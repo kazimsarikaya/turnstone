@@ -2,7 +2,7 @@ OUTPUT_FORMAT(binary)
 ENTRY(mystart)
 SECTIONS
 {
-    . = 0x500;
+    . = 0x1000;
     .text :
     {
         *(.text);
@@ -16,6 +16,7 @@ SECTIONS
         *(COMMON)
         __bss_end = .;
     }
+    . = ALIGN(0x1000);
     __stack_bottom = .;
     . = . + 0x1000;
     __stack_top = .;
