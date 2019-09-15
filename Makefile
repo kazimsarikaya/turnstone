@@ -11,9 +11,11 @@ ASOBJDIR = $(OBJDIR)/asm
 CCOBJDIR = $(OBJDIR)/cc
 ASSRCDIR = asm
 CCSRCDIR = cc
+LDSRCDIR = lds
 
 ASSRCS = $(shell find $(ASSRCDIR) -type f -name \*.asm)
 CCSRCS = $(shell find $(CCSRCDIR) -type f -name \*.c)
+LDSRCS = $(shell find $(LDSRCDIR) -type f -name \*.ld)
 
 ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
 CCOBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CCSRCS))

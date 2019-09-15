@@ -27,7 +27,7 @@ call   load_disk
 mov    load_end_stage2,%bx
 call   print_msg
 
-ljmp   $0x50,$0x0
+ljmp   $0x100,$0x0
 
 panic:
 hlt
@@ -83,7 +83,7 @@ mov    $0x0,%ch
 mov    $0x2,%cl
 mov    $0x0,%dh
 mov    BOOT_DRIVE,%dl
-mov    $0x500,%bx
+mov    $0x1000,%bx
 int    $0x13
 jb     load_disk.err
 jmp    load_disk.end
