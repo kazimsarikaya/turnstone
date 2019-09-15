@@ -1,8 +1,8 @@
 OUTPUT_FORMAT(binary)
-ENTRY(mystart)
+ENTRY(__start)
 SECTIONS
 {
-    . = 0x1000;
+    . = 0x1000; /* same as last far jump at bootsect.asm */
     .text :
     {
         *(.text);

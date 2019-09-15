@@ -1,7 +1,7 @@
 .code16
 .text
-.global mystart
-mystart:
+.global __start
+__start:
   cli
   xor %ax, %ax
   mov %ax, %ds
