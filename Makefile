@@ -22,6 +22,8 @@ CCOBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CCSRCS))
 OBJS = $(ASOBJS) $(CCOBJS)
 PROGS = $(OBJDIR)/bootsect.bin $(OBJDIR)/stage2.bin
 
+
+.PHONY: all disk clean
 all: disk
 
 disk: $(OBJDIR)/kernel
@@ -30,11 +32,11 @@ disk: $(OBJDIR)/kernel
 $(OBJDIR)/kernel: $(PROGS)
 	cat $^ > $@
 
-$(OBJDIR)/bootsect.bin: $(ASOBJDIR)/bootsect.o
-	$(LD) $(LDFLAGS) --script=lds/bootsect.ld  -o $@ $^
+$(OBJDIR)/bootsect.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect.o
+	$(LD) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
 
-$(OBJDIR)/stage2.bin: $(ASOBJDIR)/kentry.o $(CCOBJS)
-	$(LD) $(LDFLAGS) --script=lds/stage2.ld -o $@ $^
+$(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry.o $(CCOBJS)
+	$(LD) $(LDFLAGS) --script=$< -o $@ $^
 
 $(CCOBJDIR)/%.o: $(CCSRCDIR)/%.c
 	$(CC) $(CCFLAGS) -o $@ $^
