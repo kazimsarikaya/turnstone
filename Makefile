@@ -23,7 +23,7 @@ OBJS = $(ASOBJS) $(CCOBJS)
 PROGS = $(OBJDIR)/bootsect.bin $(OBJDIR)/stage2.bin
 
 
-.PHONY: all disk clean
+.PHONY: all disk clean depend
 all: disk
 
 disk: $(OBJDIR)/kernel
@@ -39,12 +39,21 @@ $(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry.o $(CCOBJS)
 	$(LD) $(LDFLAGS) --script=$< -o $@ $^
 
 $(CCOBJDIR)/%.o: $(CCSRCDIR)/%.c
-	$(CC) $(CCFLAGS) -o $@ $^
+	$(CC) $(CCFLAGS) -o $@ $<
 
 $(ASOBJDIR)/%.o: $(ASSRCDIR)/%.asm
 	$(AS) $(ASFLAGS) -o $@ $^
 
 clean:
 	find $(OBJDIR) -type f -delete
+	rm -f .depend
 
 print-%  : ; @echo $* = $($*)
+
+depend: .depend
+
+.depend: $(CCSRCS)
+	rm -f .depend
+	$(CC) $(CCFLAGS) -MM $^ | sed 's%^%'$(CCOBJDIR)/'%g' > .depend
+
+-include .depend
