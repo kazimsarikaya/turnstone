@@ -6,26 +6,26 @@ __start:
 cli
 mov    $__stack_top,%bp
 mov    %bp,%sp
-mov    $0x7c0,%bx
-mov    %bx,%ds
-mov    $0x0,%bx
-mov    %bx,%es
 sti
 
 mov    %dl,BOOT_DRIVE
 cli
 call   enable_A20
 sti
-mov    bootmsg_1,%bx
+mov    $bootmsg_1,%si
 call   print_msg
 
-mov    load_start_stage2,%bx
+mov    $load_start_stage2,%si
 call   print_msg
 
 call   load_disk
 
-mov    load_end_stage2,%bx
+mov    $load_end_stage2,%si
 call   print_msg
+
+mov    (BOOT_DRIVE),%al
+mov    $0x0, %ah
+push   %ax
 
 ljmp   $0x100,$0x0
 
@@ -88,7 +88,7 @@ int    $0x13
 jb     load_disk.err
 jmp    load_disk.end
 load_disk.err:
-mov    errmsg_disk,%bx
+mov    $errmsg_disk,%si
 call   print_msg
 jmp    panic
 load_disk.end:
@@ -99,11 +99,10 @@ print_msg:
   pusha
   mov    $0xe,%ah
 print_msg.loop:
-  mov    (%bx),%al
+  lodsb
   cmp    $0x0,%al
   je     print_msg.end
   int    $0x10
-  inc    %bx
   jmp    print_msg.loop
 print_msg.end:
   popa
@@ -139,12 +138,12 @@ print_hex.cont:
 HEX_DATA: .byte 0x00,0x00,0x00,0x00,0x0d,0x0a,0x00
 BOOT_DRIVE: .byte 0x00
 bootmsg_1:
-  .string "Booting OS...\r\n\0"
+  .asciz "Booting OS...\r\n"
 load_start_stage2:
-  .string "Loading stage 2...\r\n\0"
+  .asciz "Loading stage 2...\r\n"
 load_end_stage2:
-  .string "Loading ended.\r\n\0"
+  .asciz "Loading ended.\r\n"
 errmsg_disk:
-  .string "Disk error\r\n\0"
+  .asciz "Disk error\r\n"
 
 .word 0xaa55

@@ -1,7 +1,11 @@
 .code16
 .text
 .global __start
+.global BOOT_DRIVE
 __start:
+  pop %ax
+  mov %al,BOOT_DRIVE
+
   cli
   xor %ax, %ax
   mov %ax, %ds
@@ -17,3 +21,4 @@ __start:
   hlt
   jmp .loop
 .data
+BOOT_DRIVE: .byte 0x00
