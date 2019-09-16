@@ -1,5 +1,5 @@
-#ifndef ___DISKIO
-#define ___DISKIO 0
+#ifndef ___DISKIO_H
+#define ___DISKIO_H 0
 
 extern unsigned char BOOT_DRIVE;
 
