@@ -8,7 +8,7 @@ typedef struct _lbasupport {
 	char majorver;
 	char minorver;
 	char api;
-} lbasupport;
+} __attribute__ ((packed)) lbasupport;
 
 int check_lba_support(lbasupport*);
 
