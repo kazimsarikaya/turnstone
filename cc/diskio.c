@@ -5,7 +5,6 @@ asm (".code16gcc");
 int check_lba_support(lbasupport *ls){
 	char status = 0;
 	char api = 0, code = 0, minver =0;
-	int ver = 0;
 
 	asm volatile (
 		"int $0x13\n"

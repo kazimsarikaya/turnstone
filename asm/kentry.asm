@@ -1,8 +1,8 @@
 .code16
 .text
-.global __start
+.global __kstart
 .global BOOT_DRIVE
-__start:
+__kstart:
   pop %ax
   mov %al,BOOT_DRIVE
 
