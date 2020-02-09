@@ -3,7 +3,7 @@ AS = i386-elf-as
 LD = i386-elf-ld
 
 LDFLAGS = --nmagic -s
-CCFLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes
+CCFLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes -Werror -Wall
 ASFLAGS = --32
 
 OBJDIR = output
