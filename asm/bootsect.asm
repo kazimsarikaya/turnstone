@@ -65,13 +65,13 @@ ret
 enable_A20.a20wait:
 in     $0x64,%al
 test   $0x2,%al
-jne    0x66
+jne    enable_A20.a20wait
 ret
 
 enable_A20.a20wait2:
 in     $0x64,%al
 test   $0x1,%al
-je     0x6d
+je     enable_A20.a20wait2
 ret
 
 load_disk:
