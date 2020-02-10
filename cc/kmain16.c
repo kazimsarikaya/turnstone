@@ -4,7 +4,7 @@ asm (".code16gcc");
 #include <memory.h>
 #include <ports.h>
 
-int kmain(void)
+int kmain16(void)
 {
 	lbasupport ls;
 	int status;

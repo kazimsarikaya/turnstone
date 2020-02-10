@@ -1,10 +1,16 @@
-CC = i386-elf-gcc
-AS = i386-elf-as
-LD = i386-elf-ld
+CC16 = i386-elf-gcc
+CC64 = x86_64-elf-gcc
+AS16 = i386-elf-as
+AS64 = x86_64-elf-as
+LD16 = i386-elf-ld
+LD64 = x86_64-elf-ld
 
-LDFLAGS = --nmagic -s
-CCFLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes -Werror -Wall
-ASFLAGS = --32
+LD16FLAGS = --nmagic -s
+LD64FLAGS = --nmagic -s
+CC16FLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes/16 -Werror -Wall
+CC64FLAGS = -std=gnu99 -Os -nostdlib -m64 -march=x86-64 -ffreestanding -c -Iincludes/64 -Werror -Wall
+AS16FLAGS = --32
+AS64FLAGS = --64
 
 OBJDIR = output
 ASOBJDIR = $(OBJDIR)/asm
@@ -13,14 +19,17 @@ ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
 
-ASSRCS = $(shell find $(ASSRCDIR) -type f -name \*.asm)
-CCSRCS = $(shell find $(CCSRCDIR) -type f -name \*.c)
+AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
+AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.asm)
+CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*16.c)
+CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*64.c)
 LDSRCS = $(shell find $(LDSRCDIR) -type f -name \*.ld)
 
 ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
-CCOBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CCSRCS))
-OBJS = $(ASOBJS) $(CCOBJS)
-PROGS = $(OBJDIR)/bootsect.bin $(OBJDIR)/stage2.bin
+CC16OBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CC16SRCS))
+CC64OBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CC64SRCS))
+OBJS = $(ASOBJS) $(CC16OBJS) $(CC64OBJS)
+PROGS = $(OBJDIR)/bootsect16.bin $(OBJDIR)/stage2.bin $(OBJDIR)/stage3.bin
 
 
 .PHONY: all disk clean depend
@@ -32,28 +41,39 @@ disk: $(OBJDIR)/kernel
 $(OBJDIR)/kernel: $(PROGS)
 	cat $^ > $@
 
-$(OBJDIR)/bootsect.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect.o
-	$(LD) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
+$(OBJDIR)/bootsect16.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
+	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
 
-$(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry.o $(CCOBJS)
-	$(LD) $(LDFLAGS) --script=$< -o $@ $^
+$(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
+	$(LD16) $(LD16FLAGS) --script=$< -o $@ $^
 
-$(CCOBJDIR)/%.o: $(CCSRCDIR)/%.c
-	$(CC) $(CCFLAGS) -o $@ $<
+$(OBJDIR)/stage3.bin: $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
+	$(LD64) $(LD64FLAGS) -T $< -o $@ $^
 
-$(ASOBJDIR)/%.o: $(ASSRCDIR)/%.asm
-	$(AS) $(ASFLAGS) -o $@ $^
+$(CCOBJDIR)/%16.o: $(CCSRCDIR)/%16.c
+	$(CC16) $(CC16FLAGS) -o $@ $<
+
+$(CCOBJDIR)/%64.o: $(CCSRCDIR)/%64.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
+	$(AS16) $(AS16FLAGS) -o $@ $^
+
+$(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.asm
+	$(AS64) $(AS64FLAGS) -o $@ $^
 
 clean:
 	find $(OBJDIR) -type f -delete
-	rm -f .depend
+	rm -f .depend*
 
 print-%  : ; @echo $* = $($*)
 
-depend: .depend
+depend: .depend16 .depend64
 
-.depend: $(CCSRCS)
-	rm -f .depend
-	$(CC) $(CCFLAGS) -MM $^ | sed 's%^%'$(CCOBJDIR)/'%g' > .depend
+.depend16: $(CC16SRCS)
+	$(CC16) $(CC16FLAGS) -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend16
 
--include .depend
+.depend64: $(CC64SRCS)
+	$(CC64) $(CC64FLAGS) -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend64
+
+-include .depend16 .depend64
