@@ -2,6 +2,7 @@ asm (".code16gcc");
 #include <video.h>
 #include <diskio.h>
 #include <memory.h>
+#include <ports.h>
 
 int kmain(void)
 {
@@ -68,5 +69,13 @@ int kmain(void)
 	} else {
 		print("LBA is not supported\r\n",0,y++);
 	}
+
+	char *comdata = "Hello World\n\0";
+
+	int i=0;
+	while(comdata[i]!='\0') {
+		outb(COM1,comdata[i++]);
+	}
+
 	return 0;
 }
