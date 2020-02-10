@@ -15,7 +15,7 @@ __kstart:
   mov %esp,%ebp
   sti
   cld
-  call kmain
+  call kmain16
   cli
 .loop:
   hlt
