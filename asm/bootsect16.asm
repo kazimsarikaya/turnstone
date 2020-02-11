@@ -4,26 +4,7 @@
 
 __start:
 cmp    $0xaa55, %ax
-je    __start_normal
-mov    $load_from_network,%si
-call   print_msg
-cli
-mov    $0x800, %ecx
-push   %ds
-mov    %ax, %ds
-xor    %ax, %ax
-mov    %ax, %si
-mov    $0x100, %ax
-push   %es
-mov    %ax, %es
-xor    %ax, %ax
-mov    %ax, %di
-cld
-rep    movsb
-pop    %es
-pop    %ds
-sti
-jmp    __start_network
+jne    panic
 __start_normal:
 cli
 mov    $0x7c0, %ax
@@ -36,26 +17,56 @@ mov    $__stack_top,%bp
 mov    %bp,%sp
 sti
 
-__start_network:
 mov    %dl,BOOT_DRIVE
-cli
-call   enable_A20
-sti
+
 mov    $bootmsg_1,%si
 call   print_msg
 
 cmp    $0x0,%dl
-je     __skip_disk_load
+je     load_disk.err
+
+call   check_disk_ext
 
 mov    $load_start_stage2,%si
 call   print_msg
 
+mov    $slottableprotect, %ax
+push   %ax
+mov    $0x7c0, %ax
+push   %ax
+mov    $0x1, %ax //sector count
+push   %ax
+mov    $0x1, %ax //lba
+push   %ax
+call   load_disk
+
+mov    $slottable, %bx
+mov    $0x0, %si
+next_slot:
+mov    (%bx, %si), %al
+cmp    $0x2, %al
+je     stage2_found
+add    $0x18, %si
+cmp    $0xF0, %si
+je     load_disk.err
+jmp    next_slot
+stage2_found:
+
+mov    8(%bx, %si), %cx
+mov    16(%bx, %si), %dx
+sub    %cx, %dx
+inc    %dx
+
+xor    %ax, %ax
+push   %ax //offset
+pushw  $0x100 //segment
+push   %dx
+push   %cx
 call   load_disk
 
 mov    $load_end_stage2,%si
 call   print_msg
 
-__skip_disk_load:
 mov    BOOT_DRIVE, %al
 mov    $0x0, %ah
 push   %ax
@@ -66,73 +77,44 @@ panic:
 hlt
 jmp    panic
 
-enable_A20:
-call   enable_A20.a20wait
-mov    $0xad,%al
-out    %al,$0x64
-
-call   enable_A20.a20wait
-mov    $0xd0,%al
-out    %al,$0x64
-
-call   enable_A20.a20wait2
-in     $0x60,%al
-push   %eax
-
-call   enable_A20.a20wait
-mov    $0xd1,%al
-out    %al,$0x64
-
-call   enable_A20.a20wait
-pop    %eax
-or     $0x2,%al
-out    %al,$0x60
-
-call   enable_A20.a20wait
-mov    $0xae,%al
-out    %al,$0x64
-
-call   enable_A20.a20wait
-ret
-
-enable_A20.a20wait:
-in     $0x64,%al
-test   $0x2,%al
-jne    enable_A20.a20wait
-ret
-
-enable_A20.a20wait2:
-in     $0x64,%al
-test   $0x1,%al
-je     enable_A20.a20wait2
+check_disk_ext:
+mov    $0x4100, %ax
+xor    %bx,%bx
+int    $0x13
+cmp    $0xaa55, %bx
+jne    load_disk.err
 ret
 
 load_disk:
-pusha
-push   %es
-mov    $0x100,%ax
-mov    %ax, %es
-mov    $0x2,%ah
-mov    $0x10,%al
-mov    $0x0,%ch
-mov    $0x2,%cl
-mov    $0x0,%dh
-mov    BOOT_DRIVE,%dl
-xor    %bx,%bx
+push   %bp
+mov    %sp, %bp
+mov    $dap, %bx
+movw   $0x0010, 0x0(%bx) // header
+mov    0x6(%bp), %ax
+mov    %ax, 0x2(%bx) // sectors to read
+mov    0xa(%bp), %ax
+mov    %ax, 0x4(%bx) // offset to put
+mov    0x8(%bp), %ax
+mov    %ax, 0x6(%bx) // segment to put
+mov    0x4(%bp), %ax
+mov    %ax, 0x8(%bx) // lba first word
+movw   $0x0, 0xa(%bx) // lba second word
+movl   $0x0, 0xc(%bx) // lba third & forth word
+mov    BOOT_DRIVE, %dl
+mov    %bx, %si
+mov    $0x4200, %ax
 int    $0x13
-jb     load_disk.err
-jmp    load_disk.end
+jc     load_disk.err
+mov    %bp, %sp
+pop    %bp
+ret
+
 load_disk.err:
 mov    $errmsg_disk,%si
 call   print_msg
 jmp    panic
-load_disk.end:
-pop    %es
-popa
-ret
 
 print_msg:
-  pusha
   mov    $0xe,%ah
 print_msg.loop:
   lodsb
@@ -145,11 +127,9 @@ print_msg.end:
   int    $0x10
   mov    $0x0A, %al
   int    $0x10
-  popa
   ret
 
 .data
-BOOT_DRIVE: .byte 0x00
 bootmsg_1:
   .asciz "Booting OS"
 load_start_stage2:
@@ -158,5 +138,8 @@ load_end_stage2:
   .asciz "Loading ended"
 errmsg_disk:
   .asciz "Disk error"
-load_from_network:
-  .asciz "Diskless boot"
+.bss
+BOOT_DRIVE: .byte 0x00
+.lcomm dap, 16
+.lcomm slottableprotect, 0x110
+.lcomm slottable, 0xF0
