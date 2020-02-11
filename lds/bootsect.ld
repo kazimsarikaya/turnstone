@@ -2,8 +2,8 @@ OUTPUT_FORMAT(binary)
 ENTRY(__start)
 SECTIONS
 {
-    . = 0x7c00;
-    .text : AT(0x7c00)
+    . = 0x0;
+    .text :
     {
         *(.text);
     }
@@ -16,7 +16,7 @@ SECTIONS
         *(COMMON)
         __bss_end = .;
     }
-    .sig : AT(0x7DFE)
+    .sig : AT(0x1FE)
     {
         SHORT(0xaa55);
     }

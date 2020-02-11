@@ -11,16 +11,20 @@ SECTIONS
     {
         *(.data)
         *(.rodata)
-        __bss_start = .;
-        *(.bss)
-        *(COMMON)
-        __bss_end = .;
-    }
-    .stack :
+        . = ALIGN(512);
+    } =0x0
+    .bss :
     {
-      . = __bss_end;
-      __stack_bottom = ALIGN(0x1000);
-      __stack_top = __stack_bottom + 0x00100000;
+      __bss_start = .;
+      *(.bss)
+      *(COMMON)
+      __bss_end = .;
+    }
+    .stack BLOCK(0x1000) :
+    {
+      __stack_bottom = .;
+      . += 0x00100000;
+      __stack_top = .;
     }
     /DISCARD/ :
     {

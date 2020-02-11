@@ -3,17 +3,49 @@
 .global __start
 
 __start:
+cmp    $0xaa55, %ax
+je    __start_normal
+mov    $load_from_network,%si
+call   print_msg
 cli
+mov    $0x800, %ecx
+push   %ds
+mov    %ax, %ds
+xor    %ax, %ax
+mov    %ax, %si
+mov    $0x100, %ax
+push   %es
+mov    %ax, %es
+xor    %ax, %ax
+mov    %ax, %di
+cld
+rep    movsb
+pop    %es
+pop    %ds
+sti
+jmp    __start_network
+__start_normal:
+cli
+mov    $0x7c0, %ax
+mov    %ax, %ds
+mov    %ax, %es
+mov    %ax, %fs
+mov    %ax, %gs
+mov    %ax, %ss
 mov    $__stack_top,%bp
 mov    %bp,%sp
 sti
 
+__start_network:
 mov    %dl,BOOT_DRIVE
 cli
 call   enable_A20
 sti
 mov    $bootmsg_1,%si
 call   print_msg
+
+cmp    $0x0,%dl
+je     __skip_disk_load
 
 mov    $load_start_stage2,%si
 call   print_msg
@@ -23,11 +55,12 @@ call   load_disk
 mov    $load_end_stage2,%si
 call   print_msg
 
-mov    (BOOT_DRIVE),%al
+__skip_disk_load:
+mov    BOOT_DRIVE, %al
 mov    $0x0, %ah
 push   %ax
-
-ljmp   $0x100,$0x0
+xor    %ax, %ax
+jmp    $0x100,$0x0
 
 panic:
 hlt
@@ -76,14 +109,16 @@ ret
 
 load_disk:
 pusha
-mov    BOOT_DRIVE,%bx
+push   %es
+mov    $0x100,%ax
+mov    %ax, %es
 mov    $0x2,%ah
 mov    $0x10,%al
 mov    $0x0,%ch
 mov    $0x2,%cl
 mov    $0x0,%dh
 mov    BOOT_DRIVE,%dl
-mov    $0x1000,%bx
+xor    %bx,%bx
 int    $0x13
 jb     load_disk.err
 jmp    load_disk.end
@@ -92,6 +127,7 @@ mov    $errmsg_disk,%si
 call   print_msg
 jmp    panic
 load_disk.end:
+pop    %es
 popa
 ret
 
@@ -105,45 +141,22 @@ print_msg.loop:
   int    $0x10
   jmp    print_msg.loop
 print_msg.end:
-  popa
-  ret
-
-print_hex:
-  pusha
-  mov    %ax,%dx
-  mov    HEX_DATA+4,%bx
-  mov    $0x4,%cx
-print_hex.loop:
-  dec    %bx
-  and    $0xf,%al
-  cmp    $0xa,%al
-  jl     print_hex.number
-  add    $0x37,%al
-  jmp    print_hex.cont
-print_hex.number:
-  add    $0x30,%al
-print_hex.cont:
-  mov    %al,(%bx)
-  shr    $0x4,%dx
-  mov    %dx,%ax
-  dec    %cx
-  cmp    $0x0,%cx
-  jne    print_hex.loop
-  mov    HEX_DATA,%bx
-  call   0x99
+  mov    $0x0d, %al
+  int    $0x10
+  mov    $0x0A, %al
+  int    $0x10
   popa
   ret
 
 .data
-HEX_DATA: .byte 0x00,0x00,0x00,0x00,0x0d,0x0a,0x00
 BOOT_DRIVE: .byte 0x00
 bootmsg_1:
-  .asciz "Booting OS...\r\n"
+  .asciz "Booting OS"
 load_start_stage2:
-  .asciz "Loading stage 2...\r\n"
+  .asciz "Loading stage2"
 load_end_stage2:
-  .asciz "Loading ended.\r\n"
+  .asciz "Loading ended"
 errmsg_disk:
-  .asciz "Disk error\r\n"
-
-.word 0xaa55
+  .asciz "Disk error"
+load_from_network:
+  .asciz "Diskless boot"
