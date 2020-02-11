@@ -11,24 +11,16 @@ SECTIONS
     {
         *(.data)
         *(.rodata)
-    }
-    .sig : AT(0x1FE)
+        __bss_start = .;
+        *(.bss)
+        *(COMMON)
+        __bss_end = .;
+    } =0x0
+    .slottable : AT(0x110)
     {
-        SHORT(0xaa55);
-    }
-    .stack :
-    {
-      __stack_bottom = .;
-      . = . + 0x1000;
-      __stack_top = .;
-    }
-    .bss :
-    {
-      __bss_start = .;
-      *(.bss)
-      *(COMMON)
-      __bss_end = .;
-    }
+      *(.slottable)
+      . = 0xF0;
+    } =0x0
     /DISCARD/ :
     {
     *(.note*);

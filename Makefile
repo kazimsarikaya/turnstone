@@ -1,16 +1,20 @@
-CC16 = i386-elf-gcc
-CC64 = x86_64-elf-gcc
+MAKE = make
+
 AS16 = i386-elf-as
-AS64 = x86_64-elf-as
+CC16 = i386-elf-gcc
 LD16 = i386-elf-ld
+
+AS64 = x86_64-elf-as
+CC64 = x86_64-elf-gcc
 LD64 = x86_64-elf-ld
 
-LD16FLAGS = --nmagic -s
-LD64FLAGS = --nmagic -s
-CC16FLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes/16 -Werror -Wall
-CC64FLAGS = -std=gnu99 -Os -nostdlib -m64 -march=x86-64 -ffreestanding -c -Iincludes/64 -Werror -Wall
 AS16FLAGS = --32
+CC16FLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes/16 -Werror -Wall
+LD16FLAGS = --nmagic -s
+
 AS64FLAGS = --64
+CC64FLAGS = -std=gnu99 -Os -nostdlib -m64 -march=x86-64 -ffreestanding -c -Iincludes/64 -Werror -Wall
+LD64FLAGS = --nmagic -s
 
 OBJDIR = output
 ASOBJDIR = $(OBJDIR)/asm
@@ -19,29 +23,44 @@ ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
 
+
 AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
-AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.asm)
 CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*16.c)
+
+AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.asm)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*64.c)
+
 LDSRCS = $(shell find $(LDSRCDIR) -type f -name \*.ld)
+
+UTILSSRCS = $(shell find $(UTILSSRCDIR) -type f -name \*.c)
 
 ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
 CC16OBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CC16SRCS))
 CC64OBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CC64SRCS))
 OBJS = $(ASOBJS) $(CC16OBJS) $(CC64OBJS)
-PROGS = $(OBJDIR)/bootsect16.bin $(OBJDIR)/stage2.bin $(OBJDIR)/stage3.bin
+PROGS = $(OBJDIR)/bootsect16.bin \
+	$(OBJDIR)/slottable.bin \
+	$(OBJDIR)/stage2.bin \
+	$(OBJDIR)/stage3.bin
 
+SUBDIRS := utils
 
-.PHONY: all disk clean depend
+.PHONY: all disk clean depend $(SUBDIRS)
 all: disk
 
-disk: $(OBJDIR)/kernel
-	dd bs=512 conv=notrunc if=$< of=/Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
+disk: kernel
+	dd bs=512 conv=notrunc if=$(OBJDIR)/$< of=/Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
+
+kernel: $(OBJDIR)/kernel $(SUBDIRS)
+	$(OBJDIR)/formatslots.bin $< $(PROGS)
 
 $(OBJDIR)/kernel: $(PROGS)
 	cat $^ > $@
 
 $(OBJDIR)/bootsect16.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
+	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
+
+$(OBJDIR)/slottable.bin: $(LDSRCDIR)/slottableprotect.ld $(ASOBJDIR)/slottableprotect16.o
 	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
 
 $(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
@@ -61,6 +80,9 @@ $(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
 
 $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.asm
 	$(AS64) $(AS64FLAGS) -o $@ $^
+
+$(SUBDIRS):
+	$(MAKE) -C $@
 
 clean:
 	find $(OBJDIR) -type f -delete
