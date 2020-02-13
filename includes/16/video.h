@@ -3,8 +3,9 @@
 
 #define  VIDEO_BUF_LEN 25*80
 
-void print(char *string, int x, int y);
-void clear_screen();
-void set_video();
+void video_print_at(char *, unsigned, unsigned);
+void video_print(char *);
+void video_clear_screen();
+void video_scroll();
 
 #endif

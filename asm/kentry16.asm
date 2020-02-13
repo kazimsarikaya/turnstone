@@ -19,8 +19,8 @@ __kstart:
   cld
   mov %bl,BOOT_DRIVE
   call kmain16
-  cli
 .loop:
+  cli
   hlt
   jmp .loop
 

@@ -8,73 +8,68 @@ int kmain16(void)
 {
 	lbasupport ls;
 	int status;
-	int y = 0;
-	set_video();
-	clear_screen();
-	print("Hello, World!\r\n\0",0,y++);
-
+	video_clear_screen();
+	video_print("Hello, World!\r\n");
 	init_simple_memory();   //memory init;
 
 	char *data=simple_kmalloc(sizeof(char)*100);
 	if(data!=NULL) {
 		simple_memset(data,'x',5);
-		print(data,0,y++);
+		video_print(data);
 	} else {
 		return -1;
 	}
 	char *data2=simple_kmalloc(sizeof(char)*100);
 	if(data2!=NULL) {
 		simple_memset(data2,'y',5);
-		print(data,0,y);
-		print(data2,15,y++);
+		video_print(data);
+		video_print(data2);
 	} else {
 		return -1;
 	}
 	if(data!=NULL) {
-		print("free data\0",0,y++);
+		video_print("free data\0");
 		if(simple_kfree(data) != 0) {
-			print("kfree not ok",15,y++);
+			video_print("kfree not ok");
 			return -1;
 		}
-		print(data,0,y);
-		print(data2,15,y++);
+		video_print(data);
+		video_print(data2);
 	}
 	char *data3=simple_kmalloc(sizeof(char)*200);
 	if(data!=NULL) {
 		simple_memset(data3,'z',5);
-		print(data3,0,y++);
+		video_print(data3);
 	} else {
 		return -1;
 	}
 	if(data2!=NULL) {
-		print("free data2\0",0,y++);
+		video_print("free data2\0");
 		if(simple_kfree(data2) != 0) {
-			print("kfree not ok",15,y++);
+			video_print("kfree not ok");
 			return -1;
 		}
-		print(data,0,y);
-		print(data2,15,y++);
+		video_print(data);
+		video_print(data2);
 	}
 	if(data3!=NULL) {
-		print("free data3\0",0,y++);
+		video_print("free data3\0");
 		if(simple_kfree(data3) != 0) {
-			print("kfree not ok",15,y++);
+			video_print("kfree not ok");
 			return -1;
 		}
 	}
 
 	status = check_lba_support(&ls);
 	if(status ==0) {
-		print("LBA is supported\r\n",0,y++);
+		video_print("LBA is supported\r\n");
 	} else {
-		print("LBA is not supported\r\n",0,y++);
+		video_print("LBA is not supported\r\n");
 	}
-
-	char *comdata = "Hello World\n\0";
-
-	int i=0;
-	while(comdata[i]!='\0') {
-		outb(COM1,comdata[i++]);
+	char * alpha = "A\n\0";
+	for(int i=0; i< 26; i++) {
+		alpha[0] = 65+i;
+		video_print(alpha);
 	}
 
 	return 0;
