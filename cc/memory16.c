@@ -1,6 +1,5 @@
 asm (".code16gcc");
 #include <memory.h>
-#include <video.h>
 
 #define HEAP_INFO_FLAG_STARTEND        (1<<0)
 #define HEAP_INFO_FLAG_USED            (1<<1)
@@ -41,10 +40,7 @@ int init_simple_memory (){
 	return 0;
 }
 
-
-int y = 16;
 void *simple_kmalloc(unsigned int size){
-	int x=0;
 	heapinfo *hi = hibottom;
 	unsigned int t_size = size / sizeof(heapinfo);
 	if ((size % sizeof(heapinfo)) != 0) {
@@ -57,13 +53,9 @@ void *simple_kmalloc(unsigned int size){
 		if( hi == hitop) {
 			return NULL;
 		}
-		print("!\0",x++,y);
 		hi = hi->next;
-		print(">\0",x,y);
-		x+=5;
 	}
-	print("free area\0",x,y);
-	x+=15;
+
 	heapinfo *tmp = hi+1+t_size;
 	tmp->magic =  HEAP_INFO_MAGIC;
 	tmp->flags = HEAP_INFO_FLAG_NOTUSED;
@@ -72,20 +64,14 @@ void *simple_kmalloc(unsigned int size){
 	hi->next = tmp;
 	hi->flags |= HEAP_INFO_FLAG_USED;
 
-	print("malloc end \0",x,y);
-	y++;
 	return hi+1;
 }
 
 
 int simple_kfree(void *address){
-	int x=0;
-
 	if(address==NULL) {
 		return -1;
 	}
-	print("start free\0",x,y);
-	x+=12;
 	heapinfo *hi = ((heapinfo*)address)-1;
 	if(hi->magic != HEAP_INFO_MAGIC) {
 		//incorrect address to clean
@@ -96,8 +82,6 @@ int simple_kfree(void *address){
 		// heap end, can not clean
 		return -1;
 	}
-	print("area ok\0",x,y);
-	x+=9;
 	hi->flags ^= HEAP_INFO_FLAG_USED;
 
 
@@ -105,13 +89,8 @@ int simple_kfree(void *address){
 	unsigned int size = (void*)hi->next-address;
 	simple_memclean(address,size);
 
-
-	print("merging",x,y);
-	x+=9;
 	//merge next empty slot if any
 	if(!(hi->next->flags & HEAP_INFO_FLAG_USED)) {
-		print("next empty\0",x,y);
-		x+=12;
 		void *caddr = hi->next;
 		hi->next = hi->next->next; //next cannot be NULL do not afraid of it
 		simple_memclean(caddr,sizeof(heapinfo));
@@ -120,15 +99,11 @@ int simple_kfree(void *address){
 	// merge previous empty slot if any
 	if(hi->previous!=NULL) {
 		if(!(hi->previous->flags & HEAP_INFO_FLAG_USED)) { // if prev is full then stop
-			print("prev empty\0",x,y);
-			x+=12;
 			void *caddr = hi;
 			hi->previous->next = hi->next;
 			simple_memclean(caddr,sizeof(heapinfo));
 		}
 	}
-	print("kfree completed", x, y);
-	y++;
 	return 0;
 }
 
