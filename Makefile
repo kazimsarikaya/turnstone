@@ -9,11 +9,11 @@ CC64 = x86_64-elf-gcc
 LD64 = x86_64-elf-ld
 
 AS16FLAGS = --32
-CC16FLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes/16 -Werror -Wall
+CC16FLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes/16 -Werror -Wall -mgeneral-regs-only -mno-red-zone
 LD16FLAGS = --nmagic -s
 
 AS64FLAGS = --64
-CC64FLAGS = -std=gnu99 -Os -nostdlib -m64 -march=x86-64 -ffreestanding -c -Iincludes/64 -Werror -Wall
+CC64FLAGS = -std=gnu99 -Os -nostdlib -m64 -march=x86-64 -ffreestanding -c -Iincludes/64 -Werror -Wall -mgeneral-regs-only -mno-red-zone
 LD64FLAGS = --nmagic -s
 
 OBJDIR = output

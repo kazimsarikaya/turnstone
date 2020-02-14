@@ -7,11 +7,11 @@ Stages of this project are:
 
 1. ****Stage1****: Custom boot loader:
 
-   Enable A20 line. Load several sectors to the memory at 0x100 (first free memory), and jump to that program.
+   Load several sectors to the memory at 0x100 (first free memory), and jump to that program.
 
 2. ****Stage2****: Detect memory, prepare long mode and jump long it.
 
-   Memory detection can be performed by bios interrupt, hence real mode operations needed before long mode. Prepare ISR, IRQ and long mode page tables. Then jump long mode.
+   Enable A20 line. Memory detection can be performed by bios interrupt, hence real mode operations needed before long mode. Prepare ISR, IRQ and long mode page tables. Then jump long mode.
 
 3. ****Stage3****: Memory Management
 
