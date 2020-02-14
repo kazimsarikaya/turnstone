@@ -7,12 +7,12 @@ asm (".code16gcc");
 #define HEAP_INFO_MAGIC                (0xaa55)
 
 
-extern unsigned char *__kheap_bottom;
-extern unsigned char *__kheap_top;
+extern uint8_t *__kheap_bottom;
+extern uint8_t *__kheap_top;
 
 typedef struct __heapinfo {
-	int magic;
-	char flags;
+	uint16_t magic;
+	uint8_t flags;
 	struct __heapinfo *next;
 	struct __heapinfo *previous;
 }__attribute__ ((packed)) heapinfo;
@@ -20,7 +20,7 @@ typedef struct __heapinfo {
 heapinfo *hibottom = NULL;
 heapinfo *hitop = NULL;
 
-int init_simple_memory (){
+uint8_t init_simple_memory (){
 
 	hibottom = (heapinfo*)&__kheap_bottom;
 	hitop = (heapinfo*)(&__kheap_top-sizeof(heapinfo));
@@ -40,9 +40,9 @@ int init_simple_memory (){
 	return 0;
 }
 
-void *simple_kmalloc(unsigned int size){
+void *simple_kmalloc(size_t size){
 	heapinfo *hi = hibottom;
-	unsigned int t_size = size / sizeof(heapinfo);
+	size_t t_size = size / sizeof(heapinfo);
 	if ((size % sizeof(heapinfo)) != 0) {
 		t_size++;
 	}
@@ -68,7 +68,7 @@ void *simple_kmalloc(unsigned int size){
 }
 
 
-int simple_kfree(void *address){
+uint8_t simple_kfree(void *address){
 	if(address==NULL) {
 		return -1;
 	}
@@ -86,7 +86,7 @@ int simple_kfree(void *address){
 
 
 	//clean data
-	unsigned int size = (void*)hi->next-address;
+	size_t size = (void*)hi->next-address;
 	simple_memclean(address,size);
 
 	//merge next empty slot if any
@@ -107,8 +107,8 @@ int simple_kfree(void *address){
 	return 0;
 }
 
-void simple_memset(void *address,unsigned char value,unsigned int size) {
-	for(unsigned int i=0; i<size; i++) {
-		((unsigned char*)address)[i] = value;
+void simple_memset(void *address,uint8_t value,size_t size) {
+	for(size_t i=0; i<size; i++) {
+		((uint8_t*)address)[i] = value;
 	}
 }

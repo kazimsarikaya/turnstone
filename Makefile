@@ -8,12 +8,20 @@ AS64 = x86_64-elf-as
 CC64 = x86_64-elf-gcc
 LD64 = x86_64-elf-ld
 
+CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -Iincludes \
+	-Werror -Wall \
+	-mgeneral-regs-only -mno-red-zone
+
 AS16FLAGS = --32
-CC16FLAGS = -std=gnu99 -Os -nostdlib -m32 -march=i386 -ffreestanding -c -Iincludes/16 -Werror -Wall -mgeneral-regs-only -mno-red-zone
+CC16FLAGS = -m32 -march=i386 -D___BITS=16 $(CCXXFLAGS)
 LD16FLAGS = --nmagic -s
 
+AS32FLAGS = --32
+CC32FLAGS = -m32 -march=i386 -D___BITS=32 $(CCXXFLAGS)
+LD32FLAGS = --nmagic -s
+
 AS64FLAGS = --64
-CC64FLAGS = -std=gnu99 -Os -nostdlib -m64 -march=x86-64 -ffreestanding -c -Iincludes/64 -Werror -Wall -mgeneral-regs-only -mno-red-zone
+CC64FLAGS = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
 LD64FLAGS = --nmagic -s
 
 OBJDIR = output

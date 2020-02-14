@@ -4,22 +4,22 @@ asm (".code16gcc");
 #include <utils.h>
 
 
-int strlen(char* string) {
+size_t strlen(char_t* string) {
 	if(string==NULL) {
 		return 0;
 	}
-	int ret = 0;
+	size_t ret = 0;
 	while(string[ret]) {
 		ret++;
 	}
 	return ret;
 }
 
-int strcmp(char* string1, char* string2) {
-	int len1=strlen(string1);
-	int len2=strlen(string2);
-	int minlen = MIN(len1,len2);
-	for(int i=0; i<minlen; i++) {
+uint8_t strcmp(char_t* string1, char_t* string2) {
+	size_t len1=strlen(string1);
+	size_t len2=strlen(string2);
+	size_t minlen = MIN(len1,len2);
+	for(size_t i=0; i<minlen; i++) {
 		if(string1[i]<string2[i]) {
 			return -1;
 		}
@@ -33,61 +33,61 @@ int strcmp(char* string1, char* string2) {
 	return (minlen == len1) ? -1 : 1;
 }
 
-int strcpy(char* source, char* destination){
+uint8_t strcpy(char_t* source, char_t* destination){
 	if(source==NULL || destination==NULL) {
 		return -1;
 	}
-	for(int i=0; i<strlen(source); i++) {
+	for(size_t i=0; i<strlen(source); i++) {
 		destination[i] = source[i];
 	}
 	return 0;
 }
 
-char* strrev(char* source) {
-	int len = strlen(source);
+char_t* strrev(char_t* source) {
+	size_t len = strlen(source);
 	if(len==0) {
 		return NULL;
 	}
-	char *dest=simple_kmalloc(sizeof(char)*len);
+	char_t *dest=simple_kmalloc(sizeof(char_t)*len);
 	if(dest == NULL) {
 		return NULL;
 	}
-	for(int i=0; i<len; i++) {
+	for(size_t i=0; i<len; i++) {
 		dest[i] = source[len-i-1];
 	}
 	return dest;
 }
 
-int ato_base(char* source, int base) {
-	int ret = 0;
-	int p = 0;
-	for(int i=strlen(source)-1; i>=0; i--) {
+number_t ato_base(char_t* source, number_t base) {
+	number_t ret = 0;
+	number_t p = 0;
+	for(number_t i=strlen(source)-1; i>=0; i--) {
 		if(source[i]<='9') {
-			ret += ((int)(source[i]-48)) * power(base,p);
+			ret += ((char_t)(source[i]-48)) * power(base,p);
 		} else {
-			ret += ((int)(source[i]-55)) * power(base,p);
+			ret += ((char_t)(source[i]-55)) * power(base,p);
 		}
 		p++;
 	}
 	return ret;
 }
 
-char* ito_base(int number,int base){
+char_t* ito_base(number_t number,number_t base){
 	if(base<2 || base >36) {
 		return NULL;
 	}
-	int len = 0;
-	int temp = number;
+	size_t len = 0;
+	number_t temp = number;
 	while(temp) {
 		temp /= base;
 		len++;
 	}
-	char* ret = simple_kmalloc(sizeof(char)*len+1);
+	char_t* ret = simple_kmalloc(sizeof(char_t)*len+1);
 	if (ret == NULL) {
 		return NULL;
 	}
-	int i=1;
-	int r;
+	size_t i=1;
+	number_t r;
 	while(number) {
 		r = number % base;
 		number /= base;
@@ -103,4 +103,4 @@ char* ito_base(int number,int base){
 }
 
 
-int strindexof(char*,char*);
+size_t strindexof(char_t*,char_t*);
