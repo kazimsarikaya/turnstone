@@ -61,11 +61,12 @@ char_t* strrev(char_t* source) {
 number_t ato_base(char_t* source, number_t base) {
 	number_t ret = 0;
 	number_t p = 0;
-	for(number_t i=strlen(source)-1; i>=0; i--) {
-		if(source[i]<='9') {
-			ret += ((char_t)(source[i]-48)) * power(base,p);
+	size_t l = strlen(source);
+	for(size_t i=1; i<=l; i++) {
+		if(source[l-i]<='9') {
+			ret += ((number_t)(source[l-i]-48)) * power(base,p);
 		} else {
-			ret += ((char_t)(source[i]-55)) * power(base,p);
+			ret += ((number_t)(source[l-i]-55)) * power(base,p);
 		}
 		p++;
 	}
