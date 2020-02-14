@@ -6,13 +6,13 @@ asm (".code16gcc");
 #include <strings.h>
 #include <utils.h>
 
-int kmain16(void)
+uint8_t kmain16(void)
 {
 	init_simple_memory();
 	video_clear_screen();
 	video_print("Hello, World!\r\n");
 
-	int i = 1234;
+	int16_t i = 1234;
 	char* data10=itoa(i);
 	char* data16=itoh(i);
 	video_print(data10);
@@ -27,6 +27,12 @@ int kmain16(void)
 	}
 
 	if (strlen(data10) != 4) {
+		video_print("strlen error\n");
+	} else {
+		video_print("strlen ok\n");
+	}
+
+	if (strlen(data16) != 3) {
 		video_print("strlen error\n");
 	} else {
 		video_print("strlen ok\n");

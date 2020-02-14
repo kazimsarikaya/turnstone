@@ -1,10 +1,8 @@
-asm (".code16gcc");
-
 #include <diskio.h>
 
 int check_lba_support(lbasupport *ls){
-	char status = 0;
-	char api = 0, code = 0, minver =0;
+	uint8_t status = 0;
+	uint8_t api = 0, code = 0, minver =0;
 
 	asm volatile (
 		"int $0x13\n"
