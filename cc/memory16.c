@@ -1,4 +1,3 @@
-asm (".code16gcc");
 #include <memory.h>
 
 #define HEAP_INFO_FLAG_STARTEND        (1<<0)
