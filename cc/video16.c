@@ -1,5 +1,3 @@
-asm (".code16gcc");
-
 #include <video.h>
 #include <memory.h>
 #include <faraccess.h>

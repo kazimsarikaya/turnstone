@@ -1,4 +1,3 @@
-asm (".code16gcc");
 #include <video.h>
 #include <diskio.h>
 #include <memory.h>

@@ -1,4 +1,3 @@
-asm (".code16gcc");
 #include <strings.h>
 #include <memory.h>
 #include <utils.h>
