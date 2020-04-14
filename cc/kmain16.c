@@ -71,5 +71,15 @@ uint8_t kmain16(void)
 	simple_kfree(data10);
 	simple_kfree(data16);
 
+	init_serial(COM1);
+
+	char_t * sdata = "Hello\r\nWorld";
+	char_t r = read_serial(COM1);
+	write_serial(COM1,r);
+	for(i=0; i<strlen(sdata); i++) {
+		write_serial(COM1,sdata[i]);
+	}
+
+
 	return 0;
 }

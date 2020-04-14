@@ -35,6 +35,7 @@ typedef struct {
 } __attribute__ ((packed)) uint64_t;
 
 #define reg_t uint16_t
+#define regext_t uint32_t
 #define size_t uint16_t
 #define number_t int16_t
 
@@ -55,6 +56,7 @@ typedef struct {
 
 
 #define reg_t uint32_t
+#define regext_t uint32_t
 #define size_t uint32_t
 #define number_t int32_t
 
@@ -66,6 +68,7 @@ typedef struct {
 #define uint64_t unsigned long
 
 #define reg_t uint64_t
+#define regext_t uint64_t
 #define size_t uint64_t
 #define number_t int64_t
 
