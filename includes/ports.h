@@ -15,4 +15,8 @@ static inline uint8_t inb(uint16_t port){
 	return ret;
 }
 
+void init_serial(uint16_t);
+char_t read_serial(uint16_t);
+void write_serial(uint16_t,char_t);
+
 #endif
