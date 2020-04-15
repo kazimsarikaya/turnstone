@@ -8,8 +8,18 @@
 uint8_t kmain16(void)
 {
 	init_simple_memory();
+
+	memory_map_t **mmap = simple_kmalloc(sizeof(memory_map_t**));
+	int mmap_e_count = detect_memory(mmap);
+
 	video_clear_screen();
 	video_print("Hello, World!\r\n");
+
+	char * mmap_e_count_str = itoa(mmap_e_count);
+	video_print("mmap entry count: ");
+	video_print(mmap_e_count_str);
+	video_print("\n");
+	simple_kfree(mmap_e_count_str);
 
 	int16_t i = 1234;
 	char* data10=itoa(i);

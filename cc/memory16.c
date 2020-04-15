@@ -62,7 +62,7 @@ void *simple_kmalloc(size_t size){
 	tmp->next = hi->next;
 	hi->next = tmp;
 	hi->flags |= HEAP_INFO_FLAG_USED;
-
+	simple_memclean(hi+1, size);
 	return hi+1;
 }
 
@@ -110,4 +110,28 @@ void simple_memset(void *address,uint8_t value,size_t size) {
 	for(size_t i=0; i<size; i++) {
 		((uint8_t*)address)[i] = value;
 	}
+}
+
+size_t detect_memory(memory_map_t** mmap) {
+	*mmap = simple_kmalloc(sizeof(memory_map_t*)*MMAP_MAX_ENTRY_COUNT);
+	memory_map_t * mmap_a = *mmap;
+	regext_t contID = {0,0},signature, bytes;
+	size_t entries = 0;
+	do {
+		__asm__ __volatile__ ("int $0x15"
+		                      : "=a" (signature), "=c" (bytes), "=b" (contID)
+		                      : "a" (0xE820), "b" (contID), "c" (24), "d" (0x534D4150), "D" (mmap_a));
+		if(signature.part_high != 0x534D && signature.part_low != 0x4150) {
+			return -1;
+		}
+		if(bytes.part_high == 0 && bytes.part_low > 20 && mmap_a->acpi.part_low & 0x0001) {
+
+		}
+		else{
+			mmap_a++;
+			entries++;
+		}
+	} while(contID.part_low !=0 && entries<MMAP_MAX_ENTRY_COUNT);
+
+	return entries;
 }
