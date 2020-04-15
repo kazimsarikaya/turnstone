@@ -82,9 +82,15 @@ char_t* ito_base(number_t number,number_t base){
 		temp /= base;
 		len++;
 	}
+	if(number==0) {
+		len=1;
+	}
 	char_t* ret = simple_kmalloc(sizeof(char_t)*len+1);
 	if (ret == NULL) {
 		return NULL;
+	}
+	if(number==0) {
+		ret[0] = '0';
 	}
 	size_t i=1;
 	number_t r;
