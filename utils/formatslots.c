@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
 	fseek(fp_kernel, 0x0310, SEEK_SET);
 
 	char unused[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-	char slottype = 0;
+	char slottype = 1;
 	int slot = 0;
 	long slot_start = 0;
 	long slot_end = 0;

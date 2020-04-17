@@ -44,7 +44,7 @@ mov    $slottable, %bx
 mov    $0x0, %si
 next_slot:
 mov    (%bx, %si), %al
-cmp    $0x2, %al
+cmp    $0x3, %al
 je     stage2_found
 add    $0x18, %si
 cmp    $0xF0, %si
