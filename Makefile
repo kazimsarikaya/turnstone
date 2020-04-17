@@ -72,10 +72,10 @@ $(OBJDIR)/slottable.bin: $(LDSRCDIR)/slottableprotect.ld $(ASOBJDIR)/slottablepr
 	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
 
 $(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
-	$(LD16) $(LD16FLAGS) --script=$< -o $@ $^
+	$(LD16) $(LD16FLAGS) --script=$< -o $@ $(filter-out $<,$^)
 
 $(OBJDIR)/stage3.bin: $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
-	$(LD64) $(LD64FLAGS) -T $< -o $@ $^
+	$(LD64) $(LD64FLAGS) -T $< -o $@ $(filter-out $<,$^)
 
 $(CCOBJDIR)/%16.o: $(CCSRCDIR)/%16.c
 	$(CC16) $(CC16FLAGS) -o $@ $<
