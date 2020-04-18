@@ -11,20 +11,22 @@ Stages of this project are:
 
 2. ****Stage2****: Detect memory, prepare long mode and jump long it.
 
-   Enable A20 line. Memory detection can be performed by bios interrupt, hence real mode operations needed before long mode. Prepare ISR, IRQ and long mode page tables. Then jump long mode.
+   Enable A20 line. Memory detection can be performed by bios interrupt, hence real mode operations needed before long mode. Simple memory manager to load 64bit stage3 from disk. PIO disk implentation. Prepare simple GDT empty IDT and 1 Hugepage page table entry (0-2MiB). Then jump long mode. long mode stage3 is at 0x20000
 
-3. ****Stage3****: Memory Management
+3. ****Stage3****: Minimal 64 bit kernel. Prepares real GDT, IDT etc. Disk access with PIO. Prepares Page tables
 
-   TODO
-
-4. ****Stage4****: Scheduler
+4. ****Stage4****: Memory Management
 
    TODO
 
-4. ****Stage5****: I/O (disk and network)
+5. ****Stage5****: Scheduler
 
    TODO
 
-5. ****Stage6****: Hypervisor
+6. ****Stage6****: I/O (disk and network)
+
+   TODO
+
+7. ****Stage7****: Hypervisor
 
    TODO
