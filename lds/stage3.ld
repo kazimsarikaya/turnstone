@@ -2,7 +2,7 @@ OUTPUT_FORMAT(binary)
 ENTRY(___kstart64)
 SECTIONS
 {
-    . = 0x00100000; /* 64bit kern location */
+    . = 0x20000; /* 64bit kern location */
     .text :
     {
         *(.text);
@@ -23,7 +23,7 @@ SECTIONS
     .stack BLOCK(0x1000) :
     {
       __stack_bottom = .;
-      . += 0x00100000;
+      . += 0x010000;
       __stack_top = .;
     }
     /DISCARD/ :

@@ -1,9 +1,10 @@
+.code64
 .text
 .global ___kstart64
 
 ___kstart64:
   cli
-  pop %ax
+  mov $0x0, %ax
   mov %ax, %ds
   mov %ax, %es
   mov %ax, %ss
@@ -11,7 +12,6 @@ ___kstart64:
   mov %ax, %gs
   mov $__stack_top, %esp
   mov %esp,%ebp
-  sti
   cld
   call kmain64
   cli
