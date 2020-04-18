@@ -4,30 +4,6 @@
 
 uint16_t pool_drive();
 
-uint8_t disk_check_lba_support(lbasupport_t *ls){
-	uint8_t status = 0;
-	uint8_t api = 0, code = 0, minver =0;
-
-	asm volatile (
-		"int $0x13\n"
-		"mov %%ah, %[code]\n"
-		"mov %%cl, %[api]\n"
-		"mov %%dh, %[minver]\n"
-		"setc %%bl\n"
-		"mov %%bl, %[status]\n"
-		: [code] "=a" (code), [api] "=c" (api), [minver] "=d" (minver),  [status] "=b" (status)
-		: "a" (0x4100), "b" (0x55aa), "d" (BOOT_DRIVE)
-		);
-
-	if(status == 0) {
-		ls->majorver = code;
-		ls->minorver = minver;
-		ls->api = api;
-	}
-
-	return status;
-}
-
 uint16_t disk_read(uint64_t lba, uint16_t sector_count, uint8_t** data){
 	if(sector_count==0) {
 		return 1;
@@ -38,13 +14,13 @@ uint16_t disk_read(uint64_t lba, uint16_t sector_count, uint8_t** data){
 	}
 	outb(PIO_MASTER+6,0x40);
 	outb(PIO_MASTER+2, (sector_count>>8)&0xFF);
-	outb(PIO_MASTER+3, (lba.part_high>>0)&0xFF);
-	outb(PIO_MASTER+4, (lba.part_high>>8)&0xFF);
-	outb(PIO_MASTER+5, (lba.part_high>>16)&0xFF);
+	outb(PIO_MASTER+3, EXT_INT64_GET_BYTE(lba,3));
+	outb(PIO_MASTER+4, EXT_INT64_GET_BYTE(lba,4));
+	outb(PIO_MASTER+5, EXT_INT64_GET_BYTE(lba,5));
 	outb(PIO_MASTER+2, (sector_count>>0)&0xFF);
-	outb(PIO_MASTER+3, (lba.part_low>>0)&0xFF);
-	outb(PIO_MASTER+4, (lba.part_low>>8)&0xFF);
-	outb(PIO_MASTER+5, (lba.part_low>>16)&0xFF);
+	outb(PIO_MASTER+3, EXT_INT64_GET_BYTE(lba,0));
+	outb(PIO_MASTER+4, EXT_INT64_GET_BYTE(lba,1));
+	outb(PIO_MASTER+5, EXT_INT64_GET_BYTE(lba,2));
 	outb(PIO_MASTER+7, 0x24);
 	uint8_t status;
 	uint16_t *t_data=(uint16_t*)*data;
@@ -66,7 +42,11 @@ uint16_t disk_read(uint64_t lba, uint16_t sector_count, uint8_t** data){
 
 
 uint16_t disk_read_slottable(disk_slot_table_t **pst){
+#if ___BITS == 16
 	uint64_t lba = {1,0};
+#elif ___BITS == 64
+	uint64_t lba = 1;
+#endif
 	uint8_t *data;
 	uint16_t status = disk_read(lba,1,&data);
 	if(status==0) {

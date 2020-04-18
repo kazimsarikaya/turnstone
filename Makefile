@@ -33,18 +33,22 @@ LDSRCDIR = lds
 
 
 AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
-CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*16.c)
+CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*.16.c)
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.asm)
-CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*64.c)
+CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
+
+CCXXSRCS = $(shell find $(CCSRCDIR) -type f -name \*.xx.c)
 
 LDSRCS = $(shell find $(LDSRCDIR) -type f -name \*.ld)
 
 UTILSSRCS = $(shell find $(UTILSSRCDIR) -type f -name \*.c)
 
 ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
-CC16OBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CC16SRCS))
-CC64OBJS = $(patsubst $(CCSRCDIR)/%.c,$(CCOBJDIR)/%.o,$(CC64SRCS))
+CC16OBJS = $(patsubst $(CCSRCDIR)/%.16.c,$(CCOBJDIR)/%.16.o,$(CC16SRCS))
+CC16OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_16.o,$(CCXXSRCS))
+CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
+CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
 OBJS = $(ASOBJS) $(CC16OBJS) $(CC64OBJS)
 PROGS = $(OBJDIR)/bootsect16.bin \
 	$(OBJDIR)/slottable.bin \
@@ -77,10 +81,16 @@ $(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
 $(OBJDIR)/stage3.bin: $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
 	$(LD64) $(LD64FLAGS) -T $< -o $@ $(filter-out $<,$^)
 
-$(CCOBJDIR)/%16.o: $(CCSRCDIR)/%16.c
+$(CCOBJDIR)/%.16.o: $(CCSRCDIR)/%.16.c
 	$(CC16) $(CC16FLAGS) -o $@ $<
 
-$(CCOBJDIR)/%64.o: $(CCSRCDIR)/%64.c
+$(CCOBJDIR)/%.xx_16.o: $(CCSRCDIR)/%.xx.c
+	$(CC16) $(CC16FLAGS) -o $@ $<
+
+$(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
 $(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
@@ -100,10 +110,12 @@ print-%  : ; @echo $* = $($*)
 
 depend: .depend16 .depend64
 
-.depend16: $(CC16SRCS)
+.depend16: $(CC16SRCS) $(CCXXSRCS)
 	$(CC16) $(CC16FLAGS) -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend16
+	sed -i'' -e 's/xx.o:/xx_16.o:/g' .depend16
 
-.depend64: $(CC64SRCS)
+.depend64: $(CC64SRCS) $(CCXXSRCS)
 	$(CC64) $(CC64FLAGS) -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend64
+	sed -i'' -e 's/xx.o:/xx_64.o:/g' .depend64
 
 -include .depend16 .depend64

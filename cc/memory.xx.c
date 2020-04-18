@@ -164,13 +164,21 @@ uint8_t memory_build_page_table(){
 
 	p4->pages[0].present = 1;
 	p4->pages[0].writable = 1;
-	uint32_t p3_addr = get_absolute_address((uint32_t)p3);
+	size_t p3_addr = get_absolute_address((size_t)p3);
+#if ___BITS == 16
 	p4->pages[0].physical_address_part1=p3_addr >> 12;
+#elif ___BITS == 64
+	p4->pages[0].physical_address=p3_addr >> 12;
+#endif
 
 	p3->pages[0].present = 1;
 	p3->pages[0].writable = 1;
-	uint32_t p2_addr = get_absolute_address((uint32_t)p2);
+	size_t p2_addr = get_absolute_address((size_t)p2);
+#if ___BITS == 16
 	p3->pages[0].physical_address_part1=p2_addr >> 12;
+#elif ___BITS == 64
+	p3->pages[0].physical_address=p2_addr >> 12;
+#endif
 
 	p2->pages[0].present = 1;
 	p2->pages[0].writable = 1;
