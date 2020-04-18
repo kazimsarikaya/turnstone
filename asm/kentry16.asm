@@ -5,6 +5,7 @@
 .global BOOT_DRIVE
 .global GDT_REGISTER
 .global IDT_REGISTER
+.global SYSTEM_INFO
 .extern __kpagetable_p4
 __kstart:
   cli
@@ -54,6 +55,7 @@ __kstart:
   bts $0x8, %eax
   wrmsr
 
+  mov SYSTEM_INFO, %edx
   xor %eax, %eax
   mov %cs, %ax
   shl $0x04, %ax
@@ -72,8 +74,6 @@ fix_cs:
   mov %ax, %es
   mov %ax, %fs
   mov %ax, %gs
-
-  mov $long_mode, %ebx
 
   mov %cr0, %eax
   bts $0x0, %eax //pe
@@ -174,4 +174,6 @@ GDT_REGISTER:
 .align 4
 IDT_REGISTER:
 .byte 0x00, 0x00
+.byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+SYSTEM_INFO:
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
