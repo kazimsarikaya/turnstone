@@ -6,3 +6,7 @@ uint8_t kmain64() {
 	data[0]='h';
 	return 0;
 }
+
+void __attribute__ ((interrupt)) isr0(void* ctx){
+
+}

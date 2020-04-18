@@ -8,6 +8,9 @@
 
 extern uint8_t *__kheap_bottom;
 extern uint8_t *__kheap_top;
+extern uint8_t *__kpagetable_p4;
+extern uint8_t *__kpagetable_p3;
+extern uint8_t *__kpagetable_p2;
 
 typedef struct __heapinfo {
 	uint16_t magic;
@@ -112,26 +115,66 @@ void simple_memset(void *address,uint8_t value,size_t size) {
 	}
 }
 
+void simple_memcpy(uint8_t* source,uint8_t* destination,size_t length){
+	for(size_t i=0; i<length; i++) {
+		destination[i]=source[i];
+	}
+}
+
 size_t detect_memory(memory_map_t** mmap) {
 	*mmap = simple_kmalloc(sizeof(memory_map_t*)*MMAP_MAX_ENTRY_COUNT);
 	memory_map_t * mmap_a = *mmap;
-	regext_t contID = {0,0},signature, bytes;
+	regext_t contID = 0,signature, bytes;
 	size_t entries = 0;
 	do {
 		__asm__ __volatile__ ("int $0x15"
 		                      : "=a" (signature), "=c" (bytes), "=b" (contID)
 		                      : "a" (0xE820), "b" (contID), "c" (24), "d" (0x534D4150), "D" (mmap_a));
-		if(signature.part_high != 0x534D && signature.part_low != 0x4150) {
+		if(signature != 0x534D4150) {
 			return -1;
 		}
-		if(bytes.part_high == 0 && bytes.part_low > 20 && mmap_a->acpi.part_low & 0x0001) {
+		if(bytes > 20 && mmap_a->acpi & 0x0001) {
 
 		}
 		else{
 			mmap_a++;
 			entries++;
 		}
-	} while(contID.part_low !=0 && entries<MMAP_MAX_ENTRY_COUNT);
+	} while(contID !=0 && entries<MMAP_MAX_ENTRY_COUNT);
 
 	return entries;
+}
+
+size_t get_absolute_address(uint32_t raddr) {
+	__asm__ __volatile__ ("mov %%ds, %%bx\r\n"
+	                      "shl $0x4, %%ebx\r\n"
+	                      "add %%ebx, %%eax"
+	                      : "=a" (raddr)
+	                      : "a" (raddr));
+	return raddr;
+}
+
+uint8_t memory_build_page_table(){
+	page_table_t *p4 = (page_table_t*)&__kpagetable_p4;
+	page_table_t *p3 = (page_table_t*)&__kpagetable_p3;
+	page_table_t *p2 = (page_table_t*)&__kpagetable_p2;
+	simple_memclean(p4,0x1000);
+	simple_memclean(p3,0x1000);
+	simple_memclean(p2,0x1000);
+
+	p4->pages[0].present = 1;
+	p4->pages[0].writable = 1;
+	uint32_t p3_addr = get_absolute_address((uint32_t)p3);
+	p4->pages[0].physical_address_part1=p3_addr >> 12;
+
+	p3->pages[0].present = 1;
+	p3->pages[0].writable = 1;
+	uint32_t p2_addr = get_absolute_address((uint32_t)p2);
+	p3->pages[0].physical_address_part1=p2_addr >> 12;
+
+	p2->pages[0].present = 1;
+	p2->pages[0].writable = 1;
+	p2->pages[0].hugepage = 1;
+
+	return 0;
 }

@@ -73,6 +73,7 @@ uint16_t disk_read_slottable(disk_slot_table_t **pst){
 		*pst=simple_kmalloc(sizeof(disk_slot_t));
 		simple_memcpy(&data[0x110],(uint8_t*)*pst,0xF0);
 	}
+	simple_kfree(data);
 	return status;
 }
 

@@ -20,17 +20,24 @@ SECTIONS
       *(COMMON)
       __bss_end = .;
     }
-    .stack BLOCK(0x1000) :
+    .stack :
     {
-      __stack_bottom = .;
-      . += 0x1000;
-      __stack_top = .;
+      . = __bss_end +1;
+      __stack_bottom = ALIGN(0x100);
+      __stack_top = __stack_bottom + 0x1000;
     }
     .heap :
     {
       . = __stack_top +1;
       __kheap_bottom = ALIGN(0x100);
       __kheap_top = __kheap_bottom + 0x8000;
+    }
+    .pagetable :
+    {
+      . = __kheap_top +1;
+      __kpagetable_p4 = ALIGN(0x1000);
+      __kpagetable_p3 = __kpagetable_p4 + 0x1000;
+      __kpagetable_p2 = __kpagetable_p3 + 0x1000;
     }
     /DISCARD/ :
     {
