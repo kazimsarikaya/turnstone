@@ -4,16 +4,16 @@
 #include <faraccess.h>
 #include <diskio.h>
 #include <descriptor.h>
+#include <systeminfo.h>
 
-extern uint8_t *__kpagetable_p4;
-uint8_t kmain16(void)
+uint8_t kmain16()
 {
 	init_simple_memory();
 
 	video_clear_screen();
 
-	memory_map_t **mmap = simple_kmalloc(sizeof(memory_map_t**));
-	int mmap_e_count = detect_memory(mmap);
+	memory_map_t *mmap;
+	size_t mmap_e_count = detect_memory(&mmap);
 	char_t * mmap_e_count_str = itoa(mmap_e_count);
 	video_print("mmap entry count: ");
 	video_print(mmap_e_count_str);
@@ -57,7 +57,6 @@ uint8_t kmain16(void)
 						simple_kfree(data);
 						return -1;
 					} else {
-						video_print("sector readed");
 						for(uint16_t j=0; j<512; j++) {
 							far_write_8(0x2000,j,data[j]);
 						}
@@ -98,5 +97,9 @@ uint8_t kmain16(void)
 		video_print("Default page table builded\r\n");
 	}
 
+	SYSTEM_INFO=simple_kmalloc(sizeof(system_info_t));
+	SYSTEM_INFO->mmap=(memory_map_t*)get_absolute_address((uint32_t)mmap);
+	SYSTEM_INFO->mmap_entry_count=mmap_e_count;
+	SYSTEM_INFO=(system_info_t*)get_absolute_address((uint32_t)SYSTEM_INFO);
 	return 0;
 }
