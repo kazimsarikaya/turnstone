@@ -27,12 +27,6 @@ uint8_t kmain16()
 
 	video_print("Hello, World!\r\n");
 
-	lbasupport_t lbas;
-	if(disk_check_lba_support(&lbas)!=0) {
-		video_print("LBA not supported\r\n");
-		return -1;
-	}
-
 	disk_slot_table_t *st;
 	uint8_t k64_copied = 0;
 	if(disk_read_slottable(&st) == 0) {
@@ -49,6 +43,7 @@ uint8_t kmain16()
 				video_print(tmp_str);
 				simple_kfree(tmp_str);
 				video_print(" sectors\r\n");
+				reg_t base_mem = 0x2000;
 				for(uint16_t i=0; i<sc; i++) {
 					uint8_t *data;
 					uint64_t k4_lba_addr = {ss+i,0};
@@ -58,9 +53,10 @@ uint8_t kmain16()
 						return -1;
 					} else {
 						for(uint16_t j=0; j<512; j++) {
-							far_write_8(0x2000,j,data[j]);
+							far_write_8(base_mem,j,data[j]);
 						}
 						simple_kfree(data);
+						base_mem += 0x20;
 					}
 				}
 				video_print("k64 kernel copied\r\n");

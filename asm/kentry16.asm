@@ -2,7 +2,6 @@
 .text
 .global __kstart
 .global check_longmode
-.global BOOT_DRIVE
 .global GDT_REGISTER
 .global IDT_REGISTER
 .global SYSTEM_INFO
@@ -26,7 +25,6 @@ __kstart:
   mov $__stack_top, %esp
   mov %esp, %ebp
   cld
-  mov %bl,BOOT_DRIVE
   call kmain16
   cmp $0x00, %al
   jne .loop
@@ -166,7 +164,6 @@ check_longmode.no_longmode:
   ret
 
 .bss
-BOOT_DRIVE: .byte 0x00
 .align 4
 GDT_REGISTER:
 .byte 0x00, 0x00
