@@ -112,10 +112,10 @@ depend: .depend16 .depend64
 
 .depend16: $(CC16SRCS) $(CCXXSRCS)
 	$(CC16) $(CC16FLAGS) -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend16
-	sed -i'' 's/xx.o:/xx_16.o:/g' .depend16
+	sed -i '' 's/xx.o:/xx_16.o:/g' .depend16
 
 .depend64: $(CC64SRCS) $(CCXXSRCS)
 	$(CC64) $(CC64FLAGS) -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend64
-	sed -i'' 's/xx.o:/xx_64.o:/g' .depend64
+	sed -i '' 's/xx.o:/xx_64.o:/g' .depend64
 
 -include .depend16 .depend64

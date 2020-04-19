@@ -1,4 +1,5 @@
 #include <memory.h>
+#include <systeminfo.h>
 
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
 #define HEAP_INFO_FLAG_USED            (1 << 1)
@@ -26,7 +27,15 @@ heapinfo* hitop = NULL;
 uint8_t memory_simple_init(){
 
 	hibottom = (heapinfo*)&__kheap_bottom;
+#if ___BITS == 16
 	hitop = (heapinfo*)(&__kheap_top - sizeof(heapinfo));
+#elif ___BITS == 64
+	memory_map_t* mmap = SYSTEM_INFO->mmap;
+	while(mmap->type!=1) {
+		mmap++;
+	}
+	hitop = (heapinfo*)(mmap->base + mmap->length - sizeof(heapinfo));
+#endif
 
 	hibottom->magic = HEAP_INFO_MAGIC;
 	hitop->magic = HEAP_INFO_MAGIC;
@@ -51,12 +60,13 @@ void* memory_simple_kmalloc(size_t size){
 	}
 
 	//find first empty and enough slot
-	while((hi->flags & HEAP_INFO_FLAG_USED) ==  HEAP_INFO_FLAG_USED // empty?
-	      || hi + 1 + t_size>hi->next) { // size enough?
-		if( hi == hitop) {
-			return NULL;
-		}
+	while( (hi != hitop) &&
+	       ((hi->flags & HEAP_INFO_FLAG_USED) ==  HEAP_INFO_FLAG_USED// empty?
+	        || hi + 1 + t_size>hi->next)) { // size enough?
 		hi = hi->next;
+	}
+	if( hi == hitop) {
+		return NULL;
 	}
 
 	heapinfo* tmp = hi + 1 + t_size;
@@ -64,6 +74,7 @@ void* memory_simple_kmalloc(size_t size){
 	tmp->flags = HEAP_INFO_FLAG_NOTUSED;
 	tmp->previous = hi;
 	tmp->next = hi->next;
+	hi->next->previous = tmp;
 	hi->next = tmp;
 	hi->flags |= HEAP_INFO_FLAG_USED;
 	memory_simple_memclean(hi + 1, size);
