@@ -18,13 +18,6 @@ typedef struct memory_map {
 	uint32_t acpi;
 } __attribute__((packed)) memory_map_t;
 
-#if ___BITS == 16
-typedef struct physical_address {
-	uint32_t part1;
-	uint8_t part2;
-} __attribute__((packed)) physical_address_t;
-#endif
-
 typedef struct page_entry {
 	uint8_t present : 1; //bit 0
 	uint8_t writable : 1; //bit 1
@@ -41,7 +34,7 @@ typedef struct page_entry {
 #if ___BITS == 16
 	//physical_address_t physical_address; // bits 12-51
 	uint32_t physical_address_part1 : 32; // bits 12-43
-	uint8_t physical_address_part2 : 8; // bits 44-51
+	uint8_t physical_address_part2;  // bits 44-51
 #elif ___BITS == 64
 	uint64_t physical_address : 40; // bits 12-51
 #endif
