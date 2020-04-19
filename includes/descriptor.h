@@ -27,17 +27,17 @@ typedef struct descriptor_gdt_code {
 
 }__attribute__((packed)) descriptor_gdt_code_t;
 
-#define BUILD_GDT_CODE_SEG(seg,DPL) {seg.code.unused1=0; \
-		                                 seg.code.unused2=0; \
-		                                 seg.code.conforming=0; \
-		                                 seg.code.always1=3; \
-		                                 seg.code.dpl=DPL; \
-		                                 seg.code.present=1; \
-		                                 seg.code.unused3=0; \
-		                                 seg.code.avl=0; \
-		                                 seg.code.long_mode=1; \
-		                                 seg.code.default_opsize=0; \
-		                                 seg.code.unused4=0;}
+#define BUILD_GDT_CODE_SEG(seg, DPL) {seg.code.unused1 = 0; \
+		                                  seg.code.unused2 = 0; \
+		                                  seg.code.conforming = 0; \
+		                                  seg.code.always1 = 3; \
+		                                  seg.code.dpl = DPL; \
+		                                  seg.code.present = 1; \
+		                                  seg.code.unused3 = 0; \
+		                                  seg.code.avl = 0; \
+		                                  seg.code.long_mode = 1; \
+		                                  seg.code.default_opsize = 0; \
+		                                  seg.code.unused4 = 0;}
 
 typedef struct descriptor_gdt_data {
 	uint32_t unused1; // 1/0-31
@@ -49,20 +49,28 @@ typedef struct descriptor_gdt_data {
 	uint16_t unused3; // 2/16-31 aka 48-63
 }__attribute__((packed)) descriptor_gdt_data_t;
 
-#define BUILD_GDT_DATA_SEG(seg) {seg.data.unused1=0; \
-		                             seg.data.unused2=0; \
-		                             seg.data.always0=0; \
-		                             seg.data.always1=1; \
-		                             seg.data.dpl=0; \
-		                             seg.data.present=1; \
-		                             seg.data.unused3=0;}
+#define BUILD_GDT_DATA_SEG(seg) {seg.data.unused1 = 0; \
+		                             seg.data.unused2 = 0; \
+		                             seg.data.always0 = 0; \
+		                             seg.data.always1 = 1; \
+		                             seg.data.dpl = 0; \
+		                             seg.data.present = 1; \
+		                             seg.data.unused3 = 0;}
 
 typedef struct descriptor_gdt_null {
 	uint32_t unused1;
 	uint32_t unused2;
 }__attribute__((packed)) descriptor_gdt_null_t;
 
-#define BUILD_GDT_NULL_SEG(seg) {seg.null.unused1=0; seg.null.unused2=0;}
+#define BUILD_GDT_NULL_SEG(seg) {seg.null.unused1 = 0; seg.null.unused2 = 0;}
+
+#define SYSTEM_SEGMENT_TYPE_IDT           0x02
+#define SYSTEM_SEGMENT_TYPE_TSS_A         0x09
+#define SYSTEM_SEGMENT_TYPE_TSS_B         0x0B
+#define SYSTEM_SEGMENT_TYPE_GATE_CALL     0x0C
+#define SYSTEM_SEGMENT_TYPE_GATE_INT      0x0E
+#define SYSTEM_SEGMENT_TYPE_GATE_TRAP     0x0F
+
 
 typedef struct descriptor_gdt {
 	union {

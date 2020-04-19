@@ -1,6 +1,6 @@
 #include <helloworld.h>
 
 
-char_t * hello_world(){
+char_t* hello_world(){
 	return "Hello World";
 }

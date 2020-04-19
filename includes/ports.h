@@ -28,6 +28,6 @@ static inline uint16_t inw(uint16_t port){
 
 void init_serial(uint16_t);
 char_t read_serial(uint16_t);
-void write_serial(uint16_t,char_t);
+void write_serial(uint16_t, char_t);
 
 #endif

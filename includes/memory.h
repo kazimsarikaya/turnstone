@@ -65,11 +65,11 @@ typedef struct page_table {
 
 extern uint8_t check_longmode();
 uint8_t memory_simple_init();
-void *memory_simple_kmalloc(size_t);
+void* memory_simple_kmalloc(size_t);
 uint8_t memory_simple_kfree(void*);
-void memory_simple_memset(void*,uint8_t,size_t);
-#define memory_simple_memclean(addr,size) memory_simple_memset(addr,NULL,size)
-void memory_simple_memcpy(uint8_t*,uint8_t*,size_t);
+void memory_simple_memset(void*, uint8_t, size_t);
+#define memory_simple_memclean(addr, size) memory_simple_memset(addr, NULL, size)
+void memory_simple_memcpy(uint8_t*, uint8_t*, size_t);
 
 size_t memory_detect_map(memory_map_t**);
 size_t memory_get_absolute_address(uint32_t);

@@ -27,8 +27,8 @@ uint8_t is_transmit_empty(uint16_t port) {
 	return inb(port + 5) & 0x20;
 }
 
-void write_serial(uint16_t port,char_t data) {
+void write_serial(uint16_t port, char_t data) {
 	while (is_transmit_empty(port) == 0);
 
-	outb(port,data);
+	outb(port, data);
 }
