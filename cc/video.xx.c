@@ -49,11 +49,7 @@ void video_print(char_t *string)
 		}
 		i++;
 	}
-	uint16_t cursor = cursor_y*80+cursor_x;
-	outb(0x3D4, 14);
-	outb(0x3D5, cursor >> 8);
-	outb(0x3D4, 15);
-	outb(0x3D5, cursor);
+	video_move_cursor();
 }
 
 void video_print_at(char_t *string, uint8_t x, uint8_t y) {
@@ -62,6 +58,13 @@ void video_print_at(char_t *string, uint8_t x, uint8_t y) {
 	video_print(string);
 }
 
+void video_move_cursor(){
+	uint16_t cursor = cursor_y*80+cursor_x;
+	outb(0x3D4, 14);
+	outb(0x3D5, cursor >> 8);
+	outb(0x3D4, 15);
+	outb(0x3D5, cursor);
+}
 
 void video_scroll() {
 	for(size_t i=0; i<80*24; i++) {

@@ -64,15 +64,15 @@ typedef struct page_table {
 } __attribute__((packed)) page_table_t;
 
 extern uint8_t check_longmode();
-uint8_t init_simple_memory();
-void *simple_kmalloc(size_t);
-uint8_t simple_kfree(void*);
-void simple_memset(void*,uint8_t,size_t);
-#define simple_memclean(addr,size) simple_memset(addr,NULL,size)
-void simple_memcpy(uint8_t*,uint8_t*,size_t);
+uint8_t memory_simple_init();
+void *memory_simple_kmalloc(size_t);
+uint8_t memory_simple_kfree(void*);
+void memory_simple_memset(void*,uint8_t,size_t);
+#define memory_simple_memclean(addr,size) memory_simple_memset(addr,NULL,size)
+void memory_simple_memcpy(uint8_t*,uint8_t*,size_t);
 
-size_t detect_memory(memory_map_t**);
-size_t get_absolute_address(uint32_t);
+size_t memory_detect_map(memory_map_t**);
+size_t memory_get_absolute_address(uint32_t);
 uint8_t memory_build_page_table();
 
 #endif

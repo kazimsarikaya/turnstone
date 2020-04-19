@@ -16,6 +16,15 @@ ___kstart64:
   mov %ax, %gs
   mov $__stack_top, %esp
   mov %esp,%ebp
+
+  xor %rax, %rax
+  mov $IDT_REGISTER, %rax
+  sidt (%rax)
+
+  xor %rax,%rax
+  mov $GDT_REGISTER, %rax
+  sgdt (%rax)
+
   cld
   call kmain64
 ___kstart64.loop:

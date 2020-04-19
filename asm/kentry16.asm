@@ -30,11 +30,11 @@ __kstart:
   jne .loop
 
   xor %eax, %eax
-  add $IDT_REGISTER, %eax
+  mov $IDT_REGISTER, %eax
   lidt (%eax)
 
   xor %eax, %eax
-  add $GDT_REGISTER, %eax
+  mov $GDT_REGISTER, %eax
   lgdt (%eax)
 
   mov %cr4, %eax
@@ -164,11 +164,11 @@ check_longmode.no_longmode:
   ret
 
 .bss
-.align 4
+.align 8
 GDT_REGISTER:
 .byte 0x00, 0x00
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-.align 4
+.align 8
 IDT_REGISTER:
 .byte 0x00, 0x00
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00

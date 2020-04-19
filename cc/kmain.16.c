@@ -8,17 +8,17 @@
 
 uint8_t kmain16()
 {
-	init_simple_memory();
+	memory_simple_init();
 
 	video_clear_screen();
 
 	memory_map_t *mmap;
-	size_t mmap_e_count = detect_memory(&mmap);
+	size_t mmap_e_count = memory_detect_map(&mmap);
 	char_t * mmap_e_count_str = itoa(mmap_e_count);
 	video_print("mmap entry count: ");
 	video_print(mmap_e_count_str);
 	video_print("\n");
-	simple_kfree(mmap_e_count_str);
+	memory_simple_kfree(mmap_e_count_str);
 
 	if(check_longmode()!=0) {
 		video_print("No long mode support");
@@ -37,11 +37,11 @@ uint8_t kmain16()
 				video_print("k64 kernel start at: ");
 				char_t *tmp_str = itoh(ss);
 				video_print(tmp_str);
-				simple_kfree(tmp_str);
+				memory_simple_kfree(tmp_str);
 				video_print(" size: ");
 				tmp_str=itoh(sc);
 				video_print(tmp_str);
-				simple_kfree(tmp_str);
+				memory_simple_kfree(tmp_str);
 				video_print(" sectors\r\n");
 				reg_t base_mem = 0x2000;
 				for(uint16_t i=0; i<sc; i++) {
@@ -49,13 +49,13 @@ uint8_t kmain16()
 					uint64_t k4_lba_addr = {ss+i,0};
 					if(disk_read(k4_lba_addr,1,&data) !=0) {
 						video_print("can not read k64 sectors\r\n");
-						simple_kfree(data);
+						memory_simple_kfree(data);
 						return -1;
 					} else {
 						for(uint16_t j=0; j<512; j++) {
 							far_write_8(base_mem,j,data[j]);
 						}
-						simple_kfree(data);
+						memory_simple_kfree(data);
 						base_mem += 0x20;
 					}
 				}
@@ -93,9 +93,9 @@ uint8_t kmain16()
 		video_print("Default page table builded\r\n");
 	}
 
-	SYSTEM_INFO=simple_kmalloc(sizeof(system_info_t));
-	SYSTEM_INFO->mmap=(memory_map_t*)get_absolute_address((uint32_t)mmap);
+	SYSTEM_INFO=memory_simple_kmalloc(sizeof(system_info_t));
+	SYSTEM_INFO->mmap=(memory_map_t*)memory_get_absolute_address((uint32_t)mmap);
 	SYSTEM_INFO->mmap_entry_count=mmap_e_count;
-	SYSTEM_INFO=(system_info_t*)get_absolute_address((uint32_t)SYSTEM_INFO);
+	SYSTEM_INFO=(system_info_t*)memory_get_absolute_address((uint32_t)SYSTEM_INFO);
 	return 0;
 }
