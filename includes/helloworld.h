@@ -3,6 +3,6 @@
 
 #include <types.h>
 
-char_t * hello_world();
+char_t* hello_world();
 
 #endif
