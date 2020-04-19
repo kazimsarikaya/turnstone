@@ -8,7 +8,7 @@ uint16_t disk_read(uint64_t lba, uint16_t sector_count, uint8_t** data){
 	if(sector_count==0) {
 		return 1;
 	}
-	*data=simple_kmalloc(sizeof(uint8_t)*sector_count*512);
+	*data=memory_simple_kmalloc(sizeof(uint8_t)*sector_count*512);
 	if(*data==NULL) {
 		return 2;
 	}
@@ -32,7 +32,7 @@ uint16_t disk_read(uint64_t lba, uint16_t sector_count, uint8_t** data){
 				t_data[k++] = inw(PIO_MASTER);
 			}
 		} else {
-			simple_kfree(*data);
+			memory_simple_kfree(*data);
 			return status;
 		}
 	}
@@ -50,10 +50,10 @@ uint16_t disk_read_slottable(disk_slot_table_t **pst){
 	uint8_t *data;
 	uint16_t status = disk_read(lba,1,&data);
 	if(status==0) {
-		*pst=simple_kmalloc(sizeof(disk_slot_t));
-		simple_memcpy(&data[0x110],(uint8_t*)*pst,0xF0);
+		*pst=memory_simple_kmalloc(sizeof(disk_slot_t));
+		memory_simple_memcpy(&data[0x110],(uint8_t*)*pst,0xF0);
 	}
-	simple_kfree(data);
+	memory_simple_kfree(data);
 	return status;
 }
 

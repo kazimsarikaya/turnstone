@@ -3,7 +3,7 @@
 
 uint8_t descriptor_build_gdt_register(){
 	uint16_t gdt_size = sizeof(descriptor_gdt_t)*3;
-	descriptor_gdt_t *gdts = simple_kmalloc(gdt_size);
+	descriptor_gdt_t *gdts = memory_simple_kmalloc(gdt_size);
 	if(gdts==NULL) {
 		return -1;
 	}
@@ -12,7 +12,7 @@ uint8_t descriptor_build_gdt_register(){
 	BUILD_GDT_DATA_SEG(gdts[2]);
 	GDT_REGISTER.limit = gdt_size -1;
 #if ___BITS == 16
-	GDT_REGISTER.base.part_low = get_absolute_address((uint32_t)gdts);
+	GDT_REGISTER.base.part_low = memory_get_absolute_address((uint32_t)gdts);
 	GDT_REGISTER.base.part_high = 0;
 #endif
 	return 0;

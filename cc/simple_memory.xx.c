@@ -14,15 +14,16 @@ extern uint8_t *__kpagetable_p2;
 
 typedef struct __heapinfo {
 	uint16_t magic;
-	uint8_t flags;
+	uint16_t flags;
 	struct __heapinfo *next;
 	struct __heapinfo *previous;
+	uint32_t padding; // for 8 byte align
 }__attribute__ ((packed)) heapinfo;
 
 heapinfo *hibottom = NULL;
 heapinfo *hitop = NULL;
 
-uint8_t init_simple_memory (){
+uint8_t memory_simple_init(){
 
 	hibottom = (heapinfo*)&__kheap_bottom;
 	hitop = (heapinfo*)(&__kheap_top-sizeof(heapinfo));
@@ -42,7 +43,7 @@ uint8_t init_simple_memory (){
 	return 0;
 }
 
-void *simple_kmalloc(size_t size){
+void *memory_simple_kmalloc(size_t size){
 	heapinfo *hi = hibottom;
 	size_t t_size = size / sizeof(heapinfo);
 	if ((size % sizeof(heapinfo)) != 0) {
@@ -65,12 +66,12 @@ void *simple_kmalloc(size_t size){
 	tmp->next = hi->next;
 	hi->next = tmp;
 	hi->flags |= HEAP_INFO_FLAG_USED;
-	simple_memclean(hi+1, size);
+	memory_simple_memclean(hi+1, size);
 	return hi+1;
 }
 
 
-uint8_t simple_kfree(void *address){
+uint8_t memory_simple_kfree(void *address){
 	if(address==NULL) {
 		return -1;
 	}
@@ -89,13 +90,13 @@ uint8_t simple_kfree(void *address){
 
 	//clean data
 	size_t size = (void*)hi->next-address;
-	simple_memclean(address,size);
+	memory_simple_memclean(address,size);
 
 	//merge next empty slot if any
 	if(!(hi->next->flags & HEAP_INFO_FLAG_USED)) {
 		void *caddr = hi->next;
 		hi->next = hi->next->next; //next cannot be NULL do not afraid of it
-		simple_memclean(caddr,sizeof(heapinfo));
+		memory_simple_memclean(caddr,sizeof(heapinfo));
 	}
 
 	// merge previous empty slot if any
@@ -103,26 +104,26 @@ uint8_t simple_kfree(void *address){
 		if(!(hi->previous->flags & HEAP_INFO_FLAG_USED)) { // if prev is full then stop
 			void *caddr = hi;
 			hi->previous->next = hi->next;
-			simple_memclean(caddr,sizeof(heapinfo));
+			memory_simple_memclean(caddr,sizeof(heapinfo));
 		}
 	}
 	return 0;
 }
 
-void simple_memset(void *address,uint8_t value,size_t size) {
+void memory_simple_memset(void *address,uint8_t value,size_t size) {
 	for(size_t i=0; i<size; i++) {
 		((uint8_t*)address)[i] = value;
 	}
 }
 
-void simple_memcpy(uint8_t* source,uint8_t* destination,size_t length){
+void memory_simple_memcpy(uint8_t* source,uint8_t* destination,size_t length){
 	for(size_t i=0; i<length; i++) {
 		destination[i]=source[i];
 	}
 }
 
-size_t detect_memory(memory_map_t** mmap) {
-	*mmap = simple_kmalloc(sizeof(memory_map_t*)*MMAP_MAX_ENTRY_COUNT);
+size_t memory_detect_map(memory_map_t** mmap) {
+	*mmap = memory_simple_kmalloc(sizeof(memory_map_t*)*MMAP_MAX_ENTRY_COUNT);
 	memory_map_t * mmap_a = *mmap;
 	regext_t contID = 0,signature, bytes;
 	size_t entries = 0;
@@ -145,7 +146,7 @@ size_t detect_memory(memory_map_t** mmap) {
 	return entries;
 }
 
-size_t get_absolute_address(uint32_t raddr) {
+size_t memory_get_absolute_address(uint32_t raddr) {
 	__asm__ __volatile__ ("mov %%ds, %%bx\r\n"
 	                      "shl $0x4, %%ebx\r\n"
 	                      "add %%ebx, %%eax"
@@ -158,13 +159,13 @@ uint8_t memory_build_page_table(){
 	page_table_t *p4 = (page_table_t*)&__kpagetable_p4;
 	page_table_t *p3 = (page_table_t*)&__kpagetable_p3;
 	page_table_t *p2 = (page_table_t*)&__kpagetable_p2;
-	simple_memclean(p4,0x1000);
-	simple_memclean(p3,0x1000);
-	simple_memclean(p2,0x1000);
+	memory_simple_memclean(p4,0x1000);
+	memory_simple_memclean(p3,0x1000);
+	memory_simple_memclean(p2,0x1000);
 
 	p4->pages[0].present = 1;
 	p4->pages[0].writable = 1;
-	size_t p3_addr = get_absolute_address((size_t)p3);
+	size_t p3_addr = memory_get_absolute_address((size_t)p3);
 #if ___BITS == 16
 	p4->pages[0].physical_address_part1=p3_addr >> 12;
 #elif ___BITS == 64
@@ -173,7 +174,7 @@ uint8_t memory_build_page_table(){
 
 	p3->pages[0].present = 1;
 	p3->pages[0].writable = 1;
-	size_t p2_addr = get_absolute_address((size_t)p2);
+	size_t p2_addr = memory_get_absolute_address((size_t)p2);
 #if ___BITS == 16
 	p3->pages[0].physical_address_part1=p2_addr >> 12;
 #elif ___BITS == 64
