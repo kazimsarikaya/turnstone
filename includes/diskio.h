@@ -14,7 +14,7 @@ typedef struct disk_slot_table {
 	disk_slot_t slots[10];
 } __attribute__ ((packed)) disk_slot_table_t;
 
-uint16_t disk_pio_read(uint64_t, uint16_t, uint8_t**);
-uint16_t disk_pio_read_slottable(disk_slot_table_t**);
+uint16_t disk_read(uint8_t hard_disk, uint64_t, uint16_t, uint8_t**);
+uint16_t disk_read_slottable(uint8_t hard_disk, disk_slot_table_t**);
 
 #endif

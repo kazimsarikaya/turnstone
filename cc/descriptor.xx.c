@@ -7,9 +7,9 @@ uint8_t descriptor_build_gdt_register(){
 	if(gdts==NULL) {
 		return -1;
 	}
-	BUILD_GDT_NULL_SEG(gdts[0]);
-	BUILD_GDT_CODE_SEG(gdts[1], DPL_KERNEL);
-	BUILD_GDT_DATA_SEG(gdts[2]);
+	DESCRIPTOR_BUILD_GDT_NULL_SEG(gdts[0]);
+	DESCRIPTOR_BUILD_GDT_CODE_SEG(gdts[1], DPL_KERNEL);
+	DESCRIPTOR_BUILD_GDT_DATA_SEG(gdts[2]);
 	GDT_REGISTER.limit = gdt_size - 1;
 #if ___BITS == 16
 	GDT_REGISTER.base.part_low = memory_get_absolute_address((uint32_t)gdts);

@@ -25,6 +25,9 @@ __kstart:
   mov $__stack_top, %esp
   mov %esp, %ebp
   cld
+  push %ebx
+  xor  %eax, %eax
+  push %ax // fix fucking gcc stack alignment
   call kmain16
   cmp $0x00, %al
   jne .loop

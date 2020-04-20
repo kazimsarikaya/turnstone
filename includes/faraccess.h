@@ -1,5 +1,5 @@
-#ifndef ___FAR_ACCESS
-#define ___FAR_ACCESS 0
+#ifndef ___FAR_ACCESS_H
+#define ___FAR_ACCESS_H 0
 
 #include <types.h>
 

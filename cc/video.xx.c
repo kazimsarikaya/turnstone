@@ -12,7 +12,7 @@ uint16_t cursor_y = 0;
 void video_clear_screen(){
 	size_t i;
 	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
-	for(i = 0; i<VIDEO_BUF_LEN; i += 2) {
+	for(i = 0; i<VIDEO_BUF_LEN * 2; i += 2) {
 		far_write_16(VIDEO_SEG, i, blank);
 	}
 }

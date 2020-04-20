@@ -1,5 +1,5 @@
-#ifndef ___HELLO_WORLD
-#define ___HELLO_WORLD 0
+#ifndef ___HELLO_WORLD_H
+#define ___HELLO_WORLD_H 0
 
 #include <types.h>
 
