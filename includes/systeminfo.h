@@ -1,5 +1,5 @@
-#ifndef ___SYSTEMINFO
-#define ___SYSTEMINFO 0
+#ifndef ___SYSTEMINFO_H
+#define ___SYSTEMINFO_H 0
 
 #include <types.h>
 #include <memory.h>

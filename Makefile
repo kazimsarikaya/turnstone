@@ -16,10 +16,6 @@ AS16FLAGS = --32
 CC16FLAGS = -m32 -march=i386 -D___BITS=16 $(CCXXFLAGS)
 LD16FLAGS = --nmagic -s
 
-AS32FLAGS = --32
-CC32FLAGS = -m32 -march=i386 -D___BITS=32 $(CCXXFLAGS)
-LD32FLAGS = --nmagic -s
-
 AS64FLAGS = --64
 CC64FLAGS = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
 LD64FLAGS = --nmagic -s

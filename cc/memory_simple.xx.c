@@ -70,12 +70,14 @@ void* memory_simple_kmalloc(size_t size){
 	}
 
 	heapinfo* tmp = hi + 1 + t_size;
-	tmp->magic =  HEAP_INFO_MAGIC;
-	tmp->flags = HEAP_INFO_FLAG_NOTUSED;
-	tmp->previous = hi;
-	tmp->next = hi->next;
-	hi->next->previous = tmp;
-	hi->next = tmp;
+	if(tmp!=hi->next) {
+		tmp->magic =  HEAP_INFO_MAGIC;
+		tmp->flags = HEAP_INFO_FLAG_NOTUSED;
+		tmp->previous = hi;
+		tmp->next = hi->next;
+		hi->next->previous = tmp;
+		hi->next = tmp;
+	}
 	hi->flags |= HEAP_INFO_FLAG_USED;
 	memory_simple_memclean(hi + 1, size);
 	return hi + 1;
@@ -107,6 +109,7 @@ uint8_t memory_simple_kfree(void* address){
 	if(!(hi->next->flags & HEAP_INFO_FLAG_USED)) {
 		void* caddr = hi->next;
 		hi->next = hi->next->next; //next cannot be NULL do not afraid of it
+		hi->next->previous = hi;
 		memory_simple_memclean(caddr, sizeof(heapinfo));
 	}
 
@@ -115,6 +118,7 @@ uint8_t memory_simple_kfree(void* address){
 		if(!(hi->previous->flags & HEAP_INFO_FLAG_USED)) { // if prev is full then stop
 			void* caddr = hi;
 			hi->previous->next = hi->next;
+			hi->next->previous = hi->previous;
 			memory_simple_memclean(caddr, sizeof(heapinfo));
 		}
 	}

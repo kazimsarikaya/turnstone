@@ -4,7 +4,6 @@
 #include <types.h>
 
 #define COM1    0x03F8
-#define PIO_MASTER  0x01F0
 
 static inline void outb(uint16_t port, uint8_t data) {
 	asm volatile ( "outb %0, %1" : : "a" (data), "dN" (port));

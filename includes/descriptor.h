@@ -1,5 +1,5 @@
-#ifndef ___DESCRIPTOR
-#define ___DESCRIPTOR 0
+#ifndef ___DESCRIPTOR_H
+#define ___DESCRIPTOR_H 0
 
 #include <types.h>
 
@@ -10,6 +10,8 @@
 
 #define DPL_KERNEL DPL_RING0
 #define DPL_USER   DPL_RING3
+
+#define KERNEL_CODE_SEG 0x08
 
 typedef struct descriptor_gdt_code {
 	uint32_t unused1; // 1/0-31
@@ -27,17 +29,17 @@ typedef struct descriptor_gdt_code {
 
 }__attribute__((packed)) descriptor_gdt_code_t;
 
-#define BUILD_GDT_CODE_SEG(seg, DPL) {seg.code.unused1 = 0; \
-		                                  seg.code.unused2 = 0; \
-		                                  seg.code.conforming = 0; \
-		                                  seg.code.always1 = 3; \
-		                                  seg.code.dpl = DPL; \
-		                                  seg.code.present = 1; \
-		                                  seg.code.unused3 = 0; \
-		                                  seg.code.avl = 0; \
-		                                  seg.code.long_mode = 1; \
-		                                  seg.code.default_opsize = 0; \
-		                                  seg.code.unused4 = 0;}
+#define DESCRIPTOR_BUILD_GDT_CODE_SEG(seg, DPL) {seg.code.unused1 = 0; \
+		                                             seg.code.unused2 = 0; \
+		                                             seg.code.conforming = 0; \
+		                                             seg.code.always1 = 3; \
+		                                             seg.code.dpl = DPL; \
+		                                             seg.code.present = 1; \
+		                                             seg.code.unused3 = 0; \
+		                                             seg.code.avl = 0; \
+		                                             seg.code.long_mode = 1; \
+		                                             seg.code.default_opsize = 0; \
+		                                             seg.code.unused4 = 0;}
 
 typedef struct descriptor_gdt_data {
 	uint32_t unused1; // 1/0-31
@@ -49,20 +51,20 @@ typedef struct descriptor_gdt_data {
 	uint16_t unused3; // 2/16-31 aka 48-63
 }__attribute__((packed)) descriptor_gdt_data_t;
 
-#define BUILD_GDT_DATA_SEG(seg) {seg.data.unused1 = 0; \
-		                             seg.data.unused2 = 0; \
-		                             seg.data.always0 = 0; \
-		                             seg.data.always1 = 1; \
-		                             seg.data.dpl = 0; \
-		                             seg.data.present = 1; \
-		                             seg.data.unused3 = 0;}
+#define DESCRIPTOR_BUILD_GDT_DATA_SEG(seg) {seg.data.unused1 = 0; \
+		                                        seg.data.unused2 = 0; \
+		                                        seg.data.always0 = 0; \
+		                                        seg.data.always1 = 1; \
+		                                        seg.data.dpl = 0; \
+		                                        seg.data.present = 1; \
+		                                        seg.data.unused3 = 0;}
 
 typedef struct descriptor_gdt_null {
 	uint32_t unused1;
 	uint32_t unused2;
 }__attribute__((packed)) descriptor_gdt_null_t;
 
-#define BUILD_GDT_NULL_SEG(seg) {seg.null.unused1 = 0; seg.null.unused2 = 0;}
+#define DESCRIPTOR_BUILD_GDT_NULL_SEG(seg) {seg.null.unused1 = 0; seg.null.unused2 = 0;}
 
 #define SYSTEM_SEGMENT_TYPE_IDT           0x02
 #define SYSTEM_SEGMENT_TYPE_TSS_A         0x09
@@ -83,12 +85,29 @@ typedef struct descriptor_gdt {
 typedef struct descriptor_idt {
 	uint16_t offset_1;  // offset bits 0..15
 	uint16_t selector;  // a code segment selector in GDT or LDT
-	uint8_t ist;        // bits 0..2 holds Interrupt Stack Table offset, rest of bits zero.
-	uint8_t type_attr;  // type and attributes
+	uint8_t ist : 3;    // bits 0..2 holds Interrupt Stack Table offset, rest of bits zero.
+	uint8_t always0_1 : 5; // ignore
+	uint8_t type : 4;  // type
+	uint8_t always0_2 : 1; // 0
+	uint8_t dpl : 2; // dpl
+	uint8_t present : 1; //interrupt present?
 	uint16_t offset_2;  // offset bits 16..31
 	uint32_t offset_3;  // offset bits 32..63
 	uint32_t zero;      // reserved
 }__attribute__((packed)) descriptor_idt_t;
+
+#define DESCRIPTOR_BUILD_IDT_SEG(IE, FUNC_ADDR, SELECTOR, IST, DPL) { \
+		IE.selector = SELECTOR; \
+		IE.ist = IST; \
+		IE.always0_1 = 0; \
+		IE.type = 0xE; \
+		IE.always0_2 = 0; \
+		IE.dpl = DPL; \
+		IE.present = 1; \
+		IE.offset_1 = (dummy_i_h_nec >> 0) & 0xFFFF; \
+		IE.offset_2 = (dummy_i_h_nec >> 16) & 0xFFFF; \
+		IE.offset_3 = (dummy_i_h_nec >> 32) & 0xFFFFFFFF; \
+}
 
 
 typedef struct descriptor_register {
