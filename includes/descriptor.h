@@ -104,9 +104,9 @@ typedef struct descriptor_idt {
 		IE.always0_2 = 0; \
 		IE.dpl = DPL; \
 		IE.present = 1; \
-		IE.offset_1 = (dummy_i_h_nec >> 0) & 0xFFFF; \
-		IE.offset_2 = (dummy_i_h_nec >> 16) & 0xFFFF; \
-		IE.offset_3 = (dummy_i_h_nec >> 32) & 0xFFFFFFFF; \
+		IE.offset_1 = (FUNC_ADDR >> 0) & 0xFFFF; \
+		IE.offset_2 = (FUNC_ADDR >> 16) & 0xFFFF; \
+		IE.offset_3 = (FUNC_ADDR >> 32) & 0xFFFFFFFF; \
 }
 
 
