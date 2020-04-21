@@ -62,6 +62,7 @@ PROGS = $(OBJDIR)/bootsect16.bin \
 SUBDIRS := utils
 
 .PHONY: all disk clean depend $(SUBDIRS)
+.PRECIOUS: $(M4OBJS)
 all: disk
 
 disk: kernel

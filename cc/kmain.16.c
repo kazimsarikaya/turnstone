@@ -6,7 +6,9 @@
 #include <descriptor.h>
 #include <systeminfo.h>
 
-uint8_t kmain16(uint8_t hard_disk)
+extern uint8_t BOOT_DRIVE;
+
+uint8_t kmain16()
 {
 	memory_simple_init();
 
@@ -20,7 +22,11 @@ uint8_t kmain16(uint8_t hard_disk)
 	video_print("\n");
 	memory_simple_kfree(mmap_e_count_str);
 
-	if(check_longmode()!=0) {
+	SYSTEM_INFO = memory_simple_kmalloc(sizeof(system_info_t));
+	SYSTEM_INFO->mmap_entry_count = mmap_e_count;
+	SYSTEM_INFO->mmap = mmap;
+
+	if(check_longmode() != 0) {
 		video_print("No long mode support\0");
 		return -1;
 	}
@@ -29,9 +35,9 @@ uint8_t kmain16(uint8_t hard_disk)
 
 	disk_slot_table_t* st;
 	uint8_t k64_copied = 0;
-	if(disk_read_slottable(hard_disk, &st) == 0) {
-		for(uint8_t i = 0; i<0xF0; i++) {
-			if(st->slots[i].type==4) {
+	if(disk_read_slottable(BOOT_DRIVE, &st) == 0) {
+		for(uint8_t i = 0; i < 0xF0; i++) {
+			if(st->slots[i].type == 4) {
 				uint32_t sc = st->slots[i].end.part_low - st->slots[i].start.part_low + 1;
 				uint32_t ss = st->slots[i].start.part_low;
 				video_print("k64 kernel start at: \0");
@@ -44,15 +50,15 @@ uint8_t kmain16(uint8_t hard_disk)
 				memory_simple_kfree(tmp_str);
 				video_print(" sectors\r\n\0");
 				reg_t base_mem = 0x2000;
-				for(uint32_t i = 0; i<sc; i++) {
+				for(uint32_t i = 0; i < sc; i++) {
 					uint8_t* data;
 					uint64_t k4_lba_addr = {ss + i, 0};
-					if(disk_read(hard_disk, k4_lba_addr, 1, &data) !=0) {
+					if(disk_read(BOOT_DRIVE, k4_lba_addr, 1, &data) != 0) {
 						video_print("can not read k64 sectors\r\n\0");
 						memory_simple_kfree(data);
 						return -1;
 					} else {
-						for(uint16_t j = 0; j<512; j++) {
+						for(uint16_t j = 0; j < 512; j++) {
 							far_write_8(base_mem, j, data[j]);
 						}
 						memory_simple_kfree(data);
@@ -65,7 +71,8 @@ uint8_t kmain16(uint8_t hard_disk)
 			}
 		}
 	} else {
-		video_print("Data not readed\r\n\0");
+		video_print("Slot table can not readed\r\n\0");
+		return -1;
 	}
 	if(k64_copied == 0) {
 		video_print("Can not copy k64 kernel\r\n\0");
@@ -86,16 +93,14 @@ uint8_t kmain16(uint8_t hard_disk)
 		video_print("Default gdt builded\r\n\0");
 	}
 
-	if(memory_build_page_table()!=0) {
+	if(memory_build_page_table() != 0) {
 		video_print("Can not build default page table\r\n\0");
 		return -1;
 	} else {
 		video_print("Default page table builded\r\n\0");
 	}
 
-	SYSTEM_INFO = memory_simple_kmalloc(sizeof(system_info_t));
-	SYSTEM_INFO->mmap = (memory_map_t*)memory_get_absolute_address((uint32_t)mmap);
-	SYSTEM_INFO->mmap_entry_count = mmap_e_count;
+	SYSTEM_INFO->mmap = (memory_map_t*)memory_get_absolute_address((uint32_t)SYSTEM_INFO->mmap);
 	SYSTEM_INFO = (system_info_t*)memory_get_absolute_address((uint32_t)SYSTEM_INFO);
 	return 0;
 }

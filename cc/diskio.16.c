@@ -17,11 +17,11 @@ uint16_t disk_read(uint8_t hard_disk, uint64_t lba, uint16_t sector_count, uint8
 	uint16_t status, err;
 
 	*data = memory_simple_kmalloc(sizeof(uint8_t) * sector_count * 512);
-	if(*data==NULL) {
+	if(*data == NULL) {
 		return -1;
 	}
 	dap = memory_simple_kmalloc(sizeof(disk_bios_dap_t));
-	if(dap==NULL) {
+	if(dap == NULL) {
 		memory_simple_kfree(*data);
 		return -2;
 	}
@@ -33,13 +33,13 @@ uint16_t disk_read(uint8_t hard_disk, uint64_t lba, uint16_t sector_count, uint8
 	dap->lba.part_low = lba.part_low;
 	dap->lba.part_high = lba.part_high;
 
-	__asm__ __volatile__ ( "int $0x13"
-	                       : "=@ccc" (err), "=a" (status)
-	                       : "a" (0x4200), "d" (hard_disk), "S" (dap)
-	                       );
+	__asm__ __volatile__ ("int $0x13\n"
+	                      : "=@ccc" (err), "=a" (status)
+	                      : "a" (0x4200), "d" (hard_disk), "S" (dap)
+	                      );
 
 	memory_simple_kfree(dap);
-	if(err!=0) {
+	if(err != 0) {
 		memory_simple_kfree(*data);
 	}
 	return status;
@@ -54,7 +54,7 @@ uint16_t disk_read_slottable(uint8_t hard_disk, disk_slot_table_t** pst){
 #endif
 	uint8_t* data;
 	uint16_t status = disk_read(hard_disk, lba, 1, &data);
-	if(status==0) {
+	if(status == 0) {
 		*pst = memory_simple_kmalloc(sizeof(disk_slot_table_t));
 		memory_simple_memcpy(data + 0x110, (uint8_t*)*pst, 0xF0);
 	}

@@ -1,6 +1,6 @@
 #include <cpu.h>
 
-void cpu_halt() {
+void cpu_hlt() {
 	for(;;) {
 		cpu_cli();
 		__asm__ __volatile__ ("hlt");

@@ -26,26 +26,9 @@ typedef struct {
 	uint32_t part_high;
 } __attribute__ ((packed)) uint64_t;
 
-#define EXT_INT64_GET_BYTE(i, bo) (bo<4 ? ((i.part_low >> (bo * 4)) & 0XFF) : ((i.part_high >> ((bo - 4) * 4)) & 0XFF))
+#define EXT_INT64_GET_BYTE(i, bo) (bo < 4 ? ((i.part_low >> (bo * 4)) & 0XFF) : ((i.part_high >> ((bo - 4) * 4)) & 0XFF))
 
 #define reg_t uint16_t
-#define regext_t uint32_t
-#define size_t uint32_t
-#define number_t int32_t
-
-#elif ___BITS == 32
-
-typedef struct {
-	int32_t part_low;
-	int32_t part_high;
-} __attribute__ ((packed)) int64_t;
-
-typedef struct {
-	uint32_t part_low;
-	uint32_t part_high;
-} __attribute__ ((packed)) uint64_t;
-
-#define reg_t uint32_t
 #define regext_t uint32_t
 #define size_t uint32_t
 #define number_t int32_t
