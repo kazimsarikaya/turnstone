@@ -32,9 +32,8 @@ typedef struct page_entry {
 	uint8_t os_avail02 : 1; //bit 10
 	uint8_t os_avail03 : 1; //bit 11
 #if ___BITS == 16
-	//physical_address_t physical_address; // bits 12-51
 	uint32_t physical_address_part1 : 32; // bits 12-43
-	uint8_t physical_address_part2;  // bits 44-51
+	uint8_t physical_address_part2 : 8;  // bits 44-51
 #elif ___BITS == 64
 	uint64_t physical_address : 40; // bits 12-51
 #endif
@@ -65,7 +64,21 @@ void memory_simple_memset(void*, uint8_t, size_t);
 void memory_simple_memcpy(uint8_t*, uint8_t*, size_t);
 
 size_t memory_detect_map(memory_map_t**);
-size_t memory_get_absolute_address(uint32_t);
+size_t memory_get_absolute_address(size_t);
+size_t memory_get_relative_address(size_t);
 uint8_t memory_build_page_table();
+
+#if ___BITS == 16
+#define MEMORY_PT_GET_P4_INDEX(u64) ((u64.part_high >> 7) & 0x1FF)
+#define MEMORY_PT_GET_P3_INDEX(u64) (((u64.part_high & 0x7F) << 2) | ((u64.part_low >> 31) & 0x3))
+#define MEMORY_PT_GET_P2_INDEX(u64) ((u64.part_low >> 21) & 0x1FF)
+#define MEMORY_PT_GET_P1_INDEX(u64) ((u64.part_low >> 12) & 0x1FF)
+#elif ___BITS == 64
+#define MEMORY_PT_GET_P4_INDEX(u64) ((u64 >> 39) & 0x1FF)
+#define MEMORY_PT_GET_P3_INDEX(u64) ((u64 >> 30) & 0x1FF)
+#define MEMORY_PT_GET_P2_INDEX(u64) ((u64 >> 21) & 0x1FF)
+#define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & 0x1FF)
+#endif
+
 
 #endif

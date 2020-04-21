@@ -5,6 +5,7 @@
 .global GDT_REGISTER
 .global IDT_REGISTER
 .global SYSTEM_INFO
+.global BOOT_DRIVE
 .extern __kpagetable_p4
 __kstart:
   cli
@@ -25,9 +26,7 @@ __kstart:
   mov $__stack_top, %esp
   mov %esp, %ebp
   cld
-  push %ebx
-  xor  %eax, %eax
-  push %ax // fix fucking gcc stack alignment
+  mov %bl, BOOT_DRIVE
   call kmain16
   cmp $0x00, %al
   jne .loop
@@ -177,3 +176,5 @@ IDT_REGISTER:
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 SYSTEM_INFO:
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+BOOT_DRIVE:
+.byte 0x00

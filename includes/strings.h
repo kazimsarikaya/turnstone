@@ -12,7 +12,11 @@ number_t ato_base(char_t*, number_t);
 #define atoh(number) ato_base(number, 16)
 char_t* ito_base(number_t, number_t);
 #define itoa(number) ito_base(number, 10)
-#define itoh(number) ito_base(number, 16)
+#if ___BITS == 16
+char_t* itoh(uint32_t);
+#elif ___BITS == 64
+char_t* itoh(uint64_t);
+#endif
 size_t strindexof(char_t*, char_t*);
 
 #endif

@@ -31,7 +31,7 @@ uint8_t memory_simple_init(){
 	hitop = (heapinfo*)(&__kheap_top - sizeof(heapinfo));
 #elif ___BITS == 64
 	memory_map_t* mmap = SYSTEM_INFO->mmap;
-	while(mmap->type!=1) {
+	while(mmap->type != 1) {
 		mmap++;
 	}
 	hitop = (heapinfo*)(mmap->base + mmap->length - sizeof(heapinfo));
@@ -62,7 +62,7 @@ void* memory_simple_kmalloc(size_t size){
 	//find first empty and enough slot
 	while( (hi != hitop) &&
 	       ((hi->flags & HEAP_INFO_FLAG_USED) ==  HEAP_INFO_FLAG_USED// empty?
-	        || hi + 1 + t_size>hi->next)) { // size enough?
+	        || hi + 1 + t_size > hi->next)) { // size enough?
 		hi = hi->next;
 	}
 	if( hi == hitop) {
@@ -70,7 +70,7 @@ void* memory_simple_kmalloc(size_t size){
 	}
 
 	heapinfo* tmp = hi + 1 + t_size;
-	if(tmp!=hi->next) {
+	if(tmp != hi->next) {
 		tmp->magic =  HEAP_INFO_MAGIC;
 		tmp->flags = HEAP_INFO_FLAG_NOTUSED;
 		tmp->previous = hi;
@@ -85,7 +85,7 @@ void* memory_simple_kmalloc(size_t size){
 
 
 uint8_t memory_simple_kfree(void* address){
-	if(address==NULL) {
+	if(address == NULL) {
 		return -1;
 	}
 	heapinfo* hi = ((heapinfo*)address) - 1;
@@ -114,7 +114,7 @@ uint8_t memory_simple_kfree(void* address){
 	}
 
 	// merge previous empty slot if any
-	if(hi->previous!=NULL) {
+	if(hi->previous != NULL) {
 		if(!(hi->previous->flags & HEAP_INFO_FLAG_USED)) { // if prev is full then stop
 			void* caddr = hi;
 			hi->previous->next = hi->next;
@@ -126,13 +126,13 @@ uint8_t memory_simple_kfree(void* address){
 }
 
 void memory_simple_memset(void* address, uint8_t value, size_t size) {
-	for(size_t i = 0; i<size; i++) {
+	for(size_t i = 0; i < size; i++) {
 		((uint8_t*)address)[i] = value;
 	}
 }
 
 void memory_simple_memcpy(uint8_t* source, uint8_t* destination, size_t length){
-	for(size_t i = 0; i<length; i++) {
+	for(size_t i = 0; i < length; i++) {
 		destination[i] = source[i];
 	}
 }
@@ -156,17 +156,30 @@ size_t memory_detect_map(memory_map_t** mmap) {
 			mmap_a++;
 			entries++;
 		}
-	} while(contID !=0 && entries<MMAP_MAX_ENTRY_COUNT);
+	} while(contID != 0 && entries < MMAP_MAX_ENTRY_COUNT);
 
 	return entries;
 }
 
-size_t memory_get_absolute_address(uint32_t raddr) {
+size_t memory_get_absolute_address(size_t raddr) {
+#if ___BITS == 16
 	__asm__ __volatile__ ("mov %%ds, %%bx\r\n"
 	                      "shl $0x4, %%ebx\r\n"
 	                      "add %%ebx, %%eax"
 	                      : "=a" (raddr)
 	                      : "a" (raddr));
+#endif
+	return raddr;
+}
+
+size_t memory_get_relative_address(size_t raddr) {
+#if ___BITS == 16
+	__asm__ __volatile__ ("mov %%ds, %%bx\r\n"
+	                      "shl $0x4, %%ebx\r\n"
+	                      "sub %%ebx, %%eax"
+	                      : "=a" (raddr)
+	                      : "a" (raddr));
+#endif
 	return raddr;
 }
 
@@ -199,6 +212,59 @@ uint8_t memory_build_page_table(){
 	p2->pages[0].present = 1;
 	p2->pages[0].writable = 1;
 	p2->pages[0].hugepage = 1;
+
+	page_table_t* t_p3;
+	page_table_t* t_p2;
+
+
+	for(uint32_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
+		if(SYSTEM_INFO->mmap[i].type == 1) {
+			continue;
+		}
+		uint32_t p4idx = MEMORY_PT_GET_P4_INDEX(SYSTEM_INFO->mmap[i].base);
+		if(p4idx > 511) {
+			return -1;
+		}
+		if(p4->pages[p4idx].present != 1) {
+			// TODO: allocate page
+			continue;
+		}
+#if ___BITS == 16
+		t_p3 = (page_table_t*)memory_get_relative_address(p4->pages[p4idx].physical_address_part1 << 12);
+#elif ___BITS == 64
+		t_p3 = (page_table_t*)((uint64_t)(p4->pages[p4idx].physical_address << 12));
+#endif
+		uint32_t p3idx = MEMORY_PT_GET_P3_INDEX(SYSTEM_INFO->mmap[i].base);
+		if(p3idx > 511) {
+			return -1;
+		}
+		if(t_p3->pages[p3idx].present != 1) {
+			// TODO: allocate page
+			continue;
+		}
+#if ___BITS == 16
+		t_p2 = (page_table_t*)memory_get_relative_address(t_p3->pages[p3idx].physical_address_part1 << 12);
+#elif ___BITS == 64
+		t_p2 = (page_table_t*)((uint64_t)(t_p3->pages[p3idx].physical_address << 12));
+#endif
+		uint32_t p2idx = MEMORY_PT_GET_P2_INDEX(SYSTEM_INFO->mmap[i].base);
+		if(p2idx > 511) {
+			return -1;
+		}
+		if(t_p2->pages[p2idx].present != 1) {
+			t_p2->pages[p2idx].present = 1;
+			t_p2->pages[p2idx].writable = 1;
+			t_p2->pages[p2idx].hugepage = 1;
+
+#if ___BITS == 16
+			t_p2->pages[p2idx].physical_address_part1 = ((SYSTEM_INFO->mmap[i].base.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (SYSTEM_INFO->mmap[i].base.part_high << 20));
+			t_p2->pages[p2idx].physical_address_part2 = (SYSTEM_INFO->mmap[i].base.part_high >> 12) & 0xFF;
+#elif ___BITS == 64
+			t_p2->pages[p2idx].physical_address = (SYSTEM_INFO->mmap[i].base >> 12) & 0xFFFFFFFE00;
+#endif
+
+		}
+	}
 
 	return 0;
 }
