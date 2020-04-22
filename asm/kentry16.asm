@@ -1,7 +1,6 @@
 .code16
 .text
 .global __kstart
-.global check_longmode
 .global GDT_REGISTER
 .global IDT_REGISTER
 .global SYSTEM_INFO
@@ -131,38 +130,6 @@ enable_A20.a20wait2:
   in     $0x64,%al
   test   $0x1,%al
   je     enable_A20.a20wait2
-  ret
-
-check_longmode:
-  pushf
-  pop    %eax
-  mov    %eax, %ecx
-  xor    $0x00200000, %eax
-  push   %eax
-  popf
-  pushf
-  pop    %eax
-  xor    %ecx, %eax
-  shr    $0x15, %eax
-  and    $0x1, %eax
-  push   %ecx
-  popf
-  test   %eax, %eax
-  jz     check_longmode.no_longmode //no cpuid
-  mov    $0x80000000, %eax
-  cpuid
-  cmp    $0x80000001, %eax
-  jb     check_longmode.no_longmode //no extended cpuid
-  mov    $0x80000001, %eax
-  cpuid
-  test   $0x20000000, %edx
-  jz     check_longmode.no_longmode //no long mode
-  test   $0x800, %edx
-  jz     check_longmode.no_longmode //no nxe support
-  mov    $0x0, %eax
-  ret
-check_longmode.no_longmode:
-  mov    $0x1, %eax
   ret
 
 .bss
