@@ -43,12 +43,6 @@ __kstart:
   bts $0x7, %eax //pge
   mov %eax, %cr4
 
-  xor %eax, %eax
-  mov %ds, %ax
-  shl $0x04, %ax
-  add $__kpagetable_p4, %eax
-  mov %eax, %cr3
-
   mov $0xC0000080, %ecx
   rdmsr
   bts $0x8, %eax
