@@ -5,6 +5,7 @@
 #include <diskio.h>
 #include <descriptor.h>
 #include <systeminfo.h>
+#include <cpu.h>
 
 extern uint8_t BOOT_DRIVE;
 
@@ -26,7 +27,7 @@ uint8_t kmain16()
 	SYSTEM_INFO->mmap_entry_count = mmap_e_count;
 	SYSTEM_INFO->mmap = mmap;
 
-	if(check_longmode() != 0) {
+	if(cpu_check_longmode() != 0) {
 		video_print("No long mode support\0");
 		return -1;
 	}
