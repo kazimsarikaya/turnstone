@@ -7,9 +7,11 @@
 #define NULL 0
 #endif
 
-#ifndef MMAP_MAX_ENTRY_COUNT
-#define MMAP_MAX_ENTRY_COUNT 128
-#endif
+#define MEMORY_MMAP_MAX_ENTRY_COUNT 128
+#define MEMORY_MMAP_TYPE_USABLE 1
+#define MEMORY_MMAP_TYPE_RESERVED 2
+#define MEMORY_MMAP_TYPE_ACPI 3
+#define MEMORY_MMAP_TYPE_ACPI_NVS 4
 
 typedef struct memory_map {
 	uint64_t base;
@@ -55,13 +57,17 @@ typedef struct page_table {
 	page_entry_t pages[512];
 } __attribute__((packed)) page_table_t;
 
-extern uint8_t check_longmode();
-uint8_t memory_simple_init();
-void* memory_simple_kmalloc(size_t);
+typedef void* memory_simple_heap_t;
+memory_simple_heap_t memory_simple_create_heap(size_t, size_t);
+uint8_t memory_simple_init_ext(memory_simple_heap_t);
+#define memory_simple_init() memory_simple_init_ext(NULL)
+void* memory_simple_kmalloc_ext(memory_simple_heap_t, size_t, size_t);
+#define memory_simple_kmalloc(size) memory_simple_kmalloc_ext(NULL, size, 0)
+#define memory_simple_kmalloc_aligned(size, align) memory_simple_kmalloc_ext(NULL, size, align)
 uint8_t memory_simple_kfree(void*);
 void memory_simple_memset(void*, uint8_t, size_t);
 #define memory_simple_memclean(addr, size) memory_simple_memset(addr, NULL, size)
-void memory_simple_memcpy(uint8_t*, uint8_t*, size_t);
+void memory_simple_memcpy(void*, void*, size_t);
 
 size_t memory_detect_map(memory_map_t**);
 size_t memory_get_absolute_address(size_t);

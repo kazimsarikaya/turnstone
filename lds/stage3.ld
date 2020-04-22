@@ -18,10 +18,6 @@ SECTIONS
       __bss_start = .;
       *(.bss)
       *(COMMON)
-      __kheap_top = 0;
-      __kpagetable_p4 = 0;
-      __kpagetable_p3 = 0;
-      __kpagetable_p2 = 0;
       __bss_end = .;
     }
     .stack BLOCK(0x1000) :
