@@ -11,7 +11,8 @@ extern uint8_t BOOT_DRIVE;
 
 uint8_t kmain16()
 {
-	memory_simple_init();
+	memory_heap_t* heap = memory_create_heap_simple(0, 0);
+	memory_set_default_heap(heap);
 
 	video_clear_screen();
 
@@ -21,9 +22,9 @@ uint8_t kmain16()
 	video_print("mmap entry count: \0");
 	video_print(mmap_e_count_str);
 	video_print("\n");
-	memory_simple_kfree(mmap_e_count_str);
+	memory_free(mmap_e_count_str);
 
-	SYSTEM_INFO = memory_simple_kmalloc(sizeof(system_info_t));
+	SYSTEM_INFO = memory_malloc(sizeof(system_info_t));
 	SYSTEM_INFO->mmap_entry_count = mmap_e_count;
 	SYSTEM_INFO->mmap = mmap;
 
@@ -44,11 +45,11 @@ uint8_t kmain16()
 				video_print("k64 kernel start at: \0");
 				char_t* tmp_str = itoh(ss);
 				video_print(tmp_str);
-				memory_simple_kfree(tmp_str);
+				memory_free(tmp_str);
 				video_print(" size: \0");
 				tmp_str = itoh(sc);
 				video_print(tmp_str);
-				memory_simple_kfree(tmp_str);
+				memory_free(tmp_str);
 				video_print(" sectors\r\n\0");
 				reg_t base_mem = 0x2000;
 				for(uint32_t i = 0; i < sc; i++) {
@@ -56,13 +57,13 @@ uint8_t kmain16()
 					uint64_t k4_lba_addr = {ss + i, 0};
 					if(disk_read(BOOT_DRIVE, k4_lba_addr, 1, &data) != 0) {
 						video_print("can not read k64 sectors\r\n\0");
-						memory_simple_kfree(data);
+						memory_free(data);
 						return -1;
 					} else {
 						for(uint16_t j = 0; j < 512; j++) {
 							far_write_8(base_mem, j, data[j]);
 						}
-						memory_simple_kfree(data);
+						memory_free(data);
 						base_mem += 0x20;
 					}
 				}

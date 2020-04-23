@@ -6,7 +6,8 @@
 #include <interrupt.h>
 
 uint8_t kmain64() {
-	memory_simple_init();
+	memory_heap_t* heap = memory_create_heap_simple(0, 0);
+	memory_set_default_heap(heap);
 	interrupt_init();
 	video_clear_screen();
 	char_t* data = hello_world();

@@ -47,7 +47,7 @@ char_t* strrev(char_t* source) {
 	if(len == 0) {
 		return NULL;
 	}
-	char_t* dest = memory_simple_kmalloc(sizeof(char_t) * len);
+	char_t* dest = memory_malloc(sizeof(char_t) * len);
 	if(dest == NULL) {
 		return NULL;
 	}
@@ -85,7 +85,7 @@ char_t* ito_base(number_t number, number_t base){
 	if(number == 0) {
 		len = 1;
 	}
-	char_t* ret = memory_simple_kmalloc(sizeof(char_t) * len + 1);
+	char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
 	if (ret == NULL) {
 		return NULL;
 	}
@@ -114,8 +114,8 @@ char_t* itoh(uint32_t number) {
 char_t* itoh(uint64_t number) {
 #endif
 	size_t len = sizeof(number) * 2;
-	char_t* ret = memory_simple_kmalloc(sizeof(char_t) * len + 1);
-	memory_simple_memset(ret, '0', len);
+	char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
+	memory_memset(ret, '0', len);
 	size_t i = 1;
 	uint8_t r;
 	while (number) {

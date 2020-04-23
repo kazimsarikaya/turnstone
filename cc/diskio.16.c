@@ -16,13 +16,13 @@ uint16_t disk_read(uint8_t hard_disk, uint64_t lba, uint16_t sector_count, uint8
 	disk_bios_dap_t* dap;
 	uint16_t status, err;
 
-	*data = memory_simple_kmalloc(sizeof(uint8_t) * sector_count * 512);
+	*data = memory_malloc(sizeof(uint8_t) * sector_count * 512);
 	if(*data == NULL) {
 		return -1;
 	}
-	dap = memory_simple_kmalloc(sizeof(disk_bios_dap_t));
+	dap = memory_malloc(sizeof(disk_bios_dap_t));
 	if(dap == NULL) {
-		memory_simple_kfree(*data);
+		memory_free(*data);
 		return -2;
 	}
 	dap->size = 0x10;
@@ -38,9 +38,9 @@ uint16_t disk_read(uint8_t hard_disk, uint64_t lba, uint16_t sector_count, uint8
 	                      : "a" (0x4200), "d" (hard_disk), "S" (dap)
 	                      );
 
-	memory_simple_kfree(dap);
+	memory_free(dap);
 	if(err != 0) {
-		memory_simple_kfree(*data);
+		memory_free(*data);
 	}
 	return status;
 }
@@ -55,9 +55,9 @@ uint16_t disk_read_slottable(uint8_t hard_disk, disk_slot_table_t** pst){
 	uint8_t* data;
 	uint16_t status = disk_read(hard_disk, lba, 1, &data);
 	if(status == 0) {
-		*pst = memory_simple_kmalloc(sizeof(disk_slot_table_t));
-		memory_simple_memcpy(data + 0x110, (uint8_t*)*pst, 0xF0);
+		*pst = memory_malloc(sizeof(disk_slot_table_t));
+		memory_memcopy(data + 0x110, (uint8_t*)*pst, 0xF0);
 	}
-	memory_simple_kfree(data);
+	memory_free(data);
 	return status;
 }

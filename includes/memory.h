@@ -57,17 +57,28 @@ typedef struct page_table {
 	page_entry_t pages[512];
 } __attribute__((packed)) page_table_t;
 
-typedef void* memory_simple_heap_t;
-memory_simple_heap_t memory_simple_create_heap(size_t, size_t);
-uint8_t memory_simple_init_ext(memory_simple_heap_t);
-#define memory_simple_init() memory_simple_init_ext(NULL)
-void* memory_simple_kmalloc_ext(memory_simple_heap_t, size_t, size_t);
-#define memory_simple_kmalloc(size) memory_simple_kmalloc_ext(NULL, size, 0)
-#define memory_simple_kmalloc_aligned(size, align) memory_simple_kmalloc_ext(NULL, size, align)
-uint8_t memory_simple_kfree(void*);
-void memory_simple_memset(void*, uint8_t, size_t);
-#define memory_simple_memclean(addr, size) memory_simple_memset(addr, NULL, size)
-void memory_simple_memcpy(void*, void*, size_t);
+typedef struct memory_heap {
+	uint32_t header;
+	void* metadata;
+	void* (*malloc)(struct memory_heap*, size_t, size_t);
+	uint8_t (* free)(struct memory_heap*, void*);
+} memory_heap_t;
+
+memory_heap_t* memory_create_heap_simple(size_t, size_t);
+memory_heap_t* memory_set_default_heap(memory_heap_t*);
+
+void* memory_malloc_ext(struct memory_heap*, size_t, size_t);
+#define memory_malloc(s) memory_malloc_ext(NULL, s, 0x0)
+#define memory_malloc_aligned(s, a) memory_malloc_ext(NULL, s, a)
+
+uint8_t memory_free_ext(struct memory_heap*, void*);
+#define memory_free(addr) memory_free_ext(NULL, addr)
+
+uint8_t memory_memset(void*, uint8_t, size_t);
+#define memory_memclean(addr, s) memory_memset(addr, NULL, s)
+
+uint8_t memory_memcopy(void*, void*, size_t);
+uint8_t memory_memcompare(void*, void*);
 
 size_t memory_detect_map(memory_map_t**);
 size_t memory_get_absolute_address(size_t);

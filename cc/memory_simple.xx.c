@@ -9,6 +9,7 @@
 #define HEAP_INFO_FLAG_HEAP_INITED     (HEAP_INFO_FLAG_HEAP | HEAP_INFO_FLAG_USED)
 #define HEAP_INFO_MAGIC                (0xaa55)
 #define HEAP_INFO_PADDING              (0xB16B00B5)
+#define HEAP_HEADER                    HEAP_INFO_PADDING
 
 
 extern size_t __kheap_bottom;
@@ -21,42 +22,48 @@ typedef struct __heapinfo {
 	uint32_t padding; // for 8 byte align
 }__attribute__ ((packed)) heapinfo_t;
 
-memory_simple_heap_t memory_simple_heap_default;
+void* memory_simple_malloc_ext(memory_heap_t*, size_t, size_t);
+uint8_t memory_simple_free(memory_heap_t*, void*);
 
-memory_simple_heap_t memory_simple_create_heap(size_t start, size_t end) {
-	heapinfo_t* heap = (heapinfo_t*)(start);
-	if((heap->flags & HEAP_INFO_FLAG_HEAP_INITED) == HEAP_INFO_FLAG_HEAP_INITED) {
-		return heap;
-	}
-	heap->previous = (heapinfo_t*)(start + sizeof(heapinfo_t));
-	heap->next = (heapinfo_t*)(end - sizeof(heapinfo_t));
-	heap->flags = HEAP_INFO_FLAG_HEAP;
-	heap->magic = HEAP_INFO_MAGIC;
-	heap->padding = HEAP_INFO_PADDING;
-
-	return heap;
-}
-
-uint8_t memory_simple_init_ext(memory_simple_heap_t ptrheap){
-	heapinfo_t* heap = (heapinfo_t*)ptrheap;
-	if(heap == NULL) {
+memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
+	size_t heap_start, heap_end;
+	if(start == 0 && end == 0) {
+		heap_start = (size_t)&__kheap_bottom;
 #if ___BITS == 16
-		heap = memory_simple_create_heap((size_t)&__kheap_bottom, 0xFFFF);
+		heap_end = 0xFFFF;
 #elif ___BITS == 64
 		memory_map_t* mmap = SYSTEM_INFO->mmap;
 		while(mmap->type != 1) {
 			mmap++;
 		}
-		heap = memory_simple_create_heap((size_t)&__kheap_bottom, mmap->base + mmap->length);
+		heap_end =  mmap->base + mmap->length;
 #endif
-		memory_simple_heap_default = heap;
 	}
-	if((heap->flags & HEAP_INFO_FLAG_HEAP_INITED) == HEAP_INFO_FLAG_HEAP_INITED) {
-		return 0;
+	else if(start == 0 || end == 0) {
+		return NULL;
+	} else {
+		heap_start = start;
+		heap_end = end;
 	}
+	memory_heap_t* heap = (memory_heap_t*)(heap_start);
+	size_t metadata_start = heap_start + sizeof(memory_heap_t);
+	heapinfo_t* metadata = (heapinfo_t*)(metadata_start);
+	heap->header = HEAP_HEADER;
+	heap->metadata = metadata;
+	heap->malloc = &memory_simple_malloc_ext;
+	heap->free = &memory_simple_free;
 
-	heapinfo_t* hibottom = heap->previous;
-	heapinfo_t* hitop = heap->next;
+	if((metadata->flags & HEAP_INFO_FLAG_HEAP_INITED) == HEAP_INFO_FLAG_HEAP_INITED) {
+		return heap;
+	}
+	metadata->previous = (heapinfo_t*)(metadata_start + sizeof(heapinfo_t));
+	metadata->next = (heapinfo_t*)(heap_end - sizeof(heapinfo_t));
+	metadata->flags = HEAP_INFO_FLAG_HEAP;
+	metadata->magic = HEAP_INFO_MAGIC;
+	metadata->padding = HEAP_INFO_PADDING;
+
+	heapinfo_t* hibottom = metadata->previous;
+	heapinfo_t* hitop = metadata->next;
 
 	hibottom->magic = HEAP_INFO_MAGIC;
 	hibottom->padding = HEAP_INFO_PADDING;
@@ -71,19 +78,16 @@ uint8_t memory_simple_init_ext(memory_simple_heap_t ptrheap){
 
 	hitop->next = NULL;
 	hitop->previous =  hibottom;
-	heap->flags |= HEAP_INFO_FLAG_USED;
+	metadata->flags |= HEAP_INFO_FLAG_USED;
 
-	return 0;
+	return heap;
 }
 
-void* memory_simple_kmalloc_ext(memory_simple_heap_t ptrheap, size_t size, size_t align){
-	heapinfo_t* heap = (heapinfo_t*)ptrheap;
-	if(heap == NULL) {
-		heap = memory_simple_heap_default;
-	}
+void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
+	heapinfo_t* simple_heap = (heapinfo_t*)heap->metadata;
 
-	heapinfo_t* hibottom = heap->previous;
-	heapinfo_t* hitop = heap->next;
+	heapinfo_t* hibottom = simple_heap->previous;
+	heapinfo_t* hitop = simple_heap->next;
 
 	heapinfo_t* hi = hibottom;
 	size_t a_size = size + align;
@@ -128,7 +132,7 @@ void* memory_simple_kmalloc_ext(memory_simple_heap_t ptrheap, size_t size, size_
 		// fix right empty area
 		if(right_diff > 0) {
 			heapinfo_t* tmp2 = tmp->next;
-			memory_simple_memclean(tmp, sizeof(heapinfo_t));
+			memory_memclean(tmp, sizeof(heapinfo_t));
 			hi_r = (heapinfo_t*)(aligned_addr + size);
 			hi_r->magic = HEAP_INFO_MAGIC;
 			hi_r->padding = HEAP_INFO_PADDING;
@@ -149,7 +153,7 @@ void* memory_simple_kmalloc_ext(memory_simple_heap_t ptrheap, size_t size, size_
 		} else {
 			//store hi prev to rebuild hi aka hi_a if needed
 			heapinfo_t* hi_prev = hi->previous;
-			memory_simple_memclean(hi, sizeof(heapinfo_t));
+			memory_memclean(hi, sizeof(heapinfo_t));
 			hi_a->previous = hi_prev;
 			hi_prev->next = hi_a;
 		}
@@ -162,13 +166,13 @@ void* memory_simple_kmalloc_ext(memory_simple_heap_t ptrheap, size_t size, size_
 		return (uint8_t*)aligned_addr;
 	} else {
 		hi->flags |= HEAP_INFO_FLAG_USED;
-		memory_simple_memclean(hi + 1, size);
+		memory_memclean(hi + 1, size);
 		return hi + 1;
 	}
 }
 
 
-uint8_t memory_simple_kfree(void* address){
+uint8_t memory_simple_free(memory_heap_t* heap, void* address){
 	if(address == NULL) {
 		return -1;
 	}
@@ -187,14 +191,14 @@ uint8_t memory_simple_kfree(void* address){
 
 	//clean data
 	size_t size = (void*)hi->next - address;
-	memory_simple_memclean(address, size);
+	memory_memclean(address, size);
 
 	//merge next empty slot if any
 	if(!(hi->next->flags & HEAP_INFO_FLAG_USED)) {
 		void* caddr = hi->next;
 		hi->next = hi->next->next; //next cannot be NULL do not afraid of it
 		hi->next->previous = hi;
-		memory_simple_memclean(caddr, sizeof(heapinfo_t));
+		memory_memclean(caddr, sizeof(heapinfo_t));
 	}
 
 	// merge previous empty slot if any
@@ -203,190 +207,8 @@ uint8_t memory_simple_kfree(void* address){
 			void* caddr = hi;
 			hi->previous->next = hi->next;
 			hi->next->previous = hi->previous;
-			memory_simple_memclean(caddr, sizeof(heapinfo_t));
+			memory_memclean(caddr, sizeof(heapinfo_t));
 		}
 	}
-	return 0;
-}
-
-void memory_simple_memset(void* address, uint8_t value, size_t size) {
-	for(size_t i = 0; i < size; i++) {
-		((uint8_t*)address)[i] = value;
-	}
-}
-
-void memory_simple_memcpy(void* source, void* destination, size_t length){
-	uint8_t* src = (uint8_t*)source;
-	uint8_t* dst = (uint8_t*)destination;
-	for(size_t i = 0; i < length; i++) {
-		dst[i] = src[i];
-	}
-}
-
-size_t memory_detect_map(memory_map_t** mmap) {
-	*mmap = memory_simple_kmalloc(sizeof(memory_map_t) * MEMORY_MMAP_MAX_ENTRY_COUNT);
-	memory_map_t* mmap_a = *mmap;
-	regext_t contID = 0, signature, bytes;
-	size_t entries = 0;
-	do {
-		__asm__ __volatile__ ("int $0x15"
-		                      : "=a" (signature), "=c" (bytes), "=b" (contID)
-		                      : "a" (0xE820), "b" (contID), "c" (24), "d" (0x534D4150), "D" (mmap_a));
-		if(signature != 0x534D4150) {
-			return -1;
-		}
-		if(bytes > 20 && mmap_a->acpi & 0x0001) {
-
-		}
-		else{
-			mmap_a++;
-			entries++;
-		}
-	} while(contID != 0 && entries < MEMORY_MMAP_MAX_ENTRY_COUNT);
-
-	memory_map_t* mmap_r = memory_simple_kmalloc(sizeof(memory_map_t) * entries);
-	memory_simple_memcpy(*mmap, mmap_r, sizeof(memory_map_t) * entries);
-	memory_simple_kfree(*mmap);
-	*mmap = mmap_r;
-
-	return entries;
-}
-
-size_t memory_get_absolute_address(size_t raddr) {
-#if ___BITS == 16
-	size_t ds = cpu_read_data_segment();
-	ds <<= 4;
-	ds += raddr;
-	return ds;
-#endif
-	return raddr;
-}
-
-size_t memory_get_relative_address(size_t raddr) {
-#if ___BITS == 16
-	size_t ds = cpu_read_data_segment();
-	ds <<= 4;
-	ds = raddr - ds;
-	return ds;
-#endif
-	return raddr;
-}
-
-uint8_t memory_build_page_table(){
-	page_table_t* p4 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
-	if(p4 == NULL) {
-		return -1;
-	}
-	page_table_t* p3 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
-	if(p3 == NULL) {
-		return -1;
-	}
-	page_table_t* p2 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
-	if(p2 == NULL) {
-		return -1;
-	}
-
-	p4->pages[0].present = 1;
-	p4->pages[0].writable = 1;
-
-	size_t p3_addr = memory_get_absolute_address((size_t)p3);
-#if ___BITS == 16
-	p4->pages[0].physical_address_part1 = p3_addr >> 12;
-#elif ___BITS == 64
-	p4->pages[0].physical_address = p3_addr >> 12;
-#endif
-
-	p3->pages[0].present = 1;
-	p3->pages[0].writable = 1;
-	size_t p2_addr = memory_get_absolute_address((size_t)p2);
-#if ___BITS == 16
-	p3->pages[0].physical_address_part1 = p2_addr >> 12;
-#elif ___BITS == 64
-	p3->pages[0].physical_address = p2_addr >> 12;
-#endif
-
-	p2->pages[0].present = 1;
-	p2->pages[0].writable = 1;
-	p2->pages[0].hugepage = 1;
-
-	page_table_t* t_p3;
-	page_table_t* t_p2;
-
-	for(uint32_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
-		if(!(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_ACPI || SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_ACPI_NVS )) {
-			continue;
-		}
-		uint32_t p4idx = MEMORY_PT_GET_P4_INDEX(SYSTEM_INFO->mmap[i].base);
-		if(p4idx > 511) {
-			return -1;
-		}
-		if(p4->pages[p4idx].present != 1) {
-			t_p3 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
-			if(t_p3 == NULL) {
-				return -1;
-			}
-			p4->pages[p4idx].present = 1;
-			p4->pages[p4idx].writable = 1;
-			p3_addr = memory_get_absolute_address((size_t)p3);
-#if ___BITS == 16
-			p4->pages[p4idx].physical_address_part1 = p3_addr >> 12;
-#elif ___BITS == 64
-			p4->pages[p4idx].physical_address = p3_addr >> 12;
-#endif
-		} else {
-#if ___BITS == 16
-			t_p3 = (page_table_t*)memory_get_relative_address(p4->pages[p4idx].physical_address_part1 << 12);
-#elif ___BITS == 64
-			t_p3 = (page_table_t*)((uint64_t)(p4->pages[p4idx].physical_address << 12));
-#endif
-		}
-		uint32_t p3idx = MEMORY_PT_GET_P3_INDEX(SYSTEM_INFO->mmap[i].base);
-		if(p3idx > 511) {
-			return -1;
-		}
-		if(t_p3->pages[p3idx].present != 1) {
-			t_p2 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
-			if(t_p2 == NULL) {
-				return -1;
-			}
-			t_p3->pages[p3idx].present = 1;
-			t_p3->pages[p3idx].writable = 1;
-			p2_addr = memory_get_absolute_address((size_t)p3);
-#if ___BITS == 16
-			t_p3->pages[p3idx].physical_address_part1 = p2_addr >> 12;
-#elif ___BITS == 64
-			t_p3->pages[p3idx].physical_address = p2_addr >> 12;
-#endif
-		} else {
-#if ___BITS == 16
-			t_p2 = (page_table_t*)memory_get_relative_address(t_p3->pages[p3idx].physical_address_part1 << 12);
-#elif ___BITS == 64
-			t_p2 = (page_table_t*)((uint64_t)(t_p3->pages[p3idx].physical_address << 12));
-#endif
-		}
-		uint32_t p2idx = MEMORY_PT_GET_P2_INDEX(SYSTEM_INFO->mmap[i].base);
-		if(p2idx > 511) {
-			return -1;
-		}
-		if(t_p2->pages[p2idx].present != 1) {
-			t_p2->pages[p2idx].present = 1;
-			t_p2->pages[p2idx].writable = 1;
-			t_p2->pages[p2idx].hugepage = 1;
-
-#if ___BITS == 16
-			t_p2->pages[p2idx].physical_address_part1 = ((SYSTEM_INFO->mmap[i].base.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (SYSTEM_INFO->mmap[i].base.part_high << 20));
-			t_p2->pages[p2idx].physical_address_part2 = (SYSTEM_INFO->mmap[i].base.part_high >> 12) & 0xFF;
-#elif ___BITS == 64
-			t_p2->pages[p2idx].physical_address = (SYSTEM_INFO->mmap[i].base >> 12) & 0xFFFFFFFE00;
-#endif
-
-		}
-	}
-	size_t p4addr_a = memory_get_absolute_address((size_t)p4);
-#if ___BITS == 16
-	__asm__ __volatile__ ("mov %0, %%cr3\n" : : "r" (p4addr_a));
-#elif ___BITS == 64
-	__asm__ __volatile__ ("mov %0, %%cr3\n" : : "r" (p4addr_a));
-#endif
 	return 0;
 }
