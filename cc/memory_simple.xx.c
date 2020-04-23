@@ -322,6 +322,9 @@ uint8_t memory_build_page_table(){
 		}
 		if(p4->pages[p4idx].present != 1) {
 			t_p3 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
+			if(t_p3 == NULL) {
+				return -1;
+			}
 			p4->pages[p4idx].present = 1;
 			p4->pages[p4idx].writable = 1;
 			p3_addr = memory_get_absolute_address((size_t)p3);
@@ -343,6 +346,9 @@ uint8_t memory_build_page_table(){
 		}
 		if(t_p3->pages[p3idx].present != 1) {
 			t_p2 = memory_simple_kmalloc_aligned(sizeof(page_table_t), 0x1000);
+			if(t_p2 == NULL) {
+				return -1;
+			}
 			t_p3->pages[p3idx].present = 1;
 			t_p3->pages[p3idx].writable = 1;
 			p2_addr = memory_get_absolute_address((size_t)p3);
