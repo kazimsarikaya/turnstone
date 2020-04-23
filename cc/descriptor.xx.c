@@ -3,8 +3,8 @@
 
 uint8_t descriptor_build_gdt_register(){
 	uint16_t gdt_size = sizeof(descriptor_gdt_t) * 3;
-	descriptor_gdt_t* gdts = memory_simple_kmalloc(gdt_size);
-	if(gdts==NULL) {
+	descriptor_gdt_t* gdts = memory_malloc(gdt_size);
+	if(gdts == NULL) {
 		return -1;
 	}
 	DESCRIPTOR_BUILD_GDT_NULL_SEG(gdts[0]);
