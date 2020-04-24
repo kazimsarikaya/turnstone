@@ -95,11 +95,14 @@ uint8_t kmain16()
 		video_print("Default gdt builded\r\n\0");
 	}
 
-	if(memory_build_page_table() != 0) {
+	memory_page_table_t* p4 = memory_paging_build_table();
+	if( p4 == NULL) {
 		video_print("Can not build default page table\r\n\0");
 		return -1;
 	} else {
 		video_print("Default page table builded\r\n\0");
+		memory_paging_switch_table(p4);
+		video_print("Default page table switched\r\n\0");
 	}
 
 	SYSTEM_INFO->mmap = (memory_map_t*)memory_get_absolute_address((uint32_t)SYSTEM_INFO->mmap);
