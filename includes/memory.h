@@ -51,11 +51,11 @@ typedef struct page_entry {
 	uint8_t os_avail13 : 1; //bit 61
 	uint8_t os_avail14 : 1; //bit 62
 	uint8_t no_execute : 1; //bit 63
-} __attribute__((packed)) page_entry_t;
+} __attribute__((packed)) memory_page_entry_t;
 
 typedef struct page_table {
-	page_entry_t pages[512];
-} __attribute__((packed)) page_table_t;
+	memory_page_entry_t pages[512];
+} __attribute__((packed)) memory_page_table_t;
 
 typedef struct memory_heap {
 	uint32_t header;
@@ -83,7 +83,19 @@ uint8_t memory_memcompare(void*, void*);
 size_t memory_detect_map(memory_map_t**);
 size_t memory_get_absolute_address(size_t);
 size_t memory_get_relative_address(size_t);
-uint8_t memory_build_page_table();
+
+typedef enum memory_paging_page_type {
+	MEMORY_PAGING_PAGE_TYPE_4K,
+	MEMORY_PAGING_PAGE_TYPE_2M,
+	MEMORY_PAGING_PAGE_TYPE_1G
+} memory_paging_page_type_t;
+
+memory_page_table_t* memory_paging_build_table_ext(memory_heap_t*);
+#define memory_paging_build_table() memory_paging_build_table_ext(NULL)
+memory_page_table_t* memory_paging_switch_table(const memory_page_table_t*);
+#define memory_paging_get_table() memory_paging_switch_table(NULL)
+uint8_t memory_paging_add_page_ext(memory_heap_t*, memory_page_table_t*, uint64_t, uint64_t, memory_paging_page_type_t);
+#define memory_paging_add_page(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
 
 #if ___BITS == 16
 #define MEMORY_PT_GET_P4_INDEX(u64) ((u64.part_high >> 7) & 0x1FF)
