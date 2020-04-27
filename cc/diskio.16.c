@@ -1,16 +1,27 @@
+/**
+ * @file diskio.16.c
+ * @brief diskio at real mode
+ *
+ * reading disk at real mode is performed by bios interrupts. BIOS handles ATA or SATA disks.
+ * The used interrupt is int 0x13,0x42
+ */
 #include <types.h>
 #include <diskio.h>
 #include <memory.h>
 #include <cpu.h>
 
+/**
+ * @struct disk_bios_dap
+ * @brief  disk read interrupt needs this struct
+ */
 typedef struct disk_bios_dap {
-	uint8_t size;
-	uint8_t unused;
-	uint16_t sector_count;
-	uint16_t offset;
-	uint16_t segment;
-	uint64_t lba;
-}__attribute__((packed)) disk_bios_dap_t;
+	uint8_t size; ///< dap size always 0x10
+	uint8_t unused; ///< unused data
+	uint16_t sector_count; ///< how many sectors will be readed
+	uint16_t offset; ///< the offset of readed or will be written data
+	uint16_t segment; ///< the segment of readed or will be written data
+	uint64_t lba; ///< start lba address
+}__attribute__((packed)) disk_bios_dap_t; ///< short hand for struct
 
 uint16_t disk_read(uint8_t hard_disk, uint64_t lba, uint16_t sector_count, uint8_t** data){
 	disk_bios_dap_t* dap;

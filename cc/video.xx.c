@@ -1,29 +1,48 @@
+/**
+ * @file video.xx.c
+ * @brief video operations
+ *
+ * prints string to video buffer and moves cursor
+ */
 #include <video.h>
 #include <memory.h>
 #include <faraccess.h>
 #include <ports.h>
 
+/*! main video buffer segment */
 #define VIDEO_SEG 0xB800
+/*! default color for video: white foreground over black background*/
 #define WHITE_ON_BLACK  ((0 << 4) | ( 15 & 0x0F))
 
-uint16_t cursor_x = 0;
-uint16_t cursor_y = 0;
+uint16_t cursor_x = 0; ///< cursor postion for column
+uint16_t cursor_y = 0; ///< cursor porsition for row
+
+
+/**
+ * @brief scrolls video up for one line
+ */
+
+void video_scroll();
+/**
+ * @brief moves cursor to new location.
+ */
+void video_move_cursor();
 
 void video_clear_screen(){
 	size_t i;
 	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
-	for(i = 0; i<VIDEO_BUF_LEN * 2; i += 2) {
+	for(i = 0; i < VIDEO_BUF_LEN * 2; i += 2) {
 		far_write_16(VIDEO_SEG, i, blank);
 	}
 }
 
 void video_print(char_t* string)
 {
-	if(string==NULL) {
+	if(string == NULL) {
 		return;
 	}
 	size_t i = 0;
-	while(string[i]!='\0') {
+	while(string[i] != '\0') {
 		char_t c = string[i];
 		if( c == '\r') {
 			cursor_x = 0;
@@ -67,12 +86,12 @@ void video_move_cursor(){
 }
 
 void video_scroll() {
-	for(size_t i = 0; i<80 * 24; i++) {
+	for(size_t i = 0; i < 80 * 24; i++) {
 		uint16_t data = far_read_16(VIDEO_SEG, (i * 2) + 160);
 		far_write_16(VIDEO_SEG, i * 2, data);
 	}
 	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
-	for(size_t i = 80 * 24; i<80 * 25; i++) {
+	for(size_t i = 80 * 24; i < 80 * 25; i++) {
 		far_write_16(VIDEO_SEG, i * 2, blank);
 	}
 }

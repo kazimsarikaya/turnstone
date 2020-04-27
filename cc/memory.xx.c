@@ -1,8 +1,13 @@
+/**
+ * @file memory.xx.c
+ * @brief main memory interface and functions implementation
+ */
 #include <memory.h>
 #include <types.h>
 #include <cpu.h>
 #include <systeminfo.h>
 
+/*! default heap variable */
 memory_heap_t* memory_heap_default = NULL;
 
 memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
@@ -43,6 +48,21 @@ uint8_t memory_memcopy(void* source, void* destination, size_t length){
 	return 0;
 }
 
+int8_t memory_memcompare(void* mem1, void* mem2, size_t length) {
+	uint8_t* mem1_t = (uint8_t*)mem1;
+	uint8_t* mem2_t = (uint8_t*)mem2;
+	for(size_t i = 0; i < length; i++) {
+		if(mem1_t[i] < mem2_t[i]) {
+			return -1;
+		} else if(mem1_t[i] == mem2_t[i]) {
+			return 0;
+		} else if(mem1_t[i] > mem2_t[i]) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
 size_t memory_get_absolute_address(size_t raddr) {
 #if ___BITS == 16
 	size_t ds = cpu_read_data_segment();
@@ -53,14 +73,14 @@ size_t memory_get_absolute_address(size_t raddr) {
 	return raddr;
 }
 
-size_t memory_get_relative_address(size_t raddr) {
+size_t memory_get_relative_address(size_t aaddr) {
 #if ___BITS == 16
 	size_t ds = cpu_read_data_segment();
 	ds <<= 4;
-	ds = raddr - ds;
+	ds = aaddr - ds;
 	return ds;
 #endif
-	return raddr;
+	return aaddr;
 }
 
 memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_table) {

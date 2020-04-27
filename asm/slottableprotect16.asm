@@ -2,6 +2,7 @@
 .text
 .global __start
 
+// FIXME: read slot type 3 and calculate stage2 length.
 __start:
 cli
 mov    $0x800, %ecx
