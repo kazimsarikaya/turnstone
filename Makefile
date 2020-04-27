@@ -8,6 +8,10 @@ AS64 = x86_64-elf-as
 CC64 = x86_64-elf-gcc
 LD64 = x86_64-elf-ld
 
+DOCSGEN = doxygen
+DOCSFILES = $(shell find . -type f -name \*.md)
+DOCSCONF = docs.doxygen
+
 M4 = m4
 
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -Iincludes \
@@ -25,6 +29,7 @@ LD64FLAGS = --nmagic -s
 OBJDIR = output
 ASOBJDIR = $(OBJDIR)/asm
 CCOBJDIR = $(OBJDIR)/cc
+DOCSOBJDIR = $(OBJDIR)/docs
 ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
@@ -63,7 +68,10 @@ SUBDIRS := utils
 
 .PHONY: all disk clean depend $(SUBDIRS)
 .PRECIOUS: $(M4OBJS)
-all: disk
+all: docs disk
+
+docs: $(DOCSCONF) $(DOCSFILES)
+	$(DOCSGEN) $(DOCSCONF)
 
 disk: kernel
 	dd bs=512 conv=notrunc if=$(OBJDIR)/$< of=/Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
@@ -111,6 +119,7 @@ $(SUBDIRS):
 	$(MAKE) -C $@
 
 clean:
+	rm -fr $(DOCSOBJDIR)/*
 	find $(OBJDIR) -type f -delete
 	rm -f .depend*
 	find $(M4OBJDIR) -type f -delete

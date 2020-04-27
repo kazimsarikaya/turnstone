@@ -108,11 +108,7 @@ char_t* ito_base(number_t number, number_t base){
 	return ret;
 }
 
-#if ___BITS == 16
-char_t* itoh(uint32_t number) {
-#elif ___BITS == 64
-char_t* itoh(uint64_t number) {
-#endif
+char_t* itoh(size_t number) {
 	size_t len = sizeof(number) * 2;
 	char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
 	memory_memset(ret, '0', len);
@@ -131,5 +127,3 @@ char_t* itoh(uint64_t number) {
 	ret[len] = '\0';
 	return ret;
 }
-
-size_t strindexof(char_t*, char_t*);

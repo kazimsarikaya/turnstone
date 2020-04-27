@@ -1,29 +1,60 @@
+/**
+ * @file memory_simple.xx.c
+ * @brief a simple heap implementation
+ */
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
 
+/*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
+/*! used heap hole flag */
 #define HEAP_INFO_FLAG_USED            (1 << 1)
+/*! unused heap hole flag */
 #define HEAP_INFO_FLAG_NOTUSED         (0 << 1)
+/*! heap metadata flag */
 #define HEAP_INFO_FLAG_HEAP            (1 << 4)
+/*! heap initilized flag */
 #define HEAP_INFO_FLAG_HEAP_INITED     (HEAP_INFO_FLAG_HEAP | HEAP_INFO_FLAG_USED)
+/*! heap magic for protection*/
 #define HEAP_INFO_MAGIC                (0xaa55)
+/*! heap padding for protection */
 #define HEAP_INFO_PADDING              (0xB16B00B5)
+/*! heap header */
 #define HEAP_HEADER                    HEAP_INFO_PADDING
 
 
+/*! heap bottom address comes frome linker script */
 extern size_t __kheap_bottom;
 
+/**
+ * @struct __heapinfo
+ * @brief heap info struct
+ */
 typedef struct __heapinfo {
-	uint16_t magic;
-	uint16_t flags;
-	struct __heapinfo* next;
-	struct __heapinfo* previous;
-	uint32_t padding; // for 8 byte align
-}__attribute__ ((packed)) heapinfo_t;
+	uint16_t magic; ///< magic value of heap for protection
+	uint16_t flags; ///< flags of hi
+	struct __heapinfo* next; ///< next hi node
+	struct __heapinfo* previous; ///< previous hi node
+	uint32_t padding; ///< for 8 byte align for protection
+}__attribute__ ((packed)) heapinfo_t; ///< short hand for struct
 
-void* memory_simple_malloc_ext(memory_heap_t*, size_t, size_t);
-uint8_t memory_simple_free(memory_heap_t*, void*);
+/**
+ * @brief simple heap malloc implementation
+ * @param[in] heap  simple heap (itself)
+ * @param[in] size  size of memory
+ * @param[in] align align value
+ * @return allocated memory start address
+ */
+void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
+
+/**
+ * @brief simple heap free implementation
+ * @param[in]  heap simple heap (itself)
+ * @param[in]  address address to free
+ * @return         0 if successed
+ */
+uint8_t memory_simple_free(memory_heap_t* heap, void* address);
 
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	size_t heap_start, heap_end;

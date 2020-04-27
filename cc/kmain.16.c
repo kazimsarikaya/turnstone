@@ -38,8 +38,8 @@ uint8_t kmain16()
 	disk_slot_table_t* st;
 	uint8_t k64_copied = 0;
 	if(disk_read_slottable(BOOT_DRIVE, &st) == 0) {
-		for(uint8_t i = 0; i < 0xF0; i++) {
-			if(st->slots[i].type == 4) {
+		for(uint8_t i = 0; i < sizeof(disk_slot_table_t) / sizeof(disk_slot_t); i++) {
+			if(st->slots[i].type == DISK_SLOT_TYPE_STAGE3) {
 				uint32_t sc = st->slots[i].end.part_low - st->slots[i].start.part_low + 1;
 				uint32_t ss = st->slots[i].start.part_low;
 				video_print("k64 kernel start at: \0");

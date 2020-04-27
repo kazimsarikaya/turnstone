@@ -1,13 +1,35 @@
+/**
+ * @file cpu_simple.xx.c
+ * @brief cpu commands implementation that supports both real and long mode.
+ */
 #include <cpu.h>
 
+/**
+ * @struct cpu_cpuid_regs
+ * @brief  registers
+ * @brief cpuid command set/get registers.
+ *
+ * cpuid command needs setting eax and results are returned for registers.
+ */
 typedef struct cpu_cpuid_regs {
-	uint32_t eax;
-	uint32_t ebx;
-	uint32_t ecx;
-	uint32_t edx;
-} cpu_cpuid_regs_t;
+	uint32_t eax; ///< eax register
+	uint32_t ebx; ///< ebx register
+	uint32_t ecx; ///< ecx register
+	uint32_t edx; ///< edx register
+} cpu_cpuid_regs_t; ///< struct short hand
 
+/**
+ * @brief check cpuid is supported by cpu.
+ * @return 0 if cpuid supported.
+ */
 uint8_t cpu_check_cpuid();
+
+/**
+ * @brief performs cpuid query.
+ * @param[in] query registers.
+ * @param[out] answer registers.
+ * @return 0 if method succeed.
+ */
 uint8_t cpu_cpuid(cpu_cpuid_regs_t, cpu_cpuid_regs_t*);
 
 void cpu_hlt() {
