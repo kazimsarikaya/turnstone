@@ -64,7 +64,7 @@ PROGS = $(OBJDIR)/bootsect16.bin \
 	$(OBJDIR)/stage2.bin \
 	$(OBJDIR)/stage3.bin
 
-SUBDIRS := utils
+SUBDIRS := tests utils
 
 .PHONY: all disk clean depend $(SUBDIRS)
 .PRECIOUS: $(M4OBJS)
@@ -124,7 +124,7 @@ clean:
 	rm -f .depend*
 	find $(M4OBJDIR) -type f -delete
 
-print-%  : ; @echo $* = $($*)
+print-%: ; @echo $* = $($*)
 
 depend: .depend16 .depend64
 
