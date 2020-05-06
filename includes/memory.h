@@ -257,7 +257,7 @@ uint8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 /*! gets p4 index of virtual address at real mode*/
 #define MEMORY_PT_GET_P4_INDEX(u64) ((u64.part_high >> 7) & 0x1FF)
 /*! gets p3 index of virtual address at real mode  */
-#define MEMORY_PT_GET_P3_INDEX(u64) (((u64.part_high & 0x7F) << 2) | ((u64.part_low >> 31) & 0x3))
+#define MEMORY_PT_GET_P3_INDEX(u64) (((u64.part_high & 0x7F) << 2) | ((u64.part_low >> 30) & 0x3))
 /*! gets p2 index of virtual address at real mode */
 #define MEMORY_PT_GET_P2_INDEX(u64) ((u64.part_low >> 21) & 0x1FF)
 /*! gets p1 index of virtual address at real mode */
