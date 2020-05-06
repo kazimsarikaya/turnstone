@@ -47,11 +47,15 @@ For additional information please refer @ref bootloader
 * Switch to long mode and start 64 bit stage 3. <span style="color:green; font-weight:bold">COMPLETED</span>
 
 ###3. Stage 3 and Starting Kernel Tasks
-* Write libraries for data types. <span style="color:red; font-weight:bold">NOT COMPLETED</span>
+* Write libraries for data types. <span style="color:orange; font-weight:bold">PARTIALLY COMPLETED</span>
 
   For additional information please refer @ref datatypes.
 
-* Parse ACPI tables, and get system configuration <span style="color:gray; font-weight:bold">NOT STARTED</span>
+* Frame Allocation.  <span style="color:gray; font-weight:bold">NOT STARTED</span>
+
+  For additional information please refer @ref memorymanagement.
+
+* Parse ACPI tables, and get system configuration. <span style="color:red; font-weight:bold">NOT COMPLETED</span>
 * Scan PCI hardware. <span style="color:gray; font-weight:bold">NOT STARTED</span>
 * Write disk and network driver. <span style="color:gray; font-weight:bold">NOT STARTED</span>
 * Write file system-a-like libraries. <span style="color:gray; font-weight:bold">NOT STARTED</span>

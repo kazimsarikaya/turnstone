@@ -55,7 +55,7 @@ int8_t memory_memcompare(void* mem1, void* mem2, size_t length) {
 		if(mem1_t[i] < mem2_t[i]) {
 			return -1;
 		} else if(mem1_t[i] == mem2_t[i]) {
-			return 0;
+			continue;
 		} else if(mem1_t[i] > mem2_t[i]) {
 			return 1;
 		}
@@ -186,7 +186,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 	}
 
 	for(uint32_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
-		if(!(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_ACPI || SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_ACPI_NVS )) {
+		if(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_USABLE) {
 			continue;
 		}
 		// TODO: check memory area length if greater then 2M

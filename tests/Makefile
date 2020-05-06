@@ -1,7 +1,8 @@
 CC = gcc
 LD = ld
 CCFLAGS = -Wall -Werror -D___BITS=64 -I../includes -std=gnu99 \
-	-Os -nostdlib -ffreestanding -c -m64
+	-Os -nostdlib -ffreestanding -c -m64 \
+	-D___TESTMODE=1
 LDFLAGS = -macosx_version_min 10.13 -lSystem
 
 OUTPUT = ../output
@@ -19,7 +20,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 .PHONY: all clean depend
 all: $(OUTPUTS)
 
-$(TESTOUTPUT)/%.o: %.c
+$(TESTOUTPUT)/%.o: %.c testsetup.h
 	$(CC) $(CCFLAGS) -o $@ $<
 
 $(TESTOUTPUT)/%.xx_64.o: $(CCSOURCEDIR)/%.xx.c
