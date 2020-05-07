@@ -73,6 +73,21 @@ uint8_t cpu_check_longmode() {
 #endif
 }
 
+int8_t cpu_check_rdrand(){
+	if(cpu_check_cpuid() != 0) {
+		return -1;
+	}
+	cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
+	cpu_cpuid_regs_t answer = {0, 0, 0, 0};
+	if(cpu_cpuid(query, &answer) != 0) {
+		return -1;
+	}
+	if((answer.ecx & 0x40000000) == 0x40000000) {
+		return 0;
+	}
+	return -1;
+}
+
 
 uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer){
 	__asm__ __volatile__ ("cpuid\n"

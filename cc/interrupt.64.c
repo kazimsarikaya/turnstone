@@ -1,7 +1,7 @@
 #include <types.h>
-#include <interrupt.h>
 #include <cpu.h>
-#include <descriptor.h>
+#include <cpu/interrupt.h>
+#include <cpu/descriptor.h>
 #include <video.h>
 #include <strings.h>
 

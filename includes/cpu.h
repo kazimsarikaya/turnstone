@@ -48,4 +48,10 @@ uint16_t cpu_read_data_segment();
  */
 uint8_t cpu_check_longmode();
 
+/**
+ * @brief checks rdrand supported
+ * @return 0 when supported else -1
+ */
+int8_t cpu_check_rdrand();
+
 #endif

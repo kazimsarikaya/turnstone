@@ -1,4 +1,5 @@
-#include <descriptor.h>
+#include <types.h>
+#include <cpu/descriptor.h>
 #include <memory.h>
 
 uint8_t descriptor_build_gdt_register(){

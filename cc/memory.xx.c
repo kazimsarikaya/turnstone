@@ -2,8 +2,10 @@
  * @file memory.xx.c
  * @brief main memory interface and functions implementation
  */
-#include <memory.h>
 #include <types.h>
+#include <memory.h>
+#include <memory/paging.h>
+#include <memory/mmap.h>
 #include <cpu.h>
 #include <systeminfo.h>
 
