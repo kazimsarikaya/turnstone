@@ -9,6 +9,7 @@
 #include <types.h>
 #include <memory.h>
 #include <indexer.h>
+#include <iterator.h>
 
 /**
  * @brief linked list operation enum
@@ -60,14 +61,6 @@ typedef void* linkedlist_t;
  * @brief linked list item implicit type
  */
 typedef void* linkedlist_item_t;
-
-/**
- * @typedef linkedlist_iterator_t
- * @brief linked list iterator.
- *
- * regardless of linked list type is, it iterates from head to tail
- */
-typedef void* linkedlist_iterator_t;
 
 /**
  * @brief comparing given to data
@@ -274,44 +267,6 @@ void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
  * the returned type is implicit. see also linkedlist_iterator_internal_t
  * iterator is created at the heap of list.
  */
-linkedlist_iterator_t linkedlist_iterator_create(linkedlist_t list);
-
-/**
- * @brief destroys the iterator
- * @param[in]  iterator to destroy.
- * @return  0 if succeed.
- */
-uint8_t linkedlist_iterator_destroy(linkedlist_iterator_t iterator);
-
-/**
- * @brief iterates next item of list.
- * @param[in]  iterator the iterator
- * @return          itself
- */
-linkedlist_iterator_t linkedlist_iterator_next(linkedlist_iterator_t iterator);
-
-/**
- * @brief checks if iterator is at end of the list
- * @param[in]  iterator the iterator
- * @return  0 if the iterator is at the end of list.
- */
-uint8_t linkedlist_iterator_end_of_list(linkedlist_iterator_t iterator);
-
-/**
- * @brief returns data at current item
- * @param[in]  iterator the iterator
- * @return data
- */
-void* linkedlist_iterator_get_item(linkedlist_iterator_t iterator);
-
-/**
- * @brief deletes current item.
- * @param[in]  iterator the iterator
- * @return deleted item
- *
- * current item is deleted and the value of item is returned. also list metadata is updated.
- */
-void* linkedlist_iterator_delete_item(linkedlist_iterator_t iterator);
-
+iterator_t* linkedlist_iterator_create(linkedlist_t list);
 
 #endif
