@@ -8,6 +8,7 @@
 
 #include <types.h>
 #include <memory.h>
+#include <memory/mmap.h>
 
 /**
  * @struct system_info

@@ -1,11 +1,13 @@
+#include <types.h>
 #include <video.h>
 #include <memory.h>
+#include <memory/paging.h>
 #include <strings.h>
 #include <faraccess.h>
 #include <diskio.h>
-#include <descriptor.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/descriptor.h>
 
 extern uint8_t BOOT_DRIVE;
 
