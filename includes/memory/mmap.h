@@ -3,6 +3,7 @@
  * @brief memory map detection interface
  */
 #ifndef ___MEMORY_MMAP_H
+/*! prevent duplicate header error macro */
 #define ___MEMORY_MMAP_H 0
 
 #include <memory.h>

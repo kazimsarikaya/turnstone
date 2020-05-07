@@ -62,6 +62,43 @@ int8_t linkedlist_default_data_comparator(const void* data1, const void* data2){
 	return 0;
 }
 
+/**
+ * @brief destroys the iterator
+ * @param[in]  iterator to destroy.
+ * @return  0 if succeed.
+ */
+int8_t linkedlist_iterator_destroy(iterator_t* iterator);
+
+/**
+ * @brief iterates next item of list.
+ * @param[in]  iterator the iterator
+ * @return          itself
+ */
+iterator_t* linkedlist_iterator_next(iterator_t* iterator);
+
+/**
+ * @brief checks if iterator is at end of the list
+ * @param[in]  iterator the iterator
+ * @return  0 if the iterator is at the end of list.
+ */
+int8_t linkedlist_iterator_end_of_list(iterator_t* iterator);
+
+/**
+ * @brief returns data at current item
+ * @param[in]  iterator the iterator
+ * @return data
+ */
+void* linkedlist_iterator_get_item(iterator_t* iterator);
+
+/**
+ * @brief deletes current item.
+ * @param[in]  iterator the iterator
+ * @return deleted item
+ *
+ * current item is deleted and the value of item is returned. also list metadata is updated.
+ */
+void* linkedlist_iterator_delete_item(iterator_t* iterator);
+
 linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t type,
                                          linkedlist_data_comparator_f comparator, indexer_t indexer){
 	linkedlist_internal_t* list;
@@ -94,15 +131,15 @@ size_t linkedlist_size(linkedlist_t list){
 uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_t type){
 	// TODO: check errors
 	memory_heap_t* heap = ((linkedlist_internal_t*)list)->heap;
-	linkedlist_iterator_t iter = linkedlist_iterator_create(list);
-	while(linkedlist_iterator_end_of_list(iter) != 0) {
-		void* data = linkedlist_iterator_delete_item(iter);
+	iterator_t* iter = linkedlist_iterator_create(list);
+	while(iter->end_of_iterator(iter) != 0) {
+		void* data = iter->delete_item(iter);
 		if(type == LINKEDLIST_DESTROY_WITH_DATA) {
 			memory_free_ext(heap, data);
 		}
-		iter = linkedlist_iterator_next(iter);
+		iter = iter->next(iter);
 	}
-	linkedlist_iterator_destroy(iter);
+	iter->destroy(iter);
 	return memory_free_ext(heap, list);
 }
 
@@ -266,27 +303,27 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
 			memory_free_ext(l->heap, item);
 			l->item_count--;
 		} else {
-			linkedlist_iterator_t iter = linkedlist_iterator_create(l);
-			while(linkedlist_iterator_end_of_list(iter) != 0) {
-				if(l->comparator(linkedlist_iterator_get_item(iter), data) == 0) {
-					result = linkedlist_iterator_delete_item(iter);
+			iterator_t* iter = linkedlist_iterator_create(l);
+			while(iter->end_of_iterator(iter) != 0) {
+				if(l->comparator(iter->get_item(iter), data) == 0) {
+					result = iter->delete_item(iter);
 					break;
 				}
-				iter = linkedlist_iterator_next(iter);
+				iter = iter->next(iter);
 			}
-			linkedlist_iterator_destroy(iter);
+			iter->destroy(iter);
 		}
 	} else if(where == LINKEDLIST_DELETE_AT_POSITION) {
-		linkedlist_iterator_t iter = linkedlist_iterator_create(l);
-		while(linkedlist_iterator_end_of_list(iter) != 0) {
+		iterator_t* iter = linkedlist_iterator_create(l);
+		while(iter->end_of_iterator(iter) != 0) {
 			if(position == 0) {
-				result = linkedlist_iterator_delete_item(iter);
+				result = iter->delete_item(iter);
 				break;
 			}
 			position--;
-			iter = linkedlist_iterator_next(iter);
+			iter = iter->next(iter);
 		}
-		linkedlist_iterator_destroy(iter);
+		iter->destroy(iter);
 		if(position > 0) {
 			result = NULL;
 		}
@@ -301,16 +338,16 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position){
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
 	*position = 0;
 	int8_t res = -1;
-	linkedlist_iterator_t iter = linkedlist_iterator_create(l);
-	while(linkedlist_iterator_end_of_list(iter) != 0) {
-		if(l->comparator(linkedlist_iterator_get_item(iter), data) == 0) {
+	iterator_t* iter = linkedlist_iterator_create(l);
+	while(iter->end_of_iterator(iter) != 0) {
+		if(l->comparator(iter->get_item(iter), data) == 0) {
 			res = 0;
 			break;
 		}
 		(*position)++;
-		iter = linkedlist_iterator_next(iter);
+		iter = iter->next(iter);
 	}
-	linkedlist_iterator_destroy(iter);
+	iter->destroy(iter);
 	return res;
 }
 
@@ -320,35 +357,45 @@ void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
 	if(position >= l->item_count) {
 		return result;
 	}
-	linkedlist_iterator_t iter = linkedlist_iterator_create(l);
-	while(linkedlist_iterator_end_of_list(iter) != 0) {
+	iterator_t* iter = linkedlist_iterator_create(l);
+	while(iter->end_of_iterator(iter) != 0) {
 		if(position == 0) {
-			result = linkedlist_iterator_get_item(iter);
+			result = iter->get_item(iter);
 			break;
 		}
 		position--;
-		iter = linkedlist_iterator_next(iter);
+		iter = iter->next(iter);
 	}
-	linkedlist_iterator_destroy(iter);
+	iter->destroy(iter);
 	return result;
 }
 
-linkedlist_iterator_t linkedlist_iterator_create(linkedlist_t list) {
+iterator_t* linkedlist_iterator_create(linkedlist_t list) {
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+	iterator_t* iterator = memory_malloc_ext(l->heap, sizeof(iterator_t), 0x0);
 	linkedlist_iterator_internal_t* iter = memory_malloc_ext(l->heap, sizeof(linkedlist_iterator_internal_t), 0x0);
 	iter->list = l;
 	iter->current = l->head;
-	return iter;
+	iterator->metadata = iter;
+	iterator->destroy = &linkedlist_iterator_destroy;
+	iterator->next = &linkedlist_iterator_next;
+	iterator->end_of_iterator = &linkedlist_iterator_end_of_list;
+	iterator->get_item = &linkedlist_iterator_get_item;
+	iterator->delete_item = &linkedlist_iterator_delete_item;
+	iterator->get_extra_data = NULL;
+	return iterator;
 }
 
-uint8_t linkedlist_iterator_destroy(linkedlist_iterator_t iterator) {
-	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator;
+int8_t linkedlist_iterator_destroy(iterator_t* iterator) {
+	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
 	memory_heap_t* heap = iter->list->heap;
-	return memory_free_ext(heap, iter);
+	memory_free_ext(heap, iter);
+	memory_free_ext(heap, iterator);
+	return 0;
 }
 
-linkedlist_iterator_t linkedlist_iterator_next(linkedlist_iterator_t iterator) {
-	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator;
+iterator_t* linkedlist_iterator_next(iterator_t* iterator) {
+	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
 	if(iter->current != NULL) {
 		if(iter->current_deleted == 1) {
 			iter->current_deleted = 0;
@@ -356,21 +403,21 @@ linkedlist_iterator_t linkedlist_iterator_next(linkedlist_iterator_t iterator) {
 			iter->current = iter->current->next;
 		}
 	}
-	return iter;
+	return iterator;
 }
 
-uint8_t linkedlist_iterator_end_of_list(linkedlist_iterator_t iterator) {
-	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator;
+int8_t linkedlist_iterator_end_of_list(iterator_t* iterator) {
+	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
 	return iter->current == NULL ? 0 : 1;
 }
 
-void* linkedlist_iterator_get_item(linkedlist_iterator_t iterator) {
-	linkedlist_item_internal_t* li = ((linkedlist_iterator_internal_t*)iterator)->current;
+void* linkedlist_iterator_get_item(iterator_t* iterator) {
+	linkedlist_item_internal_t* li = ((linkedlist_iterator_internal_t*)iterator->metadata)->current;
 	return li->data;
 }
 
-void* linkedlist_iterator_delete_item(linkedlist_iterator_t iterator){
-	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator;
+void* linkedlist_iterator_delete_item(iterator_t* iterator){
+	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
 	if(iter->current == NULL) {
 		return NULL;
 	}

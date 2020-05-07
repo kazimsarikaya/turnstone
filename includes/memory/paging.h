@@ -3,6 +3,7 @@
  * @brief memory paging and frame allocation interface
  */
 #ifndef ___MEMORY_PAGE_H
+/*! prevent duplicate header error macro */
 #define ___MEMORY_PAGE_H 0
 
 #include <memory.h>

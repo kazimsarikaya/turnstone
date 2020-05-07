@@ -46,11 +46,11 @@ int main(){
 	}
 	print_success("b+ tree builded");
 
-	bplustree_iterator_t iter = bplustree_iterator_create(idx);
+	iterator_t* iter = idx->create_iterator(idx);
 	printf("iterator created: %p\n", iter);
-	while(bplustree_iterator_end_of_index(iter) != 0) {
-		int* k = (int*)bplustree_iterator_get_key(iter);
-		int* d = (int*)bplustree_iterator_get_data(iter);
+	while(iter->end_of_iterator(iter) != 0) {
+		int* k = (int*)iter->get_extra_data(iter);
+		int* d = (int*)iter->get_item(iter);
 		if(k != NULL) {
 			printf("k: %i -> ", *k);
 		} else {
@@ -61,10 +61,10 @@ int main(){
 		} else {
 			printf("wtf data , ");
 		}
-		iter = bplustree_iterator_next(iter);
+		iter = iter->next(iter);
 	}
 	printf("\niteration ended\n");
-	bplustree_iterator_destroy(iter);
+	iter->destroy(iter);
 	printf("iterator destroyed\n");
 	bplustree_destroy_index(idx);
 
@@ -97,10 +97,10 @@ int main(){
 		} else {
 			print_success("existed key deletion passed");
 		}
-		iter = bplustree_iterator_create(idx);
-		while(bplustree_iterator_end_of_index(iter) != 0) {
-			int* k = (int*)bplustree_iterator_get_key(iter);
-			int* d = (int*)bplustree_iterator_get_data(iter);
+		iter = idx->create_iterator(idx);
+		while(iter->end_of_iterator(iter) != 0) {
+			int* k = (int*)iter->get_extra_data(iter);
+			int* d = (int*)iter->get_item(iter);
 			if(k != NULL) {
 				printf("k: %i -> ", *k);
 			} else {
@@ -111,9 +111,9 @@ int main(){
 			} else {
 				printf("wtf data , ");
 			}
-			iter = bplustree_iterator_next(iter);
+			iter = iter->next(iter);
 		}
-		bplustree_iterator_destroy(iter);
+		iter->destroy(iter);
 		printf("\n");
 	}
 
