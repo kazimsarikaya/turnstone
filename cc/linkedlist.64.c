@@ -274,7 +274,14 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
 		l->item_count--;
 	} else if(where == LINKEDLIST_DELETE_AT_FINDBY) {
 		if(l->type == LINKEDLIST_TYPE_INDEXEDLIST) {
-			linkedlist_item_internal_t* item = (linkedlist_item_internal_t*)indexer_search(l->indexer, data);
+			void* result;
+			if(indexer_search(l->indexer, data, &result, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL) != 0) {
+				return NULL;
+			}
+			if(result == NULL) {
+				return NULL;
+			}
+			linkedlist_item_internal_t* item = (linkedlist_item_internal_t*)result;
 			linkedlist_item_internal_t* previous = item->previous;
 			linkedlist_item_internal_t* next = item->next;
 			if(previous == NULL) {
