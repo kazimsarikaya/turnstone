@@ -103,9 +103,9 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
  *
  * if heap is NULL, the pages created in default heap
  */
-uint8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
-                                   uint64_t virtual_address, uint64_t frame_adress,
-                                   memory_paging_page_type_t type);
+int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
+                                  uint64_t virtual_address, uint64_t frame_adress,
+                                  memory_paging_page_type_t type);
 /*! add virtual address va to pt page table with frame address fa and page type t uses default heap for mallocs */
 #define memory_paging_add_page(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
 

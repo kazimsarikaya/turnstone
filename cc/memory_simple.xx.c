@@ -194,6 +194,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		hi_a->padding = HEAP_INFO_PADDING;
 		hi_a->flags = HEAP_INFO_FLAG_USED;
 
+		memory_memclean((uint8_t*)aligned_addr, size);
 		return (uint8_t*)aligned_addr;
 	} else {
 		hi->flags |= HEAP_INFO_FLAG_USED;
