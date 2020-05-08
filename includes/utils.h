@@ -32,4 +32,7 @@
  */
 number_t power(number_t base, number_t p);
 
+#define sizeof_field(s, m) (sizeof((((s*)0)->m)))
+#define typeof_field(s, m) typeof(((s*)0)->m)
+
 #endif

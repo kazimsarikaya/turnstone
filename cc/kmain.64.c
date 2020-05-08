@@ -3,7 +3,7 @@
 #include <video.h>
 #include <memory.h>
 #include <strings.h>
-#include <interrupt.h>
+#include <cpu/interrupt.h>
 
 uint8_t kmain64() {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
