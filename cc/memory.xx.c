@@ -117,7 +117,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		return -1;
 	}
 	if(p4->pages[p4idx].present != 1) {
-		t_p3 = memory_malloc_ext(heap, sizeof(memory_page_table_t), 0x1000);
+		t_p3 = memory_paging_malloc_page_with_heap(heap);
 		if(t_p3 == NULL) {
 			return -1;
 		}
@@ -146,14 +146,14 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 			t_p3->pages[p3idx].writable = 1;
 			t_p3->pages[p3idx].hugepage = 1;
 #if ___BITS == 16
-			t_p3->pages[p3idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (frame_adress.part_high << 20));
+			t_p3->pages[p3idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000C0000) | (0XFFF00000 & (frame_adress.part_high << 20));
 			t_p3->pages[p3idx].physical_address_part2 = (frame_adress.part_high >> 12) & 0xFF;
 #elif ___BITS == 64
-			t_p3->pages[p3idx].physical_address = (frame_adress >> 12) & 0xFFFFFFFE00;
+			t_p3->pages[p3idx].physical_address = (frame_adress >> 12) & 0xFFFFFC0000;
 #endif
 			return 0;
 		} else {
-			t_p2 = memory_malloc_ext(heap, sizeof(memory_page_table_t), 0x1000);
+			t_p2 = memory_paging_malloc_page_with_heap(heap);
 			if(t_p2 == NULL) {
 				return -1;
 			}
@@ -193,7 +193,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 #endif
 			return 0;
 		} else {
-			t_p1 = memory_malloc_ext(heap, sizeof(memory_page_table_t), 0x1000);
+			t_p1 = memory_paging_malloc_page_with_heap(heap);
 			if(t_p1 == NULL) {
 				return -1;
 			}
@@ -228,14 +228,14 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		t_p1->pages[p1idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (frame_adress.part_high << 20));
 		t_p1->pages[p1idx].physical_address_part2 = (frame_adress.part_high >> 12) & 0xFF;
 #elif ___BITS == 64
-		t_p1->pages[p1idx].physical_address = (frame_adress >> 12) & 0xFFFFFFFE00;
+		t_p1->pages[p1idx].physical_address = frame_adress >> 12;
 #endif
 	}
 	return 0;
 }
 
 memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
-	memory_page_table_t* p4 = memory_malloc_ext(heap, sizeof(memory_page_table_t), 0x1000);
+	memory_page_table_t* p4 = memory_paging_malloc_page_with_heap(heap);
 	if(p4 == NULL) {
 		return NULL;
 	}
@@ -260,7 +260,162 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 	return p4;
 }
 
+#if ___BITS == 64
 
+int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress){
+	if(p4 == NULL) {
+		p4 = memory_paging_switch_table(NULL);
+	}
+
+	memory_page_table_t* t_p3;
+	memory_page_table_t* t_p2;
+	memory_page_table_t* t_p1;
+
+	int8_t p1_used = 0, p2_used = 0, p3_used = 0;
+
+	size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
+	if(p4_idx > 511) {
+		return -1;
+	}
+	if(p4->pages[p4_idx].present == 0) {
+		return -1;
+	}
+
+	t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+	size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+	if(p3_idx > 511) {
+		return -1;
+	}
+
+	if(t_p3->pages[p3_idx].present == 0) {
+		return -1;
+	} else {
+		if(t_p3->pages[p3_idx].hugepage == 1) {
+			*frame_adress = t_p3->pages[p3_idx].physical_address << 12;
+			memory_memclean(&t_p3->pages[p3_idx], sizeof(memory_page_entry_t));
+		} else {
+			t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+			size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+			if(p2_idx > 511) {
+				return -1;
+			}
+			if(t_p2->pages[p2_idx].present == 0) {
+				return -1;
+			}
+			if(t_p2->pages[p2_idx].hugepage == 1) {
+				*frame_adress = t_p2->pages[p2_idx].physical_address << 12;
+				memory_memclean(&t_p2->pages[p2_idx], sizeof(memory_page_entry_t));
+			} else {
+				t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+				size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+				if(p1_idx > 511) {
+					return -1;
+				}
+				if(t_p1->pages[p1_idx].present == 0) {
+					return -1;
+				}
+				*frame_adress = t_p1->pages[p1_idx].physical_address << 12;
+				memory_memclean(&t_p1->pages[p1_idx], sizeof(memory_page_entry_t));
+				for(size_t i = 0; i < 512; i++) {
+					if(t_p1->pages[i].present == 1) {
+						p1_used = 1;
+						break;
+					}
+				}
+				if(p1_used == 0) {
+					memory_memclean(&t_p2->pages[p2_idx], sizeof(memory_page_entry_t));
+					memory_free_ext(heap, t_p1);
+				}
+			}
+			for(size_t i = 0; i < 512; i++) {
+				if(t_p2->pages[i].present == 1) {
+					p2_used = 1;
+					break;
+				}
+			}
+			if(p2_used == 0) {
+				memory_memclean(&t_p3->pages[p3_idx], sizeof(memory_page_entry_t));
+				memory_free_ext(heap, t_p2);
+			}
+		}
+		for(size_t i = 0; i < 512; i++) {
+			if(t_p3->pages[i].present == 1) {
+				p3_used = 1;
+				break;
+			}
+		}
+		if(p3_used == 0) {
+			memory_memclean(&p4->pages[p4_idx], sizeof(memory_page_entry_t));
+			memory_free_ext(heap, t_p3);
+		}
+	}
+
+	return 0;
+}
+
+memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4){
+	if(p4 == NULL) {
+		p4 = memory_paging_switch_table(NULL);
+	}
+	memory_page_table_t* new_p4 = memory_paging_malloc_page_with_heap(heap);
+	return new_p4;
+}
+
+int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress){
+	if(p4 == NULL) {
+		p4 = memory_paging_switch_table(NULL);
+	}
+	memory_page_table_t* t_p3;
+	memory_page_table_t* t_p2;
+	memory_page_table_t* t_p1;
+
+	size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
+	if(p4_idx > 511) {
+		return -1;
+	}
+	if(p4->pages[p4_idx].present == 0) {
+		return -1;
+	}
+
+	t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+	size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+	if(p3_idx > 511) {
+		return -1;
+	}
+
+	if(t_p3->pages[p3_idx].present == 0) {
+		return -1;
+	} else {
+		if(t_p3->pages[p3_idx].hugepage == 1) {
+			*frame_adress = t_p3->pages[p3_idx].physical_address << 12;
+		} else {
+			t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+			size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+			if(p2_idx > 511) {
+				return -1;
+			}
+			if(t_p2->pages[p2_idx].present == 0) {
+				return -1;
+			}
+			if(t_p2->pages[p2_idx].hugepage == 1) {
+				*frame_adress = t_p2->pages[p2_idx].physical_address << 12;
+			} else {
+				t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+				size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+				if(p1_idx > 511) {
+					return -1;
+				}
+				if(t_p1->pages[p1_idx].present == 0) {
+					return -1;
+				}
+				*frame_adress = t_p1->pages[p1_idx].physical_address << 12;
+			}
+		}
+	}
+	return 0;
+}
+
+#endif
 
 size_t memory_detect_map(memory_map_t** mmap) {
 	*mmap = memory_malloc(sizeof(memory_map_t) * MEMORY_MMAP_MAX_ENTRY_COUNT);

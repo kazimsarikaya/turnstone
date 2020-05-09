@@ -1,4 +1,5 @@
 #include "testsetup.h"
+#include <memory/paging.h>
 
 int main(){
 	setup_ram();
@@ -45,6 +46,93 @@ int main(){
 	memory_free(data4);
 
 	print_success("OK");
+
+	uint64_t fa;
+	memory_page_table_t* p4 = memory_paging_malloc_page();
+	if(memory_paging_add_page(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+		print_error("can not add 4k huge page");
+	} else {
+		print_success("page adding succeed");
+	}
+
+	fa = 0;
+	if(memory_paging_delete_page_ext(p4, 0x0, &fa) != 0) {
+		print_error("delete page failed");
+	} else {
+		fa >>= 12;
+		printf("fa: 0x%08x\n", fa);
+		if(fa != 0x1234) {
+			print_error("delete page failed");
+		} else {
+			if(memory_paging_get_frame_address_ext(p4, ((uint64_t)0x1234) << 12, &fa) != -1) {
+				print_error("delete page failed");
+			} else {
+				print_success("delete page succeed");
+			}
+		}
+	}
+
+
+	if(memory_paging_add_page(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+		print_error("can not add 4k huge page");
+	} else {
+		print_success("page adding succeed");
+	}
+
+	fa = 0;
+	if(memory_paging_delete_page_ext(p4, 0x0, &fa) != 0) {
+		print_error("delete page failed");
+	} else {
+		fa >>= 12;
+		printf("fa: 0x%08x\n", fa);
+		if(fa != 0x1234) {
+			print_error("delete page failed");
+		} else {
+			if(memory_paging_get_frame_address_ext(p4, ((uint64_t)0x1234) << 12, &fa) != -1) {
+				print_error("delete page failed");
+			} else {
+				print_success("delete page succeed");
+			}
+		}
+	}
+
+	if(memory_paging_add_page(p4, ((uint32_t)0x3) << 21, ((uint64_t)0x1234) << 21, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+		print_error("can not add 2m huge page");
+	} else {
+		print_success("page adding succeed");
+	}
+	fa = 0;
+	if(memory_paging_delete_page_ext(p4, ((uint32_t)0x3) << 21, &fa) != 0) {
+		print_error("delete page failed");
+	} else {
+		fa >>= 21;
+		printf("fa: 0x%08x\n", fa);
+		if(fa != 0x1234) {
+			print_error("delete page failed");
+		} else {
+			print_success("delete page succeed");
+		}
+	}
+
+	if(memory_paging_add_page(p4, ((uint32_t)0x3) << 30, ((uint64_t)0x12) << 30, MEMORY_PAGING_PAGE_TYPE_1G) != 0) {
+		print_error("can not add 1g huge page");
+	} else {
+		print_success("page adding succeed");
+	}
+	fa = 0;
+	if(memory_paging_delete_page_ext(p4, ((uint32_t)0x3) << 30, &fa) != 0) {
+		print_error("delete page failed");
+	} else {
+		fa >>= 30;
+		printf("fa: 0x%08x\n", fa);
+		if(fa != 0x12) {
+			print_error("delete page failed");
+		} else {
+			print_success("delete page succeed");
+		}
+	}
+
+	memory_free(p4);
 
 	fp = fopen( "tmp/mem2.dump", "w" );
 	fwrite(mem_area, 1, RAMSIZE, fp );
