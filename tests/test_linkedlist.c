@@ -1,4 +1,4 @@
-#include "testsetup.h"
+#include "setup.h"
 #include <linkedlist.h>
 
 int8_t int_comparator(const void* i, const void* j){

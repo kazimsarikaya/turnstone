@@ -15,7 +15,7 @@ DOCSCONF = docs.doxygen
 M4 = m4
 
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -Iincludes \
-	-Werror -Wall \
+	-Werror -Wall -ffunction-sections \
 	-mgeneral-regs-only -mno-red-zone
 
 AS16FLAGS = --32

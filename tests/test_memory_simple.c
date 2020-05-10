@@ -1,4 +1,4 @@
-#include "testsetup.h"
+#include "setup.h"
 
 int main(){
 	setup_ram();
