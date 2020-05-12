@@ -1,5 +1,5 @@
-#ifndef ___TESTSETUP_H
-#define ___TESTSETUP_H 0
+#ifndef ___SETUP_H
+#define ___SETUP_H 0
 
 #include <types.h>
 #include <memory.h>

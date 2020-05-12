@@ -6,8 +6,7 @@ CCFLAGS = -Wall -Werror -D___BITS=64 -I../includes -std=gnu99 \
 LDFLAGS = -macosx_version_min 10.13 -lSystem
 
 OUTPUT = ../output
-CCOUTPUT = $(OUTPUT)/cc
-TESTOUTPUT = $(OUTPUT)/tests
+TESTOUTPUT = $(OUTPUT)/cc-local
 
 CCSOURCEDIR = ../cc
 
@@ -20,7 +19,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 .PHONY: all clean depend
 all: $(OUTPUTS)
 
-$(TESTOUTPUT)/%.o: %.c testsetup.h
+$(TESTOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<
 
 $(TESTOUTPUT)/%.xx_64.o: $(CCSOURCEDIR)/%.xx.c
@@ -43,6 +42,6 @@ print-%  : ; @echo $* = $($*)
 depend: .depend
 
 .depend: $(SOURCES)
-	./create_depends.sh $(PROGS) >.depend
+	../scripts/create_depends.sh $(PROGS) >.depend
 
 -include .depend
