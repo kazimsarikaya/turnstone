@@ -113,7 +113,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 	}
 
 	size_t p4idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
-	if(p4idx > 511) {
+	if(p4idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 	if(p4->pages[p4idx].present != 1) {
@@ -137,7 +137,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 #endif
 	}
 	size_t p3idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
-	if(p3idx > 511) {
+	if(p3idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 	if(t_p3->pages[p3idx].present != 1) {
@@ -177,7 +177,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 #endif
 	}
 	size_t p2idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
-	if(p2idx > 511) {
+	if(p2idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 	if(t_p2->pages[p2idx].present != 1) {
@@ -217,13 +217,12 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 #endif
 	}
 	size_t p1idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
-	if(p1idx > 511) {
+	if(p1idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 	if(t_p1->pages[p1idx].present != 1) {
 		t_p1->pages[p1idx].present = 1;
 		t_p1->pages[p1idx].writable = 1;
-		t_p1->pages[p1idx].hugepage = 1;
 #if ___BITS == 16
 		t_p1->pages[p1idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (frame_adress.part_high << 20));
 		t_p1->pages[p1idx].physical_address_part2 = (frame_adress.part_high >> 12) & 0xFF;
@@ -274,7 +273,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 	int8_t p1_used = 0, p2_used = 0, p3_used = 0;
 
 	size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
-	if(p4_idx > 511) {
+	if(p4_idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 	if(p4->pages[p4_idx].present == 0) {
@@ -283,7 +282,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 
 	t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
 	size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
-	if(p3_idx > 511) {
+	if(p3_idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 
@@ -296,7 +295,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 		} else {
 			t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
 			size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
-			if(p2_idx > 511) {
+			if(p2_idx >= MEMORY_PAGING_INDEX_COUNT) {
 				return -1;
 			}
 			if(t_p2->pages[p2_idx].present == 0) {
@@ -308,7 +307,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 			} else {
 				t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
 				size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
-				if(p1_idx > 511) {
+				if(p1_idx >= MEMORY_PAGING_INDEX_COUNT) {
 					return -1;
 				}
 				if(t_p1->pages[p1_idx].present == 0) {
@@ -316,7 +315,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 				}
 				*frame_adress = t_p1->pages[p1_idx].physical_address << 12;
 				memory_memclean(&t_p1->pages[p1_idx], sizeof(memory_page_entry_t));
-				for(size_t i = 0; i < 512; i++) {
+				for(size_t i = 0; i < MEMORY_PAGING_INDEX_COUNT; i++) {
 					if(t_p1->pages[i].present == 1) {
 						p1_used = 1;
 						break;
@@ -327,7 +326,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 					memory_free_ext(heap, t_p1);
 				}
 			}
-			for(size_t i = 0; i < 512; i++) {
+			for(size_t i = 0; i < MEMORY_PAGING_INDEX_COUNT; i++) {
 				if(t_p2->pages[i].present == 1) {
 					p2_used = 1;
 					break;
@@ -338,7 +337,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 				memory_free_ext(heap, t_p2);
 			}
 		}
-		for(size_t i = 0; i < 512; i++) {
+		for(size_t i = 0; i < MEMORY_PAGING_INDEX_COUNT; i++) {
 			if(t_p3->pages[i].present == 1) {
 				p3_used = 1;
 				break;
@@ -358,6 +357,35 @@ memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memo
 		p4 = memory_paging_switch_table(NULL);
 	}
 	memory_page_table_t* new_p4 = memory_paging_malloc_page_with_heap(heap);
+	for(size_t p4_idx = 0; p4_idx < MEMORY_PAGING_INDEX_COUNT; p4_idx++) {
+		if(p4->pages[p4_idx].present == 1) {
+			memory_memcopy(&p4->pages[p4_idx], &new_p4->pages[p4_idx], sizeof(memory_page_entry_t));
+			memory_page_table_t* new_p3 = memory_paging_malloc_page_with_heap(heap);
+			new_p4->pages[p4_idx].physical_address = ( memory_get_absolute_address((size_t)new_p3) >> 12) & 0xFFFFFFFFFF;
+			memory_page_table_t* t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+			for(size_t p3_idx = 0; p3_idx < MEMORY_PAGING_INDEX_COUNT; p3_idx++) {
+				if(t_p3->pages[p3_idx].present == 1) {
+					memory_memcopy(&t_p3->pages[p3_idx], &new_p3->pages[p3_idx], sizeof(memory_page_entry_t));
+					if(t_p3->pages[p3_idx].hugepage != 1) {
+						memory_page_table_t* new_p2 = memory_paging_malloc_page_with_heap(heap);
+						new_p3->pages[p3_idx].physical_address = (memory_get_absolute_address((size_t)new_p2) >> 12) & 0xFFFFFFFFFF;
+						memory_page_table_t* t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+						for(size_t p2_idx = 0; p2_idx < MEMORY_PAGING_INDEX_COUNT; p2_idx++) {
+							if(t_p2->pages[p2_idx].present == 1) {
+								memory_memcopy(&t_p2->pages[p2_idx], &new_p2->pages[p2_idx], sizeof(memory_page_entry_t));
+								if(t_p2->pages[p2_idx].hugepage != 1) {
+									memory_page_table_t* new_p1 = memory_paging_malloc_page_with_heap(heap);
+									new_p2->pages[p2_idx].physical_address = (memory_get_absolute_address((size_t)new_p1) >> 12) & 0xFFFFFFFFFF;
+									memory_page_table_t* t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+									memory_memcopy(t_p1, new_p1, sizeof(memory_page_table_t));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 	return new_p4;
 }
 
@@ -370,7 +398,7 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 	memory_page_table_t* t_p1;
 
 	size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
-	if(p4_idx > 511) {
+	if(p4_idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 	if(p4->pages[p4_idx].present == 0) {
@@ -379,7 +407,7 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 
 	t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
 	size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
-	if(p3_idx > 511) {
+	if(p3_idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
 
@@ -391,7 +419,7 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 		} else {
 			t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
 			size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
-			if(p2_idx > 511) {
+			if(p2_idx >= MEMORY_PAGING_INDEX_COUNT) {
 				return -1;
 			}
 			if(t_p2->pages[p2_idx].present == 0) {
@@ -402,7 +430,7 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 			} else {
 				t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
 				size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
-				if(p1_idx > 511) {
+				if(p1_idx >= MEMORY_PAGING_INDEX_COUNT) {
 					return -1;
 				}
 				if(t_p1->pages[p1_idx].present == 0) {

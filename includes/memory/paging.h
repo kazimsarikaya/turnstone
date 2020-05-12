@@ -8,6 +8,8 @@
 
 #include <memory.h>
 
+#define MEMORY_PAGING_INDEX_COUNT 512
+
 /**
  * @struct memory_page_entry_t
  * @brief page entry struct
@@ -56,7 +58,7 @@ typedef struct {
  * a page table is 4K page aligned.
  */
 typedef struct {
-	memory_page_entry_t pages[512]; ///< page table entries
+	memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
 } __attribute__((packed)) memory_page_table_t; ///< short hand for struct
 
 /**
