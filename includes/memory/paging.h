@@ -125,6 +125,9 @@ memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memo
 #define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL, NULL)
 #define memory_paging_move_pagetable(h) memory_paging_clone_pagetable_ext(h, NULL)
 
+int8_t memory_paging_destroy_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4);
+#define memory_paging_destroy_pagetable(p) memory_paging_destroy_pagetable_ext(NULL, p)
+
 int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
 #define memory_paging_get_frame_address(va, faptr) memory_paging_get_frame_address_ext(NULL, va, faptr);
 
