@@ -109,21 +109,33 @@ char_t* ito_base(number_t number, number_t base){
 }
 
 char_t* itoh(size_t number) {
+	if(number == 0) {
+		char_t* zero = memory_malloc(sizeof(char_t) * 2);
+		zero[0] = '0';
+		zero[1] = '\0';
+		return zero;
+	}
 	size_t len = sizeof(number) * 2;
-	char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
-	memory_memset(ret, '0', len);
+	char_t* tmp = memory_malloc(sizeof(char_t) * len + 1);
+	memory_memset(tmp, '0', len);
 	size_t i = 1;
 	uint8_t r;
 	while (number) {
 		r = (number & 0xF);
 		if(r < 10) {
-			ret[len - i] = 48 + r;
+			tmp[len - i] = 48 + r;
 		} else {
-			ret[len - i] = 55 + r;
+			tmp[len - i] = 55 + r;
 		}
 		i++;
 		number >>= 4;
 	}
-	ret[len] = '\0';
+	tmp[len] = '\0';
+
+	char_t* ret = memory_malloc(sizeof(char_t) * i);
+	memory_memset(ret, '0', i);
+	memory_memcopy(tmp + len - i + 1, ret, i - 1);
+	ret[i - 1] = '\0';
+	memory_free(tmp);
 	return ret;
 }

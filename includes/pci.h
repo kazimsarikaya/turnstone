@@ -13,7 +13,11 @@
 
 #define PCI_HEADER_TYPE_GENERIC_DEVICE 0x0
 #define PCI_HEADER_TYPE_PCI2PCI_BRIDGE 0x1
-#define PCI_HEADER_TYPE_CARDBUS_BRIDGE 0x1
+#define PCI_HEADER_TYPE_CARDBUS_BRIDGE 0x2
+
+#define PCI_DEVICE_MAX_COUNT 32
+#define PCI_FUNCTION_MAX_COUNT 8
+
 
 typedef struct {
 	uint8_t io_space : 1;
@@ -84,7 +88,7 @@ typedef struct {
 	pci_status_register_t status;
 	uint8_t revsionid : 8;
 	uint8_t prog_if : 8;
-	uint8_t subclass : 8;
+	uint8_t subclass_code : 8;
 	uint8_t class_code : 8;
 	uint8_t cache_line_size : 8;
 	uint8_t latency_timer : 8;
@@ -168,7 +172,15 @@ typedef struct {
 	uint32_t pccard_16bit_legacy_mode_base_address : 32;
 } __attribute((packed)) pci_cardbus_bridge_t;
 
+typedef struct {
+	uint16_t group_number;
+	uint8_t bus_number;
+	uint8_t device_number;
+	uint8_t function_number;
+	pci_common_header_t* pci_header;
+} pci_dev_t;
+
 iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t* mcfg);
-#define pci_iterator_create(mcfg) pci_iterator_create(mcfg)
+#define pci_iterator_create(mcfg) pci_iterator_create_with_heap(NULL, mcfg)
 
 #endif
