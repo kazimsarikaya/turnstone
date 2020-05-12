@@ -1,5 +1,4 @@
-#include "testsetup.h"
-#include <memory/paging.h>
+#include "setup.h"
 
 int main(){
 	setup_ram();
