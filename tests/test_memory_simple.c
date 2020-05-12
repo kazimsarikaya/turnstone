@@ -181,6 +181,13 @@ int main(){
 		}
 	}
 
+	print_success("clone test completed");
+
+	memory_paging_destroy_pagetable(p4);
+	print_success("p4 destroyed");
+	memory_paging_destroy_pagetable(p4_cloned);
+	print_success("cloned p4 destroyed");
+
 	fp = fopen( "tmp/mem2.dump", "w" );
 	fwrite(mem_area, 1, RAMSIZE, fp );
 	fclose(fp);
