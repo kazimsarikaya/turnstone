@@ -32,7 +32,7 @@ typedef struct {
 	uint8_t fast_back2back_enable : 1;
 	uint8_t interrupt_disable : 1;
 	uint8_t reserved1 : 5;
-} __attribute((packed)) pci_command_register_t;
+} __attribute__((packed)) pci_command_register_t;
 
 typedef struct {
 	uint8_t reserved0 : 3;
@@ -48,19 +48,19 @@ typedef struct {
 	uint8_t received_master_abort : 1;
 	uint8_t signaled_system_error : 1;
 	uint8_t detected_parity_error : 1;
-} __attribute((packed)) pci_status_register_t;
+} __attribute__((packed)) pci_status_register_t;
 
 typedef struct {
 	uint8_t header_type : 7;
 	uint8_t multifunction : 1;
-} __attribute((packed)) pci_header_type_register_t;
+} __attribute__((packed)) pci_header_type_register_t;
 
 typedef struct {
 	uint8_t completion_code : 4;
 	uint8_t reserved0 : 2;
 	uint8_t start_bist : 1;
 	uint8_t bist_capable : 1;
-} __attribute((packed)) pci_bist_register_t;
+} __attribute__((packed)) pci_bist_register_t;
 
 
 typedef union {
@@ -79,7 +79,7 @@ typedef union {
 		uint8_t reserved0 : 1;
 		uint32_t base_address : 30;
 	} io_space_bar;
-} __attribute((packed)) pci_bar_register_t;
+} __attribute__((packed)) pci_bar_register_t;
 
 typedef struct {
 	uint16_t vendor_id : 16;
@@ -94,7 +94,7 @@ typedef struct {
 	uint8_t latency_timer : 8;
 	pci_header_type_register_t header_type;
 	pci_bist_register_t bist;
-} __attribute((packed)) pci_common_header_t;
+} __attribute__((packed)) pci_common_header_t;
 
 typedef struct {
 	pci_common_header_t common_header;
@@ -115,7 +115,7 @@ typedef struct {
 	uint8_t interrupt_pin : 8;
 	uint8_t min_grant : 8;
 	uint8_t max_latency : 8;
-} __attribute((packed)) pci_generic_device_t;
+} __attribute__((packed)) pci_generic_device_t;
 
 
 typedef struct {
@@ -143,7 +143,7 @@ typedef struct {
 	uint8_t interrupt_line : 8;
 	uint8_t interrupt_pin : 8;
 	uint16_t bridge_control : 16;
-} __attribute((packed)) pci_pci2pci_bridge_t;
+} __attribute__((packed)) pci_pci2pci_bridge_t;
 
 
 typedef struct {
@@ -170,7 +170,7 @@ typedef struct {
 	uint16_t subsystem_vendor_id : 16;
 	uint16_t subsystem_device_id : 16;
 	uint32_t pccard_16bit_legacy_mode_base_address : 32;
-} __attribute((packed)) pci_cardbus_bridge_t;
+} __attribute__((packed)) pci_cardbus_bridge_t;
 
 typedef struct {
 	uint16_t group_number;
