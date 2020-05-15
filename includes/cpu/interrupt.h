@@ -13,6 +13,9 @@
  */
 #define interrupt_errcode_t uint64_t
 
+#define INTERRUPT_IRQ_BASE        0x20
+#define INTERRUPT_VECTOR_SPURIOUS 0xFF
+
 /**
  * @struct interrupt_frame
  * @brief  interrupt frame for interrupt function

@@ -54,4 +54,23 @@ uint8_t cpu_check_longmode();
  */
 int8_t cpu_check_rdrand();
 
+/**
+ * @brief read msr and return
+ * @param[in]  msr_address model Specific register address
+ * @return             msr value
+ *
+ * returns edx:eax as uint64_t
+ */
+uint64_t cpu_read_msr(uint32_t msr_address);
+
+/**
+ * @brief writes msr
+ * @param[in]  msr_address model Specific register address
+ * @param[in]  value       value to write
+ * @return             0 on sucess
+ *
+ * parse value into edx:eax
+ */
+int8_t cpu_write_msr(uint32_t msr_address, uint64_t value);
+
 #endif
