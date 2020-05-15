@@ -8,6 +8,10 @@
 #include <acpi.h>
 #include <pci.h>
 #include <iterator.h>
+#include <ports.h>
+#include <apic.h>
+#include <linkedlist.h>
+#include <cpu.h>
 
 uint8_t kmain64() {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
@@ -22,28 +26,64 @@ uint8_t kmain64() {
 
 	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 	if(desc == NULL) {
-		video_print("acpi header not found or incorrect checksum\r\n\0");
+		video_print("acpi header not found or incorrect checksum\n\0");
 	} else{
-		video_print("acpi header is ok\r\n\0");
+		video_print("acpi header is ok\n\0");
+
 		acpi_sdt_header_t* madt = acpi_get_table(desc, "APIC");
 		if(madt == NULL) {
-			video_print("can not find madt or incorrect checksum\r\n\0");
+			video_print("can not find madt or incorrect checksum\n\0");
 		} else {
-			video_print("madt is found\r\n\0");
+			video_print("madt is found\n\0");
+			linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+			if(apic_init_apic(apic_entries) != 0) {
+				video_print("cannot enable apic\n\0");
+				return -2;
+			} else {
+				video_print("apic and ioapic enabled\n\0");
+			}
 		}
+
+		acpi_table_fadt_t* fadt = (acpi_table_fadt_t*)acpi_get_table(desc, "FACP");
+		if(fadt == NULL) {
+			video_print("fadt not found\n\0");
+			return -1;
+		}
+		int8_t acpi_enabled = -1;
+		if(fadt->smi_command_port == 0) {
+			video_print("acpi command port is 0. \0");
+			acpi_enabled = 0;
+		}
+		if(fadt->acpi_enable == 0 && fadt->acpi_disable == 0) {
+			video_print("acpi enable/disable is 0. \0");
+			acpi_enabled = 0;
+		}
+		uint16_t pm_1a_port = fadt->pm_1a_control_block_address_64bit.address;
+		uint32_t pm_1a_value = inw(pm_1a_port);
+		if((pm_1a_value & 0x1) == 0x1) {
+			video_print("pm 1a control block acpi en is setted\0");
+			acpi_enabled = 0;
+		}
+		if(acpi_enabled != 0) {
+			outb(fadt->smi_command_port, fadt->acpi_enable);
+			while((inw(pm_1a_port) & 0x1) != 0x1);
+			video_print("acpi enabled");
+		}
+		video_print("\n\0");
+
 		acpi_table_mcfg_t* mcfg = (acpi_table_mcfg_t*)acpi_get_table(desc, "MCFG");
 		if(mcfg == NULL) {
-			video_print("can not find mcfg or incorrect checksum\r\n\0");
+			video_print("can not find mcfg or incorrect checksum\n\0");
 		} else {
-			video_print("cmfg is found\r\n\0");
+			video_print("cmfg is found\n\0");
 			char_t* mcfg_addr = itoh((size_t)mcfg);
 			video_print(mcfg_addr);
-			video_print("\r\n\0");
+			video_print("\n\0");
 			memory_free(mcfg_addr);
 
 			iterator_t* iter = pci_iterator_create(mcfg);
 			while(iter->end_of_iterator(iter) != 0) {
-				video_print("pci dev found\r\n\0");
+				video_print("pci dev found  \0");
 				pci_dev_t* p = iter->get_item(iter);
 
 				data = itoh(p->group_number);
@@ -97,7 +137,7 @@ uint8_t kmain64() {
 
 				}
 
-				video_print("\r\n\0");
+				video_print("\n\0");
 				memory_free(p);
 
 				iter = iter->next(iter);
@@ -107,6 +147,18 @@ uint8_t kmain64() {
 		}
 	}
 
-	video_print("tests completed!...\r\n\0");
+	video_print("tests completed!...\n\0");
+	outl(0x4048, 0x200);
+	outl(0x404C, 0xBADC0DE);
+	uint32_t test_data = 0;
+	char_t* test_str;
+	for(size_t i = 0; i <= 30; i++) {
+		outl(0x4048, 4 * i);
+		test_data = inl(0x404C);
+		test_str = itoh(test_data);
+		video_print(test_str);
+		memory_free(test_str);
+		video_print("  ");
+	}
 	return 0;
 }

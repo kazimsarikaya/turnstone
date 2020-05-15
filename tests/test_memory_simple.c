@@ -49,7 +49,7 @@ int main(){
 
 	uint64_t fa;
 	memory_page_table_t* p4 = memory_paging_malloc_page();
-	if(memory_paging_add_page(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+	if(memory_paging_add_page_with_p4(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
 		print_error("can not add 4k huge page");
 	} else {
 		print_success("page adding succeed");
@@ -73,7 +73,7 @@ int main(){
 	}
 
 
-	if(memory_paging_add_page(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+	if(memory_paging_add_page_with_p4(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
 		print_error("can not add 4k huge page");
 	} else {
 		print_success("page adding succeed");
@@ -96,7 +96,7 @@ int main(){
 		}
 	}
 
-	if(memory_paging_add_page(p4, ((uint64_t)0x3) << 21, ((uint64_t)0x1234) << 21, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+	if(memory_paging_add_page_with_p4(p4, ((uint64_t)0x3) << 21, ((uint64_t)0x1234) << 21, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
 		print_error("can not add 2m huge page");
 	} else {
 		print_success("page adding succeed");
@@ -114,7 +114,7 @@ int main(){
 		}
 	}
 
-	if(memory_paging_add_page(p4, ((uint64_t)0x3) << 30, ((uint64_t)0x12) << 30, MEMORY_PAGING_PAGE_TYPE_1G) != 0) {
+	if(memory_paging_add_page_with_p4(p4, ((uint64_t)0x3) << 30, ((uint64_t)0x12) << 30, MEMORY_PAGING_PAGE_TYPE_1G) != 0) {
 		print_error("can not add 1g huge page");
 	} else {
 		print_success("page adding succeed");
@@ -132,9 +132,9 @@ int main(){
 		}
 	}
 
-	memory_paging_add_page(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K);
-	memory_paging_add_page(p4, ((uint64_t)0x3) << 21, ((uint64_t)0x1234) << 21, MEMORY_PAGING_PAGE_TYPE_2M);
-	memory_paging_add_page(p4, ((uint64_t)0x3) << 30, ((uint64_t)0x12) << 30, MEMORY_PAGING_PAGE_TYPE_1G);
+	memory_paging_add_page_with_p4(p4, 0x0, ((uint64_t)0x1234) << 12, MEMORY_PAGING_PAGE_TYPE_4K);
+	memory_paging_add_page_with_p4(p4, ((uint64_t)0x3) << 21, ((uint64_t)0x1234) << 21, MEMORY_PAGING_PAGE_TYPE_2M);
+	memory_paging_add_page_with_p4(p4, ((uint64_t)0x3) << 30, ((uint64_t)0x12) << 30, MEMORY_PAGING_PAGE_TYPE_1G);
 	printf("fill p4 for clone test\n");
 	memory_page_table_t* p4_cloned = memory_paging_clone_pagetable_ext(NULL, p4);
 	printf("p4 cloned: %p\n", p4_cloned);

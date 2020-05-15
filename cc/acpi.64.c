@@ -68,3 +68,32 @@ acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* s
 acpi_table_mcfg_t* acpi_get_mcfg_table(acpi_xrsdp_descriptor_t* xrsdp_desc){
 	return (acpi_table_mcfg_t*)acpi_get_table(xrsdp_desc, "MCFG");
 }
+
+linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
+	if(memory_memcompare(sdt_header->signature, "APIC", 4) != 0) {
+		return NULL;
+	}
+	linkedlist_t entries = linkedlist_create_list_with_heap(heap);
+	acpi_table_madt_entry_t* e;
+	uint8_t* data = (uint8_t*)sdt_header;
+	uint8_t* data_end = data + sdt_header->length;
+	data += sizeof(acpi_sdt_header_t);
+	e = memory_malloc_ext(heap, sizeof(acpi_table_madt_entry_t), 0x0);
+	e->local_apic_address.type = ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS;
+	e->local_apic_address.length = 10;
+	e->local_apic_address.address = (uint32_t)(*((uint32_t*)data));
+	data += sizeof(uint32_t);
+	e->local_apic_address.flags = (uint32_t)(*((uint32_t*)data));
+	data += sizeof(uint32_t);
+	linkedlist_list_insert(entries, e);
+	while(data < data_end) {
+		e = (acpi_table_madt_entry_t*)data;
+		linkedlist_list_insert(entries, e);
+		data += e->info.length;
+		if(e->info.type == ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE) {
+			acpi_table_madt_entry_t* t_e = linkedlist_delete_at_position(entries, 0);
+			memory_free_ext(heap, t_e);
+		}
+	}
+	return entries;
+}

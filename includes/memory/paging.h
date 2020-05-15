@@ -114,7 +114,9 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
                                   uint64_t virtual_address, uint64_t frame_adress,
                                   memory_paging_page_type_t type);
 /*! add virtual address va to pt page table with frame address fa and page type t uses default heap for mallocs */
-#define memory_paging_add_page(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
+#define memory_paging_add_page_with_p4(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
+/*! add va and fa to defeault p4 table*/
+#define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, NULL, va, fa, t)
 
 #if ___BITS == 64 || DOXYGEN
 int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
