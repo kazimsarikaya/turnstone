@@ -56,7 +56,8 @@ For additional information please refer @ref bootloader
   For additional information please refer @ref memorymanagement.
 
 * Parse ACPI tables, and get system configuration. <span style="color:red; font-weight:bold">NOT COMPLETED</span>
-* Scan PCI hardware. <span style="color:gray; font-weight:bold">NOT STARTED</span>
+* Initialize APIC and IOAPIC. <span style="color:red; font-weight:bold">NOT COMPLETED</span>
+* Scan PCI hardware. <span style="color:red; font-weight:bold">NOT COMPLETED</span>
 * Write disk and network driver. <span style="color:gray; font-weight:bold">NOT STARTED</span>
 * Write file system-a-like libraries. <span style="color:gray; font-weight:bold">NOT STARTED</span>
 * Write linker for loading objects, create executables and run them. <span style="color:gray; font-weight:bold">NOT STARTED</span>
