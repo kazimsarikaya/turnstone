@@ -164,7 +164,7 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 		return 0;
 	}
 
-	if(where == LINKEDLIST_INSERT_AT_HEAD || where == LINKEDLIST_INSERT_AT_ANYWHERE) {
+	if(where == LINKEDLIST_INSERT_AT_HEAD) {
 		item->next = l->head;
 		l->head->previous = item;
 		l->head = item;
