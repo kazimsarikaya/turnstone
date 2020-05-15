@@ -19,7 +19,6 @@
 typedef enum {
 	LINKEDLIST_INSERT_AT_HEAD, ///< insert data at head of list
 	LINKEDLIST_INSERT_AT_TAIL, ///< insert data at tail of list
-	LINKEDLIST_INSERT_AT_ANYWHERE, ///< insert data at anywhere of list (at head for o(1))
 	LINKEDLIST_INSERT_AT_POSITION, ///< insert data at given position (start at 0) of list
 	LINKEDLIST_INSERT_AT_SORTED, ///< insert data into list with sorted
 	LINKEDLIST_INSERT_AT_INDEXED, ///< insert data into list with indexed
@@ -28,6 +27,9 @@ typedef enum {
 	LINKEDLIST_DELETE_AT_FINDBY, ///< delete data from list with searching inside the list
 	LINKEDLIST_DELETE_AT_POSITION ///< delete data at given position (start at 0) of list
 }linkedlist_insert_delete_at_t;
+
+/*! insert data at anywhere of list (at tail for o(1)) */
+#define LINKEDLIST_INSERT_AT_ANYWHERE LINKEDLIST_INSERT_AT_TAIL
 
 /**
  * @brief linked list type
