@@ -4,6 +4,7 @@
 #include <types.h>
 #include <memory.h>
 #include <systeminfo.h>
+#include "os_io.h"
 
 #define RAMSIZE 0x100000
 
@@ -24,11 +25,6 @@ void print_success(const char* msg){
 void print_error(const char* msg){
 	printf("%s%s%s%s", REDCOLOR, msg, RESETCOLOR, "\r\n");
 }
-
-typedef long FILE;
-size_t fwrite(const void* ptr, size_t size, size_t nmemb, FILE* stream);
-int fclose(FILE* stream);
-FILE* fopen(const char* filename, const char* mode);
 
 void setup_ram() {
 	memory_heap_t* heap = memory_create_heap_simple((size_t)&mem_area[0], (size_t)&mem_area[RAMSIZE]);
