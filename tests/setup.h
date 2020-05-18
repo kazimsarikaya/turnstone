@@ -32,4 +32,11 @@ void setup_ram() {
 	memory_set_default_heap(heap);
 }
 
+void dump_ram(char_t* fname){
+	FILE* fp = fopen( fname, "w" );
+	fwrite(mem_area, 1, RAMSIZE, fp );
+
+	fclose(fp);
+}
+
 #endif
