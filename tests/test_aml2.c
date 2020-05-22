@@ -196,6 +196,10 @@ int64_t acpi_aml_parse_field_elements(acpi_aml_state_t* state, int64_t remaining
 				res = acpi_aml_parse_package_length(state, &pkg_len);
 				remaining -= res;
 				printf("connectfield region: %s buffer_len: %li\n", region_name, pkg_len);
+				while(pkg_len > 0) {
+					printf(".");
+					pkg_len--;
+				}
 			} else {
 				res = acpi_aml_parse_namestring(state, &namestring);
 				state->location += res;
@@ -237,35 +241,42 @@ int64_t acpi_aml_parse_field_elements(acpi_aml_state_t* state, int64_t remaining
 int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining) {
 	int64_t res = 0;
 	while(remaining > 0) {
-		printf("rem: %li %li\n", state->remaining, remaining);
+		//printf("rem: %li %li\n", state->remaining, remaining);
 		if(*state->location == 0x00) {
 			state->location++;
 			state->remaining--;
 			remaining--;
+			printf(".");
 		} else if(*state->location == 0x01) {
 			state->location++;
 			state->remaining--;
 			remaining--;
+			printf(".");
 		} else if(*state->location == 0xFF) {
 			state->location++;
 			state->remaining--;
 			remaining--;
+			printf(".");
 		} else if(*state->location == 0x0A) {
 			state->location += 2;
 			state->remaining -= 2;
 			remaining -= 2;
+			printf("..");
 		} else if(*state->location == 0x0B) {
 			state->location += 3;
 			state->remaining -= 3;
 			remaining -= 3;
+			printf("...");
 		} else if(*state->location == 0x0C) {
 			state->location += 5;
 			state->remaining -= 5;
 			remaining -= 5;
+			printf(".....");
 		} else if(*state->location == 0x0E) {
 			state->location += 9;
 			state->remaining -= 9;
 			remaining -= 9;
+			printf(".........");
 		} else if(*state->location == 0x5B) {
 			state->location++;
 			state->remaining--;
@@ -505,6 +516,10 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				state->location += field_grp_len;
 				state->remaining -= field_grp_len;
 				remaining -= field_grp_len;
+				while (field_grp_len > 0) {
+					printf(".");
+					field_grp_len--;
+				}
 			} else if(*state->location == 0x88) {
 				state->location++;
 				state->remaining--;
@@ -519,10 +534,10 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= res;
 				printf("dataregion %s\n", dataregion_name);
 			} else {
-				printf(".");
 				state->location++;
 				state->remaining--;
 				remaining--;
+				printf("..");
 			}
 		} else if(*state->location == 0x11 || *state->location == 0x12 || *state->location == 0x13) {
 			state->location++;
@@ -535,6 +550,10 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			state->location += skip_len;
 			state->remaining -= skip_len;
 			remaining -= skip_len;
+			while(skip_len > 0) {
+				printf(".");
+				skip_len--;
+			}
 		} else if(*state->location == 0x06) {
 			state->location++;
 			state->remaining--;
@@ -641,14 +660,19 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			res = acpi_aml_parse_package_length(state, &if_pkg_len);
 			remaining -= res;
 			printf("if pkg len: %li\n", if_pkg_len);
-		} else if(*state->location == 0xA1) {
-			state->location++;
-			state->remaining--;
-			remaining--;
-			int64_t else_pkg_len;
-			res = acpi_aml_parse_package_length(state, &else_pkg_len);
-			remaining -= res;
-			printf("else pkg len: %li\n", else_pkg_len);
+			acpi_aml_parse_scope_symbols(state, if_pkg_len);
+			remaining -= if_pkg_len;
+			if(remaining != 0 && *state->location == 0xA1) {
+				state->location++;
+				state->remaining--;
+				remaining--;
+				int64_t else_pkg_len;
+				res = acpi_aml_parse_package_length(state, &else_pkg_len);
+				remaining -= res;
+				printf("else pkg len: %li\n", else_pkg_len);
+				acpi_aml_parse_scope_symbols(state, else_pkg_len);
+				remaining -= else_pkg_len;
+			}
 		} else if(*state->location == 0xA2) {
 			state->location++;
 			state->remaining--;
@@ -657,11 +681,13 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			res = acpi_aml_parse_package_length(state, &while_pkg_len);
 			remaining -= res;
 			printf("while pkg len: %li\n", while_pkg_len);
+			acpi_aml_parse_scope_symbols(state, while_pkg_len);
+			remaining -= while_pkg_len;
 		} else {
-			printf(".");
 			state->location++;
 			state->remaining--;
 			remaining--;
+			printf(".");
 		}
 	}
 	return res;
