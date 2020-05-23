@@ -7,6 +7,7 @@
 #define ___STRINGS_H 0
 
 #include <types.h>
+#include <memory.h>
 
 /**
  * @brief calculates null ended string's length
@@ -79,4 +80,14 @@ char_t* ito_base(number_t number, number_t base);
  */
 char_t* itoh(size_t number);
 
+/**
+ * @brief duplicate string at heap
+ * @param[in] heap destination heap
+ * @param[in] src source string
+ * @return duplicate at heap
+ */
+char_t* strdup_at_heap(memory_heap_t* heap, char_t* src);
+
+/*! string duplicate at default heap */
+#define strdup(src) strdup_at_heap(NULL, src);
 #endif
