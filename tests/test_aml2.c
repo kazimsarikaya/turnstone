@@ -56,6 +56,27 @@ int64_t acpi_aml_symbol_insert(acpi_aml_symbol_t* scope, acpi_aml_symbol_t* symb
 
 int64_t acpi_aml_symbol_table_print(acpi_aml_symbol_t* symbol, int64_t indent);
 
+int64_t acpi_aml_symbol_table_destroy(acpi_aml_symbol_t* symbol);
+
+
+int64_t acpi_aml_symbol_table_destroy(acpi_aml_symbol_t* symbol) {
+	if(symbol->type & ACPI_AML_SYMBOL_TYPE_SCOPED) {
+		iterator_t* iter = linkedlist_iterator_create(symbol->members);
+		while(iter->end_of_iterator(iter) != 0) {
+			acpi_aml_symbol_t* sym = iter->get_item(iter);
+			if(sym->type & ACPI_AML_SYMBOL_TYPE_SCOPED) {
+				acpi_aml_symbol_table_destroy(sym);
+			}
+			iter = iter->next(iter);
+		}
+		iter->destroy(iter);
+		memory_free_ext(symbol->heap, symbol->members);
+	}
+	memory_free_ext(symbol->heap, symbol->name);
+	memory_free_ext(symbol->heap, symbol);
+	return 0;
+}
+
 int64_t acpi_aml_symbol_table_print(acpi_aml_symbol_t* symbol, int64_t indent){
 	iterator_t* iter = linkedlist_iterator_create(symbol->members);
 	while(iter->end_of_iterator(iter) != 0) {
@@ -524,6 +545,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				acpi_aml_parse_scope_symbols(state, dev_len);
 				state->scope = restore_scope;
 				remaining -= dev_len;
+				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x83) {
 				state->location++;
 				state->remaining--;
@@ -574,6 +596,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				acpi_aml_parse_scope_symbols(state, dev_len);
 				state->scope = restore_scope;
 				remaining -= dev_len;
+				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x84) {
 				state->location++;
 				state->remaining--;
@@ -618,6 +641,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				acpi_aml_parse_scope_symbols(state, dev_len);
 				state->scope = restore_scope;
 				remaining -= dev_len;
+				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x85) {
 				state->location++;
 				state->remaining--;
@@ -650,6 +674,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				acpi_aml_parse_scope_symbols(state, dev_len);
 				state->scope = restore_scope;
 				remaining -= dev_len;
+				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x86) {
 				state->location++;
 				state->remaining--;
@@ -822,6 +847,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			acpi_aml_parse_scope_symbols(state, scope_len);
 			state->scope = restore_scope;
 			remaining -= scope_len;
+			memory_free_ext(state->heap, scope_name);
 		} else if(*state->location == 0x14) {
 			state->location++;
 			state->remaining--;
@@ -859,6 +885,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			acpi_aml_parse_scope_symbols(state, method_len);
 			state->scope = restore_scope;
 			remaining -= method_len;
+			memory_free_ext(state->heap, method_name);
 		} else if(*state->location == 0x15) {
 			state->location++;
 			state->remaining--;
@@ -976,9 +1003,8 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	printf("\nsymbol table:\n");
 	acpi_aml_symbol_table_print(scope, 0);
 
+	acpi_aml_symbol_table_destroy(scope);
 
-	linkedlist_destroy_with_data(scope->members);
-	memory_free(scope->name);
 	memory_free(scope);
 	memory_free(state);
 	memory_free(aml_data);
