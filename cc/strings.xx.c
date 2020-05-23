@@ -139,3 +139,13 @@ char_t* itoh(size_t number) {
 	memory_free(tmp);
 	return ret;
 }
+
+char_t* strdup_at_heap(memory_heap_t* heap, char_t* src){
+	if(src == NULL) {
+		return NULL;
+	}
+	size_t l = strlen(src);
+	char_t* res = memory_malloc_ext(heap, sizeof(char_t) * l + 1, 0x0);
+	memory_memcopy(src, res, l);
+	return res;
+}
