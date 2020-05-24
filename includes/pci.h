@@ -15,8 +15,8 @@
 #define PCI_HEADER_TYPE_PCI2PCI_BRIDGE 0x1
 #define PCI_HEADER_TYPE_CARDBUS_BRIDGE 0x2
 
-#define PCI_DEVICE_MAX_COUNT 32
-#define PCI_FUNCTION_MAX_COUNT 8
+#define PCI_DEVICE_MAX_COUNT 32 ///< max device count per bus
+#define PCI_FUNCTION_MAX_COUNT 8 ///< max function count per device
 
 
 typedef struct {
@@ -50,10 +50,14 @@ typedef struct {
 	uint8_t detected_parity_error : 1;
 } __attribute__((packed)) pci_status_register_t;
 
+/**
+ * @struct pci_header_type_register_t
+ * @brief pci device type data inside pci_common_header_t
+ */
 typedef struct {
-	uint8_t header_type : 7;
-	uint8_t multifunction : 1;
-} __attribute__((packed)) pci_header_type_register_t;
+	uint8_t header_type : 7; ///< device types: 0x00 generic, 0x01 bridge, 0x02 cardbus
+	uint8_t multifunction : 1; ///< if 1 then device is multi-function device and has 8 functions, else only function 0.
+} __attribute__((packed)) pci_header_type_register_t; ///< short hand for struct
 
 typedef struct {
 	uint8_t completion_code : 4;
@@ -172,15 +176,26 @@ typedef struct {
 	uint32_t pccard_16bit_legacy_mode_base_address : 32;
 } __attribute__((packed)) pci_cardbus_bridge_t;
 
+/**
+ * @struct pci_dev_t
+ * @brief the pci device info returned by the iterator
+ */
 typedef struct {
-	uint16_t group_number;
-	uint8_t bus_number;
-	uint8_t device_number;
-	uint8_t function_number;
-	pci_common_header_t* pci_header;
-} pci_dev_t;
+	uint16_t group_number; ///< device's bus group number.
+	uint8_t bus_number; ///< bus number of the device
+	uint8_t device_number; ///< device number
+	uint8_t function_number; ///< device function number
+	pci_common_header_t* pci_header; ///< pci generic memory area
+} pci_dev_t; ///< short hand for struct
 
+/**
+ * @brief creates an iterator over pci device devices at mcfg memory area
+ * @param  heap iterator of heap
+ * @param  mcfg mcfg memory area which indentified by acpi table
+ * @return      iterator
+ */
 iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t* mcfg);
+/*! creates pci iterator at default heap */
 #define pci_iterator_create(mcfg) pci_iterator_create_with_heap(NULL, mcfg)
 
 #endif
