@@ -11,11 +11,13 @@ LD64 = x86_64-elf-ld
 DOCSGEN = doxygen
 DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
+INCLUDESDIR = includes
+VMDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
 
 M4 = m4
 
-CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -Iincludes \
-	-Werror -Wall -Wextra -ffunction-sections \
+CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
+	-Werror -Wall -ffunction-sections \
 	-mgeneral-regs-only -mno-red-zone
 
 AS16FLAGS = --32
@@ -58,6 +60,9 @@ CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
 M4OBJS = $(patsubst $(M4SRCDIR)/%.m4,$(M4OBJDIR)/%.c,$(M4SRCS))
 
+DOCSFILES += $(CC16SRCS) $(CC64SRCS) $(CCXXSRCS)
+DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
+
 OBJS = $(ASOBJS) $(CC16OBJS) $(CC64OBJS)
 PROGS = $(OBJDIR)/bootsect16.bin \
 	$(OBJDIR)/slottable.bin \
@@ -66,21 +71,20 @@ PROGS = $(OBJDIR)/bootsect16.bin \
 
 SUBDIRS := tests utils
 
-.PHONY: all disk clean depend $(SUBDIRS)
+.PHONY: all clean depend $(SUBDIRS)
 .PRECIOUS: $(M4OBJS)
-all: docs disk
+all: $(SUBDIRS) $(OBJDIR)/docs $(VMDISK)
 
-docs: $(DOCSCONF) $(DOCSFILES)
+$(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
+	touch $(OBJDIR)/docs
 
-disk: kernel
-	dd bs=512 conv=notrunc if=$(OBJDIR)/$< of=/Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
+$(VMDISK): $(OBJDIR)/kernel
+	dd bs=512 conv=notrunc if=$< of=$(VMDISK)
 
-kernel: $(OBJDIR)/kernel $(SUBDIRS)
-	$(OBJDIR)/formatslots.bin $< $(PROGS)
-
-$(OBJDIR)/kernel: $(PROGS)
+$(OBJDIR)/kernel: $(PROGS) $(OBJDIR)/formatslots.bin
 	cat $(PROGS) > $@
+	$(OBJDIR)/formatslots.bin $@ $(PROGS)
 
 $(OBJDIR)/bootsect16.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
 	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
