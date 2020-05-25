@@ -972,6 +972,8 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					printf(".");
 					field_grp_len--;
 				}
+				memory_free_ext(state->heap, field_grp_name1);
+				memory_free_ext(state->heap, field_grp_name2);
 			} else if(*state->location == 0x88) {
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
