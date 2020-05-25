@@ -6,7 +6,9 @@
 #include <systeminfo.h>
 #include "os_io.h"
 
+#ifndef RAMSIZE
 #define RAMSIZE 0x100000
+#endif
 
 #define REDCOLOR "\033[1;31m"
 #define GREENCOLOR "\033[1;32m"
