@@ -222,6 +222,9 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 		//incorrect address to clean
 		return -1;
 	}
+	if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
+		return 0;
+	}
 
 	if(hi->next == NULL) {
 		// heap end, can not clean
