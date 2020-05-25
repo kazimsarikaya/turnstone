@@ -178,8 +178,15 @@ int64_t acpi_aml_symbol_table_print(acpi_aml_symbol_t* symbol, int64_t indent){
 
 int64_t acpi_aml_symbol_exists(acpi_aml_symbol_t* scope, char_t* symbol_name, acpi_aml_symbol_t** symbol) {
 	printf("searching started for %s at %s\n", symbol_name, scope->name);
-	char_t* sym_name = symbol_name;
 	acpi_aml_symbol_t* tmp_scope = scope;
+	if(strlen(symbol_name) == 1 && *symbol_name == '\\') {
+		while(tmp_scope->parent != NULL) {
+			tmp_scope = tmp_scope->parent;
+		}
+		*symbol = tmp_scope;
+		return 0;
+	}
+	char_t* sym_name = symbol_name;
 	int8_t found = -1;
 	if(*sym_name == '\\') {
 		while(tmp_scope->parent != NULL) {
