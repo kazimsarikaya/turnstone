@@ -262,6 +262,18 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position);
 void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
 
 /**
+ * @brief duplicates list at the given heap
+ * @param[in]  heap the heap where the list will be created
+ * @param[in]  list source list
+ * @return  a new list at heap
+ *
+ * if heap is NULL then the new heap is same as source list's heap.
+ */
+linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist_t list);
+/*! duplicate linked list with same as heap at source list */
+#define linkedlist_duplicate_list(l) linkedlist_duplicate_list_with_heap(NULL, l);
+
+/**
  * @brief creates an iterator from the list
  * @param[in]  list source list
  * @return      the iterator

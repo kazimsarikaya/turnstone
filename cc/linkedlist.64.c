@@ -458,3 +458,25 @@ void* linkedlist_iterator_delete_item(iterator_t* iterator){
 	}
 	return data;
 }
+
+linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist_t list) {
+	linkedlist_internal_t* new_list;
+	linkedlist_internal_t* source_list = (linkedlist_internal_t*)list;
+	if(heap == NULL) {
+		heap = source_list->heap;
+	}
+	new_list = memory_malloc_ext(heap, sizeof(linkedlist_internal_t), 0x0);
+	new_list->heap = heap;
+	new_list->type = source_list->type;
+	new_list->comparator = source_list->comparator;
+	new_list->indexer = source_list->indexer;
+
+	iterator_t* iter = linkedlist_iterator_create(list);
+	while(iter->end_of_iterator(iter) != 0) {
+		void* item = iter->get_item(iter);
+		linkedlist_insert_at(new_list, item, LINKEDLIST_INSERT_AT_TAIL, 0);
+		iter = iter->next(iter);
+	}
+	iter->destroy(iter);
+	return new_list;
+}

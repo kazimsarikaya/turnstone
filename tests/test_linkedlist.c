@@ -174,6 +174,35 @@ int main(){
 	linkedlist_destroy(sortedlist);
 	print_success("Destroy sortedlist: OK");
 
+	printf("integer list test\n");
+	linkedlist_t int_list = linkedlist_create_list();
+	linkedlist_list_insert(int_list, (void*)3);
+	linkedlist_list_insert(int_list, (void*)13);
+	linkedlist_list_insert(int_list, (void*)5);
+	linkedlist_list_insert(int_list, (void*)-8);
+	linkedlist_list_insert(int_list, (void*)7);
+	iter = linkedlist_iterator_create(int_list);
+	while(iter->end_of_iterator(iter) != 0) {
+		int64_t item = (int64_t)iter->get_item(iter);
+		printf("item: %i\n", item);
+		iter = iter->next(iter);
+	}
+	iter->destroy(iter);
+	print_success("interger list succeed");
+	printf("list duplicate test\n");
+	linkedlist_t dup_int_list = linkedlist_duplicate_list(int_list);
+	iter = linkedlist_iterator_create(dup_int_list);
+	while(iter->end_of_iterator(iter) != 0) {
+		int64_t item = (int64_t)iter->get_item(iter);
+		printf("item: %i\n", item);
+		iter = iter->next(iter);
+	}
+	iter->destroy(iter);
+	printf("list size %i\n", linkedlist_size(dup_int_list));
+	print_success("dup list list succeed");
+	linkedlist_destroy(int_list);
+	linkedlist_destroy(dup_int_list);
+
 
 
 	print_success("All tests are finished");
