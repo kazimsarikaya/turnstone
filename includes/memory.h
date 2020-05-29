@@ -21,7 +21,7 @@ typedef struct memory_heap {
 	uint32_t header; ///< heap header custom values
 	void* metadata; ///< internal heap metadata filled by heap implementation
 	void* (*malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
-	uint8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
+	int8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
 } memory_heap_t; ///< short hand for struct
 
 /**
@@ -63,7 +63,7 @@ void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align);
  *
  * if heap is NULL, address will be freed at default heap
  */
-uint8_t memory_free_ext(struct memory_heap* heap, void* address);
+int8_t memory_free_ext(struct memory_heap* heap, void* address);
 /*! frees memory addr at default heap */
 #define memory_free(addr) memory_free_ext(NULL, addr)
 
@@ -74,7 +74,7 @@ uint8_t memory_free_ext(struct memory_heap* heap, void* address);
  * @param[in] size    repeat count
  * @return 0
  */
-uint8_t memory_memset(void* address, uint8_t value, size_t size);
+int8_t memory_memset(void* address, uint8_t value, size_t size);
 /*! calls memory_memset with data value as NULL */
 #define memory_memclean(addr, s) memory_memset(addr, NULL, s)
 
@@ -87,7 +87,7 @@ uint8_t memory_memset(void* address, uint8_t value, size_t size);
  *
  * if destination is smaller then length a memory corruption will be happend
  */
-uint8_t memory_memcopy(void* source, void* destination, size_t length);
+int8_t memory_memcopy(void* source, void* destination, size_t length);
 
 /**
  * @brief compares first length bytes of mem1 with mem2
