@@ -679,6 +679,10 @@ int8_t bplustree_delete(index_t* idx, void* key, void** deleted_data){
 }
 
 size_t bplustree_search(index_t* idx, void* key, void** result, index_key_search_criteria_t criteria){
+	UNUSED(idx);
+	UNUSED(key);
+	UNUSED(result);
+	UNUSED(criteria);
 	return 0;
 }
 

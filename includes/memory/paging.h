@@ -8,6 +8,8 @@
 
 #include <memory.h>
 
+#define MEMORY_PAGING_INDEX_COUNT 512
+
 /**
  * @struct memory_page_entry_t
  * @brief page entry struct
@@ -56,7 +58,7 @@ typedef struct {
  * a page table is 4K page aligned.
  */
 typedef struct {
-	memory_page_entry_t pages[512]; ///< page table entries
+	memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
 } __attribute__((packed)) memory_page_table_t; ///< short hand for struct
 
 /**
@@ -68,6 +70,11 @@ typedef enum {
 	MEMORY_PAGING_PAGE_TYPE_2M, ///< 2m page aka hugepage
 	MEMORY_PAGING_PAGE_TYPE_1G ///< 1g page aka big hugepage
 } memory_paging_page_type_t; ///< short hand for enum
+
+#define MEMORY_PAGING_PAGE_ALIGN 0x1000
+
+#define memory_paging_malloc_page_with_heap(h) memory_malloc_ext(h, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
+#define memory_paging_malloc_page() memory_malloc_ext(NULL, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
 
 /**
  * @brief build default page table
@@ -103,11 +110,30 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
  *
  * if heap is NULL, the pages created in default heap
  */
-uint8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
-                                   uint64_t virtual_address, uint64_t frame_adress,
-                                   memory_paging_page_type_t type);
+int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
+                                  uint64_t virtual_address, uint64_t frame_adress,
+                                  memory_paging_page_type_t type);
 /*! add virtual address va to pt page table with frame address fa and page type t uses default heap for mallocs */
-#define memory_paging_add_page(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
+#define memory_paging_add_page_with_p4(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
+/*! add va and fa to defeault p4 table*/
+#define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, NULL, va, fa, t)
+
+#if ___BITS == 64 || DOXYGEN
+int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
+#define memory_paging_delete_page_ext(p4, va, faptr) memory_paging_delete_page_ext_with_heap(NULL, p4, va, faptr)
+#define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext_with_heap(NULL, NULL, va, faptr)
+
+memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4);
+#define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL, NULL)
+#define memory_paging_move_pagetable(h) memory_paging_clone_pagetable_ext(h, NULL)
+
+int8_t memory_paging_destroy_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4);
+#define memory_paging_destroy_pagetable(p) memory_paging_destroy_pagetable_ext(NULL, p)
+
+int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
+#define memory_paging_get_frame_address(va, faptr) memory_paging_get_frame_address_ext(NULL, va, faptr);
+
+#endif
 
 #if ___BITS == 16 || DOXYGEN
 /*! gets p4 index of virtual address at real mode*/
