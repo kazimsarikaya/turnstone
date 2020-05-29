@@ -112,7 +112,8 @@ int64_t acpi_aml_parse_namestring(acpi_aml_state_t* state, acpi_aml_object_t** o
 }
 
 int64_t acpi_aml_parse_supername(acpi_aml_state_t* state, acpi_aml_object_t** obj){
-
+	UNUSED(state);
+	UNUSED(obj);
 	return -1;
 }
 
@@ -133,6 +134,8 @@ int64_t acpi_aml_parse_target(acpi_aml_state_t* state, acpi_aml_object_t** obj) 
 
 
 int64_t acpi_aml_parse_op_type_2(acpi_aml_state_t* state, uint8_t opcode, acpi_aml_object_t** obj) {
+	UNUSED(state);
+	UNUSED(obj);
 	int64_t res = 0;
 	switch (opcode) {
 	case 0x11: // DefBuffer
