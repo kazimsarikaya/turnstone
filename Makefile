@@ -17,7 +17,7 @@ VMDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
 M4 = m4
 
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
-	-Werror -Wall -ffunction-sections \
+	-Werror -Wall -Wextra -ffunction-sections \
 	-mgeneral-regs-only -mno-red-zone
 
 AS16FLAGS = --32
