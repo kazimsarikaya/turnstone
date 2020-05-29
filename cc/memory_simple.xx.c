@@ -54,7 +54,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
  * @param[in]  address address to free
  * @return         0 if successed
  */
-uint8_t memory_simple_free(memory_heap_t* heap, void* address);
+int8_t memory_simple_free(memory_heap_t* heap, void* address);
 
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	size_t heap_start, heap_end;
@@ -204,10 +204,19 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 }
 
 
-uint8_t memory_simple_free(memory_heap_t* heap, void* address){
+int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	if(address == NULL) {
 		return -1;
 	}
+	heapinfo_t* simple_heap = (heapinfo_t*)heap->metadata;
+
+	void* hibottom = simple_heap->previous; // need as void*
+	void* hitop = simple_heap->next; // need as void*
+
+	if(address < hibottom || address >= hitop) {
+		return -1;
+	}
+
 	heapinfo_t* hi = ((heapinfo_t*)address) - 1;
 	if(hi->magic != HEAP_INFO_MAGIC && hi->padding != HEAP_INFO_PADDING) {
 		//incorrect address to clean

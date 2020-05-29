@@ -26,7 +26,7 @@ void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align){
 	}
 }
 
-uint8_t memory_free_ext(struct memory_heap* heap, void* address){
+int8_t memory_free_ext(struct memory_heap* heap, void* address){
 	if(heap == NULL) {
 		return memory_heap_default->free(memory_heap_default, address);
 	}else {
@@ -34,14 +34,14 @@ uint8_t memory_free_ext(struct memory_heap* heap, void* address){
 	}
 }
 
-uint8_t memory_memset(void* address, uint8_t value, size_t size){
+int8_t memory_memset(void* address, uint8_t value, size_t size){
 	for(size_t i = 0; i < size; i++) {
 		((uint8_t*)address)[i] = value;
 	}
 	return 0;
 }
 
-uint8_t memory_memcopy(void* source, void* destination, size_t length){
+int8_t memory_memcopy(void* source, void* destination, size_t length){
 	uint8_t* src = (uint8_t*)source;
 	uint8_t* dst = (uint8_t*)destination;
 	for(size_t i = 0; i < length; i++) {
