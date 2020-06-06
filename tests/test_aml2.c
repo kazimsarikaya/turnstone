@@ -11,6 +11,7 @@ typedef enum {
 	ACPI_AML_SYMBOL_TYPE_CONDNEED           = 0x0004,
 	ACPI_AML_SYMBOL_TYPE_SCOPED             = 0x0008,
 	ACPI_AML_SYMBOL_TYPE_CODE               = 0x0010,
+	ACPI_AML_SYMBOL_TYPE_UNPARSED           = 0x0020,
 	ACPI_AML_SYMBOL_TYPE_DEVICE             = 0x0100,
 	ACPI_AML_SYMBOL_TYPE_POWERRESOURCE      = 0x0200,
 	ACPI_AML_SYMBOL_TYPE_PROCESSOR          = 0x0300,
@@ -27,10 +28,15 @@ typedef enum {
 	ACPI_AML_SYMBOL_TYPE_IF                 = 0x0E00,
 	ACPI_AML_SYMBOL_TYPE_ELSE               = 0x0F00,
 	ACPI_AML_SYMBOL_TYPE_WHILE              = 0x1000,
-	ACPI_AML_SYMBOL_TYPE_OPREGION           = 0x1100,
-	ACPI_AML_SYMBOL_TYPE_DATAREGION         = 0x1200,
-	ACPI_AML_SYMBOL_TYPE_BANKFIELDGROUP     = 0x1300,
+	ACPI_AML_SYMBOL_TYPE_BUFFER             = 0x1100,
+	ACPI_AML_SYMBOL_TYPE_PACKAGE            = 0x1200,
+	ACPI_AML_SYMBOL_TYPE_VARPACKAGE         = 0x1300,
 	ACPI_AML_SYMBOL_TYPE_NAME               = 0x1400,
+	ACPI_AML_SYMBOL_TYPE_NUMBER             = 0x1500,
+	ACPI_AML_SYMBOL_TYPE_STRING             = 0x1600,
+	ACPI_AML_SYMBOL_TYPE_OPREGION           = 0x1700,
+	ACPI_AML_SYMBOL_TYPE_DATAREGION         = 0x1800,
+	ACPI_AML_SYMBOL_TYPE_BANKFIELDGROUP     = 0x1900,
 } acpi_aml_symbol_type_t;
 
 typedef enum {
@@ -40,9 +46,14 @@ typedef enum {
 } acpi_aml_field_type_t;
 
 typedef struct {
+	uint64_t condition_id;
 	uint8_t* data;
-	int64_t length;
-} apci_aml_unparsed_t;
+} acpi_aml_condition_t;
+
+typedef struct {
+	uint64_t condition_id;
+	int8_t not;
+} acpi_aml_condition_symbol_t;
 
 typedef struct acpi_aml_symbol {
 	memory_heap_t* heap;
@@ -94,8 +105,13 @@ typedef struct acpi_aml_symbol {
 			char_t* name1;
 			char_t* name2;
 		}bankfieldgroup;
+		struct {
+			uint8_t* data;
+			int64_t length;
+		} unparsed;
+		int64_t number;
 	};
-	linkedlist_t unparsed;
+	linkedlist_t condition_symbols;
 } acpi_aml_symbol_t;
 
 typedef struct {
@@ -105,9 +121,14 @@ typedef struct {
 	acpi_aml_symbol_t* scope;
 	acpi_aml_symbol_type_t default_types;
 	linkedlist_t last_symbol;
+	char_t* last_anonymous_namestring;
+	linkedlist_t conditions;
+	linkedlist_t current_conditions;
+	uint64_t next_condition_id;
 } acpi_aml_state_t;
 
 
+char_t* acpi_aml_next_anonymous_namestring(acpi_aml_state_t* state);
 
 int64_t acpi_aml_parse_namestring(acpi_aml_state_t* state, char_t** namestring);
 int64_t acpi_aml_parse_package_length(acpi_aml_state_t* state, int64_t* package_length);
@@ -122,6 +143,27 @@ int64_t acpi_aml_symbol_table_print(acpi_aml_symbol_t* symbol, int64_t indent);
 
 int64_t acpi_aml_symbol_table_destroy(acpi_aml_symbol_t* symbol);
 
+char_t* acpi_aml_next_anonymous_namestring(acpi_aml_state_t* state) {
+	if(state->last_anonymous_namestring == NULL) {
+		state->last_anonymous_namestring = memory_malloc_ext(state->heap, sizeof(char_t) * 5, 0x0);
+		memory_memset(state->last_anonymous_namestring, '0', 4);
+		printf("wtf\n");
+	}
+	char_t* res = strdup_at_heap(state->heap, state->last_anonymous_namestring);
+	state->last_anonymous_namestring[3]++;
+	for(int64_t i = 3; i >= 0; i--) {
+		if(state->last_anonymous_namestring[i] == 0x3A ) {
+			state->last_anonymous_namestring[i] = 'A';
+		}
+		if(state->last_anonymous_namestring[i] > 'Z') {
+			if(i != 0) {
+				state->last_anonymous_namestring[i - 1]++;
+				state->last_anonymous_namestring[i] = '0';
+			}
+		}
+	}
+	return res;
+}
 
 int64_t acpi_aml_symbol_table_destroy(acpi_aml_symbol_t* symbol) {
 	int64_t detroy_count = 0;
@@ -150,8 +192,9 @@ int64_t acpi_aml_symbol_table_destroy(acpi_aml_symbol_t* symbol) {
 	if((symbol->type & ACPI_AML_SYMBOL_TYPE_ALIAS) == ACPI_AML_SYMBOL_TYPE_ALIAS) {
 		memory_free_ext(symbol->heap, symbol->alias.string);
 	}
-	if(symbol->unparsed != NULL) {
-		linkedlist_destroy_with_data(symbol->unparsed);
+	if((symbol->type & ACPI_AML_SYMBOL_TYPE_BANKFIELDGROUP) == ACPI_AML_SYMBOL_TYPE_BANKFIELDGROUP) {
+		memory_free_ext(symbol->heap, symbol->bankfieldgroup.name1);
+		memory_free_ext(symbol->heap, symbol->bankfieldgroup.name2);
 	}
 	memory_free_ext(symbol->heap, symbol);
 	detroy_count++;
@@ -163,8 +206,19 @@ int64_t acpi_aml_symbol_table_print(acpi_aml_symbol_t* symbol, int64_t indent){
 	for(int64_t i = 0; i < indent; i++) {
 		printf("  ");
 	}
-	printf("%s\n", symbol->name);
-	if(symbol->type & ACPI_AML_SYMBOL_TYPE_SCOPED) {
+	printf("%s(%04x)", symbol->name, symbol->type);
+	if((symbol->type & ACPI_AML_SYMBOL_TYPE_UNPARSED) == ACPI_AML_SYMBOL_TYPE_UNPARSED) {
+		printf(" : ");
+		if((symbol->type & ACPI_AML_SYMBOL_TYPE_NUMBER) == ACPI_AML_SYMBOL_TYPE_NUMBER) {
+			printf("%x", symbol->number);
+		} else {
+			for(int64_t i = 0; i < symbol->unparsed.length; i++) {
+				printf("%02x ", symbol->unparsed.data[i]);
+			}
+		}
+	}
+	printf("\n");
+	if((symbol->type & ACPI_AML_SYMBOL_TYPE_SCOPED) == ACPI_AML_SYMBOL_TYPE_SCOPED) {
 		iterator_t* iter = linkedlist_iterator_create(symbol->members);
 		while(iter->end_of_iterator(iter) != 0) {
 			acpi_aml_symbol_t* sym = iter->get_item(iter);
@@ -513,87 +567,117 @@ int64_t acpi_aml_parse_field_elements(acpi_aml_state_t* state, int64_t remaining
 }
 
 int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining) {
+	int8_t end_of_unparsed = 0;
 	int64_t res = 0;
-	int8_t var_defined = -1;
 	while(remaining > 0) {
 		//printf("rem: %li %li\n", state->remaining, remaining);
 		acpi_aml_symbol_t* dbg_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
 		printf("unparsed to sym: %s\n", dbg_sym->name);
 		if(*state->location == 0x00) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 1;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
+			end_of_unparsed = 0;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = 0;
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
 			state->location++;
 			state->remaining--;
 			remaining--;
-			printf(".");
 		} else if(*state->location == 0x01) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 1;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
+			end_of_unparsed = 0;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = 1;
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
 			state->location++;
 			state->remaining--;
 			remaining--;
-			printf(".");
 		} else if(*state->location == 0xFF) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 1;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
+			end_of_unparsed = 0;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = 0xFF;
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
 			state->location++;
 			state->remaining--;
 			remaining--;
-			printf(".");
 		} else if(*state->location == 0x0A) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 2;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
+			end_of_unparsed = 0;
+			state->location++;
+			state->remaining--;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = *((uint8_t*)state->location);
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
+			state->location++;
+			state->remaining--;
+			remaining -= 2;
+		} else if(*state->location == 0x0B) {
+			end_of_unparsed = 0;
+			state->location++;
+			state->remaining--;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = *((uint16_t*)state->location);
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
 			state->location += 2;
 			state->remaining -= 2;
-			remaining -= 2;
-			printf("..");
-		} else if(*state->location == 0x0B) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 3;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
-			state->location += 3;
-			state->remaining -= 3;
 			remaining -= 3;
-			printf("...");
 		} else if(*state->location == 0x0C) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 5;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
-			state->location += 5;
-			state->remaining -= 5;
+			end_of_unparsed = 0;
+			state->location++;
+			state->remaining--;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = *((uint32_t*)state->location);
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
+			state->location += 4;
+			state->remaining -= 4;
 			remaining -= 5;
-			printf(".....");
 		} else if(*state->location == 0x0E) {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 9;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
-			state->location += 9;
-			state->remaining -= 9;
+			end_of_unparsed = 0;
+			state->location++;
+			state->remaining--;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NUMBER | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->name = sym_name;
+			sym->number = *((uint64_t*)state->location);
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
+			state->location += 8;
+			state->remaining -= 8;
 			remaining -= 9;
-			printf(".........");
 		} else if(*state->location == 0x5B) {
 			state->location++;
 			state->remaining--;
 			remaining--;
 			if(*state->location == 0x01) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -625,6 +709,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				}
 				memory_free_ext(state->heap, mutex_name);
 			} else if(*state->location == 0x02) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -651,6 +736,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				}
 				memory_free_ext(state->heap, event_name);
 			} else if(*state->location == 0x80) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -673,12 +759,12 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					sym->heap = state->heap;
 					sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_OPREGION;
 					sym->name = opregion_name;
-					sym->unparsed = linkedlist_create_queue_with_heap(state->heap);
 					acpi_aml_symbol_insert(state->scope, sym);
 				}
 				linkedlist_stack_push(state->last_symbol, sym);
 				memory_free_ext(state->heap, opregion_name);
 			} else if(*state->location == 0x81) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -709,6 +795,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				memory_free_ext(state->heap, field_grp_name);
 				remaining -= field_grp_len;
 			} else if(*state->location == 0x82) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -737,7 +824,6 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					child_scope->type = state->default_types | ACPI_AML_SYMBOL_TYPE_SCOPED | ACPI_AML_SYMBOL_TYPE_DEVICE;
 					child_scope->name = dev_name;
 					child_scope->members = linkedlist_create_list_with_heap(state->heap);
-					child_scope->unparsed = linkedlist_create_queue_with_heap(state->heap);
 					acpi_aml_symbol_insert(state->scope, child_scope);
 				}
 				state->scope = child_scope;
@@ -748,6 +834,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= dev_len;
 				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x83) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -791,7 +878,6 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					child_scope->type = state->default_types | ACPI_AML_SYMBOL_TYPE_SCOPED | ACPI_AML_SYMBOL_TYPE_PROCESSOR;
 					child_scope->name = dev_name;
 					child_scope->members = linkedlist_create_list_with_heap(state->heap);
-					child_scope->unparsed = linkedlist_create_queue_with_heap(state->heap);
 					child_scope->processor.proc_id = proc_id;
 					child_scope->processor.pblk_addr = pblk_addr;
 					child_scope->processor.pblk_len = pblk_len;
@@ -805,6 +891,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= dev_len;
 				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x84) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -843,7 +930,6 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					child_scope->type = state->default_types | ACPI_AML_SYMBOL_TYPE_SCOPED | ACPI_AML_SYMBOL_TYPE_POWERRESOURCE;
 					child_scope->name = dev_name;
 					child_scope->members = linkedlist_create_list_with_heap(state->heap);
-					child_scope->unparsed = linkedlist_create_queue_with_heap(state->heap);
 					child_scope->power_resource.system_level = system_level;
 					child_scope->power_resource.resource_order = resource_order;
 					acpi_aml_symbol_insert(state->scope, child_scope);
@@ -856,6 +942,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= dev_len;
 				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x85) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -884,7 +971,6 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					child_scope->type = state->default_types | ACPI_AML_SYMBOL_TYPE_SCOPED | ACPI_AML_SYMBOL_TYPE_THERMALZONE;
 					child_scope->name = dev_name;
 					child_scope->members = linkedlist_create_list_with_heap(state->heap);
-					child_scope->unparsed = linkedlist_create_queue_with_heap(state->heap);
 					acpi_aml_symbol_insert(state->scope, child_scope);
 				}
 				state->scope = child_scope;
@@ -895,6 +981,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= dev_len;
 				memory_free_ext(state->heap, dev_name);
 			} else if(*state->location == 0x86) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -935,6 +1022,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				memory_free_ext(state->heap, field_grp_name2);
 				remaining -= field_grp_len;
 			} else if(*state->location == 0x87) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -964,17 +1052,32 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= res;
 				field_grp_len -= res;
 				printf("bankfield group: %s,%s len: %li\n", field_grp_name1, field_grp_name2, field_grp_len);
-				// TODO: insert unparsed bankfield
+				char_t* aname = acpi_aml_next_anonymous_namestring(state);
+				acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+				sym->heap = state->heap;
+				sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_BANKFIELDGROUP;
+				sym->bankfieldgroup.name1 = field_grp_name1;
+				sym->bankfieldgroup.name2 = field_grp_name2;
+				sym->name = aname;
+				acpi_aml_symbol_insert(state->scope, sym);
+				memory_free_ext(state->heap, aname);
+
+				aname = acpi_aml_next_anonymous_namestring(state);
+				sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+				sym->heap = state->heap;
+				sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+				sym->name = aname;
+				sym->unparsed.length = field_grp_len;
+				sym->unparsed.data = state->location;
+				acpi_aml_symbol_insert(state->scope, sym);
+				memory_free_ext(state->heap, aname);
+				end_of_unparsed = 0;
+
 				state->location += field_grp_len;
 				state->remaining -= field_grp_len;
 				remaining -= field_grp_len;
-				while (field_grp_len > 0) {
-					printf(".");
-					field_grp_len--;
-				}
-				memory_free_ext(state->heap, field_grp_name1);
-				memory_free_ext(state->heap, field_grp_name2);
 			} else if(*state->location == 0x88) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -996,24 +1099,34 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 					sym->heap = state->heap;
 					sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_DATAREGION;
 					sym->name = dataregion_name;
-					sym->unparsed = linkedlist_create_queue_with_heap(state->heap);
 					acpi_aml_symbol_insert(state->scope, sym);
 				}
 				linkedlist_stack_push(state->last_symbol, sym);
 				memory_free_ext(state->heap, dataregion_name);
 				printf("dataregion %s\n", dataregion_name);
 			} else {
-				apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-				up->length = 2;
-				up->data = state->location - 1;
-				acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-				linkedlist_queue_push(tmp_sym->unparsed, up);
+				if(end_of_unparsed == 0) {
+					char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+					acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+					sym->heap = state->heap;
+					sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+					sym->name = sym_name;
+					sym->unparsed.length = 2;
+					sym->unparsed.data = state->location - 1;
+					acpi_aml_symbol_insert(state->scope, sym);
+					memory_free_ext(state->heap, sym_name);
+				} else {
+					acpi_aml_symbol_t* sym = linkedlist_get_data_at_position(state->scope->members, linkedlist_size(state->scope->members) - 1);
+					sym->unparsed.length += 1;
+				}
+				end_of_unparsed = -1;
 				state->location++;
 				state->remaining--;
 				remaining--;
-				printf("..");
 			}
 		} else if(*state->location == 0x11 || *state->location == 0x12 || *state->location == 0x13) {
+			uint16_t unparsed_type = *state->location;
+			end_of_unparsed = 0;
 			state->location++;
 			state->remaining--;
 			remaining--;
@@ -1021,24 +1134,21 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			res = acpi_aml_parse_package_length(state, &skip_len);
 			remaining -= res;
 			printf("skip buf|pack|varpack! length: %li\n", skip_len);
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = skip_len;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
-			if(var_defined == 0) {
-				linkedlist_stack_pop(state->last_symbol);
-				var_defined = -1;
-			}
+			char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_UNPARSED | unparsed_type << 8;
+			sym->unparsed.length = skip_len;
+			sym->unparsed.data = state->location;
+			sym->name = sym_name;
+			acpi_aml_symbol_insert(state->scope, sym);
+			memory_free_ext(state->heap, sym_name);
 			state->location += skip_len;
 			state->remaining -= skip_len;
 			remaining -= skip_len;
-			while(skip_len > 0) {
-				printf(".");
-				skip_len--;
-			}
-			printf("\n");
+			end_of_unparsed = 0;
 		} else if(*state->location == 0x06) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1074,6 +1184,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			}
 			memory_free_ext(state->heap, alias);
 		} else if(*state->location == 0x08) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1090,19 +1201,17 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			state->remaining -= res;
 			remaining -= res;
 			printf("var defined: %s\n", var_name);
-			var_defined = 0;
 			acpi_aml_symbol_t* sym;
 			if(acpi_aml_symbol_exists(state->scope, var_name, &sym) == -1) {
 				sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
 				sym->heap = state->heap;
 				sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_NAME;
 				sym->name = var_name;
-				sym->unparsed = linkedlist_create_queue_with_heap(state->heap);
 				acpi_aml_symbol_insert(state->scope, sym);
 			}
-			linkedlist_stack_push(state->last_symbol, sym);
 			memory_free_ext(state->heap, var_name);
 		} else if(*state->location == 0x10) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1131,7 +1240,6 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				child_scope->type = state->default_types | ACPI_AML_SYMBOL_TYPE_SCOPED | ACPI_AML_SYMBOL_TYPE_SCOPE;
 				child_scope->name = scope_name;
 				child_scope->members = linkedlist_create_list_with_heap(state->heap);
-				child_scope->unparsed = linkedlist_create_queue_with_heap(state->heap);
 				acpi_aml_symbol_insert(state->scope, child_scope);
 			}
 			state->scope = child_scope;
@@ -1142,6 +1250,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			remaining -= scope_len;
 			memory_free_ext(state->heap, scope_name);
 		} else if(*state->location == 0x14) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1175,7 +1284,6 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				child_scope->type = state->default_types | ACPI_AML_SYMBOL_TYPE_SCOPED | ACPI_AML_SYMBOL_TYPE_METHOD;
 				child_scope->name = method_name;
 				child_scope->members = linkedlist_create_list_with_heap(state->heap);
-				child_scope->unparsed = linkedlist_create_queue_with_heap(state->heap);
 				acpi_aml_symbol_insert(state->scope, child_scope);
 			}
 			state->scope = child_scope;
@@ -1186,6 +1294,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			remaining -= method_len;
 			memory_free_ext(state->heap, method_name);
 		} else if(*state->location == 0x15) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1222,6 +1331,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			}
 			memory_free_ext(state->heap, external_name);
 		} else if(*state->location == 0xA0) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1236,6 +1346,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			acpi_aml_parse_scope_symbols(state, if_pkg_len);
 			remaining -= if_pkg_len;
 			if(remaining != 0 && *state->location == 0xA1) {
+				end_of_unparsed = 0;
 				acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 				if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 					linkedlist_stack_pop(state->last_symbol);
@@ -1251,6 +1362,7 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 				remaining -= else_pkg_len;
 			}
 		} else if(*state->location == 0xA2) {
+			end_of_unparsed = 0;
 			acpi_aml_symbol_t* ls = linkedlist_get_data_at_position(state->last_symbol, 0);
 			if((ls->type & ACPI_AML_SYMBOL_TYPE_SCOPED) != ACPI_AML_SYMBOL_TYPE_SCOPED) {
 				linkedlist_stack_pop(state->last_symbol);
@@ -1265,11 +1377,21 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			acpi_aml_parse_scope_symbols(state, while_pkg_len);
 			remaining -= while_pkg_len;
 		} else {
-			apci_aml_unparsed_t* up = memory_malloc_ext(state->heap, sizeof(apci_aml_unparsed_t), 0x0);
-			up->length = 1;
-			up->data = state->location;
-			acpi_aml_symbol_t* tmp_sym = linkedlist_get_data_at_position(state->last_symbol, 0);
-			linkedlist_queue_push(tmp_sym->unparsed, up);
+			if(end_of_unparsed == 0) {
+				char_t* sym_name = acpi_aml_next_anonymous_namestring(state);
+				acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+				sym->heap = state->heap;
+				sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+				sym->name = sym_name;
+				sym->unparsed.length = 1;
+				sym->unparsed.data = state->location;
+				acpi_aml_symbol_insert(state->scope, sym);
+				memory_free_ext(state->heap, sym_name);
+			} else {
+				acpi_aml_symbol_t* sym = linkedlist_get_data_at_position(state->scope->members, linkedlist_size(state->scope->members) - 1);
+				sym->unparsed.length += 1;
+			}
+			end_of_unparsed = -1;
 			state->location++;
 			state->remaining--;
 			remaining--;
@@ -1283,6 +1405,10 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	setup_ram();
 	FILE* fp;
 	int64_t size;
+	if(argc < 2) {
+		print_error("no required parameter");
+		return -1;
+	}
 
 	argv++;
 	printf("file name: %s\n", *argv);
@@ -1322,7 +1448,6 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	scope->parent = NULL;
 	scope->name = global_scope_name;
 	scope->members = linkedlist_create_list_with_heap(heap);
-	scope->unparsed = linkedlist_create_queue_with_heap(heap);
 
 	acpi_aml_state_t* state = memory_malloc_ext(heap, sizeof(acpi_aml_state_t), 0x0);
 	state->heap = heap;
@@ -1343,7 +1468,8 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	printf("inserted: %li printed: %li destroyed: %li\n", inserted_sym_count, p_s_c, d_s_c);
 
 	linkedlist_destroy(state->last_symbol);
-	memory_free(state);
+	memory_free_ext(state->heap, state->last_anonymous_namestring);
+	memory_free_ext(state->heap, state);
 	memory_free(aml_data);
 
 	dump_ram("tmp/mem.dump");
