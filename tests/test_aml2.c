@@ -37,6 +37,83 @@ typedef enum {
 	ACPI_AML_SYMBOL_TYPE_OPREGION           = 0x1700,
 	ACPI_AML_SYMBOL_TYPE_DATAREGION         = 0x1800,
 	ACPI_AML_SYMBOL_TYPE_BANKFIELDGROUP     = 0x1900,
+
+
+	ACPI_AML_SYMBOL_TYPE_LOCAL0             = 0x6000,
+	ACPI_AML_SYMBOL_TYPE_LOCAL1             = 0x6100,
+	ACPI_AML_SYMBOL_TYPE_LOCAL2             = 0x6200,
+	ACPI_AML_SYMBOL_TYPE_LOCAL3             = 0x6300,
+	ACPI_AML_SYMBOL_TYPE_LOCAL4             = 0x6400,
+	ACPI_AML_SYMBOL_TYPE_LOCAL5             = 0x6500,
+	ACPI_AML_SYMBOL_TYPE_LOCAL6             = 0x6600,
+	ACPI_AML_SYMBOL_TYPE_LOCAL7             = 0x6700,
+	ACPI_AML_SYMBOL_TYPE_ARG0               = 0x6800,
+	ACPI_AML_SYMBOL_TYPE_ARG1               = 0x6900,
+	ACPI_AML_SYMBOL_TYPE_ARG2               = 0x6A00,
+	ACPI_AML_SYMBOL_TYPE_ARG3               = 0x6B00,
+	ACPI_AML_SYMBOL_TYPE_ARG4               = 0x6C00,
+	ACPI_AML_SYMBOL_TYPE_ARG5               = 0x6D00,
+	ACPI_AML_SYMBOL_TYPE_ARG6               = 0x6E00,
+
+
+	ACPI_AML_SYMBOL_TYPE_STORE              = 0x7000,
+	ACPI_AML_SYMBOL_TYPE_REFOF              = 0x7100,
+	ACPI_AML_SYMBOL_TYPE_ADD                = 0x7200,
+	ACPI_AML_SYMBOL_TYPE_CONCAT             = 0x7300,
+	ACPI_AML_SYMBOL_TYPE_SUBSTRACT          = 0x7400,
+	ACPI_AML_SYMBOL_TYPE_INCREMENT          = 0x7500,
+	ACPI_AML_SYMBOL_TYPE_DECREMENT          = 0x7600,
+	ACPI_AML_SYMBOL_TYPE_MULTIPLY           = 0x7700,
+	ACPI_AML_SYMBOL_TYPE_DIVIDE             = 0x7800,
+	ACPI_AML_SYMBOL_TYPE_SHIFTLEFT          = 0x7900,
+	ACPI_AML_SYMBOL_TYPE_SHIFTRIGHT         = 0x7A00,
+	ACPI_AML_SYMBOL_TYPE_AND                = 0x7B00,
+	ACPI_AML_SYMBOL_TYPE_NAND               = 0x7C00,
+	ACPI_AML_SYMBOL_TYPE_OR                 = 0x7D00,
+	ACPI_AML_SYMBOL_TYPE_NOR                = 0x7E00,
+	ACPI_AML_SYMBOL_TYPE_XOR                = 0x7F00,
+	ACPI_AML_SYMBOL_TYPE_NOT                = 0x8000,
+	ACPI_AML_SYMBOL_TYPE_FINDSETLEFTBIT     = 0x8100,
+	ACPI_AML_SYMBOL_TYPE_FINDSETRIGHTBIT    = 0x8200,
+	ACPI_AML_SYMBOL_TYPE_DEREFOF            = 0x8300,
+	ACPI_AML_SYMBOL_TYPE_CONCATRES          = 0x8400,
+	ACPI_AML_SYMBOL_TYPE_MOD                = 0x8500,
+	ACPI_AML_SYMBOL_TYPE_NOTIFY             = 0x8600,
+	ACPI_AML_SYMBOL_TYPE_SIZEOF             = 0x8700,
+	ACPI_AML_SYMBOL_TYPE_INDEX              = 0x8800,
+	ACPI_AML_SYMBOL_TYPE_MATCH              = 0x8900,
+	ACPI_AML_SYMBOL_TYPE_CREATEDWORDFIELD   = 0x8A00,
+	ACPI_AML_SYMBOL_TYPE_CREATEWORDFIELD    = 0x8B00,
+	ACPI_AML_SYMBOL_TYPE_CREATEBYTEFIELD    = 0x8C00,
+	ACPI_AML_SYMBOL_TYPE_CREATEBITFIELD     = 0x8D00,
+	ACPI_AML_SYMBOL_TYPE_OBJECTTYPE         = 0x8E00,
+	ACPI_AML_SYMBOL_TYPE_CREATEQWORDFIELD   = 0x8F00,
+	ACPI_AML_SYMBOL_TYPE_LAND               = 0x9000,
+	ACPI_AML_SYMBOL_TYPE_LOR                = 0x9100,
+
+	ACPI_AML_SYMBOL_TYPE_LEQUAL             = 0x9300,
+	ACPI_AML_SYMBOL_TYPE_LGREATER           = 0x9400,
+	ACPI_AML_SYMBOL_TYPE_LLESS              = 0x9500,
+	ACPI_AML_SYMBOL_TYPE_TOBUFFER           = 0x9600,
+	ACPI_AML_SYMBOL_TYPE_TODECIMALSTRING    = 0x9700,
+	ACPI_AML_SYMBOL_TYPE_TOHEXSTRING        = 0x9800,
+	ACPI_AML_SYMBOL_TYPE_TOINTEGER          = 0x9900,
+
+	ACPI_AML_SYMBOL_TYPE_TOSTRING           = 0x9C00,
+	ACPI_AML_SYMBOL_TYPE_COPYOBJECT         = 0x9D00,
+	ACPI_AML_SYMBOL_TYPE_MID                = 0x9E00,
+	ACPI_AML_SYMBOL_TYPE_CONTINUE           = 0x9F00,
+
+	ACPI_AML_SYMBOL_TYPE_NOOP               = 0xA300,
+	ACPI_AML_SYMBOL_TYPE_RETURN             = 0xA400,
+	ACPI_AML_SYMBOL_TYPE_BREAK              = 0xA500,
+
+	ACPI_AML_SYMBOL_TYPE_BREAKPOINT         = 0xCC00,
+
+	ACPI_AML_SYMBOL_TYPE_LNOT               = 0xD000,
+	ACPI_AML_SYMBOL_TYPE_LNOTEQUAL          = 0xD100,
+	ACPI_AML_SYMBOL_TYPE_LLESSEQUAL         = 0xD200,
+	ACPI_AML_SYMBOL_TYPE_LGREATEREQUAL      = 0xD300,
 } acpi_aml_symbol_type_t;
 
 typedef enum {
@@ -105,6 +182,7 @@ typedef struct acpi_aml_symbol {
 			int64_t length;
 		} unparsed;
 		int64_t number;
+		char_t* string;
 	};
 	linkedlist_t condition_symbols;
 } acpi_aml_symbol_t;
@@ -662,6 +740,20 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			state->location += 8;
 			state->remaining -= 8;
 			remaining -= 9;
+		} else if(*state->location == 0x0D) {
+			end_of_unparsed = 0;
+			state->location++;
+			state->remaining--;
+			int64_t string_len = strlen((char_t*)state->location);
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			sym->heap = state->heap;
+			sym->type = state->default_types | ACPI_AML_SYMBOL_TYPE_STRING | ACPI_AML_SYMBOL_TYPE_UNPARSED;
+			sym->string = memory_malloc_ext(state->heap, sizeof(char_t) * string_len + 1, 0x0);
+			memory_memcopy(state->location, sym->string, string_len);
+			acpi_aml_symbol_insert(state, sym);
+			state->location += string_len + 1;
+			state->remaining -= string_len + 1;
+			remaining -= string_len + 2;
 		} else if(*state->location == 0x5B) {
 			state->location++;
 			state->remaining--;
@@ -1334,6 +1426,56 @@ int64_t acpi_aml_parse_scope_symbols(acpi_aml_state_t* state, int64_t remaining)
 			state->scope = restore_scope;
 
 			remaining -= while_pkg_len;
+		} else if ( (*state->location >= 0x60 && *state->location <= 0x6E)
+		            || (*state->location >= 0x70 && *state->location <= 0x91)
+		            || (*state->location >= 0x93 && *state->location <= 0x99)
+		            || (*state->location >= 0x9C && *state->location <= 0x9F)
+		            || (*state->location >= 0xA3 && *state->location <= 0xA5)
+		            || (*state->location == 0xCC)
+		            ) {
+			end_of_unparsed = 0;
+			uint16_t op_type = *state->location;
+			op_type <<= 8;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			sym->heap = state->heap;
+			sym->type = state->default_types | op_type | ACPI_AML_SYMBOL_TYPE_UNPARSED | ACPI_AML_SYMBOL_TYPE_CODE;
+			sym->unparsed.length = 0;
+			sym->unparsed.data = NULL;
+			acpi_aml_symbol_insert(state, sym);
+			state->location++;
+			state->remaining--;
+			remaining--;
+		} else if(*state->location == 0x92) {
+			end_of_unparsed = 0;
+			state->location++;
+			state->remaining--;
+			remaining--;
+			uint16_t op_type = 0;
+			if(*state->location == 0x93) {
+				state->location++;
+				state->remaining--;
+				remaining--;
+				op_type = ACPI_AML_SYMBOL_TYPE_LNOTEQUAL;
+			} else if(*state->location == 0x94) {
+				state->location++;
+				state->remaining--;
+				remaining--;
+				op_type = ACPI_AML_SYMBOL_TYPE_LLESSEQUAL;
+			} else if(*state->location == 0x95) {
+				state->location++;
+				state->remaining--;
+				remaining--;
+				op_type = ACPI_AML_SYMBOL_TYPE_LGREATEREQUAL;
+			} else {
+				op_type = ACPI_AML_SYMBOL_TYPE_LNOT;
+			}
+			op_type <<= 8;
+			acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
+			sym->heap = state->heap;
+			sym->type = state->default_types | op_type | ACPI_AML_SYMBOL_TYPE_UNPARSED | ACPI_AML_SYMBOL_TYPE_CODE;
+			sym->unparsed.length = 0;
+			sym->unparsed.data = NULL;
+			acpi_aml_symbol_insert(state, sym);
 		} else {
 			if(end_of_unparsed == 0) {
 				acpi_aml_symbol_t* sym = memory_malloc_ext(state->heap, sizeof(acpi_aml_symbol_t), 0x0);
