@@ -14,8 +14,6 @@ DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 VMDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
 
-M4 = m4
-
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections \
 	-mgeneral-regs-only -mno-red-zone
@@ -35,8 +33,6 @@ DOCSOBJDIR = $(OBJDIR)/docs
 ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
-M4SRCDIR = m4_macros
-M4OBJDIR = $(CCSRCDIR)-gen
 
 
 AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
@@ -49,8 +45,6 @@ CCXXSRCS = $(shell find $(CCSRCDIR) -type f -name \*.xx.c)
 
 LDSRCS = $(shell find $(LDSRCDIR) -type f -name \*.ld)
 
-M4SRCS = $(shell find $(M4SRCDIR) -type f -name \*.m4)
-
 UTILSSRCS = $(shell find $(UTILSSRCDIR) -type f -name \*.c)
 
 ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
@@ -58,7 +52,6 @@ CC16OBJS = $(patsubst $(CCSRCDIR)/%.16.c,$(CCOBJDIR)/%.16.o,$(CC16SRCS))
 CC16OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_16.o,$(CCXXSRCS))
 CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
-M4OBJS = $(patsubst $(M4SRCDIR)/%.m4,$(M4OBJDIR)/%.c,$(M4SRCS))
 
 DOCSFILES += $(CC16SRCS) $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
@@ -72,7 +65,7 @@ PROGS = $(OBJDIR)/bootsect16.bin \
 SUBDIRS := tests utils
 
 .PHONY: all clean depend $(SUBDIRS)
-.PRECIOUS: $(M4OBJS)
+.PRECIOUS:
 all: $(SUBDIRS) $(OBJDIR)/docs $(VMDISK)
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
@@ -98,16 +91,16 @@ $(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
 $(OBJDIR)/stage3.bin: $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
 	$(LD64) $(LD64FLAGS) -T $< -o $@ $(filter-out $<,$^)
 
-$(CCOBJDIR)/%.16.o: $(CCSRCDIR)/%.16.c $(M4OBJS)
+$(CCOBJDIR)/%.16.o: $(CCSRCDIR)/%.16.c
 	$(CC16) $(CC16FLAGS) -o $@ $<
 
-$(CCOBJDIR)/%.xx_16.o: $(CCSRCDIR)/%.xx.c $(M4OBJS)
+$(CCOBJDIR)/%.xx_16.o: $(CCSRCDIR)/%.xx.c
 	$(CC16) $(CC16FLAGS) -o $@ $<
 
-$(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c $(M4OBJS)
+$(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
-$(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c $(M4OBJS)
+$(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
 $(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
@@ -116,9 +109,6 @@ $(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
 $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.asm
 	$(AS64) $(AS64FLAGS) -o $@ $^
 
-$(M4OBJDIR)/%.c: $(M4SRCDIR)/%.m4
-	$(M4) $^ > $@
-
 $(SUBDIRS):
 	$(MAKE) -C $@
 
@@ -126,7 +116,8 @@ clean:
 	rm -fr $(DOCSOBJDIR)/*
 	find $(OBJDIR) -type f -delete
 	rm -f .depend*
-	find $(M4OBJDIR) -type f -delete
+	find cc-gen -type f -delete
+	find includes-gen -type f -delete
 
 print-%: ; @echo $* = $($*)
 

@@ -22,12 +22,17 @@ acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
 		}
 	}
 	if(desc != NULL) {
-		if(desc->revision != 2) {
+		size_t len = 0;
+		if(desc->rsdp.revision == 0) {
+			len = sizeof(acpi_rsdp_descriptor_t);
+		} else if(desc->rsdp.revision == 2) {
+			len = desc->length;
+		} else {
 			return NULL;
 		}
 		uint8_t* data2csum = (uint8_t*)desc;
 		uint8_t checksum = 0;
-		for(size_t i = 0; i < desc->length; i++) {
+		for(size_t i = 0; i < len; i++) {
 			checksum += data2csum[i];
 		}
 		if(checksum != 0x00) {
@@ -50,15 +55,35 @@ uint8_t acpi_validate_checksum(acpi_sdt_header_t* sdt_header){
 }
 
 acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature){
-	size_t table_count = (xrsdp_desc->xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
-	acpi_sdt_header_t* res;
-	for(size_t i = 0; i < table_count; i++) {
-		res = xrsdp_desc->xrsdt->acpi_sdt_header_ptrs[i];
-		if(memory_memcompare(res->signature, signature, 4) == 0) {
-			if(acpi_validate_checksum(res) == 0) {
-				return res;
+	if(xrsdp_desc->rsdp.revision == 0) {
+		uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
+		acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)((uint64_t)(addr));
+		uint8_t* table_addrs = (uint8_t*)(rsdt + 1);
+		size_t table_count = (rsdt->length - sizeof(acpi_sdt_header_t)) / sizeof(uint32_t);
+		acpi_sdt_header_t* res;
+
+		for(size_t i = 0; i < table_count; i++) {
+			uint32_t table_addr = *((uint32_t*)(table_addrs + (i * sizeof(uint32_t))));
+			res = (acpi_sdt_header_t*)((uint64_t)(table_addr));;
+			if(memory_memcompare(res->signature, signature, 4) == 0) {
+				if(acpi_validate_checksum(res) == 0) {
+					return res;
+				}
+				return NULL;
 			}
-			return NULL;
+		}
+	} else if (xrsdp_desc->rsdp.revision == 2) {
+		size_t table_count = (xrsdp_desc->xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
+		acpi_sdt_header_t* res;
+
+		for(size_t i = 0; i < table_count; i++) {
+			res = xrsdp_desc->xrsdt->acpi_sdt_header_ptrs[i];
+			if(memory_memcompare(res->signature, signature, 4) == 0) {
+				if(acpi_validate_checksum(res) == 0) {
+					return res;
+				}
+				return NULL;
+			}
 		}
 	}
 	return NULL;
