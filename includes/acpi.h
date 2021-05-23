@@ -48,6 +48,10 @@ typedef struct {
 	char_t oem_id[6];
 	uint8_t revision;
 	uint32_t rsdt_address;
+}__attribute__((packed)) acpi_rsdp_descriptor_t;
+
+typedef struct {
+	acpi_rsdp_descriptor_t rsdp;
 	uint32_t length;
 	acpi_xrsdt_t* xrsdt;
 	uint8_t extended_checksum;
