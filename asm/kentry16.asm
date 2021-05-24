@@ -14,7 +14,7 @@ __kstart:
   nop // wait some seconds
   nop // wait some seconds
 
-  pop %bx
+  pop %bx // BOOT_DRIVE
   call   enable_A20
   mov %cs, %ax
   mov %ax, %ds
@@ -24,6 +24,9 @@ __kstart:
   mov %ax, %gs
   mov $__stack_top, %esp
   mov %esp, %ebp
+  xor %eax, %eax
+  mov %eax, %esi
+  mov %eax, %edi
   cld
   mov %bl, BOOT_DRIVE
   call kmain16
