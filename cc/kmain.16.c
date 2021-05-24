@@ -17,6 +17,7 @@ uint8_t kmain16()
 	memory_set_default_heap(heap);
 
 	video_clear_screen();
+	video_print("Hello World from 16-bit stage!\r\n\0");
 
 	memory_map_t* mmap;
 	size_t mmap_e_count = memory_detect_map(&mmap);
@@ -35,7 +36,10 @@ uint8_t kmain16()
 		return -1;
 	}
 
-	video_print("Hello, World!\r\n\0");
+	if(BOOT_DRIVE == 0) {
+		video_print("PXE Boot not implemented!\r\n\0");
+		return -1;
+	}
 
 	disk_slot_table_t* st;
 	uint8_t k64_copied = 0;

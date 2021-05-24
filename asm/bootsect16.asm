@@ -3,8 +3,7 @@
 .global __start
 
 __start:
-cmp    $0xaa55, %ax
-jne    panic
+mov    %ax, %cx
 __start_normal:
 cli
 mov    $0x7c0, %ax
@@ -16,6 +15,9 @@ mov    %ax, %ss
 mov    $__stack_top,%bp
 mov    %bp,%sp
 sti
+
+cmp    $0xaa55, %cx
+jne    check_pxe_and_load
 
 mov    %dl,BOOT_DRIVE
 
@@ -76,6 +78,23 @@ jmp    $0x100,$0x0
 panic:
 hlt
 jmp    panic
+
+check_pxe_and_load:
+mov   $0x200, %bx
+mov   (%bx), %eax
+cmp   $0x45585021, %eax
+jne   pxe_error
+mov   $0x7e0, %ax
+mov   %ax, %ds
+mov   %ax, %es
+jmp   $0x7e0, $0x6
+
+pxe_error:
+hlt
+jmp pxe_error
+mov   $errmsg_disk, %si
+call  print_msg
+jmp   panic
 
 check_disk_ext:
 mov    $0x4100, %ax
