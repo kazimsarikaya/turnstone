@@ -1,3 +1,7 @@
+/**
+ * @file acpi.64.c
+ * @brief acpi table parsers
+ */
 #include <acpi.h>
 #include <bios.h>
 #include <memory.h>
