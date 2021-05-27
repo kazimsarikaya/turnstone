@@ -80,9 +80,9 @@ hlt
 jmp    panic
 
 check_pxe_and_load:
-mov   $0x200, %bx
-mov   (%bx), %eax
-cmp   $0x45585021, %eax
+mov   $0x202, %bx // at 0x200 slottable starts first 2 bytes jmp to __realstart then !PXE
+mov   (%bx), %eax //load !PXE
+cmp   $0x45585021, %eax // compare !PXE
 jne   pxe_error
 mov   $0x7e0, %ax
 mov   %ax, %ds
