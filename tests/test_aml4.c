@@ -21,7 +21,7 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 		printf("obj value=%s\n", obj->string );
 		break;
 	case ACPI_AML_OT_ALIAS:
-		printf("obj value=%s\n", obj->string );
+		printf("obj value=%s\n", obj->alias_target->name );
 		break;
 	case ACPI_AML_OT_BUFFER:
 		printf("obj buflen=%i\n", obj->buffer.buflen );

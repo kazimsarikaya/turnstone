@@ -193,6 +193,7 @@ typedef struct _acpi_aml_object_type_t {
 			linkedlist_t elements;
 		} package;
 		struct _acpi_aml_object_type_t* opcode_exec_return;
+		struct _acpi_aml_object_type_t* alias_target;
 	};
 }acpi_aml_object_t;
 

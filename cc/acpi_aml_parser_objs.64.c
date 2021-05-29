@@ -175,16 +175,19 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		return -1;
 	}
 
-	char_t* srcnomname = acpi_aml_normalize_name(ctx->scope_prefix, srcname);
-	memory_free(srcname);
+	acpi_aml_object_t* src_obj = acpi_aml_symbol_lookup(ctx, srcname);
+	if(src_obj == NULL) {
+		memory_free(srcname);
+		return -1;
+	}
+	src_obj->refcount++;
+
 
 	namelen = acpi_aml_len_namestring(ctx);
 	char_t* dstname = memory_malloc(sizeof(char_t) * namelen + 1);
 
 	if(acpi_aml_parse_namestring(ctx, (void**)&dstname, NULL) != 0) {
-		memory_free(srcname);
 		memory_free(dstname);
-		memory_free(srcnomname);
 		return -1;
 	}
 
@@ -196,7 +199,7 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	obj->type = ACPI_AML_OT_ALIAS;
 	obj->name = dstnomname;
-	obj->string = srcnomname;
+	obj->alias_target = src_obj;
 
 
 	linkedlist_list_insert(ctx->symbols, obj);
