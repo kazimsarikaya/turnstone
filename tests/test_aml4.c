@@ -72,72 +72,6 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 	return -1;
 }
 
-int8_t acpi_aml_parse_op1_tgt1(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	uint64_t t_consumed = 0;
-	uint64_t r_consumed = 1;
-
-	uint8_t oc = *ctx->data;
-	ctx->data++;
-	ctx->remaining--;
-
-	apci_aml_opcode_t* opcode = memory_malloc(sizeof(apci_aml_opcode_t));
-	opcode->type = ACPI_AML_OCT_OP1_TGT1;
-	opcode->opcode = oc;
-
-	acpi_aml_object_t* src0 = memory_malloc(sizeof(acpi_aml_object_t));
-	if(acpi_aml_parse_one_item(ctx, (void**)&src0, &t_consumed) != 0) {
-		if(src0->refcount == 0) {
-			memory_free(src0);
-		}
-		memory_free(opcode);
-		return -1;
-	}
-	r_consumed += t_consumed;
-	t_consumed = 0;
-	opcode->op0 = src0;
-
-	acpi_aml_object_t* tgt0 = memory_malloc(sizeof(acpi_aml_object_t));
-	if(acpi_aml_parse_one_item(ctx, (void**)&tgt0, &t_consumed) != 0) {
-		if(src0->refcount == 0) {
-			memory_free(src0);
-		}
-		if(tgt0->refcount == 0) {
-			memory_free(tgt0);
-		}
-		memory_free(opcode);
-		return -1;
-	}
-	r_consumed += t_consumed;
-	t_consumed = 0;
-	opcode->tgt0 = tgt0;
-
-	if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
-		if(src0->refcount == 0) {
-			memory_free(src0);
-		}
-		if(tgt0->refcount == 0) {
-			memory_free(tgt0);
-		}
-		memory_free(opcode);
-		return -1;
-	}
-
-
-	if(data != NULL) {
-		acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
-		resobj->type = ACPI_AML_OT_OPCODE_EXEC_RETURN;
-		resobj->opcode_exec_return = opcode->return_obj;
-	}
-
-	memory_free(opcode);
-
-	if(consumed != NULL) {
-		*consumed = r_consumed;
-	}
-
-	return 0;
-}
-
 
 int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	UNUSED(data);
@@ -313,8 +247,6 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	}
 
 	acpi_aml_print_symbol_table(ctx);
-
-	memory_free(ctx);
 
 	memory_free(aml_data);
 	dump_ram("tmp/mem.dump");
