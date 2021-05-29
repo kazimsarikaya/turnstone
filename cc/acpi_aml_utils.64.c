@@ -155,23 +155,33 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t* ctx){
 	return 4;
 }
 
-acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t* symbol_name){
-	char_t* tmp_scope_prefix = memory_malloc(strlen(ctx->scope_prefix) + 1);
-	strcpy(ctx->scope_prefix, tmp_scope_prefix);
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(linkedlist_t table, char_t* prefix, char_t* symbol_name){
+	char_t* tmp_prefix = memory_malloc(strlen(prefix) + 1);
+	strcpy(prefix, tmp_prefix);
 	while(1) {
-		char_t* nomname = acpi_aml_normalize_name(tmp_scope_prefix, symbol_name);
-		for(int64_t len = linkedlist_size(ctx->symbols) - 1; len >= 0; len--) {
-			acpi_aml_object_t* obj = (acpi_aml_object_t*)linkedlist_get_data_at_position(ctx->symbols, len);
+		char_t* nomname = acpi_aml_normalize_name(tmp_prefix, symbol_name);
+		for(int64_t len = linkedlist_size(table) - 1; len >= 0; len--) {
+			acpi_aml_object_t* obj = (acpi_aml_object_t*)linkedlist_get_data_at_position(table, len);
 			if(strcmp(obj->name, nomname) == 0) {
-				memory_free(tmp_scope_prefix);
+				memory_free(tmp_prefix);
 				return obj;
 			}
 		}
-		if(strlen(tmp_scope_prefix) == 0) {
+		if(strlen(tmp_prefix) == 0) {
 			break;
 		}
-		tmp_scope_prefix[strlen(tmp_scope_prefix) - 4] = NULL;
+		tmp_prefix[strlen(tmp_prefix) - 4] = NULL;
 	}
-	memory_free(tmp_scope_prefix);
+	memory_free(tmp_prefix);
 	return NULL;
+}
+
+acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t* symbol_name){
+	if(ctx->local_symbols != NULL) {
+		acpi_aml_object_t* obj = acpi_aml_symbol_lookup_at_table(ctx->local_symbols, ctx->scope_prefix, symbol_name);
+		if(obj != NULL) {
+			return obj;
+		}
+	}
+	return acpi_aml_symbol_lookup_at_table(ctx->symbols, ctx->scope_prefix, symbol_name);
 }
