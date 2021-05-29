@@ -75,7 +75,7 @@ uint8_t kmain64() {
 		if(mcfg == NULL) {
 			video_print("can not find mcfg or incorrect checksum\n\0");
 		} else {
-			video_print("cmfg is found\n\0");
+			video_print("mcfg is found\n\0");
 			char_t* mcfg_addr = itoh((size_t)mcfg);
 			video_print(mcfg_addr);
 			video_print("\n\0");
