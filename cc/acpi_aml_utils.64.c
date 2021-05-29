@@ -185,3 +185,12 @@ acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t
 	}
 	return acpi_aml_symbol_lookup_at_table(ctx->symbols, ctx->scope_prefix, symbol_name);
 }
+
+int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj) {
+	if(ctx->local_symbols != NULL) {
+		linkedlist_list_insert(ctx->local_symbols, obj);
+	}else {
+		linkedlist_list_insert(ctx->symbols, obj);
+	}
+	return 0;
+}

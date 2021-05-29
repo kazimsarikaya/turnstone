@@ -101,7 +101,7 @@ int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t
 		return -1;
 	}
 
-	linkedlist_list_insert(ctx->symbols, obj);
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
 
 	acpi_aml_print_object(obj);
 

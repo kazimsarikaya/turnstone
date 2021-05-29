@@ -216,6 +216,7 @@ uint64_t acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
 uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 
 // parser methods
 CREATE_PARSER_F(one_item);
