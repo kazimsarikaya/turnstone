@@ -167,16 +167,6 @@ typedef enum {
 	ACPI_AML_OT_OPCODE_EXEC_RETURN
 }acpi_aml_object_type_t;
 
-typedef enum {
-	ACPI_AML_OCT_OP3_TGT1,
-	ACPI_AML_OCT_OP2_TGT2,
-	ACPI_AML_OCT_OP2_TGT1,
-	ACPI_AML_OCT_OP2_TGT0,
-	ACPI_AML_OCT_OP1_TGT1,
-	ACPI_AML_OCT_OP1_TGT0,
-	ACPI_AML_OCT_OP0_TGT0,
-}acpi_aml_opcode_type_t;
-
 typedef struct _acpi_aml_object_type_t {
 	acpi_aml_object_type_t type;
 	uint64_t refcount;
@@ -198,13 +188,9 @@ typedef struct _acpi_aml_object_type_t {
 }acpi_aml_object_t;
 
 typedef struct {
-	acpi_aml_opcode_type_t type;
+	uint8_t operand_count;
 	uint16_t opcode;
-	acpi_aml_object_t* op0;
-	acpi_aml_object_t* op1;
-	acpi_aml_object_t* op2;
-	acpi_aml_object_t* tgt0;
-	acpi_aml_object_t* tgt1;
+	acpi_aml_object_t* operands[6];
 	acpi_aml_object_t* return_obj;
 }apci_aml_opcode_t;
 
@@ -242,24 +228,20 @@ CREATE_PARSER_F(name);
 CREATE_PARSER_F(scope);
 CREATE_PARSER_F(const_data);
 
-CREATE_PARSER_F(op0_tgt0);
-CREATE_PARSER_F(op1_tgt0);
-CREATE_PARSER_F(op1_tgt1);
-CREATE_PARSER_F(op2_tgt1);
-CREATE_PARSER_F(op2_tgt2);
-CREATE_PARSER_F(op2_tgt0);
-CREATE_PARSER_F(op3_tgt1);
+CREATE_PARSER_F(opcnt_0);
+CREATE_PARSER_F(opcnt_1);
+CREATE_PARSER_F(opcnt_2);
+CREATE_PARSER_F(opcnt_3);
+CREATE_PARSER_F(opcnt_4);
 
+CREATE_PARSER_F(op_match);
 CREATE_PARSER_F(logic_ext);
 
 CREATE_PARSER_F(op_if);
 CREATE_PARSER_F(op_else);
 CREATE_PARSER_F(op_while);
 
-CREATE_PARSER_F(op_match);
 CREATE_PARSER_F(create_field);
-
-CREATE_PARSER_F(op_local_arg);
 
 CREATE_PARSER_F(op_extended);
 
