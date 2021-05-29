@@ -4,7 +4,7 @@ BASEDIR="${CURRENTDIR}/../../"
 OUTPUTDIR="${BASEDIR}/output"
 TFTPROOT="/opt/local/var/tftpboot"
 
-sudo cp "${OUTPUTDIR}/kernel" "{TFTPROOT}/osdev-kernel"
+sudo cp "${OUTPUTDIR}/kernel" "${TFTPROOT}/osdev-kernel"
 
 sudo qemu-system-x86_64 \
   -M q35 -m 1g -smp cpus=2 -name osdev-pxe-boot \
