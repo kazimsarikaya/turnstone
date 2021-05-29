@@ -201,8 +201,7 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	obj->name = dstnomname;
 	obj->alias_target = src_obj;
 
-
-	linkedlist_list_insert(ctx->symbols, obj);
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
 
 	return 0;
 }
