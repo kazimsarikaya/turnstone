@@ -156,7 +156,7 @@ acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(extopcnt_0),
 	PARSER_F_NAME(opregion), // 0x80 -> 19
 	PARSER_F_NAME(field),
-	PARSER_F_NAME(device),
+	PARSER_F_NAME(scope),
 	PARSER_F_NAME(processor),
 	PARSER_F_NAME(powerres),
 	PARSER_F_NAME(thermalzone),
@@ -188,5 +188,40 @@ int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, u
 		*consumed = r_consumed;
 	}
 
-	return -1;
+	return 0;
+}
+
+uint8_t acpi_aml_parser_defaults[] =
+{
+	0x10, 0x05, 0x5F, 0x47, 0x50, 0x45,
+	0x10, 0x05, 0x5F, 0x50, 0x52, 0x5F,
+	0x10, 0x05, 0x5F, 0x53, 0x42, 0x5F,
+	0x10, 0x05, 0x5F, 0x53, 0x49, 0x5F,
+	0x10, 0x05, 0x5F, 0x54, 0x5A, 0x5F,
+	0x5B, 0x01, 0x5F, 0x47, 0x4C, 0x5F, 0x00,
+	0x08, 0x5F, 0x4F, 0x53, 0x5F, 0x0D, 0x48, 0x6F, 0x62, 0x62, 0x79, 0x20, 0x4F, 0x53, 0x00,
+	0x14, 0x08, 0x5F, 0x4F, 0x53, 0x49, 0x01, 0xA4, 0x00,
+	0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x02
+};
+
+acpi_aml_parser_context_t* acp_aml_parser_context_create(uint8_t* aml, int64_t size) {
+	char_t* root_prefix = "";
+
+	acpi_aml_parser_context_t* ctx = memory_malloc(sizeof(acpi_aml_parser_context_t));
+	ctx->data = acpi_aml_parser_defaults;
+	ctx->length = sizeof(acpi_aml_parser_defaults);
+	ctx->remaining = sizeof(acpi_aml_parser_defaults);
+	ctx->scope_prefix = root_prefix;
+	ctx->symbols = linkedlist_create_list_with_heap(NULL);
+
+	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
+		memory_free(ctx);
+		return NULL;
+	}
+
+	ctx->data = aml;
+	ctx->length = size;
+	ctx->remaining = size;
+
+	return ctx;
 }

@@ -187,6 +187,13 @@ acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t
 }
 
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj) {
+	acpi_aml_object_t* oldsym = acpi_aml_symbol_lookup(ctx, obj->name);
+	if(oldsym != NULL) {
+		if(oldsym->type == ACPI_AML_OT_SCOPE && obj->type == ACPI_AML_OT_SCOPE) {
+			return 0;
+		}
+		return -1;
+	}
 	if(ctx->local_symbols != NULL) {
 		linkedlist_list_insert(ctx->local_symbols, obj);
 	}else {

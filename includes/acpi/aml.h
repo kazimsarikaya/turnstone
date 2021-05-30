@@ -169,7 +169,12 @@ typedef enum {
 	ACPI_AML_OT_ALIAS,
 	ACPI_AML_OT_BUFFER,
 	ACPI_AML_OT_PACKAGE,
-	ACPI_AML_OT_OPCODE_EXEC_RETURN
+	ACPI_AML_OT_OPCODE_EXEC_RETURN,
+	ACPI_AML_OT_SCOPE,
+	ACPI_AML_OT_DEVICE,
+	ACPI_AML_OT_METHOD,
+	ACPI_AML_OT_EXTERNAL,
+	ACPI_AML_OT_MUTEX,
 }acpi_aml_object_type_t;
 
 typedef struct _acpi_aml_object_type_t {
@@ -189,6 +194,18 @@ typedef struct _acpi_aml_object_type_t {
 		} package;
 		struct _acpi_aml_object_type_t* opcode_exec_return;
 		struct _acpi_aml_object_type_t* alias_target;
+		uint8_t mutex_sync_flags;
+		struct {
+			uint8_t arg_count;
+			uint8_t serflag;
+			uint8_t sync_level;
+			int64_t termlist_length;
+			uint8_t* termlist;
+		} method;
+		struct {
+			uint8_t object_type;
+			uint8_t arg_count;
+		} external;
 	};
 }acpi_aml_object_t;
 
@@ -223,6 +240,8 @@ acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
+
+acpi_aml_parser_context_t* acp_aml_parser_context_create(uint8_t*, int64_t);
 
 // parser methods
 CREATE_PARSER_F(one_item);
@@ -266,7 +285,6 @@ CREATE_PARSER_F(mutex);
 CREATE_PARSER_F(event);
 CREATE_PARSER_F(opregion);
 CREATE_PARSER_F(field);
-CREATE_PARSER_F(device);
 CREATE_PARSER_F(processor);
 CREATE_PARSER_F(powerres);
 CREATE_PARSER_F(thermalzone);
@@ -290,5 +308,9 @@ CREATE_PARSER_F(extopcnt_6);
 		UNUSED(consumed); \
 		return -1; \
 	}
+
+#ifdef ___TESTMODE
+int printf(const char* format, ...);
+#endif
 
 #endif
