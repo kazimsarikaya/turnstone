@@ -12,6 +12,9 @@ int64_t acpi_aml_cast_as_integer(acpi_aml_object_t* obj){
 		return obj->number;
 	case ACPI_AML_OT_STRING:
 		return atoi(obj->string);
+	case ACPI_AML_OT_BUFFER:
+		return *((int64_t*)obj->buffer.buf);
+		break;
 	default:
 		break;
 	}

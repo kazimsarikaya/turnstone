@@ -48,6 +48,15 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 	case ACPI_AML_OT_MUTEX:
 		printf("mutex syncflags=%i\n", obj->mutex_sync_flags);
 		break;
+	case ACPI_AML_OT_EVENT:
+		printf("event\n");
+		break;
+	case ACPI_AML_OT_DATAREGION:
+		printf("dataregion signature=%s oemid=%s oemtableid=%s\n", obj->dataregion.signature, obj->dataregion.oemid, obj->dataregion.oemtableid);
+		break;
+	case ACPI_AML_OT_OPREGION:
+		printf("opregion region_space=0x%x region_offset=0x%lx region_len=0x%lx\n", obj->opregion.region_space, obj->opregion.region_offset, obj->opregion.region_len);
+		break;
 	case ACPI_AML_OT_METHOD:
 		printf("method argcount=%i serflag=%i synclevel=%i termlistlen=%i\n", obj->method.arg_count, obj->method.serflag,
 		       obj->method.sync_level, obj->method.termlist_length);
