@@ -592,16 +592,141 @@ int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	return 0;
 }
 
+int8_t acpi_aml_parse_event(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	UNUSED(consumed);
+
+	ctx->data++;
+	ctx->remaining--;
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+	obj->type = ACPI_AML_OT_EVENT;
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	return 0;
+}
+
+int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	UNUSED(consumed);
+
+	uint8_t opcode = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+
+	acpi_aml_object_type_t obj_type;
+
+	switch (opcode) {
+	case ACPI_AML_DATAREGION:
+		obj_type = ACPI_AML_OT_DATAREGION;
+		break;
+	case ACPI_AML_OPREGION:
+		obj_type = ACPI_AML_OT_OPREGION;
+		break;
+	default:
+		return -1;
+	}
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+	obj->type = obj_type;
+
+	acpi_aml_object_t* tmp_obj;
+
+	if(obj_type == ACPI_AML_OT_DATAREGION) {
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) != 0) {
+			memory_free(tmp_obj);
+			return -1;
+		}
+
+		obj->dataregion.signature = tmp_obj->string;
+		memory_free(tmp_obj);
+
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
+			memory_free(tmp_obj);
+			return -1;
+		}
+
+		obj->dataregion.oemid = tmp_obj->string;
+		memory_free(tmp_obj);
+
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
+			memory_free(tmp_obj);
+			return -1;
+		}
+
+		obj->dataregion.oemtableid = tmp_obj->string;
+		memory_free(tmp_obj);
+	} else {
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_byte_data(ctx, (void**)&tmp_obj, NULL) !=  0) {
+			memory_free(tmp_obj);
+			return -1;
+		}
+
+		obj->opregion.region_space = tmp_obj->number;
+		memory_free(tmp_obj);
+
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
+			memory_free(tmp_obj);
+			return -1;
+		}
+
+		obj->opregion.region_offset = acpi_aml_cast_as_integer(tmp_obj);
+		memory_free(tmp_obj);
+
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
+			memory_free(tmp_obj);
+			return -1;
+		}
+
+		obj->opregion.region_len = acpi_aml_cast_as_integer(tmp_obj);
+		memory_free(tmp_obj);
+	}
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	return 0;
+}
+
 
 #ifndef ___TESTMODE
 UNIMPLPARSER(name);
 UNIMPLPARSER(one_item);
 #endif
 
-UNIMPLPARSER(event);
-UNIMPLPARSER(opregion);
 UNIMPLPARSER(field);
 UNIMPLPARSER(indexfield);
 UNIMPLPARSER(bankfield);
-UNIMPLPARSER(dataregion);
 UNIMPLPARSER(fatal);

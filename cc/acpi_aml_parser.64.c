@@ -154,7 +154,7 @@ acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(extopcnt_0),
 	PARSER_F_NAME(fatal),
 	PARSER_F_NAME(extopcnt_0),
-	PARSER_F_NAME(opregion), // 0x80 -> 19
+	PARSER_F_NAME(region), // 0x80 -> 19
 	PARSER_F_NAME(field),
 	PARSER_F_NAME(scope),
 	PARSER_F_NAME(scope),
@@ -162,7 +162,7 @@ acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(scope),
 	PARSER_F_NAME(indexfield),
 	PARSER_F_NAME(bankfield),
-	PARSER_F_NAME(dataregion),
+	PARSER_F_NAME(region),
 };
 
 

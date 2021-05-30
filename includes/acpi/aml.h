@@ -151,6 +151,18 @@
 #define ACPI_AML_MATCH_MGE           0x04
 #define ACPI_AML_MATCH_MGT           0x05
 
+#define ACPI_AML_OPREGT_SYSMEM       0x00
+#define ACPI_AML_OPREGT_SYSIO        0x01
+#define ACPI_AML_OPREGT_PCICFG       0x02
+#define ACPI_AML_OPREGT_EMBCTL       0x03
+#define ACPI_AML_OPREGT_SMBUS        0x04
+#define ACPI_AML_OPREGT_SYSCMOS      0x05
+#define ACPI_AML_OPREGT_PCIBAR       0x06
+#define ACPI_AML_OPREGT_IPMI         0x07
+#define ACPI_AML_OPREGT_GPIO         0x08
+#define ACPI_AML_OPREGT_GSERBUS      0x09
+#define ACPI_AML_OPREGT_PCC          0x0A
+
 //types
 
 typedef struct {
@@ -178,6 +190,9 @@ typedef enum {
 	ACPI_AML_OT_METHOD,
 	ACPI_AML_OT_EXTERNAL,
 	ACPI_AML_OT_MUTEX,
+	ACPI_AML_OT_EVENT,
+	ACPI_AML_OT_DATAREGION,
+	ACPI_AML_OT_OPREGION,
 }acpi_aml_object_type_t;
 
 typedef struct _acpi_aml_object_type_t {
@@ -218,6 +233,16 @@ typedef struct _acpi_aml_object_type_t {
 			uint32_t pblk_addr;
 			uint8_t pblk_len;
 		}processor;
+		struct {
+			char_t* signature;
+			char_t* oemid;
+			char_t* oemtableid;
+		}dataregion;
+		struct {
+			uint8_t region_space;
+			uint64_t region_offset;
+			uint64_t region_len;
+		} opregion;
 	};
 }acpi_aml_object_t;
 
@@ -295,11 +320,12 @@ CREATE_PARSER_F(byte_data);
 
 CREATE_PARSER_F(mutex);
 CREATE_PARSER_F(event);
-CREATE_PARSER_F(opregion);
+
+CREATE_PARSER_F(region);
+
 CREATE_PARSER_F(field);
 CREATE_PARSER_F(indexfield);
 CREATE_PARSER_F(bankfield);
-CREATE_PARSER_F(dataregion);
 
 CREATE_PARSER_F(fatal);
 
