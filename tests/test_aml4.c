@@ -36,6 +36,15 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 	case ACPI_AML_OT_DEVICE:
 		printf("device\n");
 		break;
+	case ACPI_AML_OT_POWERRES:
+		printf("powerres system_level=%i resource_order=%i\n", obj->powerres.system_level, obj->powerres.resource_order);
+		break;
+	case ACPI_AML_OT_PROCESSOR:
+		printf("processor procid=%i pblk_addr=0x%x pblk_len=%i\n", obj->processor.procid, obj->processor.pblk_addr, obj->processor.pblk_len);
+		break;
+	case ACPI_AML_OT_THERMALZONE:
+		printf("thermalzone\n");
+		break;
 	case ACPI_AML_OT_MUTEX:
 		printf("mutex syncflags=%i\n", obj->mutex_sync_flags);
 		break;

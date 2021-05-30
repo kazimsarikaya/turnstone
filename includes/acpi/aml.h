@@ -172,6 +172,9 @@ typedef enum {
 	ACPI_AML_OT_OPCODE_EXEC_RETURN,
 	ACPI_AML_OT_SCOPE,
 	ACPI_AML_OT_DEVICE,
+	ACPI_AML_OT_POWERRES,
+	ACPI_AML_OT_PROCESSOR,
+	ACPI_AML_OT_THERMALZONE,
 	ACPI_AML_OT_METHOD,
 	ACPI_AML_OT_EXTERNAL,
 	ACPI_AML_OT_MUTEX,
@@ -206,6 +209,15 @@ typedef struct _acpi_aml_object_type_t {
 			uint8_t object_type;
 			uint8_t arg_count;
 		} external;
+		struct {
+			uint8_t system_level;
+			uint16_t resource_order;
+		} powerres;
+		struct {
+			uint8_t procid;
+			uint32_t pblk_addr;
+			uint8_t pblk_len;
+		}processor;
 	};
 }acpi_aml_object_t;
 
@@ -285,9 +297,6 @@ CREATE_PARSER_F(mutex);
 CREATE_PARSER_F(event);
 CREATE_PARSER_F(opregion);
 CREATE_PARSER_F(field);
-CREATE_PARSER_F(processor);
-CREATE_PARSER_F(powerres);
-CREATE_PARSER_F(thermalzone);
 CREATE_PARSER_F(indexfield);
 CREATE_PARSER_F(bankfield);
 CREATE_PARSER_F(dataregion);
