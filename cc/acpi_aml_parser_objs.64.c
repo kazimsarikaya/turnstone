@@ -383,35 +383,21 @@ int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, ui
 }
 
 #ifndef ___TESTMODE
-
-int8_t acpi_aml_parse_external(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	UNUSED(consumed);
-	return -1;
-}
-int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	UNUSED(consumed);
-	return -1;
-}
-int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	UNUSED(consumed);
-	return -1;
-}
-int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	UNUSED(consumed);
-	return -1;
-}
-int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	UNUSED(consumed);
-	return -1;
-}
+UNIMPLPARSER(external);
+UNIMPLPARSER(name);
+UNIMPLPARSER(method);
+UNIMPLPARSER(one_item);
 #endif
+
+UNIMPLPARSER(mutex);
+UNIMPLPARSER(event);
+UNIMPLPARSER(opregion);
+UNIMPLPARSER(field);
+UNIMPLPARSER(device);
+UNIMPLPARSER(processor);
+UNIMPLPARSER(powerres);
+UNIMPLPARSER(thermalzone);
+UNIMPLPARSER(indexfield);
+UNIMPLPARSER(bankfield);
+UNIMPLPARSER(dataregion);
+UNIMPLPARSER(fatal);
