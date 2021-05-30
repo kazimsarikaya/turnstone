@@ -69,6 +69,7 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 	uint8_t op_code = *ctx->data;
 	uint64_t len;
 	uint64_t t_consumed = 0;
+	acpi_aml_object_t* _rev;
 
 	ctx->data++;
 	ctx->remaining--;
@@ -85,7 +86,14 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 		break;
 	case ACPI_AML_ONES:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = 0xFF;
+
+		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
+		if(_rev->number >= 0x02) {
+			obj->number = 0xFFFFFFFFFFFFFFFF;
+		} else {
+			obj->number = 0xFFFFFFFF;
+		}
+
 		break;
 	case ACPI_AML_BYTE_PREFIX:
 		obj->type = ACPI_AML_OT_NUMBER;
@@ -210,6 +218,8 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	UNUSED(data);
 	UNUSED(consumed);
 
+	uint8_t opcode = *ctx->data;
+
 	ctx->data++;
 	ctx->remaining--;
 
@@ -229,6 +239,12 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
 	memory_free(name);
 
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->type = opcode == ACPI_AML_SCOPE ? ACPI_AML_OT_SCOPE : ACPI_AML_OT_DEVICE;
+	obj->name = nomname;
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
 	uint64_t old_length = ctx->length;
 	uint64_t old_remaining = ctx->remaining;
 	char_t* old_scope_prefix = ctx->scope_prefix;
@@ -238,7 +254,6 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	ctx->scope_prefix = nomname;
 
 	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
-		memory_free(nomname);
 		return -1;
 	}
 
@@ -382,18 +397,163 @@ int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, ui
 	return 0;
 }
 
+
+
+int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	uint64_t r_consumed = 1;
+
+	ctx->data++;
+	ctx->remaining--;
+
+	r_consumed += ctx->remaining;
+	uint64_t plen = acpi_aml_parse_package_length(ctx);
+	r_consumed -= ctx->remaining;
+	r_consumed += plen;
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+	r_consumed += namelen;
+	plen -= namelen;
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+
+	uint8_t flags = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+	r_consumed++;
+	plen--;
+
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+	obj->type = ACPI_AML_OT_METHOD;
+	obj->method.arg_count = flags & 0x03;
+	obj->method.serflag = flags & 0x04;
+	obj->method.sync_level = flags >> 4;
+	obj->method.termlist_length = plen;
+	obj->method.termlist = ctx->data;
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	ctx->data += plen;
+	ctx->remaining -= plen;
+	r_consumed += plen;
+
+	if(consumed != NULL) {
+		*consumed = r_consumed;
+	}
+
+	return 0;
+}
+
+int8_t acpi_aml_parse_external(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	uint64_t t_consumed = 0;
+
+	ctx->data++;
+	ctx->remaining--;
+	t_consumed++;
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+	t_consumed += namelen;
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+	obj->type = ACPI_AML_OT_EXTERNAL;
+
+	uint8_t flags;
+
+	flags = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+	t_consumed++;
+	obj->external.object_type = flags;
+
+	flags = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+	t_consumed++;
+	obj->external.arg_count = flags;
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	if(consumed != NULL) {
+		*consumed = t_consumed;
+	}
+
+	return 0;
+}
+
+int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	uint64_t t_consumed = 0;
+
+	ctx->data++;
+	ctx->remaining--;
+	t_consumed++;
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+	t_consumed += namelen;
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+	uint8_t flags = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+	t_consumed++;
+
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+	obj->type = ACPI_AML_OT_MUTEX;
+	obj->mutex_sync_flags = flags;
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	if(consumed != NULL) {
+		*consumed = t_consumed;
+	}
+
+	return 0;
+}
+
+
 #ifndef ___TESTMODE
-UNIMPLPARSER(external);
 UNIMPLPARSER(name);
-UNIMPLPARSER(method);
 UNIMPLPARSER(one_item);
 #endif
 
-UNIMPLPARSER(mutex);
 UNIMPLPARSER(event);
 UNIMPLPARSER(opregion);
 UNIMPLPARSER(field);
-UNIMPLPARSER(device);
 UNIMPLPARSER(processor);
 UNIMPLPARSER(powerres);
 UNIMPLPARSER(thermalzone);
