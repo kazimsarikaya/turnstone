@@ -71,110 +71,55 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	return -1;
 }
 
-
-int8_t acpi_aml_parse_opcnt_0(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	uint64_t t_consumed = 1;
-
-	uint8_t oc = *ctx->data;
-	ctx->data++;
-	ctx->remaining--;
-
-	if(acpi_aml_parse_op_code_with_cnt(oc, 0, ctx, data, &t_consumed) != 0) {
-		return -1;
+#define OPCODEPARSER(num) \
+	int8_t acpi_aml_parse_opcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
+		uint64_t t_consumed = 1; \
+		uint8_t oc = *ctx->data; \
+		ctx->data++; \
+		ctx->remaining--; \
+     \
+		if(acpi_aml_parse_op_code_with_cnt(oc, num, ctx, data, &t_consumed) != 0) { \
+			return -1; \
+		} \
+     \
+		if(consumed != NULL) { \
+			*consumed = t_consumed; \
+		} \
+     \
+		return 0; \
 	}
 
-	if(consumed != NULL) {
-		*consumed = t_consumed;
+OPCODEPARSER(0);
+OPCODEPARSER(1);
+OPCODEPARSER(2);
+OPCODEPARSER(3);
+OPCODEPARSER(4);
+
+#define EXTOPCODEPARSER(num) \
+	int8_t acpi_aml_parse_extopcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
+		uint64_t t_consumed = 1; \
+		uint16_t oc = 0x5b00; \
+		uint8_t t_oc = *ctx->data; \
+		oc |= t_oc; \
+		ctx->data++; \
+		ctx->remaining--; \
+     \
+		if(acpi_aml_parse_op_code_with_cnt(oc, num, ctx, data, &t_consumed) != 0) { \
+			return -1; \
+		} \
+     \
+		if(consumed != NULL) { \
+			*consumed = t_consumed; \
+		} \
+     \
+		return 0; \
 	}
 
-	return 0;
-}
-
-int8_t acpi_aml_parse_opcnt_1(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	uint64_t t_consumed = 1;
-
-	uint8_t oc = *ctx->data;
-	ctx->data++;
-	ctx->remaining--;
-
-	if(acpi_aml_parse_op_code_with_cnt(oc, 1, ctx, data, &t_consumed) != 0) {
-		return -1;
-	}
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return 0;
-}
-
-int8_t acpi_aml_parse_opcnt_2(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	uint64_t t_consumed = 1;
-
-	uint8_t oc = *ctx->data;
-	ctx->data++;
-	ctx->remaining--;
-
-	if(acpi_aml_parse_op_code_with_cnt(oc, 2, ctx, data, &t_consumed) != 0) {
-		return -1;
-	}
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return 0;
-}
-
-int8_t acpi_aml_parse_opcnt_3(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	uint64_t t_consumed = 1;
-
-	uint8_t oc = *ctx->data;
-	ctx->data++;
-	ctx->remaining--;
-
-	if(acpi_aml_parse_op_code_with_cnt(oc, 3, ctx, data, &t_consumed) != 0) {
-		return -1;
-	}
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-
-	return 0;
-}
-
-int8_t acpi_aml_parse_opcnt_4(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	uint64_t t_consumed = 1;
-
-	uint8_t oc = *ctx->data;
-	ctx->data++;
-	ctx->remaining--;
-
-	if(acpi_aml_parse_op_code_with_cnt(oc, 4, ctx, data, &t_consumed) != 0) {
-		return -1;
-	}
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-
-	return 0;
-}
-
-int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	uint64_t t_consumed = 0;
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return -1;
-}
+EXTOPCODEPARSER(0);
+EXTOPCODEPARSER(1);
+EXTOPCODEPARSER(2);
+EXTOPCODEPARSER(4);
+EXTOPCODEPARSER(6);
 
 int8_t acpi_aml_parse_logic_ext(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	UNUSED(data);
@@ -210,50 +155,8 @@ int8_t acpi_aml_parse_logic_ext(acpi_aml_parser_context_t* ctx, void** data, uin
 	return -1;
 }
 
-int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	uint64_t t_consumed = 0;
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return -1;
-}
-
-int8_t acpi_aml_parse_op_else(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	uint64_t t_consumed = 0;
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return -1;
-}
-
-int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	uint64_t t_consumed = 0;
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return -1;
-}
-
-int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	uint64_t t_consumed = 0;
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return -1;
-}
+UNIMPLPARSER(op_match);
+UNIMPLPARSER(op_if);
+UNIMPLPARSER(op_else);
+UNIMPLPARSER(op_while);
+UNIMPLPARSER(create_field);

@@ -50,21 +50,6 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 	printf("totoal syms %i\n", item_count );;
 }
 
-
-
-
-int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	UNUSED(data);
-	UNUSED(ctx);
-	uint64_t t_consumed = 0;
-
-	if(consumed != NULL) {
-		*consumed = t_consumed;
-	}
-
-	return -1;
-}
-
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
 	UNUSED(ctx);
 	UNUSED(opcode);

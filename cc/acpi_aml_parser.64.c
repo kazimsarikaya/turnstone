@@ -133,3 +133,60 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 
 	return 0;
 }
+
+acpi_aml_parse_f acpi_aml_parse_extfs[] = {
+	PARSER_F_NAME(mutex), // 0x01 -> 0
+	PARSER_F_NAME(event),
+	PARSER_F_NAME(extopcnt_2), //0x12 -> 2
+	PARSER_F_NAME(extopcnt_4),
+	PARSER_F_NAME(extopcnt_6), //0x1F -> 4
+	PARSER_F_NAME(extopcnt_2),
+	PARSER_F_NAME(extopcnt_1),
+	PARSER_F_NAME(extopcnt_1),
+	PARSER_F_NAME(extopcnt_2),
+	PARSER_F_NAME(extopcnt_1),
+	PARSER_F_NAME(extopcnt_2),
+	PARSER_F_NAME(extopcnt_1),
+	PARSER_F_NAME(extopcnt_1),
+	PARSER_F_NAME(extopcnt_2),
+	PARSER_F_NAME(extopcnt_2),
+	PARSER_F_NAME(extopcnt_0), // 0x30 -> 15
+	PARSER_F_NAME(extopcnt_0),
+	PARSER_F_NAME(fatal),
+	PARSER_F_NAME(extopcnt_0),
+	PARSER_F_NAME(opregion), // 0x80 -> 19
+	PARSER_F_NAME(field),
+	PARSER_F_NAME(device),
+	PARSER_F_NAME(processor),
+	PARSER_F_NAME(powerres),
+	PARSER_F_NAME(thermalzone),
+	PARSER_F_NAME(indexfield),
+	PARSER_F_NAME(bankfield),
+	PARSER_F_NAME(dataregion),
+};
+
+
+int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	uint64_t t_consumed = 0;
+	uint64_t r_consumed = 1;
+
+	ctx->data++;
+	ctx->remaining--;
+
+	uint8_t ext_opcode = *ctx->data;
+
+	uint8_t idx = acpi_aml_get_index_of_extended_code(ext_opcode);
+
+	acpi_aml_parse_f parser = acpi_aml_parse_extfs[idx];
+	if(parser(ctx, data, &t_consumed) != 0) {
+		return -1;
+	}
+
+	r_consumed += t_consumed;
+
+	if(consumed != NULL) {
+		*consumed = r_consumed;
+	}
+
+	return -1;
+}

@@ -103,25 +103,30 @@
 #define ACPI_AML_EVENT               0x02
 #define ACPI_AML_CONDREF             0x12
 #define ACPI_AML_ARBFIELD            0x13
+#define ACPI_AML_LOADTABLE           0x1F
+#define ACPI_AML_LOAD                0x20
+#define ACPI_AML_STALL               0x21
 #define ACPI_AML_SLEEP               0x22
 #define ACPI_AML_ACQUIRE             0x23
-#define ACPI_AML_RELEASE             0x27
 #define ACPI_AML_SIGNAL              0x24
 #define ACPI_AML_WAIT                0x25
 #define ACPI_AML_RESET               0x26
 #define ACPI_AML_FROM_BCD            0x28
+#define ACPI_AML_RELEASE             0x27
 #define ACPI_AML_TO_BCD              0x29
 #define ACPI_AML_REVISION            0x30
 #define ACPI_AML_DEBUG               0x31
 #define ACPI_AML_FATAL               0x32
+#define ACPI_AML_TIMER               0x33
 #define ACPI_AML_OPREGION            0x80
 #define ACPI_AML_FIELD               0x81
 #define ACPI_AML_DEVICE              0x82
 #define ACPI_AML_PROCESSOR           0x83
-#define ACPI_AML_POWER_RES           0x84
+#define ACPI_AML_POWERRES            0x84
 #define ACPI_AML_THERMALZONE         0x85
 #define ACPI_AML_INDEXFIELD          0x86  // ACPI spec v5.0 section 19.5.60
 #define ACPI_AML_BANKFIELD           0x87
+#define ACPI_AML_DATAREGION          0x88
 
 // Field Access Type
 #define ACPI_AML_FIELD_ANY_ACCESS    0x00
@@ -217,6 +222,7 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
+uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
 
 // parser methods
 CREATE_PARSER_F(one_item);
@@ -255,5 +261,34 @@ CREATE_PARSER_F(external);
 CREATE_PARSER_F(symbol);
 
 CREATE_PARSER_F(byte_data);
+
+CREATE_PARSER_F(mutex);
+CREATE_PARSER_F(event);
+CREATE_PARSER_F(opregion);
+CREATE_PARSER_F(field);
+CREATE_PARSER_F(device);
+CREATE_PARSER_F(processor);
+CREATE_PARSER_F(powerres);
+CREATE_PARSER_F(thermalzone);
+CREATE_PARSER_F(indexfield);
+CREATE_PARSER_F(bankfield);
+CREATE_PARSER_F(dataregion);
+
+CREATE_PARSER_F(fatal);
+
+CREATE_PARSER_F(extopcnt_0);
+CREATE_PARSER_F(extopcnt_1);
+CREATE_PARSER_F(extopcnt_2);
+CREATE_PARSER_F(extopcnt_4);
+CREATE_PARSER_F(extopcnt_6);
+
+
+#define UNIMPLPARSER(name) \
+	int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
+		UNUSED(data); \
+		UNUSED(ctx); \
+		UNUSED(consumed); \
+		return -1; \
+	}
 
 #endif

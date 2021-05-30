@@ -194,3 +194,19 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 	}
 	return 0;
 }
+
+uint8_t acpi_aml_get_index_of_extended_code(uint8_t code) {
+	if(code >= 0x80) {
+		return code - 0x6d;
+	}
+	if(code >= 0x30) {
+		return code - 0x21;
+	}
+	if(code >= 0x1f) {
+		return code - 0x1b;
+	}
+	if(code >= 0x12) {
+		return code - 0x10;
+	}
+	return code - 0x01;
+}
