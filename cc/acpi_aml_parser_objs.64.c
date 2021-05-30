@@ -219,30 +219,77 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	UNUSED(consumed);
 
 	uint8_t opcode = *ctx->data;
-
 	ctx->data++;
 	ctx->remaining--;
+
+	acpi_aml_object_type_t obj_type;
+
+	switch (opcode) {
+	case ACPI_AML_SCOPE:
+		obj_type = ACPI_AML_OT_SCOPE;
+		break;
+	case ACPI_AML_DEVICE:
+		obj_type = ACPI_AML_OT_DEVICE;
+		break;
+	case ACPI_AML_POWERRES:
+		obj_type = ACPI_AML_OT_POWERRES;
+		break;
+	case ACPI_AML_PROCESSOR:
+		obj_type = ACPI_AML_OT_PROCESSOR;
+		break;
+	case ACPI_AML_THERMALZONE:
+		obj_type = ACPI_AML_OT_THERMALZONE;
+		break;
+	default:
+		return -1;
+	}
+
 
 	uint64_t pkglen = acpi_aml_parse_package_length(ctx);
 
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 
-	pkglen -= namelen;
-
 	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	int64_t tmp_start = ctx->remaining;
 
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free(name);
 		return -1;
 	}
 
+	pkglen -= (tmp_start - ctx->remaining);
+
 	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
 	memory_free(name);
 
 	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
 
-	obj->type = opcode == ACPI_AML_SCOPE ? ACPI_AML_OT_SCOPE : ACPI_AML_OT_DEVICE;
+	obj->type = obj_type;
 	obj->name = nomname;
+
+
+	if(obj_type == ACPI_AML_OT_POWERRES) {
+		obj->powerres.system_level = *ctx->data;
+		ctx->data++;
+		ctx->remaining--;
+		obj->powerres.resource_order = *((uint16_t*)ctx->data);
+		ctx->data += 2;
+		ctx->remaining -= 2;
+		pkglen -= 3;
+	} else if(obj_type == ACPI_AML_OT_PROCESSOR) {
+		obj->processor.procid = *ctx->data;
+		ctx->data++;
+		ctx->remaining--;
+		obj->processor.pblk_addr = *((uint32_t*)ctx->data);
+		ctx->data += 4;
+		ctx->remaining -= 4;
+		obj->processor.pblk_len = *ctx->data;
+		ctx->data++;
+		ctx->remaining--;
+		pkglen -= 6;
+	}
+
 	acpi_aml_add_obj_to_symboltable(ctx, obj);
 
 	uint64_t old_length = ctx->length;
@@ -554,9 +601,6 @@ UNIMPLPARSER(one_item);
 UNIMPLPARSER(event);
 UNIMPLPARSER(opregion);
 UNIMPLPARSER(field);
-UNIMPLPARSER(processor);
-UNIMPLPARSER(powerres);
-UNIMPLPARSER(thermalzone);
 UNIMPLPARSER(indexfield);
 UNIMPLPARSER(bankfield);
 UNIMPLPARSER(dataregion);

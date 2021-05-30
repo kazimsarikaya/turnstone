@@ -157,9 +157,9 @@ acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(opregion), // 0x80 -> 19
 	PARSER_F_NAME(field),
 	PARSER_F_NAME(scope),
-	PARSER_F_NAME(processor),
-	PARSER_F_NAME(powerres),
-	PARSER_F_NAME(thermalzone),
+	PARSER_F_NAME(scope),
+	PARSER_F_NAME(scope),
+	PARSER_F_NAME(scope),
 	PARSER_F_NAME(indexfield),
 	PARSER_F_NAME(bankfield),
 	PARSER_F_NAME(dataregion),
