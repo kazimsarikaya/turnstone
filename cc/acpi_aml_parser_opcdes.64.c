@@ -112,7 +112,6 @@ EXTOPCODEPARSER(6);
 
 int8_t acpi_aml_parse_logic_ext(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	UNUSED(data);
-	UNUSED(ctx);
 	uint64_t t_consumed = 0;
 	uint16_t oc = 0;
 
@@ -141,12 +140,124 @@ int8_t acpi_aml_parse_logic_ext(acpi_aml_parser_context_t* ctx, void** data, uin
 		*consumed = t_consumed;
 	}
 
-	return -1;
+	return 0;
+}
+
+int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	uint64_t t_consumed = 0;
+	uint64_t r_consumed = 1;
+	uint64_t plen;
+
+	ctx->data++;
+	ctx->remaining--;
+
+	r_consumed += ctx->remaining;
+	plen = acpi_aml_parse_package_length(ctx);
+	r_consumed -= ctx->remaining;
+	r_consumed += plen;
+
+	t_consumed = 0;
+	acpi_aml_object_t* predic = memory_malloc(sizeof(acpi_aml_object_t));
+
+	if(acpi_aml_parse_one_item(ctx, (void**)&predic, &t_consumed) != 0) {
+		memory_free(predic);
+		return -1;
+	}
+
+	plen -= t_consumed;
+
+	uint64_t res = acpi_aml_cast_as_integer(predic);
+
+	if(res != 0) {
+
+		uint64_t old_length = ctx->length;
+		uint64_t old_remaining = ctx->remaining;
+
+		ctx->length = plen;
+		ctx->remaining = plen;
+
+		if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
+			return -1;
+		}
+
+		ctx->length = old_length;
+		ctx->remaining = old_remaining - plen;
+
+	} else { // discard if part
+		ctx->data += plen;
+		ctx->remaining -= plen;
+	}
+
+	if(*ctx->data == ACPI_AML_ELSE) {
+		if(res != 0) { // discard else when if executed
+			// pop else op code
+			ctx->data++;
+			ctx->remaining--;
+			r_consumed++;
+
+			r_consumed += ctx->remaining;
+			plen = acpi_aml_parse_package_length(ctx);
+			r_consumed -= ctx->remaining;
+			r_consumed += plen;
+
+			// discard else part
+			ctx->data += plen;
+			ctx->remaining -= plen;
+		} else { // parse else part
+			t_consumed = 0;
+			if(acpi_aml_parse_op_else(ctx, data, &t_consumed) != 0) {
+				return -1;
+			}
+			r_consumed += t_consumed;
+		}
+	}
+
+	if(consumed != NULL) {
+		*consumed = r_consumed;
+	}
+
+	return 0;
+}
+
+int8_t acpi_aml_parse_op_else(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	uint64_t r_consumed = 1;
+	uint64_t plen;
+
+	ctx->data++;
+	ctx->remaining--;
+
+	r_consumed += ctx->remaining;
+	plen = acpi_aml_parse_package_length(ctx);
+	r_consumed -= ctx->remaining;
+	r_consumed += plen;
+
+
+
+	uint64_t old_length = ctx->length;
+	uint64_t old_remaining = ctx->remaining;
+
+	ctx->length = plen;
+	ctx->remaining = plen;
+
+	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
+		return -1;
+	}
+
+	ctx->length = old_length;
+	ctx->remaining = old_remaining - plen;
+
+
+	if(consumed != NULL) {
+		*consumed = r_consumed;
+	}
+
+	return 0;
 }
 
 UNIMPLPARSER(fatal);
 UNIMPLPARSER(op_match);
 
-UNIMPLPARSER(op_if);
-UNIMPLPARSER(op_else);
+
 UNIMPLPARSER(op_while);
