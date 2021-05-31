@@ -256,8 +256,171 @@ int8_t acpi_aml_parse_op_else(acpi_aml_parser_context_t* ctx, void** data, uint6
 	return 0;
 }
 
-UNIMPLPARSER(fatal);
-UNIMPLPARSER(op_match);
+int8_t acpi_aml_parse_fatal(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	UNUSED(consumed);
+
+	ctx->data++;
+	ctx->remaining--;
+
+	// get fatal type 1 byte
+	ctx->fatal_error.type = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+
+	// get fatal code 4 byte
+	ctx->fatal_error.type = *((uint32_t*)(ctx->data));
+	ctx->data += 4;
+	ctx->remaining -= 4;
+
+	acpi_aml_object_t* arg = memory_malloc(sizeof(acpi_aml_object_t));
+
+	if(acpi_aml_parse_one_item(ctx, (void**)&arg, NULL) != 0) {
+		memory_free(arg);
+		return -1;
+	}
+
+	ctx->fatal_error.arg = acpi_aml_cast_as_integer(arg);
+	ctx->flags.fatal = 1;
+
+	return -1; // fatal always -1 because it is fatal :)
+}
+
+int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	uint64_t r_consumed = 1;
+	uint64_t t_consumed = 0;
+	int8_t res = -1;
 
 
-UNIMPLPARSER(op_while);
+	apci_aml_opcode_t* opcode = memory_malloc(sizeof(apci_aml_opcode_t));
+	opcode->opcode = *ctx->data;
+	opcode->operand_count = 6;
+
+	ctx->data++;
+	ctx->remaining--;
+
+	uint8_t idx = 0;
+
+	for(uint8_t i = 0; i < 2; i++) {
+		acpi_aml_object_t* op = memory_malloc(sizeof(acpi_aml_object_t));
+		t_consumed = 0;
+		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
+			if(op->refcount == 0) {
+				memory_free(op);
+			}
+			return -1;
+		}
+		r_consumed += t_consumed;
+		opcode->operands[idx++] = op;
+
+		acpi_aml_object_t* moc = memory_malloc(sizeof(acpi_aml_object_t));
+		t_consumed = 0;
+		if(acpi_aml_parse_byte_data(ctx, (void**)&moc, &t_consumed) != 0) {
+			memory_free(moc);
+			return -1;
+		}
+		r_consumed += t_consumed;
+		opcode->operands[idx++] = moc;
+	}
+
+	for(uint8_t i = 0; i < 2; i++) {
+		acpi_aml_object_t* op = memory_malloc(sizeof(acpi_aml_object_t));
+		t_consumed = 0;
+		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
+			if(op->refcount == 0) {
+				memory_free(op);
+			}
+			return -1;
+		}
+		r_consumed += t_consumed;
+		opcode->operands[idx++] = op;
+	}
+
+
+	if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
+		goto cleanup;
+	}
+
+	if(data != NULL) {
+		acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
+		resobj->type = ACPI_AML_OT_OPCODE_EXEC_RETURN;
+		resobj->opcode_exec_return = opcode->return_obj;
+	}
+
+	if(consumed != NULL) {
+		*consumed += r_consumed;
+	}
+
+	res = 0;
+
+cleanup:
+
+	for(uint8_t i = 0; i < idx; i++) {
+		if(opcode->operands[i] != NULL && opcode->operands[i]->refcount == 0) {
+			memory_free(opcode->operands[i]);
+		}
+	}
+	memory_free(opcode);
+
+	return res;
+}
+
+int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	uint64_t t_consumed = 0;
+	uint64_t r_consumed = 1;
+	uint64_t plen;
+
+	ctx->data++;
+	ctx->remaining--;
+
+	r_consumed += ctx->remaining;
+	plen = acpi_aml_parse_package_length(ctx);
+	r_consumed -= ctx->remaining;
+	r_consumed += plen;
+
+	t_consumed = 0;
+	acpi_aml_object_t* predic = memory_malloc(sizeof(acpi_aml_object_t));
+
+	if(acpi_aml_parse_one_item(ctx, (void**)&predic, &t_consumed) != 0) {
+		memory_free(predic);
+		return -1;
+	}
+
+	plen -= t_consumed;
+
+
+	uint64_t old_length = ctx->length;
+	uint64_t next_remaining = ctx->remaining - plen;
+
+	uint8_t* old_data = ctx->data;
+	uint8_t* next_data = old_data + plen;
+
+
+	while(acpi_aml_cast_as_integer(predic) != 0) {
+		ctx->length = plen;
+		ctx->remaining = plen;
+		ctx->data = old_data;
+
+		int8_t res = acpi_aml_parse_all_items(ctx, NULL, NULL);
+
+		if(res == -1) {
+			if(ctx->flags.while_break == 1) {
+				ctx->flags.while_break = 0;
+				break; // while loop ended
+			}
+			return -1; // error at parsing
+		}
+	}
+
+	ctx->length = old_length;
+	ctx->remaining = next_remaining;
+	ctx->data = next_data;
+
+
+	if(consumed != NULL) {
+		*consumed += r_consumed;
+	}
+
+	return 0;
+}

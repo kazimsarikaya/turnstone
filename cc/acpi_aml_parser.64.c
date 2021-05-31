@@ -134,6 +134,86 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 	return 0;
 }
 
+int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+#ifdef ___TESTMODE
+	printf("scope: -%s- one_item data: 0x%02x length: %li remaining: %li\n", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+#endif
+
+	int8_t res = -1;
+	if (*ctx->data != NULL && acpi_aml_is_namestring_start(ctx->data) == 0) {
+		res = acpi_aml_parse_symbol(ctx, data, consumed);
+	} else {
+		acpi_aml_parse_f parser = acpi_aml_parse_fs[*ctx->data];
+		if( parser == NULL ) {
+
+#ifdef ___TESTMODE
+			printf("null parser %02x %02x %02x %02x\n", *ctx->data, *(ctx->data + 1), *(ctx->data + 2), *(ctx->data + 3));
+#endif
+
+			res = -1;
+		}else {
+			res = parser(ctx, data, consumed);
+		}
+	}
+
+#ifdef ___TESTMODE
+	printf("one item completed\n");
+#endif
+
+	return res;
+}
+
+int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	uint64_t t_consumed = 0;
+	uint64_t r_consumed = 0;
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	int64_t tmp_start = ctx->remaining;
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+	r_consumed += (tmp_start - ctx->remaining);
+
+
+	acpi_aml_object_t* tmp_obj = acpi_aml_symbol_lookup(ctx, name);
+
+	if(tmp_obj == NULL) {
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+		tmp_obj->name = nomname;
+		tmp_obj->type = ACPI_AML_OT_RUNTIMEREF;
+	}
+
+	memory_free(name);
+
+	tmp_obj->refcount++;
+
+	if(tmp_obj->type == ACPI_AML_OT_METHOD) { // TODO: external if it is method
+		t_consumed = 0;
+
+		if(acpi_aml_parse_op_code_with_cnt(ACPI_AML_METHODCALL, tmp_obj->method.arg_count, ctx, data, &t_consumed, tmp_obj) != 0) {
+			return -1;
+		}
+
+		r_consumed += t_consumed;
+	} else {
+		if(data != NULL) {
+			*data = (void*)tmp_obj;
+		} else {
+			return -1;
+		}
+	}
+
+	if(consumed != NULL) {
+		*consumed += r_consumed;
+	}
+
+	return 0;
+}
+
 acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(mutex), // 0x01 -> 0
 	PARSER_F_NAME(event),

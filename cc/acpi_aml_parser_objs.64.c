@@ -1015,8 +1015,35 @@ int8_t acpi_aml_parse_field(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	return 0;
 }
 
+int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	UNUSED(consumed);
 
-#ifndef ___TESTMODE
-UNIMPLPARSER(name);
-UNIMPLPARSER(one_item);
-#endif
+	ctx->data++;
+	ctx->remaining--;
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+
+	if(acpi_aml_parse_one_item(ctx, (void**)&obj, NULL) != 0) {
+		memory_free(obj);
+		memory_free(nomname);
+		return -1;
+	}
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	return 0;
+}
