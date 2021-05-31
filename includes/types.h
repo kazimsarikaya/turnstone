@@ -97,5 +97,8 @@ typedef struct {
 
 #endif
 
+#ifdef ___TESTMODE
+int printf(const char* format, ...);
+#endif
 
 #endif

@@ -385,8 +385,4 @@ CREATE_PARSER_F(extopcnt_6);
 		return -1; \
 	}
 
-#ifdef ___TESTMODE
-int printf(const char* format, ...);
-#endif
-
 #endif
