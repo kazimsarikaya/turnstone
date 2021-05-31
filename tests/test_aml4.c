@@ -15,7 +15,7 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 	printf("object name=%s type=", obj->name );
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
-		printf("number value=0x%lx\n", obj->number );
+		printf("number value=0x%lx bytecnt=%i\n", obj->number.value, obj->number.bytecnt );
 		break;
 	case ACPI_AML_OT_STRING:
 		printf("string value=%s\n", obj->string );
@@ -64,6 +64,9 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 	case ACPI_AML_OT_EXTERNAL:
 		printf("external objecttype=%i argcount=%i\n", obj->external.object_type, obj->external.arg_count);
 		break;
+	case ACPI_AML_OT_FIELD:
+		printf("field related_object=%s offset=0x%lx sizeasbit=%i\n", obj->field.related_object->name, obj->field.offset, obj->field.sizeasbit);
+		break;
 	default:
 		printf("unknown object\n");
 	}
@@ -87,7 +90,7 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
 	UNUSED(ctx);
 	UNUSED(opcode);
-	printf("exec opcode\n");
+	printf("exec opcode 0x%04x\n", opcode->opcode);
 	return -1;
 }
 
@@ -129,36 +132,50 @@ int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t
 
 int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	uint64_t t_consumed = 0;
+	uint64_t r_consumed = 0;
 
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
 
+	int64_t tmp_start = ctx->remaining;
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free(name);
 		return -1;
 	}
+	r_consumed += (tmp_start - ctx->remaining);
 
-	//TODO: some symbols may be avail at runtime
+
 	acpi_aml_object_t* tmp_obj = acpi_aml_symbol_lookup(ctx, name);
+
 	if(tmp_obj == NULL) {
-		memory_free(name);
-		return -1;
+		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+		tmp_obj->name = nomname;
+		tmp_obj->type = ACPI_AML_OT_RUNTIMEREF;
 	}
+
+	memory_free(name);
+
 	tmp_obj->refcount++;
 
-	if(*data != NULL) {
-		*data = (void*)tmp_obj;
+	if(tmp_obj->type == ACPI_AML_OT_METHOD) { // TODO: external if it is method
+		t_consumed = 0;
+
+		if(acpi_aml_parse_op_code_with_cnt(ACPI_AML_METHODCALL, tmp_obj->method.arg_count, ctx, data, &t_consumed, tmp_obj) != 0) {
+			return -1;
+		}
+
+		r_consumed += t_consumed;
 	} else {
-		return -1;
+		if(data != NULL) {
+			*data = (void*)tmp_obj;
+		} else {
+			return -1;
+		}
 	}
 
-	// TODO: method call has params
-
-	t_consumed = namelen;
-
-
 	if(consumed != NULL) {
-		*consumed = t_consumed;
+		*consumed += r_consumed;
 	}
 
 	return 0;
@@ -173,6 +190,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 		acpi_aml_parse_f parser = acpi_aml_parse_fs[*ctx->data];
 		if( parser == NULL ) {
 			print_error("null parser\n");
+			printf("%02x %02x %02x %02x\n", *ctx->data, *(ctx->data + 1), *(ctx->data + 2), *(ctx->data + 3));
 			res = -1;
 		}else {
 			res = parser(ctx, data, consumed);

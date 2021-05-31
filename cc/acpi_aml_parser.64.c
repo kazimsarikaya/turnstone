@@ -138,7 +138,7 @@ acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(mutex), // 0x01 -> 0
 	PARSER_F_NAME(event),
 	PARSER_F_NAME(extopcnt_2), //0x12 -> 2
-	PARSER_F_NAME(extopcnt_4),
+	PARSER_F_NAME(create_field),
 	PARSER_F_NAME(extopcnt_6), //0x1F -> 4
 	PARSER_F_NAME(extopcnt_2),
 	PARSER_F_NAME(extopcnt_1),
@@ -160,8 +160,8 @@ acpi_aml_parse_f acpi_aml_parse_extfs[] = {
 	PARSER_F_NAME(scope),
 	PARSER_F_NAME(scope),
 	PARSER_F_NAME(scope),
-	PARSER_F_NAME(indexfield),
-	PARSER_F_NAME(bankfield),
+	PARSER_F_NAME(field),
+	PARSER_F_NAME(field),
 	PARSER_F_NAME(region),
 };
 

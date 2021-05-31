@@ -9,7 +9,7 @@
 int64_t acpi_aml_cast_as_integer(acpi_aml_object_t* obj){
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
-		return obj->number;
+		return obj->number.value;
 	case ACPI_AML_OT_STRING:
 		return atoi(obj->string);
 	case ACPI_AML_OT_BUFFER:
@@ -94,6 +94,26 @@ int8_t acpi_aml_is_namestring_start(uint8_t* data){
 	if(acpi_aml_is_lead_name_char(data) == 0 || acpi_aml_is_root_char(data) == 0 || acpi_aml_is_parent_prefix_char(data) == 0) {
 		return 0;
 	}
+	if(*data == ACPI_AML_DUAL_PREFIX) {
+		data++;
+		for(int8_t i = 0; i < 8; i++) {
+			if(acpi_aml_is_name_char(data + i) != 0) {
+				return -1;
+			}
+		}
+		return 0;
+	}
+	if(*data == ACPI_AML_MULTI_PREFIX) {
+		data++;
+		uint8_t segcnt = *data;
+		data++;
+		for(int8_t i = 0; i < 4 * segcnt; i++) {
+			if(acpi_aml_is_name_char(data + i) != 0) {
+				return -1;
+			}
+		}
+		return 0;
+	}
 	return -1;
 }
 
@@ -152,10 +172,10 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t* ctx){
 		local_data++;
 		return res + 4 * (*local_data);
 	} else if(*local_data == ACPI_AML_ZERO) {
-		return 0;
+		return res;
 	}
 
-	return 4;
+	return res + 4;
 }
 
 acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(linkedlist_t table, char_t* prefix, char_t* symbol_name){
