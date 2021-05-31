@@ -19,6 +19,7 @@ memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
 }
 
 void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align){
+	size = size + (8 - (size % 8));
 	if(heap == NULL) {
 		return memory_heap_default->malloc(memory_heap_default, size, align);
 	}else {
@@ -38,6 +39,44 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 	for(size_t i = 0; i < size; i++) {
 		((uint8_t*)address)[i] = value;
 	}
+	return 0;
+}
+
+int8_t memory_memclean(void* address, size_t size){
+	uint8_t* t_addr = (uint8_t*)address;
+
+	size_t max_regsize = sizeof(size_t);
+
+	size_t start = (size_t)address;
+
+	size_t rem = start % max_regsize;
+	if(rem != 0) {
+		rem = max_regsize - rem;
+
+		for(size_t i = 0; i < rem; i++) {
+			*t_addr++ = 0;
+			size--;
+		}
+	}
+
+	size_t* st_addr = (size_t*)t_addr;
+
+	size_t rep = size / max_regsize;
+
+	for(size_t i = 0; i < rep; i++) {
+		*st_addr++ = 0;
+	}
+
+	rem = size % max_regsize;
+
+	if(rem > 0) {
+		t_addr = (uint8_t*)st_addr;
+
+		for(size_t i = 0; i < rem; i++) {
+			*t_addr++ = 0;
+		}
+	}
+
 	return 0;
 }
 

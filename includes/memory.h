@@ -75,8 +75,14 @@ int8_t memory_free_ext(struct memory_heap* heap, void* address);
  * @return 0
  */
 int8_t memory_memset(void* address, uint8_t value, size_t size);
-/*! calls memory_memset with data value as NULL */
-#define memory_memclean(addr, s) memory_memset(addr, NULL, s)
+
+/**
+ * @brief zeros memory
+ * @param[in]  address the address to be zerod.
+ * @param[in] size    repeat count
+ * @return 0
+ */
+int8_t memory_memclean(void* address, size_t size);
 
 /**
  * @brief copy source to destination with length bytes from source
