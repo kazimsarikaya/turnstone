@@ -2,7 +2,7 @@ CC = gcc
 LD = ld
 CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
 	-Os -nostdlib -ffreestanding -c -m64 \
-	-D___TESTMODE=1
+	-D___TESTMODE=1 -g
 LDFLAGS = -macosx_version_min 10.15 -lSystem
 
 OUTPUT = ../output
