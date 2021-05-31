@@ -189,6 +189,15 @@ typedef struct {
 	char_t* scope_prefix;
 	linkedlist_t symbols;
 	linkedlist_t local_symbols;
+	struct {
+		uint8_t type;
+		uint32_t code;
+		uint64_t arg;
+	} fatal_error;
+	struct {
+		uint8_t while_break;
+		uint8_t fatal;
+	} flags;
 }acpi_aml_parser_context_t;
 
 
