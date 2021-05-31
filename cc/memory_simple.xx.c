@@ -76,6 +76,10 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		heap_start = start;
 		heap_end = end;
 	}
+
+	uint8_t* t_start = (uint8_t*)heap_start;
+	memory_memclean(t_start, heap_end - heap_start);
+
 	memory_heap_t* heap = (memory_heap_t*)(heap_start);
 	size_t metadata_start = heap_start + sizeof(memory_heap_t);
 	heapinfo_t* metadata = (heapinfo_t*)(metadata_start);
@@ -163,7 +167,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		// fix right empty area
 		if(right_diff > 0) {
 			heapinfo_t* tmp2 = tmp->next;
-			memory_memclean(tmp, sizeof(heapinfo_t));
+			//memory_memclean(tmp, sizeof(heapinfo_t));
 			hi_r = (heapinfo_t*)(aligned_addr + size);
 			hi_r->magic = HEAP_INFO_MAGIC;
 			hi_r->padding = HEAP_INFO_PADDING;
@@ -184,7 +188,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		} else {
 			//store hi prev to rebuild hi aka hi_a if needed
 			heapinfo_t* hi_prev = hi->previous;
-			memory_memclean(hi, sizeof(heapinfo_t));
+			//memory_memclean(hi, sizeof(heapinfo_t));
 			hi_a->previous = hi_prev;
 			hi_prev->next = hi_a;
 		}
@@ -194,11 +198,11 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		hi_a->padding = HEAP_INFO_PADDING;
 		hi_a->flags = HEAP_INFO_FLAG_USED;
 
-		memory_memclean((uint8_t*)aligned_addr, size);
+		//memory_memclean((uint8_t*)aligned_addr, size);
 		return (uint8_t*)aligned_addr;
 	} else {
 		hi->flags |= HEAP_INFO_FLAG_USED;
-		memory_memclean(hi + 1, size);
+		//memory_memclean(hi + 1, size);
 		return hi + 1;
 	}
 }
