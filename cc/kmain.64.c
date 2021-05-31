@@ -3,9 +3,12 @@
 #include <video.h>
 #include <memory.h>
 #include <memory/paging.h>
+#include <memory/mmap.h>
+#include <systeminfo.h>
 #include <strings.h>
 #include <cpu/interrupt.h>
 #include <acpi.h>
+#include <acpi/aml.h>
 #include <pci.h>
 #include <iterator.h>
 #include <ports.h>
@@ -23,6 +26,22 @@ uint8_t kmain64() {
 	video_clear_screen();
 	char_t* data = hello_world();
 	video_print(data);
+
+	char_t* mmap_data;
+	for(size_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
+		mmap_data = itoh(SYSTEM_INFO->mmap[i].base);
+		video_print(mmap_data);
+		memory_free(mmap_data);
+		video_print(" \0");
+		mmap_data = itoh(SYSTEM_INFO->mmap[i].length);
+		video_print(mmap_data);
+		memory_free(mmap_data);
+		video_print(" \0");
+		mmap_data = itoh(SYSTEM_INFO->mmap[i].type);
+		video_print(mmap_data);
+		memory_free(mmap_data);
+		video_print(" \n\0");
+	}
 
 	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 	if(desc == NULL) {
@@ -71,6 +90,45 @@ uint8_t kmain64() {
 		}
 		video_print("\n\0");
 
+		char_t* dsdt_addr = itoh(fadt->dsdt_address_32bit);
+		video_print(dsdt_addr);
+		memory_free(dsdt_addr);
+		video_print("\n\0");
+		memory_paging_add_page(fadt->dsdt_address_32bit, fadt->dsdt_address_32bit, MEMORY_PAGING_PAGE_TYPE_2M);
+
+		acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)((uint64_t)(fadt->dsdt_address_32bit));
+		if(acpi_validate_checksum(dsdt) == 0) {
+			video_print("dsdt ok\n\0");
+			uint64_t acpi_hs = 0x1000000;
+			uint64_t acpi_he = 0x2000000;
+			uint64_t step = 0x200000;
+			for(uint64_t i = acpi_hs; i < acpi_he; i += step) {
+				memory_paging_add_page(i, i, MEMORY_PAGING_PAGE_TYPE_2M);
+			}
+
+			memory_heap_t* acpi_heap = memory_create_heap_simple(acpi_hs, acpi_he);
+			memory_set_default_heap(acpi_heap);
+
+
+			int64_t aml_size = dsdt->length - sizeof(acpi_sdt_header_t);
+			uint8_t* aml = (uint8_t*)(dsdt + 1);
+			acpi_aml_parser_context_t* pctx = acp_aml_parser_context_create(aml, aml_size);
+			if(pctx != NULL) {
+				video_print("aml parser ctx created\n\0");
+				if(acpi_aml_parse_all_items(pctx, NULL, NULL) == 0) {
+					video_print("aml parsed\n\0");
+				} else {
+					video_print("aml not parsed\n\0");
+				}
+			} else {
+				video_print("aml parser creation failed\n\0");
+			}
+
+
+			memory_set_default_heap(heap);
+		} else {
+			video_print("dsdt not ok\n\0");
+		}
 		acpi_table_mcfg_t* mcfg = (acpi_table_mcfg_t*)acpi_get_table(desc, "MCFG");
 		if(mcfg == NULL) {
 			video_print("can not find mcfg or incorrect checksum\n\0");
@@ -148,17 +206,6 @@ uint8_t kmain64() {
 	}
 
 	video_print("tests completed!...\n\0");
-	outl(0x4048, 0x200);
-	outl(0x404C, 0xBADC0DE);
-	uint32_t test_data = 0;
-	char_t* test_str;
-	for(size_t i = 0; i <= 30; i++) {
-		outl(0x4048, 4 * i);
-		test_data = inl(0x404C);
-		test_str = itoh(test_data);
-		video_print(test_str);
-		memory_free(test_str);
-		video_print("  ");
-	}
+
 	return 0;
 }
