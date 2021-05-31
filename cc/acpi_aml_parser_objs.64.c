@@ -78,26 +78,45 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 	switch (op_code) {
 	case ACPI_AML_ZERO:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = 0;
+		obj->number.value = 0;
+
+		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
+		if(_rev->number.value >= 0x02) {
+			obj->number.bytecnt = 8;
+		} else {
+			obj->number.bytecnt = 4;
+		}
+
 		break;
 	case ACPI_AML_ONE:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = 1;
+		obj->number.value = 1;
+
+		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
+		if(_rev->number.value >= 0x02) {
+			obj->number.bytecnt = 8;
+		} else {
+			obj->number.bytecnt = 4;
+		}
+
 		break;
 	case ACPI_AML_ONES:
 		obj->type = ACPI_AML_OT_NUMBER;
 
 		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
-		if(_rev->number >= 0x02) {
-			obj->number = 0xFFFFFFFFFFFFFFFF;
+		if(_rev->number.value >= 0x02) {
+			obj->number.value = 0xFFFFFFFFFFFFFFFF;
+			obj->number.bytecnt = 8;
 		} else {
-			obj->number = 0xFFFFFFFF;
+			obj->number.value = 0xFFFFFFFF;
+			obj->number.bytecnt = 4;
 		}
 
 		break;
 	case ACPI_AML_BYTE_PREFIX:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = *ctx->data;
+		obj->number.value = *ctx->data;
+		obj->number.bytecnt = 1;
 
 		ctx->data++;
 		ctx->remaining--;
@@ -105,7 +124,8 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 		break;
 	case ACPI_AML_WORD_PREFIX:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = *((uint16_t*)(ctx->data));
+		obj->number.value = *((uint16_t*)(ctx->data));
+		obj->number.bytecnt = 2;
 
 		ctx->data += 2;
 		ctx->remaining -= 2;
@@ -113,7 +133,8 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 		break;
 	case ACPI_AML_DWORD_PREFIX:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = *((uint32_t*)(ctx->data));
+		obj->number.value = *((uint32_t*)(ctx->data));
+		obj->number.bytecnt = 4;
 
 		ctx->data += 4;
 		ctx->remaining -= 4;
@@ -121,7 +142,8 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 		break;
 	case ACPI_AML_QWORD_PREFIX:
 		obj->type = ACPI_AML_OT_NUMBER;
-		obj->number = *((uint64_t*)(ctx->data));
+		obj->number.value = *((uint64_t*)(ctx->data));
+		obj->number.bytecnt = 8;
 
 		ctx->data += 8;
 		ctx->remaining -= 8;
@@ -155,7 +177,8 @@ int8_t acpi_aml_parse_byte_data(acpi_aml_parser_context_t* ctx, void** data, uin
 	uint64_t t_consumed = 1;
 
 	obj->type = ACPI_AML_OT_NUMBER;
-	obj->number = *ctx->data;
+	obj->number.value = *ctx->data;
+	obj->number.bytecnt = 1;
 
 	ctx->data++;
 	ctx->remaining--;
@@ -449,6 +472,7 @@ int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, ui
 int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	UNUSED(data);
 	uint64_t r_consumed = 1;
+	uint64_t t_consumed = 0;
 
 	ctx->data++;
 	ctx->remaining--;
@@ -461,12 +485,17 @@ int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
 
+
+	t_consumed = ctx->remaining;
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free(name);
 		return -1;
 	}
-	r_consumed += namelen;
-	plen -= namelen;
+
+	t_consumed -= ctx->remaining;
+	plen -= t_consumed;
+	r_consumed += t_consumed;
 
 	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
 	memory_free(name);
@@ -554,19 +583,22 @@ int8_t acpi_aml_parse_external(acpi_aml_parser_context_t* ctx, void** data, uint
 int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	UNUSED(data);
 	uint64_t t_consumed = 0;
+	uint64_t r_consumed = 0;
 
 	ctx->data++;
 	ctx->remaining--;
-	t_consumed++;
+	r_consumed++;
 
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
 
+	t_consumed = ctx->remaining;
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free(name);
 		return -1;
 	}
-	t_consumed += namelen;
+	t_consumed -= ctx->remaining;
+	r_consumed += t_consumed;
 
 	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
 	memory_free(name);
@@ -574,7 +606,7 @@ int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	uint8_t flags = *ctx->data;
 	ctx->data++;
 	ctx->remaining--;
-	t_consumed++;
+	r_consumed++;
 
 
 	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
@@ -586,7 +618,7 @@ int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	acpi_aml_add_obj_to_symboltable(ctx, obj);
 
 	if(consumed != NULL) {
-		*consumed = t_consumed;
+		*consumed = r_consumed;
 	}
 
 	return 0;
@@ -693,7 +725,7 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		obj->opregion.region_space = tmp_obj->number;
+		obj->opregion.region_space = acpi_aml_cast_as_integer(tmp_obj);
 		memory_free(tmp_obj);
 
 		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
@@ -720,13 +752,271 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 	return 0;
 }
 
+int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	UNUSED(consumed);
+
+	uint8_t access_type = ACPI_AML_FIELD_ANY_ACCESS;
+	uint8_t access_attrib = ACPI_AML_FACCATTRB_NORMAL;
+	uint8_t lock_rule = ACPI_AML_FIELD_NOLOCK;
+	uint8_t update_rule = ACPI_AML_FIELD_OVERRIDE;
+	uint64_t sizeasbit = 0;
+
+	uint8_t opcode = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+
+	switch (opcode) {
+	case ACPI_AML_ARBFIELD:
+		access_type = ACPI_AML_FIELD_BUF_ACCESS;
+		break;
+	case ACPI_AML_BITFIELD:
+		sizeasbit = 1;
+		access_type = ACPI_AML_FIELD_BIT_ACCESS;
+		break;
+	case ACPI_AML_BYTEFIELD:
+		sizeasbit = 8;
+		access_type = ACPI_AML_FIELD_BYTE_ACCESS;
+		break;
+	case ACPI_AML_WORDFIELD:
+		sizeasbit = 16;
+		access_type = ACPI_AML_FIELD_WORD_ACCESS;
+		break;
+	case ACPI_AML_DWORDFIELD:
+		sizeasbit = 32;
+		access_type = ACPI_AML_FIELD_DWORD_ACCESS;
+		break;
+	case ACPI_AML_QWORDFIELD:
+		sizeasbit = 64;
+		access_type = ACPI_AML_FIELD_QWORD_ACCESS;
+		break;
+	default:
+		return -1;
+	}
+
+	acpi_aml_object_t* buf = memory_malloc(sizeof(acpi_aml_object_t));
+	if(acpi_aml_parse_one_item(ctx, (void**)&buf, NULL) != 0) {
+		memory_free(buf);
+		return -1;
+	}
+
+	acpi_aml_object_t* offset_obj = memory_malloc(sizeof(acpi_aml_object_t));
+	if(acpi_aml_parse_one_item(ctx, (void**)&offset_obj, NULL) != 0) {
+		memory_free(buf);
+		memory_free(offset_obj);
+		return -1;
+	}
+
+	uint64_t offset = acpi_aml_cast_as_integer(offset_obj);
+
+	if(opcode == ACPI_AML_ARBFIELD) {
+		acpi_aml_object_t* size_obj = memory_malloc(sizeof(acpi_aml_object_t));
+		if(acpi_aml_parse_one_item(ctx, (void**)&size_obj, NULL) != 0) {
+			memory_free(buf);
+			memory_free(offset_obj);
+			memory_free(size_obj);
+			return -1;
+		}
+
+		sizeasbit = acpi_aml_cast_as_integer(size_obj);
+	}
+
+
+	uint64_t namelen = acpi_aml_len_namestring(ctx);
+	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+		memory_free(name);
+		return -1;
+	}
+
+	char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+	memory_free(name);
+
+	acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+	obj->name = nomname;
+	obj->type = ACPI_AML_OT_FIELD;
+	obj->field.related_object = buf;
+	obj->field.access_type = access_type;
+	obj->field.access_attrib = access_attrib;
+	obj->field.lock_rule = lock_rule;
+	obj->field.update_rule = update_rule;
+	obj->field.sizeasbit = sizeasbit;
+	obj->field.offset = offset;
+
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	return 0;
+}
+
+int8_t acpi_aml_parse_field(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	UNUSED(data);
+	UNUSED(consumed);
+	uint64_t pkglen;
+	uint64_t t_consumed;
+	acpi_aml_object_t* rel_obj = NULL;
+	acpi_aml_object_t* sel_obj = NULL;
+	acpi_aml_object_t* sel_data = NULL;
+
+	uint8_t opcode = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+
+	pkglen = acpi_aml_parse_package_length(ctx);
+
+	t_consumed = 0;
+	if(acpi_aml_parse_one_item(ctx, (void**)&rel_obj, &t_consumed) != 0) {
+		return -1;
+	}
+
+	pkglen -= t_consumed;
+
+	if(opcode == ACPI_AML_BANKFIELD || opcode == ACPI_AML_INDEXFIELD) {
+		t_consumed = 0;
+		if(acpi_aml_parse_one_item(ctx, (void**)&sel_obj, &t_consumed) != 0) {
+			return -1;
+		}
+
+		pkglen -= t_consumed;
+
+		if(opcode == ACPI_AML_BANKFIELD) {
+			t_consumed = 0;
+			if(acpi_aml_parse_one_item(ctx, (void**)&sel_data, &t_consumed) != 0) {
+				return -1;
+			}
+
+			pkglen -= t_consumed;
+		}
+	}
+
+	uint8_t flags = *ctx->data;
+	ctx->data++;
+	ctx->remaining--;
+	pkglen--;
+
+	uint8_t access_type = flags & 0x0F;
+	uint8_t access_attrib = ACPI_AML_FACCATTRB_NORMAL;
+	uint8_t lock_rule = (flags & 0x10) >> 4;
+	uint8_t update_rule = (flags & 0x60) >> 5;
+	uint64_t sizeasbit = 0;
+	uint64_t offset = 0;
+
+	while(pkglen > 0) {
+		uint8_t fieldcode = *ctx->data;
+		if(fieldcode == 0x00) {
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			t_consumed = ctx->remaining;
+			uint64_t skip = acpi_aml_parse_package_length(ctx);
+			t_consumed -= ctx->remaining;
+			pkglen -= t_consumed;
+
+			skip += t_consumed;
+
+			offset += skip;
+		} else if(fieldcode == 0x01) {
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			uint8_t at = *ctx->data;
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			access_type = at & 0x0F;
+
+			uint8_t aa = *ctx->data;
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			UNUSED(aa);
+			// TODO: parse and send remainings.
+			return -1;
+		}else if(fieldcode == 0x02) {
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+			// TODO: parse and send remainings. field references anoother field
+			return -1;
+		}else if(fieldcode == 0x03) {
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			uint8_t at = *ctx->data;
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			access_type = at & 0x0F;
+
+			uint8_t eaa = *ctx->data;
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			uint8_t al = *ctx->data;
+			ctx->data++;
+			ctx->remaining--;
+			pkglen--;
+
+			UNUSED(eaa);
+			UNUSED(al);
+			// TODO: parse and send remainings.
+			return -1;
+		} else {
+			uint64_t namelen = acpi_aml_len_namestring(ctx);
+			char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+
+			t_consumed = ctx->remaining;
+			if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
+				memory_free(name);
+				return -1;
+			}
+			t_consumed -= ctx->remaining;
+			pkglen -= t_consumed;
+
+			char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+			memory_free(name);
+
+			acpi_aml_object_t* obj = memory_malloc(sizeof(acpi_aml_object_t));
+
+			t_consumed = ctx->remaining;
+			sizeasbit = acpi_aml_parse_package_length(ctx);
+			t_consumed -= ctx->remaining;
+			pkglen -= t_consumed;
+
+			sizeasbit += t_consumed;
+
+			obj->name = nomname;
+			obj->type = ACPI_AML_OT_FIELD;
+			obj->field.related_object = rel_obj;
+			obj->field.selector_object = sel_obj;
+			obj->field.selector_data =  sel_data;
+			obj->field.access_type = access_type;
+			obj->field.access_attrib = access_attrib;
+			obj->field.lock_rule = lock_rule;
+			obj->field.update_rule = update_rule;
+			obj->field.sizeasbit = sizeasbit;
+			obj->field.offset = offset;
+
+			acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+			offset += sizeasbit;
+		}
+	}
+
+	return 0;
+}
+
 
 #ifndef ___TESTMODE
 UNIMPLPARSER(name);
 UNIMPLPARSER(one_item);
 #endif
-
-UNIMPLPARSER(field);
-UNIMPLPARSER(indexfield);
-UNIMPLPARSER(bankfield);
-UNIMPLPARSER(fatal);

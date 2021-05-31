@@ -124,7 +124,7 @@
 #define ACPI_AML_PROCESSOR           0x83
 #define ACPI_AML_POWERRES            0x84
 #define ACPI_AML_THERMALZONE         0x85
-#define ACPI_AML_INDEXFIELD          0x86  // ACPI spec v5.0 section 19.5.60
+#define ACPI_AML_INDEXFIELD          0x86
 #define ACPI_AML_BANKFIELD           0x87
 #define ACPI_AML_DATAREGION          0x88
 
@@ -134,10 +134,25 @@
 #define ACPI_AML_FIELD_WORD_ACCESS   0x02
 #define ACPI_AML_FIELD_DWORD_ACCESS  0x03
 #define ACPI_AML_FIELD_QWORD_ACCESS  0x04
-#define ACPI_AML_FIELD_LOCK          0x10
+#define ACPI_AML_FIELD_BUF_ACCESS    0x05
+#define ACPI_AML_FIELD_BIT_ACCESS    0x06 // extra def, not in acpi spec
+#define ACPI_AML_FIELD_NOLOCK        0x00
+#define ACPI_AML_FIELD_LOCK          0x01
 #define ACPI_AML_FIELD_PRESERVE      0x00
 #define ACPI_AML_FIELD_WRITE_ONES    0x01
 #define ACPI_AML_FIELD_WRITE_ZEROES  0x02
+#define ACPI_AML_FIELD_OVERRIDE      0x03 // extra def, not in acpi spec
+#define ACPI_AML_FACCATTRB_NORMAL    0x00
+#define ACPI_AML_FACCATTRB_QUICK     0x02
+#define ACPI_AML_FACCATTRB_SR        0x04 // send recive
+#define ACPI_AML_FACCATTRB_BYTE      0x06
+#define ACPI_AML_FACCATTRB_WORD      0x08
+#define ACPI_AML_FACCATTRB_BLOCK     0x0A
+#define ACPI_AML_FACCATTRB_PC        0x0C // process call
+#define ACPI_AML_FACCATTRB_BPC       0x0D // block process call
+#define ACPI_AML_FEACCATTRB_BYTES    0x0B
+#define ACPI_AML_FEACCATTRB_RBYTES   0x0E
+#define ACPI_AML_FEACCATTRB_RPC      0x0F // raw process call
 
 // Methods
 #define ACPI_AML_METHOD_ARGC_MASK    0x07
@@ -162,6 +177,8 @@
 #define ACPI_AML_OPREGT_GPIO         0x08
 #define ACPI_AML_OPREGT_GSERBUS      0x09
 #define ACPI_AML_OPREGT_PCC          0x0A
+
+#define ACPI_AML_METHODCALL          0xFE
 
 //types
 
@@ -193,25 +210,31 @@ typedef enum {
 	ACPI_AML_OT_EVENT,
 	ACPI_AML_OT_DATAREGION,
 	ACPI_AML_OT_OPREGION,
+	ACPI_AML_OT_FIELD,
+	ACPI_AML_OT_METHODCALL,
+	ACPI_AML_OT_RUNTIMEREF,
 }acpi_aml_object_type_t;
 
-typedef struct _acpi_aml_object_type_t {
+typedef struct _acpi_aml_object_t {
 	acpi_aml_object_type_t type;
 	uint64_t refcount;
 	char_t* name;
 	union {
-		uint64_t number;
+		struct {
+			uint64_t value;
+			uint8_t bytecnt;
+		}number;
 		char_t* string;
 		struct {
 			int64_t buflen;
 			uint8_t* buf;
 		} buffer;
 		struct {
-			struct _acpi_aml_object_type_t* pkglen;
+			struct _acpi_aml_object_t* pkglen;
 			linkedlist_t elements;
 		} package;
-		struct _acpi_aml_object_type_t* opcode_exec_return;
-		struct _acpi_aml_object_type_t* alias_target;
+		struct _acpi_aml_object_t* opcode_exec_return;
+		struct _acpi_aml_object_t* alias_target;
 		uint8_t mutex_sync_flags;
 		struct {
 			uint8_t arg_count;
@@ -243,13 +266,24 @@ typedef struct _acpi_aml_object_type_t {
 			uint64_t region_offset;
 			uint64_t region_len;
 		} opregion;
+		struct {
+			struct _acpi_aml_object_t* related_object;
+			struct _acpi_aml_object_t* selector_object;
+			struct _acpi_aml_object_t* selector_data;
+			uint8_t access_type;
+			uint8_t access_attrib;
+			uint8_t lock_rule;
+			uint8_t update_rule;
+			uint64_t offset;
+			uint64_t sizeasbit;
+		} field;
 	};
 }acpi_aml_object_t;
 
 typedef struct {
 	uint8_t operand_count;
 	uint16_t opcode;
-	acpi_aml_object_t* operands[6];
+	acpi_aml_object_t* operands[8];
 	acpi_aml_object_t* return_obj;
 }apci_aml_opcode_t;
 
@@ -277,6 +311,7 @@ acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
+int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_context_t*, void**, uint64_t*, acpi_aml_object_t*);
 
 acpi_aml_parser_context_t* acp_aml_parser_context_create(uint8_t*, int64_t);
 
@@ -324,15 +359,12 @@ CREATE_PARSER_F(event);
 CREATE_PARSER_F(region);
 
 CREATE_PARSER_F(field);
-CREATE_PARSER_F(indexfield);
-CREATE_PARSER_F(bankfield);
 
 CREATE_PARSER_F(fatal);
 
 CREATE_PARSER_F(extopcnt_0);
 CREATE_PARSER_F(extopcnt_1);
 CREATE_PARSER_F(extopcnt_2);
-CREATE_PARSER_F(extopcnt_4);
 CREATE_PARSER_F(extopcnt_6);
 
 
