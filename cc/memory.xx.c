@@ -19,12 +19,20 @@ memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
 }
 
 void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align){
-	size = size + (8 - (size % 8));
-	if(heap == NULL) {
-		return memory_heap_default->malloc(memory_heap_default, size, align);
-	}else {
-		return heap->malloc(heap, size, align);
+	if(size % 8) {
+		size = size + (8 - (size % 8));
 	}
+	void* res;
+	if(heap == NULL) {
+		res = memory_heap_default->malloc(memory_heap_default, size, align);
+	}else {
+		res = heap->malloc(heap, size, align);
+	}
+	if(align && ((size_t)res % align)) {
+		memory_free_ext(heap, res); // recover
+		return NULL;
+	}
+	return res;
 }
 
 int8_t memory_free_ext(struct memory_heap* heap, void* address){
