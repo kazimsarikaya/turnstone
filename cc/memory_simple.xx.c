@@ -5,7 +5,6 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
-#include <video.h>
 
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
@@ -50,10 +49,12 @@ typedef struct __heapinfo {
 	uint16_t magic; ///< magic value of heap for protection
 	uint16_t flags; ///< flags of hi
 #if ___BITS == 16
-	uint32_t size;
-	uint32_t size_padding;
+	uint32_t size; ///< size of slot
+	uint32_t size_padding1; ///< alignment padding
+	uint32_t size_padding2; ///< alignment padding
+	uint32_t size_padding3; ///< alignment padding
 #elif ___BITS == 64
-	uint64_t size;
+	uint64_t size; ///< size of slot
 #endif
 	struct __heapinfo* next; ///< next hi node
 	struct __heapinfo* previous; ///< previous hi node
@@ -198,8 +199,6 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	heapinfo_t* first_empty = simple_heap->first_empty;
 
-	printf("SMEM: starting malloc first_empty: 0x%08p\n", first_empty );
-
 	heapinfo_t* empty_hi = first_empty;
 
 	size_t a_size = size + align;
@@ -221,11 +220,11 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		}
 	}
 
+
 	size_t rem = empty_hi->size - (t_size + 1);
 
 	if(rem > 1) { // we slot should store at least one item (inclusive size)
 		// we need divide slot
-		printf("SMEM: divide slot\n");
 		heapinfo_t* empty_tmp = empty_hi + 1 + t_size;
 
 		empty_tmp->magic =  HEAP_INFO_MAGIC;
@@ -245,7 +244,6 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 		empty_hi->size = 1 + t_size;     // new slot's size 1 for include header, t_size aligned requested size
 
-		printf("SMEM ehi: 0x%08p size: 0x%08li thi: 0x08p size: 0x%08li\n", empty_hi, empty_hi->size, empty_tmp, empty_tmp->size);
 
 	} // if we not we should keep slot's original size
 
@@ -268,7 +266,6 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
 		//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
-
 		return empty_hi + 1;
 	}
 
@@ -296,7 +293,6 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	// our right side t_size * sizeof(heapinfo_t) is our size for new slot
 	heapinfo_t* hi_r = hi_a + hi_a->size;
 
-	printf("SMEM: ehi: 0x%08p hia: 0x%08p hir: 0x%08p\n", empty_hi, hi_a, hi_r);
 
 	if(empty_hi + empty_hi->size > hi_r + 1 ) {
 		// we have empty space between hi_r and end of empty_hi, let's divide it
@@ -312,18 +308,15 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		}
 
 		right_exists = 1; // set flag for setting previous of hi_r after left
-		printf("SMEM: right_exists at 0x%08p\n", hi_r );
 	}
 
 
 	// now let's look left side of hi_a, it is still empty_hi. if can contain at least one item let it go
 	if(hi_a - empty_hi > 1) {
 		// yes we have at least one area
-		printf("SMEM: left side exists at 0x%08p\n", empty_hi);
 		empty_hi->size = hi_a - empty_hi; // set its size
 
 		if(empty_hi->previous == NULL) {
-			printf("SMEM: left side update first_empty 0x%08p\n", empty_hi );
 			simple_heap->first_empty = empty_hi;
 		}
 
@@ -334,28 +327,23 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		}
 	} else {
 		// ok hi_a is a dead area
-		printf("SMEM: dead area at left\n");
 		if(right_exists) {
 			// let's link hi_r to empty_hi' previous
 			if(empty_hi->previous) {
 				hi_r->previous = empty_hi->previous;
 				hi_r->previous->next = hi_r;
 			} else { // empty_hi has not any prev so hi_r is first empty!!
-				printf("SMEM: set right to first_empty\n");
 				simple_heap->first_empty = hi_r;
 			}
 
 		} else {
 			// no right not left hence link empty_hi' prev and next
-			printf("SMEM: no left and right\n");
 			if(empty_hi->previous) {
-				printf("SMEM: link left right\n");
 				empty_hi->previous->next = empty_hi->next;
 				empty_hi->next->previous = empty_hi->previous;
 			} else { // empty_hi has not any prev so next is first empty!!
 				simple_heap->first_empty = empty_hi->next;
 				simple_heap->first_empty->previous = NULL;
-				printf("SMEM: new first_empty 0x%08p\n", simple_heap->first_empty );
 			}
 			memory_memclean(empty_hi, sizeof(heapinfo_t)); // cleanup data
 		}
@@ -365,7 +353,6 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	hi_a->flags = HEAP_INFO_FLAG_USED;
 
-	printf("addr: 0x%08lx first_empty: 0x%08lp\n", aligned_addr, simple_heap->first_empty);
 	return (uint8_t*)aligned_addr;
 
 }
