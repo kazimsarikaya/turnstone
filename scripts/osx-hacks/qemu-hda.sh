@@ -11,4 +11,5 @@ sudo qemu-system-x86_64 \
   -drive index=0,media=disk,format=raw,file=${OUTPUTDIR}/qemu-hda \
   -net nic,model=virtio,macaddr=54:54:00:55:55:55 \
   -net tap,script=${CURRENTDIR}/tap-up.sh,downscript=${CURRENTDIR}/tap-down.sh  \
-  -monitor stdio
+  -monitor stdio \
+  -serial file:${BASEDIR}/tmp/qemu-video.log
