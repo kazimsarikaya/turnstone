@@ -8,6 +8,7 @@
 #include <memory/paging.h>
 #include <acpi.h>
 #include <utils.h>
+#include <video.h>
 
 typedef struct {
 	memory_heap_t* heap;
@@ -103,61 +104,97 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 
 	for(size_t bus_group = iter_metadata->group_number; bus_group < iter_metadata->group_number_count; bus_group++) {
 		iter_metadata->group_number = bus_group;
+
 		for(size_t bus_addr = iter_metadata->bus_number;
 		    bus_addr < iter_metadata->mcfg->pci_segment_group_config[bus_group].bus_end;
 		    bus_addr++) {
 			iter_metadata->bus_number = bus_addr;
+
 			for(size_t dev_addr = iter_metadata->device_number; dev_addr < PCI_DEVICE_MAX_COUNT; dev_addr++) {
 				iter_metadata->device_number = dev_addr;
+
+				//calculate mmio address of device
 				size_t pci_mmio_addr = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | 0 << 12 );
-				memory_paging_add_page_ext(iter_metadata->heap, NULL, pci_mmio_addr, pci_mmio_addr, MEMORY_PAGING_PAGE_TYPE_4K);
+
+				// add page for it. we need access
+				if(memory_paging_add_page_ext(iter_metadata->heap, NULL, pci_mmio_addr, pci_mmio_addr, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+					printf("\nKERN: FATAL cannot add page for pci dev at %02x:%02x:%02x mmio addr: 0x%08lx\n", bus_group, bus_addr, dev_addr, pci_mmio_addr);
+
+					iter_metadata->end_of_iter = 0; //end iter
+
+					return iterator;
+				}
+
 				pci_common_header_t* pci_hdr = (pci_common_header_t*)pci_mmio_addr;
-				if(pci_hdr->vendor_id != 0xFFFF) {
-					if(check_func0 == 0) {
+
+				if(pci_hdr->vendor_id != 0xFFFF) { // look for vendor_id
+					if(check_func0 == 0) { // one/multi func check?
 						dev_found = 0;
+
 						break;
 					} else {
 						if(pci_hdr->header_type.multifunction == 1) {
 							iter_metadata->function_number++;
+
 							for(size_t func_addr = iter_metadata->function_number; func_addr < PCI_FUNCTION_MAX_COUNT; func_addr++) {
 								iter_metadata->function_number = func_addr;
+
 								size_t pci_mmio_addr_f = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
-								memory_paging_add_page_ext(iter_metadata->heap, NULL, pci_mmio_addr_f, pci_mmio_addr_f, MEMORY_PAGING_PAGE_TYPE_4K);
+
+								// add page for multi function device
+								if(memory_paging_add_page_ext(iter_metadata->heap, NULL, pci_mmio_addr_f, pci_mmio_addr_f, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+									printf("\nKERN: FATAL cannot add page for pci dev at %02x:%02x:%02x.%02x mmio addr: 0x%08lx\n", bus_group, bus_addr, dev_addr, func_addr, pci_mmio_addr_f);
+
+									iter_metadata->end_of_iter = 0; //end iter
+
+									return iterator;
+								}
+
 								pci_hdr = (pci_common_header_t*)pci_mmio_addr_f;
+
 								if(pci_hdr->vendor_id != 0xFFFF) {
 									dev_found = 0;
+
 									break;
 								} else {
+									// no def so delete page for function of device
 									memory_paging_delete_page_ext_with_heap(iter_metadata->heap, NULL, pci_mmio_addr_f, &not_used_fa);
 								}
 							}
-						}
+						} // end of one/multi check
+
 					}
-				} else {
+				} else { // no device there than delete page added for pci_mmio_addr
 					memory_paging_delete_page_ext_with_heap(iter_metadata->heap, NULL, pci_mmio_addr, &not_used_fa);
 				}
+
 				if(dev_found == 0) {
 					break;
 				} else {
 					iter_metadata->function_number = 0;
 					check_func0 = 0;
 				}
-			}
+
+			} //end of device loop
+
 			if(dev_found == 0) {
 				break;
 			} else {
 				iter_metadata->device_number = 0;
 			}
 		} // bus loop end
+
 		if(dev_found == 0) {
 			break;
 		}else if((bus_group + 1) < iter_metadata->group_number_count) {
 			iter_metadata->bus_number = iter_metadata->mcfg->pci_segment_group_config[bus_group + 1].bus_start;
 		}
-	}
+	} //end of bus group loop
+
 	if(dev_found == -1) {
 		iter_metadata->end_of_iter = 0;
 	}
+
 	return iterator;
 }
 
