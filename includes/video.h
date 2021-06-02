@@ -34,4 +34,17 @@ void video_print(char_t* string);
  */
 void video_clear_screen();
 
+/**
+ * @brief writes string to video buffer
+ * @param[in] fmt string will be writen. this string can be a format
+ * @param[in] args variable length args
+ * @return writen data chars
+ *
+ * format will be writen at current cursor position and cursor will be updated. also
+ * variable args will be converted and written with help of format
+ */
+size_t video_printf(char_t* fmt, ...);
+
+#define printf(...) video_printf(__VA_ARGS__)
+
 #endif
