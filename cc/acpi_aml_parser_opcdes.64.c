@@ -409,6 +409,10 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 				ctx->flags.while_break = 0;
 				break; // while loop ended
 			}
+			if(ctx->flags.while_cont == 1) {
+				ctx->flags.while_cont = 0;
+				continue;   // while loop restarted
+			}
 			return -1; // error at parsing
 		}
 	}

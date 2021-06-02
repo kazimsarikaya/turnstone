@@ -87,12 +87,7 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 	printf("totoal syms %i\n", item_count );;
 }
 
-int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
-	UNUSED(ctx);
-	UNUSED(opcode);
-	printf("exec opcode 0x%04x\n", opcode->opcode);
-	return -1;
-}
+
 
 uint32_t main(uint32_t argc, char_t** argv) {
 	setup_ram();
