@@ -5,6 +5,7 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <video.h>
 
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
@@ -216,6 +217,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		empty_hi = empty_hi->next;
 
 		if(empty_hi == NULL) {
+			printf("\nMEM_SIMPLE: FATAL no free slot\n");
 			return NULL;
 		}
 	}
