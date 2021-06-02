@@ -9,6 +9,7 @@
 #include <faraccess.h>
 #include <ports.h>
 #include <strings.h>
+#include <utils.h>
 
 /*! main video buffer segment */
 #define VIDEO_SEG 0xB800
@@ -112,6 +113,7 @@ size_t video_printf(char_t* fmt, ...){
 			fmt++;
 			int8_t wfmtb = 1;
 			char_t buf[257];
+			char_t ito_buf[20];
 			int32_t val = 0;
 			char_t* str;
 			int32_t slen = 0;
@@ -144,16 +146,16 @@ size_t video_printf(char_t* fmt, ...){
 				case 'i':
 				case 'd':
 					ival = va_arg(args, size_t);
-					str = itoa(ival);
-					slen = strlen(str);
+					itoa_with_buffer(ito_buf, ival);
+					slen = strlen(ito_buf);
 					for(idx = 0; idx < val - slen; idx++) {
 						buf[idx] = '0';
 						cnt++;
 					}
 					video_print(buf);
 					memory_memclean(buf, 257);
-					video_print(str);
-					memory_free(str);
+					video_print(ito_buf);
+					memory_memclean(ito_buf, 20);
 					cnt += slen;
 					fmt++;
 					break;
@@ -165,16 +167,16 @@ size_t video_printf(char_t* fmt, ...){
 				case 'x':
 				case 'h':
 					ival = va_arg(args, size_t);
-					str = itoh(ival);
-					slen = strlen(str);
+					itoh_with_buffer(ito_buf, ival);
+					slen = strlen(ito_buf);
 					for(idx = 0; idx < val - slen; idx++) {
 						buf[idx] = '0';
 						cnt++;
 					}
 					video_print(buf);
 					memory_memclean(buf, 257);
-					video_print(str);
-					memory_free(str);
+					video_print(ito_buf);
+					memory_memclean(ito_buf, 20);
 					cnt += slen;
 					fmt++;
 					break;

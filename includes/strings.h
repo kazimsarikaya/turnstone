@@ -70,15 +70,8 @@ char_t* ito_base(number_t number, number_t base);
 /*! ito_base macro for base 10 */
 #define itoa(number) ito_base(number, 10)
 
-/**
- * @brief returns hex string of number
- * @param[in]  number the nubmer to be converted into hex string
- * @return hex string value
- *
- * return value should be free or memory leak will be happened.
- * length of hex string will be 2 time then max size of number filled with zeros.
- */
-char_t* itoh(size_t number);
+/*! ito_base macro for base 10 */
+#define itoh(number) ito_base(number, 16)
 
 /**
  * @brief duplicate string at heap
