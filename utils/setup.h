@@ -14,7 +14,11 @@
 #define GREENCOLOR "\033[1;32m"
 #define RESETCOLOR "\033[0m"
 
-int printf(const char* format, ...);
+int printf(const char* format, va_list args);
+
+size_t video_printf(char_t* fmt, va_list args) {
+	return printf(fmt, args);
+}
 
 uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
