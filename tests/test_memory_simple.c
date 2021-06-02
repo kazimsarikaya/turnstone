@@ -69,15 +69,22 @@ int main(){
 	fclose(fp);
 
 	print_success("OK");
+
 	printf("testing aligned malloc\n");
+
 	uint8_t* items[10];
+
 	for(int i = 0; i < 10; i++) {
 		items[i] = memory_malloc_ext(NULL, 0x1000, 0x1000);
 		printf("0x%08lx\n", items[i] );
+		memory_free_ext(NULL, items[i]);
 	}
+
+
 	for(int i = 0; i < 10; i++) {
 		items[i] = memory_malloc_ext(NULL, 0x1000, 0x100);
 		printf("0x%08lx\n", items[i] );
+		memory_free_ext(NULL, items[i]);
 	}
 
 

@@ -198,27 +198,93 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
 
-	heapinfo_t* first_empty = simple_heap->first_empty;
+	heapinfo_t* empty_hi = simple_heap->first_empty;
 
-	heapinfo_t* empty_hi = first_empty;
-
-	size_t a_size = size + align;
+	size_t a_size = size;
 	size_t t_size =  a_size / sizeof(heapinfo_t);
 	if ((a_size % sizeof(heapinfo_t)) != 0) {
 		t_size++;
 	}
 
+	empty_hi = simple_heap->first_empty;
+
 	//find first empty and enough slot
 	while(1) { // size enough?
-		if(empty_hi->size >= (t_size + 1)) {
-			break;
+		if(align) {
+			if(empty_hi->size == (t_size + 1)) {
+				break;
+			}
+		} else {
+			if(empty_hi->size >= (t_size + 1)) {
+				break;
+			}
 		}
 
 		empty_hi = empty_hi->next;
 
 		if(empty_hi == NULL) {
-			printf("\nMEM_SIMPLE: FATAL no free slot\n");
-			return NULL;
+			if(align == 0) {
+				printf("\nMEM_SIMPLE: FATAL no free slot\n");
+				return NULL;
+			}
+			break;
+		}
+	}
+
+	if(align) { // if align req, then check it
+		int8_t need_check = 0;
+
+		if(empty_hi == NULL) {
+			need_check = 1;
+		} else {
+			size_t start_addr = (size_t)(empty_hi + 1);
+			if(start_addr % align) {
+				need_check = 1;
+			}
+		}
+
+		if(need_check) { // not aligned let's search again
+
+			empty_hi = simple_heap->first_empty;
+
+			a_size = size + align;  // this time at align to the dize
+			t_size =  a_size / sizeof(heapinfo_t);
+			if ((a_size % sizeof(heapinfo_t)) != 0) {
+				t_size++;
+			}
+
+			//find first empty and enough slot
+			while(1) { // size enough?
+				if(empty_hi->size >= (t_size + 1)) {
+					break;
+				}
+
+				empty_hi = empty_hi->next;
+
+				if(empty_hi == NULL) {
+					printf("\nMEM_SIMPLE: FATAL no free slot for aligned\n");
+					return NULL;
+				}
+			}
+
+		} else { // we found what we wanted, so send it
+			if(empty_hi->previous) { // if we have previous
+				empty_hi->previous->next = empty_hi->next; // set that's next to the empty_hi' next
+			} else {
+				simple_heap->first_empty = empty_hi->next; //update first_empty because we are removing first_empty
+			}
+
+			if(empty_hi->next) {
+				empty_hi->next->previous = empty_hi->previous;
+			}
+
+			// cleanup pointers and set used
+			empty_hi->previous = NULL;
+			empty_hi->next = NULL;
+			empty_hi->flags |= HEAP_INFO_FLAG_USED;
+
+			//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
+			return empty_hi + 1;
 		}
 	}
 
@@ -378,7 +444,6 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
 		return 0;
 	}
-
 
 	//clean data
 	size_t size = (hi->size - 1) * sizeof(heapinfo_t); // get real exclusive size
