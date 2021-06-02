@@ -17,6 +17,7 @@ PROGS = $(patsubst ./%.c,%,$(SOURCES))
 OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 
 .PHONY: all clean depend
+.PRECIOUS: $(UTILOUTPUT)/%.o
 all: $(OUTPUTS)
 
 $(UTILOUTPUT)/%.o: %.c setup.h
