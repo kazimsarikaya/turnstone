@@ -58,7 +58,9 @@
 #define ACPI_AML_SHL                 0x79
 #define ACPI_AML_SHR                 0x7A
 #define ACPI_AML_AND                 0x7B
+#define ACPI_AML_NAND                0x7C
 #define ACPI_AML_OR                  0x7D
+#define ACPI_AML_NOR                 0x7E
 #define ACPI_AML_XOR                 0x7F
 #define ACPI_AML_NOT                 0x80
 #define ACPI_AML_FINDSETLEFTBIT      0x81
@@ -88,6 +90,7 @@
 #define ACPI_AML_TOINTEGER           0x99
 #define ACPI_AML_TOSTRING            0x9C
 #define ACPI_AML_COPYOBJECT          0x9D
+#define ACPI_AML_MID                 0x9E
 #define ACPI_AML_CONTINUE            0x9F
 #define ACPI_AML_IF                  0xA0
 #define ACPI_AML_ELSE                0xA1
@@ -196,6 +199,7 @@ typedef struct {
 	} fatal_error;
 	struct {
 		uint8_t while_break;
+		uint8_t while_cont;
 		uint8_t fatal;
 	} flags;
 }acpi_aml_parser_context_t;
@@ -299,10 +303,14 @@ typedef struct {
 
 typedef int8_t (* acpi_aml_parse_f)(acpi_aml_parser_context_t* ctx, void**, uint64_t*);
 
-#define CREATE_PARSER_F(name) \
-	int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t*, void**, uint64_t*);
+#define CREATE_PARSER_F(name) int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t*, void**, uint64_t*);
 
 #define PARSER_F_NAME(name) acpi_aml_parse_ ## name
+
+typedef int8_t (* acpi_aml_exec_f)(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+
+#define CREATE_EXEC_F(name) int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+#define EXEC_F_NAME(name) acpi_aml_exec_ ## name
 
 // util functions
 int64_t acpi_aml_cast_as_integer(acpi_aml_object_t*);
@@ -321,7 +329,6 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_context_t*, void**, uint64_t*, acpi_aml_object_t*);
-
 acpi_aml_parser_context_t* acp_aml_parser_context_create(uint8_t*, int64_t);
 
 // parser methods
@@ -375,14 +382,5 @@ CREATE_PARSER_F(extopcnt_0);
 CREATE_PARSER_F(extopcnt_1);
 CREATE_PARSER_F(extopcnt_2);
 CREATE_PARSER_F(extopcnt_6);
-
-
-#define UNIMPLPARSER(name) \
-	int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
-		UNUSED(data); \
-		UNUSED(ctx); \
-		UNUSED(consumed); \
-		return -1; \
-	}
 
 #endif
