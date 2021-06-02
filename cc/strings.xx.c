@@ -73,70 +73,23 @@ number_t ato_base(char_t* source, number_t base) {
 }
 
 char_t* ito_base(number_t number, number_t base){
-	if(base < 2 || base > 36) {
+	char_t buf[64];
+
+	memory_memclean(buf, 64);
+
+	if(ito_base_with_buffer(buf, number, base) != 0) {
 		return NULL;
 	}
-	size_t len = 0;
-	number_t temp = number;
-	while(temp) {
-		temp /= base;
-		len++;
-	}
-	if(number == 0) {
-		len = 1;
-	}
+
+	size_t len = strlen(buf);
 	char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
+
 	if (ret == NULL) {
 		return NULL;
 	}
-	if(number == 0) {
-		ret[0] = '0';
-	}
-	size_t i = 1;
-	number_t r;
-	while(number) {
-		r = number % base;
-		number /= base;
-		if(r < 10) {
-			ret[len - i] = 48 + r;
-		} else {
-			ret[len - i] = 55 + r;
-		}
-		i++;
-	}
-	ret[len] = NULL;
-	return ret;
-}
 
-char_t* itoh(size_t number) {
-	if(number == 0) {
-		char_t* zero = memory_malloc(sizeof(char_t) * 2);
-		zero[0] = '0';
-		zero[1] = '\0';
-		return zero;
-	}
-	size_t len = sizeof(number) * 2;
-	char_t* tmp = memory_malloc(sizeof(char_t) * len + 1);
-	memory_memset(tmp, '0', len);
-	size_t i = 1;
-	uint8_t r;
-	while (number) {
-		r = (number & 0xF);
-		if(r < 10) {
-			tmp[len - i] = 48 + r;
-		} else {
-			tmp[len - i] = 55 + r;
-		}
-		i++;
-		number >>= 4;
-	}
-	tmp[len] = '\0';
+	strcpy(buf, ret);
 
-	char_t* ret = memory_malloc(sizeof(char_t) * i);
-	memory_memset(ret, '0', i);
-	memory_memcopy(tmp + len - i + 1, ret, i - 1);
-	ret[i - 1] = '\0';
-	memory_free(tmp);
 	return ret;
 }
 
