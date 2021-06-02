@@ -4,6 +4,7 @@
 #include <cpu/descriptor.h>
 #include <video.h>
 #include <strings.h>
+#include <memory/paging.h>
 
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint16_t);
@@ -92,25 +93,15 @@ void interrupt_init() {
 
 void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
 	cpu_cli();
-	video_print("Uncached interrupt occured without error code.\0");
-	video_print("\r\nInterrupt number: \0");
-	video_print(itoh(intnum));
-	video_print("\r\nReturn address: \0");
-	video_print(itoh(frame->return_rip));
-	video_print("\r\nCpu is halting.\0");
+	printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%08x\n", intnum, frame->return_rip);
+	video_print("Cpu is halting.");
 	cpu_hlt();
 }
 
 void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint16_t intnum){
 	cpu_cli();
-	video_print("Uncached interrupt occured with error code.\0");
-	video_print("\r\nInterrupt number: \0");
-	video_print(itoh(intnum));
-	video_print("\r\nReturn address: \0");
-	video_print(itoh(frame->return_rip));
-	video_print("\r\nError code: \0");
-	video_print(itoh(errcode));
-	video_print("\r\nCpu is halting.\0");
+	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%08x\n", intnum, errcode, frame->return_rip);
+	video_print("Cpu is halting.");
 	cpu_hlt();
 }
 
@@ -172,7 +163,23 @@ void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(in
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-	interrupt_dummy_errcode(frame, errcode, 0x0E);
+	cpu_cli();
+
+	printf("\nKERN: INFO page fault occured with code 0x%08lx at 0x%08lx", errcode, frame->return_rip);
+
+	uint64_t cr2 = cpu_read_cr2();
+
+	if(errcode == 0) {
+		printf("\nKERN: INFO page does not exists for address 0x%08x", cr2 );
+		if(memory_paging_add_page(cr2, cr2, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+			printf("\nKERN: FATAL page cannot be added. Halting cpu.\n");
+			cpu_hlt();
+		}
+	} else {
+		printf("\nKERN: FATAL page error handling not implemented. Halting cpu.\n");
+		cpu_hlt();
+	}
+	cpu_sti();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0F_reserved(interrupt_frame_t* frame) {

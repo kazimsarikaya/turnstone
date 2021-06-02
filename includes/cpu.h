@@ -73,4 +73,12 @@ uint64_t cpu_read_msr(uint32_t msr_address);
  */
 int8_t cpu_write_msr(uint32_t msr_address, uint64_t value);
 
+/**
+ * @brief read cr2 and return
+ * @return             cr2 value
+ *
+ * returns cr2 value for page faults
+ */
+uint64_t cpu_read_cr2();
+
 #endif
