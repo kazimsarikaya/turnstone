@@ -5,6 +5,7 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <video.h>
 
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
@@ -28,12 +29,32 @@
 extern size_t __kheap_bottom;
 
 /**
+ * @struct __heapmetainfo
+ * @brief heap info struct
+ */
+typedef struct __heapmetainfo {
+	uint16_t magic; ///< magic value of heap for protection
+	uint16_t flags; ///< flags of hi
+	struct __heapinfo* first; ///< next hi node
+	struct __heapinfo* last; ///< previous hi node
+	struct __heapinfo* first_empty; ///< next hi node
+	struct __heapinfo* last_full; ///< previous hi node
+	uint32_t padding; ///< for 8 byte align for protection
+}__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
+
+/**
  * @struct __heapinfo
  * @brief heap info struct
  */
 typedef struct __heapinfo {
 	uint16_t magic; ///< magic value of heap for protection
 	uint16_t flags; ///< flags of hi
+#if ___BITS == 16
+	uint32_t size;
+	uint32_t size_padding;
+#elif ___BITS == 64
+	uint64_t size;
+#endif
 	struct __heapinfo* next; ///< next hi node
 	struct __heapinfo* previous; ///< previous hi node
 	uint32_t padding; ///< for 8 byte align for protection
@@ -81,8 +102,8 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	memory_memclean(t_start, heap_end - heap_start);
 
 	memory_heap_t* heap = (memory_heap_t*)(heap_start);
-	size_t metadata_start = heap_start + sizeof(memory_heap_t);
-	heapinfo_t* metadata = (heapinfo_t*)(metadata_start);
+	size_t metadata_start = heap_start + sizeof(heapmetainfo_t);
+	heapmetainfo_t* metadata = (heapmetainfo_t*)(metadata_start);
 	heap->header = HEAP_HEADER;
 	heap->metadata = metadata;
 	heap->malloc = &memory_simple_malloc_ext;
@@ -91,40 +112,96 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	if((metadata->flags & HEAP_INFO_FLAG_HEAP_INITED) == HEAP_INFO_FLAG_HEAP_INITED) {
 		return heap;
 	}
-	metadata->previous = (heapinfo_t*)(metadata_start + sizeof(heapinfo_t));
-	metadata->next = (heapinfo_t*)(heap_end - sizeof(heapinfo_t));
+
+	heapinfo_t* hibottom = (heapinfo_t*)(metadata_start + sizeof(heapmetainfo_t));
+	heapinfo_t* hitop = (heapinfo_t*)(heap_end - sizeof(heapinfo_t));
+
+
 	metadata->flags = HEAP_INFO_FLAG_HEAP;
 	metadata->magic = HEAP_INFO_MAGIC;
 	metadata->padding = HEAP_INFO_PADDING;
-
-	heapinfo_t* hibottom = metadata->previous;
-	heapinfo_t* hitop = metadata->next;
+	metadata->first = hibottom;
+	metadata->last = hitop;
+	metadata->first_empty = hibottom;
+	metadata->last_full = hitop;
 
 	hibottom->magic = HEAP_INFO_MAGIC;
 	hibottom->padding = HEAP_INFO_PADDING;
+	hibottom->next = NULL;
+	hibottom->previous = NULL;
+	hibottom->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_NOTUSED;   // heapstart, empty;
+	hibottom->size = (hitop - hibottom); // inclusive size as heapinfo_t because of alignment
+
 	hitop->magic = HEAP_INFO_MAGIC;
 	hitop->padding = HEAP_INFO_PADDING;
-
-	hibottom->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_NOTUSED; // heapstart, empty;
-	hitop->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_USED; //heaptop, full;
-
-	hibottom->next = hitop;
-	hibottom->previous = NULL;
-
 	hitop->next = NULL;
-	hitop->previous =  hibottom;
+	hitop->previous =  NULL;
+	hitop->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_USED; //heaptop, full;
+	hitop->size = 1;
+
+
 	metadata->flags |= HEAP_INFO_FLAG_USED;
 
 	return heap;
 }
 
+void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
+	if (tofull) {
+		heapinfo_t* end = heap->last_full;
+
+		while(1) {
+			if(end->previous == NULL) {
+				end->previous = item;
+				item->next = end;
+				break;
+			}
+
+			if(end->previous > item) {
+				end = end->previous;
+			} else {
+				end->previous->next = item;
+				item->previous = end->previous;
+				item->next = end;
+				end->previous = item;
+				break;
+			}
+		}
+
+	} else {
+		heapinfo_t* prev =   heap->first_empty;
+
+		if (item < prev) {
+			heap->first_empty = item;
+			item->next = prev;
+			prev->previous = item;
+
+		} else {
+
+			while(prev->next != NULL && prev->next < item) {
+				prev = prev->next;
+			}
+
+			item->next = prev->next;
+			prev->next = item;
+			item->previous = prev;
+
+			if(item->next) {
+				item->next->previous = item;
+			}
+		}
+
+	}
+}
+
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
-	heapinfo_t* simple_heap = (heapinfo_t*)heap->metadata;
+	heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
 
-	heapinfo_t* hibottom = simple_heap->previous;
-	heapinfo_t* hitop = simple_heap->next;
+	heapinfo_t* first_empty = simple_heap->first_empty;
 
-	heapinfo_t* hi = hibottom;
+	printf("SMEM: starting malloc first_empty: 0x%08p\n", first_empty );
+
+	heapinfo_t* empty_hi = first_empty;
+
 	size_t a_size = size + align;
 	size_t t_size =  a_size / sizeof(heapinfo_t);
 	if ((a_size % sizeof(heapinfo_t)) != 0) {
@@ -132,79 +209,165 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	}
 
 	//find first empty and enough slot
-	while( (hi != hitop) &&
-	       ((hi->flags & HEAP_INFO_FLAG_USED) ==  HEAP_INFO_FLAG_USED// empty?
-	        || hi + 1 + t_size > hi->next)) { // size enough?
-		hi = hi->next;
-	}
-	if( hi == hitop) {
-		return NULL;
-	}
-
-	heapinfo_t* tmp = hi + 1 + t_size;
-	if(tmp != hi->next) {
-		tmp->magic =  HEAP_INFO_MAGIC;
-		tmp->padding = HEAP_INFO_PADDING;
-		tmp->flags = HEAP_INFO_FLAG_NOTUSED;
-		tmp->previous = hi;
-		tmp->next = hi->next;
-		hi->next->previous = tmp;
-		hi->next = tmp;
-	}
-
-	if(align > 0) {
-		size_t hi_addr = (size_t)hi;
-		size_t tmp_addr = (size_t)tmp;
-		size_t free_addr = hi_addr + sizeof(heapinfo_t);
-		size_t aligned_addr = ((free_addr / align) + 1) * align;
-		size_t hi_aligned_addr = aligned_addr - sizeof(heapinfo_t);
-		size_t left_diff = hi_aligned_addr - hi_addr;
-		size_t right_diff = tmp_addr - (aligned_addr + size);
-
-		heapinfo_t* hi_r;
-		heapinfo_t* hi_a;
-
-		// fix right empty area
-		if(right_diff > 0) {
-			heapinfo_t* tmp2 = tmp->next;
-			//memory_memclean(tmp, sizeof(heapinfo_t));
-			hi_r = (heapinfo_t*)(aligned_addr + size);
-			hi_r->magic = HEAP_INFO_MAGIC;
-			hi_r->padding = HEAP_INFO_PADDING;
-			hi_r->flags = HEAP_INFO_FLAG_NOTUSED;
-			hi_r->next = tmp2;
-			tmp2->previous = hi_r;
-			tmp = hi_r;
+	while(1) { // size enough?
+		if(empty_hi->size >= (t_size + 1)) {
+			break;
 		}
 
+		empty_hi = empty_hi->next;
+
+		if(empty_hi == NULL) {
+			return NULL;
+		}
+	}
+
+	size_t rem = empty_hi->size - (t_size + 1);
+
+	if(rem > 1) { // we slot should store at least one item (inclusive size)
+		// we need divide slot
+		printf("SMEM: divide slot\n");
+		heapinfo_t* empty_tmp = empty_hi + 1 + t_size;
+
+		empty_tmp->magic =  HEAP_INFO_MAGIC;
+		empty_tmp->padding = HEAP_INFO_PADDING;
+		empty_tmp->flags = HEAP_INFO_FLAG_NOTUSED;
+
+		empty_tmp->size = rem;
+
+		empty_tmp->previous = empty_hi;
+		empty_tmp->next = empty_hi->next;
+
+		if(empty_tmp->next) {
+			empty_tmp->next->previous = empty_tmp;
+		}
+
+		empty_hi->next = empty_tmp;
+
+		empty_hi->size = 1 + t_size;     // new slot's size 1 for include header, t_size aligned requested size
+
+		printf("SMEM ehi: 0x%08p size: 0x%08li thi: 0x08p size: 0x%08li\n", empty_hi, empty_hi->size, empty_tmp, empty_tmp->size);
+
+	} // if we not we should keep slot's original size
 
 
-		// fix left empty area, if not so small add new heapinfo
-		// if so small move hi to hi_aligned
-		hi_a = (heapinfo_t*)hi_aligned_addr;
-		if(left_diff > sizeof(heapinfo_t)) {
-			hi_a->previous = hi;
-			hi->next = hi_a;
+	if (align == 0) { // if we donot need a alignment shortcut malloc remove empty_hi from list and append allocated list
+
+		if(empty_hi->previous) { // if we have previous
+			empty_hi->previous->next = empty_hi->next; // set that's next to the empty_hi' next
 		} else {
-			//store hi prev to rebuild hi aka hi_a if needed
-			heapinfo_t* hi_prev = hi->previous;
-			//memory_memclean(hi, sizeof(heapinfo_t));
-			hi_a->previous = hi_prev;
-			hi_prev->next = hi_a;
+			simple_heap->first_empty = empty_hi->next; //update first_empty because we are removing first_empty
 		}
-		hi_a->next = tmp;
-		tmp->previous = hi_a;
-		hi_a->magic = HEAP_INFO_MAGIC;
-		hi_a->padding = HEAP_INFO_PADDING;
-		hi_a->flags = HEAP_INFO_FLAG_USED;
 
-		//memory_memclean((uint8_t*)aligned_addr, size);
-		return (uint8_t*)aligned_addr;
-	} else {
-		hi->flags |= HEAP_INFO_FLAG_USED;
-		//memory_memclean(hi + 1, size);
-		return hi + 1;
+		if(empty_hi->next) {
+			empty_hi->next->previous = empty_hi->previous;
+		}
+
+		// cleanup pointers and set used
+		empty_hi->previous = NULL;
+		empty_hi->next = NULL;
+		empty_hi->flags |= HEAP_INFO_FLAG_USED;
+
+		//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
+
+		return empty_hi + 1;
 	}
+
+	// now we have alignment problem empty_hi has enough area for alignment
+	// we should find where to divide it into left real right
+	size_t hi_addr = (size_t)empty_hi;
+	size_t free_addr = hi_addr + sizeof(heapinfo_t);
+	size_t aligned_addr = ((free_addr / align) + 1) * align;
+	size_t hi_aligned_addr = aligned_addr - sizeof(heapinfo_t);
+	int8_t right_exists = 0;
+	size_t hi_a_size = size / sizeof(heapinfo_t);
+	if(size % sizeof(heapinfo_t)) {
+		hi_a_size++;
+	}
+
+
+	heapinfo_t* hi_a = (heapinfo_t*)hi_aligned_addr;                     // our rel addr
+
+	// let's fill it first
+	hi_a->magic = HEAP_INFO_MAGIC;
+	hi_a->padding = HEAP_INFO_PADDING;
+	hi_a->size = hi_a_size + 1; // inclusive size
+
+
+	// our right side t_size * sizeof(heapinfo_t) is our size for new slot
+	heapinfo_t* hi_r = hi_a + hi_a->size;
+
+	printf("SMEM: ehi: 0x%08p hia: 0x%08p hir: 0x%08p\n", empty_hi, hi_a, hi_r);
+
+	if(empty_hi + empty_hi->size > hi_r + 1 ) {
+		// we have empty space between hi_r and end of empty_hi, let's divide it
+
+		hi_r->magic = HEAP_INFO_MAGIC;
+		hi_r->padding = HEAP_INFO_PADDING;
+		hi_r->flags = HEAP_INFO_FLAG_USED;
+		hi_r->size = empty_hi + empty_hi->size - hi_r;
+
+		hi_r->next = empty_hi->next;
+		if(hi_r->next) {
+			hi_r->next->previous = hi_r;
+		}
+
+		right_exists = 1; // set flag for setting previous of hi_r after left
+		printf("SMEM: right_exists at 0x%08p\n", hi_r );
+	}
+
+
+	// now let's look left side of hi_a, it is still empty_hi. if can contain at least one item let it go
+	if(hi_a - empty_hi > 1) {
+		// yes we have at least one area
+		printf("SMEM: left side exists at 0x%08p\n", empty_hi);
+		empty_hi->size = hi_a - empty_hi; // set its size
+
+		if(empty_hi->previous == NULL) {
+			printf("SMEM: left side update first_empty 0x%08p\n", empty_hi );
+			simple_heap->first_empty = empty_hi;
+		}
+
+		if(right_exists) {
+			// set empty_hi's right to hi_r
+			empty_hi->next = hi_r;
+			hi_r->previous = empty_hi;
+		}
+	} else {
+		// ok hi_a is a dead area
+		printf("SMEM: dead area at left\n");
+		if(right_exists) {
+			// let's link hi_r to empty_hi' previous
+			if(empty_hi->previous) {
+				hi_r->previous = empty_hi->previous;
+				hi_r->previous->next = hi_r;
+			} else { // empty_hi has not any prev so hi_r is first empty!!
+				printf("SMEM: set right to first_empty\n");
+				simple_heap->first_empty = hi_r;
+			}
+
+		} else {
+			// no right not left hence link empty_hi' prev and next
+			printf("SMEM: no left and right\n");
+			if(empty_hi->previous) {
+				printf("SMEM: link left right\n");
+				empty_hi->previous->next = empty_hi->next;
+				empty_hi->next->previous = empty_hi->previous;
+			} else { // empty_hi has not any prev so next is first empty!!
+				simple_heap->first_empty = empty_hi->next;
+				simple_heap->first_empty->previous = NULL;
+				printf("SMEM: new first_empty 0x%08p\n", simple_heap->first_empty );
+			}
+			memory_memclean(empty_hi, sizeof(heapinfo_t)); // cleanup data
+		}
+	}
+
+	// memory_simple_insert_sorted(simple_heap, 1, hi_a); // add area used
+
+	hi_a->flags = HEAP_INFO_FLAG_USED;
+
+	printf("addr: 0x%08lx first_empty: 0x%08lp\n", aligned_addr, simple_heap->first_empty);
+	return (uint8_t*)aligned_addr;
+
 }
 
 
@@ -212,10 +375,10 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	if(address == NULL) {
 		return -1;
 	}
-	heapinfo_t* simple_heap = (heapinfo_t*)heap->metadata;
+	heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
 
-	void* hibottom = simple_heap->previous; // need as void*
-	void* hitop = simple_heap->next; // need as void*
+	void* hibottom = simple_heap->first; // need as void*
+	void* hitop = simple_heap->last; // need as void*
 
 	if(address < hibottom || address >= hitop) {
 		return -1;
@@ -230,33 +393,16 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 		return 0;
 	}
 
-	if(hi->next == NULL) {
-		// heap end, can not clean
-		return -1;
-	}
-	hi->flags ^= HEAP_INFO_FLAG_USED;
-
 
 	//clean data
-	size_t size = (void*)hi->next - address;
-	memory_memclean(address, size);
+	size_t size = (hi->size - 1) * sizeof(heapinfo_t); // get real exclusive size
+	memory_memclean(hi + 1, size);
 
-	//merge next empty slot if any
-	if(!(hi->next->flags & HEAP_INFO_FLAG_USED)) {
-		void* caddr = hi->next;
-		hi->next = hi->next->next; //next cannot be NULL do not afraid of it
-		hi->next->previous = hi;
-		memory_memclean(caddr, sizeof(heapinfo_t));
-	}
+	hi->flags ^= HEAP_INFO_FLAG_USED;
+	hi->previous = NULL;
+	hi->next = NULL;
 
-	// merge previous empty slot if any
-	if(hi->previous != NULL) {
-		if(!(hi->previous->flags & HEAP_INFO_FLAG_USED)) { // if prev is full then stop
-			void* caddr = hi;
-			hi->previous->next = hi->next;
-			hi->next->previous = hi->previous;
-			memory_memclean(caddr, sizeof(heapinfo_t));
-		}
-	}
+	memory_simple_insert_sorted(simple_heap, 0, hi);
+
 	return 0;
 }
