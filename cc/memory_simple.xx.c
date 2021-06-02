@@ -273,8 +273,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	// now we have alignment problem empty_hi has enough area for alignment
 	// we should find where to divide it into left real right
-	size_t hi_addr = (size_t)empty_hi;
-	size_t free_addr = hi_addr + sizeof(heapinfo_t);
+	size_t free_addr = (size_t)(empty_hi + 1);
 	size_t aligned_addr = ((free_addr / align) + 1) * align;
 	size_t hi_aligned_addr = aligned_addr - sizeof(heapinfo_t);
 	int8_t right_exists = 0;
@@ -286,14 +285,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	heapinfo_t* hi_a = (heapinfo_t*)hi_aligned_addr;                     // our rel addr
 
-	// let's fill it first
-	hi_a->magic = HEAP_INFO_MAGIC;
-	hi_a->padding = HEAP_INFO_PADDING;
-	hi_a->size = hi_a_size + 1; // inclusive size
-
-
-	// our right side t_size * sizeof(heapinfo_t) is our size for new slot
-	heapinfo_t* hi_r = hi_a + hi_a->size;
+	// probable right side: at the end of hi_a
+	heapinfo_t* hi_r = hi_a + hi_a_size + 1;
 
 
 	if(empty_hi + empty_hi->size > hi_r + 1 ) {
@@ -353,6 +346,10 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	// memory_simple_insert_sorted(simple_heap, 1, hi_a); // add area used
 
+	// fill ha
+	hi_a->magic = HEAP_INFO_MAGIC;
+	hi_a->padding = HEAP_INFO_PADDING;
+	hi_a->size = hi_a_size + 1;   // inclusive size
 	hi_a->flags = HEAP_INFO_FLAG_USED;
 
 	return (uint8_t*)aligned_addr;
