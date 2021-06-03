@@ -4,6 +4,7 @@
  */
 
  #include <acpi/aml_internal.h>
+ #include <video.h>
 
 
 
@@ -193,20 +194,22 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 }
 
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-#ifdef ___TESTMODE
+
 	printf("scope: -%s- one_item data: 0x%02x length: %li remaining: %li\n", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
-#endif
+
+	if(ctx->remaining == 0) { // realy we need this?
+		return 0;
+	}
 
 	int8_t res = -1;
+
 	if (*ctx->data != NULL && acpi_aml_is_namestring_start(ctx->data) == 0) {
 		res = acpi_aml_parse_symbol(ctx, data, consumed);
 	} else {
 		acpi_aml_parse_f parser = acpi_aml_parse_fs[*ctx->data];
-		if( parser == NULL ) {
 
-#ifdef ___TESTMODE
+		if( parser == NULL ) {
 			printf("null parser %02x %02x %02x %02x\n", *ctx->data, *(ctx->data + 1), *(ctx->data + 2), *(ctx->data + 3));
-#endif
 
 			res = -1;
 		}else {
@@ -214,9 +217,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 		}
 	}
 
-#ifdef ___TESTMODE
 	printf("one item completed\n");
-#endif
 
 	return res;
 }
@@ -227,6 +228,10 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
+
+	if(name == NULL) {
+		return -1;
+	}
 
 	int64_t tmp_start = ctx->remaining;
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
@@ -240,6 +245,11 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	if(tmp_obj == NULL) {
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		char_t* nomname = acpi_aml_normalize_name(ctx, ctx->scope_prefix, name);
 		tmp_obj->name = nomname;
 		tmp_obj->type = ACPI_AML_OT_RUNTIMEREF;
@@ -346,6 +356,11 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 	char_t* root_prefix = "";
 
 	acpi_aml_parser_context_t* ctx = memory_malloc_ext(heap, sizeof(acpi_aml_parser_context_t), 0x0);
+
+	if(ctx == NULL) {
+		return NULL;
+	}
+
 	ctx->heap = heap;
 	ctx->data = acpi_aml_parser_defaults;
 	ctx->length = sizeof(acpi_aml_parser_defaults);

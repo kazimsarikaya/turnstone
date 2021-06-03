@@ -1,0 +1,241 @@
+/**
+ * @file acpi_aml_exec_math_logic.64.c
+ * @brief acpi aml math and logic executor methods
+ */
+
+#include <acpi/aml_internal.h>
+#include <video.h>
+
+int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	int64_t op1 = acpi_aml_read_as_integer(opcode->operands[0]);
+	int64_t op2 = acpi_aml_read_as_integer(opcode->operands[1]);
+	int64_t ires = 0;
+
+	opcode->operands[0]->refcount++;
+
+	switch (opcode->opcode) {
+	case ACPI_AML_LAND:
+		ires = op1 && op2;
+		break;
+	case ACPI_AML_LOR:
+		ires = op1 || op2;
+		break;
+	case ACPI_AML_LNOT:
+		ires = !op1;
+		opcode->operands[1]->refcount++;
+		break;
+	case ACPI_AML_LEQUAL << 8 | ACPI_AML_LNOT:
+		  ires = op1 != op2;
+		break;
+	case ACPI_AML_LGREATER << 8 | ACPI_AML_LNOT:
+		  ires = !(op1 > op2);
+		break;
+	case ACPI_AML_LLESS << 8 | ACPI_AML_LNOT:
+		  ires = !(op1 < op2);
+		break;
+	case ACPI_AML_LEQUAL:
+		ires = op1 == op2;
+		break;
+	case ACPI_AML_LGREATER:
+		ires = op1 > op2;
+		break;
+	case ACPI_AML_LLESS:
+		ires = op1 < op2;
+		break;
+	default:
+		return -1;
+	}
+
+	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(res == NULL) {
+		return -1;
+	}
+
+	res->type = ACPI_AML_OT_NUMBER;
+	res->number.value = ires;
+	res->number.bytecnt = 1; // i don't known one or 8?
+
+	opcode->return_obj = res;
+
+	return 0;
+}
+
+
+int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	int64_t op1 = acpi_aml_read_as_integer(opcode->operands[0]);
+
+	opcode->operands[0]->refcount++;
+
+	switch (opcode->opcode) {
+	case ACPI_AML_INCREMENT:
+		op1++;
+		break;
+	case ACPI_AML_DECREMENT:
+		op1--;
+		break;
+	default:
+		return -1;
+	}
+
+	if(acpi_aml_write_as_integer(ctx, op1, opcode->operands[0]) != 0) {
+		return -1;
+	}
+
+	opcode->return_obj = opcode->operands[0];
+
+	return 0;
+}
+
+int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	if(opcode->opcode != ACPI_AML_NOT) {
+		return -1;
+	}
+
+	acpi_aml_object_t* src = opcode->operands[0];
+	acpi_aml_object_t* dst = opcode->operands[1];
+
+	src->refcount++;
+
+	int64_t op1 = acpi_aml_read_as_integer(src);
+
+	int64_t ires = ~op1;
+
+	if(acpi_aml_is_null_target(dst) != 0) {
+		dst->refcount++;
+		if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
+			return -1;
+		}
+	}
+
+	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(res == NULL) {
+		return -1;
+	}
+
+	res->type = ACPI_AML_OT_NUMBER;
+	res->number.value = ires;
+	res->number.bytecnt = 1; // i don't known one or 8?
+
+	opcode->return_obj = res;
+
+	return 0;
+}
+
+int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	acpi_aml_object_t* op1op = opcode->operands[0];
+	acpi_aml_object_t* op2op = opcode->operands[1];
+	acpi_aml_object_t* target = opcode->operands[2];
+
+	op1op->refcount++;
+	op2op->refcount++;
+
+	int64_t op1 = acpi_aml_read_as_integer(op1op);
+	int64_t op2 = acpi_aml_read_as_integer(op2op);
+
+
+	int64_t ires = 0;
+
+	switch (opcode->opcode) {
+	case ACPI_AML_ADD:
+		ires = op1 + op2;
+		break;
+	case ACPI_AML_SUBTRACT:
+		ires = op1 - op2;
+		break;
+	case ACPI_AML_MULTIPLY:
+		ires = op1 * op2;
+		break;
+	case ACPI_AML_AND:
+		ires = op1 & op2;
+		break;
+	case ACPI_AML_NAND:
+		ires = !(op1 & op2);
+		break;
+	case ACPI_AML_OR:
+		ires = op1 | op2;
+		break;
+	case ACPI_AML_NOR:
+		ires = !(op1 | op2);
+		break;
+	case ACPI_AML_XOR:
+		ires = op1 ^ op2;
+		break;
+	case ACPI_AML_MOD:
+		ires = op1 % op2;
+		break;
+	default:
+		return -1;
+	}
+
+	if(acpi_aml_is_null_target(target) != 0) {
+		target->refcount++;
+		if(acpi_aml_write_as_integer(ctx, ires, target) != 0) {
+			return -1;
+		}
+	}
+
+	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(res == NULL) {
+		return -1;
+	}
+
+	res->type = ACPI_AML_OT_NUMBER;
+	res->number.value = ires;
+	res->number.bytecnt = 1; // i don't known one or 8?
+
+	opcode->return_obj = res;
+
+	return 0;
+}
+
+int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	acpi_aml_object_t* dividendop = opcode->operands[0];
+	acpi_aml_object_t* divisorop = opcode->operands[1];
+	acpi_aml_object_t* remainderop = opcode->operands[2];
+	acpi_aml_object_t* resultop = opcode->operands[3];
+
+	dividendop->refcount++;
+	divisorop->refcount++;
+
+	int64_t dividend = acpi_aml_read_as_integer(dividendop);
+	int64_t divisor = acpi_aml_read_as_integer(divisorop);
+
+	if(divisor == 0) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
+	int64_t irem = dividend % divisor;
+	int64_t ires = dividend / divisor;
+
+	if(acpi_aml_is_null_target(remainderop) != 0) {
+		remainderop->refcount++;
+		if(acpi_aml_write_as_integer(ctx, irem, remainderop) != 0) {
+			return -1;
+		}
+	}
+
+	if(acpi_aml_is_null_target(resultop) != 0) {
+		resultop->refcount++;
+		if(acpi_aml_write_as_integer(ctx, ires, resultop) != 0) {
+			return -1;
+		}
+	}
+
+	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(res == NULL) {
+		return -1;
+	}
+
+	res->type = ACPI_AML_OT_NUMBER;
+	res->number.value = ires;
+	res->number.bytecnt = 1; // i don't known one or 8?
+
+	opcode->return_obj = res;
+
+	return 0;
+}
