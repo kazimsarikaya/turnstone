@@ -34,9 +34,9 @@ CREATE_EXEC_F(to_string);
 CREATE_EXEC_F(op1_tgt0_maths);
 CREATE_EXEC_F(op1_tgt1_maths);
 CREATE_EXEC_F(op2_tgt1_maths);
+CREATE_EXEC_F(op2_tgt2_maths);
 
 CREATE_EXEC_F(op2_logic);
-CREATE_EXEC_F(op1_logic);
 
 
 CREATE_EXEC_F(copy);
@@ -56,12 +56,11 @@ CREATE_EXEC_F(signal);
 CREATE_EXEC_F(wait);
 CREATE_EXEC_F(reset);
 CREATE_EXEC_F(release);
-CREATE_EXEC_F(frombcd);
-CREATE_EXEC_F(tobcd);
+CREATE_EXEC_F(from_bcd);
+CREATE_EXEC_F(to_bcd);
 CREATE_EXEC_F(revision);
 CREATE_EXEC_F(debug);
 CREATE_EXEC_F(timer);
-CREATE_EXEC_F(breakpoint);
 CREATE_EXEC_F(method);
 
 acpi_aml_exec_f acpi_aml_exec_fs[] = {
@@ -73,7 +72,7 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 	EXEC_F_NAME(op1_tgt0_maths),
 	EXEC_F_NAME(op1_tgt0_maths),
 	EXEC_F_NAME(op2_tgt1_maths),
-	EXEC_F_NAME(op2_tgt1_maths),
+	EXEC_F_NAME(op2_tgt2_maths),
 	EXEC_F_NAME(op2_tgt1_maths),
 	EXEC_F_NAME(op2_tgt1_maths), // 0x7A
 	EXEC_F_NAME(op2_tgt1_maths),
@@ -99,7 +98,7 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 	NULL,
 	EXEC_F_NAME(op2_logic), // 0x90
 	EXEC_F_NAME(op2_logic),
-	EXEC_F_NAME(op1_logic),
+	EXEC_F_NAME(op2_logic),
 	EXEC_F_NAME(op2_logic),
 	EXEC_F_NAME(op2_logic),
 	EXEC_F_NAME(op2_logic),
@@ -130,8 +129,8 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 	EXEC_F_NAME(wait), // 0x5b25
 	EXEC_F_NAME(reset), // 0x5b26
 	EXEC_F_NAME(release), // 0x5b27
-	EXEC_F_NAME(frombcd), // 0x5b28
-	EXEC_F_NAME(tobcd), // 0x5b29
+	EXEC_F_NAME(from_bcd), // 0x5b28
+	EXEC_F_NAME(to_bcd), // 0x5b29
 	NULL,
 	NULL,
 	NULL,
@@ -144,7 +143,7 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 	EXEC_F_NAME(timer), // 0x5b33 -> index 75
 
 
-	EXEC_F_NAME(breakpoint), // 0xCC -> index 76
+	EXEC_F_NAME(noop), // 0xCC -> index 76 breakpoint is also noop
 
 	EXEC_F_NAME(method) // 0xFE -> index 77
 };
@@ -153,7 +152,7 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
 	int16_t idx = -1;
 
-	if(opcode->opcode & 0x5b00) { // if extended ?
+	if((opcode->opcode & 0x5b00) == 0x5b00) { // if extended ?
 		int16_t tmp = opcode->opcode & 0xFF;
 
 		if(tmp == 0x12) {
@@ -162,17 +161,18 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 			idx = tmp - 55;
 		}
 	} else { // or
-		if(opcode->opcode == 0xCC) {
+		int16_t tmp = opcode->opcode & 0xFF;
+		if(tmp == 0xCC) {
 			idx = 76;
-		} else if(opcode->opcode == 0xFE) {
+		} else if(tmp == 0xFE) {
 			idx = 77;
-		} else if(opcode->opcode >= 0x70 && opcode->opcode <= 0xA5) {
-			idx = opcode->opcode - 0x70;
+		} else if(tmp >= 0x70 && tmp <= 0xA5) {
+			idx = tmp - 0x70;
 		}
 	}
 
 	if(idx == -1) {
-		printf("ACPIAML: FATAL unknown op code for execution\n");
+		printf("ACPIAML: FATAL unknown op code 0x%04x for execution\n", opcode->opcode);
 		return -1;
 	}
 
@@ -186,6 +186,24 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 	return exec_f(ctx, opcode);
 }
 
+int8_t acpi_aml_exec_while_break(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	UNUSED(opcode);
+	ctx->flags.while_break = 1;
+	return -1;
+}
+
+int8_t acpi_aml_exec_while_cont(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	UNUSED(opcode);
+	ctx->flags.while_cont = 1;
+	return -1;
+}
+
+int8_t acpi_aml_exec_noop(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	UNUSED(ctx);
+	UNUSED(opcode);
+	return 0;
+}
+
 
 #define UNIMPLEXEC(name) \
 	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, apci_aml_opcode_t * opcode){ \
@@ -194,7 +212,6 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 		return -1; \
 	}
 
-UNIMPLEXEC(store);
 UNIMPLEXEC(refof);
 UNIMPLEXEC(concat);
 UNIMPLEXEC(findsetbit);
@@ -204,26 +221,20 @@ UNIMPLEXEC(notify);
 UNIMPLEXEC(op_sizeof);
 UNIMPLEXEC(index);
 UNIMPLEXEC(match);
+
 UNIMPLEXEC(object_type);
 UNIMPLEXEC(to_buffer);
 UNIMPLEXEC(to_decimalstring);
 UNIMPLEXEC(to_hexstring);
 UNIMPLEXEC(to_integer);
 UNIMPLEXEC(to_string);
-UNIMPLEXEC(op1_tgt0_maths);
-UNIMPLEXEC(op1_tgt1_maths);
-UNIMPLEXEC(op2_tgt1_maths);
-UNIMPLEXEC(op2_logic);
-UNIMPLEXEC(op1_logic);
+UNIMPLEXEC(from_bcd);
+UNIMPLEXEC(to_bcd);
+
 UNIMPLEXEC(copy);
 UNIMPLEXEC(mid);
-UNIMPLEXEC(while_cont);
-UNIMPLEXEC(noop);
 UNIMPLEXEC(mth_return);
-UNIMPLEXEC(while_break);
 UNIMPLEXEC(condrefof);
-UNIMPLEXEC(load_table);
-UNIMPLEXEC(load);
 UNIMPLEXEC(stall);
 UNIMPLEXEC(sleep);
 UNIMPLEXEC(acquire);
@@ -231,10 +242,7 @@ UNIMPLEXEC(signal);
 UNIMPLEXEC(wait);
 UNIMPLEXEC(reset);
 UNIMPLEXEC(release);
-UNIMPLEXEC(frombcd);
-UNIMPLEXEC(tobcd);
 UNIMPLEXEC(revision);
 UNIMPLEXEC(debug);
 UNIMPLEXEC(timer);
-UNIMPLEXEC(breakpoint);
 UNIMPLEXEC(method);

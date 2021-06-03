@@ -4,9 +4,26 @@
  */
 #include <acpi/aml_internal.h>
 #include <strings.h>
+#include <video.h>
 
+
+int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
+	if(obj == NULL) {
+		return 0;
+	}
+
+	if(obj->name == NULL && obj->type == ACPI_AML_OT_NUMBER && obj->number.value == 0) {
+		return 0;
+	}
+
+	return -1;
+}
 
 int64_t acpi_aml_read_as_integer(acpi_aml_object_t* obj){
+	if(obj == NULL) {
+		return 0;
+	}
+
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
 		return obj->number.value;
@@ -15,10 +32,33 @@ int64_t acpi_aml_read_as_integer(acpi_aml_object_t* obj){
 	case ACPI_AML_OT_BUFFER:
 		return *((int64_t*)obj->buffer.buf);
 		break;
+	case ACPI_AML_OT_OPCODE_EXEC_RETURN:
+		return acpi_aml_read_as_integer(obj->opcode_exec_return);
+		break;
 	default:
+		printf("read as integer objtype %li\n", obj->type);
 		break;
 	}
+
 	return -1;
+}
+
+
+int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+	UNUSED(ctx);
+	if(obj == NULL) {
+		return -1;
+	}
+
+	switch (obj->type) {
+	case ACPI_AML_OT_NUMBER:
+		obj->number.value = val;
+		break;
+	default:
+		return -1;
+	}
+
+	return 0;
 }
 
 int8_t acpi_aml_is_lead_name_char(uint8_t* c) {
@@ -62,6 +102,10 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, 
 	uint64_t max_len = strlen(prefix) + strlen(name) + 1;
 	char_t* dst_name = memory_malloc_ext(ctx->heap, sizeof(char_t) * max_len, 0x0);
 
+	if(dst_name == NULL) {
+		return NULL;
+	}
+
 	if(acpi_aml_is_root_char((uint8_t*)name) == 0) {
 		strcpy(name + 1, dst_name);
 	} else {
@@ -76,6 +120,11 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, 
 		strcpy(name + prefix_cnt, dst_name + src_len);
 	}
 	char_t* nomname = memory_malloc_ext(ctx->heap, sizeof(char_t) * strlen(dst_name) + 1, 0x0);
+
+	if(nomname == NULL) {
+		return NULL;
+	}
+
 	strcpy(dst_name, nomname);
 	return nomname;
 }
@@ -180,9 +229,20 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t* ctx){
 
 acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ctx, linkedlist_t table, char_t* prefix, char_t* symbol_name){
 	char_t* tmp_prefix = memory_malloc_ext(ctx->heap, strlen(prefix) + 1, 0x0);
+
+	if(tmp_prefix == NULL) {
+		return NULL;
+	}
+
 	strcpy(prefix, tmp_prefix);
 	while(1) {
 		char_t* nomname = acpi_aml_normalize_name(ctx, tmp_prefix, symbol_name);
+
+		if(nomname == NULL) {
+			memory_free_ext(ctx->heap, tmp_prefix);
+			return NULL;
+		}
+
 		for(int64_t len = linkedlist_size(table) - 1; len >= 0; len--) {
 			acpi_aml_object_t* obj = (acpi_aml_object_t*)linkedlist_get_data_at_position(table, len);
 			if(strcmp(obj->name, nomname) == 0) {
@@ -246,4 +306,80 @@ uint8_t acpi_aml_get_index_of_extended_code(uint8_t code) {
 		return code - 0x10;
 	}
 	return code - 0x01;
+}
+
+void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
+	uint64_t item_count = 0;
+	iterator_t* iter = linkedlist_iterator_create(ctx->symbols);
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_object_t* sym = iter->get_item(iter);
+		acpi_aml_print_object(sym);
+		item_count++;
+		iter = iter->next(iter);
+	}
+	iter->destroy(iter);
+
+	printf("totoal syms %i\n", item_count );;
+}
+
+void acpi_aml_print_object(acpi_aml_object_t* obj){
+	int64_t len = 0;
+	printf("object name=%s type=", obj->name );
+	switch (obj->type) {
+	case ACPI_AML_OT_NUMBER:
+		printf("number value=0x%lx bytecnt=%i\n", obj->number.value, obj->number.bytecnt );
+		break;
+	case ACPI_AML_OT_STRING:
+		printf("string value=%s\n", obj->string );
+		break;
+	case ACPI_AML_OT_ALIAS:
+		printf("alias value=%s\n", obj->alias_target->name );
+		break;
+	case ACPI_AML_OT_BUFFER:
+		printf("buffer buflen=%i\n", obj->buffer.buflen );
+		break;
+	case ACPI_AML_OT_PACKAGE:
+		len = acpi_aml_read_as_integer(obj->package.pkglen);
+		printf("pkg pkglen=%i initial pkglen=%i\n", len, linkedlist_size(obj->package.elements) );
+		break;
+	case ACPI_AML_OT_SCOPE:
+		printf("scope\n");
+		break;
+	case ACPI_AML_OT_DEVICE:
+		printf("device\n");
+		break;
+	case ACPI_AML_OT_POWERRES:
+		printf("powerres system_level=%i resource_order=%i\n", obj->powerres.system_level, obj->powerres.resource_order);
+		break;
+	case ACPI_AML_OT_PROCESSOR:
+		printf("processor procid=%i pblk_addr=0x%x pblk_len=%i\n", obj->processor.procid, obj->processor.pblk_addr, obj->processor.pblk_len);
+		break;
+	case ACPI_AML_OT_THERMALZONE:
+		printf("thermalzone\n");
+		break;
+	case ACPI_AML_OT_MUTEX:
+		printf("mutex syncflags=%i\n", obj->mutex_sync_flags);
+		break;
+	case ACPI_AML_OT_EVENT:
+		printf("event\n");
+		break;
+	case ACPI_AML_OT_DATAREGION:
+		printf("dataregion signature=%s oemid=%s oemtableid=%s\n", obj->dataregion.signature, obj->dataregion.oemid, obj->dataregion.oemtableid);
+		break;
+	case ACPI_AML_OT_OPREGION:
+		printf("opregion region_space=0x%x region_offset=0x%lx region_len=0x%lx\n", obj->opregion.region_space, obj->opregion.region_offset, obj->opregion.region_len);
+		break;
+	case ACPI_AML_OT_METHOD:
+		printf("method argcount=%i serflag=%i synclevel=%i termlistlen=%i\n", obj->method.arg_count, obj->method.serflag,
+		       obj->method.sync_level, obj->method.termlist_length);
+		break;
+	case ACPI_AML_OT_EXTERNAL:
+		printf("external objecttype=%i argcount=%i\n", obj->external.object_type, obj->external.arg_count);
+		break;
+	case ACPI_AML_OT_FIELD:
+		printf("field related_object=%s offset=0x%lx sizeasbit=%i\n", obj->field.related_object->name, obj->field.offset, obj->field.sizeasbit);
+		break;
+	default:
+		printf("unknown object\n");
+	}
 }

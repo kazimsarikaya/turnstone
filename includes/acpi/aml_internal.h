@@ -209,6 +209,7 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_context_t*, void**, uint64_t*, acpi_aml_object_t*);
 
+int8_t acpi_aml_is_null_target(acpi_aml_object_t*);
 
 
 #endif

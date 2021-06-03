@@ -152,6 +152,11 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 	case ACPI_AML_STRING_PREFIX:
 		len = strlen((char_t*)ctx->data);
 		char_t* str = memory_malloc_ext(ctx->heap, sizeof(char_t) * len + 1, 0x0);
+
+		if(str == NULL) {
+			return -1;
+		}
+
 		strcpy((char_t*)ctx->data, str);
 
 		obj->type = ACPI_AML_OT_STRING;
@@ -201,6 +206,10 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* srcname = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(srcname == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&srcname, NULL) != 0) {
 		memory_free_ext(ctx->heap, srcname);
 		return -1;
@@ -217,6 +226,10 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	namelen = acpi_aml_len_namestring(ctx);
 	char_t* dstname = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(dstname == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&dstname, NULL) != 0) {
 		memory_free_ext(ctx->heap, dstname);
 		return -1;
@@ -227,6 +240,10 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	memory_free_ext(ctx->heap, dstname);
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->type = ACPI_AML_OT_ALIAS;
 	obj->name = dstnomname;
@@ -274,6 +291,10 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
 	int64_t tmp_start = ctx->remaining;
 
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
@@ -287,6 +308,10 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	memory_free_ext(ctx->heap, name);
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->type = obj_type;
 	obj->name = nomname;
@@ -353,6 +378,11 @@ int8_t acpi_aml_parse_buffer(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 
 	acpi_aml_object_t* buflenobj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(buflenobj == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_one_item(ctx, (void**)&buflenobj, &t_consumed) != 0) {
 		memory_free_ext(ctx->heap, buflenobj);
 		return -1;
@@ -365,6 +395,10 @@ int8_t acpi_aml_parse_buffer(acpi_aml_parser_context_t* ctx, void** data, uint64
 	buf->type = ACPI_AML_OT_BUFFER;
 	buf->buffer.buflen = buflen;
 	buf->buffer.buf = memory_malloc_ext(ctx->heap, sizeof(uint8_t) * buflen, 0x0);
+
+	if(buf->buffer.buf == NULL) {
+		return -1;
+	}
 
 	memory_memcopy(ctx->data, buf->buffer.buf, plen);
 
@@ -394,6 +428,11 @@ int8_t acpi_aml_parse_package(acpi_aml_parser_context_t* ctx, void** data, uint6
 	r_consumed += plen;
 
 	acpi_aml_object_t* pkglen = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(pkglen == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_byte_data(ctx, (void**)&pkglen, NULL) != 0) {
 		memory_free_ext(ctx->heap, pkglen);
 		return -1;
@@ -406,6 +445,11 @@ int8_t acpi_aml_parse_package(acpi_aml_parser_context_t* ctx, void** data, uint6
 	while(plen > 0) {
 		t_consumed = 0;
 		acpi_aml_object_t* tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, &t_consumed) != 0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -438,6 +482,11 @@ int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, ui
 	r_consumed += plen;
 
 	acpi_aml_object_t* pkglen = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(pkglen == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_one_item(ctx, (void**)&pkglen, &t_consumed) != 0) {
 		memory_free_ext(ctx->heap, pkglen);
 		return -1;
@@ -451,6 +500,11 @@ int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, ui
 	while(plen > 0) {
 		t_consumed = 0;
 		acpi_aml_object_t* tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, &t_consumed) != 0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -485,6 +539,9 @@ int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
 
 	t_consumed = ctx->remaining;
 
@@ -509,6 +566,11 @@ int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
+
 
 	obj->name = nomname;
 	obj->type = ACPI_AML_OT_METHOD;
@@ -542,6 +604,11 @@ int8_t acpi_aml_parse_external(acpi_aml_parser_context_t* ctx, void** data, uint
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free_ext(ctx->heap, name);
 		return -1;
@@ -553,6 +620,10 @@ int8_t acpi_aml_parse_external(acpi_aml_parser_context_t* ctx, void** data, uint
 
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->name = nomname;
 	obj->type = ACPI_AML_OT_EXTERNAL;
@@ -592,6 +663,10 @@ int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
 	t_consumed = ctx->remaining;
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free_ext(ctx->heap, name);
@@ -610,6 +685,10 @@ int8_t acpi_aml_parse_mutex(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->name = nomname;
 	obj->type = ACPI_AML_OT_MUTEX;
@@ -634,6 +713,10 @@ int8_t acpi_aml_parse_event(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free_ext(ctx->heap, name);
 		return -1;
@@ -643,6 +726,10 @@ int8_t acpi_aml_parse_event(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	memory_free_ext(ctx->heap, name);
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->name = nomname;
 	obj->type = ACPI_AML_OT_EVENT;
@@ -676,6 +763,10 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free_ext(ctx->heap, name);
 		return -1;
@@ -686,6 +777,10 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
+	if(obj == NULL) {
+		return -1;
+	}
+
 	obj->name = nomname;
 	obj->type = obj_type;
 
@@ -693,6 +788,11 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	if(obj_type == ACPI_AML_OT_DATAREGION) {
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) != 0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -702,6 +802,11 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		memory_free_ext(ctx->heap, tmp_obj);
 
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -711,6 +816,11 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		memory_free_ext(ctx->heap, tmp_obj);
 
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -720,6 +830,11 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		memory_free_ext(ctx->heap, tmp_obj);
 	} else {
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_byte_data(ctx, (void**)&tmp_obj, NULL) !=  0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -729,6 +844,11 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		memory_free_ext(ctx->heap, tmp_obj);
 
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -738,6 +858,11 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		memory_free_ext(ctx->heap, tmp_obj);
 
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(tmp_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&tmp_obj, NULL) !=  0) {
 			memory_free_ext(ctx->heap, tmp_obj);
 			return -1;
@@ -795,12 +920,22 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 	}
 
 	acpi_aml_object_t* buf = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(buf == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_one_item(ctx, (void**)&buf, NULL) != 0) {
 		memory_free_ext(ctx->heap, buf);
 		return -1;
 	}
 
 	acpi_aml_object_t* offset_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(offset_obj == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_one_item(ctx, (void**)&offset_obj, NULL) != 0) {
 		memory_free_ext(ctx->heap, buf);
 		memory_free_ext(ctx->heap, offset_obj);
@@ -811,6 +946,11 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 
 	if(opcode == ACPI_AML_ARBFIELD) {
 		acpi_aml_object_t* size_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(size_obj == NULL) {
+			return -1;
+		}
+
 		if(acpi_aml_parse_one_item(ctx, (void**)&size_obj, NULL) != 0) {
 			memory_free_ext(ctx->heap, buf);
 			memory_free_ext(ctx->heap, offset_obj);
@@ -825,6 +965,10 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free_ext(ctx->heap, name);
 		return -1;
@@ -834,6 +978,10 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 	memory_free_ext(ctx->heap, name);
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->name = nomname;
 	obj->type = ACPI_AML_OT_FIELD;
@@ -974,6 +1122,10 @@ int8_t acpi_aml_parse_field(acpi_aml_parser_context_t* ctx, void** data, uint64_
 			uint64_t namelen = acpi_aml_len_namestring(ctx);
 			char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+			if(name == NULL) {
+				return -1;
+			}
+
 			t_consumed = ctx->remaining;
 			if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 				memory_free_ext(ctx->heap, name);
@@ -986,6 +1138,10 @@ int8_t acpi_aml_parse_field(acpi_aml_parser_context_t* ctx, void** data, uint64_
 			memory_free_ext(ctx->heap, name);
 
 			acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+			if(obj == NULL) {
+				return -1;
+			}
 
 			t_consumed = ctx->remaining;
 			sizeasbit = acpi_aml_parse_package_length(ctx);
@@ -1025,6 +1181,10 @@ int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
 	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
+	if(name == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
 		memory_free_ext(ctx->heap, name);
 		return -1;
@@ -1034,6 +1194,10 @@ int8_t acpi_aml_parse_name(acpi_aml_parser_context_t* ctx, void** data, uint64_t
 	memory_free_ext(ctx->heap, name);
 
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(obj == NULL) {
+		return -1;
+	}
 
 	obj->name = nomname;
 

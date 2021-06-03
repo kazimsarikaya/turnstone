@@ -15,6 +15,11 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	int8_t res = -1;
 
 	apci_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(apci_aml_opcode_t), 0x0);
+
+	if(opcode == NULL) {
+		return -1;
+	}
+
 	opcode->opcode = oc;
 
 	if(preop != NULL) {
@@ -28,6 +33,10 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	for(; idx < opcnt; idx++) {
 		uint64_t t_consumed = 0;
 		acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(op == NULL) {
+			return -1;
+		}
 
 		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
 			goto cleanup;
@@ -56,7 +65,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 cleanup:
 
 	for(uint8_t i = 0; i < idx; i++) {
-		if(opcode->operands[i] != NULL && opcode->operands[i]->refcount == 0) {
+		if(opcode->operands[i] != NULL && (opcode->operands[i]->refcount == 0 || opcode->operands[i]->name == NULL)) {
 			memory_free_ext(ctx->heap, opcode->operands[i]);
 		}
 	}
@@ -164,6 +173,10 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	t_consumed = 0;
 	acpi_aml_object_t* predic = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
+	if(predic == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_one_item(ctx, (void**)&predic, &t_consumed) != 0) {
 		memory_free_ext(ctx->heap, predic);
 		return -1;
@@ -171,7 +184,14 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	plen -= t_consumed;
 
-	uint64_t res = acpi_aml_read_as_integer(predic);
+	int64_t res = acpi_aml_read_as_integer(predic);
+
+	if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+		if(predic->opcode_exec_return->refcount == 0) {
+			memory_free_ext(ctx->heap, predic->opcode_exec_return);
+		}
+	}
+	memory_free_ext(ctx->heap, predic);
 
 	if(res != 0) {
 
@@ -279,6 +299,10 @@ int8_t acpi_aml_parse_fatal(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	acpi_aml_object_t* arg = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
+	if(arg == NULL) {
+		return -1;
+	}
+
 	if(acpi_aml_parse_one_item(ctx, (void**)&arg, NULL) != 0) {
 		memory_free_ext(ctx->heap, arg);
 		return -1;
@@ -297,6 +321,11 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 
 
 	apci_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(apci_aml_opcode_t), 0x0);
+
+	if(opcode == NULL) {
+		return -1;
+	}
+
 	opcode->opcode = *ctx->data;
 	opcode->operand_count = 6;
 
@@ -307,6 +336,11 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 
 	for(uint8_t i = 0; i < 2; i++) {
 		acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(op == NULL) {
+			return -1;
+		}
+
 		t_consumed = 0;
 		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
 			if(op->refcount == 0) {
@@ -318,6 +352,11 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 		opcode->operands[idx++] = op;
 
 		acpi_aml_object_t* moc = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(moc == NULL) {
+			return -1;
+		}
+
 		t_consumed = 0;
 		if(acpi_aml_parse_byte_data(ctx, (void**)&moc, &t_consumed) != 0) {
 			memory_free_ext(ctx->heap, moc);
@@ -329,6 +368,11 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 
 	for(uint8_t i = 0; i < 2; i++) {
 		acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(op == NULL) {
+			return -1;
+		}
+
 		t_consumed = 0;
 		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
 			if(op->refcount == 0) {
@@ -383,16 +427,6 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 	r_consumed -= ctx->remaining;
 	r_consumed += plen;
 
-	t_consumed = 0;
-	acpi_aml_object_t* predic = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
-
-	if(acpi_aml_parse_one_item(ctx, (void**)&predic, &t_consumed) != 0) {
-		memory_free_ext(ctx->heap, predic);
-		return -1;
-	}
-
-	plen -= t_consumed;
-
 
 	uint64_t old_length = ctx->length;
 	uint64_t next_remaining = ctx->remaining - plen;
@@ -400,11 +434,39 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 	uint8_t* old_data = ctx->data;
 	uint8_t* next_data = old_data + plen;
 
+	acpi_aml_object_t* predic = NULL;
 
-	while(acpi_aml_read_as_integer(predic) != 0) {
+	while(1) {
 		ctx->length = plen;
 		ctx->remaining = plen;
 		ctx->data = old_data;
+
+		predic = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(predic == NULL) {
+			return -1;
+		}
+
+		t_consumed = 0;
+
+		if(acpi_aml_parse_one_item(ctx, (void**)&predic, &t_consumed) != 0) {
+			memory_free_ext(ctx->heap, predic);
+			return -1;
+		}
+
+		int64_t predic_res = acpi_aml_read_as_integer(predic);
+
+		if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+			if(predic->opcode_exec_return->refcount == 0 || predic->opcode_exec_return->name == NULL) {
+				memory_free_ext(ctx->heap, predic->opcode_exec_return);
+			}
+		}
+
+		memory_free_ext(ctx->heap, predic);
+
+		if(predic_res == 0) {
+			break;
+		}
 
 		int8_t res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
@@ -419,6 +481,7 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 			}
 			return -1; // error at parsing
 		}
+
 	}
 
 	ctx->length = old_length;

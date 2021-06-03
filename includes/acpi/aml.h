@@ -126,7 +126,11 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 #define acpi_aml_parser_context_create(aml, len) acpi_aml_parser_context_create_with_heap(NULL, aml, len)
 
 int64_t acpi_aml_read_as_integer(acpi_aml_object_t*);
+int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);
 
 int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
+
+void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
+void acpi_aml_print_object(acpi_aml_object_t*);
 
 #endif
