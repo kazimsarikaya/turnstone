@@ -2,11 +2,11 @@
  * @file acpi_aml_utils.64.c
  * @brief acpi parser utils
  */
-#include <acpi/aml.h>
+#include <acpi/aml_internal.h>
 #include <strings.h>
 
 
-int64_t acpi_aml_cast_as_integer(acpi_aml_object_t* obj){
+int64_t acpi_aml_read_as_integer(acpi_aml_object_t* obj){
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
 		return obj->number.value;
@@ -58,9 +58,9 @@ int8_t acpi_aml_is_parent_prefix_char(uint8_t* c){
 
 
 
-char_t* acpi_aml_normalize_name(char_t* prefix, char_t* name) {
+char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, char_t* name) {
 	uint64_t max_len = strlen(prefix) + strlen(name) + 1;
-	char_t* dst_name = memory_malloc(sizeof(char_t) * max_len);
+	char_t* dst_name = memory_malloc_ext(ctx->heap, sizeof(char_t) * max_len, 0x0);
 
 	if(acpi_aml_is_root_char((uint8_t*)name) == 0) {
 		strcpy(name + 1, dst_name);
@@ -75,7 +75,7 @@ char_t* acpi_aml_normalize_name(char_t* prefix, char_t* name) {
 		memory_memcopy(prefix, dst_name, src_len);
 		strcpy(name + prefix_cnt, dst_name + src_len);
 	}
-	char_t* nomname = memory_malloc(sizeof(char_t) * strlen(dst_name) + 1);
+	char_t* nomname = memory_malloc_ext(ctx->heap, sizeof(char_t) * strlen(dst_name) + 1, 0x0);
 	strcpy(dst_name, nomname);
 	return nomname;
 }
@@ -178,15 +178,15 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t* ctx){
 	return res + 4;
 }
 
-acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(linkedlist_t table, char_t* prefix, char_t* symbol_name){
-	char_t* tmp_prefix = memory_malloc(strlen(prefix) + 1);
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ctx, linkedlist_t table, char_t* prefix, char_t* symbol_name){
+	char_t* tmp_prefix = memory_malloc_ext(ctx->heap, strlen(prefix) + 1, 0x0);
 	strcpy(prefix, tmp_prefix);
 	while(1) {
-		char_t* nomname = acpi_aml_normalize_name(tmp_prefix, symbol_name);
+		char_t* nomname = acpi_aml_normalize_name(ctx, tmp_prefix, symbol_name);
 		for(int64_t len = linkedlist_size(table) - 1; len >= 0; len--) {
 			acpi_aml_object_t* obj = (acpi_aml_object_t*)linkedlist_get_data_at_position(table, len);
 			if(strcmp(obj->name, nomname) == 0) {
-				memory_free(tmp_prefix);
+				memory_free_ext(ctx->heap, tmp_prefix);
 				return obj;
 			}
 		}
@@ -195,18 +195,18 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(linkedlist_t table, char_t* p
 		}
 		tmp_prefix[strlen(tmp_prefix) - 4] = NULL;
 	}
-	memory_free(tmp_prefix);
+	memory_free_ext(ctx->heap, tmp_prefix);
 	return NULL;
 }
 
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t* symbol_name){
 	if(ctx->local_symbols != NULL) {
-		acpi_aml_object_t* obj = acpi_aml_symbol_lookup_at_table(ctx->local_symbols, ctx->scope_prefix, symbol_name);
+		acpi_aml_object_t* obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->local_symbols, ctx->scope_prefix, symbol_name);
 		if(obj != NULL) {
 			return obj;
 		}
 	}
-	return acpi_aml_symbol_lookup_at_table(ctx->symbols, ctx->scope_prefix, symbol_name);
+	return acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, ctx->scope_prefix, symbol_name);
 }
 
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj) {

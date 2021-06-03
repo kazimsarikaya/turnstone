@@ -6,10 +6,6 @@
 #include <strings.h>
 #include <utils.h>
 
-
-extern acpi_aml_parse_f acpi_aml_parse_fs[];
-
-
 void acpi_aml_print_object(acpi_aml_object_t* obj){
 	int64_t len = 0;
 	printf("object name=%s type=", obj->name );
@@ -27,7 +23,7 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 		printf("buffer buflen=%i\n", obj->buffer.buflen );
 		break;
 	case ACPI_AML_OT_PACKAGE:
-		len = acpi_aml_cast_as_integer(obj->package.pkglen);
+		len = acpi_aml_read_as_integer(obj->package.pkglen);
 		printf("pkg pkglen=%i initial pkglen=%i\n", len, linkedlist_size(obj->package.elements) );
 		break;
 	case ACPI_AML_OT_SCOPE:
@@ -128,11 +124,11 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	uint8_t* aml = aml_data + sizeof(acpi_sdt_header_t);
 	size -= sizeof(acpi_sdt_header_t);
 
-	acpi_aml_parser_context_t* ctx = acp_aml_parser_context_create(aml, size);
+	acpi_aml_parser_context_t* ctx = acpi_aml_parser_context_create(aml, size);
 	if(ctx == NULL) {
 		print_error("cannot create parser context");
 	} else {
-		if(acpi_aml_parse_all_items(ctx, NULL, NULL) == 0) {
+		if(acpi_aml_parse(ctx) == 0) {
 			print_success("aml parsed");
 		} else {
 			print_error("aml not parsed");

@@ -119,17 +119,15 @@ uint8_t kmain64() {
 			}
 
 			memory_heap_t* acpi_heap = memory_create_heap_simple(acpi_hs, acpi_he);
-			memory_set_default_heap(acpi_heap);
-
 
 			int64_t aml_size = dsdt->length - sizeof(acpi_sdt_header_t);
 			uint8_t* aml = (uint8_t*)(dsdt + 1);
-			acpi_aml_parser_context_t* pctx = acp_aml_parser_context_create(aml, aml_size);
+			acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(acpi_heap, aml, aml_size);
 
 			if(pctx != NULL) {
 				printf("aml parser ctx created\n");
 
-				if(acpi_aml_parse_all_items(pctx, NULL, NULL) == 0) {
+				if(acpi_aml_parse(pctx) == 0) {
 					printf("aml parsed\n");
 				} else {
 					printf("aml not parsed\n");
@@ -139,7 +137,6 @@ uint8_t kmain64() {
 				printf("aml parser creation failed\n");
 			}
 
-			memory_set_default_heap(heap);
 		} else {
 			printf("dsdt not ok\n");
 		}
