@@ -3,8 +3,15 @@
  * @brief acpi aml executor methods
  */
 
-#include <acpi/aml.h>
+#include <acpi/aml_internal.h>
 #include <video.h>
+
+
+
+typedef int8_t (* acpi_aml_exec_f)(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+
+#define CREATE_EXEC_F(name) int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+#define EXEC_F_NAME(name) acpi_aml_exec_ ## name
 
 
 CREATE_EXEC_F(store);

@@ -3,7 +3,65 @@
  * @brief acpi parser methos
  */
 
- #include <acpi/aml.h>
+ #include <acpi/aml_internal.h>
+
+
+
+typedef int8_t (* acpi_aml_parse_f)(acpi_aml_parser_context_t* ctx, void**, uint64_t*);
+
+#define CREATE_PARSER_F(name) int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t*, void**, uint64_t*);
+
+#define PARSER_F_NAME(name) acpi_aml_parse_ ## name
+
+// parser methods
+
+CREATE_PARSER_F(namestring);
+
+CREATE_PARSER_F(alias);
+CREATE_PARSER_F(name);
+CREATE_PARSER_F(scope);
+CREATE_PARSER_F(const_data);
+
+CREATE_PARSER_F(opcnt_0);
+CREATE_PARSER_F(opcnt_1);
+CREATE_PARSER_F(opcnt_2);
+CREATE_PARSER_F(opcnt_3);
+CREATE_PARSER_F(opcnt_4);
+
+CREATE_PARSER_F(op_match);
+CREATE_PARSER_F(logic_ext);
+
+CREATE_PARSER_F(op_if);
+CREATE_PARSER_F(op_else);
+CREATE_PARSER_F(op_while);
+
+CREATE_PARSER_F(create_field);
+
+CREATE_PARSER_F(op_extended);
+
+CREATE_PARSER_F(buffer);
+CREATE_PARSER_F(package);
+CREATE_PARSER_F(varpackage);
+CREATE_PARSER_F(method);
+CREATE_PARSER_F(external);
+
+CREATE_PARSER_F(symbol);
+
+CREATE_PARSER_F(byte_data);
+
+CREATE_PARSER_F(mutex);
+CREATE_PARSER_F(event);
+
+CREATE_PARSER_F(region);
+
+CREATE_PARSER_F(field);
+
+CREATE_PARSER_F(fatal);
+
+CREATE_PARSER_F(extopcnt_0);
+CREATE_PARSER_F(extopcnt_1);
+CREATE_PARSER_F(extopcnt_2);
+CREATE_PARSER_F(extopcnt_6);
 
 acpi_aml_parse_f acpi_aml_parse_fs[] = {
 	PARSER_F_NAME(const_data),
@@ -168,11 +226,11 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 	uint64_t r_consumed = 0;
 
 	uint64_t namelen = acpi_aml_len_namestring(ctx);
-	char_t* name = memory_malloc(sizeof(char_t) * namelen + 1);
+	char_t* name = memory_malloc_ext(ctx->heap, sizeof(char_t) * namelen + 1, 0x0);
 
 	int64_t tmp_start = ctx->remaining;
 	if(acpi_aml_parse_namestring(ctx, (void**)&name, NULL) != 0) {
-		memory_free(name);
+		memory_free_ext(ctx->heap, name);
 		return -1;
 	}
 	r_consumed += (tmp_start - ctx->remaining);
@@ -181,13 +239,13 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 	acpi_aml_object_t* tmp_obj = acpi_aml_symbol_lookup(ctx, name);
 
 	if(tmp_obj == NULL) {
-		tmp_obj = memory_malloc(sizeof(acpi_aml_object_t));
-		char_t* nomname = acpi_aml_normalize_name(ctx->scope_prefix, name);
+		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+		char_t* nomname = acpi_aml_normalize_name(ctx, ctx->scope_prefix, name);
 		tmp_obj->name = nomname;
 		tmp_obj->type = ACPI_AML_OT_RUNTIMEREF;
 	}
 
-	memory_free(name);
+	memory_free_ext(ctx->heap, name);
 
 	tmp_obj->refcount++;
 
@@ -284,18 +342,19 @@ uint8_t acpi_aml_parser_defaults[] =
 	0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x02
 };
 
-acpi_aml_parser_context_t* acp_aml_parser_context_create(uint8_t* aml, int64_t size) {
+acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t* aml, int64_t size) {
 	char_t* root_prefix = "";
 
-	acpi_aml_parser_context_t* ctx = memory_malloc(sizeof(acpi_aml_parser_context_t));
+	acpi_aml_parser_context_t* ctx = memory_malloc_ext(heap, sizeof(acpi_aml_parser_context_t), 0x0);
+	ctx->heap = heap;
 	ctx->data = acpi_aml_parser_defaults;
 	ctx->length = sizeof(acpi_aml_parser_defaults);
 	ctx->remaining = sizeof(acpi_aml_parser_defaults);
 	ctx->scope_prefix = root_prefix;
-	ctx->symbols = linkedlist_create_list_with_heap(NULL);
+	ctx->symbols = linkedlist_create_list_with_heap(heap);
 
 	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
-		memory_free(ctx);
+		memory_free_ext(heap, ctx);
 		return NULL;
 	}
 
@@ -304,4 +363,17 @@ acpi_aml_parser_context_t* acp_aml_parser_context_create(uint8_t* aml, int64_t s
 	ctx->remaining = size;
 
 	return ctx;
+}
+
+
+int8_t acpi_aml_parse(acpi_aml_parser_context_t* ctx) {
+	if(ctx == NULL) {
+		return -1;
+	}
+
+	uint8_t res = -1;
+
+	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
+
+	return res;
 }
