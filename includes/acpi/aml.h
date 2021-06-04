@@ -31,9 +31,11 @@ typedef struct {
 		uint8_t while_cont;
 		uint8_t fatal;
 		uint8_t inside_method;
+		uint8_t method_return;
 	} flags;
 	uint64_t timer;
 	int8_t revision;
+	void* method_context;
 }acpi_aml_parser_context_t;
 
 
@@ -137,12 +139,12 @@ typedef struct _acpi_aml_object_t {
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t, uint8_t*, int64_t);
 #define acpi_aml_parser_context_create(rev, aml, len) acpi_aml_parser_context_create_with_heap(NULL, rev, aml, len)
 
-int64_t acpi_aml_read_as_integer(acpi_aml_object_t*);
+int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t*, acpi_aml_object_t*, int64_t*);
 int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);
 
 int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
-void acpi_aml_print_object(acpi_aml_object_t*);
+void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 
 #endif

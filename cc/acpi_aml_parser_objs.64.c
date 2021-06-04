@@ -390,7 +390,14 @@ int8_t acpi_aml_parse_buffer(acpi_aml_parser_context_t* ctx, void** data, uint64
 	plen -= t_consumed;
 	t_consumed = 0;
 
-	int64_t buflen = acpi_aml_read_as_integer(buflenobj);
+	int64_t buflen = 0;
+
+	if( acpi_aml_read_as_integer(ctx, buflenobj, &buflen) != 0) {
+		memory_free_ext(ctx->heap, buflenobj);
+		return -1;
+	}
+
+	memory_free_ext(ctx->heap, buflenobj);
 
 	buf->type = ACPI_AML_OT_BUFFER;
 	buf->buffer.buflen = buflen;
@@ -840,8 +847,16 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		obj->opregion.region_space = acpi_aml_read_as_integer(tmp_obj);
+		int64_t ival = 0;
+
+		if(acpi_aml_read_as_integer(ctx, tmp_obj, &ival) != 0) {
+			memory_free_ext(ctx->heap, tmp_obj);
+			return -1;
+		}
+
 		memory_free_ext(ctx->heap, tmp_obj);
+
+		obj->opregion.region_space = ival;
 
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
@@ -854,8 +869,14 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		obj->opregion.region_offset = acpi_aml_read_as_integer(tmp_obj);
+		if(acpi_aml_read_as_integer(ctx, tmp_obj, &ival) != 0) {
+			memory_free_ext(ctx->heap, tmp_obj);
+			return -1;
+		}
+
 		memory_free_ext(ctx->heap, tmp_obj);
+
+		obj->opregion.region_offset = ival;
 
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
@@ -868,8 +889,14 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		obj->opregion.region_len = acpi_aml_read_as_integer(tmp_obj);
+		if(acpi_aml_read_as_integer(ctx, tmp_obj, &ival) != 0) {
+			memory_free_ext(ctx->heap, tmp_obj);
+			return -1;
+		}
+
 		memory_free_ext(ctx->heap, tmp_obj);
+
+		obj->opregion.region_len = ival;
 	}
 
 	acpi_aml_add_obj_to_symboltable(ctx, obj);
@@ -885,7 +912,7 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 	uint8_t access_attrib = ACPI_AML_FACCATTRB_NORMAL;
 	uint8_t lock_rule = ACPI_AML_FIELD_NOLOCK;
 	uint8_t update_rule = ACPI_AML_FIELD_OVERRIDE;
-	uint64_t sizeasbit = 0;
+	int64_t sizeasbit = 0;
 
 	uint8_t opcode = *ctx->data;
 	ctx->data++;
@@ -942,7 +969,12 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 		return -1;
 	}
 
-	uint64_t offset = acpi_aml_read_as_integer(offset_obj);
+	int64_t offset = 0;
+
+	if(acpi_aml_read_as_integer(ctx, offset_obj, &offset) != 0) {
+		memory_free_ext(ctx->heap, offset_obj);
+		return -1;
+	}
 
 	if(opcode == ACPI_AML_ARBFIELD) {
 		acpi_aml_object_t* size_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
@@ -958,7 +990,12 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 			return -1;
 		}
 
-		sizeasbit = acpi_aml_read_as_integer(size_obj);
+		if(acpi_aml_read_as_integer(ctx, size_obj, &sizeasbit) != 0) {
+			memory_free_ext(ctx->heap, size_obj);
+			return -1;
+		}
+
+		memory_free_ext(ctx->heap, size_obj);
 	}
 
 

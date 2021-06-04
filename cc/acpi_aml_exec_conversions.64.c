@@ -6,7 +6,7 @@
 #include <acpi/aml_internal.h>
 #include <video.h>
 
-int8_t acpi_aml_exec_object_type(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_object_type(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* op1 = opcode->operands[0];
 
 	if(op1 == NULL) {
@@ -36,7 +36,7 @@ int8_t acpi_aml_exec_object_type(acpi_aml_parser_context_t* ctx, apci_aml_opcode
 	return 0;
 }
 
-int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* src = opcode->operands[0];
 	acpi_aml_object_t* dst = opcode->operands[1];
 
@@ -46,7 +46,11 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* o
 
 	src->refcount++;
 
-	int64_t ival = acpi_aml_read_as_integer(src);
+	int64_t ival = 0;
+	if(acpi_aml_read_as_integer(ctx, src, &ival) != 0) {
+		return -1;
+	}
+
 	uint64_t ires = 0;
 
 	int64_t rem = 0;
@@ -84,7 +88,7 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* o
 	return 0;
 }
 
-int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* src = opcode->operands[0];
 	acpi_aml_object_t* dst = opcode->operands[1];
 
@@ -94,7 +98,11 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t*
 
 	src->refcount++;
 
-	int64_t ival = acpi_aml_read_as_integer(src);
+	int64_t ival = 0;
+	if(acpi_aml_read_as_integer(ctx, src, &ival) != 0) {
+		return -1;
+	}
+
 	uint64_t ires = 0;
 
 	int64_t rem = 0;
@@ -134,7 +142,7 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t*
 
 
 #define UNIMPLEXEC(name) \
-	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, apci_aml_opcode_t * opcode){ \
+	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
 		UNUSED(ctx); \
 		printf("ACPIAML: FATAL method %s for opcode 0x%04x not implemented\n", #name, opcode->opcode); \
 		return -1; \
