@@ -383,3 +383,15 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 		printf("unknown object\n");
 	}
 }
+
+acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj){
+	acpi_aml_object_t* new_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(new_obj == NULL) {
+		return NULL;
+	}
+
+	memory_memcopy(obj, new_obj, sizeof(acpi_aml_object_t));
+
+	return new_obj;
+}

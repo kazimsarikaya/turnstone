@@ -22,11 +22,9 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* op
 		res = acpi_aml_write_as_integer(ctx, ival, dst);
 		printf("ival %li writen to -%s-\n", ival, dst->name);
 		break;
-	case ACPI_AML_OT_OPCODE_EXEC_RETURN:
-		if(dst->opcode_exec_return == NULL) { // debug
-			acpi_aml_print_object(src);
-			res = 0;
-		}
+	case ACPI_AML_OT_DEBUG:
+		acpi_aml_print_object(src);
+		res = 0;
 		break;
 	default:
 		printf("unknown dest %i\n", dst->type);

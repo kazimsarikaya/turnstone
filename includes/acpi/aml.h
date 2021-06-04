@@ -30,11 +30,14 @@ typedef struct {
 		uint8_t while_break;
 		uint8_t while_cont;
 		uint8_t fatal;
+		uint8_t inside_method;
 	} flags;
+	uint64_t timer;
 }acpi_aml_parser_context_t;
 
 
 typedef enum {
+	ACPI_AML_OT_UNINITIALIZED,
 	ACPI_AML_OT_NUMBER,
 	ACPI_AML_OT_STRING,
 	ACPI_AML_OT_ALIAS,
@@ -55,11 +58,15 @@ typedef enum {
 	ACPI_AML_OT_FIELD,
 	ACPI_AML_OT_METHODCALL,
 	ACPI_AML_OT_RUNTIMEREF,
+	ACPI_AML_OT_DEBUG,
+	ACPI_AML_OT_TIMER,
+	ACPI_AML_OT_LOCAL_OR_ARG,
 }acpi_aml_object_type_t;
 
 typedef struct _acpi_aml_object_t {
 	acpi_aml_object_type_t type;
 	uint64_t refcount;
+	uint8_t reference;
 	char_t* name;
 	union {
 		struct {
@@ -119,11 +126,13 @@ typedef struct _acpi_aml_object_t {
 			uint64_t offset;
 			uint64_t sizeasbit;
 		} field;
+		uint8_t idx_local_or_arg;
+		uint64_t timer_value;
 	};
 }acpi_aml_object_t;
 
-acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t*, int64_t);
-#define acpi_aml_parser_context_create(aml, len) acpi_aml_parser_context_create_with_heap(NULL, aml, len)
+acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t, uint8_t*, int64_t);
+#define acpi_aml_parser_context_create(rev, aml, len) acpi_aml_parser_context_create_with_heap(NULL, rev, aml, len)
 
 int64_t acpi_aml_read_as_integer(acpi_aml_object_t*);
 int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);

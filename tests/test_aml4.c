@@ -45,7 +45,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	uint8_t* aml = aml_data + sizeof(acpi_sdt_header_t);
 	size -= sizeof(acpi_sdt_header_t);
 
-	acpi_aml_parser_context_t* ctx = acpi_aml_parser_context_create(aml, size);
+	acpi_aml_parser_context_t* ctx = acpi_aml_parser_context_create(hdr->revision, aml, size);
 	if(ctx == NULL) {
 		print_error("cannot create parser context");
 	} else {

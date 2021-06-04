@@ -41,10 +41,8 @@ CREATE_EXEC_F(op2_logic);
 
 CREATE_EXEC_F(copy);
 CREATE_EXEC_F(mid);
-CREATE_EXEC_F(while_cont);
-CREATE_EXEC_F(noop);
+
 CREATE_EXEC_F(mth_return);
-CREATE_EXEC_F(while_break);
 
 CREATE_EXEC_F(condrefof);
 CREATE_EXEC_F(load_table);
@@ -58,9 +56,7 @@ CREATE_EXEC_F(reset);
 CREATE_EXEC_F(release);
 CREATE_EXEC_F(from_bcd);
 CREATE_EXEC_F(to_bcd);
-CREATE_EXEC_F(revision);
-CREATE_EXEC_F(debug);
-CREATE_EXEC_F(timer);
+
 CREATE_EXEC_F(method);
 
 acpi_aml_exec_f acpi_aml_exec_fs[] = {
@@ -110,17 +106,12 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 	NULL,
 	EXEC_F_NAME(to_string),
 	EXEC_F_NAME(copy),
-	EXEC_F_NAME(mid),
-	EXEC_F_NAME(while_cont),
-	NULL, // 0xA0
-	NULL,
-	NULL,
-	EXEC_F_NAME(noop),
-	EXEC_F_NAME(mth_return),
-	EXEC_F_NAME(while_break), // 0xA5 -> index 53
+	EXEC_F_NAME(mid), // 0x9f -> index 46
 
-	EXEC_F_NAME(condrefof), // 0x5b12 -> index 54
-	EXEC_F_NAME(load_table), // 0x5b1f -> index 55
+	EXEC_F_NAME(mth_return), // 0xa4 -> index 47
+
+	EXEC_F_NAME(condrefof), // 0x5b12 -> index 48
+	EXEC_F_NAME(load_table), // 0x5b1f -> index 49
 	EXEC_F_NAME(load), // 0x5b20
 	EXEC_F_NAME(stall), // 0x5b21
 	EXEC_F_NAME(sleep), // 0x5b22
@@ -130,22 +121,9 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 	EXEC_F_NAME(reset), // 0x5b26
 	EXEC_F_NAME(release), // 0x5b27
 	EXEC_F_NAME(from_bcd), // 0x5b28
-	EXEC_F_NAME(to_bcd), // 0x5b29
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	EXEC_F_NAME(revision), // 0x5b30
-	EXEC_F_NAME(debug), // 0x5b31
-	NULL,
-	EXEC_F_NAME(timer), // 0x5b33 -> index 75
+	EXEC_F_NAME(to_bcd), // 0x5b29 -> index 59
 
-
-	EXEC_F_NAME(noop), // 0xCC -> index 76 breakpoint is also noop
-
-	EXEC_F_NAME(method) // 0xFE -> index 77
+	EXEC_F_NAME(method) // 0xFE -> index 60
 };
 
 
@@ -156,16 +134,16 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 		int16_t tmp = opcode->opcode & 0xFF;
 
 		if(tmp == 0x12) {
-			idx = 54;
-		} else if(tmp >= 0x1f && tmp <= 0x33) {
-			idx = tmp - 55;
+			idx = 48;
+		} else if(tmp >= 0x1f && tmp <= 0x29) {
+			idx = tmp - 49;
 		}
 	} else { // or
 		int16_t tmp = opcode->opcode & 0xFF;
-		if(tmp == 0xCC) {
-			idx = 76;
+		if(tmp == 0xA4) {
+			idx = 47;
 		} else if(tmp == 0xFE) {
-			idx = 77;
+			idx = 60;
 		} else if(tmp >= 0x70 && tmp <= 0xA5) {
 			idx = tmp - 0x70;
 		}
@@ -186,21 +164,61 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 	return exec_f(ctx, opcode);
 }
 
-int8_t acpi_aml_exec_while_break(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
-	UNUSED(opcode);
-	ctx->flags.while_break = 1;
-	return -1;
-}
-
-int8_t acpi_aml_exec_while_cont(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
-	UNUSED(opcode);
-	ctx->flags.while_cont = 1;
-	return -1;
-}
-
-int8_t acpi_aml_exec_noop(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
 	UNUSED(ctx);
-	UNUSED(opcode);
+
+	acpi_aml_object_t* obj = opcode->operands[0];
+
+	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+	if(res == NULL) {
+		return -1;
+	}
+
+	res->type = ACPI_AML_OT_NUMBER;
+	res->number.bytecnt = 1;
+
+	if(obj == NULL) {
+		res->number.value = 0;
+	} else {
+		obj->reference = 1;
+		res->number.value = 1;
+	}
+
+	opcode->return_obj = res;
+
+	return 0;
+}
+
+int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	UNUSED(ctx);
+
+	acpi_aml_object_t* obj = opcode->operands[0];
+
+	if(obj == NULL) {
+		return -1;
+	}
+
+	obj->reference = 1;
+
+	opcode->return_obj = obj;
+
+	return 0;
+}
+
+int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+	UNUSED(ctx);
+
+	acpi_aml_object_t* obj = opcode->operands[0];
+
+	if(obj == NULL) {
+		return -1;
+	}
+
+	obj->reference = 0;
+
+	opcode->return_obj = obj;
+
 	return 0;
 }
 
@@ -212,10 +230,8 @@ int8_t acpi_aml_exec_noop(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opc
 		return -1; \
 	}
 
-UNIMPLEXEC(refof);
 UNIMPLEXEC(concat);
 UNIMPLEXEC(findsetbit);
-UNIMPLEXEC(derefof);
 UNIMPLEXEC(concatres);
 UNIMPLEXEC(notify);
 UNIMPLEXEC(op_sizeof);
@@ -234,7 +250,6 @@ UNIMPLEXEC(to_bcd);
 UNIMPLEXEC(copy);
 UNIMPLEXEC(mid);
 UNIMPLEXEC(mth_return);
-UNIMPLEXEC(condrefof);
 UNIMPLEXEC(stall);
 UNIMPLEXEC(sleep);
 UNIMPLEXEC(acquire);
@@ -242,7 +257,5 @@ UNIMPLEXEC(signal);
 UNIMPLEXEC(wait);
 UNIMPLEXEC(reset);
 UNIMPLEXEC(release);
-UNIMPLEXEC(revision);
-UNIMPLEXEC(debug);
-UNIMPLEXEC(timer);
+
 UNIMPLEXEC(method);
