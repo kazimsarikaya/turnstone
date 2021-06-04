@@ -323,6 +323,28 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 }
 
 void acpi_aml_print_object(acpi_aml_object_t* obj){
+
+	if(obj == NULL) {
+		printf("ACPIAML: FATAL null object\n");
+		return;
+	}
+
+	if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+		obj = obj->opcode_exec_return;
+		if(obj == NULL) {
+			printf("ACPIAML: FATAL null object\n");
+			return;
+		}
+	}
+
+	if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+		obj = obj->opcode_exec_return;
+		if(obj == NULL) {
+			printf("ACPIAML: FATAL null object\n");
+			return;
+		}
+	}
+
 	int64_t len = 0;
 	printf("object name=%s type=", obj->name );
 	switch (obj->type) {
@@ -380,7 +402,7 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 		printf("field related_object=%s offset=0x%lx sizeasbit=%i\n", obj->field.related_object->name, obj->field.offset, obj->field.sizeasbit);
 		break;
 	default:
-		printf("unknown object\n");
+		printf("unknown object %li\n", obj->type);
 	}
 }
 
@@ -394,4 +416,30 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t* ctx, acp
 	memory_memcopy(obj, new_obj, sizeof(acpi_aml_object_t));
 
 	return new_obj;
+}
+
+acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj) {
+	if(obj == NULL) {
+		return NULL;
+	}
+
+	while(obj->type == ACPI_AML_OT_ALIAS || obj->type == ACPI_AML_OT_RUNTIMEREF) {
+		if(obj->type == ACPI_AML_OT_ALIAS) {
+			if(obj->alias_target == NULL) {
+				return NULL;
+			}
+
+			obj = obj->alias_target;
+		}
+
+		if(obj->type == ACPI_AML_OT_RUNTIMEREF) {
+			obj = acpi_aml_symbol_lookup(ctx, obj->name);
+
+			if(obj == NULL) {
+				return NULL;
+			}
+		}
+	}
+
+	return obj;
 }
