@@ -6,9 +6,18 @@
 #include <acpi/aml_internal.h>
 #include <video.h>
 
-int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
-	int64_t op1 = acpi_aml_read_as_integer(opcode->operands[0]);
-	int64_t op2 = acpi_aml_read_as_integer(opcode->operands[1]);
+int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+	int64_t op1 = 0;
+	int64_t op2 = 0;
+
+	if(acpi_aml_read_as_integer(ctx, opcode->operands[0], &op1) != 0) {
+		return -1;
+	}
+
+	if(acpi_aml_read_as_integer(ctx, opcode->operands[1], &op2) != 0) {
+		return -1;
+	}
+
 	int64_t ires = 0;
 
 	opcode->operands[0]->refcount++;
@@ -62,8 +71,12 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t
 }
 
 
-int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
-	int64_t op1 = acpi_aml_read_as_integer(opcode->operands[0]);
+int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+	int64_t op1 = 0;
+
+	if(acpi_aml_read_as_integer(ctx, opcode->operands[0], &op1) != 0) {
+		return -1;
+	}
 
 	opcode->operands[0]->refcount++;
 
@@ -87,7 +100,7 @@ int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, apci_aml_opc
 	return 0;
 }
 
-int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	if(opcode->opcode != ACPI_AML_NOT) {
 		return -1;
 	}
@@ -97,7 +110,10 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opc
 
 	src->refcount++;
 
-	int64_t op1 = acpi_aml_read_as_integer(src);
+	int64_t op1 = 0;
+	if(acpi_aml_read_as_integer(ctx, src, &op1) != 0) {
+		return -1;
+	}
 
 	int64_t ires = ~op1;
 
@@ -123,17 +139,25 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opc
 	return 0;
 }
 
-int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* op1op = opcode->operands[0];
 	acpi_aml_object_t* op2op = opcode->operands[1];
 	acpi_aml_object_t* target = opcode->operands[2];
 
+
+	int64_t op1 = 0;
+	int64_t op2 = 0;
+
+	if(acpi_aml_read_as_integer(ctx, op1op, &op1) != 0) {
+		return -1;
+	}
+
+	if(acpi_aml_read_as_integer(ctx, op2op, &op2) != 0) {
+		return -1;
+	}
+
 	op1op->refcount++;
 	op2op->refcount++;
-
-	int64_t op1 = acpi_aml_read_as_integer(op1op);
-	int64_t op2 = acpi_aml_read_as_integer(op2op);
-
 
 	int64_t ires = 0;
 
@@ -191,17 +215,25 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, apci_aml_opc
 	return 0;
 }
 
-int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* dividendop = opcode->operands[0];
 	acpi_aml_object_t* divisorop = opcode->operands[1];
 	acpi_aml_object_t* remainderop = opcode->operands[2];
 	acpi_aml_object_t* resultop = opcode->operands[3];
 
+	int64_t dividend = 0;
+	int64_t divisor = 0;
+
+	if(acpi_aml_read_as_integer(ctx, dividendop, &dividend) != 0) {
+		return -1;
+	}
+
+	if(acpi_aml_read_as_integer(ctx, divisorop, &divisor) != 0) {
+		return -1;
+	}
+
 	dividendop->refcount++;
 	divisorop->refcount++;
-
-	int64_t dividend = acpi_aml_read_as_integer(dividendop);
-	int64_t divisor = acpi_aml_read_as_integer(divisorop);
 
 	if(divisor == 0) {
 		ctx->flags.fatal = 1;

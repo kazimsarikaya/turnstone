@@ -19,35 +19,84 @@ int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
 	return -1;
 }
 
-int64_t acpi_aml_read_as_integer(acpi_aml_object_t* obj){
-	if(obj == NULL) {
-		return 0;
+acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, uint8_t w) {
+	if(obj && obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+		if(ctx->method_context == NULL) {
+			return NULL;
+		}
+
+		acpi_aml_method_context_t* mthctx = ctx->method_context;
+
+		uint8_t laidx = obj->idx_local_or_arg;
+
+		if(laidx > 14) {
+			acpi_aml_print_object(ctx, obj);
+			printf("ACPIAML: FATAL local/arg index out of bounds %lx\n", laidx);
+			return NULL;
+		}
+
+		obj = mthctx->mthobjs[laidx];
+
+		if(obj == NULL && laidx <= 7) { // if localX does not exists create it
+			obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+			obj->type = ACPI_AML_OT_UNINITIALIZED;
+			mthctx->mthobjs[laidx] = obj;
+		}
+
+		if(obj == NULL) {
+			printf("ACPIAML: FATAL local/arg does not exists %lx\n", laidx);
+			return NULL;
+		}
+
+		if(w && laidx >= 8 && laidx <= 14) {
+			if(obj->reference == 0) { // write to args need reference or a copy will be created
+				obj = acpi_aml_duplicate_object(ctx, obj);
+				mthctx->mthobjs[laidx] = obj;
+			}
+		}
 	}
+	return obj;
+}
+
+int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0);
+
+	if(obj == NULL || res == NULL) {
+		return -1;
+	}
+
 
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
-		return obj->number.value;
+		*res = obj->number.value;
+		break;
 	case ACPI_AML_OT_STRING:
-		return atoi(obj->string);
+		*res =  atoi(obj->string);
+		break;
 	case ACPI_AML_OT_BUFFER:
-		return *((int64_t*)obj->buffer.buf);
+		*res =  *((int64_t*)obj->buffer.buf);
 		break;
 	case ACPI_AML_OT_OPCODE_EXEC_RETURN:
-		return acpi_aml_read_as_integer(obj->opcode_exec_return);
-		break;
+		return acpi_aml_read_as_integer(ctx, obj->opcode_exec_return, res);
 	default:
 		printf("read as integer objtype %li\n", obj->type);
+		return -1;
 		break;
 	}
 
-	return -1;
+	return 0;
 }
 
 
 int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
-	UNUSED(ctx);
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 1);
+
 	if(obj == NULL) {
 		return -1;
+	}
+
+	if(obj->type == ACPI_AML_OT_UNINITIALIZED) {
+		obj->type = ACPI_AML_OT_NUMBER;
 	}
 
 	switch (obj->type) {
@@ -55,6 +104,7 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 		obj->number.value = val;
 		break;
 	default:
+		printf("write as integer objtype %li\n", obj->type);
 		return -1;
 	}
 
@@ -313,7 +363,7 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 	iterator_t* iter = linkedlist_iterator_create(ctx->symbols);
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_aml_object_t* sym = iter->get_item(iter);
-		acpi_aml_print_object(sym);
+		acpi_aml_print_object(ctx, sym);
 		item_count++;
 		iter = iter->next(iter);
 	}
@@ -322,7 +372,7 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 	printf("totoal syms %i\n", item_count );;
 }
 
-void acpi_aml_print_object(acpi_aml_object_t* obj){
+void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj){
 
 	if(obj == NULL) {
 		printf("ACPIAML: FATAL null object\n");
@@ -346,7 +396,10 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 	}
 
 	int64_t len = 0;
-	printf("object name=%s type=", obj->name );
+	int64_t ival = 0;
+
+	printf("object name=%s type=", obj->name);
+
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
 		printf("number value=0x%lx bytecnt=%i\n", obj->number.value, obj->number.bytecnt );
@@ -361,7 +414,7 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 		printf("buffer buflen=%i\n", obj->buffer.buflen );
 		break;
 	case ACPI_AML_OT_PACKAGE:
-		len = acpi_aml_read_as_integer(obj->package.pkglen);
+		acpi_aml_read_as_integer(ctx, obj->package.pkglen, &ival);
 		printf("pkg pkglen=%i initial pkglen=%i\n", len, linkedlist_size(obj->package.elements) );
 		break;
 	case ACPI_AML_OT_SCOPE:
@@ -399,7 +452,11 @@ void acpi_aml_print_object(acpi_aml_object_t* obj){
 		printf("external objecttype=%i argcount=%i\n", obj->external.object_type, obj->external.arg_count);
 		break;
 	case ACPI_AML_OT_FIELD:
+	case ACPI_AML_OT_BUFFERFIELD:
 		printf("field related_object=%s offset=0x%lx sizeasbit=%i\n", obj->field.related_object->name, obj->field.offset, obj->field.sizeasbit);
+		break;
+	case ACPI_AML_OT_LOCAL_OR_ARG:
+		printf("%s%i\n", obj->idx_local_or_arg > 7 ? "ARG" : "LOCAL", obj->idx_local_or_arg > 7 ? obj->idx_local_or_arg - 1 : obj->idx_local_or_arg);
 		break;
 	default:
 		printf("unknown object %li\n", obj->type);
@@ -419,11 +476,7 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t* ctx, acp
 }
 
 acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj) {
-	if(obj == NULL) {
-		return NULL;
-	}
-
-	while(obj->type == ACPI_AML_OT_ALIAS || obj->type == ACPI_AML_OT_RUNTIMEREF) {
+	while(obj && (obj->type == ACPI_AML_OT_ALIAS || obj->type == ACPI_AML_OT_RUNTIMEREF || obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN)) {
 		if(obj->type == ACPI_AML_OT_ALIAS) {
 			if(obj->alias_target == NULL) {
 				return NULL;
@@ -434,10 +487,10 @@ acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t* ctx, acpi
 
 		if(obj->type == ACPI_AML_OT_RUNTIMEREF) {
 			obj = acpi_aml_symbol_lookup(ctx, obj->name);
+		}
 
-			if(obj == NULL) {
-				return NULL;
-			}
+		if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+			obj = obj->opcode_exec_return;
 		}
 	}
 

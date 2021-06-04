@@ -115,12 +115,12 @@ acpi_aml_parse_f acpi_aml_parse_fs[] = {
 	PARSER_F_NAME(opcnt_0),
 	NULL, // empty
 	PARSER_F_NAME(opcnt_2),  // 0x70
-	PARSER_F_NAME(opcnt_2),
+	PARSER_F_NAME(opcnt_1),
 	PARSER_F_NAME(opcnt_3),
 	PARSER_F_NAME(opcnt_3),
 	PARSER_F_NAME(opcnt_3),
-	PARSER_F_NAME(opcnt_2),
-	PARSER_F_NAME(opcnt_2),
+	PARSER_F_NAME(opcnt_1),
+	PARSER_F_NAME(opcnt_1),
 	PARSER_F_NAME(opcnt_3),
 	PARSER_F_NAME(opcnt_4), /*0x78*/
 	PARSER_F_NAME(opcnt_3),
@@ -133,11 +133,11 @@ acpi_aml_parse_f acpi_aml_parse_fs[] = {
 	PARSER_F_NAME(opcnt_2),  // 0x80
 	PARSER_F_NAME(opcnt_2),
 	PARSER_F_NAME(opcnt_2),
-	PARSER_F_NAME(opcnt_2),
+	PARSER_F_NAME(opcnt_1),
 	PARSER_F_NAME(opcnt_3),
 	PARSER_F_NAME(opcnt_3),
 	PARSER_F_NAME(opcnt_2),
-	PARSER_F_NAME(opcnt_2),
+	PARSER_F_NAME(opcnt_1),
 	PARSER_F_NAME(opcnt_3), /*0x88*/
 	PARSER_F_NAME(op_match),
 	PARSER_F_NAME(create_field),

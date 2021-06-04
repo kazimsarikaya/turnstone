@@ -13,13 +13,11 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	uint64_t r_consumed = 0;
 	uint8_t idx = 0;
 	int8_t res = -1;
-	apci_aml_opcode_t* opcode = NULL;
+	acpi_aml_opcode_t* opcode = NULL;
 	acpi_aml_object_t* return_obj = NULL;
-	acpi_aml_object_type_t return_obj_type = ACPI_AML_OT_UNINITIALIZED;
 
 	if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_REVISION)) {
 		return_obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, "\\", "_REV");
-		return_obj_type = return_obj->type;
 		res = 0;
 		r_consumed = 1;
 
@@ -28,7 +26,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
 		if(return_obj != NULL) {
 			return_obj->type = ACPI_AML_OT_DEBUG;
-			return_obj_type = return_obj->type;
 			res = 0;
 			r_consumed = 1;
 		}
@@ -39,7 +36,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		if(return_obj != NULL) {
 			return_obj->type = ACPI_AML_OT_TIMER;
 			return_obj->timer_value = ctx->timer;
-			return_obj_type = return_obj->type;
 			res = 0;
 			r_consumed = 1;
 		}
@@ -50,7 +46,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		if(return_obj != NULL) {
 			return_obj->type = ACPI_AML_OT_LOCAL_OR_ARG;
 			return_obj->idx_local_or_arg = oc - 0x60;
-			return_obj_type = return_obj->type;
 			res = 0;
 			r_consumed = 1;
 		}
@@ -68,7 +63,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		res = 0;
 
 	} else {
-		opcode = memory_malloc_ext(ctx->heap, sizeof(apci_aml_opcode_t), 0x0);
+		opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0x0);
 
 		if(opcode == NULL) {
 			return -1;
@@ -84,15 +79,16 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			opcode->operand_count = opcnt;
 		}
 
-		for(; idx < opcnt; idx++) {
+		for(; idx < opcode->operand_count; idx++) {
 			uint64_t t_consumed = 0;
 			acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
 			if(op == NULL) {
-				return -1;
+				goto cleanup;
 			}
 
 			if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
+				res = -1;
 				goto cleanup;
 			}
 
@@ -107,14 +103,13 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		}
 
 		return_obj = opcode->return_obj;
-		return_obj_type = ACPI_AML_OT_OPCODE_EXEC_RETURN;
 
 		res = 0;
 	}
 
 	if(res == 0 && data != NULL) {
 		acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
-		resobj->type =  return_obj_type;
+		resobj->type =  ACPI_AML_OT_OPCODE_EXEC_RETURN;
 		resobj->opcode_exec_return = return_obj;
 
 	}
@@ -248,7 +243,12 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	plen -= t_consumed;
 
-	int64_t res = acpi_aml_read_as_integer(predic);
+	int64_t res = 0;
+
+	if(acpi_aml_read_as_integer(ctx, predic, &res) != 0) {
+		memory_free_ext(ctx->heap, predic);
+		return -1;
+	}
 
 	if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 		if(predic->opcode_exec_return->refcount == 0) {
@@ -372,7 +372,14 @@ int8_t acpi_aml_parse_fatal(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		return -1;
 	}
 
-	ctx->fatal_error.arg = acpi_aml_read_as_integer(arg);
+	int64_t fatal_ival = 0;
+
+	acpi_aml_read_as_integer(ctx, arg, &fatal_ival);
+
+	memory_free_ext(ctx->heap, arg);
+
+	ctx->fatal_error.arg = fatal_ival;
+
 	ctx->flags.fatal = 1;
 
 	return -1; // fatal always -1 because it is fatal :)
@@ -384,7 +391,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 	int8_t res = -1;
 
 
-	apci_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(apci_aml_opcode_t), 0x0);
+	acpi_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0x0);
 
 	if(opcode == NULL) {
 		return -1;
@@ -518,7 +525,12 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 			return -1;
 		}
 
-		int64_t predic_res = acpi_aml_read_as_integer(predic);
+		int64_t predic_res = 0;
+
+		if(acpi_aml_read_as_integer(ctx, predic, &predic_res) != 0) {
+			memory_free_ext(ctx->heap, predic);
+			return -1;
+		}
 
 		if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 			if(predic->opcode_exec_return->refcount == 0 || predic->opcode_exec_return->name == NULL) {

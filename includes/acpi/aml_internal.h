@@ -186,8 +186,12 @@ typedef struct {
 	uint16_t opcode;
 	acpi_aml_object_t* operands[8];
 	acpi_aml_object_t* return_obj;
-}apci_aml_opcode_t;
+}acpi_aml_opcode_t;
 
+typedef struct {
+	uint8_t arg_count;
+	acpi_aml_object_t** mthobjs; // 0-7 -> locals 8-14 -> args 15 -> return
+}acpi_aml_method_context_t;
 
 int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t*, void**, uint64_t*);
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t*, void**, uint64_t*);
@@ -205,7 +209,7 @@ uint64_t acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
 uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, linkedlist_t, char_t*, char_t*);
-int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_context_t*, void**, uint64_t*, acpi_aml_object_t*);
@@ -214,6 +218,6 @@ int8_t acpi_aml_is_null_target(acpi_aml_object_t*);
 
 acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
-
+acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t*, acpi_aml_object_t*, uint8_t);
 
 #endif

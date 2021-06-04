@@ -8,9 +8,9 @@
 
 
 
-typedef int8_t (* acpi_aml_exec_f)(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+typedef int8_t (* acpi_aml_exec_f)(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
 
-#define CREATE_EXEC_F(name) int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
+#define CREATE_EXEC_F(name) int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
 #define EXEC_F_NAME(name) acpi_aml_exec_ ## name
 
 
@@ -127,7 +127,7 @@ acpi_aml_exec_f acpi_aml_exec_fs[] = {
 };
 
 
-int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	int16_t idx = -1;
 
 	if((opcode->opcode & 0x5b00) == 0x5b00) { // if extended ?
@@ -164,8 +164,7 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, apci_aml_opcode_
 	return exec_f(ctx, opcode);
 }
 
-int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
-	UNUSED(ctx);
+int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 
 	acpi_aml_object_t* obj = opcode->operands[0];
 
@@ -190,7 +189,7 @@ int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t
 	return 0;
 }
 
-int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	UNUSED(ctx);
 
 	acpi_aml_object_t* obj = opcode->operands[0];
@@ -206,7 +205,7 @@ int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* op
 	return 0;
 }
 
-int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* opcode){
+int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	UNUSED(ctx);
 
 	acpi_aml_object_t* obj = opcode->operands[0];
@@ -222,9 +221,89 @@ int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, apci_aml_opcode_t* 
 	return 0;
 }
 
+int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+	acpi_aml_object_t* obj = opcode->operands[0];
+
+	ctx->flags.method_return = 1;
+
+	if(ctx->method_context == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
+	acpi_aml_method_context_t* mthctx = ctx->method_context;
+
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0);
+
+	mthctx->mthobjs[15] = acpi_aml_duplicate_object(ctx, obj);
+
+	printf("method return\n");
+	return -1;
+}
+
+int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+	int8_t res = -1;
+
+	acpi_aml_method_context_t* mthctx = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_method_context_t), 0x0);
+
+	if(mthctx == NULL) {
+		return -1;
+	}
+
+	mthctx->arg_count = opcode->operand_count - 1; //first op is method call object
+
+	acpi_aml_object_t** mthobjs = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t) * 16, 0x0);
+
+	if(mthobjs == NULL) {
+		memory_free_ext(ctx->heap, mthctx);
+		return -1;
+	}
+
+	for(uint8_t i = 0; i < opcode->operand_count - 1; i++) {
+		mthobjs[8 + i] = opcode->operands[1 + i];
+	}
+
+	mthctx->mthobjs = mthobjs;
+
+	acpi_aml_object_t* mth = opcode->operands[0];
+
+	uint8_t* old_data = ctx->data;
+	uint64_t old_length = ctx->length;
+	uint64_t old_remaining = ctx->remaining;
+
+	ctx->flags.inside_method = 1;
+	ctx->data = mth->method.termlist;
+	ctx->length = mth->method.termlist_length;
+	ctx->remaining = mth->method.termlist_length;
+	ctx->method_context = mthctx;
+
+	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
+
+	if(res == -1 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
+		opcode->return_obj = mthobjs[15];
+		res = 0;
+	}
+
+	ctx->flags.inside_method = 0;
+	ctx->data = old_data;
+	ctx->length = old_length;
+	ctx->remaining = old_remaining;
+	ctx->method_context = NULL;
+
+	for(uint8_t i = 0; i < 8; i++) {
+		if(mthobjs[i]) {
+			memory_free_ext(ctx->heap, mthobjs[i]);
+		}
+	}
+
+	memory_free_ext(ctx->heap, mthobjs);
+	memory_free_ext(ctx->heap, mthctx);
+
+	return res;
+}
 
 #define UNIMPLEXEC(name) \
-	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, apci_aml_opcode_t * opcode){ \
+	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
 		UNUSED(ctx); \
 		printf("ACPIAML: FATAL method %s for opcode 0x%04x not implemented\n", #name, opcode->opcode); \
 		return -1; \
@@ -240,7 +319,6 @@ UNIMPLEXEC(match);
 
 UNIMPLEXEC(copy);
 UNIMPLEXEC(mid);
-UNIMPLEXEC(mth_return);
 UNIMPLEXEC(stall);
 UNIMPLEXEC(sleep);
 UNIMPLEXEC(acquire);
@@ -248,5 +326,3 @@ UNIMPLEXEC(signal);
 UNIMPLEXEC(wait);
 UNIMPLEXEC(reset);
 UNIMPLEXEC(release);
-
-UNIMPLEXEC(method);
