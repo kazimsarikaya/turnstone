@@ -213,5 +213,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_contex
 int8_t acpi_aml_is_null_target(acpi_aml_object_t*);
 
 acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
+acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
+
 
 #endif

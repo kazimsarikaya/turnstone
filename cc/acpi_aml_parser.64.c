@@ -369,6 +369,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 	ctx->remaining = sizeof(acpi_aml_parser_defaults);
 	ctx->scope_prefix = root_prefix;
 	ctx->symbols = linkedlist_create_list_with_heap(heap);
+	ctx->revision = revision;
 
 	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
 		memory_free_ext(heap, ctx);

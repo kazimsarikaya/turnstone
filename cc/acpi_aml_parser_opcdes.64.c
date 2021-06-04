@@ -96,6 +96,8 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 				goto cleanup;
 			}
 
+			op = acpi_aml_get_real_object(ctx, op);
+
 			opcode->operands[idx] = op;
 			r_consumed += t_consumed;
 		}

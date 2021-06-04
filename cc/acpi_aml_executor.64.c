@@ -238,15 +238,6 @@ UNIMPLEXEC(op_sizeof);
 UNIMPLEXEC(index);
 UNIMPLEXEC(match);
 
-UNIMPLEXEC(object_type);
-UNIMPLEXEC(to_buffer);
-UNIMPLEXEC(to_decimalstring);
-UNIMPLEXEC(to_hexstring);
-UNIMPLEXEC(to_integer);
-UNIMPLEXEC(to_string);
-UNIMPLEXEC(from_bcd);
-UNIMPLEXEC(to_bcd);
-
 UNIMPLEXEC(copy);
 UNIMPLEXEC(mid);
 UNIMPLEXEC(mth_return);

@@ -984,7 +984,7 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 	}
 
 	obj->name = nomname;
-	obj->type = ACPI_AML_OT_FIELD;
+	obj->type = ACPI_AML_OT_BUFFERFIELD;
 	obj->field.related_object = buf;
 	obj->field.access_type = access_type;
 	obj->field.access_attrib = access_attrib;
