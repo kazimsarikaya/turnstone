@@ -122,7 +122,7 @@ uint8_t kmain64() {
 
 			int64_t aml_size = dsdt->length - sizeof(acpi_sdt_header_t);
 			uint8_t* aml = (uint8_t*)(dsdt + 1);
-			acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(acpi_heap, aml, aml_size);
+			acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(acpi_heap, dsdt->revision, aml, aml_size);
 
 			if(pctx != NULL) {
 				printf("aml parser ctx created\n");

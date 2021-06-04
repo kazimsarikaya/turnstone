@@ -93,7 +93,7 @@
 #define ACPI_AML_IF                  0xA0
 #define ACPI_AML_ELSE                0xA1
 #define ACPI_AML_WHILE               0xA2
-#define ACPI_AML_NOP                 0xA3
+#define ACPI_AML_NOOP                 0xA3
 #define ACPI_AML_RETURN              0xA4
 #define ACPI_AML_BREAK               0xA5
 #define ACPI_AML_BREAKPOINT          0xCC
@@ -204,6 +204,7 @@ int8_t acpi_aml_is_namestring_start(uint8_t*);
 uint64_t acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
 uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, linkedlist_t, char_t*, char_t*);
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, apci_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
@@ -211,5 +212,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_contex
 
 int8_t acpi_aml_is_null_target(acpi_aml_object_t*);
 
+acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 
 #endif

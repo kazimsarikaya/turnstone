@@ -13,56 +13,118 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	uint64_t r_consumed = 0;
 	uint8_t idx = 0;
 	int8_t res = -1;
+	apci_aml_opcode_t* opcode = NULL;
+	acpi_aml_object_t* return_obj = NULL;
+	acpi_aml_object_type_t return_obj_type = ACPI_AML_OT_UNINITIALIZED;
 
-	apci_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(apci_aml_opcode_t), 0x0);
+	if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_REVISION)) {
+		return_obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, "\\", "_REV");
+		return_obj_type = return_obj->type;
+		res = 0;
+		r_consumed = 1;
 
-	if(opcode == NULL) {
-		return -1;
-	}
+	} else if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_DEBUG)) {
+		return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
-	opcode->opcode = oc;
+		if(return_obj != NULL) {
+			return_obj->type = ACPI_AML_OT_DEBUG;
+			return_obj_type = return_obj->type;
+			res = 0;
+			r_consumed = 1;
+		}
 
-	if(preop != NULL) {
-		opcode->operand_count = 1 + opcnt;
-		opcode->operands[0] = preop;
-		idx = 1;
+	} else if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_TIMER)) {
+		return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(return_obj != NULL) {
+			return_obj->type = ACPI_AML_OT_TIMER;
+			return_obj->timer_value = ctx->timer;
+			return_obj_type = return_obj->type;
+			res = 0;
+			r_consumed = 1;
+		}
+
+	} else if(oc >= ACPI_AML_LOCAL0 && oc <= ACPI_AML_ARG6) {
+		return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+		if(return_obj != NULL) {
+			return_obj->type = ACPI_AML_OT_LOCAL_OR_ARG;
+			return_obj->idx_local_or_arg = oc - 0x60;
+			return_obj_type = return_obj->type;
+			res = 0;
+			r_consumed = 1;
+		}
+
+	} else if(oc == ACPI_AML_CONTINUE) {
+		ctx->flags.while_cont = 1;
+		r_consumed = 1;
+
+	} else if(oc == ACPI_AML_BREAK) {
+		ctx->flags.while_break = 1;
+		r_consumed = 1;
+
+	} else if(oc == ACPI_AML_NOOP || oc == ACPI_AML_BREAKPOINT) {
+		r_consumed = 1;
+		res = 0;
+
 	} else {
-		opcode->operand_count = opcnt;
-	}
+		opcode = memory_malloc_ext(ctx->heap, sizeof(apci_aml_opcode_t), 0x0);
 
-	for(; idx < opcnt; idx++) {
-		uint64_t t_consumed = 0;
-		acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
-
-		if(op == NULL) {
+		if(opcode == NULL) {
 			return -1;
 		}
 
-		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
+		opcode->opcode = oc;
+
+		if(preop != NULL) {
+			opcode->operand_count = 1 + opcnt;
+			opcode->operands[0] = preop;
+			idx = 1;
+		} else {
+			opcode->operand_count = opcnt;
+		}
+
+		for(; idx < opcnt; idx++) {
+			uint64_t t_consumed = 0;
+			acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+			if(op == NULL) {
+				return -1;
+			}
+
+			if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
+				goto cleanup;
+			}
+
+			opcode->operands[idx] = op;
+			r_consumed += t_consumed;
+		}
+
+		if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
 			goto cleanup;
 		}
 
-		opcode->operands[idx] = op;
-		r_consumed += t_consumed;
+		return_obj = opcode->return_obj;
+		return_obj_type = ACPI_AML_OT_OPCODE_EXEC_RETURN;
+
+		res = 0;
 	}
 
-	if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
-		goto cleanup;
-	}
-
-	if(data != NULL) {
+	if(res == 0 && data != NULL) {
 		acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
-		resobj->type = ACPI_AML_OT_OPCODE_EXEC_RETURN;
-		resobj->opcode_exec_return = opcode->return_obj;
+		resobj->type =  return_obj_type;
+		resobj->opcode_exec_return = return_obj;
+
 	}
 
 	if(consumed != NULL) {
 		*consumed += r_consumed;
 	}
 
-	res = 0;
-
 cleanup:
+	if(opcode == NULL) {
+		return res;
+	}
 
 	for(uint8_t i = 0; i < idx; i++) {
 		if(opcode->operands[i] != NULL && (opcode->operands[i]->refcount == 0 || opcode->operands[i]->name == NULL)) {

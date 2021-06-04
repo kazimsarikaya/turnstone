@@ -349,10 +349,10 @@ uint8_t acpi_aml_parser_defaults[] =
 	0x5B, 0x01, 0x5F, 0x47, 0x4C, 0x5F, 0x00,
 	0x08, 0x5F, 0x4F, 0x53, 0x5F, 0x0D, 0x48, 0x6F, 0x62, 0x62, 0x79, 0x20, 0x4F, 0x53, 0x00,
 	0x14, 0x08, 0x5F, 0x4F, 0x53, 0x49, 0x01, 0xA4, 0x00,
-	0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x02
+	0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x00
 };
 
-acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t* aml, int64_t size) {
+acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t revision, uint8_t* aml, int64_t size) {
 	char_t* root_prefix = "";
 
 	acpi_aml_parser_context_t* ctx = memory_malloc_ext(heap, sizeof(acpi_aml_parser_context_t), 0x0);
@@ -360,6 +360,8 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 	if(ctx == NULL) {
 		return NULL;
 	}
+
+	acpi_aml_parser_defaults[sizeof(acpi_aml_parser_defaults) - 1] = revision;
 
 	ctx->heap = heap;
 	ctx->data = acpi_aml_parser_defaults;
