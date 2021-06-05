@@ -194,11 +194,10 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 }
 
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-
-	printf("scope: -%s- one_item data: 0x%02x length: %li remaining: %li\n", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
-
 	if(ctx->remaining == 0) { // realy we need this?
-		return 0;
+		printf("ACPIAML: Fatal premature end\n");
+		ctx->flags.fatal = 1;
+		return -1;
 	}
 
 	int8_t res = -1;
@@ -217,7 +216,9 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 		}
 	}
 
-	printf("one item completed\n");
+	if(res == -1 && ctx->flags.fatal == 1) {
+		printf("ACPIAML: Error: scope: -%s- one_item data: 0x%02x length: %li remaining: %li\n", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+	}
 
 	return res;
 }

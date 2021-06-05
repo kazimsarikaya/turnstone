@@ -56,6 +56,9 @@ uint32_t main(uint32_t argc, char_t** argv) {
 		}
 
 		acpi_aml_print_symbol_table(ctx);
+
+		acpi_aml_destroy_symbol_table(ctx, 0);
+		memory_free(ctx);
 	}
 
 	memory_free(aml_data);

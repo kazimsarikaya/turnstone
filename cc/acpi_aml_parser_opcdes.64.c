@@ -19,7 +19,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_REVISION)) {
 		return_obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, "\\", "_REV");
 		res = 0;
-		r_consumed = 1;
 
 	} else if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_DEBUG)) {
 		return_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
@@ -27,7 +26,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		if(return_obj != NULL) {
 			return_obj->type = ACPI_AML_OT_DEBUG;
 			res = 0;
-			r_consumed = 1;
 		}
 
 	} else if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_TIMER)) {
@@ -37,7 +35,6 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			return_obj->type = ACPI_AML_OT_TIMER;
 			return_obj->timer_value = ctx->timer;
 			res = 0;
-			r_consumed = 1;
 		}
 
 	} else if(oc >= ACPI_AML_LOCAL0 && oc <= ACPI_AML_ARG6) {
@@ -45,21 +42,17 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
 		if(return_obj != NULL) {
 			return_obj->type = ACPI_AML_OT_LOCAL_OR_ARG;
-			return_obj->idx_local_or_arg = oc - 0x60;
+			return_obj->local_or_arg.idx_local_or_arg = oc - 0x60;
 			res = 0;
-			r_consumed = 1;
 		}
 
 	} else if(oc == ACPI_AML_CONTINUE) {
 		ctx->flags.while_cont = 1;
-		r_consumed = 1;
 
 	} else if(oc == ACPI_AML_BREAK) {
 		ctx->flags.while_break = 1;
-		r_consumed = 1;
 
 	} else if(oc == ACPI_AML_NOOP || oc == ACPI_AML_BREAKPOINT) {
-		r_consumed = 1;
 		res = 0;
 
 	} else {
@@ -125,7 +118,7 @@ cleanup:
 
 	for(uint8_t i = 0; i < idx; i++) {
 		if(opcode->operands[i] != NULL && (opcode->operands[i]->refcount == 0 || opcode->operands[i]->name == NULL)) {
-			memory_free_ext(ctx->heap, opcode->operands[i]);
+			acpi_aml_destroy_object(ctx, opcode->operands[i]);
 		}
 	}
 	memory_free_ext(ctx->heap, opcode);
