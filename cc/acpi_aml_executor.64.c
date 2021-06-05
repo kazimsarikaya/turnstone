@@ -166,7 +166,10 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 
 int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 
-	acpi_aml_object_t* obj = opcode->operands[0];
+	acpi_aml_object_t* src = opcode->operands[0];
+	acpi_aml_object_t* dst = opcode->operands[1];
+
+	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 1);
 
 	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
@@ -177,10 +180,17 @@ int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 	res->type = ACPI_AML_OT_NUMBER;
 	res->number.bytecnt = 1;
 
-	if(obj == NULL) {
+	if(src == NULL) {
 		res->number.value = 0;
 	} else {
-		obj->reference = 1;
+		src->refcount++;
+		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 1);
+
+		if(acpi_aml_is_null_target(dst) != 0) {
+			dst->type = ACPI_AML_OT_REFOF;
+			dst->refof_target = src;
+		}
+
 		res->number.value = 1;
 	}
 
@@ -193,14 +203,24 @@ int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	UNUSED(ctx);
 
 	acpi_aml_object_t* obj = opcode->operands[0];
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
 	if(obj == NULL) {
 		return -1;
 	}
 
-	obj->reference = 1;
+	acpi_aml_object_t* refof = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
-	opcode->return_obj = obj;
+	if(refof == NULL) {
+		return -1;
+	}
+
+	obj->refcount++;
+
+	refof->type = ACPI_AML_OT_REFOF;
+	refof->refof_target = obj;
+
+	opcode->return_obj = refof;
 
 	return 0;
 }
@@ -210,11 +230,19 @@ int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* 
 
 	acpi_aml_object_t* obj = opcode->operands[0];
 
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
+
 	if(obj == NULL) {
 		return -1;
 	}
 
-	obj->reference = 0;
+	if(obj->type == ACPI_AML_OT_STRING) {
+		obj = acpi_aml_symbol_lookup(ctx, obj->string);
+	} else if (obj->type == ACPI_AML_OT_REFOF) {
+		obj = obj->refof_target;
+	} else {
+		return -1;
+	}
 
 	opcode->return_obj = obj;
 
@@ -233,16 +261,16 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 
 	acpi_aml_method_context_t* mthctx = ctx->method_context;
 
-	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0);
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
 	mthctx->mthobjs[15] = acpi_aml_duplicate_object(ctx, obj);
 
-	printf("method return\n");
 	return -1;
 }
 
 int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	int8_t res = -1;
+	int8_t lsymtbl_created_by_me = 0;
 
 	acpi_aml_method_context_t* mthctx = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_method_context_t), 0x0);
 
@@ -277,6 +305,12 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	ctx->remaining = mth->method.termlist_length;
 	ctx->method_context = mthctx;
 
+
+	if(ctx->local_symbols == NULL) {
+		ctx->local_symbols = linkedlist_create_list_with_heap(ctx->heap);
+		lsymtbl_created_by_me = 1;
+	}
+
 	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
 	if(res == -1 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
@@ -290,9 +324,14 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	ctx->remaining = old_remaining;
 	ctx->method_context = NULL;
 
+	if(lsymtbl_created_by_me) {
+		acpi_aml_destroy_symbol_table(ctx, 1);
+		ctx->local_symbols = NULL;
+	}
+
 	for(uint8_t i = 0; i < 8; i++) {
 		if(mthobjs[i]) {
-			memory_free_ext(ctx->heap, mthobjs[i]);
+			acpi_aml_destroy_object(ctx, mthobjs[i]);
 		}
 	}
 

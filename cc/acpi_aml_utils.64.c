@@ -19,7 +19,7 @@ int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
 	return -1;
 }
 
-acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, uint8_t w) {
+acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, uint8_t write, uint8_t copy) {
 	if(obj && obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
 		if(ctx->method_context == NULL) {
 			return NULL;
@@ -27,7 +27,7 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 
 		acpi_aml_method_context_t* mthctx = ctx->method_context;
 
-		uint8_t laidx = obj->idx_local_or_arg;
+		uint8_t laidx = obj->local_or_arg.idx_local_or_arg;
 
 		if(laidx > 14) {
 			acpi_aml_print_object(ctx, obj);
@@ -35,36 +35,47 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 			return NULL;
 		}
 
-		obj = mthctx->mthobjs[laidx];
+		acpi_aml_object_t* la_obj = mthctx->mthobjs[laidx];
 
-		if(obj == NULL && laidx <= 7) { // if localX does not exists create it
-			obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
-			obj->type = ACPI_AML_OT_UNINITIALIZED;
-			mthctx->mthobjs[laidx] = obj;
+		if(la_obj == NULL && laidx <= 7) { // if localX does not exists create it
+			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
+			mthctx->mthobjs[laidx] = la_obj;
 		}
 
-		if(obj == NULL) {
+		if(la_obj == NULL) {
 			printf("ACPIAML: FATAL local/arg does not exists %lx\n", laidx);
 			return NULL;
 		}
 
-		if(w && laidx >= 8 && laidx <= 14) {
-			if(obj->reference == 0) { // write to args need reference or a copy will be created
-				obj = acpi_aml_duplicate_object(ctx, obj);
-				mthctx->mthobjs[laidx] = obj;
+		if(laidx >= 8) {
+			if(write && (mthctx->dirty_args[laidx - 8] == 0 || copy == 1)) {
+				la_obj = acpi_aml_duplicate_object(ctx, la_obj);
+				memory_free_ext(ctx->heap, la_obj->name);
+				la_obj->name = NULL;
+				mthctx->mthobjs[laidx] = la_obj;
+				mthctx->dirty_args[laidx - 8] = 1;
+			}
+
+			if(write == 0 && copy == 1 && mthctx->dirty_args[laidx - 8] == 0) {
+				la_obj = acpi_aml_duplicate_object(ctx, la_obj);
+				memory_free_ext(ctx->heap, la_obj->name);
+				la_obj->name = NULL;
+				mthctx->dirty_args[laidx - 8] = 1;
 			}
 		}
+
+		obj = la_obj;
 	}
 	return obj;
 }
 
 int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
-	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0);
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
 	if(obj == NULL || res == NULL) {
 		return -1;
 	}
-
 
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
@@ -89,7 +100,7 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 
 
 int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
-	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 1);
+	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 1, 0);
 
 	if(obj == NULL) {
 		return -1;
@@ -176,6 +187,9 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, 
 	}
 
 	strcpy(dst_name, nomname);
+
+	memory_free_ext(ctx->heap, dst_name);
+
 	return nomname;
 }
 
@@ -295,27 +309,39 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 
 		for(int64_t len = linkedlist_size(table) - 1; len >= 0; len--) {
 			acpi_aml_object_t* obj = (acpi_aml_object_t*)linkedlist_get_data_at_position(table, len);
+
 			if(strcmp(obj->name, nomname) == 0) {
+				memory_free_ext(ctx->heap, nomname);
 				memory_free_ext(ctx->heap, tmp_prefix);
 				return obj;
 			}
 		}
+
 		if(strlen(tmp_prefix) == 0) {
+			memory_free_ext(ctx->heap, nomname);
 			break;
 		}
+
 		tmp_prefix[strlen(tmp_prefix) - 4] = NULL;
+
+		memory_free_ext(ctx->heap, nomname);
 	}
+
 	memory_free_ext(ctx->heap, tmp_prefix);
+
 	return NULL;
 }
 
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t* symbol_name){
 	if(ctx->local_symbols != NULL) {
 		acpi_aml_object_t* obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->local_symbols, ctx->scope_prefix, symbol_name);
+
 		if(obj != NULL) {
 			return obj;
 		}
+
 	}
+
 	return acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, ctx->scope_prefix, symbol_name);
 }
 
@@ -332,13 +358,16 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 		   ) {
 			return 0;
 		}
+
 		return -1;
 	}
+
 	if(ctx->local_symbols != NULL) {
 		linkedlist_list_insert(ctx->local_symbols, obj);
 	}else {
 		linkedlist_list_insert(ctx->symbols, obj);
 	}
+
 	return 0;
 }
 
@@ -346,16 +375,77 @@ uint8_t acpi_aml_get_index_of_extended_code(uint8_t code) {
 	if(code >= 0x80) {
 		return code - 0x6d;
 	}
+
 	if(code >= 0x30) {
 		return code - 0x21;
 	}
+
 	if(code >= 0x1f) {
 		return code - 0x1b;
 	}
+
 	if(code >= 0x12) {
 		return code - 0x10;
 	}
+
 	return code - 0x01;
+}
+
+void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local){
+	uint64_t item_count = 0;
+	iterator_t* iter = NULL;
+	linkedlist_t symtbl;
+
+	if(local) {
+		symtbl = ctx->local_symbols;
+	} else {
+		symtbl = ctx->symbols;
+	}
+
+	iter = linkedlist_iterator_create(symtbl);
+
+	if(iter == NULL) {
+		return;
+	}
+
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_object_t* sym = iter->get_item(iter);
+		acpi_aml_destroy_object(ctx, sym);
+		item_count++;
+		iter = iter->next(iter);
+	}
+	iter->destroy(iter);
+}
+
+void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj){
+	if(obj == NULL) {
+		return;
+	}
+
+	switch (obj->type) {
+	case ACPI_AML_OT_STRING:
+		memory_free_ext(ctx->heap, obj->string);
+		break;
+	case ACPI_AML_OT_BUFFER:
+		memory_free_ext(ctx->heap, obj->buffer.buf);
+		break;
+	case ACPI_AML_OT_PACKAGE:
+		if(obj->package.pkglen->name == NULL) {
+			memory_free_ext(ctx->heap, obj->package.pkglen);
+		}
+		linkedlist_destroy(obj->package.elements); // TODO :recurive items may be package too
+		break;
+	case ACPI_AML_OT_DATAREGION:
+		memory_free_ext(ctx->heap, obj->dataregion.signature);
+		memory_free_ext(ctx->heap, obj->dataregion.oemid);
+		memory_free_ext(ctx->heap, obj->dataregion.oemtableid);
+		break;
+	default:
+		break;
+	}
+
+	memory_free_ext(ctx->heap, obj->name);
+	memory_free_ext(ctx->heap, obj);
 }
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
@@ -387,18 +477,10 @@ void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* ob
 		}
 	}
 
-	if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
-		obj = obj->opcode_exec_return;
-		if(obj == NULL) {
-			printf("ACPIAML: FATAL null object\n");
-			return;
-		}
-	}
-
 	int64_t len = 0;
 	int64_t ival = 0;
 
-	printf("object name=%s type=", obj->name);
+	printf("object id=%p name=%s type=", obj, obj->name);
 
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
@@ -456,7 +538,11 @@ void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* ob
 		printf("field related_object=%s offset=0x%lx sizeasbit=%i\n", obj->field.related_object->name, obj->field.offset, obj->field.sizeasbit);
 		break;
 	case ACPI_AML_OT_LOCAL_OR_ARG:
-		printf("%s%i\n", obj->idx_local_or_arg > 7 ? "ARG" : "LOCAL", obj->idx_local_or_arg > 7 ? obj->idx_local_or_arg - 1 : obj->idx_local_or_arg);
+		printf("%s%i\n", obj->local_or_arg.idx_local_or_arg > 7 ? "ARG" : "LOCAL", obj->local_or_arg.idx_local_or_arg > 7 ? obj->local_or_arg.idx_local_or_arg - 1 : obj->local_or_arg.idx_local_or_arg);
+		break;
+	case ACPI_AML_OT_REFOF:
+		printf("refof ");
+		acpi_aml_print_object(ctx, obj->refof_target);
 		break;
 	default:
 		printf("unknown object %li\n", obj->type);
@@ -471,6 +557,35 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t* ctx, acp
 	}
 
 	memory_memcopy(obj, new_obj, sizeof(acpi_aml_object_t));
+
+	new_obj->name = strdup_at_heap(ctx->heap, obj->name);
+
+	switch (obj->type) {
+	case ACPI_AML_OT_STRING:
+		new_obj->string = strdup_at_heap(ctx->heap, obj->string);
+		break;
+	case ACPI_AML_OT_BUFFER:
+		new_obj->buffer.buf = memory_malloc_ext(ctx->heap, obj->buffer.buflen, 0x0);
+		memory_memcopy(obj->buffer.buf, new_obj->buffer.buf, obj->buffer.buflen);
+		break;
+	case ACPI_AML_OT_NUMBER:
+	case ACPI_AML_OT_EVENT:
+	case ACPI_AML_OT_MUTEX:
+	case ACPI_AML_OT_OPREGION:
+	case ACPI_AML_OT_POWERRES:
+	case ACPI_AML_OT_PROCESSOR:
+	case ACPI_AML_OT_EXTERNAL:
+	case ACPI_AML_OT_METHOD:
+	case ACPI_AML_OT_TIMER:
+	case ACPI_AML_OT_LOCAL_OR_ARG:
+		break;
+	case ACPI_AML_OT_REFOF:
+		printf("ACPIAML: Warning duplicate of refof\n");
+		break;
+	default: // TODO: other pointers
+		printf("ACPIAML: Fatal not implemented\n");
+		break;
+	}
 
 	return new_obj;
 }

@@ -66,12 +66,12 @@ typedef enum {
 	ACPI_AML_OT_RUNTIMEREF,
 	ACPI_AML_OT_TIMER,
 	ACPI_AML_OT_LOCAL_OR_ARG,
+	ACPI_AML_OT_REFOF,
 }acpi_aml_object_type_t;
 
 typedef struct _acpi_aml_object_t {
 	acpi_aml_object_type_t type;
 	uint64_t refcount;
-	uint8_t reference;
 	char_t* name;
 	union {
 		struct {
@@ -89,6 +89,7 @@ typedef struct _acpi_aml_object_t {
 		} package;
 		struct _acpi_aml_object_t* opcode_exec_return;
 		struct _acpi_aml_object_t* alias_target;
+		struct _acpi_aml_object_t* refof_target;
 		uint8_t mutex_sync_flags;
 		struct {
 			uint8_t arg_count;
@@ -131,7 +132,9 @@ typedef struct _acpi_aml_object_t {
 			uint64_t offset;
 			uint64_t sizeasbit;
 		} field;
-		uint8_t idx_local_or_arg;
+		struct {
+			uint8_t idx_local_or_arg;
+		} local_or_arg;
 		uint64_t timer_value;
 	};
 }acpi_aml_object_t;
@@ -146,5 +149,8 @@ int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
 void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
+
+void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t*, uint8_t);
+void acpi_aml_destroy_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 
 #endif

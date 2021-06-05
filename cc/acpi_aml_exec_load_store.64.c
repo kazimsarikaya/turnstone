@@ -14,15 +14,31 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	dst->refcount++;
 
 
-	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0);
-	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1);
+	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
+	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
 
 	if(dst == NULL || src == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
+	if(src->type == ACPI_AML_OT_REFOF && !(dst->type == ACPI_AML_OT_UNINITIALIZED || dst->type == ACPI_AML_OT_DEBUG)) {
+		printf("ACPIAML: Error at writing refof to the non uninitiliazed variable\n");
+		ctx->flags.fatal = 1;
 		return -1;
 	}
 
 	if(dst->type == ACPI_AML_OT_UNINITIALIZED) {
 		dst->type = src->type;
+	}
+
+	if(dst->type == ACPI_AML_OT_REFOF) {
+		dst = dst->refof_target;
+
+		if(dst == NULL) {
+			ctx->flags.fatal = 1;
+			return -1;
+		}
 	}
 
 	int8_t res = -1;
@@ -42,7 +58,7 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 		break;
 	default:
 		acpi_aml_print_object(ctx, dst);
-		printf("store unknown dest %i\n", dst->type);
+		printf("store unknown dest %i src is %i\n", dst->type, src->type);
 		return -1;
 	}
 

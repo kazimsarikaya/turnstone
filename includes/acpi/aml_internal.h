@@ -191,6 +191,7 @@ typedef struct {
 typedef struct {
 	uint8_t arg_count;
 	acpi_aml_object_t** mthobjs; // 0-7 -> locals 8-14 -> args 15 -> return
+	uint8_t dirty_args[7];
 }acpi_aml_method_context_t;
 
 int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t*, void**, uint64_t*);
@@ -218,6 +219,6 @@ int8_t acpi_aml_is_null_target(acpi_aml_object_t*);
 
 acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
-acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t*, acpi_aml_object_t*, uint8_t);
+acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t*, acpi_aml_object_t*, uint8_t, uint8_t);
 
 #endif
