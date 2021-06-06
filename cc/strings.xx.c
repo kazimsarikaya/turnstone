@@ -58,6 +58,7 @@ char_t* strrev(char_t* source) {
 }
 
 number_t ato_base(char_t* source, number_t base) {
+	// TODO: lower upper case chars are same when base<=36
 	number_t ret = 0;
 	number_t p = 0;
 	size_t l = strlen(source);
