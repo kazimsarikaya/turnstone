@@ -235,6 +235,7 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		return -1;
 	}
 	src_obj->refcount++;
+	memory_free_ext(ctx->heap, srcname);
 
 
 	namelen = acpi_aml_len_namestring(ctx);
@@ -415,7 +416,9 @@ int8_t acpi_aml_parse_buffer(acpi_aml_parser_context_t* ctx, void** data, uint64
 		return -1;
 	}
 
-	memory_free_ext(ctx->heap, buflenobj);
+	if(buflenobj->name == NULL) {
+		memory_free_ext(ctx->heap, buflenobj);
+	}
 
 	buf->type = ACPI_AML_OT_BUFFER;
 	buf->buffer.buflen = buflen;
@@ -605,7 +608,6 @@ int8_t acpi_aml_parse_method(acpi_aml_parser_context_t* ctx, void** data, uint64
 	if(obj == NULL) {
 		return -1;
 	}
-
 
 	obj->name = nomname;
 	obj->type = ACPI_AML_OT_METHOD;

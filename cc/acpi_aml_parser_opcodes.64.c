@@ -245,10 +245,15 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 		if(predic->opcode_exec_return->refcount == 0) {
-			memory_free_ext(ctx->heap, predic->opcode_exec_return);
+			if(predic->opcode_exec_return->name == NULL) {
+				memory_free_ext(ctx->heap, predic->opcode_exec_return);
+			}
 		}
 	}
-	memory_free_ext(ctx->heap, predic);
+
+	if(predic->name == NULL) {
+		memory_free_ext(ctx->heap, predic);
+	}
 
 	if(res != 0) {
 
@@ -531,7 +536,9 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 			}
 		}
 
-		memory_free_ext(ctx->heap, predic);
+		if(predic->name == NULL) {
+			memory_free_ext(ctx->heap, predic);
+		}
 
 		if(predic_res == 0) {
 			break;
