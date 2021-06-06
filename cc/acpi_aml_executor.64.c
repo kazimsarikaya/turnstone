@@ -348,20 +348,9 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 		return -1; \
 	}
 
-UNIMPLEXEC(concat);
-UNIMPLEXEC(findsetbit);
-UNIMPLEXEC(concatres);
-UNIMPLEXEC(notify);
-UNIMPLEXEC(op_sizeof);
-UNIMPLEXEC(index);
-UNIMPLEXEC(match);
-
 UNIMPLEXEC(copy);
-UNIMPLEXEC(mid);
+
+UNIMPLEXEC(notify);
+
 UNIMPLEXEC(stall);
 UNIMPLEXEC(sleep);
-UNIMPLEXEC(acquire);
-UNIMPLEXEC(signal);
-UNIMPLEXEC(wait);
-UNIMPLEXEC(reset);
-UNIMPLEXEC(release);
