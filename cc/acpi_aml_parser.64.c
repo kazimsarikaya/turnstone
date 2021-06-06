@@ -270,6 +270,9 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 		r_consumed += t_consumed;
 	} else {
 		if(data != NULL) {
+			if(*data != NULL) {
+				memory_free_ext(ctx->heap, *data);
+			}
 			*data = (void*)tmp_obj;
 		} else {
 			return -1;
