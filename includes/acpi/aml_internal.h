@@ -221,4 +221,9 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t*, acpi_am
 acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t*, acpi_aml_object_t*, uint8_t, uint8_t);
 
+int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t*, acpi_aml_object_t*, int64_t*);
+int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);
+int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t*, acpi_aml_object_t*, acpi_aml_object_t*);
+int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t*, acpi_aml_object_t*, acpi_aml_object_t*);
+
 #endif
