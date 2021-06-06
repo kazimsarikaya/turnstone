@@ -14,13 +14,18 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 		return -1;
 	}
 
-	if(acpi_aml_read_as_integer(ctx, opcode->operands[1], &op2) != 0) {
-		return -1;
-	}
 
 	int64_t ires = 0;
 
 	opcode->operands[0]->refcount++;
+
+	if(opcode->operands[1] != NULL) {
+		if(acpi_aml_read_as_integer(ctx, opcode->operands[1], &op2) != 0) {
+			return -1;
+		}
+
+		opcode->operands[1]->refcount++;
+	}
 
 	switch (opcode->opcode) {
 	case ACPI_AML_LAND:
@@ -31,7 +36,6 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 		break;
 	case ACPI_AML_LNOT:
 		ires = !op1;
-		opcode->operands[1]->refcount++;
 		break;
 	case ACPI_AML_LEQUAL << 8 | ACPI_AML_LNOT:
 		  ires = op1 != op2;
