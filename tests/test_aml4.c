@@ -45,11 +45,15 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	uint8_t* aml = aml_data + sizeof(acpi_sdt_header_t);
 	size -= sizeof(acpi_sdt_header_t);
 
+	int8_t res = -1;
+
 	acpi_aml_parser_context_t* ctx = acpi_aml_parser_context_create(hdr->revision, aml, size);
 	if(ctx == NULL) {
 		print_error("cannot create parser context");
 	} else {
-		if(acpi_aml_parse(ctx) == 0) {
+		res = acpi_aml_parse(ctx);
+
+		if(res == 0) {
 			print_success("aml parsed");
 		} else {
 			print_error("aml not parsed");
@@ -63,6 +67,12 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
 	memory_free(aml_data);
 	dump_ram("tmp/mem.dump");
-	print_success("Tests are passed");
+
+	if(res == 0) {
+		print_success("Tests are passed");
+	} else {
+		print_error("Tests are not passed");
+	}
+
 	return 0;
 }

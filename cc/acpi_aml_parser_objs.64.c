@@ -8,6 +8,11 @@
 
 
 int8_t acpi_aml_parse_namestring(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	if(data == NULL || *data == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
 	char_t* name = (char_t*)*data;
 	uint64_t idx = 0;
 	uint64_t t_consumed = 0;
@@ -65,6 +70,10 @@ int8_t acpi_aml_parse_namestring(acpi_aml_parser_context_t* ctx, void** data, ui
 }
 
 int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	if(data == NULL || *data == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
 	acpi_aml_object_t* obj = (acpi_aml_object_t*)*data;
 	uint8_t op_code = *ctx->data;
 	uint64_t len;
@@ -178,6 +187,11 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 }
 
 int8_t acpi_aml_parse_byte_data(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	if(data == NULL || *data == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
 	acpi_aml_object_t* obj = (acpi_aml_object_t*)*data;
 	uint64_t t_consumed = 1;
 
@@ -348,21 +362,25 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	ctx->remaining = pkglen;
 	ctx->scope_prefix = nomname;
 
-	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {
-		return -1;
-	}
+	int8_t res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
 	ctx->length = old_length;
 	ctx->remaining = old_remaining - pkglen;
 	ctx->scope_prefix = old_scope_prefix;
 
-	return 0;
+	return res;
 }
 
 
 
 int8_t acpi_aml_parse_buffer(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	UNUSED(consumed);
+
+	if(data == NULL || *data == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
 	acpi_aml_object_t* buf = (acpi_aml_object_t*)*data;
 	uint64_t t_consumed = 0;
 	uint64_t r_consumed = 1;
@@ -423,6 +441,11 @@ int8_t acpi_aml_parse_package(acpi_aml_parser_context_t* ctx, void** data, uint6
 	uint64_t t_consumed = 0;
 	uint64_t r_consumed = 1;
 
+	if(data == NULL || *data == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
+
 	acpi_aml_object_t* pkg = (acpi_aml_object_t*)*data;
 	pkg->type = ACPI_AML_OT_PACKAGE;
 
@@ -476,6 +499,11 @@ int8_t acpi_aml_parse_package(acpi_aml_parser_context_t* ctx, void** data, uint6
 int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	uint64_t t_consumed = 0;
 	uint64_t r_consumed = 1;
+
+	if(data == NULL || *data == NULL) {
+		ctx->flags.fatal = 1;
+		return -1;
+	}
 
 	acpi_aml_object_t* pkg = (acpi_aml_object_t*)*data;
 	pkg->type = ACPI_AML_OT_PACKAGE;
