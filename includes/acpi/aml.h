@@ -141,9 +141,7 @@ typedef struct _acpi_aml_object_t {
 
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t, uint8_t*, int64_t);
 #define acpi_aml_parser_context_create(rev, aml, len) acpi_aml_parser_context_create_with_heap(NULL, rev, aml, len)
-
-int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t*, acpi_aml_object_t*, int64_t*);
-int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);
+void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t*);
 
 int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
 

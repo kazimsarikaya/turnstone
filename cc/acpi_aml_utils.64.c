@@ -143,6 +143,21 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 	return 0;
 }
 
+int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* src, acpi_aml_object_t* dst) {
+	UNUSED(ctx);
+	UNUSED(src);
+	UNUSED(dst);
+	return -1;
+}
+
+int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* src, acpi_aml_object_t* dst) {
+	UNUSED(ctx);
+	UNUSED(src);
+	UNUSED(dst);
+	return -1;
+}
+
+
 int8_t acpi_aml_is_lead_name_char(uint8_t* c) {
 	if(('A' <= *c && *c <= 'Z') || *c == '_') {
 		return 0;
@@ -204,6 +219,7 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, 
 	char_t* nomname = memory_malloc_ext(ctx->heap, sizeof(char_t) * strlen(dst_name) + 1, 0x0);
 
 	if(nomname == NULL) {
+		memory_free_ext(ctx->heap, dst_name);
 		return NULL;
 	}
 
@@ -435,7 +451,9 @@ void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local
 		item_count++;
 		iter = iter->next(iter);
 	}
+
 	iter->destroy(iter);
+	linkedlist_destroy(symtbl);
 }
 
 void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj){
@@ -619,13 +637,9 @@ acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t* ctx, acpi
 			}
 
 			obj = obj->alias_target;
-		}
-
-		if(obj->type == ACPI_AML_OT_RUNTIMEREF) {
+		} else if(obj->type == ACPI_AML_OT_RUNTIMEREF) {
 			obj = acpi_aml_symbol_lookup(ctx, obj->name);
-		}
-
-		if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+		} else if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 			obj = obj->opcode_exec_return;
 		}
 	}
