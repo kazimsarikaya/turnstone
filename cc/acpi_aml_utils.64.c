@@ -77,12 +77,33 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		return -1;
 	}
 
+	int64_t ival = 0;
+	char_t* strptr;
+
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
 		*res = obj->number.value;
 		break;
 	case ACPI_AML_OT_STRING:
-		*res =  atoi(obj->string);
+		strptr = obj->string;
+		if(strptr[0] == '0' && (strptr[1] == 'x' || strptr[1] == 'X')) {
+			strptr += 2;
+		}
+		while(1) {
+			if(*strptr >= 'A' && *strptr <= 'F') {
+				ival |= *strptr - 'A' + 10;
+			} else if(*strptr >= 'a' && *strptr <= 'f') {
+				ival |= *strptr - 'a' + 10;
+			} else if(*strptr >= '0' && *strptr <= '9') {
+				ival |= *strptr - '0';
+			} else {
+				ival >>= 4;
+				break;
+			}
+			ival <<= 4;
+			strptr++;
+		}
+		*res = ival;
 		break;
 	case ACPI_AML_OT_BUFFER:
 		*res =  *((int64_t*)obj->buffer.buf);
