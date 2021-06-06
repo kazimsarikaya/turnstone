@@ -393,9 +393,10 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 				 oldsym->type == ACPI_AML_OT_THERMALZONE
 				 )
 		   ) {
+			acpi_aml_destroy_object(ctx, obj);
 			return 0;
 		}
-
+		acpi_aml_destroy_object(ctx, obj);
 		return -1;
 	}
 
@@ -461,6 +462,8 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 		return;
 	}
 
+	iterator_t* iter = NULL;
+
 	switch (obj->type) {
 	case ACPI_AML_OT_STRING:
 		memory_free_ext(ctx->heap, obj->string);
@@ -469,17 +472,55 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 		memory_free_ext(ctx->heap, obj->buffer.buf);
 		break;
 	case ACPI_AML_OT_PACKAGE:
+		iter = linkedlist_iterator_create(obj->package.elements);
+
+		while(iter->end_of_iterator(iter) != 0) {
+			acpi_aml_object_t* obj = iter->get_item(iter);
+
+			if(obj->name == NULL || obj->type == ACPI_AML_OT_RUNTIMEREF) {
+				acpi_aml_destroy_object(ctx, obj);
+			}
+
+			iter = iter->next(iter);
+		}
+
+		iter->destroy(iter);
+
+		linkedlist_destroy(obj->package.elements); // TODO :recurive items may be package too
+
 		if(obj->package.pkglen->name == NULL) {
 			memory_free_ext(ctx->heap, obj->package.pkglen);
 		}
-		linkedlist_destroy(obj->package.elements); // TODO :recurive items may be package too
 		break;
 	case ACPI_AML_OT_DATAREGION:
 		memory_free_ext(ctx->heap, obj->dataregion.signature);
 		memory_free_ext(ctx->heap, obj->dataregion.oemid);
 		memory_free_ext(ctx->heap, obj->dataregion.oemtableid);
 		break;
+	case ACPI_AML_OT_OPCODE_EXEC_RETURN:
+		if(obj->opcode_exec_return->name == NULL) {
+			acpi_aml_destroy_object(ctx, obj->opcode_exec_return);
+		}
+		break;
+	case ACPI_AML_OT_NUMBER:
+	case ACPI_AML_OT_EVENT:
+	case ACPI_AML_OT_MUTEX:
+	case ACPI_AML_OT_OPREGION:
+	case ACPI_AML_OT_POWERRES:
+	case ACPI_AML_OT_PROCESSOR:
+	case ACPI_AML_OT_THERMALZONE:
+	case ACPI_AML_OT_EXTERNAL:
+	case ACPI_AML_OT_METHOD:
+	case ACPI_AML_OT_TIMER:
+	case ACPI_AML_OT_SCOPE:
+	case ACPI_AML_OT_FIELD:
+	case ACPI_AML_OT_BUFFERFIELD:
+	case ACPI_AML_OT_DEVICE:
+	case ACPI_AML_OT_ALIAS:
+	case ACPI_AML_OT_RUNTIMEREF:
+		break;
 	default:
+		printf("ACPIAML: Warning object destroy may be required %li\n", obj->type);
 		break;
 	}
 

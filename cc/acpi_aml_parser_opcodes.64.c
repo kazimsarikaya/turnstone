@@ -117,7 +117,13 @@ cleanup:
 	}
 
 	for(uint8_t i = 0; i < idx; i++) {
-		if(opcode->operands[i] != NULL && (opcode->operands[i]->refcount == 0 || opcode->operands[i]->name == NULL)) {
+		if(opcode->operands[i] != NULL && opcode->operands[i]->name == NULL) {
+			if(opcode->operands[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+				acpi_aml_object_t* tmp = opcode->operands[i]->opcode_exec_return;
+				if(tmp && tmp->name == NULL) {
+					acpi_aml_destroy_object(ctx, tmp);
+				}
+			}
 			acpi_aml_destroy_object(ctx, opcode->operands[i]);
 		}
 	}
@@ -239,15 +245,12 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	int64_t res = 0;
 
 	if(acpi_aml_read_as_integer(ctx, predic, &res) != 0) {
-		memory_free_ext(ctx->heap, predic);
 		return -1;
 	}
 
 	if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
-		if(predic->opcode_exec_return->refcount == 0) {
-			if(predic->opcode_exec_return->name == NULL) {
-				memory_free_ext(ctx->heap, predic->opcode_exec_return);
-			}
+		if(predic->opcode_exec_return->name == NULL) {
+			memory_free_ext(ctx->heap, predic->opcode_exec_return);
 		}
 	}
 
@@ -473,7 +476,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 cleanup:
 
 	for(uint8_t i = 0; i < idx; i++) {
-		if(opcode->operands[i] != NULL && opcode->operands[i]->refcount == 0) {
+		if(opcode->operands[i] != NULL && opcode->operands[i]->name == NULL) {
 			memory_free_ext(ctx->heap, opcode->operands[i]);
 		}
 	}
@@ -531,7 +534,7 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 		}
 
 		if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
-			if(predic->opcode_exec_return->refcount == 0 || predic->opcode_exec_return->name == NULL) {
+			if(predic->opcode_exec_return->name == NULL) {
 				memory_free_ext(ctx->heap, predic->opcode_exec_return);
 			}
 		}

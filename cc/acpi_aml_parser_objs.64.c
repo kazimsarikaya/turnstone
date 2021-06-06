@@ -353,8 +353,6 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		pkglen -= 6;
 	}
 
-	acpi_aml_add_obj_to_symboltable(ctx, obj);
-
 	uint64_t old_length = ctx->length;
 	uint64_t old_remaining = ctx->remaining;
 	char_t* old_scope_prefix = ctx->scope_prefix;
@@ -368,6 +366,8 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	ctx->length = old_length;
 	ctx->remaining = old_remaining - pkglen;
 	ctx->scope_prefix = old_scope_prefix;
+
+	acpi_aml_add_obj_to_symboltable(ctx, obj); // if this fails because of scope exists nomname cleared hence it should be at end
 
 	return res;
 }
@@ -1005,6 +1005,8 @@ int8_t acpi_aml_parse_create_field(acpi_aml_parser_context_t* ctx, void** data, 
 		memory_free_ext(ctx->heap, offset_obj);
 		return -1;
 	}
+
+	memory_free_ext(ctx->heap, offset_obj);
 
 	if(opcode == ACPI_AML_ARBFIELD) {
 		acpi_aml_object_t* size_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
