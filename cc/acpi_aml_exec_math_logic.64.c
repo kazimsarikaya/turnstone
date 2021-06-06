@@ -63,7 +63,7 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
 	res->type = ACPI_AML_OT_NUMBER;
 	res->number.value = ires;
-	res->number.bytecnt = 1; // i don't known one or 8?
+	res->number.bytecnt = 1;
 
 	opcode->return_obj = res;
 
