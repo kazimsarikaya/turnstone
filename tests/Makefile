@@ -27,6 +27,9 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 .PRECIOUS: $(TESTOUTPUT)/%.o
 all: $(OUTPUTS)
 
+gendirs:
+	mkdir -p $(TESTOUTPUT)
+
 $(TESTOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<
 

@@ -29,9 +29,6 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-
-
-
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections \
 	-mgeneral-regs-only -mno-red-zone
@@ -99,6 +96,11 @@ qemu: $(QEMUDISK)
 
 virtualbox: $(VBBOXDISK)
 
+gendirs:
+	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR)
+	make -C tests gendirs
+	make -C utils gendirs
+
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
 	touch $(OBJDIR)/docs
@@ -107,11 +109,17 @@ $(VBBOXDISK): $(DISK)
 	dd bs=512 conv=notrunc if=$< of=$(VBBOXDISK)
 
 $(QEMUDISK): $(DISK)
+	rm -fr $(QEMUDISK)
+	dd if=/dev/zero of=output/qemu-hda bs=1 count=0 seek=1g
 	dd bs=512 conv=notrunc if=$< of=$(QEMUDISK)
 
-$(DISK): $(GENCCSRCS) $(PROGS) utils
+$(DISK): $(MKDIRSDONE) $(GENCCSRCS) $(PROGS) utils
 	cat $(PROGS) > $@
 	$(OBJDIR)/formatslots.bin $@ $(PROGS)
+
+$(MKDIRSDONE):
+	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
+	touch $(MKDIRSDONE)
 
 $(OBJDIR)/bootsect16.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
 	$(LD16) $(LD16FLAGS) --script=$<  -o $@ $(filter-out $<,$^)
@@ -159,6 +167,9 @@ clean:
 	rm -f .depend*
 	find cc-gen -type f -delete
 	find includes-gen -type f -delete
+
+cleandirs:
+	rm -fr $(CCGENDIR) $(OBJDIR)
 
 print-%: ; @echo $* = $($*)
 
