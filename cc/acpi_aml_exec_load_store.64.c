@@ -18,9 +18,6 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
 	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
 
-	src->refcount++;
-	dst->refcount++;
-
 	if(src->type == ACPI_AML_OT_REFOF && !(dst->type == ACPI_AML_OT_UNINITIALIZED || dst->type == ACPI_AML_OT_DEBUG)) {
 		printf("ACPIAML: Error at writing refof to the non uninitiliazed variable\n");
 		ctx->flags.fatal = 1;

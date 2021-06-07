@@ -1,0 +1,30 @@
+Hobby OS:
+  Issues:
+    ☐ Memory bug when store opcode's target (maybe return one) is DEBUG object
+    ☐ Logical operations wrong if source/target not integer.
+    ☐ Will not boot when stage3 is lge 64kib
+    ☐ write casting cannot change dest object type correctly
+
+  Tasks:
+    Implement ACPI/AML:
+      Parsers:
+        ☐ handle _crs/_prs buffers
+      Executors:
+        ☐ Write executor methods
+          ☐ Write read/write string
+          ☐ Write read/write buffer
+        ☐ handle logic ops if source is string/buffer
+    PCI:
+      ☐ After acpi, map interrupts to he apic and io-apic
+      ☐ Memory mapping of BARs
+    Disk:
+      ☐ implement sata (ahci)
+    Network:
+      ☐ implement e1000
+      ☐ implement virtio-net
+
+
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+Archive:
+  ✔ Memory bug while destroying acpi aml objects @done(2021-06-07 08:46) @project(Hobby OS / Issues)
+  ✔ Write parser methods @done(2021-06-07 08:45) @project(Hobby OS / Tasks / Implement ACPI/AML / Parsers)

@@ -15,8 +15,6 @@ int8_t acpi_aml_exec_op_sizeof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 		return -1;
 	}
 
-	obj->refcount++;
-
 	int64_t len = 0;
 	int8_t res = -1;
 
@@ -90,7 +88,6 @@ int8_t acpi_aml_exec_findsetbit(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 	}
 
 	if(acpi_aml_is_null_target(dst) != 0) {
-		dst->refcount++;
 		if(acpi_aml_write_as_integer(ctx, loc, dst) != 0) {
 			return -1;
 		}

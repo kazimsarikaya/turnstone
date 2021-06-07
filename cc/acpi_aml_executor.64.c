@@ -183,7 +183,6 @@ int8_t acpi_aml_exec_condrefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 	if(src == NULL) {
 		res->number.value = 0;
 	} else {
-		src->refcount++;
 		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 1);
 
 		if(acpi_aml_is_null_target(dst) != 0) {
@@ -214,8 +213,6 @@ int8_t acpi_aml_exec_refof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	if(refof == NULL) {
 		return -1;
 	}
-
-	obj->refcount++;
 
 	refof->type = ACPI_AML_OT_REFOF;
 	refof->refof_target = obj;
@@ -263,7 +260,7 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 
 	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
-	mthctx->mthobjs[15] = acpi_aml_duplicate_object(ctx, obj);
+	mthctx->mthobjs[15] = obj; //acpi_aml_duplicate_object(ctx, obj);
 
 	return -1;
 }
