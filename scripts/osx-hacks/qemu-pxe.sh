@@ -10,4 +10,5 @@ sudo qemu-system-x86_64 \
   -M q35 -m 1g -smp cpus=2 -name osdev-pxe-boot \
   -net nic,model=virtio,macaddr=54:54:00:55:55:55 \
   -net tap,script=${CURRENTDIR}/tap-up.sh,downscript=${CURRENTDIR}/tap-down.sh  \
-  -monitor stdio
+  -monitor stdio \
+  -serial file:${BASEDIR}/tmp/qemu-video.log

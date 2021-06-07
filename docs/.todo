@@ -2,7 +2,6 @@ Hobby OS:
   Issues:
     ☐ Memory bug when store opcode's target (maybe return one) is DEBUG object
     ☐ Logical operations wrong if source/target not integer.
-    ☐ Will not boot when stage3 is lge 64kib
     ☐ write casting cannot change dest object type correctly
 
   Tasks:
@@ -26,5 +25,6 @@ Hobby OS:
 
 ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
+  ✔ Will not boot when stage3 is lge 64kib @done(2021-06-08 01:58) @project(Hobby OS / Issues)
   ✔ Memory bug while destroying acpi aml objects @done(2021-06-07 08:46) @project(Hobby OS / Issues)
   ✔ Write parser methods @done(2021-06-07 08:45) @project(Hobby OS / Tasks / Implement ACPI/AML / Parsers)

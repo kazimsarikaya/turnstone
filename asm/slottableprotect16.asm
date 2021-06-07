@@ -26,22 +26,43 @@ call    move_stage
 jmp    start_stage2
 
 move_stage:
+push   %ds /* store destination segment */
 sub    %ebx, %eax
 inc    %eax
-mov    $0x200, %edx /* sector byte count */
-imul   %edx, %eax /*  eax contains byte count of stage2 */
+mov    %eax, %esi /* our sector counter */
+
 dec    %ebx /*  dec dx to relative this code segment */
 mov    $0x20, %edx /* sector size as segment */
 imul   %ebx, %edx
-mov    %eax, %ecx /*  loop count */
 mov    %cs, %ax
 add    %dx, %ax /*  add offset as segment */
-mov    %ax, %ds
-mov    $0x00, %esi /*  source index 0 */
-mov    $0x00, %edi /*  destination index 0 */
+mov    %ax, %ds /* ds is source start in terms of segment */
 
-cld
-rep    movsb
+mov    $0x20, %dx /* sector size as segment */
+
+.sectorloop: /* loops sector count tested with %esi */
+mov    $0x0, %bx
+mov    $0x200, %ecx /* sector byte count */
+.sectorbytes: /* loop for each byte of sector tested with %cx */
+mov    %ds:(%bx), %al /* get the byte */
+mov    %al, %es:(%bx)
+inc    %bx
+dec    %cx
+test   %cx, %cx
+jnz    .sectorbytes /* loop until sector finished */
+dec    %esi
+test   %esi, %esi
+jz     .endofmove /* no remaining sector then end loop */
+mov    %ds, %ax
+add    %dx, %ax /* if segment incremented by 0x20 it means 200 bytes */
+mov    %ax, %ds
+mov    %es, %ax
+add    %dx, %ax /* if segment incremented by 0x20 it means 200 bytes */
+mov    %ax, %es
+jmp    .sectorloop /* loop until all sectors completed */
+
+.endofmove:
+pop    %ds /* restore destination segment */
 ret
 
 start_stage2:
