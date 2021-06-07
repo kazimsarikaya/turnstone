@@ -14,7 +14,7 @@
 #define GREENCOLOR "\033[1;32m"
 #define RESETCOLOR "\033[0m"
 
-int printf(const char* format, va_list args);
+int printf(const char* format, ...);
 
 size_t video_printf(char_t* fmt, va_list args) {
 	return printf(fmt, args);
