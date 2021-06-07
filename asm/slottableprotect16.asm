@@ -10,7 +10,7 @@ cli
 mov    %cs, %ax
 mov    %ax, %ds
 mov    $0x100, %ax
-mov    %ax, %es // destination stage will be at 0x1000
+mov    %ax, %es /*  destination stage will be at 0x1000 */
 mov    slot_stage2.end, %eax
 mov    slot_stage2.start, %ebx
 call    move_stage
@@ -18,7 +18,7 @@ call    move_stage
 mov    %cs, %ax
 mov    %ax, %ds
 mov    $0x2000, %ax
-mov    %ax, %es // destination stage will be at 0x20000
+mov    %ax, %es /*  destination stage will be at 0x20000 */
 mov    slot_stage3.end, %eax
 mov    slot_stage3.start, %ebx
 call    move_stage
@@ -28,30 +28,30 @@ jmp    start_stage2
 move_stage:
 sub    %ebx, %eax
 inc    %eax
-mov    $0x200, %edx //sector byte count
-imul   %edx, %eax // eax contains byte count of stage2
-dec    %ebx // dec dx to relative this code segment
-mov    $0x20, %edx //sector size as segment
+mov    $0x200, %edx /* sector byte count */
+imul   %edx, %eax /*  eax contains byte count of stage2 */
+dec    %ebx /*  dec dx to relative this code segment */
+mov    $0x20, %edx /* sector size as segment */
 imul   %ebx, %edx
-mov    %eax, %ecx // loop count
+mov    %eax, %ecx /*  loop count */
 mov    %cs, %ax
-add    %dx, %ax // add offset as segment
+add    %dx, %ax /*  add offset as segment */
 mov    %ax, %ds
-mov    $0x00, %esi // source index 0
-mov    $0x00, %edi // destination index 0
+mov    $0x00, %esi /*  source index 0 */
+mov    $0x00, %edi /*  destination index 0 */
 
 cld
 rep    movsb
 ret
 
 start_stage2:
-mov    $0x0, %ax // BOOT_DRIVE will be 0x0 for pxe boot
-push   %ax // send BOOT_DRIVE to stack
+mov    $0x0, %ax /*  BOOT_DRIVE will be 0x0 for pxe boot */
+push   %ax /*  send BOOT_DRIVE to stack */
 xor    %eax, %eax
-jmp    $0x100, $0x0 // jmp to stage2
+jmp    $0x100, $0x0 /*  jmp to stage2 */
 
 
-// align slor_mbr to 0x110 with correct ld addressing
+/*  align slor_mbr to 0x110 with correct ld addressing */
 slot_mbr_header:
 .balign 0x100, 0x00
 .quad 0,0

@@ -20,7 +20,7 @@ CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 
 AS16FLAGS = --32
 CC16FLAGS = -m32 -march=i386 -D___BITS=16 $(CCXXFLAGS)
-LD16FLAGS = --nmagic -s
+LD16FLAGS = --nmagic -s -A elf32-i386 -m elf_i386
 
 AS64FLAGS = --64
 CC64FLAGS = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
@@ -33,6 +33,8 @@ DOCSOBJDIR = $(OBJDIR)/docs
 ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
+CCGENDIR = cc-gen
+CCGENSCRIPTSDIR = scripts/gen-cc
 
 
 AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
@@ -47,11 +49,15 @@ LDSRCS = $(shell find $(LDSRCDIR) -type f -name \*.ld)
 
 UTILSSRCS = $(shell find $(UTILSSRCDIR) -type f -name \*.c)
 
+CCGENSCRIPTS = $(shell find $(CCGENSCRIPTSDIR) -type f -name \*.sh)
+GENCCSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%,$(CCGENSCRIPTS))
+
 ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
 CC16OBJS = $(patsubst $(CCSRCDIR)/%.16.c,$(CCOBJDIR)/%.16.o,$(CC16SRCS))
 CC16OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_16.o,$(CCXXSRCS))
 CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
+CC64OBJS += $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
 
 DOCSFILES += $(CC16SRCS) $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
@@ -75,7 +81,7 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 $(VMDISK): $(OBJDIR)/kernel
 	dd bs=512 conv=notrunc if=$< of=$(VMDISK)
 
-$(OBJDIR)/kernel: $(PROGS) $(OBJDIR)/formatslots.bin
+$(OBJDIR)/kernel: $(GENCCSRCS) $(PROGS) utils
 	cat $(PROGS) > $@
 	$(OBJDIR)/formatslots.bin $@ $(PROGS)
 
@@ -108,6 +114,13 @@ $(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
 
 $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.asm
 	$(AS64) $(AS64FLAGS) -o $@ $^
+
+$(CCGENDIR)/%: $(CCGENSCRIPTSDIR)/%.sh
+	$^ > $@.c.tmp
+	diff $@.c  $@.c.tmp  2>/dev/null && rm $@.c.tmp || mv $@.c.tmp $@.c
+
+$(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
 
 $(SUBDIRS):
 	$(MAKE) -C $@
