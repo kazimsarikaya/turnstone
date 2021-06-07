@@ -1,5 +1,17 @@
 #!/bin/sh
 
+cat <<EOF
+#include <types.h>
+#include <cpu/descriptor.h>
+#include <cpu/interrupt.h>
+
+#ifndef ___DEPEND_ANALYSIS
+
+void interrupt_dummy_noerrcode(interrupt_frame_t*, uint16_t);
+void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint16_t);
+
+EOF
+
 for i in $(seq 32 255); do
 
 cat <<EOF
@@ -33,4 +45,5 @@ void interrupt_register_dummy_handlers(descriptor_idt_t* idt) {
   }
 }
 
+#endif 
 EOF

@@ -36,9 +36,9 @@ mov    $slottableprotect, %ax
 push   %ax
 mov    $0x7c0, %ax
 push   %ax
-mov    $0x1, %ax //sector count
+mov    $0x1, %ax /* sector count */
 push   %ax
-mov    $0x1, %ax //lba
+mov    $0x1, %ax /* lba */
 push   %ax
 call   load_disk
 
@@ -60,8 +60,8 @@ sub    %cx, %dx
 inc    %dx
 
 xor    %ax, %ax
-push   %ax //offset
-pushw  $0x100 //segment
+push   %ax /* offset */
+pushw  $0x100 /* segment */
 push   %dx
 push   %cx
 call   load_disk
@@ -80,9 +80,9 @@ hlt
 jmp    panic
 
 check_pxe_and_load:
-mov   $0x202, %bx // at 0x200 slottable starts first 2 bytes jmp to __realstart then !PXE
-mov   (%bx), %eax //load !PXE
-cmp   $0x45585021, %eax // compare !PXE
+mov   $0x202, %bx /* at 0x200 slottable starts first 2 bytes jmp to __realstart then !PXE */
+mov   (%bx), %eax /* load !PXE */
+cmp   $0x45585021, %eax /*  compare !PXE */
 jne   pxe_error
 mov   $0x7e0, %ax
 mov   %ax, %ds
@@ -108,17 +108,17 @@ load_disk:
 push   %bp
 mov    %sp, %bp
 mov    $dap, %bx
-movw   $0x0010, 0x0(%bx) // header
+movw   $0x0010, 0x0(%bx) /*  header */
 mov    0x6(%bp), %ax
-mov    %ax, 0x2(%bx) // sectors to read
+mov    %ax, 0x2(%bx) /*  sectors to read */
 mov    0xa(%bp), %ax
-mov    %ax, 0x4(%bx) // offset to put
+mov    %ax, 0x4(%bx) /*  offset to put */
 mov    0x8(%bp), %ax
-mov    %ax, 0x6(%bx) // segment to put
+mov    %ax, 0x6(%bx) /*  segment to put */
 mov    0x4(%bp), %ax
-mov    %ax, 0x8(%bx) // lba first word
-movw   $0x0, 0xa(%bx) // lba second word
-movl   $0x0, 0xc(%bx) // lba third & forth word
+mov    %ax, 0x8(%bx) /*  lba first word */
+movw   $0x0, 0xa(%bx) /*  lba second word */
+movl   $0x0, 0xc(%bx) /*  lba third & forth word */
 mov    BOOT_DRIVE, %dl
 mov    %bx, %si
 mov    $0x4200, %ax
