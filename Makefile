@@ -110,7 +110,7 @@ $(VBBOXDISK): $(DISK)
 
 $(QEMUDISK): $(DISK)
 	rm -fr $(QEMUDISK)
-	dd if=/dev/zero of=output/qemu-hda bs=1 count=0 seek=1g
+	dd if=/dev/zero of=output/qemu-hda bs=1 count=0 seek=1073741824
 	dd bs=512 conv=notrunc if=$< of=$(QEMUDISK)
 
 $(DISK): $(MKDIRSDONE) $(GENCCSRCS) $(PROGS) utils
