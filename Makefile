@@ -50,6 +50,7 @@ CCSRCDIR = cc
 LDSRCDIR = lds
 CCGENDIR = cc-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
+TMPDIR = tmp
 
 DISK      = $(OBJDIR)/kernel
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
@@ -97,7 +98,7 @@ qemu: $(QEMUDISK)
 virtualbox: $(VBBOXDISK)
 
 gendirs:
-	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR)
+	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
 	make -C tests gendirs
 	make -C utils gendirs
 
