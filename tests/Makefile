@@ -1,9 +1,16 @@
+HOSTOS=$(shell uname -s)
+
 CC = gcc
-LD = ld
 CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
 	-Os -nostdlib -ffreestanding -c -m64 \
-	-D___TESTMODE=1 -g
+	-D___TESTMODE=1
+
+ifeq ($(HOSTOS),Darwin)
+LD = ld
 LDFLAGS = -lc
+else
+LD = gcc
+endif
 
 OUTPUT = ../output
 TESTOUTPUT = $(OUTPUT)/cc-local

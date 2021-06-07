@@ -1,4 +1,8 @@
+HOSTOS =$(shell uname -s)
+
 MAKE = make
+
+ifeq ($(HOSTOS),Darwin)
 
 AS16 = i386-elf-as
 CC16 = i386-elf-gcc
@@ -8,11 +12,25 @@ AS64 = x86_64-elf-as
 CC64 = x86_64-elf-gcc
 LD64 = x86_64-elf-ld
 
+else
+
+AS16 = as
+CC16 = gcc
+LD16 = ld
+
+AS64 = as
+CC64 = gcc
+LD64 = ld
+
+endif
+
 DOCSGEN = doxygen
 DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
-VMDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
+
+
+
 
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections \
@@ -36,6 +54,9 @@ LDSRCDIR = lds
 CCGENDIR = cc-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 
+DISK      = $(OBJDIR)/kernel
+VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
+QEMUDISK  = $(OBJDIR)/qemu-hda
 
 AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
 CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*.16.c)
@@ -72,16 +93,23 @@ SUBDIRS := tests utils
 
 .PHONY: all clean depend $(SUBDIRS)
 .PRECIOUS:
-all: $(SUBDIRS) $(OBJDIR)/docs $(VMDISK)
+all: $(SUBDIRS) $(OBJDIR)/docs $(DISK)
+
+qemu: $(QEMUDISK)
+
+virtualbox: $(VBBOXDISK)
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
 	touch $(OBJDIR)/docs
 
-$(VMDISK): $(OBJDIR)/kernel
-	dd bs=512 conv=notrunc if=$< of=$(VMDISK)
+$(VBBOXDISK): $(DISK)
+	dd bs=512 conv=notrunc if=$< of=$(VBBOXDISK)
 
-$(OBJDIR)/kernel: $(GENCCSRCS) $(PROGS) utils
+$(QEMUDISK): $(DISK)
+	dd bs=512 conv=notrunc if=$< of=$(QEMUDISK)
+
+$(DISK): $(GENCCSRCS) $(PROGS) utils
 	cat $(PROGS) > $@
 	$(OBJDIR)/formatslots.bin $@ $(PROGS)
 
