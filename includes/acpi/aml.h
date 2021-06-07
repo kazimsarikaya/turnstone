@@ -71,7 +71,6 @@ typedef enum {
 
 typedef struct _acpi_aml_object_t {
 	acpi_aml_object_type_t type;
-	uint64_t refcount;
 	char_t* name;
 	union {
 		struct {

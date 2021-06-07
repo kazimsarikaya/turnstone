@@ -17,14 +17,10 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
 	int64_t ires = 0;
 
-	opcode->operands[0]->refcount++;
-
 	if(opcode->operands[1] != NULL) {
 		if(acpi_aml_read_as_integer(ctx, opcode->operands[1], &op2) != 0) {
 			return -1;
 		}
-
-		opcode->operands[1]->refcount++;
 	}
 
 	switch (opcode->opcode) {
@@ -82,8 +78,6 @@ int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		return -1;
 	}
 
-	opcode->operands[0]->refcount++;
-
 	switch (opcode->opcode) {
 	case ACPI_AML_INCREMENT:
 		op1++;
@@ -112,8 +106,6 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	acpi_aml_object_t* src = opcode->operands[0];
 	acpi_aml_object_t* dst = opcode->operands[1];
 
-	src->refcount++;
-
 	int64_t op1 = 0;
 	if(acpi_aml_read_as_integer(ctx, src, &op1) != 0) {
 		return -1;
@@ -122,7 +114,6 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	int64_t ires = ~op1;
 
 	if(acpi_aml_is_null_target(dst) != 0) {
-		dst->refcount++;
 		if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
 			return -1;
 		}
@@ -160,9 +151,6 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		return -1;
 	}
 
-	op1op->refcount++;
-	op2op->refcount++;
-
 	int64_t ires = 0;
 
 	switch (opcode->opcode) {
@@ -198,7 +186,6 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	}
 
 	if(acpi_aml_is_null_target(target) != 0) {
-		target->refcount++;
 		if(acpi_aml_write_as_integer(ctx, ires, target) != 0) {
 			return -1;
 		}
@@ -236,9 +223,6 @@ int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		return -1;
 	}
 
-	dividendop->refcount++;
-	divisorop->refcount++;
-
 	if(divisor == 0) {
 		ctx->flags.fatal = 1;
 		return -1;
@@ -248,14 +232,12 @@ int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	int64_t ires = dividend / divisor;
 
 	if(acpi_aml_is_null_target(remainderop) != 0) {
-		remainderop->refcount++;
 		if(acpi_aml_write_as_integer(ctx, irem, remainderop) != 0) {
 			return -1;
 		}
 	}
 
 	if(acpi_aml_is_null_target(resultop) != 0) {
-		resultop->refcount++;
 		if(acpi_aml_write_as_integer(ctx, ires, resultop) != 0) {
 			return -1;
 		}

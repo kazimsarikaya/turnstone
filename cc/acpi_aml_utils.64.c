@@ -53,11 +53,17 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 				la_obj = acpi_aml_duplicate_object(ctx, la_obj);
 				memory_free_ext(ctx->heap, la_obj->name);
 				la_obj->name = NULL;
+
+				if(mthctx->mthobjs[laidx]->name == NULL) {
+					acpi_aml_destroy_object(ctx, mthctx->mthobjs[laidx]);
+				}
+
 				mthctx->mthobjs[laidx] = la_obj;
 				mthctx->dirty_args[laidx - 8] = 1;
 			}
 
 			if(write == 0 && copy == 1 && mthctx->dirty_args[laidx - 8] == 0) {
+				printf("ACPIAML: Warning read copy\n");
 				la_obj = acpi_aml_duplicate_object(ctx, la_obj);
 				memory_free_ext(ctx->heap, la_obj->name);
 				la_obj->name = NULL;
@@ -520,7 +526,7 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 	case ACPI_AML_OT_RUNTIMEREF:
 		break;
 	default:
-		printf("ACPIAML: Warning object destroy may be required %li\n", obj->type);
+		//printf("ACPIAML: Warning object destroy may be required %li\n", obj->type);
 		break;
 	}
 

@@ -258,8 +258,6 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	memory_free_ext(ctx->heap, name);
 
-	tmp_obj->refcount++;
-
 	if(tmp_obj->type == ACPI_AML_OT_METHOD) { // TODO: external if it is method
 		t_consumed = 0;
 

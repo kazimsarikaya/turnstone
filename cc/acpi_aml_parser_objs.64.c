@@ -234,7 +234,7 @@ int8_t acpi_aml_parse_alias(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		memory_free_ext(ctx->heap, srcname);
 		return -1;
 	}
-	src_obj->refcount++;
+
 	memory_free_ext(ctx->heap, srcname);
 
 

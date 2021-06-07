@@ -13,8 +13,6 @@ int8_t acpi_aml_exec_object_type(acpi_aml_parser_context_t* ctx, acpi_aml_opcode
 		return -1;
 	}
 
-	op1->refcount++;
-
 	uint8_t type = op1->type;
 
 	if(type > 16) {
@@ -44,8 +42,6 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 		return -1;
 	}
 
-	src->refcount++;
-
 	int64_t ival = 0;
 	if(acpi_aml_read_as_integer(ctx, src, &ival) != 0) {
 		return -1;
@@ -67,7 +63,6 @@ int8_t acpi_aml_exec_to_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	}
 
 	if(acpi_aml_is_null_target(dst) != 0) {
-		dst->refcount++;
 		if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
 			return -1;
 		}
@@ -96,8 +91,6 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
 		return -1;
 	}
 
-	src->refcount++;
-
 	int64_t ival = 0;
 	if(acpi_aml_read_as_integer(ctx, src, &ival) != 0) {
 		return -1;
@@ -119,7 +112,6 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
 	}
 
 	if(acpi_aml_is_null_target(dst) != 0) {
-		dst->refcount++;
 		if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
 			return -1;
 		}

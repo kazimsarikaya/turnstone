@@ -85,6 +85,12 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 				goto cleanup;
 			}
 
+			if(op->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+				acpi_aml_object_t* tmp = op->opcode_exec_return;
+				memory_free_ext(ctx->heap, op); // free only object's self not reference.
+				op = tmp;
+			}
+
 			op = acpi_aml_get_real_object(ctx, op);
 
 			opcode->operands[idx] = op;
@@ -104,7 +110,11 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		acpi_aml_object_t* resobj = (acpi_aml_object_t*)*data;
 		resobj->type =  ACPI_AML_OT_OPCODE_EXEC_RETURN;
 		resobj->opcode_exec_return = return_obj;
-
+	}  else {
+		if(return_obj && return_obj->name == NULL) {
+			// FIXME: when tgt and return_obj same never destroy obj
+			// acpi_aml_destroy_object(ctx, return_obj);
+		}
 	}
 
 	if(consumed != NULL) {
@@ -415,8 +425,8 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 
 		t_consumed = 0;
 		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
-			if(op->refcount == 0) {
-				memory_free_ext(ctx->heap, op);
+			if(op->name == NULL) {
+				acpi_aml_destroy_object(ctx, op);
 			}
 			return -1;
 		}
@@ -447,8 +457,8 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
 
 		t_consumed = 0;
 		if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
-			if(op->refcount == 0) {
-				memory_free_ext(ctx->heap, op);
+			if(op->name == NULL) {
+				acpi_aml_destroy_object(ctx, op);
 			}
 			return -1;
 		}
