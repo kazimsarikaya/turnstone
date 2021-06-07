@@ -80,10 +80,10 @@ $(OBJDIR)/kernel: $(PROGS) $(OBJDIR)/formatslots.bin
 	$(OBJDIR)/formatslots.bin $@ $(PROGS)
 
 $(OBJDIR)/bootsect16.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
-	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
+	$(LD16) $(LD16FLAGS) --script=$<  -o $@ $(filter-out $<,$^)
 
 $(OBJDIR)/slottable.bin: $(LDSRCDIR)/slottableprotect.ld $(ASOBJDIR)/slottableprotect16.o
-	$(LD16) $(LDFLAGS) --script=$<  -o $@ $(filter-out $<,$^)
+	$(LD16) $(LD16FLAGS) --script=$<  -o $@ $(filter-out $<,$^)
 
 $(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
 	$(LD16) $(LD16FLAGS) --script=$< -o $@ $(filter-out $<,$^)
