@@ -54,8 +54,20 @@ number_t ato_base(char_t* source, number_t base);
 
 /*! ato_base macro for base 10 */
 #define atoi(number) ato_base(number, 10)
-/*! ato_base macro for base 16 */
-#define atoh(number) ato_base(number, 16)
+
+/**
+ * @brief converts string into number
+ * @param[in]  source string represents number in base
+ * @param[in]  base   base of number inside string
+ * @return number
+ */
+unumber_t atou_base(char_t* source, number_t base);
+
+
+/*! atou_base macro for base 10 */
+#define atou(number) atou_base(number, 16)
+/*! atou_base macro for base 16 */
+#define atoh(number) atou_base(number, 16)
 
 /**
  * @brief convers number to its string representation
@@ -70,8 +82,19 @@ char_t* ito_base(number_t number, number_t base);
 /*! ito_base macro for base 10 */
 #define itoa(number) ito_base(number, 10)
 
-/*! ito_base macro for base 10 */
-#define itoh(number) ito_base(number, 16)
+
+/**
+ * @brief convers unsigned number to its string representation
+ * @param[in]  number unsigned number to be converted string
+ * @param[in]  base   base value of conversion
+ * @return  string represents number
+ *
+ * return value should be freed or memory leak will be happened
+ */
+char_t* uto_base(unumber_t number, number_t base);
+
+#define utoa(number) uto_base(number, 10)
+#define utoh(number) uto_base(number, 16)
 
 /**
  * @brief duplicate string at heap

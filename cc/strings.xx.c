@@ -61,6 +61,43 @@ number_t ato_base(char_t* source, number_t base) {
 	// TODO: lower upper case chars are same when base<=36
 	number_t ret = 0;
 	number_t p = 0;
+
+	if(source == NULL) {
+		return 0;
+	}
+
+	number_t sign = 1;
+
+	if(source[0] == '+') {
+		source++;
+	}
+
+	if(source[0] == '-') {
+		sign = -1;
+		source++;
+	}
+
+	size_t l = strlen(source);
+	for(size_t i = 1; i <= l; i++) {
+		if(source[l - i] <= '9') {
+			ret += ((number_t)(source[l - i] - 48)) * power(base, p);
+		} else {
+			ret += ((number_t)(source[l - i] - 55)) * power(base, p);
+		}
+		p++;
+	}
+	return sign * ret;
+}
+
+unumber_t atou_base(char_t* source, number_t base) {
+	// TODO: lower upper case chars are same when base<=36
+	number_t ret = 0;
+	number_t p = 0;
+
+	if(source == NULL) {
+		return 0;
+	}
+
 	size_t l = strlen(source);
 	for(size_t i = 1; i <= l; i++) {
 		if(source[l - i] <= '9') {
@@ -79,6 +116,27 @@ char_t* ito_base(number_t number, number_t base){
 	memory_memclean(buf, 64);
 
 	if(ito_base_with_buffer(buf, number, base) != 0) {
+		return NULL;
+	}
+
+	size_t len = strlen(buf);
+	char_t* ret = memory_malloc(sizeof(char_t) * len + 1);
+
+	if (ret == NULL) {
+		return NULL;
+	}
+
+	strcpy(buf, ret);
+
+	return ret;
+}
+
+char_t* uto_base(unumber_t number, number_t base){
+	char_t buf[64];
+
+	memory_memclean(buf, 64);
+
+	if(uto_base_with_buffer(buf, number, base) != 0) {
 		return NULL;
 	}
 

@@ -113,12 +113,22 @@ size_t video_printf(char_t* fmt, ...){
 			fmt++;
 			int8_t wfmtb = 1;
 			char_t buf[257];
-			char_t ito_buf[20];
+			char_t ito_buf[64];
 			int32_t val = 0;
 			char_t* str;
 			int32_t slen = 0;
-			size_t ival = 0;
+			number_t ival = 0;
+			unumber_t uval = 0;
 			int32_t idx = 0;
+			int8_t l_flag = 0;
+			int8_t sign = 1;
+
+#if ___BITS == 64
+			char_t fto_buf[128];
+			// float128_t fval = 0; // TODO: float128_t ops
+			float64_t fval = 0;
+			number_t prec = 6;
+#endif
 
 			while(1) {
 				wfmtb = 1;
@@ -130,6 +140,14 @@ size_t video_printf(char_t* fmt, ...){
 					fmt++;
 					wfmtb = 0;
 					break;
+#if ___BITS == 64
+				case '.':
+					fmt++;
+					prec = *fmt - 0x30;
+					fmt++;
+					wfmtb = 0;
+					break;
+#endif
 				case 'c':
 					val = va_arg(args, int32_t);
 					buf[0] = (char_t)val;
@@ -145,40 +163,106 @@ size_t video_printf(char_t* fmt, ...){
 					break;
 				case 'i':
 				case 'd':
-					ival = va_arg(args, size_t);
+#if ___BITS == 64
+					if(l_flag == 2) {
+						ival = va_arg(args, int128_t);
+					} else if(l_flag == 1) {
+						ival = va_arg(args, int64_t);
+					}
+#endif
+					if(l_flag == 0) {
+						ival = va_arg(args, int32_t);
+					}
+
 					itoa_with_buffer(ito_buf, ival);
 					slen = strlen(ito_buf);
+
+					if(ival < 0) {
+						sign = 1;
+						slen -= 2;
+					}
+
 					for(idx = 0; idx < val - slen; idx++) {
 						buf[idx] = '0';
 						cnt++;
 					}
+
+					if(ival < 0) {
+						buf[0] = '-';
+					}
+
+					video_print(buf);
+					memory_memclean(buf, 257);
+					video_print(ito_buf + sign);
+					memory_memclean(ito_buf, 64);
+
+					cnt += slen;
+					fmt++;
+					l_flag = 0;
+					break;
+				case 'u':
+#if ___BITS == 64
+					if(l_flag == 2) {
+						uval = va_arg(args, uint128_t);
+					} else if(l_flag == 1) {
+						uval = va_arg(args, uint64_t);
+					}
+#endif
+					if(l_flag == 0) {
+						uval = va_arg(args, uint32_t);
+					}
+
+					utoa_with_buffer(ito_buf, uval);
+					slen = strlen(ito_buf);
+
+					for(idx = 0; idx < val - slen; idx++) {
+						buf[idx] = '0';
+						cnt++;
+					}
+
 					video_print(buf);
 					memory_memclean(buf, 257);
 					video_print(ito_buf);
-					memory_memclean(ito_buf, 20);
+					memory_memclean(ito_buf, 64);
+
 					cnt += slen;
 					fmt++;
+					l_flag = 0;
 					break;
 				case 'l':
 					fmt++;
 					wfmtb = 0;
+					l_flag++;
 					break;
 				case 'p':
 				case 'x':
 				case 'h':
-					ival = va_arg(args, size_t);
-					itoh_with_buffer(ito_buf, ival);
+#if ___BITS == 64
+					if(l_flag == 2) {
+						uval = va_arg(args, uint128_t);
+					} else if(l_flag == 1) {
+						uval = va_arg(args, uint64_t);
+					}
+#endif
+					if(l_flag == 0) {
+						uval = va_arg(args, uint32_t);
+					}
+
+					utoh_with_buffer(ito_buf, uval);
 					slen = strlen(ito_buf);
+
 					for(idx = 0; idx < val - slen; idx++) {
 						buf[idx] = '0';
 						cnt++;
 					}
+
 					video_print(buf);
 					memory_memclean(buf, 257);
 					video_print(ito_buf);
-					memory_memclean(ito_buf, 20);
+					memory_memclean(ito_buf, 64);
 					cnt += slen;
 					fmt++;
+					l_flag = 0;
 					break;
 				case '%':
 					buf[0] = '%';
@@ -187,6 +271,24 @@ size_t video_printf(char_t* fmt, ...){
 					fmt++;
 					cnt++;
 					break;
+#if ___BITS == 64
+				case 'f':
+					if(l_flag == 2) {
+						// fval = va_arg(args, float128_t); // TODO: float128_t ops
+					} else  {
+						fval = va_arg(args, float64_t);
+					}
+
+					ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
+					slen = strlen(fto_buf);
+					video_print(fto_buf);
+					memory_memclean(fto_buf, 128);
+
+					cnt += slen;
+					fmt++;
+					l_flag = 0;
+					break;
+#endif
 				default:
 					break;
 				}

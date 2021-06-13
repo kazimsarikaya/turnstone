@@ -1,5 +1,6 @@
 #include <utils.h>
 #include <memory.h>
+#include <strings.h>
 
 number_t power(number_t base, number_t p) {
 	if (p == 0 ) {
@@ -24,7 +25,21 @@ int8_t ito_base_with_buffer(char_t* buffer, number_t number, number_t base) {
 	}
 
 	if(base < 2 || base > 36) {
-		return NULL;
+		return -1;
+	}
+
+	if(number == 0) {
+		buffer[0] = '0';
+		buffer[1] = NULL;
+		return 0;
+	}
+
+	int8_t sign = 0;
+
+	if(number < 0) {
+		buffer[0] = '-';
+		sign = 1;
+		number *= -1;
 	}
 
 	size_t len = 0;
@@ -35,13 +50,52 @@ int8_t ito_base_with_buffer(char_t* buffer, number_t number, number_t base) {
 		len++;
 	}
 
+	size_t i = 1;
+	number_t r;
+
+	while(number) {
+		r = number % base;
+		number /= base;
+
+		if(r < 10) {
+			buffer[len - i + sign] = 48 + r;
+		} else {
+			buffer[len - i + sign] = 55 + r;
+		}
+
+		i++;
+	}
+
+	buffer[len + sign] = NULL;
+
+	return 0;
+}
+
+int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base) {
+	if(buffer == NULL) {
+		return -1;
+	}
+
+	if(base < 2 || base > 36) {
+		return -1;
+	}
+
 	if(number == 0) {
-		len = 1;
 		buffer[0] = '0';
+		buffer[1] = NULL;
+		return 0;
+	}
+
+	size_t len = 0;
+	unumber_t temp = number;
+
+	while(temp) {
+		temp /= base;
+		len++;
 	}
 
 	size_t i = 1;
-	number_t r;
+	unumber_t r;
 
 	while(number) {
 		r = number % base;
@@ -60,3 +114,72 @@ int8_t ito_base_with_buffer(char_t* buffer, number_t number, number_t base) {
 
 	return 0;
 }
+
+#if ___BITS == 64
+
+int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, number_t base) {
+	if(buffer == NULL) {
+		return -1;
+	}
+
+	if(base < 2 || base > 36) {
+		return -1;
+	}
+
+	if(number == 0) {
+		buffer[0] = '0';
+		buffer[1] = '.';
+		buffer[2] = '0';
+		buffer[3] = NULL;
+
+		return 0;
+	}
+
+	int sign = 0;
+
+	if(number < 0)  {
+		sign = 1;
+	}
+
+	number_t ival = (number_t)number;
+
+	if(ival == 0) {
+		if(sign) {
+			buffer[0] = '-';
+			buffer[1] = '0';
+			buffer[2] = NULL;
+		} else {
+			buffer[0] = '0';
+			buffer[1] = NULL;
+		}
+
+	} else {
+		if(ito_base_with_buffer(buffer, ival, base) != 0) {
+			return -1;
+		}
+	}
+
+	buffer += strlen(buffer);
+	buffer[0] = '.';
+	buffer++;
+
+	number -= ival;
+
+	if(sign) {
+		number *= -1;
+	}
+
+	number_t p = power(base, prec);
+
+	number *= p;
+
+	ival = (number_t)number;
+
+	if(ito_base_with_buffer(buffer, ival, base) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+#endif
