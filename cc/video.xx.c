@@ -121,7 +121,7 @@ size_t video_printf(char_t* fmt, ...){
 			unumber_t uval = 0;
 			int32_t idx = 0;
 			int8_t l_flag = 0;
-			int8_t sign = 1;
+			int8_t sign = 0;
 
 #if ___BITS == 64
 			char_t fto_buf[128];
@@ -227,7 +227,6 @@ size_t video_printf(char_t* fmt, ...){
 
 					cnt += slen;
 					fmt++;
-					l_flag = 0;
 					break;
 				case 'l':
 					fmt++;
@@ -262,7 +261,6 @@ size_t video_printf(char_t* fmt, ...){
 					memory_memclean(ito_buf, 64);
 					cnt += slen;
 					fmt++;
-					l_flag = 0;
 					break;
 				case '%':
 					buf[0] = '%';
@@ -286,7 +284,6 @@ size_t video_printf(char_t* fmt, ...){
 
 					cnt += slen;
 					fmt++;
-					l_flag = 0;
 					break;
 #endif
 				default:
