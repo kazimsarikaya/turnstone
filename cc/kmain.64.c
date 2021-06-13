@@ -207,6 +207,8 @@ uint8_t kmain64() {
 
 	printf("printf test for floats: %lf %lf %.3lf\n", -123.4567891234, -123.456, -123.4567891234);
 
+	printf("i32 %i\n", 1 );
+
 	printf("tests completed!...\n");
 
 	return 0;
