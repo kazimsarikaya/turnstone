@@ -70,6 +70,8 @@ typedef struct {
 #define size_t uint32_t
 /*! alias for signed double word at real mode */
 #define number_t int32_t
+/*! alias for unsigned double word at real mode */
+#define unumber_t uint32_t
 
 #elif ___BITS == 64 || DOXYGEN
 
@@ -92,8 +94,22 @@ typedef struct {
 #define regext_t uint64_t
 /*! size of objects type at long mode */
 #define size_t uint64_t
-/*! alias for signed double word at long mode */
+/*! alias for signed quad word at long mode */
 #define number_t int64_t
+/*! alias for signed quad word at long mode */
+#define unumber_t uint64_t
+/*! alias for 32-bit precision floating point */
+#define float32_t float
+/*! alias for 64-bit precision floating point */
+#define float64_t double
+
+/* 128 bit types */
+/*! alias for 128-bit signed integer */
+#define int128_t __int128
+/*! alias for 128-bit signed integer */
+#define uint128_t unsigned __int128
+/*! alias for 128-bit precision floating point */
+#define float128_t __float128
 
 #endif
 

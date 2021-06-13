@@ -15,6 +15,7 @@
 #include <apic.h>
 #include <linkedlist.h>
 #include <cpu.h>
+#include <utils.h>
 
 uint8_t kmain64() {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
@@ -188,6 +189,23 @@ uint8_t kmain64() {
 			memory_set_default_heap(heap);
 		}
 	}
+
+	printf("signed print test: 150=%li\n", 150 );
+	printf("signed print test: -150=%i\n", -150 );
+	printf("signed print test: -150=%09i\n", -150 );
+	printf("unsigned print test %lu %li\n", -2UL, -2UL);
+
+	printf("128 bit tests\n");
+	printf("sizes: int128 %i unit128 %i float32 %i float64 %i float128 %i\n",
+	       sizeof(int128_t), sizeof(uint128_t),
+	       sizeof(float32_t), sizeof(float64_t), sizeof(float128_t) );
+
+	float32_t f1 = 15;
+	float32_t f2 = 2;
+	float32_t f3 = f1 / f2;
+	printf("div res: %lf\n", f3);
+
+	printf("printf test for floats: %lf %lf %.3lf\n", -123.4567891234, -123.456, -123.4567891234);
 
 	printf("tests completed!...\n");
 

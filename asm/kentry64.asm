@@ -25,6 +25,16 @@ ___kstart64:
   mov $GDT_REGISTER, %rax
   sgdt (%rax)
 
+  /* enable sse */
+  mov %cr0, %rax
+  and $0xFFFB, %ax		/* clear coprocessor emulation CR0.EM */
+  or  $0x02, %ax			/* set coprocessor monitoring  CR0.MP */
+  mov %rax, %cr0
+  mov %cr4, %rax
+  or  $0x600, %ax		/* set CR4.OSFXSR and CR4.OSXMMEXCPT at the same time */
+  mov %rax, %cr4
+  /* end enable sse */
+
   cld
   call kmain64
 ___kstart64.loop:

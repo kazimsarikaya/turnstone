@@ -31,15 +31,16 @@ INCLUDESDIR = includes
 
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections \
-	-mgeneral-regs-only -mno-red-zone
+	-mno-red-zone
 
 AS16FLAGS = --32
-CC16FLAGS = -m32 -march=i386 -D___BITS=16 $(CCXXFLAGS)
+CC16FLAGS = -m32 -march=i386 -mgeneral-regs-only -D___BITS=16 $(CCXXFLAGS)
 LD16FLAGS = --nmagic -s -A elf32-i386 -m elf_i386
 
-AS64FLAGS = --64
-CC64FLAGS = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
-LD64FLAGS = --nmagic -s
+AS64FLAGS    = --64
+CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
+LD64FLAGS    = --nmagic -s
+CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
 
 OBJDIR = output
 ASOBJDIR = $(OBJDIR)/asm
@@ -158,6 +159,12 @@ $(CCGENDIR)/%: $(CCGENSCRIPTSDIR)/%.sh
 
 $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/interrupt.64.o: $(CCSRCDIR)/interrupt.64.c
+	$(CC64) $(CC64INTFLAGS) -o $@ $<
+
+$(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
+	$(CC64) $(CC64INTFLAGS) -o $@ $<
 
 $(SUBDIRS):
 	$(MAKE) -C $@
