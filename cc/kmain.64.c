@@ -172,7 +172,7 @@ uint8_t kmain64() {
 				       p->pci_header->class_code, p->pci_header->subclass_code);
 
 
-				if(p->pci_header->header_type.header_type == 0x0) {
+				if(p->pci_header->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
 					pci_generic_device_t* pg = (pci_generic_device_t*)p->pci_header;
 
 					printf("-> %02x", pg->interrupt_line);

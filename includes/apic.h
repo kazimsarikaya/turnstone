@@ -20,7 +20,7 @@
 #define APIC_IOAPIC_REGISTER_ARBITRATION    0x02
 #define APIC_IOAPIC_REGISTER_IRQ_BASE       0x10
 #define APIC_IOAPIC_INTERRUPT_DISABLED      (1 << 16)
-#define APIC_IOAPIC_MAX_REDIRECTION_ENTRY(r)  (((r >> 16) & 0xF) + 1)
+#define APIC_IOAPIC_MAX_REDIRECTION_ENTRY(r)  (((r >> 16) & 0xFF) + 1)
 
 typedef struct {
 	uint32_t selector;
