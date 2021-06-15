@@ -81,4 +81,20 @@ int8_t cpu_write_msr(uint32_t msr_address, uint64_t value);
  */
 uint64_t cpu_read_cr2();
 
+/**
+ * @struct cpu_cpuid_regs
+ * @brief  registers
+ * @brief cpuid command set/get registers.
+ *
+ * cpuid command needs setting eax and results are returned for registers.
+ */
+typedef struct cpu_cpuid_regs {
+	uint32_t eax; ///< eax register
+	uint32_t ebx; ///< ebx register
+	uint32_t ecx; ///< ecx register
+	uint32_t edx; ///< edx register
+} cpu_cpuid_regs_t; ///< struct short hand
+
+uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer);
+
 #endif

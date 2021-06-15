@@ -5,20 +5,6 @@
 #include <cpu.h>
 
 /**
- * @struct cpu_cpuid_regs
- * @brief  registers
- * @brief cpuid command set/get registers.
- *
- * cpuid command needs setting eax and results are returned for registers.
- */
-typedef struct cpu_cpuid_regs {
-	uint32_t eax; ///< eax register
-	uint32_t ebx; ///< ebx register
-	uint32_t ecx; ///< ecx register
-	uint32_t edx; ///< edx register
-} cpu_cpuid_regs_t; ///< struct short hand
-
-/**
  * @brief check cpuid is supported by cpu.
  * @return 0 if cpuid supported.
  */

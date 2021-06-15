@@ -5,11 +5,17 @@
 #include <video.h>
 #include <strings.h>
 #include <memory/paging.h>
+#include <memory.h>
+#include <apic.h>
 
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint16_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint16_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
+
+interrupt_irq* interrupt_irqs = NULL;
+
+void interrupt_dummy_noerrcode(interrupt_frame_t*, uint16_t);
 
 void __attribute__ ((interrupt)) interrupt_int00_divide_by_zero_exception(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int01_debug_exception(interrupt_frame_t*);
@@ -79,7 +85,7 @@ uint64_t interrupt_system_defined_interrupts[32] = {
 	(uint64_t)&interrupt_int1F_reserved
 };
 
-void interrupt_init() {
+int8_t interrupt_init() {
 	descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER.base;
 
 	for(int32_t i = 0; i < 32; i++) {
@@ -87,12 +93,43 @@ void interrupt_init() {
 	}
 
 	interrupt_register_dummy_handlers(idt_table); // 32-255 dummy handlers
+
+	interrupt_irqs = memory_malloc(sizeof(interrupt_irq) * (255 - 32));
+
+	if(interrupt_irqs == NULL) {
+		return -1;
+	}
+
 	cpu_sti();
+
+	return 0;
+}
+
+int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
+	if(interrupt_irqs == NULL) {
+		return -1;
+	}
+
+	interrupt_irqs[irqnum] = irq;
+
+	return 0;
 }
 
 
 void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
 	cpu_cli();
+
+	if(interrupt_irqs != NULL) {
+		intnum -= 32;
+		if(interrupt_irqs[intnum] != NULL) {
+			interrupt_irqs[intnum](frame, intnum);
+			apic_eoi();
+			cpu_sti();
+
+			return;
+		}
+	}
+
 	printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%08x\n", intnum, frame->return_rip);
 	video_print("Cpu is halting.");
 	cpu_hlt();
