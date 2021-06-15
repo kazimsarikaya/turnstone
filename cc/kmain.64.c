@@ -16,6 +16,7 @@
 #include <linkedlist.h>
 #include <cpu.h>
 #include <utils.h>
+#include <device/kbd.h>
 
 uint8_t kmain64() {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
@@ -26,8 +27,13 @@ uint8_t kmain64() {
 
 	memory_paging_switch_table(p4);
 
-	interrupt_init();
 	video_clear_screen();
+
+	if(interrupt_init() != 0) {
+		printf("CPU: Fatal cannot init interrupts\n");
+
+		return -1;
+	}
 
 	char_t* data = hello_world();
 
@@ -209,7 +215,19 @@ uint8_t kmain64() {
 
 	printf("i32 %i\n", 1 );
 
+	outl(0x0CD8, 0); // qemu acpi init emulation
+
+	interrupt_irq_set_handler(0x1, &dev_kbd_isr);
+	apic_ioapic_setup_irq(0x1,
+	                      APIC_IOAPIC_INTERRUPT_ENABLED
+	                      | APIC_IOAPIC_DELIVERY_MODE_FIXED | APIC_IOAPIC_DELIVERY_STATUS_RELAX
+	                      | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
+	                      | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
+
+
 	printf("tests completed!...\n");
+
+	while(1); // endless loop for listening interrupts
 
 	return 0;
 }

@@ -8,6 +8,8 @@
 
 #if ___BITS == 64 || DOXYGEN
 
+#include <types.h>
+
 /**
  * @brief interrupt error code type
  */
@@ -35,7 +37,11 @@ typedef struct interrupt_frame {
  *
  * builds interrupt table at idtr look for @ref descriptor_idt
  */
-void interrupt_init();
+int8_t interrupt_init();
+
+typedef void (* interrupt_irq)(interrupt_frame_t* frame, uint16_t intnum);
+
+int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq);
 
 #endif
 
