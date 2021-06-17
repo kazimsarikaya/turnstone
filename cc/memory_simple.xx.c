@@ -87,10 +87,13 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		heap_end = 0xFFFF;
 #elif ___BITS == 64
 		memory_map_t* mmap = SYSTEM_INFO->mmap;
+
 		while(mmap->type != 1) {
 			mmap++;
 		}
-		heap_end =  mmap->base + mmap->length;
+
+		// FIXME: calculate end of avaliable ending. when it's first slot length is also end.
+		heap_end = mmap->length > 0x7FFFF ? 0x7FFFF : mmap->length;
 #endif
 	}
 	else if(start == 0 || end == 0) {
