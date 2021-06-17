@@ -473,7 +473,7 @@ int8_t acpi_aml_parse_package(acpi_aml_parser_context_t* ctx, void** data, uint6
 	plen--;
 
 	pkg->package.pkglen = pkglen;
-	pkg->package.elements = linkedlist_create_list_with_heap(NULL);
+	pkg->package.elements = linkedlist_create_list_with_heap(ctx->heap);
 
 	while(plen > 0) {
 		t_consumed = 0;
@@ -533,7 +533,7 @@ int8_t acpi_aml_parse_varpackage(acpi_aml_parser_context_t* ctx, void** data, ui
 	t_consumed = 0;
 
 	pkg->package.pkglen = pkglen;
-	pkg->package.elements = linkedlist_create_list_with_heap(NULL);
+	pkg->package.elements = linkedlist_create_list_with_heap(ctx->heap);
 
 	while(plen > 0) {
 		t_consumed = 0;
