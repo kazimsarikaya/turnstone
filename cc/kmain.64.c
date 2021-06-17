@@ -181,7 +181,23 @@ uint8_t kmain64() {
 				if(p->pci_header->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
 					pci_generic_device_t* pg = (pci_generic_device_t*)p->pci_header;
 
-					printf("-> %02x", pg->interrupt_line);
+					printf("int %02x:%02x ", pg->interrupt_line, pg->interrupt_pin);
+
+					if(pg->common_header.status.capabilities_list) {
+						printf("caps ");
+						pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pg) + pg->capabilities_pointer);
+
+
+						while(pci_cap->capability_id != 0xFF) {
+							printf("0x%x \n", pci_cap->capability_id );
+
+							if(pci_cap->next_pointer == NULL) {
+								break;
+							}
+
+							pci_cap = (pci_capability_t*)(((uint8_t*)pci_cap ) + pci_cap->next_pointer);
+						}
+					}
 				}
 
 				printf("\n");

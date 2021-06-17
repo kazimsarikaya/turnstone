@@ -198,4 +198,9 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
 /*! creates pci iterator at default heap */
 #define pci_iterator_create(mcfg) pci_iterator_create_with_heap(NULL, mcfg)
 
+typedef struct {
+	uint8_t capability_id : 8;
+	uint8_t next_pointer : 8;
+} __attribute__((packed)) pci_capability_t;
+
 #endif
