@@ -67,6 +67,7 @@ uint8_t kmain16()
 					}
 					printf("k64 kernel copied\r\n");
 					k64_copied = 1;
+					SYSTEM_INFO->boot_type = SYSTEM_INFO_BOOT_TYPE_DISK;
 					break;
 				}
 			}
@@ -80,6 +81,7 @@ uint8_t kmain16()
 		}
 	} else {
 		printf("pxe boot stage3 already moved\r\n");
+		SYSTEM_INFO->boot_type = SYSTEM_INFO_BOOT_TYPE_PXE;
 	}
 
 	if(descriptor_build_idt_register() != 0) {

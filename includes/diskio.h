@@ -8,6 +8,9 @@
 
 #include <types.h>
 
+#define DISK_SLOT_PXE_INITRD_BASE  0x12000
+#define DISK_SLOT_INITRD_MAX_COUNT 6
+
 /**
  * @enum disk_slot_type
  * @brief  disk slot type
@@ -17,7 +20,9 @@ typedef enum disk_slot_type {
 	DISK_SLOT_TYPE_STAGE1 = 1, ///< stage1 slot aka mbr
 	DISK_SLOT_TYPE_SLOTTABLE = 2, ///< slot table slot
 	DISK_SLOT_TYPE_STAGE2 = 3, ///< stage2 aka real mode loader kernel
-	DISK_SLOT_TYPE_STAGE3 = 4 ///< stage3 aka long mode loader kernel
+	DISK_SLOT_TYPE_STAGE3 = 4, ///< stage3 aka long mode loader kernel
+	DISK_SLOT_TYPE_INITRD = 5, ///< initrd
+	DISK_SLOT_TYPE_PXEINITRD = 0x85, ///< pxe initrd
 }disk_slot_type_t; ///< enum short hand
 
 /**

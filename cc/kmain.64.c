@@ -17,6 +17,7 @@
 #include <cpu.h>
 #include <utils.h>
 #include <device/kbd.h>
+#include <diskio.h>
 
 uint8_t kmain64() {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
@@ -46,6 +47,26 @@ uint8_t kmain64() {
 		       SYSTEM_INFO->mmap[i].base,
 		       SYSTEM_INFO->mmap[i].length,
 		       SYSTEM_INFO->mmap[i].type);
+	}
+
+	if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
+		printf("System booted from pxe\n");
+
+		disk_slot_t* initrd = (disk_slot_t*)DISK_SLOT_PXE_INITRD_BASE;
+		for(int8_t i = 0; i < DISK_SLOT_INITRD_MAX_COUNT; i++) {
+			if(initrd->type == DISK_SLOT_TYPE_UNUSED) {
+				break;
+			} else if(initrd->type != DISK_SLOT_TYPE_PXEINITRD) {
+				printf("PXEINITRD: Fatal unknown slot type\n");
+				return -1;
+			}
+
+			printf("Initrd start: 0x%08x end: 0x%08x\n", initrd->start, initrd->end);
+
+			initrd++;
+		}
+	} else {
+		printf("System booted from disk\n");
 	}
 
 	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
