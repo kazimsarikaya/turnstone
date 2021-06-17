@@ -23,10 +23,20 @@ mov    slot_stage3.end, %eax
 mov    slot_stage3.start, %ebx
 call    move_stage
 
+mov    %cs, %ax
+add    $0x17, %ax /* add slot table's pxe initrd's offset */
+mov    %ax, %ds
+mov    $0x1200, %ax
+mov    %ax, %es /*  destination stage will be at 0x20000 */
+mov    $0x90, %ecx /* 6 slot entries */
+mov    $0x0, %edi /* src array idx */
+mov    $0x0, %esi /* dst array idx */
+rep    movsb
+
 jmp    start_stage2
 
 move_stage:
-push   %ds /* store destination segment */
+push   %ds /* store data segment */
 sub    %ebx, %eax
 inc    %eax
 mov    %eax, %esi /* our sector counter */
@@ -62,7 +72,7 @@ mov    %ax, %es
 jmp    .sectorloop /* loop until all sectors completed */
 
 .endofmove:
-pop    %ds /* restore destination segment */
+pop    %ds /* restore data segment */
 ret
 
 start_stage2:
