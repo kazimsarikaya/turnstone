@@ -44,6 +44,14 @@ typedef struct disk_slot_table {
 	disk_slot_t slots[10]; ///< slots look for @ref disk_slot_t
 } __attribute__ ((packed)) disk_slot_table_t; ///< struct short hand
 
+typedef struct {
+	uint8_t head_count;
+	uint8_t sector_count;
+	uint16_t cylinder_count;
+} disk_geometry_t;
+
+int8_t disk_cache_geometry(uint8_t hard_disk);
+
 /**
  * @brief read disk sectors with 48bit lba addressing
  * @param[in]  hard_disk  hard disk number
