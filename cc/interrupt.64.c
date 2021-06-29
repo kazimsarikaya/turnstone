@@ -196,7 +196,9 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 }
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-	interrupt_dummy_errcode(frame, errcode, 0x0D);
+	cpu_cli();
+	printf("\nKERN: FATAL general protection error 0x%x at 0x%x:0x%x\n", errcode, frame->return_cs, frame->return_rip);
+	cpu_hlt();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
