@@ -3,6 +3,7 @@
  * @brief cpu commands implementation that supports both real and long mode.
  */
 #include <cpu.h>
+#include <video.h>
 
 /**
  * @brief check cpuid is supported by cpu.
@@ -45,14 +46,18 @@ uint8_t cpu_check_longmode() {
 	if(cpu_check_cpuid() != 0) {
 		return -1;
 	}
+
 	cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
 	cpu_cpuid_regs_t answer = {0, 0, 0, 0};
+
 	if(cpu_cpuid(query, &answer) != 0) {
 		return -1;
 	}
-	if((answer.edx & 0x20000800) == 0x20000800) {
+
+	if((answer.edx & (1 << 29)) == (1 << 29)) {
 		return 0;
 	}
+
 	return -1;
 #elif ___BITS == 64
 	return 0;
@@ -81,14 +86,18 @@ uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer){
 	                      : "a" (query.eax), "b" (query.ebx), "c" (query.ecx), "d" (query.edx)
 	                      );
 	if(answer->eax == 0 && answer->ebx == 0 && answer->ecx == 0 && answer->edx == 0) {
+		printf("CPU: Fatal cpuid failed\n");
+
 		return -1;
 	}
+
 	return 0;
 }
 
 uint8_t cpu_check_cpuid() {
 #if ___BITS == 16
 	uint8_t res;
+
 	__asm__ __volatile__ ("pushf\n"
 	                      "pop    %%eax\n"
 	                      "mov    %%eax, %%ecx\n"
@@ -112,9 +121,15 @@ uint8_t cpu_check_cpuid() {
 	                      "jmp .cpuidavail\n"
 	                      ".nocpuid: mov $0x1, %%eax\n"
 	                      ".cpuidavail:\n"
-	                      : "=a" (res)
+	                      : "=a" (res) : : "ecx"
 	                      );
+
+	if(res != 0) {
+		printf("CPU: Fatal no cpuid\n");
+	}
+
 	return res;
+
 #elif ___BITS == 64
 	return 0;
 #endif
