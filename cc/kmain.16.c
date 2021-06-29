@@ -35,10 +35,11 @@ uint8_t kmain16()
 		return -1;
 	}
 
-	if(BOOT_DRIVE != 0) {
-		disk_slot_table_t* st;
+	if(BOOT_DRIVE != 0xFF) {
+		disk_slot_table_t* st = NULL;
 		uint8_t k64_copied = 0;
-		if(disk_read_slottable(BOOT_DRIVE, &st) == 0) {
+
+		if(disk_read_slottable(BOOT_DRIVE, &st) == 0 && st != NULL) {
 			for(uint8_t i = 0; i < sizeof(disk_slot_table_t) / sizeof(disk_slot_t); i++) {
 				if(st->slots[i].type == DISK_SLOT_TYPE_STAGE3) {
 					uint32_t sc = st->slots[i].end.part_low - st->slots[i].start.part_low + 1;
@@ -61,24 +62,30 @@ uint8_t kmain16()
 							for(uint16_t j = 0; j < 512; j++) {
 								far_write_8(base_mem, j, data[j]);
 							}
+
 							memory_free(data);
 							base_mem += 0x20;
 						}
 					}
+
 					printf("k64 kernel copied\r\n");
 					k64_copied = 1;
 					SYSTEM_INFO->boot_type = SYSTEM_INFO_BOOT_TYPE_DISK;
+
 					break;
 				}
 			}
+
 		} else {
 			printf("Slot table can not readed\r\n");
 			return -1;
 		}
+
 		if(k64_copied == 0) {
 			printf("Can not copy k64 kernel\r\n");
 			return -1;
 		}
+
 	} else {
 		printf("pxe boot stage3 already moved\r\n");
 		SYSTEM_INFO->boot_type = SYSTEM_INFO_BOOT_TYPE_PXE;

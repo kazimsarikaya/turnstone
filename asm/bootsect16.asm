@@ -9,38 +9,50 @@ cli
 mov    $0x7c0, %ax
 mov    %ax, %ds
 mov    %ax, %es
-mov    %ax, %fs
 mov    %ax, %gs
 mov    %ax, %ss
+mov    $0xb800, %ax
+mov    %ax, %fs
 mov    $__stack_top,%bp
 mov    %bp,%sp
-sti
 
 cmp    $0xaa55, %cx
 jne    check_pxe_and_load
 
 mov    %dl,BOOT_DRIVE
 
+call   clear_screen
+
 mov    $bootmsg_1,%si
 call   print_msg
 
-cmp    $0x0,%dl
-je     load_disk.err
-
-call   check_disk_ext
+mov    $0, %di
+mov    $0x0800, %ax
+int    $0x13
+test   %ah, %ah
+jnz    disk.err
+inc    %dh /* TODO: check overflow */
+mov    %dh, HEAD_COUNT
+push   %cx
+and    0x003F, %cx
+mov    %cl, SECTOR_COUNT
+pop    %cx
+shr    $6, %cx
+inc    %cx
+mov    %cx, CYLINDER_COUNT
 
 mov    $load_start_stage2,%si
 call   print_msg
 
-mov    $slottableprotect, %ax
-push   %ax
+mov    $slottableprotect, %bx
 mov    $0x7c0, %ax
-push   %ax
-mov    $0x1, %ax /* sector count */
-push   %ax
-mov    $0x1, %ax /* lba */
-push   %ax
-call   load_disk
+mov    %ax, %es
+mov    $0x0201, %ax
+mov    $0x0002, %cx
+mov    $0x00, %dh
+mov    BOOT_DRIVE, %dl
+int    $0x13
+jc     load_disk.err
 
 mov    $slottable, %bx
 mov    $0x0, %si
@@ -59,12 +71,16 @@ mov    16(%bx, %si), %dx
 sub    %cx, %dx
 inc    %dx
 
-xor    %ax, %ax
-push   %ax /* offset */
-pushw  $0x100 /* segment */
-push   %dx
-push   %cx
-call   load_disk
+mov    $0x02, %ah
+mov    %dl, %al
+mov    $0x100, %bx
+mov    %bx, %es
+xor    %bx, %bx
+mov    $0x0003, %cx /* TODO: calculate lba */
+mov    $0x00, %dh
+mov    BOOT_DRIVE, %dl
+int    $0x13
+jc     load_disk.err
 
 mov    $load_end_stage2,%si
 call   print_msg
@@ -90,62 +106,54 @@ mov   %ax, %es
 jmp   $0x7e0, $0x6
 
 pxe_error:
-hlt
-jmp pxe_error
-mov   $errmsg_disk, %si
+mov   $errmsg_pxe, %si
 call  print_msg
 jmp   panic
 
-check_disk_ext:
-mov    $0x4100, %ax
-xor    %bx,%bx
-int    $0x13
-cmp    $0xaa55, %bx
-jne    load_disk.err
-ret
-
-load_disk:
-push   %bp
-mov    %sp, %bp
-mov    $dap, %bx
-movw   $0x0010, 0x0(%bx) /*  header */
-mov    0x6(%bp), %ax
-mov    %ax, 0x2(%bx) /*  sectors to read */
-mov    0xa(%bp), %ax
-mov    %ax, 0x4(%bx) /*  offset to put */
-mov    0x8(%bp), %ax
-mov    %ax, 0x6(%bx) /*  segment to put */
-mov    0x4(%bp), %ax
-mov    %ax, 0x8(%bx) /*  lba first word */
-movw   $0x0, 0xa(%bx) /*  lba second word */
-movl   $0x0, 0xc(%bx) /*  lba third & forth word */
-mov    BOOT_DRIVE, %dl
-mov    %bx, %si
-mov    $0x4200, %ax
-int    $0x13
-jc     load_disk.err
-mov    %bp, %sp
-pop    %bp
-ret
-
-load_disk.err:
+disk.err:
 mov    $errmsg_disk,%si
 call   print_msg
 jmp    panic
 
+load_disk.err:
+mov    $errmsg_loaddisk,%si
+call   print_msg
+jmp    panic
+
+load_nodiskext.err:
+mov    $errmsg_nodiskext,%si
+call   print_msg
+jmp    panic
+
+clear_screen:
+  mov    $2000, %cx
+  mov    $0x0F, %ah
+  mov    $0x20, %al
+  xor    %bx, %bx
+clear_screen.loop:
+  mov    %ax, %fs:(%bx)
+  add    $2, %bx
+  dec    %cx
+  test   %cx, %cx
+  jnz    clear_screen.loop
+  ret
+
 print_msg:
-  mov    $0xe,%ah
+  mov    $0x0F,%ah
+  movzb  CURSOR_Y, %cx
+  mov    %cx, %di
+  imul   $160, %di
+  xor    %bx, %bx
 print_msg.loop:
   lodsb
   cmp    $0x0,%al
   je     print_msg.end
-  int    $0x10
+  mov    %ax, %fs:(%di)
+  add    $2, %di
   jmp    print_msg.loop
 print_msg.end:
-  mov    $0x0d, %al
-  int    $0x10
-  mov    $0x0A, %al
-  int    $0x10
+  inc    %cl
+  mov    %cl, CURSOR_Y
   ret
 
 .data
@@ -157,8 +165,17 @@ load_end_stage2:
   .asciz "Loading ended"
 errmsg_disk:
   .asciz "Disk error"
+errmsg_pxe:
+  .asciz "PXE error"
+errmsg_loaddisk:
+  .asciz "Load Disk error"
+errmsg_nodiskext:
+  .asciz "No disk extensions"
 .bss
 BOOT_DRIVE: .byte 0x00
-.lcomm dap, 16
 .lcomm slottableprotect, 0x110
 .lcomm slottable, 0xF0
+CURSOR_Y: .byte 0x00
+HEAD_COUNT: .byte 0x00
+SECTOR_COUNT: .byte 0x00
+CYLINDER_COUNT: .word 0x0000

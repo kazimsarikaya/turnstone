@@ -76,7 +76,7 @@ pop    %ds /* restore data segment */
 ret
 
 start_stage2:
-mov    $0x0, %ax /*  BOOT_DRIVE will be 0x0 for pxe boot */
+mov    $0xFF, %ax /*  BOOT_DRIVE will be 0xFF for pxe boot */
 push   %ax /*  send BOOT_DRIVE to stack */
 xor    %eax, %eax
 jmp    $0x100, $0x0 /*  jmp to stage2 */
