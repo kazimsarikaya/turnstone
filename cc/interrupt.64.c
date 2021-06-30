@@ -2,6 +2,7 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 #include <cpu/descriptor.h>
+#include <cpu/crx.h>
 #include <video.h>
 #include <strings.h>
 #include <memory/paging.h>
@@ -36,7 +37,7 @@ void __attribute__ ((interrupt)) interrupt_int0F_reserved(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int10_x87_fpu_error(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int11_alignment_check_exception(interrupt_frame_t*, interrupt_errcode_t);
 void __attribute__ ((interrupt)) interrupt_int12_machine_check_exception(interrupt_frame_t*);
-void __attribute__ ((interrupt)) interrupt_int13_simd_floaring_point_exception(interrupt_frame_t*);
+void __attribute__ ((interrupt)) interrupt_int13_simd_floating_point_exception(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int14_virtualization_exception(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int15_control_protection_exception(interrupt_frame_t*, interrupt_errcode_t);
 void __attribute__ ((interrupt)) interrupt_int16_reserved(interrupt_frame_t*);
@@ -70,7 +71,7 @@ uint64_t interrupt_system_defined_interrupts[32] = {
 	(uint64_t)&interrupt_int10_x87_fpu_error,
 	(uint64_t)&interrupt_int11_alignment_check_exception,
 	(uint64_t)&interrupt_int12_machine_check_exception,
-	(uint64_t)&interrupt_int13_simd_floaring_point_exception,
+	(uint64_t)&interrupt_int13_simd_floating_point_exception,
 	(uint64_t)&interrupt_int14_virtualization_exception,
 	(uint64_t)&interrupt_int15_control_protection_exception,
 	(uint64_t)&interrupt_int16_reserved,
@@ -119,7 +120,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
 void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
 	cpu_cli();
 
-	if(interrupt_irqs != NULL) {
+	if(intnum >= 32 && interrupt_irqs != NULL) {
 		intnum -= 32;
 		if(interrupt_irqs[intnum] != NULL) {
 			interrupt_irqs[intnum](frame, intnum);
@@ -131,14 +132,15 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
 	}
 
 	printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%08x\n", intnum, frame->return_rip);
-	video_print("Cpu is halting.");
+	printf("cr4: 0x%x\n", cpu_read_cr4());
+	printf("Cpu is halting.");
 	cpu_hlt();
 }
 
 void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint16_t intnum){
 	cpu_cli();
 	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%08x\n", intnum, errcode, frame->return_rip);
-	video_print("Cpu is halting.");
+	printf("Cpu is halting.");
 	cpu_hlt();
 }
 
@@ -237,7 +239,7 @@ void __attribute__ ((interrupt)) interrupt_int12_machine_check_exception(interru
 	interrupt_dummy_noerrcode(frame, 0x12);
 }
 
-void __attribute__ ((interrupt)) interrupt_int13_simd_floaring_point_exception(interrupt_frame_t* frame) {
+void __attribute__ ((interrupt)) interrupt_int13_simd_floating_point_exception(interrupt_frame_t* frame) {
 	interrupt_dummy_noerrcode(frame, 0x13);
 }
 

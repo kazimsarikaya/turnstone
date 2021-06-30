@@ -53,4 +53,7 @@ typedef struct {
 	uint32_t reserved4 : 32;
 }__attribute__((packed)) cpu_reg_cr4_t;
 
+cpu_reg_cr4_t cpu_read_cr4();
+void cpu_write_cr4(cpu_reg_cr4_t cr4);
+
 #endif

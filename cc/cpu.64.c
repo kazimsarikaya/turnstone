@@ -4,6 +4,7 @@
  */
 
 #include <cpu.h>
+#include <cpu/crx.h>
 
 uint64_t cpu_read_msr(uint32_t msr_address){
 	uint64_t low_part, high_part;
@@ -22,4 +23,17 @@ uint64_t cpu_read_cr2() {
 	__asm__ __volatile__ ("mov %%cr2, %0\n"
 	                      : "=r" (cr2));
 	return cr2;
+}
+
+
+cpu_reg_cr4_t cpu_read_cr4() {
+	cpu_reg_cr4_t cr4;
+	__asm__ __volatile__ ("mov %%cr4, %0\n"
+	                      : "=r" (cr4));
+	return cr4;
+}
+
+void cpu_write_cr4(cpu_reg_cr4_t cr4) {
+	__asm__ __volatile__ ("mov %0, %%cr4\n"
+	                      : : "r" (cr4));
 }

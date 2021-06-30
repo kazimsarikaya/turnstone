@@ -146,7 +146,6 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
 	return (memory_page_table_t*)old_table_r;
 }
 
-
 int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
                                   uint64_t virtual_address, uint64_t frame_adress,
                                   memory_paging_page_type_t type) {
@@ -164,19 +163,24 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 	if(p4idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
+
 	if(p4->pages[p4idx].present != 1) {
 		t_p3 = memory_paging_malloc_page_with_heap(heap);
+
 		if(t_p3 == NULL) {
 			return -1;
 		}
+
 		p4->pages[p4idx].present = 1;
 		p4->pages[p4idx].writable = 1;
 		p3_addr = memory_get_absolute_address((size_t)t_p3);
+
 #if ___BITS == 16
 		p4->pages[p4idx].physical_address_part1 = p3_addr >> 12;
 #elif ___BITS == 64
 		p4->pages[p4idx].physical_address = p3_addr >> 12;
 #endif
+
 	} else {
 #if ___BITS == 16
 		t_p3 = (memory_page_table_t*)memory_get_relative_address(p4->pages[p4idx].physical_address_part1 << 12);
@@ -184,30 +188,38 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4idx].physical_address << 12));
 #endif
 	}
+
 	size_t p3idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
 	if(p3idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
+
 	if(t_p3->pages[p3idx].present != 1) {
 		if(type == MEMORY_PAGING_PAGE_TYPE_1G) {
 			t_p3->pages[p3idx].present = 1;
 			t_p3->pages[p3idx].writable = 1;
 			t_p3->pages[p3idx].hugepage = 1;
+
 #if ___BITS == 16
 			t_p3->pages[p3idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000C0000) | (0XFFF00000 & (frame_adress.part_high << 20));
 			t_p3->pages[p3idx].physical_address_part2 = (frame_adress.part_high >> 12) & 0xFF;
 #elif ___BITS == 64
 			t_p3->pages[p3idx].physical_address = (frame_adress >> 12) & 0xFFFFFC0000;
 #endif
+
 			return 0;
 		} else {
 			t_p2 = memory_paging_malloc_page_with_heap(heap);
+
 			if(t_p2 == NULL) {
 				return -1;
 			}
+
 			t_p3->pages[p3idx].present = 1;
 			t_p3->pages[p3idx].writable = 1;
 			p2_addr = memory_get_absolute_address((size_t)t_p2);
+
 #if ___BITS == 16
 			t_p3->pages[p3idx].physical_address_part1 = p2_addr >> 12;
 #elif ___BITS == 64
@@ -218,36 +230,45 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		if(type == MEMORY_PAGING_PAGE_TYPE_1G) {
 			return 0;
 		}
+
 #if ___BITS == 16
 		t_p2 = (memory_page_table_t*)memory_get_relative_address(t_p3->pages[p3idx].physical_address_part1 << 12);
 #elif ___BITS == 64
 		t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3idx].physical_address << 12));
 #endif
 	}
+
 	size_t p2idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
 	if(p2idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
+
 	if(t_p2->pages[p2idx].present != 1) {
 		if(type == MEMORY_PAGING_PAGE_TYPE_2M) {
 			t_p2->pages[p2idx].present = 1;
 			t_p2->pages[p2idx].writable = 1;
 			t_p2->pages[p2idx].hugepage = 1;
+
 #if ___BITS == 16
 			t_p2->pages[p2idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (frame_adress.part_high << 20));
 			t_p2->pages[p2idx].physical_address_part2 = (frame_adress.part_high >> 12) & 0xFF;
 #elif ___BITS == 64
 			t_p2->pages[p2idx].physical_address = (frame_adress >> 12) & 0xFFFFFFFE00;
 #endif
+
 			return 0;
 		} else {
 			t_p1 = memory_paging_malloc_page_with_heap(heap);
+
 			if(t_p1 == NULL) {
 				return -1;
 			}
+
 			t_p2->pages[p2idx].present = 1;
 			t_p2->pages[p2idx].writable = 1;
 			p1_addr = memory_get_absolute_address((size_t)t_p1);
+
 #if ___BITS == 16
 			t_p2->pages[p2idx].physical_address_part1 = p1_addr >> 12;
 #elif ___BITS == 64
@@ -258,19 +279,24 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		if(type == MEMORY_PAGING_PAGE_TYPE_2M) {
 			return 0;
 		}
+
 #if ___BITS == 16
 		t_p1 = (memory_page_table_t*)memory_get_relative_address(t_p2->pages[p2idx].physical_address_part1 << 12);
 #elif ___BITS == 64
 		t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2idx].physical_address << 12));
 #endif
 	}
+
 	size_t p1idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
 	if(p1idx >= MEMORY_PAGING_INDEX_COUNT) {
 		return -1;
 	}
+
 	if(t_p1->pages[p1idx].present != 1) {
 		t_p1->pages[p1idx].present = 1;
 		t_p1->pages[p1idx].writable = 1;
+
 #if ___BITS == 16
 		t_p1->pages[p1idx].physical_address_part1 = ((frame_adress.part_low >> 12) & 0x000FFE00) | (0XFFF00000 & (frame_adress.part_high << 20));
 		t_p1->pages[p1idx].physical_address_part2 = (frame_adress.part_high >> 12) & 0xFF;
@@ -278,6 +304,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		t_p1->pages[p1idx].physical_address = frame_adress >> 12;
 #endif
 	}
+
 	return 0;
 }
 
@@ -295,15 +322,17 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		return NULL;
 	}
 
-	for(uint32_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
-		if(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_USABLE) {
-			continue;
-		}
-		// TODO: check memory area length if greater then 2M
-		if(memory_paging_add_page_ext(heap, p4, SYSTEM_INFO->mmap[i].base, SYSTEM_INFO->mmap[i].base, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
-			return NULL;
-		}
-	}
+/* We don't need all areas. it should be created mannually
+   for(uint32_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
+    if(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_USABLE) {
+      continue;
+    }
+    // TODO: check memory area length if greater then 2M
+    if(memory_paging_add_page_ext(heap, p4, SYSTEM_INFO->mmap[i].base, SYSTEM_INFO->mmap[i].base, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+      return NULL;
+    }
+   }
+ */
 	return p4;
 }
 
