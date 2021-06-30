@@ -3,7 +3,7 @@ HOSTOS=$(shell uname -s)
 CC = gcc
 CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
 	-Os -nostdlib -ffreestanding -c -m64 \
-	-D___TESTMODE=1
+	-D___TESTMODE=1 -g
 
 ifeq ($(HOSTOS),Darwin)
 LD = ld
