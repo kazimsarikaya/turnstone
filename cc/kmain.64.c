@@ -43,10 +43,11 @@ uint8_t kmain64() {
 	printf("memory map table\n");
 	printf("base\t\tlength\t\ttype\n");
 	for(size_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
-		printf("0x%08lx\t0x%08lx\t0x%04lx\t\n",
+		printf("0x%08lx\t0x%08lx\t0x%04lx\t0x%x\n",
 		       SYSTEM_INFO->mmap[i].base,
 		       SYSTEM_INFO->mmap[i].length,
-		       SYSTEM_INFO->mmap[i].type);
+		       SYSTEM_INFO->mmap[i].type,
+		       SYSTEM_INFO->mmap[i].acpi);
 	}
 
 	if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
