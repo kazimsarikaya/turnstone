@@ -78,7 +78,6 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 	uint8_t op_code = *ctx->data;
 	uint64_t len;
 	uint64_t t_consumed = 0;
-	acpi_aml_object_t* _rev;
 
 	ctx->data++;
 	ctx->remaining--;
@@ -89,8 +88,7 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 		obj->type = ACPI_AML_OT_NUMBER;
 		obj->number.value = 0;
 
-		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
-		if(_rev->number.value >= 0x02) {
+		if(ctx->revision >= 0x02) {
 			obj->number.bytecnt = 8;
 		} else {
 			obj->number.bytecnt = 4;
@@ -101,8 +99,7 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 		obj->type = ACPI_AML_OT_NUMBER;
 		obj->number.value = 1;
 
-		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
-		if(_rev->number.value >= 0x02) {
+		if(ctx->revision >= 0x02) {
 			obj->number.bytecnt = 8;
 		} else {
 			obj->number.bytecnt = 4;
@@ -112,8 +109,7 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
 	case ACPI_AML_ONES:
 		obj->type = ACPI_AML_OT_NUMBER;
 
-		_rev = acpi_aml_symbol_lookup(ctx, "_REV");
-		if(_rev->number.value >= 0x02) {
+		if(ctx->revision >= 0x02) {
 			obj->number.value = 0xFFFFFFFFFFFFFFFF;
 			obj->number.bytecnt = 8;
 		} else {
@@ -325,6 +321,7 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	acpi_aml_object_t* obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
 	if(obj == NULL) {
+		memory_free_ext(ctx->heap, nomname);
 		return -1;
 	}
 
@@ -353,6 +350,12 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		pkglen -= 6;
 	}
 
+	int8_t res = acpi_aml_add_obj_to_symboltable(ctx, obj);
+
+	if(res != 0) {
+		return res;
+	}
+
 	uint64_t old_length = ctx->length;
 	uint64_t old_remaining = ctx->remaining;
 	char_t* old_scope_prefix = ctx->scope_prefix;
@@ -361,13 +364,11 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 	ctx->remaining = pkglen;
 	ctx->scope_prefix = nomname;
 
-	int8_t res = acpi_aml_parse_all_items(ctx, NULL, NULL);
+	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
 	ctx->length = old_length;
 	ctx->remaining = old_remaining - pkglen;
 	ctx->scope_prefix = old_scope_prefix;
-
-	acpi_aml_add_obj_to_symboltable(ctx, obj); // if this fails because of scope exists nomname cleared hence it should be at end
 
 	return res;
 }
@@ -884,7 +885,9 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		memory_free_ext(ctx->heap, tmp_obj);
+		if(tmp_obj->name == NULL) {
+			memory_free_ext(ctx->heap, tmp_obj);
+		}
 
 		obj->opregion.region_space = ival;
 
@@ -904,7 +907,9 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		memory_free_ext(ctx->heap, tmp_obj);
+		if(tmp_obj->name == NULL) {
+			memory_free_ext(ctx->heap, tmp_obj);
+		}
 
 		obj->opregion.region_offset = ival;
 
@@ -924,7 +929,9 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		memory_free_ext(ctx->heap, tmp_obj);
+		if(tmp_obj->name == NULL) {
+			memory_free_ext(ctx->heap, tmp_obj);
+		}
 
 		obj->opregion.region_len = ival;
 	}

@@ -22,7 +22,7 @@ size_t strlen(char_t* string);
  * @param  string2 second string
  * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
  */
-uint8_t strcmp(char_t* string1, char_t* string2);
+int8_t strcmp(char_t* string1, char_t* string2);
 
 /**
  * @brief copies source string to destination string
@@ -33,7 +33,7 @@ uint8_t strcmp(char_t* string1, char_t* string2);
  * NULL will not be copied. destination should be equal or greater then source.
  * destination should have space for NULL.
  */
-uint8_t strcpy(char_t* source, char_t* destination);
+int8_t strcpy(char_t* source, char_t* destination);
 
 /**
  * @brief reverse a string

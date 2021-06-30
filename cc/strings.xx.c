@@ -7,38 +7,48 @@ size_t strlen(char_t* string) {
 	if(string == NULL) {
 		return 0;
 	}
+
 	size_t ret = 0;
+
 	while(string[ret]) {
 		ret++;
 	}
+
 	return ret;
 }
 
-uint8_t strcmp(char_t* string1, char_t* string2) {
+int8_t strcmp(char_t* string1, char_t* string2) {
 	size_t len1 = strlen(string1);
 	size_t len2 = strlen(string2);
+
 	size_t minlen = MIN(len1, len2);
+
 	for(size_t i = 0; i < minlen; i++) {
 		if(string1[i] < string2[i]) {
 			return -1;
 		}
+
 		if(string1[i] > string2[i]) {
 			return 1;
 		}
 	}
+
 	if(len1 == len2) {
 		return 0;
 	}
+
 	return (minlen == len1) ? -1 : 1;
 }
 
-uint8_t strcpy(char_t* source, char_t* destination){
+int8_t strcpy(char_t* source, char_t* destination){
 	if(source == NULL || destination == NULL) {
 		return -1;
 	}
+
 	for(size_t i = 0; i < strlen(source); i++) {
 		destination[i] = source[i];
 	}
+
 	return 0;
 }
 

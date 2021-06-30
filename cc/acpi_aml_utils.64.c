@@ -210,18 +210,21 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, 
 	}
 
 	if(acpi_aml_is_root_char((uint8_t*)name) == 0) {
-		strcpy(name + 1, dst_name);
+		strcpy(name, dst_name);
 	} else {
 		uint64_t prefix_cnt = 0;
 		char_t* tmp = name;
+
 		while(acpi_aml_is_parent_prefix_char((uint8_t*)tmp) == 0) {
 			tmp++;
 			prefix_cnt++;
 		}
+
 		uint64_t src_len = strlen(prefix) - (prefix_cnt * 4);
 		memory_memcopy(prefix, dst_name, src_len);
 		strcpy(name + prefix_cnt, dst_name + src_len);
 	}
+
 	char_t* nomname = memory_malloc_ext(ctx->heap, sizeof(char_t) * strlen(dst_name) + 1, 0x0);
 
 	if(nomname == NULL) {
@@ -342,6 +345,7 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 	}
 
 	strcpy(prefix, tmp_prefix);
+
 	while(1) {
 		char_t* nomname = acpi_aml_normalize_name(ctx, tmp_prefix, symbol_name);
 
@@ -360,8 +364,12 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 			}
 		}
 
-		if(strlen(tmp_prefix) == 0) {
+		if(strlen(tmp_prefix) == 1) {
 			memory_free_ext(ctx->heap, nomname);
+			break;
+		}
+
+		if(strlen(symbol_name) > 0 && acpi_aml_is_root_char((uint8_t*)symbol_name) == 0) {
 			break;
 		}
 
@@ -399,10 +407,15 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 				 oldsym->type == ACPI_AML_OT_THERMALZONE
 				 )
 		   ) {
+
+			obj->name = NULL;
 			acpi_aml_destroy_object(ctx, obj);
+
 			return 0;
 		}
+
 		acpi_aml_destroy_object(ctx, obj);
+
 		return -1;
 	}
 

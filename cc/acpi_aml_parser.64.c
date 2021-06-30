@@ -367,7 +367,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 	ctx->data = acpi_aml_parser_defaults;
 	ctx->length = sizeof(acpi_aml_parser_defaults);
 	ctx->remaining = sizeof(acpi_aml_parser_defaults);
-	ctx->scope_prefix = "";
+	ctx->scope_prefix = "\\";
 	ctx->symbols = linkedlist_create_list_with_heap(heap);
 	ctx->revision = revision;
 
