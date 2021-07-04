@@ -57,10 +57,10 @@ DISK      = $(OBJDIR)/kernel
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
 
-AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.asm)
+AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.s)
 CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*.16.c)
 
-AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.asm)
+AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.s)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
 
 CCXXSRCS = $(shell find $(CCSRCDIR) -type f -name \*.xx.c)
@@ -72,7 +72,7 @@ UTILSSRCS = $(shell find $(UTILSSRCDIR) -type f -name \*.c)
 CCGENSCRIPTS = $(shell find $(CCGENSCRIPTSDIR) -type f -name \*.sh)
 GENCCSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%,$(CCGENSCRIPTS))
 
-ASOBJS = $(patsubst $(ASSRCDIR)/%.asm,$(ASOBJDIR)/%.o,$(ASSRCS))
+ASOBJS = $(patsubst $(ASSRCDIR)/%.s,$(ASOBJDIR)/%.o,$(ASSRCS))
 CC16OBJS = $(patsubst $(CCSRCDIR)/%.16.c,$(CCOBJDIR)/%.16.o,$(CC16SRCS))
 CC16OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_16.o,$(CCXXSRCS))
 CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
@@ -147,10 +147,10 @@ $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 $(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
-$(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.asm
+$(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.s
 	$(AS16) $(AS16FLAGS) -o $@ $^
 
-$(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.asm
+$(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.s
 	$(AS64) $(AS64FLAGS) -o $@ $^
 
 $(CCGENDIR)/%: $(CCGENSCRIPTSDIR)/%.sh
