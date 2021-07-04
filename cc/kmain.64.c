@@ -48,6 +48,35 @@ uint8_t kmain64() {
 		       SYSTEM_INFO->mmap[i].length,
 		       SYSTEM_INFO->mmap[i].type,
 		       SYSTEM_INFO->mmap[i].acpi);
+
+		if(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_RESERVED || SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_ACPI) {
+			uint64_t base = SYSTEM_INFO->mmap[i].base;
+			uint64_t len = SYSTEM_INFO->mmap[i].length;
+
+			printf("MMAP: adding page for address 0x%lx with length 0x%lx\n", base, len);
+
+			memory_paging_page_type_t pt;
+			uint64_t pl;
+
+			while(len > 0) {
+				pt = MEMORY_PAGING_PAGE_TYPE_4K;
+				pl = MEMORY_PAGING_PAGE_LENGTH_4K;
+
+				if(len >= MEMORY_PAGING_PAGE_LENGTH_2M) {
+					pt = MEMORY_PAGING_PAGE_TYPE_2M;
+					pl = MEMORY_PAGING_PAGE_LENGTH_2M;
+				}
+
+				memory_paging_add_page(base, base, pt);
+
+				if(pl > len) {
+					break;
+				}
+
+				base += pl;
+				len -= pl;
+			}
+		}
 	}
 
 	if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {

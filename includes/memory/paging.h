@@ -73,6 +73,10 @@ typedef enum {
 
 #define MEMORY_PAGING_PAGE_ALIGN 0x1000
 
+#define MEMORY_PAGING_PAGE_LENGTH_4K 1 << 12
+#define MEMORY_PAGING_PAGE_LENGTH_2M 1 << 21
+#define MEMORY_PAGING_PAGE_LENGTH_1G 1 << 30
+
 #define memory_paging_malloc_page_with_heap(h) memory_malloc_ext(h, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
 #define memory_paging_malloc_page() memory_malloc_ext(NULL, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
 

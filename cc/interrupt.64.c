@@ -206,12 +206,12 @@ void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(in
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
 	cpu_cli();
 
-	printf("\nKERN: INFO page fault occured with code 0x%08lx at 0x%08lx", errcode, frame->return_rip);
+	printf("\nKERN: INFO page fault occured with code 0x%08lx at 0x%08lx\n", errcode, frame->return_rip);
 
 	uint64_t cr2 = cpu_read_cr2();
 
 	if(errcode == 0) {
-		printf("\nKERN: INFO page does not exists for address 0x%08x", cr2 );
+		printf("\nKERN: INFO page does not exists for address 0x%08x\n", cr2 );
 		if(memory_paging_add_page(cr2, cr2, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
 			printf("\nKERN: FATAL page cannot be added. Halting cpu.\n");
 			cpu_hlt();
