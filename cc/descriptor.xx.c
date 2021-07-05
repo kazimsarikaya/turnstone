@@ -3,7 +3,7 @@
 #include <memory.h>
 
 uint8_t descriptor_build_gdt_register(){
-	uint16_t gdt_size = sizeof(descriptor_gdt_t) * 3;
+	uint16_t gdt_size = sizeof(descriptor_gdt_t) * 5;
 	descriptor_gdt_t* gdts = memory_malloc(gdt_size);
 	if(gdts == NULL) {
 		return -1;

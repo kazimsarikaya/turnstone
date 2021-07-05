@@ -18,8 +18,11 @@
 #include <utils.h>
 #include <device/kbd.h>
 #include <diskio.h>
+#include <cpu/task.h>
 
-uint8_t kmain64() {
+int8_t kmain64_init();
+
+int8_t kmain64() {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
 
 	memory_set_default_heap(heap);
@@ -30,12 +33,24 @@ uint8_t kmain64() {
 
 	video_clear_screen();
 
+	printf("Initializing stage 3\n");
+
 	if(interrupt_init() != 0) {
 		printf("CPU: Fatal cannot init interrupts\n");
 
 		return -1;
 	}
 
+	if(task_init_tasking() != 0) {
+		printf("TASKING: Fatal cannot init tasking\n");
+
+		return -1;
+	}
+
+	return kmain64_init(heap);
+}
+
+int8_t kmain64_init(memory_heap_t* heap) {
 	char_t* data = hello_world();
 
 	printf("%s\n", data);
@@ -292,9 +307,22 @@ uint8_t kmain64() {
 	                      | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
 
 
-	printf("tests completed!...\n");
+	printf("aml resource size %li\n", sizeof(acpi_aml_resource_t));
+	uint8_t data1[] = {0x47, 0x01, 0x60, 0x00, 0x60, 0x00, 0x01, 0x01};
+	uint8_t data2[] = {0x86, 0x09, 0x00, 0x00, 0x00, 0x00, 0xD0, 0xFE, 0x00, 0x04, 0x00, 0x00};
+	acpi_aml_resource_t* res1 = (acpi_aml_resource_t*)data1;
+	acpi_aml_resource_t* res2 = (acpi_aml_resource_t*)data2;
+	printf("si %li %li %li\n", res1->type.type, res1->smallitem.name, res1->smallitem.length);
+	printf("decode %i min 0x%x max 0x%x  aln 0x%x len 0x%x\n",
+	       res1->smallitem.io.decode,
+	       res1->smallitem.io.min,
+	       res1->smallitem.io.max,
+	       res1->smallitem.io.align,
+	       res1->smallitem.io.length);
 
-	while(1); // endless loop for listening interrupts
+	printf("li %li %li %li\n", res2->type.type, res2->largeitem.name, res2->largeitem.length);
+
+	printf("tests completed!...\n");
 
 	return 0;
 }

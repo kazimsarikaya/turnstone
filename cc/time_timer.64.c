@@ -1,6 +1,7 @@
 #include <time/timer.h>
 #include <video.h>
 #include <ports.h>
+#include <cpu/task.h>
 
 #define TIME_TIMER_PIT_BASE_HZ       1193181
 #define TIME_TIMER_PIT_COMMAND_PORT  0x43
@@ -37,6 +38,10 @@ void time_timer_apic_isr(interrupt_frame_t* frame, uint16_t intnum) {
 	UNUSED(intnum);
 
 	time_timer_tick_count++;
+
+	if((time_timer_tick_count % 50) == 0) {
+		task_switch_task();
+	}
 
 	if((time_timer_tick_count % 1000) == 0) {
 		printf("APICTIMER: timer hits!\n");
