@@ -50,6 +50,22 @@ int8_t kmain64() {
 	return kmain64_init(heap);
 }
 
+void test_task1() {
+	printf("task starting %li\n", task_get_id());
+	for(uint64_t i = 0; i < 0x10; i++) {
+		printf("hello world from task %li try: 0x%lx\n", task_get_id(), i);
+
+		for(uint64_t j = 0; j < 0x800; j++) {
+			printf("%li", task_get_id());
+			if((j % 0x200) == 0) {
+				task_yield();
+			}
+		}
+		printf("\n");
+	}
+	printf("task %li ending\n", task_get_id());
+}
+
 int8_t kmain64_init(memory_heap_t* heap) {
 	char_t* data = hello_world();
 
@@ -299,6 +315,9 @@ int8_t kmain64_init(memory_heap_t* heap) {
 
 	outl(0x0CD8, 0); // qemu acpi init emulation
 
+
+	task_create_task(heap, 0x1000, test_task1);
+
 	interrupt_irq_set_handler(0x1, &dev_kbd_isr);
 	apic_ioapic_setup_irq(0x1,
 	                      APIC_IOAPIC_INTERRUPT_ENABLED
@@ -321,6 +340,8 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	       res1->smallitem.io.length);
 
 	printf("li %li %li %li\n", res2->type.type, res2->largeitem.name, res2->largeitem.length);
+
+	task_create_task(heap, 0x1000, test_task1);
 
 	printf("tests completed!...\n");
 
