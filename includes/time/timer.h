@@ -20,4 +20,6 @@ void time_timer_pit_sleep(uint64_t usecs);
 
 void time_timer_apic_isr(interrupt_frame_t* frame, uint16_t intnum);
 
+uint64_t time_timer_get_tick_count();
+
 #endif

@@ -14,6 +14,8 @@
 #define TASK_TSS_STACK_START 0x200000
 #define TASK_TSS_STACK_STEP  (176 << 10)
 
+#define TASK_MAX_TICK_COUNT 50
+
 /**
  * @struct descriptor_tss
  * @brief 64 bit tss descriptor
@@ -69,22 +71,25 @@ typedef struct {
 	uint64_t reserved2;
 	uint16_t reserved3;
 	uint16_t iomap_base_address;
-
 }__attribute__((packed)) tss_t;
 
+typedef enum {
+	TASK_STATE_CREATED,
+	TASK_STATE_ENDED
+} task_state_t;
 
-typedef struct task_register_store {
-	uint64_t local2;
-	uint64_t local1;
-	uint64_t return_rsp1; ///< rsp inside generic handler
-	uint64_t return_rbp1; ///< rbp inside generic handler
-	uint64_t return_rip1; ///< return rip of real interrupt inside generic handler
+typedef struct {
+	memory_heap_t* heap;
+	uint64_t task_id;
+	uint64_t last_tick_count;
+	task_state_t state;
+	void* entry_point;
+	void* stack;
+	memory_page_table_t* page_table;
 	uint64_t rax;
 	uint64_t rbx;
-	uint64_t rdx;
 	uint64_t rcx;
-	uint64_t rsi;
-	uint64_t rdi;
+	uint64_t rdx;
 	uint64_t r8;
 	uint64_t r9;
 	uint64_t r10;
@@ -93,29 +98,21 @@ typedef struct task_register_store {
 	uint64_t r13;
 	uint64_t r14;
 	uint64_t r15;
-	uint64_t return_rflags1; ///< rflags inside generic handler
-	uint64_t return_rip0; ///< the ip value after interrupt
-	uint16_t return_cs0; ///< the cs value after intterupt
-	uint64_t empty1 : 48; ///< unused value
-	uint64_t return_rflags0; ///< the rflags after interrupt
-	uint64_t return_rsp0; ///< the rsp value aka stack after interrupt
-	uint16_t return_ss0; ///< the ss value aka stach segment after interrupt
-	uint64_t empty2 : 48; ///< unused value
-	uint8_t* fx_registers;
-}__attribute__((packed)) task_register_store_t;
-
-
-typedef struct {
-	uint64_t pid;
-	task_register_store_t* register_store;
-	void* entry_point;
-	memory_page_table_t* page_table;
+	uint64_t rsi;
+	uint64_t rdi;
 	uint64_t rsp;
+	uint64_t rbp;
+	uint8_t* fx_registers;
+	uint64_t rflags;
 } task_t;
 
 int8_t task_init_tasking_ext(memory_heap_t* heap);
 #define task_init_tasking() task_init_tasking_ext(NULL)
 
 void task_switch_task();
+void task_yield();
+uint64_t task_get_id();
+
+void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point);
 
 #endif

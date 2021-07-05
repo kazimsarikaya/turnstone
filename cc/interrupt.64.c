@@ -124,8 +124,6 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
 		intnum -= 32;
 		if(interrupt_irqs[intnum] != NULL) {
 			interrupt_irqs[intnum](frame, intnum);
-			apic_eoi();
-			cpu_sti();
 
 			return;
 		}
