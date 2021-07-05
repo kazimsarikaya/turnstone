@@ -15,7 +15,7 @@ ___kstart64:
   mov %ax, %fs
   mov %ax, %gs
   mov $__stack_top, %esp
-  mov %esp,%ebp
+  mov %esp, %ebp
 
   xor %rax, %rax
   mov $IDT_REGISTER, %rax
@@ -37,10 +37,15 @@ ___kstart64:
 
   cld
   call kmain64
+  test %rax, %rax
+  jne ___kstart64.errloop
 ___kstart64.loop:
-  cli
   hlt
   jmp ___kstart64.loop
+___kstart64.errloop:
+  cli
+  hlt
+  jmp ___kstart64.errloop
 .bss
 .align 8
 GDT_REGISTER:

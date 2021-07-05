@@ -144,7 +144,6 @@ void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errco
 	cpu_hlt();
 }
 
-
 void __attribute__ ((interrupt)) interrupt_int00_divide_by_zero_exception(interrupt_frame_t* frame) {
 	interrupt_dummy_noerrcode(frame, 0x00);
 }
