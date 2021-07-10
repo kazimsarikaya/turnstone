@@ -19,10 +19,12 @@
 #include <device/kbd.h>
 #include <diskio.h>
 #include <cpu/task.h>
+#include <linker.h>
 
 int8_t kmain64_init();
+void move_kernel(size_t src, size_t dst);
 
-int8_t kmain64() {
+int8_t kmain64(size_t entry_point) {
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
 
 	memory_set_default_heap(heap);
@@ -34,6 +36,13 @@ int8_t kmain64() {
 	video_clear_screen();
 
 	printf("Initializing stage 3\n");
+	printf("Entry point of kernel is 0x%lx\n", entry_point);
+
+	uint64_t kernel_start = entry_point - 0x100;
+
+	program_header_t* kernel = (program_header_t*)kernel_start;
+
+	printf("kernel size %lx reloc start %lx reloc count %lx\n", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
 
 	if(interrupt_init() != 0) {
 		printf("CPU: Fatal cannot init interrupts\n");
@@ -41,13 +50,47 @@ int8_t kmain64() {
 		return -1;
 	}
 
+	printf("interrupts initialized\n");
+
+	//move_kernel(kernel_start, 64 << 20); /* for testing */
+
 	if(task_init_tasking() != 0) {
 		printf("TASKING: Fatal cannot init tasking\n");
 
 		return -1;
 	}
 
+	printf("tasking initialized\n");
+
 	return kmain64_init(heap);
+}
+
+
+
+
+void second_init(size_t kernel_loc) {
+	video_clear_screen();
+	printf("hello from second kernel at %lx\n", kernel_loc);
+	__asm__ __volatile__ ("1: hlt\n jmp 1b\n");
+}
+
+void move_kernel(size_t src, size_t dst) {
+	uint64_t new_area_start = dst;
+	uint64_t new_area_end = dst + (128 << 20);
+	uint64_t step = 0x200000;
+
+	for(uint64_t i = new_area_start; i < new_area_end; i += step) {
+		memory_paging_add_page(i, i, MEMORY_PAGING_PAGE_TYPE_2M);
+	}
+
+	if(linker_memcopy_program_and_relink(src, dst, (uint64_t)second_init) != 0) {
+		printf("KERNEL: Fatal cannot move kernel\n");
+		return;
+	}
+
+	printf("jumping new kernel at %lx\n", dst);
+
+	__asm__ __volatile__ ( "call *%%rax\n" : : "D" (dst), "a" (dst)  );
 }
 
 void test_task1() {

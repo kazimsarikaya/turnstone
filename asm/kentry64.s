@@ -40,6 +40,7 @@ ___kstart64:
   /* end enable sse */
 
   cld
+  mov  $___kstart64, %edi
   call kmain64
   test %rax, %rax
   jne ___kstart64.errloop
