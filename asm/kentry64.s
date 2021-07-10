@@ -1,10 +1,14 @@
 .code64
-.text
+.type ___kstart64, @function
 .global ___kstart64
+.type GDT_REGISTER, @object
 .global GDT_REGISTER
+.type IDT_REGISTER, @object
 .global IDT_REGISTER
+.type SYSTEM_INFO, @object
 .global SYSTEM_INFO
 
+.section .text.___kstart64
 ___kstart64:
   cli
   mov %rdx, SYSTEM_INFO
@@ -46,14 +50,20 @@ ___kstart64.errloop:
   cli
   hlt
   jmp ___kstart64.errloop
-.bss
+
+.section .bss.GDT_REGISTER
 .align 8
 GDT_REGISTER:
 .byte 0x00, 0x00
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+.section .bss.IDT_REGISTER
 .align 8
 IDT_REGISTER:
 .byte 0x00, 0x00
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+.section .bss.SYSTEM_INFO
+.align 8
 SYSTEM_INFO:
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00

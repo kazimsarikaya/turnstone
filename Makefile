@@ -30,7 +30,7 @@ DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
 CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
-	-Werror -Wall -Wextra -ffunction-sections \
+	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone
 
 AS16FLAGS = --32

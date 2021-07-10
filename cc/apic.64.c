@@ -15,12 +15,12 @@
 uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic, uint8_t base_irq);
 void apic_init_timer();
 
-uint64_t ioapic_bases[2];
+uint64_t ioapic_bases[2] = {0, 0};
 uint8_t ioapic_count = 0;
 uint64_t lapic_addr = 0;
 int8_t apic_enabled = 0;
 
-linkedlist_t irq_remappings;
+linkedlist_t irq_remappings = NULL;
 
 int8_t apic_init_apic(linkedlist_t apic_entries){
 	cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
