@@ -129,6 +129,10 @@ size_t linkedlist_size(linkedlist_t list){
 }
 
 uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_t type){
+	if(list == NULL) {
+		return 0;
+	}
+
 	// TODO: check errors
 	memory_heap_t* heap = ((linkedlist_internal_t*)list)->heap;
 	iterator_t* iter = linkedlist_iterator_create(list);
