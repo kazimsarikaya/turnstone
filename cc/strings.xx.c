@@ -166,8 +166,59 @@ char_t* strdup_at_heap(memory_heap_t* heap, char_t* src){
 	if(src == NULL) {
 		return NULL;
 	}
+
 	size_t l = strlen(src);
+
 	char_t* res = memory_malloc_ext(heap, sizeof(char_t) * l + 1, 0x0);
+
+	if(res == NULL) {
+		return res;
+	}
+
 	memory_memcopy(src, res, l);
+
 	return res;
 }
+
+#if ___BITS == 64
+
+int8_t strstarts(char_t* str, char_t* prefix) {
+	if(strlen(str) < strlen(prefix)) {
+		return -1;
+	}
+
+	if(memory_memcompare(str, prefix, strlen(prefix)) == 0) {
+		return 0;
+	}
+
+	return -1;
+}
+
+int8_t strends(char_t* str, char_t* suffix) {
+	if(strlen(str) < strlen(suffix)) {
+		return -1;
+	}
+
+	if(memory_memcompare(str + strlen(str) - strlen(suffix), suffix, strlen(suffix)) == 0) {
+		return 0;
+	}
+
+	return -1;
+}
+
+char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2) {
+	size_t newsize = strlen(string1) + strlen(string2);
+
+	char_t* res = memory_malloc_ext(heap, sizeof(char_t) * newsize + 1, 0x0);
+
+	if(res == NULL) {
+		return res;
+	}
+
+	strcpy(string1, res);
+	strcpy(string2, res + strlen(string1));
+
+	return res;
+}
+
+#endif
