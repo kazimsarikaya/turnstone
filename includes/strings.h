@@ -25,6 +25,33 @@ size_t strlen(char_t* string);
 int8_t strcmp(char_t* string1, char_t* string2);
 
 /**
+ * @brief checks str starts with prefix
+ * @param  str string for look
+ * @param  prefix to compare
+ * @return 0 if str starts with prefix, else -1
+ */
+int8_t strstarts(char_t* str, char_t* prefix);
+
+/**
+ * @brief checks str ends with suffix
+ * @param  str string for look
+ * @param  suffix to compare
+ * @return 0 if str ends with suffix, else -1
+ */
+int8_t strends(char_t* str, char_t* suffix);
+
+/**
+ * @brief concanates two string and returns new one
+ * @param  string1 first string
+ * @param  string2 second string
+ * @return new string, needs freeing or memory leak
+ */
+char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2);
+
+/*! strcat at default heap */
+#define strcat(s1, s2) strcat_at_heap(NULL, s1, s2)
+
+/**
  * @brief copies source string to destination string
  * @param  source      source string
  * @param  destination destination string
