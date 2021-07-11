@@ -428,6 +428,10 @@ int8_t linkedlist_iterator_destroy(iterator_t* iterator) {
 }
 
 iterator_t* linkedlist_iterator_next(iterator_t* iterator) {
+	if(iterator == NULL) {
+		return NULL;
+	}
+
 	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
 
 	if(iter == NULL) {

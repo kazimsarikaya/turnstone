@@ -60,6 +60,7 @@ typedef struct {
 	uint64_t direct_relocation_count;
 	linker_direct_relocation_t* direct_relocations;
 	linker_section_locations_t section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
+	uint8_t enable_removing_disabled_sections;
 } linker_context_t;
 
 linker_symbol_t* linker_lookup_symbol(linker_context_t* ctx, char_t* symbol_name, uint64_t section_id);
@@ -79,6 +80,12 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 
 
 int8_t linker_tag_required_sections(linker_context_t* ctx) {
+	if(ctx->enable_removing_disabled_sections == 0) {
+		return 0;
+	}
+
+	ctx->direct_relocation_count = 0;
+
 	linker_symbol_t* ep_sym = linker_lookup_symbol(ctx, ctx->entry_point, 0);
 
 	if(ep_sym == NULL) {
@@ -138,6 +145,7 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 				res = linker_tag_required_section(ctx, sub_section);
 
 				if(res != 0) {
+					printf("error at symbol %li %s\n", sym->id, sym->symbol_name);
 					break;
 				}
 
@@ -307,10 +315,13 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 	uint64_t dr_index = 0;
 
+	int8_t res = 0;
+
 	while(iter->end_of_iterator(iter) != 0) {
 		linker_section_t* sec  = iter->get_item(iter);
 
-		if(sec->required == 0) {
+		if(sec->required == 0 && ctx->enable_removing_disabled_sections != 0) {
+			printf("unused section: %s\n", sec->section_name);
 			iter = iter->next(iter);
 			continue;
 		}
@@ -328,6 +339,12 @@ int8_t linker_write_output(linker_context_t* ctx) {
 			if(sec->relocations) {
 
 				iterator_t* relocs_iter = linkedlist_iterator_create(sec->relocations);
+
+				if(relocs_iter == NULL) {
+					printf("cannot create iterator for relocations\n");
+					res = -1;
+					break;
+				}
 
 				while(relocs_iter->end_of_iterator(relocs_iter) != 0) {
 					linker_relocation_t* reloc = relocs_iter->get_item(relocs_iter);
@@ -421,6 +438,10 @@ int8_t linker_write_output(linker_context_t* ctx) {
 	}
 
 	iter->destroy(iter);
+
+	if(res != 0) {
+		return res;
+	}
 
 	fseek (fp, 0, SEEK_SET);
 
@@ -516,6 +537,8 @@ int8_t linker_sort_sections_by_offset(linker_context_t* ctx) {
 		linker_section_t* sec = iter->get_item(iter);
 
 		linkedlist_sortedlist_insert(sorted_sections, sec);
+
+		iter->delete_item(iter);
 
 		iter = iter->next(iter);
 	}
@@ -710,7 +733,7 @@ void linker_bind_offset_of_section(linker_context_t* ctx, linker_section_type_t 
 	while(sec_iter->end_of_iterator(sec_iter) != 0) {
 		linker_section_t* sec = sec_iter->get_item(sec_iter);
 
-		if(sec->type == type && sec->required) {
+		if(sec->type == type && (sec->required || ctx->enable_removing_disabled_sections == 0)) {
 			if(sec->align) {
 				if(*base_offset % sec->align) {
 					uint64_t padding = sec->align - (*base_offset % sec->align);
@@ -764,6 +787,7 @@ int32_t main(int32_t argc, char** argv) {
 	char_t* linker_script = NULL;
 	uint8_t print_sections = 0;
 	uint8_t print_symbols = 0;
+	uint8_t trim = 0;
 
 	while(argc > 0) {
 		if(strstarts(*argv, "-") != 0) {
@@ -846,7 +870,14 @@ int32_t main(int32_t argc, char** argv) {
 			argc--;
 			argv++;
 
-			print_sections = 1;
+			print_symbols = 1;
+		}
+
+		if(strcmp(*argv, "--trim") == 0) {
+			argc--;
+			argv++;
+
+			trim = 1;
 		}
 	}
 
@@ -872,6 +903,7 @@ int32_t main(int32_t argc, char** argv) {
 	ctx->map_file = map_file;
 	ctx->symbols = linkedlist_create_list_with_heap(ctx->heap);
 	ctx->sections = linkedlist_create_list_with_heap(ctx->heap);
+	ctx->enable_removing_disabled_sections = trim;
 
 	if(linker_script) {
 		linker_parse_script(ctx, linker_script);
@@ -1133,12 +1165,15 @@ int32_t main(int32_t argc, char** argv) {
 				switch (relocs[reloc_idx].r_symtype) {
 				case R_X86_64_32:
 					reloc->type = LINKER_RELOCATION_TYPE_32;
+					ctx->direct_relocation_count++;
 					break;
 				case R_X86_64_32S:
 					reloc->type = LINKER_RELOCATION_TYPE_32S;
+					ctx->direct_relocation_count++;
 					break;
 				case R_X86_64_64:
 					reloc->type = LINKER_RELOCATION_TYPE_64;
+					ctx->direct_relocation_count++;
 					break;
 				case R_X86_64_PC32:
 				case R_X86_64_PLT32:
