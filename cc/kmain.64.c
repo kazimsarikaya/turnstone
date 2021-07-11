@@ -54,7 +54,7 @@ int8_t kmain64(size_t entry_point) {
 
 	//move_kernel(kernel_start, 64 << 20); /* for testing */
 
-	if(task_init_tasking() != 0) {
+	if(task_init_tasking_ext(heap) != 0) {
 		printf("TASKING: Fatal cannot init tasking\n");
 
 		return -1;

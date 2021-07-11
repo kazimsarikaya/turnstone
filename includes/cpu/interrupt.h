@@ -28,7 +28,7 @@ typedef struct interrupt_frame {
 	uint64_t empty1 : 48; ///< unused value
 	uint64_t return_rflags; ///< the rflags after interrupt
 	uint64_t return_rsp; ///< the rsp value aka stack after interrupt
-	uint16_t return_ss; ///< the ss value aka stach segment after interrupt
+	uint16_t return_ss; ///< the ss value aka stack segment after interrupt
 	uint64_t empty2 : 48; ///< unused value
 } __attribute__((packed)) interrupt_frame_t; ///< struct short hand
 

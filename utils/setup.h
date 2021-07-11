@@ -45,4 +45,8 @@ void dump_ram(char_t* fname){
 	fclose(fp);
 }
 
+void* task_get_current_task(){
+	return NULL;
+}
+
 #endif
