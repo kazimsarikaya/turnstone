@@ -112,6 +112,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap);
 void task_switch_task();
 void task_yield();
 uint64_t task_get_id();
+task_t* task_get_current_task();
 
 void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point);
 

@@ -9,6 +9,9 @@
 #include <cpu.h>
 #include <systeminfo.h>
 #include <video.h>
+#if ___BITS == 64
+#include <cpu/task.h>
+#endif
 
 /*! default heap variable */
 memory_heap_t* memory_heap_default = NULL;
@@ -19,25 +22,48 @@ memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
 	return res;
 }
 
-void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align){
+void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	if(size % 8) {
 		size = size + (8 - (size % 8));
 	}
-	void* res;
+
+	void* res = NULL;
+
 	if(heap == NULL) {
-		res = memory_heap_default->malloc(memory_heap_default, size, align);
+#if ___BITS == 64
+		task_t* current_task = task_get_current_task();
+		if(current_task != NULL && current_task->heap != NULL) {
+			res = current_task->heap->malloc(current_task->heap, size, align);
+		}
+#endif
+
+		if(!res) {
+			res = memory_heap_default->malloc(memory_heap_default, size, align);
+		}
+
 	}else {
 		res = heap->malloc(heap, size, align);
 	}
-	if(align && ((size_t)res % align)) {
-		memory_free_ext(heap, res); // recover
-		return NULL;
+
+	if(res != NULL) {
+		if(align && ((size_t)res % align)) {
+			memory_free_ext(heap, res); // recover
+			return NULL;
+		}
 	}
+
 	return res;
 }
 
-int8_t memory_free_ext(struct memory_heap* heap, void* address){
+int8_t memory_free_ext(memory_heap_t* heap, void* address){
 	if(heap == NULL) {
+#if ___BITS == 64
+		task_t* current_task = task_get_current_task();
+		if(current_task != NULL && current_task->heap != NULL) {
+			return current_task->heap->free(current_task->heap, address);
+		}
+#endif
+
 		return memory_heap_default->free(memory_heap_default, address);
 	}else {
 		return heap->free(heap, address);

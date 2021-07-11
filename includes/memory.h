@@ -48,7 +48,7 @@ memory_heap_t* memory_set_default_heap(memory_heap_t* heap);
  *
  * if heap is NULL, variable allocated at default heap.
  */
-void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align);
+void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
 
 /*! malloc with size s at default heap without aligned */
 #define memory_malloc(s) memory_malloc_ext(NULL, s, 0x0)
@@ -63,7 +63,7 @@ void* memory_malloc_ext(struct memory_heap* heap, size_t size, size_t align);
  *
  * if heap is NULL, address will be freed at default heap
  */
-int8_t memory_free_ext(struct memory_heap* heap, void* address);
+int8_t memory_free_ext(memory_heap_t* heap, void* address);
 /*! frees memory addr at default heap */
 #define memory_free(addr) memory_free_ext(NULL, addr)
 
