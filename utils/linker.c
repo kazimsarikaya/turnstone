@@ -29,6 +29,7 @@ typedef struct {
 	uint64_t align;
 	uint8_t* data;
 	linkedlist_t relocations;
+	uint8_t required;
 } linker_section_t;
 
 typedef struct {
@@ -72,6 +73,85 @@ linker_section_t* linker_get_section_by_id(linker_context_t* ctx, uint64_t id);
 int8_t linker_write_output(linker_context_t* ctx);
 int8_t linker_parse_script(linker_context_t* ctx, char_t* linker_script);
 void linker_destroy_context(linker_context_t* ctx);
+int8_t linker_tag_required_sections(linker_context_t* ctx);
+int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* section);
+
+
+
+int8_t linker_tag_required_sections(linker_context_t* ctx) {
+	linker_symbol_t* ep_sym = linker_lookup_symbol(ctx, ctx->entry_point, 0);
+
+	if(ep_sym == NULL) {
+		printf("entry point not found %s\n", ctx->entry_point);
+		return -1;
+	}
+
+	linker_section_t* ep_sec = linker_get_section_by_id(ctx, ep_sym->section_id);
+
+	if(ep_sym == NULL) {
+		printf("entry point section not found %s\n", ctx->entry_point);
+		return -1;
+	}
+
+	return linker_tag_required_section(ctx, ep_sec);
+}
+
+
+int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* section) {
+	if(section == NULL) {
+		printf("error at tagging required section. section is null\n");
+		return -1;
+	}
+
+	if(section->required) {
+		return 0;
+	}
+
+	section->required = 1;
+
+	int8_t res = 0;
+
+
+	if(section->relocations) {
+		iterator_t* iter = linkedlist_iterator_create(section->relocations);
+
+		if(iter != NULL) {
+			while(iter->end_of_iterator(iter) != 0) {
+				linker_relocation_t* reloc = iter->get_item(iter);
+
+				if(reloc->type == LINKER_RELOCATION_TYPE_32 ||
+				   reloc->type == LINKER_RELOCATION_TYPE_32S ||
+				   reloc->type == LINKER_RELOCATION_TYPE_64) {
+					ctx->direct_relocation_count++;
+				}
+
+				linker_symbol_t* sym = linker_get_symbol_by_id(ctx, reloc->symbol_id);
+
+				if(sym == NULL) {
+					printf("cannot find required symbol %li at for section %s reloc list\n", reloc->symbol_id, section->section_name);
+					res = -1;
+					break;
+				}
+
+				linker_section_t* sub_section = linker_get_section_by_id(ctx, sym->section_id);
+
+				res = linker_tag_required_section(ctx, sub_section);
+
+				if(res != 0) {
+					break;
+				}
+
+				iter = iter->next(iter);
+			}
+
+			iter->destroy(iter);
+
+		}
+
+	}
+
+	return res;
+}
 
 void linker_destroy_context(linker_context_t* ctx) {
 	if(ctx->direct_relocations) {
@@ -158,7 +238,7 @@ int8_t linker_parse_script(linker_context_t* ctx, char_t* linker_script) {
 		if(strcmp(key, "program_start") == 0) {
 			if(fscanf(ls, "0x%lx\n", &ivalue) != -1) {
 				ctx->start = ivalue;
-				printf("program_start setted to %i\n", ivalue);
+				printf("program_start setted to %lx\n", ivalue);
 			} else {
 				res = -1;
 				break;
@@ -168,7 +248,7 @@ int8_t linker_parse_script(linker_context_t* ctx, char_t* linker_script) {
 		if(strcmp(key, "stack_size") == 0) {
 			if(fscanf(ls, "0x%lx\n", &ivalue) != -1) {
 				ctx->stack_size = ivalue;
-				printf("stack_size setted to %i\n", ivalue);
+				printf("stack_size setted to %lx\n", ivalue);
 			} else {
 				res = -1;
 				break;
@@ -229,6 +309,11 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 	while(iter->end_of_iterator(iter) != 0) {
 		linker_section_t* sec  = iter->get_item(iter);
+
+		if(sec->required == 0) {
+			iter = iter->next(iter);
+			continue;
+		}
 
 		if(map_fp) {
 			fprintf(map_fp, "%016lx %s\n", ctx->start + sec->offset, sec->section_name);
@@ -625,7 +710,7 @@ void linker_bind_offset_of_section(linker_context_t* ctx, linker_section_type_t 
 	while(sec_iter->end_of_iterator(sec_iter) != 0) {
 		linker_section_t* sec = sec_iter->get_item(sec_iter);
 
-		if(sec->type == type) {
+		if(sec->type == type && sec->required) {
 			if(sec->align) {
 				if(*base_offset % sec->align) {
 					uint64_t padding = sec->align - (*base_offset % sec->align);
@@ -802,6 +887,7 @@ int32_t main(int32_t argc, char** argv) {
 	stack_sec->size = ctx->stack_size;
 	stack_sec->align = 0x1000;
 	stack_sec->type = LINKER_SECTION_TYPE_STACK;
+	stack_sec->required = 1;
 
 	linkedlist_list_insert(ctx->sections, stack_sec);
 
@@ -821,6 +907,7 @@ int32_t main(int32_t argc, char** argv) {
 	kheap_sec->section_name = strdup_at_heap(ctx->heap, ".heap");
 	kheap_sec->align = 0x100;
 	kheap_sec->type = LINKER_SECTION_TYPE_HEAP;
+	kheap_sec->required = 1;
 
 	linkedlist_list_insert(ctx->sections, kheap_sec);
 
@@ -1046,15 +1133,12 @@ int32_t main(int32_t argc, char** argv) {
 				switch (relocs[reloc_idx].r_symtype) {
 				case R_X86_64_32:
 					reloc->type = LINKER_RELOCATION_TYPE_32;
-					ctx->direct_relocation_count++;
 					break;
 				case R_X86_64_32S:
 					reloc->type = LINKER_RELOCATION_TYPE_32S;
-					ctx->direct_relocation_count++;
 					break;
 				case R_X86_64_64:
 					reloc->type = LINKER_RELOCATION_TYPE_64;
-					ctx->direct_relocation_count++;
 					break;
 				case R_X86_64_PC32:
 				case R_X86_64_PLT32:
@@ -1083,6 +1167,12 @@ int32_t main(int32_t argc, char** argv) {
 		argv++;
 	}
 
+	if(linker_tag_required_sections(ctx) != 0) {
+		print_error("error at tagging required sections");
+		linker_destroy_context(ctx);
+		return -1;
+
+	}
 
 	uint64_t output_offset_base = 0x100;
 
