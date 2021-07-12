@@ -321,7 +321,6 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		linker_section_t* sec  = iter->get_item(iter);
 
 		if(sec->required == 0 && ctx->enable_removing_disabled_sections != 0) {
-			printf("unused section: %s\n", sec->section_name);
 			iter = iter->next(iter);
 			continue;
 		}
@@ -463,7 +462,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		file_size += 16 - (file_size % 16);
 	}
 
-	printf("reloc table start %lx count: %lx\n", file_size, ctx->direct_relocation_count);
+	printf("reloc table start %lx count: %lx ", file_size, ctx->direct_relocation_count);
 
 	fseek (fp, file_size, SEEK_SET);
 
@@ -476,10 +475,13 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 	file_size = ftell(fp);
 
+	printf(" end %lx\n", file_size);
+
 	if(file_size % 512) {
-		uint8_t pad = 0x00;
 		uint64_t rem = 512 - (file_size % 512);
-		fwrite(&pad, rem, 1, fp);
+		uint8_t* pad = memory_malloc_ext(ctx->heap, rem, 0x0);
+		fwrite(pad, 1, rem, fp);
+		memory_free_ext(ctx->heap, pad);
 	}
 
 	fseek (fp, 0, SEEK_END);
@@ -1215,15 +1217,21 @@ int32_t main(int32_t argc, char** argv) {
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_DATA, &output_offset_base);
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_RODATA, &output_offset_base);
 
-	if(output_offset_base % 8) {
-		output_offset_base += 8 - (output_offset_base % 8);
+	if(output_offset_base % 16) {
+		output_offset_base += 16 - (output_offset_base % 16);
 	}
+
+	printf("reloc table should start at 0x%lx ", output_offset_base);
 
 	output_offset_base += sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count;
 
-	if(output_offset_base % 0x100) {
-		output_offset_base +=  0x100 - (output_offset_base %  0x100);
+	printf("ends at 0x%lx\n", output_offset_base);
+
+	if(output_offset_base % 0x200) {
+		output_offset_base +=  0x200 - (output_offset_base %  0x200);
 	}
+
+	printf("section .bss should start at 0x%lx\n", output_offset_base);
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_BSS, &output_offset_base);
 
