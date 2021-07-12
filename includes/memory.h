@@ -88,21 +88,21 @@ int8_t memory_memclean(void* address, size_t size);
  * @brief copy source to destination with length bytes from source
  * @param[in]  source      source address
  * @param[in]  destination destination address
- * @param[in]  length      how many bytes will be copied
+ * @param[in]  size      how many bytes will be copied
  * @return 0
  *
  * if destination is smaller then length a memory corruption will be happend
  */
-int8_t memory_memcopy(void* source, void* destination, size_t length);
+int8_t memory_memcopy(void* source, void* destination, size_t size);
 
 /**
  * @brief compares first length bytes of mem1 with mem2
  * @param  mem1   first memory address
  * @param  mem2   second memory address
- * @param  length count of bytes for compare
+ * @param  size count of bytes for compare
  * @return       <0 if mem1>mem2, 0 if mem1=mem2, >0 if mem1>mem2
  */
-int8_t memory_memcompare(void* mem1, void* mem2, size_t length);
+int8_t memory_memcompare(void* mem1, void* mem2, size_t size);
 
 /**
  * @brief converts relative address to absolute address
