@@ -20,29 +20,29 @@
 #include <diskio.h>
 #include <cpu/task.h>
 #include <linker.h>
+#include <driver/ahci.h>
 
 int8_t kmain64_init();
 void move_kernel(size_t src, size_t dst);
 
 int8_t kmain64(size_t entry_point) {
-	memory_heap_t* heap = memory_create_heap_simple(0, 0);
-
-	memory_set_default_heap(heap);
-
-	memory_page_table_t* p4 = memory_paging_clone_pagetable();
-
-	memory_paging_switch_table(p4);
-
 	video_clear_screen();
 
 	printf("Initializing stage 3\n");
 	printf("Entry point of kernel is 0x%lx\n", entry_point);
 
-	uint64_t kernel_start = entry_point - 0x100;
+	memory_heap_t* heap = memory_create_heap_simple(0, 0);
 
-	program_header_t* kernel = (program_header_t*)kernel_start;
+	if(heap == NULL) {
+		printf("KERNEL: Error at creating heap\n");
+		return -1;
+	}
 
-	printf("kernel size %lx reloc start %lx reloc count %lx\n", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
+	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
+
+	memory_set_default_heap(heap);
+
+	printf("KERNEL: Initializing interrupts\n");
 
 	if(interrupt_init() != 0) {
 		printf("CPU: Fatal cannot init interrupts\n");
@@ -51,6 +51,21 @@ int8_t kmain64(size_t entry_point) {
 	}
 
 	printf("interrupts initialized\n");
+
+	memory_page_table_t* p4 = memory_paging_clone_pagetable();
+
+	if(p4 == NULL) {
+		printf("KERNEL: Fatal cannot create new page table\n");
+		return -1;
+	}
+
+	memory_paging_switch_table(p4);
+
+	uint64_t kernel_start = entry_point - 0x100;
+
+	program_header_t* kernel = (program_header_t*)kernel_start;
+
+	printf("kernel size %lx reloc start %lx reloc count %lx\n", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
 
 	//move_kernel(kernel_start, 64 << 20); /* for testing */
 
@@ -273,13 +288,14 @@ int8_t kmain64_init(memory_heap_t* heap) {
 			printf("dsdt not ok\n");
 		}
 
-		acpi_table_mcfg_t* mcfg = (acpi_table_mcfg_t*)acpi_get_table(desc, "MCFG");
+		acpi_table_mcfg_t* mcfg = acpi_get_mcfg_table(desc);
 
 		if(mcfg == NULL) {
 			printf("can not find mcfg or incorrect checksum\n");
 		} else {
 			printf("mcfg is found at 0x%08p\n", mcfg);
 
+			linkedlist_t sata_controllers = linkedlist_create_list_with_heap(heap);
 
 			uint64_t pci_hs = 0x1000000;
 			uint64_t pci_he = 0x2000000;
@@ -290,7 +306,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 			}
 
 			memory_heap_t* pci_heap = memory_create_heap_simple(pci_hs, pci_he);
-			memory_set_default_heap(pci_heap);
 
 			iterator_t* iter = pci_iterator_create_with_heap(pci_heap, mcfg);
 
@@ -301,6 +316,11 @@ int8_t kmain64_init(memory_heap_t* heap) {
 				       p->group_number, p->bus_number, p->device_number, p->function_number,
 				       p->pci_header->vendor_id, p->pci_header->device_id,
 				       p->pci_header->class_code, p->pci_header->subclass_code);
+
+				if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
+				    p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
+					linkedlist_list_insert(sata_controllers, p);
+				}
 
 
 				if(p->pci_header->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
@@ -327,13 +347,35 @@ int8_t kmain64_init(memory_heap_t* heap) {
 
 				printf("\n");
 
-				memory_free(p);
+				if( p->pci_header->class_code != PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
+				    p->pci_header->subclass_code != PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
+					memory_free_ext(pci_heap, p);
+				}
 
 				iter = iter->next(iter);
 			}
 			iter->destroy(iter);
 
-			memory_set_default_heap(heap);
+			int8_t sata_port_cnt = ahci_init(heap, sata_controllers, 34 * (1 << 20));
+
+			printf("KERNEL: sata port count: %i\n", sata_port_cnt);
+
+			if(sata_port_cnt) {
+				uint64_t r_size = 2048;
+				uint8_t* rt_buf = memory_malloc(r_size);
+				if(ahci_read(0, 0, r_size, rt_buf) == 0) {
+					printf("%i bytes readed at 0x%p\n", r_size, rt_buf);
+
+					uint8_t* wt_buf = memory_malloc(r_size);
+					strcpy("hello world from ahci write", (char_t*)wt_buf);
+					if(ahci_write(0, 1024, r_size, wt_buf) == 0) {
+						printf("write success\n");
+					} else {
+						printf("write fail\n");
+					}
+				}
+			}
+
 		}
 	}
 
@@ -359,7 +401,7 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	outl(0x0CD8, 0); // qemu acpi init emulation
 
 
-	task_create_task(heap, 0x1000, test_task1);
+	//task_create_task(heap, 0x1000, test_task1);
 
 	interrupt_irq_set_handler(0x1, &dev_kbd_isr);
 	apic_ioapic_setup_irq(0x1,
@@ -384,7 +426,7 @@ int8_t kmain64_init(memory_heap_t* heap) {
 
 	printf("li %li %li %li\n", res2->type.type, res2->largeitem.name, res2->largeitem.length);
 
-	task_create_task(heap, 0x1000, test_task1);
+	//task_create_task(heap, 0x1000, test_task1);
 
 	printf("tests completed!...\n");
 
