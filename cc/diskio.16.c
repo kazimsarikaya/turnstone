@@ -9,6 +9,7 @@
 #include <diskio.h>
 #include <memory.h>
 #include <cpu.h>
+#include <video.h>
 
 disk_geometry_t* disk_geometry = NULL;
 
@@ -39,6 +40,8 @@ int8_t disk_cache_geometry(uint8_t hard_disk) {
 	disk_geometry->head_count = (dx >> 8) + 1;
 	disk_geometry->sector_count = cx & 0x3F;
 	disk_geometry->cylinder_count = (cx >> 6) + 1;
+
+	printf("DISKIO: CYL %i HEAD %i SEC %i\n", disk_geometry->cylinder_count,  disk_geometry->head_count, disk_geometry->sector_count );
 
 	return 0;
 }

@@ -18,6 +18,10 @@
 #define PCI_DEVICE_MAX_COUNT 32 ///< max device count per bus
 #define PCI_FUNCTION_MAX_COUNT 8 ///< max function count per device
 
+#define PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER  0x01
+
+#define PCI_DEVICE_SUBCLASS_SATA_CONTROLLER  0x06
+
 
 typedef struct {
 	uint8_t io_space : 1;
