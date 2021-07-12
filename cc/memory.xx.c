@@ -71,16 +71,16 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
 }
 
 int8_t memory_memset(void* address, uint8_t value, size_t size){
-	for(size_t i = 0; i < size; i++) {
-		((uint8_t*)address)[i] = value;
-	}
-	return 0;
-}
-
-int8_t memory_memclean(void* address, size_t size){
 	uint8_t* t_addr = (uint8_t*)address;
 
 	size_t max_regsize = sizeof(size_t);
+
+	if(size <= (max_regsize * 32)) {
+		for(size_t i = 0; i < size; i++) {
+			*t_addr++ = value;
+		}
+		return 0;
+	}
 
 	size_t start = (size_t)address;
 
@@ -89,7 +89,7 @@ int8_t memory_memclean(void* address, size_t size){
 		rem = max_regsize - rem;
 
 		for(size_t i = 0; i < rem; i++) {
-			*t_addr++ = 0;
+			*t_addr++ = value;
 			size--;
 		}
 	}
@@ -98,8 +98,16 @@ int8_t memory_memclean(void* address, size_t size){
 
 	size_t rep = size / max_regsize;
 
+	size_t pad = 0;
+
+	if(value) {
+		for(uint8_t i = 0; i < max_regsize; i++) {
+			pad |= ((size_t)value) << (4 * i);
+		}
+	}
+
 	for(size_t i = 0; i < rep; i++) {
-		*st_addr++ = 0;
+		*st_addr++ = pad;
 	}
 
 	rem = size % max_regsize;
@@ -108,26 +116,70 @@ int8_t memory_memclean(void* address, size_t size){
 		t_addr = (uint8_t*)st_addr;
 
 		for(size_t i = 0; i < rem; i++) {
-			*t_addr++ = 0;
+			*t_addr++ = value;
 		}
 	}
 
 	return 0;
 }
 
-int8_t memory_memcopy(void* source, void* destination, size_t length){
-	uint8_t* src = (uint8_t*)source;
-	uint8_t* dst = (uint8_t*)destination;
-	for(size_t i = 0; i < length; i++) {
-		dst[i] = src[i];
+int8_t memory_memclean(void* address, size_t size){
+	return memory_memset(address, 0, size);
+}
+
+int8_t memory_memcopy(void* source, void* destination, size_t size){
+	uint8_t* s_addr = (uint8_t*)source;
+	uint8_t* t_addr = (uint8_t*)destination;
+
+	size_t max_regsize = sizeof(size_t);
+
+	if(size <= (max_regsize * 2)) {
+		for(size_t i = 0; i < size; i++) {
+			*t_addr++ = *s_addr++;
+		}
+		return 0;
 	}
+
+	size_t start = (size_t)source;
+
+	size_t rem = start % max_regsize;
+
+	if(rem != 0) {
+		rem = max_regsize - rem;
+
+		for(size_t i = 0; i < rem; i++) {
+			*t_addr++ = *s_addr++;
+			size--;
+		}
+	}
+
+	size_t* st_addr = (size_t*)t_addr;
+	size_t* ss_addr = (size_t*)s_addr;
+
+	size_t rep = size / max_regsize;
+
+	for(size_t i = 0; i < rep; i++) {
+		*st_addr++ = *ss_addr++;
+	}
+
+	rem = size % max_regsize;
+
+	if(rem > 0) {
+		t_addr = (uint8_t*)st_addr;
+		s_addr = (uint8_t*)ss_addr;
+
+		for(size_t i = 0; i < rem; i++) {
+			*t_addr++ = *s_addr++;
+		}
+	}
+
 	return 0;
 }
 
-int8_t memory_memcompare(void* mem1, void* mem2, size_t length) {
+int8_t memory_memcompare(void* mem1, void* mem2, size_t size) {
 	uint8_t* mem1_t = (uint8_t*)mem1;
 	uint8_t* mem2_t = (uint8_t*)mem2;
-	for(size_t i = 0; i < length; i++) {
+	for(size_t i = 0; i < size; i++) {
 		if(mem1_t[i] < mem2_t[i]) {
 			return -1;
 		} else if(mem1_t[i] == mem2_t[i]) {
@@ -457,14 +509,19 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_
 
 memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4){
 	if(p4 == NULL) {
-		p4 = memory_paging_switch_table(NULL);
+		p4 = memory_paging_get_table();
 	}
+
+	printf("KERNEL: Info old page table is at 0x%lx\n", p4);
 
 	memory_page_table_t* new_p4 = memory_paging_malloc_page_with_heap(heap);
 
 	if(new_p4 == NULL) {
+		printf("KERNEL: Fatal cannot create new page table\n");
 		return NULL;
 	}
+
+	printf("KERNEL: Info new page table is at 0x%lx\n", new_p4);
 
 	for(size_t p4_idx = 0; p4_idx < MEMORY_PAGING_INDEX_COUNT; p4_idx++) {
 		if(p4->pages[p4_idx].present == 1) {
@@ -519,6 +576,7 @@ memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memo
 	return new_p4;
 
 cleanup:
+	printf("KERNEL: Fatal error at cloning page table\n");
 	memory_paging_destroy_pagetable_ext(heap, new_p4);
 
 	return NULL;
