@@ -6,21 +6,17 @@ ifeq ($(HOSTOS),Darwin)
 
 AS16 = i386-elf-as
 CC16 = i386-elf-gcc
-LD16 = i386-elf-ld
 
 AS64 = x86_64-elf-as
 CC64 = x86_64-elf-gcc
-LD64 = x86_64-elf-ld
 
 else
 
 AS16 = as
 CC16 = gcc
-LD16 = ld
 
 AS64 = as
 CC64 = gcc
-LD64 = ld
 
 endif
 
@@ -35,11 +31,9 @@ CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 
 AS16FLAGS = --32
 CC16FLAGS = -m32 -march=i386 -mgeneral-regs-only -D___BITS=16 $(CCXXFLAGS)
-LD16FLAGS = --nmagic -s -A elf32-i386 -m elf_i386
 
 AS64FLAGS    = --64
 CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
-LD64FLAGS    = --nmagic -s
 CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
 
 OBJDIR = output
@@ -123,14 +117,14 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(OBJDIR)/bootsect16.bin: $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
-	$(LD16) $(LD16FLAGS) --script=$<  -o $@ $(filter-out $<,$^)
+$(OBJDIR)/bootsect16.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
+	$(OBJDIR)/linker.bin --trim --boot-flag -o $@ -M $@.map -T $(filter-out $<,$^)
 
-$(OBJDIR)/slottable.bin: $(LDSRCDIR)/slottableprotect.ld $(ASOBJDIR)/slottableprotect16.o
-	$(LD16) $(LD16FLAGS) --script=$<  -o $@ $(filter-out $<,$^)
+$(OBJDIR)/slottable.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/slottableprotect.ld $(ASOBJDIR)/slottableprotect16.o
+	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
 
-$(OBJDIR)/stage2.bin: $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
-	$(LD16) $(LD16FLAGS) --script=$< -o $@ $(filter-out $<,$^)
+$(OBJDIR)/stage2.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
+	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
 
 $(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
 	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)

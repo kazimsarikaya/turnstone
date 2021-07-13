@@ -1,20 +1,3 @@
-OUTPUT_FORMAT(binary)
-ENTRY(__start)
-SECTIONS
-{
-    . = 0x0;
-    .text :
-    {
-        *(.text);
-    }
-    /DISCARD/ :
-    {
-    *(.note*);
-    *(.iplt*);
-    *(.igot*);
-    *(.rel*);
-    *(.comment);
-    *(.eh_frame);
-    }
-
-}
+program_start = 0x0
+entry_point = __start
+stack_size = 0

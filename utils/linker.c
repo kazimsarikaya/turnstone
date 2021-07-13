@@ -49,7 +49,21 @@ typedef struct {
 } linker_relocation_t;
 
 typedef struct {
+	char_t* file_name;
+	FILE* file;
+	uint8_t type;
+	uint8_t* sections;
+	char_t* shstrtab;
+	char_t* strtab;
+	uint8_t* symbols;
+	uint8_t* relocs;
+	uint64_t symbol_count;
+	uint64_t section_count;
+} linker_objectfile_ctx_t;
+
+typedef struct {
 	memory_heap_t* heap;
+	uint8_t class;
 	char_t* entry_point;
 	uint64_t start;
 	uint64_t stack_size;
@@ -61,6 +75,8 @@ typedef struct {
 	linker_direct_relocation_t* direct_relocations;
 	linker_section_locations_t section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
 	uint8_t enable_removing_disabled_sections;
+	uint8_t boot_flag;
+	linker_objectfile_ctx_t objectfile_ctx;
 } linker_context_t;
 
 linker_symbol_t* linker_lookup_symbol(linker_context_t* ctx, char_t* symbol_name, uint64_t section_id);
@@ -76,6 +92,417 @@ int8_t linker_parse_script(linker_context_t* ctx, char_t* linker_script);
 void linker_destroy_context(linker_context_t* ctx);
 int8_t linker_tag_required_sections(linker_context_t* ctx);
 int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* section);
+int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id);
+uint64_t linker_get_symbol_count(linker_context_t* ctx);
+char_t* linker_get_section_name(linker_context_t* ctx, uint16_t sec_idx);
+char_t* linker_get_symbol_name(linker_context_t* ctx, uint16_t sec_idx);
+uint64_t linker_get_section_size(linker_context_t* ctx, uint16_t sec_idx);
+uint64_t linker_get_section_type(linker_context_t* ctx, uint16_t sec_idx);
+uint64_t linker_get_section_addralign(linker_context_t* ctx, uint16_t sec_idx);
+uint64_t linker_get_section_offset(linker_context_t* ctx, uint16_t sec_idx);
+uint64_t linker_get_section_index_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
+uint8_t linker_get_type_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
+uint8_t linker_get_scope_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
+uint64_t linker_get_value_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
+uint64_t linker_get_relocation_symbol_index(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
+uint64_t linker_get_relocation_symbol_offset(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
+uint64_t linker_get_relocation_symbol_type(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
+int64_t linker_get_relocation_symbol_addend(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
+void linker_destroy_objectctx(linker_context_t* ctx);
+
+
+uint64_t linker_get_relocation_symbol_index(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		if(is_rela) {
+			elf32_rela_t* relocs = (elf32_rela_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symindx;
+		} else {
+			elf32_rel_t* relocs = (elf32_rel_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symindx;
+		}
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		if(is_rela) {
+			elf64_rela_t* relocs = (elf64_rela_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symindx;
+		} else {
+			elf64_rel_t* relocs = (elf64_rel_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symindx;
+		}
+	}
+
+	return NULL;
+}
+
+uint64_t linker_get_relocation_symbol_offset(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		if(is_rela) {
+			elf32_rela_t* relocs = (elf32_rela_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_offset;
+		} else {
+			elf32_rel_t* relocs = (elf32_rel_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_offset;
+		}
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		if(is_rela) {
+			elf64_rela_t* relocs = (elf64_rela_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_offset;
+		} else {
+			elf64_rel_t* relocs = (elf64_rel_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_offset;
+		}
+	}
+
+	return NULL;
+}
+
+uint64_t linker_get_relocation_symbol_type(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		if(is_rela) {
+			elf32_rela_t* relocs = (elf32_rela_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symtype;
+		} else {
+			elf32_rel_t* relocs = (elf32_rel_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symtype;
+		}
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		if(is_rela) {
+			elf64_rela_t* relocs = (elf64_rela_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symtype;
+		} else {
+			elf64_rel_t* relocs = (elf64_rel_t*)ctx->objectfile_ctx.relocs;
+
+			return relocs[reloc_idx].r_symtype;
+		}
+	}
+
+	return NULL;
+}
+
+int64_t linker_get_relocation_symbol_addend(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela) {
+	if(is_rela == 0) {
+		return 0;
+	}
+
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_rela_t* relocs = (elf32_rela_t*)ctx->objectfile_ctx.relocs;
+
+		return relocs[reloc_idx].r_addend;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_rela_t* relocs = (elf64_rela_t*)ctx->objectfile_ctx.relocs;
+
+		return relocs[reloc_idx].r_addend;
+	}
+
+	return NULL;
+}
+
+void linker_destroy_objectctx(linker_context_t* ctx) {
+	if(ctx->objectfile_ctx.file) {
+		fclose(ctx->objectfile_ctx.file);
+	}
+
+	memory_free_ext(ctx->heap, ctx->objectfile_ctx.file_name);
+	memory_free_ext(ctx->heap, ctx->objectfile_ctx.sections);
+	memory_free_ext(ctx->heap, ctx->objectfile_ctx.shstrtab);
+	memory_free_ext(ctx->heap, ctx->objectfile_ctx.strtab);
+	memory_free_ext(ctx->heap, ctx->objectfile_ctx.symbols);
+	memory_free_ext(ctx->heap, ctx->objectfile_ctx.relocs);
+
+	memory_memclean(&ctx->objectfile_ctx, sizeof(linker_objectfile_ctx_t));
+}
+
+uint64_t linker_get_symbol_count(linker_context_t* ctx){
+	return ctx->objectfile_ctx.symbol_count;
+}
+
+char_t* linker_get_section_name(linker_context_t* ctx, uint16_t sec_idx){
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return ctx->objectfile_ctx.shstrtab + sections[sec_idx].sh_name;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_shdr_t* sections = (elf64_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return ctx->objectfile_ctx.shstrtab + sections[sec_idx].sh_name;
+	}
+
+	return NULL;
+}
+
+uint64_t linker_get_section_size(linker_context_t* ctx, uint16_t sec_idx){
+	if(ctx->objectfile_ctx.type  == ELFCLASS32) {
+		elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_size;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_shdr_t* sections = (elf64_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_size;
+	}
+
+	return 0;
+}
+
+uint64_t linker_get_section_offset(linker_context_t* ctx, uint16_t sec_idx){
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_offset;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_shdr_t* sections = (elf64_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_offset;
+	}
+
+	return 0;
+}
+
+uint64_t linker_get_section_addralign(linker_context_t* ctx, uint16_t sec_idx){
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_addralign;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_shdr_t* sections = (elf64_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_addralign;
+	}
+
+	return 0;
+}
+
+uint64_t linker_get_section_type(linker_context_t* ctx, uint16_t sec_idx){
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_type;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_shdr_t* sections = (elf64_shdr_t*)ctx->objectfile_ctx.sections;
+
+		return sections[sec_idx].sh_type;
+	}
+
+	return SHT_NULL;
+}
+
+char_t* linker_get_symbol_name(linker_context_t* ctx, uint16_t sym_idx){
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return ctx->objectfile_ctx.strtab + symbols[sym_idx].st_name;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_sym_t* symbols = (elf64_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return ctx->objectfile_ctx.strtab + symbols[sym_idx].st_name;
+	}
+
+	return NULL;
+}
+
+uint64_t linker_get_section_index_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_shndx;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_sym_t* symbols = (elf64_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_shndx;
+	}
+
+	return 0;
+}
+
+uint64_t linker_get_value_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_value;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_sym_t* symbols = (elf64_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_value;
+	}
+
+	return 0;
+}
+
+uint8_t linker_get_type_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_type;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_sym_t* symbols = (elf64_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_type;
+	}
+
+	return 0;
+}
+
+uint8_t linker_get_scope_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_scope;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_sym_t* symbols = (elf64_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_scope;
+	}
+
+	return 0;
+}
+
+int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
+	ctx->objectfile_ctx.file = fopen(ctx->objectfile_ctx.file_name, "r");
+
+	elf_indent_t e_indent;
+
+	fread(&e_indent, sizeof(elf_indent_t), 1, ctx->objectfile_ctx.file);
+
+	if(ctx->class == 0) {
+		ctx->class = e_indent.class;
+	} else if(ctx->class != e_indent.class) {
+		print_error("class change\n");
+		return -1;
+	}
+
+	ctx->objectfile_ctx.type = e_indent.class;
+
+	fseek(ctx->objectfile_ctx.file, 0, SEEK_SET);
+
+	uint16_t e_shnum = 0;
+	uint64_t e_shoff = 0;
+	uint16_t e_shstrndx = 0;
+
+	uint64_t e_shsize = 0;
+
+	if(e_indent.class == ELFCLASS32) {
+
+		elf32_hdr_t hdr;
+		fread(&hdr, sizeof(elf32_hdr_t), 1, ctx->objectfile_ctx.file);
+
+		e_shnum = hdr.e_shnum;
+		e_shoff = hdr.e_shoff;
+		e_shstrndx = hdr.e_shstrndx;
+		e_shsize = sizeof(elf32_shdr_t) * e_shnum;
+
+	} else if(e_indent.class == ELFCLASS64) {
+
+		elf64_hdr_t hdr;
+		fread(&hdr, sizeof(elf64_hdr_t), 1, ctx->objectfile_ctx.file);
+
+		e_shnum = hdr.e_shnum;
+		e_shoff = hdr.e_shoff;
+		e_shstrndx = hdr.e_shstrndx;
+		e_shsize = sizeof(elf64_shdr_t) * e_shnum;
+
+	} else {
+		printf("unknown file class %i\n", e_indent.class );
+		return -1;
+	}
+
+	if(e_shnum == 0) {
+		return -1;
+	}
+
+	ctx->objectfile_ctx.section_count = e_shnum;
+
+	ctx->objectfile_ctx.sections  = memory_malloc_ext(ctx->heap, e_shsize, 0x0);
+	fseek(ctx->objectfile_ctx.file, e_shoff, SEEK_SET);
+	fread(ctx->objectfile_ctx.sections, e_shsize, 1, ctx->objectfile_ctx.file);
+
+
+	ctx->objectfile_ctx.shstrtab = memory_malloc_ext(ctx->heap, linker_get_section_size(ctx, e_shstrndx), 0x0);
+	fseek(ctx->objectfile_ctx.file, linker_get_section_offset(ctx, e_shstrndx), SEEK_SET);
+	fread(ctx->objectfile_ctx.shstrtab, linker_get_section_size(ctx, e_shstrndx), 1, ctx->objectfile_ctx.file);
+
+
+	uint8_t req_sec_found = 0;
+
+	for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
+		uint64_t sec_size = linker_get_section_size(ctx, sec_idx);
+		uint64_t sec_off = linker_get_section_offset(ctx, sec_idx);
+
+		if(strcmp(".strtab", linker_get_section_name(ctx, sec_idx)) == 0) {
+			ctx->objectfile_ctx.strtab = memory_malloc_ext(ctx->heap, sec_size, 0x0);
+			fseek(ctx->objectfile_ctx.file, sec_off, SEEK_SET);
+			fread(ctx->objectfile_ctx.strtab, sec_size, 1, ctx->objectfile_ctx.file);
+			req_sec_found++;
+		}
+
+		if(linker_get_section_type(ctx, sec_idx) == SHT_SYMTAB) {
+			ctx->objectfile_ctx.symbols = memory_malloc_ext(ctx->heap, sec_size, 0x0);
+			fseek(ctx->objectfile_ctx.file, sec_off, SEEK_SET);
+			fread(ctx->objectfile_ctx.symbols, sec_size, 1, ctx->objectfile_ctx.file);
+			req_sec_found++;
+
+			if(e_indent.class == ELFCLASS32) {
+				ctx->objectfile_ctx.symbol_count = sec_size / sizeof(elf32_sym_t);
+			} else {
+				ctx->objectfile_ctx.symbol_count = sec_size / sizeof(elf64_sym_t);
+			}
+		}
+
+		if(linker_get_section_size(ctx, sec_idx) &&   (
+				 strstarts(linker_get_section_name(ctx, sec_idx), ".text") == 0 ||
+				 strstarts(linker_get_section_name(ctx, sec_idx), ".data") == 0 ||
+				 strstarts(linker_get_section_name(ctx, sec_idx), ".rodata") == 0 ||
+				 strstarts(linker_get_section_name(ctx, sec_idx), ".bss") == 0
+				 )) {
+			linker_section_t* sec = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+			sec->id = *section_id;
+
+			(*section_id)++;
+
+			sec->file_name = strdup_at_heap(ctx->heap, ctx->objectfile_ctx.file_name);
+			sec->section_name = strdup_at_heap(ctx->heap, linker_get_section_name(ctx, sec_idx));
+			sec->size = sec_size;
+			sec->align = linker_get_section_addralign(ctx, sec_idx);
+
+			if(strstarts(linker_get_section_name(ctx, sec_idx), ".text") == 0) {
+				sec->type = LINKER_SECTION_TYPE_TEXT;
+			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".data") == 0) {
+				sec->type = LINKER_SECTION_TYPE_DATA;
+			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".rodata") == 0) {
+				sec->type = LINKER_SECTION_TYPE_RODATA;
+			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".bss") == 0) {
+				sec->type = LINKER_SECTION_TYPE_BSS;
+			}
+
+			if(strstarts(linker_get_section_name(ctx, sec_idx), ".bss") != 0) {
+				sec->data = memory_malloc_ext(ctx->heap, sec->size, 0x0);
+
+				fseek(ctx->objectfile_ctx.file, sec_off, SEEK_SET);
+				fread(sec->data, sec->size, 1, ctx->objectfile_ctx.file);
+			}
+
+			linkedlist_list_insert(ctx->sections, sec);
+		}
+
+	}
+
+	if(req_sec_found != 2) {
+		print_error("strtab/symtab not found!");
+		return -1;
+	}
+
+	return 0;
+}
 
 
 
@@ -126,9 +553,11 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 			while(iter->end_of_iterator(iter) != 0) {
 				linker_relocation_t* reloc = iter->get_item(iter);
 
-				if(reloc->type == LINKER_RELOCATION_TYPE_32 ||
-				   reloc->type == LINKER_RELOCATION_TYPE_32S ||
-				   reloc->type == LINKER_RELOCATION_TYPE_64) {
+				if(reloc->type == LINKER_RELOCATION_TYPE_32_16 ||
+				   reloc->type == LINKER_RELOCATION_TYPE_32_32 ||
+				   reloc->type == LINKER_RELOCATION_TYPE_64_32 ||
+				   reloc->type == LINKER_RELOCATION_TYPE_64_32S ||
+				   reloc->type == LINKER_RELOCATION_TYPE_64_64) {
 					ctx->direct_relocation_count++;
 				}
 
@@ -284,10 +713,12 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		return -1;
 	}
 
-	ctx->direct_relocations = memory_malloc_ext(ctx->heap, sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count, 0x0);
+	if(ctx->class == ELFCLASS64) {
+		ctx->direct_relocations = memory_malloc_ext(ctx->heap, sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count, 0x0);
 
-	if(ctx->direct_relocations == NULL) {
-		return -1;
+		if(ctx->direct_relocations == NULL) {
+			return -1;
+		}
 	}
 
 	FILE* fp = fopen(ctx->output, "w" );
@@ -369,7 +800,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						fprintf(map_fp, "%016lx     reference symbol %s@%s at ", ctx->start + reloc->offset, target_sym->symbol_name, target_sec->section_name);
 					}
 
-					if(reloc->type == LINKER_RELOCATION_TYPE_32) {
+					if(reloc->type == LINKER_RELOCATION_TYPE_64_32) {
 						ctx->direct_relocations[dr_index].type = reloc->type;
 						ctx->direct_relocations[dr_index].offset = reloc->offset;
 						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
@@ -383,7 +814,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						}
 
 						fwrite(&addr, 1, 4, fp);
-					} else if(reloc->type == LINKER_RELOCATION_TYPE_32S) {
+					} else if(reloc->type == LINKER_RELOCATION_TYPE_64_32S) {
 						ctx->direct_relocations[dr_index].type = reloc->type;
 						ctx->direct_relocations[dr_index].offset = reloc->offset;
 						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
@@ -397,7 +828,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						}
 
 						fwrite(&addr, 1, 4, fp);
-					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64) {
+					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64_64) {
 						ctx->direct_relocations[dr_index].type = reloc->type;
 						ctx->direct_relocations[dr_index].offset = reloc->offset;
 						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
@@ -411,7 +842,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						}
 
 						fwrite(&addr, 1, 8, fp);
-					}  else if(reloc->type == LINKER_RELOCATION_TYPE_PC32) {
+					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64_PC32) {
 						uint32_t addr = (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend  - (uint32_t)(reloc->offset);
 
 
@@ -420,7 +851,47 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						}
 
 						fwrite(&addr, 1, 4, fp);
-					} else {
+					} else if(reloc->type == LINKER_RELOCATION_TYPE_32_16) {
+						uint16_t addr = (uint16_t)ctx->start;
+						uint16_t addend = *((uint16_t*)(sec->data + reloc->offset - sec->offset));
+						addr += (uint16_t)target_sym->value + (uint16_t)target_sec->offset + (uint16_t)reloc->addend + addend;
+
+						if(map_fp) {
+							fprintf(map_fp, "%08x\n", addr);
+						}
+
+						fwrite(&addr, 1, 2, fp);
+					} else if(reloc->type == LINKER_RELOCATION_TYPE_32_32) {
+						uint32_t addr = (uint32_t)ctx->start;
+						uint32_t addend = *((uint32_t*)(sec->data + reloc->offset - sec->offset));
+						addr += (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend + addend;
+
+						if(map_fp) {
+							fprintf(map_fp, "%08x\n", addr);
+						}
+
+						fwrite(&addr, 1, 4, fp);
+					} else if(reloc->type == LINKER_RELOCATION_TYPE_32_PC16) {
+						int16_t addend = *((uint16_t*)(sec->data + reloc->offset - sec->offset));
+						uint16_t addr = (uint16_t)target_sym->value + (uint16_t)target_sec->offset + (uint16_t)reloc->addend  - (uint16_t)(reloc->offset) + addend;
+
+
+						if(map_fp) {
+							fprintf(map_fp, "%08x\n", ctx->start + reloc->offset + addr + 2);
+						}
+
+						fwrite(&addr, 1, 2, fp);
+					} else if(reloc->type == LINKER_RELOCATION_TYPE_32_PC32) {
+						int32_t addend = *((uint32_t*)(sec->data + reloc->offset - sec->offset));
+						uint32_t addr = (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend  - (uint32_t)(reloc->offset) + addend;
+
+
+						if(map_fp) {
+							fprintf(map_fp, "%08x\n", ctx->start + reloc->offset + addr + 4);
+						}
+
+						fwrite(&addr, 1, 4, fp);
+					} else{
 						print_error("unknown reloc type");
 						return -1;
 					}
@@ -433,6 +904,8 @@ int8_t linker_write_output(linker_context_t* ctx) {
 			}
 		}
 
+		fflush(fp);
+
 		iter = iter->next(iter);
 	}
 
@@ -442,40 +915,43 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		return res;
 	}
 
-	fseek (fp, 0, SEEK_SET);
-
-	uint8_t jmp = 0xe9;
-
-	fwrite(&jmp, 1, 1, fp);
-
-	linker_section_t* ep_sec = linker_get_section_by_id(ctx, ep_sym->section_id);
-
-	uint32_t addr = (uint32_t)ep_sym->value + (uint32_t)ep_sec->offset - (uint32_t)(1 + 4);
-
-	fwrite(&addr, 1, 4, fp);
+	uint64_t reloc_locaction = 0;
 
 	fseek (fp, 0, SEEK_END);
 
 	uint64_t file_size = ftell(fp);
 
-	if(file_size % 16) {
-		file_size += 16 - (file_size % 16);
+	if(ctx->class == ELFCLASS64) {
+		fseek (fp, 0, SEEK_SET);
+
+		uint8_t jmp = 0xe9;
+
+		fwrite(&jmp, 1, 1, fp);
+
+		linker_section_t* ep_sec = linker_get_section_by_id(ctx, ep_sym->section_id);
+
+		uint32_t addr = (uint32_t)ep_sym->value + (uint32_t)ep_sec->offset - (uint32_t)(1 + 4);
+
+		fwrite(&addr, 1, 4, fp);
+
+		if(file_size % 16) {
+			file_size += 16 - (file_size % 16);
+		}
+
+		printf("reloc table start %lx count: %lx ", file_size, ctx->direct_relocation_count);
+
+		fseek (fp, file_size, SEEK_SET);
+
+		fwrite(ctx->direct_relocations, 1, sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count, fp);
+
+		reloc_locaction = file_size;
+
+		fseek (fp, 0, SEEK_END);
+
+		file_size = ftell(fp);
+
+		printf(" end %lx\n", file_size);
 	}
-
-	printf("reloc table start %lx count: %lx ", file_size, ctx->direct_relocation_count);
-
-	fseek (fp, file_size, SEEK_SET);
-
-	fwrite(ctx->direct_relocations, 1, sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count, fp);
-
-	uint64_t reloc_locaction = file_size;
-
-
-	fseek (fp, 0, SEEK_END);
-
-	file_size = ftell(fp);
-
-	printf(" end %lx\n", file_size);
 
 	if(file_size % 512) {
 		uint64_t rem = 512 - (file_size % 512);
@@ -484,24 +960,33 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		memory_free_ext(ctx->heap, pad);
 	}
 
-	fseek (fp, 0, SEEK_END);
+	if(ctx->class == ELFCLASS64) {
 
-	file_size = ftell(fp);
+		fseek (fp, 0, SEEK_END);
 
-	fseek (fp, 0x10, SEEK_SET);
+		file_size = ftell(fp);
 
-	fwrite(&file_size, 1, sizeof(file_size), fp);
+		fseek (fp, 0x10, SEEK_SET);
 
-	fseek (fp, 0x18, SEEK_SET);
+		fwrite(&file_size, 1, sizeof(file_size), fp);
 
-	fwrite(&reloc_locaction, 1, sizeof(reloc_locaction), fp);
+		fseek (fp, 0x18, SEEK_SET);
 
-	fseek (fp, 0x20, SEEK_SET);
+		fwrite(&reloc_locaction, 1, sizeof(reloc_locaction), fp);
 
-	fwrite(&ctx->direct_relocation_count, 1, sizeof(uint64_t), fp);
+		fseek (fp, 0x20, SEEK_SET);
 
-	for(uint8_t i = 0; i < LINKER_SECTION_TYPE_STACK; i++) {
-		fwrite(&ctx->section_locations[i], 1, sizeof(linker_section_locations_t), fp);
+		fwrite(&ctx->direct_relocation_count, 1, sizeof(uint64_t), fp);
+
+		for(uint8_t i = 0; i < LINKER_SECTION_TYPE_STACK; i++) {
+			fwrite(&ctx->section_locations[i], 1, sizeof(linker_section_locations_t), fp);
+		}
+	}
+
+	if(ctx->boot_flag) {
+		fseek(fp, 0x1FE, SEEK_SET);
+		uint16_t flag = 0xaa55;
+		fwrite(&flag, 1, 2, fp);
 	}
 
 	fclose(fp);
@@ -790,6 +1275,7 @@ int32_t main(int32_t argc, char** argv) {
 	uint8_t print_sections = 0;
 	uint8_t print_symbols = 0;
 	uint8_t trim = 0;
+	uint8_t boot_flag = 0;
 
 	while(argc > 0) {
 		if(strstarts(*argv, "-") != 0) {
@@ -881,6 +1367,13 @@ int32_t main(int32_t argc, char** argv) {
 
 			trim = 1;
 		}
+
+		if(strcmp(*argv, "--boot-flag") == 0) {
+			argc--;
+			argv++;
+
+			boot_flag = 1;
+		}
 	}
 
 	if(output_file == NULL) {
@@ -906,6 +1399,7 @@ int32_t main(int32_t argc, char** argv) {
 	ctx->symbols = linkedlist_create_list_with_heap(ctx->heap);
 	ctx->sections = linkedlist_create_list_with_heap(ctx->heap);
 	ctx->enable_removing_disabled_sections = trim;
+	ctx->boot_flag = boot_flag;
 
 	if(linker_script) {
 		linker_parse_script(ctx, linker_script);
@@ -919,7 +1413,13 @@ int32_t main(int32_t argc, char** argv) {
 	stack_sec->file_name = NULL;
 	stack_sec->section_name = strdup_at_heap(ctx->heap, ".stack");
 	stack_sec->size = ctx->stack_size;
-	stack_sec->align = 0x1000;
+
+	if(ctx->class == ELFCLASS64) {
+		stack_sec->align = 0x1000;
+	} else {
+		stack_sec->align = 0x100;
+	}
+
 	stack_sec->type = LINKER_SECTION_TYPE_STACK;
 	stack_sec->required = 1;
 
@@ -960,100 +1460,29 @@ int32_t main(int32_t argc, char** argv) {
 
 	while(argc > 0) {
 		file_name = *argv;
-		FILE* obj_file = fopen(file_name, "r");
 
-		elf64_hdr_t obj_hdr;
+		ctx->objectfile_ctx.file_name = file_name;
 
-		fread(&obj_hdr, sizeof(elf64_hdr_t), 1, obj_file);
-
-		elf64_shdr_t* sections = memory_malloc_ext(ctx->heap, obj_hdr.e_shentsize * obj_hdr.e_shnum, 0x0);
-		fseek(obj_file, obj_hdr.e_shoff, SEEK_SET);
-		fread(sections, obj_hdr.e_shentsize * obj_hdr.e_shnum, 1, obj_file);
-
-		elf64_shdr_t shstrtabsec = sections[obj_hdr.e_shstrndx];
-
-		char_t* shstrtab = memory_malloc_ext(ctx->heap, shstrtabsec.sh_size, 0x0);
-		fseek(obj_file, shstrtabsec.sh_offset, SEEK_SET);
-		fread(shstrtab, shstrtabsec.sh_size, 1, obj_file);
-
-		elf64_shdr_t* strtabsec = NULL;
-		elf64_shdr_t* symtabsec = NULL;
-
-		for(uint16_t sec_idx = 0; sec_idx < obj_hdr.e_shnum; sec_idx++) {
-			if(strcmp(".strtab", shstrtab + sections[sec_idx].sh_name) == 0) {
-				strtabsec = &sections[sec_idx];
-			}
-
-			if(sections[sec_idx].sh_type == SHT_SYMTAB) {
-				symtabsec = &sections[sec_idx];
-			}
-
-			if(sections[sec_idx].sh_size &&   (
-					 strstarts(shstrtab + sections[sec_idx].sh_name, ".text") == 0 ||
-					 strstarts(shstrtab + sections[sec_idx].sh_name, ".data") == 0 ||
-					 strstarts(shstrtab + sections[sec_idx].sh_name, ".rodata") == 0 ||
-					 strstarts(shstrtab + sections[sec_idx].sh_name, ".bss") == 0
-					 )) {
-				linker_section_t* sec = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
-				sec->id = section_id++;
-				sec->file_name = strdup_at_heap(ctx->heap, file_name);
-				sec->section_name = strdup_at_heap(ctx->heap, shstrtab + sections[sec_idx].sh_name);
-				sec->size = sections[sec_idx].sh_size;
-				sec->align = sections[sec_idx].sh_addralign;
-
-				if(strstarts(shstrtab + sections[sec_idx].sh_name, ".text") == 0) {
-					sec->type = LINKER_SECTION_TYPE_TEXT;
-				} else if(strstarts(shstrtab + sections[sec_idx].sh_name, ".data") == 0) {
-					sec->type = LINKER_SECTION_TYPE_DATA;
-				} else if(strstarts(shstrtab + sections[sec_idx].sh_name, ".rodata") == 0) {
-					sec->type = LINKER_SECTION_TYPE_RODATA;
-				} else if(strstarts(shstrtab + sections[sec_idx].sh_name, ".bss") == 0) {
-					sec->type = LINKER_SECTION_TYPE_BSS;
-				}
-
-				if(strstarts(shstrtab + sections[sec_idx].sh_name, ".bss") != 0) {
-					sec->data = memory_malloc_ext(ctx->heap, sec->size, 0x0);
-
-					fseek(obj_file, sections[sec_idx].sh_offset, SEEK_SET);
-					fread(sec->data, sec->size, 1, obj_file);
-				}
-
-				linkedlist_list_insert(ctx->sections, sec);
-			}
-
-		}
-
-		if(strtabsec == NULL) {
-			print_error("string table not found");
+		if(linker_parse_elf_header(ctx, &section_id) != 0) {
+			linker_destroy_objectctx(ctx);
 			linker_destroy_context(ctx);
 			return -1;
 		}
 
-		char_t* strtab = memory_malloc_ext(ctx->heap, strtabsec->sh_size, 0x0);
-		fseek(obj_file, strtabsec->sh_offset, SEEK_SET);
-		fread(strtab, strtabsec->sh_size, 1, obj_file);
-
-		if(symtabsec == NULL) {
-			print_error("symbol table not found");
-			linker_destroy_context(ctx);
-			return -1;
-		}
-
-
-		elf64_sym_t* symtab = memory_malloc_ext(ctx->heap, symtabsec->sh_size, 0x0);
-		fseek(obj_file, symtabsec->sh_offset, SEEK_SET);
-		fread(symtab, symtabsec->sh_size, 1, obj_file);
-		uint64_t symcnt = symtabsec->sh_size / sizeof(elf64_sym_t);
+		uint64_t symcnt = linker_get_symbol_count(ctx);
 
 		for(uint64_t sym_idx = 1; sym_idx < symcnt; sym_idx++) {
-			if(symtab[sym_idx].st_type > STT_SECTION) {
+			uint8_t sym_type = linker_get_type_of_symbol(ctx, sym_idx);
+			uint64_t sym_shndx = linker_get_section_index_of_symbol(ctx, sym_idx);
+
+			if(sym_type > STT_SECTION) {
 				continue;
 			}
 
-			char_t* tmp_section_name = shstrtab + sections[symtab[sym_idx].st_shndx].sh_name;
-			char_t* tmp_symbol_name = strtab + symtab[sym_idx].st_name;
+			char_t* tmp_section_name = linker_get_section_name(ctx, sym_shndx);
+			char_t* tmp_symbol_name = linker_get_symbol_name(ctx, sym_idx);
 
-			if(symtab[sym_idx].st_type == STT_SECTION) {
+			if(sym_type == STT_SECTION) {
 				tmp_symbol_name = tmp_section_name;
 			}
 
@@ -1061,7 +1490,7 @@ int32_t main(int32_t argc, char** argv) {
 			if(tmp_symbol_name == NULL ||
 			   strcmp(tmp_symbol_name, ".eh_frame") == 0 ||
 			   strcmp(tmp_symbol_name, ".comment") == 0 ||
-			   (symtab[sym_idx].st_shndx != 0 && sections[symtab[sym_idx].st_shndx].sh_size == 0)) {
+			   (sym_shndx != 0 && linker_get_section_size(ctx, sym_shndx) == 0)) {
 				continue;
 			}
 
@@ -1074,7 +1503,7 @@ int32_t main(int32_t argc, char** argv) {
 				sym->id = symbol_id++;
 				sym->symbol_name = strdup_at_heap(ctx->heap, tmp_symbol_name);
 
-				if(symtab[sym_idx].st_scope == STB_GLOBAL) {
+				if(linker_get_scope_of_symbol(ctx, sym_idx) == STB_GLOBAL) {
 					sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
 				} else {
 					sym->scope = LINKER_SYMBOL_SCOPE_LOCAL;
@@ -1084,19 +1513,24 @@ int32_t main(int32_t argc, char** argv) {
 			}
 
 			if(tmp_section_id) {
-				sym->type = symtab[sym_idx].st_type;
-				sym->value = symtab[sym_idx].st_value;
+				sym->type = sym_type;
+				sym->value = linker_get_value_of_symbol(ctx, sym_idx);
 				sym->section_id = tmp_section_id;
 			}
 		}
 
 
-		for(uint16_t sec_idx = 0; sec_idx < obj_hdr.e_shnum; sec_idx++) {
-			if(strstarts(shstrtab + sections[sec_idx].sh_name, ".rela") != 0) {
+		for(uint16_t sec_idx = 0; sec_idx < ctx->objectfile_ctx.section_count; sec_idx++) {
+			uint8_t is_rela = 0;
+			if(strstarts(linker_get_section_name(ctx, sec_idx), ".rela.") == 0) {
+				is_rela = 1;
+			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".rel.") == 0) {
+				is_rela = 0;
+			} else {
 				continue;
 			}
 
-			char_t* tmp_section_name = shstrtab + sections[sec_idx].sh_name + strlen(".rela");
+			char_t* tmp_section_name = linker_get_section_name(ctx, sec_idx) + strlen(".rel") + is_rela;
 
 			if(strcmp(tmp_section_name, ".eh_frame") == 0) {
 				continue;
@@ -1106,7 +1540,8 @@ int32_t main(int32_t argc, char** argv) {
 
 			if(tmp_section_id == 0) {
 				print_error("unknown section");
-				printf("%s %s\n", shstrtab + sections[sec_idx].sh_name, tmp_section_name);
+				printf("%s %s\n", linker_get_section_name(ctx, sec_idx), tmp_section_name);
+				linker_destroy_objectctx(ctx);
 				linker_destroy_context(ctx);
 				return -1;
 			}
@@ -1115,34 +1550,63 @@ int32_t main(int32_t argc, char** argv) {
 
 			if(sec == NULL) {
 				print_error("unknown section");
-				printf("%s %s\n", shstrtab + sections[sec_idx].sh_name, tmp_section_name);
+				printf("%s %s\n", linker_get_section_name(ctx, sec_idx), tmp_section_name);
+				linker_destroy_objectctx(ctx);
 				linker_destroy_context(ctx);
 				return -1;
 			}
 
 			sec->relocations = linkedlist_create_list_with_heap(ctx->heap);
 
-			elf64_shdr_t* relocsec = &sections[sec_idx];
-
-			elf64_rela_t* relocs = memory_malloc_ext(ctx->heap, relocsec->sh_size, 0x0);
-
-			if(relocs == NULL) {
+			if(sec->relocations == NULL) {
+				print_error("cannot create relocations list");
+				linker_destroy_objectctx(ctx);
+				linker_destroy_context(ctx);
 				return -1;
 			}
 
-			fseek(obj_file, relocsec->sh_offset, SEEK_SET);
-			fread(relocs, relocsec->sh_size, 1, obj_file);
+			uint64_t relocsec_off = linker_get_section_offset(ctx, sec_idx);
+			uint64_t relocsec_size = linker_get_section_size(ctx, sec_idx);
 
-			uint32_t reloc_cnt = relocsec->sh_size / sizeof(elf64_rela_t);
+			ctx->objectfile_ctx.relocs = memory_malloc_ext(ctx->heap, relocsec_size, 0x0);
+
+			if( ctx->objectfile_ctx.relocs  == NULL) {
+				print_error("cannot create relocs buffer");
+				linker_destroy_objectctx(ctx);
+				linker_destroy_context(ctx);
+				return -1;
+			}
+
+			fseek(ctx->objectfile_ctx.file, relocsec_off, SEEK_SET);
+			fread(ctx->objectfile_ctx.relocs, relocsec_size, 1, ctx->objectfile_ctx.file);
+
+			uint32_t reloc_cnt = relocsec_size / sizeof(elf64_rela_t);
+
+			if(ctx->objectfile_ctx.type == ELFCLASS32) {
+				if(is_rela) {
+					reloc_cnt = relocsec_size / sizeof(elf32_rela_t);
+				} else {
+					reloc_cnt = relocsec_size / sizeof(elf32_rel_t);
+				}
+			} else {
+				if(is_rela) {
+					reloc_cnt = relocsec_size / sizeof(elf64_rela_t);
+				} else {
+					reloc_cnt = relocsec_size / sizeof(elf64_rel_t);
+				}
+			}
 
 			for(uint32_t reloc_idx = 0; reloc_idx < reloc_cnt; reloc_idx++) {
 
-				uint32_t sym_idx = relocs[reloc_idx].r_symindx;
+				uint64_t sym_idx = linker_get_relocation_symbol_index(ctx, reloc_idx, is_rela);
 
-				char_t* tmp_section_name = shstrtab + sections[symtab[sym_idx].st_shndx].sh_name;
-				char_t* tmp_symbol_name = strtab + symtab[sym_idx].st_name;
+				uint8_t sym_type = linker_get_type_of_symbol(ctx, sym_idx);
+				uint64_t sym_shndx = linker_get_section_index_of_symbol(ctx, sym_idx);
 
-				if(symtab[sym_idx].st_type == STT_SECTION) {
+				char_t* tmp_section_name = linker_get_section_name(ctx, sym_shndx);
+				char_t* tmp_symbol_name = linker_get_symbol_name(ctx, sym_idx);
+
+				if(sym_type == STT_SECTION) {
 					tmp_symbol_name = tmp_section_name;
 				}
 
@@ -1161,44 +1625,70 @@ int32_t main(int32_t argc, char** argv) {
 				linker_relocation_t* reloc = memory_malloc_ext(ctx->heap, sizeof(linker_relocation_t), 0x0);
 
 				reloc->symbol_id = sym->id;
-				reloc->offset = relocs[reloc_idx].r_offset;
-				reloc->addend = relocs[reloc_idx].r_addend;
+				reloc->offset = linker_get_relocation_symbol_offset(ctx, reloc_idx, is_rela);
+				reloc->addend = linker_get_relocation_symbol_addend(ctx, reloc_idx, is_rela);
 
-				switch (relocs[reloc_idx].r_symtype) {
-				case R_X86_64_32:
-					reloc->type = LINKER_RELOCATION_TYPE_32;
-					ctx->direct_relocation_count++;
-					break;
-				case R_X86_64_32S:
-					reloc->type = LINKER_RELOCATION_TYPE_32S;
-					ctx->direct_relocation_count++;
-					break;
-				case R_X86_64_64:
-					reloc->type = LINKER_RELOCATION_TYPE_64;
-					ctx->direct_relocation_count++;
-					break;
-				case R_X86_64_PC32:
-				case R_X86_64_PLT32:
-					reloc->type = LINKER_RELOCATION_TYPE_PC32;
-					break;
-				default:
-					print_error("unknown reloc type");
-					printf("%i %lx %lx %lx\n", relocs[reloc_idx].r_symtype, reloc->symbol_id, reloc->offset, reloc->addend);
-					return -1;
+				uint64_t reloc_type = linker_get_relocation_symbol_type(ctx, reloc_idx, is_rela);
+
+				if(ctx->objectfile_ctx.type == ELFCLASS32) {
+					switch (reloc_type) {
+					case R_386_16:
+						reloc->type = LINKER_RELOCATION_TYPE_32_16;
+						ctx->direct_relocation_count++;
+						break;
+					case R_386_32:
+						reloc->type = LINKER_RELOCATION_TYPE_32_32;
+						ctx->direct_relocation_count++;
+						break;
+					case R_386_PC16:
+						reloc->type = LINKER_RELOCATION_TYPE_32_PC16;
+						break;
+					case R_386_PC32:
+						reloc->type = LINKER_RELOCATION_TYPE_32_PC32;
+						break;
+					default:
+						print_error("unknown reloc type");
+						printf("%i %lx %lx %lx\n", reloc_type, reloc->symbol_id, reloc->offset, reloc->addend);
+						linker_destroy_objectctx(ctx);
+						linker_destroy_context(ctx);
+						return -1;
+					}
+				} else {
+					switch (reloc_type) {
+					case R_X86_64_32:
+						reloc->type = LINKER_RELOCATION_TYPE_64_32;
+						ctx->direct_relocation_count++;
+						break;
+					case R_X86_64_32S:
+						reloc->type = LINKER_RELOCATION_TYPE_64_32S;
+						ctx->direct_relocation_count++;
+						break;
+					case R_X86_64_64:
+						reloc->type = LINKER_RELOCATION_TYPE_64_64;
+						ctx->direct_relocation_count++;
+						break;
+					case R_X86_64_PC32:
+					case R_X86_64_PLT32:
+						reloc->type = LINKER_RELOCATION_TYPE_64_PC32;
+						break;
+					default:
+						print_error("unknown reloc type");
+						printf("%i %lx %lx %lx\n", reloc_type, reloc->symbol_id, reloc->offset, reloc->addend);
+						linker_destroy_objectctx(ctx);
+						linker_destroy_context(ctx);
+						return -1;
+					}
 				}
+
+
 
 				linkedlist_list_insert(sec->relocations, reloc);
 			}
 
-			memory_free_ext(ctx->heap, relocs);
+			memory_free_ext(ctx->heap,  ctx->objectfile_ctx.relocs);
 		}
 
-		memory_free_ext(ctx->heap, symtab);
-		memory_free_ext(ctx->heap, strtab);
-		memory_free_ext(ctx->heap, shstrtab);
-		memory_free_ext(ctx->heap, sections);
-
-		fclose(obj_file);
+		linker_destroy_objectctx(ctx);
 
 		argc--;
 		argv++;
@@ -1211,21 +1701,27 @@ int32_t main(int32_t argc, char** argv) {
 
 	}
 
-	uint64_t output_offset_base = 0x100;
+	uint64_t output_offset_base = 0;
+
+	if(ctx->class == ELFCLASS64) {
+		output_offset_base = 0x100;
+	}
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_TEXT, &output_offset_base);
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_DATA, &output_offset_base);
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_RODATA, &output_offset_base);
 
-	if(output_offset_base % 16) {
-		output_offset_base += 16 - (output_offset_base % 16);
+	if(ctx->class == ELFCLASS64) {
+		if(output_offset_base % 16) {
+			output_offset_base += 16 - (output_offset_base % 16);
+		}
+
+		printf("reloc table should start at 0x%lx ", output_offset_base);
+
+		output_offset_base += sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count;
+
+		printf("ends at 0x%lx\n", output_offset_base);
 	}
-
-	printf("reloc table should start at 0x%lx ", output_offset_base);
-
-	output_offset_base += sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count;
-
-	printf("ends at 0x%lx\n", output_offset_base);
 
 	if(output_offset_base % 0x200) {
 		output_offset_base +=  0x200 - (output_offset_base %  0x200);

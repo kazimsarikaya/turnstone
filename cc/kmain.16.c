@@ -20,6 +20,7 @@ uint8_t kmain16()
 	init_serial(COM1);
 
 	video_clear_screen();
+
 	printf("Hello World from stage2!\r\n");
 
 	memory_map_t* mmap;

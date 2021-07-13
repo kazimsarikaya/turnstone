@@ -1,7 +1,8 @@
 .code16
-.text
+.type __start, @function
 .global __start
 
+.section .text.__start
 __start:
 mov    %ax, %cx
 __start_normal:

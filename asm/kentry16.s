@@ -1,11 +1,17 @@
 .code16
-.text
+.type __kstart, @function
 .global __kstart
+.type GDT_REGISTER, @object
 .global GDT_REGISTER
+.type IDT_REGISTER, @object
 .global IDT_REGISTER
+.type SYSTEM_INFO, @object
 .global SYSTEM_INFO
+.type BOOT_DRIVE, @object
 .global BOOT_DRIVE
 .extern __kpagetable_p4
+
+.section .text.__kstart
 __kstart:
   cli
   mov $0xFF, %al /*  disable pic */
@@ -129,16 +135,24 @@ enable_A20.a20wait2:
   je     enable_A20.a20wait2
   ret
 
-.bss
+.section .bss.GDT_REGISTER
 .align 8
 GDT_REGISTER:
 .byte 0x00, 0x00
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+.section .bss.IDT_REGISTER
 .align 8
 IDT_REGISTER:
 .byte 0x00, 0x00
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+.section .bss.SYSTEM_INFO
+.align 8
 SYSTEM_INFO:
 .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+.section .bss.BOOT_DRIVE
+.align 8
 BOOT_DRIVE:
 .byte 0x00

@@ -103,6 +103,77 @@
 #define R_X86_64_GOTPCRELX       41  /* like GOTPCREL, but optionally with linker optimizations */
 #define R_X86_64_REX_GOTPCRELX   42  /* like GOTPCRELX, but a REX prefix is present */
 
+
+#define R_386_32        1  /* Direct 32 bit */
+#define R_386_PC32      2  /* PC relative 32 bit */
+#define R_386_16       20  /* Direct 16 bit */
+#define R_386_PC16     21  /* PC relative 16 bit signed */
+
+
+typedef struct {
+	uint8_t magic[4];
+	uint8_t class;
+	uint8_t encoding;
+	uint8_t version;
+	uint8_t padding[9];
+	uint8_t size;
+}__attribute__((packed)) elf_indent_t;
+
+typedef struct {
+	uint8_t e_indent[16];
+	uint16_t e_type;
+	uint16_t e_machine;
+	uint32_t e_version;
+	uint32_t e_entry;
+	uint32_t e_phoff;
+	uint32_t e_shoff;
+	uint32_t e_flags;
+	uint16_t e_ehsize;
+	uint16_t e_phentsize;
+	uint16_t e_phnum;
+	uint16_t e_shentsize;
+	uint16_t e_shnum;
+	uint16_t e_shstrndx;
+}__attribute__((packed)) elf32_hdr_t;
+
+typedef struct {
+	uint32_t sh_name;
+	uint32_t sh_type;
+	uint32_t sh_flags;
+	uint32_t sh_addr;
+	uint32_t sh_offset;
+	uint32_t sh_size;
+	uint32_t sh_link;
+	uint32_t sh_info;
+	uint32_t sh_addralign;
+	uint32_t sh_entsize;
+}__attribute__((packed)) elf32_shdr_t;
+
+typedef struct {
+	uint32_t st_name;
+	uint32_t st_value;
+	uint32_t st_size;
+	uint8_t st_type : 4;
+	uint8_t st_scope : 4;
+	uint8_t st_other;
+	uint16_t st_shndx;
+}__attribute__((packed)) elf32_sym_t;
+
+typedef struct {
+	uint32_t r_offset;
+	uint8_t r_symtype;
+	uint8_t r_symindx;
+	uint16_t reserved;
+}__attribute__((packed)) elf32_rel_t;
+
+typedef struct {
+	uint32_t r_offset;
+	uint8_t r_symtype;
+	uint8_t r_symindx;
+	uint16_t reserved;
+	int32_t r_addend;
+}__attribute__((packed)) elf32_rela_t;
+
 typedef struct {
 	uint8_t e_indent[16];
 	uint16_t e_type;
