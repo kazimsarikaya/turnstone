@@ -17,15 +17,15 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
 	uint8_t* dst_bytes = (uint8_t*)dst_program;
 
 	for(uint64_t i = 0; i < reloc_count; i++) {
-		if(relocs[i].type == LINKER_RELOCATION_TYPE_32) {
+		if(relocs[i].type == LINKER_RELOCATION_TYPE_64_32) {
 			uint32_t* target = (uint32_t*)&dst_bytes[relocs[i].offset];
 
 			*target = (uint32_t)dst_program_addr + (uint32_t)relocs[i].addend;
-		} else if(relocs[i].type == LINKER_RELOCATION_TYPE_32S) {
+		} else if(relocs[i].type == LINKER_RELOCATION_TYPE_64_32S) {
 			int32_t* target = (int32_t*)&dst_bytes[relocs[i].offset];
 
 			*target = (int32_t)dst_program_addr + (int32_t)relocs[i].addend;
-		}  else if(relocs[i].type == LINKER_RELOCATION_TYPE_64) {
+		}  else if(relocs[i].type == LINKER_RELOCATION_TYPE_64_64) {
 			uint64_t* target = (uint64_t*)&dst_bytes[relocs[i].offset];
 
 			*target = dst_program_addr + relocs[i].addend;
