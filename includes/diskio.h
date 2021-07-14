@@ -44,12 +44,21 @@ typedef struct disk_slot_table {
 	disk_slot_t slots[10]; ///< slots look for @ref disk_slot_t
 } __attribute__ ((packed)) disk_slot_table_t; ///< struct short hand
 
-typedef struct {
-	uint8_t head_count;
-	uint8_t sector_count;
-	uint16_t cylinder_count;
-} disk_geometry_t;
+/**
+ * @struct disk_geometry
+ * @brief  Disk geometry in terms of CHS
+ */
+typedef struct disk_geometry {
+	uint8_t head_count; ///< head count at disk
+	uint8_t sector_count; ///< sector count at disk
+	uint16_t cylinder_count; ///< cylinder count at disk
+} disk_geometry_t; ///< struct short hand
 
+/**
+ * @brief caches disk geometry at @ref cached_disk_geometry
+ * @param[in] hard_disk hardisk number getted from bios
+ * @return  0 if successed.
+ */
 int8_t disk_cache_geometry(uint8_t hard_disk);
 
 /**

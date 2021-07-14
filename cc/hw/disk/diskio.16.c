@@ -3,7 +3,7 @@
  * @brief diskio at real mode
  *
  * reading disk at real mode is performed by bios interrupts. BIOS handles ATA or SATA disks.
- * The used interrupt is int 0x13,0x42
+ * The used interrupt is int 0x13, ah=0x02
  */
 #include <types.h>
 #include <diskio.h>
@@ -11,15 +11,18 @@
 #include <cpu.h>
 #include <video.h>
 
-disk_geometry_t* disk_geometry = NULL;
+/**
+ * @brief cached disk geometry
+ */
+cached_disk_geometry_t* cached_disk_geometry = NULL;
 
 int8_t disk_cache_geometry(uint8_t hard_disk) {
-	if(disk_geometry != NULL) {
+	if(cached_disk_geometry != NULL) {
 		return 0;
 	}
 
-	disk_geometry = memory_malloc(sizeof(disk_geometry_t));
-	if(disk_geometry == NULL) {
+	cached_disk_geometry = memory_malloc(sizeof(cached_disk_geometry_t));
+	if(cached_disk_geometry == NULL) {
 		return -1;
 	}
 
@@ -37,11 +40,11 @@ int8_t disk_cache_geometry(uint8_t hard_disk) {
 		return ax >> 8;
 	}
 
-	disk_geometry->head_count = (dx >> 8) + 1;
-	disk_geometry->sector_count = cx & 0x3F;
-	disk_geometry->cylinder_count = (cx >> 6) + 1;
+	cached_disk_geometry->head_count = (dx >> 8) + 1;
+	cached_disk_geometry->sector_count = cx & 0x3F;
+	cached_disk_geometry->cylinder_count = (cx >> 6) + 1;
 
-	printf("DISKIO: CYL %i HEAD %i SEC %i\n", disk_geometry->cylinder_count,  disk_geometry->head_count, disk_geometry->sector_count );
+	printf("DISKIO: CYL %i HEAD %i SEC %i\n", cached_disk_geometry->cylinder_count,  cached_disk_geometry->head_count, cached_disk_geometry->sector_count );
 
 	return 0;
 }
@@ -58,20 +61,22 @@ uint16_t disk_read(uint8_t hard_disk, uint64_t lba, uint16_t sector_count, uint8
 		return -1;
 	}
 
+	//! [Read Disk Sector with BIOS]
 	uint16_t ax, cx, dx;
 
 	ax = 0x0200 | sector_count;
 
-	dx = (lba.part_low / disk_geometry->sector_count) % disk_geometry->head_count;
+	dx = (lba.part_low / cached_disk_geometry->sector_count) % cached_disk_geometry->head_count;
 	dx = (dx << 8) | hard_disk;
 
-	cx = lba.part_low / (disk_geometry->sector_count * disk_geometry->head_count);
-	cx = (cx << 6) | ((lba.part_low % disk_geometry->sector_count) + 1);
+	cx = lba.part_low / (cached_disk_geometry->sector_count * cached_disk_geometry->head_count);
+	cx = (cx << 6) | ((lba.part_low % cached_disk_geometry->sector_count) + 1);
 
 	__asm__ __volatile__ ("int $0x13\n"
 	                      : "=@ccc" (err), "=a" (status)
 	                      : "a" (ax), "c" (cx), "d" (dx), "b" (*data)
 	                      );
+	//! [Read Disk Sector with BIOS]
 
 	if(err != 0) {
 		memory_free(*data);

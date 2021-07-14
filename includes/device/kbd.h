@@ -1,5 +1,5 @@
 /**
- * @file dev_kbd.h
+ * @file kbd.h
  * @brief keyboard device interface
  */
 #ifndef ___DEVICE_KBD_H

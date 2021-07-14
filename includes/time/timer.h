@@ -1,5 +1,5 @@
 /**
- * @file time.h
+ * @file timer.h
  * @brief time interface
  */
 #ifndef ___TIMER_H

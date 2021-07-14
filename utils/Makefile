@@ -29,7 +29,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 all: $(OUTPUTS)
 
 gendirs:
-	mkdir -p $(UTILOUTPUT)
+	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p 
 
 $(UTILOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<
