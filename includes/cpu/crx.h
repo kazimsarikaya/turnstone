@@ -1,5 +1,5 @@
 /**
- * @file crx.h.h
+ * @file crx.h
  * @brief defines crx registers detailed
  */
 #ifndef ___CPU_CRX_H

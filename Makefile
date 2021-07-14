@@ -96,6 +96,7 @@ gendirs:
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
 	make -C tests gendirs
 	make -C utils gendirs
+	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
@@ -154,7 +155,7 @@ $(CCGENDIR)/%: $(CCGENSCRIPTSDIR)/%.sh
 $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
-$(CCOBJDIR)/interrupt.64.o: $(CCSRCDIR)/interrupt.64.c
+$(CCOBJDIR)/cpu/interrupt.64.o: $(CCSRCDIR)/cpu/interrupt.64.c
 	$(CC64) $(CC64INTFLAGS) -o $@ $<
 
 $(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
