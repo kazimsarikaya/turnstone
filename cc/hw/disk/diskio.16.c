@@ -14,14 +14,14 @@
 /**
  * @brief cached disk geometry
  */
-cached_disk_geometry_t* cached_disk_geometry = NULL;
+disk_geometry_t* cached_disk_geometry = NULL;
 
 int8_t disk_cache_geometry(uint8_t hard_disk) {
 	if(cached_disk_geometry != NULL) {
 		return 0;
 	}
 
-	cached_disk_geometry = memory_malloc(sizeof(cached_disk_geometry_t));
+	cached_disk_geometry = memory_malloc(sizeof(disk_geometry_t));
 	if(cached_disk_geometry == NULL) {
 		return -1;
 	}

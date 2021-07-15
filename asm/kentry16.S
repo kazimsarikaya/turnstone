@@ -35,6 +35,13 @@ __kstart:
   mov %eax, %edi
   cld
   mov %bl, BOOT_DRIVE
+
+#ifdef ___TESTMODE
+  call kmain_test
+  cmp $0x00, %al
+  jne .loop
+#endif
+
   call kmain16
   cmp $0x00, %al
   jne .loop
