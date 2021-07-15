@@ -13,6 +13,8 @@ asm (".code16gcc");
 /*! unused parameter warning supress macro */
 #define UNUSED(x) (void)(x)
 
+#define NULL 0
+
 /*! char type */
 #define char_t char
 /*! signed byte type */

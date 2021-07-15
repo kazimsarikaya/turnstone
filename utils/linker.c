@@ -8,8 +8,8 @@
 
 typedef enum {
 	LINKER_SYMBOL_TYPE_UNDEF,
-	LINKER_SYMBOL_TYPE_FUNCTION,
 	LINKER_SYMBOL_TYPE_OBJECT,
+	LINKER_SYMBOL_TYPE_FUNCTION,
 	LINKER_SYMBOL_TYPE_SECTION,
 	LINKER_SYMBOL_TYPE_SYMBOL,
 }linker_symbol_type_t;
@@ -77,6 +77,12 @@ typedef struct {
 	uint8_t enable_removing_disabled_sections;
 	uint8_t boot_flag;
 	linker_objectfile_ctx_t objectfile_ctx;
+	uint8_t test_section_flag;
+	uint64_t test_func_array_secid;
+	linkedlist_t test_function_names;
+	uint64_t test_func_names_array_str_size;
+	uint64_t test_func_names_array_str_secid;
+	uint64_t test_functions_names_array_secid;
 } linker_context_t;
 
 linker_symbol_t* linker_lookup_symbol(linker_context_t* ctx, char_t* symbol_name, uint64_t section_id);
@@ -109,7 +115,43 @@ uint64_t linker_get_relocation_symbol_offset(linker_context_t* ctx, uint16_t rel
 uint64_t linker_get_relocation_symbol_type(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
 int64_t linker_get_relocation_symbol_addend(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
 void linker_destroy_objectctx(linker_context_t* ctx);
+int8_t linker_test_function_names_comparator(const void* name1, const void* name2);
+int8_t linker_relocate_test_functions(linker_context_t* ctx);
 
+int8_t linker_test_function_names_comparator(const void* name1, const void* name2){
+
+	char_t* name1_str = (char_t*)name1;
+	char_t* name2_str = (char_t*)name2;
+
+	uint64_t idx_name1_str = strlen(name1_str) - 1;
+
+	while(name1_str[idx_name1_str] != 0x5f) {
+		idx_name1_str--;
+	}
+
+	uint64_t idx_name2_str = strlen(name2_str) - 1;
+
+	while(name2_str[idx_name2_str] != 0x5f) {
+		idx_name2_str--;
+	}
+
+	if(idx_name1_str == idx_name2_str) {
+		if(strncmp(name1_str, name2_str, idx_name1_str) == 0) {
+			int64_t line1 = atoi(name1_str + idx_name1_str + 1);
+			int64_t line2 = atoi(name2_str + idx_name2_str + 1);
+
+			if(line1 < line2) {
+				return -1;
+			} else if(line1 > line2) {
+				return 1;
+			}
+
+			return 0;
+		}
+	}
+
+	return strcmp((char_t*)name1, (char_t*)name2);
+}
 
 uint64_t linker_get_relocation_symbol_index(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela) {
 	if(ctx->objectfile_ctx.type == ELFCLASS32) {
@@ -457,11 +499,13 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
 			}
 		}
 
+		char_t* secname = linker_get_section_name(ctx, sec_idx);
+
 		if(linker_get_section_size(ctx, sec_idx) &&   (
-				 strstarts(linker_get_section_name(ctx, sec_idx), ".text") == 0 ||
-				 strstarts(linker_get_section_name(ctx, sec_idx), ".data") == 0 ||
-				 strstarts(linker_get_section_name(ctx, sec_idx), ".rodata") == 0 ||
-				 strstarts(linker_get_section_name(ctx, sec_idx), ".bss") == 0
+				 strstarts(secname, ".text") == 0 ||
+				 strstarts(secname, ".data") == 0 ||
+				 strstarts(secname, ".rodata") == 0 ||
+				 strstarts(secname, ".bss") == 0
 				 )) {
 			linker_section_t* sec = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
 
@@ -470,21 +514,21 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
 			(*section_id)++;
 
 			sec->file_name = strdup_at_heap(ctx->heap, ctx->objectfile_ctx.file_name);
-			sec->section_name = strdup_at_heap(ctx->heap, linker_get_section_name(ctx, sec_idx));
+			sec->section_name = strdup_at_heap(ctx->heap, secname);
 			sec->size = sec_size;
 			sec->align = linker_get_section_addralign(ctx, sec_idx);
 
-			if(strstarts(linker_get_section_name(ctx, sec_idx), ".text") == 0) {
+			if(strstarts(secname, ".text") == 0) {
 				sec->type = LINKER_SECTION_TYPE_TEXT;
-			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".data") == 0) {
+			} else if(strstarts(secname, ".data") == 0) {
 				sec->type = LINKER_SECTION_TYPE_DATA;
-			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".rodata") == 0) {
+			} else if(strstarts(secname, ".rodata") == 0) {
 				sec->type = LINKER_SECTION_TYPE_RODATA;
-			} else if(strstarts(linker_get_section_name(ctx, sec_idx), ".bss") == 0) {
+			} else if(strstarts(secname, ".bss") == 0) {
 				sec->type = LINKER_SECTION_TYPE_BSS;
 			}
 
-			if(strstarts(linker_get_section_name(ctx, sec_idx), ".bss") != 0) {
+			if(strstarts(secname, ".bss") != 0) {
 				sec->data = memory_malloc_ext(ctx->heap, sec->size, 0x0);
 
 				fseek(ctx->objectfile_ctx.file, sec_off, SEEK_SET);
@@ -511,7 +555,9 @@ int8_t linker_tag_required_sections(linker_context_t* ctx) {
 		return 0;
 	}
 
-	ctx->direct_relocation_count = 0;
+	if(ctx->test_section_flag == 0) {
+		ctx->direct_relocation_count = 0;
+	}
 
 	linker_symbol_t* ep_sym = linker_lookup_symbol(ctx, ctx->entry_point, 0);
 
@@ -532,6 +578,10 @@ int8_t linker_tag_required_sections(linker_context_t* ctx) {
 
 
 int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* section) {
+	if(ctx->enable_removing_disabled_sections == 0) {
+		return 0;
+	}
+
 	if(section == NULL) {
 		printf("error at tagging required section. section is null\n");
 		return -1;
@@ -574,7 +624,7 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 				res = linker_tag_required_section(ctx, sub_section);
 
 				if(res != 0) {
-					printf("error at symbol %li %s\n", sym->id, sym->symbol_name);
+					printf("error at symbol %li %s symsec %li\n", sym->id, sym->symbol_name, sym->section_id);
 					break;
 				}
 
@@ -585,6 +635,171 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 
 		}
 
+	}
+
+	return res;
+}
+
+int8_t linker_relocate_test_functions(linker_context_t* ctx) {
+	int8_t res = -1;
+	int8_t iter_err = 0;
+
+	iterator_t* iter = linkedlist_iterator_create(ctx->test_function_names);
+
+	if(iter != NULL) {
+		uint64_t tf_cnt = linkedlist_size(ctx->test_function_names);
+		uint64_t tf_sec_size = 0;
+		uint64_t tfn_sec_size = 0;
+
+		if(ctx->class == ELFCLASS32) {
+			tf_sec_size = tf_cnt * 4;
+			tfn_sec_size = tf_cnt * 4;
+		} else {
+			tf_sec_size = tf_cnt * 8;
+			tfn_sec_size = tf_cnt * 8;
+		}
+
+		linker_section_t* test_func_array = linker_get_section_by_id(ctx, ctx->test_func_array_secid);
+
+		if(test_func_array == NULL) {
+			return -1;
+		}
+
+		test_func_array->size = tf_sec_size;
+
+		linker_symbol_t* test_functions_array_end = linker_lookup_symbol(ctx, "__test_functions_array_end", 0);
+
+		if(test_functions_array_end == NULL) {
+			return -1;
+		}
+
+		test_functions_array_end->value = tf_sec_size;
+
+		linker_section_t* test_functions_names_array = linker_get_section_by_id(ctx, ctx->test_functions_names_array_secid);
+
+		if(test_functions_names_array == NULL) {
+			return -1;
+		}
+
+		test_functions_names_array->size = tfn_sec_size;
+
+
+		linker_section_t* test_functions_names_array_str = linker_get_section_by_id(ctx, ctx->test_func_names_array_str_secid);
+
+		if(test_functions_names_array_str == NULL) {
+			return -1;
+		}
+
+		test_functions_names_array_str->size = ctx->test_func_names_array_str_size;
+
+		test_func_array->relocations = linkedlist_create_list_with_heap(ctx->heap);
+
+		if(test_func_array->relocations == NULL) {
+			return -1;
+		}
+
+		test_functions_names_array->relocations = linkedlist_create_list_with_heap(ctx->heap);
+
+		if(test_functions_names_array->relocations == NULL) {
+			return -1;
+		}
+
+		test_func_array->data = memory_malloc_ext(ctx->heap, test_func_array->size, 0x0);
+
+		if(test_func_array->data == NULL) {
+			return -1;
+		}
+
+		test_functions_names_array->data = memory_malloc_ext(ctx->heap, test_functions_names_array->size, 0x0);
+
+		if(test_functions_names_array->data == NULL) {
+			return -1;
+		}
+
+		test_functions_names_array_str->data = memory_malloc_ext(ctx->heap, test_functions_names_array_str->size, 0x0);
+
+		if(test_functions_names_array_str->data == NULL) {
+			return -1;
+		}
+
+
+		linker_symbol_t* test_functions_names_str = linker_lookup_symbol(ctx, "__test_functions_names_str", 0);
+
+		if(test_functions_names_str == NULL) {
+			return -1;
+		}
+
+
+		uint64_t f_offset = 0;
+		uint64_t fn_offset = 0;
+		uint64_t str_offset = 0;
+
+
+		while(iter->end_of_iterator(iter) != 0) {
+			char_t* test_func_name = iter->get_item(iter);
+
+			strcpy(test_func_name + 2, (char_t*)test_functions_names_array_str->data + str_offset);
+
+			linker_symbol_t* tf_sym = linker_lookup_symbol(ctx, test_func_name, 0);
+
+			linker_relocation_t* tf_reloc = memory_malloc_ext(ctx->heap, sizeof(linker_relocation_t), 0x0);
+
+			if(tf_reloc == NULL) {
+				iter_err = -1;
+				break;
+			}
+
+			tf_reloc->symbol_id = tf_sym->id;
+			tf_reloc->offset = f_offset;
+
+			linkedlist_list_insert(test_func_array->relocations, tf_reloc);
+
+			linker_relocation_t* tfn_reloc = memory_malloc_ext(ctx->heap, sizeof(linker_relocation_t), 0x0);
+
+			if(tfn_reloc == NULL) {
+				iter_err = -1;
+				break;
+			}
+
+			tfn_reloc->symbol_id = test_functions_names_str->id;
+			tfn_reloc->offset = fn_offset;
+			tfn_reloc->addend = str_offset;
+
+			linkedlist_list_insert(test_functions_names_array->relocations, tfn_reloc);
+
+			if(ctx->class == ELFCLASS32) {
+				tf_reloc->type = LINKER_RELOCATION_TYPE_32_32;
+				tfn_reloc->type = LINKER_RELOCATION_TYPE_32_32;
+				f_offset += 4;
+				fn_offset += 4;
+			} else {
+				tf_reloc->type = LINKER_RELOCATION_TYPE_64_64;
+				tfn_reloc->type = LINKER_RELOCATION_TYPE_64_64;
+				f_offset += 8;
+				fn_offset += 8;
+			}
+
+			str_offset += strlen(test_func_name) - 2 + 1; // remove begining 2 chars and add null
+
+			iter = iter->next(iter);
+		}
+
+		iter->destroy(iter);
+
+		res = iter_err;
+
+		if(res == 0) {
+
+			if(ctx->enable_removing_disabled_sections) {
+				ctx->direct_relocation_count = 0;
+			}
+
+			res = linker_tag_required_section(ctx, test_func_array);
+
+			if(res == 0) {
+				res = linker_tag_required_section(ctx, test_functions_names_array);
+			}
+		}
 	}
 
 	return res;
@@ -638,6 +853,10 @@ void linker_destroy_context(linker_context_t* ctx) {
 			linkedlist_destroy(ctx->symbols);
 		}
 
+	}
+
+	if(ctx->test_section_flag) {
+		linkedlist_destroy(ctx->test_function_names);
 	}
 
 
@@ -758,6 +977,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 		if(map_fp) {
 			fprintf(map_fp, "%016lx %s\n", ctx->start + sec->offset, sec->section_name);
+			fflush(map_fp);
 		}
 
 		if(sec->type <= LINKER_SECTION_TYPE_RODATA) {
@@ -1276,6 +1496,7 @@ int32_t main(int32_t argc, char** argv) {
 	uint8_t print_symbols = 0;
 	uint8_t trim = 0;
 	uint8_t boot_flag = 0;
+	uint8_t test_section_flag = 0;
 
 	while(argc > 0) {
 		if(strstarts(*argv, "-") != 0) {
@@ -1374,6 +1595,13 @@ int32_t main(int32_t argc, char** argv) {
 
 			boot_flag = 1;
 		}
+
+		if(strcmp(*argv, "--test-section") == 0) {
+			argc--;
+			argv++;
+
+			test_section_flag = 1;
+		}
 	}
 
 	if(output_file == NULL) {
@@ -1400,6 +1628,11 @@ int32_t main(int32_t argc, char** argv) {
 	ctx->sections = linkedlist_create_list_with_heap(ctx->heap);
 	ctx->enable_removing_disabled_sections = trim;
 	ctx->boot_flag = boot_flag;
+	ctx->test_section_flag = test_section_flag;
+
+	if(ctx->test_section_flag) {
+		ctx->test_function_names = linkedlist_create_sortedlist_with_heap(ctx->heap, linker_test_function_names_comparator);
+	}
 
 	if(linker_script) {
 		linker_parse_script(ctx, linker_script);
@@ -1454,6 +1687,86 @@ int32_t main(int32_t argc, char** argv) {
 	kheap_bottom_sym->section_id = kheap_sec->id;
 
 	linkedlist_list_insert(ctx->symbols, kheap_bottom_sym);
+
+	if(ctx->test_section_flag) {
+		linker_section_t* test_func_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+		test_func_array->id = section_id++;
+		test_func_array->file_name = NULL;
+		test_func_array->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_array");
+		test_func_array->align = 0x10;
+		test_func_array->type = LINKER_SECTION_TYPE_RODATA;
+
+		ctx->test_func_array_secid = test_func_array->id;
+
+		linkedlist_list_insert(ctx->sections, test_func_array);
+
+		linker_symbol_t* test_functions_array_start =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+		test_functions_array_start->id = symbol_id++;
+		test_functions_array_start->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_start");
+		test_functions_array_start->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+		test_functions_array_start->type = LINKER_SYMBOL_TYPE_SYMBOL;
+		test_functions_array_start->value = 0;
+		test_functions_array_start->section_id = test_func_array->id;
+
+		linkedlist_list_insert(ctx->symbols, test_functions_array_start);
+
+		linker_symbol_t* test_functions_array_end =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+		test_functions_array_end->id = symbol_id++;
+		test_functions_array_end->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_end");
+		test_functions_array_end->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+		test_functions_array_end->type = LINKER_SYMBOL_TYPE_SYMBOL;
+		test_functions_array_end->value = 0;
+		test_functions_array_end->section_id = test_func_array->id;
+
+		linkedlist_list_insert(ctx->symbols, test_functions_array_end);
+
+		linker_section_t* test_func_names_array_str = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+		test_func_names_array_str->id = section_id++;
+		test_func_names_array_str->file_name = NULL;
+		test_func_names_array_str->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_names.str");
+		test_func_names_array_str->align = 0x10;
+		test_func_names_array_str->type = LINKER_SECTION_TYPE_RODATA;
+		test_func_names_array_str->required = 1;
+
+		ctx->test_func_names_array_str_secid = test_func_names_array_str->id;
+
+		linkedlist_list_insert(ctx->sections, test_func_names_array_str);
+
+
+		linker_symbol_t* test_functions_names_str =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+		test_functions_names_str->id = symbol_id++;
+		test_functions_names_str->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names_str");
+		test_functions_names_str->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+		test_functions_names_str->type = LINKER_SYMBOL_TYPE_SYMBOL;
+		test_functions_names_str->value = 0;
+		test_functions_names_str->section_id = test_func_names_array_str->id;
+
+		linkedlist_list_insert(ctx->symbols, test_functions_names_str);
+
+
+		linker_section_t* test_functions_names_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+		test_functions_names_array->id = section_id++;
+		test_functions_names_array->file_name = NULL;
+		test_functions_names_array->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_names_array");
+		test_functions_names_array->align = 0x10;
+		test_functions_names_array->type = LINKER_SECTION_TYPE_RODATA;
+
+		ctx->test_functions_names_array_secid = test_functions_names_array->id;
+
+		linkedlist_list_insert(ctx->sections, test_functions_names_array);
+
+		linker_symbol_t* test_functions_names =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+		test_functions_names->id = symbol_id++;
+		test_functions_names->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names");
+		test_functions_names->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+		test_functions_names->type = LINKER_SYMBOL_TYPE_SYMBOL;
+		test_functions_names->value = 0;
+		test_functions_names->section_id = test_functions_names_array->id;
+
+		linkedlist_list_insert(ctx->symbols, test_functions_names);
+
+
+	}
 
 
 	char_t* file_name;
@@ -1516,6 +1829,11 @@ int32_t main(int32_t argc, char** argv) {
 				sym->type = sym_type;
 				sym->value = linker_get_value_of_symbol(ctx, sym_idx);
 				sym->section_id = tmp_section_id;
+
+				if(strstarts(tmp_section_name, ".text.__test_") == 0 && sym->type == LINKER_SYMBOL_TYPE_FUNCTION) {
+					linkedlist_sortedlist_insert(ctx->test_function_names, sym->symbol_name);
+					ctx->test_func_names_array_str_size += strlen(sym->symbol_name) - 2 + 1; // remove __ at begin and add null
+				}
 			}
 		}
 
@@ -1694,11 +2012,18 @@ int32_t main(int32_t argc, char** argv) {
 		argv++;
 	}
 
+	if(ctx->test_section_flag && linker_relocate_test_functions(ctx) != 0) {
+		print_error("error at relocation test functions");
+		linker_destroy_context(ctx);
+
+		return -1;
+	}
+
 	if(linker_tag_required_sections(ctx) != 0) {
 		print_error("error at tagging required sections");
 		linker_destroy_context(ctx);
-		return -1;
 
+		return -1;
 	}
 
 	uint64_t output_offset_base = 0;
@@ -1708,8 +2033,8 @@ int32_t main(int32_t argc, char** argv) {
 	}
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_TEXT, &output_offset_base);
-	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_DATA, &output_offset_base);
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_RODATA, &output_offset_base);
+	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_DATA, &output_offset_base);
 
 	if(ctx->class == ELFCLASS64) {
 		if(output_offset_base % 16) {

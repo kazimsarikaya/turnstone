@@ -25,6 +25,15 @@ size_t strlen(char_t* string);
 int8_t strcmp(char_t* string1, char_t* string2);
 
 /**
+ * @brief compares two string with first n bytes
+ * @param  string1 first string
+ * @param  string2 second string
+ * @param  n first n bytes
+ * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
+ */
+int8_t strncmp(char_t* string1, char_t* string2, size_t n);
+
+/**
  * @brief checks str starts with prefix
  * @param  str string for look
  * @param  prefix to compare

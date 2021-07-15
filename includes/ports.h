@@ -14,6 +14,7 @@
  * COM1 value
  */
 #define COM1    0x03F8
+#define COM2    0x02F8
 
 /**
  * @brief write one byte to the port

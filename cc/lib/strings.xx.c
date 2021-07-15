@@ -221,4 +221,27 @@ char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2) {
 	return res;
 }
 
+int8_t strncmp(char_t* string1, char_t* string2, size_t n) {
+	size_t len1 = strlen(string1);
+	size_t len2 = strlen(string2);
+
+	size_t minlen_of_strs = MIN(len1, len2);
+
+	if(n <= minlen_of_strs) {
+		for(size_t i = 0; i < n; i++) {
+			if(string1[i] < string2[i]) {
+				return -1;
+			}
+
+			if(string1[i] > string2[i]) {
+				return 1;
+			}
+		}
+
+		return 0;
+	}
+
+	return strcmp(string1, string2);
+}
+
 #endif

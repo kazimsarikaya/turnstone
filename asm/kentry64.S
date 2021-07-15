@@ -41,7 +41,13 @@ ___kstart64:
 
   cld
   mov  $___kstart64, %edi
+
+#ifndef ___TESTMODE
   call kmain64
+#else
+  call kmain_test
+#endif
+
   test %rax, %rax
   jne ___kstart64.errloop
 ___kstart64.loop:

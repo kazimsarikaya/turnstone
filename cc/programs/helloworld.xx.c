@@ -2,5 +2,5 @@
 
 
 char_t* hello_world(){
-	return "Hello World\r\n\0";
+	return "Hello World\n";
 }
