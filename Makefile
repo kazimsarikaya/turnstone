@@ -130,7 +130,7 @@ $(VBBOXDISK): $(DISK)
 
 $(QEMUDISK): $(DISK)
 	rm -fr $(QEMUDISK)
-	dd if=/dev/zero of=$(QEMUDISK)a bs=1 count=0 seek=1073741824
+	dd if=/dev/zero of=$(QEMUDISK) bs=1 count=0 seek=1073741824
 	dd bs=512 conv=notrunc if=$< of=$(QEMUDISK)
 
 $(TESTQEMUDISK): $(TESTDISK)
