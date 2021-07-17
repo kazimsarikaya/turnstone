@@ -10,13 +10,14 @@
 #include <apic.h>
 
 
-void interrupt_dummy_noerrcode(interrupt_frame_t*, uint16_t);
-void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint16_t);
+void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
+void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
 
 interrupt_irq* interrupt_irqs = NULL;
+uint8_t next_empty_interrupt = 0;
 
-void interrupt_dummy_noerrcode(interrupt_frame_t*, uint16_t);
+void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 
 void __attribute__ ((interrupt)) interrupt_int00_divide_by_zero_exception(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int01_debug_exception(interrupt_frame_t*);
@@ -101,9 +102,17 @@ int8_t interrupt_init() {
 		return -1;
 	}
 
+	next_empty_interrupt = INTERRUPT_IRQ_BASE;
+
 	cpu_sti();
 
 	return 0;
+}
+
+uint8_t interrupt_get_next_empty_interrupt(){
+	uint8_t res = next_empty_interrupt;
+	next_empty_interrupt++;
+	return res;
 }
 
 int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
@@ -117,7 +126,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
 }
 
 
-void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
+void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
 	cpu_cli();
 
 	if(intnum >= 32 && interrupt_irqs != NULL) {
@@ -135,7 +144,7 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint16_t intnum){
 	cpu_hlt();
 }
 
-void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint16_t intnum){
+void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint8_t intnum){
 	cpu_cli();
 	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%08x\n", intnum, errcode, frame->return_rip);
 	printf("Cpu is halting.");

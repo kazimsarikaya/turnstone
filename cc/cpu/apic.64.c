@@ -12,7 +12,7 @@
 #include <time/timer.h>
 #include <linkedlist.h>
 
-uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic, uint8_t base_irq);
+uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic);
 void apic_init_timer();
 
 uint64_t ioapic_bases[2] = {0, 0};
@@ -51,7 +51,6 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 		cpu_write_msr(APIC_MSR_ADDRESS, apic_msr);
 	}
 
-	uint8_t irq_base = APIC_BASE_IRQ_INT_MAP;
 	acpi_table_madt_entry_t* la = NULL;
 
 
@@ -65,7 +64,7 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 		}
 
 		if(e->info.type == ACPI_MADT_ENTRY_TYPE_IOAPIC) {
-			irq_base += apic_init_ioapic(e, irq_base);
+			apic_init_ioapic(e);
 		}
 
 		if(e->info.type == ACPI_MADT_ENTRY_TYPE_INTERRUPT_SOURCE_OVERRIDE) {
@@ -156,7 +155,7 @@ void apic_init_timer() {
 	time_timer_reset_tick_count();
 }
 
-uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic, uint8_t base_irq) {
+uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
 	uint64_t ioapic_base = ioapic->ioapic.address;
 
 	ioapic_bases[ioapic_count++] = ioapic_base;
@@ -177,19 +176,20 @@ uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic, uint8_t base_irq) {
 	uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
 
 	for(uint8_t i = 0; i < max_r_e; i++) {
+		uint8_t intnum = interrupt_get_next_empty_interrupt();
 		io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i;
-		io_apic_r->value = (base_irq + i) | APIC_IOAPIC_INTERRUPT_DISABLED;
+		io_apic_r->value = intnum | APIC_IOAPIC_INTERRUPT_DISABLED;
 		io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i + 1;
 		io_apic_r->value = 0;
 
-		printf("IOAPIC: irq 0x%02x mapped to 0x%02x\n", i, base_irq + i);
+		printf("IOAPIC: irq 0x%02x mapped to 0x%02x\n", i, intnum);
 	}
 
 	return max_r_e;
 }
 
 int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
-	uint8_t base_irq = APIC_BASE_IRQ_INT_MAP;
+	uint8_t base_irq = INTERRUPT_IRQ_BASE;
 
 	for(uint8_t i = 0; i < ioapic_count; i++) {
 		__volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_bases[i];
@@ -217,7 +217,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
 }
 
 int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
-	uint8_t base_irq = APIC_BASE_IRQ_INT_MAP;
+	uint8_t base_irq = INTERRUPT_IRQ_BASE;
 
 	for(uint8_t i = 0; i < ioapic_count; i++) {
 		__volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_bases[i];

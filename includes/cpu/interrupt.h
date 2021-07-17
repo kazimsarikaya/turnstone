@@ -39,9 +39,11 @@ typedef struct interrupt_frame {
  */
 int8_t interrupt_init();
 
-typedef void (* interrupt_irq)(interrupt_frame_t* frame, uint16_t intnum);
+typedef void (* interrupt_irq)(interrupt_frame_t* frame, uint8_t intnum);
 
 int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq);
+
+uint8_t interrupt_get_next_empty_interrupt();
 
 #endif
 
