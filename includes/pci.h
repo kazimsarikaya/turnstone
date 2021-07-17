@@ -22,6 +22,9 @@
 
 #define PCI_DEVICE_SUBCLASS_SATA_CONTROLLER  0x06
 
+#define PCI_DEVICE_CAPABILITY_MSI     0x05
+#define PCI_DEVICE_CAPABILITY_MSIX    0x11
+
 
 typedef struct {
 	uint8_t io_space : 1;
@@ -206,5 +209,33 @@ typedef struct {
 	uint8_t capability_id : 8;
 	uint8_t next_pointer : 8;
 } __attribute__((packed)) pci_capability_t;
+
+typedef struct {
+	pci_capability_t cap;
+	uint8_t enable : 1;
+	uint8_t multiple_message_count : 3;
+	uint8_t multiple_message_enable : 3;
+	uint8_t ma64_support : 1;
+	uint8_t per_vector_masking : 1;
+	uint8_t reserved0 : 7;
+	union {
+		struct {
+			uint32_t message_address;
+			uint16_t message_data;
+			uint16_t reserved0;
+			uint32_t mask;
+			uint32_t pending;
+		} ma32;
+		struct {
+			uint64_t message_address;
+			uint16_t message_data;
+			uint16_t reserved0;
+			uint32_t mask;
+			uint32_t pending;
+		} ma64;
+	};
+} __attribute__((packed)) pci_capability_msi_t;
+
+
 
 #endif
