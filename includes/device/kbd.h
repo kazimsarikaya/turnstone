@@ -10,6 +10,6 @@
 #include <types.h>
 #include <cpu/interrupt.h>
 
-void dev_kbd_isr(interrupt_frame_t* frame, uint16_t intnum);
+void dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 #endif

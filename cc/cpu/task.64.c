@@ -26,7 +26,7 @@ task_t* task_get_current_task(){
 	return current_task;
 }
 
-void task_task_switch_isr(interrupt_frame_t* frame, uint16_t intnum);
+void task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	uint64_t rsp;
@@ -301,7 +301,7 @@ void task_yield() {
 	__asm__ __volatile__ ("int $0x80\n");
 }
 
-void task_task_switch_isr(interrupt_frame_t* frame, uint16_t intnum) {
+void task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
 	UNUSED(frame);
 	UNUSED(intnum);
 
