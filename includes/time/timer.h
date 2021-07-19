@@ -22,4 +22,8 @@ void time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 uint64_t time_timer_get_tick_count();
 
+void time_timer_configure_spinsleep();
+
+void time_timer_spinsleep(uint64_t usecs);
+
 #endif
