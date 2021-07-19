@@ -228,8 +228,6 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ah
 
 
 			while(pci_cap->capability_id != 0xFF) {
-				printf("0x%x \n", pci_cap->capability_id );
-
 				if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSI) {
 					msi_cap = (pci_capability_msi_t*)pci_cap;
 					break;
