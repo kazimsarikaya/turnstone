@@ -1,4 +1,5 @@
 #include <tests.h>
+#include <video.h>
 
 extern size_t __test_functions_array_start;
 extern size_t __test_functions_array_end;
@@ -6,6 +7,8 @@ extern size_t __test_functions_names;
 
 int8_t kmain_test(size_t entry_point) {
 	UNUSED(entry_point);
+
+	video_clear_screen();
 
 	uint32_t failed_count = 0;
 

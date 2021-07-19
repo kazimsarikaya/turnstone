@@ -22,6 +22,29 @@ int8_t apic_enabled = 0;
 
 linkedlist_t irq_remappings = NULL;
 
+int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
+	acpi_sdt_header_t* madt = acpi_get_table(desc, "APIC");
+
+	if(madt == NULL) {
+		printf("APIC: Info can not find madt or incorrect checksum\n");
+		return -1;
+	}
+
+	printf("APIC: Info madt is found\n");
+
+	linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+
+	if(apic_init_apic(apic_entries) != 0) {
+		printf("APIC: Info cannot enable apic\n");
+
+		return -1;
+	}
+
+	printf("APIC: Info apic and ioapic enabled\n");
+
+	return 0;
+}
+
 int8_t apic_init_apic(linkedlist_t apic_entries){
 	cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
 	cpu_cpuid_regs_t answer = {0, 0, 0, 0};

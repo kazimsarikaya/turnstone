@@ -5,6 +5,10 @@
 #include <acpi.h>
 #include <bios.h>
 #include <memory.h>
+#include <video.h>
+#include <ports.h>
+#include <acpi/aml.h>
+#include <memory/paging.h>
 
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
 	bios_data_area_t* bda = (bios_data_area_t*)(BIOS_BDA_POINTER);
@@ -146,4 +150,91 @@ linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt
 	}
 
 	return entries;
+}
+
+int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
+	acpi_table_fadt_t* fadt = (acpi_table_fadt_t*)acpi_get_table(desc, "FACP");
+
+	if(fadt == NULL) {
+		printf("fadt not found\n\0");
+
+		return -1;
+	}
+
+	int8_t acpi_enabled = -1;
+
+	if(fadt->smi_command_port == 0) {
+		printf("acpi command port is 0. ");
+		acpi_enabled = 0;
+	}
+
+	if(fadt->acpi_enable == 0 && fadt->acpi_disable == 0) {
+		printf("acpi enable/disable is 0. ");
+		acpi_enabled = 0;
+	}
+
+	uint16_t pm_1a_port = fadt->pm_1a_control_block_address_64bit.address;
+	uint32_t pm_1a_value = inw(pm_1a_port);
+
+	if((pm_1a_value & 0x1) == 0x1) {
+		printf("pm 1a control block acpi en is setted ");
+		acpi_enabled = 0;
+	}
+
+	if(acpi_enabled != 0) {
+		outb(fadt->smi_command_port, fadt->acpi_enable);
+
+		while((inw(pm_1a_port) & 0x1) != 0x1);
+
+		printf("acpi enabled");
+	}
+
+	printf("\n");
+
+	printf("DSDT address 0x%08lx\n", fadt->dsdt_address_32bit);
+
+	memory_paging_add_page(fadt->dsdt_address_32bit, fadt->dsdt_address_32bit, MEMORY_PAGING_PAGE_TYPE_2M);
+
+	acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)((uint64_t)(fadt->dsdt_address_32bit));
+
+
+	if(acpi_validate_checksum(dsdt) != 0) {
+		printf("dsdt not ok\n");
+
+		return -1;
+	}
+
+	uint64_t acpi_hs = 0x1000000;
+	uint64_t acpi_he = 0x2000000;
+	uint64_t acpi_step = 0x200000;
+
+	for(uint64_t i = acpi_hs; i < acpi_he; i += acpi_step) {
+		memory_paging_add_page(i, i, MEMORY_PAGING_PAGE_TYPE_2M);
+	}
+
+	memory_heap_t* acpi_heap = memory_create_heap_simple(acpi_hs, acpi_he);
+
+	int64_t aml_size = dsdt->length - sizeof(acpi_sdt_header_t);
+	uint8_t* aml = (uint8_t*)(dsdt + 1);
+
+	acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(acpi_heap, dsdt->revision, aml, aml_size);
+
+	if(pctx == NULL) {
+		printf("aml parser creation failed\n");
+
+		return -1;
+	}
+
+	int res = -1;
+
+	if(acpi_aml_parse(pctx) == 0) {
+		printf("aml parsed\n");
+		res = 0;
+	} else {
+		printf("aml not parsed\n");
+	}
+
+	outl(0x0CD8, 0);   // qemu acpi init emulation
+
+	return res;
 }

@@ -48,7 +48,7 @@ ___kstart64:
   call kmain_test
 #endif
 
-  test %rax, %rax
+  test %al, %al
   jne ___kstart64.errloop
 ___kstart64.loop:
   hlt
