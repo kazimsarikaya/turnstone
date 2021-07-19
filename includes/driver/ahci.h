@@ -24,10 +24,14 @@
 #define AHCI_HBA_PxCMD_CR    0x8000
 #define AHCI_HBA_PxIS_TFES   (1 << 30)
 
-#define AHCI_ATA_CMD_READ_DMA_EX     0x25
-#define AHCI_ATA_CMD_WRITE_DMA_EX    0x35
-#define AHCI_ATA_CMD_IDENTIFY        0xEC
-#define AHCI_ATA_CMD_FLUSH_EX        0xEA
+#define AHCI_ATA_CMD_READ_DMA_EXT           0x25
+#define AHCI_ATA_CMD_READ_LOG_EXT           0x2F
+#define AHCI_ATA_CMD_WRITE_DMA_EXT          0x35
+#define AHCI_ATA_CMD_READ_LOG_DMA_EXT       0x47
+#define AHCI_ATA_CMD_READ_FPDMA_QUEUED      0x60
+#define AHCI_ATA_CMD_WRITE_FPDMA_QUEUED     0x61
+#define AHCI_ATA_CMD_FLUSH_EXT              0xEA
+#define AHCI_ATA_CMD_IDENTIFY               0xEC
 
 #define AHCI_ATA_DEV_BUSY 0x80
 #define AHCI_ATA_DEV_DRQ  0x08
@@ -66,21 +70,54 @@ typedef struct {
 	uint16_t rec_multi_word_dma_cycle_time;
 	uint16_t min_pio_cycle_time_without_flow_control;
 	uint16_t min_pio_cycle_time_with_flow_control;
-	uint16_t reserved_69_79[11];
+	uint16_t additional_supported;
+	uint16_t reserved_70;
+	uint16_t reserved_71_74[4];
+	uint16_t queue_depth;
+	uint16_t serial_ata_capabilities;
+	uint16_t reserved_77;                                ///< Reserved for Serial ATA
+	uint16_t serial_ata_features_supported;
+	uint16_t serial_ata_features_enabled;
 	uint16_t major_version_no;
 	uint16_t minor_version_no;
-	uint32_t command_set_supported;     ///< word 82
-	uint16_t command_set_feature_extn;     ///< word 84
-	uint32_t command_set_feature_enabled;   ///< word 85
-	uint16_t command_set_feature_default;  ///< word 87
+	uint16_t command_set_supported_82;     ///< word 82
+	uint16_t command_set_supported_83;     ///< word 83
+	uint16_t command_set_supported_84;     ///< word 84
+	uint16_t command_set_feature_enabled_85;   ///< word 85
+	uint16_t command_set_feature_enabled_86;  ///< word 86
+	uint16_t command_set_feature_enabled_87;  ///< word 87
 	uint16_t ultra_dma_mode;               ///< word 88
 	uint16_t reserved_89_99[11];
 	uint64_t user_addressable_sectors_ext; ///< word 100
-	uint16_t reserved_104_127[24];
+	uint16_t reserved_104_118[15];
+	uint16_t command_set_supported_119;   ///< word 119
+	uint16_t command_set_feature_enabled_120;  ///< word 120
+	uint16_t reserved_121_127[7];
 	uint16_t security_status;
 	uint16_t vendor_data_129_159[31];
 	uint16_t reserved_160_255[96];
 }__attribute__((packed)) ahci_ata_identify_data_t;
+
+typedef struct {
+	uint8_t ncq_tag : 4;
+	uint8_t reserved0 : 1;
+	uint8_t unload : 1;
+	uint8_t nq : 1;
+	uint8_t reserved1;
+	uint8_t status;
+	uint8_t error;
+	uint64_t lba0 : 24;
+	uint8_t device;
+	uint64_t lba1 : 24;
+	uint8_t reserved2;
+	uint16_t count;
+	uint8_t sense_key;
+	uint8_t additional_sense_code;
+	uint8_t additional_sense_qualifier;
+	uint8_t reserved3[239];
+	uint8_t vendor_specific[255];
+	uint8_t checksum;
+}__attribute__((packed)) ahci_ata_ncq_error_log_t;
 
 typedef enum {
 	AHCI_FIS_TYPE_REG_H2D    = 0x27, ///< Register FIS - host to device
@@ -128,7 +165,7 @@ typedef struct {
 	uint8_t error;                ///< Error
 	uint64_t lba0 : 24;           ///< LBA low register, 0:23
 	uint8_t device;               ///< Device register
-	uint64_t lba1 : 24;            ///< LBA register, 24:48
+	uint64_t lba1 : 24;           ///< LBA register, 24:48
 	uint8_t reserved2;            ///< Reserved
 	uint16_t count;               ///< Count register
 	uint8_t reserved3[6];         ///< Reserved
@@ -150,7 +187,7 @@ typedef struct {
 	uint8_t notification : 1;     ///< Notification Bit
 	uint8_t status;               ///< Status
 	uint8_t error;                ///< Error
-	uint8_t reserved1[4];          ///< Reserved
+	uint8_t reserved1[4];         ///< Reserved
 } __attribute((packed)) ahci_fis_dev_bits_t;
 
 typedef struct {
@@ -164,7 +201,7 @@ typedef struct {
 	uint8_t error;                ///< Error
 	uint64_t lba0 : 24;           ///< LBA low register, 0:23
 	uint8_t device;               ///< Device register
-	uint64_t lba1 : 24;            ///< LBA register, 24:48
+	uint64_t lba1 : 24;           ///< LBA register, 24:48
 	uint8_t reserved2;            ///< Reserved
 	uint16_t count;               ///< Count register
 	uint8_t reserved3;            ///< Reserved
@@ -184,15 +221,14 @@ typedef struct {
 	uint64_t dma_buffer_id;       ///< DMA Buffer Identifier. Used to Identify DMA buffer in host memory. SATA Spec says host specific and not in Spec. Trying AHCI spec might work.
 	uint32_t reserved2;           ///< Reserved
 	uint32_t dma_buffer_offset;   ///< byte offset into buffer first 2 bits must be 0
-	uint32_t reserved3;           ///< Reserved
 	uint32_t transfer_count;      ///< Transfer Count bit 0 must 0
-	uint32_t reserved4;           ///< Reserved
+	uint32_t reserved3;           ///< Reserved
 } __attribute((packed)) ahci_fis_dma_setup_t;
 
 typedef volatile struct {
 	uint64_t command_list_base_address;   ///< 0x00, command list base address, 1K-byte aligned
 	uint64_t fis_base_address;            ///< 0x08, FIS base address, 256-byte aligned
-	uint32_t interrupt_state;             ///< 0x10, interrupt status
+	uint32_t interrupt_status;            ///< 0x10, interrupt status
 	uint32_t interrupt_enable;            ///< 0x14, interrupt enable
 	uint32_t command_and_status;          ///< 0x18, command and status
 	uint32_t reserved0;                   ///< 0x1C, Reserved
@@ -231,46 +267,66 @@ typedef volatile struct {
 	uint8_t padding0[4];                        ///< padding
 	ahci_fis_pio_setup_t pio_setup_fis;         ///< PIO Setup FIS
 	uint8_t padding1[12];                       ///< padding
-	ahci_fis_reg_d2h_t d2h_register;            ///< Register – Device to Host FIS
+	ahci_fis_reg_d2h_t d2h_fis;                 ///< Register – Device to Host FIS
 	uint8_t padding2[4];                        ///< padding
-	ahci_fis_dev_bits_t set_device_bits_fis;    ///< Set Device Bit FIS
+	ahci_fis_dev_bits_t sdbs_fis;               ///< Set Device Bit FIS
 	uint8_t ufis[64];                           ///< unknown fis
 	uint8_t reserved0[0x100 - 0xA0];            ///< reserved
 }  __attribute((packed)) ahci_hba_fis_t;
 
 typedef struct {
-	uint8_t command_fis_length : 5;   ///<  Command FIS length in DWORDS, 2 ~ 16
-	uint8_t atapi : 1;   ///<  ATAPI
-	uint8_t write_direction : 1;   ///<  Write, 1: H2D, 0: D2H
-	uint8_t prefetchable : 1;   ///<  Prefetchable
-	uint8_t reset : 1;   ///<  Reset
-	uint8_t bist : 1;   ///<  BIST
-	uint8_t clear_busy : 1;   ///<  Clear busy upon R_OK
-	uint8_t reserved0 : 1;    ///<  Reserved
-	uint8_t port_multiplier : 4;   ///<  Port multiplier port
-	uint16_t prdt_length;   ///<  Physical region descriptor table length in entries
+	uint8_t command_fis_length : 5;         ///<  Command FIS length in DWORDS, 2 ~ 16
+	uint8_t atapi : 1;                      ///<  ATAPI
+	uint8_t write_direction : 1;            ///<  Write, 1: H2D, 0: D2H
+	uint8_t prefetchable : 1;               ///<  Prefetchable
+	uint8_t reset : 1;                      ///<  Reset
+	uint8_t bist : 1;                       ///<  BIST
+	uint8_t clear_busy : 1;                 ///<  Clear busy upon R_OK
+	uint8_t reserved0 : 1;                  ///<  Reserved
+	uint8_t port_multiplier : 4;            ///<  Port multiplier port
+	uint16_t prdt_length;                   ///<  Physical region descriptor table length in entries
 	volatile uint32_t prd_transfer_count;   ///<  Physical region descriptor byte count transferred
-	uint64_t prdt_base_address;    ///<  Command table descriptor base address
-	uint32_t reserved1[4]; // Reserved
+	uint64_t prdt_base_address;             ///<  Command table descriptor base address
+	uint32_t reserved1[4];                  ///< Reserved
 }  __attribute((packed)) ahci_hba_cmd_header_t;
 
 typedef struct {
-	uint64_t data_base_address;   // Data base address
-	uint32_t reserved0;   // Reserved
-	uint32_t data_byte_count : 22;    // Byte count, 4M max
-	uint32_t reserved1 : 9;    // Reserved
-	uint32_t interrupt : 1;   // Interrupt on completion
+	uint64_t data_base_address;        ///< Data base address
+	uint32_t reserved0;                ///< Reserved
+	uint32_t data_byte_count : 22;     ///< Byte count, 4M max
+	uint32_t reserved1 : 9;            ///< Reserved
+	uint32_t interrupt : 1;            ///< Interrupt on completion
 }  __attribute((packed)) ahci_hba_prdt_entry_t;
 
 typedef struct {
-	uint8_t command_fis[64];   // Command FIS
-	uint8_t acmd[16];   // ATAPI command, 12 or 16 bytes
-	uint8_t reserved[48];  // Reserved
-	ahci_hba_prdt_entry_t prdt_entry[1];   // Physical region descriptor table entries, 0 ~ 65535
+	uint8_t command_fis[64];               ///< Command FIS
+	uint8_t acmd[16];                      ///< ATAPI command, 12 or 16 bytes
+	uint8_t reserved[48];                  ///< Reserved
+	ahci_hba_prdt_entry_t prdt_entry[1];   ///< Physical region descriptor table entries, 0 ~ 65535
 } __attribute((packed)) ahci_hba_prdt_t;
 
 typedef struct {
+	uint8_t gpl_supported : 1;
+	uint8_t gpl_enabled : 1;
+	uint8_t dma_ext_supported : 1;
+	uint8_t dma_ext_enabled : 1;
+	uint8_t dma_ext_is_log_ext : 1;
+	uint8_t reserved : 3;
+} __attribute((packed)) ahci_ata_logging_t;
+
+typedef struct {
+	uint8_t supported : 1;
+	uint8_t enabled : 1;
+	uint8_t errlog_supported : 1;
+	uint8_t errlog_enabled : 1;
+	uint8_t selftest_supported : 1;
+	uint8_t selftest_enabled : 1;
+	uint8_t reserved : 2;
+} __attribute((packed)) ahci_ata_smart_t;
+
+typedef struct {
 	uint64_t disk_id;
+	ahci_device_type_t type;
 	uint64_t port_address;
 	uint16_t cylinders;
 	uint16_t heads;
@@ -278,7 +334,20 @@ typedef struct {
 	uint64_t lba_count;
 	char_t serial[21];
 	char_t model[41];
+	uint8_t sncq; ///< native command queue support
+	uint8_t volatile_write_cache;
+	uint16_t queue_depth;
+	ahci_ata_logging_t logging;
+	ahci_ata_smart_t smart_status;
 }ahci_sata_disk_t;
+
+typedef struct {
+	uint64_t hba_addr;
+	uint8_t intnum_base;
+	uint8_t intnum_count;
+	uint8_t disk_base;
+	uint8_t disk_count;
+} ahci_hba_t;
 
 
 int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ahci_base);
