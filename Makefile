@@ -238,11 +238,11 @@ print-%: ; @echo $* = $($*)
 depend: .depend16 .depend64
 
 .depend16: $(CC16SRCS) $(CCXXSRCS) $(CC16TESTSRCS)
-	$(CC16) $(CC16FLAGS) -D___DEPEND_ANALYSIS -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend16
+	scripts/create-cc-deps.sh "$(CC16) $(CC16FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend16
 	sed -i '' 's/xx.o:/xx_16.o:/g' .depend16
 
 .depend64: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
-	$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM $^ | sed -E 's%^(.*):%'$(CCOBJDIR)'/\1:%g' > .depend64
+	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
 	sed -i '' 's/xx.o:/xx_64.o:/g' .depend64
 
 -include .depend16 .depend64
