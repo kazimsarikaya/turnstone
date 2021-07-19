@@ -187,4 +187,6 @@ acpi_table_mcfg_t* acpi_get_mcfg_table(acpi_xrsdp_descriptor_t* xrsdp_desc);
 linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header);
 #define acpi_get_apic_table_entries(sdt_hdr) acpi_get_apic_table_entries_with_heap(NULL, sdt_hdr)
 
+int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);
+
 #endif

@@ -36,6 +36,11 @@ void video_clear_screen(){
 	for(i = 0; i < VIDEO_BUF_LEN * 2; i += 2) {
 		far_write_16(VIDEO_SEG, i, blank);
 	}
+
+	cursor_x = 0;
+	cursor_y = 0;
+
+	video_move_cursor();
 }
 
 void video_print(char_t* string)

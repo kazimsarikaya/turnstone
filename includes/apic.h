@@ -8,6 +8,7 @@
 
 #include <types.h>
 #include <linkedlist.h>
+#include <acpi.h>
 
 #define APIC_MSR_ADDRESS        0x1B
 #define APIC_MSR_ENABLE_APIC    0x800UL
@@ -64,6 +65,8 @@ typedef struct {
 	uint8_t focus_cpu_core_checking : 1;
 	uint32_t reserved0 : 22;
 }__attribute__((packed)) apic_register_spurious_interrupt_t;
+
+int8_t apic_setup(acpi_xrsdp_descriptor_t* desc);
 
 int8_t apic_init_apic(linkedlist_t apic_entries);
 
