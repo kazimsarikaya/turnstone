@@ -153,6 +153,7 @@ void apic_init_timer() {
 
 	apic_ioapic_disable_irq(timer_irq);
 	time_timer_reset_tick_count();
+	time_timer_configure_spinsleep();
 }
 
 uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {

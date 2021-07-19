@@ -12,6 +12,9 @@
 
 __volatile__ uint64_t time_timer_tick_count = 0;
 
+__volatile__ uint64_t time_timer_spinsleep_counter_value = 0;
+__volatile__ uint8_t time_timer_start_spinsleep_counter = 0;
+
 void time_timer_reset_tick_count() {
 	time_timer_tick_count = 0;
 }
@@ -44,6 +47,10 @@ void time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
 	time_timer_tick_count++;
 
+	if(time_timer_start_spinsleep_counter) {
+		time_timer_start_spinsleep_counter = 0;
+	}
+
 	if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
 		task_switch_task();
 	}
@@ -58,4 +65,19 @@ void time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
 uint64_t time_timer_get_tick_count() {
 	return time_timer_tick_count;
+}
+
+void time_timer_configure_spinsleep() {
+	time_timer_start_spinsleep_counter = 1;
+	while(time_timer_start_spinsleep_counter) {
+		time_timer_spinsleep_counter_value++;
+	}
+	printf("TIMER: Info spinsleep counter is 0x%x\n", time_timer_spinsleep_counter_value);
+}
+
+void time_timer_spinsleep(uint64_t usecs) {
+	while(usecs--) {
+		uint64_t spinsleep_counter = time_timer_start_spinsleep_counter;
+		while(spinsleep_counter--);
+	}
 }
