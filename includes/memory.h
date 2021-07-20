@@ -8,9 +8,8 @@
 
 #include <types.h>
 
-#ifndef NULL
-/*! NULL value */
-#define NULL 0
+#if ___BITS == 64
+typedef void* lock_t;
 #endif
 
 /**
@@ -22,6 +21,9 @@ typedef struct memory_heap {
 	void* metadata; ///< internal heap metadata filled by heap implementation
 	void* (*malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
 	int8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
+#if ___BITS == 64
+	lock_t lock;
+#endif
 } memory_heap_t; ///< short hand for struct
 
 /**

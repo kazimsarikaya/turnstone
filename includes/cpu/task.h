@@ -16,6 +16,8 @@
 
 #define TASK_MAX_TICK_COUNT 50
 
+#define TASK_KERNEL_TASK_ID 1
+
 /**
  * @struct descriptor_tss
  * @brief 64 bit tss descriptor

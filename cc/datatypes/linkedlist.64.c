@@ -5,6 +5,7 @@
 #include <types.h>
 #include <linkedlist.h>
 #include <indexer.h>
+#include <cpu/sync.h>
 
 /**
  * @struct linkedlist_item_internal
@@ -30,6 +31,7 @@ typedef struct {
 	size_t item_count; ///< item count at the list, for fast access.
 	linkedlist_item_internal_t* head; ///< head of the list
 	linkedlist_item_internal_t* tail; ///< tail of the list
+	lock_t lock;
 }linkedlist_internal_t; ///< short hand for struct
 
 /**
@@ -102,17 +104,23 @@ void* linkedlist_iterator_delete_item(iterator_t* iterator);
 linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t type,
                                          linkedlist_data_comparator_f comparator, indexer_t indexer){
 	linkedlist_internal_t* list;
+
 	list = memory_malloc_ext(heap, sizeof(linkedlist_internal_t), 0x0);
+
 	list->heap = heap;
 	list->type = type;
 	list->comparator = comparator;
+
 	if(list->comparator == NULL) {
 		list->comparator = &linkedlist_default_data_comparator;
 	}
+
 	list->indexer = indexer;
 	list->item_count = 0;
 	list->head = NULL;
 	list->tail = NULL;
+	list->lock = lock_create_with_heap(list->heap);
+
 	return list;
 }
 
@@ -125,6 +133,11 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linked
 
 size_t linkedlist_size(linkedlist_t list){
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+
+	if(l == NULL) {
+		return 0;
+	}
+
 	return l->item_count;
 }
 
@@ -144,6 +157,9 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
 		iter = iter->next(iter);
 	}
 	iter->destroy(iter);
+
+	lock_destroy(((linkedlist_internal_t*)list)->lock);
+
 	return memory_free_ext(heap, list);
 }
 
@@ -156,7 +172,15 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 	if(data == NULL) {
 		return NULL;
 	}
+
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+
+	if(l == NULL) {
+		return 0;
+	}
+
+	lock_acquire(l->lock);
+
 	size_t result = 0;
 	linkedlist_item_internal_t* item = memory_malloc_ext(l->heap, sizeof(linkedlist_item_internal_t), 0x0);
 	item->data = data;
@@ -165,6 +189,8 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 		l->head = item;
 		l->tail = item;
 		l->item_count++;
+		lock_release(l->lock);
+
 		return 0;
 	}
 
@@ -173,15 +199,18 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 		l->head->previous = item;
 		l->head = item;
 		result = 0;
+
 	} else if(where == LINKEDLIST_INSERT_AT_TAIL) {
 		item->previous = l->tail;
 		l->tail->next = item;
 		l->tail = item;
 		result = l->item_count;
+
 	} else if(where == LINKEDLIST_INSERT_AT_SORTED) {
 		linkedlist_item_internal_t* cur = l->head;
 		uint8_t insert_at_end = 0;
 		result = 0;
+
 		while(l->comparator(item->data, cur->data) > 0) {
 			if(cur->next != NULL) {
 				cur = cur->next;
@@ -189,22 +218,27 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 				insert_at_end = 1;
 				break;
 			}
+
 			result++;
 		}
+
 		if(insert_at_end == 0) {
 			if(cur->previous != NULL) {
 				cur->previous->next = item;
 			} else {
 				l->head = item;
 			}
+
 			item->next = cur;
 			item->previous = cur->previous;
 			cur->previous = item;
+
 		} else {
 			l->tail = item;
 			cur->next = item;
 			item->previous = cur;
 			result = l->item_count;
+
 		}
 	} else if(where == LINKEDLIST_INSERT_AT_INDEXED) {
 		item->next = l->head;
@@ -212,36 +246,47 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 		l->head = item;
 		indexer_index(l->indexer, data, item);
 		result = 0;
+
 	}else if(where == LINKEDLIST_INSERT_AT_POSITION) {
 		linkedlist_item_internal_t* cur = l->head;
 		size_t index = 0;
 		uint8_t insert_at_end = 0;
+
 		while(index < position) {
 			cur = cur->next;
+
 			if(cur == NULL) {
 				insert_at_end = 1;
 				break;
 			}
+
 			index++;
 		}
+
 		if(insert_at_end == 1) {
 			item->previous = l->tail;
 			l->tail->next = item;
 			l->tail = item;
 			result = l->item_count;
+
 		} else {
 			item->next = cur;
 			item->previous = cur->previous;
 			cur->previous = item;
+
 			if(item->previous != NULL) {
 				item->previous->next = item;
 			} else {
 				l->head = item;
 			}
+
 			result = position;
 		}
 	}
+
 	l->item_count++;
+	lock_release(l->lock);
+
 	return result;
 }
 
@@ -249,96 +294,133 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
 	if(data == NULL && where == LINKEDLIST_DELETE_AT_FINDBY) {
 		return NULL;
 	}
+
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+
+	if(l == NULL) {
+		return NULL;
+	}
+
+	lock_acquire(l->lock);
+
 	if(l->item_count == 0) {
 		return NULL;
 	}
+
 	void* result = NULL;
+
 	if(where == LINKEDLIST_DELETE_AT_HEAD) {
 		linkedlist_item_internal_t* item = l->head;
 		l->head = l->head->next;
+
 		if(l->head == NULL) {
 			l->tail = NULL;
 		} else {
 			l->head->previous = NULL;
 		}
+
 		result = item->data;
 		memory_free_ext(l->heap, item);
 		l->item_count--;
+
 	} else if(where == LINKEDLIST_DELETE_AT_TAIL) {
 		linkedlist_item_internal_t* item = l->tail;
 		l->tail = l->tail->previous;
+
 		if(l->tail == NULL) {
 			l->head = NULL;
 		} else {
 			l->tail->next = NULL;
 		}
+
 		result = item->data;
 		memory_free_ext(l->heap, item);
 		l->item_count--;
+
 	} else if(where == LINKEDLIST_DELETE_AT_FINDBY) {
 		if(l->type == LINKEDLIST_TYPE_INDEXEDLIST) {
 			void* result;
+
 			if(indexer_search(l->indexer, data, &result, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL) != 0) {
 				return NULL;
 			}
+
 			if(result == NULL) {
 				return NULL;
 			}
+
 			linkedlist_item_internal_t* item = (linkedlist_item_internal_t*)result;
 			linkedlist_item_internal_t* previous = item->previous;
 			linkedlist_item_internal_t* next = item->next;
+
 			if(previous == NULL) {
 				l->head = next;
+
 				if(l->head != NULL) {
 					l->head->previous = NULL;
 				} else {
 					l->tail = NULL;
 				}
+
 			} else {
 				previous->next = next;
 			}
+
 			if(next == NULL) {
 				l->tail = previous;
+
 				if(l->tail != NULL) {
 					l->tail->next = NULL;
 				} else {
 					l->head = NULL;
 				}
+
 			} else {
 				next->previous = previous;
 			}
+
 			// TODO: check error.
 			indexer_delete(l->indexer, item);
 			result = item->data;
 			memory_free_ext(l->heap, item);
 			l->item_count--;
+
 		} else {
 			iterator_t* iter = linkedlist_iterator_create(l);
+
 			while(iter->end_of_iterator(iter) != 0) {
 				if(l->comparator(iter->get_item(iter), data) == 0) {
 					result = iter->delete_item(iter);
 					break;
 				}
+
 				iter = iter->next(iter);
 			}
+
 			iter->destroy(iter);
 		}
 	} else if(where == LINKEDLIST_DELETE_AT_POSITION) {
 		iterator_t* iter = linkedlist_iterator_create(l);
+
 		while(iter->end_of_iterator(iter) != 0) {
 			if(position == 0) {
 				result = iter->delete_item(iter);
 				break;
 			}
+
 			position--;
 			iter = iter->next(iter);
 		}
+
 		iter->destroy(iter);
+
 		if(position > 0) {
 			result = NULL;
 		}
 	}
+
+	lock_release(l->lock);
+
 	return result;
 }
 
@@ -388,6 +470,8 @@ iterator_t* linkedlist_iterator_create(linkedlist_t list) {
 
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
 
+	lock_acquire(l->lock);
+
 	iterator_t* iterator = memory_malloc_ext(l->heap, sizeof(iterator_t), 0x0);
 	linkedlist_iterator_internal_t* iter = memory_malloc_ext(l->heap, sizeof(linkedlist_iterator_internal_t), 0x0);
 
@@ -419,6 +503,7 @@ int8_t linkedlist_iterator_destroy(iterator_t* iterator) {
 
 	if(iter->list != NULL) {
 		heap = iter->list->heap;
+		lock_release(iter->list->lock);
 	}
 
 	memory_free_ext(heap, iter);
