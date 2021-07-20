@@ -49,4 +49,22 @@ void* task_get_current_task(){
 	return NULL;
 }
 
+void* lock_create_with_heap(memory_heap_t* heap){
+	UNUSED(heap);
+	return NULL;
+}
+
+int8_t lock_destroy(void* lock){
+	UNUSED(lock);
+	return 0;
+}
+
+void lock_acquire(void* lock){
+	UNUSED(lock);
+}
+
+void lock_release(void* lock){
+	UNUSED(lock);
+}
+
 #endif

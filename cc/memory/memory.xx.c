@@ -11,6 +11,7 @@
 #include <video.h>
 #if ___BITS == 64
 #include <cpu/task.h>
+#include <cpu/sync.h>
 #endif
 
 /*! default heap variable */
@@ -33,22 +34,36 @@ void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 #if ___BITS == 64
 		task_t* current_task = task_get_current_task();
 		if(current_task != NULL && current_task->heap != NULL) {
+			lock_acquire(current_task->heap->lock);
 			res = current_task->heap->malloc(current_task->heap, size, align);
+			lock_release(current_task->heap->lock);
 		}
 #endif
 
 		if(!res) {
+#if ___BITS == 64
+			lock_acquire(memory_heap_default->lock);
+#endif
 			res = memory_heap_default->malloc(memory_heap_default, size, align);
+#if ___BITS == 64
+			lock_release(memory_heap_default->lock);
+#endif
 		}
 
 	}else {
+#if ___BITS == 64
+		lock_acquire(heap->lock);
+#endif
 		res = heap->malloc(heap, size, align);
+#if ___BITS == 64
+		lock_release(heap->lock);
+#endif
 	}
 
 	if(res != NULL) {
 		if(align && ((size_t)res % align)) {
 			memory_free_ext(heap, res); // recover
-			return NULL;
+			res = NULL;
 		}
 	}
 
@@ -56,18 +71,35 @@ void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 }
 
 int8_t memory_free_ext(memory_heap_t* heap, void* address){
+	int8_t res = -1;
+
 	if(heap == NULL) {
 #if ___BITS == 64
 		task_t* current_task = task_get_current_task();
 		if(current_task != NULL && current_task->heap != NULL) {
-			return current_task->heap->free(current_task->heap, address);
+			lock_acquire(current_task->heap->lock);
+			res = current_task->heap->free(current_task->heap, address);
+			lock_release(current_task->heap->lock);
 		}
+
+		lock_acquire(memory_heap_default->lock);
 #endif
 
-		return memory_heap_default->free(memory_heap_default, address);
+		res = memory_heap_default->free(memory_heap_default, address);
+#if ___BITS == 64
+		lock_release(memory_heap_default->lock);
+#endif
 	}else {
-		return heap->free(heap, address);
+#if ___BITS == 64
+		lock_acquire(heap->lock);
+#endif
+		res = heap->free(heap, address);
+#if ___BITS == 64
+		lock_release(heap->lock);
+#endif
 	}
+
+	return res;
 }
 
 int8_t memory_memset(void* address, uint8_t value, size_t size){

@@ -6,6 +6,7 @@
 #include <systeminfo.h>
 #include <cpu.h>
 #include <video.h>
+#include <cpu/sync.h>
 
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
@@ -107,8 +108,28 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	memory_memclean(t_start, heap_end - heap_start);
 
 	memory_heap_t* heap = (memory_heap_t*)(heap_start);
-	size_t metadata_start = heap_start + sizeof(heapmetainfo_t);
+
+#if ___BITS == 64
+	size_t lock_start = heap_start + sizeof(memory_heap_t);
+	heap->lock = (lock_t)lock_start;
+	memory_heap_t** lock_heap = (memory_heap_t**)(lock_start); // black magic first element of lock is heap
+	*lock_heap = heap;
+	size_t metadata_start = lock_start + SYNC_LOCK_SIZE;
+#else
+	size_t metadata_start = heap_start + sizeof(memory_heap_t);
+#endif
+
+	printf("MEMORY: Info metadata_start %lx\n", metadata_start);
+
+	if(metadata_start % 0x20) { //align 0x20
+		metadata_start += 0x20 - (metadata_start % 0x20);
+	}
+
+	printf("MEMORY: Info heap_start %lx metadata_start %lx\n", heap_start, metadata_start);
+
+
 	heapmetainfo_t* metadata = (heapmetainfo_t*)(metadata_start);
+
 	heap->header = HEAP_HEADER;
 	heap->metadata = metadata;
 	heap->malloc = &memory_simple_malloc_ext;
@@ -118,7 +139,13 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		return heap;
 	}
 
-	heapinfo_t* hibottom = (heapinfo_t*)(metadata_start + sizeof(heapmetainfo_t));
+	size_t hibottom_start = metadata_start + sizeof(heapmetainfo_t);
+
+	if(hibottom_start % 0x20) {
+		hibottom_start += 0x20 - (hibottom_start % 0x20);
+	}
+
+	heapinfo_t* hibottom = (heapinfo_t*)(hibottom_start);
 	heapinfo_t* hitop = (heapinfo_t*)(heap_end - sizeof(heapinfo_t));
 
 

@@ -11,7 +11,7 @@
 #include <time/timer.h>
 #include <video.h>
 
-uint64_t task_id = 1;
+uint64_t task_id = 0;
 
 task_t* current_task = NULL;
 
@@ -70,11 +70,13 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
 	current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 	current_task->heap = heap;
-	current_task->task_id = 0;
+	current_task->task_id = TASK_KERNEL_TASK_ID;
 	current_task->state = TASK_STATE_CREATED;
 	current_task->entry_point = kmain64;
 	current_task->page_table = memory_paging_get_table();
-	current_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x0);
+	current_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+
+	task_id = current_task->task_id + 1;
 
 	uint32_t tss_limit = sizeof(tss_t) - 1;
 	DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
@@ -243,7 +245,7 @@ void task_switch_task() {
 		task_save_registers(current_task);
 		linkedlist_queue_push(task_queue, current_task);
 
-		if(current_task->task_id == 0) {
+		if(current_task->task_id == TASK_KERNEL_TASK_ID) {
 			task_cleanup();
 		}
 	}
@@ -258,6 +260,8 @@ void task_end_task() {
 	printf("TASK: Debug ending task 0x%li\n", current_task->task_id);
 
 	linkedlist_queue_push(task_cleaner_queue, current_task);
+
+	printf("TASK: task 0x%li added to cleaning queue\n", current_task->task_id);
 
 	current_task = NULL;
 
@@ -275,7 +279,7 @@ void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_poin
 	new_task->state = TASK_STATE_CREATED;
 	new_task->entry_point = entry_point;
 	new_task->page_table = memory_paging_get_table();
-	new_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x0);
+	new_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
 	new_task->stack = memory_malloc_ext(heap, sizeof(uint8_t) * stack_size, 0x0);
 	new_task->rflags = 0x202;
 
@@ -298,7 +302,9 @@ void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_poin
 }
 
 void task_yield() {
-	__asm__ __volatile__ ("int $0x80\n");
+	if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
+		__asm__ __volatile__ ("int $0x80\n");
+	}
 }
 
 void task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {

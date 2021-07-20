@@ -113,6 +113,9 @@ void test_task1() {
 	for(uint64_t i = 0; i < 0x10; i++) {
 		printf("hello world from task %li try: 0x%lx\n", task_get_id(), i);
 
+		uint8_t* tmp = memory_malloc(1);
+		memory_free(tmp);
+
 		for(uint64_t j = 0; j < 0x800; j++) {
 			printf("%li", task_get_id());
 			if((j % 0x200) == 0) {
