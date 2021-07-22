@@ -17,11 +17,13 @@
  * @brief key compression criteria for searching index.
  */
 typedef enum {
-	INDEXER_KEY_COMPARATOR_CRITERIA_LESS=-1,
+	INDEXER_KEY_COMPARATOR_CRITERIA_NULL,
+	INDEXER_KEY_COMPARATOR_CRITERIA_LESS,
 	INDEXER_KEY_COMPARATOR_CRITERIA_LESSOREQUAL,
-	INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL=0,
+	INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL,
 	INDEXER_KEY_COMPARATOR_CRITERIA_EQUALORGREATER,
-	INDEXER_KEY_COMPARATOR_CRITERIA_GREATER=1
+	INDEXER_KEY_COMPARATOR_CRITERIA_GREATER,
+	INDEXER_KEY_COMPARATOR_CRITERIA_BETWEEN
 } index_key_search_criteria_t;
 
 
@@ -33,7 +35,7 @@ typedef struct index {
 	index_key_comparator_f comparator;
 	int8_t (* insert)(struct index* idx, void* key, void* data);
 	int8_t (* delete)(struct index* idx, void* key, void** deleted_data);
-	size_t (* search)(struct index* idx, void* key, void** result, index_key_search_criteria_t criteria);
+	iterator_t*  (*search)(struct index* idx, void* ke1, void* key2, index_key_search_criteria_t criteria);
 	iterator_t* (*create_iterator)(struct index* idx);
 } index_t;
 
@@ -51,7 +53,7 @@ int8_t indexer_destroy(indexer_t idxer);
 int8_t indexer_register_index(indexer_t idxer, index_t* idx, indexer_key_creator_f key_creator);
 int8_t indexer_index(indexer_t idxer, void* key, void* data);
 void* indexer_delete(indexer_t idxer, void* key);
-int8_t indexer_search(indexer_t idxer, void* key, void** result, index_key_search_criteria_t criteria);
+iterator_t* indexer_search(indexer_t idxer, void* key1, void* key2, index_key_search_criteria_t criteria);
 
 
 #endif
