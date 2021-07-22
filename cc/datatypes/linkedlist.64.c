@@ -339,11 +339,15 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
 
 	} else if(where == LINKEDLIST_DELETE_AT_FINDBY) {
 		if(l->type == LINKEDLIST_TYPE_INDEXEDLIST) {
-			void* result;
+			void* result = NULL;
 
-			if(indexer_search(l->indexer, data, &result, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL) != 0) {
-				return NULL;
+			iterator_t* pk_iter = indexer_search(l->indexer, "PRIMARYKEY", data, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+			if(pk_iter->end_of_iterator(pk_iter) != 0) {
+				result = pk_iter->get_item(pk_iter);
 			}
+
+			pk_iter->destroy(pk_iter);
 
 			if(result == NULL) {
 				return NULL;

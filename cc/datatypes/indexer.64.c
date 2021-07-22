@@ -3,8 +3,10 @@
 #include <memory.h>
 #include <linkedlist.h>
 #include <iterator.h>
+#include <strings.h>
 
 typedef struct {
+	char_t* idx_name;
 	index_t* idx;
 	indexer_key_creator_f key_creator;
 }indexer_idx_kc_internal_t;
@@ -28,9 +30,10 @@ int8_t indexer_destroy(indexer_t idxer){
 	return 0;
 }
 
-int8_t indexer_register_index(indexer_t idxer, index_t* idx, indexer_key_creator_f key_creator){
+int8_t indexer_register_index(indexer_t idxer, char_t* idx_name, index_t* idx, indexer_key_creator_f key_creator){
 	indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 	indexer_idx_kc_internal_t* pair = memory_malloc_ext(l_idxer->heap, sizeof(indexer_idx_kc_internal_t), 0x0);
+	pair->idx_name = idx_name;
 	pair->idx = idx;
 	pair->key_creator = key_creator;
 	linkedlist_list_insert(l_idxer->indexes, pair);
@@ -72,21 +75,29 @@ void* indexer_delete(indexer_t idxer, void* key){
 	return data;
 }
 
-int8_t indexer_search(indexer_t idxer, void* key, void** result, index_key_search_criteria_t criteria){
+iterator_t* indexer_search(indexer_t idxer, char_t* idx_name, void* key1, void* key2, index_key_search_criteria_t criteria){
 	indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
-	int8_t res = -1;
+	indexer_idx_kc_internal_t* idx_pair = NULL;
+
 	iterator_t* iter = linkedlist_iterator_create(l_idxer->indexes);
 	while(iter->end_of_iterator(iter) != 0) {
 		indexer_idx_kc_internal_t* pair = iter->get_item(iter);
-		void* r_key = pair->key_creator(key);
-		if(r_key != NULL) {
-			if(pair->idx->search(pair->idx, r_key, result, criteria) == 0) {
-				res = 0;
-				break;
-			}
+
+		if(strcmp(pair->idx_name, idx_name) == 0) {
+			idx_pair = pair;
+			break;
 		}
+
 		iter = iter->next(iter);
 	}
 	iter->destroy(iter);
-	return res;
+
+	if(idx_pair) {
+		void* r_key1 = idx_pair->key_creator(key1);
+		void* r_key2 = idx_pair->key_creator(key2);
+
+		return idx_pair->idx->search(idx_pair->idx, r_key1, r_key2, criteria);
+	}
+
+	return NULL;
 }
