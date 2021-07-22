@@ -2,9 +2,9 @@
  * @file sync.h
  * @brief synchronization interface
  */
-#ifndef ___SYNC_H
+#ifndef ___CPU_SYNC_H
 /*! prevent duplicate header error macro */
-#define ___SYNC_H 0
+#define ___CPU_SYNC_H 0
 
 #if ___BITS == 64
 

@@ -2,9 +2,9 @@
  * @file interrupt.h
  * @brief defines interrupt functions at long mode
  */
-#ifndef ___INTERRUPT_H
+#ifndef ___CPU_INTERRUPT_H
 /*! prevent duplicate header error macro */
-#define ___INTERRUPT_H 0
+#define ___CPU_INTERRUPT_H 0
 
 #if ___BITS == 64 || DOXYGEN
 

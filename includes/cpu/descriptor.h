@@ -2,9 +2,9 @@
  * @file descriptor.h
  * @brief cpu segment descriptors for long mode.
  */
-#ifndef ___DESCRIPTOR_H
+#ifndef ___CPU_DESCRIPTOR_H
 /*! prevent duplicate header error macro */
-#define ___DESCRIPTOR_H 0
+#define ___CPU_DESCRIPTOR_H 0
 
 #include <types.h>
 

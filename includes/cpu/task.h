@@ -2,9 +2,9 @@
  * @file task.h
  * @brief cpu task definitons
  */
-#ifndef ___TASK_H
+#ifndef ___CPU_TASK_H
 /*! prevent duplicate header error macro */
-#define ___TASK_H 0
+#define ___CPU_TASK_H 0
 
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
