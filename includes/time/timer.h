@@ -2,9 +2,9 @@
  * @file timer.h
  * @brief time interface
  */
-#ifndef ___TIMER_H
+#ifndef ___TIME_TIMER_H
 /*! prevent duplicate header error macro */
-#define ___TIMER_H 0
+#define ___TIME_TIMER_H 0
 
 #include <types.h>
 #include <cpu/interrupt.h>
