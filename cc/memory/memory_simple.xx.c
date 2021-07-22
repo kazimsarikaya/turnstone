@@ -119,14 +119,9 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	size_t metadata_start = heap_start + sizeof(memory_heap_t);
 #endif
 
-	printf("MEMORY: Info metadata_start %lx\n", metadata_start);
-
 	if(metadata_start % 0x20) { //align 0x20
 		metadata_start += 0x20 - (metadata_start % 0x20);
 	}
-
-	printf("MEMORY: Info heap_start %lx metadata_start %lx\n", heap_start, metadata_start);
-
 
 	heapmetainfo_t* metadata = (heapmetainfo_t*)(metadata_start);
 
