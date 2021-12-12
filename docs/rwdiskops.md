@@ -11,10 +11,16 @@ BIOS can support extended disk read and write with the interrupt **0x13**. For c
 
 The interrupt uses a structure called as [DAP][DAP]. DAP address is located at **DS:SI**. And hard disk number is located at **dl**. If there is and error, **CF** is set, and **ah** contains error code.
 
+Reading disk at C kernel, we send interrupt like that
+
+\snippet{lineno} cc/diskio.16.c Read Disk Sector with BIOS
+
+
+
 ### Over PCI
 
 At long mode we cannot use BIOS interrupts. Hence we should scan [PCI][PCI] and find disk controller aka [HBA][HBA]. Then we send HBA commands to work with disks. PCI access in not implemented yet.
 
 [DAP]: @ref disk_bios_dap
 [PCI]: @ref pciops
-[HBA]: @ref hbaops 
+[HBA]: @ref hbaops
