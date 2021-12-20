@@ -136,10 +136,63 @@ char_t* uto_base(unumber_t number, number_t base);
  * @brief duplicate string at heap
  * @param[in] heap destination heap
  * @param[in] src source string
+ * @param[in] length of destination string
  * @return duplicate at heap
  */
-char_t* strdup_at_heap(memory_heap_t* heap, char_t* src);
+char_t* strndup_at_heap(memory_heap_t* heap, char_t* src, size_t n);
+
+/*! string duplicate at heap */
+#define strdup_at_heap(heap, src) strndup_at_heap(heap, src, strlen(src))
 
 /*! string duplicate at default heap */
-#define strdup(src) strdup_at_heap(NULL, src);
+#define strdup(src) strndup_at_heap(NULL, src, strlen(src))
+
+/*! string duplicate with length at default heap */
+#define strndup(src, n) strndup_at_heap(NULL, src, n)
+
+/**
+ * @brief splits string into array
+ * @param[in] str string to tokinize
+ * @param[in] token split char
+ * @param[out] lengths array of each splitted part's length
+ * @param[out] count splitted array length
+ * @return array of starts of each part
+ */
+char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int64_t* count);
+
+/**
+ * @brief converts string to upper case
+ * @param[in] str string to upper case
+ * @return input string
+ */
+char_t* strupper(char_t* str);
+
+/**
+ * @brief duplicates string and converts it to upper case
+ * @param[in] str string to upper case
+ * @return new uppercased string
+ */
+char_t* struppercopy(char_t* str);
+
+/**
+ * @brief converts string to lower case
+ * @param[in] str string to lower case
+ * @return input string
+ */
+char_t* strlower(char_t* str);
+
+/**
+ * @brief duplicates string and converts it to lower case
+ * @param[in] str string to lower case
+ * @return new lowercased string
+ */
+char_t* strlowercopy(char_t* str);
+
+char_t* strtrim_right(char_t* str);
+
+int8_t str_is_upper(char_t* str);
+
+int64_t wchar_size(const wchar_t* str);
+char_t* wchar_to_char(wchar_t* src);
+wchar_t* char_to_wchar(char_t* str);
 #endif

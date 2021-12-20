@@ -1,9 +1,9 @@
 HOSTOS=$(shell uname -s)
 
 CC = gcc
-CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
+CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu99 \
 	-Os -nostdlib -ffreestanding -c -m64 \
-	-D___TESTMODE=1 -g
+	-D___TESTMODE=1 -g -Wno-address-of-packed-member
 
 ifeq ($(HOSTOS),Darwin)
 LD = ld
@@ -29,7 +29,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 all: $(OUTPUTS)
 
 gendirs:
-	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p 
+	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
 
 $(UTILOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<

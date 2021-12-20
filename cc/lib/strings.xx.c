@@ -162,12 +162,12 @@ char_t* uto_base(unumber_t number, number_t base){
 	return ret;
 }
 
-char_t* strdup_at_heap(memory_heap_t* heap, char_t* src){
+char_t* strndup_at_heap(memory_heap_t* heap, char_t* src, size_t l){
 	if(src == NULL) {
 		return NULL;
 	}
 
-	size_t l = strlen(src);
+	l = MIN(l, strlen(src));
 
 	char_t* res = memory_malloc_ext(heap, sizeof(char_t) * l + 1, 0x0);
 
@@ -242,6 +242,162 @@ int8_t strncmp(char_t* string1, char_t* string2, size_t n) {
 	}
 
 	return strcmp(string1, string2);
+}
+
+char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int64_t* count) {
+	char_t* tmp = (char_t*)str;
+
+	*count = 0;
+
+	while(*tmp != NULL) {
+		if(*tmp == token) {
+			(*count)++;
+		}
+
+		tmp++;
+	}
+
+	(*count)++;
+
+	*lengths = memory_malloc(sizeof(int64_t) * (*count));
+	char_t** result = memory_malloc(sizeof(char_t*) * (*count));
+
+	char_t** result_start = result;
+
+	tmp = (char_t*)str;
+
+	int64_t* tmp_lengths = *lengths;
+	int64_t len = 0;
+
+	*result = tmp;
+
+	while(*tmp != NULL) {
+		if(*tmp == token) {
+			tmp++;
+
+			if(*tmp == NULL) {
+				break;
+			}
+
+			result++;
+			*result = tmp;
+
+			*tmp_lengths = len;
+			len = 0;
+			tmp_lengths++;
+
+		} else {
+			len++;
+			tmp++;
+		}
+
+	}
+
+	*tmp_lengths = len;
+
+
+	return result_start;
+}
+
+
+char_t* strupper(char_t* str) {
+	int64_t i = 0;
+
+	while(str[i] != NULL) {
+		if(str[i] >= 'a' && str[i] <= 'z') {
+			str[i] -= 0x20;
+		}
+
+		i++;
+	}
+
+	return str;
+}
+
+char_t* struppercopy(char_t* str) {
+	return strupper(strdup(str));
+}
+
+char_t* strlower(char_t* str) {
+	int64_t i = 0;
+
+	while(str[i] != NULL) {
+		if(str[i] >= 'A' && str[i] <= 'Z') {
+			str[i] += 0x20;
+		}
+
+		i++;
+	}
+
+	return str;
+}
+
+char_t* strlowercopy(char_t* str) {
+	return strlower(strdup(str));
+}
+
+int64_t wchar_size(const wchar_t* str){
+	int64_t res = 0;
+	int64_t i = 0;
+
+	while(str[i++] != 0) {
+		res++;
+	}
+
+	return res;
+}
+
+char_t* wchar_to_char(wchar_t* src){
+	int64_t len = wchar_size(src);
+	char_t* dst = memory_malloc(sizeof(char_t) * len + 1);
+
+	for(int64_t i = 0; i < len; i++) {
+		dst[i] = (char_t)(src[i] & 0xFF);
+	}
+
+	return dst;
+}
+
+wchar_t* char_to_wchar(char_t* str){
+	int64_t len = strlen(str);
+	wchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+
+	for(int64_t i = 0; i < len; i++) {
+		res[i] = str[i];
+	}
+
+	return res;
+}
+
+char_t* strtrim_right(char_t* str) {
+
+	for(int64_t i = strlen(str) - 1; i >= 0; i--) {
+		if(str[i] == '\n' || str[i] == '\r' || str[i] == '\t' || str[i] == ' ') {
+			str[i] = NULL;
+		} else {
+			break;
+		}
+	}
+
+	return str;
+}
+
+int8_t str_is_upper(char_t* str) {
+	if(str == NULL) {
+		return 0;
+	}
+
+	int64_t i = 0;
+
+	while(str[i] != NULL) {
+		if(str[i] >= 'a' && str[i] <= 'z') {
+			return -1;
+		}
+
+		i++;
+	}
+
+	return 0;
 }
 
 #endif

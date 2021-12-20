@@ -43,15 +43,9 @@ CCGENDIR = cc-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 
-DISK      = $(OBJDIR)/kernel
-TESTDISK      = $(OBJDIR)/kernel-test
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
 TESTQEMUDISK  = $(OBJDIR)/qemu-test-hda
-
-AS16SRCS = $(shell find $(ASSRCDIR) -type f -name \*16.S)
-CC16SRCS = $(shell find $(CCSRCDIR) -type f -name \*.16.c)
-CC16TESTSRCS = $(shell find $(CCSRCDIR) -type f -name \*.16.test.c)
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.S)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
@@ -71,12 +65,6 @@ ASOBJS = $(patsubst $(ASSRCDIR)/%.s,$(ASOBJDIR)/%.o,$(ASSRCS))
 
 ASTESTOBJS = $(patsubst $(ASSRCDIR)/%.s,$(ASOBJDIR)/%.test.o,$(ASSRCS))
 
-CC16OBJS = $(patsubst $(CCSRCDIR)/%.16.c,$(CCOBJDIR)/%.16.o,$(CC16SRCS))
-CC16OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_16.o,$(CCXXSRCS))
-
-CC16TESTOBJS = $(patsubst $(CCSRCDIR)/%.16.test.c,$(CCOBJDIR)/%.16.test.o,$(CC16TESTSRCS))
-CC16TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_16.test.o,$(CCXXTESTSRCS))
-
 CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
 CC64OBJS += $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
@@ -90,17 +78,14 @@ DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 OBJS = $(ASOBJS) $(CC16OBJS) $(CC64OBJS)
 TESTOBJS= $(ASTESTOBJS) $(CC16TESTOBJS) $(CC64TESTOBJS)
 
-PROGS = $(OBJDIR)/bootsect16.bin \
-	$(OBJDIR)/slottable.bin \
-	$(OBJDIR)/stage2.bin \
-	$(OBJDIR)/stage3.bin
+EFIDISKTOOL = $(OBJDIR)/efi_disk.bin
+EFIBOOTFILE = $(OBJDIR)/BOOTX64.EFI
 
-TESTPROGS = $(OBJDIR)/bootsect16.bin \
-	$(OBJDIR)/slottable.bin \
-	$(OBJDIR)/stage2.test.bin \
-	$(OBJDIR)/stage3.test.bin
+PROGS = $(OBJDIR)/stage3.bin
 
-SUBDIRS := tests utils
+TESTPROGS = $(OBJDIR)/stage3.test.bin
+
+SUBDIRS := efi tests utils
 
 .PHONY: all clean depend $(SUBDIRS)
 .PRECIOUS:
@@ -117,6 +102,7 @@ test: qemu-test
 
 gendirs:
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
+	make -C efi gendirs
 	make -C tests gendirs
 	make -C utils gendirs
 	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
@@ -128,17 +114,13 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 $(VBBOXDISK): $(DISK)
 	dd bs=512 conv=notrunc if=$< of=$(VBBOXDISK)
 
-$(QEMUDISK): $(DISK)
-	rm -fr $(QEMUDISK)
-	dd if=/dev/zero of=$(QEMUDISK) bs=1 count=0 seek=1073741824
-	dd bs=512 conv=notrunc if=$< of=$(QEMUDISK)
+$(QEMUDISK): $(MKDIRSDONE) $(GENCCSRCS) $(PROGS) efi utils
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
 
 $(TESTQEMUDISK): $(TESTDISK)
-	rm -fr $(TESTQEMUDISK)
-	dd if=/dev/zero of=$(TESTQEMUDISK) bs=1 count=0 seek=1073741824
-	dd bs=512 conv=notrunc if=$< of=$(TESTQEMUDISK)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin
 
-$(DISK): $(MKDIRSDONE) $(GENCCSRCS) $(PROGS) utils
+$(DISK):
 	cat $(PROGS) > $@
 	$(OBJDIR)/formatslots.bin $@ $(PROGS)
 
@@ -150,29 +132,11 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(OBJDIR)/bootsect16.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/bootsect.ld $(ASOBJDIR)/bootsect16.o
-	$(OBJDIR)/linker.bin --trim --boot-flag -o $@ -M $@.map -T $(filter-out $<,$^)
-
-$(OBJDIR)/slottable.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/slottableprotect.ld $(ASOBJDIR)/slottableprotect16.o
-	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
-
-$(OBJDIR)/stage2.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.o $(CC16OBJS)
-	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
-
 $(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
 	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
 
-$(OBJDIR)/stage2.test.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage2.ld $(ASOBJDIR)/kentry16.test.o $(CC16OBJS) $(CC16TESTOBJS)
-	$(OBJDIR)/linker.bin --test-section --trim -o $@ -M $@.map -T $(filter-out $<,$^)
-
 $(OBJDIR)/stage3.test.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.test.o $(CC64OBJS) $(CC64TESTOBJS)
 	$(OBJDIR)/linker.bin --test-section --trim -o $@ -M $@.map -T $(filter-out $<,$^)
-
-$(CCOBJDIR)/%.16.o: $(CCSRCDIR)/%.16.c
-	$(CC16) $(CC16FLAGS) -o $@ $<
-
-$(CCOBJDIR)/%.xx_16.o: $(CCSRCDIR)/%.xx.c
-	$(CC16) $(CC16FLAGS) -o $@ $<
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
@@ -180,26 +144,14 @@ $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 $(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
-$(CCOBJDIR)/%.16.test.o: $(CCSRCDIR)/%.16.test.c
-	$(CC16) $(CC16FLAGS) -o $@ $<
-
-$(CCOBJDIR)/%.xx_16.test.o: $(CCSRCDIR)/%.xx.test.c
-	$(CC16) $(CC16FLAGS) -o $@ $<
-
 $(CCOBJDIR)/%.64.test.o: $(CCSRCDIR)/%.64.test.c
 	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $<
 
 $(CCOBJDIR)/%.xx_64.test.o: $(CCSRCDIR)/%.xx.test.c
 	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $<
 
-$(ASOBJDIR)/%16.o: $(ASSRCDIR)/%16.S
-	$(CC16) $(CC16FLAGS) -o $@ $^
-
 $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.S
 	$(CC64) $(CC64FLAGS) -o $@ $^
-
-$(ASOBJDIR)/%16.test.o: $(ASSRCDIR)/%16.S
-	$(CC16) $(CC16FLAGS) $(CXXTESTFLAGS) -o $@ $^
 
 $(ASOBJDIR)/%64.test.o: $(ASSRCDIR)/%64.S
 	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $^
@@ -235,11 +187,7 @@ cleandirs:
 
 print-%: ; @echo $* = $($*)
 
-depend: .depend16 .depend64
-
-.depend16: $(CC16SRCS) $(CCXXSRCS) $(CC16TESTSRCS)
-	scripts/create-cc-deps.sh "$(CC16) $(CC16FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend16
-	sed -i '' 's/xx.o:/xx_16.o:/g' .depend16
+depend: .depend64
 
 .depend64: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
 	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64

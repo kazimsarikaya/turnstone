@@ -20,6 +20,16 @@ size_t video_printf(char_t* fmt, va_list args) {
 	return printf(fmt, args);
 }
 
+void task_switch_task(){
+}
+
+void cpu_sti(){
+
+}
+
+void  apic_eoi(){
+}
+
 uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
 system_info_t* SYSTEM_INFO = NULL;
