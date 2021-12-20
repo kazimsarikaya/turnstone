@@ -23,8 +23,12 @@ asm (".code16gcc");
 #define uchar_t unsigned char
 /*! unsigned byte type */
 #define uint8_t unsigned char
+/*! boolean type */
+typedef uint8_t boolean_t;
 /*! signed word (two bytes) type */
 #define int16_t short
+/*! wide char (two bytes) type */
+#define wchar_t unsigned short
 /*! unsigned word (two bytes) type */
 #define uint16_t unsigned short
 /*! signed double word (four bytes) type */
