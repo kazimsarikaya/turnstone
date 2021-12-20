@@ -92,7 +92,7 @@ int32_t main(int32_t argc, char** argv) {
 	setup_ram();
 	dump_ram("tmp/mem-free.dump");
 
-	if (argc < 3) {
+	if (argc < 4) {
 		printf("Error: not enough arguments\n");
 		return -1;
 	}
@@ -109,11 +109,23 @@ int32_t main(int32_t argc, char** argv) {
 	int item = 1;
 	char_t* disk_name = argv[item++];
 	char_t* efi_boot_file_name = argv[item++];
+	char_t* kernel_name = argv[item++];
+
 
 
 	disk_t* d = NULL;
 
 	if(1) {
+		FILE* fp_kernel = fopen(kernel_name, "r");
+		fseek(fp_kernel, 0, SEEK_END);
+		int64_t kernel_size = ftell(fp_kernel);
+		fseek(fp_kernel, 0, SEEK_SET);
+
+		int64_t kernel_sec_count = kernel_size / 512;
+		if(kernel_size % 512) {
+			kernel_sec_count++;
+		}
+
 		d = disk_file_open(disk_name, 1 << 30);
 
 
@@ -130,10 +142,19 @@ int32_t main(int32_t argc, char** argv) {
 
 
 		efi_guid_t kernel_guid = {0x1DF53B77, 0xCDFC, 0x4903, {0x9B, 0xE6, 0x08, 0x9C, 0xE0, 0x25, 0x7A, 0x09}};
-		part_ctx = gpt_create_partition_context(&kernel_guid, "kernel", 206848, 411647);
+		part_ctx = gpt_create_partition_context(&kernel_guid, "kernel", 206848, 206848 + kernel_sec_count - 1);
 		d->add_partition(d, part_ctx);
 		memory_free(part_ctx->internal_context);
 		memory_free(part_ctx);
+
+		uint8_t* buf = memory_malloc(kernel_size);
+		fread(buf, 1, kernel_size, fp_kernel);
+
+		d->write(d, 206848, kernel_size / 512, buf);
+
+		memory_free(buf);
+		fclose(fp_kernel);
+
 	} else {
 		d = disk_file_open(disk_name, -1);
 		d = gpt_get_or_create_gpt_disk(d);
@@ -142,6 +163,7 @@ int32_t main(int32_t argc, char** argv) {
 	if(d == NULL) {
 		printf("disk open failed\n");
 	}
+
 
 
 	int res = -1;
