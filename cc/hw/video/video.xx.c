@@ -22,8 +22,8 @@ uint16_t cursor_text_y = 0; ///< cursor porsition for row
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column
 uint16_t cursor_graphics_y = 0; ///< cursor porsition for row
 
-extern uint8_t _binary_output_font_ps_start;
-extern uint8_t _binary_output_font_ps_end;
+extern uint8_t font_data_start;
+extern uint8_t font_data_end;
 
 void put_char(char_t c, int32_t cx, int32_t cy, uint32_t fg, uint32_t bg);
 
@@ -61,12 +61,12 @@ void video_init() {
 	VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
 	VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;
 
-	video_psf2_font_t* font2 = (video_psf2_font_t*)&_binary_output_font_ps_start;
+	video_psf2_font_t* font2 = (video_psf2_font_t*)&font_data_start;
 
 	if(font2) {
 		if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
 			printf("font v2 ok\n");
-			FONT_ADDRESS = (uint8_t*)&_binary_output_font_ps_start + font2->header_size;
+			FONT_ADDRESS = (uint8_t*)&font_data_start + font2->header_size;
 			FONT_WIDTH = font2->width;
 			FONT_HEIGHT = font2->height;
 			FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
@@ -77,11 +77,11 @@ void video_init() {
 			GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
 		} else {
 
-			video_psf1_font_t* font1 = (video_psf1_font_t*)&_binary_output_font_ps_start;
+			video_psf1_font_t* font1 = (video_psf1_font_t*)&font_data_start;
 
 			if(font1->magic == VIDEO_PSF1_FONT_MAGIC) {
 				printf("font v1 ok\n");
-				uint64_t addr = (uint64_t)&_binary_output_font_ps_start;
+				uint64_t addr = (uint64_t)&font_data_start;
 				addr += sizeof(video_psf1_font_t);
 				FONT_ADDRESS = (uint8_t*)addr;
 				FONT_WIDTH = 10;
