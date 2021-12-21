@@ -25,10 +25,14 @@ int8_t kmain64_init();
 void move_kernel(size_t src, size_t dst);
 
 int8_t kmain64(size_t entry_point) {
+	video_init();
 	video_clear_screen();
 
 	printf("Initializing stage 3\n");
 	printf("Entry point of kernel is 0x%lx\n", entry_point);
+	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
+	printf("Frame buffer at 0x%p and size 0x%lx\n", SYSTEM_INFO->frame_buffer->base_address, SYSTEM_INFO->frame_buffer->buffer_size);
+	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
 	memory_heap_t* heap = memory_create_heap_simple(0, 0);
 

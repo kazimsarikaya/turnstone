@@ -36,6 +36,29 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 			printf("heap creation failed\n");
 		}
 
+
+		video_frame_buffer_t* vfb = NULL;
+
+		efi_guid_t gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+		efi_gop_t* gop;
+		res = BS->locate_protocol(&gop_guid, NULL, (efi_handle_t*)&gop);
+
+		if(res == EFI_SUCCESS) {
+			vfb = memory_malloc(sizeof(video_frame_buffer_t));
+
+			vfb->base_address = (void*)gop->mode->frame_buffer_base;
+			vfb->buffer_size = gop->mode->frame_buffer_size;
+			vfb->width = gop->mode->information->horizontal_resolution;
+			vfb->height = gop->mode->information->vertical_resolution;
+			vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
+
+			printf("frame buffer info %ix%i pps %i at 0x%p size 0x%lx\n", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->base_address, vfb->buffer_size);
+			printf("vfb address 0x%p\n", vfb);
+
+		} else {
+			printf("gop handle failed %i\n", res);
+		}
+
 		efi_guid_t bio_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
 		efi_handle_t handles[128];
 		uint64_t handle_size = sizeof(handles);
@@ -89,7 +112,6 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 					} // end of checking disk existence
 
-					printf("tesssstttt %i\n", blk_dev_cnt);
 				} // end of iter over all disks
 
 				if(sys_disk_idx != -1) {
@@ -146,9 +168,10 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 										sysinfo->mmap_size = map_size;
 										sysinfo->mmap_descriptor_size = descriptor_size;
 										sysinfo->mmap_descriptor_version = descriptor_version;
+										sysinfo->frame_buffer = vfb;
 
 
-										printf("calling kernel\n");
+										printf("calling kernel with sysinfo @ 0x%p\n", sysinfo);
 
 										BS->exit_boot_services(image, map_key);
 

@@ -12,7 +12,7 @@ do
   for _s in $_sources;
   do
     _s=$(echo $_s|tr -d ' ')
-    for _f in $(find ../cc -name "$_s*.c");
+    for _f in $(find ../cc -name "$_s*.c"|grep -v video);
     do
       _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
       DEPEND_OBJS="$DEPEND_OBJS\n$_f"

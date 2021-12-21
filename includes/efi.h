@@ -477,4 +477,62 @@ typedef struct {
 	efi_block_io_t* bio;
 } block_file_t;
 
+
+#define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID { 0x9042a9de, 0x23dc, 0x4a38, {0x96, 0xfb, 0x7a, 0xde, 0xd0, 0x80, 0x51, 0x6a } }
+
+typedef enum {
+	EFI_PIXEL_RED_GREEN_BLUE_RESERVED_8BIT_PER_COLOR,
+	EFI_PIXEL_BLUE_GREEN_RED_RESERVED_8BIT_PER_COLOR,
+	EFI_PIXEL_BIT_MASK,
+	EFI_PIXEL_BLT_ONLY,
+	EFI_PIXEL_FORMAT_MAX
+} efi_gop_pixel_format_t;
+
+typedef enum {
+	EFI_BLT_VIDEO_FILL,
+	EFI_BLT_VIDEO_TO_BLT_BUFFER,
+	EFI_BLT_BUFFER_TO_VIDEO,
+	EFI_BLT_VIDEO_TO_VIDEO,
+	EFI_GRAPHICS_OUTPUT_BLT_OPERATION_MAX
+} efi_gop_blt_operation_t;
+
+typedef struct {
+	uint32_t red_mask;
+	uint32_t green_mask;
+	uint32_t blue_mask;
+	uint32_t reserved_mask;
+} efi_gop_pixel_bitmask_t;
+
+typedef struct {
+	uint32_t version;
+	uint32_t horizontal_resolution;
+	uint32_t vertical_resolution;
+	efi_gop_pixel_format_t pixel_format;
+	efi_gop_pixel_bitmask_t pixel_information;
+	uint32_t pixels_per_scanline;
+} efi_gop_mode_info_t;
+
+typedef struct {
+	uint32_t max_mode;
+	uint32_t mode;
+	efi_gop_mode_info_t* information;
+	uint64_t size_of_info;
+	efi_physical_address_t frame_buffer_base;
+	uint64_t frame_buffer_size;
+} efi_gop_mode_t;
+
+typedef efi_status_t (EFIAPI* efi_gop_query_mode_t)(void* self, uint32_t mode_number, uint64_t* size_of_info,
+                                                    efi_gop_mode_info_t** info);
+typedef efi_status_t (EFIAPI* efi_gop_set_mode_t)(void* self, uint32_t mode_number);
+typedef efi_status_t (EFIAPI* efi_gop_blt_t)(void* self, uint32_t* blt_buffer, efi_gop_blt_operation_t blt_operation,
+                                             uint64_t source_x, uint64_t source_y, uint64_t destination_x, uint64_t destionation_y, uint64_t width, uint64_t height, uint64_t delta);
+
+typedef struct {
+	efi_gop_query_mode_t query_mode;
+	efi_gop_set_mode_t set_mode;
+	efi_gop_blt_t blt;
+	efi_gop_mode_t* mode;
+} efi_gop_t;
+
+
 #endif

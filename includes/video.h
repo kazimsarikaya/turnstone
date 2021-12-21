@@ -11,6 +11,38 @@
 /*! video buffer len rowsxcolumns at text mode*/
 #define  VIDEO_BUF_LEN 25 * 80
 
+#define VIDEO_PSF2_FONT_MAGIC 0x864ab572
+#define VIDEO_PSF1_FONT_MAGIC 0x0436
+
+typedef struct {
+	uint32_t magic;           /* magic bytes to identify PSF */
+	uint32_t version;         /* zero */
+	uint32_t header_size;      /* offset of bitmaps in file, 32 */
+	uint32_t flags;           /* 0 if there's no unicode table */
+	int32_t glyph_count;        /* number of glyphs */
+	int32_t bytes_per_glyph;   /* size of each glyph */
+	int32_t height;          /* height in pixels */
+	int32_t width;           /* width in pixels */
+} video_psf2_font_t;
+
+typedef struct {
+	uint16_t magic;
+	uint8_t mode;
+	uint8_t bytes_per_glyph;
+}video_psf1_font_t;
+
+typedef struct {
+	void* base_address;
+	uint64_t buffer_size;
+	uint32_t width;
+	uint32_t height;
+	uint32_t pixels_per_scanline;
+} video_frame_buffer_t;
+
+typedef uint32_t pixel_t;
+
+void video_init();
+
 /**
  * @brief writes string to a spacial location
  * @param[in] string string will be writen

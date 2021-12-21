@@ -9,6 +9,7 @@
 #include <types.h>
 #include <memory.h>
 #include <efi.h>
+#include <video.h>
 
 typedef enum {
 	SYSTEM_INFO_BOOT_TYPE_DISK,
@@ -25,6 +26,7 @@ typedef struct system_info {
 	uint64_t mmap_descriptor_size;
 	uint32_t mmap_descriptor_version;
 	system_info_boot_type_t boot_type;
+	video_frame_buffer_t* frame_buffer;
 } system_info_t; ///< struct short hand
 
 /*! static location of system information */
