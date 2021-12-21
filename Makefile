@@ -166,8 +166,8 @@ $(SUBDIRS):
 $(OBJDIR)/linker.bin: utils ;
 
 $(FONTOBJ):
-	curl -sL -o $(OBJDIR)/font.ps $(FONTSRC)
-	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary $(OBJDIR)/font.ps $@
+	curl -sL -o $(OBJDIR)/font.psf $(FONTSRC)
+	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.data.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size $(OBJDIR)/font.psf $@
 
 
 
