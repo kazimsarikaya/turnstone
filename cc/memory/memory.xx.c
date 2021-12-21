@@ -5,7 +5,6 @@
 #include <types.h>
 #include <memory.h>
 #include <memory/paging.h>
-#include <memory/mmap.h>
 #include <cpu.h>
 #include <systeminfo.h>
 #include <video.h>
@@ -713,41 +712,3 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 }
 
 #endif
-
-size_t memory_detect_map(memory_map_t** mmap) {
-	*mmap = memory_malloc(sizeof(memory_map_t) * MEMORY_MMAP_MAX_ENTRY_COUNT);
-	memory_map_t* mmap_a = *mmap;
-	regext_t contID = 0, signature, bytes;
-	size_t entries = 0;
-	int16_t err;
-
-	do {
-		__asm__ __volatile__ ("int $0x15"
-		                      : "=@ccc" (err), "=a" (signature), "=c" (bytes), "=b" (contID)
-		                      : "a" (0xE820), "b" (contID), "c" (24), "d" (0x534D4150), "D" (mmap_a));
-
-		if(err) {
-			printf("MMAP: Info E820 not supported\n");
-			break;
-		}
-
-		if(signature != 0x534D4150) {
-			return -1;
-		}
-
-		mmap_a++;
-		entries++;
-
-	} while(contID != 0 && entries < MEMORY_MMAP_MAX_ENTRY_COUNT);
-
-	if(err) {
-		return -1; // TODO: implement other methods
-	}
-
-	memory_map_t* mmap_r = memory_malloc(sizeof(memory_map_t) * entries);
-	memory_memcopy(*mmap, mmap_r, sizeof(memory_map_t) * entries);
-	memory_free(*mmap);
-	*mmap = mmap_r;
-
-	return entries;
-}

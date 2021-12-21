@@ -30,7 +30,7 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
 
 			*target = dst_program_addr + relocs[i].addend;
 		} else {
-			printf("LINKER: Fatal unknown relocation type %i", relocs[i].type);
+			printf("LINKER: Fatal unknown relocation type %i\n", relocs[i].type);
 			return -1;
 		}
 	}

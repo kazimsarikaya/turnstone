@@ -3,7 +3,6 @@
 #include <video.h>
 #include <memory.h>
 #include <memory/paging.h>
-#include <memory/mmap.h>
 #include <systeminfo.h>
 #include <strings.h>
 #include <cpu/interrupt.h>
@@ -35,6 +34,7 @@ int8_t kmain64(size_t entry_point) {
 
 	if(heap == NULL) {
 		printf("KERNEL: Error at creating heap\n");
+		while(1);
 		return -1;
 	}
 
@@ -134,41 +134,13 @@ int8_t kmain64_init(memory_heap_t* heap) {
 
 	printf("memory map table\n");
 	printf("base\t\tlength\t\ttype\n");
-	for(size_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
+	uint64_t mmap_ent_cnt = SYSTEM_INFO->mmap_size / SYSTEM_INFO->mmap_descriptor_size;
+	for(size_t i = 0; i < mmap_ent_cnt; i++) {
 		printf("0x%08lx\t0x%08lx\t0x%04lx\t0x%x\n",
-		       SYSTEM_INFO->mmap[i].base,
-		       SYSTEM_INFO->mmap[i].length,
+		       SYSTEM_INFO->mmap[i].physical_start,
+		       SYSTEM_INFO->mmap[i].page_count * 4096,
 		       SYSTEM_INFO->mmap[i].type,
-		       SYSTEM_INFO->mmap[i].acpi);
-
-		if(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_RESERVED || SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_ACPI) {
-			uint64_t base = SYSTEM_INFO->mmap[i].base;
-			uint64_t len = SYSTEM_INFO->mmap[i].length;
-
-			printf("MMAP: adding page for address 0x%lx with length 0x%lx\n", base, len);
-
-			memory_paging_page_type_t pt;
-			uint64_t pl;
-
-			while(len > 0) {
-				pt = MEMORY_PAGING_PAGE_TYPE_4K;
-				pl = MEMORY_PAGING_PAGE_LENGTH_4K;
-
-				if(len >= MEMORY_PAGING_PAGE_LENGTH_2M) {
-					pt = MEMORY_PAGING_PAGE_TYPE_2M;
-					pl = MEMORY_PAGING_PAGE_LENGTH_2M;
-				}
-
-				memory_paging_add_page(base, base, pt);
-
-				if(pl > len) {
-					break;
-				}
-
-				base += pl;
-				len -= pl;
-			}
-		}
+		       SYSTEM_INFO->mmap[i].attribute);
 	}
 
 	if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
