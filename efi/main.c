@@ -44,6 +44,19 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 		res = BS->locate_protocol(&gop_guid, NULL, (efi_handle_t*)&gop);
 
 		if(res == EFI_SUCCESS) {
+			uint64_t next_mode = gop->mode->mode;
+			for(int64_t i = 0; i < gop->mode->max_mode; i++) {
+				uint64_t gop_mode_size = 0;
+				efi_gop_mode_info_t* gop_mi = NULL;
+				if(gop->query_mode(gop, i, &gop_mode_size, &gop_mi) == EFI_SUCCESS && gop_mi->horizontal_resolution == 1280 && gop_mi->vertical_resolution == 1024) {
+					next_mode = i;
+					break;
+				}
+			}
+
+			gop->set_mode(gop, next_mode);
+
+
 			vfb = memory_malloc(sizeof(video_frame_buffer_t));
 
 			vfb->base_address = (void*)gop->mode->frame_buffer_base;
@@ -138,7 +151,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 						if(sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &kernel_data) == 0) {
 							printf("kernel loaded at 0x%p\n", kernel_data);
 
-							int64_t kernel_page_count = kernel_size / 4096;
+							int64_t kernel_page_count = kernel_size / 4096 + 0x120; // adding extra pages for stack and heap
 							if(kernel_size % 4096) {
 								kernel_page_count++;
 							}

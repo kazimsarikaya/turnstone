@@ -38,13 +38,16 @@ int8_t kmain64(size_t entry_point) {
 
 	if(heap == NULL) {
 		printf("KERNEL: Error at creating heap\n");
-		while(1);
 		return -1;
 	}
 
 	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
 
 	memory_set_default_heap(heap);
+
+	if(heap) {
+		while(1);
+	}
 
 	printf("KERNEL: Initializing interrupts\n");
 
