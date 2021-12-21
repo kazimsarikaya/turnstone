@@ -5,10 +5,12 @@ MAKE = make
 ifeq ($(HOSTOS),Darwin)
 
 CC64 = x86_64-elf-gcc
+OBJCOPY = x86_64-elf-objcopy
 
 else
 
 CC64 = gcc
+OBJCOPY = objcopy
 
 endif
 
@@ -69,7 +71,10 @@ CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(
 DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 
-OBJS = $(ASOBJS) $(CC64OBJS)
+FONTSRC = http://www.zap.org.au/projects/console-fonts-lucida/src/lucida-10x16.psf
+FONTOBJ = $(OBJDIR)/font.o
+
+OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
 EFIDISKTOOL = $(OBJDIR)/efi_disk.bin
@@ -118,7 +123,7 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS)
+$(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.o $(CC64OBJS) $(FONTOBJ)
 	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
 
 $(OBJDIR)/stage3.test.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(ASOBJDIR)/kentry64.test.o $(CC64OBJS) $(CC64TESTOBJS)
@@ -159,6 +164,11 @@ $(SUBDIRS):
 	$(MAKE) -C $@
 
 $(OBJDIR)/linker.bin: utils ;
+
+$(FONTOBJ):
+	curl -sL -o $(OBJDIR)/font.ps $(FONTSRC)
+	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary $(OBJDIR)/font.ps $@
+
 
 
 clean:

@@ -10,25 +10,174 @@
 #include <ports.h>
 #include <strings.h>
 #include <utils.h>
+#include <systeminfo.h>
 
 /*! main video buffer segment */
 #define VIDEO_SEG 0xB800
 /*! default color for video: white foreground over black background*/
 #define WHITE_ON_BLACK  ((0 << 4) | ( 15 & 0x0F))
 
-uint16_t cursor_x = 0; ///< cursor postion for column
-uint16_t cursor_y = 0; ///< cursor porsition for row
+uint16_t cursor_text_x = 0; ///< cursor postion for column
+uint16_t cursor_text_y = 0; ///< cursor porsition for row
+uint16_t cursor_graphics_x = 0; ///< cursor postion for column
+uint16_t cursor_graphics_y = 0; ///< cursor porsition for row
 
+extern uint8_t _binary_output_font_ps_start;
+extern uint8_t _binary_output_font_ps_end;
+
+void put_char(char_t c, int32_t cx, int32_t cy, uint32_t fg, uint32_t bg);
+
+void video_text_print(char_t* string);
 
 /**
  * @brief scrolls video up for one line
  */
+void video_text_scroll();
 
-void video_scroll();
+void video_graphics_scroll();
 /**
  * @brief moves cursor to new location.
  */
 void video_move_cursor();
+
+
+uint32_t* VIDEO_BASE_ADDRESS = NULL;
+uint32_t VIDEO_PIXELS_PER_SCANLINE = 0;
+uint8_t* FONT_ADDRESS = NULL;
+int32_t FONT_WIDTH = 0;
+int32_t FONT_HEIGHT = 0;
+int32_t FONT_BYTES_PER_GLYPH = 0;
+int32_t FONT_CHARS_PER_LINE = 0;
+int32_t FONT_LINES_ON_SCREEN = 0;
+boolean_t GRAPHICS_MODE = 0;
+int32_t VIDEO_GRAPHICS_WIDTH = 0;
+int32_t VIDEO_GRAPHICS_HEIGHT = 0;
+uint32_t VIDEO_GRAPHICS_FOREGROUND = 0xFFFFFF;
+uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
+
+void video_init() {
+	VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->base_address;
+	VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
+	VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
+	VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;
+
+	video_psf2_font_t* font2 = (video_psf2_font_t*)&_binary_output_font_ps_start;
+
+	if(font2) {
+		if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
+			printf("font v2 ok\n");
+			FONT_ADDRESS = (uint8_t*)&_binary_output_font_ps_start + font2->header_size;
+			FONT_WIDTH = font2->width;
+			FONT_HEIGHT = font2->height;
+			FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
+
+			FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
+			FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
+
+			GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
+		} else {
+
+			video_psf1_font_t* font1 = (video_psf1_font_t*)&_binary_output_font_ps_start;
+
+			if(font1->magic == VIDEO_PSF1_FONT_MAGIC) {
+				printf("font v1 ok\n");
+				uint64_t addr = (uint64_t)&_binary_output_font_ps_start;
+				addr += sizeof(video_psf1_font_t);
+				FONT_ADDRESS = (uint8_t*)addr;
+				FONT_WIDTH = 10;
+				FONT_HEIGHT = 16;
+				FONT_BYTES_PER_GLYPH = font1->bytes_per_glyph;
+
+				FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
+				FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
+
+				GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
+			} else {
+				printf("font magic err\n");
+			}
+
+		}
+	} else {
+		printf("font err\n");
+	}
+}
+
+
+void video_graphics_scroll(){
+	int64_t j = 0;
+
+	for(int64_t i = FONT_HEIGHT * VIDEO_GRAPHICS_WIDTH; i < VIDEO_GRAPHICS_WIDTH * VIDEO_GRAPHICS_HEIGHT; i++) {
+		*((pixel_t*)(VIDEO_BASE_ADDRESS + j)) = *((pixel_t*)(VIDEO_BASE_ADDRESS + i));
+		j++;
+	}
+
+	for(int64_t i = FONT_HEIGHT * VIDEO_GRAPHICS_WIDTH * (FONT_LINES_ON_SCREEN - 1); i < VIDEO_GRAPHICS_WIDTH * VIDEO_GRAPHICS_HEIGHT; i++) {
+		*((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = VIDEO_GRAPHICS_BACKGROUND;
+	}
+}
+
+void video_graphics_print(char_t* string) {
+	int64_t i = 0;
+
+	while(string[i]) {
+		if(string[i] == '\r') {
+			cursor_graphics_x = 0;
+			i++;
+
+			continue;
+		}
+		if(string[i] == '\n') {
+			cursor_graphics_x = 0;
+			cursor_graphics_y++;
+			i++;
+
+			if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
+				video_graphics_scroll();
+				cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
+			}
+
+			continue;
+		}
+
+
+		uint8_t* glyph = FONT_ADDRESS + (string[i] * FONT_BYTES_PER_GLYPH);
+
+		int bytesperline = (FONT_WIDTH + 7) / 8;
+
+		int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
+
+		int32_t x, y, line, mask;
+
+		for(y = 0; y < FONT_HEIGHT; y++) {
+			line = offs;
+			mask = 1 << (FONT_WIDTH - 1);
+
+			for(x = 0; x < FONT_WIDTH; x++) {
+				*((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = *((uint8_t*)glyph) & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
+
+				mask >>= 1;
+				line++;
+			}
+
+			glyph += bytesperline;
+			offs  += VIDEO_PIXELS_PER_SCANLINE;
+		}
+
+		cursor_graphics_x++;
+
+		if(cursor_graphics_x >= FONT_CHARS_PER_LINE) {
+			cursor_graphics_x = 0;
+			cursor_graphics_y++;
+
+			if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
+				video_graphics_scroll();
+				cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
+			}
+		}
+
+		i++;
+	}
+}
 
 void video_clear_screen(){
 	size_t i;
@@ -37,13 +186,31 @@ void video_clear_screen(){
 		far_write_16(VIDEO_SEG, i, blank);
 	}
 
-	cursor_x = 0;
-	cursor_y = 0;
+	cursor_text_x = 0;
+	cursor_text_y = 0;
 
 	video_move_cursor();
+
+	if(GRAPHICS_MODE) {
+		for(int64_t i = 0; i < VIDEO_GRAPHICS_HEIGHT * VIDEO_GRAPHICS_WIDTH; i++) {
+			*((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = VIDEO_GRAPHICS_BACKGROUND;
+		}
+
+		cursor_graphics_x = 0;
+		cursor_graphics_y = 0;
+	}
+
+
 }
 
-void video_print(char_t* string)
+void video_print(char_t* string) {
+	video_text_print(string);
+	if(GRAPHICS_MODE) {
+		video_graphics_print(string);
+	}
+}
+
+void video_text_print(char_t* string)
 {
 	if(string == NULL) {
 		return;
@@ -53,24 +220,24 @@ void video_print(char_t* string)
 		write_serial(COM1, string[i]);
 		char_t c = string[i];
 		if( c == '\r') {
-			cursor_x = 0;
+			cursor_text_x = 0;
 		} else if ( c == '\n') {
-			cursor_x = 0;
-			cursor_y++;
-			if (cursor_y >= 25) {
-				cursor_y = 24;
-				video_scroll();
+			cursor_text_x = 0;
+			cursor_text_y++;
+			if (cursor_text_y >= 25) {
+				cursor_text_y = 24;
+				video_text_scroll();
 			}
 		} else if ( c >= ' ') {
-			uint16_t location = (cursor_y * 80 + cursor_x) * 2;
+			uint16_t location = (cursor_text_y * 80 + cursor_text_x) * 2;
 			far_write_16(VIDEO_SEG, location, c | (WHITE_ON_BLACK << 8));
-			cursor_x++;
-			if(cursor_x == 80) {
-				cursor_x = 0;
-				cursor_y++;
-				if (cursor_y >= 25) {
-					cursor_y = 24;
-					video_scroll();
+			cursor_text_x++;
+			if(cursor_text_x == 80) {
+				cursor_text_x = 0;
+				cursor_text_y++;
+				if (cursor_text_y >= 25) {
+					cursor_text_y = 24;
+					video_text_scroll();
 				}
 			}
 		}
@@ -80,20 +247,20 @@ void video_print(char_t* string)
 }
 
 void video_print_at(char_t* string, uint8_t x, uint8_t y) {
-	cursor_x = x;
-	cursor_y = y;
+	cursor_text_x = x;
+	cursor_text_y = y;
 	video_print(string);
 }
 
 void video_move_cursor(){
-	uint16_t cursor = cursor_y * 80 + cursor_x;
+	uint16_t cursor = cursor_text_y * 80 + cursor_text_x;
 	outb(0x3D4, 14);
 	outb(0x3D5, cursor >> 8);
 	outb(0x3D4, 15);
 	outb(0x3D5, cursor);
 }
 
-void video_scroll() {
+void video_text_scroll() {
 	for(size_t i = 0; i < 80 * 24; i++) {
 		uint16_t data = far_read_16(VIDEO_SEG, (i * 2) + 160);
 		far_write_16(VIDEO_SEG, i * 2, data);
