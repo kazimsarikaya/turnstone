@@ -82,9 +82,9 @@ typedef struct {
 #elif ___BITS == 64 || DOXYGEN
 
 /*! signed quad word (eight bytes) type */
-#define int64_t long
+#define int64_t long long
 /*! unsigned quad word (eight bytes) type */
-#define uint64_t unsigned long
+#define uint64_t unsigned long long
 
 /**
  * @brief gets byte at offset from quad word

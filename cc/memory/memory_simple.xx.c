@@ -82,22 +82,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address);
 
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	size_t heap_start, heap_end;
-	if(start == 0 && end == 0) {
-		heap_start = (size_t)&__kheap_bottom;
-#if ___BITS == 16
-		heap_end = 0xFFFF;
-#elif ___BITS == 64
-		memory_map_t* mmap = SYSTEM_INFO->mmap;
-
-		while(mmap->type != 1) {
-			mmap++;
-		}
-
-		// FIXME: calculate end of avaliable ending. when it's first slot length is also end.
-		heap_end = mmap->length > 0x7FFFF ? 0x7FFFF : mmap->length;
-#endif
-	}
-	else if(start == 0 || end == 0) {
+	if(start == 0 || end == 0) {
 		return NULL;
 	} else {
 		heap_start = start;

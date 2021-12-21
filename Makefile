@@ -4,13 +4,9 @@ MAKE = make
 
 ifeq ($(HOSTOS),Darwin)
 
-CC16 = i386-elf-gcc
-
 CC64 = x86_64-elf-gcc
 
 else
-
-CC16 = gcc
 
 CC64 = gcc
 
@@ -26,8 +22,6 @@ CCXXFLAGS = -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 	-mno-red-zone
 
 CXXTESTFLAGS= -D___TESTMODE=1
-
-CC16FLAGS = -m32 -march=i386 -mgeneral-regs-only -D___BITS=16 $(CCXXFLAGS)
 
 CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
 CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
@@ -72,11 +66,11 @@ CC64OBJS += $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(C
 CC64TESTOBJS = $(patsubst $(CCSRCDIR)/%.64.test.c,$(CCOBJDIR)/%.64.test.o,$(CC64TESTSRCS))
 CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(CCXXTESTSRCS))
 
-DOCSFILES += $(CC16SRCS) $(CC64SRCS) $(CCXXSRCS)
+DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 
-OBJS = $(ASOBJS) $(CC16OBJS) $(CC64OBJS)
-TESTOBJS= $(ASTESTOBJS) $(CC16TESTOBJS) $(CC64TESTOBJS)
+OBJS = $(ASOBJS) $(CC64OBJS)
+TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
 EFIDISKTOOL = $(OBJDIR)/efi_disk.bin
 EFIBOOTFILE = $(OBJDIR)/BOOTX64.EFI
@@ -89,7 +83,7 @@ SUBDIRS := efi tests utils
 
 .PHONY: all clean depend $(SUBDIRS)
 .PRECIOUS:
-all: $(SUBDIRS) $(OBJDIR)/docs $(DISK)
+all: $(SUBDIRS) $(OBJDIR)/docs
 
 qemu: $(QEMUDISK)
 
@@ -111,22 +105,14 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(DISK)
-	dd bs=512 conv=notrunc if=$< of=$(VBBOXDISK)
+$(VBBOXDISK): $(MKDIRSDONE) $(GENCCSRCS) $(PROGS) efi utils
+	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
 
 $(QEMUDISK): $(MKDIRSDONE) $(GENCCSRCS) $(PROGS) efi utils
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
 
 $(TESTQEMUDISK): $(TESTDISK)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin
-
-$(DISK):
-	cat $(PROGS) > $@
-	$(OBJDIR)/formatslots.bin $@ $(PROGS)
-
-$(TESTDISK): $(MKDIRSDONE) $(GENCCSRCS) $(TESTPROGS) utils
-	cat $(TESTPROGS) > $@
-	$(OBJDIR)/formatslots.bin $@ $(TESTPROGS)
 
 $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
@@ -193,4 +179,4 @@ depend: .depend64
 	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
 	sed -i '' 's/xx.o:/xx_64.o:/g' .depend64
 
--include .depend16 .depend64
+-include .depend64

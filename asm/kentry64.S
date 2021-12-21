@@ -11,7 +11,7 @@
 .section .text.___kstart64
 ___kstart64:
   cli
-  mov %rdx, SYSTEM_INFO
+  mov %rdi, SYSTEM_INFO
   mov $0x0, %ax
   mov %ax, %ds
   mov %ax, %es
