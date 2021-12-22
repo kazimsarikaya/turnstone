@@ -20,7 +20,3 @@ void lock_acquire(lock_t lock){
 void lock_release(lock_t lock){
 	UNUSED(lock);
 }
-
-int32_t rand(){
-	return 0;
-}

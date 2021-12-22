@@ -4,6 +4,6 @@
 #include <types.h>
 
 void srand(uint64_t seed);
-int32_t rand(void);
+uint32_t rand(void);
 
 #endif

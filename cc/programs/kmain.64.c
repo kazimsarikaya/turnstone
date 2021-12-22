@@ -20,13 +20,24 @@
 #include <cpu/task.h>
 #include <linker.h>
 #include <driver/ahci.h>
+#include <random.h>
 
 int8_t kmain64_init();
 void move_kernel(size_t src, size_t dst);
 
 int8_t kmain64(size_t entry_point) {
+	srand(0x123456789);
+	memory_heap_t* heap = memory_create_heap_simple(0, 0);
+	memory_set_default_heap(heap);
+
 	video_init();
 	video_clear_screen();
+
+	if(heap == NULL) {
+		printf("KERNEL: Error at creating heap\n");
+		return -1;
+	}
+
 
 	printf("Initializing stage 3\n");
 	printf("Entry point of kernel is 0x%lx\n", entry_point);
@@ -34,16 +45,8 @@ int8_t kmain64(size_t entry_point) {
 	printf("Frame buffer at 0x%p and size 0x%lx\n", SYSTEM_INFO->frame_buffer->base_address, SYSTEM_INFO->frame_buffer->buffer_size);
 	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
-	memory_heap_t* heap = memory_create_heap_simple(0, 0);
-
-	if(heap == NULL) {
-		printf("KERNEL: Error at creating heap\n");
-		return -1;
-	}
-
 	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
 
-	memory_set_default_heap(heap);
 
 	printf("map info %i %i\n", sizeof(efi_memory_descriptor_t), SYSTEM_INFO->mmap_descriptor_size );
 	printf("memory map table\n");
@@ -62,6 +65,12 @@ int8_t kmain64(size_t entry_point) {
 	if(SYSTEM_INFO->acpi_table) {
 		printf("acpi rsdp table version: %i\n", SYSTEM_INFO->acpi_version);
 	}
+
+	int32_t* test_data = L"çok güzel bir kış ayı";
+	printf("address 0x%p\n", test_data);
+
+	printf("random data 0x%x\n", rand());
+
 
 	if(heap) {
 		while(1);
