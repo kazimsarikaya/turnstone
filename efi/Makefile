@@ -3,8 +3,10 @@ ARCH=x86_64
 CC = x86_64-w64-mingw32-gcc
 LD = x86_64-w64-mingw32-gcc
 
-CFLAGS += -D___BITS=64 -I../includes -I./ -mno-ms-bitfields
-CFLAGS +=  -ffreestanding -nostdlib -Wall -Werror -c
+CFLAGS += -D___BITS=64 -std=gnu99 -Os -I../includes -I./ -mno-ms-bitfields
+CFLAGS +=  -ffreestanding -nostdlib -Wall -Werror -Wextra -c
+CFLAGS += -ffunction-sections -fdata-sections
+
 
 LDFLAGS += -nostdlib -Wl,-dll -shared -Wl,--subsystem,10 -e efi_main
 

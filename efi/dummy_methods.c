@@ -15,8 +15,10 @@ task_t* task_get_current_task(){
 
 
 void lock_acquire(lock_t lock){
+	UNUSED(lock);
 }
 void lock_release(lock_t lock){
+	UNUSED(lock);
 }
 
 int32_t rand(){
