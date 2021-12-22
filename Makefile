@@ -71,7 +71,7 @@ CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(
 DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 
-FONTSRC = http://www.zap.org.au/projects/console-fonts-lucida/src/lucida-10x16.psf
+FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus20x10.psf
 FONTOBJ = $(OBJDIR)/font.o
 
 OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ)

@@ -55,6 +55,8 @@ int32_t VIDEO_GRAPHICS_HEIGHT = 0;
 uint32_t VIDEO_GRAPHICS_FOREGROUND = 0xFFFFFF;
 uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
 
+wchar_t* video_font_unicode_table = NULL;
+
 void video_init() {
 	VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->base_address;
 	VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
@@ -71,6 +73,41 @@ void video_init() {
 			FONT_HEIGHT = font2->height;
 			FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
 
+			if(font2->flags) {
+				wchar_t glyph = 0;
+				video_font_unicode_table = memory_malloc(sizeof(wchar_t) * ((wchar_t)-1));
+				uint8_t* font_unicode_table = FONT_ADDRESS + font2->glyph_count * font2->bytes_per_glyph;
+
+				while(font_unicode_table < (uint8_t*)&font_data_end) {
+					wchar_t wc = *font_unicode_table;
+
+					if(wc == 0xFF) {
+						glyph++;
+						font_unicode_table++;
+
+						continue;
+					} else if(wc & 128) {
+						if((wc & 32) == 0 ) {
+							wc = ((font_unicode_table[0] & 0x1F) << 6) + (font_unicode_table[1] & 0x3F);
+							font_unicode_table++;
+						} else if((wc & 16) == 0 ) {
+							wc = ((((font_unicode_table[0] & 0xF) << 6) + (font_unicode_table[1] & 0x3F)) << 6) + (font_unicode_table[2] & 0x3F);
+							font_unicode_table += 2;
+						} else if((wc & 8) == 0 ) {
+							wc = ((((((font_unicode_table[0] & 0x7) << 6) + (font_unicode_table[1] & 0x3F)) << 6) + (font_unicode_table[2] & 0x3F)) << 6) + (font_unicode_table[3] & 0x3F);
+							font_unicode_table += 3;
+						} else {
+							wc = 0;
+						}
+
+					}
+
+					video_font_unicode_table[wc] = glyph;
+					font_unicode_table++;
+				}
+
+			}
+
 			FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
 			FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
 
@@ -85,8 +122,43 @@ void video_init() {
 				addr += sizeof(video_psf1_font_t);
 				FONT_ADDRESS = (uint8_t*)addr;
 				FONT_WIDTH = 10;
-				FONT_HEIGHT = 16;
+				FONT_HEIGHT = 20;
 				FONT_BYTES_PER_GLYPH = font1->bytes_per_glyph;
+
+				if(font1->mode) {
+					wchar_t glyph = 0;
+					video_font_unicode_table = memory_malloc(sizeof(wchar_t) * ((wchar_t)-1));
+					uint8_t* font_unicode_table = FONT_ADDRESS + 512 * font1->bytes_per_glyph;
+
+					while(font_unicode_table < (uint8_t*)&font_data_end) {
+						wchar_t wc = *font_unicode_table;
+
+						if(wc == 0xFF) {
+							glyph++;
+							font_unicode_table++;
+
+							continue;
+						} else if(wc & 128) {
+							if((wc & 32) == 0 ) {
+								wc = ((font_unicode_table[0] & 0x1F) << 6) + (font_unicode_table[1] & 0x3F);
+								font_unicode_table++;
+							} else if((wc & 16) == 0 ) {
+								wc = ((((font_unicode_table[0] & 0xF) << 6) + (font_unicode_table[1] & 0x3F)) << 6) + (font_unicode_table[2] & 0x3F);
+								font_unicode_table += 2;
+							} else if((wc & 8) == 0 ) {
+								wc = ((((((font_unicode_table[0] & 0x7) << 6) + (font_unicode_table[1] & 0x3F)) << 6) + (font_unicode_table[2] & 0x3F)) << 6) + (font_unicode_table[3] & 0x3F);
+								font_unicode_table += 3;
+							} else {
+								wc = 0;
+							}
+
+						}
+
+						video_font_unicode_table[wc] = glyph;
+						font_unicode_table++;
+					}
+
+				}
 
 				FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
 				FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
@@ -120,13 +192,36 @@ void video_graphics_print(char_t* string) {
 	int64_t i = 0;
 
 	while(string[i]) {
-		if(string[i] == '\r') {
+		wchar_t wc = string[i];
+
+		if(wc & 128) {
+			if((wc & 32) == 0 ) {
+				wc = ((string[i] & 0x1F) << 6) + (string[i + 1] & 0x3F);
+				i++;
+			} else if((wc & 16) == 0 ) {
+				wc = ((((string[i] & 0xF) << 6) + (string[i + 1] & 0x3F)) << 6) + (string[i + 2] & 0x3F);
+				i += 2;
+			} else if((wc & 8) == 0 ) {
+				wc = ((((((string[i] & 0x7) << 6) + (string[i + 1] & 0x3F)) << 6) + (string[i + 2] & 0x3F)) << 6) + (string[i + 3] & 0x3F);
+				i += 3;
+			} else {
+				wc = 0;
+			}
+		}
+
+		if(wc == '\t') {
+			i++;
+			continue;
+		}
+
+		if(wc == '\r') {
 			cursor_graphics_x = 0;
 			i++;
 
 			continue;
 		}
-		if(string[i] == '\n') {
+
+		if(wc == '\n') {
 			cursor_graphics_x = 0;
 			cursor_graphics_y++;
 			i++;
@@ -139,8 +234,11 @@ void video_graphics_print(char_t* string) {
 			continue;
 		}
 
+		if(video_font_unicode_table) {
+			wc = video_font_unicode_table[wc];
+		}
 
-		uint8_t* glyph = FONT_ADDRESS + (string[i] * FONT_BYTES_PER_GLYPH);
+		uint8_t* glyph = FONT_ADDRESS + (wc * FONT_BYTES_PER_GLYPH);
 
 		int bytesperline = (FONT_WIDTH + 7) / 8;
 
