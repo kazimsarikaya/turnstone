@@ -88,7 +88,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 			if(blk_devs) {
 
-				for(int64_t i = 0; i < handle_size; i++) {
+				for(uint64_t i = 0; i < handle_size; i++) {
 
 					if(handles[i] && !EFI_ERROR(BS->handle_protocol(handles[i], &bio_guid, (void**) &blk_devs[blk_dev_cnt].bio)) &&
 					   blk_devs[blk_dev_cnt].bio && blk_devs[blk_dev_cnt].bio->media && blk_devs[blk_dev_cnt].bio->media->block_size > 0) {
@@ -173,7 +173,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 									void* acpi_rsdp = NULL;
 									void* acpi_xrsdp = NULL;
 
-									for (int64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
+									for (uint64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
 										if(efi_guid_equal(acpi_table_v2_guid, system_table->configuration_table[i].vendor_guid) == 0) {
 											acpi_xrsdp = system_table->configuration_table[i].vendor_table;
 										} else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
