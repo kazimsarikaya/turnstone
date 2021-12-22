@@ -85,11 +85,11 @@ int8_t kmain64(size_t entry_point) {
 	}
 
 	if(SYSTEM_INFO->acpi_table) {
-		printf("acpi rsdp table version: %i\n", SYSTEM_INFO->acpi_version);
+		printf("acpi rsdp table version: %i address 0x%p\n", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
 	}
 
-	int32_t* test_data = L"çok güzel bir kış ayı";
-	printf("address 0x%p\n", test_data);
+	char_t* test_data = "çok güzel bir kış ayı";
+	printf("address 0x%p %s\n", test_data, test_data);
 
 	printf("random data 0x%x\n", rand());
 
