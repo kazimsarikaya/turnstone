@@ -3,7 +3,6 @@
 
 #include <types.h>
 #include <memory.h>
-#include <systeminfo.h>
 #include "os_io.h"
 
 #ifndef RAMSIZE
@@ -32,7 +31,6 @@ void  apic_eoi(){
 
 uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
-system_info_t* SYSTEM_INFO = NULL;
 
 void print_success(const char* msg){
 	printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
