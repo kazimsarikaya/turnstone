@@ -45,6 +45,24 @@ int8_t kmain64(size_t entry_point) {
 
 	memory_set_default_heap(heap);
 
+	printf("map info %i %i\n", sizeof(efi_memory_descriptor_t), SYSTEM_INFO->mmap_descriptor_size );
+	printf("memory map table\n");
+	printf("base\t\t length\t\t type\t\t attributes\n");
+	uint64_t mmap_ent_cnt = SYSTEM_INFO->mmap_size / SYSTEM_INFO->mmap_descriptor_size;
+	for(size_t i = 0; i < mmap_ent_cnt; i++) {
+		efi_memory_descriptor_t* mem_desc = (efi_memory_descriptor_t*)(SYSTEM_INFO->mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
+		printf("0x%08lx \t 0x%08lx \t 0x%04x \t 0x%08x\n",
+		       mem_desc->physical_start,
+		       mem_desc->page_count * 4096,
+		       mem_desc->type,
+		       mem_desc->attribute);
+
+	}
+
+	if(SYSTEM_INFO->acpi_table) {
+		printf("acpi rsdp table version: %i\n", SYSTEM_INFO->acpi_version);
+	}
+
 	if(heap) {
 		while(1);
 	}
@@ -138,17 +156,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	char_t* data = hello_world();
 
 	printf("%s\n", data);
-
-	printf("memory map table\n");
-	printf("base\t\tlength\t\ttype\n");
-	uint64_t mmap_ent_cnt = SYSTEM_INFO->mmap_size / SYSTEM_INFO->mmap_descriptor_size;
-	for(size_t i = 0; i < mmap_ent_cnt; i++) {
-		printf("0x%08lx\t0x%08lx\t0x%04lx\t0x%x\n",
-		       SYSTEM_INFO->mmap[i].physical_start,
-		       SYSTEM_INFO->mmap[i].page_count * 4096,
-		       SYSTEM_INFO->mmap[i].type,
-		       SYSTEM_INFO->mmap[i].attribute);
-	}
 
 	if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
 		printf("System booted from pxe\n");

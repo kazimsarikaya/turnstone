@@ -65,6 +65,8 @@ typedef struct {
 #define EFI_PART_TYPE_UNUSED_GUID           { 0x00000000, 0x0000, 0x0000, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00} }
 #define EFI_PART_TYPE_EFI_SYSTEM_PART_GUID  { 0xc12a7328, 0xf81f, 0x11d2, {0xba, 0x4b, 0x00, 0xa0, 0xc9, 0x3e, 0xc9, 0x3b} }
 #define EFI_PART_TYPE_LEGACY_MBR_GUID       { 0x024dee41, 0x33e7, 0x11d3, {0x9d, 0x69, 0x00, 0x08, 0xc7, 0x81, 0xf3, 0x9f} }
+#define EFI_ACPI_TABLE_GUID                 { 0xeb9d2d30, 0x2d88, 0x11d3, {0x9a, 0x16, 0x0, 0x90, 0x27, 0x3f, 0xc1, 0x4d} }
+#define EFI_ACPI_20_TABLE_GUID              { 0x8868e871, 0xe4f1, 0x11d3, {0xbc, 0x22, 0x0, 0x80, 0xc7, 0x3c, 0x88, 0x81} }
 
 int8_t efi_create_guid(efi_guid_t* guid);
 int8_t efi_guid_equal(efi_guid_t guid1, efi_guid_t guid2);
@@ -150,21 +152,23 @@ typedef enum {
 } efi_reset_type_t;
 
 typedef enum {
-	EFI_RESERVED_MEMORY_TYPE,
+	EFI_RESERVED_MEMORY_TYPE, // 0
 	EFI_LOADER_CODE,
 	EFI_LOADER_DATA,
 	EFI_BOOT_SERVICES_CODE,
 	EFI_BOOT_SERVICES_DATA,
-	EFI_RUNTIME_SERVICES_CODE,
+	EFI_RUNTIME_SERVICES_CODE, // 5
 	EFI_RUNTIME_SERVICES_DATA,
 	EFI_CONVENTIONAL_MEMORY,
 	EFI_UNUSABLE_MEMORY,
 	EFI_ACPI_RECLAIM_MEMORY,
-	EFI_ACPI_MEMORY_NVS,
+	EFI_ACPI_MEMORY_NVS,  // A
 	EFI_MEMORY_MAPPED_IO,
 	EFI_MEMORY_MAPPED_IO_PORT_SPACE,
 	EFI_PAL_CODE,
-	EFI_MAX_MEMORY_TYPE
+	EFI_PERSISTENT_MEMORY,
+	EFI_UNACCEPTED_MEMORY, // F
+	EFI_MAX_MEMORY_TYPE,
 } efi_memory_type_t;
 
 typedef enum {
@@ -183,7 +187,6 @@ typedef struct {
 
 typedef struct {
 	uint32_t type;
-	uint32_t padding;
 	efi_physical_address_t physical_start;
 	efi_virtual_address_t virtual_start;
 	uint64_t page_count;
@@ -434,7 +437,7 @@ typedef struct {
 	efi_runtime_services_t* runtime_services;
 	efi_boot_services_t* boot_services;
 
-	uint64_t table_entry_count;
+	uint64_t configuration_table_entry_count;
 	efi_configuration_table_t* configuration_table;
 } efi_system_table_t;
 

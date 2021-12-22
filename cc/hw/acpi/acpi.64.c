@@ -3,34 +3,17 @@
  * @brief acpi table parsers
  */
 #include <acpi.h>
-#include <bios.h>
 #include <memory.h>
 #include <video.h>
 #include <ports.h>
 #include <acpi/aml.h>
 #include <memory/paging.h>
+#include <systeminfo.h>
 
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
-	bios_data_area_t* bda = (bios_data_area_t*)(BIOS_BDA_POINTER);
-	uint8_t* ebda = (uint8_t*)((size_t)bda->ebda_base_address << 4);
-	size_t ebda_size = ebda[0] * 1024;
 	acpi_xrsdp_descriptor_t* desc = NULL;
 
-	for(size_t i = 0; i < ebda_size; i += 16) {
-		if(memory_memcompare(ebda + i, ACPI_RSDP_SIGNATURE, 8) == 0) {
-			desc = (acpi_xrsdp_descriptor_t*)(ebda + i);
-			break;
-		}
-	}
-
-	if(desc == NULL) {
-		for(uint8_t* rom = (uint8_t*)(0xE0000); rom < (uint8_t*)(0xFFFFF); rom += 16) {
-			if(memory_memcompare(rom, ACPI_RSDP_SIGNATURE, 8) == 0) {
-				desc = (acpi_xrsdp_descriptor_t*)rom;
-				break;
-			}
-		}
-	}
+	desc = (acpi_xrsdp_descriptor_t*)SYSTEM_INFO->acpi_table;
 
 	if(desc != NULL) {
 		size_t len = 0;

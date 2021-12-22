@@ -21,12 +21,14 @@ typedef enum {
  * @brief  system information struct
  */
 typedef struct system_info {
-	efi_memory_descriptor_t* mmap;
+	uint8_t* mmap_data;
 	uint64_t mmap_size;
 	uint64_t mmap_descriptor_size;
 	uint32_t mmap_descriptor_version;
 	system_info_boot_type_t boot_type;
 	video_frame_buffer_t* frame_buffer;
+	uint64_t acpi_version;
+	void* acpi_table;
 } system_info_t; ///< struct short hand
 
 /*! static location of system information */
