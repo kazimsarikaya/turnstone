@@ -41,6 +41,28 @@ int8_t kmain64(size_t entry_point) {
 
 	printf("Initializing stage 3\n");
 	printf("Entry point of kernel is 0x%lx\n", entry_point);
+
+	video_frame_buffer_t* new_vfb = memory_malloc(sizeof(system_info_t));
+	memory_memcopy(SYSTEM_INFO->frame_buffer, new_vfb, sizeof(system_info_t));
+	uint64_t fb_ba;
+	memory_paging_get_frame_address((uint64_t)SYSTEM_INFO->frame_buffer->base_address, &fb_ba);
+	new_vfb->base_address = (void*)fb_ba;
+
+	printf("frame_buffer ba phy addr 0x%p  va 0x%p\n", fb_ba, SYSTEM_INFO->frame_buffer->base_address);
+
+	uint8_t* new_mmap_data = memory_malloc(SYSTEM_INFO->mmap_descriptor_size);
+	memory_memcopy(SYSTEM_INFO->mmap_data, new_mmap_data, SYSTEM_INFO->mmap_size);
+
+	system_info_t* new_system_info = memory_malloc(sizeof(system_info_t));
+	memory_memcopy(SYSTEM_INFO, new_system_info, sizeof(system_info_t));
+	new_system_info->frame_buffer = new_vfb;
+	new_system_info->mmap_data = new_mmap_data;
+
+
+	SYSTEM_INFO = new_system_info;
+
+
+
 	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
 	printf("Frame buffer at 0x%p and size 0x%lx\n", SYSTEM_INFO->frame_buffer->base_address, SYSTEM_INFO->frame_buffer->buffer_size);
 	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
