@@ -165,24 +165,41 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 									printf("moving kernel at 0x%lx succed\n", new_kernel_address);
 									memory_free(kernel_data);
 
-									efi_memory_descriptor_t* mmap = NULL;
+
+									printf("conf table count %i\n", system_table->configuration_table_entry_count);
+									efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
+									efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
+
+									void* acpi_rsdp = NULL;
+									void* acpi_xrsdp = NULL;
+
+									for (int64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
+										if(efi_guid_equal(acpi_table_v2_guid, system_table->configuration_table[i].vendor_guid) == 0) {
+											acpi_xrsdp = system_table->configuration_table[i].vendor_table;
+										} else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
+											acpi_rsdp = system_table->configuration_table[i].vendor_table;
+										}
+									}
+
+									uint8_t* mmap = NULL;
 									uint64_t map_size, map_key, descriptor_size;
 									uint32_t descriptor_version;
 
-									BS->get_memory_map(&map_size, mmap, &map_key, &descriptor_size, &descriptor_version);
+									BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
 									printf("mmap size %li desc size %li ver %li\n", map_size, descriptor_size, descriptor_version);
 
 									mmap = memory_malloc(map_size);
 
-									if(BS->get_memory_map(&map_size, mmap, &map_key, &descriptor_size, &descriptor_version) == EFI_SUCCESS) {
+									if(BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version) == EFI_SUCCESS) {
 										system_info_t* sysinfo = memory_malloc(sizeof(system_info_t));
 										sysinfo->boot_type = SYSTEM_INFO_BOOT_TYPE_DISK;
-										sysinfo->mmap = mmap;
+										sysinfo->mmap_data = mmap;
 										sysinfo->mmap_size = map_size;
 										sysinfo->mmap_descriptor_size = descriptor_size;
 										sysinfo->mmap_descriptor_version = descriptor_version;
 										sysinfo->frame_buffer = vfb;
-
+										sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
+										sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
 
 										printf("calling kernel with sysinfo @ 0x%p\n", sysinfo);
 
