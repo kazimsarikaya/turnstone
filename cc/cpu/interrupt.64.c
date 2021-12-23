@@ -88,7 +88,7 @@ uint64_t interrupt_system_defined_interrupts[32] = {
 };
 
 int8_t interrupt_init() {
-	descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER.base;
+	descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
 
 	for(int32_t i = 0; i < 32; i++) {
 		DESCRIPTOR_BUILD_IDT_SEG(idt_table[i], interrupt_system_defined_interrupts[i], KERNEL_CODE_SEG, 0, DPL_KERNEL)

@@ -33,7 +33,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
 	__asm__ __volatile__ ("mov %%rsp, %0\n" : : "m" (rsp));
 
-	descriptor_gdt_t* gdts = (descriptor_gdt_t*)GDT_REGISTER.base;
+	descriptor_gdt_t* gdts = (descriptor_gdt_t*)GDT_REGISTER->base;
 
 	descriptor_tss_t* d_tss = (descriptor_tss_t*)&gdts[3];
 

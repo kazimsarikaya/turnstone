@@ -1,10 +1,6 @@
 .code64
 .type ___kstart64, @function
 .global ___kstart64
-.type GDT_REGISTER, @object
-.global GDT_REGISTER
-.type IDT_REGISTER, @object
-.global IDT_REGISTER
 .type SYSTEM_INFO, @object
 .global SYSTEM_INFO
 
@@ -20,14 +16,6 @@ ___kstart64:
   mov %ax, %gs
   mov $__stack_top, %esp
   mov %esp, %ebp
-
-  xor %rax, %rax
-  mov $IDT_REGISTER, %rax
-  sidt (%rax)
-
-  xor %rax,%rax
-  mov $GDT_REGISTER, %rax
-  sgdt (%rax)
 
   /* enable sse */
   mov %cr0, %rax
@@ -57,18 +45,6 @@ ___kstart64.errloop:
   cli
   hlt
   jmp ___kstart64.errloop
-
-.section .bss.GDT_REGISTER
-.align 8
-GDT_REGISTER:
-.byte 0x00, 0x00
-.byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-
-.section .bss.IDT_REGISTER
-.align 8
-IDT_REGISTER:
-.byte 0x00, 0x00
-.byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 .section .bss.SYSTEM_INFO
 .align 8
