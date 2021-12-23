@@ -6,8 +6,6 @@
 /*! prevent duplicate header error macro */
 #define ___CPU_INTERRUPT_H 0
 
-#if ___BITS == 64 || DOXYGEN
-
 #include <types.h>
 
 /**
@@ -44,7 +42,5 @@ typedef void (* interrupt_irq)(interrupt_frame_t* frame, uint8_t intnum);
 int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq);
 
 uint8_t interrupt_get_next_empty_interrupt();
-
-#endif
 
 #endif

@@ -8,10 +8,7 @@
 
 #include <types.h>
 
-#if ___BITS == 64
 typedef void* lock_t;
-#endif
-
 /**
  * @struct memory_heap
  * @brief heap interface for all types
@@ -19,11 +16,9 @@ typedef void* lock_t;
 typedef struct memory_heap {
 	uint32_t header; ///< heap header custom values
 	void* metadata; ///< internal heap metadata filled by heap implementation
-	void* (*malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
+	void* (* malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
 	int8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
-#if ___BITS == 64
 	lock_t lock;
-#endif
 } memory_heap_t; ///< short hand for struct
 
 /**
@@ -105,22 +100,5 @@ int8_t memory_memcopy(void* source, void* destination, size_t size);
  * @return       <0 if mem1>mem2, 0 if mem1=mem2, >0 if mem1>mem2
  */
 int8_t memory_memcompare(void* mem1, void* mem2, size_t size);
-
-/**
- * @brief converts relative address to absolute address
- * @param[in]  raddr relative address
- * @return       absolute address
- *
- * meaningful at real mode
- */
-size_t memory_get_absolute_address(size_t raddr);
-/**
- * @brief converts absolute address to relative address
- * @param[in]  aaddr absolute address
- * @return       relative address
- *
- * meaningful at real mode
- */
-size_t memory_get_relative_address(size_t aaddr);
 
 #endif

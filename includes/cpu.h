@@ -40,15 +40,6 @@ void cpu_sti();
 uint16_t cpu_read_data_segment();
 
 /**
- * @brief checks long mode is supported.
- * @return 0 if long mode supported
- *
- * At real mode this command uses several cpuid assembly command to learn
- * long mode is supported by cpu with several properties.
- */
-uint8_t cpu_check_longmode();
-
-/**
  * @brief checks rdrand supported
  * @return 0 when supported else -1
  */

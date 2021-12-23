@@ -50,14 +50,7 @@ typedef struct __heapmetainfo {
 typedef struct __heapinfo {
 	uint16_t magic; ///< magic value of heap for protection
 	uint16_t flags; ///< flags of hi
-#if ___BITS == 16
-	uint32_t size; ///< size of slot
-	uint32_t size_padding1; ///< alignment padding
-	uint32_t size_padding2; ///< alignment padding
-	uint32_t size_padding3; ///< alignment padding
-#elif ___BITS == 64
 	uint64_t size; ///< size of slot
-#endif
 	struct __heapinfo* next; ///< next hi node
 	struct __heapinfo* previous; ///< previous hi node
 	uint32_t padding; ///< for 8 byte align for protection
@@ -95,15 +88,11 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 
 	memory_heap_t* heap = (memory_heap_t*)(heap_start);
 
-#if ___BITS == 64
 	size_t lock_start = heap_start + sizeof(memory_heap_t);
 	heap->lock = (lock_t)lock_start;
 	memory_heap_t** lock_heap = (memory_heap_t**)(lock_start); // black magic first element of lock is heap
 	*lock_heap = heap;
 	size_t metadata_start = lock_start + SYNC_LOCK_SIZE;
-#else
-	size_t metadata_start = heap_start + sizeof(memory_heap_t);
-#endif
 
 	if(metadata_start % 0x20) { //align 0x20
 		metadata_start += 0x20 - (metadata_start % 0x20);

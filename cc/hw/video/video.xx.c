@@ -6,14 +6,13 @@
  */
 #include <video.h>
 #include <memory.h>
-#include <faraccess.h>
 #include <ports.h>
 #include <strings.h>
 #include <utils.h>
 #include <systeminfo.h>
 
 /*! main video buffer segment */
-#define VIDEO_SEG 0xB800
+#define VIDEO_TEXT_ADDRESS 0xB8000ULL
 /*! default color for video: white foreground over black background*/
 #define WHITE_ON_BLACK  ((0 << 4) | ( 15 & 0x0F))
 
@@ -281,7 +280,7 @@ void video_clear_screen(){
 	size_t i;
 	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
 	for(i = 0; i < VIDEO_BUF_LEN * 2; i += 2) {
-		far_write_16(VIDEO_SEG, i, blank);
+		*((uint16_t*)VIDEO_TEXT_ADDRESS + i) = blank;
 	}
 
 	cursor_text_x = 0;
@@ -328,7 +327,7 @@ void video_text_print(char_t* string)
 			}
 		} else if ( c >= ' ') {
 			uint16_t location = (cursor_text_y * 80 + cursor_text_x) * 2;
-			far_write_16(VIDEO_SEG, location, c | (WHITE_ON_BLACK << 8));
+			*((uint16_t*)VIDEO_TEXT_ADDRESS + location) = c | (WHITE_ON_BLACK << 8);
 			cursor_text_x++;
 			if(cursor_text_x == 80) {
 				cursor_text_x = 0;
@@ -360,12 +359,12 @@ void video_move_cursor(){
 
 void video_text_scroll() {
 	for(size_t i = 0; i < 80 * 24; i++) {
-		uint16_t data = far_read_16(VIDEO_SEG, (i * 2) + 160);
-		far_write_16(VIDEO_SEG, i * 2, data);
+		uint16_t data =   *((uint16_t*)VIDEO_TEXT_ADDRESS + (i * 2) + 160);
+		*((uint16_t*)VIDEO_TEXT_ADDRESS + (i * 2)) = data;
 	}
 	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
 	for(size_t i = 80 * 24; i < 80 * 25; i++) {
-		far_write_16(VIDEO_SEG, i * 2, blank);
+		*((uint16_t*)VIDEO_TEXT_ADDRESS + (i * 2)) = blank;
 	}
 }
 
@@ -392,13 +391,10 @@ size_t video_printf(char_t* fmt, ...){
 			int32_t idx = 0;
 			int8_t l_flag = 0;
 			int8_t sign = 0;
-
-#if ___BITS == 64
 			char_t fto_buf[128];
 			// float128_t fval = 0; // TODO: float128_t ops
 			float64_t fval = 0;
 			number_t prec = 6;
-#endif
 
 			while(1) {
 				wfmtb = 1;
@@ -410,14 +406,12 @@ size_t video_printf(char_t* fmt, ...){
 					fmt++;
 					wfmtb = 0;
 					break;
-#if ___BITS == 64
 				case '.':
 					fmt++;
 					prec = *fmt - 0x30;
 					fmt++;
 					wfmtb = 0;
 					break;
-#endif
 				case 'c':
 					val = va_arg(args, int32_t);
 					buf[0] = (char_t)val;
@@ -433,13 +427,11 @@ size_t video_printf(char_t* fmt, ...){
 					break;
 				case 'i':
 				case 'd':
-#if ___BITS == 64
 					if(l_flag == 2) {
 						ival = va_arg(args, int128_t);
 					} else if(l_flag == 1) {
 						ival = va_arg(args, int64_t);
 					}
-#endif
 					if(l_flag == 0) {
 						ival = va_arg(args, int32_t);
 					}
@@ -471,13 +463,11 @@ size_t video_printf(char_t* fmt, ...){
 					l_flag = 0;
 					break;
 				case 'u':
-#if ___BITS == 64
 					if(l_flag == 2) {
 						uval = va_arg(args, uint128_t);
 					} else if(l_flag == 1) {
 						uval = va_arg(args, uint64_t);
 					}
-#endif
 					if(l_flag == 0) {
 						uval = va_arg(args, uint32_t);
 					}
@@ -506,13 +496,11 @@ size_t video_printf(char_t* fmt, ...){
 				case 'p':
 				case 'x':
 				case 'h':
-#if ___BITS == 64
 					if(l_flag == 2) {
 						uval = va_arg(args, uint128_t);
 					} else if(l_flag == 1) {
 						uval = va_arg(args, uint64_t);
 					}
-#endif
 					if(l_flag == 0) {
 						uval = va_arg(args, uint32_t);
 					}
@@ -539,7 +527,6 @@ size_t video_printf(char_t* fmt, ...){
 					fmt++;
 					cnt++;
 					break;
-#if ___BITS == 64
 				case 'f':
 					if(l_flag == 2) {
 						// fval = va_arg(args, float128_t); // TODO: float128_t ops
@@ -555,7 +542,6 @@ size_t video_printf(char_t* fmt, ...){
 					cnt += slen;
 					fmt++;
 					break;
-#endif
 				default:
 					break;
 				}
