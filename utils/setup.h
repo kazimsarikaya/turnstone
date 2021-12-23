@@ -15,6 +15,8 @@
 
 int printf(const char* format, ...);
 
+void* SYSTEM_INFO = NULL;
+
 size_t video_printf(char_t* fmt, va_list args) {
 	return printf(fmt, args);
 }

@@ -349,17 +349,34 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		return NULL;
 	}
 
-/* We don't need all areas. it should be created mannually
-   for(uint32_t i = 0; i < SYSTEM_INFO->mmap_entry_count; i++) {
-    if(SYSTEM_INFO->mmap[i].type == MEMORY_MMAP_TYPE_USABLE) {
-      continue;
-    }
-    // TODO: check memory area length if greater then 2M
-    if(memory_paging_add_page_ext(heap, p4, SYSTEM_INFO->mmap[i].base, SYSTEM_INFO->mmap[i].base, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
-      return NULL;
-    }
-   }
- */
+	uint64_t base_addr_2m = 2 << 20;
+
+	if(memory_paging_add_page_ext(heap, p4, base_addr_2m, base_addr_2m, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+		return NULL;
+	}
+
+	uint64_t vfb_addr = (uint64_t)SYSTEM_INFO->frame_buffer->base_address;
+	uint64_t vfb_size = SYSTEM_INFO->frame_buffer->buffer_size;
+
+	uint64_t vfb_page_size = 2 << 20;
+
+	while(vfb_size > 0) {
+		if(vfb_size >= (2 << 20)) {
+			if(memory_paging_add_page_ext(heap, p4, vfb_addr, vfb_addr, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+				return NULL;
+			}
+		} else {
+			vfb_page_size = 4 << 10;
+			if(memory_paging_add_page_ext(heap, p4, vfb_addr, vfb_addr, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+				return NULL;
+			}
+		}
+
+		vfb_size -= vfb_page_size;
+		vfb_addr += vfb_page_size;
+	}
+
+
 	return p4;
 }
 

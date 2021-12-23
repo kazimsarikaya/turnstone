@@ -38,8 +38,8 @@ int8_t kmain64(size_t entry_point) {
 		return -1;
 	}
 
-
 	printf("Initializing stage 3\n");
+	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
 	printf("Entry point of kernel is 0x%lx\n", entry_point);
 
 	video_frame_buffer_t* new_vfb = memory_malloc(sizeof(system_info_t));
@@ -50,7 +50,7 @@ int8_t kmain64(size_t entry_point) {
 
 	printf("frame_buffer ba phy addr 0x%p  va 0x%p\n", fb_ba, SYSTEM_INFO->frame_buffer->base_address);
 
-	uint8_t* new_mmap_data = memory_malloc(SYSTEM_INFO->mmap_descriptor_size);
+	uint8_t* new_mmap_data = memory_malloc(SYSTEM_INFO->mmap_size);
 	memory_memcopy(SYSTEM_INFO->mmap_data, new_mmap_data, SYSTEM_INFO->mmap_size);
 
 	system_info_t* new_system_info = memory_malloc(sizeof(system_info_t));
@@ -61,13 +61,46 @@ int8_t kmain64(size_t entry_point) {
 
 	SYSTEM_INFO = new_system_info;
 
+	if(descriptor_build_idt_register() != 0) {
+		printf("Can not build idt\n");
+		return -1;
+	} else {
+		printf("Default idt builded\n");
+	}
+
+	printf("KERNEL: Initializing interrupts\n");
+
+	if(interrupt_init() != 0) {
+		printf("CPU: Fatal cannot init interrupts\n");
+
+		return -1;
+	}
+
+	printf("interrupts initialized\n");
+
+	if(descriptor_build_gdt_register() != 0) {
+		printf("Can not build gdt\n");
+		return -1;
+	} else {
+		printf("Default gdt builded\n");
+	}
+
+	memory_page_table_t* p4 = memory_paging_build_table();
+	if( p4 == NULL) {
+		printf("Can not build default page table\n");
+		return -1;
+	} else {
+		printf("Default page table builded at 0x%p\n", p4);
+		memory_paging_switch_table(p4);
+		printf("Default page table switched to 0x%08p\n", p4);
+	}
+
 
 
 	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
 	printf("Frame buffer at 0x%p and size 0x%lx\n", SYSTEM_INFO->frame_buffer->base_address, SYSTEM_INFO->frame_buffer->buffer_size);
 	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
-	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
 
 
 	printf("map info %i %i\n", sizeof(efi_memory_descriptor_t), SYSTEM_INFO->mmap_descriptor_size );
@@ -97,25 +130,6 @@ int8_t kmain64(size_t entry_point) {
 	if(heap) {
 		while(1);
 	}
-
-	printf("KERNEL: Initializing interrupts\n");
-
-	if(interrupt_init() != 0) {
-		printf("CPU: Fatal cannot init interrupts\n");
-
-		return -1;
-	}
-
-	printf("interrupts initialized\n");
-
-	memory_page_table_t* p4 = memory_paging_clone_pagetable();
-
-	if(p4 == NULL) {
-		printf("KERNEL: Fatal cannot create new page table\n");
-		return -1;
-	}
-
-	memory_paging_switch_table(p4);
 
 	uint64_t kernel_start = entry_point - 0x100;
 
