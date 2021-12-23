@@ -115,8 +115,6 @@ int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base) {
 	return 0;
 }
 
-#if ___BITS == 64
-
 int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, number_t base) {
 	if(buffer == NULL) {
 		return -1;
@@ -181,5 +179,3 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 
 	return 0;
 }
-
-#endif

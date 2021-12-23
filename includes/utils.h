@@ -62,8 +62,6 @@ int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base);
 #define utoa_with_buffer(buf, number) uto_base_with_buffer(buf, number, 10)
 #define utoh_with_buffer(buf, number) uto_base_with_buffer(buf, number, 16)
 
-
-#if ___BITS == 64 || DOXYGEN
 /**
  * @brief converts float to string
  * @param[in]  buffer destination buffer
@@ -79,7 +77,5 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 #define ftoh_with_buffer(buf, number) fto_base_with_buffer(buf, number, 6, 16)
 #define ftoa_with_buffer_and_prec(buf, number, prec) fto_base_with_buffer(buf, number, prec, 10)
 #define ftoh_with_buffer_and_prec(buf, number, prec) fto_base_with_buffer(buf, number, prec, 16)
-
-#endif
 
 #endif

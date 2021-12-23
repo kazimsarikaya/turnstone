@@ -25,12 +25,6 @@ int8_t kmain_test(size_t entry_point) {
 	for(size_t test_no = 0; test_no < t_f_count; test_no++) {
 		test_print("TEST");
 
-#if ___BITS == 16
-		test_print("16 ");
-#else
-		test_print("64 ");
-#endif
-
 		test_print(t_f_names[test_no]);
 
 		test_func t_f = t_f_start[test_no];

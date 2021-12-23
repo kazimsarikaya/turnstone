@@ -29,13 +29,7 @@ typedef struct {
 	uint8_t os_avail01 : 1; ///< bit 9 is available for os
 	uint8_t os_avail02 : 1; ///< bit 10 is available for os
 	uint8_t os_avail03 : 1; ///< bit 11 is available for os
-#if ___BITS == 16 || DOXYGEN
-	uint32_t physical_address_part1 : 32; ///< bits 12-43 low 32 bits of physical address shifted by 12 (real mode)
-	uint8_t physical_address_part2 : 8;  ///< bits 44-51 high 8 bits of physical adress for 40 bit length (real mode)
-#endif
-#if ___BITS == 64 || DOXYGEN
 	uint64_t physical_address : 40; ///< bits 12-51 physical address 40 bits, shifted by 12 (long mode)
-#endif
 	uint8_t os_avail04 : 1; ///< bit 52 is available for os
 	uint8_t os_avail05 : 1; ///< bit 53 is available for os
 	uint8_t os_avail06 : 1; ///< bit 54 is available for os
@@ -122,7 +116,6 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 /*! add va and fa to defeault p4 table*/
 #define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, NULL, va, fa, t)
 
-#if ___BITS == 64 || DOXYGEN
 int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
 #define memory_paging_delete_page_ext(p4, va, faptr) memory_paging_delete_page_ext_with_heap(NULL, p4, va, faptr)
 #define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext_with_heap(NULL, NULL, va, faptr)
@@ -137,18 +130,6 @@ int8_t memory_paging_destroy_pagetable_ext(memory_heap_t* heap, memory_page_tabl
 int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
 #define memory_paging_get_frame_address(va, faptr) memory_paging_get_frame_address_ext(NULL, va, faptr);
 
-#endif
-
-#if ___BITS == 16 || DOXYGEN
-/*! gets p4 index of virtual address at real mode*/
-#define MEMORY_PT_GET_P4_INDEX(u64) ((u64.part_high >> 7) & 0x1FF)
-/*! gets p3 index of virtual address at real mode  */
-#define MEMORY_PT_GET_P3_INDEX(u64) (((u64.part_high & 0x7F) << 2) | ((u64.part_low >> 30) & 0x3))
-/*! gets p2 index of virtual address at real mode */
-#define MEMORY_PT_GET_P2_INDEX(u64) ((u64.part_low >> 21) & 0x1FF)
-/*! gets p1 index of virtual address at real mode */
-#define MEMORY_PT_GET_P1_INDEX(u64) ((u64.part_low >> 12) & 0x1FF)
-#elif ___BITS == 64 || DOXYGEN
 /*! gets p4 index of virtual address at long mode */
 #define MEMORY_PT_GET_P4_INDEX(u64) ((u64 >> 39) & 0x1FF)
 /*! gets p3 index of virtual address at long mode */
@@ -157,6 +138,5 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 #define MEMORY_PT_GET_P2_INDEX(u64) ((u64 >> 21) & 0x1FF)
 /*! gets p1 index of virtual address at long mode */
 #define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & 0x1FF)
-#endif
 
 #endif

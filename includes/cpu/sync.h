@@ -6,8 +6,6 @@
 /*! prevent duplicate header error macro */
 #define ___CPU_SYNC_H 0
 
-#if ___BITS == 64
-
 #include <types.h>
 #include <memory.h>
 
@@ -35,7 +33,5 @@ int8_t semaphore_acquire_with_count(semaphore_t semaphore, uint64_t count);
 
 int8_t semaphore_release_with_count(semaphore_t semaphore, uint64_t count);
 #define semaphore_release(s) semaphore_release_with_count(s, 1)
-
-#endif
 
 #endif

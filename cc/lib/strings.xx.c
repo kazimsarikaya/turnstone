@@ -180,8 +180,6 @@ char_t* strndup_at_heap(memory_heap_t* heap, char_t* src, size_t l){
 	return res;
 }
 
-#if ___BITS == 64
-
 int8_t strstarts(char_t* str, char_t* prefix) {
 	if(strlen(str) < strlen(prefix)) {
 		return -1;
@@ -399,5 +397,3 @@ int8_t str_is_upper(char_t* str) {
 
 	return 0;
 }
-
-#endif
