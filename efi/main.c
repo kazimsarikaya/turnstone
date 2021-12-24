@@ -156,6 +156,15 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 								kernel_page_count++;
 							}
 
+							int64_t new_kernel_2m_factor = 0;
+							new_kernel_2m_factor = kernel_page_count / 512;
+							if(kernel_page_count % 512) {
+								new_kernel_2m_factor++;
+							}
+							kernel_page_count = new_kernel_2m_factor * 512;
+
+							printf("new kernel page count 0x%lx\n", kernel_page_count);
+
 							uint64_t new_kernel_address = 2 << 20;
 
 							if(BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address) == 0) {
