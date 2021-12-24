@@ -465,10 +465,6 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		return NULL;
 	}
 
-	if(memory_paging_add_page_ext(heap, p4, 0xB8000, 0xB8000, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-		return NULL;
-	}
-
 	uint64_t vfb_addr = (uint64_t)SYSTEM_INFO->frame_buffer->base_address;
 	uint64_t vfb_size = SYSTEM_INFO->frame_buffer->buffer_size;
 

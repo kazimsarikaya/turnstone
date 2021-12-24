@@ -8,9 +8,6 @@
 
 #include <types.h>
 
-/*! video buffer len rowsxcolumns at text mode*/
-#define  VIDEO_BUF_LEN 25 * 80
-
 #define VIDEO_PSF2_FONT_MAGIC 0x864ab572
 #define VIDEO_PSF1_FONT_MAGIC 0x0436
 
@@ -42,16 +39,6 @@ typedef struct {
 typedef uint32_t pixel_t;
 
 void video_init();
-
-/**
- * @brief writes string to a spacial location
- * @param[in] string string will be writen
- * @param[in] x      column number
- * @param[in] y      row number
- *
- * updates cursor location and calls @ref video_print
- */
-void video_print_at(char_t* string, uint8_t x, uint8_t y);
 
 /**
  * @brief writes string to video buffer

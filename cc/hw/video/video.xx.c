@@ -11,15 +11,8 @@
 #include <utils.h>
 #include <systeminfo.h>
 
-/*! main video buffer segment */
-#define VIDEO_TEXT_ADDRESS 0xB8000ULL
-/*! default color for video: white foreground over black background*/
-#define WHITE_ON_BLACK  ((0 << 4) | ( 15 & 0x0F))
-
 #define VIDEO_TAB_STOP 8
 
-uint16_t cursor_text_x = 0; ///< cursor postion for column
-uint16_t cursor_text_y = 0; ///< cursor porsition for row
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column
 uint16_t cursor_graphics_y = 0; ///< cursor porsition for row
 
@@ -28,18 +21,12 @@ extern uint8_t font_data_end;
 
 void put_char(char_t c, int32_t cx, int32_t cy, uint32_t fg, uint32_t bg);
 
-void video_text_print(char_t* string);
-
 /**
  * @brief scrolls video up for one line
  */
-void video_text_scroll();
-
 void video_graphics_scroll();
-/**
- * @brief moves cursor to new location.
- */
-void video_move_cursor();
+
+void video_text_print(char_t* string);
 
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
@@ -286,17 +273,6 @@ void video_graphics_print(char_t* string) {
 }
 
 void video_clear_screen(){
-	size_t i;
-	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
-	for(i = 0; i < VIDEO_BUF_LEN * 2; i += 2) {
-		*((uint16_t*)VIDEO_TEXT_ADDRESS + i) = blank;
-	}
-
-	cursor_text_x = 0;
-	cursor_text_y = 0;
-
-	video_move_cursor();
-
 	if(GRAPHICS_MODE) {
 		for(int64_t i = 0; i < VIDEO_GRAPHICS_HEIGHT * VIDEO_GRAPHICS_WIDTH; i++) {
 			*((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = VIDEO_GRAPHICS_BACKGROUND;
@@ -305,8 +281,6 @@ void video_clear_screen(){
 		cursor_graphics_x = 0;
 		cursor_graphics_y = 0;
 	}
-
-
 }
 
 void video_print(char_t* string) {
@@ -324,56 +298,7 @@ void video_text_print(char_t* string)
 	size_t i = 0;
 	while(string[i] != '\0') {
 		write_serial(COM1, string[i]);
-		char_t c = string[i];
-		if( c == '\r') {
-			cursor_text_x = 0;
-		} else if ( c == '\n') {
-			cursor_text_x = 0;
-			cursor_text_y++;
-			if (cursor_text_y >= 25) {
-				cursor_text_y = 24;
-				video_text_scroll();
-			}
-		} else if ( c >= ' ') {
-			uint16_t location = cursor_text_y * 80 + cursor_text_x;
-			*((uint16_t*)(VIDEO_TEXT_ADDRESS + location)) = c | (WHITE_ON_BLACK << 8);
-			cursor_text_x++;
-			if(cursor_text_x == 80) {
-				cursor_text_x = 0;
-				cursor_text_y++;
-				if (cursor_text_y >= 25) {
-					cursor_text_y = 24;
-					video_text_scroll();
-				}
-			}
-		}
 		i++;
-	}
-	video_move_cursor();
-}
-
-void video_print_at(char_t* string, uint8_t x, uint8_t y) {
-	cursor_text_x = x;
-	cursor_text_y = y;
-	video_print(string);
-}
-
-void video_move_cursor(){
-	uint16_t cursor = cursor_text_y * 80 + cursor_text_x;
-	outb(0x3D4, 14);
-	outb(0x3D5, cursor >> 8);
-	outb(0x3D4, 15);
-	outb(0x3D5, cursor);
-}
-
-void video_text_scroll() {
-	for(size_t i = 0; i < 80 * 24; i++) {
-		uint16_t data =   *((uint16_t*)VIDEO_TEXT_ADDRESS + i + 80);
-		*((uint16_t*)VIDEO_TEXT_ADDRESS + i) = data;
-	}
-	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
-	for(size_t i = 80 * 24; i < 80 * 25; i++) {
-		*((uint16_t*)VIDEO_TEXT_ADDRESS + i) = blank;
 	}
 }
 
