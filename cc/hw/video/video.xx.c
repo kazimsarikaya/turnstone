@@ -16,6 +16,8 @@
 /*! default color for video: white foreground over black background*/
 #define WHITE_ON_BLACK  ((0 << 4) | ( 15 & 0x0F))
 
+#define VIDEO_TAB_STOP 8
+
 uint16_t cursor_text_x = 0; ///< cursor postion for column
 uint16_t cursor_text_y = 0; ///< cursor porsition for row
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column
@@ -208,11 +210,6 @@ void video_graphics_print(char_t* string) {
 			}
 		}
 
-		if(wc == '\t') {
-			i++;
-			continue;
-		}
-
 		if(wc == '\r') {
 			cursor_graphics_x = 0;
 			i++;
@@ -220,15 +217,27 @@ void video_graphics_print(char_t* string) {
 			continue;
 		}
 
-		if(wc == '\n') {
-			cursor_graphics_x = 0;
-			cursor_graphics_y++;
-			i++;
+		if(wc == '\n' || wc == '\t') {
+
+			if(wc == '\n') {
+				cursor_graphics_x = 0;
+				cursor_graphics_y++;
+			} else {
+				cursor_graphics_x = ((cursor_graphics_x + VIDEO_TAB_STOP) / VIDEO_TAB_STOP) * VIDEO_TAB_STOP;
+
+				if(cursor_graphics_x >= FONT_CHARS_PER_LINE) {
+					cursor_graphics_x = cursor_graphics_x % FONT_CHARS_PER_LINE;
+					cursor_graphics_y++;
+				}
+			}
+
 
 			if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
 				video_graphics_scroll();
 				cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
 			}
+
+			i++;
 
 			continue;
 		}
@@ -326,8 +335,8 @@ void video_text_print(char_t* string)
 				video_text_scroll();
 			}
 		} else if ( c >= ' ') {
-			uint16_t location = (cursor_text_y * 80 + cursor_text_x) * 2;
-			*((uint16_t*)VIDEO_TEXT_ADDRESS + location) = c | (WHITE_ON_BLACK << 8);
+			uint16_t location = cursor_text_y * 80 + cursor_text_x;
+			*((uint16_t*)(VIDEO_TEXT_ADDRESS + location)) = c | (WHITE_ON_BLACK << 8);
 			cursor_text_x++;
 			if(cursor_text_x == 80) {
 				cursor_text_x = 0;
@@ -359,12 +368,12 @@ void video_move_cursor(){
 
 void video_text_scroll() {
 	for(size_t i = 0; i < 80 * 24; i++) {
-		uint16_t data =   *((uint16_t*)VIDEO_TEXT_ADDRESS + (i * 2) + 160);
-		*((uint16_t*)VIDEO_TEXT_ADDRESS + (i * 2)) = data;
+		uint16_t data =   *((uint16_t*)VIDEO_TEXT_ADDRESS + i + 80);
+		*((uint16_t*)VIDEO_TEXT_ADDRESS + i) = data;
 	}
 	uint16_t blank = ' ' | (WHITE_ON_BLACK << 8);
 	for(size_t i = 80 * 24; i < 80 * 25; i++) {
-		*((uint16_t*)VIDEO_TEXT_ADDRESS + (i * 2)) = blank;
+		*((uint16_t*)VIDEO_TEXT_ADDRESS + i) = blank;
 	}
 }
 
