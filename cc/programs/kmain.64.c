@@ -95,8 +95,6 @@ int8_t kmain64(size_t entry_point) {
 		printf("Default page table switched to 0x%08p\n", p4);
 	}
 
-
-
 	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
 	printf("Frame buffer at 0x%p and size 0x%lx\n", SYSTEM_INFO->frame_buffer->base_address, SYSTEM_INFO->frame_buffer->buffer_size);
 	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
@@ -121,7 +119,7 @@ int8_t kmain64(size_t entry_point) {
 		printf("acpi rsdp table version: %i address 0x%p\n", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
 	}
 
-	char_t* test_data = "çok güzel bir kış ayı";
+	char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
 	printf("address 0x%p %s\n", test_data, test_data);
 
 	printf("random data 0x%x\n", rand());

@@ -29,6 +29,8 @@ typedef struct system_info {
 	video_frame_buffer_t* frame_buffer;
 	uint64_t acpi_version;
 	void* acpi_table;
+	uint64_t kernel_start;
+	uint64_t kernel_4k_frame_count;
 } system_info_t; ///< struct short hand
 
 /*! static location of system information */

@@ -10,6 +10,8 @@
 #include <video.h>
 #include <cpu/task.h>
 #include <cpu/sync.h>
+#include <linker.h>
+#include <cpu/descriptor.h>
 
 /*! default heap variable */
 memory_heap_t* memory_heap_default = NULL;
@@ -240,7 +242,25 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		}
 
 		p4->pages[p4idx].present = 1;
-		p4->pages[p4idx].writable = 1;
+
+		if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
+			p4->pages[p4idx].writable = 0;
+		} else {
+			p4->pages[p4idx].writable = 1;
+		}
+
+		if(type & MEMORY_PAGING_PAGE_TYPE_NOEXEC) {
+			p4->pages[p4idx].no_execute = 1;
+		} else {
+			p4->pages[p4idx].no_execute = 0;
+		}
+
+		if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+			p4->pages[p4idx].user_accessible = 1;
+		} else {
+			p4->pages[p4idx].user_accessible = 0;
+		}
+
 		p3_addr = (size_t)t_p3;
 
 		p4->pages[p4idx].physical_address = p3_addr >> 12;
@@ -256,10 +276,27 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 	}
 
 	if(t_p3->pages[p3idx].present != 1) {
-		if(type == MEMORY_PAGING_PAGE_TYPE_1G) {
+		if(type & MEMORY_PAGING_PAGE_TYPE_1G) {
 			t_p3->pages[p3idx].present = 1;
-			t_p3->pages[p3idx].writable = 1;
 			t_p3->pages[p3idx].hugepage = 1;
+
+			if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
+				t_p3->pages[p3idx].writable = 0;
+			} else {
+				t_p3->pages[p3idx].writable = 1;
+			}
+
+			if(type & MEMORY_PAGING_PAGE_TYPE_NOEXEC) {
+				t_p3->pages[p3idx].no_execute = 1;
+			} else {
+				t_p3->pages[p3idx].no_execute = 0;
+			}
+
+			if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+				t_p3->pages[p3idx].user_accessible = 1;
+			} else {
+				t_p3->pages[p3idx].user_accessible = 0;
+			}
 
 			t_p3->pages[p3idx].physical_address = (frame_adress >> 12) & 0xFFFFFC0000;
 
@@ -273,12 +310,13 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
 			t_p3->pages[p3idx].present = 1;
 			t_p3->pages[p3idx].writable = 1;
+
 			p2_addr = (size_t)t_p2;
 
 			t_p3->pages[p3idx].physical_address = p2_addr >> 12;
 		}
 	} else {
-		if(type == MEMORY_PAGING_PAGE_TYPE_1G) {
+		if(type & MEMORY_PAGING_PAGE_TYPE_1G) {
 			return 0;
 		}
 
@@ -292,10 +330,28 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 	}
 
 	if(t_p2->pages[p2idx].present != 1) {
-		if(type == MEMORY_PAGING_PAGE_TYPE_2M) {
+		if(type & MEMORY_PAGING_PAGE_TYPE_2M) {
 			t_p2->pages[p2idx].present = 1;
-			t_p2->pages[p2idx].writable = 1;
 			t_p2->pages[p2idx].hugepage = 1;
+
+
+			if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
+				t_p2->pages[p2idx].writable = 0;
+			} else {
+				t_p2->pages[p2idx].writable = 1;
+			}
+
+			if(type & MEMORY_PAGING_PAGE_TYPE_NOEXEC) {
+				t_p2->pages[p2idx].no_execute = 1;
+			} else {
+				t_p2->pages[p2idx].no_execute = 0;
+			}
+
+			if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+				t_p2->pages[p2idx].user_accessible = 1;
+			} else {
+				t_p2->pages[p2idx].user_accessible = 0;
+			}
 
 			t_p2->pages[p2idx].physical_address = (frame_adress >> 12) & 0xFFFFFFFE00;
 
@@ -309,12 +365,13 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
 			t_p2->pages[p2idx].present = 1;
 			t_p2->pages[p2idx].writable = 1;
+
 			p1_addr = (size_t)t_p1;
 
 			t_p2->pages[p2idx].physical_address = p1_addr >> 12;
 		}
 	} else {
-		if(type == MEMORY_PAGING_PAGE_TYPE_2M) {
+		if(type & MEMORY_PAGING_PAGE_TYPE_2M) {
 			return 0;
 		}
 
@@ -329,7 +386,24 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
 	if(t_p1->pages[p1idx].present != 1) {
 		t_p1->pages[p1idx].present = 1;
-		t_p1->pages[p1idx].writable = 1;
+
+		if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
+			t_p1->pages[p1idx].writable = 0;
+		} else {
+			t_p1->pages[p1idx].writable = 1;
+		}
+
+		if(type & MEMORY_PAGING_PAGE_TYPE_NOEXEC) {
+			t_p1->pages[p1idx].no_execute = 1;
+		} else {
+			t_p1->pages[p1idx].no_execute = 0;
+		}
+
+		if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+			t_p1->pages[p1idx].user_accessible = 1;
+		} else {
+			t_p1->pages[p1idx].user_accessible = 0;
+		}
 
 		t_p1->pages[p1idx].physical_address = frame_adress >> 12;
 	}
@@ -343,31 +417,71 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		return NULL;
 	}
 
-	uint64_t base_addr_zero = 0;
+	program_header_t* kernel_header = (program_header_t*)SYSTEM_INFO->kernel_start;
 
-	if(memory_paging_add_page_ext(heap, p4, base_addr_zero, base_addr_zero, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+	for(uint64_t i = 0; i < LINKER_SECTION_TYPE_NR_SECTIONS; i++) {
+		uint64_t section_start = kernel_header->section_locations[i].section_start + SYSTEM_INFO->kernel_start;
+		uint64_t section_size = kernel_header->section_locations[i].section_size;
+
+		if(i == LINKER_SECTION_TYPE_TEXT) {
+			section_size += kernel_header->section_locations[i].section_start;
+		}
+
+		if(i == LINKER_SECTION_TYPE_HEAP) {
+			extern size_t __kheap_bottom;
+			size_t heap_start = (size_t)&__kheap_bottom;
+			size_t heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
+			section_size = heap_end - heap_start;
+		}
+
+		memory_paging_page_type_t p_type = MEMORY_PAGING_PAGE_TYPE_4K;
+
+		if(section_size % MEMORY_PAGING_PAGE_LENGTH_4K) {
+			section_size += MEMORY_PAGING_PAGE_LENGTH_4K - (section_size % MEMORY_PAGING_PAGE_LENGTH_4K);
+		}
+
+		printf("section %i start 0x%08x size 0x%08x\n", i, section_start, section_size);
+
+		if(i != LINKER_SECTION_TYPE_TEXT) {
+			p_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
+		}
+
+		if(i == LINKER_SECTION_TYPE_RODATA) {
+			p_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
+		}
+
+		while(section_size) {
+			if(memory_paging_add_page_ext(heap, p4, section_start, section_start, p_type) != 0) {
+				return NULL;
+			}
+
+			section_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+			section_size -= MEMORY_PAGING_PAGE_LENGTH_4K;
+		}
+
+	}
+
+	if(memory_paging_add_page_ext(heap, p4, IDT_BASE_ADDRESS, IDT_BASE_ADDRESS, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
 		return NULL;
 	}
 
-	uint64_t base_addr_2m = 2 << 20;
-
-	if(memory_paging_add_page_ext(heap, p4, base_addr_2m, base_addr_2m, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+	if(memory_paging_add_page_ext(heap, p4, 0xB8000, 0xB8000, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
 		return NULL;
 	}
 
 	uint64_t vfb_addr = (uint64_t)SYSTEM_INFO->frame_buffer->base_address;
 	uint64_t vfb_size = SYSTEM_INFO->frame_buffer->buffer_size;
 
-	uint64_t vfb_page_size = 2 << 20;
+	uint64_t vfb_page_size = MEMORY_PAGING_PAGE_LENGTH_2M;
 
 	while(vfb_size > 0) {
-		if(vfb_size >= (2 << 20)) {
-			if(memory_paging_add_page_ext(heap, p4, vfb_addr, vfb_addr, MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
+		if(vfb_size >= MEMORY_PAGING_PAGE_LENGTH_2M) {
+			if(memory_paging_add_page_ext(heap, p4, vfb_addr, vfb_addr, MEMORY_PAGING_PAGE_TYPE_2M | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
 				return NULL;
 			}
 		} else {
-			vfb_page_size = 4 << 10;
-			if(memory_paging_add_page_ext(heap, p4, vfb_addr, vfb_addr, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+			vfb_page_size = MEMORY_PAGING_PAGE_LENGTH_4K;
+			if(memory_paging_add_page_ext(heap, p4, vfb_addr, vfb_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
 				return NULL;
 			}
 		}

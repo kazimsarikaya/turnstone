@@ -77,7 +77,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	size_t heap_start, heap_end;
 	if(start == 0 || end == 0) {
 		heap_start = (size_t)&__kheap_bottom;
-		heap_end = heap_start + 0x100000;
+		heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
 	} else {
 		heap_start = start;
 		heap_end = end;

@@ -60,9 +60,13 @@ typedef struct {
  * @brief page type enum.
  */
 typedef enum {
-	MEMORY_PAGING_PAGE_TYPE_4K, ///< 4k page
-	MEMORY_PAGING_PAGE_TYPE_2M, ///< 2m page aka hugepage
-	MEMORY_PAGING_PAGE_TYPE_1G ///< 1g page aka big hugepage
+	MEMORY_PAGING_PAGE_TYPE_UNKNOWN= 0, ///< 4k page
+	MEMORY_PAGING_PAGE_TYPE_4K = 1 << 0, ///< 4k page
+	MEMORY_PAGING_PAGE_TYPE_2M = 1 << 1, ///< 2m page aka hugepage
+	MEMORY_PAGING_PAGE_TYPE_1G = 1 << 2, ///< 1g page aka big hugepage
+	MEMORY_PAGING_PAGE_TYPE_READONLY = 1 << 4, ///< read only
+	MEMORY_PAGING_PAGE_TYPE_NOEXEC = 1 << 5, ///< no executable
+	MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE = 1 << 6, ///< no executable
 } memory_paging_page_type_t; ///< short hand for enum
 
 #define MEMORY_PAGING_PAGE_ALIGN 0x1000
