@@ -1135,8 +1135,6 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		return res;
 	}
 
-	uint64_t reloc_locaction = 0;
-
 	fseek (fp, 0, SEEK_END);
 
 	uint64_t file_size = ftell(fp);
@@ -1154,17 +1152,13 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 		fwrite(&addr, 1, 4, fp);
 
-		if(file_size % 16) {
-			file_size += 16 - (file_size % 16);
-		}
+		file_size = ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
 
 		printf("reloc table start %lx count: %lx ", file_size, ctx->direct_relocation_count);
 
 		fseek (fp, file_size, SEEK_SET);
 
 		fwrite(ctx->direct_relocations, 1, sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count, fp);
-
-		reloc_locaction = file_size;
 
 		fseek (fp, 0, SEEK_END);
 
@@ -1192,13 +1186,13 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 		fseek (fp, 0x18, SEEK_SET);
 
-		fwrite(&reloc_locaction, 1, sizeof(reloc_locaction), fp);
+		fwrite(&ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start, 1, sizeof(uint64_t), fp);
 
 		fseek (fp, 0x20, SEEK_SET);
 
 		fwrite(&ctx->direct_relocation_count, 1, sizeof(uint64_t), fp);
 
-		for(uint8_t i = 0; i < LINKER_SECTION_TYPE_STACK; i++) {
+		for(uint8_t i = 0; i < LINKER_SECTION_TYPE_NR_SECTIONS; i++) {
 			fwrite(&ctx->section_locations[i], 1, sizeof(linker_section_locations_t), fp);
 		}
 	}
@@ -2033,32 +2027,54 @@ int32_t main(int32_t argc, char** argv) {
 	}
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_TEXT, &output_offset_base);
+
+	if(output_offset_base % 0x1000) {
+		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+	}
+
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_RODATA, &output_offset_base);
+
+	if(output_offset_base % 0x1000) {
+		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+	}
+
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_DATA, &output_offset_base);
 
 	if(ctx->class == ELFCLASS64) {
-		if(output_offset_base % 16) {
-			output_offset_base += 16 - (output_offset_base % 16);
+		if(output_offset_base % 0x1000) {
+			output_offset_base += 0x1000 - (output_offset_base % 0x1000);
 		}
 
 		printf("reloc table should start at 0x%lx ", output_offset_base);
+		ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start = output_offset_base;
 
 		output_offset_base += sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count;
 
 		printf("ends at 0x%lx\n", output_offset_base);
+
+		ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_size = output_offset_base -  ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
+
 	}
 
-	if(output_offset_base % 0x200) {
-		output_offset_base +=  0x200 - (output_offset_base %  0x200);
+	if(output_offset_base % 0x1000) {
+		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
 	}
+
 
 	printf("section .bss should start at 0x%lx\n", output_offset_base);
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_BSS, &output_offset_base);
 
+	if(output_offset_base % 0x1000) {
+		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+	}
+
+
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_STACK, &output_offset_base);
 
-	output_offset_base += 1;
+	if(output_offset_base % 0x1000) {
+		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+	}
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_HEAP, &output_offset_base);
 

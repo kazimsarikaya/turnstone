@@ -209,6 +209,8 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 										sysinfo->frame_buffer = vfb;
 										sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
 										sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
+										sysinfo->kernel_start = new_kernel_address;
+										sysinfo->kernel_4k_frame_count = kernel_page_count;
 
 										printf("calling kernel with sysinfo @ 0x%p\n", sysinfo);
 
