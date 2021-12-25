@@ -116,7 +116,7 @@ typedef struct descriptor_gdt {
 		                                        seg.data.dpl = 0; \
 		                                        seg.data.present = 1; \
 		                                        seg.data.unused3 = 0;}
-#define IDT_BASE_ADDRESS (1 << 20)
+#define IDT_BASE_ADDRESS (0)
 /*! IDT segment type */
 #define SYSTEM_SEGMENT_TYPE_IDT           0x02
 /*! Active TSS segment type */
