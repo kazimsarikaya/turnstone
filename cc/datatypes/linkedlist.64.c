@@ -27,6 +27,7 @@ typedef struct {
 	memory_heap_t* heap; ///< the heap of the list
 	linkedlist_type_t type; ///< list type
 	linkedlist_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
+	linkedlist_data_comparator_f equality_comparator; ///< if the list is sorted, this is comparator function for data
 	indexer_t indexer; ///< if the list is indexed, this is the indexer
 	size_t item_count; ///< item count at the list, for fast access.
 	linkedlist_item_internal_t* head; ///< head of the list
@@ -165,7 +166,25 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
 
 void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item) {
 	linkedlist_item_internal_t* li = (linkedlist_item_internal_t*)list_item;
+
+	if(li == NULL) {
+		return NULL;
+	}
+
 	return li->data;
+}
+
+int8_t linkedlist_set_equality_comparator(linkedlist_t list, linkedlist_data_comparator_f comparator){
+
+	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+
+	if(l == NULL) {
+		return -1;
+	}
+
+	l->equality_comparator = comparator;
+
+	return 0;
 }
 
 size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position){
@@ -339,7 +358,6 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
 
 	} else if(where == LINKEDLIST_DELETE_AT_FINDBY) {
 		if(l->type == LINKEDLIST_TYPE_INDEXEDLIST) {
-			void* result = NULL;
 
 			iterator_t* pk_iter = indexer_search(l->indexer, "PRIMARYKEY", data, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
@@ -392,8 +410,14 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
 		} else {
 			iterator_t* iter = linkedlist_iterator_create(l);
 
+			linkedlist_data_comparator_f cmp = l->comparator;
+
+			if(l->equality_comparator) {
+				cmp = l->equality_comparator;
+			}
+
 			while(iter->end_of_iterator(iter) != 0) {
-				if(l->comparator(iter->get_item(iter), data) == 0) {
+				if(cmp(iter->get_item(iter), data) == 0) {
 					result = iter->delete_item(iter);
 					break;
 				}

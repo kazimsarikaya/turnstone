@@ -37,11 +37,11 @@ typedef enum {
  * used only information
  */
 typedef enum {
-	LINKEDLIST_TYPE_LIST, ///< normal list
-	LINKEDLIST_TYPE_SORTEDLIST, ///< sorted list
-	LINKEDLIST_TYPE_INDEXEDLIST, ///< indexed list
-	LINKEDLIST_TYPE_QUEUE, ///< queue
-	LINKEDLIST_TYPE_STACK ///< stack
+	LINKEDLIST_TYPE_LIST = 1 << 0, ///< normal list
+	LINKEDLIST_TYPE_SORTEDLIST = 1 << 1, ///< sorted list
+	LINKEDLIST_TYPE_QUEUE = 1 << 2, ///< queue
+	LINKEDLIST_TYPE_STACK = 1 << 3, ///< stack
+	LINKEDLIST_TYPE_INDEXEDLIST = 1 << 8,  ///< indexed list
 }linkedlist_type_t;
 
 /**
@@ -282,5 +282,7 @@ linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist
  * iterator is created at the heap of list.
  */
 iterator_t* linkedlist_iterator_create(linkedlist_t list);
+
+int8_t linkedlist_set_equality_comparator(linkedlist_t list, linkedlist_data_comparator_f comparator);
 
 #endif
