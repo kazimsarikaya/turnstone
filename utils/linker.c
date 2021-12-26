@@ -607,7 +607,8 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 				   reloc->type == LINKER_RELOCATION_TYPE_32_32 ||
 				   reloc->type == LINKER_RELOCATION_TYPE_64_32 ||
 				   reloc->type == LINKER_RELOCATION_TYPE_64_32S ||
-				   reloc->type == LINKER_RELOCATION_TYPE_64_64) {
+				   reloc->type == LINKER_RELOCATION_TYPE_64_64 ||
+				   reloc->type == LINKER_RELOCATION_TYPE_64_PC32) {
 					ctx->direct_relocation_count++;
 				}
 
@@ -1021,7 +1022,8 @@ int8_t linker_write_output(linker_context_t* ctx) {
 					}
 
 					if(reloc->type == LINKER_RELOCATION_TYPE_64_32) {
-						ctx->direct_relocations[dr_index].type = reloc->type;
+						ctx->direct_relocations[dr_index].section_type = sec->type;
+						ctx->direct_relocations[dr_index].relocation_type = reloc->type;
 						ctx->direct_relocations[dr_index].offset = reloc->offset;
 						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
 						dr_index++;
@@ -1035,7 +1037,8 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 						fwrite(&addr, 1, 4, fp);
 					} else if(reloc->type == LINKER_RELOCATION_TYPE_64_32S) {
-						ctx->direct_relocations[dr_index].type = reloc->type;
+						ctx->direct_relocations[dr_index].section_type = sec->type;
+						ctx->direct_relocations[dr_index].relocation_type = reloc->type;
 						ctx->direct_relocations[dr_index].offset = reloc->offset;
 						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
 						dr_index++;
@@ -1049,7 +1052,8 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 						fwrite(&addr, 1, 4, fp);
 					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64_64) {
-						ctx->direct_relocations[dr_index].type = reloc->type;
+						ctx->direct_relocations[dr_index].section_type = sec->type;
+						ctx->direct_relocations[dr_index].relocation_type = reloc->type;
 						ctx->direct_relocations[dr_index].offset = reloc->offset;
 						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
 						dr_index++;
@@ -1063,6 +1067,12 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 						fwrite(&addr, 1, 8, fp);
 					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64_PC32) {
+						ctx->direct_relocations[dr_index].section_type = sec->type;
+						ctx->direct_relocations[dr_index].relocation_type = reloc->type;
+						ctx->direct_relocations[dr_index].offset = reloc->offset;
+						ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend - reloc->offset;
+						dr_index++;
+
 						uint32_t addr = (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend  - (uint32_t)(reloc->offset);
 
 
@@ -1657,7 +1667,7 @@ int32_t main(int32_t argc, char** argv) {
 	stack_top_sym->symbol_name = strdup_at_heap(ctx->heap, "__stack_top");
 	stack_top_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
 	stack_top_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
-	stack_top_sym->value = stack_sec->size;
+	stack_top_sym->value = stack_sec->size - 16;
 	stack_top_sym->section_id = stack_sec->id;
 
 	linkedlist_list_insert(ctx->symbols, stack_top_sym);
@@ -1982,6 +1992,7 @@ int32_t main(int32_t argc, char** argv) {
 					case R_X86_64_PC32:
 					case R_X86_64_PLT32:
 						reloc->type = LINKER_RELOCATION_TYPE_64_PC32;
+						ctx->direct_relocation_count++;
 						break;
 					default:
 						print_error("unknown reloc type");

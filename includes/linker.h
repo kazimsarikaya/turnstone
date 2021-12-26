@@ -31,7 +31,8 @@ typedef enum {
 } linker_relocation_type_t;
 
 typedef struct {
-	linker_relocation_type_t type : 8;
+	linker_section_type_t section_type;
+	linker_relocation_type_t relocation_type;
 	uint64_t offset;
 	uint64_t addend;
 }__attribute__((packed)) linker_direct_relocation_t;
@@ -48,7 +49,7 @@ typedef struct {
 	uint64_t program_size;
 	uint64_t reloc_start;
 	uint64_t reloc_count;
-	linker_section_locations_t section_locations[LINKER_SECTION_TYPE_STACK];
+	linker_section_locations_t section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
 }__attribute__((packed)) program_header_t;
 
 int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst_program_addr, uint64_t entry_point_addr);
