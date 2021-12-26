@@ -446,7 +446,11 @@ int8_t bplustree_delete(index_t* idx, void* key, void** deleted_data){
 				break;
 			} else {
 				linkedlist_stack_push(path, position);
-				*deleted_data = linkedlist_get_data_at_position(node->datas, *position);
+
+				if(deleted_data) {
+					*deleted_data = linkedlist_get_data_at_position(node->datas, *position);
+				}
+
 				found = 0;
 				break;
 			}
