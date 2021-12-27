@@ -66,4 +66,6 @@ size_t video_printf(char_t* fmt, ...);
 
 #define printf(...) video_printf(__VA_ARGS__)
 
+#define PRINTLOG(module, type, msg, ...)  video_printf("%s:%i: " module " : " type " " msg "\n", __FILE__, __LINE__, __VA_ARGS__)
+
 #endif

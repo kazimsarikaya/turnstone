@@ -338,6 +338,10 @@ size_t video_printf(char_t* fmt, ...){
 					fmt++;
 					val = *fmt - 0x30;
 					fmt++;
+					if(*fmt >= '0' && *fmt <= '9') {
+						val = val * 10 + *fmt - 0x30;
+						fmt++;
+					}
 					wfmtb = 0;
 					break;
 				case '.':
