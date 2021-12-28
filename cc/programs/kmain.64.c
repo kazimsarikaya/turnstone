@@ -34,6 +34,7 @@ int8_t linker_remap_kernel() {
 	linker_section_locations_t sec;
 	uint64_t sec_size;
 	uint64_t sec_start;
+	frame_t f;
 
 	linker_section_locations_t old_section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
 
@@ -70,11 +71,14 @@ int8_t linker_remap_kernel() {
 
 	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
 
-	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+	f.frame_count = sec_size / FRAME_SIZE;
 
-		data_start += FRAME_SIZE;
+	if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		return -1;
 	}
+
+	data_start += sec_size;
 
 	sec = kernel->section_locations[LINKER_SECTION_TYPE_RODATA];
 	sec_start = sec.section_start;
@@ -89,11 +93,15 @@ int8_t linker_remap_kernel() {
 
 	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
 
+	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+	f.frame_count = sec_size / FRAME_SIZE;
+
+	if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		return -1;
+	}
+
 	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-
 		memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
-
 		data_start += FRAME_SIZE;
 	}
 
@@ -110,11 +118,14 @@ int8_t linker_remap_kernel() {
 
 	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
 
-	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+	f.frame_count = sec_size / FRAME_SIZE;
 
-		data_start += FRAME_SIZE;
+	if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		return -1;
 	}
+
+	data_start += sec_size;
 
 	sec = kernel->section_locations[LINKER_SECTION_TYPE_DATA];
 	sec_start = sec.section_start;
@@ -129,11 +140,14 @@ int8_t linker_remap_kernel() {
 
 	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
 
-	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+	f.frame_count = sec_size / FRAME_SIZE;
 
-		data_start += FRAME_SIZE;
+	if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		return -1;
 	}
+
+	data_start += sec_size;
 
 	sec = kernel->section_locations[LINKER_SECTION_TYPE_HEAP];
 	sec_start = sec.section_start;
@@ -149,11 +163,14 @@ int8_t linker_remap_kernel() {
 
 	printf("sec 0x%016lx  0x%08x\n", data_start, sec_size);
 
-	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+	f.frame_count = sec_size / FRAME_SIZE;
 
-		data_start += FRAME_SIZE;
+	if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		return -1;
 	}
+
+	data_start += sec_size;
 
 	uint64_t stack_top = 4ULL << 30;
 
@@ -172,11 +189,14 @@ int8_t linker_remap_kernel() {
 
 	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
 
-	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+	f.frame_count = sec_size / FRAME_SIZE;
 
-		data_start += FRAME_SIZE;
+	if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		return -1;
 	}
+
+	data_start += sec_size;
 
 	PRINTLOG("LINKER", "DEBUG", "new sections locations are created on page table", 0);
 
@@ -400,7 +420,7 @@ int8_t kmain64(size_t entry_point) {
 	}
 
 	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
-	printf("Frame buffer at 0x%lp and size 0x%lx\n", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
+	printf("Frame buffer at 0x%lp and size 0x%016lx\n", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
 	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
 	if(SYSTEM_INFO->acpi_table) {

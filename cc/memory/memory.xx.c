@@ -108,8 +108,9 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 	size_t pad = 0;
 
 	if(value) {
-		for(uint8_t i = 0; i < max_regsize; i++) {
-			pad |= ((size_t)value) << (4 * i);
+		pad = value;
+		for(uint8_t i = 0; i < max_regsize - 1; i++) {
+			pad = (pad << 8) | value;
 		}
 	}
 
@@ -128,10 +129,6 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 	}
 
 	return 0;
-}
-
-int8_t memory_memclean(void* address, size_t size){
-	return memory_memset(address, 0, size);
 }
 
 int8_t memory_memcopy(void* source, void* destination, size_t size){
