@@ -216,9 +216,9 @@ void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_
 
 	uint64_t cr2 = cpu_read_cr2();
 
-	if(errcode == 0) {
-		printf("\nKERN: INFO page does not exists for address 0x%08x\n", cr2 );
+	printf("\nKERN: INFO page does not exists for address 0x%08x\n", cr2 );
 
+	if(errcode == 0) {
 		printf("\nKERN: FATAL page cannot be added. Implement it!. Halting cpu.\n");
 		cpu_hlt();
 	} else {

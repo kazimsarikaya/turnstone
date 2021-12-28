@@ -59,13 +59,14 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 			vfb = memory_malloc(sizeof(video_frame_buffer_t));
 
-			vfb->base_address = (void*)gop->mode->frame_buffer_base;
+			vfb->physical_base_address = gop->mode->frame_buffer_base;
+			vfb->virtual_base_address = gop->mode->frame_buffer_base;
 			vfb->buffer_size = gop->mode->frame_buffer_size;
 			vfb->width = gop->mode->information->horizontal_resolution;
 			vfb->height = gop->mode->information->vertical_resolution;
 			vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
 
-			printf("frame buffer info %ix%i pps %i at 0x%p size 0x%lx\n", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->base_address, vfb->buffer_size);
+			printf("frame buffer info %ix%i pps %i at 0x%p size 0x%lx\n", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
 			printf("vfb address 0x%p\n", vfb);
 
 		} else {

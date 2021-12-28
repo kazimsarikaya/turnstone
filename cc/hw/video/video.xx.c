@@ -45,8 +45,11 @@ uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
 
 wchar_t* video_font_unicode_table = NULL;
 
+void video_refresh_frame_buffer_address() {
+	VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
+}
 void video_init() {
-	VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->base_address;
+	VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 	VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
 	VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
 	VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;

@@ -39,6 +39,7 @@ typedef struct {
 
 typedef struct {
 	uint64_t section_start;
+	uint64_t section_pyhsical_start;
 	uint64_t section_size;
 }linker_section_locations_t;
 

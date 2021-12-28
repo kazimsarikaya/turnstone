@@ -1,6 +1,8 @@
 #include <types.h>
 #include <cpu/descriptor.h>
 #include <memory.h>
+#include <memory/frame.h>
+#include <systeminfo.h>
 
 descriptor_register_t* GDT_REGISTER = NULL;
 descriptor_register_t* IDT_REGISTER = NULL;
@@ -41,6 +43,11 @@ uint8_t descriptor_build_idt_register(){
 	IDT_REGISTER = memory_malloc(sizeof(descriptor_register_t));
 	if(IDT_REGISTER == NULL) {
 		return -1;
+	}
+
+	if(SYSTEM_INFO->remapped == 0) {
+		frame_t idt_frame = {IDT_BASE_ADDRESS, 1, FRAME_TYPE_RESERVED, 0};
+		KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &idt_frame);
 	}
 
 	IDT_REGISTER->limit = idt_size - 1;

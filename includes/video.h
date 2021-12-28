@@ -29,7 +29,8 @@ typedef struct {
 }video_psf1_font_t;
 
 typedef struct {
-	void* base_address;
+	uint64_t physical_base_address;
+	uint64_t virtual_base_address;
 	uint64_t buffer_size;
 	uint32_t width;
 	uint32_t height;
@@ -39,6 +40,7 @@ typedef struct {
 typedef uint32_t pixel_t;
 
 void video_init();
+void video_refresh_frame_buffer_address();
 
 /**
  * @brief writes string to video buffer

@@ -1032,7 +1032,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						addr += (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend;
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", addr);
+							fprintf(map_fp, "%08x ", addr);
 						}
 
 						fwrite(&addr, 1, 4, fp);
@@ -1047,7 +1047,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						addr += (int32_t)target_sym->value + (int32_t)target_sec->offset + (uint32_t)reloc->addend;
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", addr);
+							fprintf(map_fp, "%08x ", addr);
 						}
 
 						fwrite(&addr, 1, 4, fp);
@@ -1062,7 +1062,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						addr += target_sym->value + target_sec->offset + reloc->addend;
 
 						if(map_fp) {
-							fprintf(map_fp, "%016lx\n", addr);
+							fprintf(map_fp, "%016lx ", addr);
 						}
 
 						fwrite(&addr, 1, 8, fp);
@@ -1077,7 +1077,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", ctx->start + reloc->offset + addr + 4);
+							fprintf(map_fp, "%08x ", ctx->start + reloc->offset + addr + 4);
 						}
 
 						fwrite(&addr, 1, 4, fp);
@@ -1087,7 +1087,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						addr += (uint16_t)target_sym->value + (uint16_t)target_sec->offset + (uint16_t)reloc->addend + addend;
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", addr);
+							fprintf(map_fp, "%08x ", addr);
 						}
 
 						fwrite(&addr, 1, 2, fp);
@@ -1097,7 +1097,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 						addr += (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend + addend;
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", addr);
+							fprintf(map_fp, "%08x ", addr);
 						}
 
 						fwrite(&addr, 1, 4, fp);
@@ -1107,7 +1107,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", ctx->start + reloc->offset + addr + 2);
+							fprintf(map_fp, "%08x ", ctx->start + reloc->offset + addr + 2);
 						}
 
 						fwrite(&addr, 1, 2, fp);
@@ -1117,13 +1117,17 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 
 						if(map_fp) {
-							fprintf(map_fp, "%08x\n", ctx->start + reloc->offset + addr + 4);
+							fprintf(map_fp, "%08x ", ctx->start + reloc->offset + addr + 4);
 						}
 
 						fwrite(&addr, 1, 4, fp);
 					} else{
 						print_error("unknown reloc type");
 						return -1;
+					}
+
+					if(map_fp) {
+						fprintf(map_fp, "with reloc type %i\n", reloc->type);
 					}
 
 					relocs_iter = relocs_iter->next(relocs_iter);
@@ -1438,6 +1442,7 @@ void linker_print_sections(linker_context_t* ctx) {
 void linker_bind_offset_of_section(linker_context_t* ctx, linker_section_type_t type, uint64_t* base_offset) {
 
 	ctx->section_locations[type].section_start = *base_offset;
+	ctx->section_locations[type].section_pyhsical_start = *base_offset;
 
 	iterator_t* sec_iter = linkedlist_iterator_create(ctx->sections);
 
@@ -2058,6 +2063,7 @@ int32_t main(int32_t argc, char** argv) {
 
 		printf("reloc table should start at 0x%lx ", output_offset_base);
 		ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start = output_offset_base;
+		ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_pyhsical_start = output_offset_base;
 
 		output_offset_base += sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count;
 
