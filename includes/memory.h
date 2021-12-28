@@ -79,7 +79,7 @@ int8_t memory_memset(void* address, uint8_t value, size_t size);
  * @param[in] size    repeat count
  * @return 0
  */
-int8_t memory_memclean(void* address, size_t size);
+#define memory_memclean(a, s) memory_memset(a, 0, s)
 
 /**
  * @brief copy source to destination with length bytes from source

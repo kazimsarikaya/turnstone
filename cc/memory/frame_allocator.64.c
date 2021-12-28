@@ -6,6 +6,7 @@
 #include <cpu.h>
 #include <cpu/sync.h>
 #include <cpu/descriptor.h>
+#include <memory/paging.h>
 
 
 frame_allocator_t* KERNEL_FRAME_ALLOCATOR = NULL;
@@ -306,6 +307,12 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 		new_frm->type = FRAME_TYPE_FREE;
 		new_frm->frame_attributes = tmp_frame->frame_attributes;
 
+		for(uint64_t i = 0; i < f->frame_count; i++) {
+			memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
+			memory_memclean((void*)(0x1000), FRAME_SIZE);
+			memory_paging_delete_page(0x1000, NULL);
+		}
+
 		ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm);
 		linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
@@ -360,6 +367,12 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 		new_frm->type = FRAME_TYPE_FREE;
 		new_frm->frame_attributes = tmp_frame->frame_attributes;
 
+		for(uint64_t i = 0; i < f->frame_count; i++) {
+			memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
+			memory_memclean((void*)(0x1000), FRAME_SIZE);
+			memory_paging_delete_page(0x1000, NULL);
+		}
+
 		ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm);
 		linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
@@ -410,6 +423,12 @@ int8_t fa_cleanup(frame_allocator_t* self) {
 
 		ctx->reserved_frames_by_address->delete(ctx->reserved_frames_by_address, f, NULL);
 
+		for(uint64_t i = 0; i < f->frame_count; i++) {
+			memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
+			memory_memclean((void*)(0x1000), FRAME_SIZE);
+			memory_paging_delete_page(0x1000, NULL);
+		}
+
 		f->frame_attributes &= ~FRAME_ATTRIBUTE_OLD_RESERVED;
 		f->type = FRAME_TYPE_FREE;
 
@@ -447,6 +466,12 @@ int8_t fa_cleanup(frame_allocator_t* self) {
 
 		ctx->allocated_frames_by_address->delete(ctx->allocated_frames_by_address, f, NULL);
 
+		for(uint64_t i = 0; i < f->frame_count; i++) {
+			memory_paging_add_page(0x1000, f->frame_address + i * FRAME_SIZE, MEMORY_PAGING_PAGE_TYPE_4K);
+			memory_memclean((void*)(0x1000), FRAME_SIZE);
+			memory_paging_delete_page(0x1000, NULL);
+		}
+
 		f->frame_attributes &= ~FRAME_ATTRIBUTE_OLD_RESERVED;
 		f->type = FRAME_TYPE_FREE;
 
@@ -463,6 +488,29 @@ int8_t fa_cleanup(frame_allocator_t* self) {
 	lock_release(ctx->lock);
 
 	return 0;
+}
+
+
+frame_t* fa_get_reserved_frames_of_address(struct frame_allocator* self, void* address){
+	if(self == NULL) {
+		return NULL;
+	}
+
+	frame_allocator_context_t* ctx = self->context;
+
+	frame_t f = {((((uint64_t)address) >> 12) << 12), 1, 0, 0};
+
+	frame_t* res = NULL;
+
+	iterator_t* iter = ctx->reserved_frames_by_address->search(ctx->reserved_frames_by_address, &f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+	if(iter->end_of_iterator(iter) != 0) {
+		res = (frame_t*)iter->get_item(iter);
+	}
+
+	iter->destroy(iter);
+
+	return res;
 }
 
 int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
@@ -535,7 +583,7 @@ frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
 	}
 
 	if(efi_m_type == EFI_ACPI_RECLAIM_MEMORY) {
-		return FRAME_TYPE_USED;
+		return FRAME_TYPE_ACPI_RECLAIM_MEMORY;
 	}
 
 	return FRAME_TYPE_RESERVED;
@@ -577,6 +625,10 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 			f->type = type;
 			f->frame_attributes = mem_desc->attribute;
 
+			if(mem_desc->type == EFI_ACPI_RECLAIM_MEMORY) {
+				f->frame_attributes |= FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY;
+			}
+
 			if((frame_start + frame_count * FRAME_SIZE) <= (1 << 20)) {
 				type = FRAME_TYPE_RESERVED;
 				f->type = type;
@@ -591,6 +643,7 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 				ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, f, f);
 				break;
 			case FRAME_TYPE_RESERVED:
+			case FRAME_TYPE_ACPI_RECLAIM_MEMORY:
 				ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f);
 				break;
 			}
@@ -611,6 +664,7 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 	fa->release_frame = fa_release_frame;
 	fa->rebuild_reserved_mmap = fa_rebuild_reserved_mmap;
 	fa->cleanup = fa_cleanup;
+	fa->get_reserved_frames_of_address = fa_get_reserved_frames_of_address;
 
 	if(SYSTEM_INFO->reserved_mmap_size && SYSTEM_INFO->reserved_mmap_data) {
 		uint64_t resv_mmap_ent_cnt = SYSTEM_INFO->reserved_mmap_size / SYSTEM_INFO->mmap_descriptor_size;

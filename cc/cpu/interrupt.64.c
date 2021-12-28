@@ -138,7 +138,7 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
 		}
 	}
 
-	printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%08x\n", intnum, frame->return_rip);
+	printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016lx\n", intnum, frame->return_rip);
 	printf("cr4: 0x%x\n", cpu_read_cr4());
 	printf("Cpu is halting.");
 	cpu_hlt();
@@ -146,7 +146,7 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
 
 void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint8_t intnum){
 	cpu_cli();
-	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%08x\n", intnum, errcode, frame->return_rip);
+	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%016lx\n", intnum, errcode, frame->return_rip);
 	printf("Cpu is halting.");
 	cpu_hlt();
 }
@@ -212,11 +212,11 @@ void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(in
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
 	cpu_cli();
 
-	printf("\nKERN: INFO page fault occured with code 0x%08lx at 0x%08lx\n", errcode, frame->return_rip);
+	printf("\nKERN: INFO page fault occured with code 0x%016lx at 0x%016lx\n", errcode, frame->return_rip);
 
 	uint64_t cr2 = cpu_read_cr2();
 
-	printf("\nKERN: INFO page does not exists for address 0x%08x\n", cr2 );
+	printf("\nKERN: INFO page does not exists for address 0x%016lx\n", cr2 );
 
 	if(errcode == 0) {
 		printf("\nKERN: FATAL page cannot be added. Implement it!. Halting cpu.\n");
