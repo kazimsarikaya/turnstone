@@ -9,6 +9,7 @@
 #include <memory.h>
 
 #define MEMORY_PAGING_INDEX_COUNT 512
+#define MEMORY_PAGING_PAGE_SIZE   0x1000
 
 /**
  * @struct memory_page_entry_t
@@ -67,9 +68,11 @@ typedef enum {
 	MEMORY_PAGING_PAGE_TYPE_READONLY = 1 << 4, ///< read only
 	MEMORY_PAGING_PAGE_TYPE_NOEXEC = 1 << 5, ///< no executable
 	MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE = 1 << 6, ///< no executable
+	MEMORY_PAGING_PAGE_TYPE_INTERNAL = 1 << 15, ///< no executable
+	MEMORY_PAGING_PAGE_TYPE_WILL_DELETED = 1 << 16, ///< no executable
 } memory_paging_page_type_t; ///< short hand for enum
 
-#define MEMORY_PAGING_PAGE_ALIGN 0x1000
+#define MEMORY_PAGING_PAGE_ALIGN MEMORY_PAGING_PAGE_SIZE
 
 #define MEMORY_PAGING_PAGE_LENGTH_4K (1 << 12)
 #define MEMORY_PAGING_PAGE_LENGTH_2M (1 << 21)
@@ -106,21 +109,21 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
  * @param  heap            the heap where variables will be created in
  * @param  p4              p4 page table
  * @param  virtual_address virtual start address of page
- * @param  frame_adress    frame address of page links
+ * @param  frame_address    frame address of page links
  * @param  type            page type, see also \ref memory_paging_page_type_t
  * @return  0 if successed
  *
  * if heap is NULL, the pages created in default heap
  */
 int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
-                                  uint64_t virtual_address, uint64_t frame_adress,
+                                  uint64_t virtual_address, uint64_t frame_address,
                                   memory_paging_page_type_t type);
 /*! add virtual address va to pt page table with frame address fa and page type t uses default heap for mallocs */
 #define memory_paging_add_page_with_p4(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
 /*! add va and fa to defeault p4 table*/
 #define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, NULL, va, fa, t)
 
-int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
+int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_address);
 #define memory_paging_delete_page_ext(p4, va, faptr) memory_paging_delete_page_ext_with_heap(NULL, p4, va, faptr)
 #define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext_with_heap(NULL, NULL, va, faptr)
 
@@ -128,11 +131,18 @@ memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memo
 #define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL, NULL)
 #define memory_paging_move_pagetable(h) memory_paging_clone_pagetable_ext(h, NULL)
 
+memory_page_table_t* memory_paging_clone_pagetable_to_frames_ext(memory_heap_t* heap, memory_page_table_t* p4, uint64_t fa);
+#define memory_paging_clone_current_pagetable_to_frames_ext(h, fa) memory_paging_clone_pagetable_to_frames_ext(h, NULL, fa)
+#define memory_paging_clone_current_pagetable_to_frames(fa) memory_paging_clone_pagetable_to_frames_ext(NULL, NULL, fa)
+
 int8_t memory_paging_destroy_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4);
 #define memory_paging_destroy_pagetable(p) memory_paging_destroy_pagetable_ext(NULL, p)
 
-int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_adress);
-#define memory_paging_get_frame_address(va, faptr) memory_paging_get_frame_address_ext(NULL, va, faptr);
+int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_address);
+#define memory_paging_get_frame_address(va, faptr) memory_paging_get_frame_address_ext(NULL, va, faptr)
+
+int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type);
+#define memory_paging_toggle_attributes(va, t) memory_paging_toggle_attributes_ext(NULL, va, t)
 
 /*! gets p4 index of virtual address at long mode */
 #define MEMORY_PT_GET_P4_INDEX(u64) ((u64 >> 39) & 0x1FF)

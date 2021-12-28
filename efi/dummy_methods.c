@@ -8,6 +8,7 @@ typedef void* lock_t;
 
 size_t __kheap_bottom;
 void* SYSTEM_INFO;
+void* KERNEL_FRAME_ALLOCATOR = NULL;
 
 task_t* task_get_current_task(){
 	return NULL;

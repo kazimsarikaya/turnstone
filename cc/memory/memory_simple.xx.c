@@ -80,7 +80,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
 
 		if(kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size) {
-			heap_start = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size;
+			heap_start = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
 			heap_end = heap_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size;
 		} else {
 			heap_start = (size_t)&__kheap_bottom;
@@ -90,6 +90,8 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		heap_start = start;
 		heap_end = end;
 	}
+
+	printf("SIMPLEHEAP: Debug heap boundaries 0x%08x 0x%08x\n", heap_start, heap_end);
 
 	uint8_t* t_start = (uint8_t*)heap_start;
 	memory_memclean(t_start, heap_end - heap_start);

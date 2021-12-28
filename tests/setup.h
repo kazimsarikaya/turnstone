@@ -22,6 +22,7 @@ size_t video_printf(char_t* fmt, va_list args) {
 uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
 void* SYSTEM_INFO = NULL;
+void* KERNEL_FRAME_ALLOCATOR = NULL;
 
 void print_success(const char* msg){
 	printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");

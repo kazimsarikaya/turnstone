@@ -16,14 +16,293 @@
 #include <cpu.h>
 #include <utils.h>
 #include <device/kbd.h>
-#include <diskio.h>
 #include <cpu/task.h>
 #include <linker.h>
 #include <driver/ahci.h>
 #include <random.h>
+#include <memory/frame.h>
 
+int8_t kmain64(size_t entry_point);
 int8_t kmain64_init();
 void move_kernel(size_t src, size_t dst);
+
+int8_t linker_remap_kernel() {
+	program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
+
+	uint64_t data_start = 1 << 30; // 1gib
+
+	linker_section_locations_t sec;
+	uint64_t sec_size;
+	uint64_t sec_start;
+
+	linker_section_locations_t old_section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
+
+	memory_memcopy(kernel->section_locations, old_section_locations, sizeof(old_section_locations));
+
+	for(uint64_t i = 0; i < LINKER_SECTION_TYPE_NR_SECTIONS; i++) {
+		old_section_locations[i].section_start = (old_section_locations[i].section_start >> 12) << 12;
+		old_section_locations[i].section_start += SYSTEM_INFO->kernel_start;
+
+		if(old_section_locations[i].section_size % FRAME_SIZE) {
+			old_section_locations[i].section_size += (FRAME_SIZE - (old_section_locations[i].section_size % FRAME_SIZE));
+		}
+	}
+
+	old_section_locations[LINKER_SECTION_TYPE_TEXT].section_start = SYSTEM_INFO->kernel_start;
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_TEXT];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	if(sec_size % FRAME_SIZE) {
+		sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+	}
+
+	kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start = 2 << 20;
+	kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_size = sec_size;
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size + (FRAME_SIZE - (sec.section_size % FRAME_SIZE));
+	kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start = data_start;
+	kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_size = sec_size;
+
+
+	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+
+	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		data_start += FRAME_SIZE;
+	}
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_RODATA];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	if(sec_size % FRAME_SIZE) {
+		sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+	}
+
+	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_start = data_start;
+	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_size = sec_size;
+
+	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+
+	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
+
+		data_start += FRAME_SIZE;
+	}
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	if(sec_size % FRAME_SIZE) {
+		sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+	}
+
+	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_start = data_start;
+	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_size = sec_size;
+
+	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+
+	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		data_start += FRAME_SIZE;
+	}
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_DATA];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	if(sec_size % FRAME_SIZE) {
+		sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+	}
+
+	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_start = data_start;
+	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_size = sec_size;
+
+	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+
+	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		data_start += FRAME_SIZE;
+	}
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_HEAP];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	if(sec_size % FRAME_SIZE) {
+		sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+	}
+
+	data_start = 4ULL << 30;
+	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = data_start;
+	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = sec_size;
+
+	printf("sec 0x%016lx  0x%08x\n", data_start, sec_size);
+
+	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		data_start += FRAME_SIZE;
+	}
+
+	uint64_t stack_top = 4ULL << 30;
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_STACK];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	if(sec_size % FRAME_SIZE) {
+		sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+	}
+
+	kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_start = stack_top - sec_size;
+	kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_size = sec_size;
+
+	data_start = stack_top - sec_size;
+
+	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+
+	for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+		memory_paging_add_page_ext(NULL, NULL, data_start, SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		data_start += FRAME_SIZE;
+	}
+
+	PRINTLOG("LINKER", "DEBUG", "new sections locations are created on page table", 0);
+
+
+	SYSTEM_INFO->remapped = 1;
+
+	frame_t* sysinfo_frms;
+
+	KERNEL_FRAME_ALLOCATOR->rebuild_reserved_mmap(KERNEL_FRAME_ALLOCATOR);
+
+	uint64_t sysinfo_size = SYSTEM_INFO->mmap_size + SYSTEM_INFO->reserved_mmap_size + sizeof(video_frame_buffer_t) + sizeof(system_info_t);
+	uint64_t sysinfo_frm_count = (sysinfo_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+	while(1) {
+		KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, sysinfo_frm_count,
+		                                                FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+		                                                &sysinfo_frms, NULL);
+
+
+		for(uint64_t i = 0; i < sysinfo_frm_count; i++) {
+			memory_paging_add_page_ext(NULL, NULL,
+			                           sysinfo_frms->frame_address  + i * FRAME_SIZE,
+			                           sysinfo_frms->frame_address  + i * FRAME_SIZE,
+			                           MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		}
+
+		KERNEL_FRAME_ALLOCATOR->rebuild_reserved_mmap(KERNEL_FRAME_ALLOCATOR);
+
+		uint64_t new_sysinfo_size = SYSTEM_INFO->mmap_size + SYSTEM_INFO->reserved_mmap_size + sizeof(video_frame_buffer_t) + sizeof(system_info_t);
+		uint64_t new_sysinfo_frm_count = (new_sysinfo_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+		if(sysinfo_frm_count != new_sysinfo_frm_count) {
+			sysinfo_frm_count = new_sysinfo_frm_count;
+
+			KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, sysinfo_frms);
+		} else {
+			break;
+		}
+	}
+
+	PRINTLOG("LINKER", "DEBUG", "stored system info frame address 0x%016lx", sysinfo_frms->frame_address);
+
+	uint8_t* mmap_data = (uint8_t*)sysinfo_frms->frame_address;
+	uint8_t* reserved_mmap_data = (uint8_t*)(sysinfo_frms->frame_address + SYSTEM_INFO->mmap_size);
+	video_frame_buffer_t* vfb = (video_frame_buffer_t*)(sysinfo_frms->frame_address + SYSTEM_INFO->mmap_size + SYSTEM_INFO->reserved_mmap_size);
+	system_info_t* new_sysinfo = (system_info_t*)(sysinfo_frms->frame_address + SYSTEM_INFO->mmap_size + SYSTEM_INFO->reserved_mmap_size + sizeof(video_frame_buffer_t));
+
+	memory_memcopy(SYSTEM_INFO->mmap_data, mmap_data, SYSTEM_INFO->mmap_size);
+	memory_memcopy(SYSTEM_INFO->reserved_mmap_data, reserved_mmap_data, SYSTEM_INFO->reserved_mmap_size);
+	memory_memcopy(SYSTEM_INFO->frame_buffer, vfb, sizeof(video_frame_buffer_t));
+	memory_memcopy(SYSTEM_INFO, new_sysinfo, sizeof(system_info_t));
+	new_sysinfo->mmap_data = mmap_data;
+	new_sysinfo->reserved_mmap_data = reserved_mmap_data;
+	new_sysinfo->frame_buffer = vfb;
+
+
+	PRINTLOG("LINKER", "DEBUG", "new system info copy created at 0x%08x", new_sysinfo);
+
+	uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
+	linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)(SYSTEM_INFO->kernel_start + kernel->reloc_start);
+	kernel->reloc_start = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
+	uint64_t kernel_start = SYSTEM_INFO->kernel_start;
+
+	for(uint64_t i = 0; i < kernel->reloc_count; i++)
+	{
+		linker_section_type_t addend_section = LINKER_SECTION_TYPE_NR_SECTIONS;
+
+		uint64_t pc_offset = 0;
+		if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_PC32) {
+			pc_offset = 4 + relocs[i].offset;
+		}
+
+		pc_offset += kernel_start;
+
+		for(uint64_t j = 0; j < LINKER_SECTION_TYPE_NR_SECTIONS; j++) {
+			if((relocs[i].addend + pc_offset) >= old_section_locations[j].section_start && (relocs[i].addend + pc_offset) < (old_section_locations[j].section_start + old_section_locations[j].section_size)) {
+				addend_section = j;
+				break;
+			}
+		}
+
+		relocs[i].addend += kernel->section_locations[addend_section].section_start - old_section_locations[addend_section].section_start;
+
+		if(relocs[i].relocation_type != LINKER_RELOCATION_TYPE_64_PC32) {
+			relocs[i].addend += kernel_start;
+		}
+	}
+
+	PRINTLOG("LINKER", "DEBUG", "relocs are computed. linking started", 0);
+
+	for(uint64_t i = 0; i < kernel->reloc_count; i++) {
+		if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_32) {
+			uint32_t* target = (uint32_t*)&dst_bytes[relocs[i].offset];
+			uint32_t target_value = (uint32_t)relocs[i].addend;
+			*target = target_value;
+		} else if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_32S || relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_PC32) {
+			int32_t* target = (int32_t*)&dst_bytes[relocs[i].offset];
+			int32_t target_value = (int32_t)relocs[i].addend;
+			*target = target_value;
+		} else if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
+			uint64_t* target = (uint64_t*)&dst_bytes[relocs[i].offset];
+			uint64_t target_value = relocs[i].addend;
+			*target = target_value;
+		} else {
+			printf("LINKER: Fatal unknown relocation type %i\n", relocs[i].relocation_type);
+			cpu_hlt();
+		}
+	}
+
+	PRINTLOG("LINKER", "DEBUG", "relocs are finished.", 0);
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	printf("reloc completed\nnew sysinfo at 0x%p.\ncleaning bss and try to re-jump kernel\n", new_sysinfo);
+
+	memory_memclean((uint8_t*)sec_start, sec_size);
+
+	asm volatile (
+		"jmp *%%rax\n"
+		: : "c" (new_sysinfo), "a" (kernel_start)
+		);
+
+	return 0;
+}
 
 int8_t kmain64(size_t entry_point) {
 	srand(0x123456789);
@@ -38,28 +317,48 @@ int8_t kmain64(size_t entry_point) {
 		return -1;
 	}
 
-	printf("Initializing stage 3\n");
+	PRINTLOG("KERNEL", "INFO", "Initializing stage 3 with remapped kernel? %i", SYSTEM_INFO->remapped);
 	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
 	printf("Entry point of kernel is 0x%lx\n", entry_point);
 
-	video_frame_buffer_t* new_vfb = memory_malloc(sizeof(system_info_t));
-	memory_memcopy(SYSTEM_INFO->frame_buffer, new_vfb, sizeof(system_info_t));
-	uint64_t fb_ba;
-	memory_paging_get_frame_address((uint64_t)SYSTEM_INFO->frame_buffer->base_address, &fb_ba);
-	new_vfb->base_address = (void*)fb_ba;
-
-	printf("frame_buffer ba phy addr 0x%p  va 0x%p\n", fb_ba, SYSTEM_INFO->frame_buffer->base_address);
+	video_frame_buffer_t* new_vfb = memory_malloc(sizeof(video_frame_buffer_t));
+	memory_memcopy(SYSTEM_INFO->frame_buffer, new_vfb, sizeof(video_frame_buffer_t));
 
 	uint8_t* new_mmap_data = memory_malloc(SYSTEM_INFO->mmap_size);
 	memory_memcopy(SYSTEM_INFO->mmap_data, new_mmap_data, SYSTEM_INFO->mmap_size);
 
+	uint8_t* new_reserved_mmap_data = NULL;
+
+	if(SYSTEM_INFO->reserved_mmap_size) {
+		new_reserved_mmap_data = memory_malloc(SYSTEM_INFO->reserved_mmap_size);
+		memory_memcopy(SYSTEM_INFO->reserved_mmap_data, new_reserved_mmap_data, SYSTEM_INFO->reserved_mmap_size);
+	}
+
 	system_info_t* new_system_info = memory_malloc(sizeof(system_info_t));
 	memory_memcopy(SYSTEM_INFO, new_system_info, sizeof(system_info_t));
+
 	new_system_info->frame_buffer = new_vfb;
 	new_system_info->mmap_data = new_mmap_data;
-
+	new_system_info->reserved_mmap_data = new_reserved_mmap_data;
+	new_system_info->heap = heap;
 
 	SYSTEM_INFO = new_system_info;
+
+	frame_allocator_t* fa = frame_allocator_new_ext(heap);
+
+	if(fa) {
+		printf("frame allocator created\n");
+		KERNEL_FRAME_ALLOCATOR = fa;
+
+		frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+		if(fa->allocate_frame(fa, &kernel_frames) != 0) {
+			PRINTLOG("KERNEL", "Panic", "cannot allocate kernel frames", 0);
+			cpu_hlt();
+		}
+	} else {
+		PRINTLOG("KERNEL", "Panic", "cannot allocate frame allocator. Halting...", 0);
+		cpu_hlt();
+	}
 
 	if(descriptor_build_idt_register() != 0) {
 		printf("Can not build idt\n");
@@ -87,33 +386,22 @@ int8_t kmain64(size_t entry_point) {
 
 	memory_page_table_t* p4 = memory_paging_build_table();
 	if( p4 == NULL) {
-		printf("Can not build default page table\n");
-		return -1;
+		printf("Can not build default page table. Halting\n");
+		cpu_hlt();
 	} else {
 		printf("Default page table builded at 0x%p\n", p4);
 		memory_paging_switch_table(p4);
+		video_refresh_frame_buffer_address();
 		printf("Default page table switched to 0x%08p\n", p4);
 	}
 
-	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
-	printf("Frame buffer at 0x%p and size 0x%lx\n", SYSTEM_INFO->frame_buffer->base_address, SYSTEM_INFO->frame_buffer->buffer_size);
-	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
-
-
-
-	printf("map info %i %i\n", sizeof(efi_memory_descriptor_t), SYSTEM_INFO->mmap_descriptor_size );
-	printf("memory map table\n");
-	printf("base\t\t length\t\t type\t\t attributes\n");
-	uint64_t mmap_ent_cnt = SYSTEM_INFO->mmap_size / SYSTEM_INFO->mmap_descriptor_size;
-	for(size_t i = 0; i < mmap_ent_cnt; i++) {
-		efi_memory_descriptor_t* mem_desc = (efi_memory_descriptor_t*)(SYSTEM_INFO->mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
-		printf("0x%08lx \t 0x%08lx \t 0x%04x \t 0x%08x\n",
-		       mem_desc->physical_start,
-		       mem_desc->page_count * 4096,
-		       mem_desc->type,
-		       mem_desc->attribute);
-
+	if(SYSTEM_INFO->remapped == 0) {
+		linker_remap_kernel();
 	}
+
+	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
+	printf("Frame buffer at 0x%lp and size 0x%lx\n", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
+	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
 	if(SYSTEM_INFO->acpi_table) {
 		printf("acpi rsdp table version: %i address 0x%p\n", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
@@ -124,10 +412,13 @@ int8_t kmain64(size_t entry_point) {
 
 	printf("random data 0x%x\n", rand());
 
+	KERNEL_FRAME_ALLOCATOR->cleanup(KERNEL_FRAME_ALLOCATOR);
 
-	if(heap) {
-		while(1);
-	}
+	frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
+
+	PRINTLOG("KERNEL", "DEBUG", "Implement remaining ops with frame allocator", 0);
+
+	while(1);
 
 	uint64_t kernel_start = entry_point - 0x100;
 
@@ -200,26 +491,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 
 	printf("%s\n", data);
 
-	if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
-		printf("System booted from pxe\n");
-
-		disk_slot_t* initrd = (disk_slot_t*)DISK_SLOT_PXE_INITRD_BASE;
-		for(int8_t i = 0; i < DISK_SLOT_INITRD_MAX_COUNT; i++) {
-			if(initrd->type == DISK_SLOT_TYPE_UNUSED) {
-				break;
-			} else if(initrd->type != DISK_SLOT_TYPE_PXEINITRD) {
-				printf("PXEINITRD: Fatal unknown slot type\n");
-				return -1;
-			}
-
-			printf("Initrd start: 0x%08x end: 0x%08x\n", initrd->start, initrd->end);
-
-			initrd++;
-		}
-	} else {
-		printf("System booted from disk\n");
-	}
-
 	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
 	if(desc == NULL) {
@@ -235,8 +506,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	if(acpi_setup(desc) != 0) {
 		printf("acpi setup failed\n");
 	}
-
-
 
 	acpi_table_mcfg_t* mcfg = acpi_get_mcfg_table(desc);
 
