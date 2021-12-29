@@ -14,15 +14,10 @@ make gendirs
 make qemu
 ```
 
-For starting a networkless (may be with default network) qemu:
+For starting a networkless (may be with default network) qemu with OVF EDK2 uefi bios:
 
 ```
-sudo <qemu-64-binary> \
-          -name osdev-hda-boot \
-          -M q35 -m 1g -smp cpus=2 \
-          -drive index=0,media=disk,format=raw,file=output/qemu-hda \
-          -monitor stdio \
-          -serial tmp/qemu-video.log
+scripts/osx-hacks/qemu-efi-hda.sh
 ```
 
 The qemu terminal will be openned at console and video output will be at tmp/qemu-video.log
