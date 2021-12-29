@@ -5,6 +5,7 @@
 
  #include <acpi/aml_internal.h>
  #include <video.h>
+ #include <strings.h>
 
 
 
@@ -354,6 +355,13 @@ uint8_t acpi_aml_parser_defaults[] =
 	0x08, 0x5F, 0x52, 0x45, 0x56, 0x0A, 0x00   // _REV
 };
 
+int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
+	acpi_aml_object_t* obj1 = (acpi_aml_object_t*)data1;
+	acpi_aml_object_t* obj2 = (acpi_aml_object_t*)data2;
+
+	return strcmp(obj1->name, obj2->name);
+}
+
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t revision, uint8_t* aml, int64_t size) {
 	acpi_aml_parser_context_t* ctx = memory_malloc_ext(heap, sizeof(acpi_aml_parser_context_t), 0x0);
 
@@ -368,7 +376,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 	ctx->length = sizeof(acpi_aml_parser_defaults);
 	ctx->remaining = sizeof(acpi_aml_parser_defaults);
 	ctx->scope_prefix = "\\";
-	ctx->symbols = linkedlist_create_list_with_heap(heap);
+	ctx->symbols = linkedlist_create_sortedlist_with_heap(heap, acpi_aml_object_name_comparator);
 	ctx->revision = revision;
 
 	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {

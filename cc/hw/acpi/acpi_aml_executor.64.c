@@ -304,7 +304,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
 
 	if(ctx->local_symbols == NULL) {
-		ctx->local_symbols = linkedlist_create_list_with_heap(ctx->heap);
+		ctx->local_symbols = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_object_name_comparator);
 		lsymtbl_created_by_me = 1;
 	}
 
