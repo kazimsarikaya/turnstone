@@ -1,4 +1,4 @@
-OS DEV
+**TURNSTONE**: The fUnny opeRatiNg SysTem Of uNivErse
 ======
 
 This is a custom os project.
