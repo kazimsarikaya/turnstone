@@ -420,9 +420,9 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 	}
 
 	if(ctx->local_symbols != NULL) {
-		linkedlist_list_insert(ctx->local_symbols, obj);
+		linkedlist_sortedlist_insert(ctx->local_symbols, obj);
 	}else {
-		linkedlist_list_insert(ctx->symbols, obj);
+		linkedlist_sortedlist_insert(ctx->symbols, obj);
 	}
 
 	return 0;
