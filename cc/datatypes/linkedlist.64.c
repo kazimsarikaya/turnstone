@@ -6,6 +6,7 @@
 #include <linkedlist.h>
 #include <indexer.h>
 #include <cpu/sync.h>
+#include <strings.h>
 
 /**
  * @struct linkedlist_item_internal
@@ -92,6 +93,10 @@ int8_t linkedlist_iterator_end_of_list(iterator_t* iterator);
  * @return data
  */
 void* linkedlist_iterator_get_item(iterator_t* iterator);
+
+int8_t linkedlist_string_comprator(const void* data1, const void* data2) {
+	return strcmp((char_t*)data1, (char_t*)data2);
+}
 
 /**
  * @brief deletes current item.
