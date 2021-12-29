@@ -882,7 +882,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
 	uint64_t frm_cnt = frm->frame_count;
 
 	while(frm_cnt) {
-		if(frm_cnt >= 0x200) { // TODO: check boundaries of huge page.
+		if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) { // TODO: check boundaries of huge page.
 			if(memory_paging_add_page_with_p4(p4, va_start, frm_addr, type | MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
 				return -1;
 			}
