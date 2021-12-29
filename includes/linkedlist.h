@@ -74,6 +74,10 @@ typedef void* linkedlist_item_t;
  */
 typedef int8_t (* linkedlist_data_comparator_f)(const void* data1, const void* data2);
 
+int8_t linkedlist_default_data_comparator(const void* data1, const void* data2);
+#define linkedlist_integer_comparator linkedlist_default_data_comparator
+int8_t linkedlist_string_comprator(const void* data1, const void* data2);
+
 /**
  * @brief linked list creator
  * @param[in] heap @ref memory_heap_t the heap where linked list will be at.
