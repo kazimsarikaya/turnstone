@@ -175,6 +175,58 @@ typedef enum {
 	ACPI_AML_RESOURCE_LARGEITEM_PIN_GROUP_CONFIGURATION=18,
 }acpi_aml_resource_largeitem_name_t;
 
+typedef enum {
+	ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY=0,
+	ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO=1,
+	ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS=2,
+}acpi_aml_resource_word_address_space_type_t;
+
+typedef enum {
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY=0,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IO=1,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCI_CONF_SPACE=2,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_EMBEDED_CONTROLLER=3,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_SMBUS=4,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_CMOS=5,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCI_BAR_TARGET=6,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_IPMI=7,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_GPIO=8,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_SERIALBUS=9,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_PCC=10,
+	ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_FUNCTIONAL_FIXED_HARDWARE=0X7F,
+} acpi_aml_resource_address_space_id_t;
+
+typedef enum {
+	ACPI_AML_RESOURCE_ACCESS_SIZE_UNDEFINED=0,
+	ACPI_AML_RESOURCE_ACCESS_SIZE_BYTE=1,
+	ACPI_AML_RESOURCE_ACCESS_SIZE_WORD=2,
+	ACPI_AML_RESOURCE_ACCESS_SIZE_DWORD=3,
+	ACPI_AML_RESOURCE_ACCESS_SIZE_QWORD=4,
+}acpi_aml_resource_access_size_t;
+
+typedef union {
+	struct {
+		uint8_t write : 1;
+		uint8_t mem : 2;
+		uint8_t mtp : 2;
+		uint8_t ttp : 1;
+		uint8_t reserved : 2;
+	}__attribute__((packed)) memory_resource_flag;
+
+	struct {
+		uint8_t rng : 2;
+		uint8_t reserved1 : 2;
+		uint8_t ttp : 1;
+		uint8_t trs : 1;
+		uint8_t reserved2 : 2;
+	}__attribute__((packed)) io_resource_flag;
+
+	struct {
+		uint8_t reserved;
+	}__attribute__((packed)) bus_number_resource_flag;
+
+}__attribute__((packed)) acpi_aml_resource_type_specific_flag_t;
+
 typedef union {
 	struct {
 		uint8_t unused : 7;
@@ -257,59 +309,129 @@ typedef union {
 			}__attribute__((packed)) memory_range_24bit;
 
 			struct {
-
+				uint8_t uuid_sub_type;
+				uint8_t uuid[16];
+				uint8_t vendor_data[0];
 			}__attribute__((packed)) vendor;
 
 			struct {
-
+				uint8_t rw : 1;
+				uint8_t ignored : 7;
+				uint32_t min;
+				uint32_t max;
+				uint32_t align;
+				uint32_t length;
 			}__attribute__((packed)) memory_range_32bit;
 
 			struct {
-
+				uint8_t rw : 1;
+				uint8_t ignored : 7;
+				uint32_t base;
+				uint32_t length;
 			}__attribute__((packed)) memory_range_32bit_fixed;
 
 			struct {
-
+				acpi_aml_resource_word_address_space_type_t type : 8;
+				uint8_t ignored : 1;
+				uint8_t decode_type : 1;
+				uint8_t min_address_fixed : 1;
+				uint8_t max_address_fixed : 1;
+				uint8_t reserved : 4;
+				acpi_aml_resource_type_specific_flag_t type_spesific_flags;
+				uint16_t gra;
+				uint16_t min;
+				uint16_t max;
+				uint16_t translation_offset;
+				uint16_t length;
+				uint8_t resource_source_index;
+				char_t resource_source[0];
 			}__attribute__((packed)) word_address_space;
 
 			struct {
-
+				uint8_t ignored : 1;
+				uint8_t decode_type : 1;
+				uint8_t min_address_fixed : 1;
+				uint8_t max_address_fixed : 1;
+				uint8_t reserved : 4;
+				acpi_aml_resource_type_specific_flag_t type_spesific_flags;
+				uint32_t gra;
+				uint32_t min;
+				uint32_t max;
+				uint32_t translation_offset;
+				uint32_t length;
+				uint8_t resource_source_index;
+				char_t resource_source[0];
 			}__attribute__((packed)) dword_address_space;
 
 			struct {
-
+				uint8_t ignored : 1;
+				uint8_t decode_type : 1;
+				uint8_t min_address_fixed : 1;
+				uint8_t max_address_fixed : 1;
+				uint8_t reserved : 4;
+				acpi_aml_resource_type_specific_flag_t type_spesific_flags;
+				uint64_t gra;
+				uint64_t min;
+				uint64_t max;
+				uint64_t translation_offset;
+				uint64_t length;
+				uint8_t resource_source_index;
+				char_t resource_source[0];
 			}__attribute__((packed)) qword_address_space;
 
 			struct {
-
+				uint8_t ignored : 1;
+				uint8_t decode_type : 1;
+				uint8_t min_address_fixed : 1;
+				uint8_t max_address_fixed : 1;
+				uint8_t reserved : 4;
+				acpi_aml_resource_type_specific_flag_t type_spesific_flags;
+				uint64_t gra;
+				uint64_t min;
+				uint64_t max;
+				uint64_t translation_offset;
+				uint64_t length;
+				uint8_t type_spesific_attribute;
+				uint64_t attribute;
 			}__attribute__((packed)) extended_address_space;
 
 			struct {
-
+				uint8_t consumer : 1;
+				uint8_t mode : 1;
+				uint8_t polarity : 1;
+				uint8_t sharing : 1;
+				uint8_t wake_capability : 1;
+				uint8_t reserved : 3;
+				uint8_t length;
+				// extra attributes length X 32bit interrupt number resource source index and its data
 			}__attribute__((packed)) extended_interrupt;
 
 			struct {
-
+				acpi_aml_resource_address_space_id_t asi : 8;
+				uint8_t register_bit_width;
+				uint8_t register_bit_offset;
+				acpi_aml_resource_access_size_t access_size : 8;
+				uint64_t address;
 			}__attribute__((packed)) generic_register;
 
 			struct {
-
+				uint8_t data[0];
 			}__attribute__((packed)) gpio_descriptor;
 
 			struct {
-
+				uint8_t data[0];
 			}__attribute__((packed)) generic_serial_bus;
 
 			struct {
-
+				uint8_t data[0];
 			}__attribute__((packed)) pin_function;
 
 			struct {
-
+				uint8_t data[0];
 			}__attribute__((packed)) pin_configuration;
 
 			struct {
-
+				uint8_t data[0];
 			}__attribute__((packed)) pin_group;
 
 			struct {
@@ -339,6 +461,8 @@ typedef union {
 	}__attribute__((packed)) largeitem;
 
 }__attribute__((packed)) acpi_aml_resource_t;
+
+int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2);
 
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t, uint8_t*, int64_t);
 #define acpi_aml_parser_context_create(rev, aml, len) acpi_aml_parser_context_create_with_heap(NULL, rev, aml, len)
