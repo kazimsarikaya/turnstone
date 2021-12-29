@@ -8,12 +8,30 @@
 #include <ports.h>
 #include <acpi/aml.h>
 #include <memory/paging.h>
+#include <memory/frame.h>
 #include <systeminfo.h>
 
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
-	acpi_xrsdp_descriptor_t* desc = NULL;
 
-	desc = (acpi_xrsdp_descriptor_t*)SYSTEM_INFO->acpi_table;
+	frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, SYSTEM_INFO->acpi_table);
+
+	if(acpi_frames == NULL) {
+		PRINTLOG("ACPI", "ERROR", "cannot find acpi frames of table 0x%016lx", SYSTEM_INFO->acpi_table);
+		return NULL;
+	}
+
+	uint64_t acpi_frames_vas = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address);
+
+	PRINTLOG("ACPI", "DEBUG", "acpi area frames 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
+
+	if(memory_paging_add_va_for_frame(acpi_frames_vas, acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		PRINTLOG("ACPI", "ERROR", "cannot add page mapping for acpi area 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
+		return NULL;
+	}
+
+	acpi_xrsdp_descriptor_t* desc = (acpi_xrsdp_descriptor_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->acpi_table);
+	PRINTLOG("ACPI", "DEBUG", "acpi descriptor address 0x%016lx", desc);
+
 
 	if(desc != NULL) {
 		size_t len = 0;
@@ -58,14 +76,14 @@ uint8_t acpi_validate_checksum(acpi_sdt_header_t* sdt_header){
 acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature){
 	if(xrsdp_desc->rsdp.revision == 0) {
 		uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
-		acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)((uint64_t)(addr));
+		acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
 		uint8_t* table_addrs = (uint8_t*)(rsdt + 1);
 		size_t table_count = (rsdt->length - sizeof(acpi_sdt_header_t)) / sizeof(uint32_t);
 		acpi_sdt_header_t* res;
 
 		for(size_t i = 0; i < table_count; i++) {
 			uint32_t table_addr = *((uint32_t*)(table_addrs + (i * sizeof(uint32_t))));
-			res = (acpi_sdt_header_t*)((uint64_t)(table_addr));
+			res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(table_addr));
 
 			if(memory_memcompare(res->signature, signature, 4) == 0) {
 				if(acpi_validate_checksum(res) == 0) {
@@ -77,11 +95,13 @@ acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* s
 
 		}
 	} else if (xrsdp_desc->rsdp.revision == 2) {
-		size_t table_count = (xrsdp_desc->xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
+		acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdp_desc->xrsdt);
+
+		size_t table_count = (xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
 		acpi_sdt_header_t* res;
 
 		for(size_t i = 0; i < table_count; i++) {
-			res = xrsdp_desc->xrsdt->acpi_sdt_header_ptrs[i];
+			res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdt->acpi_sdt_header_ptrs[i]);
 			if(memory_memcompare(res->signature, signature, 4) == 0) {
 				if(acpi_validate_checksum(res) == 0) {
 					return res;
@@ -139,20 +159,22 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	acpi_table_fadt_t* fadt = (acpi_table_fadt_t*)acpi_get_table(desc, "FACP");
 
 	if(fadt == NULL) {
-		printf("fadt not found\n\0");
+		PRINTLOG("ACPI", "DEBUG", "fadt not found", 0);
 
 		return -1;
 	}
 
+	PRINTLOG("ACPI", "DEBUG", "fadt found", 0);
+
 	int8_t acpi_enabled = -1;
 
 	if(fadt->smi_command_port == 0) {
-		printf("acpi command port is 0. ");
+		PRINTLOG("ACPI", "DEBUG", "cpi command port is 0.", 0);
 		acpi_enabled = 0;
 	}
 
 	if(fadt->acpi_enable == 0 && fadt->acpi_disable == 0) {
-		printf("acpi enable/disable is 0. ");
+		PRINTLOG("ACPI", "DEBUG", "acpi enable/disable is 0.", 0);
 		acpi_enabled = 0;
 	}
 
@@ -160,7 +182,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	uint32_t pm_1a_value = inw(pm_1a_port);
 
 	if((pm_1a_value & 0x1) == 0x1) {
-		printf("pm 1a control block acpi en is setted ");
+		PRINTLOG("ACPI", "DEBUG", "pm 1a control block acpi en is setted", 0);
 		acpi_enabled = 0;
 	}
 
@@ -168,17 +190,20 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		outb(fadt->smi_command_port, fadt->acpi_enable);
 
 		while((inw(pm_1a_port) & 0x1) != 0x1);
-
-		printf("acpi enabled");
 	}
 
-	printf("\n");
+	PRINTLOG("ACPI", "INFO", "ACPI Enabled", 0);
 
-	printf("DSDT address 0x%08lx\n", fadt->dsdt_address_32bit);
+	uint64_t dsdt_fa = 0;
 
-	memory_paging_add_page(fadt->dsdt_address_32bit, fadt->dsdt_address_32bit, MEMORY_PAGING_PAGE_TYPE_2M);
+	if(SYSTEM_INFO->acpi_version == 2) {
+		dsdt_fa = fadt->dsdt_address_64bit;
+	} else {
+		dsdt_fa = fadt->dsdt_address_32bit;
+	}
 
-	acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)((uint64_t)(fadt->dsdt_address_32bit));
+	acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dsdt_fa);
+	PRINTLOG("ACPI", "DEBUG", "DSDT address 0x%016lx", dsdt);
 
 
 	if(acpi_validate_checksum(dsdt) != 0) {
@@ -187,20 +212,10 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		return -1;
 	}
 
-	uint64_t acpi_hs = 0x1000000;
-	uint64_t acpi_he = 0x2000000;
-	uint64_t acpi_step = 0x200000;
-
-	for(uint64_t i = acpi_hs; i < acpi_he; i += acpi_step) {
-		memory_paging_add_page(i, i, MEMORY_PAGING_PAGE_TYPE_2M);
-	}
-
-	memory_heap_t* acpi_heap = memory_create_heap_simple(acpi_hs, acpi_he);
-
 	int64_t aml_size = dsdt->length - sizeof(acpi_sdt_header_t);
 	uint8_t* aml = (uint8_t*)(dsdt + 1);
 
-	acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(acpi_heap, dsdt->revision, aml, aml_size);
+	acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(NULL, dsdt->revision, aml, aml_size);
 
 	if(pctx == NULL) {
 		printf("aml parser creation failed\n");
@@ -215,7 +230,10 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		res = 0;
 	} else {
 		printf("aml not parsed\n");
+		return -1;
 	}
+
+	acpi_aml_print_symbol_table(pctx);
 
 	outl(0x0CD8, 0);   // qemu acpi init emulation
 

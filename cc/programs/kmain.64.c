@@ -433,8 +433,18 @@ int8_t kmain64(size_t entry_point) {
 	printf("random data 0x%x\n", rand());
 
 	KERNEL_FRAME_ALLOCATOR->cleanup(KERNEL_FRAME_ALLOCATOR);
-
 	frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
+
+	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
+
+	if(desc == NULL) {
+		PRINTLOG("ACPI", "FATAL", "acpi header not found or incorrect checksum. Halting...", 0);
+		cpu_hlt();
+	}
+
+	if(acpi_setup(desc) != 0) {
+		printf("acpi setup failed\n");
+	}
 
 	PRINTLOG("KERNEL", "DEBUG", "Implement remaining ops with frame allocator", 0);
 
