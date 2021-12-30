@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 CURRENTDIR=`dirname $0`
 BASEDIR="${CURRENTDIR}/../../"

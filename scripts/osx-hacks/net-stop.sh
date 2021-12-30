@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 sudo port unload dnsmasq
 sudo ifconfig bridge0 down

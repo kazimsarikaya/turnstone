@@ -267,7 +267,6 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 
 int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	int8_t res = -1;
-	int8_t lsymtbl_created_by_me = 0;
 
 	acpi_aml_method_context_t* mthctx = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_method_context_t), 0x0);
 
@@ -277,7 +276,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
 	mthctx->arg_count = opcode->operand_count - 1; //first op is method call object
 
-	acpi_aml_object_t* mthobjs = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t) * 16, 0x0);
+	acpi_aml_object_t** mthobjs = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t*) * 16, 0x0);
 
 	if(mthobjs == NULL) {
 		memory_free_ext(ctx->heap, mthctx);
