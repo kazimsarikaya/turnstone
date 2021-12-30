@@ -35,7 +35,8 @@ DOCSOBJDIR = $(OBJDIR)/docs
 ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
-CCGENDIR = cc-gen includes-gen
+CCGENDIR = cc-gen
+INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 
@@ -100,7 +101,7 @@ test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
 
 gendirs:
-	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
+	mkdir -p $(CCGENDIR) $(INCLUDESGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
 	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
 	make -C efi gendirs
 	make -C tests gendirs
