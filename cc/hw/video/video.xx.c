@@ -16,8 +16,8 @@
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column
 uint16_t cursor_graphics_y = 0; ///< cursor porsition for row
 
-extern uint8_t font_data_start;
-extern uint8_t font_data_end;
+extern uint8_t* font_data_start;
+extern uint8_t* font_data_end;
 
 void put_char(char_t c, int32_t cx, int32_t cy, uint32_t fg, uint32_t bg);
 
