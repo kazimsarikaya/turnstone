@@ -496,7 +496,7 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 		while(iter->end_of_iterator(iter) != 0) {
 			acpi_aml_object_t* obj = iter->get_item(iter);
 
-			if(obj->name == NULL || obj->type == ACPI_AML_OT_RUNTIMEREF) {
+			if(obj->name == NULL || obj->type == ACPI_AML_OT_RUNTIMEREF || obj->type == ACPI_AML_OT_PACKAGE) {
 				acpi_aml_destroy_object(ctx, obj);
 			}
 
@@ -505,7 +505,7 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 
 		iter->destroy(iter);
 
-		linkedlist_destroy(obj->package.elements); // TODO :recurive items may be package too
+		linkedlist_destroy(obj->package.elements);
 
 		if(obj->package.pkglen->name == NULL) {
 			memory_free_ext(ctx->heap, obj->package.pkglen);

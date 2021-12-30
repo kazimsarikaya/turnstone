@@ -21,3 +21,8 @@ scripts/osx-hacks/qemu-efi-hda.sh
 ```
 
 The qemu terminal will be openned at console and video output will be at tmp/qemu-video.log
+
+For discustions please visit [discord channel][discord channel]. 
+
+
+[discord channel]: https://discord.gg/q5WxJKz7fd

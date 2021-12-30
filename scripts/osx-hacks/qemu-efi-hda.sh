@@ -32,4 +32,5 @@ qemu-system-x86_64 \
   -drive index=0,media=disk,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
   -monitor stdio \
   -net none \
-  -serial file:${BASEDIR}/tmp/qemu-video.log
+  -serial file:${BASEDIR}/tmp/qemu-video.log \
+  -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402
