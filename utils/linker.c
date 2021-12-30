@@ -1996,6 +1996,7 @@ int32_t main(int32_t argc, char** argv) {
 						break;
 					case R_X86_64_PC32:
 					case R_X86_64_PLT32:
+					case R_X86_64_REX_GOTPCRELX:
 						reloc->type = LINKER_RELOCATION_TYPE_64_PC32;
 						ctx->direct_relocation_count++;
 						break;
