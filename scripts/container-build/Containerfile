@@ -1,6 +1,4 @@
-FROM docker.io/library/gcc:11
-RUN apt-get update \
-    && apt-get install -y gcc-mingw-w64 \
-    && apt-get clean
+FROM registry.fedoraproject.org/fedora-minimal@sha256:13b422a79980fc4ce26c46b0b6ad573dfaf0825a9d93dda8f6403a66d6709f47
+RUN microdnf install -y make gcc mingw64-gcc && microdnf clean all
 WORKDIR /osdev
 CMD make clean gendirs qemu
