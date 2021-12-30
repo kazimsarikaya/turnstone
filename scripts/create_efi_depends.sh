@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 APP=$1
 
@@ -21,10 +21,10 @@ do
   echo
 done
 
-DEPEND_OBJS=$(echo $DEPEND_OBJS|sort|uniq)
+DEPEND_OBJS=$(echo -e $DEPEND_OBJS|sort|uniq)
 
 for _f in $DEPEND_OBJS;
 do
-  echo "$APP: ../output/efi/$_f"
-  echo "EFIOBJS += \$(EFIOUTPUT)/$_f"
+  echo -e "$APP: ../output/efi/$_f"
+  echo -e "EFIOBJS += \$(EFIOUTPUT)/$_f"
 done
