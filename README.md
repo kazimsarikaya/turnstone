@@ -6,7 +6,7 @@ The roadmap is at @ref roadmap.
 
 The architecture is at @ref architecture.
 
-## Building On OSX
+## Building On OSX
 
 You need packages with macports:
 ```
