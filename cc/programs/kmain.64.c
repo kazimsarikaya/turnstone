@@ -645,8 +645,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	                      | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
 	                      | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
 
-	printf("li %li %li %li\n", res2->type.type, res2->largeitem.name, res2->largeitem.length);
-
 	//task_create_task(heap, 0x1000, test_task1);
 
 	printf("tests completed!...\n");
