@@ -101,10 +101,10 @@ test: qemu-test
 
 gendirs:
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
+	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
 	make -C efi gendirs
 	make -C tests gendirs
 	make -C utils gendirs
-	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
