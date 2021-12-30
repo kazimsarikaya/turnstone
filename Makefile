@@ -35,7 +35,7 @@ DOCSOBJDIR = $(OBJDIR)/docs
 ASSRCDIR = asm
 CCSRCDIR = cc
 LDSRCDIR = lds
-CCGENDIR = cc-gen
+CCGENDIR = cc-gen includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 
