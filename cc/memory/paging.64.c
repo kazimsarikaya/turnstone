@@ -66,7 +66,7 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
 	size_t old_table;
 	__asm__ __volatile__ ("mov %%cr3, %0\n"
 	                      : "=r" (old_table));
-	size_t old_table_r = old_table; // TODO: find virtual address
+	size_t old_table_r = old_table;
 
 	if(new_table != NULL) {
 		__asm__ __volatile__ ("mov %0, %%cr3\n" : : "r" (new_table));
@@ -77,7 +77,6 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
 int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
                                   uint64_t virtual_address, uint64_t frame_address,
                                   memory_paging_page_type_t type) {
-	// TODO: implement page type
 	memory_page_table_t* t_p3;
 	memory_page_table_t* t_p2;
 	memory_page_table_t* t_p1;
@@ -882,7 +881,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
 	uint64_t frm_cnt = frm->frame_count;
 
 	while(frm_cnt) {
-		if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) { // TODO: check boundaries of huge page.
+		if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
 			if(memory_paging_add_page_with_p4(p4, va_start, frm_addr, type | MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
 				return -1;
 			}

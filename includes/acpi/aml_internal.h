@@ -93,7 +93,7 @@
 #define ACPI_AML_IF                  0xA0
 #define ACPI_AML_ELSE                0xA1
 #define ACPI_AML_WHILE               0xA2
-#define ACPI_AML_NOOP                 0xA3
+#define ACPI_AML_NOOP                0xA3
 #define ACPI_AML_RETURN              0xA4
 #define ACPI_AML_BREAK               0xA5
 #define ACPI_AML_BREAKPOINT          0xCC

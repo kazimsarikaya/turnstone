@@ -277,7 +277,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
 	mthctx->arg_count = opcode->operand_count - 1; //first op is method call object
 
-	acpi_aml_object_t** mthobjs = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t) * 16, 0x0);
+	acpi_aml_object_t* mthobjs = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t) * 16, 0x0);
 
 	if(mthobjs == NULL) {
 		memory_free_ext(ctx->heap, mthctx);
@@ -292,21 +292,21 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
 	acpi_aml_object_t* mth = opcode->operands[0];
 
+	uint8_t inside_method = ctx->flags.inside_method;
 	uint8_t* old_data = ctx->data;
 	uint64_t old_length = ctx->length;
 	uint64_t old_remaining = ctx->remaining;
+	acpi_aml_method_context_t* old_mthctx =  ctx->method_context;
 
 	ctx->flags.inside_method = 1;
 	ctx->data = mth->method.termlist;
 	ctx->length = mth->method.termlist_length;
 	ctx->remaining = mth->method.termlist_length;
 	ctx->method_context = mthctx;
+	linkedlist_t local_symbols = ctx->local_symbols;
 
 
-	if(ctx->local_symbols == NULL) {
-		ctx->local_symbols = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_object_name_comparator);
-		lsymtbl_created_by_me = 1;
-	}
+	ctx->local_symbols = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_object_name_comparator);
 
 	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
@@ -315,16 +315,15 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 		res = 0;
 	}
 
-	ctx->flags.inside_method = 0;
+	ctx->flags.inside_method = inside_method;
 	ctx->data = old_data;
 	ctx->length = old_length;
 	ctx->remaining = old_remaining;
-	ctx->method_context = NULL;
+	ctx->method_context = old_mthctx;
 
-	if(lsymtbl_created_by_me) {
-		acpi_aml_destroy_symbol_table(ctx, 1);
-		ctx->local_symbols = NULL;
-	}
+	acpi_aml_destroy_symbol_table(ctx, 1);
+	ctx->local_symbols = local_symbols;
+
 
 	for(uint8_t i = 0; i < 8; i++) {
 		if(mthobjs[i]) {

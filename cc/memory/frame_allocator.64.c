@@ -397,7 +397,7 @@ int8_t fa_cleanup(frame_allocator_t* self) {
 	lock_acquire(ctx->lock);
 
 	iterator_t* iter;
-	linkedlist_t* frms;
+	linkedlist_t frms;
 
 
 	frms = linkedlist_create_sortedlist_with_heap(ctx->heap, frame_allocator_cmp_by_size);
