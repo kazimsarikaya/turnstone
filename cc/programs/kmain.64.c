@@ -645,20 +645,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	                      | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
 	                      | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
 
-
-	printf("aml resource size %li\n", sizeof(acpi_aml_resource_t));
-	uint8_t data1[] = {0x47, 0x01, 0x60, 0x00, 0x60, 0x00, 0x01, 0x01};
-	uint8_t data2[] = {0x86, 0x09, 0x00, 0x00, 0x00, 0x00, 0xD0, 0xFE, 0x00, 0x04, 0x00, 0x00};
-	acpi_aml_resource_t* res1 = (acpi_aml_resource_t*)data1;
-	acpi_aml_resource_t* res2 = (acpi_aml_resource_t*)data2;
-	printf("si %li %li %li\n", res1->type.type, res1->smallitem.name, res1->smallitem.length);
-	printf("decode %i min 0x%x max 0x%x  aln 0x%x len 0x%x\n",
-	       res1->smallitem.io.decode,
-	       res1->smallitem.io.min,
-	       res1->smallitem.io.max,
-	       res1->smallitem.io.align,
-	       res1->smallitem.io.length);
-
 	printf("li %li %li %li\n", res2->type.type, res2->largeitem.name, res2->largeitem.length);
 
 	//task_create_task(heap, 0x1000, test_task1);
