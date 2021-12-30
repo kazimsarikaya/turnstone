@@ -1,0 +1,6 @@
+FROM docker.io/library/gcc:11
+RUN apt-get update \
+    && apt-get install -y gcc-mingw-w64 \
+    && apt-get clean
+WORKDIR /osdev
+CMD make clean gendirs qemu
