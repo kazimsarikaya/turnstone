@@ -174,13 +174,13 @@ $(FONTOBJ):
 
 clean:
 	rm -fr $(DOCSOBJDIR)/*
-	find $(OBJDIR) -type f -delete
+	if [ -d $(OBJDIR) ]; then find $(OBJDIR) -type f -delete; fi
 	rm -f .depend*
-	find cc-gen -type f -delete
-	find includes-gen -type f -delete
+	if [ -d $(CCGENDIR) ]; then find $(CCGENDIR) -type f -delete; fi
+	if [ -d $(INCLUDESGENDIR) ]; then find $(INCLUDESGENDIR) -type f -delete; fi
 
 cleandirs:
-	rm -fr $(CCGENDIR) $(OBJDIR)
+	rm -fr $(CCGENDIR) $(INCLUDESGENDIR) $(OBJDIR)
 
 print-%: ; @echo $* = $($*)
 
