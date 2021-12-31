@@ -24,6 +24,8 @@
  */
 #define MAX(x, y)  (x > y ? x : y)
 
+#define ABS(x)  (x >= 0?x:-1 * x)
+
 /**
  * @brief power base with p
  * @param[in]  base the base
