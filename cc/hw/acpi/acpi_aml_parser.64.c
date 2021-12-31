@@ -362,6 +362,13 @@ int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
 	return strcmp(obj1->name, obj2->name);
 }
 
+int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2) {
+	acpi_aml_device_t* obj1 = (acpi_aml_device_t*)data1;
+	acpi_aml_device_t* obj2 = (acpi_aml_device_t*)data2;
+
+	return strcmp(obj1->name, obj2->name);
+}
+
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t revision, uint8_t* aml, int64_t size) {
 	acpi_aml_parser_context_t* ctx = memory_malloc_ext(heap, sizeof(acpi_aml_parser_context_t), 0x0);
 
@@ -392,6 +399,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 }
 
 void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
+	linkedlist_destroy(ctx->devices);
 	acpi_aml_destroy_symbol_table(ctx, 0);
 	memory_free_ext(ctx->heap, ctx);
 }
