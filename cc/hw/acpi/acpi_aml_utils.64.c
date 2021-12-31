@@ -5,6 +5,7 @@
 #include <acpi/aml_internal.h>
 #include <strings.h>
 #include <video.h>
+#include <utils.h>
 
 
 int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
@@ -545,6 +546,174 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 
 	memory_free_ext(ctx->heap, obj->name);
 	memory_free_ext(ctx->heap, obj);
+}
+
+int8_t acpi_aml_build_devices(acpi_aml_parser_context_t* ctx) {
+	uint64_t item_count = 0;
+
+	ctx->devices = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_device_name_comparator);
+	acpi_aml_device_t* curr_device = NULL;
+
+
+	iterator_t* iter = linkedlist_iterator_create(ctx->symbols);
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_object_t* sym = iter->get_item(iter);
+
+		if(sym == NULL && sym->name == NULL) {
+			iter->destroy(iter);
+			PRINTLOG("ACPI", "FATAL", "NULL object at symbol table or no name", 0);
+			return -1;
+		}
+
+		if(strends(sym->name, "_PIC") == 0) {
+			ctx->pic = sym;
+		}
+
+		if(sym->type == ACPI_AML_OT_DEVICE) {
+			acpi_aml_device_t* new_device = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_t), 0);
+			new_device->name = sym->name;
+			linkedlist_sortedlist_insert(ctx->devices, new_device);
+
+			if(curr_device != NULL) {
+				int64_t len_diff = strlen(sym->name) - strlen(curr_device->name);
+
+				if(len_diff == 0) {
+					new_device->parent = curr_device->parent;
+				} else if(len_diff == 4) {
+					new_device->parent = curr_device;
+				} else {
+					len_diff = ABS(len_diff) / 4;
+
+					while(curr_device && len_diff--) {
+						curr_device = curr_device->parent;
+					}
+
+					new_device->parent = curr_device;
+				}
+			}
+
+			curr_device = new_device;
+			item_count++;
+		} else {
+			if(curr_device != NULL) {
+				int64_t len_diff = strlen(sym->name) - strlen(curr_device->name);
+				boolean_t need_check = 0;
+
+				if(len_diff < 0) {
+					len_diff = ABS(len_diff) / 4;
+
+					while(curr_device && len_diff--) {
+						curr_device = curr_device->parent;
+					}
+
+					if(curr_device != NULL) {
+						need_check = 1;
+					}
+
+				} else if(len_diff == 4) {
+					need_check = 1;
+				} else if(len_diff == 0) {
+					curr_device = curr_device->parent;
+
+					if(curr_device != NULL && strlen(sym->name) - strlen(curr_device->name) == 4) {
+						need_check = 1;
+					}
+				}
+
+				if(need_check && strstarts(sym->name, curr_device->name) == 0) {
+					if(strends(sym->name, "_ADR") == 0) {
+						curr_device->adr = sym;
+					}
+
+					if(strends(sym->name, "_HID") == 0) {
+						curr_device->hid = sym;
+					}
+
+					if(strends(sym->name, "_UID") == 0) {
+						curr_device->uid = sym;
+					}
+
+					if(strends(sym->name, "_CRS") == 0) {
+						curr_device->crs = sym;
+					}
+
+					if(strends(sym->name, "_STA") == 0) {
+						curr_device->sta = sym;
+					}
+
+					if(strends(sym->name, "_INI") == 0) {
+						curr_device->ini = sym;
+					}
+
+					if(strends(sym->name, "_PRT") == 0) {
+						curr_device->prt = sym;
+					}
+				}
+			}
+		}
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
+	return 0;
+}
+
+void acpi_aml_print_devices(acpi_aml_parser_context_t* ctx) {
+	uint64_t item_count = 0;
+	iterator_t* iter = linkedlist_iterator_create(ctx->devices);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_device_t* d = iter->get_item(iter);
+
+		acpi_aml_print_device(ctx, d);
+		item_count++;
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
+	printf("totoal devices %i\n", item_count );;
+}
+
+void acpi_aml_print_device(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d) {
+	printf("device name %s ", d->name);
+
+	if(d->parent) {
+		printf("parent %s", d->parent->name);
+	}
+
+	printf("\n");
+
+	if(d->adr) {
+		acpi_aml_print_object(ctx, d->adr);
+	}
+
+	if(d->hid) {
+		acpi_aml_print_object(ctx, d->hid);
+	}
+
+	if(d->uid) {
+		acpi_aml_print_object(ctx, d->uid);
+	}
+
+	if(d->crs) {
+		acpi_aml_print_object(ctx, d->crs);
+	}
+
+	if(d->sta) {
+		acpi_aml_print_object(ctx, d->sta);
+	}
+
+	if(d->ini) {
+		acpi_aml_print_object(ctx, d->ini);
+	}
+
+	if(d->prt) {
+		acpi_aml_print_object(ctx, d->prt);
+	}
+
 }
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){

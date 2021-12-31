@@ -233,7 +233,11 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		return -1;
 	}
 
-	acpi_aml_print_symbol_table(pctx);
+	if(acpi_aml_build_devices(pctx) != 0) {
+		PRINTLOG("ACPI", "ERROR", "devices cannot be builded", 0);
+	}
+
+	acpi_aml_print_devices(pctx);
 
 	outl(0x0CD8, 0);   // qemu acpi init emulation
 

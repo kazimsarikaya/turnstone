@@ -13,32 +13,6 @@
 
 //types
 
-typedef struct {
-	memory_heap_t* heap;
-	uint8_t* data;
-	uint64_t length;
-	uint64_t remaining;
-	char_t* scope_prefix;
-	linkedlist_t symbols;
-	linkedlist_t local_symbols;
-	struct {
-		uint8_t type;
-		uint32_t code;
-		uint64_t arg;
-	} fatal_error;
-	struct {
-		uint8_t while_break;
-		uint8_t while_cont;
-		uint8_t fatal;
-		uint8_t inside_method;
-		uint8_t method_return;
-	} flags;
-	uint64_t timer;
-	int8_t revision;
-	void* method_context;
-}acpi_aml_parser_context_t;
-
-
 typedef enum {
 	ACPI_AML_OT_UNINITIALIZED,
 	ACPI_AML_OT_NUMBER,
@@ -462,13 +436,57 @@ typedef union {
 
 }__attribute__((packed)) acpi_aml_resource_t;
 
+typedef struct acpi_aml_device {
+	char_t* name;
+	struct acpi_aml_device* parent;
+	acpi_aml_object_t* adr;
+	acpi_aml_object_t* hid;
+	acpi_aml_object_t* uid;
+	acpi_aml_object_t* crs;
+	acpi_aml_object_t* sta;
+	acpi_aml_object_t* ini;
+	acpi_aml_object_t* prt;
+}acpi_aml_device_t;
+
+typedef struct {
+	memory_heap_t* heap;
+	uint8_t* data;
+	uint64_t length;
+	uint64_t remaining;
+	char_t* scope_prefix;
+	linkedlist_t symbols;
+	linkedlist_t local_symbols;
+	linkedlist_t devices;
+	acpi_aml_object_t* pic;
+	struct {
+		uint8_t type;
+		uint32_t code;
+		uint64_t arg;
+	} fatal_error;
+	struct {
+		uint8_t while_break;
+		uint8_t while_cont;
+		uint8_t fatal;
+		uint8_t inside_method;
+		uint8_t method_return;
+	} flags;
+	uint64_t timer;
+	int8_t revision;
+	void* method_context;
+}acpi_aml_parser_context_t;
+
 int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2);
+int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2);
 
 acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t, uint8_t*, int64_t);
 #define acpi_aml_parser_context_create(rev, aml, len) acpi_aml_parser_context_create_with_heap(NULL, rev, aml, len)
 void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t*);
 
 int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
+
+int8_t acpi_aml_build_devices(acpi_aml_parser_context_t*);
+void acpi_aml_print_devices(acpi_aml_parser_context_t* ctx);
+void acpi_aml_print_device(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
 void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
