@@ -51,13 +51,13 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
 		while (1) {
 
 			if (index == 1) {
-				if (extra_days - 29 < 0)
+				if (extra_days - 29 <= 0)
 					break;
 				tp->month += 1;
 				extra_days -= 29;
 			}
 			else {
-				if (extra_days - time_days_of_month[index] < 0) {
+				if (extra_days - time_days_of_month[index] <= 0) {
 					break;
 				}
 				tp->month += 1;
@@ -69,7 +69,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
 	else {
 		while (1) {
 
-			if (extra_days  - time_days_of_month[index] < 0) {
+			if (extra_days  - time_days_of_month[index] <= 0) {
 				break;
 			}
 			tp->month += 1;
