@@ -101,11 +101,7 @@ int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base) {
 		r = number % base;
 		number /= base;
 
-		if(r < 10) {
-			buffer[len - i] = 48 + r;
-		} else {
-			buffer[len - i] = 55 + r;
-		}
+		buffer[len - i] = DIGIT_TO_HEX(r);
 
 		i++;
 	}
@@ -178,4 +174,16 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 	}
 
 	return 0;
+}
+
+uint64_t byte_swap(uint64_t num, uint8_t bc) {
+	uint64_t res = 0;
+	uint8_t* res_bytes = (uint8_t*)&res;
+	uint8_t* bytes = (uint8_t*)&num;
+
+	for(uint32_t i = 0; i < 8; i++) {
+		res_bytes[i] = bytes[7 - i];
+	}
+
+	return res >> ((8 - bc) * 8);
 }
