@@ -32,6 +32,18 @@ void print_error(const char* msg){
 	printf("%s%s%s%s", REDCOLOR, msg, RESETCOLOR, "\r\n");
 }
 
+typedef void frame_t;
+typedef int8_t memory_paging_page_type_t;
+typedef void memory_page_table_t;
+
+int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type){
+	UNUSED(p4);
+	UNUSED(va_start);
+	UNUSED(frm);
+	UNUSED(type);
+	return 0;
+}
+
 void setup_ram() {
 	memory_heap_t* heap = memory_create_heap_simple((size_t)&mem_area[0], (size_t)&mem_area[RAMSIZE]);
 	printf("%p\n", heap);
