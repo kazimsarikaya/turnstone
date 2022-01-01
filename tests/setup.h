@@ -24,6 +24,8 @@ uint64_t __kheap_bottom = 0;
 void* SYSTEM_INFO = NULL;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 
+#define PRINTLOG(module, type, msg, ...)  printf("%s:%i: " module " : " type " " msg "\n", __FILE__, __LINE__, __VA_ARGS__)
+
 void print_success(const char* msg){
 	printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
 }

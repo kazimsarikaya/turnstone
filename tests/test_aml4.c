@@ -59,7 +59,16 @@ uint32_t main(uint32_t argc, char_t** argv) {
 			print_error("aml not parsed");
 		}
 
-		acpi_aml_print_symbol_table(ctx);
+		if(acpi_device_build(ctx) != 0) {
+			PRINTLOG("ACPI", "ERROR", "devices cannot be builded", 0);
+		} else {
+			acpi_device_print_all(ctx);
+			acpi_aml_print_symbol_table(ctx);
+
+			if(acpi_device_init(ctx) != 0) {
+				PRINTLOG("ACPI", "ERROR", "devices cannot be initialized", 0);
+			}
+		}
 
 		acpi_aml_parser_context_destroy(ctx);
 	}
