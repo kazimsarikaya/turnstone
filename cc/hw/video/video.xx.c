@@ -182,6 +182,10 @@ void video_graphics_scroll(){
 void video_graphics_print(char_t* string) {
 	int64_t i = 0;
 
+	if(string == NULL) {
+		return;
+	}
+
 	while(string[i]) {
 		wchar_t wc = string[i];
 
