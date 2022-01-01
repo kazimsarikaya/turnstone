@@ -9,6 +9,7 @@
 #include <acpi.h>
 #include <utils.h>
 #include <video.h>
+#include <ports.h>
 
 typedef struct {
 	memory_heap_t* heap;
@@ -25,6 +26,46 @@ int8_t pci_iterator_destroy(iterator_t* iterator);
 iterator_t* pci_iterator_next(iterator_t* iterator);
 int8_t pci_iterator_end_of_iterator(iterator_t* iterator);
 void* pci_iterator_get_item(iterator_t* iterator);
+
+
+int8_t pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc) {
+	outl(address, PCI_IO_PORT_CONFIG);
+
+	switch (bc) {
+	case 1:
+		outb(PCI_IO_PORT_DATA, data & 0xFF);
+		break;
+	case 2:
+		outw(PCI_IO_PORT_DATA, data & 0xFFFF);
+		break;
+	case 4:
+		outl(PCI_IO_PORT_DATA, data);
+		break;
+	}
+
+	return 0;
+}
+
+uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc) {
+	outl(address, PCI_IO_PORT_CONFIG);
+
+	uint32_t res = 0;
+
+	switch (bc) {
+	case 1:
+		res = inb(PCI_IO_PORT_DATA);
+		break;
+	case 2:
+		res = inw(PCI_IO_PORT_DATA);
+		break;
+	case 4:
+		res = inl(PCI_IO_PORT_DATA);
+		break;
+	}
+
+	return res;
+}
+
 
 iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t* mcfg){
 	iterator_t* iter = memory_malloc_ext(heap, sizeof(iterator_t), 0x0);
