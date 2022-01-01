@@ -223,23 +223,29 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		return -1;
 	}
 
-	int res = -1;
-
 	if(acpi_aml_parse(pctx) == 0) {
 		printf("aml parsed\n");
-		res = 0;
 	} else {
 		printf("aml not parsed\n");
 		return -1;
 	}
 
-	if(acpi_aml_build_devices(pctx) != 0) {
+	if(acpi_device_build(pctx) != 0) {
 		PRINTLOG("ACPI", "ERROR", "devices cannot be builded", 0);
+		return -1;
 	}
 
-	acpi_aml_print_devices(pctx);
+	acpi_device_print_all(pctx);
+	acpi_aml_print_symbol_table(pctx);
 
-	outl(0x0CD8, 0);   // qemu acpi init emulation
+	if(acpi_device_init(pctx) != 0) {
+		PRINTLOG("ACPI", "ERROR", "devices cannot be initialized", 0);
+		return -1;
+	}
 
-	return res;
+	PRINTLOG("ACPI", "INFO", "Devices initialized", 0);
+
+	PRINTLOG("ACPI", "DEBUG", "Interrupt mapping and memory reservation is remained", 0);
+
+	return 0;
 }

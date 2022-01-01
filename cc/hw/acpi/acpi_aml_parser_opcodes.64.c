@@ -4,6 +4,7 @@
  */
 
  #include <acpi/aml_internal.h>
+ #include <video.h>
 
 
 int8_t acpi_aml_parse_byte_data(acpi_aml_parser_context_t*, void**, uint64_t*);
@@ -59,6 +60,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0x0);
 
 		if(opcode == NULL) {
+			PRINTLOG("ACPIAML", "ERROR", "Cannot allocate memory for opcode", 0);
 			return -1;
 		}
 
@@ -72,15 +74,20 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			opcode->operand_count = opcnt;
 		}
 
+		PRINTLOG("ACPIAML", "DEBUG", "scope %s opcode 0x%04x", ctx->scope_prefix, opcode->opcode);
+
 		for(; idx < opcode->operand_count; idx++) {
 			uint64_t t_consumed = 0;
 			acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
 			if(op == NULL) {
+				PRINTLOG("ACPIAML", "ERROR", "Cannot allocate memory for op", 0);
+				res = -1;
 				goto cleanup;
 			}
 
 			if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
+				PRINTLOG("ACPIAML", "ERROR", "Cannot parse the op %i for opcode", idx);
 				res = -1;
 				goto cleanup;
 			}
@@ -93,15 +100,26 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
 			op = acpi_aml_get_real_object(ctx, op);
 
+			PRINTLOG("ACPIAML", "DEBUG", "scope %s param name %s type %i", ctx->scope_prefix, op->name, op->type);
+
 			opcode->operands[idx] = op;
 			r_consumed += t_consumed;
 		}
 
 		if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
+			PRINTLOG("ACPIAML", "ERROR", "Cannot execute opcode", 0);
+			res = -1;
 			goto cleanup;
 		}
 
 		return_obj = opcode->return_obj;
+
+		if(return_obj) {
+			PRINTLOG("ACPIAML", "DEBUG", "scope %s return name %s type %i", ctx->scope_prefix, return_obj->name, return_obj->type);
+		} else {
+			PRINTLOG("ACPIAML", "DEBUG", "scope %s nulll return", ctx->scope_prefix);
+		}
+
 
 		res = 0;
 	}
@@ -126,15 +144,24 @@ cleanup:
 		return res;
 	}
 
+	if(res != 0) {
+		PRINTLOG("ACPIAML", "ERROR", "Cannot parse opcode", 0);
+	}
+
 	for(uint8_t i = 0; i < idx; i++) {
 		if(opcode->operands[i] != NULL && opcode->operands[i]->name == NULL) {
 			if(opcode->operands[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 				acpi_aml_object_t* tmp = opcode->operands[i]->opcode_exec_return;
-				if(tmp && tmp->name == NULL) {
+
+				if(tmp && tmp->name == NULL && return_obj != tmp) {
 					acpi_aml_destroy_object(ctx, tmp);
 				}
 			}
-			acpi_aml_destroy_object(ctx, opcode->operands[i]);
+
+			if(return_obj != opcode->operands[i]) {
+				acpi_aml_destroy_object(ctx, opcode->operands[i]);
+			}
+
 		}
 	}
 	memory_free_ext(ctx->heap, opcode);

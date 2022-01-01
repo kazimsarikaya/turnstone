@@ -12,6 +12,7 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
 	if(dst == NULL || src == NULL) {
 		ctx->flags.fatal = 1;
+		PRINTLOG("ACPIAML", "FATAL", "store op with null dst/src %i", dst == NULL?0:1);
 		return -1;
 	}
 
@@ -19,28 +20,50 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
 
 	if(src->type == ACPI_AML_OT_REFOF && !(dst->type == ACPI_AML_OT_UNINITIALIZED || dst->type == ACPI_AML_OT_DEBUG)) {
-		printf("ACPIAML: Error at writing refof to the non uninitiliazed variable\n");
+		PRINTLOG("ACPIAML", "FATAL", "writing refof to the non uninitiliazed variable", 0);
 		ctx->flags.fatal = 1;
 		return -1;
 	}
 
-	if(dst->type == ACPI_AML_OT_UNINITIALIZED) {
-		dst->type = src->type;
+	acpi_aml_object_type_t dst_type = dst->type;
+
+	if(dst_type == ACPI_AML_OT_UNINITIALIZED) {
+		dst_type = src->type;
 	}
 
-	if(dst->type == ACPI_AML_OT_REFOF) {
+	if(dst_type == ACPI_AML_OT_REFOF) {
 		dst = dst->refof_target;
 
 		if(dst == NULL) {
+			PRINTLOG("ACPIAML", "FATAL", "writing refof target is non uninitiliazed variable", 0);
 			ctx->flags.fatal = 1;
 			return -1;
 		}
+
+		dst_type = dst->type;
+	}
+
+	if(dst_type == ACPI_AML_OT_FIELD) {
+
+		if(dst->type == ACPI_AML_OT_FIELD) {
+			dst_type = dst->field.related_object->type;
+		} else {
+			dst_type = src->field.related_object->type;
+		}
+
+		if(dst_type == ACPI_AML_OT_OPREGION) {
+			dst_type = ACPI_AML_OT_NUMBER;
+		}
+	}
+
+	if(dst_type == ACPI_AML_OT_BUFFERFIELD) {
+		dst_type = ACPI_AML_OT_NUMBER;
 	}
 
 	int8_t res = -1;
 	int64_t ival = 0;
 
-	switch (dst->type) {
+	switch (dst_type) {
 	case ACPI_AML_OT_NUMBER:
 		res = acpi_aml_read_as_integer(ctx, src, &ival);
 		if(res != 0) {
@@ -59,8 +82,8 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 		res = 0;
 		break;
 	default:
+		PRINTLOG("ACPIAML", "ERROR", "store unknown dest %i src is %i remaining %i", dst->type, src->type, ctx->remaining);
 		acpi_aml_print_object(ctx, dst);
-		printf("store unknown dest %i src is %i\n", dst->type, src->type);
 		return -1;
 	}
 

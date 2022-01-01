@@ -150,14 +150,14 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 	}
 
 	if(idx == -1) {
-		printf("ACPIAML: FATAL unknown op code 0x%04x for execution\n", opcode->opcode);
+		PRINTLOG("ACPIAML", "FATAL", "unknown op code 0x%04x for execution", opcode->opcode);
 		return -1;
 	}
 
 	acpi_aml_exec_f exec_f = acpi_aml_exec_fs[idx];
 
 	if(exec_f == NULL) {
-		printf("ACPIAML: FATAL unwanted op code for execution\n");
+		PRINTLOG("ACPIAML", "FATAL", "unwanted op code for execution", 0);
 		return -1;
 	}
 
@@ -249,37 +249,61 @@ int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* 
 int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* obj = opcode->operands[0];
 
-	ctx->flags.method_return = 1;
-
 	if(ctx->method_context == NULL) {
 		ctx->flags.fatal = 1;
 		return -1;
 	}
 
+	ctx->flags.method_return = 1;
+
 	acpi_aml_method_context_t* mthctx = ctx->method_context;
 
 	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
-	mthctx->mthobjs[15] = obj; //acpi_aml_duplicate_object(ctx, obj);
+	mthctx->mthobjs[15] = obj; // acpi_aml_duplicate_object(ctx, obj);
+	opcode->return_obj = obj;
 
-	return -1;
+	return 0;
+}
+
+int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, acpi_aml_object_t** return_obj, ...) {
+	acpi_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0);
+	opcode->opcode = ACPI_AML_METHODCALL;
+	opcode->operands[0] = mth;
+	opcode->operand_count = 1;
+
+	va_list args;
+	va_start(args, return_obj);
+
+	for(uint32_t i = 0; i < mth->method.arg_count; i++) {
+		printf("!!!!!\n");
+		opcode->operands[i + 1] = va_arg(args, acpi_aml_object_t*);
+		opcode->operand_count++;
+	}
+
+	va_end(args);
+
+	int8_t res = acpi_aml_exec_method(ctx, opcode);
+
+	if(return_obj) {
+		if(opcode->return_obj) {
+			PRINTLOG("ACPIAML", "DEBUG", "return obj type %i", opcode->return_obj->type);
+		}
+
+		*return_obj = opcode->return_obj;
+	}
+
+	memory_free_ext(ctx->heap, opcode);
+
+	return res;
 }
 
 int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	int8_t res = -1;
 
-	acpi_aml_method_context_t* mthctx = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_method_context_t), 0x0);
-
-	if(mthctx == NULL) {
-		return -1;
-	}
-
-	mthctx->arg_count = opcode->operand_count - 1; //first op is method call object
-
 	acpi_aml_object_t** mthobjs = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t*) * 16, 0x0);
 
 	if(mthobjs == NULL) {
-		memory_free_ext(ctx->heap, mthctx);
 		return -1;
 	}
 
@@ -287,51 +311,64 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 		mthobjs[8 + i] = opcode->operands[1 + i];
 	}
 
+	acpi_aml_method_context_t* mthctx = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_method_context_t), 0x0);
+
+	if(mthctx == NULL) {
+		memory_free_ext(ctx->heap, mthobjs);
+		return -1;
+	}
+
 	mthctx->mthobjs = mthobjs;
+	mthctx->arg_count = opcode->operand_count - 1;   //first op is method call object
 
-	acpi_aml_object_t* mth = opcode->operands[0];
 
+	char_t* old_scope_prefix = ctx->scope_prefix;
 	uint8_t inside_method = ctx->flags.inside_method;
 	uint8_t* old_data = ctx->data;
 	uint64_t old_length = ctx->length;
 	uint64_t old_remaining = ctx->remaining;
 	acpi_aml_method_context_t* old_mthctx =  ctx->method_context;
+	linkedlist_t old_local_symbols = ctx->local_symbols;
 
+	acpi_aml_object_t* mth = opcode->operands[0];
+
+
+	ctx->scope_prefix = mth->name;
 	ctx->flags.inside_method = 1;
 	ctx->data = mth->method.termlist;
 	ctx->length = mth->method.termlist_length;
 	ctx->remaining = mth->method.termlist_length;
 	ctx->method_context = mthctx;
-	linkedlist_t local_symbols = ctx->local_symbols;
-
-
 	ctx->local_symbols = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_object_name_comparator);
 
 	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
-	if(res == -1 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
+	acpi_aml_destroy_symbol_table(ctx, 1);
+
+	if(res == 0 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
+		PRINTLOG("ACPIAML", "DEBUG", "return obj type %i", mthobjs[15]->type);
 		opcode->return_obj = mthobjs[15];
 		res = 0;
 	}
 
-	ctx->flags.inside_method = inside_method;
-	ctx->data = old_data;
-	ctx->length = old_length;
-	ctx->remaining = old_remaining;
-	ctx->method_context = old_mthctx;
-
-	acpi_aml_destroy_symbol_table(ctx, 1);
-	ctx->local_symbols = local_symbols;
-
-
 	for(uint8_t i = 0; i < 8; i++) {
-		if(mthobjs[i]) {
+		if(mthobjs[i] && mthobjs[i] != opcode->return_obj) {
 			acpi_aml_destroy_object(ctx, mthobjs[i]);
+			memory_free_ext(ctx->heap, mthobjs[i]);
 		}
 	}
 
 	memory_free_ext(ctx->heap, mthobjs);
 	memory_free_ext(ctx->heap, mthctx);
+
+	ctx->scope_prefix = old_scope_prefix;
+	ctx->flags.inside_method = inside_method;
+	ctx->flags.method_return = 0;
+	ctx->data = old_data;
+	ctx->length = old_length;
+	ctx->remaining = old_remaining;
+	ctx->method_context = old_mthctx;
+	ctx->local_symbols = old_local_symbols;
 
 	return res;
 }

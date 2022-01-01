@@ -10,15 +10,20 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 	int64_t op1 = 0;
 	int64_t op2 = 0;
 
-	if(acpi_aml_read_as_integer(ctx, opcode->operands[0], &op1) != 0) {
+	acpi_aml_object_t* op1op = opcode->operands[0];
+	acpi_aml_object_t* op2op = opcode->operands[1];
+	op1op = acpi_aml_get_if_arg_local_obj(ctx, op1op, 0, 0);
+	op2op = acpi_aml_get_if_arg_local_obj(ctx, op2op, 0, 0);
+
+	if(acpi_aml_read_as_integer(ctx, op1op, &op1) != 0) {
 		return -1;
 	}
 
 
 	int64_t ires = 0;
 
-	if(opcode->operands[1] != NULL) {
-		if(acpi_aml_read_as_integer(ctx, opcode->operands[1], &op2) != 0) {
+	if(op2op != NULL) {
+		if(acpi_aml_read_as_integer(ctx, op2op, &op2) != 0) {
 			return -1;
 		}
 	}
@@ -52,6 +57,7 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 		ires = op1 < op2;
 		break;
 	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown logic op code 0x%04x", opcode->opcode);
 		return -1;
 	}
 
@@ -73,8 +79,10 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
 int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	int64_t op1 = 0;
+	acpi_aml_object_t* op1op = opcode->operands[0];
+	op1op = acpi_aml_get_if_arg_local_obj(ctx, op1op, 0, 0);
 
-	if(acpi_aml_read_as_integer(ctx, opcode->operands[0], &op1) != 0) {
+	if(acpi_aml_read_as_integer(ctx, op1op, &op1) != 0) {
 		return -1;
 	}
 
@@ -106,6 +114,8 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	acpi_aml_object_t* src = opcode->operands[0];
 	acpi_aml_object_t* dst = opcode->operands[1];
 
+	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
+
 	int64_t op1 = 0;
 	if(acpi_aml_read_as_integer(ctx, src, &op1) != 0) {
 		return -1;
@@ -114,6 +124,8 @@ int8_t acpi_aml_exec_op1_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	int64_t ires = ~op1;
 
 	if(acpi_aml_is_null_target(dst) != 0) {
+		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
+
 		if(acpi_aml_write_as_integer(ctx, ires, dst) != 0) {
 			return -1;
 		}
@@ -139,15 +151,26 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	acpi_aml_object_t* op2op = opcode->operands[1];
 	acpi_aml_object_t* target = opcode->operands[2];
 
+	op1op = acpi_aml_get_if_arg_local_obj(ctx, op1op, 0, 0);
+	op2op = acpi_aml_get_if_arg_local_obj(ctx, op2op, 0, 0);
+
+
+	if(op1op == NULL || op2op == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "one of empty operands for math op 0x%04x", opcode->opcode);
+		return -1;
+	}
+
 
 	int64_t op1 = 0;
 	int64_t op2 = 0;
 
 	if(acpi_aml_read_as_integer(ctx, op1op, &op1) != 0) {
+		PRINTLOG("ACPIAML", "ERROR", "cannot read integer data op1 %i for math op 0x%04x", op1op->type, opcode->opcode);
 		return -1;
 	}
 
 	if(acpi_aml_read_as_integer(ctx, op2op, &op2) != 0) {
+		PRINTLOG("ACPIAML", "ERROR", "cannot read integer data op2 %i for math op 0x%04x", op2op->type, opcode->opcode);
 		return -1;
 	}
 
@@ -188,10 +211,13 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		ires = op1 << op2;
 		break;
 	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown math op code 0x%04x", opcode->opcode);
 		return -1;
 	}
 
 	if(acpi_aml_is_null_target(target) != 0) {
+		target = acpi_aml_get_if_arg_local_obj(ctx, target, 1, 0);
+
 		if(acpi_aml_write_as_integer(ctx, ires, target) != 0) {
 			return -1;
 		}
@@ -218,6 +244,9 @@ int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	acpi_aml_object_t* remainderop = opcode->operands[2];
 	acpi_aml_object_t* resultop = opcode->operands[3];
 
+	dividendop = acpi_aml_get_if_arg_local_obj(ctx, dividendop, 0, 0);
+	divisorop = acpi_aml_get_if_arg_local_obj(ctx, divisorop, 0, 0);
+
 	int64_t dividend = 0;
 	int64_t divisor = 0;
 
@@ -238,12 +267,16 @@ int8_t acpi_aml_exec_op2_tgt2_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	int64_t ires = dividend / divisor;
 
 	if(acpi_aml_is_null_target(remainderop) != 0) {
+		remainderop = acpi_aml_get_if_arg_local_obj(ctx, remainderop, 1, 0);
+
 		if(acpi_aml_write_as_integer(ctx, irem, remainderop) != 0) {
 			return -1;
 		}
 	}
 
 	if(acpi_aml_is_null_target(resultop) != 0) {
+		resultop = acpi_aml_get_if_arg_local_obj(ctx, resultop, 1, 0);
+
 		if(acpi_aml_write_as_integer(ctx, ires, resultop) != 0) {
 			return -1;
 		}
