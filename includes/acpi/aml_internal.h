@@ -226,4 +226,7 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_o
 int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t*, acpi_aml_object_t*, acpi_aml_object_t*);
 int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t*, acpi_aml_object_t*, acpi_aml_object_t*);
 
+char_t* acpi_aml_parse_eisaid(acpi_aml_parser_context_t* ctx, uint64_t eisaid_num);
+
+int8_t acpi_aml_execute(acpi_aml_parser_context_t*, acpi_aml_object_t* mth, acpi_aml_object_t** return_obj, ...);
 #endif

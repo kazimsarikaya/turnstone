@@ -185,10 +185,14 @@ acpi_aml_parse_f acpi_aml_parse_fs[] = {
 };
 
 int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	while(ctx->remaining > 0) {
+	while(ctx->remaining > 0 && ctx->flags.method_return != 1 && ctx->flags.fatal != 1) {
 		if(acpi_aml_parse_one_item(ctx, data, consumed) != 0) {
 			return -1;
 		}
+	}
+
+	if(ctx->flags.fatal == 1) {
+		return -1;
 	}
 
 	return 0;
@@ -219,6 +223,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 
 	if(res == -1 && ctx->flags.fatal == 1) {
 		printf("ACPIAML: Error: scope: -%s- one_item data: 0x%02x length: %li remaining: %li\n", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+		return -1;
 	}
 
 	return res;

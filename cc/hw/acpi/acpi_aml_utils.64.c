@@ -6,6 +6,9 @@
 #include <strings.h>
 #include <video.h>
 #include <utils.h>
+#include <memory/paging.h>
+#include <pci.h>
+#include <ports.h>
 
 
 int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
@@ -77,6 +80,429 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 	return obj;
 }
 
+int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+	UNUSED(ctx);
+
+	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		return -1;
+	}
+
+	if(obj->field.related_object->opregion.region_space != ACPI_AML_OPREGT_SYSIO) {
+		PRINTLOG("ACPIAML", "ERROR", "op region space is not pci config %i", obj->field.related_object->opregion.region_space);
+		return -1;
+	}
+
+
+	uint8_t offset = obj->field.offset / 8 + obj->field.related_object->opregion.region_offset;
+
+	uint64_t tmp = 0;
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		tmp = inb(offset);
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		tmp = inw(offset);
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		tmp = inl(offset);
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	uint64_t mask = (1 << obj->field.sizeasbit) - 1;
+
+	val &= mask;
+	val <<= (obj->field.offset % 8);
+
+	mask <<= (obj->field.offset % 8);
+
+	switch (obj->field.update_rule) {
+	case ACPI_AML_FIELD_PRESERVE:
+		tmp = (tmp & ~mask) | val;
+		break;
+	case ACPI_AML_FIELD_WRITE_ONES:
+		tmp = ~mask | val;
+		break;
+	case ACPI_AML_FIELD_WRITE_ZEROES:
+		tmp = val;
+		break;
+	}
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		outb(offset, tmp & 0xFF);
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		outw(offset, tmp & 0xFFFF);
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		outl(offset, tmp & 0xFFFFFFFF);
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+
+	return 0;
+}
+
+int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+	UNUSED(ctx);
+
+	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		return -1;
+	}
+
+	if(obj->field.related_object->opregion.region_space != ACPI_AML_OPREGT_PCICFG) {
+		PRINTLOG("ACPIAML", "ERROR", "op region space is not pci config %i", obj->field.related_object->opregion.region_space);
+		return -1;
+	}
+
+
+	uint8_t offset = obj->field.offset / 8 + obj->field.related_object->opregion.region_offset;
+
+	char_t* region_name = obj->field.related_object->name;
+	char_t* aml_device_name = strndup(region_name, strlen(region_name) - 4);
+
+	acpi_aml_device_t* dev = acpi_device_lookup(ctx, aml_device_name);
+
+
+	if(dev == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "cannot find pci device %s", aml_device_name);
+		memory_free(aml_device_name);
+		return -1;
+	}
+
+	memory_free(aml_device_name);
+
+	int64_t adr = 0;
+
+	if(dev->adr == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "pci device does not have adr", 0);
+		return -1;
+	}
+
+	if(acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
+		PRINTLOG("ACPIAML", "ERROR", "cannot read pci device address", 0);
+		return -1;
+	}
+
+	uint32_t pci_address = PCI_IO_PORT_CREATE_ADDRESS(0, (adr >> 16) & 0x1F, adr & 0x7, offset);
+
+	uint64_t tmp = 0;
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		tmp = pci_io_port_read_data(pci_address, 1);
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		tmp = pci_io_port_read_data(pci_address, 2);
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		tmp = pci_io_port_read_data(pci_address, 4);
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	uint64_t mask = (1 << obj->field.sizeasbit) - 1;
+
+	val &= mask;
+	val <<= (obj->field.offset % 8);
+
+	mask <<= (obj->field.offset % 8);
+
+	switch (obj->field.update_rule) {
+	case ACPI_AML_FIELD_PRESERVE:
+		tmp = (tmp & ~mask) | val;
+		break;
+	case ACPI_AML_FIELD_WRITE_ONES:
+		tmp = ~mask | val;
+		break;
+	case ACPI_AML_FIELD_WRITE_ZEROES:
+		tmp = val;
+		break;
+	}
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		pci_io_port_write_data(pci_address, tmp, 1);
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		pci_io_port_write_data(pci_address, tmp, 2);
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		pci_io_port_write_data(pci_address, tmp, 4);
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+
+	return 0;
+}
+
+int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+	UNUSED(ctx);
+
+	if(obj == NULL && !(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		return -1;
+	}
+
+	uint8_t* memva = NULL;
+
+	if(obj->field.related_object->type == ACPI_AML_OT_OPREGION) {
+		memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(obj->field.related_object->opregion.region_offset);
+	} else if(obj->field.related_object->type == ACPI_AML_OT_BUFFER) {
+		memva = obj->field.related_object->buffer.buf;
+	} else {
+		PRINTLOG("ACPIAML", "ERROR", "not opregion or buffer %i", obj->field.related_object->type);
+		return -1;
+	}
+
+	memva += obj->field.offset / 8;
+
+	uint8_t* ba = memva;
+	uint16_t* wa = (uint16_t*)memva;
+	uint32_t* dwa = (uint32_t*)memva;
+	uint64_t* qwa = (uint64_t*)memva;
+
+	uint64_t tmp = 0;
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		tmp = *ba;
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		tmp = *wa;
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		tmp = *dwa;
+		break;
+	case ACPI_AML_FIELD_QWORD_ACCESS:
+		tmp = *qwa;
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	uint64_t mask = (1 << obj->field.sizeasbit) - 1;
+
+	val &= mask;
+	val <<= (obj->field.offset % 8);
+
+	mask <<= (obj->field.offset % 8);
+
+	switch (obj->field.update_rule) {
+	case ACPI_AML_FIELD_PRESERVE:
+		tmp = (tmp & ~mask) | val;
+		break;
+	case ACPI_AML_FIELD_WRITE_ONES:
+		tmp = ~mask | val;
+		break;
+	case ACPI_AML_FIELD_WRITE_ZEROES:
+		tmp = val;
+		break;
+	}
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		*ba = (uint8_t)tmp;
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		*wa = (uint16_t)tmp;
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		*dwa = (uint32_t)tmp;
+		break;
+	case ACPI_AML_FIELD_QWORD_ACCESS:
+		*qwa = (uint64_t)tmp;
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	return 0;
+}
+
+int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
+	UNUSED(ctx);
+
+	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		return -1;
+	}
+
+	if(obj->field.related_object->opregion.region_space != ACPI_AML_OPREGT_SYSIO) {
+		PRINTLOG("ACPIAML", "ERROR", "op region space is not pci config %i", obj->field.related_object->opregion.region_space);
+		return -1;
+	}
+
+
+	uint8_t offset = obj->field.offset / 8 + obj->field.related_object->opregion.region_offset;
+
+	uint64_t tmp = 0;
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		tmp = inb(offset);
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		tmp = inw(offset);
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		tmp = inl(offset);
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	uint64_t mask = (1 << obj->field.sizeasbit) - 1;
+	tmp >>= (obj->field.offset % 8);
+	tmp &= mask;
+
+	*res = tmp;
+
+	return 0;
+}
+
+int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
+	UNUSED(ctx);
+
+	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		return -1;
+	}
+
+	if(obj->field.related_object->opregion.region_space != ACPI_AML_OPREGT_PCICFG) {
+		PRINTLOG("ACPIAML", "ERROR", "op region space is not pci config %i", obj->field.related_object->opregion.region_space);
+		return -1;
+	}
+
+
+	uint8_t offset = obj->field.offset / 8 + obj->field.related_object->opregion.region_offset;
+
+	char_t* region_name = obj->field.related_object->name;
+	char_t* aml_device_name = strndup(region_name, strlen(region_name) - 4);
+
+	acpi_aml_device_t* dev = acpi_device_lookup(ctx, aml_device_name);
+
+
+	if(dev == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "cannot find pci device %s", aml_device_name);
+		memory_free(aml_device_name);
+		return -1;
+	}
+
+	memory_free(aml_device_name);
+
+	int64_t adr = 0;
+
+	if(dev->adr == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "pci device does not have adr", 0);
+		return -1;
+	}
+
+	if(acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
+		PRINTLOG("ACPIAML", "ERROR", "cannot read pci device address", 0);
+		return -1;
+	}
+
+	uint32_t pci_address = PCI_IO_PORT_CREATE_ADDRESS(0, (adr >> 16) & 0x1F, adr & 0x7, offset);
+
+	uint64_t tmp = 0;
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		tmp = pci_io_port_read_data(pci_address, 1);
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		tmp = pci_io_port_read_data(pci_address, 2);
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		tmp = pci_io_port_read_data(pci_address, 4);
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	uint64_t mask = (1 << obj->field.sizeasbit) - 1;
+	tmp >>= (obj->field.offset % 8);
+	tmp &= mask;
+
+	*res = tmp;
+
+	return 0;
+}
+
+int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
+	UNUSED(ctx);
+
+	if(obj == NULL && !(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
+		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		return -1;
+	}
+
+	uint8_t* memva = NULL;
+
+	if(obj->field.related_object->type == ACPI_AML_OT_OPREGION) {
+		memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(obj->field.related_object->opregion.region_offset);
+	} else if(obj->field.related_object->type == ACPI_AML_OT_BUFFER) {
+		memva = obj->field.related_object->buffer.buf;
+	} else {
+		PRINTLOG("ACPIAML", "ERROR", "not opregion or buffer %i", obj->field.related_object->type);
+		return -1;
+	}
+
+	memva += obj->field.offset / 8;
+
+	uint8_t* ba = memva;
+	uint16_t* wa = (uint16_t*)memva;
+	uint32_t* dwa = (uint32_t*)memva;
+	uint64_t* qwa = (uint64_t*)memva;
+
+	uint64_t tmp = 0;
+
+	switch (obj->field.access_type) {
+	case ACPI_AML_FIELD_BYTE_ACCESS:
+		tmp = *ba;
+		break;
+	case ACPI_AML_FIELD_WORD_ACCESS:
+		tmp = *wa;
+		break;
+	case ACPI_AML_FIELD_DWORD_ACCESS:
+		tmp = *dwa;
+		break;
+	case ACPI_AML_FIELD_QWORD_ACCESS:
+		tmp = *qwa;
+		break;
+	default:
+		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		return -1;
+	}
+
+	uint64_t mask = (1 << obj->field.sizeasbit) - 1;
+	tmp >>= (obj->field.offset % 8);
+	tmp &= mask;
+
+	*res = tmp;
+
+	return 0;
+}
+
 int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
 	obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
 
@@ -84,8 +510,10 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		return -1;
 	}
 
+	int8_t result = 0;
 	int64_t ival = 0;
 	char_t* strptr;
+	acpi_aml_object_t* mth_res = NULL;
 
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
@@ -117,6 +545,30 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		break;
 	case ACPI_AML_OT_OPCODE_EXEC_RETURN:
 		return acpi_aml_read_as_integer(ctx, obj->opcode_exec_return, res);
+	case ACPI_AML_OT_METHOD:
+		if(acpi_aml_execute(ctx, obj, &mth_res) != 0) {
+			return -1;
+		}
+
+		result = acpi_aml_read_as_integer(ctx, mth_res, res);
+		memory_free_ext(ctx->heap, mth_res);
+
+		return result;
+	case ACPI_AML_OT_FIELD:
+		switch(obj->field.related_object->opregion.region_space) {
+		case ACPI_AML_OPREGT_SYSMEM:
+			return acpi_aml_read_memory_as_integer(ctx, obj, res);
+		case ACPI_AML_OPREGT_PCICFG:
+			return acpi_aml_read_pci_as_integer(ctx, obj, res);
+		case ACPI_AML_OPREGT_SYSIO:
+			return acpi_aml_read_sysio_as_integer(ctx, obj, res);
+		default:
+			PRINTLOG("ACPIAML", "ERROR", "region space id not implemented %i", obj->field.related_object->opregion.region_space);
+			return -1;
+		}
+		return -1;
+	case ACPI_AML_OT_BUFFERFIELD:
+		return acpi_aml_read_memory_as_integer(ctx, obj, res);
 	default:
 		printf("read as integer objtype %li\n", obj->type);
 		return -1;
@@ -142,6 +594,19 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 	case ACPI_AML_OT_NUMBER:
 		obj->number.value = val;
 		break;
+	case ACPI_AML_OT_FIELD:
+		switch(obj->field.related_object->opregion.region_space) {
+		case ACPI_AML_OPREGT_SYSMEM:
+			return acpi_aml_write_memory_as_integer(ctx, val, obj);
+		case ACPI_AML_OPREGT_PCICFG:
+			return acpi_aml_write_pci_as_integer(ctx, val, obj);
+		case ACPI_AML_OPREGT_SYSIO:
+			return acpi_aml_write_sysio_as_integer(ctx, val, obj);
+		default:
+			PRINTLOG("ACPIAML", "ERROR", "region space id not implemented %i", obj->field.related_object->opregion.region_space);
+			return -1;
+		}
+		return -1;
 	default:
 		printf("write as integer objtype %li\n", obj->type);
 		return -1;
@@ -548,172 +1013,26 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 	memory_free_ext(ctx->heap, obj);
 }
 
-int8_t acpi_aml_build_devices(acpi_aml_parser_context_t* ctx) {
-	uint64_t item_count = 0;
+char_t* acpi_aml_parse_eisaid(acpi_aml_parser_context_t* ctx, uint64_t eisaid_num) {
+	char_t* res = memory_malloc_ext(ctx->heap, 8, 0);
+	eisaid_num = BYTE_SWAP32(eisaid_num);
 
-	ctx->devices = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_device_name_comparator);
-	acpi_aml_device_t* curr_device = NULL;
+	res[6] = DIGIT_TO_HEX(eisaid_num & 0xF);
+	eisaid_num >>= 4;
+	res[5] = DIGIT_TO_HEX(eisaid_num & 0xF);
+	eisaid_num >>= 4;
+	res[4] = DIGIT_TO_HEX(eisaid_num & 0xF);
+	eisaid_num >>= 4;
+	res[3] = DIGIT_TO_HEX(eisaid_num & 0xF);
+	eisaid_num >>= 4;
 
+	res[2] = (eisaid_num & 0x1F) + 'A' - 1;
+	eisaid_num >>= 5;
+	res[1] = (eisaid_num & 0x1F) + 'A' - 1;
+	eisaid_num >>= 5;
+	res[0] = (eisaid_num & 0x1F) + 'A' - 1;
 
-	iterator_t* iter = linkedlist_iterator_create(ctx->symbols);
-	while(iter->end_of_iterator(iter) != 0) {
-		acpi_aml_object_t* sym = iter->get_item(iter);
-
-		if(sym == NULL && sym->name == NULL) {
-			iter->destroy(iter);
-			PRINTLOG("ACPI", "FATAL", "NULL object at symbol table or no name", 0);
-			return -1;
-		}
-
-		if(strends(sym->name, "_PIC") == 0) {
-			ctx->pic = sym;
-		}
-
-		if(sym->type == ACPI_AML_OT_DEVICE) {
-			acpi_aml_device_t* new_device = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_t), 0);
-			new_device->name = sym->name;
-			linkedlist_sortedlist_insert(ctx->devices, new_device);
-
-			if(curr_device != NULL) {
-				int64_t len_diff = strlen(sym->name) - strlen(curr_device->name);
-
-				if(len_diff == 0) {
-					new_device->parent = curr_device->parent;
-				} else if(len_diff == 4) {
-					new_device->parent = curr_device;
-				} else {
-					len_diff = ABS(len_diff) / 4;
-
-					while(curr_device && len_diff--) {
-						curr_device = curr_device->parent;
-					}
-
-					new_device->parent = curr_device;
-				}
-			}
-
-			curr_device = new_device;
-			item_count++;
-		} else {
-			if(curr_device != NULL) {
-				int64_t len_diff = strlen(sym->name) - strlen(curr_device->name);
-				boolean_t need_check = 0;
-
-				if(len_diff < 0) {
-					len_diff = ABS(len_diff) / 4;
-
-					while(curr_device && len_diff--) {
-						curr_device = curr_device->parent;
-					}
-
-					if(curr_device != NULL) {
-						need_check = 1;
-					}
-
-				} else if(len_diff == 4) {
-					need_check = 1;
-				} else if(len_diff == 0) {
-					curr_device = curr_device->parent;
-
-					if(curr_device != NULL && strlen(sym->name) - strlen(curr_device->name) == 4) {
-						need_check = 1;
-					}
-				}
-
-				if(need_check && strstarts(sym->name, curr_device->name) == 0) {
-					if(strends(sym->name, "_ADR") == 0) {
-						curr_device->adr = sym;
-					}
-
-					if(strends(sym->name, "_HID") == 0) {
-						curr_device->hid = sym;
-					}
-
-					if(strends(sym->name, "_UID") == 0) {
-						curr_device->uid = sym;
-					}
-
-					if(strends(sym->name, "_CRS") == 0) {
-						curr_device->crs = sym;
-					}
-
-					if(strends(sym->name, "_STA") == 0) {
-						curr_device->sta = sym;
-					}
-
-					if(strends(sym->name, "_INI") == 0) {
-						curr_device->ini = sym;
-					}
-
-					if(strends(sym->name, "_PRT") == 0) {
-						curr_device->prt = sym;
-					}
-				}
-			}
-		}
-
-		iter = iter->next(iter);
-	}
-
-	iter->destroy(iter);
-
-	return 0;
-}
-
-void acpi_aml_print_devices(acpi_aml_parser_context_t* ctx) {
-	uint64_t item_count = 0;
-	iterator_t* iter = linkedlist_iterator_create(ctx->devices);
-
-	while(iter->end_of_iterator(iter) != 0) {
-		acpi_aml_device_t* d = iter->get_item(iter);
-
-		acpi_aml_print_device(ctx, d);
-		item_count++;
-		iter = iter->next(iter);
-	}
-
-	iter->destroy(iter);
-
-	printf("totoal devices %i\n", item_count );;
-}
-
-void acpi_aml_print_device(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d) {
-	printf("device name %s ", d->name);
-
-	if(d->parent) {
-		printf("parent %s", d->parent->name);
-	}
-
-	printf("\n");
-
-	if(d->adr) {
-		acpi_aml_print_object(ctx, d->adr);
-	}
-
-	if(d->hid) {
-		acpi_aml_print_object(ctx, d->hid);
-	}
-
-	if(d->uid) {
-		acpi_aml_print_object(ctx, d->uid);
-	}
-
-	if(d->crs) {
-		acpi_aml_print_object(ctx, d->crs);
-	}
-
-	if(d->sta) {
-		acpi_aml_print_object(ctx, d->sta);
-	}
-
-	if(d->ini) {
-		acpi_aml_print_object(ctx, d->ini);
-	}
-
-	if(d->prt) {
-		acpi_aml_print_object(ctx, d->prt);
-	}
-
+	return res;
 }
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
@@ -747,12 +1066,20 @@ void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* ob
 
 	int64_t len = 0;
 	int64_t ival = 0;
+	char_t* eisaid = NULL;
 
 	printf("object id=%p name=%s type=", obj, obj->name);
 
 	switch (obj->type) {
 	case ACPI_AML_OT_NUMBER:
-		printf("number value=0x%lx bytecnt=%i\n", obj->number.value, obj->number.bytecnt );
+		printf("number value=0x%lx bytecnt=%i", obj->number.value, obj->number.bytecnt );
+		if(strends(obj->name, "_HID") == 0) {
+			eisaid = acpi_aml_parse_eisaid(ctx, obj->number.value);
+			printf(" eisaid=%s\n", eisaid);
+			memory_free_ext(ctx->heap, eisaid);
+		} else {
+			printf("\n");
+		}
 		break;
 	case ACPI_AML_OT_STRING:
 		printf("string value=%s\n", obj->string );

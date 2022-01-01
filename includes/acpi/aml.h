@@ -30,7 +30,7 @@ typedef enum {
 	ACPI_AML_OT_THERMALZONE,
 	ACPI_AML_OT_BUFFERFIELD,
 	ACPI_AML_OT_DDBHANDLE,
-	ACPI_AML_OT_DEBUG,
+	ACPI_AML_OT_DEBUG,  // 16
 	ACPI_AML_OT_ALIAS,
 	ACPI_AML_OT_OPCODE_EXEC_RETURN,
 	ACPI_AML_OT_SCOPE,
@@ -39,7 +39,7 @@ typedef enum {
 	ACPI_AML_OT_METHODCALL,
 	ACPI_AML_OT_RUNTIMEREF,
 	ACPI_AML_OT_TIMER,
-	ACPI_AML_OT_LOCAL_OR_ARG,
+	ACPI_AML_OT_LOCAL_OR_ARG, // 25
 	ACPI_AML_OT_REFOF,
 }acpi_aml_object_type_t;
 
@@ -440,12 +440,15 @@ typedef struct acpi_aml_device {
 	char_t* name;
 	struct acpi_aml_device* parent;
 	acpi_aml_object_t* adr;
-	acpi_aml_object_t* hid;
-	acpi_aml_object_t* uid;
 	acpi_aml_object_t* crs;
-	acpi_aml_object_t* sta;
+	acpi_aml_object_t* dis;
+	acpi_aml_object_t* hid;
 	acpi_aml_object_t* ini;
+	acpi_aml_object_t* prs;
 	acpi_aml_object_t* prt;
+	acpi_aml_object_t* srs;
+	acpi_aml_object_t* sta;
+	acpi_aml_object_t* uid;
 }acpi_aml_device_t;
 
 typedef struct {
@@ -484,9 +487,11 @@ void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t*);
 
 int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
 
-int8_t acpi_aml_build_devices(acpi_aml_parser_context_t*);
-void acpi_aml_print_devices(acpi_aml_parser_context_t* ctx);
-void acpi_aml_print_device(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d);
+int8_t acpi_device_build(acpi_aml_parser_context_t*);
+int8_t acpi_device_init(acpi_aml_parser_context_t*);
+void acpi_device_print_all(acpi_aml_parser_context_t* ctx);
+void acpi_device_print(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d);
+acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
 void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
