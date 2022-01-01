@@ -181,6 +181,12 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	case ACPI_AML_MOD:
 		ires = op1 % op2;
 		break;
+	case ACPI_AML_SHR:
+		ires = op1 >> op2;
+		break;
+	case ACPI_AML_SHL:
+		ires = op1 << op2;
+		break;
 	default:
 		return -1;
 	}
