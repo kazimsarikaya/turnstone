@@ -1525,6 +1525,8 @@ int32_t main(int32_t argc, char** argv) {
 				continue;
 			} else {
 				print_error("argument error");
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 		}
@@ -1541,6 +1543,8 @@ int32_t main(int32_t argc, char** argv) {
 				continue;
 			} else {
 				print_error("argument error");
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 		}
@@ -1557,6 +1561,8 @@ int32_t main(int32_t argc, char** argv) {
 				continue;
 			} else {
 				print_error("argument error");
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 		}
@@ -1573,6 +1579,8 @@ int32_t main(int32_t argc, char** argv) {
 				continue;
 			} else {
 				print_error("argument error");
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 		}
@@ -1615,11 +1623,15 @@ int32_t main(int32_t argc, char** argv) {
 
 	if(output_file == NULL) {
 		printf("no output file given exiting\n");
+		print_error("LINKER FAILED");
+
 		return -1;
 	}
 
 	if(entry_point == NULL) {
 		printf("no entry point given exiting\n");
+		print_error("LINKER FAILED");
+
 		return -1;
 	}
 
@@ -1870,6 +1882,8 @@ int32_t main(int32_t argc, char** argv) {
 				printf("%s %s\n", linker_get_section_name(ctx, sec_idx), tmp_section_name);
 				linker_destroy_objectctx(ctx);
 				linker_destroy_context(ctx);
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 
@@ -1880,6 +1894,8 @@ int32_t main(int32_t argc, char** argv) {
 				printf("%s %s\n", linker_get_section_name(ctx, sec_idx), tmp_section_name);
 				linker_destroy_objectctx(ctx);
 				linker_destroy_context(ctx);
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 
@@ -1889,6 +1905,8 @@ int32_t main(int32_t argc, char** argv) {
 				print_error("cannot create relocations list");
 				linker_destroy_objectctx(ctx);
 				linker_destroy_context(ctx);
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 
@@ -1901,6 +1919,8 @@ int32_t main(int32_t argc, char** argv) {
 				print_error("cannot create relocs buffer");
 				linker_destroy_objectctx(ctx);
 				linker_destroy_context(ctx);
+				print_error("LINKER FAILED");
+
 				return -1;
 			}
 
@@ -1946,6 +1966,8 @@ int32_t main(int32_t argc, char** argv) {
 					printf("%s %s %s\n", file_name, tmp_section_name, tmp_symbol_name );
 					linker_print_symbols(ctx);
 					linker_destroy_context(ctx);
+					print_error("LINKER FAILED");
+
 					return -1;
 				}
 
@@ -1978,6 +2000,8 @@ int32_t main(int32_t argc, char** argv) {
 						printf("%i %lx %lx %lx\n", reloc_type, reloc->symbol_id, reloc->offset, reloc->addend);
 						linker_destroy_objectctx(ctx);
 						linker_destroy_context(ctx);
+						print_error("LINKER FAILED");
+
 						return -1;
 					}
 				} else {
@@ -2004,6 +2028,8 @@ int32_t main(int32_t argc, char** argv) {
 						printf("%i %lx %lx %lx\n", reloc_type, reloc->symbol_id, reloc->offset, reloc->addend);
 						linker_destroy_objectctx(ctx);
 						linker_destroy_context(ctx);
+						print_error("LINKER FAILED");
+
 						return -1;
 					}
 				}
@@ -2025,6 +2051,7 @@ int32_t main(int32_t argc, char** argv) {
 	if(ctx->test_section_flag && linker_relocate_test_functions(ctx) != 0) {
 		print_error("error at relocation test functions");
 		linker_destroy_context(ctx);
+		print_error("LINKER FAILED");
 
 		return -1;
 	}
@@ -2032,6 +2059,7 @@ int32_t main(int32_t argc, char** argv) {
 	if(linker_tag_required_sections(ctx) != 0) {
 		print_error("error at tagging required sections");
 		linker_destroy_context(ctx);
+		print_error("LINKER FAILED");
 
 		return -1;
 	}
@@ -2098,6 +2126,8 @@ int32_t main(int32_t argc, char** argv) {
 	if(linker_sort_sections_by_offset(ctx) != 0) {
 		printf("cannot sort sections\n");
 		linker_destroy_context(ctx);
+		print_error("LINKER FAILED");
+
 		return -1;
 	}
 
@@ -2112,11 +2142,13 @@ int32_t main(int32_t argc, char** argv) {
 	if(linker_write_output(ctx) != 0) {
 		print_error("error at writing output");
 		linker_destroy_context(ctx);
+		print_error("LINKER FAILED");
+
 		return -1;
 	}
 
 	linker_destroy_context(ctx);
 
-	print_success("OK");
+	print_success("LINKER OK");
 	return 0;
 }
