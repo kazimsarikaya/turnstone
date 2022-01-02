@@ -264,7 +264,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	memory_free_ext(ctx->heap, name);
 
-	if(tmp_obj->type == ACPI_AML_OT_METHOD) { // TODO: external if it is method
+	if(tmp_obj->type == ACPI_AML_OT_METHOD && ctx->flags.dismiss_execute_method == 0) { // TODO: external if it is method
 		t_consumed = 0;
 
 		if(acpi_aml_parse_op_code_with_cnt(ACPI_AML_METHODCALL, tmp_obj->method.arg_count, ctx, data, &t_consumed, tmp_obj) != 0) {
