@@ -237,6 +237,19 @@ int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* 
 		obj = acpi_aml_symbol_lookup(ctx, obj->string);
 	} else if (obj->type == ACPI_AML_OT_REFOF) {
 		obj = obj->refof_target;
+	} else if (obj->type == ACPI_AML_OT_BUFFERFIELD) {
+		int64_t data = 0;
+		if(acpi_aml_read_as_integer(ctx, obj, &data) != 0) {
+			return -1;
+		}
+
+		acpi_aml_object_t* tmp = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+		tmp->type = ACPI_AML_OT_NUMBER;
+		tmp->number.bytecnt = 1;
+		tmp->number.value = data;
+
+		obj = tmp;
+
 	} else {
 		return -1;
 	}
@@ -343,6 +356,23 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
 	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
+
+	iterator_t* iter = linkedlist_iterator_create(ctx->local_symbols);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_object_t* tmp = iter->get_item(iter);
+
+		if(tmp == mthobjs[15]) {
+			tmp = acpi_aml_duplicate_object(ctx, tmp);
+			memory_free_ext(ctx->heap, tmp->name);
+			mthobjs[15] = tmp;
+		}
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
 	acpi_aml_destroy_symbol_table(ctx, 1);
 
 	if(res == 0 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
@@ -354,7 +384,6 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	for(uint8_t i = 0; i < 8; i++) {
 		if(mthobjs[i] && mthobjs[i] != opcode->return_obj) {
 			acpi_aml_destroy_object(ctx, mthobjs[i]);
-			memory_free_ext(ctx->heap, mthobjs[i]);
 		}
 	}
 

@@ -42,9 +42,17 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 		acpi_aml_object_t* la_obj = mthctx->mthobjs[laidx];
 
 		if(la_obj == NULL && laidx <= 7) { // if localX does not exists create it
+			printf("----- creating local arg %i\n", laidx);
 			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
 			mthctx->mthobjs[laidx] = la_obj;
+		} else if(la_obj != NULL && laidx <= 7 && write) {
+			printf("----- cleaning local arg %i for write %p", laidx, la_obj);
+			acpi_aml_destroy_object(ctx, la_obj);
+			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
+			mthctx->mthobjs[laidx] = la_obj;
+			printf(" %p %i\n", la_obj, la_obj->type);
 		}
 
 		if(la_obj == NULL) {
@@ -324,6 +332,8 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
 		memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(obj->field.related_object->opregion.region_offset);
 	} else if(obj->field.related_object->type == ACPI_AML_OT_BUFFER) {
 		memva = obj->field.related_object->buffer.buf;
+	} else if(obj->field.related_object->type == ACPI_AML_OT_STRING) {
+		memva = (uint8_t*)obj->field.related_object->string;
 	} else {
 		PRINTLOG("ACPIAML", "ERROR", "not opregion or buffer %i", obj->field.related_object->type);
 		return -1;
@@ -572,6 +582,8 @@ int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_
 		memva = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(obj->field.related_object->opregion.region_offset);
 	} else if(obj->field.related_object->type == ACPI_AML_OT_BUFFER) {
 		memva = obj->field.related_object->buffer.buf;
+	} else if(obj->field.related_object->type == ACPI_AML_OT_STRING) {
+		memva = (uint8_t*)obj->field.related_object->string;
 	} else {
 		PRINTLOG("ACPIAML", "ERROR", "not opregion or buffer %i", obj->field.related_object->type);
 		return -1;
@@ -662,7 +674,10 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		}
 
 		result = acpi_aml_read_as_integer(ctx, mth_res, res);
-		memory_free_ext(ctx->heap, mth_res);
+
+		if(mth_res->name == NULL) {
+			acpi_aml_destroy_object(ctx, mth_res);
+		}
 
 		return result;
 	case ACPI_AML_OT_FIELD:
@@ -706,6 +721,7 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 
 	if(obj->type == ACPI_AML_OT_UNINITIALIZED) {
 		obj->type = ACPI_AML_OT_NUMBER;
+		obj->number.bytecnt = 8;
 	}
 
 	switch (obj->type) {
@@ -740,17 +756,193 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 }
 
 int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* src, acpi_aml_object_t* dst) {
-	UNUSED(ctx);
-	UNUSED(src);
-	UNUSED(dst);
-	return -1;
+	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
+	acpi_aml_object_t* original_dst = dst;
+	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 0, 0);
+
+	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_NUMBER || src->type == ACPI_AML_OT_BUFFER)) {
+		PRINTLOG("ACPIAML", "ERROR", "source type missmatch %i", src->type);
+
+		return -1;
+	}
+
+	char_t* src_data = NULL;
+
+	if(src->type == ACPI_AML_OT_STRING) {
+		src_data = src->string;
+		src_data = strdup_at_heap(ctx->heap, src_data);
+	}
+
+	if(src->type == ACPI_AML_OT_BUFFER) {
+		src_data = (char_t*)src->buffer.buf;
+		src_data = strdup_at_heap(ctx->heap, src_data);
+	}
+
+	if(src->type == ACPI_AML_OT_NUMBER) {
+		src_data = utoh(src->number.value);
+		char_t* tmp = strdup_at_heap(ctx->heap, src_data);
+		memory_free(src_data);
+		src_data = tmp;
+	}
+
+	if(dst->type == ACPI_AML_OT_FIELD) {
+		for(uint64_t i = 0; i < strlen(src_data); i++) {
+			if(acpi_aml_write_as_integer(ctx, src_data[i], dst) != 0) {
+				PRINTLOG("ACPIAML", "ERROR", "cannot write string to field", 0);
+				memory_free_ext(ctx->heap, src_data);
+
+				return -1;
+			}
+		}
+
+		memory_free_ext(ctx->heap, src_data);
+
+		return 0;
+	}
+
+	if(dst->type == ACPI_AML_OT_BUFFERFIELD) {
+		uint64_t* tmp = (uint64_t*)src_data;
+
+		if(acpi_aml_write_as_integer(ctx, *tmp, dst) != 0) {
+			PRINTLOG("ACPIAML", "ERROR", "cannot write string to bufferfield", 0);
+
+			memory_free_ext(ctx->heap, src_data);
+
+			return -1;
+		}
+
+		memory_free_ext(ctx->heap, src_data);
+
+		return 0;
+	}
+
+
+	dst = acpi_aml_get_if_arg_local_obj(ctx, original_dst, 1, 0);
+
+	if(dst->type == ACPI_AML_OT_UNINITIALIZED) {
+		dst->type = ACPI_AML_OT_STRING;
+	}
+
+	if(dst->type != ACPI_AML_OT_STRING) {
+		PRINTLOG("ACPIAML", "ERROR", "dest type missmatch %i", dst->type);
+		memory_free_ext(ctx->heap, src_data);
+
+		return -1;
+	}
+
+	memory_free_ext(ctx->heap, dst->string);
+
+	dst->string = src_data;
+
+	return 0;
 }
 
 int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* src, acpi_aml_object_t* dst) {
-	UNUSED(ctx);
-	UNUSED(src);
-	UNUSED(dst);
-	return -1;
+	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
+	acpi_aml_object_t* original_dst = dst;
+	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 0, 0);
+
+	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_NUMBER || src->type == ACPI_AML_OT_BUFFER)) {
+		PRINTLOG("ACPIAML", "ERROR", "source type missmatch %i", src->type);
+
+		return -1;
+	}
+
+	uint8_t* src_data = NULL;
+	int64_t src_len = 0;
+
+	if(src->type == ACPI_AML_OT_STRING) {
+		src_len = strlen(src->string) + 1;
+		src_data = memory_malloc_ext(ctx->heap, src_len, 0);
+		memory_memcopy(src->string, src_data, src_len);
+	}
+
+	if(src->type == ACPI_AML_OT_BUFFER) {
+		src_len = src->buffer.buflen;
+		src_data = memory_malloc_ext(ctx->heap, src_len, 0);
+		memory_memcopy(src->buffer.buf, src_data, src_len);
+	}
+
+	if(src->type == ACPI_AML_OT_NUMBER) {
+		src_len = src->number.bytecnt;
+		src_data = memory_malloc_ext(ctx->heap, src_len, 0);
+		memory_memcopy(&src->number.value, src_data, src_len);
+	}
+
+	if(dst->type == ACPI_AML_OT_FIELD) {
+		for(int64_t i = 0; i < src_len; i++) {
+			if(acpi_aml_write_as_integer(ctx, src_data[i], dst) != 0) {
+				PRINTLOG("ACPIAML", "ERROR", "cannot write string to field", 0);
+
+				memory_free_ext(ctx->heap, src_data);
+
+				return -1;
+			}
+		}
+
+		memory_free_ext(ctx->heap, src_data);
+
+		return 0;
+	}
+
+	if(dst->type == ACPI_AML_OT_BUFFERFIELD) {
+		uint64_t* tmp = (uint64_t*)src_data;
+
+		if(acpi_aml_write_as_integer(ctx, *tmp, dst) != 0) {
+			PRINTLOG("ACPIAML", "ERROR", "cannot write string to bufferfield", 0);
+
+			memory_free_ext(ctx->heap, src_data);
+
+			return -1;
+		}
+
+		memory_free_ext(ctx->heap, src_data);
+
+		return 0;
+	}
+
+	if(dst->type == ACPI_AML_OT_DEBUG) {
+		int64_t i = 0;
+
+		for(; i < src_len - 1; i++) {
+			printf("%x ", src_data[i]);
+		}
+
+		printf("%x\n", src_data[i]);
+		memory_free_ext(ctx->heap, src_data);
+
+		return 0;
+	}
+
+
+	dst = acpi_aml_get_if_arg_local_obj(ctx, original_dst, 1, 0);
+
+	boolean_t need_buf_alloc = 0;
+
+	if(dst->type == ACPI_AML_OT_UNINITIALIZED) {
+		dst->type = ACPI_AML_OT_BUFFER;
+		need_buf_alloc = 1;
+	}
+
+	if(dst->type != ACPI_AML_OT_BUFFER) {
+		PRINTLOG("ACPIAML", "ERROR", "dest type missmatch %i", dst->type);
+
+		return -1;
+	}
+
+	if(need_buf_alloc) {
+		dst->buffer.buf = memory_malloc_ext(ctx->heap, src_len, 0);
+		dst->buffer.buflen = src_len;
+	} else {
+		memory_memclean(dst->buffer.buf, dst->buffer.buflen);
+	}
+
+	int64_t l = MIN(src_len, dst->buffer.buflen);
+
+	memory_memcopy(src_data, dst->buffer.buf, l);
+	memory_free_ext(ctx->heap, src_data);
+
+	return 0;
 }
 
 
@@ -1019,23 +1211,21 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 }
 
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t code) {
+	uint8_t res = -1;
+
 	if(code >= 0x80) {
-		return code - 0x6d;
+		res = code - 0x6d;
+	}else if(code >= 0x30) {
+		res = code - 0x21;
+	} else if(code >= 0x1f) {
+		res = code - 0x1b;
+	} else if(code >= 0x12) {
+		res = code - 0x10;
+	} else {
+		res = code - 0x01;
 	}
 
-	if(code >= 0x30) {
-		return code - 0x21;
-	}
-
-	if(code >= 0x1f) {
-		return code - 0x1b;
-	}
-
-	if(code >= 0x12) {
-		return code - 0x10;
-	}
-
-	return code - 0x01;
+	return res;
 }
 
 void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local){
@@ -1302,7 +1492,7 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t* ctx, acp
 		printf("ACPIAML: Warning duplicate of refof\n");
 		break;
 	default: // TODO: other pointers
-		printf("ACPIAML: Fatal not implemented\n");
+		PRINTLOG("ACPIAML", "FATAL", "not implemented %i", obj->type);
 		break;
 	}
 

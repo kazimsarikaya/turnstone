@@ -6,6 +6,18 @@
 #include <strings.h>
 #include <utils.h>
 
+int8_t pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc){
+	UNUSED(address);
+	UNUSED(data);
+	UNUSED(bc);
+	return 0;
+}
+uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc){
+	UNUSED(address);
+	UNUSED(bc);
+	return 0x1234;
+}
+
 uint32_t main(uint32_t argc, char_t** argv) {
 	setup_ram();
 	FILE* fp;

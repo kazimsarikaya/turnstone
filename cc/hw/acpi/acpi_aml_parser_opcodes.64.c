@@ -16,6 +16,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	int8_t res = -1;
 	acpi_aml_opcode_t* opcode = NULL;
 	acpi_aml_object_t* return_obj = NULL;
+	boolean_t not_destroy[6];
 
 	if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_REVISION)) {
 		return_obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, "\\", "_REV");
@@ -76,6 +77,10 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
 		PRINTLOG("ACPIAML", "DEBUG", "scope %s opcode 0x%04x", ctx->scope_prefix, opcode->opcode);
 
+		if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_CONDREF)) {
+			ctx->flags.dismiss_execute_method = 1;
+		}
+
 		for(; idx < opcode->operand_count; idx++) {
 			uint64_t t_consumed = 0;
 			acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
@@ -98,12 +103,37 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 				op = tmp;
 			}
 
+			if(op == NULL) {
+				PRINTLOG("ACPIAML", "FATAL", "scope %s null operand at exec return rem=%i", ctx->scope_prefix, ctx->remaining);
+				res = -1;
+				goto cleanup;
+			}
+
+			if(op->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+				not_destroy[idx] = 1;
+			}
+
+			if(oc == ACPI_AML_METHODCALL) {
+				op = acpi_aml_get_if_arg_local_obj(ctx, op, 0, 0);
+			}
+
 			op = acpi_aml_get_real_object(ctx, op);
 
-			PRINTLOG("ACPIAML", "DEBUG", "scope %s param name %s type %i", ctx->scope_prefix, op->name, op->type);
+			if(op == NULL) {
+				PRINTLOG("ACPIAML", "FATAL", "scope %s null operand", ctx->scope_prefix);
+				res = -1;
+				goto cleanup;
+			} else {
+				PRINTLOG("ACPIAML", "DEBUG", "scope %s param name %s type %i %i", ctx->scope_prefix, op->name, op->type, op->type == ACPI_AML_OT_LOCAL_OR_ARG?op->local_or_arg.idx_local_or_arg:-1);
+			}
 
 			opcode->operands[idx] = op;
 			r_consumed += t_consumed;
+		}
+
+
+		if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_CONDREF)) {
+			ctx->flags.dismiss_execute_method = 0;
 		}
 
 		if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
@@ -149,7 +179,7 @@ cleanup:
 	}
 
 	for(uint8_t i = 0; i < idx; i++) {
-		if(opcode->operands[i] != NULL && opcode->operands[i]->name == NULL) {
+		if(not_destroy[i] == 0 && opcode->operands[i] != NULL && opcode->operands[i]->name == NULL) {
 			if(opcode->operands[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 				acpi_aml_object_t* tmp = opcode->operands[i]->opcode_exec_return;
 
@@ -287,12 +317,12 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 		if(predic->opcode_exec_return->name == NULL) {
-			memory_free_ext(ctx->heap, predic->opcode_exec_return);
+			acpi_aml_destroy_object(ctx, predic->opcode_exec_return);
 		}
 	}
 
 	if(predic->name == NULL) {
-		memory_free_ext(ctx->heap, predic);
+		acpi_aml_destroy_object(ctx, predic);
 	}
 
 	if(res != 0) {
@@ -315,7 +345,7 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		ctx->remaining -= plen;
 	}
 
-	if(*ctx->data == ACPI_AML_ELSE) {
+	if(ctx->remaining && *ctx->data == ACPI_AML_ELSE) {
 		if(res != 0) { // discard else when if executed
 			// pop else op code
 			ctx->data++;
@@ -572,12 +602,12 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 
 		if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 			if(predic->opcode_exec_return->name == NULL) {
-				memory_free_ext(ctx->heap, predic->opcode_exec_return);
+				acpi_aml_destroy_object(ctx, predic->opcode_exec_return);
 			}
 		}
 
 		if(predic->name == NULL) {
-			memory_free_ext(ctx->heap, predic);
+			acpi_aml_destroy_object(ctx, predic);
 		}
 
 		if(predic_res == 0) {
@@ -598,6 +628,9 @@ int8_t acpi_aml_parse_op_while(acpi_aml_parser_context_t* ctx, void** data, uint
 			return -1; // error at parsing
 		}
 
+		if(ctx->flags.method_return) {
+			break;
+		}
 	}
 
 	ctx->length = old_length;

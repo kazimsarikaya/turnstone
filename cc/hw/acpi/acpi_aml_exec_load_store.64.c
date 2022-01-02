@@ -17,7 +17,8 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	}
 
 	src = acpi_aml_get_if_arg_local_obj(ctx, src, 0, 0);
-	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
+	acpi_aml_object_t* original_dst = dst;
+	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 0, 0);
 
 	if(src->type == ACPI_AML_OT_REFOF && !(dst->type == ACPI_AML_OT_UNINITIALIZED || dst->type == ACPI_AML_OT_DEBUG)) {
 		PRINTLOG("ACPIAML", "FATAL", "writing refof to the non uninitiliazed variable", 0);
@@ -67,19 +68,17 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	case ACPI_AML_OT_NUMBER:
 		res = acpi_aml_read_as_integer(ctx, src, &ival);
 		if(res != 0) {
+			PRINTLOG("ACPIAML", "ERROR", "read as integer of src failed %i", src->type);
 			break;
 		}
-		res = acpi_aml_write_as_integer(ctx, ival, dst);
+		res = acpi_aml_write_as_integer(ctx, ival, original_dst);
 		break;
 	case ACPI_AML_OT_STRING:
-		res = acpi_aml_write_as_string(ctx, src, dst);
+		res = acpi_aml_write_as_string(ctx, src, original_dst);
 		break;
 	case ACPI_AML_OT_BUFFER:
-		res = acpi_aml_write_as_buffer(ctx, src, dst);
-		break;
 	case ACPI_AML_OT_DEBUG:
-		acpi_aml_print_object(ctx, src);
-		res = 0;
+		res = acpi_aml_write_as_buffer(ctx, src, original_dst);
 		break;
 	default:
 		PRINTLOG("ACPIAML", "ERROR", "store unknown dest %i src is %i remaining %i", dst->type, src->type, ctx->remaining);

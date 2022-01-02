@@ -472,6 +472,7 @@ typedef struct {
 		uint8_t fatal;
 		uint8_t inside_method;
 		uint8_t method_return;
+		uint8_t dismiss_execute_method;
 	} flags;
 	uint64_t timer;
 	int8_t revision;
