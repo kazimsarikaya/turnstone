@@ -117,6 +117,8 @@ char_t* ito_base(number_t number, number_t base);
 
 /*! ito_base macro for base 10 */
 #define itoa(number) ito_base(number, 10)
+/*! ito_base macro for base 16 */
+#define itoh(number) ito_base(number, 16)
 
 
 /**
