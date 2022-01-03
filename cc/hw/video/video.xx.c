@@ -58,7 +58,7 @@ void video_init() {
 
 	if(font2) {
 		if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
-			printf("font v2 ok\n");
+			PRINTLOG(VIDEO, LOG_DEBUG, "font v2 ok", 0);
 			FONT_ADDRESS = (uint8_t*)&font_data_start + font2->header_size;
 			FONT_WIDTH = font2->width;
 			FONT_HEIGHT = font2->height;
@@ -108,7 +108,7 @@ void video_init() {
 			video_psf1_font_t* font1 = (video_psf1_font_t*)&font_data_start;
 
 			if(font1->magic == VIDEO_PSF1_FONT_MAGIC) {
-				printf("font v1 ok\n");
+				PRINTLOG(VIDEO, LOG_DEBUG, "font v1 ok", 0);
 				uint64_t addr = (uint64_t)&font_data_start;
 				addr += sizeof(video_psf1_font_t);
 				FONT_ADDRESS = (uint8_t*)addr;
@@ -156,12 +156,12 @@ void video_init() {
 
 				GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
 			} else {
-				printf("font magic err\n");
+				PRINTLOG(VIDEO, LOG_ERROR, "font magic err", 0);
 			}
 
 		}
 	} else {
-		printf("font err\n");
+		PRINTLOG(VIDEO, LOG_ERROR, "font err", 0);
 	}
 }
 

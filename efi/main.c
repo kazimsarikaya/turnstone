@@ -2,6 +2,7 @@
 #include <strings.h>
 #include <linker.h>
 #include <systeminfo.h>
+#include <cpu.h>
 
 efi_system_table_t* ST;
 efi_boot_services_t* BS;
@@ -14,7 +15,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 	video_clear_screen();
 
-	printf("%s\n", "hello from efi app");
+	PRINTLOG(EFI, LOG_INFO, "%s", "TURNSTONE EFI Loader Starting...");
 
 	void* heap_area;
 	int64_t heap_size = 1024 * 4096;
@@ -22,7 +23,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	efi_status_t res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
 
 	if(res == EFI_SUCCESS) {
-		printf("memory pool created\n");
+		PRINTLOG(EFI, LOG_DEBUG, "memory pool created", 0);
 
 		size_t start = (size_t)heap_area;
 
@@ -31,9 +32,9 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 		memory_set_default_heap(heap);
 
 		if(heap) {
-			printf("heap created at 0x%p with size 0x%x\n", heap_area, heap_size);
+			PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%lp with size 0x%x", heap_area, heap_size);
 		} else {
-			printf("heap creation failed\n");
+			PRINTLOG(EFI, LOG_DEBUG, "heap creation failed", 0);
 		}
 
 
@@ -66,11 +67,12 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 			vfb->height = gop->mode->information->vertical_resolution;
 			vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
 
-			printf("frame buffer info %ix%i pps %i at 0x%p size 0x%lx\n", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
-			printf("vfb address 0x%p\n", vfb);
+			PRINTLOG(EFI, LOG_DEBUG, "frame buffer info %ix%i pps %i at 0x%lp size 0x%lx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
+			PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%lp", vfb);
 
 		} else {
-			printf("gop handle failed %i\n", res);
+			PRINTLOG(EFI, LOG_FATAL, "gop handle failed %i. Halting...", res);
+			cpu_hlt();
 		}
 
 		efi_guid_t bio_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
@@ -81,7 +83,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 		if(res == EFI_SUCCESS) {
 			handle_size /= (uint64_t)sizeof(efi_handle_t);
 
-			printf("block devs retrived. count %i\n", handle_size);
+			PRINTLOG(EFI, LOG_DEBUG, "block devs retrived. count %i", handle_size);
 
 			block_file_t* blk_devs = (block_file_t*)memory_malloc(handle_size * sizeof(block_file_t));
 			int64_t blk_dev_cnt = 0;
@@ -94,11 +96,11 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 					if(handles[i] && !EFI_ERROR(BS->handle_protocol(handles[i], &bio_guid, (void**) &blk_devs[blk_dev_cnt].bio)) &&
 					   blk_devs[blk_dev_cnt].bio && blk_devs[blk_dev_cnt].bio->media && blk_devs[blk_dev_cnt].bio->media->block_size > 0) {
 
-						printf("disk %i mid %i block size: %i removable %i present %i readonly %i size %li\n",
-						       blk_dev_cnt, blk_devs[blk_dev_cnt].bio->media->media_id, blk_devs[blk_dev_cnt].bio->media->block_size,
-						       blk_devs[blk_dev_cnt].bio->media->removable_media,
-						       blk_devs[blk_dev_cnt].bio->media->media_present, blk_devs[blk_dev_cnt].bio->media->readonly,
-						       blk_devs[blk_dev_cnt].bio->media->last_block);
+						PRINTLOG(EFI, LOG_DEBUG, "disk %i mid %i block size: %i removable %i present %i readonly %i size %li",
+						         blk_dev_cnt, blk_devs[blk_dev_cnt].bio->media->media_id, blk_devs[blk_dev_cnt].bio->media->block_size,
+						         blk_devs[blk_dev_cnt].bio->media->removable_media,
+						         blk_devs[blk_dev_cnt].bio->media->media_present, blk_devs[blk_dev_cnt].bio->media->readonly,
+						         blk_devs[blk_dev_cnt].bio->media->last_block);
 
 						if(blk_devs[blk_dev_cnt].bio->media->block_size == 512) {
 							uint8_t* buffer = memory_malloc(512);
@@ -109,7 +111,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 								efi_pmbr_partition_t* pmbr = (efi_pmbr_partition_t*)&buffer[0x1be];
 
 								if(pmbr->part_type == EFI_PMBR_PART_TYPE) {
-									printf("gpt disk id %li\n", blk_dev_cnt);
+									PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %li", blk_dev_cnt);
 									sys_disk_idx = blk_dev_cnt;
 									memory_free(buffer);
 
@@ -133,28 +135,28 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 				if(BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, 0x100, &frm_start_1mib) == 0) {
 
 					if(sys_disk_idx != -1) {
-						printf("openning sys disk %li\n", sys_disk_idx);
+						PRINTLOG(EFI, LOG_DEBUG, "openning sys disk %li", sys_disk_idx);
 
 						disk_t* sys_disk = efi_disk_impl_open(blk_devs[sys_disk_idx].bio);
 
 						if(sys_disk) {
-							printf("openning as gpt disk\n");
+							PRINTLOG(EFI, LOG_DEBUG, "openning as gpt disk", 0);
 
 							sys_disk = gpt_get_or_create_gpt_disk(sys_disk);
 
-							printf("gpt disk getted\n");
+							PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted", 0);
 
 							disk_partition_context_t* part_ctx = sys_disk->get_partition(sys_disk, 1);
 
-							printf("kernel start lba %x end lba %x\n", part_ctx->start_lba, part_ctx->end_lba);
+							PRINTLOG(EFI, LOG_DEBUG, "kernel start lba %x end lba %x", part_ctx->start_lba, part_ctx->end_lba);
 
 							uint8_t* kernel_data;
 							int64_t kernel_size = (part_ctx->end_lba - part_ctx->start_lba  + 1) * blk_devs[sys_disk_idx].bio->media->block_size;
 
-							printf("kernel size %li\n", kernel_size);
+							PRINTLOG(EFI, LOG_DEBUG, "kernel size %li", kernel_size);
 
 							if(sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &kernel_data) == 0) {
-								printf("kernel loaded at 0x%p\n", kernel_data);
+								PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%lp", kernel_data);
 
 								int64_t kernel_page_count = kernel_size / 4096 + 0x120;         // adding extra pages for stack and heap
 								if(kernel_size % 4096) {
@@ -168,19 +170,19 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 								}
 								kernel_page_count = new_kernel_2m_factor * 512;
 
-								printf("new kernel page count 0x%lx\n", kernel_page_count);
+								PRINTLOG(EFI, LOG_DEBUG, "new kernel page count 0x%lx", kernel_page_count);
 
 								uint64_t new_kernel_address = 2 << 20;
 
 								if(BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address) == 0) {
-									printf("alloc pages for new kernel succed at 0x%lx\n", new_kernel_address);
+									PRINTLOG(EFI, LOG_DEBUG, "alloc pages for new kernel succed at 0x%lx", new_kernel_address);
 
 									if(linker_memcopy_program_and_relink((size_t)kernel_data, new_kernel_address, ((size_t)kernel_data) + 0x100 - 1) == 0) {
-										printf("moving kernel at 0x%lx succed\n", new_kernel_address);
+										PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%lx succed", new_kernel_address);
 										memory_free(kernel_data);
 
 
-										printf("conf table count %i\n", system_table->configuration_table_entry_count);
+										PRINTLOG(EFI, LOG_DEBUG, "conf table count %i", system_table->configuration_table_entry_count);
 										efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
 										efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
 
@@ -200,7 +202,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 										uint32_t descriptor_version;
 
 										BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
-										printf("mmap size %li desc size %li ver %li\n", map_size, descriptor_size, descriptor_version);
+										PRINTLOG(EFI, LOG_DEBUG, "mmap size %li desc size %li ver %li", map_size, descriptor_size, descriptor_version);
 
 										mmap = memory_malloc(map_size);
 
@@ -217,7 +219,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 											sysinfo->kernel_start = new_kernel_address;
 											sysinfo->kernel_4k_frame_count = kernel_page_count;
 
-											printf("calling kernel with sysinfo @ 0x%p\n", sysinfo);
+											PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%lp with sysinfo @ 0x%lp", new_kernel_address, sysinfo);
 
 											BS->exit_boot_services(image, map_key);
 
@@ -228,49 +230,43 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 
 										} else {
-											printf("cannot fill memory map\n");
+											PRINTLOG(EFI, LOG_ERROR, "cannot fill memory map.", 0);
 										}
 
 									}         // endof linker
 
 								} else {
-									printf("cannot alloc pages for new kernel\n");
-									memory_free(kernel_data);
+									PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for new kernel", 0);
 								}
 
 							} else {
-								printf("kernel load failed\n");
-								memory_free(kernel_data);
+								PRINTLOG(EFI, LOG_ERROR, "kernel load failed", 0);
 							}
 
-
-
-
-							memory_free(part_ctx);
 						} else {
-							printf("sys disk open failed\n");
+							PRINTLOG(EFI, LOG_ERROR, "sys disk open failed", 0);
 						}
 
 					}
 				} else {
-					printf("cannot allocate frame for kernel usage at 1mib to 2mib\n");
+					PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame for kernel usage at 1mib to 2mib", 0);
 				}
 
 			} // end of malloc success
 
 		} else {
-			printf("blocks devs retrivation failed. code: 0x%x\n", res);
+			PRINTLOG(EFI, LOG_ERROR, "blocks devs retrivation failed. code: 0x%x", res);
 		}
 
 
 
 	} else {
-		printf("memory pool creation failed. err code 0x%x\n", res);
+		PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%x", res);
 	}
 
-	printf("efi app could not have finished correctly, infinite loop started.\n");
+	PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...", 0);
 
-	while(1);
+	cpu_hlt();
 
-	return EFI_SUCCESS;
+	return EFI_LOAD_ERROR;
 }

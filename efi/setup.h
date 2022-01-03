@@ -2,6 +2,7 @@
 #define ___SETUP_H 0
 
 #include <types.h>
+#include <logging.h>
 #include <efi.h>
 #include <disk.h>
 #include <memory.h>

@@ -61,7 +61,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0x0);
 
 		if(opcode == NULL) {
-			PRINTLOG("ACPIAML", "ERROR", "Cannot allocate memory for opcode", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "Cannot allocate memory for opcode", 0);
 			return -1;
 		}
 
@@ -75,7 +75,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			opcode->operand_count = opcnt;
 		}
 
-		PRINTLOG("ACPIAML", "DEBUG", "scope %s opcode 0x%04x", ctx->scope_prefix, opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s opcode 0x%04x", ctx->scope_prefix, opcode->opcode);
 
 		if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_CONDREF)) {
 			ctx->flags.dismiss_execute_method = 1;
@@ -86,13 +86,13 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
 			if(op == NULL) {
-				PRINTLOG("ACPIAML", "ERROR", "Cannot allocate memory for op", 0);
+				PRINTLOG(ACPIAML, LOG_ERROR, "Cannot allocate memory for op", 0);
 				res = -1;
 				goto cleanup;
 			}
 
 			if(acpi_aml_parse_one_item(ctx, (void**)&op, &t_consumed) != 0) {
-				PRINTLOG("ACPIAML", "ERROR", "Cannot parse the op %i for opcode", idx);
+				PRINTLOG(ACPIAML, LOG_ERROR, "Cannot parse the op %i for opcode", idx);
 				res = -1;
 				goto cleanup;
 			}
@@ -104,7 +104,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			}
 
 			if(op == NULL) {
-				PRINTLOG("ACPIAML", "FATAL", "scope %s null operand at exec return rem=%i", ctx->scope_prefix, ctx->remaining);
+				PRINTLOG(ACPIAML, LOG_FATAL, "scope %s null operand at exec return rem=%i", ctx->scope_prefix, ctx->remaining);
 				res = -1;
 				goto cleanup;
 			}
@@ -120,11 +120,11 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 			op = acpi_aml_get_real_object(ctx, op);
 
 			if(op == NULL) {
-				PRINTLOG("ACPIAML", "FATAL", "scope %s null operand", ctx->scope_prefix);
+				PRINTLOG(ACPIAML, LOG_FATAL, "scope %s null operand", ctx->scope_prefix);
 				res = -1;
 				goto cleanup;
 			} else {
-				PRINTLOG("ACPIAML", "DEBUG", "scope %s param name %s type %i %i", ctx->scope_prefix, op->name, op->type, op->type == ACPI_AML_OT_LOCAL_OR_ARG?op->local_or_arg.idx_local_or_arg:-1);
+				PRINTLOG(ACPIAML, LOG_TRACE, "scope %s param name %s type %i %i", ctx->scope_prefix, op->name, op->type, op->type == ACPI_AML_OT_LOCAL_OR_ARG?op->local_or_arg.idx_local_or_arg:-1);
 			}
 
 			opcode->operands[idx] = op;
@@ -137,7 +137,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		}
 
 		if(acpi_aml_executor_opcode(ctx, opcode) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "Cannot execute opcode", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "Cannot execute opcode", 0);
 			res = -1;
 			goto cleanup;
 		}
@@ -145,9 +145,9 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		return_obj = opcode->return_obj;
 
 		if(return_obj) {
-			PRINTLOG("ACPIAML", "DEBUG", "scope %s return name %s type %i", ctx->scope_prefix, return_obj->name, return_obj->type);
+			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return name %s type %i", ctx->scope_prefix, return_obj->name, return_obj->type);
 		} else {
-			PRINTLOG("ACPIAML", "DEBUG", "scope %s nulll return", ctx->scope_prefix);
+			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s nulll return", ctx->scope_prefix);
 		}
 
 
@@ -175,7 +175,7 @@ cleanup:
 	}
 
 	if(res != 0) {
-		PRINTLOG("ACPIAML", "ERROR", "Cannot parse opcode", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Cannot parse opcode", 0);
 	}
 
 	for(uint8_t i = 0; i < idx; i++) {

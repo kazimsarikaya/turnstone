@@ -23,7 +23,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 
 		if(sym == NULL && sym->name == NULL) {
 			iter->destroy(iter);
-			PRINTLOG("ACPI", "FATAL", "NULL object at symbol table or no name", 0);
+			PRINTLOG(ACPI, LOG_FATAL, "NULL object at symbol table or no name", 0);
 			return -1;
 		}
 
@@ -39,7 +39,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 
 			if(memory_paging_add_va_for_frame(fva, &f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN) != 0) {
 				iter->destroy(iter);
-				PRINTLOG("ACPI", "FATAL", "cannot allocate pages for system memory opregion", 0);
+				PRINTLOG(ACPI, LOG_FATAL, "cannot allocate pages for system memory opregion", 0);
 				return -1;
 			}
 
@@ -180,7 +180,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 
 		if(d->sta) {
 			if(acpi_aml_read_as_integer(ctx, d->sta, &sta_value) != 0) {
-				PRINTLOG("ACPI", "ERROR", "Cannot read device status", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "Cannot read device status", 0);
 				acpi_aml_print_object(ctx, d->sta);
 				res = -1;
 
@@ -196,7 +196,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 			res = acpi_aml_execute(ctx, d->ini, NULL);
 
 			if(res != 0) {
-				PRINTLOG("ACPI", "ERROR", "Device init method failed", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "Device init method failed", 0);
 				acpi_aml_print_object(ctx, d->ini);
 				res = -1;
 

@@ -7,6 +7,7 @@
 #define ___VIDEO_H 0
 
 #include <types.h>
+#include <logging.h>
 
 #define VIDEO_PSF2_FONT_MAGIC 0x864ab572
 #define VIDEO_PSF1_FONT_MAGIC 0x0436
@@ -68,6 +69,9 @@ size_t video_printf(char_t* fmt, ...);
 
 #define printf(...) video_printf(__VA_ARGS__)
 
-#define PRINTLOG(module, type, msg, ...)  video_printf("%s:%i: " module " : " type " " msg "\n", __FILE__, __LINE__, __VA_ARGS__)
+#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
+		if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], __VA_ARGS__); } \
+		else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], __VA_ARGS__); } }
+
 
 #endif

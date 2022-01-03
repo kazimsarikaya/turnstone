@@ -26,14 +26,14 @@ uint64_t memory_paging_get_internal_frame() {
 	}
 
 	if(MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT < (MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT >> 1)) {
-		PRINTLOG("PAGING", "DEBUG", "Second internal page frame cache needs refilling", 0);
+		PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache needs refilling", 0);
 		frame_t* internal_frms;
 
 		if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
 		                                                   MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
 		                                                   FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
 		                                                   &internal_frms, NULL) != 0) {
-			PRINTLOG("PAGING", "PANIC", "cannot allocate internal paging frames. Halting...", 0);
+			PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...", 0);
 			cpu_hlt();
 		}
 
@@ -45,19 +45,19 @@ uint64_t memory_paging_get_internal_frame() {
 			                              MEMORY_PAGING_INTERNAL_FRAMES_2_START + i * MEMORY_PAGING_PAGE_SIZE,
 			                              MEMORY_PAGING_INTERNAL_FRAMES_2_START + i * MEMORY_PAGING_PAGE_SIZE,
 			                              MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
-				PRINTLOG("PAGING", "PANIC", "cannot map internal paging frames. Halting...", 0);
+				PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...", 0);
 				cpu_hlt();
 			}
 		}
 
-		PRINTLOG("PAGING", "DEBUG", "Second internal page frame cache refilled", 0);
+		PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache refilled", 0);
 	}
 
 	uint64_t res = MEMORY_PAGING_INTERNAL_FRAMES_1_START;
 	MEMORY_PAGING_INTERNAL_FRAMES_1_START += MEMORY_PAGING_PAGE_SIZE;
 	MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT--;
 
-	PRINTLOG("PAGING", "DEBUG", "Internal page frame returns frame 0x%08x", res);
+	PRINTLOG(PAGING, LOG_DEBUG, "Internal page frame returns frame 0x%08x", res);
 
 	return res;
 }
@@ -340,7 +340,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 	                                                   MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
 	                                                   FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
 	                                                   &t_p4_frm, NULL) != 0) {
-		PRINTLOG("PAGING", "ERROR", "cannot allocate frames for p4", 0);
+		PRINTLOG(PAGING, LOG_ERROR, "cannot allocate frames for p4", 0);
 
 		return NULL;
 	}
@@ -350,7 +350,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		                              t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K,
 		                              t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K,
 		                              MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
-			PRINTLOG("PAGING", "ERROR", "cannot allocate internal frames for page table build", 0);
+			PRINTLOG(PAGING, LOG_ERROR, "cannot allocate internal frames for page table build", 0);
 
 			return NULL;
 		}
@@ -361,10 +361,10 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 	MEMORY_PAGING_INTERNAL_FRAMES_1_START = t_p4_frm->frame_address + MEMORY_PAGING_PAGE_LENGTH_4K;
 	MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT - 1;
 
-	PRINTLOG("PAGING", "DEBUG", "frame pool start 0x%016lx", MEMORY_PAGING_INTERNAL_FRAMES_1_START);
+	PRINTLOG(PAGING, LOG_DEBUG, "frame pool start 0x%016lx", MEMORY_PAGING_INTERNAL_FRAMES_1_START);
 
 	if(memory_paging_add_page_ext(heap, p4, (uint64_t)p4, (uint64_t)p4, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-		PRINTLOG("PAGING", "ERROR", "cannot build p4's itself", 0);
+		PRINTLOG(PAGING, LOG_ERROR, "cannot build p4's itself", 0);
 
 		return NULL;
 	}
@@ -374,7 +374,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		                              t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K,
 		                              t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K,
 		                              MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-			PRINTLOG("PAGING", "ERROR", "cannot allocate internal frames for page table build", 0);
+			PRINTLOG(PAGING, LOG_ERROR, "cannot allocate internal frames for page table build", 0);
 
 			return NULL;
 		}
@@ -424,7 +424,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 			fa_addr -= (fa_addr % FRAME_SIZE);
 		}
 
-		printf("section %i start 0x%08x pyhstart 0x%08x size 0x%08x\n", i, section_start, fa_addr, section_size);
+		PRINTLOG(PAGING, LOG_TRACE, "section %i start 0x%08x pyhstart 0x%08x size 0x%08x\n", i, section_start, fa_addr, section_size);
 
 		if(i != LINKER_SECTION_TYPE_TEXT) {
 			p_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;

@@ -35,28 +35,27 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 
 		if(laidx > 14) {
 			acpi_aml_print_object(ctx, obj);
-			printf("ACPIAML: FATAL local/arg index out of bounds %lx\n", laidx);
+			PRINTLOG(ACPIAML, LOG_FATAL, "local/arg index out of bounds %lx", laidx);
 			return NULL;
 		}
 
 		acpi_aml_object_t* la_obj = mthctx->mthobjs[laidx];
 
 		if(la_obj == NULL && laidx <= 7) { // if localX does not exists create it
-			printf("----- creating local arg %i\n", laidx);
+			PRINTLOG(ACPIAML, LOG_TRACE, "----- creating local arg %i", laidx);
 			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
 			mthctx->mthobjs[laidx] = la_obj;
 		} else if(la_obj != NULL && laidx <= 7 && write) {
-			printf("----- cleaning local arg %i for write %p", laidx, la_obj);
+			PRINTLOG(ACPIAML, LOG_TRACE, "----- cleaning local arg %i for write %p", laidx, la_obj);
 			acpi_aml_destroy_object(ctx, la_obj);
 			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
 			mthctx->mthobjs[laidx] = la_obj;
-			printf(" %p %i\n", la_obj, la_obj->type);
 		}
 
 		if(la_obj == NULL) {
-			printf("ACPIAML: FATAL local/arg does not exists %lx\n", laidx);
+			PRINTLOG(ACPIAML, LOG_FATAL, "local/arg does not exists %lx", laidx);
 			return NULL;
 		}
 
@@ -75,7 +74,7 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 			}
 
 			if(write == 0 && copy == 1 && mthctx->dirty_args[laidx - 8] == 0) {
-				printf("ACPIAML: Warning read copy\n");
+				PRINTLOG(ACPIAML, LOG_WARNING, "read copy", 0);
 				la_obj = acpi_aml_duplicate_object(ctx, la_obj);
 				memory_free_ext(ctx->heap, la_obj->name);
 				la_obj->name = NULL;
@@ -92,7 +91,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 	UNUSED(ctx);
 
 	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
 		return -1;
 	}
 
@@ -108,7 +107,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 		opregion = obj->field.related_object->field.related_object;
 		indexedfield = 1;
 	} else {
-		PRINTLOG("ACPIAML", "ERROR", "op region space is not sysio %i", obj->field.related_object->opregion.region_space);
+		PRINTLOG(ACPIAML, LOG_ERROR, "op region space is not sysio %i", obj->field.related_object->opregion.region_space);
 		return -1;
 	}
 
@@ -119,7 +118,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 
 	if(indexedfield) {
 		if(acpi_aml_write_sysio_as_integer(ctx, obj->field.offset, obj->field.related_object) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "cannot select indexed field", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot select indexed field", 0);
 			return -1;
 		}
 
@@ -147,7 +146,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 		tmp = inl(offset);
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -181,7 +180,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 		outl(offset, tmp & 0xFFFFFFFF);
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -193,7 +192,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 	UNUSED(ctx);
 
 	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
 		return -1;
 	}
 
@@ -210,7 +209,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 		opregion = obj->field.related_object->field.related_object;
 		indexedfield = 1;
 	} else {
-		PRINTLOG("ACPIAML", "ERROR", "op region space is not sysio %i", obj->field.related_object->opregion.region_space);
+		PRINTLOG(ACPIAML, LOG_ERROR, "op region space is not sysio %i", obj->field.related_object->opregion.region_space);
 		return -1;
 	}
 
@@ -220,7 +219,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 
 	if(indexedfield) {
 		if(acpi_aml_write_sysio_as_integer(ctx, obj->field.offset, obj->field.related_object) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "cannot select indexed field", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot select indexed field", 0);
 			return -1;
 		}
 
@@ -242,7 +241,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 
 
 	if(dev == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "cannot find pci device %s", aml_device_name);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot find pci device %s", aml_device_name);
 		memory_free(aml_device_name);
 		return -1;
 	}
@@ -252,12 +251,12 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 	int64_t adr = 0;
 
 	if(dev->adr == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "pci device does not have adr", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "pci device does not have adr", 0);
 		return -1;
 	}
 
 	if(acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
-		PRINTLOG("ACPIAML", "ERROR", "cannot read pci device address", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot read pci device address", 0);
 		return -1;
 	}
 
@@ -276,7 +275,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 		tmp = pci_io_port_read_data(pci_address, 4);
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -310,7 +309,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 		pci_io_port_write_data(pci_address, tmp, 4);
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -322,7 +321,7 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
 	UNUSED(ctx);
 
 	if(obj == NULL && !(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
 		return -1;
 	}
 
@@ -335,7 +334,7 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
 	} else if(obj->field.related_object->type == ACPI_AML_OT_STRING) {
 		memva = (uint8_t*)obj->field.related_object->string;
 	} else {
-		PRINTLOG("ACPIAML", "ERROR", "not opregion or buffer %i", obj->field.related_object->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "not opregion or buffer %i", obj->field.related_object->type);
 		return -1;
 	}
 
@@ -362,7 +361,7 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
 		tmp = *qwa;
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -399,7 +398,7 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
 		*qwa = (uint64_t)tmp;
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -408,7 +407,7 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
 
 int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
 	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
 		return -1;
 	}
 
@@ -424,7 +423,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 		opregion = obj->field.related_object->field.related_object;
 		indexedfield = 1;
 	} else {
-		PRINTLOG("ACPIAML", "ERROR", "op region space is not sysio %i", obj->field.related_object->opregion.region_space);
+		PRINTLOG(ACPIAML, LOG_ERROR, "op region space is not sysio %i", obj->field.related_object->opregion.region_space);
 		return -1;
 	}
 
@@ -434,7 +433,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 
 	if(indexedfield) {
 		if(acpi_aml_write_sysio_as_integer(ctx, obj->field.offset, obj->field.related_object) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "cannot select indexed field", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot select indexed field", 0);
 			return -1;
 		}
 
@@ -460,7 +459,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 		tmp = inl(offset);
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -475,7 +474,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 
 int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
 	if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
 		return -1;
 	}
 
@@ -491,7 +490,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 		opregion = obj->field.related_object->field.related_object;
 		indexedfield = 1;
 	} else {
-		PRINTLOG("ACPIAML", "ERROR", "op region space is not pci config %i", obj->field.related_object->opregion.region_space);
+		PRINTLOG(ACPIAML, LOG_ERROR, "op region space is not pci config %i", obj->field.related_object->opregion.region_space);
 		return -1;
 	}
 
@@ -501,7 +500,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 
 	if(indexedfield) {
 		if(acpi_aml_write_pci_as_integer(ctx, obj->field.offset, obj->field.related_object) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "cannot select indexed field", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot select indexed field", 0);
 			return -1;
 		}
 
@@ -521,7 +520,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 
 
 	if(dev == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "cannot find pci device %s", aml_device_name);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot find pci device %s", aml_device_name);
 		memory_free(aml_device_name);
 		return -1;
 	}
@@ -531,12 +530,12 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 	int64_t adr = 0;
 
 	if(dev->adr == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "pci device does not have adr", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "pci device does not have adr", 0);
 		return -1;
 	}
 
 	if(acpi_aml_read_as_integer(ctx, dev->adr, &adr) != 0) {
-		PRINTLOG("ACPIAML", "ERROR", "cannot read pci device address", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot read pci device address", 0);
 		return -1;
 	}
 
@@ -555,7 +554,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 		tmp = pci_io_port_read_data(pci_address, 4);
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -572,7 +571,7 @@ int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_
 	UNUSED(ctx);
 
 	if(obj == NULL && !(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "Field or region is null %i", obj == NULL?0:1);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
 		return -1;
 	}
 
@@ -585,7 +584,7 @@ int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_
 	} else if(obj->field.related_object->type == ACPI_AML_OT_STRING) {
 		memva = (uint8_t*)obj->field.related_object->string;
 	} else {
-		PRINTLOG("ACPIAML", "ERROR", "not opregion or buffer %i", obj->field.related_object->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "not opregion or buffer %i", obj->field.related_object->type);
 		return -1;
 	}
 
@@ -612,7 +611,7 @@ int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_
 		tmp = *qwa;
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown memory access type %i", obj->field.access_type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown memory access type %i", obj->field.access_type);
 		return -1;
 	}
 
@@ -695,14 +694,14 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		case ACPI_AML_OPREGT_SYSIO:
 			return acpi_aml_read_sysio_as_integer(ctx, obj, res);
 		default:
-			PRINTLOG("ACPIAML", "ERROR", "region space id not implemented %i", obj->field.related_object->opregion.region_space);
+			PRINTLOG(ACPIAML, LOG_ERROR, "region space id not implemented %i", obj->field.related_object->opregion.region_space);
 			return -1;
 		}
 		return -1;
 	case ACPI_AML_OT_BUFFERFIELD:
 		return acpi_aml_read_memory_as_integer(ctx, obj, res);
 	default:
-		printf("read as integer objtype %li\n", obj->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "read as integer objtype %li", obj->type);
 		return -1;
 		break;
 	}
@@ -743,12 +742,12 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 		case ACPI_AML_OPREGT_SYSIO:
 			return acpi_aml_write_sysio_as_integer(ctx, val, obj);
 		default:
-			PRINTLOG("ACPIAML", "ERROR", "region space id not implemented %i", obj->field.related_object->opregion.region_space);
+			PRINTLOG(ACPIAML, LOG_ERROR, "region space id not implemented %i", obj->field.related_object->opregion.region_space);
 			return -1;
 		}
 		return -1;
 	default:
-		printf("write as integer objtype %li\n", obj->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "write as integer objtype %li", obj->type);
 		return -1;
 	}
 
@@ -761,7 +760,7 @@ int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 0, 0);
 
 	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_NUMBER || src->type == ACPI_AML_OT_BUFFER)) {
-		PRINTLOG("ACPIAML", "ERROR", "source type missmatch %i", src->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "source type missmatch %i", src->type);
 
 		return -1;
 	}
@@ -788,7 +787,7 @@ int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	if(dst->type == ACPI_AML_OT_FIELD) {
 		for(uint64_t i = 0; i < strlen(src_data); i++) {
 			if(acpi_aml_write_as_integer(ctx, src_data[i], dst) != 0) {
-				PRINTLOG("ACPIAML", "ERROR", "cannot write string to field", 0);
+				PRINTLOG(ACPIAML, LOG_ERROR, "cannot write string to field", 0);
 				memory_free_ext(ctx->heap, src_data);
 
 				return -1;
@@ -804,7 +803,7 @@ int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		uint64_t* tmp = (uint64_t*)src_data;
 
 		if(acpi_aml_write_as_integer(ctx, *tmp, dst) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "cannot write string to bufferfield", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot write string to bufferfield", 0);
 
 			memory_free_ext(ctx->heap, src_data);
 
@@ -824,7 +823,7 @@ int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	}
 
 	if(dst->type != ACPI_AML_OT_STRING) {
-		PRINTLOG("ACPIAML", "ERROR", "dest type missmatch %i", dst->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "dest type missmatch %i", dst->type);
 		memory_free_ext(ctx->heap, src_data);
 
 		return -1;
@@ -843,7 +842,7 @@ int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 0, 0);
 
 	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_NUMBER || src->type == ACPI_AML_OT_BUFFER)) {
-		PRINTLOG("ACPIAML", "ERROR", "source type missmatch %i", src->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "source type missmatch %i", src->type);
 
 		return -1;
 	}
@@ -872,7 +871,7 @@ int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	if(dst->type == ACPI_AML_OT_FIELD) {
 		for(int64_t i = 0; i < src_len; i++) {
 			if(acpi_aml_write_as_integer(ctx, src_data[i], dst) != 0) {
-				PRINTLOG("ACPIAML", "ERROR", "cannot write string to field", 0);
+				PRINTLOG(ACPIAML, LOG_ERROR, "cannot write string to field", 0);
 
 				memory_free_ext(ctx->heap, src_data);
 
@@ -889,7 +888,7 @@ int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 		uint64_t* tmp = (uint64_t*)src_data;
 
 		if(acpi_aml_write_as_integer(ctx, *tmp, dst) != 0) {
-			PRINTLOG("ACPIAML", "ERROR", "cannot write string to bufferfield", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot write string to bufferfield", 0);
 
 			memory_free_ext(ctx->heap, src_data);
 
@@ -925,7 +924,7 @@ int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	}
 
 	if(dst->type != ACPI_AML_OT_BUFFER) {
-		PRINTLOG("ACPIAML", "ERROR", "dest type missmatch %i", dst->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "dest type missmatch %i", dst->type);
 
 		return -1;
 	}
@@ -1366,14 +1365,14 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj){
 
 	if(obj == NULL) {
-		printf("ACPIAML: FATAL null object\n");
+		PRINTLOG(ACPIAML, LOG_FATAL, "null object", 0);
 		return;
 	}
 
 	if(obj->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 		obj = obj->opcode_exec_return;
 		if(obj == NULL) {
-			printf("ACPIAML: FATAL null object\n");
+			PRINTLOG(ACPIAML, LOG_FATAL, "null object", 0);
 			return;
 		}
 	}
@@ -1489,10 +1488,10 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t* ctx, acp
 	case ACPI_AML_OT_LOCAL_OR_ARG:
 		break;
 	case ACPI_AML_OT_REFOF:
-		printf("ACPIAML: Warning duplicate of refof\n");
+		PRINTLOG(ACPIAML, LOG_WARNING, "duplicate of refof", 0);
 		break;
 	default: // TODO: other pointers
-		PRINTLOG("ACPIAML", "FATAL", "not implemented %i", obj->type);
+		PRINTLOG(ACPIAML, LOG_FATAL, "not implemented %i", obj->type);
 		break;
 	}
 

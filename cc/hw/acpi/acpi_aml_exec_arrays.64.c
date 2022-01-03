@@ -119,13 +119,13 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	idx = acpi_aml_get_if_arg_local_obj(ctx, idx, 0, 0);
 
 	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_BUFFER || src->type == ACPI_AML_OT_PACKAGE)) {
-		PRINTLOG("ACPIAML", "ERROR", "mismatch src type for index %i", src->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type for index %i", src->type);
 
 		return -1;
 	}
 
 	if(idx->type != ACPI_AML_OT_NUMBER) {
-		PRINTLOG("ACPIAML", "ERROR", "mismatch idx type for index %i", src->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch idx type for index %i", src->type);
 
 		return -1;
 	}
@@ -133,7 +133,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
 	int64_t idx_val = 0;
 	if(acpi_aml_read_as_integer(ctx, idx, &idx_val) != 0) {
-		PRINTLOG("ACPIAML", "ERROR", "cannotread idx value for index op", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannotread idx value for index op", 0);
 
 		return -1;
 	}
@@ -158,7 +158,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
 	if(acpi_aml_is_null_target(dst) != 0) {
 		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
-		PRINTLOG("ACPIAML", "ERROR", "storing to dest not implemented for index op", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "storing to dest not implemented for index op", 0);
 
 		return -1;
 	}
@@ -172,7 +172,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 #define UNIMPLEXEC(name) \
 	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
 		UNUSED(ctx); \
-		printf("ACPIAML: FATAL method %s for opcode 0x%04x not implemented\n", #name, opcode->opcode); \
+		PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
 		return -1; \
 	}
 
