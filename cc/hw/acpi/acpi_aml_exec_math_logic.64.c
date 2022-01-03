@@ -55,7 +55,7 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 		ires = op1 < op2;
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown logic op code 0x%04x", opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown logic op code 0x%04x", opcode->opcode);
 		return -1;
 	}
 
@@ -145,7 +145,7 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	acpi_aml_object_t* target = opcode->operands[2];
 
 	if(op1op == NULL || op2op == NULL) {
-		PRINTLOG("ACPIAML", "ERROR", "one of empty operands for math op 0x%04x", opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_ERROR, "one of empty operands for math op 0x%04x", opcode->opcode);
 		return -1;
 	}
 
@@ -154,12 +154,12 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 	int64_t op2 = 0;
 
 	if(acpi_aml_read_as_integer(ctx, op1op, &op1) != 0) {
-		PRINTLOG("ACPIAML", "ERROR", "cannot read integer data op1 %i for math op 0x%04x", op1op->type, opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot read integer data op1 %i for math op 0x%04x", op1op->type, opcode->opcode);
 		return -1;
 	}
 
 	if(acpi_aml_read_as_integer(ctx, op2op, &op2) != 0) {
-		PRINTLOG("ACPIAML", "ERROR", "cannot read integer data op2 %i for math op 0x%04x", op2op->type, opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot read integer data op2 %i for math op 0x%04x", op2op->type, opcode->opcode);
 		return -1;
 	}
 
@@ -200,7 +200,7 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		ires = op1 << op2;
 		break;
 	default:
-		PRINTLOG("ACPIAML", "ERROR", "Unknown math op code 0x%04x", opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_ERROR, "Unknown math op code 0x%04x", opcode->opcode);
 		return -1;
 	}
 

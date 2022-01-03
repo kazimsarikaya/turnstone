@@ -91,7 +91,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		heap_end = end;
 	}
 
-	printf("SIMPLEHEAP: Debug heap boundaries 0x%08x 0x%08x\n", heap_start, heap_end);
+	PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "heap boundaries 0x%08x 0x%08x\n", heap_start, heap_end);
 
 	uint8_t* t_start = (uint8_t*)heap_start;
 	memory_memclean(t_start, heap_end - heap_start);
@@ -234,7 +234,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 		if(empty_hi == NULL) {
 			if(align == 0) {
-				printf("\nMEM_SIMPLE: FATAL no free slot\n");
+				PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot", 0);
 				return NULL;
 			}
 			break;
@@ -272,7 +272,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 				empty_hi = empty_hi->next;
 
 				if(empty_hi == NULL) {
-					printf("\nMEM_SIMPLE: FATAL no free slot for aligned\n");
+					PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot for aligned", 0);
 					return NULL;
 				}
 			}

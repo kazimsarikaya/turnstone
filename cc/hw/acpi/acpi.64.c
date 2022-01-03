@@ -16,21 +16,21 @@ acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
 	frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, SYSTEM_INFO->acpi_table);
 
 	if(acpi_frames == NULL) {
-		PRINTLOG("ACPI", "ERROR", "cannot find acpi frames of table 0x%016lx", SYSTEM_INFO->acpi_table);
+		PRINTLOG(ACPI, LOG_ERROR, "cannot find acpi frames of table 0x%016lx", SYSTEM_INFO->acpi_table);
 		return NULL;
 	}
 
 	uint64_t acpi_frames_vas = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address);
 
-	PRINTLOG("ACPI", "DEBUG", "acpi area frames 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
+	PRINTLOG(ACPI, LOG_DEBUG, "acpi area frames 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
 
 	if(memory_paging_add_va_for_frame(acpi_frames_vas, acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-		PRINTLOG("ACPI", "ERROR", "cannot add page mapping for acpi area 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
+		PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for acpi area 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
 		return NULL;
 	}
 
 	acpi_xrsdp_descriptor_t* desc = (acpi_xrsdp_descriptor_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->acpi_table);
-	PRINTLOG("ACPI", "DEBUG", "acpi descriptor address 0x%016lx", desc);
+	PRINTLOG(ACPI, LOG_DEBUG, "acpi descriptor address 0x%016lx", desc);
 
 
 	if(desc != NULL) {
@@ -159,22 +159,22 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	acpi_table_fadt_t* fadt = (acpi_table_fadt_t*)acpi_get_table(desc, "FACP");
 
 	if(fadt == NULL) {
-		PRINTLOG("ACPI", "DEBUG", "fadt not found", 0);
+		PRINTLOG(ACPI, LOG_DEBUG, "fadt not found", 0);
 
 		return -1;
 	}
 
-	PRINTLOG("ACPI", "DEBUG", "fadt found", 0);
+	PRINTLOG(ACPI, LOG_DEBUG, "fadt found", 0);
 
 	int8_t acpi_enabled = -1;
 
 	if(fadt->smi_command_port == 0) {
-		PRINTLOG("ACPI", "DEBUG", "cpi command port is 0.", 0);
+		PRINTLOG(ACPI, LOG_DEBUG, "cpi command port is 0.", 0);
 		acpi_enabled = 0;
 	}
 
 	if(fadt->acpi_enable == 0 && fadt->acpi_disable == 0) {
-		PRINTLOG("ACPI", "DEBUG", "acpi enable/disable is 0.", 0);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi enable/disable is 0.", 0);
 		acpi_enabled = 0;
 	}
 
@@ -182,7 +182,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	uint32_t pm_1a_value = inw(pm_1a_port);
 
 	if((pm_1a_value & 0x1) == 0x1) {
-		PRINTLOG("ACPI", "DEBUG", "pm 1a control block acpi en is setted", 0);
+		PRINTLOG(ACPI, LOG_DEBUG, "pm 1a control block acpi en is setted", 0);
 		acpi_enabled = 0;
 	}
 
@@ -192,7 +192,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		while((inw(pm_1a_port) & 0x1) != 0x1);
 	}
 
-	PRINTLOG("ACPI", "INFO", "ACPI Enabled", 0);
+	PRINTLOG(ACPI, LOG_INFO, "ACPI Enabled", 0);
 
 	uint64_t dsdt_fa = 0;
 
@@ -203,11 +203,11 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	}
 
 	acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dsdt_fa);
-	PRINTLOG("ACPI", "DEBUG", "DSDT address 0x%016lx", dsdt);
+	PRINTLOG(ACPI, LOG_DEBUG, "DSDT address 0x%016lx", dsdt);
 
 
 	if(acpi_validate_checksum(dsdt) != 0) {
-		printf("dsdt not ok\n");
+		PRINTLOG(ACPI, LOG_ERROR, "dsdt not ok", 0);
 
 		return -1;
 	}
@@ -218,34 +218,36 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(NULL, dsdt->revision, aml, aml_size);
 
 	if(pctx == NULL) {
-		printf("aml parser creation failed\n");
+		PRINTLOG(ACPI, LOG_ERROR, "aml parser creation failed", 0);
 
 		return -1;
 	}
 
 	if(acpi_aml_parse(pctx) == 0) {
-		printf("aml parsed\n");
+		PRINTLOG(ACPI, LOG_INFO, "aml parsed", 0);
 	} else {
-		printf("aml not parsed\n");
+		PRINTLOG(ACPI, LOG_ERROR, "aml not parsed", 0);
 		return -1;
 	}
 
 	if(acpi_device_build(pctx) != 0) {
-		PRINTLOG("ACPI", "ERROR", "devices cannot be builded", 0);
+		PRINTLOG(ACPI, LOG_ERROR, "devices cannot be builded", 0);
 		return -1;
 	}
 
-	acpi_device_print_all(pctx);
-	acpi_aml_print_symbol_table(pctx);
+	LOGBLOCK(ACPI, LOG_DEBUG){
+		acpi_device_print_all(pctx);
+		acpi_aml_print_symbol_table(pctx);
+	}
 
 	if(acpi_device_init(pctx) != 0) {
-		PRINTLOG("ACPI", "ERROR", "devices cannot be initialized", 0);
+		PRINTLOG(ACPI, LOG_ERROR, "devices cannot be initialized", 0);
 		return -1;
 	}
 
-	PRINTLOG("ACPI", "INFO", "Devices initialized", 0);
+	PRINTLOG(ACPI, LOG_INFO, "Devices initialized", 0);
 
-	PRINTLOG("ACPI", "DEBUG", "Interrupt mapping and memory reservation is remained", 0);
+	PRINTLOG(ACPI, LOG_DEBUG, "Interrupt mapping and memory reservation is remained", 0);
 
 	return 0;
 }

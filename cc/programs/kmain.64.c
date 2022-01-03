@@ -69,7 +69,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_size = sec_size;
 
 
-	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -91,7 +91,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_size = sec_size;
 
-	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -116,7 +116,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_size = sec_size;
 
-	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -138,7 +138,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_size = sec_size;
 
-	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -161,7 +161,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = sec_size;
 
-	printf("sec 0x%016lx  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%016lx  0x%08x\n", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -187,7 +187,7 @@ int8_t linker_remap_kernel() {
 
 	data_start = stack_top - sec_size;
 
-	printf("sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -198,7 +198,7 @@ int8_t linker_remap_kernel() {
 
 	data_start += sec_size;
 
-	PRINTLOG("LINKER", "DEBUG", "new sections locations are created on page table", 0);
+	PRINTLOG(LINKER, LOG_DEBUG, "new sections locations are created on page table", 0);
 
 
 	SYSTEM_INFO->remapped = 1;
@@ -237,7 +237,7 @@ int8_t linker_remap_kernel() {
 		}
 	}
 
-	PRINTLOG("LINKER", "DEBUG", "stored system info frame address 0x%016lx", sysinfo_frms->frame_address);
+	PRINTLOG(LINKER, LOG_DEBUG, "stored system info frame address 0x%016lx", sysinfo_frms->frame_address);
 
 	uint8_t* mmap_data = (uint8_t*)sysinfo_frms->frame_address;
 	uint8_t* reserved_mmap_data = (uint8_t*)(sysinfo_frms->frame_address + SYSTEM_INFO->mmap_size);
@@ -253,7 +253,7 @@ int8_t linker_remap_kernel() {
 	new_sysinfo->frame_buffer = vfb;
 
 
-	PRINTLOG("LINKER", "DEBUG", "new system info copy created at 0x%08x", new_sysinfo);
+	PRINTLOG(LINKER, LOG_DEBUG, "new system info copy created at 0x%08x", new_sysinfo);
 
 	uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
 	linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)(SYSTEM_INFO->kernel_start + kernel->reloc_start);
@@ -285,7 +285,7 @@ int8_t linker_remap_kernel() {
 		}
 	}
 
-	PRINTLOG("LINKER", "DEBUG", "relocs are computed. linking started", 0);
+	PRINTLOG(LINKER, LOG_DEBUG, "relocs are computed. linking started", 0);
 
 	for(uint64_t i = 0; i < kernel->reloc_count; i++) {
 		if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_32) {
@@ -301,18 +301,18 @@ int8_t linker_remap_kernel() {
 			uint64_t target_value = relocs[i].addend;
 			*target = target_value;
 		} else {
-			printf("LINKER: Fatal unknown relocation type %i\n", relocs[i].relocation_type);
+			PRINTLOG(LINKER, LOG_FATAL, "unknown relocation type %i\n", relocs[i].relocation_type);
 			cpu_hlt();
 		}
 	}
 
-	PRINTLOG("LINKER", "DEBUG", "relocs are finished.", 0);
+	PRINTLOG(LINKER, LOG_DEBUG, "relocs are finished.", 0);
 
 	sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
 	sec_start = sec.section_start;
 	sec_size = sec.section_size;
 
-	printf("reloc completed\nnew sysinfo at 0x%p.\ncleaning bss and try to re-jump kernel\n", new_sysinfo);
+	PRINTLOG(LINKER, LOG_DEBUG, "reloc completed\nnew sysinfo at 0x%p.\ncleaning bss and try to re-jump kernel\n", new_sysinfo);
 
 	memory_memclean((uint8_t*)sec_start, sec_size);
 
@@ -333,13 +333,13 @@ int8_t kmain64(size_t entry_point) {
 	video_clear_screen();
 
 	if(heap == NULL) {
-		printf("KERNEL: Error at creating heap\n");
+		PRINTLOG(KERNEL, LOG_FATAL, "creating heap", 0);
 		return -1;
 	}
 
-	PRINTLOG("KERNEL", "INFO", "Initializing stage 3 with remapped kernel? %i", SYSTEM_INFO->remapped);
-	printf("KERNEL: Info new heap created at 0x%lx\n", heap);
-	printf("Entry point of kernel is 0x%lx\n", entry_point);
+	PRINTLOG(KERNEL, LOG_INFO, "Initializing stage 3 with remapped kernel? %i", SYSTEM_INFO->remapped);
+	PRINTLOG(KERNEL, LOG_INFO, "new heap created at 0x%lx", heap);
+	PRINTLOG(KERNEL, LOG_INFO, "Entry point of kernel is 0x%lx", entry_point);
 
 	video_frame_buffer_t* new_vfb = memory_malloc(sizeof(video_frame_buffer_t));
 	memory_memcopy(SYSTEM_INFO->frame_buffer, new_vfb, sizeof(video_frame_buffer_t));
@@ -367,64 +367,64 @@ int8_t kmain64(size_t entry_point) {
 	frame_allocator_t* fa = frame_allocator_new_ext(heap);
 
 	if(fa) {
-		printf("frame allocator created\n");
+		PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created", 0);
 		KERNEL_FRAME_ALLOCATOR = fa;
 
 		frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
 		if(fa->allocate_frame(fa, &kernel_frames) != 0) {
-			PRINTLOG("KERNEL", "Panic", "cannot allocate kernel frames", 0);
+			PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames", 0);
 			cpu_hlt();
 		}
 	} else {
-		PRINTLOG("KERNEL", "Panic", "cannot allocate frame allocator. Halting...", 0);
+		PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...", 0);
 		cpu_hlt();
 	}
 
 	if(descriptor_build_idt_register() != 0) {
-		printf("Can not build idt\n");
-		return -1;
+		PRINTLOG(KERNEL, LOG_PANIC, "Can not build idt. Halting...", 0);
+		cpu_hlt();
 	} else {
-		printf("Default idt builded\n");
+		PRINTLOG(KERNEL, LOG_DEBUG, "Default idt builded", 0);
 	}
 
-	printf("KERNEL: Initializing interrupts\n");
+	PRINTLOG(KERNEL, LOG_DEBUG, "Initializing interrupts", 0);
 
 	if(interrupt_init() != 0) {
-		printf("CPU: Fatal cannot init interrupts\n");
+		PRINTLOG(KERNEL, LOG_PANIC, "cannot init interrupts", 0);
 
 		return -1;
 	}
 
-	printf("interrupts initialized\n");
+	PRINTLOG(KERNEL, LOG_DEBUG, "interrupts initialized", 0);
 
 	if(descriptor_build_gdt_register() != 0) {
-		printf("Can not build gdt\n");
+		PRINTLOG(KERNEL, LOG_PANIC, "Can not build gdt", 0);
 		return -1;
 	} else {
-		printf("Default gdt builded\n");
+		PRINTLOG(KERNEL, LOG_DEBUG, "Default gdt builded", 0);
 	}
 
 	memory_page_table_t* p4 = memory_paging_build_table();
 	if( p4 == NULL) {
-		printf("Can not build default page table. Halting\n");
+		PRINTLOG(KERNEL, LOG_PANIC, "Can not build default page table. Halting", 0);
 		cpu_hlt();
 	} else {
-		printf("Default page table builded at 0x%p\n", p4);
+		PRINTLOG(KERNEL, LOG_DEBUG, "Default page table builded at 0x%p", p4);
 		memory_paging_switch_table(p4);
 		video_refresh_frame_buffer_address();
-		printf("Default page table switched to 0x%08p\n", p4);
+		PRINTLOG(KERNEL, LOG_DEBUG, "Default page table switched to 0x%08p", p4);
 	}
 
 	if(SYSTEM_INFO->remapped == 0) {
 		linker_remap_kernel();
 	}
 
-	printf("vfb address 0x%p\n", SYSTEM_INFO->frame_buffer);
-	printf("Frame buffer at 0x%lp and size 0x%016lx\n", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
-	printf("Screen resultion %ix%i\n", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
+	PRINTLOG(KERNEL, LOG_DEBUG, "vfb address 0x%p", SYSTEM_INFO->frame_buffer);
+	PRINTLOG(KERNEL, LOG_DEBUG, "Frame buffer at 0x%lp and size 0x%016lx", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);
+	PRINTLOG(KERNEL, LOG_DEBUG, "Screen resultion %ix%i", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
 	if(SYSTEM_INFO->acpi_table) {
-		printf("acpi rsdp table version: %i address 0x%p\n", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %i address 0x%p\n", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
 	}
 
 	char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
@@ -433,38 +433,41 @@ int8_t kmain64(size_t entry_point) {
 	printf("random data 0x%x\n", rand());
 
 	KERNEL_FRAME_ALLOCATOR->cleanup(KERNEL_FRAME_ALLOCATOR);
-	frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
+
+	LOGBLOCK(FRAMEALLOCATOR, LOG_DEBUG){
+		frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
+	}
 
 	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
 	if(desc == NULL) {
-		PRINTLOG("ACPI", "FATAL", "acpi header not found or incorrect checksum. Halting...", 0);
+		PRINTLOG(ACPI, LOG_FATAL, "acpi header not found or incorrect checksum. Halting...", 0);
 		cpu_hlt();
 	}
 
 	if(acpi_setup(desc) != 0) {
-		printf("acpi setup failed\n");
+		PRINTLOG(ACPI, LOG_FATAL, "acpi setup failed. Halting", 0);
+		cpu_hlt();
 	}
 
-	PRINTLOG("KERNEL", "DEBUG", "Implement remaining ops with frame allocator", 0);
+	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
-	while(1);
+	cpu_hlt();
 
 	uint64_t kernel_start = entry_point - 0x100;
 
 	program_header_t* kernel = (program_header_t*)kernel_start;
 
-	printf("kernel size %lx reloc start %lx reloc count %lx\n", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
+	PRINTLOG(KERNEL, LOG_DEBUG, "kernel size %lx reloc start %lx reloc count %lx\n", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
 
 	//move_kernel(kernel_start, 64 << 20); /* for testing */
 
 	if(task_init_tasking_ext(heap) != 0) {
-		printf("TASKING: Fatal cannot init tasking\n");
-
-		return -1;
+		PRINTLOG(TASKING, LOG_FATAL, "cannot init tasking. Halting...", 0);
+		cpu_hlt();
 	}
 
-	printf("tasking initialized\n");
+	PRINTLOG(TASKING, LOG_FATAL, "tasking initialized\n", 0);
 
 	return kmain64_init(heap);
 }

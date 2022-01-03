@@ -42,9 +42,6 @@ uint16_t cpu_read_data_segment(){
 }
 
 int8_t cpu_check_rdrand(){
-	if(cpu_check_cpuid() != 0) {
-		return -1;
-	}
 	cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
 	cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 	if(cpu_cpuid(query, &answer) != 0) {

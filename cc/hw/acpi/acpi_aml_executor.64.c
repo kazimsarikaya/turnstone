@@ -150,14 +150,14 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 	}
 
 	if(idx == -1) {
-		PRINTLOG("ACPIAML", "FATAL", "unknown op code 0x%04x for execution", opcode->opcode);
+		PRINTLOG(ACPIAML, LOG_FATAL, "unknown op code 0x%04x for execution", opcode->opcode);
 		return -1;
 	}
 
 	acpi_aml_exec_f exec_f = acpi_aml_exec_fs[idx];
 
 	if(exec_f == NULL) {
-		PRINTLOG("ACPIAML", "FATAL", "unwanted op code for execution", 0);
+		PRINTLOG(ACPIAML, LOG_FATAL, "unwanted op code for execution", 0);
 		return -1;
 	}
 
@@ -289,7 +289,6 @@ int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, 
 	va_start(args, return_obj);
 
 	for(uint32_t i = 0; i < mth->method.arg_count; i++) {
-		printf("!!!!!\n");
 		opcode->operands[i + 1] = va_arg(args, acpi_aml_object_t*);
 		opcode->operand_count++;
 	}
@@ -300,7 +299,7 @@ int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, 
 
 	if(return_obj) {
 		if(opcode->return_obj) {
-			PRINTLOG("ACPIAML", "DEBUG", "return obj type %i", opcode->return_obj->type);
+			PRINTLOG(ACPIAML, LOG_TRACE, "return obj type %i", opcode->return_obj->type);
 		}
 
 		*return_obj = opcode->return_obj;
@@ -376,7 +375,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	acpi_aml_destroy_symbol_table(ctx, 1);
 
 	if(res == 0 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
-		PRINTLOG("ACPIAML", "DEBUG", "return obj type %i", mthobjs[15]->type);
+		PRINTLOG(ACPIAML, LOG_TRACE, "return obj type %i", mthobjs[15]->type);
 		opcode->return_obj = mthobjs[15];
 		res = 0;
 	}
@@ -405,7 +404,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 #define UNIMPLEXEC(name) \
 	int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
 		UNUSED(ctx); \
-		printf("ACPIAML: FATAL method %s for opcode 0x%04x not implemented\n", #name, opcode->opcode); \
+		PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
 		return -1; \
 	}
 

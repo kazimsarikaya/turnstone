@@ -200,7 +200,7 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	if(ctx->remaining == 0) { // realy we need this?
-		printf("ACPIAML: Fatal premature end\n");
+		PRINTLOG(ACPIAML, LOG_ERROR, "premature end", 0);
 		ctx->flags.fatal = 1;
 		return -1;
 	}
@@ -213,7 +213,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 		acpi_aml_parse_f parser = acpi_aml_parse_fs[*ctx->data];
 
 		if( parser == NULL ) {
-			printf("null parser %02x %02x %02x %02x\n", *ctx->data, *(ctx->data + 1), *(ctx->data + 2), *(ctx->data + 3));
+			PRINTLOG(ACPIAML, LOG_ERROR, "null parser %02x %02x %02x %02x", *ctx->data, *(ctx->data + 1), *(ctx->data + 2), *(ctx->data + 3));
 
 			res = -1;
 		}else {
@@ -222,7 +222,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 	}
 
 	if(res == -1 && ctx->flags.fatal == 1) {
-		printf("ACPIAML: Error: scope: -%s- one_item data: 0x%02x length: %li remaining: %li\n", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+		PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- one_item data: 0x%02x length: %li remaining: %li", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
 		return -1;
 	}
 
