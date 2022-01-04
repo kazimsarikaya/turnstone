@@ -1,9 +1,10 @@
 HOSTOS=$(shell uname -s)
 
 CC = gcc
-CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
+CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
 	-Os -nostdlib -ffreestanding -c -m64 \
-	-D___TESTMODE=1 -g
+	-D___TESTMODE=1 -g \
+	-L/opt/local/lib/valgrind -I/opt/local/include/valgrind -lcoregrind-amd64-darwin -lvex-amd64-darwin
 
 ifeq ($(HOSTOS),Darwin)
 LD = ld
@@ -28,7 +29,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 all: $(OUTPUTS)
 
 gendirs:
-	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p 
+	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
 
 $(TESTOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<

@@ -1,9 +1,10 @@
 HOSTOS=$(shell uname -s)
 
 CC = gcc
-CCFLAGS = -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu99 \
+CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu99 \
 	-Os -nostdlib -ffreestanding -c -m64 \
-	-D___TESTMODE=1 -g -Wno-address-of-packed-member
+	-D___TESTMODE=1 -g -Wno-address-of-packed-member \
+	-L/opt/local/lib/valgrind -I/opt/local/include/valgrind -lcoregrind-amd64-darwin -lvex-amd64-darwin
 
 ifeq ($(HOSTOS),Darwin)
 LD = ld
