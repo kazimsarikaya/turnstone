@@ -8,6 +8,9 @@
 #include <video.h>
 #include <cpu/sync.h>
 #include <linker.h>
+#if ___TESTMODE == 1
+#include <valgrind.h>
+#endif
 
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
@@ -91,7 +94,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 		heap_end = end;
 	}
 
-	PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "heap boundaries 0x%08x 0x%08x\n", heap_start, heap_end);
+	PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "heap boundaries 0x%lx 0x%lx", heap_start, heap_end);
 
 	uint8_t* t_start = (uint8_t*)heap_start;
 	memory_memclean(t_start, heap_end - heap_start);
@@ -206,6 +209,8 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
 }
 
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
+	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "requesting memory with size 0x%lx and align 0x%lx", size, align);
+
 	heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
 
 	heapinfo_t* empty_hi = simple_heap->first_empty;
@@ -294,6 +299,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 			empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
 			//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
+#if ___TESTMODE == 1
+			VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+#endif
+
+			PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+
 			return empty_hi + 1;
 		}
 	}
@@ -344,6 +355,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 		empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
 		//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
+#if ___TESTMODE == 1
+		VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+#endif
+
+		PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+
 		return empty_hi + 1;
 	}
 
@@ -428,6 +445,13 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	hi_a->size = hi_a_size + 1;   // inclusive size
 	hi_a->flags = HEAP_INFO_FLAG_USED;
 
+
+	#if ___TESTMODE == 1
+	VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, hi_a_size * sizeof(heapinfo_t), 0, 1);
+	#endif
+
+	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", aligned_addr, hi_a_size * sizeof(heapinfo_t));
+
 	return (uint8_t*)aligned_addr;
 
 }
@@ -459,11 +483,18 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	size_t size = (hi->size - 1) * sizeof(heapinfo_t); // get real exclusive size
 	memory_memclean(hi + 1, size);
 
+
+#if ___TESTMODE == 1
+	VALGRIND_FREELIKE_BLOCK(hi + 1, 0);
+#endif
+
 	hi->flags ^= HEAP_INFO_FLAG_USED;
 	hi->previous = NULL;
 	hi->next = NULL;
 
 	memory_simple_insert_sorted(simple_heap, 0, hi);
+
+	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp freed with size 0x%lx", hi + 1, size);
 
 	return 0;
 }
