@@ -404,7 +404,19 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 }
 
 void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
+	iterator_t* iter = linkedlist_iterator_create(ctx->devices);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_device_t* d = iter->get_item(iter);
+		memory_free_ext(ctx->heap, d);
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
 	linkedlist_destroy(ctx->devices);
+
 	acpi_aml_destroy_symbol_table(ctx, 0);
 	memory_free_ext(ctx->heap, ctx);
 }

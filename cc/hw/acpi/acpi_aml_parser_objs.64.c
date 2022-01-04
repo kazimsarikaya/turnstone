@@ -350,6 +350,8 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 		pkglen -= 6;
 	}
 
+	char_t* new_scope_prefix = strdup_at_heap(ctx->heap, nomname);
+
 	int8_t res = acpi_aml_add_obj_to_symboltable(ctx, obj);
 
 	if(res != 0) {
@@ -362,9 +364,11 @@ int8_t acpi_aml_parse_scope(acpi_aml_parser_context_t* ctx, void** data, uint64_
 
 	ctx->length = pkglen;
 	ctx->remaining = pkglen;
-	ctx->scope_prefix = nomname;
+	ctx->scope_prefix = new_scope_prefix;
 
 	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
+
+	memory_free_ext(ctx->heap, new_scope_prefix);
 
 	ctx->length = old_length;
 	ctx->remaining = old_remaining - pkglen;
