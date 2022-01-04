@@ -746,6 +746,8 @@ int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, ac
 			return -1;
 		}
 		return -1;
+	case ACPI_AML_OT_BUFFERFIELD:
+		return acpi_aml_write_memory_as_integer(ctx, val, obj);
 	default:
 		PRINTLOG(ACPIAML, LOG_ERROR, "write as integer objtype %li", obj->type);
 		return -1;
@@ -1151,6 +1153,7 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 		}
 
 		if(strlen(symbol_name) > 0 && acpi_aml_is_root_char((uint8_t*)symbol_name) == 0) {
+			memory_free_ext(ctx->heap, nomname);
 			break;
 		}
 
@@ -1189,7 +1192,6 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 				 )
 		   ) {
 
-			obj->name = NULL;
 			acpi_aml_destroy_object(ctx, obj);
 
 			return 0;
