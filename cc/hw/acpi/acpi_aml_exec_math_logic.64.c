@@ -98,7 +98,7 @@ int8_t acpi_aml_exec_op1_tgt0_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		return -1;
 	}
 
-	opcode->return_obj = opcode->operands[0];
+	opcode->return_obj = op1op;
 
 	return 0;
 }
@@ -163,6 +163,8 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		return -1;
 	}
 
+	PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s math op 0x%x with 0x%lx 0x%lx", ctx->scope_prefix, opcode->opcode, op1, op2);
+
 	int64_t ires = 0;
 
 	switch (opcode->opcode) {
@@ -218,7 +220,7 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 
 	res->type = ACPI_AML_OT_NUMBER;
 	res->number.value = ires;
-	res->number.bytecnt = 1; // i don't known one or 8?
+	res->number.bytecnt = 8; // i don't known one or 8?
 
 	opcode->return_obj = res;
 
