@@ -119,13 +119,13 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	idx = acpi_aml_get_if_arg_local_obj(ctx, idx, 0, 0);
 
 	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_BUFFER || src->type == ACPI_AML_OT_PACKAGE)) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type for index %i", src->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type for index %i 0x%lp", src->type, src);
 
 		return -1;
 	}
 
 	if(idx->type != ACPI_AML_OT_NUMBER) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch idx type for index %i", src->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch idx type for index %i 0x%lp", idx->type, idx);
 
 		return -1;
 	}

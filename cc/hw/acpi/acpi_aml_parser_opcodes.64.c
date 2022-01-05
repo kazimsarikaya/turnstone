@@ -16,7 +16,9 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	int8_t res = -1;
 	acpi_aml_opcode_t* opcode = NULL;
 	acpi_aml_object_t* return_obj = NULL;
-	boolean_t not_destroy[6];
+	acpi_aml_object_t* delete_for_return_obj = NULL;
+	acpi_aml_object_t* ops_for_delete[8] = {0};
+
 
 	if(oc == (ACPI_AML_EXTOP_PREFIX << 8 | ACPI_AML_REVISION)) {
 		return_obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->symbols, "\\", "_REV");
@@ -70,6 +72,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		if(preop != NULL) {
 			opcode->operand_count = 1 + opcnt;
 			opcode->operands[0] = preop;
+			ops_for_delete[idx] = preop;
 			idx = 1;
 		} else {
 			opcode->operand_count = opcnt;
@@ -109,12 +112,11 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 				goto cleanup;
 			}
 
-			if(op->type == ACPI_AML_OT_LOCAL_OR_ARG) {
-				not_destroy[idx] = 1;
-			}
-
 			if(oc == ACPI_AML_METHODCALL) {
+				ops_for_delete[idx] = op;
 				op = acpi_aml_get_if_arg_local_obj(ctx, op, 0, 0);
+			} else {
+				ops_for_delete[idx] = op;
 			}
 
 			op = acpi_aml_get_real_object(ctx, op);
@@ -124,7 +126,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 				res = -1;
 				goto cleanup;
 			} else {
-				PRINTLOG(ACPIAML, LOG_TRACE, "scope %s param name %s type %i %i", ctx->scope_prefix, op->name, op->type, op->type == ACPI_AML_OT_LOCAL_OR_ARG?op->local_or_arg.idx_local_or_arg:-1);
+				PRINTLOG(ACPIAML, LOG_TRACE, "scope %s param %i name %s type %i %i 0x%lp", ctx->scope_prefix, idx, op->name, op->type, op->type == ACPI_AML_OT_LOCAL_OR_ARG?op->local_or_arg.idx_local_or_arg:-1, op);
 			}
 
 			opcode->operands[idx] = op;
@@ -143,13 +145,21 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		}
 
 		return_obj = opcode->return_obj;
+		delete_for_return_obj = return_obj;
+		return_obj = acpi_aml_get_if_arg_local_obj(ctx, return_obj, 0, 0);
+
+		if(delete_for_return_obj == return_obj) {
+			delete_for_return_obj = NULL;
+		} else if(delete_for_return_obj->type == ACPI_AML_OT_LOCAL_OR_ARG) {
+			acpi_aml_destroy_object(ctx, delete_for_return_obj);
+			delete_for_return_obj = NULL;
+		}
 
 		if(return_obj) {
-			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return name %s type %i", ctx->scope_prefix, return_obj->name, return_obj->type);
+			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return name %s type %i 0x%lp", ctx->scope_prefix, return_obj->name, return_obj->type, return_obj);
 		} else {
 			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s nulll return", ctx->scope_prefix);
 		}
-
 
 		res = 0;
 	}
@@ -161,7 +171,38 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 	}  else {
 		if(return_obj && return_obj->name == NULL) {
 			// FIXME: when tgt and return_obj same never destroy obj
-			// acpi_aml_destroy_object(ctx, return_obj);
+			boolean_t found = 0;
+
+			if(return_obj->type != ACPI_AML_OT_DEBUG) {
+
+				if(found == 0) {
+					for(int16_t i = idx; i >= 0; i--) {
+						if(return_obj == opcode->operands[i] || return_obj == ops_for_delete[1]) {
+							PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of target", ctx->scope_prefix);
+							found = 1;
+							break;
+						}
+					}
+				}
+
+
+				if(found == 0) {
+					acpi_aml_method_context_t* mthctx = (acpi_aml_method_context_t*)ctx->method_context;
+
+					for(int16_t i = 0; i < 16; i++) {
+						if(return_obj == mthctx->mthobjs[i]) {
+							PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of mthctx obj", ctx->scope_prefix);
+							found = 1;
+							break;
+						}
+					}
+				}
+			}
+
+			if(found == 0) {
+				PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return obj type %i 0x%lp ", ctx->scope_prefix, return_obj->type, return_obj);
+				acpi_aml_destroy_object(ctx, return_obj);
+			}
 		}
 	}
 
@@ -179,17 +220,19 @@ cleanup:
 	}
 
 	for(uint8_t i = 0; i < idx; i++) {
-		if(not_destroy[i] == 0 && opcode->operands[i] != NULL && opcode->operands[i]->name == NULL) {
-			if(opcode->operands[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
-				acpi_aml_object_t* tmp = opcode->operands[i]->opcode_exec_return;
+		if(ops_for_delete[i] != NULL && ops_for_delete[i]->name == NULL) {
+			if(ops_for_delete[i]->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+				acpi_aml_object_t* tmp = ops_for_delete[i]->opcode_exec_return;
 
 				if(tmp && tmp->name == NULL && return_obj != tmp) {
+					PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free return object at %i 0x%lp", ctx->scope_prefix, i, ops_for_delete[i]);
 					acpi_aml_destroy_object(ctx, tmp);
 				}
 			}
 
-			if(return_obj != opcode->operands[i]) {
-				acpi_aml_destroy_object(ctx, opcode->operands[i]);
+			if(return_obj != ops_for_delete[i]) {
+				PRINTLOG(ACPIAML, LOG_TRACE, "scope %s free op %i 0x%lp", ctx->scope_prefix, i, ops_for_delete[i]);
+				acpi_aml_destroy_object(ctx, ops_for_delete[i]);
 			}
 
 		}

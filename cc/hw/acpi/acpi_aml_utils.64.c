@@ -46,12 +46,13 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
 			mthctx->mthobjs[laidx] = la_obj;
+			PRINTLOG(ACPIAML, LOG_TRACE, "----- new local arg %i for read %lp", laidx, la_obj);
 		} else if(la_obj != NULL && laidx <= 7 && write) {
-			PRINTLOG(ACPIAML, LOG_TRACE, "----- cleaning local arg %i for write %p", laidx, la_obj);
 			acpi_aml_destroy_object(ctx, la_obj);
 			la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 			la_obj->type = ACPI_AML_OT_UNINITIALIZED;
 			mthctx->mthobjs[laidx] = la_obj;
+			PRINTLOG(ACPIAML, LOG_TRACE, "----- new local arg %i for write %lp", laidx, la_obj);
 		}
 
 		if(la_obj == NULL) {
@@ -83,6 +84,7 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
 		}
 
 		obj = la_obj;
+		PRINTLOG(ACPIAML, LOG_TRACE, "----- refered local arg %i  %lp", laidx, la_obj);
 	}
 	return obj;
 }
@@ -701,7 +703,7 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 	case ACPI_AML_OT_BUFFERFIELD:
 		return acpi_aml_read_memory_as_integer(ctx, obj, res);
 	default:
-		PRINTLOG(ACPIAML, LOG_ERROR, "read as integer objtype %li", obj->type);
+		PRINTLOG(ACPIAML, LOG_ERROR, "ctx %s read as integer objtype %li 0x%lp", ctx->scope_prefix, obj->type, obj);
 		return -1;
 		break;
 	}

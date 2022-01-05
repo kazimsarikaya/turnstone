@@ -276,6 +276,8 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 	mthctx->mthobjs[15] = obj; // acpi_aml_duplicate_object(ctx, obj);
 	opcode->return_obj = obj;
 
+	PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method return obj type %i", ctx->scope_prefix, obj->type)
+
 	return 0;
 }
 
@@ -372,12 +374,23 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
 	iter->destroy(iter);
 
+	for(uint32_t i = 0; i < 7; i++) {
+		if(mthctx->dirty_args[i]) {
+			acpi_aml_destroy_object(ctx, mthobjs[i + 8]);
+		}
+	}
+
 	acpi_aml_destroy_symbol_table(ctx, 1);
 
 	if(res == 0 && ctx->flags.fatal == 0 && ctx->flags.method_return == 1) {
 		PRINTLOG(ACPIAML, LOG_TRACE, "return obj type %i", mthobjs[15]->type);
 		opcode->return_obj = mthobjs[15];
 		res = 0;
+
+		if(opcode->return_obj) {
+			PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method execution finished. obj type %i", ctx->scope_prefix, opcode->return_obj->type);
+		}
+
 	}
 
 	for(uint8_t i = 0; i < 8; i++) {
