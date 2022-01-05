@@ -305,6 +305,8 @@ int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, 
 		}
 
 		*return_obj = opcode->return_obj;
+	} else {
+		acpi_aml_destroy_object(ctx, opcode->return_obj);
 	}
 
 	memory_free_ext(ctx->heap, opcode);
@@ -366,6 +368,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 		if(tmp == mthobjs[15]) {
 			tmp = acpi_aml_duplicate_object(ctx, tmp);
 			memory_free_ext(ctx->heap, tmp->name);
+			tmp->name = NULL;
 			mthobjs[15] = tmp;
 		}
 
@@ -388,7 +391,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 		res = 0;
 
 		if(opcode->return_obj) {
-			PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method execution finished. obj type %i", ctx->scope_prefix, opcode->return_obj->type);
+			PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method execution finished. obj name %s type %i", ctx->scope_prefix, opcode->return_obj->name, opcode->return_obj->type);
 		}
 
 	}

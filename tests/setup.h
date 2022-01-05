@@ -58,7 +58,7 @@ memory_heap_t* heap = NULL;
 
 void setup_ram() {
 	heap = memory_create_heap_simple((size_t)&mem_area[0], (size_t)&mem_area[RAMSIZE]);
-	//printf("%p\n", heap);
+	printf("%p\n", heap);
 	memory_set_default_heap(heap);
 }
 
