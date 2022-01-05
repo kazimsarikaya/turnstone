@@ -300,7 +300,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 			//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
 #if ___TESTMODE == 1
-			VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+			VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 0, 1);
 #endif
 
 			PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
@@ -356,7 +356,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 		//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
 #if ___TESTMODE == 1
-		VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+		VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 0, 1);
 #endif
 
 		PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
@@ -447,7 +447,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 
 	#if ___TESTMODE == 1
-	VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, hi_a_size * sizeof(heapinfo_t), 0, 1);
+	VALGRIND_MALLOCLIKE_BLOCK(aligned_addr, hi_a_size * sizeof(heapinfo_t), 0, 1);
 	#endif
 
 	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", aligned_addr, hi_a_size * sizeof(heapinfo_t));
@@ -481,12 +481,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 
 	//clean data
 	size_t size = (hi->size - 1) * sizeof(heapinfo_t); // get real exclusive size
-	memory_memclean(hi + 1, size);
-
-
-#if ___TESTMODE == 1
-	VALGRIND_FREELIKE_BLOCK(hi + 1, 0);
-#endif
+	memory_memclean(address, size);
 
 	hi->flags ^= HEAP_INFO_FLAG_USED;
 	hi->previous = NULL;
@@ -494,7 +489,12 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 
 	memory_simple_insert_sorted(simple_heap, 0, hi);
 
-	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp freed with size 0x%lx", hi + 1, size);
+	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp freed with size 0x%lx", address, size);
+
+
+#if ___TESTMODE == 1
+	VALGRIND_FREELIKE_BLOCK(address, 0);
+#endif
 
 	return 0;
 }

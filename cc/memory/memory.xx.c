@@ -84,7 +84,8 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 
 	if(size <= (max_regsize * 32)) {
 		for(size_t i = 0; i < size; i++) {
-			*t_addr++ = value;
+			*t_addr = value;
+			t_addr++;
 		}
 		return 0;
 	}
@@ -115,7 +116,8 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 	}
 
 	for(size_t i = 0; i < rep; i++) {
-		*st_addr++ = pad;
+		*st_addr = pad;
+		st_addr++;
 	}
 
 	rem = size % max_regsize;
@@ -124,7 +126,8 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 		t_addr = (uint8_t*)st_addr;
 
 		for(size_t i = 0; i < rem; i++) {
-			*t_addr++ = value;
+			*t_addr = value;
+			t_addr++;
 		}
 	}
 
@@ -139,7 +142,9 @@ int8_t memory_memcopy(void* source, void* destination, size_t size){
 
 	if(size <= (max_regsize * 2)) {
 		for(size_t i = 0; i < size; i++) {
-			*t_addr++ = *s_addr++;
+			*t_addr = *s_addr;
+			t_addr++;
+			s_addr++;
 		}
 		return 0;
 	}
@@ -152,7 +157,9 @@ int8_t memory_memcopy(void* source, void* destination, size_t size){
 		rem = max_regsize - rem;
 
 		for(size_t i = 0; i < rem; i++) {
-			*t_addr++ = *s_addr++;
+			*t_addr = *s_addr;
+			t_addr++;
+			s_addr++;
 			size--;
 		}
 	}
@@ -163,7 +170,9 @@ int8_t memory_memcopy(void* source, void* destination, size_t size){
 	size_t rep = size / max_regsize;
 
 	for(size_t i = 0; i < rep; i++) {
-		*st_addr++ = *ss_addr++;
+		*st_addr = *ss_addr;
+		st_addr++;
+		ss_addr++;
 	}
 
 	rem = size % max_regsize;
@@ -173,7 +182,9 @@ int8_t memory_memcopy(void* source, void* destination, size_t size){
 		s_addr = (uint8_t*)ss_addr;
 
 		for(size_t i = 0; i < rem; i++) {
-			*t_addr++ = *s_addr++;
+			*t_addr = *s_addr;
+			t_addr++;
+			s_addr++;
 		}
 	}
 
