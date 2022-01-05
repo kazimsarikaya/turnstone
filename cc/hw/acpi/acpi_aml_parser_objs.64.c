@@ -422,7 +422,7 @@ int8_t acpi_aml_parse_buffer(acpi_aml_parser_context_t* ctx, void** data, uint64
 	}
 
 	if(buflenobj->name == NULL) {
-		memory_free_ext(ctx->heap, buflenobj);
+		acpi_aml_destroy_object(ctx, buflenobj);
 	}
 
 	buf->type = ACPI_AML_OT_BUFFER;
@@ -890,7 +890,7 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		}
 
 		if(tmp_obj->name == NULL) {
-			memory_free_ext(ctx->heap, tmp_obj);
+			acpi_aml_destroy_object(ctx, tmp_obj);
 		}
 
 		obj->opregion.region_space = ival;
@@ -912,7 +912,7 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		}
 
 		if(tmp_obj->name == NULL) {
-			memory_free_ext(ctx->heap, tmp_obj);
+			acpi_aml_destroy_object(ctx, tmp_obj);
 		}
 
 		obj->opregion.region_offset = ival;
@@ -934,7 +934,7 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
 		}
 
 		if(tmp_obj->name == NULL) {
-			memory_free_ext(ctx->heap, tmp_obj);
+			acpi_aml_destroy_object(ctx, tmp_obj);
 		}
 
 		obj->opregion.region_len = ival;

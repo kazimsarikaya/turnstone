@@ -191,7 +191,7 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 
 					for(int16_t i = 0; i < 16; i++) {
 						if(return_obj == mthctx->mthobjs[i]) {
-							PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of mthctx obj", ctx->scope_prefix);
+							PRINTLOG(ACPIAML, LOG_TRACE, "scope %s return obj is one of mthctx obj %i", ctx->scope_prefix, i);
 							found = 1;
 							break;
 						}
