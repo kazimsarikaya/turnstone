@@ -3,6 +3,7 @@
  * @brief acpi device utils
  */
 #include <acpi/aml_internal.h>
+#include <acpi/aml_resource.h>
 #include <strings.h>
 #include <video.h>
 #include <utils.h>
@@ -170,21 +171,25 @@ acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* de
 
 int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 	iterator_t* iter = linkedlist_iterator_create(ctx->devices);
-	int8_t res = 0;
+
+	int32_t err_cnt = 0;
+
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_aml_device_t* d = iter->get_item(iter);
 
+		PRINTLOG(ACPI, LOG_DEBUG, "device %s controlling for init and crs", d->name);
 
 		boolean_t need_ini = 1;
 		int64_t sta_value = 0;
 
 		if(d->sta) {
+			PRINTLOG(ACPI, LOG_TRACE, "device %s has sta method, reading...", d->name);
+
 			if(acpi_aml_read_as_integer(ctx, d->sta, &sta_value) != 0) {
 				PRINTLOG(ACPI, LOG_ERROR, "Cannot read device status", 0);
-				acpi_aml_print_object(ctx, d->sta);
-				res = -1;
-
-				break;
+				err_cnt += -1;
+			} else {
+				PRINTLOG(ACPI, LOG_DEBUG, "Device sta method succeed. sta value: 0x%lx", sta_value);
 			}
 
 			if((sta_value & 1) != 1) {
@@ -193,15 +198,51 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 		}
 
 		if(need_ini && d->ini) {
-			res = acpi_aml_execute(ctx, d->ini, NULL);
+			PRINTLOG(ACPI, LOG_TRACE, "device %s has ini method, executing...", d->name);
+			int8_t res = acpi_aml_execute(ctx, d->ini, NULL);
 
 			if(res != 0) {
 				PRINTLOG(ACPI, LOG_ERROR, "Device init method failed", 0);
 				acpi_aml_print_object(ctx, d->ini);
-				res = -1;
-
-				break;
+				err_cnt += -1;
+			} else {
+				PRINTLOG(ACPI, LOG_DEBUG, "device %s init method succeed", d->name);
 			}
+		}
+
+		if(d->crs) {
+
+			if(d->crs->type == ACPI_AML_OT_BUFFER) {
+				PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with buffer len %i, enumarating...", d->name, d->crs->buffer.buflen);
+				acpi_aml_resource_parse(ctx, d, d->crs);
+			} else if(d->crs->type == ACPI_AML_OT_METHOD) {
+				PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with method, executing...", d->name);
+				acpi_aml_object_t* crs_res = NULL;
+
+				if(acpi_aml_execute(ctx, d->crs, &crs_res) == 0 && crs_res != NULL) {
+					PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with %i, executing...", d->name, crs_res->type);
+
+					if(crs_res->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+						acpi_aml_object_t* tmp = crs_res->opcode_exec_return;
+						acpi_aml_destroy_object(ctx, crs_res);
+						crs_res = tmp;
+					}
+
+					err_cnt += acpi_aml_resource_parse(ctx, d, crs_res);
+
+					if(crs_res->name == NULL) {
+						acpi_aml_destroy_object(ctx, crs_res);
+					}
+
+				} else {
+					PRINTLOG(ACPI, LOG_ERROR, "device %s crs execution faild crs_res is null? %i", d->name, crs_res == NULL);
+					err_cnt += -1;
+				}
+			} else {
+				PRINTLOG(ACPI, LOG_ERROR, "device %s has crs with unknown type %i", d->name, d->crs->type);
+				err_cnt += -1;
+			}
+
 		}
 
 		iter = iter->next(iter);
@@ -209,8 +250,15 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 
 	iter->destroy(iter);
 
+	if(err_cnt < 0) {
+		PRINTLOG(ACPI, LOG_ERROR, "some devices have failed resource %i", err_cnt);
+	} else if(err_cnt == 0) {
+		PRINTLOG(ACPI, LOG_DEBUG, "all devices have succeed", 0);
+	} else {
+		PRINTLOG(ACPI, LOG_FATAL, "unexpected error state %i", err_cnt);
+	}
 
-	return res;
+	return err_cnt;
 }
 
 void acpi_device_print_all(acpi_aml_parser_context_t* ctx) {
