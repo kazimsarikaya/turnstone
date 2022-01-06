@@ -424,7 +424,7 @@ int8_t kmain64(size_t entry_point) {
 	PRINTLOG(KERNEL, LOG_DEBUG, "Screen resultion %ix%i", SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height);
 
 	if(SYSTEM_INFO->acpi_table) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %i address 0x%p\n", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %i address 0x%lp", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
 	}
 
 	char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
@@ -452,13 +452,15 @@ int8_t kmain64(size_t entry_point) {
 
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
+	acpi_poweroff();
+
 	cpu_hlt();
 
 	uint64_t kernel_start = entry_point - 0x100;
 
 	program_header_t* kernel = (program_header_t*)kernel_start;
 
-	PRINTLOG(KERNEL, LOG_DEBUG, "kernel size %lx reloc start %lx reloc count %lx\n", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
+	PRINTLOG(KERNEL, LOG_DEBUG, "kernel size %lx reloc start %lx reloc count %lx", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
 
 	//move_kernel(kernel_start, 64 << 20); /* for testing */
 
@@ -467,7 +469,7 @@ int8_t kmain64(size_t entry_point) {
 		cpu_hlt();
 	}
 
-	PRINTLOG(TASKING, LOG_FATAL, "tasking initialized\n", 0);
+	PRINTLOG(TASKING, LOG_FATAL, "tasking initialized", 0);
 
 	return kmain64_init(heap);
 }

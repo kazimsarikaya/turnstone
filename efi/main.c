@@ -134,6 +134,8 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 				if(BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, 0x100, &frm_start_1mib) == 0) {
 
+					memory_memclean((void*)frm_start_1mib, 0x100 * 4096);
+
 					if(sys_disk_idx != -1) {
 						PRINTLOG(EFI, LOG_DEBUG, "openning sys disk %li", sys_disk_idx);
 
@@ -176,6 +178,8 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 								if(BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address) == 0) {
 									PRINTLOG(EFI, LOG_DEBUG, "alloc pages for new kernel succed at 0x%lx", new_kernel_address);
+
+									memory_memclean((void*)new_kernel_address, kernel_page_count * 4096);
 
 									if(linker_memcopy_program_and_relink((size_t)kernel_data, new_kernel_address, ((size_t)kernel_data) + 0x100 - 1) == 0) {
 										PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%lx succed", new_kernel_address);
