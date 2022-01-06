@@ -100,7 +100,9 @@ int8_t acpi_aml_resource_parse_largeitem_memory_range_32bit_fixed(acpi_aml_parse
 	item->min = res->memory_range_32bit_fixed.base;
 	item->max = res->memory_range_32bit_fixed.base + res->memory_range_32bit_fixed.length;
 
-	linkedlist_list_insert(device->dmas, item);
+	item->max--;
+
+	linkedlist_list_insert(device->memory_ranges, item);
 
 	return 0;
 }
@@ -140,6 +142,14 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
 		item->min = res->word_address_space.min;
 		item->max = res->word_address_space.max;
 
+		if(res->word_address_space.min_address_fixed == 0) {
+			item->min <<= res->word_address_space.gra + 1;
+		}
+
+		if(res->word_address_space.max_address_fixed == 0) {
+			item->max <<= res->word_address_space.gra + 1;
+		}
+
 		linkedlist_list_insert(device->memory_ranges, item);
 	} else if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO) {
 		if(device->ioports == NULL) {
@@ -151,6 +161,14 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
 		item->min = res->word_address_space.min;
 		item->max = res->word_address_space.max;
 
+		if(res->word_address_space.min_address_fixed == 0) {
+			item->min <<= res->word_address_space.gra + 1;
+		}
+
+		if(res->word_address_space.max_address_fixed == 0) {
+			item->max <<= res->word_address_space.gra + 1;
+		}
+
 		linkedlist_list_insert(device->ioports, item);
 	} else if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS) {
 		if(device->buses == NULL) {
@@ -161,6 +179,14 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
 
 		item->min = res->word_address_space.min;
 		item->max = res->word_address_space.max;
+
+		if(res->word_address_space.min_address_fixed == 0) {
+			item->min <<= res->word_address_space.gra + 1;
+		}
+
+		if(res->word_address_space.max_address_fixed == 0) {
+			item->max <<= res->word_address_space.gra + 1;
+		}
 
 		linkedlist_list_insert(device->buses, item);
 	} else {
@@ -186,6 +212,14 @@ int8_t acpi_aml_resource_parse_largeitem_dword_address_space(acpi_aml_parser_con
 	item->min = res->dword_address_space.min;
 	item->max = res->dword_address_space.max;
 
+	if(res->word_address_space.min_address_fixed == 0) {
+		item->min <<= res->word_address_space.gra + 1;
+	}
+
+	if(res->word_address_space.max_address_fixed == 0) {
+		item->max <<= res->word_address_space.gra + 1;
+	}
+
 	linkedlist_list_insert(device->memory_ranges, item);
 
 	return 0;
@@ -204,6 +238,14 @@ int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_con
 	item->type = res->qword_address_space.type_spesific_flags.memory_flag.mtp;
 	item->min = res->qword_address_space.min;
 	item->max = res->qword_address_space.max;
+
+	if(res->word_address_space.min_address_fixed == 0) {
+		item->min <<= res->word_address_space.gra + 1;
+	}
+
+	if(res->word_address_space.max_address_fixed == 0) {
+		item->max <<= res->word_address_space.gra + 1;
+	}
 
 	linkedlist_list_insert(device->memory_ranges, item);
 

@@ -442,7 +442,10 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
 	PRINTLOG(ACPI, LOG_INFO, "Devices initialized", 0);
 
-	PRINTLOG(ACPI, LOG_DEBUG, "Interrupt mapping and memory reservation is remained", 0);
+	if(acpi_device_reserve_memory_ranges(pctx) != 0) {
+		PRINTLOG(ACPI, LOG_ERROR, "devices memory reservation failed", 0);
+		return -1;
+	}
 
 	return 0;
 }

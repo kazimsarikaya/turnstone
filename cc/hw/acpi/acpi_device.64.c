@@ -169,6 +169,48 @@ acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* de
 	return res;
 }
 
+int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
+
+	KERNEL_FRAME_ALLOCATOR->release_acpi_reclaim_memory(KERNEL_FRAME_ALLOCATOR);
+
+	iterator_t* dev_iter = linkedlist_iterator_create(ctx->devices);
+
+
+	while(dev_iter->end_of_iterator(dev_iter) != 0) {
+		acpi_aml_device_t* d = dev_iter->get_item(dev_iter);
+
+		if(d->memory_ranges) {
+			PRINTLOG(ACPI, LOG_DEBUG, "device %s has memory ranges", d->name);
+
+			iterator_t* mem_iter = linkedlist_iterator_create(d->memory_ranges);
+
+
+			while(mem_iter->end_of_iterator(mem_iter) != 0) {
+				acpi_aml_device_memory_range_t* mem = mem_iter->get_item(mem_iter);
+
+				PRINTLOG(ACPI, LOG_DEBUG, "device %s memory range [0x%lx,0x%lx]", d->name, mem->min, mem->max);
+
+				uint64_t frm_cnt = (mem->max - mem->min + 1 + FRAME_SIZE - 1) / FRAME_SIZE;
+
+				frame_t f = {mem->min, frm_cnt, 0, 0};
+
+				KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &f);
+
+				mem_iter = mem_iter->next(mem_iter);
+			}
+
+			mem_iter->destroy(mem_iter);
+
+		}
+
+		dev_iter = dev_iter->next(dev_iter);
+	}
+
+	dev_iter->destroy(dev_iter);
+
+	return 0;
+}
+
 int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 	iterator_t* iter = linkedlist_iterator_create(ctx->devices);
 

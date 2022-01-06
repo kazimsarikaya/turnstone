@@ -214,6 +214,7 @@ typedef struct {
 		} __attribute__((packed)) word_address_space;
 
 		struct {
+			acpi_aml_resource_word_address_space_type_t type : 8;
 			uint8_t ignored : 1;
 			uint8_t decode_type : 1;
 			uint8_t min_address_fixed : 1;
@@ -230,6 +231,7 @@ typedef struct {
 		} __attribute__((packed)) dword_address_space;
 
 		struct {
+			acpi_aml_resource_word_address_space_type_t type : 8;
 			uint8_t ignored : 1;
 			uint8_t decode_type : 1;
 			uint8_t min_address_fixed : 1;
