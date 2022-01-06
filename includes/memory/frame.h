@@ -40,6 +40,8 @@ typedef struct frame_allocator {
 	frame_t* (* get_reserved_frames_of_address)(struct frame_allocator* self, void* address);
 	int8_t (* rebuild_reserved_mmap)(struct frame_allocator* self);
 	int8_t (* cleanup)(struct frame_allocator* self);
+	int8_t (* reserve_system_frames)(struct frame_allocator* self, frame_t* f);
+	int8_t (* release_acpi_reclaim_memory)(struct frame_allocator* self);
 } frame_allocator_t;
 
 frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap);

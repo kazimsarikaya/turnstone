@@ -218,6 +218,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t*);
 void acpi_device_print_all(acpi_aml_parser_context_t* ctx);
 void acpi_device_print(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d);
 acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name);
+int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
 void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
