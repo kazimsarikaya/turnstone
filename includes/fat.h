@@ -83,15 +83,15 @@ typedef struct {
 #define FAT32_DIRENT_TYPE_UNUSED      0xE5
 
 typedef struct {
-	uint8_t seconds : 5;
-	uint8_t minutes : 6;
-	uint8_t hours  : 5;
+	uint16_t seconds : 5;
+	uint16_t minutes : 6;
+	uint16_t hours  : 5;
 }__attribute__((packed)) fat32_dirent_time;
 
 typedef struct {
-	uint8_t day : 5;
-	uint8_t month : 4;
-	uint8_t year : 7;
+	uint16_t day : 5;
+	uint16_t month : 4;
+	uint16_t year : 7;
 }__attribute__((packed)) fat32_dirent_date;
 
 typedef struct {

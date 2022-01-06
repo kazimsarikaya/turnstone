@@ -113,7 +113,8 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 		return -1;
 	}
 
-	uint8_t offset = 0;
+	uint64_t offset = 0;
+	uint64_t field_offset = 0;
 	uint8_t access_type = 0;
 	uint8_t update_rule = 0;
 	uint64_t sizeasbit = 0;
@@ -125,11 +126,13 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 		}
 
 		offset = obj->field.related_object->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.related_object->field.offset;
 		access_type = obj->field.related_object->field.access_type;
 		update_rule = obj->field.related_object->field.update_rule;
 		sizeasbit = obj->field.related_object->field.sizeasbit;
 	} else {
 		offset = obj->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.offset;
 		access_type = obj->field.access_type;
 		update_rule = obj->field.update_rule;
 		sizeasbit = obj->field.sizeasbit;
@@ -155,9 +158,9 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 	uint64_t mask = (1 << sizeasbit) - 1;
 
 	val &= mask;
-	val <<= (offset % 8);
+	val <<= (field_offset % 8);
 
-	mask <<= (offset % 8);
+	mask <<= (field_offset % 8);
 
 	switch (update_rule) {
 	case ACPI_AML_FIELD_PRESERVE:
@@ -170,6 +173,8 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 		tmp = val;
 		break;
 	}
+
+	PRINTLOG(ACPIAML, LOG_TRACE, "io writing offset 0x%lx value 0x%lx", offset, tmp);
 
 	switch (access_type) {
 	case ACPI_AML_FIELD_BYTE_ACCESS:
@@ -215,7 +220,8 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 		return -1;
 	}
 
-	uint8_t offset = 0;
+	uint64_t offset = 0;
+	uint64_t field_offset = 0;
 	uint8_t access_type = 0;
 	uint64_t sizeasbit = 0;
 
@@ -226,11 +232,13 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 		}
 
 		offset = obj->field.related_object->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.related_object->field.offset;
 		access_type = obj->field.related_object->field.access_type;
 		update_rule = obj->field.related_object->field.update_rule;
 		sizeasbit = obj->field.related_object->field.sizeasbit;
 	} else {
 		offset = obj->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.offset;
 		access_type = obj->field.access_type;
 		update_rule = obj->field.update_rule;
 		sizeasbit = obj->field.sizeasbit;
@@ -284,9 +292,9 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 	uint64_t mask = (1 << sizeasbit) - 1;
 
 	val &= mask;
-	val <<= (offset % 8);
+	val <<= (field_offset % 8);
 
-	mask <<= (offset % 8);
+	mask <<= (field_offset % 8);
 
 	switch (update_rule) {
 	case ACPI_AML_FIELD_PRESERVE:
@@ -429,7 +437,8 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 		return -1;
 	}
 
-	uint8_t offset = 0;
+	uint64_t offset = 0;
+	uint64_t field_offset = 0;
 	uint8_t access_type = 0;
 	uint64_t sizeasbit = 0;
 
@@ -440,10 +449,12 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 		}
 
 		offset = obj->field.related_object->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.related_object->field.offset;
 		access_type = obj->field.related_object->field.access_type;
 		sizeasbit = obj->field.related_object->field.sizeasbit;
 	} else {
 		offset = obj->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.offset;
 		access_type = obj->field.access_type;
 		sizeasbit = obj->field.sizeasbit;
 	}
@@ -466,7 +477,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 	}
 
 	uint64_t mask = (1 << sizeasbit) - 1;
-	tmp >>= (offset % 8);
+	tmp >>= (field_offset % 8);
 	tmp &= mask;
 
 	*res = tmp;
@@ -496,7 +507,8 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 		return -1;
 	}
 
-	uint8_t offset = 0;
+	uint64_t offset = 0;
+	uint64_t field_offset = 0;
 	uint8_t access_type = 0;
 	uint64_t sizeasbit = 0;
 
@@ -507,10 +519,12 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 		}
 
 		offset = obj->field.related_object->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.related_object->field.offset;
 		access_type = obj->field.related_object->field.access_type;
 		sizeasbit = obj->field.related_object->field.sizeasbit;
 	} else {
 		offset = obj->field.offset / 8 + opregion->opregion.region_offset;
+		field_offset = obj->field.offset;
 		access_type = obj->field.access_type;
 		sizeasbit = obj->field.sizeasbit;
 	}
@@ -561,7 +575,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 	}
 
 	uint64_t mask = (1 << sizeasbit) - 1;
-	tmp >>= (offset % 8);
+	tmp >>= (field_offset % 8);
 	tmp &= mask;
 
 	*res = tmp;

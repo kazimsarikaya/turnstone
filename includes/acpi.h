@@ -121,6 +121,17 @@ typedef struct {
 	acpi_generic_address_structure_t gpe1_block_address_64bit;
 }__attribute__((packed)) acpi_table_fadt_t;
 
+typedef struct {
+	uint16_t sci_enable : 1;
+	uint16_t bm_rld : 1;
+	uint16_t gbl_rls : 1;
+	uint16_t reserved0 : 6;
+	uint16_t ignored : 1;
+	uint16_t sleep_type : 3;
+	uint16_t sleep_enable : 1;
+	uint16_t reserved1 : 2;
+}__attribute__((packed)) acpi_pm1_control_register_t;
+
 typedef enum {
 	ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS=0xFF,
 	ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC=0,
@@ -177,6 +188,11 @@ typedef union {
 	} local_apic_address_override;
 }__attribute__((packed)) acpi_table_madt_entry_t;
 
+typedef struct {
+	acpi_table_fadt_t* fadt;
+	void* acpi_parser_context;
+} acpi_contex_t;
+
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp();
 uint8_t acpi_validate_checksum(acpi_sdt_header_t* sdt_header);
 
@@ -188,5 +204,8 @@ linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt
 #define acpi_get_apic_table_entries(sdt_hdr) acpi_get_apic_table_entries_with_heap(NULL, sdt_hdr)
 
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);
+
+int8_t acpi_reset();
+int8_t acpi_poweroff();
 
 #endif
