@@ -55,6 +55,10 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 		if(dst_type == ACPI_AML_OT_OPREGION) {
 			dst_type = ACPI_AML_OT_NUMBER;
 		}
+
+		if(dst_type == ACPI_AML_OT_FIELD) {
+			dst_type = ACPI_AML_OT_NUMBER;
+		}
 	}
 
 	if(dst_type == ACPI_AML_OT_BUFFERFIELD) {
