@@ -28,30 +28,39 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
 	switch (opcode->opcode) {
 	case ACPI_AML_LAND:
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li && %li", ctx->scope_prefix, op1, op2);
 		ires = op1 && op2;
 		break;
 	case ACPI_AML_LOR:
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li || %li", ctx->scope_prefix, op1, op2);
 		ires = op1 || op2;
 		break;
 	case ACPI_AML_LNOT:
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s ! %li", ctx->scope_prefix, op1);
 		ires = !op1;
 		break;
 	case ACPI_AML_LEQUAL << 8 | ACPI_AML_LNOT:
-		  ires = op1 != op2;
+		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li != %li", ctx->scope_prefix, op1, op2);
+		ires = op1 != op2;
 		break;
 	case ACPI_AML_LGREATER << 8 | ACPI_AML_LNOT:
-		  ires = !(op1 > op2);
+		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li <= %li", ctx->scope_prefix, op1, op2);
+		ires = !(op1 > op2);
 		break;
 	case ACPI_AML_LLESS << 8 | ACPI_AML_LNOT:
-		  ires = !(op1 < op2);
+		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li >= %li", ctx->scope_prefix, op1, op2);
+		ires = !(op1 < op2);
 		break;
 	case ACPI_AML_LEQUAL:
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li == %li", ctx->scope_prefix, op1, op2);
 		ires = op1 == op2;
 		break;
 	case ACPI_AML_LGREATER:
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li > %li", ctx->scope_prefix, op1, op2);
 		ires = op1 > op2;
 		break;
 	case ACPI_AML_LLESS:
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li < %li", ctx->scope_prefix, op1, op2);
 		ires = op1 < op2;
 		break;
 	default:

@@ -85,6 +85,8 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 		}
 
 		for(; idx < opcode->operand_count; idx++) {
+			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s try to parse param %i", ctx->scope_prefix, idx);
+
 			uint64_t t_consumed = 0;
 			acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
@@ -99,6 +101,8 @@ int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_pars
 				res = -1;
 				goto cleanup;
 			}
+
+			PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %i parsed, extracting", ctx->scope_prefix, idx);
 
 			if(op->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
 				acpi_aml_object_t* tmp = op->opcode_exec_return;
