@@ -447,5 +447,12 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		return -1;
 	}
 
+	if(acpi_build_interrupt_map(pctx) != 0) {
+		PRINTLOG(ACPI, LOG_ERROR, "cannot build interrupt map", 0);
+		return -1;
+	}
+
+	PRINTLOG(ACPI, LOG_INFO, "Interrupt map builded", 0);
+
 	return 0;
 }

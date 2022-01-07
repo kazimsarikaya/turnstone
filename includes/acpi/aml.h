@@ -165,12 +165,18 @@ typedef struct acpi_aml_device {
 	acpi_aml_object_t* srs;
 	acpi_aml_object_t* sta;
 	acpi_aml_object_t* uid;
+	boolean_t disabled;
 	linkedlist_t buses;
 	linkedlist_t ioports;
 	linkedlist_t dmas;
 	linkedlist_t memory_ranges;
 	linkedlist_t interrupts;
 }acpi_aml_device_t;
+
+typedef struct {
+	uint32_t address;
+	uint32_t interrupt_no;
+}acpi_aml_interrupt_map_item_t;
 
 typedef struct {
 	memory_heap_t* heap;
@@ -181,6 +187,7 @@ typedef struct {
 	linkedlist_t symbols;
 	linkedlist_t local_symbols;
 	linkedlist_t devices;
+	linkedlist_t interrupt_map;
 	acpi_aml_object_t* pic;
 	struct {
 		uint8_t type;
@@ -219,6 +226,7 @@ void acpi_device_print_all(acpi_aml_parser_context_t* ctx);
 void acpi_device_print(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d);
 acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name);
 int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx);
+int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
 void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
