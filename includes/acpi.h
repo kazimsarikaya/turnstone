@@ -189,16 +189,18 @@ typedef union {
 }__attribute__((packed)) acpi_table_madt_entry_t;
 
 typedef struct {
+	acpi_xrsdp_descriptor_t* xrsdp_desc;
 	acpi_table_fadt_t* fadt;
+	acpi_table_mcfg_t* mcfg;
 	void* acpi_parser_context;
 } acpi_contex_t;
+
+extern acpi_contex_t* ACPI_CONTEXT;
 
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp();
 uint8_t acpi_validate_checksum(acpi_sdt_header_t* sdt_header);
 
 acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature);
-
-acpi_table_mcfg_t* acpi_get_mcfg_table(acpi_xrsdp_descriptor_t* xrsdp_desc);
 
 linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header);
 #define acpi_get_apic_table_entries(sdt_hdr) acpi_get_apic_table_entries_with_heap(NULL, sdt_hdr)

@@ -456,14 +456,6 @@ int8_t kmain64(size_t entry_point) {
 
 	cpu_hlt();
 
-	uint64_t kernel_start = entry_point - 0x100;
-
-	program_header_t* kernel = (program_header_t*)kernel_start;
-
-	PRINTLOG(KERNEL, LOG_DEBUG, "kernel size %lx reloc start %lx reloc count %lx", kernel->program_size, kernel_start + kernel->reloc_start, kernel->reloc_count);
-
-	//move_kernel(kernel_start, 64 << 20); /* for testing */
-
 	if(task_init_tasking_ext(heap) != 0) {
 		PRINTLOG(TASKING, LOG_FATAL, "cannot init tasking. Halting...", 0);
 		cpu_hlt();
@@ -472,34 +464,6 @@ int8_t kmain64(size_t entry_point) {
 	PRINTLOG(TASKING, LOG_FATAL, "tasking initialized", 0);
 
 	return kmain64_init(heap);
-}
-
-
-
-
-void second_init(size_t kernel_loc) {
-	video_clear_screen();
-	printf("hello from second kernel at %lx\n", kernel_loc);
-	__asm__ __volatile__ ("1: hlt\n jmp 1b\n");
-}
-
-void move_kernel(size_t src, size_t dst) {
-	uint64_t new_area_start = dst;
-	uint64_t new_area_end = dst + (128 << 20);
-	uint64_t step = 0x200000;
-
-	for(uint64_t i = new_area_start; i < new_area_end; i += step) {
-		memory_paging_add_page(i, i, MEMORY_PAGING_PAGE_TYPE_2M);
-	}
-
-	if(linker_memcopy_program_and_relink(src, dst, (uint64_t)second_init) != 0) {
-		printf("KERNEL: Fatal cannot move kernel\n");
-		return;
-	}
-
-	printf("jumping new kernel at %lx\n", dst);
-
-	__asm__ __volatile__ ( "call *%%rax\n" : : "D" (dst), "a" (dst)  );
 }
 
 void test_task1() {
@@ -526,23 +490,12 @@ int8_t kmain64_init(memory_heap_t* heap) {
 
 	printf("%s\n", data);
 
-	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
-
-	if(desc == NULL) {
-		printf("acpi header not found or incorrect checksum\n");
-		return -1;
-	}
-
-	if(apic_setup(desc) != 0) {
+	if(apic_setup(ACPI_CONTEXT->xrsdp_desc) != 0) {
 		printf("apic setup failed\n");
 		return -1;
 	}
 
-	if(acpi_setup(desc) != 0) {
-		printf("acpi setup failed\n");
-	}
-
-	acpi_table_mcfg_t* mcfg = acpi_get_mcfg_table(desc);
+	acpi_table_mcfg_t* mcfg = ACPI_CONTEXT->mcfg;
 
 	if(mcfg == NULL) {
 		printf("can not find mcfg or incorrect checksum\n");

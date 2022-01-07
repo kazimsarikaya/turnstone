@@ -276,11 +276,6 @@ acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* s
 	return NULL;
 }
 
-
-acpi_table_mcfg_t* acpi_get_mcfg_table(acpi_xrsdp_descriptor_t* xrsdp_desc){
-	return (acpi_table_mcfg_t*)acpi_get_table(xrsdp_desc, "MCFG");
-}
-
 linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
 	if(memory_memcompare(sdt_header->signature, "APIC", 4) != 0) {
 		return NULL;
@@ -322,6 +317,8 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	if(ACPI_CONTEXT == NULL) {
 		return -1;
 	}
+
+	ACPI_CONTEXT->xrsdp_desc = desc;
 
 	acpi_table_fadt_t* fadt = (acpi_table_fadt_t*)acpi_get_table(desc, "FACP");
 
@@ -453,6 +450,8 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	}
 
 	PRINTLOG(ACPI, LOG_INFO, "Interrupt map builded", 0);
+
+	ACPI_CONTEXT->mcfg = (acpi_table_mcfg_t*)acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "MCFG");
 
 	return 0;
 }
