@@ -230,6 +230,8 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 }
 
 int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
+	PRINTLOG(ACPIAML, LOG_TRACE, "try to parse symbol", 0);
+
 	uint64_t t_consumed = 0;
 	uint64_t r_consumed = 0;
 
@@ -247,8 +249,11 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 	}
 	r_consumed += (tmp_start - ctx->remaining);
 
+	PRINTLOG(ACPIAML, LOG_TRACE, "name string parsed %s", name);
 
 	acpi_aml_object_t* tmp_obj = acpi_aml_symbol_lookup(ctx, name);
+
+	PRINTLOG(ACPIAML, LOG_TRACE, "returned symbol 0x%lp", tmp_obj);
 
 	if(tmp_obj == NULL) {
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
@@ -257,9 +262,13 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 			return -1;
 		}
 
-		char_t* nomname = acpi_aml_normalize_name(ctx, ctx->scope_prefix, name);
-		tmp_obj->name = nomname;
+		//char_t* nomname = acpi_aml_normalize_name(ctx, ctx->scope_prefix, name);
+		tmp_obj->name = strdup_at_heap(ctx->heap, name);
 		tmp_obj->type = ACPI_AML_OT_RUNTIMEREF;
+
+		PRINTLOG(ACPIAML, LOG_TRACE, "name string %s runtime reference", name);
+	} else {
+		PRINTLOG(ACPIAML, LOG_TRACE, "name string %s found type %i", name, tmp_obj->type);
 	}
 
 	memory_free_ext(ctx->heap, name);
@@ -286,6 +295,8 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 	if(consumed != NULL) {
 		*consumed += r_consumed;
 	}
+
+	PRINTLOG(ACPIAML, LOG_TRACE, "symbol parsed", 0);
 
 	return 0;
 }
