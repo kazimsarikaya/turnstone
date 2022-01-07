@@ -257,6 +257,7 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
  */
 int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position);
 
+#define linkedlist_contains(l, d)  linkedlist_get_position(l, d, NULL)
 /**
  * @brief returns position of given data.
  * @param  list list to search

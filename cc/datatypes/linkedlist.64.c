@@ -461,19 +461,41 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position){
 	if(data == NULL) {
 		return -1;
 	}
+
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
-	*position = 0;
+
+	if(position) {
+		*position = 0;
+	}
+
 	int8_t res = -1;
+
+
+	linkedlist_data_comparator_f cmp = l->comparator;
+
+	if(l->equality_comparator) {
+		cmp = l->equality_comparator;
+	}
+
 	iterator_t* iter = linkedlist_iterator_create(l);
+
 	while(iter->end_of_iterator(iter) != 0) {
-		if(l->comparator(iter->get_item(iter), data) == 0) {
+
+
+		if(cmp(iter->get_item(iter), data) == 0) {
 			res = 0;
 			break;
 		}
-		(*position)++;
+
+		if(position) {
+			(*position)++;
+		}
+
 		iter = iter->next(iter);
 	}
+
 	iter->destroy(iter);
+
 	return res;
 }
 
