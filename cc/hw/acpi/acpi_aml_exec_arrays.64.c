@@ -110,6 +110,87 @@ int8_t acpi_aml_exec_findsetbit(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 	return 0;
 }
 
+
+int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
+	acpi_aml_object_t* src1 = opcode->operands[0];
+	acpi_aml_object_t* src2 = opcode->operands[1];
+	acpi_aml_object_t* dst = opcode->operands[2];
+
+	src1 = acpi_aml_get_if_arg_local_obj(ctx, src1, 0, 0);
+	src2 = acpi_aml_get_if_arg_local_obj(ctx, src2, 0, 0);
+
+	if(src1->type != ACPI_AML_OT_BUFFER && src2->type == ACPI_AML_OT_BUFFER) {
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type %i %i", src1->type, src2->type);
+
+		return -1;
+	}
+
+	if(src1->buffer.buflen == 1 || src2->buffer.buflen == 1) {
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch bufferlen %i %i", src1->buffer.buflen, src2->buffer.buflen);
+
+		return -1;
+	}
+
+	int64_t new_buflen = src1->buffer.buflen;
+	int64_t src1_copy_len = 0;
+	int64_t src2_copy_len = 0;
+
+	if(new_buflen >= 2) {
+		new_buflen -= 2; //remove end tag
+	}
+
+	src1_copy_len = new_buflen;
+
+	if(src2->buffer.buflen) {
+		new_buflen += src2->buffer.buflen - 2;
+		src2_copy_len = src2->buffer.buflen - 2;
+	}
+
+	new_buflen += 2; // add end tag
+
+	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0);
+
+	if(res == NULL) {
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate result", 0);
+
+		return -1;
+	}
+
+	res->type = ACPI_AML_OT_BUFFER;
+	res->buffer.buflen = new_buflen;
+
+	uint8_t* new_buf = memory_malloc_ext(ctx->heap, new_buflen, 0);
+
+	if(new_buf == NULL) {
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate memory for buffer", 0);
+		memory_free_ext(ctx->heap, res);
+
+		return -1;
+	}
+
+	memory_memcopy(src1->buffer.buf, new_buf, src1_copy_len);
+	memory_memcopy(src2->buffer.buf, new_buf + src1_copy_len, src2_copy_len);
+
+	new_buf[new_buflen - 2] = 0x79; //endtag
+
+	res->buffer.buf = new_buf;
+
+	if(acpi_aml_is_null_target(dst) != 0) {
+		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
+
+		if(acpi_aml_write_as_buffer(ctx, res, dst) != 0) {
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot write buffer to destination", 0);
+			acpi_aml_destroy_object(ctx, res);
+
+			return -1;
+		}
+	}
+
+	opcode->return_obj = res;
+
+	return 0;
+}
+
 int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
 	acpi_aml_object_t* src = opcode->operands[0];
 	acpi_aml_object_t* idx = opcode->operands[1];
@@ -177,6 +258,5 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	}
 
 UNIMPLEXEC(concat);
-UNIMPLEXEC(concatres);
 UNIMPLEXEC(match);
 UNIMPLEXEC(mid);
