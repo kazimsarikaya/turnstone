@@ -7,9 +7,10 @@
 #define ___ACPI_AML_H 0
 
 
-#include <linkedlist.h>
 #include <types.h>
 #include <memory.h>
+#include <linkedlist.h>
+#include <indexer.h>
 
 //types
 
@@ -184,8 +185,8 @@ typedef struct {
 	uint64_t length;
 	uint64_t remaining;
 	char_t* scope_prefix;
-	linkedlist_t symbols;
-	linkedlist_t local_symbols;
+	index_t* symbols;
+	index_t* local_symbols;
 	linkedlist_t devices;
 	linkedlist_t interrupt_map;
 	acpi_aml_object_t* pic;

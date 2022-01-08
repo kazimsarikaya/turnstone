@@ -6,6 +6,7 @@
  #include <acpi/aml_internal.h>
  #include <video.h>
  #include <strings.h>
+ #include <bplustree.h>
 
 
 
@@ -372,10 +373,10 @@ uint8_t acpi_aml_parser_defaults[] =
 };
 
 int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2) {
-	acpi_aml_object_t* obj1 = (acpi_aml_object_t*)data1;
-	acpi_aml_object_t* obj2 = (acpi_aml_object_t*)data2;
+	char_t* name1 = (char_t*)data1;
+	char_t* name2  = (char_t*)data2;
 
-	return strcmp(obj1->name, obj2->name);
+	return strcmp(name1, name2);
 }
 
 int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2) {
@@ -399,7 +400,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 	ctx->length = sizeof(acpi_aml_parser_defaults);
 	ctx->remaining = sizeof(acpi_aml_parser_defaults);
 	ctx->scope_prefix = "\\";
-	ctx->symbols = linkedlist_create_sortedlist_with_heap(heap, acpi_aml_object_name_comparator);
+	ctx->symbols = bplustree_create_index_with_heap(heap, 20, acpi_aml_object_name_comparator);
 	ctx->revision = revision;
 
 	if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {

@@ -9,6 +9,7 @@
 #include <memory/paging.h>
 #include <pci.h>
 #include <ports.h>
+#include <bplustree.h>
 
 
 int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
@@ -1177,7 +1178,7 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t* ctx){
 	return res + 4;
 }
 
-acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ctx, linkedlist_t table, char_t* prefix, char_t* symbol_name){
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ctx, index_t* table, char_t* prefix, char_t* symbol_name){
 	char_t* tmp_prefix = memory_malloc_ext(ctx->heap, strlen(prefix) + 1, 0x0);
 
 	if(tmp_prefix == NULL) {
@@ -1198,17 +1199,21 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 
 		PRINTLOG(ACPIAML, LOG_TRACE, "normalized name %s", nomname);
 
-		for(int64_t len = linkedlist_size(table) - 1; len >= 0; len--) {
-			acpi_aml_object_t* obj = (acpi_aml_object_t*)linkedlist_get_data_at_position(table, len);
+		iterator_t* iter = table->search(table, nomname, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
-			if(strcmp(obj->name, nomname) == 0) {
-				memory_free_ext(ctx->heap, nomname);
-				memory_free_ext(ctx->heap, tmp_prefix);
+		if(iter != NULL && iter->end_of_iterator(iter) != 0) {
+			acpi_aml_object_t* obj = iter->get_item(iter);
+			iter->destroy(iter);
+			memory_free_ext(ctx->heap, nomname);
+			memory_free_ext(ctx->heap, tmp_prefix);
 
-				PRINTLOG(ACPIAML, LOG_TRACE, "symbol found", 0);
+			PRINTLOG(ACPIAML, LOG_TRACE, "symbol found", 0);
 
-				return obj;
-			}
+			return obj;
+		}
+
+		if(iter) {
+			iter->destroy(iter);
 		}
 
 		if(strlen(tmp_prefix) == 1) {
@@ -1269,9 +1274,9 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
 	}
 
 	if(ctx->local_symbols != NULL) {
-		linkedlist_sortedlist_insert(ctx->local_symbols, obj);
+		ctx->local_symbols->insert(ctx->local_symbols, obj->name, obj);
 	}else {
-		linkedlist_sortedlist_insert(ctx->symbols, obj);
+		ctx->symbols->insert(ctx->symbols, obj->name, obj);
 	}
 
 	return 0;
@@ -1298,7 +1303,7 @@ uint8_t acpi_aml_get_index_of_extended_code(uint8_t code) {
 void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local){
 	uint64_t item_count = 0;
 	iterator_t* iter = NULL;
-	linkedlist_t symtbl;
+	index_t* symtbl;
 
 	if(local) {
 		symtbl = ctx->local_symbols;
@@ -1306,7 +1311,7 @@ void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local
 		symtbl = ctx->symbols;
 	}
 
-	iter = linkedlist_iterator_create(symtbl);
+	iter = symtbl->create_iterator(symtbl);
 
 	if(iter == NULL) {
 		return;
@@ -1320,7 +1325,7 @@ void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local
 	}
 
 	iter->destroy(iter);
-	linkedlist_destroy(symtbl);
+	bplustree_destroy_index(symtbl);
 }
 
 void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj){
@@ -1418,13 +1423,18 @@ char_t* acpi_aml_parse_eisaid(acpi_aml_parser_context_t* ctx, uint64_t eisaid_nu
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
 	uint64_t item_count = 0;
-	iterator_t* iter = linkedlist_iterator_create(ctx->symbols);
+	iterator_t* iter = ctx->symbols->create_iterator(ctx->symbols);
+
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_aml_object_t* sym = iter->get_item(iter);
+
 		acpi_aml_print_object(ctx, sym);
+
 		item_count++;
+
 		iter = iter->next(iter);
 	}
+
 	iter->destroy(iter);
 
 	printf("totoal syms %i\n", item_count );;

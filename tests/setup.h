@@ -39,6 +39,9 @@ void print_error(const char* msg){
 	printf("%s%s%s%s", REDCOLOR, msg, RESETCOLOR, "\r\n");
 }
 
+void cpu_hlt(){
+}
+
 #define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
 		if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], __VA_ARGS__); } \
 		else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], __VA_ARGS__); } }

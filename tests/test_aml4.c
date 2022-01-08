@@ -5,6 +5,7 @@
 #include <linkedlist.h>
 #include <strings.h>
 #include <utils.h>
+#include <bplustree.h>
 
 int8_t pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc){
 	UNUSED(address);

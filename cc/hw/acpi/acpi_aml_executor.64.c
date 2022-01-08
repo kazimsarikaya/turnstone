@@ -5,6 +5,7 @@
 
 #include <acpi/aml_internal.h>
 #include <video.h>
+#include <bplustree.h>
 
 
 
@@ -344,7 +345,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	uint64_t old_length = ctx->length;
 	uint64_t old_remaining = ctx->remaining;
 	acpi_aml_method_context_t* old_mthctx =  ctx->method_context;
-	linkedlist_t old_local_symbols = ctx->local_symbols;
+	index_t* old_local_symbols = ctx->local_symbols;
 
 	acpi_aml_object_t* mth = opcode->operands[0];
 
@@ -355,12 +356,12 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 	ctx->length = mth->method.termlist_length;
 	ctx->remaining = mth->method.termlist_length;
 	ctx->method_context = mthctx;
-	ctx->local_symbols = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_object_name_comparator);
+	ctx->local_symbols = bplustree_create_index_with_heap(ctx->heap, 20, acpi_aml_object_name_comparator);
 
 	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 
 
-	iterator_t* iter = linkedlist_iterator_create(ctx->local_symbols);
+	iterator_t* iter = ctx->local_symbols->create_iterator(ctx->local_symbols);
 
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_aml_object_t* tmp = iter->get_item(iter);
