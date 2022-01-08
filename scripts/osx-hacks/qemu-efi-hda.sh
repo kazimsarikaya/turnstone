@@ -31,6 +31,7 @@ qemu-system-x86_64 \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive index=0,media=disk,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
   -monitor stdio \
-  -net none \
+  -device virtio-net,netdev=t0,id=nic0 \
+  -netdev socket,id=t0,udp=127.0.0.1:16384,localaddr=127.0.0.1:16385  \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402
