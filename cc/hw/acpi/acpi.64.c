@@ -323,7 +323,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 	return 0;
 }
 
-acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature, void* old_address) {
+acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature, linkedlist_t old_tables) {
 	if(xrsdp_desc->rsdp.revision == 0) {
 		uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
 		acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
@@ -335,13 +335,14 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char
 			uint32_t table_addr = *((uint32_t*)(table_addrs + (i * sizeof(uint32_t))));
 			res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(table_addr));
 
-			if((uint64_t)res <= (uint64_t)old_address) {
-				continue;
-			}
-
 			PRINTLOG(ACPI, LOG_TRACE, "looking for table %i of %i at fa 0x%lp va 0x%lp", i, table_addr, res);
 
 			if(memory_memcompare(res->signature, signature, 4) == 0) {
+
+				if(old_tables && linkedlist_contains(old_tables, res) == 0) {
+					continue;
+				}
+
 				if(acpi_validate_checksum(res) == 0) {
 					return res;
 				}
@@ -359,13 +360,14 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char
 		for(size_t i = 0; i < table_count; i++) {
 			res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdt->acpi_sdt_header_ptrs[i]);
 
-			if((uint64_t)res <= (uint64_t)old_address) {
-				continue;
-			}
-
 			PRINTLOG(ACPI, LOG_TRACE, "looking for table %i of %i at fa 0x%lp va 0x%lp", i, table_count, xrsdt->acpi_sdt_header_ptrs[i], res);
 
 			if(memory_memcompare(res->signature, signature, 4) == 0) {
+
+				if(old_tables && linkedlist_contains(old_tables, res) == 0) {
+					continue;
+				}
+
 				if(acpi_validate_checksum(res) == 0) {
 					return res;
 				}
@@ -518,6 +520,8 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
 	uint32_t ssdt_cnt = 0;
 
+	linkedlist_t old_ssdts = linkedlist_create_list();
+
 	while(ssdt) {
 		if(acpi_aml_parser_parse_table(pctx, ssdt) == 0) {
 			PRINTLOG(ACPI, LOG_INFO, "ssdt%i table parsed as aml", ssdt_cnt);
@@ -528,8 +532,12 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
 		ssdt_cnt++;
 
-		ssdt = acpi_get_next_table(desc, "SSDT", ssdt);
+		linkedlist_list_insert(old_ssdts, ssdt);
+
+		ssdt = acpi_get_next_table(desc, "SSDT", old_ssdts);
 	}
+
+	linkedlist_destroy(old_ssdts);
 
 	if(acpi_device_build(pctx) != 0) {
 		PRINTLOG(ACPI, LOG_ERROR, "devices cannot be builded", 0);
