@@ -450,6 +450,12 @@ int8_t kmain64(size_t entry_point) {
 		cpu_hlt();
 	}
 
+	if(pci_setup(NULL) != 0) {
+		PRINTLOG(PCI, LOG_FATAL, "pci setup failed. Halting", 0);
+		cpu_hlt();
+	}
+
+
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
 	acpi_poweroff();
@@ -495,76 +501,9 @@ int8_t kmain64_init(memory_heap_t* heap) {
 		return -1;
 	}
 
-	acpi_table_mcfg_t* mcfg = ACPI_CONTEXT->mcfg;
-
-	if(mcfg == NULL) {
-		printf("can not find mcfg or incorrect checksum\n");
-
-		return -1;
-	}
-
-	printf("mcfg is found at 0x%08p\n", mcfg);
 
 	linkedlist_t sata_controllers = linkedlist_create_list_with_heap(heap);
 
-	uint64_t pci_hs = 0x1000000;
-	uint64_t pci_he = 0x2000000;
-	uint64_t pci_step = 0x200000;
-
-	for(uint64_t i = pci_hs; i < pci_he; i += pci_step) {
-		memory_paging_add_page(i, i, MEMORY_PAGING_PAGE_TYPE_2M);
-	}
-
-	memory_heap_t* pci_heap = memory_create_heap_simple(pci_hs, pci_he);
-
-	iterator_t* iter = pci_iterator_create_with_heap(pci_heap, mcfg);
-
-	while(iter->end_of_iterator(iter) != 0) {
-		pci_dev_t* p = iter->get_item(iter);
-
-		printf("pci dev found  %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x ",
-		       p->group_number, p->bus_number, p->device_number, p->function_number,
-		       p->pci_header->vendor_id, p->pci_header->device_id,
-		       p->pci_header->class_code, p->pci_header->subclass_code);
-
-		if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
-		    p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
-			linkedlist_list_insert(sata_controllers, p);
-		}
-
-
-		if(p->pci_header->header_type.header_type == PCI_HEADER_TYPE_GENERIC_DEVICE) {
-			pci_generic_device_t* pg = (pci_generic_device_t*)p->pci_header;
-
-			printf("int %02x:%02x ", pg->interrupt_line, pg->interrupt_pin);
-
-			if(pg->common_header.status.capabilities_list) {
-				printf("caps ");
-				pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pg) + pg->capabilities_pointer);
-
-
-				while(pci_cap->capability_id != 0xFF) {
-					printf("0x%x \n", pci_cap->capability_id );
-
-					if(pci_cap->next_pointer == NULL) {
-						break;
-					}
-
-					pci_cap = (pci_capability_t*)(((uint8_t*)pci_cap ) + pci_cap->next_pointer);
-				}
-			}
-		}
-
-		printf("\n");
-
-		if( p->pci_header->class_code != PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
-		    p->pci_header->subclass_code != PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
-			memory_free_ext(pci_heap, p);
-		}
-
-		iter = iter->next(iter);
-	}
-	iter->destroy(iter);
 
 	int8_t sata_port_cnt = ahci_init(heap, sata_controllers, 34 * (1 << 20));
 

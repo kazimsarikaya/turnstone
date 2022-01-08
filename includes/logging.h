@@ -15,6 +15,7 @@ typedef enum {
 	LINKER,
 	TASKING,
 	EFI,
+	PCI,
 } logging_modules_t;
 
 typedef enum {
@@ -78,6 +79,10 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_EFI
 #define LOG_LEVEL_EFI LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_PCI
+#define LOG_LEVEL_PCI LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION
