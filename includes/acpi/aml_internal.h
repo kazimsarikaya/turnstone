@@ -209,7 +209,7 @@ int8_t acpi_aml_is_namestring_start(uint8_t*);
 uint64_t acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
 uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
-acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, linkedlist_t, char_t*, char_t*);
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, index_t*, char_t*, char_t*);
 int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
 int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);

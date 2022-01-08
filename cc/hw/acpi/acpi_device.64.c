@@ -266,7 +266,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 	acpi_aml_device_t* curr_device = NULL;
 
 
-	iterator_t* iter = linkedlist_iterator_create(ctx->symbols);
+	iterator_t* iter = ctx->symbols->create_iterator(ctx->symbols);
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_aml_object_t* sym = iter->get_item(iter);
 
