@@ -13,6 +13,7 @@ char_t* logging_module_names[] = {
 	"LINKER",
 	"TASKING",
 	"EFI",
+	"PCI",
 };
 
 
@@ -41,4 +42,5 @@ uint8_t logging_module_levels[] = {
 	LOG_LEVEL_LINKER,
 	LOG_LEVEL_TASKING,
 	LOG_LEVEL_EFI,
+	LOG_LEVEL_PCI,
 };

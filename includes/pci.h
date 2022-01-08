@@ -10,6 +10,7 @@
 #include <iterator.h>
 #include <acpi.h>
 #include <memory.h>
+#include <linkedlist.h>
 
 #define PCI_HEADER_TYPE_GENERIC_DEVICE 0x0
 #define PCI_HEADER_TYPE_PCI2PCI_BRIDGE 0x1
@@ -19,8 +20,24 @@
 #define PCI_FUNCTION_MAX_COUNT 8 ///< max function count per device
 
 #define PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER  0x01
+#define PCI_DEVICE_CLASS_NETWORK_CONTROLLER       0x02
+#define PCI_DEVICE_CLASS_DISPLAY_CONTROLLER       0x03
+#define PCI_DEVICE_CLASS_BRIDGE_CONTROLLER        0x06
+#define PCI_DEVICE_CLASS_SYSTEM_PERIPHERAL        0x08
+#define PCI_DEVICE_CLASS_SERIAL_BUS               0x0C
 
 #define PCI_DEVICE_SUBCLASS_SATA_CONTROLLER  0x06
+#define PCI_DEVICE_SUBCLASS_ETHERNET         0x00
+#define PCI_DEVICE_SUBCLASS_VGA              0x00
+#define PCI_DEVICE_SUBCLASS_BRIDGE_HOST      0x00
+#define PCI_DEVICE_SUBCLASS_BRIDGE_ISA       0x01
+#define PCI_DEVICE_SUBCLASS_BRIDGE_OTHER     0x80
+#define PCI_DEVICE_SUBCLASS_SP_OTHER         0x80
+#define PCI_DEVICE_SUBCLASS_USB              0x80
+
+#define PCI_DEVICE_PROGIF_OHCI               0x10
+#define PCI_DEVICE_PROGIF_EHCI               0x20
+#define PCI_DEVICE_PROGIF_XHCI               0x30
 
 #define PCI_DEVICE_CAPABILITY_MSI     0x05
 #define PCI_DEVICE_CAPABILITY_MSIX    0x11
@@ -243,6 +260,15 @@ typedef struct {
 	};
 } __attribute__((packed)) pci_capability_msi_t;
 
+typedef struct {
+	linkedlist_t storage_controllers;
+	linkedlist_t network_controllers;
+	linkedlist_t other_devices;
+} pci_context_t;
 
+extern pci_context_t* PCI_CONTEXT;
+
+
+int8_t pci_setup(memory_heap_t* heap);
 
 #endif
