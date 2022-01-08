@@ -386,7 +386,7 @@ int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2) {
 	return strcmp(obj1->name, obj2->name);
 }
 
-acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t revision, uint8_t* aml, int64_t size) {
+acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t revision) {
 	acpi_aml_parser_context_t* ctx = memory_malloc_ext(heap, sizeof(acpi_aml_parser_context_t), 0x0);
 
 	if(ctx == NULL) {
@@ -408,11 +408,18 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
 		return NULL;
 	}
 
-	ctx->data = aml;
-	ctx->length = size;
-	ctx->remaining = size;
-
 	return ctx;
+}
+
+int8_t acpi_aml_parser_parse_table(acpi_aml_parser_context_t* ctx, acpi_sdt_header_t* table) {
+	int64_t aml_size = table->length - sizeof(acpi_sdt_header_t);
+	uint8_t* aml = (uint8_t*)(table + 1);
+
+	ctx->data = aml;
+	ctx->length = aml_size;
+	ctx->remaining = aml_size;
+
+	return acpi_aml_parse_all_items(ctx, NULL, NULL);
 }
 
 void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
@@ -431,17 +438,4 @@ void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
 
 	acpi_aml_destroy_symbol_table(ctx, 0);
 	memory_free_ext(ctx->heap, ctx);
-}
-
-
-int8_t acpi_aml_parse(acpi_aml_parser_context_t* ctx) {
-	if(ctx == NULL) {
-		return -1;
-	}
-
-	uint8_t res = -1;
-
-	res = acpi_aml_parse_all_items(ctx, NULL, NULL);
-
-	return res;
 }

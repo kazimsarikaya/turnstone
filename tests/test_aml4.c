@@ -55,16 +55,13 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	printf("table name: %s\n", table_name);
 	memory_free(table_name);
 
-	uint8_t* aml = aml_data + sizeof(acpi_sdt_header_t);
-	size -= sizeof(acpi_sdt_header_t);
-
 	int8_t res = -1;
 
-	acpi_aml_parser_context_t* ctx = acpi_aml_parser_context_create(hdr->revision, aml, size);
+	acpi_aml_parser_context_t* ctx = acpi_aml_parser_context_create(hdr->revision);
 	if(ctx == NULL) {
 		print_error("cannot create parser context");
 	} else {
-		res = acpi_aml_parse(ctx);
+		res = acpi_aml_parser_parse_table(ctx, hdr);
 
 		if(res == 0) {
 			print_success("aml parsed");
