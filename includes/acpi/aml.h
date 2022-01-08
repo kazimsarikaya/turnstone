@@ -11,6 +11,7 @@
 #include <memory.h>
 #include <linkedlist.h>
 #include <indexer.h>
+#include <acpi.h>
 
 //types
 
@@ -211,11 +212,11 @@ typedef struct {
 int8_t acpi_aml_object_name_comparator(const void* data1, const void* data2);
 int8_t acpi_aml_device_name_comparator(const void* data1, const void* data2);
 
-acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t*, uint8_t, uint8_t*, int64_t);
-#define acpi_aml_parser_context_create(rev, aml, len) acpi_aml_parser_context_create_with_heap(NULL, rev, aml, len)
-void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t*);
+acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_t* heap, uint8_t rev);
+#define acpi_aml_parser_context_create(rev) acpi_aml_parser_context_create_with_heap(NULL, rev)
+void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx);
 
-int8_t acpi_aml_parse(acpi_aml_parser_context_t*);
+int8_t acpi_aml_parser_parse_table(acpi_aml_parser_context_t* ctx, acpi_sdt_header_t* table);
 
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t*, acpi_aml_object_t*, int64_t*);

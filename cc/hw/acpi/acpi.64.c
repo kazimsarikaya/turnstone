@@ -322,7 +322,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 	return 0;
 }
 
-acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature){
+acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature, void* old_address) {
 	if(xrsdp_desc->rsdp.revision == 0) {
 		uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
 		acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
@@ -333,6 +333,10 @@ acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* s
 		for(size_t i = 0; i < table_count; i++) {
 			uint32_t table_addr = *((uint32_t*)(table_addrs + (i * sizeof(uint32_t))));
 			res = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(table_addr));
+
+			if((uint64_t)res <= (uint64_t)old_address) {
+				continue;
+			}
 
 			PRINTLOG(ACPI, LOG_TRACE, "looking for table %i of %i at fa 0x%lp va 0x%lp", i, table_addr, res);
 
@@ -353,6 +357,10 @@ acpi_sdt_header_t* acpi_get_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* s
 
 		for(size_t i = 0; i < table_count; i++) {
 			res = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdt->acpi_sdt_header_ptrs[i]);
+
+			if((uint64_t)res <= (uint64_t)old_address) {
+				continue;
+			}
 
 			PRINTLOG(ACPI, LOG_TRACE, "looking for table %i of %i at fa 0x%lp va 0x%lp", i, table_count, xrsdt->acpi_sdt_header_ptrs[i], res);
 
@@ -488,17 +496,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 	acpi_sdt_header_t* dsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dsdt_fa);
 	PRINTLOG(ACPI, LOG_DEBUG, "DSDT address 0x%016lx", dsdt);
 
-
-	if(acpi_validate_checksum(dsdt) != 0) {
-		PRINTLOG(ACPI, LOG_ERROR, "dsdt not ok", 0);
-
-		return -1;
-	}
-
-	int64_t aml_size = dsdt->length - sizeof(acpi_sdt_header_t);
-	uint8_t* aml = (uint8_t*)(dsdt + 1);
-
-	acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(NULL, dsdt->revision, aml, aml_size);
+	acpi_aml_parser_context_t* pctx = acpi_aml_parser_context_create_with_heap(NULL, dsdt->revision);
 
 	if(pctx == NULL) {
 		PRINTLOG(ACPI, LOG_ERROR, "aml parser creation failed", 0);
@@ -506,11 +504,30 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		return -1;
 	}
 
-	if(acpi_aml_parse(pctx) == 0) {
-		PRINTLOG(ACPI, LOG_INFO, "aml parsed", 0);
+	ACPI_CONTEXT->acpi_parser_context = pctx;
+
+	if(acpi_aml_parser_parse_table(pctx, dsdt) == 0) {
+		PRINTLOG(ACPI, LOG_INFO, "dsdt table parsed as aml", 0);
 	} else {
-		PRINTLOG(ACPI, LOG_ERROR, "aml not parsed", 0);
+		PRINTLOG(ACPI, LOG_ERROR, "dsdt table cannot parsed as aml", 0);
 		return -1;
+	}
+
+	acpi_sdt_header_t* ssdt = acpi_get_table(desc, "SSDT");
+
+	uint32_t ssdt_cnt = 0;
+
+	while(ssdt) {
+		if(acpi_aml_parser_parse_table(pctx, ssdt) == 0) {
+			PRINTLOG(ACPI, LOG_INFO, "ssdt%i table parsed as aml", ssdt_cnt);
+		} else {
+			PRINTLOG(ACPI, LOG_ERROR, "ssdt%i table cannot parsed as aml", ssdt_cnt);
+			return -1;
+		}
+
+		ssdt_cnt++;
+
+		ssdt = acpi_get_next_table(desc, "SSDT", ssdt);
 	}
 
 	if(acpi_device_build(pctx) != 0) {
@@ -522,8 +539,6 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 		acpi_device_print_all(pctx);
 		acpi_aml_print_symbol_table(pctx);
 	}
-
-	ACPI_CONTEXT->acpi_parser_context = pctx;
 
 	if(acpi_device_init(pctx) != 0) {
 		PRINTLOG(ACPI, LOG_ERROR, "devices cannot be initialized", 0);
