@@ -1,5 +1,8 @@
 #include "setup.h"
 #include <sha256.h>
+#include <xxhash.h>
+#include <strings.h>
+#include <utils.h>
 
 uint32_t main(uint32_t argc, char_t** argv) {
 	setup_ram();
@@ -50,6 +53,10 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	printf(" %s\n", *argv);
 
 	memory_free(sum);
+
+	char_t* xxhash_data = "Hello, world!";
+	uint64_t xxhash_result = xxhash64_hash(xxhash_data, strlen(xxhash_data)), xxhash_verify = 17691043854468224118ULL;
+	printf("%lu %i\n", xxhash_result, xxhash_result == xxhash_verify);
 
 	return 0;
 }
