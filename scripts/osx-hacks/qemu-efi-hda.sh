@@ -27,6 +27,7 @@ fi
 
 qemu-system-x86_64 \
   -M q35 -m 1g -smp cpus=2 -name osdev-hda-boot \
+  -cpu qemu64,+ssse3,+sse4.1,+sse4.2 \
   -drive if=pflash,readonly=off,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive index=0,media=disk,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
