@@ -25,7 +25,7 @@ CCXXFLAGS += -std=gnu99 -O3 -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
-CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 $(CCXXFLAGS)
+CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 $(CCXXFLAGS)
 CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
 
 OBJDIR = output
