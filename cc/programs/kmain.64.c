@@ -442,26 +442,33 @@ int8_t kmain64(size_t entry_point) {
 	acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
 	if(desc == NULL) {
-		PRINTLOG(ACPI, LOG_FATAL, "acpi header not found or incorrect checksum. Halting...", 0);
+		PRINTLOG(KERNEL, LOG_FATAL, "acpi header not found or incorrect checksum. Halting...", 0);
 		cpu_hlt();
 	}
 
 	if(acpi_setup(desc) != 0) {
-		PRINTLOG(ACPI, LOG_FATAL, "acpi setup failed. Halting", 0);
+		PRINTLOG(KERNEL, LOG_FATAL, "acpi setup failed. Halting", 0);
 		cpu_hlt();
 	}
 
 	if(pci_setup(NULL) != 0) {
-		PRINTLOG(PCI, LOG_FATAL, "pci setup failed. Halting", 0);
+		PRINTLOG(KERNEL, LOG_FATAL, "pci setup failed. Halting", 0);
 		cpu_hlt();
 	}
 
 	if(apic_setup(ACPI_CONTEXT->xrsdp_desc) != 0) {
-		PRINTLOG(APIC, LOG_FATAL, "apic setup failed. Halting", 0);
+		PRINTLOG(KERNEL, LOG_FATAL, "apic setup failed. Halting", 0);
 		cpu_hlt();
 	}
 
-	time_timer_spinsleep(1000ULL * 1000ULL * 5000ULL);
+	if(task_init_tasking_ext(heap) != 0) {
+		PRINTLOG(KERNEL, LOG_FATAL, "cannot init tasking. Halting...", 0);
+		cpu_hlt();
+	}
+
+	PRINTLOG(KERNEL, LOG_INFO, "tasking initialized", 0);
+
+	time_timer_spinsleep(1000ULL * 1000ULL * 50000ULL);
 
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
@@ -469,12 +476,6 @@ int8_t kmain64(size_t entry_point) {
 
 	cpu_hlt();
 
-	if(task_init_tasking_ext(heap) != 0) {
-		PRINTLOG(TASKING, LOG_FATAL, "cannot init tasking. Halting...", 0);
-		cpu_hlt();
-	}
-
-	PRINTLOG(TASKING, LOG_FATAL, "tasking initialized", 0);
 
 	return kmain64_init(heap);
 }

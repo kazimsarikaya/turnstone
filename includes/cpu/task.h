@@ -11,9 +11,6 @@
 #include <memory.h>
 #include <memory/paging.h>
 
-#define TASK_TSS_STACK_START 0x200000
-#define TASK_TSS_STACK_STEP  (176 << 10)
-
 #define TASK_MAX_TICK_COUNT 50
 
 #define TASK_KERNEL_TASK_ID 1
