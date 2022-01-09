@@ -16,6 +16,9 @@ typedef enum {
 	TASKING,
 	EFI,
 	PCI,
+	APIC,
+	IOAPIC,
+	TIMER,
 } logging_modules_t;
 
 typedef enum {
@@ -83,6 +86,18 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_PCI
 #define LOG_LEVEL_PCI LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_APIC
+#define LOG_LEVEL_APIC LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_IOAPIC
+#define LOG_LEVEL_IOAPIC LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_TIMER
+#define LOG_LEVEL_TIMER LOG_DEBUG
 #endif
 
 #ifndef LOG_LOCATION

@@ -21,6 +21,7 @@
 #include <driver/ahci.h>
 #include <random.h>
 #include <memory/frame.h>
+#include <time/timer.h>
 
 int8_t kmain64(size_t entry_point);
 int8_t kmain64_init();
@@ -455,6 +456,12 @@ int8_t kmain64(size_t entry_point) {
 		cpu_hlt();
 	}
 
+	if(apic_setup(ACPI_CONTEXT->xrsdp_desc) != 0) {
+		PRINTLOG(APIC, LOG_FATAL, "apic setup failed. Halting", 0);
+		cpu_hlt();
+	}
+
+	time_timer_spinsleep(1000ULL * 1000ULL * 5000ULL);
 
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
@@ -495,11 +502,6 @@ int8_t kmain64_init(memory_heap_t* heap) {
 	char_t* data = hello_world();
 
 	printf("%s\n", data);
-
-	if(apic_setup(ACPI_CONTEXT->xrsdp_desc) != 0) {
-		printf("apic setup failed\n");
-		return -1;
-	}
 
 
 	linkedlist_t sata_controllers = linkedlist_create_list_with_heap(heap);
