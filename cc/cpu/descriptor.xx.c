@@ -29,7 +29,13 @@ uint8_t descriptor_build_gdt_register(){
 	GDT_REGISTER->limit = gdt_size - 1;
 	GDT_REGISTER->base = (size_t)gdts;
 
-	asm volatile ("lgdt (%%rax)\n" : : "a" (GDT_REGISTER));
+	__asm__ __volatile__ ("lgdt (%%rax)\n"
+	                      "push $0x08\n"
+	                      "lea fix_gdt_jmp%=(%%rip),%%rax\n"
+	                      "push %%rax\n"
+	                      "lretq\n"
+	                      "fix_gdt_jmp%=:"
+	                      : : "a" (GDT_REGISTER));
 	return 0;
 }
 
@@ -53,7 +59,7 @@ uint8_t descriptor_build_idt_register(){
 	IDT_REGISTER->limit = idt_size - 1;
 	IDT_REGISTER->base = IDT_BASE_ADDRESS;
 
-	asm volatile ("lidt (%%rax)\n" : : "a" (IDT_REGISTER));
+	__asm__ __volatile__ ("lidt (%%rax)\n" : : "a" (IDT_REGISTER));
 
 	return 0;
 }
