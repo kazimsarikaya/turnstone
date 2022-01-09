@@ -56,7 +56,7 @@ void time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 	}
 
 	if((time_timer_tick_count % 1000) == 0) {
-		printf("APICTIMER: timer hits!\n");
+		PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%lx", time_timer_tick_count);
 	}
 
 	apic_eoi();
@@ -69,15 +69,19 @@ uint64_t time_timer_get_tick_count() {
 
 void time_timer_configure_spinsleep() {
 	time_timer_start_spinsleep_counter = 1;
+
 	while(time_timer_start_spinsleep_counter) {
 		time_timer_spinsleep_counter_value++;
 	}
-	printf("TIMER: Info spinsleep counter is 0x%x\n", time_timer_spinsleep_counter_value);
+
+	PRINTLOG(TIMER, LOG_TRACE, "spinsleep counter is 0x%lx", time_timer_spinsleep_counter_value);
 }
 
 void time_timer_spinsleep(uint64_t usecs) {
+	PRINTLOG(TIMER, LOG_TRACE, "spinsleep for 0x%lx", usecs);
 	while(usecs--) {
-		uint64_t spinsleep_counter = time_timer_start_spinsleep_counter;
+		uint64_t spinsleep_counter = time_timer_spinsleep_counter_value;
 		while(spinsleep_counter--);
 	}
+	PRINTLOG(TIMER, LOG_TRACE, "spinsleep finished", 0);
 }

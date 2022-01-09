@@ -5,6 +5,7 @@
 #include <apic.h>
 #include <cpu.h>
 #include <memory/paging.h>
+#include <memory/frame.h>
 #include <acpi.h>
 #include <iterator.h>
 #include <cpu/interrupt.h>
@@ -13,7 +14,7 @@
 #include <linkedlist.h>
 
 uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic);
-void apic_init_timer();
+int8_t apic_init_timer();
 
 uint64_t ioapic_bases[2] = {0, 0};
 uint8_t ioapic_count = 0;
@@ -25,22 +26,25 @@ linkedlist_t irq_remappings = NULL;
 int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
 	acpi_sdt_header_t* madt = acpi_get_table(desc, "APIC");
 
+
+	PRINTLOG(APIC, LOG_INFO, "apic and ioapic initialization", 0);
+
 	if(madt == NULL) {
-		printf("APIC: Info can not find madt or incorrect checksum\n");
+		PRINTLOG(APIC, LOG_ERROR, "can not find madt or incorrect checksum", 0);
 		return -1;
 	}
 
-	printf("APIC: Info madt is found\n");
+	PRINTLOG(APIC, LOG_DEBUG, "madt is found", 0);
 
 	linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
 
 	if(apic_init_apic(apic_entries) != 0) {
-		printf("APIC: Info cannot enable apic\n");
+		PRINTLOG(APIC, LOG_ERROR, "cannot enable apic", 0);
 
 		return -1;
 	}
 
-	printf("APIC: Info apic and ioapic enabled\n");
+	PRINTLOG(APIC, LOG_INFO, "apic and ioapic enabled", 0);
 
 	return 0;
 }
@@ -48,8 +52,10 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
 int8_t apic_init_apic(linkedlist_t apic_entries){
 	cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
 	cpu_cpuid_regs_t answer = {0, 0, 0, 0};
+
 	if(cpu_cpuid(query, &answer) != 0) {
-		printf("APIC: Fatal cannot read cpuid\n");
+		PRINTLOG(APIC, LOG_DEBUG, "Fatal cannot read cpuid", 0);
+
 		return -1;
 	}
 
@@ -61,10 +67,10 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 
 	uint64_t apic_enable_flag = APIC_MSR_ENABLE_APIC;
 	if(answer.ecx & (1 << 21)) {
-		printf("APIC: x2apic found\n");
+		PRINTLOG(APIC, LOG_DEBUG, "x2apic found", 0);
 		// apic_enable_flag |= APIC_MSR_ENABLE_X2APIC; // TODO: x2apic needs rdmsr wrmsr
 	} else {
-		printf("APIC: apic found\n");
+		PRINTLOG(APIC, LOG_DEBUG, "apic found", 0);
 	}
 
 	uint64_t apic_msr = cpu_read_msr(APIC_MSR_ADDRESS);
@@ -92,7 +98,7 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 
 		if(e->info.type == ACPI_MADT_ENTRY_TYPE_INTERRUPT_SOURCE_OVERRIDE) {
 			linkedlist_list_insert(irq_remappings, e);
-			printf("APIC: source irq 0x%02x is at gsi 0x%02x\n", e->interrupt_source_override.irq_source, e->interrupt_source_override.global_system_interrupt);
+			PRINTLOG(APIC, LOG_DEBUG, "source irq 0x%02x is at gsi 0x%02x", e->interrupt_source_override.irq_source, e->interrupt_source_override.global_system_interrupt);
 		}
 
 		iter = iter->next(iter);
@@ -107,9 +113,35 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 		lapic_addr = la->local_apic_address_override.address;
 	}
 
-	printf("APIC: local apic address is: 0x%08x\n", lapic_addr);
+	frame_t* lapic_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)lapic_addr);
 
-	memory_paging_add_page(lapic_addr, lapic_addr, MEMORY_PAGING_PAGE_TYPE_4K);
+	if(lapic_frames == NULL) {
+		PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of lapic 0x%016lx", lapic_addr);
+		frame_t tmp_lapic_frm = {lapic_addr, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+
+		if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &tmp_lapic_frm) != 0) {
+			PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of lapic 0x%016lx", lapic_addr);
+
+			return -1;
+		}
+
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr), &tmp_lapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr);
+
+		PRINTLOG(APIC, LOG_DEBUG, "lapic address mapped to 0x%016lx", lapic_addr);
+
+	} else if((lapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
+		PRINTLOG(APIC, LOG_TRACE, "frames of lapic 0x%016lx is 0x%lx 0x%lx", lapic_addr, lapic_frames->frame_address, lapic_frames->frame_count);
+
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr), lapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		lapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
+
+		lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr);
+	}
+
+	PRINTLOG(APIC, LOG_DEBUG, "local apic address is: 0x%08x", lapic_addr);
 
 	apic_register_spurious_interrupt_t* ar_si = (apic_register_spurious_interrupt_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT);
 	ar_si->vector = INTERRUPT_VECTOR_SPURIOUS;
@@ -117,12 +149,12 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 
 	apic_enabled = 1;
 
-	apic_init_timer();
-
-	return 0;
+	return apic_init_timer();
 }
 
-void apic_init_timer() {
+int8_t apic_init_timer() {
+	PRINTLOG(APIC, LOG_DEBUG, "timer init started", 0);
+
 	uint8_t timer_irq = 0;
 
 	iterator_t* iter = linkedlist_iterator_create(irq_remappings);
@@ -138,13 +170,24 @@ void apic_init_timer() {
 
 	iter->destroy(iter);
 
+	PRINTLOG(APIC, LOG_DEBUG, "pic timer irq is: 0x%02x", timer_irq);
+
 	time_timer_pit_set_hz(TIME_TIMER_PIT_HZ_FOR_1MS);
-	interrupt_irq_set_handler(timer_irq, &time_timer_pit_isr);
+
+	if(interrupt_irq_set_handler(timer_irq, &time_timer_pit_isr) != 0) {
+		PRINTLOG(APIC, LOG_ERROR, "cannot set pic timer irq", 0);
+
+		return -1;
+	}
+
 	apic_ioapic_setup_irq(timer_irq,
 	                      APIC_IOAPIC_INTERRUPT_ENABLED
 	                      | APIC_IOAPIC_DELIVERY_MODE_FIXED | APIC_IOAPIC_DELIVERY_STATUS_RELAX
 	                      | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
 	                      | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
+
+
+	PRINTLOG(APIC, LOG_DEBUG, "pic timer enabled", 0);
 
 
 	uint32_t* timer_divier = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_DIVIDER);
@@ -169,24 +212,61 @@ void apic_init_timer() {
 
 	*timer_init = total_inits / 10;
 
-	interrupt_irq_set_handler(0x0, &time_timer_apic_isr);
+	PRINTLOG(APIC, LOG_DEBUG, "apic timer configuration started", 0);
+
+	if(interrupt_irq_set_handler(0x0, &time_timer_apic_isr) != 0) {
+		PRINTLOG(APIC, LOG_ERROR, "cannot set apic timer irq", 0);
+
+		return -1;
+	}
 
 	*timer_lvt = APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20;
 
+	PRINTLOG(APIC, LOG_DEBUG, "apic timer initialized", 0);
 
 	apic_ioapic_disable_irq(timer_irq);
+	PRINTLOG(APIC, LOG_DEBUG, "pic timer disabled", 0);
 	time_timer_reset_tick_count();
 	time_timer_configure_spinsleep();
+
+	return 0;
 }
 
 uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
 	uint64_t ioapic_base = ioapic->ioapic.address;
 
+	PRINTLOG(IOAPIC, LOG_DEBUG, "address is 0x%08x", ioapic_base);
+
+
+	frame_t* ioapic_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)ioapic_base);
+
+	if(ioapic_frames == NULL) {
+		PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of ioapic 0x%016lx", ioapic_base);
+		frame_t tmp_ioapic_frm = {ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+
+		if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &tmp_ioapic_frm) != 0) {
+			PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of ioapic 0x%016lx", ioapic_base);
+
+			return -1;
+		}
+
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
+
+		PRINTLOG(APIC, LOG_DEBUG, "ioapic address mapped to 0x%016lx", ioapic_base);
+
+	} else if((ioapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
+		PRINTLOG(APIC, LOG_TRACE, "frames of ioapic 0x%016lx is 0x%lx 0x%lx", ioapic_base, ioapic_frames->frame_address, ioapic_frames->frame_count);
+
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+		ioapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
+
+		ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
+	}
+
 	ioapic_bases[ioapic_count++] = ioapic_base;
-
-	printf("IOAPIC: address is 0x%08x\n", ioapic_base);
-
-	memory_paging_add_page(ioapic_base, ioapic_base, MEMORY_PAGING_PAGE_TYPE_4K);
 
 	__volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_base;
 
@@ -195,7 +275,7 @@ uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
 
 	io_apic_r->selector = APIC_IOAPIC_REGISTER_VERSION;
 
-	printf("IOAPIC: version 0x%02x\n", io_apic_r->value & 0xFF);
+	PRINTLOG(IOAPIC, LOG_DEBUG, "version 0x%02x", io_apic_r->value & 0xFF);
 
 	uint8_t max_r_e = APIC_IOAPIC_MAX_REDIRECTION_ENTRY(io_apic_r->value);
 
@@ -206,7 +286,7 @@ uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
 		io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * i + 1;
 		io_apic_r->value = 0;
 
-		printf("IOAPIC: irq 0x%02x mapped to 0x%02x\n", i, intnum);
+		PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", i, intnum);
 	}
 
 	return max_r_e;
@@ -232,7 +312,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
 		io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq + 1;
 		io_apic_r->value = 0;
 
-		printf("IOAPIC: irq 0x%02x mapped to 0x%02x\n", irq, base_irq + irq);
+		PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", irq, base_irq + irq);
 
 		return 0;
 	}
@@ -262,7 +342,7 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
 			io_apic_r->value ^= disabled;
 		}
 
-		printf("IOAPIC: irq 0x%02x %s\n", irq, disabled == 0 ? "enabled" : "disabled");
+		PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x %s", irq, disabled == 0 ? "enabled" : "disabled");
 
 		return 0;
 	}

@@ -14,6 +14,9 @@ char_t* logging_module_names[] = {
 	"TASKING",
 	"EFI",
 	"PCI",
+	"APIC",
+	"IOAPIC",
+	"TIMER",
 };
 
 
@@ -43,4 +46,7 @@ uint8_t logging_module_levels[] = {
 	LOG_LEVEL_TASKING,
 	LOG_LEVEL_EFI,
 	LOG_LEVEL_PCI,
+	LOG_LEVEL_APIC,
+	LOG_LEVEL_IOAPIC,
+	LOG_LEVEL_TIMER,
 };
