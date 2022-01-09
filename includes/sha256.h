@@ -12,5 +12,6 @@ typedef void* sha256_ctx_t;
 sha256_ctx_t sha256_init();
 int8_t sha256_update(sha256_ctx_t ctx, const uint8_t* data, size_t len);
 uint8_t* sha256_final(sha256_ctx_t ctx);
+uint8_t* sha256_hash(uint8_t* data, size_t length);
 
 #endif

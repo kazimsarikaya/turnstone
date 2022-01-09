@@ -87,4 +87,15 @@ uint64_t byte_swap(uint64_t num, uint8_t bc);
 
 #define DIGIT_TO_HEX(r) (((r) < 10)?(r) + 48:(r) + 55)
 
+#define ROTLEFT(a, b, c) (((a) << (b)) | ((a) >> (c - (b))))
+#define ROTRIGHT(a, b, c) (((a) >> (b)) | ((a) << (c - (b))))
+#define ROTLEFT8(a, b)         ROTLEFT(a, b, 8)
+#define ROTRIGHT8(a, b)        ROTRIGHT(a, b, 8)
+#define ROTLEFT16(a, b)        ROTLEFT(a, b, 16)
+#define ROTRIGHT16(a, b)       ROTRIGHT(a, b, 16)
+#define ROTLEFT32(a, b)        ROTLEFT(a, b, 32)
+#define ROTRIGHT32(a, b)       ROTRIGHT(a, b, 32)
+#define ROTLEFT64(a, b)        ROTLEFT(a, b, 64)
+#define ROTRIGHT64(a, b)       ROTRIGHT(a, b, 64)
+
 #endif
