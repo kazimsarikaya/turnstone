@@ -59,14 +59,14 @@ typedef uint8_t boolean_t;
 #define float32_t float
 /*! alias for 64-bit precision floating point */
 #define float64_t double
+/*! alias for 64-bit precision floating point */
+#define float128_t long double
 
 /* 128 bit types */
 /*! alias for 128-bit signed integer */
 #define int128_t __int128
 /*! alias for 128-bit signed integer */
 #define uint128_t unsigned __int128
-/*! alias for 128-bit precision floating point */
-#define float128_t __float128
 
 #ifdef ___TESTMODE
 int printf(const char* format, ...);
