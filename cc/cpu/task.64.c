@@ -7,9 +7,12 @@
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
 #include <memory/paging.h>
+#include <memory/frame.h>
 #include <linkedlist.h>
 #include <time/timer.h>
 #include <video.h>
+#include <systeminfo.h>
+#include <linker.h>
 
 uint64_t task_id = 0;
 
@@ -29,6 +32,8 @@ task_t* task_get_current_task(){
 void task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
+	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started", 0);
+
 	uint64_t rsp;
 
 	__asm__ __volatile__ ("mov %%rsp, %0\n" : : "m" (rsp));
@@ -40,28 +45,49 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	size_t tmp_selector = (size_t)d_tss - (size_t)gdts;
 	uint16_t tss_selector = (uint16_t)tmp_selector;
 
-	printf("TASK: Info selector 0x%x\n",  tss_selector);
+	PRINTLOG(TASKING, LOG_TRACE, "tss selector 0x%lx",  tss_selector);
+
+
+
+	program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
+	uint64_t stack_size = kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_size;
+	uint64_t stack_top = kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_start;
+
+
+	uint64_t stack_bottom = stack_top - 9 * stack_size;
+
+	uint64_t frame_count = 9 * stack_size / FRAME_SIZE;
+
+	frame_t* stack_frames = NULL;
+
+	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+		PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%lx", frame_count);
+
+		return -1;
+	}
 
 	tss_t* tss = memory_malloc_ext(heap, sizeof(tss_t), 0x1000);
 
 	if(tss == NULL) {
+		PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for tss", 0);
+
 		return -1;
 	}
 
-	memory_paging_add_page(TASK_TSS_STACK_START, TASK_TSS_STACK_START, MEMORY_PAGING_PAGE_TYPE_2M);
+	memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
-	uint64_t kernel_rsp = TASK_TSS_STACK_START + TASK_TSS_STACK_STEP;
+	PRINTLOG(TASKING, LOG_TRACE, "for tasking frames 0x%lx with count 0x%lx mapped to 0x%lx",  stack_frames->frame_address, stack_frames->frame_count, stack_bottom);
 
-	tss->rsp0 = kernel_rsp + TASK_TSS_STACK_STEP;
-	tss->rsp1 = tss->rsp0  + TASK_TSS_STACK_STEP;
-	tss->rsp2 = tss->rsp1  + TASK_TSS_STACK_STEP;
-	tss->ist1 = tss->rsp2  + TASK_TSS_STACK_STEP;
-	tss->ist2 = tss->ist1  + TASK_TSS_STACK_STEP;
-	tss->ist3 = tss->ist2  + TASK_TSS_STACK_STEP;
-	tss->ist4 = tss->ist3  + TASK_TSS_STACK_STEP;
-	tss->ist5 = tss->ist4  + TASK_TSS_STACK_STEP;
-	tss->ist6 = tss->ist5  + TASK_TSS_STACK_STEP;
-	tss->ist7 = tss->ist6  + TASK_TSS_STACK_STEP;
+	tss->ist7 = stack_bottom + stack_size;
+	tss->ist6 = tss->ist7  + stack_size;
+	tss->ist5 = tss->ist6  + stack_size;
+	tss->ist4 = tss->ist5  + stack_size;
+	tss->ist3 = tss->ist4  + stack_size;
+	tss->ist2 = tss->ist3  + stack_size;
+	tss->ist1 = tss->ist2  + stack_size;
+	tss->rsp2 = tss->ist1  + stack_size;
+	tss->rsp1 = tss->rsp2  + stack_size;
+	tss->rsp0 = rsp;
 
 	task_queue = linkedlist_create_queue_with_heap(heap);
 	task_cleaner_queue = linkedlist_create_queue_with_heap(heap);
@@ -81,32 +107,16 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	uint32_t tss_limit = sizeof(tss_t) - 1;
 	DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
 
-	uint64_t* old_rbp = (uint64_t*)&__stack_top;
-	uint64_t* old_rsp = (uint64_t*)rsp;
-	uint64_t* new_rbp = (uint64_t*)kernel_rsp;
-	uint64_t* new_rsp = new_rbp - (old_rbp - old_rsp);
-	kernel_rsp = (uint64_t)new_rsp;
-
-	printf("TASK: move stack 0x%p-0x%p to 0x%p-0x%p\n", old_rsp, old_rbp, new_rsp, new_rbp);
-	printf("TASK: kernel task is at 0x%p\n", current_task);
-
-	while(old_rsp < old_rbp) {
-		*new_rsp = *old_rsp;
-		new_rsp++;
-		old_rsp++;
-	}
-
-	new_rbp[-2] = (uint64_t)new_rbp;
-
-	printf("TASK: Info task register loading with tss 0x%p limit 0x%x\n", tss, tss_limit);
+	PRINTLOG(TASKING, LOG_TRACE, "task register loading with tss 0x%p limit 0x%x", tss, tss_limit);
 
 	__asm__ __volatile__ (
 		"cli\n"
 		"ltr %0\n"
-		"mov %1, %%rsp\n"
 		"sti\n"
-		: : "r" (tss_selector), "m" (kernel_rsp)
+		: : "r" (tss_selector)
 		);
+
+	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended", 0);
 
 	return 0;
 }
@@ -257,11 +267,11 @@ void task_switch_task() {
 
 void task_end_task() {
 	cpu_cli();
-	printf("TASK: Debug ending task 0x%li\n", current_task->task_id);
+	PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%li", current_task->task_id);
 
 	linkedlist_queue_push(task_cleaner_queue, current_task);
 
-	printf("TASK: task 0x%li added to cleaning queue\n", current_task->task_id);
+	PRINTLOG(TASKING, LOG_TRACE, "task 0x%li added to cleaning queue", current_task->task_id);
 
 	current_task = NULL;
 
@@ -294,7 +304,7 @@ void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_poin
 	stack[-3] = (uint64_t)apic_eoi;
 	stack[-4] = 0xdeadc0de;
 
-	printf("TASK: scheduling new task 0x%lx 0x%p stack at 0x%lx-0x%lx\n", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
+	PRINTLOG(TASKING, LOG_TRACE, "scheduling new task 0x%lx 0x%p stack at 0x%lx-0x%lx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
 
 	linkedlist_stack_push(task_queue, new_task);
 
