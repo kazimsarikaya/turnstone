@@ -7,6 +7,11 @@
 .section .text.___kstart64
 ___kstart64:
   cli
+  mov $0xff, %al
+  out %al, $0xa1
+  out %al, $0x21
+  nop
+  nop
   mov %rcx, SYSTEM_INFO
   mov $0x0, %ax
   mov %ax, %ds
