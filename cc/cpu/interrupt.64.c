@@ -205,7 +205,8 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
 	cpu_cli();
-	printf("\nKERN: FATAL general protection error 0x%x at 0x%x:0x%x\n", errcode, frame->return_cs, frame->return_rip);
+	printf("\nKERN: FATAL general protection error 0x%x at 0x%x:0x%lx\n", errcode, frame->return_cs, frame->return_rip);
+	printf("KERN: FATAL return stack at 0x%x:0x%lx frm ptr 0x%lx\n", errcode, frame->return_ss, frame->return_rsp, frame);
 	cpu_hlt();
 }
 
