@@ -468,7 +468,7 @@ int8_t kmain64(size_t entry_point) {
 
 	PRINTLOG(KERNEL, LOG_INFO, "tasking initialized", 0);
 
-	time_timer_spinsleep(1000ULL * 1000ULL * 50000ULL);
+	time_timer_spinsleep(1000ULL * 1000ULL * 5000ULL);
 
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
