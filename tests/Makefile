@@ -2,7 +2,7 @@ HOSTOS=$(shell uname -s)
 
 CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu99 \
-	-Os -nostdlib -ffreestanding -c -m64 \
+	-O3 -nostdlib -ffreestanding -c -m64 \
 	-D___TESTMODE=1 -g \
 	-L/opt/local/lib/valgrind -I/opt/local/include/valgrind -lcoregrind-amd64-darwin -lvex-amd64-darwin
 

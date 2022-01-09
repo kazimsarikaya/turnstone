@@ -19,7 +19,7 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-CCXXFLAGS += -std=gnu99 -Os -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
+CCXXFLAGS += -std=gnu99 -O3 -nostdlib -ffreestanding -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone
 
