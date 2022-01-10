@@ -231,7 +231,9 @@ int8_t apic_init_timer() {
 	PRINTLOG(APIC, LOG_DEBUG, "apic timer initialized", 0);
 
 	apic_ioapic_disable_irq(timer_irq);
+	interrupt_irq_remove_handler(timer_irq, &time_timer_pit_isr);
 	PRINTLOG(APIC, LOG_DEBUG, "pic timer disabled", 0);
+
 	time_timer_reset_tick_count();
 	time_timer_configure_spinsleep();
 

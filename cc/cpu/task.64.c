@@ -29,7 +29,7 @@ task_t* task_get_current_task(){
 	return current_task;
 }
 
-void task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started", 0);
@@ -92,7 +92,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	task_queue = linkedlist_create_queue_with_heap(heap);
 	task_cleaner_queue = linkedlist_create_queue_with_heap(heap);
 
-	interrupt_irq_set_handler(0x60, task_task_switch_isr);
+	interrupt_irq_set_handler(0x60, &task_task_switch_isr);
 
 	current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 	current_task->heap = heap;
@@ -317,13 +317,15 @@ void task_yield() {
 	}
 }
 
-void task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
+int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
 	UNUSED(frame);
 	UNUSED(intnum);
 
 	task_switch_task();
 
 	cpu_sti();
+
+	return 0;
 }
 
 

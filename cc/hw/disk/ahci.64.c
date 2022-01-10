@@ -19,10 +19,12 @@ void ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id);
 int8_t ahci_error_recovery_ncq(ahci_hba_port_t* port, ahci_sata_disk_t* disk);
 int8_t ahci_read_log_ncq(ahci_hba_port_t* port, uint8_t from_dma);
 
-void ahci_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum);
 
-void ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 	UNUSED(frame);
+
+	boolean_t irq_handled = 0;
 
 	iterator_t* iter = linkedlist_iterator_create(sata_hbas);
 
@@ -38,6 +40,7 @@ void ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 				for(uint8_t i = 0; i < hba->disk_count; i++) {
 					if(is & 1) {
 						ahci_handle_disk_isr(hba, hba->disk_base + i);
+						irq_handled = 1;
 					}
 
 					is >>= 1;
@@ -45,6 +48,7 @@ void ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 
 			} else {
 				ahci_handle_disk_isr(hba, hba->disk_base + intnum - hba->intnum_base);
+				irq_handled = 1;
 			}
 
 			break;
@@ -55,8 +59,14 @@ void ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 
 	iter->destroy(iter);
 
-	apic_eoi();
-	cpu_sti();
+	if(irq_handled) {
+		apic_eoi();
+		cpu_sti();
+
+		return 0;
+	}
+
+	return -1;
 }
 
 void ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id) {
@@ -282,7 +292,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ah
 
 			for(uint8_t i = 0; i < msg_count; i++) {
 				uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
-				interrupt_irq_set_handler(isrnum, ahci_isr);
+				interrupt_irq_set_handler(isrnum, &ahci_isr);
 				printf("AHCI: Info interrupt 0x%x registered as isr 0x%x for ahci_isr\n", intnum, isrnum);
 				intnum = interrupt_get_next_empty_interrupt();
 			}

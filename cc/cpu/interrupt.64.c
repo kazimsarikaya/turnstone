@@ -9,12 +9,16 @@
 #include <memory.h>
 #include <apic.h>
 
-
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
 
-interrupt_irq* interrupt_irqs = NULL;
+typedef struct interrupt_irq_list_item {
+	interrupt_irq irq;
+	struct interrupt_irq_list_item* next;
+} interrupt_irq_list_item_t;
+
+interrupt_irq_list_item_t** interrupt_irqs = NULL;
 uint8_t next_empty_interrupt = 0;
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
@@ -96,7 +100,7 @@ int8_t interrupt_init() {
 
 	interrupt_register_dummy_handlers(idt_table); // 32-255 dummy handlers
 
-	interrupt_irqs = memory_malloc(sizeof(interrupt_irq) * (255 - 32));
+	interrupt_irqs = memory_malloc(sizeof(interrupt_irq_list_item_t*) * (255 - 32));
 
 	if(interrupt_irqs == NULL) {
 		return -1;
@@ -115,12 +119,64 @@ uint8_t interrupt_get_next_empty_interrupt(){
 	return res;
 }
 
+int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq) {
+	if(interrupt_irqs == NULL) {
+		return -1;
+	}
+
+	cpu_cli();
+
+	if(interrupt_irqs[irqnum]) {
+		interrupt_irq_list_item_t* item = interrupt_irqs[irqnum];
+		interrupt_irq_list_item_t* prev = NULL;
+
+		while(item && item->irq != irq) {
+			prev = item;
+			item = item->next;
+		}
+
+		if(item) {
+			if(prev) {
+				prev->next = item->next;
+			} else {
+				interrupt_irqs[irqnum] = NULL;
+			}
+
+			memory_free(item);
+		}
+
+	} else {
+		return -1;
+	}
+
+	cpu_sti();
+
+	return 0;
+}
+
 int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
 	if(interrupt_irqs == NULL) {
 		return -1;
 	}
 
-	interrupt_irqs[irqnum] = irq;
+	cpu_cli();
+
+	if(interrupt_irqs[irqnum] == NULL) {
+		interrupt_irqs[irqnum] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+		interrupt_irqs[irqnum]->irq = irq;
+
+	} else {
+		interrupt_irq_list_item_t* item = interrupt_irqs[irqnum];
+
+		while(item->next) {
+			item = item->next;
+		}
+
+		item->next = memory_malloc(sizeof(interrupt_irq_list_item_t));
+		item->next->irq = irq;
+	}
+
+	cpu_sti();
 
 	return 0;
 }
@@ -132,9 +188,22 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
 	if(intnum >= 32 && interrupt_irqs != NULL) {
 		intnum -= 32;
 		if(interrupt_irqs[intnum] != NULL) {
-			interrupt_irqs[intnum](frame, intnum);
 
-			return;
+			interrupt_irq_list_item_t* item = interrupt_irqs[intnum];
+
+			while(item) {
+				interrupt_irq irq = item->irq;
+
+				if(irq && irq(frame, intnum) == 0) {
+					return;
+				}
+
+				item = item->next;
+			}
+
+			PRINTLOG(KERNEL, LOG_FATAL, "cannot find shared irq for 0x%02x", intnum);
+		} else {
+			PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
 		}
 	}
 
