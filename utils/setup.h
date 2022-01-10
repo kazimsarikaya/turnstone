@@ -5,6 +5,7 @@
 #include <logging.h>
 #include <memory.h>
 #include "os_io.h"
+#include <time.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -31,6 +32,10 @@ void cpu_sti(){
 }
 
 void  apic_eoi(){
+}
+
+time_t rtc_get_time(){
+	return time(NULL);
 }
 
 uint8_t mem_area[RAMSIZE] = {0};
