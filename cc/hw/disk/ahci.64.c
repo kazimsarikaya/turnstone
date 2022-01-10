@@ -40,7 +40,6 @@ int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 				for(uint8_t i = 0; i < hba->disk_count; i++) {
 					if(is & 1) {
 						ahci_handle_disk_isr(hba, hba->disk_base + i);
-						irq_handled = 1;
 					}
 
 					is >>= 1;
@@ -48,8 +47,9 @@ int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 
 			} else {
 				ahci_handle_disk_isr(hba, hba->disk_base + intnum - hba->intnum_base);
-				irq_handled = 1;
 			}
+
+			irq_handled = 1;
 
 			break;
 		}
