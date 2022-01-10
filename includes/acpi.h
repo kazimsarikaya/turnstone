@@ -210,5 +210,6 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);
 
 int8_t acpi_reset();
 int8_t acpi_poweroff();
+int8_t acpi_setup_events();
 
 #endif
