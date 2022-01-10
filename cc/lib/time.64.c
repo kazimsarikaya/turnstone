@@ -1,6 +1,31 @@
 #include <time.h>
 #include <memory.h>
 
+
+uint64_t TIME_EPOCH = 0;
+
+#if ___TESTMODE != 1
+
+time_t time(time_t* t){
+	if(t) {
+		*t = (time_t)(TIME_EPOCH / 1000000);
+		return *t;
+	}
+
+	return (time_t)(TIME_EPOCH / 1000000);
+}
+
+time_t time_ns(time_t* t) {
+	if(t) {
+		*t = (time_t)(TIME_EPOCH);
+		return *t;
+	}
+
+	return (time_t)(TIME_EPOCH);
+}
+
+#endif
+
 timeparsed_t* parse_time(timeparsed_t* tp, time_t t);
 
 int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
@@ -96,10 +121,6 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
 
 	return tp;
 }
-
-
-timeparsed_t* time_to_timeparsed(time_t t);
-
 
 time_t timeparsed_to_time(timeparsed_t* tp) {
 	time_t t;

@@ -4,6 +4,8 @@
 #include <cpu/task.h>
 #include <cpu.h>
 #include <apic.h>
+#include <device/rtc.h>
+#include <time.h>
 
 #define TIME_TIMER_PIT_BASE_HZ       1193181
 #define TIME_TIMER_PIT_COMMAND_PORT  0x43
@@ -57,8 +59,14 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 		task_switch_task();
 	}
 
+	if(TIME_EPOCH == 0 || (time_timer_tick_count % (1000 * 60 * 15)) == 0) {
+		TIME_EPOCH = rtc_get_time() * 1000000;
+	} else {
+		TIME_EPOCH += 1000;
+	}
+
 	if((time_timer_tick_count % 1000) == 0) {
-		PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%lx", time_timer_tick_count);
+		PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%lx epoch %li", time_timer_tick_count, TIME_EPOCH);
 	}
 
 	apic_eoi();

@@ -14,6 +14,8 @@
 
 typedef uint64_t time_t;
 
+extern uint64_t TIME_EPOCH;
+
 typedef struct {
 	uint16_t year;
 	uint8_t month;
@@ -24,6 +26,7 @@ typedef struct {
 } timeparsed_t;
 
 time_t time(time_t* t);
+time_t time_ns(time_t* t);
 
 timeparsed_t* timeparsed(timeparsed_t* tp);
 
