@@ -6,12 +6,13 @@
 #include <ports.h>
 #include <video.h>
 
-void acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 	UNUSED(frame);
 	UNUSED(intnum);
 
 	boolean_t os_poweroff = 0;
 	boolean_t os_reset = 0;
+	boolean_t irq_handled = 0;
 
 	if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address) {
 		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%lx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
@@ -40,6 +41,7 @@ void acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1a", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space);
 		}
 
+		irq_handled = 1;
 	}
 
 	if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address) {
@@ -69,6 +71,7 @@ void acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1b", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space);
 		}
 
+		irq_handled = 1;
 	}
 
 	if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address) {
@@ -86,6 +89,8 @@ void acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 		} else {
 			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe0", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space);
 		}
+
+		irq_handled = 1;
 	}
 
 	if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address) {
@@ -103,6 +108,8 @@ void acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 		} else {
 			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe1", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space);
 		}
+
+		irq_handled = 1;
 	}
 
 	if(os_poweroff) {
@@ -115,8 +122,14 @@ void acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 		cpu_hlt();
 	}
 
-	apic_eoi();
-	cpu_sti();
+	if(irq_handled) {
+		apic_eoi();
+		cpu_sti();
+
+		return 0;
+	}
+
+	return -1;
 }
 
 

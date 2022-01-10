@@ -3,10 +3,12 @@
 #include <cpu.h>
 #include <apic.h>
 
-void dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
 	UNUSED(frame);
 	printf("KEYBOARD: Info keyboard event occured at %i\n", intnum);
 
 	apic_eoi();
 	cpu_sti();
+
+	return 0;
 }
