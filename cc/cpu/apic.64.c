@@ -152,23 +152,29 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 	return apic_init_timer();
 }
 
-int8_t apic_init_timer() {
-	PRINTLOG(APIC, LOG_DEBUG, "timer init started", 0);
-
-	uint8_t timer_irq = 0;
-
+uint8_t apic_get_irq_override(uint8_t old_irq){
 	iterator_t* iter = linkedlist_iterator_create(irq_remappings);
 
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_table_madt_entry_t* e = iter->get_item(iter);
 
-		if(e->interrupt_source_override.irq_source == timer_irq) {
-			timer_irq = e->interrupt_source_override.global_system_interrupt;
+		if(e->interrupt_source_override.irq_source == old_irq) {
+			old_irq = e->interrupt_source_override.global_system_interrupt;
 			break;
 		}
+
+		iter = iter->next(iter);
 	}
 
 	iter->destroy(iter);
+
+	return old_irq;
+}
+
+int8_t apic_init_timer() {
+	PRINTLOG(APIC, LOG_DEBUG, "timer init started", 0);
+
+	uint8_t timer_irq = apic_get_irq_override(0);
 
 	PRINTLOG(APIC, LOG_DEBUG, "pic timer irq is: 0x%02x", timer_irq);
 

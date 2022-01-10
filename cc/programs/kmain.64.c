@@ -163,6 +163,11 @@ int8_t kmain64(size_t entry_point) {
 		cpu_hlt();
 	}
 
+	if(acpi_setup_events() != 0) {
+		PRINTLOG(KERNEL, LOG_FATAL, "cannot setup acpi events", 0);
+		cpu_hlt();
+	}
+
 	if(task_init_tasking_ext(heap) != 0) {
 		PRINTLOG(KERNEL, LOG_FATAL, "cannot init tasking. Halting...", 0);
 		cpu_hlt();
@@ -170,13 +175,9 @@ int8_t kmain64(size_t entry_point) {
 
 	PRINTLOG(KERNEL, LOG_INFO, "tasking initialized", 0);
 
-	time_timer_spinsleep(1000ULL * 1000ULL * 5000ULL);
-
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
-	acpi_poweroff();
-
-	cpu_hlt();
+	return 0;
 
 
 	return kmain64_init(heap);

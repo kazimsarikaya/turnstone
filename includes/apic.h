@@ -76,6 +76,8 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled);
 #define apic_ioapic_enable_irq(irq) apic_ioapic_switch_irq(irq, APIC_IOAPIC_INTERRUPT_ENABLED)
 #define apic_ioapic_disable_irq(irq) apic_ioapic_switch_irq(irq, APIC_IOAPIC_INTERRUPT_DISABLED)
 
+uint8_t apic_get_irq_override(uint8_t old_irq);
+
 void  apic_eoi();
 
 #endif
