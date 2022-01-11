@@ -225,15 +225,14 @@ void video_graphics_print(char_t* string) {
 				}
 			}
 
-
-			if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
-				video_graphics_scroll();
-				cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
-			}
-
 			i++;
 
 			continue;
+		}
+
+		if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
+			video_graphics_scroll();
+			cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
 		}
 
 		if(video_font_unicode_table) {
