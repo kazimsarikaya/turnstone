@@ -125,7 +125,7 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 			return -1;
 		}
 
-		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr), &tmp_lapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_lapic_frm.frame_address), &tmp_lapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
 		lapic_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr);
 
@@ -134,7 +134,7 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 	} else if((lapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
 		PRINTLOG(APIC, LOG_TRACE, "frames of lapic 0x%016lx is 0x%lx 0x%lx", lapic_addr, lapic_frames->frame_address, lapic_frames->frame_count);
 
-		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_addr), lapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(lapic_frames->frame_address), lapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
 		lapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
@@ -258,7 +258,7 @@ uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
 			return -1;
 		}
 
-		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(tmp_ioapic_frm.frame_address), &tmp_ioapic_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
 		ioapic_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base);
 
@@ -267,7 +267,7 @@ uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
 	} else if((ioapic_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
 		PRINTLOG(APIC, LOG_TRACE, "frames of ioapic 0x%016lx is 0x%lx 0x%lx", ioapic_base, ioapic_frames->frame_address, ioapic_frames->frame_count);
 
-		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_base), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ioapic_frames->frame_address), ioapic_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
 		ioapic_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
