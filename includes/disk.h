@@ -16,6 +16,7 @@ typedef struct disk {
 	uint64_t (* get_disk_size)(struct disk* d);
 	int8_t (* write)(struct disk* d, uint64_t lba, uint64_t count, uint8_t* data);
 	int8_t (* read)(struct disk* d, uint64_t lba, uint64_t count, uint8_t** data);
+	int8_t (* flush)(struct disk* d);
 	int8_t (* close)(struct disk* d);
 	uint8_t (* add_partition)(struct disk* d, disk_partition_context_t* part_ctx);
 	int8_t (* del_partition)(struct disk* d, uint8_t partno);

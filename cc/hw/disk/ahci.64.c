@@ -23,6 +23,20 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk);
 
 int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum);
 
+ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
+	ahci_sata_disk_t tmp_disk;
+	tmp_disk.disk_id = disk_id;
+	uint64_t pos;
+
+	if(linkedlist_get_position(sata_ports, &tmp_disk, &pos) != 0) {
+		return NULL;
+	}
+
+	return linkedlist_get_data_at_position(sata_ports, pos);
+}
+
+
+
 int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 	UNUSED(frame);
 
