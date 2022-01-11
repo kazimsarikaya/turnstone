@@ -56,4 +56,8 @@ typedef struct {
 cpu_reg_cr4_t cpu_read_cr4();
 void cpu_write_cr4(cpu_reg_cr4_t cr4);
 
+cpu_reg_cr0_t cpu_read_cr0();
+void cpu_write_cr0(cpu_reg_cr0_t cr0);
+void cpu_toggle_cr0_wp();
+
 #endif
