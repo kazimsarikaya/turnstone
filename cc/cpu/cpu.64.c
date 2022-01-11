@@ -37,3 +37,24 @@ void cpu_write_cr4(cpu_reg_cr4_t cr4) {
 	__asm__ __volatile__ ("mov %0, %%cr4\n"
 	                      : : "r" (cr4));
 }
+
+
+cpu_reg_cr0_t cpu_read_cr0() {
+	cpu_reg_cr0_t cr0;
+	__asm__ __volatile__ ("mov %%cr0, %0\n"
+	                      : "=r" (cr0));
+	return cr0;
+}
+
+void cpu_write_cr0(cpu_reg_cr0_t cr0) {
+	__asm__ __volatile__ ("mov %0, %%cr0\n"
+	                      : : "r" (cr0));
+}
+
+void cpu_toggle_cr0_wp() {
+	cpu_reg_cr0_t cr0 = cpu_read_cr0();
+
+	cr0.write_protect = ~cr0.write_protect;
+
+	cpu_write_cr0(cr0);
+}
