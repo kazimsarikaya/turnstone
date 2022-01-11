@@ -888,7 +888,7 @@ int8_t memory_paging_destroy_pagetable_ext(memory_heap_t* heap, memory_page_tabl
 
 #endif
 
-int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_address){
+int8_t memory_paging_get_physical_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* physical_address){
 	if(p4 == NULL) {
 		p4 = memory_paging_switch_table(NULL);
 	}
@@ -922,7 +922,9 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 		if(t_p3->pages[p3_idx].hugepage == 1) {
 			size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 			size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
-			*frame_address = (t_p3->pages[p3_idx].physical_address | (p2_idx << 12) | p1_idx) << 12;
+
+			*physical_address = (t_p3->pages[p3_idx].physical_address | (p2_idx << 12) | p1_idx) << 12 | (virtual_address & ((1ULL << 30) - 1));
+
 		} else {
 			t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
 			t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
@@ -939,7 +941,9 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 
 			if(t_p2->pages[p2_idx].hugepage == 1) {
 				size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
-				*frame_address = (t_p2->pages[p2_idx].physical_address | p1_idx) << 12;
+
+				*physical_address = (t_p2->pages[p2_idx].physical_address | p1_idx) << 12 | (virtual_address & ((1ULL << 21) - 1));
+
 			} else {
 				t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
 				t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
@@ -954,7 +958,7 @@ int8_t memory_paging_get_frame_address_ext(memory_page_table_t* p4, uint64_t vir
 					return -1;
 				}
 
-				*frame_address = t_p1->pages[p1_idx].physical_address << 12;
+				*physical_address = t_p1->pages[p1_idx].physical_address << 12 | (virtual_address & ((1ULL << 12) - 1));
 			}
 		}
 	}
