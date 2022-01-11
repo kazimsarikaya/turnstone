@@ -112,10 +112,13 @@ int8_t kmain64(size_t entry_point) {
 		PRINTLOG(KERNEL, LOG_PANIC, "Can not build default page table. Halting", 0);
 		cpu_hlt();
 	} else {
-		PRINTLOG(KERNEL, LOG_DEBUG, "Default page table builded at 0x%p", p4);
+		PRINTLOG(KERNEL, LOG_DEBUG, "Default page table builded at 0x%lp", p4);
 		memory_paging_switch_table(p4);
+
+		SYSTEM_INFO->my_page_table = 1;
+
 		video_refresh_frame_buffer_address();
-		PRINTLOG(KERNEL, LOG_DEBUG, "Default page table switched to 0x%08p", p4);
+		PRINTLOG(KERNEL, LOG_DEBUG, "Default page table switched to 0x%lp", p4);
 	}
 
 	if(SYSTEM_INFO->remapped == 0) {

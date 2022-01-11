@@ -33,6 +33,7 @@ typedef struct system_info {
 	uint64_t kernel_start;
 	uint64_t kernel_4k_frame_count;
 	boolean_t remapped;
+	boolean_t my_page_table;
 	uint8_t* reserved_mmap_data;
 	uint64_t reserved_mmap_size;
 } system_info_t; ///< struct short hand

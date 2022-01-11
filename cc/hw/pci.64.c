@@ -208,7 +208,7 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
 						return NULL;
 					} else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
 						PRINTLOG(PCI, LOG_DEBUG, "frames of mmio 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
-						memory_paging_add_va_for_frame(pci_mmio_addr_va, pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+						memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 						pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 					}
 
@@ -281,13 +281,13 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 				frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_fa);
 
 				if(pci_frames == NULL) {
-					PRINTLOG(PCI, LOG_ERROR, "cannot find frames of table 0x%016lx", pci_mmio_addr_fa);
+					PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016lx", pci_mmio_addr_fa);
 					iter_metadata->end_of_iter = 0; //end iter
 
 					return iterator;
 				} else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-					PRINTLOG(PCI, LOG_DEBUG, "frames of table 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
-					memory_paging_add_va_for_frame(pci_mmio_addr_va, pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+					PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
+					memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 					pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 				}
 
@@ -311,13 +311,13 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 								frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_f_fa);
 
 								if(pci_frames == NULL) {
-									PRINTLOG(PCI, LOG_ERROR, "cannot find frames of table 0x%016lx", pci_mmio_addr_fa);
+									PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016lx", pci_mmio_addr_fa);
 									iter_metadata->end_of_iter = 0; //end iter
 
 									return iterator;
 								} else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-									PRINTLOG(PCI, LOG_DEBUG, "frames of table 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_f_fa, pci_frames->frame_address, pci_frames->frame_count);
-									memory_paging_add_va_for_frame(pci_mmio_addr_f_va, pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+									PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_f_fa, pci_frames->frame_address, pci_frames->frame_count);
+									memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 									pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 								}
 

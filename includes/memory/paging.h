@@ -154,7 +154,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 /*! gets p1 index of virtual address at long mode */
 #define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & 0x1FF)
 
-#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((64ULL << 40) | (uint64_t)fa))
+#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((64ULL << 40) | (uint64_t)(fa)))
+#define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(va)  ((typeof(va))(((64ULL << 40 ) - 1) & (uint64_t)(va)))
 
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
 #define memory_paging_add_va_for_frame(vas, f, t) memory_paging_add_va_for_frame_ext(NULL, vas, f, t)

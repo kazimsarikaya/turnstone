@@ -188,7 +188,9 @@ acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
 
 	PRINTLOG(ACPI, LOG_DEBUG, "acpi area frames 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
 
-	if(memory_paging_add_va_for_frame(acpi_frames_vas, acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+	if(((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) &&
+	   memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+		acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 		PRINTLOG(ACPI, LOG_ERROR, "cannot add page mapping for acpi area 0x%016lx->0x%016lx 0x%08x", acpi_frames_vas, acpi_frames->frame_address, acpi_frames->frame_count);
 		return NULL;
 	}
@@ -258,16 +260,17 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 
 			if(acpi_frames == NULL) {
 				PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%016lx", table_addr);
-			} else {
+			} else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
 				PRINTLOG(ACPI, LOG_TRACE, "frames of table 0x%016lx is 0x%lx 0x%lx", table_addr, acpi_frames->frame_address, acpi_frames->frame_count);
-				memory_paging_add_va_for_frame((uint64_t)res, acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+				memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+				acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 				char_t* sign = strndup(res->signature, 4);
 				PRINTLOG(ACPI, LOG_TRACE, "table name %s", sign);
 				memory_free(sign);
 			}
 
 		}
-	} else if (xrsdp_desc->rsdp.revision == 2) {
+	} else if (xrsdp_desc->rsdp.revision >= 2) {
 		acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdp_desc->xrsdt);
 
 		size_t table_count = (xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
@@ -283,9 +286,9 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 
 			if(acpi_frames == NULL) {
 				PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%016lx", xrsdt->acpi_sdt_header_ptrs[i]);
-			} else {
+			} else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
 				PRINTLOG(ACPI, LOG_TRACE, "frames of table 0x%016lx is 0x%lx 0x%lx", xrsdt->acpi_sdt_header_ptrs[i], acpi_frames->frame_address, acpi_frames->frame_count);
-				memory_paging_add_va_for_frame((uint64_t)res, acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+				memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 				acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 				char_t* sign = strndup(res->signature, 4);
 				PRINTLOG(ACPI, LOG_TRACE, "table name %s", sign);
@@ -308,15 +311,14 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 		dsdt_fa = fadt->dsdt_address_32bit;
 	}
 
-	uint64_t dsdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dsdt_fa);
-
 	frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)dsdt_fa);
 
 	if(acpi_frames == NULL) {
 		PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of  dsdt table", 0);
-	} else {
+	} else if((acpi_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
 		PRINTLOG(ACPI, LOG_TRACE, "frames of dsdt table is 0x%lx 0x%lx", acpi_frames->frame_address, acpi_frames->frame_count);
-		memory_paging_add_va_for_frame(dsdt_va, acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(acpi_frames->frame_address), acpi_frames, MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		acpi_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 	}
 
 
