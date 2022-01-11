@@ -524,7 +524,7 @@ int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
 	while(iter->end_of_iterator(iter) != 0) {
 		frame_t* f = (frame_t*)iter->get_item(iter);
 
-		if(f->frame_attributes & FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY) {
+		if((f->frame_attributes & FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY) && !(f->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED)) {
 			linkedlist_sortedlist_insert(frms, f);
 		}
 
