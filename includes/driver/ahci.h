@@ -9,6 +9,8 @@
 #include <types.h>
 #include <memory.h>
 #include <linkedlist.h>
+#include <cpu/sync.h>
+#include <future.h>
 
 #define AHCI_SATA_SIG_ATA    0x00000101  // SATA drive
 #define AHCI_SATA_SIG_ATAPI  0xEB140101  // SATAPI drive
@@ -241,7 +243,8 @@ typedef volatile struct {
 	uint32_t command_issue;               ///< 0x38, command issue
 	uint32_t sata_notification;           ///< 0x3C, SATA notification (SCR4:SNotification)
 	uint32_t fis_based_switch_control;    ///< 0x40, FIS-based switch control
-	uint32_t reserved1[11];               ///< 0x44 ~ 0x6F, Reserved
+	uint32_t device_sleep;                ///< 0x44, device sleep
+	uint32_t reserved1[10];               ///< 0x48 ~ 0x6F, Reserved
 	uint32_t vendor[4];                   ///< 0x70 ~ 0x7F, vendor specific
 } __attribute((packed)) ahci_hba_port_t;
 
@@ -259,7 +262,7 @@ typedef volatile struct {
 	uint32_t bios_os_handoff_control_and_status;    ///< 0x28, BIOS/OS handoff control and status
 	uint8_t reserved[0xA0 - 0x2C];                  ///< reserved
 	uint8_t vendor[0x100 - 0xA0];                   ///< vendor defined
-	ahci_hba_port_t ports[1];                       ///< 1 ~ 32
+	ahci_hba_port_t ports[0];                       ///< 1 ~ 32
 } __attribute((packed)) ahci_hba_mem_t;
 
 typedef volatile struct {
@@ -339,6 +342,11 @@ typedef struct {
 	uint16_t queue_depth;
 	ahci_ata_logging_t logging;
 	ahci_ata_smart_t smart_status;
+	uint8_t command_count;
+	lock_t disk_lock;
+	uint32_t acquired_slots;
+	uint32_t current_commands;
+	lock_t future_locks[32];
 }ahci_sata_disk_t;
 
 typedef struct {
@@ -350,10 +358,10 @@ typedef struct {
 } ahci_hba_t;
 
 
-int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ahci_base);
+int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices);
 int8_t ahci_identify(uint64_t disk_id);
-int8_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
-int8_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
-int8_t ahci_flush(uint64_t disk_id);
+future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
+future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
+future_t ahci_flush(uint64_t disk_id);
 
 #endif

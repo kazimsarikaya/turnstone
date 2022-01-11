@@ -19,6 +19,7 @@ typedef enum {
 	APIC,
 	IOAPIC,
 	TIMER,
+	AHCI,
 } logging_modules_t;
 
 typedef enum {
@@ -98,6 +99,10 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_TIMER
 #define LOG_LEVEL_TIMER LOG_DEBUG
+#endif
+
+#ifndef LOG_LEVEL_AHCI
+#define LOG_LEVEL_AHCI LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

@@ -17,6 +17,7 @@ char_t* logging_module_names[] = {
 	"APIC",
 	"IOAPIC",
 	"TIMER",
+	"AHCI",
 };
 
 
@@ -49,4 +50,5 @@ uint8_t logging_module_levels[] = {
 	LOG_LEVEL_APIC,
 	LOG_LEVEL_IOAPIC,
 	LOG_LEVEL_TIMER,
+	LOG_LEVEL_AHCI,
 };

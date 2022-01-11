@@ -2,22 +2,24 @@
 #include <video.h>
 #include <pci.h>
 #include <memory/paging.h>
+#include <memory/frame.h>
 #include <cpu/interrupt.h>
 #include <apic.h>
 #include <cpu.h>
 #include <time/timer.h>
+#include <utils.h>
 
 linkedlist_t sata_ports = NULL;
 linkedlist_t sata_hbas = NULL;
 
 ahci_device_type_t ahci_check_type(ahci_hba_port_t* port);
-int8_t ahci_find_command_slot(ahci_hba_port_t* port, int8_t nr_cmd_slots);
+int8_t ahci_find_command_slot(ahci_sata_disk_t* disk);
 void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slots);
 void ahci_port_start_cmd(ahci_hba_port_t* port);
 void ahci_port_stop_cmd(ahci_hba_port_t* port);
 void ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id);
-int8_t ahci_error_recovery_ncq(ahci_hba_port_t* port, ahci_sata_disk_t* disk);
-int8_t ahci_read_log_ncq(ahci_hba_port_t* port, uint8_t from_dma);
+int8_t ahci_error_recovery_ncq(ahci_sata_disk_t* disk);
+int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk);
 
 int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum);
 
@@ -74,12 +76,31 @@ void ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id) {
 	ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-	printf("AHCI: Info interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x\n",
-	       port->interrupt_status, port->command_and_status, port->sata_active, port->sata_error, port->command_issue, port->task_file_data);
+	PRINTLOG(AHCI, LOG_TRACE, "interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x",
+	         port->interrupt_status, port->command_and_status, port->sata_active, port->sata_error, port->command_issue, port->task_file_data);
+
+	uint32_t finished_commands = disk->current_commands ^ port->command_issue;
+
+	for(uint32_t i = 0; i < disk->command_count; i++) {
+		if(finished_commands & 1) {
+			PRINTLOG(AHCI, LOG_TRACE, "command %i finished for disk %i", i, disk_id);
+
+			disk->current_commands ^= (1 << i);
+			disk->acquired_slots ^= (1 << i);
+
+			if(disk->future_locks[i]) {
+				PRINTLOG(AHCI, LOG_TRACE, "releasing future lock for command %i for disk %i", i, disk_id);
+				lock_release(disk->future_locks[i]);
+				disk->future_locks[i] = NULL;
+			}
+		}
+
+		finished_commands >>= 1;
+	}
 
 	if(port->task_file_data & 1) {
 		if(port->sata_active) {
-			ahci_error_recovery_ncq(port, disk);
+			ahci_error_recovery_ncq(disk);
 		}
 	}
 
@@ -87,7 +108,30 @@ void ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id) {
 	hba_mem->interrupt_status = 1;
 }
 
-int8_t ahci_error_recovery_ncq(ahci_hba_port_t* port, ahci_sata_disk_t* disk){
+int8_t ahci_port_comreset(ahci_hba_port_t* port){
+	PRINTLOG(AHCI, LOG_TRACE, "comreset started 0x%lx 0x%lx", port->sata_control, port->sata_status);
+
+	port->sata_control |= 1;
+
+	time_timer_spinsleep(1000 * 1000);
+
+	port->sata_control &= ~1;
+
+	uint8_t try_cnt = 16;
+
+	while((port->sata_status & 0xF) != 0x3 && try_cnt--) {
+		time_timer_spinsleep(1000 * 1000 * 50);
+	}
+
+	port->sata_error = (uint32_t)-1;
+
+	PRINTLOG(AHCI, LOG_TRACE, "comreset ended", 0);
+
+	return 0;
+}
+
+int8_t ahci_error_recovery_ncq(ahci_sata_disk_t* disk){
+	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 	port->command_and_status &= ~AHCI_HBA_PxCMD_ST;
 
 	while(1) {
@@ -107,38 +151,35 @@ int8_t ahci_error_recovery_ncq(ahci_hba_port_t* port, ahci_sata_disk_t* disk){
 		port->interrupt_enable = 0;
 		port->interrupt_status = (uint32_t)-1;
 
-		ahci_read_log_ncq(port, disk->logging.dma_ext_is_log_ext);
+		ahci_read_log_ncq(disk);
 
 		port->interrupt_status = (uint32_t)-1;
 		port->interrupt_enable = (uint32_t)-1;
 	}
 
 	if(port->sata_active) {
-		printf("AHCI: Warning force comreset\n");
-		port->sata_control |= 1;
-		time_timer_spinsleep(1000);
-		port->sata_control &= ~1;
-		while((port->sata_status & 0xF) != 0x3);
-		port->sata_error = (uint32_t)-1;
+		PRINTLOG(AHCI, LOG_WARNING, "force comreset", 0);
+		ahci_port_comreset(port);
 	}
 
 	return 0;
 }
 
-int8_t ahci_read_log_ncq(ahci_hba_port_t* port, uint8_t from_dma) {
-
+int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
+	uint8_t from_dma = disk->logging.dma_ext_is_log_ext;
 	ahci_ata_ncq_error_log_t error_log;
+	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-	int8_t slot = ahci_find_command_slot(port, 32);
+	int8_t slot = ahci_find_command_slot(disk);
 
 	if(slot == -1) {
-		printf("AHCI: Fatal cannot find empty command slot\n");
+		PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot", 0);
 		return -1;
 	}
 
-	printf("slot %i\n", slot);
+	PRINTLOG(AHCI, LOG_TRACE, "slot %i", slot);
 
-	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)port->command_list_base_address;
+	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 	cmd_hdr += slot;
 
 	cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -146,13 +187,22 @@ int8_t ahci_read_log_ncq(ahci_hba_port_t* port, uint8_t from_dma) {
 	cmd_hdr->prdt_length = 1;
 	cmd_hdr->clear_busy = 1;
 
-	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)cmd_hdr->prdt_base_address;
+	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
 	memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
-	cmd_table->prdt_entry[0].data_base_address = (uint64_t)&error_log;
-	cmd_table->prdt_entry[0].data_byte_count = 511;
+	uint64_t el_phy_addr = 0;
 
-	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)&cmd_table->command_fis;
+	if(memory_paging_get_physical_address((uint64_t)&error_log, &el_phy_addr) != 0) {
+		PRINTLOG(AHCI, LOG_ERROR, "cannot get physical address of error log 0x%lx", &error_log);
+		disk->acquired_slots ^= (1 << slot);
+
+		return -1;
+	}
+
+	cmd_table->prdt_entry[0].data_base_address = el_phy_addr;
+	cmd_table->prdt_entry[0].data_byte_count = sizeof(ahci_ata_ncq_error_log_t) - 1;
+
+	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
 	memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
 	fis->fis_type = AHCI_FIS_TYPE_REG_H2D;
@@ -179,21 +229,25 @@ int8_t ahci_read_log_ncq(ahci_hba_port_t* port, uint8_t from_dma) {
 		}
 
 		if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
-			printf("AHCI: Fatal read ncq log error is 0x%x tfd 0x%x err 0x%x\n", port->interrupt_status, port->task_file_data, port->sata_error);
+			PRINTLOG(AHCI, LOG_FATAL, "read ncq log error is 0x%x tfd 0x%x err 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
+			disk->acquired_slots ^= (1 << slot);
+
 			return -1;
 		}
 	}
 
+	disk->acquired_slots ^= (1 << slot);
+
 	if(port->interrupt_status & 1) {
 		ahci_hba_fis_t* hba_fis = (ahci_hba_fis_t*)port->fis_base_address;
-		printf("AHCI: hba fis lba %lx count %x err %x status %x\n",
-		       hba_fis->d2h_fis.lba0 | ( hba_fis->d2h_fis.lba1 << 24), hba_fis->d2h_fis.count, hba_fis->d2h_fis.error, hba_fis->d2h_fis.status );
+		PRINTLOG(AHCI, LOG_TRACE, "hba fis lba %lx count %x err %x status %x",
+		         hba_fis->d2h_fis.lba0 | ( hba_fis->d2h_fis.lba1 << 24), hba_fis->d2h_fis.count, hba_fis->d2h_fis.error, hba_fis->d2h_fis.status );
 	}
 
-	printf("AHCI: Error is 0x%x 0x%x 0x%x ncq 0x%x unload 0x%x tag 0x%x status 0x%x error 0x%x lba 0x%lx count 0x%x device 0x%x \n",
-	       port->interrupt_status, port->task_file_data, port->sata_error,
-	       error_log.nq, error_log.unload, error_log.ncq_tag,
-	       error_log.status, error_log.error, error_log.lba0 | (error_log.lba1 << 24), error_log.count, error_log.device);
+	PRINTLOG(AHCI, LOG_ERROR, "is 0x%x 0x%x 0x%x ncq 0x%x unload 0x%x tag 0x%x status 0x%x error 0x%x lba 0x%lx count 0x%x device 0x%x ",
+	         port->interrupt_status, port->task_file_data, port->sata_error,
+	         error_log.nq, error_log.unload, error_log.ncq_tag,
+	         error_log.status, error_log.error, error_log.lba0 | (error_log.lba1 << 24), error_log.count, error_log.device);
 
 	return 0;
 }
@@ -213,9 +267,11 @@ int8_t ahci_disk_id_comparator(const void* disk1, const void* disk2) {
 	return 0;
 }
 
-int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ahci_offset) {
+int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
+	PRINTLOG(AHCI, LOG_INFO, "disk searching started", 0);
+
 	if(linkedlist_size(sata_pci_devices) == 0) {
-		printf("AHCI: Warning no SATA devices\n");
+		PRINTLOG(AHCI, LOG_WARNING, "no SATA devices", 0);
 		return 0;
 	}
 
@@ -251,32 +307,57 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ah
 			}
 		}
 
-		uint32_t abar = (uint32_t)(pci_sata->bar5.memory_space_bar.base_address << 4);
+		uint32_t abar_fa_tmp = (uint32_t)(pci_sata->bar5.memory_space_bar.base_address << 4);
+		uint64_t abar_fa = (uint64_t)abar_fa_tmp;
+		uint64_t abar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(abar_fa);
 
-		printf("AHCI: abar value 0x%x bar4  0x%x\n", abar, pci_sata->bar4.io_space_bar.base_address << 2);
+		PRINTLOG(AHCI, LOG_TRACE, "abar value 0x%x bar4  0x%x", abar_fa, pci_sata->bar4.io_space_bar.base_address << 2);
 
-		memory_paging_add_page_ext(heap, NULL, abar, abar, MEMORY_PAGING_PAGE_TYPE_4K);
-		memory_paging_add_page_ext(heap, NULL, abar + MEMORY_PAGING_PAGE_LENGTH_4K, abar + MEMORY_PAGING_PAGE_LENGTH_4K, MEMORY_PAGING_PAGE_TYPE_4K);
+		frame_t* hba_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
 
-		ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)((uint64_t)abar);
+		if(hba_frames == NULL) {
+			PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for abar", 0);
+
+			frame_t f = {abar_fa, 2, FRAME_ALLOCATION_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+
+			if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &f) != 0) {
+				PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for abar", 0);
+			}
+
+			hba_frames = &f;
+		}
+
+		PRINTLOG(AHCI, LOG_TRACE, "frames for abar 0x%lx,0x%lx", hba_frames->frame_address, hba_frames->frame_count);
+		memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(hba_frames->frame_address), hba_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+		hba_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
+
+
+		ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)abar_va;
+
+		hba_mem->bios_os_handoff_control_and_status = 2;
+		PRINTLOG(AHCI, LOG_TRACE, "hba glovbal host control value 0x%lx bohc 0x%lx", hba_mem->global_host_control, hba_mem->bios_os_handoff_control_and_status );
+
+		hba_mem->global_host_control = (1 << 31);
+
+		PRINTLOG(AHCI, LOG_TRACE, "hba glovbal host control value 0x%lx", hba_mem->global_host_control );
 
 		uint8_t nr_cmd_slots = ( (hba_mem->host_capability >> 8) & 0x1F) + 1;
 		uint8_t nr_port = (hba_mem->host_capability & 0x1F) + 1;
 		uint8_t sncq  = (hba_mem->host_capability >> 30) & 1;
 
 		ahci_hba_t* hba = memory_malloc_ext(heap, sizeof(ahci_hba_t), 0x0);
-		hba->hba_addr = (uint64_t)abar;
+		hba->hba_addr = abar_va;
 		hba->disk_base = disk_id;
 		hba->disk_count = nr_port;
 
 		linkedlist_list_insert(sata_hbas, hba);
 
 		if(msi_cap) {
-			printf("AHCI: msi capability present\n");
+			PRINTLOG(AHCI, LOG_TRACE, "msi capability present", 0);
 
 			uint8_t msg_count = 1 << msi_cap->multiple_message_count;
 
-			printf("AHCI: ma64 support %i vector masking %i msg count %i\n", msi_cap->ma64_support, msi_cap->per_vector_masking, msg_count);
+			PRINTLOG(AHCI, LOG_TRACE, "ma64 support %i vector masking %i msg count %i", msi_cap->ma64_support, msi_cap->per_vector_masking, msg_count);
 
 			uint8_t intnum = interrupt_get_next_empty_interrupt();
 			hba->intnum_base = intnum - INTERRUPT_IRQ_BASE;
@@ -293,62 +374,75 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ah
 			for(uint8_t i = 0; i < msg_count; i++) {
 				uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
 				interrupt_irq_set_handler(isrnum, &ahci_isr);
-				printf("AHCI: Info interrupt 0x%x registered as isr 0x%x for ahci_isr\n", intnum, isrnum);
+				PRINTLOG(AHCI, LOG_TRACE, "interrupt 0x%x registered as isr 0x%x for ahci_isr", intnum, isrnum);
 				intnum = interrupt_get_next_empty_interrupt();
 			}
 
 			msi_cap->enable = 1;
 
 		} else {
-			printf("AHCI: no msi capability\n");
+			PRINTLOG(AHCI, LOG_ERROR, "no msi capability", 0);
 
 			return -1;
 		}
 
-		hba_mem->global_host_control = 1;
-		hba_mem->global_host_control = (1 << 31);
-
-		printf("AHCI: controller port cnt %i cmd slots %i sncq %i bohc %x\n", nr_port, nr_cmd_slots, sncq, hba_mem->bios_os_handoff_control_and_status);
+		PRINTLOG(AHCI, LOG_TRACE, "controller port cnt %i cmd slots %i sncq %i bohc %x", nr_port, nr_cmd_slots, sncq, hba_mem->bios_os_handoff_control_and_status);
 
 		for(uint8_t port_idx = 0; port_idx < nr_port; port_idx++) {
-			printf("AHCI: checking port %i at ahci bar 0x%lx", port_idx, abar);
+			PRINTLOG(AHCI, LOG_TRACE, "checking port %i at ahci bar 0x%lx", port_idx, abar_va);
 
 			uint64_t port_address = (uint64_t)&hba_mem->ports[port_idx];
+			PRINTLOG(AHCI, LOG_TRACE, "port address 0x%lx", port_address);
 
-			printf(" port address 0x%lx\n", port_address);
+			ahci_hba_port_t* port = (ahci_hba_port_t*)port_address;
 
-			ahci_device_type_t dt = ahci_check_type(&hba_mem->ports[port_idx]);
+			ahci_device_type_t dt = ahci_check_type(port);
+
+			PRINTLOG(AHCI, LOG_TRACE, "port type 0x%lx", dt);
 
 			ahci_sata_disk_t* disk = memory_malloc_ext(heap, sizeof(ahci_sata_disk_t), 0x0);
 			disk->disk_id = disk_id++;
 			disk->port_address = port_address;
 			disk->type = dt;
 			disk->sncq = sncq;
+			disk->command_count = nr_cmd_slots;
+			disk->disk_lock = lock_create_with_heap(heap);
 
 			linkedlist_list_insert(sata_ports, disk);
 
-			if (dt == AHCI_DEVICE_SATA) {
-				printf("AHCI: SATA drive found at port %d at 0x%lx\n", port_idx, port_address);
+			PRINTLOG(AHCI, LOG_DEBUG, "Disk %i inserted for port %d", disk->disk_id, port_idx);
 
-				for(int8_t i = 0; i < 4; i++) {
-					memory_paging_add_page_ext(heap, NULL, ahci_offset, ahci_offset, MEMORY_PAGING_PAGE_TYPE_4K);
-					ahci_offset += MEMORY_PAGING_PAGE_LENGTH_4K;
+			if (dt == AHCI_DEVICE_SATA) {
+				PRINTLOG(AHCI, LOG_DEBUG, "SATA drive found at port %d at 0x%lx", port_idx, port_address);
+
+				frame_t* port_frames = NULL;
+
+				if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
+					PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for disk %i at 0x%lx", disk->disk_id, disk->port_address);
+
+					return -1;
 				}
 
-				ahci_port_rebase( &hba_mem->ports[port_idx], ahci_offset - 4 * MEMORY_PAGING_PAGE_LENGTH_4K, nr_cmd_slots);
+				if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port_frames->frame_address), port_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+					PRINTLOG(AHCI, LOG_ERROR, "cannot page map frames for disk %i at 0x%lx", disk->disk_id, disk->port_address);
+
+					return -1;
+				}
+
+				ahci_port_rebase(port, port_frames->frame_address, nr_cmd_slots);
 
 				if(ahci_identify(disk->disk_id) != 0) {
-					printf("AHCI: Error cannot identify disk %li at port address %lx\n", disk_id, port_address);
+					PRINTLOG(AHCI, LOG_ERROR, "cannot identify disk %li at port address %lx", disk_id, port_address);
 				}
 
 			}   else if (dt == AHCI_DEVICE_SATAPI)  {
-				printf("AHCI: Debug SATAPI drive found at port %d\n", port_idx);
+				PRINTLOG(AHCI, LOG_DEBUG, "SATAPI drive found at port %d", port_idx);
 			}   else if (dt == AHCI_DEVICE_SEMB)  {
-				printf("AHCI: Debug SEMB drive found at port %d\n", port_idx);
+				PRINTLOG(AHCI, LOG_DEBUG, "SEMB drive found at port %d", port_idx);
 			}   else if (dt == AHCI_DEVICE_PM) {
-				printf("AHCI: Debug PM drive found at port %d\n", port_idx);
+				PRINTLOG(AHCI, LOG_DEBUG, "PM drive found at port %d", port_idx);
 			}   else {
-				printf("AHCI: Debug No drive found at port %d\n", port_idx);
+				PRINTLOG(AHCI, LOG_DEBUG, "No drive found at port %d", port_idx);
 			}
 
 		}
@@ -360,25 +454,29 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices, uint64_t ah
 
 	iter->destroy(iter);
 
-	return linkedlist_size(sata_ports);
+	uint64_t disk_cnt = linkedlist_size(sata_ports);
+
+	PRINTLOG(AHCI, LOG_INFO, "disk searching ended, %i disks found", disk_cnt);
+
+	return disk_cnt;
 }
 
 
-int8_t ahci_flush(uint64_t disk_id) {
+future_t ahci_flush(uint64_t disk_id) {
 	ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
 	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-	int8_t slot = ahci_find_command_slot(port, 32);
+	int8_t slot = ahci_find_command_slot(disk);
 
 	if(slot == -1) {
-		printf("AHCI: Fatal cannot find empty command slot\n");
-		return -1;
+		PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot", 0);
+		return NULL;
 	}
 
-	printf("AHCI: Info flush port 0x%p slot %i\n", port, slot);
+	PRINTLOG(AHCI, LOG_TRACE, "flush port 0x%p slot %i", port, slot);
 
-	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)port->command_list_base_address;
+	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 	cmd_hdr += slot;
 
 	cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -386,19 +484,24 @@ int8_t ahci_flush(uint64_t disk_id) {
 	cmd_hdr->prdt_length = 0;
 	cmd_hdr->clear_busy = 1;
 
-	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)cmd_hdr->prdt_base_address;
+	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
 	memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t));
 
-	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)&cmd_table->command_fis;
+	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
 	memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
 	fis->fis_type = AHCI_FIS_TYPE_REG_H2D;
 	fis->control_or_command = 1;
 	fis->command = AHCI_ATA_CMD_FLUSH_EXT;
 
+	disk->future_locks[(1 << slot) - 1] = lock_create_for_future();
+
+	future_t fut = future_create(disk->future_locks[(1 << slot) - 1]);
+
+	disk->current_commands |= 1 << slot;
 	port->command_issue = 1 << slot;
 
-	return 0;
+	return fut;
 }
 
 int8_t ahci_identify(uint64_t disk_id) {
@@ -411,14 +514,14 @@ int8_t ahci_identify(uint64_t disk_id) {
 	port->interrupt_status = (uint32_t)-1;
 	port->sata_error = (uint32_t)-1;
 
-	int8_t slot = ahci_find_command_slot(port, 32);
+	int8_t slot = ahci_find_command_slot(disk);
 
 	if(slot == -1) {
-		printf("AHCI: Fatal cannot find empty command slot\n");
+		PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot", 0);
 		return -1;
 	}
 
-	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)port->command_list_base_address;
+	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 	cmd_hdr += slot;
 
 	cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -426,13 +529,22 @@ int8_t ahci_identify(uint64_t disk_id) {
 	cmd_hdr->prdt_length = 1;
 	cmd_hdr->clear_busy = 1;
 
-	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)cmd_hdr->prdt_base_address;
+	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
 	memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
-	cmd_table->prdt_entry[0].data_base_address = (uint64_t)&identify_data;
-	cmd_table->prdt_entry[0].data_byte_count = 511;
+	uint64_t id_phy_addr = 0;
 
-	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)&cmd_table->command_fis;
+	if(memory_paging_get_physical_address((uint64_t)&identify_data, &id_phy_addr) != 0) {
+		PRINTLOG(AHCI, LOG_ERROR, "cannot find physical address of buffer 0x%lx", 0, &identify_data);
+		disk->acquired_slots ^= (1 << slot);
+
+		return -1;
+	}
+
+	cmd_table->prdt_entry[0].data_base_address = id_phy_addr;
+	cmd_table->prdt_entry[0].data_byte_count = sizeof(ahci_ata_identify_data_t) - 1;
+
+	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
 	memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
 	fis->fis_type = AHCI_FIS_TYPE_REG_H2D;
@@ -447,17 +559,23 @@ int8_t ahci_identify(uint64_t disk_id) {
 		}
 
 		if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
-			printf("AHCI: Fatal disk identify error\n");
+			PRINTLOG(AHCI, LOG_FATAL, "disk identify error", 0);
+			disk->acquired_slots ^= (1 << slot);
+
 			return -1;
 		}
 	}
 
 	if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
-		printf("AHCI: Fatal disk identify error\n");
+		PRINTLOG(AHCI, LOG_FATAL, "disk identify error", 0);
+		disk->acquired_slots ^= (1 << slot);
+
 		return -1;
 	}
 
-	printf("AHCI: Info building identify data\n");
+	disk->acquired_slots ^= (1 << slot);
+
+	PRINTLOG(AHCI, LOG_TRACE, "building identify data", 0);
 
 	disk->cylinders = identify_data.cylinders;
 	disk->heads = identify_data.heads;
@@ -510,11 +628,11 @@ int8_t ahci_identify(uint64_t disk_id) {
 	disk->smart_status.selftest_supported = (identify_data.command_set_supported_84 >> 1) & 1;
 	disk->smart_status.selftest_enabled = (identify_data.command_set_feature_enabled_87 >> 1) & 1;
 
-	printf("AHCI: Info disk %li cyl %x head %x sec %x lba %lx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x\n",
-	       disk->disk_id, disk->cylinders, disk->heads,
-	       disk->sectors, disk->lba_count, disk->serial, disk->model,
-	       disk->queue_depth, disk->sncq, disk->volatile_write_cache,
-	       disk->logging, disk->smart_status);
+	PRINTLOG(AHCI, LOG_TRACE, "disk %li cyl %x head %x sec %x lba %lx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x",
+	         disk->disk_id, disk->cylinders, disk->heads,
+	         disk->sectors, disk->lba_count, disk->serial, disk->model,
+	         disk->queue_depth, disk->sncq, disk->volatile_write_cache,
+	         disk->logging, disk->smart_status);
 
 	port->sata_active = 0;
 	port->interrupt_status = (uint32_t)-1;
@@ -523,19 +641,19 @@ int8_t ahci_identify(uint64_t disk_id) {
 	return 0;
 }
 
-int8_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
 	ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
 	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-	int8_t slot = ahci_find_command_slot(port, 32);
+	int8_t slot = ahci_find_command_slot(disk);
 
 	if(slot == -1) {
-		printf("AHCI: Fatal cannot find empty command slot\n");
-		return -1;
+		PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot", 0);
+		return NULL;
 	}
 
-	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)port->command_list_base_address;
+	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 	cmd_hdr += slot;
 
 	cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -543,13 +661,21 @@ int8_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer)
 	cmd_hdr->prdt_length = 1;
 	cmd_hdr->clear_busy = 1;
 
-	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)cmd_hdr->prdt_base_address;
+	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
 	memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
-	cmd_table->prdt_entry[0].data_base_address = (uint64_t)buffer;
+	uint64_t buffer_phy_addr = 0;
+
+	if(memory_paging_get_physical_address((uint64_t)buffer, &buffer_phy_addr) != 0) {
+		PRINTLOG(AHCI, LOG_ERROR, "cannot get read buffer physical address 0x%lx", buffer);
+
+		return NULL;
+	}
+
+	cmd_table->prdt_entry[0].data_base_address = buffer_phy_addr;
 	cmd_table->prdt_entry[0].data_byte_count = size - 1;
 
-	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)&cmd_table->command_fis;
+	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
 	memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
 	fis->fis_type = AHCI_FIS_TYPE_REG_H2D;
@@ -573,26 +699,31 @@ int8_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer)
 		port->sata_active = 1 << slot;
 	}
 
+	disk->future_locks[(1 << slot) - 1] = lock_create_for_future();
+
+	future_t fut = future_create_with_data(disk->future_locks[(1 << slot) - 1], buffer);
+
+	disk->current_commands |= 1 << slot;
 	port->command_issue = 1 << slot;
 
-	return 0;
+	return fut;
 }
 
-int8_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
 	ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
 	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-	int8_t slot = ahci_find_command_slot(port, 32);
+	int8_t slot = ahci_find_command_slot(disk);
 
 	if(slot == -1) {
-		printf("AHCI: Fatal cannot find empty command slot\n");
-		return -1;
+		PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot", 0);
+		return NULL;
 	}
 
-	printf("AHCI: Info write to port 0x%p at lba 0x%lx with size 0x%x from buffer 0x%p slot %i\n", port, lba, size, buffer, slot);
+	PRINTLOG(AHCI, LOG_TRACE, "write to port 0x%p at lba 0x%lx with size 0x%x from buffer 0x%p slot %i", port, lba, size, buffer, slot);
 
-	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)port->command_list_base_address;
+	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 	cmd_hdr += slot;
 
 	cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
@@ -600,13 +731,21 @@ int8_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer
 	cmd_hdr->prdt_length = 1;
 	cmd_hdr->clear_busy = 1;
 
-	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)cmd_hdr->prdt_base_address;
+	ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
 	memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
-	cmd_table->prdt_entry[0].data_base_address = (uint64_t)buffer;
+	uint64_t buffer_phy_addr = 0;
+
+	if(memory_paging_get_physical_address((uint64_t)buffer, &buffer_phy_addr) != 0) {
+		PRINTLOG(AHCI, LOG_ERROR, "cannot get read buffer physical address 0x%lx", buffer);
+
+		return NULL;
+	}
+
+	cmd_table->prdt_entry[0].data_base_address = buffer_phy_addr;
 	cmd_table->prdt_entry[0].data_byte_count = size - 1;
 
-	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)&cmd_table->command_fis;
+	ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
 	memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
 	fis->fis_type = AHCI_FIS_TYPE_REG_H2D;
@@ -630,14 +769,21 @@ int8_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer
 		port->sata_active = 1 << slot;
 	}
 
+	disk->future_locks[(1 << slot) - 1] = lock_create_for_future();
+
+	future_t fut = future_create_with_data(disk->future_locks[(1 << slot) - 1], buffer);
+
+	disk->current_commands |= 1 << slot;
 	port->command_issue = 1 << slot;
 
-	return 0;
+	return fut;
 }
 
 
 ahci_device_type_t ahci_check_type(ahci_hba_port_t* port) {
 	uint32_t sata_status = port->sata_status;
+
+	PRINTLOG(AHCI, LOG_TRACE, "port status 0x%lx", sata_status);
 
 	uint8_t ipm = (sata_status >> 8) & 0x0F;
 	uint8_t det = sata_status & 0x0F;
@@ -664,24 +810,36 @@ ahci_device_type_t ahci_check_type(ahci_hba_port_t* port) {
 }
 
 
-int8_t ahci_find_command_slot(ahci_hba_port_t* port, int8_t nr_cmd_slots) {
-	uint32_t slots = port->sata_active | port->command_issue;
+int8_t ahci_find_command_slot(ahci_sata_disk_t* disk) {
+	ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-	for(int8_t i = 0; i < nr_cmd_slots; i++) {
+	lock_acquire(disk->disk_lock);
+
+	uint32_t slots = port->sata_active | port->command_issue | disk->acquired_slots;
+
+	for(int8_t i = 0; i < disk->command_count; i++) {
 		if((slots & 1) == 0) {
+			disk->acquired_slots |= 1 << i;
+
+			lock_release(disk->disk_lock);
+
 			return i;
 		}
 
 		slots >>= 1;
 	}
-	printf("AHCI: Warning cannot find empty command slot\n");
+
+	lock_release(disk->disk_lock);
+
+	PRINTLOG(AHCI, LOG_WARNING, "cannot find empty command slot", 0);
+
 	return -1;
 }
 
 void ahci_port_start_cmd(ahci_hba_port_t* port) {
-	printf("AHCI: Info try to start port 0x%p\n", port);
+	PRINTLOG(AHCI, LOG_TRACE, "try to start port 0x%p", port);
 
-	printf("AHCI: Info sending identify 0x%x 0x%x 0x%x\n", port->interrupt_status, port->task_file_data, port->sata_error);
+	PRINTLOG(AHCI, LOG_TRACE, "sending identify 0x%x 0x%x 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
 	// Wait until CR (bit15) is cleared
 	while (port->command_and_status & AHCI_HBA_PxCMD_CR); // check command running
 
@@ -690,14 +848,14 @@ void ahci_port_start_cmd(ahci_hba_port_t* port) {
 	port->command_and_status |= AHCI_HBA_PxCMD_ST;   // set command start
 
 	//port->sata_control = 1;
-	printf("AHCI: Info sending identify 0x%x 0x%x 0x%x\n", port->interrupt_status, port->task_file_data, port->sata_error);
+	PRINTLOG(AHCI, LOG_TRACE, "sending identify 0x%x 0x%x 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
 
-	printf("AHCI: Info port 0x%p started\n", port);
+	PRINTLOG(AHCI, LOG_TRACE, "port 0x%p started", port);
 }
 
 // Stop command engine
 void ahci_port_stop_cmd(ahci_hba_port_t* port) {
-	printf("AHCI: Info try to stop port 0x%p\n", port);
+	PRINTLOG(AHCI, LOG_TRACE, "try to stop port 0x%p", port);
 	// Clear ST (bit0)
 	port->command_and_status &= ~AHCI_HBA_PxCMD_ST;
 
@@ -717,25 +875,25 @@ void ahci_port_stop_cmd(ahci_hba_port_t* port) {
 		break;
 	}
 
-	printf("AHCI: Info port 0x%p stopped\n", port);
+	PRINTLOG(AHCI, LOG_TRACE, "port 0x%p stopped", port);
 }
 
 void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slots) {
 	ahci_port_stop_cmd(port);
 
-	printf("AHCI: Info port 0x%p is rebasing to 0x%lx\n", port, offset);
+	PRINTLOG(AHCI, LOG_TRACE, "port 0x%p is rebasing to 0x%lx", port, offset);
 
 	port->command_list_base_address = offset;
-	memory_memclean((void*)port->command_list_base_address, 1024);
+	memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address), 1024);
 
 	offset += 1024;
 
 	port->fis_base_address = offset;
-	memory_memclean((void*)port->fis_base_address, 256);
+	memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->fis_base_address), 256);
 
 	offset += 256;
 
-	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)port->command_list_base_address;
+	ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 
 	for(uint8_t i = 0; i < nr_cmd_slots; i++) {
 		cmd_hdr[i].prdt_length = 16;
@@ -743,7 +901,7 @@ void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slot
 
 		uint64_t size = sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr[i].prdt_length - 1));
 
-		memory_memclean((void*)cmd_hdr[i].prdt_base_address, size);
+		memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr[i].prdt_base_address), size);
 
 		offset += size;
 	}

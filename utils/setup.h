@@ -66,8 +66,9 @@ void* task_get_current_task(){
 	return NULL;
 }
 
-void* lock_create_with_heap(memory_heap_t* heap){
+void* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future){
 	UNUSED(heap);
+	UNUSED(for_future);
 	return NULL;
 }
 
