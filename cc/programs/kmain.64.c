@@ -178,12 +178,36 @@ int8_t kmain64(size_t entry_point) {
 
 	PRINTLOG(KERNEL, LOG_INFO, "tasking initialized", 0);
 
+	int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->storage_controllers);
+
+	if(sata_port_cnt == -1) {
+		PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...", 0);
+		cpu_hlt();
+	}
+
+	uint8_t buffer[512] = {0};
+
+	future_t fut = ahci_read(0, 1, 512, buffer);
+
+	if(fut) {
+		uint8_t* res = future_get_data_and_destroy(fut);
+
+		for(int16_t i = 0; i < 512; i += 16) {
+			for(int16_t j = 0; j < 16; j++) {
+				printf("0x%02x ", res[i + j]);
+			}
+
+			printf("\n");
+		}
+
+	}
+
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
 
 	return 0;
 
 
-	return kmain64_init(heap);
+	return kmain64_init();
 }
 
 void test_task1() {
@@ -205,42 +229,10 @@ void test_task1() {
 	printf("task %li ending\n", task_get_id());
 }
 
-int8_t kmain64_init(memory_heap_t* heap) {
+int8_t kmain64_init() {
 	char_t* data = hello_world();
 
 	printf("%s\n", data);
-
-
-	linkedlist_t sata_controllers = linkedlist_create_list_with_heap(heap);
-
-
-	int8_t sata_port_cnt = ahci_init(heap, sata_controllers, 34 * (1 << 20));
-
-	printf("KERNEL: sata port count: %i\n", sata_port_cnt);
-
-	if(sata_port_cnt) {
-		uint64_t r_size = 2048;
-		uint8_t* rt_buf = memory_malloc(r_size);
-		if(ahci_read(0, 0, r_size, rt_buf) == 0) {
-			printf("%i bytes readed at 0x%p\n", r_size, rt_buf);
-
-			uint8_t* wt_buf = memory_malloc(r_size);
-			strcpy("hello world from ahci write", (char_t*)wt_buf);
-			if(ahci_write(0, 1024, r_size, wt_buf) == 0) {
-				printf("write success\n");
-			} else {
-				printf("write fail\n");
-			}
-		}
-
-		// for(uint16_t i = 0; i <= 0xff; i++) {
-		// 	ahci_read(0, 0, r_size, rt_buf);
-		// }
-
-		ahci_read(0, 0x400100, r_size, rt_buf);
-
-		ahci_flush(0);
-	}
 
 	//task_create_task(heap, 0x1000, test_task1);
 

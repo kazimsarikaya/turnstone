@@ -6,6 +6,7 @@ typedef struct {
 	memory_heap_t* heap;
 	uint64_t lock_value;
 	uint64_t owner_task_id;
+	boolean_t for_future;
 }lock_internal_t;
 
 static int8_t sync_test_set_get(uint64_t* value, int8_t offset){
@@ -15,9 +16,15 @@ static int8_t sync_test_set_get(uint64_t* value, int8_t offset){
 }
 
 
-lock_t lock_create_with_heap(memory_heap_t* heap){
+lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future) {
 	lock_internal_t* lock = memory_malloc_ext(heap, sizeof(lock_internal_t), 0x0);
 	lock->heap = heap;
+	lock->for_future = for_future;
+
+	if(lock->for_future) {
+		lock->lock_value = 1;
+	}
+
 	return lock;
 }
 
@@ -37,7 +44,7 @@ void lock_acquire(lock_t lock) {
 		current_task_id = current_task->task_id;
 	}
 
-	if(li->owner_task_id == current_task_id) {
+	if(li->for_future == 0 && li->owner_task_id == current_task_id) {
 		return;
 	}
 

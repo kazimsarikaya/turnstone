@@ -13,10 +13,12 @@
 
 typedef void* lock_t;
 
-lock_t lock_create_with_heap(memory_heap_t* heap);
+lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
 int8_t lock_destroy(lock_t lock);
 
+#define lock_create_with_heap(h) lock_create_with_heap_for_future(h, 0)
 #define lock_create() lock_create_with_heap(NULL)
+#define lock_create_for_future() lock_create_with_heap_for_future(NULL, 1)
 
 void lock_acquire(lock_t lock);
 void lock_release(lock_t lock);
