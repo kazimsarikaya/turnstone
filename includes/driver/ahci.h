@@ -11,6 +11,7 @@
 #include <linkedlist.h>
 #include <cpu/sync.h>
 #include <future.h>
+#include <disk.h>
 
 #define AHCI_SATA_SIG_ATA    0x00000101  // SATA drive
 #define AHCI_SATA_SIG_ATAPI  0xEB140101  // SATAPI drive
@@ -363,5 +364,8 @@ int8_t ahci_identify(uint64_t disk_id);
 future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
 future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
 future_t ahci_flush(uint64_t disk_id);
+
+ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id);
+disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk);
 
 #endif

@@ -185,21 +185,23 @@ int8_t kmain64(size_t entry_point) {
 		cpu_hlt();
 	}
 
-	uint8_t buffer[512] = {0};
+	ahci_sata_disk_t* d = ahci_get_disk_by_id(0);
+	if(d) {
+		disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
 
-	future_t fut = ahci_read(0, 1, 512, buffer);
+		PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%lx", sata0->get_disk_size(sata0));
 
-	if(fut) {
-		uint8_t* res = future_get_data_and_destroy(fut);
+		disk_partition_context_t* part_ctx;
 
-		for(int16_t i = 0; i < 512; i += 16) {
-			for(int16_t j = 0; j < 16; j++) {
-				printf("0x%02x ", res[i + j]);
-			}
+		part_ctx = sata0->get_partition(sata0, 0);
+		PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%lx end lba 0x%lx", part_ctx->start_lba, part_ctx->end_lba);
+		memory_free(part_ctx);
 
-			printf("\n");
-		}
+		part_ctx = sata0->get_partition(sata0, 1);
+		PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%lx end lba 0x%lx", part_ctx->start_lba, part_ctx->end_lba);
+		memory_free(part_ctx);
 
+		sata0->flush(sata0);
 	}
 
 	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
