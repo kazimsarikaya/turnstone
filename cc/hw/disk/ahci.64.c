@@ -302,6 +302,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
 
 		pci_capability_msi_t* msi_cap = NULL;
+		ahci_pci_capability_sata_t* sata_cap = NULL;
 
 		if(pci_sata->common_header.status.capabilities_list) {
 			pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pci_sata) + pci_sata->capabilities_pointer);
@@ -310,22 +311,36 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 			while(pci_cap->capability_id != 0xFF) {
 				if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSI) {
 					msi_cap = (pci_capability_msi_t*)pci_cap;
-					break;
+				} else if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_SATA) {
+					sata_cap = (ahci_pci_capability_sata_t*)pci_cap;
+				} else {
+					PRINTLOG(AHCI, LOG_WARNING, "not implemented cap 0x%02x", pci_cap->capability_id);
 				}
 
 				if(pci_cap->next_pointer == NULL) {
 					break;
 				}
 
-				pci_cap = (pci_capability_t*)(((uint8_t*)pci_cap ) + pci_cap->next_pointer);
+				pci_cap = (pci_capability_t*)(((uint8_t*)pci_sata) + pci_cap->next_pointer);
 			}
 		}
 
 		uint32_t abar_fa_tmp = (uint32_t)(pci_sata->bar5.memory_space_bar.base_address << 4);
 		uint64_t abar_fa = (uint64_t)abar_fa_tmp;
+
+		if(pci_sata->bar5.memory_space_bar.base_address == 2) {
+			PRINTLOG(AHCI, LOG_TRACE, "64 bit abar", 0);
+
+			pci_bar_register_t* bar = &pci_sata->bar5;
+			bar++;
+			uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
+
+			abar_fa = tmp << 32 | abar_fa;
+		}
+
 		uint64_t abar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(abar_fa);
 
-		PRINTLOG(AHCI, LOG_TRACE, "abar value 0x%x bar4  0x%x", abar_fa, pci_sata->bar4.io_space_bar.base_address << 2);
+		PRINTLOG(AHCI, LOG_TRACE, "abar fa 0x%x va  0x%x", abar_fa, abar_va);
 
 		frame_t* hba_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
 
@@ -364,6 +379,15 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 		hba->disk_base = disk_id;
 		hba->disk_count = nr_port;
 
+		if(sata_cap) {
+			hba->revision_major = sata_cap->revision_major;
+			hba->revision_minor = sata_cap->revision_minor;
+			hba->sata_bar = sata_cap->bar_location - 4;
+			hba->sata_bar_offset = sata_cap->bar_offset << 2;
+
+			PRINTLOG(AHCI, LOG_TRACE, "sata revision %i.%i sata bar %i offset 0x%x", hba->revision_major, hba->revision_minor, hba->sata_bar, hba->sata_bar_offset );
+		}
+
 		linkedlist_list_insert(sata_hbas, hba);
 
 		if(msi_cap) {
@@ -378,10 +402,10 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 			hba->intnum_count = msg_count;
 
 			if(msi_cap->ma64_support) {
-				msi_cap->ma64.message_address = 0xFEE00000 | (1 << 3) | (0 << 2);
+				msi_cap->ma64.message_address = 0xFEE00000; //| (1 << 3) | (0 << 2);
 				msi_cap->ma64.message_data = intnum;
 			} else {
-				msi_cap->ma32.message_address = 0xFEE00000 | (1 << 3) | (0 << 2);
+				msi_cap->ma32.message_address = 0xFEE00000;// | (1 << 3) | (0 << 2);
 				msi_cap->ma32.message_data = intnum;
 			}
 
