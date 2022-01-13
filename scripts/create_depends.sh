@@ -6,7 +6,7 @@ do
   _sources=$(echo $_depends|sed 's/\.h//g')
   for _s in $_sources;
   do
-    _s=$(echo $_s|tr -d ' ')
+    _s=$(basename $_s|tr -d ' ')
     for _f in $(find ../cc -name "$_s*.c"|grep -v video);
     do
       _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
