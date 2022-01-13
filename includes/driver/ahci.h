@@ -12,6 +12,7 @@
 #include <cpu/sync.h>
 #include <future.h>
 #include <disk.h>
+#include <pci.h>
 
 #define AHCI_SATA_SIG_ATA    0x00000101  // SATA drive
 #define AHCI_SATA_SIG_ATAPI  0xEB140101  // SATAPI drive
@@ -38,6 +39,18 @@
 
 #define AHCI_ATA_DEV_BUSY 0x80
 #define AHCI_ATA_DEV_DRQ  0x08
+
+#define PCI_DEVICE_CAPABILITY_SATA    0x12
+
+typedef struct {
+	pci_capability_t cap;
+	uint16_t revision_minor : 4;
+	uint16_t revision_major : 4;
+	uint16_t reserved0 : 8;
+	uint32_t bar_location : 4;
+	uint32_t bar_offset : 20;
+	uint32_t reserved1 : 8;
+}__attribute__((packed)) ahci_pci_capability_sata_t;
 
 typedef struct {
 	uint16_t config;              ///< General Configuration.
@@ -352,6 +365,10 @@ typedef struct {
 
 typedef struct {
 	uint64_t hba_addr;
+	uint8_t revision_major;
+	uint8_t revision_minor;
+	uint8_t sata_bar;
+	uint8_t sata_bar_offset;
 	uint8_t intnum_base;
 	uint8_t intnum_count;
 	uint8_t disk_base;
