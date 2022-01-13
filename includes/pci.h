@@ -39,7 +39,9 @@
 #define PCI_DEVICE_PROGIF_EHCI               0x20
 #define PCI_DEVICE_PROGIF_XHCI               0x30
 
+#define PCI_DEVICE_CAPABILITY_AER     0x01
 #define PCI_DEVICE_CAPABILITY_MSI     0x05
+#define PCI_DEVICE_CAPABILITY_VENDOR  0x09
 #define PCI_DEVICE_CAPABILITY_MSIX    0x11
 
 #define PCI_IO_PORT_CONFIG 0x0CF8
@@ -100,20 +102,20 @@ typedef struct {
 
 typedef union {
 	struct {
-		uint8_t type : 1;
+		uint32_t type : 1;
 		uint32_t reserved0 : 31;
-	} bar_type;
+	} __attribute__((packed)) bar_type;
 	struct {
-		uint8_t bar_type : 1;
-		uint8_t type : 2;
-		uint8_t prefetchable : 1;
+		uint32_t bar_type : 1;
+		uint32_t type : 2;
+		uint32_t prefetchable : 1;
 		uint32_t base_address : 28;
-	} memory_space_bar;
+	} __attribute__((packed)) memory_space_bar;
 	struct {
-		uint8_t bar_type : 1;
-		uint8_t reserved0 : 1;
+		uint32_t bar_type : 1;
+		uint32_t reserved0 : 1;
 		uint32_t base_address : 30;
-	} io_space_bar;
+	} __attribute__((packed)) io_space_bar;
 } __attribute__((packed)) pci_bar_register_t;
 
 typedef struct {
@@ -259,6 +261,29 @@ typedef struct {
 		} ma64;
 	};
 } __attribute__((packed)) pci_capability_msi_t;
+
+typedef struct {
+	pci_capability_t cap;
+	uint16_t table_size : 11;
+	uint16_t reserved : 3;
+	uint16_t function_mask : 1;
+	uint16_t enable : 1;
+	uint32_t bir : 3;
+	uint32_t table_offset : 29;
+	uint32_t pending_bit_bir : 3;
+	uint32_t pending_bit_offset : 29;
+}__attribute__((packed)) pci_capability_msix_t;
+
+typedef struct {
+	uint64_t message_address;
+	uint32_t message_data;
+	uint32_t masked : 1;
+	uint32_t reserved : 29;
+}__attribute__((packed)) pci_capability_msix_table_entry_t;
+
+typedef struct {
+	pci_capability_msix_table_entry_t entries[0];
+}__attribute__((packed)) pci_capability_msix_table_t;
 
 typedef struct {
 	linkedlist_t storage_controllers;
