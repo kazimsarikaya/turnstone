@@ -20,6 +20,9 @@ typedef enum {
 	IOAPIC,
 	TIMER,
 	AHCI,
+	NETWORK,
+	VIRTIO,
+	VIRTIONET,
 } logging_modules_t;
 
 typedef enum {
@@ -104,6 +107,19 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_AHCI
 #define LOG_LEVEL_AHCI LOG_INFO
 #endif
+
+#ifndef LOG_LEVEL_NETWORK
+#define LOG_LEVEL_NETWORK LOG_TRACE
+#endif
+
+#ifndef LOG_LEVEL_VIRTIO
+#define LOG_LEVEL_VIRTIO LOG_TRACE
+#endif
+
+#ifndef LOG_LEVEL_VIRTIONET
+#define LOG_LEVEL_VIRTIONET LOG_TRACE
+#endif
+
 
 #ifndef LOG_LOCATION
 #define LOG_LOCATION 1
