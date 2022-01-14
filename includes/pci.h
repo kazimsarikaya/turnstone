@@ -277,8 +277,7 @@ typedef struct {
 typedef struct {
 	uint64_t message_address;
 	uint32_t message_data;
-	uint32_t masked : 1;
-	uint32_t reserved : 29;
+	uint32_t masked;
 }__attribute__((packed)) pci_capability_msix_table_entry_t;
 
 typedef struct {
