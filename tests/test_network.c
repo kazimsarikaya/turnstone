@@ -7,8 +7,23 @@ typedef uint32_t time_t;
 
 time_t time(time_t* t);
 
+struct timeb {
+	time_t time;
+	unsigned short millitm;
+	short timezone;
+	short dstflag;
+};
+
+int ftime(struct timeb* tp);
+
 uint64_t time_ns(uint64_t* t){
-	uint64_t res = time(NULL) * 1000000ULL;
+	struct timeb timer_msec;
+
+	ftime(&timer_msec);
+
+	uint64_t res = ((uint64_t) timer_msec.time) * 1000ll +
+	               (uint64_t) timer_msec.millitm;
+	res *= 1000000;
 
 	if(t) {
 		*t = res;
@@ -99,7 +114,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 	uint8_t ping_data[NETWORK_ICMP_MIN_DATA_SIZE];
 
 	for(int16_t i = 0; i < NETWORK_ICMP_MIN_DATA_SIZE; i++) {
-		ping_data[i] = 0x10 + i;
+		ping_data[i] = 0x08 + i;
 	}
 
 	uint16_t pp_len = 0;

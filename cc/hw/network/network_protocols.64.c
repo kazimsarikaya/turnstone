@@ -54,7 +54,11 @@ network_icmp_ping_header_t* network_create_ping_packet(boolean_t is_reply, uint1
 	pp->header.code = NETWORK_ICMP_ECHO_CODE;
 	pp->header.identifier = identifier;
 	pp->header.sequence = sequence;
-	pp->timestamp = BYTE_SWAP64(time_ns(NULL));
+	uint64_t ts = time_ns(NULL);
+	uint32_t sec = ts / (1000 * 1000 * 1000);
+	pp->timestamp_sec = BYTE_SWAP32(sec);
+	uint32_t usec = (ts % (1000 * 1000 * 1000)) / (1000);
+	pp->timestamp_usec = BYTE_SWAP32(usec);
 
 	uint8_t* pp_data = (uint8_t*)pp;
 

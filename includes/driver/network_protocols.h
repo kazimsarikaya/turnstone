@@ -91,7 +91,8 @@ typedef struct {
 
 typedef struct {
 	network_icmp_header_t header;
-	uint64_t timestamp;
+	uint32_t timestamp_sec;
+	uint32_t timestamp_usec;
 }__attribute__((packed)) network_icmp_ping_header_t;
 
 typedef struct {
