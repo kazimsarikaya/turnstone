@@ -39,6 +39,8 @@ out_strm = os.popen("ifconfig tap0 | grep ether |cut -dH -f2|cut -d\  -f2")
 mac_str = out_strm.read().strip()
 out_strm.close()
 
+print("router mac %s" % (mac_str,))
+
 router_ip_int = int(ipaddress.IPv4Address("192.168.122.1"))
 router_ip_max = int(ipaddress.IPv4Address("192.168.122.255"))
 
@@ -50,7 +52,7 @@ mac_ip[router_mac] = router_ip_int
 
 ROUTER_NOTSTOP = True
 
-if file_exists("qemu.txt"):
+if file_exists("qemus.txt"):
     old_qemus = open("qemus.txt", "r")
     old_qemus_lines = old_qemus.readlines()
     old_qemus.close()
@@ -58,7 +60,13 @@ if file_exists("qemu.txt"):
     for line in old_qemus_lines:
         parts = line.split(":")
 
+        mac = int(parts[0]).to_bytes(6, "big")
+
+        print("mac is %s at %s:%s" % (':'.join('%02x' % b for b in mac), parts[1], parts[2],))
+
         target_qemu[int(parts[0])] = (parts[1], int(parts[2]))
+else:
+    print("no old mac mapping")
 
 
 def router_stop(signum, frame):
