@@ -226,9 +226,13 @@ int8_t acpi_device_build(acpi_aml_parser_context_t*);
 int8_t acpi_device_init(acpi_aml_parser_context_t*);
 void acpi_device_print_all(acpi_aml_parser_context_t* ctx);
 void acpi_device_print(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d);
-acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name);
+acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name, uint64_t address);
+#define acpi_device_lookup_by_address(c, a) acpi_device_lookup(c, NULL, a)
+#define acpi_device_lookup_by_name(c, n) acpi_device_lookup(c, n, 0)
 int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx);
 int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx);
+
+uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t addr, uint8_t* int_count);
 
 void acpi_aml_print_symbol_table(acpi_aml_parser_context_t*);
 void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);

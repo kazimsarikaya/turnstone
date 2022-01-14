@@ -255,7 +255,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
 	char_t* region_name = opregion->name;
 	char_t* aml_device_name = strndup(region_name, strlen(region_name) - 4);
 
-	acpi_aml_device_t* dev = acpi_device_lookup(ctx, aml_device_name);
+	acpi_aml_device_t* dev = acpi_device_lookup_by_name(ctx, aml_device_name);
 
 
 	if(dev == NULL) {
@@ -556,7 +556,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 	char_t* region_name = opregion->name;
 	char_t* aml_device_name = strndup(region_name, strlen(region_name) - 4);
 
-	acpi_aml_device_t* dev = acpi_device_lookup(ctx, aml_device_name);
+	acpi_aml_device_t* dev = acpi_device_lookup_by_name(ctx, aml_device_name);
 
 
 	if(dev == NULL) {

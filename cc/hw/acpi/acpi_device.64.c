@@ -37,6 +37,65 @@ int8_t acpi_aml_intmap_eq(const void* data1, const void* data2){
 	return -1;
 }
 
+uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t addr, uint8_t* int_count) {
+	acpi_aml_device_t* d = acpi_device_lookup_by_address(ctx, addr);
+
+	uint8_t* res = NULL;
+
+	if(d) {
+		PRINTLOG(ACPI, LOG_DEBUG, "device %s found for address 0x%lx", d->name, addr);
+		uint64_t ic = linkedlist_size(d->interrupts);
+
+		if(ic) {
+			res = memory_malloc_ext(ctx->heap, ic, 0);
+
+			for(uint64_t i = 0; i < ic; i++) {
+				acpi_aml_device_interrupt_t* int_item = linkedlist_get_data_at_position(d->interrupts, i);
+
+				res[i] = int_item->interrupt_no;
+			}
+
+			if(int_count) {
+				*int_count = ic;
+			}
+
+			return res;
+		}
+	}
+
+	PRINTLOG(ACPI, LOG_DEBUG, "device not found for address 0x%lx or doesnot contain interrupt, looking intmap", addr);
+
+	res = memory_malloc_ext(ctx->heap, 4, 0);   // max 4 int
+	uint64_t ic = 0;
+
+	iterator_t* iter = linkedlist_iterator_create(ctx->interrupt_map);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		acpi_aml_interrupt_map_item_t* int_item = iter->get_item(iter);
+
+		if(int_item->address > addr) {
+			break;
+		}
+
+		PRINTLOG(ACPI, LOG_TRACE, "int addr 0x%lx looking for 0x%lx", int_item->address, addr);
+
+		if(int_item->address == (uint32_t)addr) {
+			res[ic++] = int_item->interrupt_no;
+		}
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
+	if(int_count) {
+		*int_count = ic;
+	}
+
+
+	return res;
+}
+
 int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 	acpi_aml_object_t* val_obj;
 	int32_t err_cnt = 0;
@@ -91,7 +150,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 						acpi_aml_object_t* int_dev_ref = linkedlist_get_data_at_position(item->package.elements, 2);
 
 						if(int_dev_ref->type == ACPI_AML_OT_RUNTIMEREF) {
-							acpi_aml_device_t* int_dev = acpi_device_lookup(ctx, int_dev_ref->name);
+							acpi_aml_device_t* int_dev = acpi_device_lookup_by_name(ctx, int_dev_ref->name);
 
 							if(int_dev) {
 								if(int_dev->dis && int_dev->disabled != 1) {
@@ -196,7 +255,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 							} else if(int_dev_ref->type == ACPI_AML_OT_RUNTIMEREF) {
 								PRINTLOG(ACPI, LOG_TRACE, "int device %s", int_dev_ref->name);
 
-								acpi_aml_device_t* int_dev = acpi_device_lookup(ctx, int_dev_ref->name);
+								acpi_aml_device_t* int_dev = acpi_device_lookup_by_name(ctx, int_dev_ref->name);
 
 								if(int_dev && int_dev->interrupts) {
 									acpi_aml_device_interrupt_t* int_obj = linkedlist_get_data_at_position(int_dev->interrupts, 0);
@@ -396,22 +455,37 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 	return 0;
 }
 
-acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name) {
+acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name, uint64_t address) {
 	iterator_t* iter = linkedlist_iterator_create(ctx->devices);
 	acpi_aml_device_t* res = NULL;
 
 	while(iter->end_of_iterator(iter) != 0) {
 		acpi_aml_device_t* d = iter->get_item(iter);
 
-		if(strlen(dev_name) == 4) {
-			if(strcmp(d->name + strlen(d->name) - 4, dev_name) == 0) {
-				res = d;
-				break;
+		if(dev_name) {
+			if(strlen(dev_name) == 4) {
+				if(strcmp(d->name + strlen(d->name) - 4, dev_name) == 0) {
+					res = d;
+					break;
+				}
+			} else {
+				if(strcmp(d->name, dev_name) == 0) {
+					res = d;
+					break;
+				}
 			}
-		} else {
-			if(strcmp(d->name, dev_name) == 0) {
-				res = d;
-				break;
+		} else if(d->adr) {
+			int64_t adr;
+
+			if(acpi_aml_read_as_integer(ctx, d->adr, &adr) == 0) {
+				PRINTLOG(ACPI, LOG_TRACE, "device addr 0x%lx looking for 0x%lx", adr, address);
+				if((uint64_t)adr == address) {
+					res = d;
+					break;
+				}
+
+			} else {
+				PRINTLOG(ACPI, LOG_ERROR, "device %s cannot read address", d->name);
 			}
 		}
 
