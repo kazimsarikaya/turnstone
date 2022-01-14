@@ -22,6 +22,7 @@
 #include <random.h>
 #include <memory/frame.h>
 #include <time/timer.h>
+#include <driver/network.h>
 
 int8_t kmain64(size_t entry_point);
 int8_t kmain64_init();
@@ -182,6 +183,11 @@ int8_t kmain64(size_t entry_point) {
 
 	if(sata_port_cnt == -1) {
 		PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...", 0);
+		cpu_hlt();
+	}
+
+	if(network_init() != 0) {
+		PRINTLOG(KERNEL, LOG_FATAL, "cannot init network. Halting...", 0);
 		cpu_hlt();
 	}
 
