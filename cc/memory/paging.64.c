@@ -468,7 +468,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 			fa_addr -= (fa_addr % FRAME_SIZE);
 		}
 
-		PRINTLOG(PAGING, LOG_TRACE, "section %i start 0x%08x pyhstart 0x%08x size 0x%08x\n", i, section_start, fa_addr, section_size);
+		PRINTLOG(PAGING, LOG_DEBUG, "section %i start 0x%08x pyhstart 0x%08x size 0x%08x", i, section_start, fa_addr, section_size);
 
 		if(i != LINKER_SECTION_TYPE_TEXT) {
 			p_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;

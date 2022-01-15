@@ -149,6 +149,7 @@ __attribute__((naked)) void task_save_registers(task_t* task) {
 		"popfq\n"
 		"pop %%rax\n"
 		"mov %%rsp, %17\n"
+		"retq\n"
 		: :
 		"m" (task->rax),
 		"m" (task->rbx),
@@ -207,6 +208,7 @@ __attribute__((naked)) void task_load_registers(task_t* task) {
 		"label1%=: pop %%rax\n"
 		"add $0x10, %%rsp\n"
 		"label2%=: mov %12, %%rdi\n"
+		"retq\n"
 		: :
 		"m" (task->rax),
 		"m" (task->rbx),

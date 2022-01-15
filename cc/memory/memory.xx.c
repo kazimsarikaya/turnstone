@@ -64,10 +64,13 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
 			lock_release(current_task->heap->lock);
 		}
 
-		lock_acquire(memory_heap_default->lock);
+		if(res == -1) {
+			lock_acquire(memory_heap_default->lock);
 
-		res = memory_heap_default->free(memory_heap_default, address);
-		lock_release(memory_heap_default->lock);
+			res = memory_heap_default->free(memory_heap_default, address);
+			lock_release(memory_heap_default->lock);
+		}
+
 	}else {
 		lock_acquire(heap->lock);
 		res = heap->free(heap, address);

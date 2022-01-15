@@ -57,8 +57,11 @@ void lock_acquire(lock_t lock) {
 
 void lock_release(lock_t lock) {
 	lock_internal_t* li = (lock_internal_t*)lock;
-	li->lock_value = 0;
-	li->owner_task_id = 0;
+
+	if(li) {
+		li->lock_value = 0;
+		li->owner_task_id = 0;
+	}
 }
 
 typedef struct {

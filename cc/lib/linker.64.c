@@ -91,6 +91,8 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start = 2 << 20;
 	kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_size = sec_size;
 
+	PRINTLOG(LINKER, LOG_TRACE, "text sec 0x%08x  0x%08x", 2 << 20, sec_size);
+
 	sec = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE];
 	sec_start = sec.section_start;
 	sec_size = sec.section_size + (FRAME_SIZE - (sec.section_size % FRAME_SIZE));
@@ -98,7 +100,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_size = sec_size;
 
 
-	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "reloc sec 0x%08x  0x%08x", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -120,7 +122,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "rodata sec 0x%08x  0x%08x", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -145,7 +147,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "bss sec 0x%08x  0x%08x", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -167,7 +169,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "data sec 0x%08x  0x%08x", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -190,7 +192,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%016lx  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "heap sec 0x%016lx  0x%08x", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -216,7 +218,7 @@ int8_t linker_remap_kernel() {
 
 	data_start = stack_top - sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "sec 0x%08x  0x%08x\n", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "stack sec 0x%08x  0x%08x", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
