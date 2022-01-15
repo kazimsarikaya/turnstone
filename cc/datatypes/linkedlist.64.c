@@ -601,37 +601,46 @@ void* linkedlist_iterator_get_item(iterator_t* iterator) {
 
 void* linkedlist_iterator_delete_item(iterator_t* iterator){
 	linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
+
 	if(iter->current == NULL) {
 		return NULL;
 	}
+
 	void* data = iter->current->data;
 	linkedlist_item_internal_t* current = iter->current;
 	linkedlist_item_internal_t* previous = iter->current->previous;
 	linkedlist_item_internal_t* next = iter->current->next;
+
 	if(previous == NULL) {
 		iter->list->head = next;
+
 		if(next != NULL) {
 			next->previous = NULL;
 		}
 	} else {
 		previous->next = next;
 	}
+
 	if(next == NULL) {
 		iter->list->tail = previous;
+
 		if(previous != NULL) {
 			previous->next = NULL;
 		}
 	} else {
 		next->previous = previous;
 	}
+
 	iter->current = next;
 	iter->current_deleted = 1;
 	iter->list->item_count--;
 	memory_free_ext(iter->list->heap, current);
+
 	if(iter->list->type == LINKEDLIST_TYPE_INDEXEDLIST) {
 		// TODO: check error
 		indexer_delete(iter->list->indexer, data);
 	}
+
 	return data;
 }
 
