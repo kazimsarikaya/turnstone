@@ -17,11 +17,11 @@ time_t time(time_t* t){
 
 time_t time_ns(time_t* t) {
 	if(t) {
-		*t = (time_t)(TIME_EPOCH);
+		*t = (time_t)(TIME_EPOCH * 1000);
 		return *t;
 	}
 
-	return (time_t)(TIME_EPOCH);
+	return (time_t)(TIME_EPOCH * 1000);
 }
 
 #endif
