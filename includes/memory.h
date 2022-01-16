@@ -9,6 +9,14 @@
 #include <types.h>
 
 typedef void* lock_t;
+
+typedef struct {
+	uint64_t malloc_count;
+	uint64_t free_count;
+	uint64_t total_size;
+	uint64_t free_size;
+}memory_heap_stat_t;
+
 /**
  * @struct memory_heap
  * @brief heap interface for all types
@@ -18,6 +26,7 @@ typedef struct memory_heap {
 	void* metadata; ///< internal heap metadata filled by heap implementation
 	void* (* malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
 	int8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
+	void (* stat)(struct memory_heap*, memory_heap_stat_t*); ///< return heap stats
 	lock_t lock;
 } memory_heap_t; ///< short hand for struct
 
@@ -35,6 +44,10 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end);
  * @return old default heap
  */
 memory_heap_t* memory_set_default_heap(memory_heap_t* heap);
+
+
+void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat);
+#define memory_get_heap_stat(s) memory_get_heap_stat_ext(NULL, s)
 
 /**
  * @brief malloc memory

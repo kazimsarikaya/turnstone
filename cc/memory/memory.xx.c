@@ -80,6 +80,21 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
 	return res;
 }
 
+void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat){
+	if(heap == NULL) {
+		task_t* current_task = task_get_current_task();
+		if(current_task != NULL && current_task->heap != NULL) {
+			current_task->heap->stat(current_task->heap, stat);
+
+			return;
+		}
+
+		memory_heap_default->stat(memory_heap_default, stat);
+	} else {
+		heap->stat(heap, stat);
+	}
+}
+
 int8_t memory_memset(void* address, uint8_t value, size_t size){
 	uint8_t* t_addr = (uint8_t*)address;
 
