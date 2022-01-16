@@ -16,6 +16,8 @@
  */
 void cpu_hlt();
 
+void cpu_idle();
+
 /**
  * @brief disables interrupts
  *

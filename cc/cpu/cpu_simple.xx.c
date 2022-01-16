@@ -26,6 +26,10 @@ void cpu_hlt() {
 	}
 }
 
+void cpu_idle() {
+	__asm__ __volatile__ ("hlt");
+}
+
 void cpu_cli() {
 	__asm__ __volatile__ ("cli");
 }
