@@ -8,6 +8,7 @@
 #include <memory/paging.h>
 #include <memory.h>
 #include <apic.h>
+#include <cpu/task.h>
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
@@ -183,38 +184,49 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
 
 
 void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
-	cpu_cli();
 
 	if(intnum >= 32 && interrupt_irqs != NULL) {
 		intnum -= 32;
-		if(interrupt_irqs[intnum] != NULL) {
 
+		if(interrupt_irqs[intnum] != NULL) {
 			interrupt_irq_list_item_t* item = interrupt_irqs[intnum];
+			uint8_t miss_count = 0;
 
 			while(item) {
 				interrupt_irq irq = item->irq;
 
-				if(irq && irq(frame, intnum) == 0) {
-					return;
+				if(irq != NULL) {
+					int8_t irq_res = irq(frame, intnum);
+
+					if(irq_res == 0) {
+						return;
+					} else {
+						PRINTLOG(KERNEL, LOG_WARNING, "irq res status %i for 0x%02x", irq_res, intnum);
+					}
+
+				} else {
+					PRINTLOG(KERNEL, LOG_FATAL, "null irq at shared irq list for 0x%02x", intnum);
 				}
 
+				miss_count++;
 				item = item->next;
 			}
 
-			PRINTLOG(KERNEL, LOG_FATAL, "cannot find shared irq for 0x%02x", intnum);
+			PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
+
+			return;
 		} else {
 			PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
 		}
 	}
 
 	printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016lx\n", intnum, frame->return_rip);
-	printf("cr4: 0x%x\n", cpu_read_cr4());
+	printf("cr4: 0x%lx\n", cpu_read_cr4());
 	printf("Cpu is halting.");
 	cpu_hlt();
 }
 
 void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint8_t intnum){
-	cpu_cli();
 	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%016lx\n", intnum, errcode, frame->return_rip);
 	printf("Cpu is halting.");
 	cpu_hlt();
@@ -273,16 +285,13 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 }
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-	cpu_cli();
 	printf("\nKERN: FATAL general protection error 0x%x at 0x%x:0x%lx\n", errcode, frame->return_cs, frame->return_rip);
 	printf("KERN: FATAL return stack at 0x%x:0x%lx frm ptr 0x%lx\n", errcode, frame->return_ss, frame->return_rsp, frame);
 	cpu_hlt();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-	cpu_cli();
-
-	printf("\nKERN: INFO page fault occured with code 0x%016lx at 0x%016lx\n", errcode, frame->return_rip);
+	printf("\nKERN: INFO page fault occured with code 0x%016lx at 0x%016lx task 0x%lx\n", errcode, frame->return_rip, task_get_id());
 
 	uint64_t cr2 = cpu_read_cr2();
 
@@ -295,7 +304,6 @@ void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_
 		printf("\nKERN: FATAL page error handling not implemented. Halting cpu.\n");
 		cpu_hlt();
 	}
-	cpu_sti();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0F_reserved(interrupt_frame_t* frame) {

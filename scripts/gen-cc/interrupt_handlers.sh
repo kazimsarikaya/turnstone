@@ -2,6 +2,7 @@
 
 cat <<EOF
 #include <types.h>
+#include <cpu.h>
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 
@@ -15,7 +16,9 @@ for i in $(seq 32 255); do
 
 cat <<EOF
 void __attribute__ ((interrupt)) interrupt_dummy_noerrcode_int${i}(interrupt_frame_t* frame){
+	cpu_cli();
   interrupt_dummy_noerrcode(frame, ${i});
+  cpu_sti();
 }
 EOF
 
