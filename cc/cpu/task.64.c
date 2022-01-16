@@ -13,6 +13,7 @@
 #include <video.h>
 #include <systeminfo.h>
 #include <linker.h>
+#include <utils.h>
 
 uint64_t task_id = 0;
 
@@ -23,13 +24,13 @@ linkedlist_t task_cleaner_queue = NULL;
 
 extern int8_t kmain64();
 
+int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
+
 extern uint64_t __stack_top;
 
 task_t* task_get_current_task(){
 	return current_task;
 }
-
-int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started", 0);
@@ -116,7 +117,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 		: : "r" (tss_selector)
 		);
 
-	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended", 0);
+	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%lx", current_task);
 
 	return 0;
 }
@@ -240,6 +241,50 @@ void task_cleanup(){
 	}
 }
 
+task_t* task_find_next_task() {
+	task_t* tmp_task = NULL;
+
+	while(1) {
+		tmp_task = linkedlist_queue_pop(task_queue);
+
+		if(tmp_task->message_waiting) {
+			if(tmp_task->message_queues) {
+
+				for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
+					linkedlist_t q = linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
+
+					if(q) {
+						if(linkedlist_size(q)) {
+							tmp_task->message_waiting = 0;
+							break;
+						}
+
+					} else {
+						PRINTLOG(TASKING, LOG_ERROR, "task 0x%li has null queue in message queues, removing task", tmp_task->task_id);
+						linkedlist_queue_push(task_cleaner_queue, tmp_task);
+
+						continue;
+					}
+
+				}
+
+			} else {
+				PRINTLOG(TASKING, LOG_ERROR, "task 0x%li in message waiting state without message queues, removing task", tmp_task->task_id);
+				linkedlist_queue_push(task_cleaner_queue, tmp_task);
+
+				continue;
+			}
+
+			linkedlist_queue_push(task_queue, tmp_task);
+		} else {
+			break;
+		}
+
+	}
+
+	return tmp_task;
+}
+
 void task_switch_task() {
 	if(task_queue == NULL) {
 		return;
@@ -250,7 +295,7 @@ void task_switch_task() {
 	}
 
 	if(current_task != NULL) {
-		if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT) {
+		if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting) {
 			return;
 		}
 
@@ -262,7 +307,7 @@ void task_switch_task() {
 		}
 	}
 
-	current_task = linkedlist_queue_pop(task_queue);
+	current_task = task_find_next_task();
 	current_task->last_tick_count = time_timer_get_tick_count();
 	task_load_registers(current_task);
 }
@@ -282,8 +327,34 @@ void task_end_task() {
 	__asm__ __volatile__ ("int $0x80\n");
 }
 
-void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point) {
-	cpu_cli();
+
+void task_add_message_queue(linkedlist_t queue){
+	if(current_task->message_queues == NULL) {
+		current_task->message_queues = linkedlist_create_list();
+	}
+
+	linkedlist_list_insert(current_task->message_queues, queue);
+}
+
+void task_set_message_waiting(){
+	current_task->message_waiting = 1;
+}
+
+int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point) {
+
+	frame_t* stack_frames;
+	uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
+	stack_size = stack_frames_cnt * FRAME_SIZE;
+
+	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+		PRINTLOG(TASKING, LOG_TRACE, "cannot allocate stack with frame count 0x%lx", stack_frames_cnt);
+
+		return -1;
+	}
+
+	uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+
+	memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
 	task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 	new_task->heap = heap;
@@ -292,8 +363,9 @@ void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_poin
 	new_task->entry_point = entry_point;
 	new_task->page_table = memory_paging_get_table();
 	new_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
-	new_task->stack = memory_malloc_ext(heap, sizeof(uint8_t) * stack_size, 0x0);
 	new_task->rflags = 0x202;
+	new_task->stack_size = stack_size;
+	new_task->stack = (void*)stack_va;
 
 	uint64_t rbp = (uint64_t)new_task->stack;
 	rbp += stack_size - 16;
@@ -306,16 +378,23 @@ void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_poin
 	stack[-3] = (uint64_t)apic_eoi;
 	stack[-4] = 0xdeadc0de;
 
-	PRINTLOG(TASKING, LOG_TRACE, "scheduling new task 0x%lx 0x%p stack at 0x%lx-0x%lx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
+	cpu_cli();
+
+	PRINTLOG(TASKING, LOG_INFO, "scheduling new task 0x%lx 0x%lp stack at 0x%lx-0x%lx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
 
 	linkedlist_stack_push(task_queue, new_task);
 
 	cpu_sti();
+
+	return 0;
 }
 
 void task_yield() {
 	if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
-		__asm__ __volatile__ ("int $0x80\n");
+		//	__asm__ __volatile__ ("int $0x80\n");
+		cpu_cli();
+		task_switch_task();
+		cpu_sti();
 	}
 }
 
@@ -325,12 +404,15 @@ int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
 	task_switch_task();
 
-	cpu_sti();
-
 	return 0;
 }
 
 
 uint64_t task_get_id() {
-	return current_task->task_id;
+	if(current_task) {
+		return current_task->task_id;
+	} else {
+		return TASK_KERNEL_TASK_ID;
+	}
+
 }
