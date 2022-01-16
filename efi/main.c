@@ -160,7 +160,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 							if(sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &kernel_data) == 0) {
 								PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%lp", kernel_data);
 
-								int64_t kernel_page_count = kernel_size / 4096 + 0x120;         // adding extra pages for stack and heap
+								int64_t kernel_page_count = kernel_size / 4096 + 0x150;         // adding extra pages for stack and heap
 								if(kernel_size % 4096) {
 									kernel_page_count++;
 								}
