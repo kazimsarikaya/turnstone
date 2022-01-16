@@ -10,6 +10,7 @@
 #include <cpu/interrupt.h>
 #include <memory.h>
 #include <memory/paging.h>
+#include <linkedlist.h>
 
 #define TASK_MAX_TICK_COUNT 50
 
@@ -84,6 +85,9 @@ typedef struct {
 	task_state_t state;
 	void* entry_point;
 	void* stack;
+	uint64_t stack_size;
+	linkedlist_t message_queues;
+	boolean_t message_waiting;
 	memory_page_table_t* page_table;
 	uint64_t rax;
 	uint64_t rbx;
@@ -113,6 +117,9 @@ void task_yield();
 uint64_t task_get_id();
 task_t* task_get_current_task();
 
-void task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point);
+void task_set_message_waiting();
+void task_add_message_queue(linkedlist_t queue);
+
+int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point);
 
 #endif
