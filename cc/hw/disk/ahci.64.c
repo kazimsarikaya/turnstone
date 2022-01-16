@@ -77,7 +77,6 @@ int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
 
 	if(irq_handled) {
 		apic_eoi();
-		cpu_sti();
 
 		return 0;
 	}
