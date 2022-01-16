@@ -3,8 +3,120 @@
 #include <memory.h>
 #include <video.h>
 #include <time.h>
+#include <video.h>
 
 mac_address_t BROADCAST_MAC = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+ipv4_address_t NETWORK_TEST_OUR_STATIC_IP = {192, 168, 122, 5};
+ipv4_address_t NETWORK_TEST_OUR_BROADCAST_IP = {192, 168, 122, 255};
+
+int8_t network_is_mac_address_eq(mac_address_t mac1, mac_address_t mac2){
+	uint8_t* mac1_b = (uint8_t*) mac1;
+	uint8_t* mac2_b = (uint8_t*) mac2;
+
+	for(uint64_t i = 0; i < sizeof(mac_address_t); i++) {
+		if(mac1_b[i] != mac2_b[i]) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int8_t network_is_ipv4_address_eq(ipv4_address_t ipv4_addr1, ipv4_address_t ipv4_addr2){
+	uint8_t* ipv4_addr1_b = (uint8_t*) ipv4_addr1;
+	uint8_t* ipv4_addr2_b = (uint8_t*) ipv4_addr2;
+
+	for(uint64_t i = 0; i < sizeof(ipv4_address_t); i++) {
+		if(ipv4_addr1_b[i] != ipv4_addr2_b[i]) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+network_ethernet_t*  network_process_packet(network_received_packet_t* packet, uint16_t* return_packet_len) {
+	network_ethernet_t* recv_eth_packet = (network_ethernet_t*)packet->packet_data;
+
+	uint16_t packet_type = BYTE_SWAP16(recv_eth_packet->type);
+
+	if(network_is_mac_address_eq(recv_eth_packet->destination, packet->device_mac_address) != 0 &&
+	   network_is_mac_address_eq(recv_eth_packet->destination, BROADCAST_MAC) != 0) {
+		PRINTLOG(NETWORK, LOG_TRACE, "destination is not this machine, discarding packet", 0);
+
+		return NULL;
+	}
+
+	network_ethernet_t* res = NULL;
+	uint16_t res_packet_len = 0;
+
+	if(packet_type == NETWORK_PROTOCOL_ARP) {
+		PRINTLOG(NETWORK, LOG_TRACE, "arp packet received", 0);
+
+		res = network_create_arp_reply_from_packet(packet);
+		res_packet_len = NETWORK_ARP_ETHERNET_PACKET_LEN;
+
+	} else if(packet_type == NETWORK_PROTOCOL_IP) {
+		res = network_process_ipv4_packet_from_packet(packet, &res_packet_len);
+	} else {
+		PRINTLOG(NETWORK, LOG_TRACE, "unimplemented packet type 0x%04x", packet_type);
+	}
+
+	if(return_packet_len == NULL) {
+		if(res) {
+			memory_free(res);
+		}
+	} else {
+		*return_packet_len = res_packet_len;
+	}
+
+	return res;
+}
+
+network_ethernet_t* network_process_ipv4_packet_from_packet(network_received_packet_t* packet, uint16_t* return_packet_len){
+	uint8_t* offset = (uint8_t*)packet->packet_data;
+
+	network_ethernet_t*  eth_packet = (network_ethernet_t*)offset;
+	offset += sizeof(network_ethernet_t);
+	network_ipv4_header_t* ipv4_hdr = (network_ipv4_header_t*)offset;
+
+	if(network_ipv4_header_checksum_verify(ipv4_hdr) != 0) {
+		PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet checksum failed", 0);
+
+		return NULL;
+	}
+
+	if(network_is_ipv4_address_eq(NETWORK_TEST_OUR_STATIC_IP, ipv4_hdr->destination_ip) != 0 &&
+	   network_is_ipv4_address_eq(NETWORK_TEST_OUR_BROADCAST_IP, ipv4_hdr->destination_ip) != 0) {
+		PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet destination isnot us", 0);
+		return NULL;
+	}
+
+	if(ipv4_hdr->protocol == NETWORK_IPV4_PROTOCOL_ICMP) {
+		offset += ipv4_hdr->header_length * 4;
+		network_icmp_header_t* icmp_hdr = (network_icmp_header_t*)offset;
+
+		if(icmp_hdr->type == NETWORK_ICMP_ECHO_REQUEST && icmp_hdr->code == NETWORK_ICMP_ECHO_CODE) {
+			uint16_t pp_len = 0;
+			offset += sizeof(network_icmp_ping_header_t);
+
+			network_icmp_ping_header_t* ping = network_create_ping_packet(1, icmp_hdr->identifier, icmp_hdr->sequence, NETWORK_ICMP_MIN_DATA_SIZE, offset, &pp_len);
+			network_ipv4_header_t* ip = network_create_ipv4_packet_from_icmp_packet(NETWORK_TEST_OUR_STATIC_IP, ipv4_hdr->source_ip, (network_icmp_header_t*)ping, pp_len);
+			network_ethernet_t* reply_eth_packet = network_create_ethernet_packet_from_ipv4_packet(eth_packet->source, packet->device_mac_address, ip, return_packet_len);
+
+			return reply_eth_packet;
+		} else {
+			PRINTLOG(NETWORK, LOG_TRACE, "unimplemented icmp type 0x%02x code 0x%02x", icmp_hdr->type, icmp_hdr->code);
+		}
+
+
+	} else {
+		PRINTLOG(NETWORK, LOG_TRACE, "unimplemented ipv4 protocol 0x%02x", ipv4_hdr->protocol);
+	}
+
+	return NULL;
+}
+
 
 uint16_t network_ipv4_header_checksum(network_ipv4_header_t* ipv4_hdr){
 	uint8_t* data_tmp = (uint8_t*)ipv4_hdr;
@@ -94,8 +206,6 @@ network_ethernet_t* network_create_ethernet_packet_from_ipv4_packet(mac_address_
 
 	*len = sizeof(network_ethernet_t) + BYTE_SWAP16(ipv4_hdr->total_length);
 
-	PRINTLOG(KERNEL, LOG_INFO, "eth pack len %i", *len);
-
 	network_ethernet_t* eth_packet = memory_malloc(*len);
 
 	memory_memcopy(dst, eth_packet->destination, sizeof(mac_address_t));
@@ -114,8 +224,6 @@ network_ethernet_t* network_create_ethernet_packet_from_ipv4_packet(mac_address_
 
 network_udp_header_t* network_create_udp_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data){
 	uint16_t packet_len = sizeof(network_udp_header_t) + len;
-
-	PRINTLOG(KERNEL, LOG_INFO, "udp pack len %i", packet_len);
 
 	network_udp_header_t* res = memory_malloc(packet_len);
 
@@ -158,8 +266,6 @@ network_udp_header_t* network_create_udp_packet_from_data(uint16_t sp, uint16_t 
 network_ipv4_header_t* network_create_ipv4_packet_from_udp_packet(ipv4_address_t sip, ipv4_address_t dip, network_udp_header_t* udp_hdr){
 	uint16_t packet_len = sizeof(network_ipv4_header_t) + BYTE_SWAP16(udp_hdr->length);
 
-	PRINTLOG(KERNEL, LOG_INFO, "ipv4 pack len %i", packet_len);
-
 	network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);
 
 	ipv4_packet->version = NETWORK_IPV4_VERSION;
@@ -188,8 +294,6 @@ network_ipv4_header_t* network_create_ipv4_packet_from_udp_packet(ipv4_address_t
 	uint8_t* buf = (uint8_t*)ipv4_packet;
 	buf += ipv4_packet->header_length * 4;
 
-	PRINTLOG(KERNEL, LOG_INFO, "%li %li %i", buf, ipv4_packet, udp_hdr->length);
-
 	memory_memcopy((void*)udp_hdr, buf, BYTE_SWAP16(udp_hdr->length));
 
 	memory_free(udp_hdr);
@@ -200,8 +304,6 @@ network_ipv4_header_t* network_create_ipv4_packet_from_udp_packet(ipv4_address_t
 
 network_ipv4_header_t* network_create_ipv4_packet_from_icmp_packet(ipv4_address_t sip, ipv4_address_t dip, network_icmp_header_t* icmp_hdr, uint16_t icmp_packet_len){
 	uint16_t packet_len = sizeof(network_ipv4_header_t) + icmp_packet_len;
-
-	PRINTLOG(KERNEL, LOG_INFO, "ipv4 pack len %i", packet_len);
 
 	network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);
 
@@ -219,13 +321,39 @@ network_ipv4_header_t* network_create_ipv4_packet_from_icmp_packet(ipv4_address_
 	uint8_t* buf = (uint8_t*)ipv4_packet;
 	buf += ipv4_packet->header_length * 4;
 
-	PRINTLOG(KERNEL, LOG_INFO, "%li %li %i", buf, ipv4_packet, packet_len);
-
 	memory_memcopy((void*)icmp_hdr, buf, icmp_packet_len);
 
 	memory_free(icmp_hdr);
 
 	return ipv4_packet;
+}
+
+network_ethernet_t* network_create_arp_reply_from_packet(network_received_packet_t* packet) {
+	network_arp_t* arp_packet = (network_arp_t*)(packet->packet_data + sizeof(network_ethernet_t));
+
+	if(network_is_ipv4_address_eq(NETWORK_TEST_OUR_STATIC_IP, arp_packet->target_ip) != 0) {
+		return NULL;
+	}
+
+	uint8_t* buffer = memory_malloc(sizeof(packet->packet_len));
+	memory_memcopy(packet->packet_data, buffer, packet->packet_len);
+
+	arp_packet = (network_arp_t*)(buffer + sizeof(network_ethernet_t));
+
+	memory_memcopy(arp_packet->source_mac, arp_packet->target_ip, sizeof(ipv4_address_t));
+	memory_memcopy(arp_packet->source_ip, arp_packet->target_mac, sizeof(mac_address_t));
+
+	memory_memcopy(packet->device_mac_address, arp_packet->source_mac, sizeof(mac_address_t));
+	memory_memcopy(NETWORK_TEST_OUR_STATIC_IP, arp_packet->source_ip, sizeof(ipv4_address_t));
+
+	arp_packet->operation_code = BYTE_SWAP16(NETWORK_ARP_OPERATION_CODE_ANSWER);
+
+	network_ethernet_t* eth_packet = (network_ethernet_t*)buffer;
+
+	memory_memcopy(eth_packet->source, eth_packet->destination, sizeof(mac_address_t));
+	memory_memcopy(packet->device_mac_address, eth_packet->source, sizeof(mac_address_t));
+
+	return eth_packet;
 }
 
 network_ethernet_t* network_create_arp_request(mac_address_t src_mac, ipv4_address_t src_ip, ipv4_address_t tgt_ip){

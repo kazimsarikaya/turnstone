@@ -2,6 +2,7 @@
 #define ___NETWORK_PROTOCOLS 0
 
 #include <types.h>
+#include <driver/network.h>
 
 #define NETWORK_PROTOCOL_ARP 0x0806
 #define NETWORK_PROTOCOL_IP  0x0800
@@ -123,6 +124,17 @@ typedef struct {
 	uint16_t urgent_pointer;
 }__attribute__((packed)) network_tcp_header_t;
 
+typedef struct {
+	uint64_t packet_len;
+	uint8_t* packet_data;
+	linkedlist_t return_queue;
+	mac_address_t device_mac_address;
+} network_received_packet_t;
+
+typedef struct {
+	uint64_t packet_len;
+	uint8_t* packet_data;
+} network_transmit_packet_t;
 
 uint16_t network_ipv4_header_checksum(network_ipv4_header_t* ipv4_hdr);
 int8_t network_ipv4_header_checksum_verify(network_ipv4_header_t* ipv4_hdr);
@@ -136,5 +148,9 @@ network_ipv4_header_t* network_create_ipv4_packet_from_icmp_packet(ipv4_address_
 network_ethernet_t* network_create_ethernet_packet_from_ipv4_packet(mac_address_t dst, mac_address_t src, network_ipv4_header_t* ipv4_hdr, uint16_t* len);
 
 network_ethernet_t* network_create_arp_request(mac_address_t src_mac, ipv4_address_t src_ip, ipv4_address_t tgt_ip);
+network_ethernet_t* network_create_arp_reply_from_packet(network_received_packet_t* packet);
+
+network_ethernet_t* network_process_packet(network_received_packet_t* packet, uint16_t* return_packet_len);
+network_ethernet_t* network_process_ipv4_packet_from_packet(network_received_packet_t* packet, uint16_t* return_packet_len);
 
 #endif

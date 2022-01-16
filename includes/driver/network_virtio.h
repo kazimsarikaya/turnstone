@@ -5,6 +5,7 @@
 #include <pci.h>
 #include <driver/network_protocols.h>
 #include <driver/virtio.h>
+#include <linkedlist.h>
 
 #define VIRTIO_NETWORK_F_CHEKCSUM         (1ULL <<  0)
 #define VIRTIO_NETWORK_F_GUEST_CHEKCSUM   (1ULL <<  1)
@@ -116,7 +117,7 @@ struct  {
 #define VIRTIO_NETWORK_CTRL_QUEUE_ITEM_LENGTH     16
 
 typedef struct {
-	pci_dev_t* pci_dev;
+	pci_dev_t* pci_netdev;
 	boolean_t is_legacy;
 	boolean_t has_msix;
 	uint16_t msix_table_size;
@@ -135,6 +136,7 @@ typedef struct {
 	uint16_t max_vq_count;
 	uint16_t mtu;
 	uint64_t features;
+	uint16_t queue_size;
 	pci_capability_msix_t* msix_cap;
 	virtio_queue_t* vq_rx;
 	virtio_notification_data_t* nd_rx;
@@ -142,8 +144,9 @@ typedef struct {
 	virtio_notification_data_t* nd_tx;
 	virtio_queue_t* vq_ctrl;
 	virtio_notification_data_t* nd_ctrl;
+	linkedlist_t transmit_queue;
 }network_virtio_dev_t;
 
-int8_t network_virtio_init(pci_dev_t* netdev);
+int8_t network_virtio_init(pci_dev_t* pci_netdev);
 
 #endif
