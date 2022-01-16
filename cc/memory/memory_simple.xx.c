@@ -253,6 +253,10 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 		if(empty_hi == NULL) {
 			if(align == 0) {
+				memory_heap_stat_t stat;
+				memory_get_heap_stat(&stat);
+
+				PRINTLOG(SIMPLEHEAP, LOG_ERROR, "memory stat ts 0x%lx fs 0x%lx mc 0x%lx fc 0x%lx diff 0x%lx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
 				PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot 0x%lx 0x%lx 0x%lx", empty_hi_t, empty_hi_t->size * sizeof(heapinfo_t), empty_hi_t->flags);
 				return NULL;
 			}

@@ -96,6 +96,10 @@ void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat){
 }
 
 int8_t memory_memset(void* address, uint8_t value, size_t size){
+	if(address == NULL) {
+		return -1;
+	}
+
 	uint8_t* t_addr = (uint8_t*)address;
 
 	size_t max_regsize = sizeof(size_t);
@@ -153,6 +157,10 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 }
 
 int8_t memory_memcopy(void* source, void* destination, size_t size){
+	if(source == NULL || destination == NULL) {
+		return -1;
+	}
+
 	uint8_t* s_addr = (uint8_t*)source;
 	uint8_t* t_addr = (uint8_t*)destination;
 
@@ -210,6 +218,10 @@ int8_t memory_memcopy(void* source, void* destination, size_t size){
 }
 
 int8_t memory_memcompare(void* mem1, void* mem2, size_t size) {
+	if(mem1 == NULL || mem2 == NULL) {
+		return -1;
+	}
+
 	uint8_t* mem1_t = (uint8_t*)mem1;
 	uint8_t* mem2_t = (uint8_t*)mem2;
 	for(size_t i = 0; i < size; i++) {
