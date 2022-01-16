@@ -8,6 +8,7 @@
 #include <video.h>
 #include <cpu/sync.h>
 #include <linker.h>
+#include <utils.h>
 #if ___TESTMODE == 1
 #include <valgrind.h>
 #endif
@@ -25,7 +26,7 @@
 /*! heap magic for protection*/
 #define HEAP_INFO_MAGIC                (0xaa55)
 /*! heap padding for protection */
-#define HEAP_INFO_PADDING              (0xB16B00B5)
+#define HEAP_INFO_PADDING              (0xaa55aa55)
 /*! heap header */
 #define HEAP_HEADER                    HEAP_INFO_PADDING
 
@@ -44,6 +45,10 @@ typedef struct __heapmetainfo {
 	struct __heapinfo* last; ///< previous hi node
 	struct __heapinfo* first_empty; ///< next hi node
 	struct __heapinfo* last_full; ///< previous hi node
+	uint64_t malloc_count;
+	uint64_t free_count;
+	uint64_t total_size;
+	uint64_t free_size;
 	uint32_t padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
 
@@ -76,6 +81,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
  * @return         0 if successed
  */
 int8_t memory_simple_free(memory_heap_t* heap, void* address);
+
+void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat);
 
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	size_t heap_start, heap_end;
@@ -117,10 +124,15 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	heap->metadata = metadata;
 	heap->malloc = &memory_simple_malloc_ext;
 	heap->free = &memory_simple_free;
+	heap->stat = &memory_simple_stat;
 
 	if((metadata->flags & HEAP_INFO_FLAG_HEAP_INITED) == HEAP_INFO_FLAG_HEAP_INITED) {
+		PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "heap already initialized between 0x%lx 0x%lx", heap_start, heap_end);
+
 		return heap;
 	}
+
+	PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "building internal structures between 0x%lx 0x%lx", heap_start, heap_end);
 
 	size_t hibottom_start = metadata_start + sizeof(heapmetainfo_t);
 
@@ -139,6 +151,8 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 	metadata->last = hitop;
 	metadata->first_empty = hibottom;
 	metadata->last_full = hitop;
+	metadata->total_size = (uint64_t)(heap_end - hibottom_start - sizeof(heapinfo_t) * 2);
+	metadata->free_size = metadata->total_size;
 
 	hibottom->magic = HEAP_INFO_MAGIC;
 	hibottom->padding = HEAP_INFO_PADDING;
@@ -156,6 +170,8 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 
 
 	metadata->flags |= HEAP_INFO_FLAG_USED;
+
+	PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "heap created between 0x%lx 0x%lx", heap_start, heap_end);
 
 	return heap;
 }
@@ -183,7 +199,7 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
 		}
 
 	} else {
-		heapinfo_t* prev =   heap->first_empty;
+		heapinfo_t* prev = heap->first_empty;
 
 		if (item < prev) {
 			heap->first_empty = item;
@@ -216,10 +232,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	heapinfo_t* empty_hi = simple_heap->first_empty;
 
 	size_t a_size = size;
-	size_t t_size =  a_size / sizeof(heapinfo_t);
-	if ((a_size % sizeof(heapinfo_t)) != 0) {
-		t_size++;
-	}
+	size_t t_size =  (a_size + sizeof(heapinfo_t) - 1) / sizeof(heapinfo_t);
 
 	empty_hi = simple_heap->first_empty;
 
@@ -235,11 +248,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 			}
 		}
 
+		heapinfo_t* empty_hi_t = empty_hi;
 		empty_hi = empty_hi->next;
 
 		if(empty_hi == NULL) {
 			if(align == 0) {
-				PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot", 0);
+				PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot 0x%lx 0x%lx 0x%lx", empty_hi_t, empty_hi_t->size * sizeof(heapinfo_t), empty_hi_t->flags);
 				return NULL;
 			}
 			break;
@@ -263,10 +277,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 			empty_hi = simple_heap->first_empty;
 
 			a_size = size + align;  // this time at align to the dize
-			t_size =  a_size / sizeof(heapinfo_t);
-			if ((a_size % sizeof(heapinfo_t)) != 0) {
-				t_size++;
-			}
+			t_size =  (a_size + sizeof(heapinfo_t) - 1) / sizeof(heapinfo_t);
 
 			//find first empty and enough slot
 			while(1) { // size enough?
@@ -300,10 +311,13 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 			//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
 #if ___TESTMODE == 1
-			VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 0, 1);
+			VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 2, 1);
 #endif
 
 			PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+
+			simple_heap->free_size -= (empty_hi->size - 1) * sizeof(heapinfo_t);
+			simple_heap->malloc_count++;
 
 			return empty_hi + 1;
 		}
@@ -314,7 +328,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	if(rem > 1) { // we slot should store at least one item (inclusive size)
 		// we need divide slot
-		heapinfo_t* empty_tmp = empty_hi + 1 + t_size;
+		heapinfo_t* empty_tmp = empty_hi + (1 + t_size); // (1+t_size) is our allocation size 1 for header t_size for request
 
 		empty_tmp->magic =  HEAP_INFO_MAGIC;
 		empty_tmp->padding = HEAP_INFO_PADDING;
@@ -333,7 +347,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 		empty_hi->size = 1 + t_size;     // new slot's size 1 for include header, t_size aligned requested size
 
-
+		simple_heap->free_size -= sizeof(heapinfo_t); // meta occupies free area
 	} // if we not we should keep slot's original size
 
 
@@ -356,10 +370,13 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 		//memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
 #if ___TESTMODE == 1
-		VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 0, 1);
+		VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 2, 1);
 #endif
 
 		PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+
+		simple_heap->free_size -= (empty_hi->size - 1) * sizeof(heapinfo_t);
+		simple_heap->malloc_count++;
 
 		return empty_hi + 1;
 	}
@@ -395,6 +412,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 			hi_r->next->previous = hi_r;
 		}
 
+		simple_heap->free_size -= sizeof(heapinfo_t);
+
 		right_exists = 1; // set flag for setting previous of hi_r after left
 	}
 
@@ -413,6 +432,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 			empty_hi->next = hi_r;
 			hi_r->previous = empty_hi;
 		}
+
+		simple_heap->free_size -= sizeof(heapinfo_t);
 	} else {
 		// ok hi_a is a dead area
 		if(right_exists) {
@@ -433,8 +454,11 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 				simple_heap->first_empty = empty_hi->next;
 				simple_heap->first_empty->previous = NULL;
 			}
+
 			memory_memclean(empty_hi, sizeof(heapinfo_t)); // cleanup data
 		}
+
+		simple_heap->free_size -= sizeof(heapinfo_t);
 	}
 
 	// memory_simple_insert_sorted(simple_heap, 1, hi_a); // add area used
@@ -446,11 +470,15 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 	hi_a->flags = HEAP_INFO_FLAG_USED;
 
 
+
 	#if ___TESTMODE == 1
-	VALGRIND_MALLOCLIKE_BLOCK(aligned_addr, hi_a_size * sizeof(heapinfo_t), 0, 1);
+	VALGRIND_MALLOCLIKE_BLOCK(aligned_addr, hi_a_size * sizeof(heapinfo_t), 2, 1);
 	#endif
 
 	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", aligned_addr, hi_a_size * sizeof(heapinfo_t));
+
+	simple_heap->free_size -= ( hi_a->size - 1) * sizeof(heapinfo_t);
+	simple_heap->malloc_count++;
 
 	return (uint8_t*)aligned_addr;
 
@@ -467,14 +495,19 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	void* hitop = simple_heap->last; // need as void*
 
 	if(address < hibottom || address >= hitop) {
+		PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%lp not inside heap", address);
+
 		return -1;
 	}
 
 	heapinfo_t* hi = ((heapinfo_t*)address) - 1;
+
 	if(hi->magic != HEAP_INFO_MAGIC && hi->padding != HEAP_INFO_PADDING) {
-		//incorrect address to clean
+		PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%lp broken", address);
+
 		return -1;
 	}
+
 	if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
 		return 0;
 	}
@@ -487,6 +520,9 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	hi->previous = NULL;
 	hi->next = NULL;
 
+	simple_heap->free_count++;
+	simple_heap->free_size += size;
+
 	memory_simple_insert_sorted(simple_heap, 0, hi);
 
 	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp freed with size 0x%lx", address, size);
@@ -497,4 +533,16 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 #endif
 
 	return 0;
+}
+
+void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat) {
+	if(stat) {
+		heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
+
+		stat->malloc_count = simple_heap->malloc_count;
+		stat->free_count = simple_heap->free_count;
+		stat->total_size = simple_heap->total_size;
+		stat->free_size = simple_heap->free_size;
+
+	}
 }
