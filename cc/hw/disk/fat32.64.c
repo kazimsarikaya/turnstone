@@ -765,7 +765,6 @@ path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, path
 			}
 
 			pi->close(pi);
-			memory_free(t_p_str);
 		}
 
 		iter = iter->next(iter);
