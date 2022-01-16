@@ -53,7 +53,7 @@ typedef struct {
 	uint16_t flags;
 	uint16_t index;
 	uint16_t ring[VIRTIO_QUEUE_SIZE] /* queue size */;
-	/* uint16_t used_event; Only if VIRTIO_F_EVENT_IDX */
+	uint16_t used_event;  /* Only if VIRTIO_F_EVENT_IDX */
 } __attribute__((packed)) virtio_queue_avail_t;
 
 typedef struct {
@@ -68,7 +68,7 @@ typedef struct {
 	uint16_t flags;
 	uint16_t index;
 	virtio_queue_used_element_t ring[VIRTIO_QUEUE_SIZE]; /* queue size */;
-	/*uint16_t avail_event;  Only if VIRTIO_F_EVENT_IDX */
+	uint16_t avail_event; /* Only if VIRTIO_F_EVENT_IDX */
 } __attribute__((packed)) virtio_queue_used_t;
 
 typedef struct {
@@ -93,6 +93,7 @@ typedef struct {
 	virtio_queue_descriptor_t descriptors[VIRTIO_QUEUE_SIZE] __attribute__ ((aligned(16)));
 	virtio_queue_avail_t avail __attribute__ ((aligned(2)));
 	virtio_queue_used_t used __attribute__ ((aligned(4)));
+	uint16_t last_used_index;
 }__attribute__((packed)) virtio_queue_t;
 
 /*

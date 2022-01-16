@@ -4,27 +4,84 @@
 #include <linkedlist.h>
 #include <memory.h>
 #include <video.h>
+#include <cpu/task.h>
+#include <cpu.h>
+#include <time/timer.h>
+#include <driver/network_protocols.h>
+
+int8_t network_process_rx();
+
+linkedlist_t network_received_packets = NULL;
+
+int8_t network_process_rx(){
+
+	task_add_message_queue(network_received_packets);
+
+	while(1) {
+		if(linkedlist_size(network_received_packets) == 0) {
+			task_set_message_waiting();
+			task_yield();
+		}
+
+		while(linkedlist_size(network_received_packets)) {
+			network_received_packet_t* packet = linkedlist_queue_pop(network_received_packets);
+
+			if(packet) {
+				PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%lx", packet->packet_len);
+
+				uint16_t return_packet_len = 0;
+				network_ethernet_t* return_packet = network_process_packet(packet, &return_packet_len);
+
+				linkedlist_t return_queue = packet->return_queue;
+
+				memory_free(packet->packet_data);
+				memory_free(packet);
+
+				if(return_packet && return_packet_len) {
+					PRINTLOG(NETWORK, LOG_TRACE, "network packet proccessed with return len 0x%lx", return_packet_len);
+
+					if(return_queue) {
+						network_transmit_packet_t* tx_packet = memory_malloc(sizeof(network_transmit_packet_t));
+						tx_packet->packet_len = return_packet_len;
+						tx_packet->packet_data = (uint8_t*)return_packet;
+
+						linkedlist_queue_push(return_queue, tx_packet);
+					} else {
+						PRINTLOG(NETWORK, LOG_TRACE, "there is no return packet 0x%lx", return_packet_len);
+					}
+
+				} else {
+					PRINTLOG(NETWORK, LOG_TRACE, "packet discarded", 0);
+				}
+
+			}
+
+			PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%x", linkedlist_size(network_received_packets));
+		}
+
+	}
+
+	return 0;
+}
 
 
 int8_t network_init() {
 	PRINTLOG(NETWORK, LOG_INFO, "network devices starting", 0);
 	int8_t errors = 0;
 
-	linkedlist_t netdevs = PCI_CONTEXT->network_controllers;
-
-	iterator_t* iter = linkedlist_iterator_create(netdevs);
+	iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->network_controllers);
 
 	while(iter->end_of_iterator(iter) != 0) {
-		pci_dev_t* netdev = iter->get_item(iter);
+		pci_dev_t* pci_netdev = iter->get_item(iter);
 
-		pci_common_header_t* pci_netdev = netdev->pci_header;
+		pci_common_header_t* pci_header = pci_netdev->pci_header;
 
 
 
-		if(pci_netdev->vendor_id == NETWORK_DEVICE_VENDOR_ID_VIRTIO && (pci_netdev->device_id == NETWORK_DEVICE_DEVICE_ID_VIRTNET1 || pci_netdev->device_id == NETWORK_DEVICE_DEVICE_ID_VIRTNET2)) {
-			errors += network_virtio_init(netdev);
+		if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_VIRTIO && (pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_VIRTNET1 || pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_VIRTNET2)) {
+			errors += network_virtio_init(pci_netdev);
 		} else {
-			PRINTLOG(NETWORK, LOG_ERROR, "unknown net device vendor 0x%04x device 0x%04x", pci_netdev->vendor_id, pci_netdev->device_id);
+			PRINTLOG(NETWORK, LOG_ERROR, "unknown net device vendor 0x%04x device 0x%04x", pci_header->vendor_id, pci_header->device_id);
 			errors += -1;
 		}
 
@@ -33,6 +90,8 @@ int8_t network_init() {
 
 	iter->destroy(iter);
 
+	network_received_packets = linkedlist_create_queue_with_heap(NULL);
+	task_create_task(NULL, 64 << 10, &network_process_rx);
 
 	PRINTLOG(NETWORK, LOG_INFO, "network devices started", 0);
 

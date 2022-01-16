@@ -109,15 +109,15 @@ extern uint8_t logging_module_levels[];
 #endif
 
 #ifndef LOG_LEVEL_NETWORK
-#define LOG_LEVEL_NETWORK LOG_TRACE
+#define LOG_LEVEL_NETWORK LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_VIRTIO
-#define LOG_LEVEL_VIRTIO LOG_TRACE
+#define LOG_LEVEL_VIRTIO LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_VIRTIONET
-#define LOG_LEVEL_VIRTIONET LOG_TRACE
+#define LOG_LEVEL_VIRTIONET LOG_INFO
 #endif
 
 
