@@ -254,7 +254,7 @@ void linker_destroy_objectctx(linker_context_t* ctx) {
 		fclose(ctx->objectfile_ctx.file);
 	}
 
-	memory_free_ext(ctx->heap, ctx->objectfile_ctx.file_name);
+	// memory_free_ext(ctx->heap, ctx->objectfile_ctx.file_name);
 	memory_free_ext(ctx->heap, ctx->objectfile_ctx.sections);
 	memory_free_ext(ctx->heap, ctx->objectfile_ctx.shstrtab);
 	memory_free_ext(ctx->heap, ctx->objectfile_ctx.strtab);
@@ -862,8 +862,8 @@ void linker_destroy_context(linker_context_t* ctx) {
 
 
 	memory_free_ext(ctx->heap, ctx->entry_point);
-	memory_free_ext(ctx->heap, ctx->output);
-	memory_free_ext(ctx->heap, ctx->map_file);
+	//memory_free_ext(ctx->heap, ctx->output);
+	//memory_free_ext(ctx->heap, ctx->map_file);
 	memory_free_ext(ctx->heap, ctx);
 }
 
