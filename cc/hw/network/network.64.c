@@ -1,5 +1,6 @@
 #include <driver/network.h>
 #include <driver/network_virtio.h>
+#include <driver/network_e1000.h>
 #include <pci.h>
 #include <linkedlist.h>
 #include <memory.h>
@@ -80,6 +81,8 @@ int8_t network_init() {
 
 		if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_VIRTIO && (pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_VIRTNET1 || pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_VIRTNET2)) {
 			errors += network_virtio_init(pci_netdev);
+		} else if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_INTEL && ((pci_header->device_id | NETWORK_DEVICE_DEVICE_ID_E1000) == NETWORK_DEVICE_DEVICE_ID_E1000)) {
+			errors += network_e1000_init(pci_netdev);
 		} else {
 			PRINTLOG(NETWORK, LOG_ERROR, "unknown net device vendor 0x%04x device 0x%04x", pci_header->vendor_id, pci_header->device_id);
 			errors += -1;
