@@ -7,6 +7,7 @@
 #include <indexer.h>
 #include <cpu/sync.h>
 #include <strings.h>
+#include <video.h>
 
 /**
  * @struct linkedlist_item_internal
@@ -502,19 +503,30 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position){
 void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
 	void* result = NULL;
 	linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+
+	if(l == NULL) {
+		return result;
+	}
+
 	if(position >= l->item_count) {
 		return result;
 	}
+
 	iterator_t* iter = linkedlist_iterator_create(l);
+
 	while(iter->end_of_iterator(iter) != 0) {
 		if(position == 0) {
 			result = iter->get_item(iter);
+
 			break;
 		}
+
 		position--;
 		iter = iter->next(iter);
 	}
+
 	iter->destroy(iter);
+
 	return result;
 }
 
