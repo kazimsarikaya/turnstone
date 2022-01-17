@@ -23,7 +23,7 @@ int8_t network_e1000_rx_init(network_e1000_dev_t* dev);
 int8_t network_e1000_tx_init(network_e1000_dev_t* dev);
 void network_e1000_tx_poll(network_e1000_dev_t* dev, void* pkt, uint16_t length);
 void network_e1000_rx_poll(network_e1000_dev_t* netdev);
-int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t network_e1000_process_tx();
 
 
@@ -299,7 +299,7 @@ void network_e1000_rx_poll(network_e1000_dev_t* dev) {
 	}
 }
 
-int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
+int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
 	UNUSED(frame);
 	UNUSED(intnum);
 
@@ -490,7 +490,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 	network_e1000_tx_init(dev);
 
 	uint8_t isrnum = dev->irq_base;
-	interrupt_irq_set_handler(isrnum, &network_virtio_rx_isr);
+	interrupt_irq_set_handler(isrnum, &network_e1000_rx_isr);
 	//apic_ioapic_setup_irq(isrnum, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
 	apic_ioapic_enable_irq(isrnum);
 
