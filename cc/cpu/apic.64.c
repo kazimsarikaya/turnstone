@@ -340,14 +340,15 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
 		if(irq >= max_r_e) {
 			irq -= max_r_e;
 			base_irq += max_r_e;
+
 			continue;
 		}
 
 		io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq;
 		if(disabled) {
-			io_apic_r->value |= disabled;
+			io_apic_r->value |= APIC_IOAPIC_INTERRUPT_DISABLED;
 		} else {
-			io_apic_r->value ^= disabled;
+			io_apic_r->value &= ~APIC_IOAPIC_INTERRUPT_DISABLED;
 		}
 
 		PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x %s", irq, disabled == 0 ? "enabled" : "disabled");
