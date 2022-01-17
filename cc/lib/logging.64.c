@@ -21,6 +21,7 @@ char_t* logging_module_names[] = {
 	"NETWORK",
 	"VIRTIO",
 	"VIRTIONET",
+	"E1000",
 };
 
 
@@ -57,4 +58,5 @@ uint8_t logging_module_levels[] = {
 	LOG_LEVEL_NETWORK,
 	LOG_LEVEL_VIRTIO,
 	LOG_LEVEL_VIRTIONET,
+	LOG_LEVEL_E1000,
 };

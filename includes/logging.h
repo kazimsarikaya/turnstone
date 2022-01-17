@@ -23,6 +23,7 @@ typedef enum {
 	NETWORK,
 	VIRTIO,
 	VIRTIONET,
+	E1000,
 } logging_modules_t;
 
 typedef enum {
@@ -118,6 +119,10 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_VIRTIONET
 #define LOG_LEVEL_VIRTIONET LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_E1000
+#define LOG_LEVEL_E1000 LOG_INFO
 #endif
 
 
