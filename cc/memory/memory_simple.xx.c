@@ -45,10 +45,15 @@ typedef struct __heapmetainfo {
 	struct __heapinfo* last; ///< previous hi node
 	struct __heapinfo* first_empty; ///< next hi node
 	struct __heapinfo* last_full; ///< previous hi node
+	struct {
+		struct __heapinfo* head;
+		struct __heapinfo* tail;
+	} __attribute__ ((packed)) fast_classes[128];
 	uint64_t malloc_count;
 	uint64_t free_count;
 	uint64_t total_size;
 	uint64_t free_size;
+	uint64_t fast_hit;
 	uint32_t padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
 
@@ -233,6 +238,36 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 	size_t a_size = size;
 	size_t t_size =  (a_size + sizeof(heapinfo_t) - 1) / sizeof(heapinfo_t);
+
+	if(align <= sizeof(heapinfo_t) && (t_size - 1) < 128 && simple_heap->fast_classes[t_size - 1].head != NULL) {
+		heapinfo_t* res = simple_heap->fast_classes[t_size - 1].head;
+
+		simple_heap->fast_classes[t_size - 1].head = simple_heap->fast_classes[t_size - 1].head->next;
+
+		if(simple_heap->fast_classes[t_size - 1].head) {
+			simple_heap->fast_classes[t_size - 1].head->previous = NULL;
+		}
+
+		if(res == simple_heap->fast_classes[t_size - 1].tail) {
+			simple_heap->fast_classes[t_size - 1].tail = NULL;
+		}
+
+		res->previous = NULL;
+		res->next = NULL;
+		res->flags |= HEAP_INFO_FLAG_USED;
+
+#if ___TESTMODE == 1
+		VALGRIND_MALLOCLIKE_BLOCK(res + 1, t_size * sizeof(heapinfo_t), 2, 1);
+#endif
+
+		PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp allocated with size 0x%lx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+
+		simple_heap->free_size -= (res->size - 1) * sizeof(heapinfo_t);
+		simple_heap->malloc_count++;
+		simple_heap->fast_hit++;
+
+		return res + 1;
+	}
 
 	empty_hi = simple_heap->first_empty;
 
@@ -527,7 +562,18 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	simple_heap->free_count++;
 	simple_heap->free_size += size;
 
-	memory_simple_insert_sorted(simple_heap, 0, hi);
+	if((hi->size - 2) < 128) {
+		if(simple_heap->fast_classes[hi->size - 2].tail == NULL) {
+			simple_heap->fast_classes[hi->size - 2].tail = hi;
+			simple_heap->fast_classes[hi->size - 2].head = hi;
+		} else {
+			hi->previous = simple_heap->fast_classes[hi->size - 2].tail;
+			simple_heap->fast_classes[hi->size - 2].tail->next = hi;
+			simple_heap->fast_classes[hi->size - 2].tail = hi;
+		}
+	} else {
+		memory_simple_insert_sorted(simple_heap, 0, hi);
+	}
 
 	PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%lp freed with size 0x%lx", address, size);
 
@@ -547,6 +593,7 @@ void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat) {
 		stat->free_count = simple_heap->free_count;
 		stat->total_size = simple_heap->total_size;
 		stat->free_size = simple_heap->free_size;
+		stat->fast_hit = simple_heap->fast_hit;
 
 	}
 }

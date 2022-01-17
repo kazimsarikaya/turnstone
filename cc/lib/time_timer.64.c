@@ -70,7 +70,7 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 		memory_heap_stat_t stat;
 		memory_get_heap_stat(&stat);
 
-		PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%lx fs 0x%lx mc 0x%lx fc 0x%lx diff 0x%lx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
+		PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%lx fs 0x%lx mc 0x%lx fc 0x%lx diff 0x%lx fh 0x%lx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
 	}
 
 	apic_eoi();
