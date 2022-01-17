@@ -15,6 +15,7 @@ typedef struct {
 	uint64_t free_count;
 	uint64_t total_size;
 	uint64_t free_size;
+	uint64_t fast_hit;
 }memory_heap_stat_t;
 
 /**
