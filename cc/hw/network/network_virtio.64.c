@@ -339,7 +339,7 @@ int8_t network_virtio_create_queues(network_virtio_dev_t* dev){
 
 	uint64_t queue_size = VIRTIO_QUEUE_SIZE * 1536;
 
-	uint64_t queue_frm_cnt = queue_size / FRAME_SIZE;
+	uint64_t queue_frm_cnt = (queue_size + FRAME_SIZE - 1) / FRAME_SIZE;
 	uint64_t queue_meta_frm_cnt = (sizeof(virtio_queue_t) + FRAME_SIZE - 1 ) / FRAME_SIZE;
 
 
@@ -786,7 +786,16 @@ int8_t network_virtio_set_msix_isr(network_virtio_dev_t* dev, uint16_t msix_vect
 	pci_bar_register_t* bar = &pci_dev->bar0;
 	bar += dev->msix_bir;
 
-	uint64_t msix_table_address = (bar->memory_space_bar.base_address << 4) + dev->msix_table_offset;
+	uint64_t msix_table_address = bar->memory_space_bar.base_address;
+	msix_table_address <<= 4;
+
+	if(bar->memory_space_bar.type == 2) {
+		bar++;
+		uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
+		msix_table_address = tmp << 32 | msix_table_address;
+	}
+
+	msix_table_address += dev->msix_table_offset;
 
 	pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
 
@@ -808,7 +817,17 @@ int8_t network_virtio_clear_msix_pending_bit(network_virtio_dev_t* dev, uint16_t
 	pci_bar_register_t* bar = &pci_dev->bar0;
 	bar += dev->msix_pendind_bit_bir;
 
-	uint64_t msix_pendind_bit_table_address = (bar->memory_space_bar.base_address << 4) + dev->msix_pendind_bit_table_offset;
+
+	uint64_t msix_pendind_bit_table_address = bar->memory_space_bar.base_address;
+	msix_pendind_bit_table_address <<= 4;
+
+	if(bar->memory_space_bar.type == 2) {
+		bar++;
+		uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
+		msix_pendind_bit_table_address = tmp << 32 | msix_pendind_bit_table_address;
+	}
+
+	msix_pendind_bit_table_address += dev->msix_pendind_bit_table_offset;
 
 	uint8_t* pending_bit_table = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
 
@@ -1011,6 +1030,7 @@ int8_t network_virtio_init(pci_dev_t* pci_netdev){
 
 				if(bar->bar_type.type == 0) {
 					uint64_t bar_fa = (uint64_t)bar->memory_space_bar.base_address;
+					bar_fa <<= 4;
 
 					if(bar->memory_space_bar.type == 2) {
 						bar++;
@@ -1026,7 +1046,7 @@ int8_t network_virtio_init(pci_dev_t* pci_netdev){
 
 					if(bar_frames == NULL) {
 						PRINTLOG(VIRTIO, LOG_TRACE, "cannot find reserved frames for 0x%lx and try to reserve", bar_fa);
-						frame_t tmp_frm = {bar_fa, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+						frame_t tmp_frm = {bar_fa, 1, FRAME_TYPE_RESERVED, 0};
 
 						if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &tmp_frm) != 0) {
 							PRINTLOG(VIRTIO, LOG_ERROR, "cannot allocate frame", 0);
@@ -1129,7 +1149,7 @@ int8_t network_virtio_init(pci_dev_t* pci_netdev){
 	if(errors == 0) {
 		task_create_task(NULL, 64 << 10, &network_virtio_process_tx);
 
-		PRINTLOG(VIRTIONET, LOG_ERROR, "virtnet device started", 0);
+		PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device started", 0);
 
 		return 0;
 	}
