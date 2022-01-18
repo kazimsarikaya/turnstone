@@ -98,9 +98,10 @@ network_ethernet_t* network_process_ipv4_packet_from_packet(network_received_pac
 
 		if(icmp_hdr->type == NETWORK_ICMP_ECHO_REQUEST && icmp_hdr->code == NETWORK_ICMP_ECHO_CODE) {
 			uint16_t pp_len = 0;
-			offset += sizeof(network_icmp_ping_header_t);
+			offset += sizeof(network_icmp_header_t);
+			uint16_t ping_data_len = BYTE_SWAP16(ipv4_hdr->total_length) - ((ipv4_hdr->header_length * 4) + sizeof(network_icmp_header_t));
 
-			network_icmp_ping_header_t* ping = network_create_ping_packet(1, icmp_hdr->identifier, icmp_hdr->sequence, NETWORK_ICMP_MIN_DATA_SIZE, offset, &pp_len);
+			network_icmp_ping_header_t* ping = network_create_ping_packet(1, icmp_hdr->identifier, icmp_hdr->sequence, ping_data_len, offset, &pp_len);
 			network_ipv4_header_t* ip = network_create_ipv4_packet_from_icmp_packet(NETWORK_TEST_OUR_STATIC_IP, ipv4_hdr->source_ip, (network_icmp_header_t*)ping, pp_len);
 			network_ethernet_t* reply_eth_packet = network_create_ethernet_packet_from_ipv4_packet(eth_packet->source, packet->device_mac_address, ip, return_packet_len);
 
@@ -159,22 +160,35 @@ int8_t network_ipv4_header_checksum_verify(network_ipv4_header_t* ipv4_hdr){
 }
 
 network_icmp_ping_header_t* network_create_ping_packet(boolean_t is_reply, uint16_t identifier, uint16_t sequence, uint16_t data_len, uint8_t* data, uint16_t* packet_len){
-	uint16_t plen = sizeof(network_icmp_ping_header_t) + data_len;
+	uint16_t plen = 0;
+	uint16_t data_offset = 0;
+
+	if(is_reply) {
+		plen = sizeof(network_icmp_header_t) + data_len;
+		data_offset = sizeof(network_icmp_header_t);
+	} else {
+		plen = sizeof(network_icmp_ping_header_t) + data_len;
+		data_offset = sizeof(network_icmp_ping_header_t);
+	}
+
 	network_icmp_ping_header_t* pp = memory_malloc(plen);
 
 	pp->header.type = is_reply?NETWORK_ICMP_ECHO_REPLY:NETWORK_ICMP_ECHO_REQUEST;
 	pp->header.code = NETWORK_ICMP_ECHO_CODE;
 	pp->header.identifier = identifier;
 	pp->header.sequence = sequence;
-	uint64_t ts = time_ns(NULL);
-	uint32_t sec = ts / (1000 * 1000 * 1000);
-	pp->timestamp_sec = BYTE_SWAP32(sec);
-	uint32_t usec = (ts % (1000 * 1000 * 1000)) / (1000);
-	pp->timestamp_usec = BYTE_SWAP32(usec);
+
+	if(is_reply == 0) {
+		uint64_t ts = time_ns(NULL);
+		uint32_t sec = ts / (1000 * 1000 * 1000);
+		pp->timestamp_sec = BYTE_SWAP32(sec);
+		uint32_t usec = (ts % (1000 * 1000 * 1000)) / (1000);
+		pp->timestamp_usec = BYTE_SWAP32(usec);
+	}
 
 	uint8_t* pp_data = (uint8_t*)pp;
 
-	memory_memcopy(data, pp_data + sizeof(network_icmp_ping_header_t), data_len);
+	memory_memcopy(data, pp_data + data_offset, data_len);
 
 	uint16_t* pp_data_16 = (uint16_t*)pp_data;
 
