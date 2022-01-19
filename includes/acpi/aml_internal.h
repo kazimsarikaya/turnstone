@@ -1,6 +1,9 @@
 /**
  * @file aml.h
  * @brief acpi aml internal interface
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___ACPI_AML_INTERNAL_H
 /*! prevent duplicate header error macro */

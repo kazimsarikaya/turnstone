@@ -1,6 +1,9 @@
 /**
  * @file task.64.c
  * @brief cpu task methods
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <apic.h>
 #include <cpu.h>

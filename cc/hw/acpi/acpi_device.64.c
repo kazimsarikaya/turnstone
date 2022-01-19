@@ -1,6 +1,9 @@
 /**
  * @file acpi_device.64.c
  * @brief acpi device utils
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <acpi/aml_internal.h>
 #include <acpi/aml_resource.h>

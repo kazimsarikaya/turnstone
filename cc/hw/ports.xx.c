@@ -4,6 +4,9 @@
  *
  * the functions inside this file are for port communication. the in/out functions
  * defined at header file as inline functions.
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <ports.h>
 

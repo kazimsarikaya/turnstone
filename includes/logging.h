@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #ifndef ___LOGGING_H
 #define ___LOGGING_H 0
 
@@ -102,7 +107,7 @@ extern uint8_t logging_module_levels[];
 #endif
 
 #ifndef LOG_LEVEL_TIMER
-#define LOG_LEVEL_TIMER LOG_DEBUG
+#define LOG_LEVEL_TIMER LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_AHCI

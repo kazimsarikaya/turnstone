@@ -3,6 +3,9 @@
  * @brief video operations
  *
  * prints string to video buffer and moves cursor
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <video.h>
 #include <memory.h>

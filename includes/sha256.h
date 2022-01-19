@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #ifndef ___SHA256_H
 #define ___SHA256_H 0
 

@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #ifndef ___SERTUP_H
 #define ___SETUP_H 0
 

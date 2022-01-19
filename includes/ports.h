@@ -3,6 +3,9 @@
  * @brief i/o port functions
  *
  * this functions uses inline assembly
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___PORTS_H
 /*! prevent duplicate header error macro */

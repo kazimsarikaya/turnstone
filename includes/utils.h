@@ -1,6 +1,9 @@
 /**
  * @file utils.h
  * @brief util functions and macros
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___UTILS_H
 /*! prevent duplicate header error macro */

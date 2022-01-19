@@ -1,6 +1,9 @@
 /**
  * @file task.h
  * @brief cpu task definitons
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___CPU_TASK_H
 /*! prevent duplicate header error macro */

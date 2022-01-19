@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #ifndef ___XXHASH_H
 #define ___XXHASH_H 0
 

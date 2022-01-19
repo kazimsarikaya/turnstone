@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# This work is licensed under TURNSTONE OS Public License.
+# Please read and understand latest version of Licence.
+
 CURRENTDIR=`dirname $0`
 BASEDIR="${CURRENTDIR}/../../"
 OUTPUTDIR="${BASEDIR}/output"

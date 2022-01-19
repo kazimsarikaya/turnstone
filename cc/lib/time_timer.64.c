@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #include <time/timer.h>
 #include <video.h>
 #include <ports.h>

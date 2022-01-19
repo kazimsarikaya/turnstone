@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #ifndef ___ACPI_AML_RESOURCE_H
 #define ___ACPI_AML_RESOURCE_H 0
 

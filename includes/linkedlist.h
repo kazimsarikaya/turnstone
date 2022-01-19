@@ -1,6 +1,9 @@
 /**
  * @file linkedlist.h
  * @brief linked list interface
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___LINKEDLIST_H
 /*! prevent duplicate header error macro */
