@@ -1,6 +1,9 @@
 /**
  * @file systeminfo.h
  * @brief system information data for kernel entries
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___SYSTEMINFO_H
 /*! prevent duplicate header error macro */

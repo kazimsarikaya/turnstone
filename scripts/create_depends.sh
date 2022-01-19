@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# This work is licensed under TURNSTONE OS Public License.
+# Please read and understand latest version of Licence.
+
 for var in "$@"
 do
   _depends=$(gcc -I../includes -MM ${var}.c | tr -d '\\\n'|cut -d':' -f2|sed 's/\.\.\/includes\///g')

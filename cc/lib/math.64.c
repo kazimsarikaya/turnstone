@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #include <math.h>
 
 #define MATH_TRESHOLD 0.00000000000001L

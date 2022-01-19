@@ -1,6 +1,9 @@
 /**
  * @file cpu_simple.xx.c
  * @brief cpu commands implementation that supports both real and long mode.
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <cpu.h>
 #include <video.h>

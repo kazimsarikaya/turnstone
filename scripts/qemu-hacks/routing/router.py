@@ -1,3 +1,6 @@
+# This work is licensed under TURNSTONE OS Public License.
+# Please read and understand latest version of Licence.
+
 import os
 import time
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR

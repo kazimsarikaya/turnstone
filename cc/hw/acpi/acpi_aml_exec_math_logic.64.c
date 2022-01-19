@@ -1,6 +1,9 @@
 /**
  * @file acpi_aml_exec_math_logic.64.c
  * @brief acpi aml math and logic executor methods
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #include <acpi/aml_internal.h>

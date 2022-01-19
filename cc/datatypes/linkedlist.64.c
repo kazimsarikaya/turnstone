@@ -1,6 +1,9 @@
 /**
  * @file linkedlist.64.c
  * @brief linked list types implementations
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <types.h>
 #include <linkedlist.h>

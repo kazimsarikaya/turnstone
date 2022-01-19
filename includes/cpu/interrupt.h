@@ -1,6 +1,9 @@
 /**
  * @file interrupt.h
  * @brief defines interrupt functions at long mode
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___CPU_INTERRUPT_H
 /*! prevent duplicate header error macro */

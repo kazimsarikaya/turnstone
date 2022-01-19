@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #define RAMSIZE 0x100000 * 8
 #include "setup.h"
 #include <acpi.h>

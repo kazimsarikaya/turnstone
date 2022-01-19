@@ -1,3 +1,7 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
 #include <disk.h>
 #include <driver/ahci.h>
 #include <utils.h>

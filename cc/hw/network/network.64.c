@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #include <driver/network.h>
 #include <driver/network_virtio.h>
 #include <driver/network_e1000.h>

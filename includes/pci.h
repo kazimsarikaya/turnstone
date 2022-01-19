@@ -1,6 +1,9 @@
 /**
  * @file pci.h
  * @brief pci interface
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___PCI_H
 /*! prevent duplicate header error macro */

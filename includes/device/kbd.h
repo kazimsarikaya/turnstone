@@ -1,6 +1,9 @@
 /**
  * @file kbd.h
  * @brief keyboard device interface
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___DEVICE_KBD_H
 /*! prevent duplicate header error macro */

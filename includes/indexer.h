@@ -3,6 +3,9 @@
  * @brief indexer interface
  *
  * allow indexing of @ref linkedlist_t
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___INDEXER_H
 /*! prevent duplicate header error macro */
@@ -35,8 +38,8 @@ typedef struct index {
 	index_key_comparator_f comparator;
 	int8_t (* insert)(struct index* idx, void* key, void* data);
 	int8_t (* delete)(struct index* idx, void* key, void** deleted_data);
-	iterator_t*  (*search)(struct index* idx, void* key1, void* key2, index_key_search_criteria_t criteria);
-	iterator_t* (*create_iterator)(struct index* idx);
+	iterator_t*  (* search)(struct index* idx, void* key1, void* key2, index_key_search_criteria_t criteria);
+	iterator_t* (* create_iterator)(struct index* idx);
 } index_t;
 
 typedef void* (* indexer_key_creator_f)(void* key);

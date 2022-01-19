@@ -1,6 +1,9 @@
 /**
  * @file acpi_aml_parser_resource.64.c
  * @brief acpi parser methods for device resources
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
  #include <acpi/aml_internal.h>

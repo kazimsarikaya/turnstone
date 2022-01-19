@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #include <driver/network_virtio.h>
 #include <driver/virtio.h>
 #include <video.h>

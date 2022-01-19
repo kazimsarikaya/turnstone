@@ -1,6 +1,9 @@
 /**
  * @file acpi_aml_parser.64.c
  * @brief acpi parser methos
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
  #include <acpi/aml_internal.h>

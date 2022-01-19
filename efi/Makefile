@@ -1,3 +1,6 @@
+# This work is licensed under TURNSTONE OS Public License.
+# Please read and understand latest version of Licence.
+
 ARCH=x86_64
 
 CC = x86_64-w64-mingw32-gcc

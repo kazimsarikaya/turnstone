@@ -1,6 +1,9 @@
 /**
  * @file strings.h>
  * @brief main string operations interface
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___STRINGS_H
 /*! prevent duplicate header error macro */

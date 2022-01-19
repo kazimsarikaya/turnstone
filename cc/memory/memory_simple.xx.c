@@ -1,6 +1,9 @@
 /**
  * @file memory_simple.xx.c
  * @brief a simple heap implementation
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #include <memory.h>
 #include <systeminfo.h>

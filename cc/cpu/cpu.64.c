@@ -1,6 +1,9 @@
 /**
  * @file cpu.64.c
  * @brief 64 bit cpu operations
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #include <cpu.h>

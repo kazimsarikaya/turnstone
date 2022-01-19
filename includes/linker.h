@@ -1,6 +1,9 @@
 /**
  * @file linker.h
  * @brief linker functions and types
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___LINKER_H
 /*! prevent duplicate header error macro */

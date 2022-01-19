@@ -1,6 +1,9 @@
 /**
  * @file ahci.h
  * @brief ahci interface
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 #ifndef ___DRIVER_AHCI_H
 /*! prevent duplicate header error macro */

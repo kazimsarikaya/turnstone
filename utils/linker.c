@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #define RAMSIZE 0x8000000
 #include "setup.h"
 #include "elf64.h"

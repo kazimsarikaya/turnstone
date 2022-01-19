@@ -1,3 +1,8 @@
+/*
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #include <types.h>
 #include <cpu.h>
 #include <cpu/interrupt.h>
