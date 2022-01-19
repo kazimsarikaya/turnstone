@@ -528,6 +528,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 	if(address == NULL) {
 		return -1;
 	}
+
 	heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
 
 	void* hibottom = simple_heap->first; // need as void*
@@ -553,6 +554,13 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 
 	//clean data
 	size_t size = (hi->size - 1) * sizeof(heapinfo_t); // get real exclusive size
+
+	if((((uint8_t*)(address)) + size) >= (uint8_t*)hitop) {
+		PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%lp with size 0x%lx not inside heap", address, size);
+
+		return -1;
+	}
+
 	memory_memclean(address, size);
 
 	hi->flags ^= HEAP_INFO_FLAG_USED;
