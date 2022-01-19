@@ -349,13 +349,13 @@ network_ethernet_t* network_create_arp_reply_from_packet(network_received_packet
 		return NULL;
 	}
 
-	uint8_t* buffer = memory_malloc(sizeof(packet->packet_len));
+	uint8_t* buffer = memory_malloc(packet->packet_len);
 	memory_memcopy(packet->packet_data, buffer, packet->packet_len);
 
 	arp_packet = (network_arp_t*)(buffer + sizeof(network_ethernet_t));
 
-	memory_memcopy(arp_packet->source_mac, arp_packet->target_ip, sizeof(ipv4_address_t));
-	memory_memcopy(arp_packet->source_ip, arp_packet->target_mac, sizeof(mac_address_t));
+	memory_memcopy(arp_packet->source_ip, arp_packet->target_ip, sizeof(ipv4_address_t));
+	memory_memcopy(arp_packet->source_mac, arp_packet->target_mac, sizeof(mac_address_t));
 
 	memory_memcopy(packet->device_mac_address, arp_packet->source_mac, sizeof(mac_address_t));
 	memory_memcopy(NETWORK_TEST_OUR_STATIC_IP, arp_packet->source_ip, sizeof(ipv4_address_t));
