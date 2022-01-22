@@ -14,6 +14,7 @@
 #include <acpi.h>
 #include <memory.h>
 #include <linkedlist.h>
+#include <cpu/interrupt.h>
 
 #define PCI_HEADER_TYPE_GENERIC_DEVICE 0x0
 #define PCI_HEADER_TYPE_PCI2PCI_BRIDGE 0x1
@@ -295,6 +296,11 @@ typedef struct {
 
 extern pci_context_t* PCI_CONTEXT;
 
+uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no);
+uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no);
+int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64_t bar_fa);
+int8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr);
+int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
 
 int8_t pci_setup(memory_heap_t* heap);
 

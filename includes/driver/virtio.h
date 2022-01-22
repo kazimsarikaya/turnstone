@@ -8,6 +8,7 @@
 
 #include <types.h>
 #include <pci.h>
+#include <cpu/interrupt.h>
 
 typedef enum {
 	VIRTIO_DEVICE_STATUS_ACKKNOWLEDGE=1,
@@ -57,8 +58,8 @@ typedef struct {
 typedef struct {
 	uint16_t flags;
 	uint16_t index;
-	uint16_t ring[VIRTIO_QUEUE_SIZE] /* queue size */;
-	uint16_t used_event;  /* Only if VIRTIO_F_EVENT_IDX */
+	uint16_t ring[]; /* queue size */
+	/* uint16_t used_event; Only if VIRTIO_F_EVENT_IDX */
 } __attribute__((packed)) virtio_queue_avail_t;
 
 typedef struct {
@@ -72,8 +73,8 @@ typedef struct {
 typedef struct {
 	uint16_t flags;
 	uint16_t index;
-	virtio_queue_used_element_t ring[VIRTIO_QUEUE_SIZE]; /* queue size */;
-	uint16_t avail_event; /* Only if VIRTIO_F_EVENT_IDX */
+	virtio_queue_used_element_t ring[]; /* queue size */
+	/* uint16_t used_event; Only if VIRTIO_F_EVENT_IDX */
 } __attribute__((packed)) virtio_queue_used_t;
 
 typedef struct {
@@ -94,12 +95,17 @@ typedef struct {
 	uint16_t reserved : 15;
 } __attribute__((packed)) virtio_pqueue_event_suppress_t;
 
-typedef struct {
-	virtio_queue_descriptor_t descriptors[VIRTIO_QUEUE_SIZE] __attribute__ ((aligned(16)));
-	virtio_queue_avail_t avail __attribute__ ((aligned(2)));
-	virtio_queue_used_t used __attribute__ ((aligned(4)));
-	uint16_t last_used_index;
-}__attribute__((packed)) virtio_queue_t;
+typedef void* virtio_queue_t;
+
+/*
+   typedef struct {
+   virtio_queue_descriptor_t descriptors[VIRTIO_QUEUE_SIZE] __attribute__ ((aligned(16)));
+   virtio_queue_avail_t avail __attribute__ ((aligned(2)));
+   virtio_queue_used_t used __attribute__ ((aligned(4)));
+   uint16_t last_used_index;
+   }__attribute__((packed)) virtio_queue_t;
+
+ */
 
 /*
    static inline int8_t virtio_queue_need_event(uint16_t event_idx, uint16_t new_idx, uint16_t old_idx)
@@ -195,5 +201,91 @@ typedef struct {
 #define VIRTIO_IOPORT_CFG_MSIX_VECTOR 0x14
 #define VIRTIO_IOPORT_VQ_MSIX_VECTOR  0x16
 
+
+typedef struct {
+	virtio_queue_t vq;
+	uint16_t last_used_index;
+	virtio_notification_data_t* nd;
+}virtio_queue_ext_t;
+
+typedef struct {
+	pci_dev_t* pci_dev;
+	boolean_t is_legacy;
+	boolean_t has_msix;
+	pci_capability_msix_t* msix_cap;
+	uint8_t irq_base;
+	uint16_t iobase;
+	virtio_pci_common_config_t* common_config;
+	uint32_t notify_offset_multiplier;
+	uint8_t* notify_offset;
+	void* isr_config;
+	void* device_config;
+	uint64_t features;
+	uint64_t selected_features;
+	uint16_t max_vq_count;
+	uint16_t queue_size;
+	uint64_t queue_avail_offset;
+	uint64_t queue_used_offset;
+	virtio_queue_ext_t* queues;
+	linkedlist_t return_queue;
+	void* extra_data;
+}virtio_dev_t;
+
+
+static inline uint64_t virtio_queue_get_size(virtio_dev_t* vdev) {
+	uint64_t size = 0;
+	size += sizeof(virtio_queue_descriptor_t) * vdev->queue_size;
+
+	if(size & 1) {
+		size++;
+	}
+
+	vdev->queue_avail_offset = size;
+
+	size += sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) * vdev->queue_size;
+
+	if(vdev->selected_features & VIRTIO_F_EVENT_IDX) {
+		size += sizeof(uint16_t);
+	}
+
+	if(size % 4) {
+		size += 4 - (size % 4);
+	}
+
+	vdev->queue_used_offset = size;
+
+	size += sizeof(uint16_t) + sizeof(uint16_t) + sizeof(virtio_queue_used_element_t) * vdev->queue_size;
+
+
+	if(vdev->selected_features & VIRTIO_F_EVENT_IDX) {
+		size += sizeof(uint16_t);
+	}
+
+	return size;
+}
+
+static inline virtio_queue_descriptor_t* virtio_queue_get_desc(virtio_dev_t* vdev, virtio_queue_t queue){
+	UNUSED(vdev);
+	return (virtio_queue_descriptor_t*)queue;
+}
+
+static inline virtio_queue_avail_t* virtio_queue_get_avail(virtio_dev_t* vdev, virtio_queue_t queue){
+	return (virtio_queue_avail_t*)(((uint8_t*)queue) + vdev->queue_avail_offset);
+}
+
+static inline virtio_queue_used_t* virtio_queue_get_used(virtio_dev_t* vdev, virtio_queue_t queue){
+	return (virtio_queue_used_t*)(((uint8_t*)queue) + vdev->queue_used_offset);
+}
+
+typedef int8_t (* virtio_queue_item_builder_f)(virtio_dev_t* vdev, void* queue_item);
+
+int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue_item_size, boolean_t write, boolean_t iter_rw, virtio_queue_item_builder_f item_builder, interrupt_irq modern, interrupt_irq legacy);
+
+virtio_dev_t* virtio_get_device(pci_dev_t* pci_dev);
+
+typedef uint64_t (* virtio_select_features_f)(virtio_dev_t* vdev, uint64_t avail_features);
+typedef int8_t (* virtio_create_queues_f)(virtio_dev_t* vdev);
+
+int8_t virtio_init_dev(virtio_dev_t* vdev, virtio_select_features_f select_features, virtio_create_queues_f create_queues);
 
 #endif
