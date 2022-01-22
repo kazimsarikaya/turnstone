@@ -15,6 +15,7 @@
 #include <video.h>
 #include <ports.h>
 #include <cpu.h>
+#include <cpu/interrupt.h>
 
 typedef struct {
 	memory_heap_t* heap;
@@ -33,6 +34,103 @@ int8_t pci_iterator_end_of_iterator(iterator_t* iterator);
 void* pci_iterator_get_item(iterator_t* iterator);
 
 pci_context_t* PCI_CONTEXT = NULL;
+
+int8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr) {
+	uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);;
+	msix_table_address += msix_cap->table_offset;
+
+	pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
+
+	uint8_t intnum = interrupt_get_next_empty_interrupt();
+	msix_table->entries[msix_vector].message_address = 0xFEE00000;
+	msix_table->entries[msix_vector].message_data = intnum;
+	msix_table->entries[msix_vector].masked = 0;
+
+	uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
+	interrupt_irq_set_handler(isrnum, isr);
+
+	PRINTLOG(PCI, LOG_TRACE, "msix isr 0x%02x",  msix_table->entries[msix_vector].message_data);
+
+	return 0;
+}
+
+int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+	uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
+
+	msix_pendind_bit_table_address += msix_cap->pending_bit_offset;
+
+	uint8_t* pending_bit_table = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
+
+	uint8_t mask1 = (1 << msix_cap->table_size) - 1;
+
+	uint8_t mask2 = ~(1 << msix_vector);
+	mask1 &=  mask2;
+
+	*pending_bit_table &= mask1;
+
+	PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i",  msix_vector);
+
+	return 0;
+}
+
+uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
+	uint64_t old_address = pci_get_bar_address(pci_dev, bar_no);
+	uint64_t mask = -1ULL;
+	pci_set_bar_address(pci_dev, bar_no, mask);
+
+	uint64_t size = pci_get_bar_address(pci_dev, bar_no);
+
+	pci_set_bar_address(pci_dev, bar_no, old_address);
+
+	size = ~size + 1;
+
+	PRINTLOG(PCI, LOG_TRACE, "bar %i size 0x%lx",  bar_no, size);
+
+	return size;
+}
+
+uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no){
+	pci_bar_register_t* bar = &pci_dev->bar0;
+	bar += bar_no;
+
+	uint64_t bar_fa = 0;
+
+	if(bar->bar_type.type == 0) {
+		bar_fa = (uint64_t)bar->memory_space_bar.base_address;
+		bar_fa <<= 4;
+
+		if(bar->memory_space_bar.type == 2) {
+			bar++;
+			uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
+			bar_fa = tmp << 32 | bar_fa;
+		}
+
+	}
+
+	PRINTLOG(PCI, LOG_TRACE, "bar %i address 0x%lx",  bar_no, bar_fa);
+
+	return bar_fa;
+}
+
+int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64_t bar_fa){
+	pci_bar_register_t* bar = &pci_dev->bar0;
+	bar += bar_no;
+
+	if(bar->bar_type.type == 0) {
+		bar->memory_space_bar.base_address = (bar_fa >> 4) & 0xFFFFFFF;
+
+		if(bar->memory_space_bar.type == 2) {
+			bar++;
+
+			(*(uint64_t*)bar) = bar_fa >> 32;
+		}
+
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
 
 int8_t pci_setup(memory_heap_t* heap) {
 

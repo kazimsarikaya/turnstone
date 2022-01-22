@@ -121,37 +121,6 @@ struct  {
 #define VIRTIO_NETWORK_QUEUE_ITEM_LENGTH        1536
 #define VIRTIO_NETWORK_CTRL_QUEUE_ITEM_LENGTH     16
 
-typedef struct {
-	pci_dev_t* pci_netdev;
-	boolean_t is_legacy;
-	boolean_t has_msix;
-	uint16_t msix_table_size;
-	uint8_t msix_bir;
-	uint32_t msix_table_offset;
-	uint8_t msix_pendind_bit_bir;
-	uint32_t msix_pendind_bit_table_offset;
-	uint8_t irq_base;
-	uint16_t iobase;
-	virtio_pci_common_config_t* common_config;
-	virtio_network_config_t* device_config;
-	uint32_t notify_offset_multiplier;
-	uint8_t* notify_offset;
-	void* isr_config;
-	mac_address_t mac;
-	uint16_t max_vq_count;
-	uint16_t mtu;
-	uint64_t features;
-	uint16_t queue_size;
-	pci_capability_msix_t* msix_cap;
-	virtio_queue_t* vq_rx;
-	virtio_notification_data_t* nd_rx;
-	virtio_queue_t* vq_tx;
-	virtio_notification_data_t* nd_tx;
-	virtio_queue_t* vq_ctrl;
-	virtio_notification_data_t* nd_ctrl;
-	linkedlist_t transmit_queue;
-}network_virtio_dev_t;
-
 int8_t network_virtio_init(pci_dev_t* pci_netdev);
 
 #endif
