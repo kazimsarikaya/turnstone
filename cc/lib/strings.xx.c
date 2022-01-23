@@ -352,10 +352,24 @@ int64_t wchar_size(const wchar_t* str){
 
 char_t* wchar_to_char(wchar_t* src){
 	int64_t len = wchar_size(src);
-	char_t* dst = memory_malloc(sizeof(char_t) * len + 1);
+	char_t* dst = memory_malloc(sizeof(char_t) * len * 4 + 1);
 
-	for(int64_t i = 0; i < len; i++) {
-		dst[i] = (char_t)(src[i] & 0xFF);
+	int64_t i = 0;
+	int64_t j = 0;
+
+	while(src[i]) {
+		if(src[i] >= 0x800) {
+			dst[j++] = ((src[i] >> 12) & 0xF) | 0xE0;
+			dst[j++] = ((src[i] >> 6) & 0x3F) | 0x80;
+			dst[j++] = (src[i] & 0x3F) | 0x80;
+		} else if(src[i] >= 0x80) {
+			dst[j++] = ((src[i] >> 6) & 0x1F) | 0xC0;
+			dst[j++] = (src[i] & 0x3F) | 0x80;
+		} else {
+			dst[j++] = src[i] & 0x7F;
+		}
+
+		i++;
 	}
 
 	return dst;
@@ -365,8 +379,106 @@ wchar_t* char_to_wchar(char_t* str){
 	int64_t len = strlen(str);
 	wchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
 
-	for(int64_t i = 0; i < len; i++) {
-		res[i] = str[i];
+	int64_t i = 0;
+	int64_t j = 0;
+
+	while(str[i]) {
+		wchar_t wc = str[i];
+
+		if(wc & 128) {
+			if((wc & 32) == 0 ) {
+				wc = ((str[i] & 0x1F) << 6) + (str[i + 1] & 0x3F);
+				i++;
+			} else if((wc & 16) == 0 ) {
+				wc = ((((str[i] & 0xF) << 6) + (str[i + 1] & 0x3F)) << 6) + (str[i + 2] & 0x3F);
+				i += 2;
+			} else if((wc & 8) == 0 ) {
+				wc = ((((((str[i] & 0x7) << 6) + (str[i + 1] & 0x3F)) << 6) + (str[i + 2] & 0x3F)) << 6) + (str[i + 3] & 0x3F);
+				i += 3;
+			} else {
+				wc = 0;
+			}
+		}
+
+		res[j] = wc;
+
+		j++;
+		i++;
+	}
+
+	return res;
+}
+
+int64_t lchar_size(const lchar_t* str){
+	int64_t res = 0;
+	int64_t i = 0;
+
+	while(str[i++] != 0) {
+		res++;
+	}
+
+	return res;
+}
+
+char_t* lchar_to_char(lchar_t* src){
+	int64_t len = lchar_size(src);
+	char_t* dst = memory_malloc(sizeof(char_t) * len * 4 + 1);
+
+	int64_t i = 0;
+	int64_t j = 0;
+
+	while(src[i]) {
+		if(src[i] >= 10000) {
+			dst[j++] = ((src[i] >> 18) & 0x7) | 0xF0;
+			dst[j++] = ((src[i] >> 12) & 0x3F) | 0x80;
+			dst[j++] = ((src[i] >> 6) & 0x3F) | 0x80;
+			dst[j++] = (src[i] & 0x3F) | 0x80;
+		} else if(src[i] >= 0x800) {
+			dst[j++] = ((src[i] >> 12) & 0xF) | 0xE0;
+			dst[j++] = ((src[i] >> 6) & 0x3F) | 0x80;
+			dst[j++] = (src[i] & 0x3F) | 0x80;
+		} else if(src[i] >= 0x80) {
+			dst[j++] = ((src[i] >> 6) & 0x1F) | 0xC0;
+			dst[j++] = (src[i] & 0x3F) | 0x80;
+		} else {
+			dst[j++] = src[i] & 0x7F;
+		}
+
+		i++;
+	}
+
+	return dst;
+}
+
+lchar_t* char_to_lchar(char_t* str){
+	int64_t len = strlen(str);
+	lchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+
+	int64_t i = 0;
+	int64_t j = 0;
+
+	while(str[i]) {
+		wchar_t wc = str[i];
+
+		if(wc & 128) {
+			if((wc & 32) == 0 ) {
+				wc = ((str[i] & 0x1F) << 6) + (str[i + 1] & 0x3F);
+				i++;
+			} else if((wc & 16) == 0 ) {
+				wc = ((((str[i] & 0xF) << 6) + (str[i + 1] & 0x3F)) << 6) + (str[i + 2] & 0x3F);
+				i += 2;
+			} else if((wc & 8) == 0 ) {
+				wc = ((((((str[i] & 0x7) << 6) + (str[i + 1] & 0x3F)) << 6) + (str[i + 2] & 0x3F)) << 6) + (str[i + 3] & 0x3F);
+				i += 3;
+			} else {
+				wc = 0;
+			}
+		}
+
+		res[j] = wc;
+
+		j++;
+		i++;
 	}
 
 	return res;

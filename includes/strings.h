@@ -200,4 +200,8 @@ int8_t str_is_upper(char_t* str);
 int64_t wchar_size(const wchar_t* str);
 char_t* wchar_to_char(wchar_t* src);
 wchar_t* char_to_wchar(char_t* str);
+
+int64_t lchar_size(const lchar_t* str);
+char_t* lchar_to_char(lchar_t* src);
+lchar_t* char_to_lchar(char_t* str);
 #endif

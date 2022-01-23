@@ -34,6 +34,8 @@ typedef uint8_t boolean_t;
 #define int32_t int
 /*! unsigned double word (four bytes) type */
 #define uint32_t unsigned int
+/*! long char (four bytes) type */
+#define lchar_t unsigned int
 
 /*! signed quad word (eight bytes) type */
 #define int64_t long long
