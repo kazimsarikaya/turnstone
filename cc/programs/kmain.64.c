@@ -215,50 +215,12 @@ int8_t kmain64(size_t entry_point) {
 		sata0->flush(sata0);
 	}
 
-	PRINTLOG(KERNEL, LOG_ERROR, "Implement remaining ops with frame allocator", 0);
-
-	return 0;
-
-
-	return kmain64_init();
-}
-
-void test_task1() {
-	printf("task starting %li\n", task_get_id());
-	for(uint64_t i = 0; i < 0x10; i++) {
-		printf("hello world from task %li try: 0x%lx\n", task_get_id(), i);
-
-		uint8_t* tmp = memory_malloc(1);
-		memory_free(tmp);
-
-		for(uint64_t j = 0; j < 0x800; j++) {
-			printf("%li", task_get_id());
-			if((j % 0x200) == 0) {
-				task_yield();
-			}
-		}
-		printf("\n");
+	if(kbd_init() != 0) {
+		PRINTLOG(KERNEL, LOG_FATAL, "cannot init keyboard. Halting...", 0);
+		cpu_hlt();
 	}
-	printf("task %li ending\n", task_get_id());
-}
 
-int8_t kmain64_init() {
-	char_t* data = hello_world();
-
-	printf("%s\n", data);
-
-	//task_create_task(heap, 0x1000, test_task1);
-
-	interrupt_irq_set_handler(0x1, &dev_kbd_isr);
-	apic_ioapic_setup_irq(0x1,
-	                      APIC_IOAPIC_INTERRUPT_ENABLED
-	                      | APIC_IOAPIC_DELIVERY_MODE_FIXED | APIC_IOAPIC_DELIVERY_STATUS_RELAX
-	                      | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
-	                      | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
-
-	//task_create_task(heap, 0x1000, test_task1);
-
-	printf("tests completed!...\n");
+	PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)", 0);
 
 	return 0;
 }
