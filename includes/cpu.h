@@ -17,7 +17,7 @@
  *
  * This command stops cpu using hlt assembly command inside for.
  */
-void cpu_hlt();
+__attribute__((noreturn)) void cpu_hlt();
 
 void cpu_idle();
 

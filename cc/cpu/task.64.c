@@ -125,7 +125,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	return 0;
 }
 
-__attribute__((naked)) void task_save_registers(task_t* task) {
+__attribute__((naked, __optimize__("-fno-stack-protector"))) void task_save_registers(task_t* task) {
 	__asm__ __volatile__ (
 		"mov %%rax, %0\n"
 		"mov %%rbx, %1\n"
@@ -176,7 +176,7 @@ __attribute__((naked)) void task_save_registers(task_t* task) {
 		);
 }
 
-__attribute__((naked)) void task_load_registers(task_t* task) {
+__attribute__((naked, __optimize__("-fno-stack-protector"))) void task_load_registers(task_t* task) {
 	__asm__ __volatile__ (
 		"mov %0,  %%rax\n"
 		"mov %1,  %%rbx\n"
@@ -288,7 +288,7 @@ task_t* task_find_next_task() {
 	return tmp_task;
 }
 
-void task_switch_task() {
+__attribute__((__optimize__("-fno-stack-protector"))) void task_switch_task() {
 	if(task_queue == NULL) {
 		return;
 	}
