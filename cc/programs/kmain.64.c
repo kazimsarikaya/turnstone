@@ -220,6 +220,8 @@ int8_t kmain64(size_t entry_point) {
 		cpu_hlt();
 	}
 
+	PRINTLOG(KERNEL, LOG_INFO, "rdrand %i", cpu_check_rdrand());
+
 	PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)", 0);
 
 	return 0;
