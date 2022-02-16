@@ -14,18 +14,18 @@ efi_boot_services_t* BS;
 
 typedef int8_t (* kernel_start_t)(system_info_t* sysinfo);
 
-int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
-	ST = system_table;
-	BS = system_table->boot_services;
+typedef struct {
+	uint8_t* data;
+	uint64_t size;
+} efi_kernel_data_t;
 
-	video_clear_screen();
-
-	PRINTLOG(EFI, LOG_INFO, "%s", "TURNSTONE EFI Loader Starting...");
+int64_t efi_setup_heap(){
+	efi_status_t res;
 
 	void* heap_area;
 	int64_t heap_size = 1024 * 4096;
 
-	efi_status_t res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
+	res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
 
 	if(res != EFI_SUCCESS) {
 		PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%x", res);
@@ -43,11 +43,21 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 		PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%lp with size 0x%x", heap_area, heap_size);
 	} else {
 		PRINTLOG(EFI, LOG_DEBUG, "heap creation failed", 0);
+		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
 	}
 
 	memory_set_default_heap(heap);
+
+	res = EFI_SUCCESS;
+
+catch_efi_error:
+	return res;
+}
+
+int64_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
+	efi_status_t res;
 
 	video_frame_buffer_t* vfb = NULL;
 
@@ -71,9 +81,22 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 		}
 	}
 
-	gop->set_mode(gop, next_mode);
+	res = gop->set_mode(gop, next_mode);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_FATAL, "cannot set gop mode", res);
+
+		goto catch_efi_error;
+	}
 
 	vfb = memory_malloc(sizeof(video_frame_buffer_t));
+
+	if(vfb == NULL) {
+		PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb", 0);
+		res = EFI_OUT_OF_RESOURCES;
+
+		goto catch_efi_error;
+	}
 
 	vfb->physical_base_address = gop->mode->frame_buffer_base;
 	vfb->virtual_base_address = gop->mode->frame_buffer_base;
@@ -84,6 +107,102 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 	PRINTLOG(EFI, LOG_DEBUG, "frame buffer info %ix%i pps %i at 0x%lp size 0x%lx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
 	PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%lp", vfb);
+
+	*vfb_res = vfb;
+
+	res = EFI_SUCCESS;
+
+catch_efi_error:
+	return res;
+}
+
+int64_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data) {
+	efi_status_t res;
+
+	disk_t* sys_disk = efi_disk_impl_open(bio);
+
+	if(sys_disk == NULL) {
+		PRINTLOG(EFI, LOG_ERROR, "sys disk open failed", 0);
+		res = EFI_OUT_OF_RESOURCES;
+
+		goto catch_efi_error;
+	}
+
+	PRINTLOG(EFI, LOG_DEBUG, "openning as gpt disk", 0);
+
+	sys_disk = gpt_get_or_create_gpt_disk(sys_disk);
+
+	PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted", 0);
+
+	efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
+	disk_partition_context_t* part_ctx = NULL;
+
+	iterator_t* iter = sys_disk->get_partitions(sys_disk);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
+
+		if(tmp_part_ctx == NULL) {
+			res = EFI_OUT_OF_RESOURCES;
+
+			break;
+		}
+
+		efi_partition_entry_t* efi_pe = (efi_partition_entry_t*)tmp_part_ctx->internal_context;
+
+		if(efi_guid_equal(kernel_guid, efi_pe->partition_type_guid) == 0) {
+			part_ctx = tmp_part_ctx;
+
+			break;
+		}
+
+		memory_free(tmp_part_ctx);
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
+
+	if(part_ctx == NULL) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot find turnstone kernel partition", 0);
+		res = EFI_NOT_FOUND;
+
+		goto catch_efi_error;
+	}
+
+	PRINTLOG(EFI, LOG_DEBUG, "kernel start lba %x end lba %x", part_ctx->start_lba, part_ctx->end_lba);
+
+	*kernel_data = memory_malloc(sizeof(efi_kernel_data_t));
+
+	if(*kernel_data == NULL) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data", 0);
+		res = EFI_OUT_OF_RESOURCES;
+
+		goto catch_efi_error;
+	}
+
+	(*kernel_data)->size = (part_ctx->end_lba - part_ctx->start_lba  + 1) * bio->media->block_size;
+
+	PRINTLOG(EFI, LOG_DEBUG, "kernel size %li", (*kernel_data)->size);
+
+	res = sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "kernel load failed", 0);
+
+		goto catch_efi_error;
+	}
+
+	PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%lp", (*kernel_data)->data);
+
+
+catch_efi_error:
+	return res;
+}
+
+int64_t efi_load_kernel(efi_kernel_data_t** kernel_data) {
+	efi_status_t res;
 
 	efi_guid_t bio_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
 	efi_handle_t handles[128];
@@ -109,7 +228,6 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	}
 
 	int64_t blk_dev_cnt = 0;
-	int64_t sys_disk_idx = -1;
 
 	for(uint64_t i = 0; i < handle_size; i++) {
 
@@ -132,10 +250,17 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 					if(pmbr->part_type == EFI_PMBR_PART_TYPE) {
 						PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %li", blk_dev_cnt);
-						sys_disk_idx = blk_dev_cnt;
 						memory_free(buffer);
 
-						break;
+						PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %li", blk_dev_cnt);
+
+						res = efi_lookup_kernel_partition(blk_devs[blk_dev_cnt].bio, kernel_data);
+
+						if(res == EFI_SUCCESS) {
+
+							break;
+						}
+
 					}
 				}
 
@@ -150,8 +275,45 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 	}       // end of iter over all disks
 
-	if(sys_disk_idx == -1) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot find system disk", 0);
+catch_efi_error:
+	return res;
+}
+
+int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+	ST = system_table;
+	BS = system_table->boot_services;
+
+	efi_status_t res;
+
+	video_clear_screen();
+
+	PRINTLOG(EFI, LOG_INFO, "%s", "TURNSTONE EFI Loader Starting...");
+
+	res = efi_setup_heap();
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_FATAL, "cannot setup heap", res);
+
+		goto catch_efi_error;
+	}
+
+
+	video_frame_buffer_t* vfb = NULL;
+
+	res = efi_setup_graphics(&vfb);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_FATAL, "cannot setup graphics", res);
+
+		goto catch_efi_error;
+	}
+
+	efi_kernel_data_t* kernel_data = NULL;
+
+	res = efi_load_kernel(&kernel_data);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_FATAL, "cannot load kernel", res);
 
 		goto catch_efi_error;
 	}
@@ -168,83 +330,10 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 	memory_memclean((void*)frm_start_1mib, 0x100 * 4096);
 
-	PRINTLOG(EFI, LOG_DEBUG, "openning sys disk %li", sys_disk_idx);
-
-	disk_t* sys_disk = efi_disk_impl_open(blk_devs[sys_disk_idx].bio);
-
-	if(sys_disk == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "sys disk open failed", 0);
-
-		goto catch_efi_error;
-	}
-
-	PRINTLOG(EFI, LOG_DEBUG, "openning as gpt disk", 0);
-
-	sys_disk = gpt_get_or_create_gpt_disk(sys_disk);
-
-	PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted", 0);
-
-	efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
-
-	disk_partition_context_t* part_ctx = NULL;
-
-	iterator_t* iter = sys_disk->get_partitions(sys_disk);
-
-	while(iter->end_of_iterator(iter) != 0) {
-		disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
-
-		if(tmp_part_ctx == NULL) {
-			break;
-		}
-
-		efi_partition_entry_t* efi_pe = (efi_partition_entry_t*)tmp_part_ctx->internal_context;
-
-		if(efi_guid_equal(kernel_guid, efi_pe->partition_type_guid) == 0) {
-			part_ctx = tmp_part_ctx;
-
-			break;
-		}
-
-		memory_free(tmp_part_ctx);
-
-		iter = iter->next(iter);
-	}
-
-	iter->destroy(iter);
-
-	if(part_ctx == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot find turnstone kernel partition", 0);
-
-		goto catch_efi_error;
-	}
-
-	PRINTLOG(EFI, LOG_DEBUG, "kernel start lba %x end lba %x", part_ctx->start_lba, part_ctx->end_lba);
-
-	uint8_t* kernel_data;
-	int64_t kernel_size = (part_ctx->end_lba - part_ctx->start_lba  + 1) * blk_devs[sys_disk_idx].bio->media->block_size;
-
-	PRINTLOG(EFI, LOG_DEBUG, "kernel size %li", kernel_size);
-
-	res = sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &kernel_data);
-
-	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "kernel load failed", 0);
-
-		goto catch_efi_error;
-	}
-
-	PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%lp", kernel_data);
-
-	int64_t kernel_page_count = kernel_size / 4096 + 0x150;                       // adding extra pages for stack and heap
-	if(kernel_size % 4096) {
-		kernel_page_count++;
-	}
+	int64_t kernel_page_count = (kernel_data->size + 4096 - 1) / 4096 + 0x150;
 
 	int64_t new_kernel_2m_factor = 0;
-	new_kernel_2m_factor = kernel_page_count / 512;
-	if(kernel_page_count % 512) {
-		new_kernel_2m_factor++;
-	}
+	new_kernel_2m_factor = (kernel_page_count + 512 - 1) / 512;
 	kernel_page_count = new_kernel_2m_factor * 512;
 
 	PRINTLOG(EFI, LOG_DEBUG, "new kernel page count 0x%lx", kernel_page_count);
@@ -263,13 +352,14 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 	memory_memclean((void*)new_kernel_address, kernel_page_count * 4096);
 
-	if(linker_memcopy_program_and_relink((size_t)kernel_data, new_kernel_address, ((size_t)kernel_data) + 0x100 - 1) != 0) {
+	if(linker_memcopy_program_and_relink((size_t)kernel_data->data, new_kernel_address, ((size_t)kernel_data->data) + 0x100 - 1) != 0) {
 		PRINTLOG(EFI, LOG_ERROR, "cannot move and relink kernel", 0);
 
 		goto catch_efi_error;
 	}
 
 	PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%lx succed", new_kernel_address);
+	memory_free(kernel_data->data);
 	memory_free(kernel_data);
 
 
