@@ -10,6 +10,11 @@
 #include <memory.h>
 #include <random.h>
 
+typedef struct gpt_parts_iter_metadata_s {
+	gpt_disk_t* disk;
+	uint8_t current_part_no;
+} gpt_parts_iter_metadata_t;
+
 
 int8_t efi_create_guid(efi_guid_t* guid){
 	guid->time_low = rand();
@@ -238,9 +243,112 @@ disk_partition_context_t*  gpt_get_partition(disk_t* d, uint8_t partno) {
 	return res;
 }
 
+int8_t gpt_part_iter_destroy(iterator_t* iter){
+	if(iter == NULL) {
+		return -1;
+	}
+
+	memory_free(iter->metadata);
+	memory_free(iter);
+
+	return 0;
+}
+
+iterator_t* gpt_part_iter_next(iterator_t* iter){
+	if(iter == NULL) {
+		return NULL;
+	}
+
+	gpt_parts_iter_metadata_t* md = iter->metadata;
+
+	if(md == NULL) {
+		return NULL;
+	}
+
+	md->current_part_no++;
+
+	return iter;
+}
+
+int8_t gpt_part_iter_end_of_iterator(iterator_t* iter){
+	if(iter == NULL) {
+		return 0;
+	}
+
+	gpt_parts_iter_metadata_t* md = iter->metadata;
+
+	if(md == NULL) {
+		return 0;
+	}
+
+	if(md->current_part_no > md->disk->gpt_header->partition_entry_count) {
+		return 0;
+	}
+
+	return -1;
+}
+
+void* gpt_part_iter_get_item(iterator_t* iter){
+	if(iter == NULL) {
+		return NULL;
+	}
+
+	gpt_parts_iter_metadata_t* md = iter->metadata;
+
+	if(md == NULL) {
+		return NULL;
+	}
+
+	return gpt_get_partition((disk_t*)md->disk, md->current_part_no);
+}
+
+void* gpt_part_iter_delete_item(iterator_t* iter){
+	if(iter == NULL) {
+		return NULL;
+	}
+
+	gpt_parts_iter_metadata_t* md = iter->metadata;
+
+	if(md == NULL) {
+		return NULL;
+	}
+
+	disk_partition_context_t* tmp = gpt_get_partition((disk_t*)md->disk, md->current_part_no);
+	gpt_del_partition((disk_t*)md->disk, md->current_part_no);
+
+	return tmp;
+}
+
 iterator_t* gpt_get_partitions(disk_t* d){
-	UNUSED(d);
-	return NULL;
+	if(d == NULL) {
+		return NULL;
+	}
+
+	iterator_t* iter = memory_malloc(sizeof(iterator_t));
+
+	if(iter == NULL) {
+		return NULL;
+	}
+
+	gpt_parts_iter_metadata_t* md = memory_malloc(sizeof(gpt_parts_iter_metadata_t));
+
+	if(md == NULL) {
+		memory_free(iter);
+
+		return NULL;
+	}
+
+	md->disk = (gpt_disk_t*)d;
+	md->current_part_no = 0;
+
+	iter->metadata = md;
+	iter->destroy = gpt_part_iter_destroy;
+	iter->next = gpt_part_iter_next;
+	iter->end_of_iterator = gpt_part_iter_end_of_iterator;
+	iter->get_item = gpt_part_iter_get_item;
+	iter->delete_item = gpt_part_iter_delete_item;
+
+	return iter;
 }
 
 disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, char_t* name, uint64_t start, uint64_t end){
