@@ -1,30 +1,51 @@
 Hobby OS:
   Issues:
-    ☐ Memory bug when store opcode's target (maybe return one) is DEBUG object
-    ☐ Logical operations wrong if source/target not integer.
-    ☐ write casting cannot change dest object type correctly
 
   Tasks:
-    Implement ACPI/AML:
-      Parsers:
-        ☐ handle _crs/_prs buffers
-      Executors:
-        ☐ Write executor methods
-          ☐ Write read/write string
-          ☐ Write read/write buffer
-        ☐ handle logic ops if source is string/buffer
-    PCI:
-      ☐ After acpi, map interrupts to he apic and io-apic
-      ☐ Memory mapping of BARs
+    Scheduler:
+      ☐ Activate Cores
+        ☐ Implement trampoline code
+      ☐ Move kernel threads to the kernel cores
+      ☐ Implement user space task scheduling
     Disk:
-      ☐ implement sata (ahci)
+      ☐ Implement NVMe
+      ☐ Implement raid1
+    Database:
+      ☐ Implement disk layout
+      ☐ Implement write/read log on nvme disk
     Network:
-      ☐ implement e1000
-      ☐ implement virtio-net
+      ☐ Implement TCP
+      ☐ Implement DHCP Client
+      ☐ Implement DNS Client
+    Message Queue:
+      ☐ Implement mq system
+    Compiler:
+      ☐ Write assembler
+      ☐ Write C compiler
+        ☐ Write preprocessor
+        ☐ Write C to assembly compiler
+        ☐ Write optimizers
+      ☐ Write bootstrapper
+    Linker-Loader:
+      ☐ Write linker/loader for programs readed from disk
+      ☐ Write shared library linker/loader
 
 
 ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
+  ✔ Memory bug when store opcode's target (maybe return one) is DEBUG object @done(2022-02-13 18:10) @project(Hobby OS / Issues)
+  ✔ Logical operations wrong if source/target not integer. @done(2022-02-13 18:10) @project(Hobby OS / Issues)
+  ✔ write casting cannot change dest object type correctly @done(2022-02-13 18:10) @project(Hobby OS / Issues)
+  ✔ handle _crs/_prs buffers @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Parsers)
+  ✔ Write executor methods @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ Write read/write string @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ Write read/write buffer @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ handle logic ops if source is string/buffer @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ After acpi, map interrupts to he apic and io-apic @done(2022-02-13 18:10) @project(Hobby OS / Tasks / PCI)
+  ✔ Memory mapping of BARs @done(2022-02-13 18:10) @project(Hobby OS / Tasks / PCI)
+  ✔ implement sata (ahci) @done(2022-02-13 18:11) @project(Hobby OS / Tasks / Disk)
+  ✔ implement e1000 @done(2022-02-13 18:11) @project(Hobby OS / Tasks / Network)
+  ✔ implement virtio-net @done(2022-02-13 18:11) @project(Hobby OS / Tasks / Network)
   ✔ Will not boot when stage3 is lge 64kib @done(2021-06-08 01:58) @project(Hobby OS / Issues)
   ✔ Memory bug while destroying acpi aml objects @done(2021-06-07 08:46) @project(Hobby OS / Issues)
   ✔ Write parser methods @done(2021-06-07 08:45) @project(Hobby OS / Tasks / Implement ACPI/AML / Parsers)
