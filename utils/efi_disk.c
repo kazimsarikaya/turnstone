@@ -146,7 +146,7 @@ int32_t main(int32_t argc, char** argv) {
 		memory_free(part_ctx);
 
 
-		efi_guid_t kernel_guid = {0x1DF53B77, 0xCDFC, 0x4903, {0x9B, 0xE6, 0x08, 0x9C, 0xE0, 0x25, 0x7A, 0x09}};
+		efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
 		part_ctx = gpt_create_partition_context(&kernel_guid, "kernel", 206848, 206848 + kernel_sec_count - 1);
 		d->add_partition(d, part_ctx);
 		memory_free(part_ctx->internal_context);
