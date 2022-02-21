@@ -514,3 +514,20 @@ int8_t str_is_upper(char_t* str) {
 
 	return 0;
 }
+
+uint64_t strhash(const char_t* input) {
+	char_t* tmp = (char_t*)input;
+
+	if(tmp == NULL) {
+		return 0;
+	}
+
+	uint64_t res = 5381;
+
+	while(tmp) {
+		res = ((res << 5) + res) + *tmp;
+		tmp++;
+	}
+
+	return res;
+}
