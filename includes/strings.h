@@ -204,4 +204,6 @@ wchar_t* char_to_wchar(char_t* str);
 int64_t lchar_size(const lchar_t* str);
 char_t* lchar_to_char(lchar_t* src);
 lchar_t* char_to_lchar(char_t* str);
+
+uint64_t strhash(const char_t* input);
 #endif
