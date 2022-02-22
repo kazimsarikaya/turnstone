@@ -159,7 +159,7 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 	return 0;
 }
 
-int8_t memory_memcopy(void* source, void* destination, size_t size){
+int8_t memory_memcopy(const void* source, const void* destination, size_t size){
 	if(source == NULL || destination == NULL) {
 		return -1;
 	}
@@ -220,7 +220,7 @@ int8_t memory_memcopy(void* source, void* destination, size_t size){
 	return 0;
 }
 
-int8_t memory_memcompare(void* mem1, void* mem2, size_t size) {
+int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
 	if(mem1 == NULL || mem2 == NULL) {
 		return -1;
 	}

@@ -8,7 +8,7 @@
 #include <utils.h>
 
 
-size_t strlen(char_t* string) {
+size_t strlen(const char_t* string) {
 	if(string == NULL) {
 		return 0;
 	}
@@ -22,7 +22,7 @@ size_t strlen(char_t* string) {
 	return ret;
 }
 
-int8_t strcmp(char_t* string1, char_t* string2) {
+int8_t strcmp(const char_t* string1, const char_t* string2) {
 	size_t len1 = strlen(string1);
 	size_t len2 = strlen(string2);
 
@@ -45,7 +45,7 @@ int8_t strcmp(char_t* string1, char_t* string2) {
 	return (minlen == len1) ? -1 : 1;
 }
 
-int8_t strcpy(char_t* source, char_t* destination){
+int8_t strcpy(const char_t* source, char_t* destination){
 	if(source == NULL || destination == NULL) {
 		return -1;
 	}
@@ -57,7 +57,7 @@ int8_t strcpy(char_t* source, char_t* destination){
 	return 0;
 }
 
-char_t* strrev(char_t* source) {
+char_t* strrev(const char_t* source) {
 	size_t len = strlen(source);
 	if(len == 0) {
 		return NULL;
@@ -72,7 +72,7 @@ char_t* strrev(char_t* source) {
 	return dest;
 }
 
-number_t ato_base(char_t* source, number_t base) {
+number_t ato_base(const char_t* source, number_t base) {
 	// TODO: lower upper case chars are same when base<=36
 	number_t ret = 0;
 	number_t p = 0;
@@ -104,7 +104,7 @@ number_t ato_base(char_t* source, number_t base) {
 	return sign * ret;
 }
 
-unumber_t atou_base(char_t* source, number_t base) {
+unumber_t atou_base(const char_t* source, number_t base) {
 	// TODO: lower upper case chars are same when base<=36
 	number_t ret = 0;
 	number_t p = 0;
@@ -167,7 +167,7 @@ char_t* uto_base(unumber_t number, number_t base){
 	return ret;
 }
 
-char_t* strndup_at_heap(memory_heap_t* heap, char_t* src, size_t l){
+char_t* strndup_at_heap(memory_heap_t* heap, const char_t* src, size_t l){
 	if(src == NULL) {
 		return NULL;
 	}
@@ -185,7 +185,7 @@ char_t* strndup_at_heap(memory_heap_t* heap, char_t* src, size_t l){
 	return res;
 }
 
-int8_t strstarts(char_t* str, char_t* prefix) {
+int8_t strstarts(const char_t* str, const char_t* prefix) {
 	if(strlen(str) < strlen(prefix)) {
 		return -1;
 	}
@@ -197,7 +197,7 @@ int8_t strstarts(char_t* str, char_t* prefix) {
 	return -1;
 }
 
-int8_t strends(char_t* str, char_t* suffix) {
+int8_t strends(const char_t* str, const char_t* suffix) {
 	if(strlen(str) < strlen(suffix)) {
 		return -1;
 	}
@@ -209,7 +209,7 @@ int8_t strends(char_t* str, char_t* suffix) {
 	return -1;
 }
 
-char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2) {
+char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t* string2) {
 	size_t newsize = strlen(string1) + strlen(string2);
 
 	char_t* res = memory_malloc_ext(heap, sizeof(char_t) * newsize + 1, 0x0);
@@ -224,7 +224,7 @@ char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2) {
 	return res;
 }
 
-int8_t strncmp(char_t* string1, char_t* string2, size_t n) {
+int8_t strncmp(const char_t* string1, const char_t* string2, size_t n) {
 	size_t len1 = strlen(string1);
 	size_t len2 = strlen(string2);
 
@@ -317,7 +317,7 @@ char_t* strupper(char_t* str) {
 	return str;
 }
 
-char_t* struppercopy(char_t* str) {
+char_t* struppercopy(const char_t* str) {
 	return strupper(strdup(str));
 }
 
@@ -335,7 +335,7 @@ char_t* strlower(char_t* str) {
 	return str;
 }
 
-char_t* strlowercopy(char_t* str) {
+char_t* strlowercopy(const char_t* str) {
 	return strlower(strdup(str));
 }
 
