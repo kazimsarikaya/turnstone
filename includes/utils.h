@@ -108,4 +108,6 @@ static inline uint64_t byte_swap(uint64_t num, uint8_t bc) {
 #define ROTLEFT64(a, b)        ROTLEFT(a, b, 64)
 #define ROTRIGHT64(a, b)       ROTRIGHT(a, b, 64)
 
+uint8_t byte_count(const uint64_t num);
+
 #endif
