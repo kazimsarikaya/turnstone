@@ -17,7 +17,7 @@
  * @param[in]  string string to calculate length
  * @return length
  */
-size_t strlen(char_t* string);
+size_t strlen(const char_t* string);
 
 /**
  * @brief compares two string
@@ -25,7 +25,7 @@ size_t strlen(char_t* string);
  * @param  string2 second string
  * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
  */
-int8_t strcmp(char_t* string1, char_t* string2);
+int8_t strcmp(const char_t* string1, const char_t* string2);
 
 /**
  * @brief compares two string with first n bytes
@@ -34,7 +34,7 @@ int8_t strcmp(char_t* string1, char_t* string2);
  * @param  n first n bytes
  * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
  */
-int8_t strncmp(char_t* string1, char_t* string2, size_t n);
+int8_t strncmp(const char_t* string1, const char_t* string2, size_t n);
 
 /**
  * @brief checks str starts with prefix
@@ -42,7 +42,7 @@ int8_t strncmp(char_t* string1, char_t* string2, size_t n);
  * @param  prefix to compare
  * @return 0 if str starts with prefix, else -1
  */
-int8_t strstarts(char_t* str, char_t* prefix);
+int8_t strstarts(const char_t* str, const char_t* prefix);
 
 /**
  * @brief checks str ends with suffix
@@ -50,7 +50,7 @@ int8_t strstarts(char_t* str, char_t* prefix);
  * @param  suffix to compare
  * @return 0 if str ends with suffix, else -1
  */
-int8_t strends(char_t* str, char_t* suffix);
+int8_t strends(const char_t* str, const char_t* suffix);
 
 /**
  * @brief concanates two string and returns new one
@@ -58,7 +58,7 @@ int8_t strends(char_t* str, char_t* suffix);
  * @param  string2 second string
  * @return new string, needs freeing or memory leak
  */
-char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2);
+char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t* string2);
 
 /*! strcat at default heap */
 #define strcat(s1, s2) strcat_at_heap(NULL, s1, s2)
@@ -72,7 +72,7 @@ char_t* strcat_at_heap(memory_heap_t* heap, char_t* string1, char_t* string2);
  * NULL will not be copied. destination should be equal or greater then source.
  * destination should have space for NULL.
  */
-int8_t strcpy(char_t* source, char_t* destination);
+int8_t strcpy(const char_t* source, char_t* destination);
 
 /**
  * @brief reverse a string
@@ -81,7 +81,7 @@ int8_t strcpy(char_t* source, char_t* destination);
  *
  * allocates new space, hence return value needs be freed, else leak will be happened
  */
-char* strrev(char_t* source);
+char* strrev(const char_t* source);
 
 /**
  * @brief converts string into number
@@ -89,7 +89,7 @@ char* strrev(char_t* source);
  * @param[in]  base   base of number inside string
  * @return number
  */
-number_t ato_base(char_t* source, number_t base);
+number_t ato_base(const char_t* source, number_t base);
 
 /*! ato_base macro for base 10 */
 #define atoi(number) ato_base(number, 10)
@@ -100,7 +100,7 @@ number_t ato_base(char_t* source, number_t base);
  * @param[in]  base   base of number inside string
  * @return number
  */
-unumber_t atou_base(char_t* source, number_t base);
+unumber_t atou_base(const char_t* source, number_t base);
 
 
 /*! atou_base macro for base 10 */
@@ -144,7 +144,7 @@ char_t* uto_base(unumber_t number, number_t base);
  * @param[in] length of destination string
  * @return duplicate at heap
  */
-char_t* strndup_at_heap(memory_heap_t* heap, char_t* src, size_t n);
+char_t* strndup_at_heap(memory_heap_t* heap, const char_t* src, size_t n);
 
 /*! string duplicate at heap */
 #define strdup_at_heap(heap, src) strndup_at_heap(heap, src, strlen(src))
@@ -177,7 +177,7 @@ char_t* strupper(char_t* str);
  * @param[in] str string to upper case
  * @return new uppercased string
  */
-char_t* struppercopy(char_t* str);
+char_t* struppercopy(const char_t* str);
 
 /**
  * @brief converts string to lower case
@@ -191,7 +191,7 @@ char_t* strlower(char_t* str);
  * @param[in] str string to lower case
  * @return new lowercased string
  */
-char_t* strlowercopy(char_t* str);
+char_t* strlowercopy(const char_t* str);
 
 char_t* strtrim_right(char_t* str);
 

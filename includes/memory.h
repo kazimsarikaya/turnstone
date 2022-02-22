@@ -107,7 +107,7 @@ int8_t memory_memset(void* address, uint8_t value, size_t size);
  *
  * if destination is smaller then length a memory corruption will be happend
  */
-int8_t memory_memcopy(void* source, void* destination, size_t size);
+int8_t memory_memcopy(const void* source, const void* destination, size_t size);
 
 /**
  * @brief compares first length bytes of mem1 with mem2
@@ -116,6 +116,6 @@ int8_t memory_memcopy(void* source, void* destination, size_t size);
  * @param  size count of bytes for compare
  * @return       <0 if mem1>mem2, 0 if mem1=mem2, >0 if mem1>mem2
  */
-int8_t memory_memcompare(void* mem1, void* mem2, size_t size);
+int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size);
 
 #endif
