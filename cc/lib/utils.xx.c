@@ -180,3 +180,16 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 
 	return 0;
 }
+
+uint8_t byte_count(const uint64_t num) {
+	uint8_t res = sizeof(uint64_t);
+	uint64_t tmp_num = BYTE_SWAP64(num);
+	uint8_t* blist = (uint8_t*)&tmp_num;
+
+	while(*blist == 0) {
+		blist++;
+		res--;
+	}
+
+	return res;
+}
