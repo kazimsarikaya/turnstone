@@ -20,6 +20,10 @@ memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
 }
 
 void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
+	if(size == 0) {
+		return NULL;
+	}
+
 	if(size % 8) {
 		size = size + (8 - (size % 8));
 	}
