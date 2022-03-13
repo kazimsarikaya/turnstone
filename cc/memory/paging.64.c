@@ -56,6 +56,8 @@ uint64_t memory_paging_get_internal_frame() {
 			}
 		}
 
+		memory_memclean((void*)MEMORY_PAGING_INTERNAL_FRAMES_2_START, MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT * FRAME_SIZE);
+
 		PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache refilled", 0);
 	}
 
@@ -158,12 +160,15 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
 	}
 	else {
-		t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4idx].physical_address << 12));
+		uint64_t tmp_pa = p4->pages[p4idx].physical_address;
+		t_p3 = (memory_page_table_t*)(tmp_pa << 12);
 
 		if(SYSTEM_INFO->my_page_table) {
 			t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
 		}
 	}
+
+	PRINTLOG(PAGING, LOG_TRACE, "p3 address: 0x%lx", t_p3);
 
 	size_t p3idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
 
@@ -244,13 +249,15 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		if(type & MEMORY_PAGING_PAGE_TYPE_1G) {
 			return 0;
 		}
-
-		t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3idx].physical_address << 12));
+		uint64_t tmp_pa = t_p3->pages[p3idx].physical_address;
+		t_p2 = (memory_page_table_t*)(tmp_pa << 12);
 
 		if(SYSTEM_INFO->my_page_table) {
 			t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
 		}
 	}
+
+	PRINTLOG(PAGING, LOG_TRACE, "p2 address: 0x%lx", t_p2);
 
 	size_t p2idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
 
@@ -332,13 +339,15 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 		if(type & MEMORY_PAGING_PAGE_TYPE_2M) {
 			return 0;
 		}
-
-		t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2idx].physical_address << 12));
+		uint64_t tmp_pa = t_p2->pages[p2idx].physical_address;
+		t_p1 = (memory_page_table_t*)(tmp_pa << 12);
 
 		if(SYSTEM_INFO->my_page_table) {
 			t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
 		}
 	}
+
+	PRINTLOG(PAGING, LOG_TRACE, "p1 address: 0x%lx", t_p1);
 
 	size_t p1idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
 
@@ -374,6 +383,8 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 }
 
 memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
+	PRINTLOG(PAGING, LOG_DEBUG, "building page table started", 0);
+
 	frame_t* t_p4_frm;
 
 	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
@@ -400,6 +411,8 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		}
 	}
 
+	PRINTLOG(PAGING, LOG_DEBUG, "building internal frames ended", 0);
+
 	if(SYSTEM_INFO->my_page_table == 0) {
 		cpu_toggle_cr0_wp();
 	}
@@ -407,8 +420,12 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 	uint64_t p4_fa = t_p4_frm->frame_address;
 	memory_page_table_t* p4 = (memory_page_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
 
+	memory_memclean(p4, sizeof(memory_page_table_t));
+
 	MEMORY_PAGING_INTERNAL_FRAMES_1_START = t_p4_frm->frame_address + MEMORY_PAGING_PAGE_LENGTH_4K;
 	MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT - 1;
+
+	memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(MEMORY_PAGING_INTERNAL_FRAMES_1_START), MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT * sizeof(memory_page_table_t));
 
 	PRINTLOG(PAGING, LOG_DEBUG, "frame pool start 0x%016lx", MEMORY_PAGING_INTERNAL_FRAMES_1_START);
 
@@ -417,6 +434,8 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 
 		return NULL;
 	}
+
+	PRINTLOG(PAGING, LOG_DEBUG, "p4 self mapping completed", 0);
 
 	for(uint64_t i = 0; i < MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT; i++) {
 		if(memory_paging_add_page_ext(NULL, p4,
@@ -429,6 +448,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 		}
 	}
 
+	PRINTLOG(PAGING, LOG_DEBUG, "internal frames mapping completed", 0);
 
 	program_header_t* kernel_header = (program_header_t*)SYSTEM_INFO->kernel_start;
 
