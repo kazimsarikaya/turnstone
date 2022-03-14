@@ -23,7 +23,9 @@
 /*! unsigned byte type */
 #define uint8_t unsigned char
 /*! boolean type */
-typedef uint8_t boolean_t;
+#define true        1
+#define false       0
+typedef _Bool boolean_t;
 /*! signed word (two bytes) type */
 #define int16_t short
 /*! wide char (two bytes) type */

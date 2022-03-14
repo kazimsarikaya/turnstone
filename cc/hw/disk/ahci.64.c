@@ -477,7 +477,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 					PRINTLOG(AHCI, LOG_ERROR, "cannot identify disk %li at port address %lx", disk_id, port_address);
 				}
 
-				disk->inserted = 1;
+				disk->inserted = true;
 
 			}   else if (dt == AHCI_DEVICE_SATAPI)  {
 				PRINTLOG(AHCI, LOG_DEBUG, "SATAPI drive found at port %d", port_idx);
