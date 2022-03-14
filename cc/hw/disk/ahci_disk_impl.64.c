@@ -129,6 +129,14 @@ int8_t ahci_disk_impl_close(disk_t* d) {
 
 disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
 
+	if(sata_disk == NULL) {
+		return NULL;
+	}
+
+	if(sata_disk->inserted == 0) {
+		return NULL;
+	}
+
 	ahci_disk_impl_context_t* ctx = memory_malloc(sizeof(ahci_disk_impl_context_t));
 
 	ctx->sata_disk = sata_disk;
