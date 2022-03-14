@@ -198,21 +198,29 @@ int8_t kmain64(size_t entry_point) {
 
 	ahci_sata_disk_t* d = ahci_get_disk_by_id(0);
 	if(d) {
+		PRINTLOG(KERNEL, LOG_DEBUG, "try to read disk 0x%lx", d);
 		disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
 
-		PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%lx", sata0->get_disk_size(sata0));
+		if(sata0) {
+			PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%lx", sata0->get_disk_size(sata0));
 
-		disk_partition_context_t* part_ctx;
+			disk_partition_context_t* part_ctx;
 
-		part_ctx = sata0->get_partition(sata0, 0);
-		PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%lx end lba 0x%lx", part_ctx->start_lba, part_ctx->end_lba);
-		memory_free(part_ctx);
+			part_ctx = sata0->get_partition(sata0, 0);
+			PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%lx end lba 0x%lx", part_ctx->start_lba, part_ctx->end_lba);
+			memory_free(part_ctx);
 
-		part_ctx = sata0->get_partition(sata0, 1);
-		PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%lx end lba 0x%lx", part_ctx->start_lba, part_ctx->end_lba);
-		memory_free(part_ctx);
+			part_ctx = sata0->get_partition(sata0, 1);
+			PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%lx end lba 0x%lx", part_ctx->start_lba, part_ctx->end_lba);
+			memory_free(part_ctx);
 
-		sata0->flush(sata0);
+			sata0->flush(sata0);
+		} else {
+			PRINTLOG(KERNEL, LOG_INFO, "sata0 is empty", 0);
+		}
+
+	} else {
+		PRINTLOG(KERNEL, LOG_WARNING, "no disks found", 0);
 	}
 
 	if(kbd_init() != 0) {

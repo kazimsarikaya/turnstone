@@ -364,6 +364,7 @@ typedef struct {
 	uint32_t acquired_slots;
 	uint32_t current_commands;
 	lock_t future_locks[32];
+	boolean_t inserted;
 }ahci_sata_disk_t;
 
 typedef struct {

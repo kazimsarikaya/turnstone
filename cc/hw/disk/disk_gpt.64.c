@@ -375,6 +375,10 @@ disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, char_t*
 }
 
 disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk){
+	if(underlaying_disk == NULL) {
+		return NULL;
+	}
+
 	gpt_disk_t* gd = memory_malloc(sizeof(gpt_disk_t));
 
 	memory_memcopy(underlaying_disk, gd, sizeof(disk_t));
