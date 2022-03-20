@@ -54,22 +54,6 @@ void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat);
 #define memory_get_heap_stat(s) memory_get_heap_stat_ext(NULL, s)
 
 /**
- * @brief malloc memory
- * @param[in] heap  the heap used for malloc
- * @param[in] size  size of variable
- * @param[in] align address of variable aligned at.
- * @return address of variable
- *
- * if heap is NULL, variable allocated at default heap.
- */
-void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
-
-/*! malloc with size s at default heap without aligned */
-#define memory_malloc(s) memory_malloc_ext(NULL, s, 0x0)
-/*! malloc with size s at default heap with aligned a */
-#define memory_malloc_aligned(s, a) memory_malloc_ext(NULL, s, a)
-
-/**
  * @brief frees memory
  * @param[in]  heap  the heap where the address is.
  * @param[in]  address address to free
@@ -80,6 +64,22 @@ void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
 int8_t memory_free_ext(memory_heap_t* heap, void* address);
 /*! frees memory addr at default heap */
 #define memory_free(addr) memory_free_ext(NULL, addr)
+
+/**
+ * @brief malloc memory
+ * @param[in] heap  the heap used for malloc
+ * @param[in] size  size of variable
+ * @param[in] align address of variable aligned at.
+ * @return address of variable
+ *
+ * if heap is NULL, variable allocated at default heap.
+ */
+__attribute__ ((malloc, malloc (memory_free_ext, 2))) void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
+
+/*! malloc with size s at default heap without aligned */
+#define memory_malloc(s) memory_malloc_ext(NULL, s, 0x0)
+/*! malloc with size s at default heap with aligned a */
+#define memory_malloc_aligned(s, a) memory_malloc_ext(NULL, s, a)
 
 /**
  * @brief sets memory with value
