@@ -70,7 +70,7 @@ int8_t linker_remap_kernel() {
 	uint64_t sec_start;
 	frame_t f;
 
-	linker_section_locations_t old_section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
+	linker_section_locations_t old_section_locations[LINKER_SECTION_TYPE_NR_SECTIONS] = {};
 
 	memory_memcopy(kernel->section_locations, old_section_locations, sizeof(old_section_locations));
 

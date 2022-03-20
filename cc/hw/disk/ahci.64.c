@@ -351,7 +351,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 		if(hba_frames == NULL) {
 			PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for abar", 0);
 
-			frame_t f = {abar_fa, 2, FRAME_ALLOCATION_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
+			frame_t f = {abar_fa, 2, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
 			if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &f) != 0) {
 				PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for abar", 0);
