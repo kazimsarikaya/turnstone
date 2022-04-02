@@ -230,6 +230,8 @@ int8_t kmain64(size_t entry_point) {
 
 	PRINTLOG(KERNEL, LOG_INFO, "rdrand %i", cpu_check_rdrand());
 
+	PRINTLOG(KERNEL, LOG_INFO, "system table %lp %i %i", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
+
 	PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)", 0);
 
 	return 0;
