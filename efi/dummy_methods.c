@@ -19,10 +19,5 @@ task_t* task_get_current_task(){
 	return NULL;
 }
 
-
-void lock_acquire(lock_t lock){
-	UNUSED(lock);
-}
-void lock_release(lock_t lock){
-	UNUSED(lock);
+void task_yield() {
 }
