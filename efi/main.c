@@ -8,9 +8,13 @@
 #include <linker.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/sync.h>
+#include <buffer.h>
+#include <data.h>
 
 efi_system_table_t* ST;
 efi_boot_services_t* BS;
+efi_runtime_services_t* RS;
 
 typedef int8_t (* kernel_start_t)(system_info_t* sysinfo);
 
@@ -19,7 +23,7 @@ typedef struct {
 	uint64_t size;
 } efi_kernel_data_t;
 
-int64_t efi_setup_heap(){
+efi_status_t efi_setup_heap(){
 	efi_status_t res;
 
 	void* heap_area;
@@ -56,7 +60,7 @@ catch_efi_error:
 	return res;
 }
 
-int64_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
+efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
 	efi_status_t res;
 
 	video_frame_buffer_t* vfb = NULL;
@@ -116,7 +120,7 @@ catch_efi_error:
 	return res;
 }
 
-int64_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data) {
+efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data) {
 	efi_status_t res;
 
 	disk_t* sys_disk = efi_disk_impl_open(bio);
@@ -201,8 +205,8 @@ catch_efi_error:
 	return res;
 }
 
-int64_t efi_load_kernel(efi_kernel_data_t** kernel_data) {
-	efi_status_t res;
+efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
+	efi_status_t res = EFI_NOT_FOUND;
 
 	efi_guid_t bio_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
 	efi_handle_t handles[128];
@@ -230,6 +234,7 @@ int64_t efi_load_kernel(efi_kernel_data_t** kernel_data) {
 	int64_t blk_dev_cnt = 0;
 
 	for(uint64_t i = 0; i < handle_size; i++) {
+		res = EFI_NOT_FOUND;
 
 		if(handles[i] && !EFI_ERROR(BS->handle_protocol(handles[i], &bio_guid, (void**) &blk_devs[blk_dev_cnt].bio)) &&
 		   blk_devs[blk_dev_cnt].bio && blk_devs[blk_dev_cnt].bio->media && blk_devs[blk_dev_cnt].bio->media->block_size > 0) {
@@ -239,6 +244,10 @@ int64_t efi_load_kernel(efi_kernel_data_t** kernel_data) {
 			         blk_devs[blk_dev_cnt].bio->media->removable_media,
 			         blk_devs[blk_dev_cnt].bio->media->media_present, blk_devs[blk_dev_cnt].bio->media->readonly,
 			         blk_devs[blk_dev_cnt].bio->media->last_block);
+
+			if(blk_devs[blk_dev_cnt].bio->media->media_present != 1) {
+				continue;
+			}
 
 			if(blk_devs[blk_dev_cnt].bio->media->block_size == 512) {
 				uint8_t* buffer = memory_malloc(512);
@@ -257,7 +266,6 @@ int64_t efi_load_kernel(efi_kernel_data_t** kernel_data) {
 						res = efi_lookup_kernel_partition(blk_devs[blk_dev_cnt].bio, kernel_data);
 
 						if(res == EFI_SUCCESS) {
-
 							break;
 						}
 
@@ -279,9 +287,271 @@ catch_efi_error:
 	return res;
 }
 
-int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+efi_status_t efi_print_variable_names() {
+	efi_status_t res;
+
+	wchar_t buffer[256];
+	memory_memclean(buffer, 256);
+	efi_guid_t var_ven_guid;
+	uint64_t var_size = 0;
+
+	while(1) {
+		var_size = sizeof(buffer);
+		res = RS->get_next_variable_name(&var_size, buffer, &var_ven_guid);
+
+		if(res == EFI_NOT_FOUND) {
+			break;
+		}
+
+		if(res != EFI_SUCCESS) {
+			PRINTLOG(EFI, LOG_ERROR, "cannot get next variable name: 0x%lx", res);
+
+			goto catch_efi_error;
+		}
+
+		char_t* var_name = wchar_to_char(buffer);
+		PRINTLOG(EFI, LOG_DEBUG, "variable size %li name: %s", var_size, var_name);
+		memory_free(var_name);
+	}
+
+catch_efi_error:
+	return res;
+}
+
+efi_status_t efi_is_pxe_boot(boolean_t* result){
+	efi_status_t res;
+
+	if(result == NULL) {
+		res = EFI_INVALID_PARAMETER;
+
+		goto catch_efi_error;
+	}
+
+	wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+	efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
+	uint32_t var_attrs = 0;
+	uint64_t buffer_size = sizeof(uint16_t);
+	uint16_t boot_order_idx;
+
+	res = RS->get_variable(var_name_boot_current, &var_global, &var_attrs, &buffer_size, &boot_order_idx);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot variable 0x%lx", res);
+
+		goto catch_efi_error;
+	}
+
+	memory_free(var_name_boot_current);
+
+
+	char_t* boot_order_idx_str = itoh(boot_order_idx);
+
+	char_t* boot_value_rev = "0000tooB";
+
+	for(int32_t i = strlen(boot_order_idx_str) - 1, j = 0; i >= 0; i--) {
+		boot_value_rev[j++] = boot_order_idx_str[i];
+	}
+
+	char_t* boot_value = strrev(boot_value_rev);
+
+	PRINTLOG(EFI, LOG_DEBUG, "current boot order: %i %s", boot_order_idx, boot_value);
+
+	wchar_t* var_val_boot_current = char_to_wchar(boot_value);
+
+	memory_free(boot_value);
+
+	res = RS->get_variable(var_val_boot_current, &var_global, &var_attrs, &buffer_size, NULL);
+
+	if(res != EFI_BUFFER_TOO_SMALL) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot size: 0x%lx", res);
+
+		goto catch_efi_error;
+	}
+
+	uint8_t* var_val_boot = memory_malloc(buffer_size);
+
+	res = RS->get_variable(var_val_boot_current, &var_global, &var_attrs, &buffer_size, (void*)var_val_boot);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot variable: 0x%lx", res);
+
+		goto catch_efi_error;
+	}
+
+	memory_free(var_val_boot_current);
+
+	//uint32_t lo_attr = *((uint32_t*)var_val_boot);
+	uint16_t lo_len = *((uint16_t*)(var_val_boot + sizeof(uint32_t)));
+	wchar_t* lo_desc = (wchar_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
+	char_t* boot_desc = wchar_to_char(lo_desc);
+
+	PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %i", lo_len, boot_desc, wchar_size(lo_desc));
+
+	efi_device_path_t* lo_fp = (efi_device_path_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t) + wchar_size(lo_desc) * sizeof(wchar_t) + sizeof(wchar_t));
+
+	while(lo_len > 0) {
+		PRINTLOG(EFI, LOG_DEBUG, "boot fp type %i subtype %i len %i", lo_fp->type, lo_fp->sub_type, lo_fp->length);
+
+		if(lo_fp->type == EFI_DEVICE_PATH_TYPE_EOF && lo_fp->sub_type == EFI_DEVICE_PATH_SUBTYPE_EOF_EOF) {
+			break;
+		}
+
+		if(lo_fp->type == EFI_DEVICE_PATH_TYPE_MESSAGING && lo_fp->sub_type == EFI_DEVICE_PATH_SUBTYPE_MESSAGING_MAC) {
+			*result = 1;
+
+			break;
+		}
+
+
+		lo_len -= lo_fp->length;
+		lo_fp = (efi_device_path_t*)(((uint8_t*)lo_fp) + lo_fp->length);
+	}
+
+	res = EFI_SUCCESS;
+
+catch_efi_error:
+	return res;
+}
+
+
+efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
+	efi_status_t res = EFI_NOT_FOUND;
+
+	efi_pxe_base_code_protocol_t* pxe_prot;
+	efi_guid_t pxe_prot_guid = EFI_PXE_BASE_CODE_PROTOCOL_GUID;
+
+	res = BS->locate_protocol(&pxe_prot_guid, NULL, (void**)&pxe_prot);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot find pxe protocol: 0x%lx", res);
+
+		goto catch_efi_error;
+	}
+
+	PRINTLOG(EFI, LOG_DEBUG, "pxe started: %i", pxe_prot->mode->started);
+	PRINTLOG(EFI, LOG_DEBUG, "pxe discover: %i.%i.%i.%i",
+	         pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[0],
+	         pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[1],
+	         pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[2],
+	         pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3]);
+
+
+	efi_ip_address_t eipa;
+	eipa.v4.addr[0] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[0];
+	eipa.v4.addr[1] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[1];
+	eipa.v4.addr[2] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[2];
+	eipa.v4.addr[3] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3];
+
+	uint64_t buffer_size;
+	char_t* pxeconfig = "pxeconf.json";
+	boolean_t pxeconfig_is_json = true;
+
+	res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get config size as json: 0x%lx", res);
+
+		pxeconfig = "pxeconf.bson";
+		pxeconfig_is_json = false;
+
+		res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
+
+		if(res != EFI_SUCCESS) {
+			PRINTLOG(EFI, LOG_ERROR, "cannot get config size as bson: 0x%lx", res);
+
+			goto catch_efi_error;
+		}
+
+	}
+
+	PRINTLOG(EFI, LOG_DEBUG, "config size 0x%lx", buffer_size);
+
+	uint8_t* buffer = memory_malloc(buffer_size);
+
+	if(buffer == NULL) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate config buffer", 0);
+		res = EFI_OUT_OF_RESOURCES;
+
+		goto catch_efi_error;
+	}
+
+	res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 0);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get config %s: 0x%lx", pxeconfig, res);
+
+		goto catch_efi_error;
+	}
+
+	data_t pxeconf_deser_data = {DATA_TYPE_INT8_ARRAY, buffer_size, NULL, buffer};
+
+	data_t* pxeconfig_data = NULL;
+
+	if(pxeconfig_is_json) {
+		pxeconfig_data = data_json_deserialize(&pxeconf_deser_data);
+	} else {
+		pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data, DATA_SERIALIZE_WITH_FLAGS);
+	}
+
+	memory_free(buffer);
+
+	if(pxeconfig_data == NULL) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot deserialize pxe config", 0);
+		res = EFI_INVALID_PARAMETER;
+
+		goto catch_efi_error;
+	}
+
+	if(pxeconfig_data->name == NULL || strcmp(pxeconfig_data->name->value, "pxe-config") != 0 || pxeconfig_data->length != 2) {
+		PRINTLOG(EFI, LOG_ERROR, "malformed pxe config", 0);
+		res = EFI_INVALID_PARAMETER;
+
+		goto catch_efi_error;
+	}
+
+	data_t* kerd = &((data_t*)pxeconfig_data->value)[0];
+	data_t* kerd_s = &((data_t*)pxeconfig_data->value)[1];
+
+	if(kerd->name == NULL || strcmp(kerd->name->value, "kernel") != 0 || kerd_s->name == NULL || strcmp(kerd_s->name->value, "kernel-size") != 0) {
+		PRINTLOG(EFI, LOG_ERROR, "malformed pxe config", 0);
+		res = EFI_INVALID_PARAMETER;
+
+		goto catch_efi_error;
+	}
+
+	buffer_size = (uint64_t)kerd_s->value;
+	buffer = memory_malloc(buffer_size);
+
+	res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, kerd->value, NULL, 0);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get kernel: 0x%lx", res);
+
+		goto catch_efi_error;
+	}
+
+	*kernel_data = memory_malloc(sizeof(efi_kernel_data_t));
+
+	if(*kernel_data == NULL) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data", 0);
+		res = EFI_OUT_OF_RESOURCES;
+
+		goto catch_efi_error;
+	}
+
+	(*kernel_data)->size = buffer_size;
+	(*kernel_data)->data = buffer;
+
+	res = EFI_SUCCESS;
+
+catch_efi_error:
+	return res;
+}
+
+efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	ST = system_table;
 	BS = system_table->boot_services;
+	RS = system_table->runtime_services;
 
 	efi_status_t res;
 
@@ -308,9 +578,34 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 		goto catch_efi_error;
 	}
 
+	efi_guid_t lip_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+	efi_loaded_image_t* loaded_image = NULL;
+
+	res = BS->handle_protocol(image, &lip_guid, (void**)&loaded_image);
+
+	if(res != EFI_SUCCESS) {
+		PRINTLOG(EFI, LOG_ERROR, "cannot get details of loaded imgage", res);
+
+		goto catch_efi_error;
+	}
+
+	PRINTLOG(EFI, LOG_DEBUG, "devhandle 0x%lp fp 0x%lp los %li", loaded_image->device_handle, loaded_image->file_path, loaded_image->load_options_size);
+
+	boolean_t is_pxe = 0;
+
+	res = efi_is_pxe_boot(&is_pxe);
+
+	if(res != EFI_SUCCESS) {
+		goto catch_efi_error;
+	}
+
 	efi_kernel_data_t* kernel_data = NULL;
 
-	res = efi_load_kernel(&kernel_data);
+	if(is_pxe) {
+		res = efi_load_pxe_kernel(&kernel_data);
+	} else {
+		res = efi_load_local_kernel(&kernel_data);
+	}
 
 	if(res != EFI_SUCCESS) {
 		PRINTLOG(EFI, LOG_FATAL, "cannot load kernel", res);
@@ -406,6 +701,7 @@ int64_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
 	sysinfo->kernel_start = new_kernel_address;
 	sysinfo->kernel_4k_frame_count = kernel_page_count;
+	sysinfo->efi_system_table = system_table;
 
 	PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%lp with sysinfo @ 0x%lp", new_kernel_address, sysinfo);
 

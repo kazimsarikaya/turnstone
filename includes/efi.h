@@ -202,12 +202,86 @@ typedef enum {
 	EFI_TIMER_TYPE_MAX
 } efi_timer_delay_t;
 
+typedef enum {
+	EFI_DEVICE_PATH_TYPE_HARDWARE=1,
+	EFI_DEVICE_PATH_TYPE_ACPI=2,
+	EFI_DEVICE_PATH_TYPE_MESSAGING=3,
+	EFI_DEVICE_PATH_TYPE_MEDIA=4,
+	EFI_DEVICE_PATH_TYPE_BIOS_BOOT=5,
+	EFI_DEVICE_PATH_TYPE_EOF=0x7F,
+}efi_device_path_type_t;
+
+typedef enum {
+	EFI_DEVICE_PATH_SUBTYPE_HARDWARE_PCI=1,
+	EFI_DEVICE_PATH_SUBTYPE_HARDWARE_PCCARD=2,
+	EFI_DEVICE_PATH_SUBTYPE_HARDWARE_MEMORY_MAPPED=3,
+	EFI_DEVICE_PATH_SUBTYPE_HARDWARE_VENDOR=4,
+	EFI_DEVICE_PATH_SUBTYPE_HARDWARE_CONTROLLER=5,
+	EFI_DEVICE_PATH_SUBTYPE_HARDWARE_BMC=6,
+}efi_device_path_subtype_hardware_t;
+
+typedef enum {
+	EFI_DEVICE_PATH_SUBTYPE_ACPI_ACPI=1,
+	EFI_DEVICE_PATH_SUBTYPE_ACPI_ACPI_EX=2,
+	EFI_DEVICE_PATH_SUBTYPE_ACPI_ADR=3,
+	EFI_DEVICE_PATH_SUBTYPE_ACPI_NVDIMM=4,
+}efi_device_path_subtype_acpi_t;
+
+typedef enum {
+	EFI_DEVICE_PATH_SUBTYPE_EOF_EOI=0x01,
+	EFI_DEVICE_PATH_SUBTYPE_EOF_EOF=0xFF,
+} efi_device_path_subtype_eof_t;
+
+typedef enum {
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_ATAPI=1,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_SCSI=2,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_FC=3,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_1394=4,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_USB=5,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_I2O=6,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_IB=9,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_VENDOR=10,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_MAC=11,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_IPV4=12,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_IPV6=13,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_UART=14,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_USB_CLASS=15,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_USB_WWID=16,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_LUN=17,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_SATA=18,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_ISCSI=19,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_VLAN=20,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_FC_EX=21,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_SAS_EX=22,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_NVME=23,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_URI=24,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_UFS=25,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_SD=26,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_BLUETOOTH=27,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_WIFI=28,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_EMMC=29,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_BLUETOOTHLE=30,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_DNS=31,
+	EFI_DEVICE_PATH_SUBTYPE_MESSAGING_WTF=32, ///< NVDIMM_NS & REST uses it
+}efi_device_path_subtype_messaging_t;
+
+typedef enum {
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_HDD=1,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_CDROM=2,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_VENDOR=3,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_FILEPATH=4,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_MEDIA=5,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_PWING=6,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_PWING_FW_VOL=7,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_RELATIVE_OFFSET=8,
+	EFI_DEVICE_PATH_SUBTYPE_MEDIA_RAMDISK=9,
+}efi_device_path_subtype_media_t;
 
 typedef struct {
-	uint8_t type;
+	efi_device_path_type_t type : 8;
 	uint8_t sub_type;
-	uint8_t length[2];
-} efi_device_path_t;
+	uint16_t length;
+}__attribute__((packed)) efi_device_path_t;
 
 typedef struct {
 	uint32_t type;
@@ -561,5 +635,271 @@ typedef struct {
 	efi_gop_mode_t* mode;
 } efi_gop_t;
 
+#define EFI_LOADED_IMAGE_PROTOCOL_GUID { 0x5B1B31A1, 0x9562, 0x11d2, {0x8E, 0x3F, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B} }
+#define EFI_LOADED_IMAGE_DEVICE_PATH_PROTOCOL_GUID { 0xBC62157E, 0x3E33, 0x4FEC, {0x99, 0x20, 0x2D, 0x3B, 0x36, 0xD7, 0x50, 0xDF} }
+
+typedef efi_status_t (EFIAPI* efi_image_unload_t)(efi_handle_t image_handle);
+
+typedef struct {
+	uint32_t revision;
+	efi_handle_t parent_handle;
+	efi_system_table_t* system_table;
+	efi_handle_t device_handle;
+	efi_device_path_t* file_path;
+	void* reserved;
+	uint32_t load_options_size;
+	void* load_options;
+	void* image_base;
+	uint64_t image_size;
+	efi_memory_type_t image_code_type;
+	efi_memory_type_t image_data_type;
+	efi_image_unload_t unload;
+} efi_loaded_image_t;
+
+#define EFI_GLOBAL_VARIABLE { 0x8BE4DF61, 0x93CA, 0x11d2, {0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C } }
+
+#define EFI_PXE_BASE_CODE_PROTOCOL_GUID { 0x03C4E603, 0xAC28, 0x11D3, {0x9A, 0x2D, 0x00, 0x90, 0x27, 0x3F, 0xC1, 0x4D} }
+#define EFI_PXE_BASE_CODE_PROTOCOL_REVISION 0x00010000
+
+#define EFI_PXE_BASE_CODE_MAX_ARP_ENTRIES 8
+#define EFI_PXE_BASE_CODE_MAX_ROUTE_ENTRIES 8
+#define EFI_PXE_BASE_CODE_MAX_IPCNT 8
+
+#define EFI_PXE_BASE_CODE_DEFAULT_TTL 16
+#define EFI_PXE_BASE_CODE_DEFAULT_TOS 0
+
+typedef uint16_t efi_pxe_base_code_udp_port_t;
+
+typedef struct {
+	uint8_t addr[4];
+}efi_ipv4_address_t;
+
+typedef struct {
+	uint8_t addr[16];
+}efi_ipv6_address_t;
+
+typedef union {
+	uint32_t addr[4];
+	efi_ipv4_address_t v4;
+	efi_ipv6_address_t v6;
+} efi_ip_address_t;
+
+typedef struct {
+	uint8_t addr[32];
+} efi_mac_address_t;
+
+typedef enum {
+	EFI_PXE_BASE_CODE_IP_FILTER_STATION_IP = 1,
+	EFI_PXE_BASE_CODE_IP_FILTER_BROADCAST = 2,
+	EFI_PXE_BASE_CODE_IP_FILTER_PROMISCUOUS = 4,
+	EFI_PXE_BASE_CODE_IP_FILTER_PROMISCUOUS_MULTICAT = 8,
+} efi_pxe_base_code_ip_filter_type_t;
+
+typedef struct {
+	efi_pxe_base_code_ip_filter_type_t filters : 8;
+	uint8_t ip_cnt;
+	uint16_t reserved;
+	efi_ip_address_t ip_list[EFI_PXE_BASE_CODE_MAX_IPCNT];
+} efi_pxe_base_code_ip_filter_t;
+
+typedef struct {
+	uint8_t type;
+	uint8_t code;
+	uint16_t checksum;
+	union {
+		uint32_t reserved;
+		uint32_t mtu;
+		uint32_t pointer;
+		struct {
+			uint16_t identifier;
+			uint16_t sequence;
+		} echo;
+	} u;
+	uint8_t data[494];
+} __attribute__((packed)) efi_pxe_base_code_icmp_error_t;
+
+typedef struct {
+	uint8_t error_code;
+	char_t error_string[127];
+} __attribute__((packed)) efi_pxe_base_code_tftp_error_t;
+
+typedef struct {
+	efi_ip_address_t ip_address;
+	efi_mac_address_t mac_address;
+} efi_pxe_base_code_arp_entry_t;
+
+typedef struct {
+	efi_ip_address_t ip_address;
+	efi_ip_address_t subnet_mask;
+	efi_ip_address_t gateway_address;
+} efi_pxe_base_code_route_entry_t;
+
+typedef enum {
+	EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_SRC_IP=1,
+	EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_SRC_PORT=2,
+	EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_DST_IP=4,
+	EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_DST_PORT=8,
+	EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_FILTER=0x10,
+	EFI_PXE_BASE_CODE_UDP_OPFLAGS_ANY_FRAGMENT=0x20,
+} efi_pxe_base_code_udp_opflags_t;
+
+typedef struct {
+	uint8_t bootp_opcode;
+	uint8_t bootp_hw_len;
+	uint8_t bootp_hw_addr_len;
+	uint8_t bootp_gate_hops;
+	uint32_t bootp_ident;
+	uint16_t bootp_seconds;
+	uint16_t bootp_flags;
+	uint8_t bootp_ci_addr[4];
+	uint8_t bootp_yi_addr[4];
+	uint8_t bootp_si_addr[4];
+	uint8_t bootp_gi_addr[4];
+	uint8_t bootp_hw_addr[16];
+	uint8_t bootp_srv_name[64];
+	uint8_t bootp_boot_file[128];
+	uint32_t dhcp_magic;
+	uint8_t dhcp_options[56];
+} __attribute__((packed)) efi_pxe_base_code_dhcpv4_packet_t;
+
+typedef struct {
+	uint32_t message_type : 8;
+	uint32_t transaction_id : 24;
+	uint8_t dhcp_options[1024];
+} __attribute__((packed)) efi_pxe_base_code_dhcpv6_packet_t;
+
+typedef union {
+	uint8_t raw[1472];
+	efi_pxe_base_code_dhcpv4_packet_t dhcpv4;
+	efi_pxe_base_code_dhcpv6_packet_t dhcpv6;
+} __attribute__((packed)) efi_pxe_base_code_packet_t;
+
+typedef struct {
+	boolean_t started;
+	boolean_t ipv6_available;
+	boolean_t ipv6_supported;
+	boolean_t ipv6_using;
+	boolean_t bis_supported;
+	boolean_t bis_detected;
+	boolean_t auto_arp;
+	boolean_t send_guid;
+	boolean_t dhcp_discover_vaild;
+	boolean_t dhcp_ack_received;
+	boolean_t proxy_offer_received;
+	boolean_t pxe_discover_valid;
+	boolean_t pxe_reply_received;
+	boolean_t pxe_bis_reply_received;
+	boolean_t icmp_error_received;
+	boolean_t tftp_error_received;
+	boolean_t make_callbacks;
+	uint8_t ttl;
+	uint8_t tos;
+	efi_ip_address_t station_ip;
+	efi_ip_address_t subnet_mask;
+	efi_pxe_base_code_packet_t dhcp_discover;
+	efi_pxe_base_code_packet_t dhcp_ack;
+	efi_pxe_base_code_packet_t proxy_offer;
+	efi_pxe_base_code_packet_t pxe_discover;
+	efi_pxe_base_code_packet_t pxe_reply;
+	efi_pxe_base_code_packet_t pxe_bis_reply;
+	efi_pxe_base_code_ip_filter_t ip_filter;
+	uint32_t arp_cache_entries;
+	efi_pxe_base_code_arp_entry_t arp_cache[EFI_PXE_BASE_CODE_MAX_ARP_ENTRIES];
+	uint32_t route_table_entries;
+	efi_pxe_base_code_route_entry_t route_table[EFI_PXE_BASE_CODE_MAX_ROUTE_ENTRIES];
+	efi_pxe_base_code_icmp_error_t icmp_error;
+	efi_pxe_base_code_tftp_error_t tftp_error;
+}efi_base_code_mode_t;
+
+typedef enum {
+	EFI_PXE_BASE_CODE_BOOT_TYPE_BOOTSTRAP=0,
+	FI_PXE_BASE_CODE_BOOT_TYPE_MS_WINNT_RIS=1,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_INTEL_LCM=2,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_DOSUNDI=3,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_NEC_ESMPRO=4,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_IBM_WSOD=5,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_IBM_LCCM=6,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_CA_UNICENTER_TNG=7,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_HP_OPENVIEW=8,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_ALTIRIS_9=9,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_ALTIRIS_10=10,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_ALTIRIS_11=11,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_NOT_USED_12=12,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_REDHAT_INSTALL=13,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_REDHAT_BOOT=14,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_REMBO=15,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_BEOBOOT=16,
+	EFI_PXE_BASE_CODE_BOOT_TYPE_PXETEST=65535,
+} efi_pxe_base_code_boot_type_t;
+
+#define EFI_PXE_BASE_CODE_BOOT_LAYER_MASK     0x7FFF
+#define EFI_PXE_BASE_CODE_BOOT_LAYER_INITIAL  0x0000
+
+typedef struct {
+	uint16_t type;
+	boolean_t accept_any_response;
+	uint8_t reserved;
+	efi_ip_address_t ip_addr;
+} efi_pxe_base_code_srvlist_t;
+
+typedef struct {
+	boolean_t use_mcast;
+	boolean_t use_bcast;
+	boolean_t use_ucast;
+	boolean_t must_use_list;
+	efi_ip_address_t server_mcast_ip;
+	uint16_t ip_cnt;
+	efi_pxe_base_code_srvlist_t srvlist[EFI_PXE_BASE_CODE_MAX_IPCNT];
+} efi_pxe_base_code_discover_info_t;
+
+typedef enum {
+	EFI_PXE_BASE_CODE_TFTP_FIRST,
+	EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE,
+	EFI_PXE_BASE_CODE_TFTP_READ_FILE,
+	EFI_PXE_BASE_CODE_TFTP_WRITE_FILE,
+	EFI_PXE_BASE_CODE_TFTP_READ_DIRECTORY,
+	EFI_PXE_BASE_CODE_MTFTP_GET_FILE_SIZE,
+	EFI_PXE_BASE_CODE_MTFTP_READ_FILE,
+	EFI_PXE_BASE_CODE_MTFTP_READ_DIRECTORY,
+	EFI_PXE_BASE_CODE_MTFTP_LAST
+} efi_pxe_base_code_tftp_opcode_t;
+
+typedef struct {
+	efi_ip_address_t mcast_ip;
+	efi_pxe_base_code_udp_port_t cport;
+	efi_pxe_base_code_udp_port_t sport;
+	uint16_t listen_timeout;
+	uint16_t transmit_timeout;
+} efi_pxe_base_code_mtftp_info_t;
+
+typedef efi_status_t (EFIAPI* efi_base_code_start_t)(efi_handle_t this, boolean_t use_ipv6);
+typedef efi_status_t (EFIAPI* efi_base_code_stop_t)(efi_handle_t this);
+typedef efi_status_t (EFIAPI* efi_base_code_dhcp_t)(efi_handle_t this, boolean_t sort_offers);
+typedef efi_status_t (EFIAPI* efi_base_code_discover_t)(efi_handle_t this, uint16_t type, uint16_t* layer, boolean_t use_bis, efi_pxe_base_code_discover_info_t* info);
+typedef efi_status_t (EFIAPI* efi_base_code_mtftp_t)(efi_handle_t this, efi_pxe_base_code_tftp_opcode_t opcode, void* buffer, boolean_t overwrite, uint64_t* buffer_size, uint64_t* block_size, efi_ip_address_t* server_ip, char_t* file_name, efi_pxe_base_code_mtftp_info_t* info, boolean_t dont_use_buffer);
+typedef efi_status_t (EFIAPI* efi_base_code_udp_write_t)(efi_handle_t this, uint16_t op_flags, efi_ip_address_t* dst_ip, efi_pxe_base_code_udp_port_t* dst_port, efi_ip_address_t* gw_ip, efi_ip_address_t* src_ip, efi_pxe_base_code_udp_port_t* src_port, uint64_t* header_size, void* header, uint64_t* buffer_size, void* buffer);
+typedef efi_status_t (EFIAPI* efi_base_code_udp_read_t)(efi_handle_t this, uint16_t op_flags, efi_ip_address_t* dst_ip, efi_pxe_base_code_udp_port_t* dst_port, efi_ip_address_t* src_ip, efi_pxe_base_code_udp_port_t* src_port, uint64_t* header_size, void* header, uint64_t* buffer_size, void* buffer);
+typedef efi_status_t (EFIAPI* efi_base_code_set_ip_filer_t)(efi_handle_t this, efi_pxe_base_code_ip_filter_t* new_filter);
+typedef efi_status_t (EFIAPI* efi_base_code_arp_t)(efi_handle_t this, efi_ip_address_t* ip_addr, efi_mac_address_t* mac_addr);
+typedef efi_status_t (EFIAPI* efi_base_code_set_parameters_t)(efi_handle_t this, boolean_t* new_auto_arp, boolean_t* new_send_guid, uint8_t* new_ttl, uint8_t* new_tos, boolean_t* new_make_callback);
+typedef efi_status_t (EFIAPI* efi_base_code_set_station_ip_t)(efi_handle_t this, efi_ip_address_t* new_station_ip, efi_ip_address_t* new_subnet_mask);
+typedef efi_status_t (EFIAPI* efi_base_code_set_packets_t)(efi_handle_t this, boolean_t* new_dhcp_discover_valid, boolean_t* new_dhcp_ack_received, boolean_t* new_proxy_offer_received, boolean_t* new_pxe_discover_valid, boolean_t* new_pxe_reply_received, boolean_t* new_pxe_bis_reply_received, efi_pxe_base_code_packet_t* new_dhcp_discover, efi_pxe_base_code_packet_t* new_dhcp_ack, efi_pxe_base_code_packet_t* new_proxy_offer, efi_pxe_base_code_packet_t* new_pxe_discover, efi_pxe_base_code_packet_t* new_pxe_reply, efi_pxe_base_code_packet_t* new_pxe_bis_reply);
+
+typedef struct {
+	uint64_t revision;
+	efi_base_code_start_t start;
+	efi_base_code_stop_t stop;
+	efi_base_code_dhcp_t dhcp;
+	efi_base_code_discover_t discover;
+	efi_base_code_mtftp_t mtftp;
+	efi_base_code_udp_write_t udp_write;
+	efi_base_code_udp_read_t udp_read;
+	efi_base_code_set_ip_filer_t set_ip_filer;
+	efi_base_code_arp_t arp;
+	efi_base_code_set_parameters_t set_parameters;
+	efi_base_code_set_station_ip_t set_station_ip;
+	efi_base_code_set_packets_t set_packets;
+	efi_base_code_mode_t* mode;
+} efi_pxe_base_code_protocol_t;
 
 #endif
