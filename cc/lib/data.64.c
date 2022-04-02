@@ -13,6 +13,16 @@
 #include <utils.h>
 
 
+data_t* data_json_serialize(data_t* data) {
+	UNUSED(data);
+	return NULL;
+}
+
+data_t* data_json_deserialize(data_t* data) {
+	UNUSED(data);
+	return NULL;
+}
+
 data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
 	if(sw == DATA_SERIALIZE_WITH_NONE) {
 		return NULL;
