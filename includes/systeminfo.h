@@ -39,6 +39,7 @@ typedef struct system_info {
 	boolean_t my_page_table;
 	uint8_t* reserved_mmap_data;
 	uint64_t reserved_mmap_size;
+	efi_system_table_t* efi_system_table;
 } system_info_t; ///< struct short hand
 
 /*! static location of system information */
