@@ -315,6 +315,7 @@ __attribute__((__optimize__("-fno-stack-protector"))) void task_switch_task() {
 	current_task = task_find_next_task();
 	current_task->last_tick_count = time_timer_get_tick_count();
 	task_load_registers(current_task);
+	PRINTLOG(TASKING, LOG_TRACE, "for fix gcc behaviour", 0);
 }
 
 void task_end_task() {
