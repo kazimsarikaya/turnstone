@@ -125,7 +125,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	return 0;
 }
 
-__attribute__((naked, __optimize__("-fno-stack-protector"))) void task_save_registers(task_t* task) {
+__attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task) {
 	__asm__ __volatile__ (
 		"mov %%rax, %0\n"
 		"mov %%rbx, %1\n"
@@ -153,6 +153,7 @@ __attribute__((naked, __optimize__("-fno-stack-protector"))) void task_save_regi
 		"popfq\n"
 		"pop %%rax\n"
 		"mov %%rsp, %17\n"
+		"mov %19, %18\n"
 		"retq\n"
 		: :
 		"m" (task->rax),
@@ -172,11 +173,13 @@ __attribute__((naked, __optimize__("-fno-stack-protector"))) void task_save_regi
 		"m" (task->rbp),
 		"m" (task->fx_registers),
 		"m" (task->rflags),
-		"m" (task->rsp)
+		"m" (task->rsp),
+		"m" (task->state),
+		"I" (TASK_STATE_SUSPENDED)
 		);
 }
 
-__attribute__((naked, __optimize__("-fno-stack-protector"))) void task_load_registers(task_t* task) {
+__attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task) {
 	__asm__ __volatile__ (
 		"mov %0,  %%rax\n"
 		"mov %1,  %%rbx\n"
@@ -203,15 +206,11 @@ __attribute__((naked, __optimize__("-fno-stack-protector"))) void task_load_regi
 		"pop %%rax\n"
 		"mov %17, %%rsp\n"
 		"push %%rax\n"
-		"mov 0x8(%%rsp), %%rax\n"
-		"cmp $0xdeadc0de, %%eax\n"
-		"jne label1%=\n"
+		"mov %18, %%ax\n"
+		"cmp %19, %%ax\n"
 		"pop %%rax\n"
-		"add $0x8, %%rsp\n"
-		"jmp label2%=\n"
-		"label1%=: pop %%rax\n"
-		"add $0x10, %%rsp\n"
-		"label2%=: mov %12, %%rdi\n"
+		"mov %20, %18\n"
+		"mov %12, %%rdi\n"
 		"retq\n"
 		: :
 		"m" (task->rax),
@@ -231,7 +230,10 @@ __attribute__((naked, __optimize__("-fno-stack-protector"))) void task_load_regi
 		"m" (task->rbp),
 		"m" (task->fx_registers),
 		"m" (task->rflags),
-		"m" (task->rsp)
+		"m" (task->rsp),
+		"m" (task->state),
+		"I" (TASK_STATE_CREATED),
+		"I" (TASK_STATE_RUNNING)
 		);
 }
 
@@ -373,13 +375,12 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
 	uint64_t rbp = (uint64_t)new_task->stack;
 	rbp += stack_size - 16;
 	new_task->rbp = rbp;
-	new_task->rsp = rbp - 32;
+	new_task->rsp = rbp - 24;
 
 	uint64_t* stack = (uint64_t*)rbp;
 	stack[-1] = (uint64_t)task_end_task;
 	stack[-2] = (uint64_t)entry_point;
 	stack[-3] = (uint64_t)apic_eoi;
-	stack[-4] = 0xdeadc0de;
 
 	cpu_cli();
 
