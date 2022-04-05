@@ -51,13 +51,15 @@ uint16_t cpu_read_data_segment(){
 int8_t cpu_check_rdrand(){
 	cpu_cpuid_regs_t query = {0x00000001, 0, 0, 0};
 	cpu_cpuid_regs_t answer = {0, 0, 0, 0};
+
 	if(cpu_cpuid(query, &answer) != 0) {
 		return -1;
 	}
-	printf("0x%08x 0x%08x\n", answer.ecx, answer.edx);
+
 	if(((answer.ecx >> 30) & 1) == 1) {
 		return 0;
 	}
+
 	return -1;
 }
 
