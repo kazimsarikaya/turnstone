@@ -96,6 +96,9 @@ all: $(SUBDIRS) $(OBJDIR)/docs
 
 qemu: $(QEMUDISK)
 
+qemu-pxe: $(PROGS)
+	output/pxeconfgen.bin -k stage3.bin -kp $(OBJDIR)/stage3.bin -o $(OBJDIR)/pxeconf.bson
+
 qemu-test: $(TESTQEMUDISK)
 
 virtualbox: $(VBBOXDISK)

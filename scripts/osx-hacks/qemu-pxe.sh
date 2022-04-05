@@ -37,6 +37,8 @@ qemu-system-x86_64 \
   -device vmware-svga,id=gpu0 \
   -device virtio-net,netdev=n0,id=nic0 \
   -netdev user,id=n0,tftp=${OUTPUTDIR},bootfile=BOOTX64.EFI  \
+  -device virtio-net,netdev=n1,id=nic1 \
+  -netdev socket,id=n1,udp=127.0.0.1:16384,localaddr=127.0.0.1:16385  \
   -device virtio-keyboard,id=kbd \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402
