@@ -77,8 +77,11 @@ typedef struct {
 }__attribute__((packed)) tss_t;
 
 typedef enum {
+	TASK_STATE_NULL,
 	TASK_STATE_CREATED,
-	TASK_STATE_ENDED
+	TASK_STATE_RUNNING,
+	TASK_STATE_SUSPENDED,
+	TASK_STATE_ENDED,
 } task_state_t;
 
 typedef struct {
