@@ -290,7 +290,7 @@ task_t* task_find_next_task() {
 	return tmp_task;
 }
 
-__attribute__((__optimize__("-fno-stack-protector"))) void task_switch_task() {
+__attribute__((no_stack_protector)) void task_switch_task() {
 	if(task_queue == NULL) {
 		return;
 	}
