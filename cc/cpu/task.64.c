@@ -290,7 +290,7 @@ task_t* task_find_next_task() {
 	return tmp_task;
 }
 
-__attribute__((no_stack_protector)) void task_switch_task() {
+__attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
 	if(task_queue == NULL) {
 		return;
 	}
@@ -315,7 +315,12 @@ __attribute__((no_stack_protector)) void task_switch_task() {
 	current_task = task_find_next_task();
 	current_task->last_tick_count = time_timer_get_tick_count();
 	task_load_registers(current_task);
-	PRINTLOG(TASKING, LOG_TRACE, "for fix gcc behaviour", 0);
+
+	//PRINTLOG(TASKING, LOG_TRACE, "for fix gcc behaviour", 0);
+
+	if(need_eoi) {
+		apic_eoi();
+	}
 }
 
 void task_end_task() {
@@ -398,7 +403,7 @@ void task_yield() {
 	if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
 		//	__asm__ __volatile__ ("int $0x80\n");
 		cpu_cli();
-		task_switch_task();
+		task_switch_task(false);
 		cpu_sti();
 	}
 }
@@ -407,7 +412,7 @@ int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
 	UNUSED(frame);
 	UNUSED(intnum);
 
-	task_switch_task();
+	task_switch_task(true);
 
 	return 0;
 }

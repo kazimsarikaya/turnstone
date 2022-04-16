@@ -59,10 +59,6 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 		time_timer_start_spinsleep_counter = 0;
 	}
 
-	if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
-		task_switch_task();
-	}
-
 	if(TIME_EPOCH == 0 || (time_timer_tick_count % (1000 * 60 * 15)) == 0) {
 		TIME_EPOCH = rtc_get_time() * 1000000;
 	} else {
@@ -78,7 +74,11 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 		PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%lx fs 0x%lx mc 0x%lx fc 0x%lx diff 0x%lx fh 0x%lx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
 	}
 
-	apic_eoi();
+	if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
+		task_switch_task(true);
+	} else {
+		apic_eoi();
+	}
 
 	return 0;
 }
