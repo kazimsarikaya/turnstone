@@ -43,7 +43,7 @@ INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 
-VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev/rawdisk0.raw
+VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
 TESTQEMUDISK  = $(OBJDIR)/qemu-test-hda
 

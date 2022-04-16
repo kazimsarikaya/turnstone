@@ -118,7 +118,7 @@ typedef struct {
 int8_t task_init_tasking_ext(memory_heap_t* heap);
 #define task_init_tasking() task_init_tasking_ext(NULL)
 
-void task_switch_task();
+void task_switch_task(boolean_t need_eoi);
 void task_yield();
 uint64_t task_get_id();
 task_t* task_get_current_task();
