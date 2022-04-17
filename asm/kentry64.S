@@ -24,7 +24,7 @@ ___kstart64:
   mov %ax, %fs
   mov %ax, %gs
   mov $__stack_top, %esp
-  mov %esp, %ebp
+  xor %ebp, %ebp
 
   /* enable sse */
   mov %cr0, %rax

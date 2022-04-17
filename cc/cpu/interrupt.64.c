@@ -14,6 +14,7 @@
 #include <memory.h>
 #include <apic.h>
 #include <cpu/task.h>
+#include <backtrace.h>
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
@@ -229,6 +230,9 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
 	printf("KERN: FATAL return stack at 0x%x:0x%lx frm ptr 0x%lx\n", frame->return_ss, frame->return_rsp, frame);
 	printf("cr4: 0x%lx\n", cpu_read_cr4());
 	printf("Cpu is halting.");
+
+	backtrace_print((stackframe_t*)frame->return_rsp);
+
 	cpu_hlt();
 }
 
@@ -236,6 +240,9 @@ void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errco
 	printf("Uncatched interrupt 0x%02x occured with error code 0x%08x.\nReturn address 0x%016lx\n", intnum, errcode, frame->return_rip);
 	printf("KERN: FATAL return stack at 0x%x:0x%lx frm ptr 0x%lx\n", frame->return_ss, frame->return_rsp, frame);
 	printf("Cpu is halting.");
+
+	backtrace_print((stackframe_t*)frame->return_rsp);
+
 	cpu_hlt();
 }
 
@@ -294,6 +301,10 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
 	printf("\nKERN: FATAL general protection error 0x%x at 0x%x:0x%lx\n", errcode, frame->return_cs, frame->return_rip);
 	printf("KERN: FATAL return stack at 0x%x:0x%lx frm ptr 0x%lx\n", frame->return_ss, frame->return_rsp, frame);
+	printf("Cpu is halting.");
+
+	backtrace_print((stackframe_t*)frame->return_rsp);
+
 	cpu_hlt();
 }
 
@@ -305,13 +316,11 @@ void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_
 
 	printf("\nKERN: INFO page does not exists for address 0x%016lx\n", cr2 );
 
-	if(errcode == 0) {
-		printf("\nKERN: FATAL page cannot be added. Implement it!. Halting cpu.\n");
-		cpu_hlt();
-	} else {
-		printf("\nKERN: FATAL page error handling not implemented. Halting cpu.\n");
-		cpu_hlt();
-	}
+	printf("Cpu is halting.");
+
+	backtrace_print((stackframe_t*)frame->return_rsp);
+
+	cpu_hlt();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0F_reserved(interrupt_frame_t* frame) {
