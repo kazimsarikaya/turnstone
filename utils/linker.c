@@ -10,6 +10,8 @@
 #include <strings.h>
 #include <linkedlist.h>
 #include <linker.h>
+#include <crc.h>
+#include <efi.h>
 
 typedef enum {
 	LINKER_SYMBOL_TYPE_UNDEF,
@@ -88,7 +90,13 @@ typedef struct {
 	uint64_t test_func_names_array_str_size;
 	uint64_t test_func_names_array_str_secid;
 	uint64_t test_functions_names_array_secid;
+	boolean_t for_efi;
 } linker_context_t;
+
+typedef struct {
+	uint32_t start_rva;
+	linkedlist_t relocs;
+} linker_efi_reloc_block_t;
 
 linker_symbol_t* linker_lookup_symbol(linker_context_t* ctx, char_t* symbol_name, uint64_t section_id);
 linker_symbol_t* linker_get_symbol_by_id(linker_context_t* ctx, uint64_t id);
@@ -99,6 +107,7 @@ int8_t linker_sort_sections_by_offset(linker_context_t* ctx);
 uint64_t linker_get_section_id(linker_context_t* ctx, char_t* file_name, char_t* section_name);
 linker_section_t* linker_get_section_by_id(linker_context_t* ctx, uint64_t id);
 int8_t linker_write_output(linker_context_t* ctx);
+int8_t linker_write_efi_output(linker_context_t* ctx);
 int8_t linker_parse_script(linker_context_t* ctx, char_t* linker_script);
 void linker_destroy_context(linker_context_t* ctx);
 int8_t linker_tag_required_sections(linker_context_t* ctx);
@@ -929,6 +938,290 @@ int8_t linker_parse_script(linker_context_t* ctx, char_t* linker_script) {
 	return res;
 }
 
+int8_t linker_write_efi_output(linker_context_t* ctx) {
+	linker_symbol_t* ep_sym = linker_lookup_symbol(ctx, ctx->entry_point, 0);
+
+	if(ep_sym == NULL) {
+		printf("entry point not found %s\n", ctx->entry_point);
+		return -1;
+	}
+
+	linker_section_t* ep_sec = linker_get_section_by_id(ctx, ep_sym->section_id);
+
+	uint32_t ep_addr = (uint32_t)ep_sym->value + (uint32_t)ep_sec->offset;
+
+	FILE* fp = fopen(ctx->output, "w" );
+
+	if(fp == NULL) {
+		return -1;
+	}
+
+	uint16_t dosstub_magic = EFI_IMAGE_DOSSTUB_HEADER_MAGIC;
+
+	fwrite(&dosstub_magic, 1, sizeof(uint16_t), fp);
+
+	fseek(fp, EFI_IMAGE_DOSSTUB_EFI_IMAGE_OFFSET_LOCATION, SEEK_SET);
+
+	uint32_t ep_offset = EFI_IMAGE_DOSSTUB_LENGTH;
+
+	fwrite(&ep_offset, 1, sizeof(uint32_t), fp);
+
+	efi_image_header_t p_hdr = {};
+	p_hdr.magic = EFI_IMAGE_HEADER_MAGIC;
+	p_hdr.machine = EFI_IMAGE_MACHINE_AMD64;
+	p_hdr.number_of_sections = 5;
+	p_hdr.size_of_optional_header = sizeof(efi_image_optional_header_t);
+	p_hdr.characteristics = EFI_IMAGE_CHARACTERISTISCS;
+
+
+	efi_image_optional_header_t opt_hdr = {};
+	opt_hdr.magic = EFI_IMAGE_OPTIONAL_HEADER_MAGIC;
+	opt_hdr.address_of_entrypoint = ep_addr;
+	opt_hdr.base_of_code = 0x1000;
+	opt_hdr.section_alignment = 0x1000;
+	opt_hdr.file_alignment = 0x20;
+	opt_hdr.subsystem = 10;
+	opt_hdr.number_of_rva_nd_sizes = 16;
+
+	efi_image_section_header_t sec_hdrs[5] = {};
+
+	strcpy(".text", sec_hdrs[0].name);
+	sec_hdrs[0].characteristics = 0x68000020;
+
+	strcpy(".rodata", sec_hdrs[1].name);
+	sec_hdrs[1].characteristics = 0x48000040;
+
+	strcpy(".data", sec_hdrs[2].name);
+	sec_hdrs[2].characteristics = 0xC8000040;
+
+	strcpy(".bss", sec_hdrs[3].name);
+	sec_hdrs[3].characteristics = 0xC8000080;
+	sec_hdrs[3].virtual_address = ctx->section_locations[LINKER_SECTION_TYPE_BSS].section_start;
+	sec_hdrs[3].virtual_size = ctx->section_locations[LINKER_SECTION_TYPE_BSS].section_size;
+	opt_hdr.size_of_uninitialized_data = sec_hdrs[3].virtual_size;
+
+	strcpy(".reloc", sec_hdrs[4].name);
+	sec_hdrs[4].characteristics = 0x48000040;
+	sec_hdrs[4].virtual_address = sec_hdrs[3].virtual_address + sec_hdrs[3].virtual_size;
+
+	if(sec_hdrs[4].virtual_address % 0x1000) {
+		sec_hdrs[4].virtual_address += 0x1000 - (sec_hdrs[4].virtual_address % 0x1000);
+	}
+
+	int64_t w_offset = EFI_IMAGE_DOSSTUB_LENGTH + sizeof(efi_image_header_t) + sizeof(efi_image_optional_header_t) + sizeof(sec_hdrs);
+
+	if(w_offset % opt_hdr.file_alignment) {
+		w_offset += 0x20 - (w_offset % opt_hdr.file_alignment);
+	}
+
+	opt_hdr.size_of_headers = w_offset;
+
+	fseek(fp, w_offset, SEEK_SET);
+
+	boolean_t text_offset_setted = false;
+	boolean_t data_offset_setted = false;
+	boolean_t rodata_offset_setted = false;
+
+	linkedlist_t tmp_relocs = linkedlist_create_list_with_heap(ctx->heap);
+
+
+	iterator_t* iter = linkedlist_iterator_create(ctx->sections);
+
+	if(iter == NULL) {
+		return -1;
+	}
+
+	while(iter->end_of_iterator(iter) != 0) {
+		linker_section_t* sec  = iter->get_item(iter);
+
+		if(sec->required == 0 && ctx->enable_removing_disabled_sections != 0) {
+			iter = iter->next(iter);
+			continue;
+		}
+
+		if(sec->type <= LINKER_SECTION_TYPE_RODATA) {
+
+			if(sec->type == LINKER_SECTION_TYPE_TEXT) {
+				sec_hdrs[0].virtual_size += sec->size;
+				sec_hdrs[0].size_of_raw_data += sec->size;
+				opt_hdr.size_of_code += sec->size;
+
+				if(!text_offset_setted) {
+					sec_hdrs[0].virtual_address = sec->offset;
+					sec_hdrs[0].pointer_to_raw_data = sec->offset;
+					text_offset_setted = true;
+				}
+			}
+
+			if(sec->type == LINKER_SECTION_TYPE_RODATA) {
+				sec_hdrs[1].virtual_size += sec->size;
+				sec_hdrs[1].size_of_raw_data += sec->size;
+				opt_hdr.size_of_initialized_data += sec->size;
+
+				if(!rodata_offset_setted) {
+					sec_hdrs[1].virtual_address = sec->offset;
+					sec_hdrs[1].pointer_to_raw_data = sec->offset;
+					rodata_offset_setted = true;
+				}
+			}
+
+			if(sec->type == LINKER_SECTION_TYPE_DATA) {
+				sec_hdrs[2].virtual_size += sec->size;
+				sec_hdrs[2].size_of_raw_data += sec->size;
+				opt_hdr.size_of_initialized_data += sec->size;
+
+				if(!data_offset_setted) {
+					sec_hdrs[2].virtual_address = sec->offset;
+					sec_hdrs[2].pointer_to_raw_data = sec->offset;
+					data_offset_setted = true;
+				}
+			}
+
+
+			fseek (fp, sec->offset, SEEK_SET);
+
+			fwrite(sec->data, 1, sec->size, fp);
+
+
+			if(sec->relocations) {
+
+				iterator_t* relocs_iter = linkedlist_iterator_create(sec->relocations);
+
+				if(relocs_iter == NULL) {
+					printf("cannot create iterator for relocations\n");
+					return -1;
+				}
+
+				while(relocs_iter->end_of_iterator(relocs_iter) != 0) {
+					linker_relocation_t* reloc = relocs_iter->get_item(relocs_iter);
+
+					fseek (fp, reloc->offset, SEEK_SET);
+
+					linker_symbol_t* target_sym = linker_get_symbol_by_id(ctx, reloc->symbol_id);
+
+					if(target_sym == NULL) {
+						print_error("unknown target sym");
+						return -1;
+					}
+
+					linker_section_t* target_sec = linker_get_section_by_id(ctx, target_sym->section_id);
+
+
+					if(target_sym == NULL) {
+						print_error("unknown target sec");
+						return -1;
+					}
+
+					if(reloc->type == LINKER_RELOCATION_TYPE_64_32) {
+
+						uint32_t addr = (uint32_t)ctx->start;
+						addr += (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend;
+
+						efi_image_relocation_entry_t* re = memory_malloc_ext(ctx->heap, sizeof(efi_image_relocation_entry_t), 0);
+						re->page_rva = reloc->offset & ~(0x1000 - 1);
+						re->block_size = sizeof(efi_image_relocation_entry_t);
+						re->type = 0x3;
+						re->offset = reloc->offset & (0x1000 - 1);
+
+						linkedlist_list_insert(tmp_relocs, re);
+
+						fwrite(&addr, 1, 4, fp);
+					} else if(reloc->type == LINKER_RELOCATION_TYPE_64_32S) {
+
+						int32_t addr = (int32_t)ctx->start;
+						addr += (int32_t)target_sym->value + (int32_t)target_sec->offset + (uint32_t)reloc->addend;
+
+						efi_image_relocation_entry_t* re = memory_malloc_ext(ctx->heap, sizeof(efi_image_relocation_entry_t), 0);
+						re->page_rva = reloc->offset & ~(0x1000 - 1);
+						re->block_size = sizeof(efi_image_relocation_entry_t);
+						re->type = 0x3;
+						re->offset = reloc->offset & (0x1000 - 1);
+
+						linkedlist_list_insert(tmp_relocs, re);
+
+						fwrite(&addr, 1, 4, fp);
+					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64_64) {
+
+						uint64_t addr = ctx->start;
+						addr += target_sym->value + target_sec->offset + reloc->addend;
+
+						efi_image_relocation_entry_t* re = memory_malloc_ext(ctx->heap, sizeof(efi_image_relocation_entry_t), 0);
+						re->page_rva = reloc->offset & ~(0x1000 - 1);
+						re->block_size = sizeof(efi_image_relocation_entry_t);
+						re->type = 0xa;
+						re->offset = reloc->offset & (0x1000 - 1);
+
+						linkedlist_list_insert(tmp_relocs, re);
+
+						fwrite(&addr, 1, 8, fp);
+					}  else if(reloc->type == LINKER_RELOCATION_TYPE_64_PC32) {
+
+						uint32_t addr = (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend  - (uint32_t)(reloc->offset);
+
+						fwrite(&addr, 1, 4, fp);
+					} else{
+						print_error("unknown reloc type");
+						return -1;
+					}
+
+					relocs_iter = relocs_iter->next(relocs_iter);
+				}
+
+				relocs_iter->destroy(relocs_iter);
+
+			}
+		}
+
+		fflush(fp);
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
+
+	opt_hdr.base_relocation_table.virtual_address = sec_hdrs[4].virtual_address;
+	opt_hdr.base_relocation_table.size = sizeof(efi_image_relocation_entry_t) * linkedlist_size(tmp_relocs);
+	sec_hdrs[4].virtual_size = opt_hdr.base_relocation_table.size;
+	sec_hdrs[4].size_of_raw_data = opt_hdr.base_relocation_table.size;
+	sec_hdrs[4].pointer_to_raw_data = ftell(fp);
+
+	iter = linkedlist_iterator_create(tmp_relocs);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		efi_image_relocation_entry_t* re = iter->get_item(iter);
+
+		fwrite(re, 1, sizeof(efi_image_relocation_entry_t), fp);
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
+
+	linkedlist_destroy_with_data(tmp_relocs);
+
+	opt_hdr.size_of_image = sec_hdrs[4].virtual_address;
+
+	uint64_t soi = sec_hdrs[4].virtual_size;
+
+	if(soi % 0x1000) {
+		soi += 0x1000 - (soi % 0x1000);
+	}
+
+	opt_hdr.size_of_image += soi;
+
+	fseek(fp, EFI_IMAGE_DOSSTUB_LENGTH, SEEK_SET);
+	fwrite(&p_hdr, 1, sizeof(efi_image_header_t), fp);
+	fwrite(&opt_hdr, 1, sizeof(efi_image_optional_header_t), fp);
+	fwrite(&sec_hdrs, 1, sizeof(sec_hdrs), fp);
+
+
+	fclose(fp);
+
+	return 0;
+}
+
 
 int8_t linker_write_output(linker_context_t* ctx) {
 	linker_symbol_t* ep_sym = linker_lookup_symbol(ctx, ctx->entry_point, 0);
@@ -1455,7 +1748,7 @@ void linker_bind_offset_of_section(linker_context_t* ctx, linker_section_type_t 
 		linker_section_t* sec = sec_iter->get_item(sec_iter);
 
 		if(sec->type == type && (sec->required || ctx->enable_removing_disabled_sections == 0)) {
-			if(sec->align) {
+			if(sec->align && !ctx->for_efi) {
 				if(*base_offset % sec->align) {
 					uint64_t padding = sec->align - (*base_offset % sec->align);
 					*base_offset += padding;
@@ -1511,6 +1804,7 @@ int32_t main(int32_t argc, char** argv) {
 	uint8_t trim = 0;
 	uint8_t boot_flag = 0;
 	uint8_t test_section_flag = 0;
+	boolean_t for_efi = false;
 
 	while(argc > 0) {
 		if(strstarts(*argv, "-") != 0) {
@@ -1541,7 +1835,7 @@ int32_t main(int32_t argc, char** argv) {
 			argv++;
 
 			if(argc) {
-				entry_point = *argv;
+				entry_point = strdup(*argv);
 
 				argc--;
 				argv++;
@@ -1624,6 +1918,13 @@ int32_t main(int32_t argc, char** argv) {
 
 			test_section_flag = 1;
 		}
+
+		if(strcmp(*argv, "--for-efi") == 0) {
+			argc--;
+			argv++;
+
+			for_efi = true;
+		}
 	}
 
 	if(output_file == NULL) {
@@ -1646,7 +1947,11 @@ int32_t main(int32_t argc, char** argv) {
 
 	ctx->heap = NULL;
 	ctx->entry_point = entry_point;
-	ctx->start = 0x20000;
+
+	if(!for_efi) {
+		ctx->start = 0x20000;
+	}
+
 	ctx->stack_size = 0x10000;
 	ctx->output = output_file;
 	ctx->map_file = map_file;
@@ -1655,6 +1960,7 @@ int32_t main(int32_t argc, char** argv) {
 	ctx->enable_removing_disabled_sections = trim;
 	ctx->boot_flag = boot_flag;
 	ctx->test_section_flag = test_section_flag;
+	ctx->for_efi = for_efi;
 
 	if(ctx->test_section_flag) {
 		ctx->test_function_names = linkedlist_create_sortedlist_with_heap(ctx->heap, linker_test_function_names_comparator);
@@ -2071,8 +2377,12 @@ int32_t main(int32_t argc, char** argv) {
 
 	uint64_t output_offset_base = 0;
 
-	if(ctx->class == ELFCLASS64) {
+	if(ctx->class == ELFCLASS64 && !ctx->for_efi) {
 		output_offset_base = 0x100;
+	}
+
+	if(ctx->class == ELFCLASS64 && ctx->for_efi) {
+		output_offset_base = 0x1000;
 	}
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_TEXT, &output_offset_base);
@@ -2089,7 +2399,7 @@ int32_t main(int32_t argc, char** argv) {
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_DATA, &output_offset_base);
 
-	if(ctx->class == ELFCLASS64) {
+	if(ctx->class == ELFCLASS64 && !ctx->for_efi) {
 		if(output_offset_base % 0x1000) {
 			output_offset_base += 0x1000 - (output_offset_base % 0x1000);
 		}
@@ -2115,18 +2425,20 @@ int32_t main(int32_t argc, char** argv) {
 
 	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_BSS, &output_offset_base);
 
-	if(output_offset_base % 0x1000) {
-		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+	if(!ctx->for_efi) {
+		if(output_offset_base % 0x1000) {
+			output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+		}
+
+
+		linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_STACK, &output_offset_base);
+
+		if(output_offset_base % 0x1000) {
+			output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+		}
+
+		linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_HEAP, &output_offset_base);
 	}
-
-
-	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_STACK, &output_offset_base);
-
-	if(output_offset_base % 0x1000) {
-		output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
-	}
-
-	linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_HEAP, &output_offset_base);
 
 	if(linker_sort_sections_by_offset(ctx) != 0) {
 		printf("cannot sort sections\n");
@@ -2144,12 +2456,22 @@ int32_t main(int32_t argc, char** argv) {
 		linker_print_symbols(ctx);
 	}
 
-	if(linker_write_output(ctx) != 0) {
-		print_error("error at writing output");
-		linker_destroy_context(ctx);
-		print_error("LINKER FAILED");
+	if(!ctx->for_efi) {
+		if(linker_write_output(ctx) != 0) {
+			print_error("error at writing output");
+			linker_destroy_context(ctx);
+			print_error("LINKER FAILED");
 
-		return -1;
+			return -1;
+		}
+	} else {
+		if(linker_write_efi_output(ctx) != 0) {
+			print_error("error at writing efi output");
+			linker_destroy_context(ctx);
+			print_error("LINKER FAILED");
+
+			return -1;
+		}
 	}
 
 	linker_destroy_context(ctx);
