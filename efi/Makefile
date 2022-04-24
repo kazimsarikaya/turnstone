@@ -3,18 +3,17 @@
 
 ARCH=x86_64
 
-CC = x86_64-w64-mingw32-gcc
-LD = x86_64-w64-mingw32-gcc
-
-CFLAGS += -D___BITS=64 -D___EFIBUILD=1 -std=gnu11 -O3 -I../includes -I./ -mno-ms-bitfields
-CFLAGS +=  -ffreestanding -nostdlib -Wall -Werror -Wextra -c
-CFLAGS += -ffunction-sections -fdata-sections
-
-
-LDFLAGS += -nostdlib -Wl,-dll -shared -Wl,--subsystem,10 -e efi_main
-
 OUTPUT = ../output
 EFIOUTPUT = $(OUTPUT)/efi
+
+CC = x86_64-elf-gcc
+LD = $(OUTPUT)/linker.bin
+
+CFLAGS += -D___BITS=64 -D___EFIBUILD=1 -std=gnu11 -O3 -I../includes -I./
+CFLAGS +=  -ffreestanding -nostdlib -Wall -Werror -Wextra
+CFLAGS += -ffunction-sections -fdata-sections -mabi=ms -c
+
+LDFLAGS = --for-efi --trim -o efitest.efi -e efi_main
 
 CCSOURCEDIR = ../cc
 
