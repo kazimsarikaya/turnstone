@@ -67,13 +67,6 @@ size_t video_printf(char_t* fmt, ...) {
 			int8_t l_flag = 0;
 			int8_t sign = 0;
 
-#if ___BITS == 64
-			char_t fto_buf[128];
-			// float128_t fval = 0; // TODO: float128_t ops
-			float64_t fval = 0;
-			number_t prec = 6;
-#endif
-
 			while(1) {
 				wfmtb = 1;
 
@@ -84,14 +77,6 @@ size_t video_printf(char_t* fmt, ...) {
 					fmt++;
 					wfmtb = 0;
 					break;
-#if ___BITS == 64
-				case '.':
-					fmt++;
-					prec = *fmt - 0x30;
-					fmt++;
-					wfmtb = 0;
-					break;
-#endif
 				case 'c':
 					val = va_arg(args, int32_t);
 					buf[0] = (char_t)val;
@@ -213,23 +198,6 @@ size_t video_printf(char_t* fmt, ...) {
 					fmt++;
 					cnt++;
 					break;
-#if ___BITS == 64
-				case 'f':
-					if(l_flag == 2) {
-						// fval = va_arg(args, float128_t); // TODO: float128_t ops
-					} else  {
-						fval = va_arg(args, float64_t);
-					}
-
-					ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
-					slen = strlen(fto_buf);
-					video_print(fto_buf);
-					memory_memclean(fto_buf, 128);
-
-					cnt += slen;
-					fmt++;
-					break;
-#endif
 				default:
 					break;
 				}
