@@ -296,11 +296,21 @@ __attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
 	}
 
 	if(linkedlist_size(task_queue) == 0) {
+
+		if(need_eoi) {
+			apic_eoi();
+		}
+
 		return;
 	}
 
 	if(current_task != NULL) {
 		if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting) {
+
+			if(need_eoi) {
+				apic_eoi();
+			}
+
 			return;
 		}
 
@@ -315,8 +325,6 @@ __attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
 	current_task = task_find_next_task();
 	current_task->last_tick_count = time_timer_get_tick_count();
 	task_load_registers(current_task);
-
-	//PRINTLOG(TASKING, LOG_TRACE, "for fix gcc behaviour", 0);
 
 	if(need_eoi) {
 		apic_eoi();
