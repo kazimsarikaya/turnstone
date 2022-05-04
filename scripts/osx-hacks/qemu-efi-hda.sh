@@ -28,6 +28,10 @@ if [ ! -f $CURRENTDIR/edk2-i386-vars.fd ]; then
   cp $UEFIBIOSVARS $CURRENTDIR/edk2-i386-vars.fd
 fi
 
+if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
+  dd if=/dev/zero of=${OUTPUTDIR}/qemu-nvme-cache bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
+fi
+
 qemu-system-x86_64 \
   -M q35 -m 1g -smp cpus=2 -name osdev-hda-boot \
   -cpu max \
