@@ -66,6 +66,18 @@ uint32_t main(uint32_t argc, char_t** argv) {
 		return -1;
 	}
 
+	iterator_t* iter = map_create_iterator(map);
+
+	while(iter->end_of_iterator(iter) != 0) {
+		char_t* data = iter->get_item(iter);
+
+		printf("data: %s\n", data);
+
+		iter = iter->next(iter);
+	}
+
+	iter->destroy(iter);
+
 	map_destroy(map);
 
 

@@ -11,6 +11,7 @@
 
 #include <types.h>
 #include <memory.h>
+#include <iterator.h>
 
 typedef void* map_t;
 
@@ -35,5 +36,6 @@ void* map_get_with_default(map_t map, void* key, void* def);
 void* map_delete(map_t map, void* key);
 int8_t map_destroy(map_t map);
 
+iterator_t* map_create_iterator(map_t map);
 
 #endif

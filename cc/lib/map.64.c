@@ -130,3 +130,9 @@ int8_t map_destroy(map_t map) {
 
 	return 0;
 }
+
+iterator_t* map_create_iterator(map_t map) {
+	map_internal_t* mi = (map_internal_t*)map;
+
+	return mi->store->create_iterator(mi->store);
+}
