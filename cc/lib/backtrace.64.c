@@ -25,6 +25,10 @@ void backtrace_print(stackframe_t* frame) {
 		PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%lx RBP: 0x%lp", frame->rip, frame);
 
 		frame = frame->previous;
+
+		if(frame->rip < 0x200000) {
+			break;
+		}
 	}
 
 }

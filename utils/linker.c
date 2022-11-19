@@ -34,6 +34,7 @@ typedef struct {
 	uint64_t offset;
 	uint64_t size;
 	uint64_t align;
+	uint64_t padding;
 	uint8_t* data;
 	linkedlist_t relocations;
 	uint8_t required;
@@ -1042,21 +1043,21 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
 		if(sec->type <= LINKER_SECTION_TYPE_RODATA) {
 
 			if(sec->type == LINKER_SECTION_TYPE_TEXT) {
-				sec_hdrs[0].virtual_size += sec->size;
-				sec_hdrs[0].size_of_raw_data += sec->size;
-				opt_hdr.size_of_code += sec->size;
+				sec_hdrs[0].virtual_size += sec->size + sec->padding;
+				sec_hdrs[0].size_of_raw_data += sec->size + sec->padding;
+				opt_hdr.size_of_code += sec->size + sec->padding;
 
 				if(!text_offset_setted) {
-					sec_hdrs[0].virtual_address = sec->offset;
-					sec_hdrs[0].pointer_to_raw_data = sec->offset;
+					sec_hdrs[0].virtual_address = sec->offset + sec->padding;
+					sec_hdrs[0].pointer_to_raw_data = sec->offset + sec->padding;
 					text_offset_setted = true;
 				}
 			}
 
 			if(sec->type == LINKER_SECTION_TYPE_RODATA) {
-				sec_hdrs[1].virtual_size += sec->size;
-				sec_hdrs[1].size_of_raw_data += sec->size;
-				opt_hdr.size_of_initialized_data += sec->size;
+				sec_hdrs[1].virtual_size += sec->size + sec->padding;
+				sec_hdrs[1].size_of_raw_data += sec->size + sec->padding;
+				opt_hdr.size_of_initialized_data += sec->size + sec->padding;
 
 				if(!rodata_offset_setted) {
 					sec_hdrs[1].virtual_address = sec->offset;
@@ -1066,9 +1067,9 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
 			}
 
 			if(sec->type == LINKER_SECTION_TYPE_DATA) {
-				sec_hdrs[2].virtual_size += sec->size;
-				sec_hdrs[2].size_of_raw_data += sec->size;
-				opt_hdr.size_of_initialized_data += sec->size;
+				sec_hdrs[2].virtual_size += sec->size + sec->padding;
+				sec_hdrs[2].size_of_raw_data += sec->size + sec->padding;
+				opt_hdr.size_of_initialized_data += sec->size + sec->padding;
 
 				if(!data_offset_setted) {
 					sec_hdrs[2].virtual_address = sec->offset;
@@ -1185,6 +1186,12 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
 	sec_hdrs[4].virtual_size = opt_hdr.base_relocation_table.size;
 	sec_hdrs[4].size_of_raw_data = opt_hdr.base_relocation_table.size;
 	sec_hdrs[4].pointer_to_raw_data = ftell(fp);
+
+	if(sec_hdrs[4].pointer_to_raw_data % opt_hdr.file_alignment) {
+		sec_hdrs[4].pointer_to_raw_data += opt_hdr.file_alignment - (sec_hdrs[4].pointer_to_raw_data % opt_hdr.file_alignment);
+	}
+
+	fseek(fp, sec_hdrs[4].pointer_to_raw_data, SEEK_SET);
 
 	iter = linkedlist_iterator_create(tmp_relocs);
 
@@ -1748,9 +1755,10 @@ void linker_bind_offset_of_section(linker_context_t* ctx, linker_section_type_t 
 		linker_section_t* sec = sec_iter->get_item(sec_iter);
 
 		if(sec->type == type && (sec->required || ctx->enable_removing_disabled_sections == 0)) {
-			if(sec->align && !ctx->for_efi) {
+			if(sec->align) {
 				if(*base_offset % sec->align) {
 					uint64_t padding = sec->align - (*base_offset % sec->align);
+					sec->padding = padding;
 					*base_offset += padding;
 				}
 			}
