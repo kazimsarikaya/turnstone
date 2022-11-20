@@ -6,7 +6,18 @@ ARCH=x86_64
 OUTPUT = ../output
 EFIOUTPUT = $(OUTPUT)/efi
 
+HOSTOS =$(shell uname -s)
+
+ifeq ($(HOSTOS),Darwin)
+  
 CC = x86_64-elf-gcc
+
+else
+
+CC = gcc
+
+endif
+
 LD = $(OUTPUT)/linker.bin
 
 CFLAGS += -D___BITS=64 -D___EFIBUILD=1 -std=gnu11 -O3 -I../includes -I./

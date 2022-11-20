@@ -7,13 +7,15 @@ CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu11 \
 	-O3 -nostdlib -ffreestanding -c -m64 -msse4.2\
 	-D___TESTMODE=1 -g -Wno-address-of-packed-member \
-	-L/opt/local/lib/valgrind -I/opt/local/include/valgrind -lcoregrind-amd64-darwin -lvex-amd64-darwin
 
 ifeq ($(HOSTOS),Darwin)
+CCFLAGS += -I/opt/local/include/valgrind
 LD = ld
-LDFLAGS = -lc
+LDFLAGS = -lc -L/opt/local/lib/valgrind -lcoregrind-amd64-darwin -lvex-amd64-darwin
 else
+CCFLAGS += -I/usr/include/valgrind
 LD = gcc
+LDFLAGS = -L/usr/lib64/valgrind -lcoregrind-amd64-linux -lvex-amd64-linux
 endif
 
 

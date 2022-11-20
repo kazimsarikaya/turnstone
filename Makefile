@@ -10,10 +10,14 @@ ifeq ($(HOSTOS),Darwin)
 CC64 = x86_64-elf-gcc
 OBJCOPY = x86_64-elf-objcopy
 
+SEDNOBAK = sed -i ''
+
 else
 
 CC64 = gcc
 OBJCOPY = objcopy
+
+SEDNOBAK = sed -i
 
 endif
 
@@ -194,6 +198,6 @@ depend: .depend64
 
 .depend64: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
 	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
-	sed -i '' 's/xx.o:/xx_64.o:/g' .depend64
+	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
 
 -include .depend64
