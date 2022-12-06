@@ -37,6 +37,14 @@ uint64_t buffer_get_length(buffer_t buffer) {
 	return ((buffer_internal_t*)buffer)->length;
 };
 
+uint64_t buffer_get_capacity(buffer_t buffer) {
+	if(!buffer){
+		return 0;
+	}
+
+	return ((buffer_internal_t*)buffer)->capacity;
+};
+
 buffer_t buffer_append_byte(buffer_t buffer, uint8_t data) {
 	uint8_t tmp[] = {data};
 	return buffer_append_bytes(buffer, tmp, 1);
