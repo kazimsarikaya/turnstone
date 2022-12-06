@@ -68,6 +68,12 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
 	return (buffer_t)bi;
 }
 
+buffer_t buffer_append_buffer(buffer_t buffer, buffer_t appenden) {
+	buffer_internal_t* bi = (buffer_internal_t*)appenden;
+
+	return buffer_append_bytes(buffer,bi->data,bi->length);
+}
+
 uint8_t* buffer_get_bytes(buffer_t buffer, uint64_t* length) {
 	buffer_internal_t* bi = (buffer_internal_t*)buffer;
 
