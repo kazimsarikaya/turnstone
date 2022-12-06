@@ -95,7 +95,7 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
 
 		if(frm->frame_address <= rem_frm_start && rem_frm_cnt <= frm->frame_count) {
 			lock_release(ctx->lock);
-			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame inside reserved area", 0);
+			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "frame inside reserved area");
 
 			return 0;
 		}
@@ -109,7 +109,7 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
 
 
 	while(rem_frm_cnt) {
-		PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "remaining frame start 0x%lx count 0x%lx", rem_frm_start, rem_frm_cnt);
+		PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "remaining frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
 		frame_t search_frm = {rem_frm_start, 1, 0, 0};
 
@@ -122,7 +122,7 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
 			new_r_frm->type = FRAME_TYPE_RESERVED;
 			ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm);
 
-			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%lx count 0x%lx", rem_frm_start, rem_frm_cnt);
+			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
 			break;
 		}
@@ -136,12 +136,12 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
 			new_r_frm->type = FRAME_TYPE_RESERVED;
 			ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm);
 
-			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%lx count 0x%lx", rem_frm_start, rem_frm_cnt);
+			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
 			break;
 		}
 
-		PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "area inside free frames, frame start 0x%lx count 0x%lx", rem_frm_start, rem_frm_cnt);
+		PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "area inside free frames, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
 		frame_t* frm = (frame_t*)iter->get_item(iter);
 		iter->destroy(iter);
@@ -190,7 +190,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 
 		if(iter == NULL) {
 			lock_release(ctx->lock);
-			PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "cannot list free frames", 0);
+			PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "cannot list free frames");
 
 			return -1;
 		}
@@ -215,7 +215,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 
 		if(tmp_frm == NULL) {
 			lock_release(ctx->lock);
-			PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "cannot find free frames with count 0x%lx", count);
+			PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "cannot find free frames with count 0x%llx", count);
 
 			return -1;
 		}
@@ -227,7 +227,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 		frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
 		if(new_frm == NULL) {
-			PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...", 0);
+			PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
 			cpu_hlt();
 		}
 
@@ -257,7 +257,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 			frame_t* free_rem_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
 			if(free_rem_frm == NULL) {
-				PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...", 0);
+				PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
 				cpu_hlt();
 			}
 
@@ -277,14 +277,14 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 		return 0;
 	} else {
 		lock_release(ctx->lock);
-		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "unknown alloctation type for frames", 0);
+		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "unknown alloctation type for frames");
 
 		return -1;
 	}
 
 	lock_release(ctx->lock);
 
-	PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "Should never hit", 0);
+	PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "Should never hit");
 
 	return -1;
 }
@@ -302,7 +302,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
 
 	if(iter == NULL) {
 		lock_release(ctx->lock);
-		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%lx 0x%lx", f->frame_address, f->frame_count);
+		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%llx 0x%llx", f->frame_address, f->frame_count);
 
 		return -1;
 	}
@@ -310,7 +310,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
 	if(iter->end_of_iterator(iter) == 0) {
 		iter->destroy(iter);
 		lock_release(ctx->lock);
-		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%lx 0x%lx", f->frame_address, f->frame_count);
+		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%llx 0x%llx", f->frame_address, f->frame_count);
 
 		return -1;
 	}
@@ -320,7 +320,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
 
 	if(frm == NULL) {
 		lock_release(ctx->lock);
-		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%lx 0x%lx", f->frame_address, f->frame_count);
+		PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%llx 0x%llx", f->frame_address, f->frame_count);
 
 		return -1;
 	}
@@ -724,11 +724,11 @@ int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
 	SYSTEM_INFO->reserved_mmap_data = memory_malloc_ext(SYSTEM_INFO->heap, SYSTEM_INFO->reserved_mmap_size, 0);
 
 	if(SYSTEM_INFO->reserved_mmap_data == NULL) {
-		PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "Cannot create reserved mmap data. Halting...", 0);
+		PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "Cannot create reserved mmap data. Halting...");
 		cpu_hlt();
 	}
 
-	PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "reserved map ent count 0x%lx size 0x%lx", mmap_entry_cnt, SYSTEM_INFO->reserved_mmap_size);
+	PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "reserved map ent count 0x%llx size 0x%llx", mmap_entry_cnt, SYSTEM_INFO->reserved_mmap_size);
 
 	uint64_t i = 0;
 
@@ -744,7 +744,7 @@ int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
 		mem_desc->page_count = f->frame_count;
 		mem_desc->attribute = f->frame_attributes | FRAME_ATTRIBUTE_OLD_RESERVED;
 
-		PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "reserved mmap start 0x%016x count 0x%lx", mem_desc->physical_start, mem_desc->page_count);
+		PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "reserved mmap start 0x%016llx count 0x%llx", mem_desc->physical_start, mem_desc->page_count);
 
 		iter = iter->next(iter);
 		i++;
@@ -875,11 +875,11 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
 			fa->allocate_frame(fa, &f);
 
-			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "old reserved frame start 0x%016lx count 0x%lx\n", mem_desc->physical_start, mem_desc->page_count);
+			PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "old reserved frame start 0x%016llx count 0x%llx\n", mem_desc->physical_start, mem_desc->page_count);
 
 		}
 	}else {
-		PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "no old reserved mmap data (size: 0x%lx)", SYSTEM_INFO->reserved_mmap_size);
+		PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "no old reserved mmap data (size: 0x%llx)", SYSTEM_INFO->reserved_mmap_size);
 	}
 
 	return fa;
@@ -902,7 +902,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 	while(iter->end_of_iterator(iter) != 0) {
 		frame_t* f = (frame_t*)iter->get_item(iter);
 
-		printf("0x%016lx \t 0x%016lx \t 0x%016lx\n", f->frame_address, f->frame_count, f->frame_attributes);
+		printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
 
 		iter = iter->next(iter);
 	}
@@ -916,7 +916,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 	while(iter->end_of_iterator(iter) != 0) {
 		frame_t* f = (frame_t*)iter->get_item(iter);
 
-		printf("0x%016lx \t 0x%016lx \t 0x%016lx\n", f->frame_address, f->frame_count, f->frame_attributes);
+		printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
 
 		iter = iter->next(iter);
 	}
@@ -930,7 +930,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 	while(iter->end_of_iterator(iter) != 0) {
 		frame_t* f = (frame_t*)iter->get_item(iter);
 
-		printf("0x%016lx \t 0x%016lx \t 0x%016lx\n", f->frame_address, f->frame_count, f->frame_attributes);
+		printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
 
 		iter = iter->next(iter);
 	}
@@ -944,7 +944,7 @@ void frame_allocator_print(frame_allocator_t* fa) {
 	while(iter->end_of_iterator(iter) != 0) {
 		frame_t* f = (frame_t*)iter->get_item(iter);
 
-		printf("0x%016lx \t 0x%016lx \t 0x%016lx\n", f->frame_address, f->frame_count, f->frame_attributes);
+		printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
 
 		iter = iter->next(iter);
 	}

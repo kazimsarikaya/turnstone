@@ -161,7 +161,7 @@ int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 	acpi_aml_exec_f exec_f = acpi_aml_exec_fs[idx];
 
 	if(exec_f == NULL) {
-		PRINTLOG(ACPIAML, LOG_FATAL, "unwanted op code for execution", 0);
+		PRINTLOG(ACPIAML, LOG_FATAL, "unwanted op code for execution");
 		return -1;
 	}
 

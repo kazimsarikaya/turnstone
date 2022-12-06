@@ -19,8 +19,8 @@
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column
 uint16_t cursor_graphics_y = 0; ///< cursor porsition for row
 
-extern uint8_t* font_data_start;
-extern uint8_t* font_data_end;
+extern video_psf2_font_t font_data_start;
+extern video_psf2_font_t font_data_end;
 
 void put_char(char_t c, int32_t cx, int32_t cy, uint32_t fg, uint32_t bg);
 
@@ -61,7 +61,7 @@ void video_init() {
 
 	if(font2) {
 		if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
-			PRINTLOG(VIDEO, LOG_DEBUG, "font v2 ok", 0);
+			PRINTLOG(VIDEO, LOG_DEBUG, "font v2 ok");
 			FONT_ADDRESS = (uint8_t*)&font_data_start + font2->header_size;
 			FONT_WIDTH = font2->width;
 			FONT_HEIGHT = font2->height;
@@ -111,7 +111,7 @@ void video_init() {
 			video_psf1_font_t* font1 = (video_psf1_font_t*)&font_data_start;
 
 			if(font1->magic == VIDEO_PSF1_FONT_MAGIC) {
-				PRINTLOG(VIDEO, LOG_DEBUG, "font v1 ok", 0);
+				PRINTLOG(VIDEO, LOG_DEBUG, "font v1 ok");
 				uint64_t addr = (uint64_t)&font_data_start;
 				addr += sizeof(video_psf1_font_t);
 				FONT_ADDRESS = (uint8_t*)addr;
@@ -159,12 +159,12 @@ void video_init() {
 
 				GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
 			} else {
-				PRINTLOG(VIDEO, LOG_ERROR, "font magic err", 0);
+				PRINTLOG(VIDEO, LOG_ERROR, "font magic err");
 			}
 
 		}
 	} else {
-		PRINTLOG(VIDEO, LOG_ERROR, "font err", 0);
+		PRINTLOG(VIDEO, LOG_ERROR, "font err");
 	}
 }
 
@@ -375,7 +375,7 @@ size_t video_printf(char_t* fmt, ...){
 				case 'i':
 				case 'd':
 					if(l_flag == 2) {
-						ival = va_arg(args, int128_t);
+						ival = va_arg(args, int64_t);
 					} else if(l_flag == 1) {
 						ival = va_arg(args, int64_t);
 					}
@@ -411,7 +411,7 @@ size_t video_printf(char_t* fmt, ...){
 					break;
 				case 'u':
 					if(l_flag == 2) {
-						uval = va_arg(args, uint128_t);
+						uval = va_arg(args, uint64_t);
 					} else if(l_flag == 1) {
 						uval = va_arg(args, uint64_t);
 					}

@@ -32,21 +32,21 @@ efi_status_t efi_setup_heap(){
 	res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%x", res);
+		PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%llx", res);
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "memory pool created", 0);
+	PRINTLOG(EFI, LOG_DEBUG, "memory pool created");
 
 	size_t start = (size_t)heap_area;
 
 	memory_heap_t* heap = memory_create_heap_simple(start, start + heap_size);
 
 	if(heap) {
-		PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%lp with size 0x%x", heap_area, heap_size);
+		PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%p with size 0x%llx", heap_area, heap_size);
 	} else {
-		PRINTLOG(EFI, LOG_DEBUG, "heap creation failed", 0);
+		PRINTLOG(EFI, LOG_DEBUG, "heap creation failed");
 		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
@@ -70,7 +70,7 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
 	res = BS->locate_protocol(&gop_guid, NULL, (efi_handle_t*)&gop);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_FATAL, "gop handle failed %i. Halting...", res);
+		PRINTLOG(EFI, LOG_FATAL, "gop handle failed %llx. Halting...", res);
 
 		goto catch_efi_error;
 	}
@@ -88,7 +88,7 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
 	res = gop->set_mode(gop, next_mode);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_FATAL, "cannot set gop mode", res);
+		PRINTLOG(EFI, LOG_FATAL, "cannot set gop mode 0x%llx", res);
 
 		goto catch_efi_error;
 	}
@@ -96,7 +96,7 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
 	vfb = memory_malloc(sizeof(video_frame_buffer_t));
 
 	if(vfb == NULL) {
-		PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb", 0);
+		PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb");
 		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
@@ -109,8 +109,8 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
 	vfb->height = gop->mode->information->vertical_resolution;
 	vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
 
-	PRINTLOG(EFI, LOG_DEBUG, "frame buffer info %ix%i pps %i at 0x%lp size 0x%lx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
-	PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%lp", vfb);
+	PRINTLOG(EFI, LOG_DEBUG, "frame buffer info %ix%i pps %i at 0x%llx size 0x%llx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
+	PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%p", vfb);
 
 	*vfb_res = vfb;
 
@@ -126,17 +126,17 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 	disk_t* sys_disk = efi_disk_impl_open(bio);
 
 	if(sys_disk == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "sys disk open failed", 0);
+		PRINTLOG(EFI, LOG_ERROR, "sys disk open failed");
 		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "openning as gpt disk", 0);
+	PRINTLOG(EFI, LOG_DEBUG, "openning as gpt disk");
 
 	sys_disk = gpt_get_or_create_gpt_disk(sys_disk);
 
-	PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted", 0);
+	PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted");
 
 	efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
 	disk_partition_context_t* part_ctx = NULL;
@@ -169,18 +169,18 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 
 
 	if(part_ctx == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot find turnstone kernel partition", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot find turnstone kernel partition");
 		res = EFI_NOT_FOUND;
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "kernel start lba %x end lba %x", part_ctx->start_lba, part_ctx->end_lba);
+	PRINTLOG(EFI, LOG_DEBUG, "kernel start lba %llx end lba %llx", part_ctx->start_lba, part_ctx->end_lba);
 
 	*kernel_data = memory_malloc(sizeof(efi_kernel_data_t));
 
 	if(*kernel_data == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data");
 		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
@@ -188,17 +188,17 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 
 	(*kernel_data)->size = (part_ctx->end_lba - part_ctx->start_lba  + 1) * bio->media->block_size;
 
-	PRINTLOG(EFI, LOG_DEBUG, "kernel size %li", (*kernel_data)->size);
+	PRINTLOG(EFI, LOG_DEBUG, "kernel size %lli", (*kernel_data)->size);
 
 	res = sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "kernel load failed", 0);
+		PRINTLOG(EFI, LOG_ERROR, "kernel load failed");
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%lp", (*kernel_data)->data);
+	PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%p", (*kernel_data)->data);
 
 
 catch_efi_error:
@@ -214,19 +214,19 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 	res = BS->locate_handle(EFI_BY_PROTOCOL, &bio_guid, NULL, &handle_size, (efi_handle_t*)&handles);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "blocks devs retrivation failed. code: 0x%x", res);
+		PRINTLOG(EFI, LOG_ERROR, "blocks devs retrivation failed. code: 0x%llx", res);
 
 		goto catch_efi_error;
 	}
 
 	handle_size /= (uint64_t)sizeof(efi_handle_t);
 
-	PRINTLOG(EFI, LOG_DEBUG, "block devs retrived. count %i", handle_size);
+	PRINTLOG(EFI, LOG_DEBUG, "block devs retrived. count %lli", handle_size);
 
 	block_file_t* blk_devs = (block_file_t*)memory_malloc(handle_size * sizeof(block_file_t));
 
 	if(blk_devs == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot alloc block dev array", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot alloc block dev array");
 
 		goto catch_efi_error;
 	}
@@ -239,7 +239,7 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 		if(handles[i] && !EFI_ERROR(BS->handle_protocol(handles[i], &bio_guid, (void**) &blk_devs[blk_dev_cnt].bio)) &&
 		   blk_devs[blk_dev_cnt].bio && blk_devs[blk_dev_cnt].bio->media && blk_devs[blk_dev_cnt].bio->media->block_size > 0) {
 
-			PRINTLOG(EFI, LOG_DEBUG, "disk %i mid %i block size: %i removable %i present %i readonly %i size %li",
+			PRINTLOG(EFI, LOG_DEBUG, "disk %lli mid %i block size: %i removable %i present %i readonly %i size %lli",
 			         blk_dev_cnt, blk_devs[blk_dev_cnt].bio->media->media_id, blk_devs[blk_dev_cnt].bio->media->block_size,
 			         blk_devs[blk_dev_cnt].bio->media->removable_media,
 			         blk_devs[blk_dev_cnt].bio->media->media_present, blk_devs[blk_dev_cnt].bio->media->readonly,
@@ -258,10 +258,10 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 					efi_pmbr_partition_t* pmbr = (efi_pmbr_partition_t*)&buffer[0x1be];
 
 					if(pmbr->part_type == EFI_PMBR_PART_TYPE) {
-						PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %li", blk_dev_cnt);
+						PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %lli", blk_dev_cnt);
 						memory_free(buffer);
 
-						PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %li", blk_dev_cnt);
+						PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", blk_dev_cnt);
 
 						res = efi_lookup_kernel_partition(blk_devs[blk_dev_cnt].bio, kernel_data);
 
@@ -304,13 +304,13 @@ efi_status_t efi_print_variable_names() {
 		}
 
 		if(res != EFI_SUCCESS) {
-			PRINTLOG(EFI, LOG_ERROR, "cannot get next variable name: 0x%lx", res);
+			PRINTLOG(EFI, LOG_ERROR, "cannot get next variable name: 0x%llx", res);
 
 			goto catch_efi_error;
 		}
 
 		char_t* var_name = wchar_to_char(buffer);
-		PRINTLOG(EFI, LOG_DEBUG, "variable size %li name: %s", var_size, var_name);
+		PRINTLOG(EFI, LOG_DEBUG, "variable size %lli name: %s", var_size, var_name);
 		memory_free(var_name);
 	}
 
@@ -336,7 +336,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 	res = RS->get_variable(var_name_boot_current, &var_global, &var_attrs, &buffer_size, &boot_order_idx);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot variable 0x%lx", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot variable 0x%llx", res);
 
 		goto catch_efi_error;
 	}
@@ -363,7 +363,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 	res = RS->get_variable(var_val_boot_current, &var_global, &var_attrs, &buffer_size, NULL);
 
 	if(res != EFI_BUFFER_TOO_SMALL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot size: 0x%lx", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot size: 0x%llx", res);
 
 		goto catch_efi_error;
 	}
@@ -373,7 +373,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 	res = RS->get_variable(var_val_boot_current, &var_global, &var_attrs, &buffer_size, (void*)var_val_boot);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot variable: 0x%lx", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get current boot variable: 0x%llx", res);
 
 		goto catch_efi_error;
 	}
@@ -385,7 +385,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 	wchar_t* lo_desc = (wchar_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
 	char_t* boot_desc = wchar_to_char(lo_desc);
 
-	PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %i", lo_len, boot_desc, wchar_size(lo_desc));
+	PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %lli", lo_len, boot_desc, wchar_size(lo_desc));
 
 	efi_device_path_t* lo_fp = (efi_device_path_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t) + wchar_size(lo_desc) * sizeof(wchar_t) + sizeof(wchar_t));
 
@@ -423,7 +423,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	res = BS->locate_protocol(&pxe_prot_guid, NULL, (void**)&pxe_prot);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot find pxe protocol: 0x%lx", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot find pxe protocol: 0x%llx", res);
 
 		goto catch_efi_error;
 	}
@@ -449,7 +449,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get config size as json: 0x%lx", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get config size as json: 0x%llx", res);
 
 		pxeconfig = "pxeconf.bson";
 		pxeconfig_is_json = false;
@@ -457,19 +457,19 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 		res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
 
 		if(res != EFI_SUCCESS) {
-			PRINTLOG(EFI, LOG_ERROR, "cannot get config size as bson: 0x%lx", res);
+			PRINTLOG(EFI, LOG_ERROR, "cannot get config size as bson: 0x%llx", res);
 
 			goto catch_efi_error;
 		}
 
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "config size 0x%lx", buffer_size);
+	PRINTLOG(EFI, LOG_DEBUG, "config size 0x%llx", buffer_size);
 
 	uint8_t* buffer = memory_malloc(buffer_size);
 
 	if(buffer == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot allocate config buffer", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate config buffer");
 		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
@@ -478,7 +478,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 0);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get config %s: 0x%lx", pxeconfig, res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get config %s: 0x%llx", pxeconfig, res);
 
 		goto catch_efi_error;
 	}
@@ -496,14 +496,14 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	memory_free(buffer);
 
 	if(pxeconfig_data == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot deserialize pxe config", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot deserialize pxe config");
 		res = EFI_INVALID_PARAMETER;
 
 		goto catch_efi_error;
 	}
 
 	if(pxeconfig_data->name == NULL || strcmp(pxeconfig_data->name->value, "pxe-config") != 0 || pxeconfig_data->length != 2) {
-		PRINTLOG(EFI, LOG_ERROR, "malformed pxe config", 0);
+		PRINTLOG(EFI, LOG_ERROR, "malformed pxe config");
 		res = EFI_INVALID_PARAMETER;
 
 		goto catch_efi_error;
@@ -513,7 +513,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	data_t* kerd_s = &((data_t*)pxeconfig_data->value)[1];
 
 	if(kerd->name == NULL || strcmp(kerd->name->value, "kernel") != 0 || kerd_s->name == NULL || strcmp(kerd_s->name->value, "kernel-size") != 0) {
-		PRINTLOG(EFI, LOG_ERROR, "malformed pxe config", 0);
+		PRINTLOG(EFI, LOG_ERROR, "malformed pxe config");
 		res = EFI_INVALID_PARAMETER;
 
 		goto catch_efi_error;
@@ -525,7 +525,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, kerd->value, NULL, 0);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get kernel: 0x%lx", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get kernel: 0x%llx", res);
 
 		goto catch_efi_error;
 	}
@@ -533,7 +533,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
 	*kernel_data = memory_malloc(sizeof(efi_kernel_data_t));
 
 	if(*kernel_data == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data");
 		res = EFI_OUT_OF_RESOURCES;
 
 		goto catch_efi_error;
@@ -562,7 +562,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	res = efi_setup_heap();
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_FATAL, "cannot setup heap", res);
+		PRINTLOG(EFI, LOG_FATAL, "cannot setup heap %llx", res);
 
 		goto catch_efi_error;
 	}
@@ -573,7 +573,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	res = efi_setup_graphics(&vfb);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_FATAL, "cannot setup graphics", res);
+		PRINTLOG(EFI, LOG_FATAL, "cannot setup graphics %llx", res);
 
 		goto catch_efi_error;
 	}
@@ -584,12 +584,12 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	res = BS->handle_protocol(image, &lip_guid, (void**)&loaded_image);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot get details of loaded imgage", res);
+		PRINTLOG(EFI, LOG_ERROR, "cannot get details of loaded imgage %llx", res);
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "devhandle 0x%lp fp 0x%lp los %li", loaded_image->device_handle, loaded_image->file_path, loaded_image->load_options_size);
+	PRINTLOG(EFI, LOG_DEBUG, "devhandle 0x%p fp 0x%p los %i", loaded_image->device_handle, loaded_image->file_path, loaded_image->load_options_size);
 
 	boolean_t is_pxe = 0;
 
@@ -608,7 +608,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	}
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_FATAL, "cannot load kernel", res);
+		PRINTLOG(EFI, LOG_FATAL, "cannot load kernel %llx", res);
 
 		goto catch_efi_error;
 	}
@@ -618,7 +618,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	res = BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, 0x100, &frm_start_1mib);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame for kernel usage at 1mib to 2mib", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame for kernel usage at 1mib to 2mib");
 
 		goto catch_efi_error;
 	}
@@ -631,34 +631,34 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	new_kernel_2m_factor = (kernel_page_count + 512 - 1) / 512;
 	kernel_page_count = new_kernel_2m_factor * 512;
 
-	PRINTLOG(EFI, LOG_DEBUG, "new kernel page count 0x%lx", kernel_page_count);
+	PRINTLOG(EFI, LOG_DEBUG, "new kernel page count 0x%llx", kernel_page_count);
 
 	uint64_t new_kernel_address = 2 << 20;
 
 	res = BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for new kernel", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for new kernel");
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "alloc pages for new kernel succed at 0x%lx", new_kernel_address);
+	PRINTLOG(EFI, LOG_DEBUG, "alloc pages for new kernel succed at 0x%llx", new_kernel_address);
 
 	memory_memclean((void*)new_kernel_address, kernel_page_count * 4096);
 
 	if(linker_memcopy_program_and_relink((size_t)kernel_data->data, new_kernel_address, ((size_t)kernel_data->data) + 0x100 - 1) != 0) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot move and relink kernel", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot move and relink kernel");
 
 		goto catch_efi_error;
 	}
 
-	PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%lx succed", new_kernel_address);
+	PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%llx succed", new_kernel_address);
 	memory_free(kernel_data->data);
 	memory_free(kernel_data);
 
 
-	PRINTLOG(EFI, LOG_DEBUG, "conf table count %i", system_table->configuration_table_entry_count);
+	PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
 	efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
 	efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
 
@@ -678,14 +678,14 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	uint32_t descriptor_version;
 
 	BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
-	PRINTLOG(EFI, LOG_DEBUG, "mmap size %li desc size %li ver %li", map_size, descriptor_size, descriptor_version);
+	PRINTLOG(EFI, LOG_DEBUG, "mmap size %lli desc size %lli ver %i", map_size, descriptor_size, descriptor_version);
 
 	mmap = memory_malloc(map_size);
 
 	res = BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
 
 	if(res != EFI_SUCCESS) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot fill memory map.", 0);
+		PRINTLOG(EFI, LOG_ERROR, "cannot fill memory map.");
 
 		goto catch_efi_error;
 	}
@@ -703,7 +703,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	sysinfo->kernel_4k_frame_count = kernel_page_count;
 	sysinfo->efi_system_table = system_table;
 
-	PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%lp with sysinfo @ 0x%lp", new_kernel_address, sysinfo);
+	PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", new_kernel_address, sysinfo);
 
 	BS->exit_boot_services(image, map_key);
 
@@ -712,7 +712,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	ks(sysinfo);
 
 catch_efi_error:
-	PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...", 0);
+	PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
 
 	cpu_hlt();
 

@@ -66,12 +66,12 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 	}
 
 	if((time_timer_tick_count % 1000) == 0) {
-		PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%lx epoch %li", time_timer_tick_count, TIME_EPOCH);
+		PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%llx epoch %lli", time_timer_tick_count, TIME_EPOCH);
 
 		memory_heap_stat_t stat;
 		memory_get_heap_stat(&stat);
 
-		PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%lx fs 0x%lx mc 0x%lx fc 0x%lx diff 0x%lx fh 0x%lx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
+		PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx fh 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
 	}
 
 	if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
@@ -94,14 +94,14 @@ void time_timer_configure_spinsleep() {
 		time_timer_spinsleep_counter_value++;
 	}
 
-	PRINTLOG(TIMER, LOG_TRACE, "spinsleep counter is 0x%lx", time_timer_spinsleep_counter_value);
+	PRINTLOG(TIMER, LOG_TRACE, "spinsleep counter is 0x%llx", time_timer_spinsleep_counter_value);
 }
 
 void time_timer_spinsleep(uint64_t usecs) {
-	PRINTLOG(TIMER, LOG_TRACE, "spinsleep for 0x%lx", usecs);
+	PRINTLOG(TIMER, LOG_TRACE, "spinsleep for 0x%llx", usecs);
 	while(usecs--) {
 		uint64_t spinsleep_counter = time_timer_spinsleep_counter_value;
 		while(spinsleep_counter--);
 	}
-	PRINTLOG(TIMER, LOG_TRACE, "spinsleep finished", 0);
+	PRINTLOG(TIMER, LOG_TRACE, "spinsleep finished");
 }

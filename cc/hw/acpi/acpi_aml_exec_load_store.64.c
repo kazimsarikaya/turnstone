@@ -24,7 +24,7 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 0, 0);
 
 	if(src->type == ACPI_AML_OT_REFOF && !(dst->type == ACPI_AML_OT_UNINITIALIZED || dst->type == ACPI_AML_OT_DEBUG)) {
-		PRINTLOG(ACPIAML, LOG_FATAL, "writing refof to the non uninitiliazed variable", 0);
+		PRINTLOG(ACPIAML, LOG_FATAL, "writing refof to the non uninitiliazed variable");
 		ctx->flags.fatal = 1;
 		return -1;
 	}
@@ -39,7 +39,7 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 		dst = dst->refof_target;
 
 		if(dst == NULL) {
-			PRINTLOG(ACPIAML, LOG_FATAL, "writing refof target is non uninitiliazed variable", 0);
+			PRINTLOG(ACPIAML, LOG_FATAL, "writing refof target is non uninitiliazed variable");
 			ctx->flags.fatal = 1;
 			return -1;
 		}
@@ -88,7 +88,7 @@ int8_t acpi_aml_exec_store(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 		res = acpi_aml_write_as_buffer(ctx, src, original_dst);
 		break;
 	default:
-		PRINTLOG(ACPIAML, LOG_ERROR, "store unknown dest %i src is %i remaining %i", dst->type, src->type, ctx->remaining);
+		PRINTLOG(ACPIAML, LOG_ERROR, "store unknown dest %i src is %i remaining %lli", dst->type, src->type, ctx->remaining);
 		acpi_aml_print_object(ctx, dst);
 		return -1;
 	}

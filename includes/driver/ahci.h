@@ -325,24 +325,30 @@ typedef struct {
 	ahci_hba_prdt_entry_t prdt_entry[1];   ///< Physical region descriptor table entries, 0 ~ 65535
 } __attribute((packed)) ahci_hba_prdt_t;
 
-typedef struct {
-	uint8_t gpl_supported : 1;
-	uint8_t gpl_enabled : 1;
-	uint8_t dma_ext_supported : 1;
-	uint8_t dma_ext_enabled : 1;
-	uint8_t dma_ext_is_log_ext : 1;
-	uint8_t reserved : 3;
-} __attribute((packed)) ahci_ata_logging_t;
+typedef union {
+	struct {
+		uint8_t gpl_supported : 1;
+		uint8_t gpl_enabled : 1;
+		uint8_t dma_ext_supported : 1;
+		uint8_t dma_ext_enabled : 1;
+		uint8_t dma_ext_is_log_ext : 1;
+		uint8_t reserved : 3;
+	} __attribute((packed)) fields;
+	uint8_t bits;
+} ahci_ata_logging_t;
 
-typedef struct {
-	uint8_t supported : 1;
-	uint8_t enabled : 1;
-	uint8_t errlog_supported : 1;
-	uint8_t errlog_enabled : 1;
-	uint8_t selftest_supported : 1;
-	uint8_t selftest_enabled : 1;
-	uint8_t reserved : 2;
-} __attribute((packed)) ahci_ata_smart_t;
+typedef union {
+	struct {
+		uint8_t supported : 1;
+		uint8_t enabled : 1;
+		uint8_t errlog_supported : 1;
+		uint8_t errlog_enabled : 1;
+		uint8_t selftest_supported : 1;
+		uint8_t selftest_enabled : 1;
+		uint8_t reserved : 2;
+	} __attribute((packed)) fields;
+	uint8_t bits;
+} ahci_ata_smart_t;
 
 typedef struct {
 	uint64_t disk_id;

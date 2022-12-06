@@ -19,10 +19,10 @@ stackframe_t* backtrace_get_stackframe() {
 }
 
 void backtrace_print(stackframe_t* frame) {
-	PRINTLOG(KERNEL, LOG_ERROR, "Trace:", 0);
+	PRINTLOG(KERNEL, LOG_ERROR, "Trace:");
 
 	while(frame) {
-		PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%lx RBP: 0x%lp", frame->rip, frame);
+		PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx RBP: 0x%p", frame->rip, frame);
 
 		frame = frame->previous;
 

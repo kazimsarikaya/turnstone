@@ -49,7 +49,7 @@ int8_t network_e1000_process_tx() {
 				network_transmit_packet_t* packet = linkedlist_queue_pop(dev->transmit_queue);
 
 				if(packet) {
-					PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%lx", packet->packet_len);
+					PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
 					packet_exists = 1;
 
 					uint8_t* buffer = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dev->tx_desc[dev->tx_tail].address);
@@ -70,7 +70,7 @@ int8_t network_e1000_process_tx() {
 
 				}
 
-				PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%lx", linkedlist_size(dev->transmit_queue));
+				PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", linkedlist_size(dev->transmit_queue));
 			}
 
 		}
@@ -140,7 +140,7 @@ void network_e1000_rx_enable(network_e1000_dev_t* dev) {
 }
 
 int8_t network_e1000_rx_init(network_e1000_dev_t* dev) {
-	PRINTLOG(E1000, LOG_TRACE, "try to initialize rx queue", 0);
+	PRINTLOG(E1000, LOG_TRACE, "try to initialize rx queue");
 
 	uint64_t queue_size = (8192 + 16) * NETWORK_E1000_NUM_RX_DESCRIPTORS;
 
@@ -151,7 +151,7 @@ int8_t network_e1000_rx_init(network_e1000_dev_t* dev) {
 	frame_t* queue_frames;
 	frame_t* queue_meta_frames;
 
-	PRINTLOG(E1000, LOG_TRACE, "rx queue size 0x%lx queue frm count 0x%lx meta frm count 0x%lx", queue_size, queue_frm_cnt, queue_meta_frm_cnt);
+	PRINTLOG(E1000, LOG_TRACE, "rx queue size 0x%llx queue frm count 0x%llx meta frm count 0x%llx", queue_size, queue_frm_cnt, queue_meta_frm_cnt);
 
 
 	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) == 0 &&
@@ -171,7 +171,7 @@ int8_t network_e1000_rx_init(network_e1000_dev_t* dev) {
 		dev->mmio->rdbah = (queue_meta_fa >> 32) & 0xFFFFFFFF;
 		dev->rx_desc = (network_e1000_rx_desc_t*)queue_meta_va;
 
-		PRINTLOG(E1000, LOG_TRACE, "filling rx queue at 0x%lx", queue_meta_va);
+		PRINTLOG(E1000, LOG_TRACE, "filling rx queue at 0x%llx", queue_meta_va);
 
 		for(int32_t i = 0; i < NETWORK_E1000_NUM_RX_DESCRIPTORS; i++ ) {
 			dev->rx_desc[i].address = queue_fa + i * (8192 + 16);
@@ -189,7 +189,7 @@ int8_t network_e1000_rx_init(network_e1000_dev_t* dev) {
 		// set the receieve control register (promisc ON, 8K pkt size)
 		dev->mmio->rctl = (NETWORK_E1000_RCTL_SBP | NETWORK_E1000_RCTL_UPE | NETWORK_E1000_RCTL_MPE | NETWORK_E1000_RDMTS_HALF | NETWORK_E1000_RCTL_SECRC | NETWORK_E1000_RCTL_LPE | NETWORK_E1000_RCTL_BAM | NETWORK_E1000_RCTL_BSIZE_8192);
 
-		PRINTLOG(E1000, LOG_TRACE, "rx queue initialized", 0);
+		PRINTLOG(E1000, LOG_TRACE, "rx queue initialized");
 
 		return 0;
 	}
@@ -207,7 +207,7 @@ int8_t network_e1000_tx_init(network_e1000_dev_t* dev) {
 	frame_t* queue_frames;
 	frame_t* queue_meta_frames;
 
-	PRINTLOG(E1000, LOG_TRACE, "tx queue size 0x%lx queue frm count 0x%lx meta frm count 0x%lx", queue_size, queue_frm_cnt, queue_meta_frm_cnt);
+	PRINTLOG(E1000, LOG_TRACE, "tx queue size 0x%llx queue frm count 0x%llx meta frm count 0x%llx", queue_size, queue_frm_cnt, queue_meta_frm_cnt);
 
 	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) == 0 &&
 	   KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) == 0) {
@@ -226,7 +226,7 @@ int8_t network_e1000_tx_init(network_e1000_dev_t* dev) {
 		dev->mmio->tdbah = (queue_meta_fa >> 32) & 0xFFFFFFFF;
 		dev->tx_desc = (network_e1000_tx_desc_t*)queue_meta_va;
 
-		PRINTLOG(E1000, LOG_TRACE, "filling tx queue at 0x%lx", queue_meta_va);
+		PRINTLOG(E1000, LOG_TRACE, "filling tx queue at 0x%llx", queue_meta_va);
 
 		for(int32_t i = 0; i < NETWORK_E1000_NUM_TX_DESCRIPTORS; i++ ) {
 			dev->tx_desc[i].address = queue_fa + i * (8192 + 16);
@@ -244,7 +244,7 @@ int8_t network_e1000_tx_init(network_e1000_dev_t* dev) {
 		// set the transmit control register (padshortpackets)
 		dev->mmio->tctl = (NETWORK_E1000_TCTL_EN | NETWORK_E1000_TCTL_PSP);
 
-		PRINTLOG(E1000, LOG_TRACE, "tx queue initialized", 0);
+		PRINTLOG(E1000, LOG_TRACE, "tx queue initialized");
 
 		return 0;
 	}
@@ -270,14 +270,14 @@ void network_e1000_rx_poll(network_e1000_dev_t* dev) {
 		}
 
 		if( dev->rx_desc[dev->rx_tail].errors ) {
-			PRINTLOG(E1000, LOG_WARNING, "device has rx errors 0x%lx", dev->rx_desc[dev->rx_tail].errors);
+			PRINTLOG(E1000, LOG_WARNING, "device has rx errors 0x%x", dev->rx_desc[dev->rx_tail].errors);
 
 			dropflag = 1;
 		}
 
 		if( !dropflag ) {
 			// send the packet to higher layers for parsing
-			PRINTLOG(E1000, LOG_TRACE, "packet received with len 0x%lx", pktlen);
+			PRINTLOG(E1000, LOG_TRACE, "packet received with len 0x%x", pktlen);
 
 			pkt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pkt);
 
@@ -325,7 +325,7 @@ int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
 	// RX underrun / min threshold
 	if( icr & (1 << 6) || icr & (1 << 4) ) {
 		icr &= ~((1 << 6) | (1 << 4));
-		PRINTLOG(E1000, LOG_WARNING, "underrun (rx_head = 0x%lx, rx_tail = 0x%lx)\n", dev->mmio->rdh, dev->rx_tail);
+		PRINTLOG(E1000, LOG_WARNING, "underrun (rx_head = 0x%x, rx_tail = 0x%x)\n", dev->mmio->rdh, dev->rx_tail);
 
 		volatile int32_t i;
 
@@ -346,11 +346,11 @@ int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
 
 	if(icr & 0x8000) {
 		icr &= ~(0x8000);
-		PRINTLOG(E1000, LOG_TRACE, " tx at low (zero)", 0);
+		PRINTLOG(E1000, LOG_TRACE, " tx at low (zero)");
 	}
 
 	if( icr ) {
-		PRINTLOG(E1000, LOG_WARNING, "unhandled interrupt 0x%02x received! icr 0x%lx", intnum, icr);
+		PRINTLOG(E1000, LOG_WARNING, "unhandled interrupt 0x%02x received! icr 0x%x", intnum, icr);
 	}
 
 
@@ -368,7 +368,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 	e1000_net_devs = linkedlist_create_list_with_heap(NULL);
 
 	if(e1000_net_devs == NULL) {
-		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create e1000 network devices list", 0);
+		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create e1000 network devices list");
 
 		return -1;
 	}
@@ -401,25 +401,25 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 			bar_fa = tmp << 32 | bar_fa;
 		}
 
-		PRINTLOG(E1000, LOG_TRACE, "frame address at bar 0x%lx", bar_fa);
+		PRINTLOG(E1000, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
 		frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
 
 		bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
 		if(bar_frames == NULL) {
-			PRINTLOG(E1000, LOG_TRACE, "cannot find reserved frames for 0x%lx and try to reserve", bar_fa);
+			PRINTLOG(E1000, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
 
 			uint64_t bar_frm_cnt = (sizeof(network_e1000_mmio_t) + FRAME_SIZE - 1) / FRAME_SIZE;
 
 			frame_t tmp_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
 			if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &tmp_frm) != 0) {
-				PRINTLOG(E1000, LOG_ERROR, "cannot allocate frame", 0);
+				PRINTLOG(E1000, LOG_ERROR, "cannot allocate frame");
 
 				return -1;
 			} else {
-				PRINTLOG(E1000, LOG_TRACE, "reserved frames start from 0x%lx (0x%lx) with count 0x%lx", bar_fa, bar_va, tmp_frm.frame_count);
+				PRINTLOG(E1000, LOG_TRACE, "reserved frames start from 0x%llx (0x%llx) with count 0x%llx", bar_fa, bar_va, tmp_frm.frame_count);
 			}
 
 			bar_frames = &tmp_frm;
@@ -439,7 +439,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 	// register the MMIO address
 	dev->mmio = (network_e1000_mmio_t*)bar_va;
 
-	PRINTLOG(E1000, LOG_TRACE, "device hasnot msi looking for interrupts at acpi", 0);
+	PRINTLOG(E1000, LOG_TRACE, "device hasnot msi looking for interrupts at acpi");
 	uint8_t ic;
 
 	uint64_t addr = pci_netdev->device_number;
@@ -461,7 +461,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
 		memory_free(ints);
 	} else {
-		PRINTLOG(E1000, LOG_ERROR, "device hasnot any interrupts", 0);
+		PRINTLOG(E1000, LOG_ERROR, "device hasnot any interrupts");
 
 		return -1;
 	}
@@ -507,7 +507,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
 	task_create_task(NULL, 64 << 10, &network_e1000_process_tx);
 
-	PRINTLOG(E1000, LOG_INFO, "device initialized", 0);
+	PRINTLOG(E1000, LOG_INFO, "device initialized");
 
 	return 0;
 }

@@ -33,7 +33,7 @@ int8_t network_process_rx(){
 			network_received_packet_t* packet = linkedlist_queue_pop(network_received_packets);
 
 			if(packet) {
-				PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%lx", packet->packet_len);
+				PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
 
 				uint16_t return_packet_len = 0;
 				network_ethernet_t* return_packet = network_process_packet(packet, &return_packet_len);
@@ -44,7 +44,7 @@ int8_t network_process_rx(){
 				memory_free(packet);
 
 				if(return_packet && return_packet_len) {
-					PRINTLOG(NETWORK, LOG_TRACE, "network packet proccessed with return len 0x%lx", return_packet_len);
+					PRINTLOG(NETWORK, LOG_TRACE, "network packet proccessed with return len 0x%x", return_packet_len);
 
 					if(return_queue) {
 						network_transmit_packet_t* tx_packet = memory_malloc(sizeof(network_transmit_packet_t));
@@ -53,16 +53,16 @@ int8_t network_process_rx(){
 
 						linkedlist_queue_push(return_queue, tx_packet);
 					} else {
-						PRINTLOG(NETWORK, LOG_TRACE, "there is no return packet 0x%lx", return_packet_len);
+						PRINTLOG(NETWORK, LOG_TRACE, "there is no return packet 0x%x", return_packet_len);
 					}
 
 				} else {
-					PRINTLOG(NETWORK, LOG_TRACE, "packet discarded", 0);
+					PRINTLOG(NETWORK, LOG_TRACE, "packet discarded");
 				}
 
 			}
 
-			PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%x", linkedlist_size(network_received_packets));
+			PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%llx", linkedlist_size(network_received_packets));
 		}
 
 	}
@@ -72,7 +72,7 @@ int8_t network_process_rx(){
 
 
 int8_t network_init() {
-	PRINTLOG(NETWORK, LOG_INFO, "network devices starting", 0);
+	PRINTLOG(NETWORK, LOG_INFO, "network devices starting");
 	int8_t errors = 0;
 
 	iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->network_controllers);
@@ -101,7 +101,7 @@ int8_t network_init() {
 	network_received_packets = linkedlist_create_queue_with_heap(NULL);
 	task_create_task(NULL, 64 << 10, &network_process_rx);
 
-	PRINTLOG(NETWORK, LOG_INFO, "network devices started", 0);
+	PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 
 	return errors;
 }

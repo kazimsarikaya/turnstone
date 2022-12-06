@@ -19,7 +19,7 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 	boolean_t irq_handled = 0;
 
 	if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%lx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -30,10 +30,10 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 				PRINTLOG(ACPI, LOG_DEBUG, "pm1a event 0x%04x", value);
 
 				if(value & 0x100) {
-					PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is poweroff", 0);
+					PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is poweroff");
 					os_poweroff = 1;
 				} else if(value & 0x200) {
-					PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is reset", 0);
+					PRINTLOG(ACPI, LOG_DEBUG, "pm1a event is reset");
 					os_reset = 1;
 				} else {
 					PRINTLOG(ACPI, LOG_ERROR, "pm1a event is unknown 0x%04x", value);
@@ -42,14 +42,14 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 				outw(pm1a_port, 0xFFFF);
 			}
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1a", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1a 0x%x", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space);
 		}
 
 		irq_handled = 1;
 	}
 
 	if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b address %i 0x%lx %i", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -60,10 +60,10 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 				PRINTLOG(ACPI, LOG_DEBUG, "pm1b event 0x%04x", value);
 
 				if(value & 0x100) {
-					PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is poweroff", 0);
+					PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is poweroff");
 					os_poweroff = 1;
 				} else if(value & 0x200) {
-					PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is reset", 0);
+					PRINTLOG(ACPI, LOG_DEBUG, "pm1b event is reset");
 					os_reset = 1;
 				} else {
 					PRINTLOG(ACPI, LOG_ERROR, "pm1b event is unknown 0x%04x", value);
@@ -72,14 +72,14 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 				outw(pm1b_port, 0xFFFF);
 			}
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1b", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1b 0x%x", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space);
 		}
 
 		irq_handled = 1;
 	}
 
 	if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 address %i 0x%lx %i", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -91,14 +91,14 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 				outb(gpe0_port, 0xFF);
 			}
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe0", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe0 0x%x", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space);
 		}
 
 		irq_handled = 1;
 	}
 
 	if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 address %i 0x%lx %i", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -110,7 +110,7 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 				outb(gpe1_port, 0xFF);
 			}
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe1", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe1 0x%x", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space);
 		}
 
 		irq_handled = 1;
@@ -139,7 +139,7 @@ int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
 
 
 int8_t acpi_setup_events() {
-	PRINTLOG(ACPI, LOG_INFO, "acpi event setup started", 0);
+	PRINTLOG(ACPI, LOG_INFO, "acpi event setup started");
 
 	uint8_t irq = ACPI_CONTEXT->fadt->sci_interrupt;
 
@@ -154,7 +154,7 @@ int8_t acpi_setup_events() {
 	apic_ioapic_enable_irq(irq);
 
 	if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%lx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -168,13 +168,13 @@ int8_t acpi_setup_events() {
 			outw(pm1a_port, value);
 			PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1a enable 0x%04x", pm1a_port);
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1a", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1a 0x%x", ACPI_CONTEXT->fadt->pm_1a_event_block_address_64bit.address_space);
 		}
 
 	}
 
 	if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b address %i 0x%lx %i", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b address %i 0x%llx %i", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address, ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -188,13 +188,13 @@ int8_t acpi_setup_events() {
 			outw(pm1b_port, value);
 			PRINTLOG(ACPI, LOG_DEBUG, "acpi pm1b enable 0x%04x", pm1b_port);
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1b", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of pm1b 0x%x", ACPI_CONTEXT->fadt->pm_1b_event_block_address_64bit.address_space);
 		}
 
 	}
 
 	if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 address %i 0x%lx %i", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe0_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -206,12 +206,12 @@ int8_t acpi_setup_events() {
 			outb(gpe0_port, 0xFF);
 			PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe0 enable 0x%04x", gpe0_port);
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe0", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe0 0x%x", ACPI_CONTEXT->fadt->gpe0_block_address_64bit.address_space);
 		}
 	}
 
 	if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address) {
-		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 address %i 0x%lx %i", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.bit_width);
+		PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 address %i 0x%llx %i", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address, ACPI_CONTEXT->fadt->gpe1_block_address_64bit.bit_width);
 
 		if(ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space == ACPI_AML_RESOURCE_ADDRESS_SPACE_ID_MEMORY) {
 
@@ -223,7 +223,7 @@ int8_t acpi_setup_events() {
 			outb(gpe1_port, 0xFF);
 			PRINTLOG(ACPI, LOG_DEBUG, "acpi gpe1 enable 0x%04x", gpe1_port);
 		} else {
-			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe1", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space);
+			PRINTLOG(ACPI, LOG_ERROR, "unknown address type of gpe1 0x%x", ACPI_CONTEXT->fadt->gpe1_block_address_64bit.address_space);
 		}
 	}
 

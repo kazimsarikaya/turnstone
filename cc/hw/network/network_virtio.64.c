@@ -50,7 +50,7 @@ int8_t network_virtio_process_tx(){
 				network_transmit_packet_t* packet = linkedlist_queue_pop(vdev->return_queue);
 
 				if(packet) {
-					PRINTLOG(VIRTIONET, LOG_TRACE, "network packet will be sended with length 0x%lx", packet->packet_len);
+					PRINTLOG(VIRTIONET, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
 					packet_exists = 1;
 
 					uint16_t avail_tx_id = avail->index;
@@ -77,7 +77,7 @@ int8_t network_virtio_process_tx(){
 					vq_tx->nd->vqn = 1;
 				}
 
-				PRINTLOG(VIRTIONET, LOG_TRACE, "tx queue size 0x%lx", linkedlist_size(vdev->return_queue));
+				PRINTLOG(VIRTIONET, LOG_TRACE, "tx queue size 0x%llx", linkedlist_size(vdev->return_queue));
 			}
 
 		}
@@ -136,7 +136,7 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
 		avail->index++;
 		vq_rx->nd->vqn = 0;
 
-		PRINTLOG(VIRTIONET, LOG_TRACE, "packet received with length 0x%lx", packet_len);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "packet received with length 0x%llx", packet_len);
 
 		linkedlist_queue_push(network_received_packets, packet);
 
@@ -232,7 +232,7 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
 	uint64_t req_features = 0;
 
 	if(avail_features & VIRTIO_NETWORK_F_MAC) {
-		PRINTLOG(VIRTIONET, LOG_TRACE, "device has mac feature", 0);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "device has mac feature");
 		req_features |= VIRTIO_NETWORK_F_MAC;
 
 		mac_address_t* mac = memory_malloc(sizeof(mac_address_t));
@@ -267,36 +267,36 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
 	}
 
 	if(avail_features & VIRTIO_NETWORK_F_STATUS) {
-		PRINTLOG(VIRTIONET, LOG_TRACE, "device has link status feature", 0);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "device has link status feature");
 		req_features |= VIRTIO_NETWORK_F_STATUS;
 	}
 
 	if(avail_features & VIRTIO_NETWORK_F_MRG_RXBUF) {
-		PRINTLOG(VIRTIONET, LOG_TRACE, "device has merge receive buffers feature", 0);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "device has merge receive buffers feature");
 		req_features |= VIRTIO_NETWORK_F_MRG_RXBUF;
 	}
 
 	if(avail_features & VIRTIO_NETWORK_F_CTRL_VQ) {
-		PRINTLOG(VIRTIONET, LOG_TRACE, "device has control vq feature", 0);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "device has control vq feature");
 		req_features |= VIRTIO_NETWORK_F_CTRL_VQ;
 
 		if(avail_features & VIRTIO_NETWORK_F_CTRL_RX) {
-			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control rx feature", 0);
+			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control rx feature");
 			req_features |= VIRTIO_NETWORK_F_CTRL_RX;
 		}
 
 		if(avail_features & VIRTIO_NETWORK_F_CTRL_VLAN) {
-			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control vlan feature", 0);
+			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control vlan feature");
 			req_features |= VIRTIO_NETWORK_F_CTRL_VLAN;
 		}
 
 		if(avail_features & VIRTIO_NETWORK_F_GUEST_ANNOUNCE) {
-			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control announce feature", 0);
+			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control announce feature");
 			req_features |= VIRTIO_NETWORK_F_GUEST_ANNOUNCE;
 		}
 
 		if(avail_features & VIRTIO_NETWORK_F_MQ) {
-			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control max vq count feature", 0);
+			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control max vq count feature");
 			req_features |= VIRTIO_NETWORK_F_MQ;
 
 			if(vdev->is_legacy) {
@@ -310,20 +310,20 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
 		}
 
 		if(avail_features & VIRTIO_NETWORK_F_CTRL_MAC_ADDR) {
-			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control mac feature", 0);
+			PRINTLOG(VIRTIONET, LOG_TRACE, "device has control mac feature");
 			req_features |= VIRTIO_NETWORK_F_CTRL_MAC_ADDR;
 		}
 	}
 
 	if(avail_features & VIRTIO_NETWORK_F_MTU) {
-		PRINTLOG(VIRTIONET, LOG_TRACE, "device has mtu feature", 0);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "device has mtu feature");
 
 		req_features |= VIRTIO_NETWORK_F_MTU;
 
 	}
 
 	if(avail_features & VIRTIO_F_NOTIFICATION_DATA) {
-		PRINTLOG(VIRTIONET, LOG_TRACE, "device has notification data feature", 0);
+		PRINTLOG(VIRTIONET, LOG_TRACE, "device has notification data feature");
 
 		req_features |= VIRTIO_F_NOTIFICATION_DATA;
 	}
@@ -351,19 +351,19 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 	//TODO create only one rx,tx queue
 
 	if(virtio_create_queue(vdev, 0, VIRTIO_NETWORK_QUEUE_ITEM_LENGTH, 1, 0, &network_rx_tx_queue_item_builder, &network_virtio_rx_isr, &network_virtio_combined_isr) != 0) {
-		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create rx queue", 0);
+		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create rx queue");
 
 		return -1;
 	}
 
 	if(virtio_create_queue(vdev, 1, VIRTIO_NETWORK_QUEUE_ITEM_LENGTH, 0, 0, &network_rx_tx_queue_item_builder, &network_virtio_tx_isr, &network_virtio_combined_isr) != 0) {
-		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create tx queue", 0);
+		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create tx queue");
 
 		return -1;
 	}
 
 	if(((vdev->selected_features & VIRTIO_NETWORK_F_CTRL_VQ) == VIRTIO_NETWORK_F_CTRL_VQ) && virtio_create_queue(vdev, 2, VIRTIO_NETWORK_CTRL_QUEUE_ITEM_LENGTH, 0, 1, NULL, &network_virtio_ctrl_isr, &network_virtio_combined_isr) != 0) {
-		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create ctrl queue", 0);
+		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create ctrl queue");
 
 		return -1;
 	}
@@ -374,7 +374,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 			time_timer_spinsleep(1000);
 
 			while(inw(vdev->iobase + VIRTIO_IOPORT_CFG_MSIX_VECTOR) != 3) {
-				PRINTLOG(VIRTIONET, LOG_WARNING, "config msix not configured re-trying", 0);
+				PRINTLOG(VIRTIONET, LOG_WARNING, "config msix not configured re-trying");
 				outw(vdev->iobase + VIRTIO_IOPORT_CFG_MSIX_VECTOR, 3);
 				time_timer_spinsleep(1000);
 			}
@@ -386,7 +386,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 		time_timer_spinsleep(1000);
 
 		while(vdev->common_config->msix_config != 3) {
-			PRINTLOG(VIRTIONET, LOG_WARNING, "config msix not configured re-trying", 0);
+			PRINTLOG(VIRTIONET, LOG_WARNING, "config msix not configured re-trying");
 			vdev->common_config->msix_config = 3;
 			time_timer_spinsleep(1000);
 		}
@@ -394,19 +394,19 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 		pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 3, &network_virtio_config_isr);
 	}
 
-	PRINTLOG(VIRTIONET, LOG_TRACE, "queue configuration completed", 0);
+	PRINTLOG(VIRTIONET, LOG_TRACE, "queue configuration completed");
 
 	return 0;
 }
 
 
 int8_t network_virtio_init(pci_dev_t* pci_netdev){
-	PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device starting", 0);
+	PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device starting");
 
 	virtio_net_devs = linkedlist_create_list_with_heap(NULL);
 
 	if(virtio_net_devs == NULL) {
-		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create virtio network devices list", 0);
+		PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create virtio network devices list");
 
 		return -1;
 	}
@@ -422,14 +422,14 @@ int8_t network_virtio_init(pci_dev_t* pci_netdev){
 	vdev_net->queue_size = VIRTIO_QUEUE_SIZE;
 
 	if(virtio_init_dev(vdev_net, &network_virtio_select_features, &network_virtio_create_queues) != 0) {
-		PRINTLOG(VIRTIONET, LOG_ERROR, "virtnet device starting failed.", 0);
+		PRINTLOG(VIRTIONET, LOG_ERROR, "virtnet device starting failed.");
 
 		return -1;
 	}
 
 	task_create_task(NULL, 64 << 10, &network_virtio_process_tx);
 
-	PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device started", 0);
+	PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device started");
 
 	return 0;
 }

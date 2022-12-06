@@ -68,13 +68,13 @@ void video_clear_screen();
  * format will be writen at current cursor position and cursor will be updated. also
  * variable args will be converted and written with help of format
  */
-size_t video_printf(char_t* fmt, ...);
+size_t video_printf(char_t* fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 #define printf(...) video_printf(__VA_ARGS__)
 
 #define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
-		if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], __VA_ARGS__); } \
-		else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], __VA_ARGS__); } }
+		if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ##__VA_ARGS__); } \
+		else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ##__VA_ARGS__); } }
 
 
 #endif

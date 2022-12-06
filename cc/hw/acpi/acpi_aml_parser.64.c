@@ -204,7 +204,7 @@ int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t* ctx, void** data, uin
 
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
 	if(ctx->remaining == 0) { // realy we need this?
-		PRINTLOG(ACPIAML, LOG_ERROR, "premature end", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "premature end");
 		ctx->flags.fatal = 1;
 		return -1;
 	}
@@ -226,7 +226,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 	}
 
 	if(res == -1 && ctx->flags.fatal == 1) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- one_item data: 0x%02x length: %li remaining: %li", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
+		PRINTLOG(ACPIAML, LOG_ERROR, "scope: -%s- one_item data: 0x%02x length: %lli remaining: %lli", ctx->scope_prefix, *ctx->data, ctx->length, ctx->remaining);
 		return -1;
 	}
 
@@ -234,7 +234,7 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
 }
 
 int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
-	PRINTLOG(ACPIAML, LOG_TRACE, "try to parse symbol", 0);
+	PRINTLOG(ACPIAML, LOG_TRACE, "try to parse symbol");
 
 	uint64_t t_consumed = 0;
 	uint64_t r_consumed = 0;
@@ -257,7 +257,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
 	acpi_aml_object_t* tmp_obj = acpi_aml_symbol_lookup(ctx, name);
 
-	PRINTLOG(ACPIAML, LOG_TRACE, "returned symbol 0x%lp", tmp_obj);
+	PRINTLOG(ACPIAML, LOG_TRACE, "returned symbol 0x%p", tmp_obj);
 
 	if(tmp_obj == NULL) {
 		tmp_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
@@ -300,7 +300,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 		*consumed += r_consumed;
 	}
 
-	PRINTLOG(ACPIAML, LOG_TRACE, "symbol parsed", 0);
+	PRINTLOG(ACPIAML, LOG_TRACE, "symbol parsed");
 
 	return 0;
 }

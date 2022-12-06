@@ -125,7 +125,7 @@ int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev){
 
 
 int8_t dev_virtio_kbd_init() {
-	PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device starting", 0);
+	PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device starting");
 	int8_t errors = 0;
 
 	iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->other_devices);
@@ -146,7 +146,7 @@ int8_t dev_virtio_kbd_init() {
 	iter->destroy(iter);
 
 	if(pci_dev == NULL) {
-		PRINTLOG(VIRTIO, LOG_ERROR, "virtkbd device not found", 0);
+		PRINTLOG(VIRTIO, LOG_ERROR, "virtkbd device not found");
 
 		return -1;
 	}
@@ -162,7 +162,7 @@ int8_t dev_virtio_kbd_init() {
 
 	virtio_init_dev(virtio_kbd, NULL, &dev_virtio_kbd_create_queues);
 
-	PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device started", 0);
+	PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device started");
 
 	return errors;
 }

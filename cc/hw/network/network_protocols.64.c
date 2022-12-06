@@ -47,7 +47,7 @@ network_ethernet_t*  network_process_packet(network_received_packet_t* packet, u
 
 	if(network_is_mac_address_eq(recv_eth_packet->destination, packet->device_mac_address) != 0 &&
 	   network_is_mac_address_eq(recv_eth_packet->destination, BROADCAST_MAC) != 0) {
-		PRINTLOG(NETWORK, LOG_TRACE, "destination is not this machine, discarding packet", 0);
+		PRINTLOG(NETWORK, LOG_TRACE, "destination is not this machine, discarding packet");
 
 		return NULL;
 	}
@@ -56,7 +56,7 @@ network_ethernet_t*  network_process_packet(network_received_packet_t* packet, u
 	uint16_t res_packet_len = 0;
 
 	if(packet_type == NETWORK_PROTOCOL_ARP) {
-		PRINTLOG(NETWORK, LOG_TRACE, "arp packet received", 0);
+		PRINTLOG(NETWORK, LOG_TRACE, "arp packet received");
 
 		res = network_create_arp_reply_from_packet(packet);
 		res_packet_len = NETWORK_ARP_ETHERNET_PACKET_LEN;
@@ -86,14 +86,14 @@ network_ethernet_t* network_process_ipv4_packet_from_packet(network_received_pac
 	network_ipv4_header_t* ipv4_hdr = (network_ipv4_header_t*)offset;
 
 	if(network_ipv4_header_checksum_verify(ipv4_hdr) != 0) {
-		PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet checksum failed", 0);
+		PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet checksum failed");
 
 		return NULL;
 	}
 
 	if(network_is_ipv4_address_eq(NETWORK_TEST_OUR_STATIC_IP, ipv4_hdr->destination_ip) != 0 &&
 	   network_is_ipv4_address_eq(NETWORK_TEST_OUR_BROADCAST_IP, ipv4_hdr->destination_ip) != 0) {
-		PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet destination isnot us", 0);
+		PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet destination isnot us");
 		return NULL;
 	}
 

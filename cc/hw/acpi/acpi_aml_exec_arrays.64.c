@@ -129,7 +129,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 	}
 
 	if(src1->buffer.buflen == 1 || src2->buffer.buflen == 1) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch bufferlen %i %i", src1->buffer.buflen, src2->buffer.buflen);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch bufferlen %lli %lli", src1->buffer.buflen, src2->buffer.buflen);
 
 		return -1;
 	}
@@ -154,7 +154,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 	acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0);
 
 	if(res == NULL) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate result", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate result");
 
 		return -1;
 	}
@@ -165,7 +165,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 	uint8_t* new_buf = memory_malloc_ext(ctx->heap, new_buflen, 0);
 
 	if(new_buf == NULL) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate memory for buffer", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannot allocate memory for buffer");
 		memory_free_ext(ctx->heap, res);
 
 		return -1;
@@ -182,7 +182,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
 
 		if(acpi_aml_write_as_buffer(ctx, res, dst) != 0) {
-			PRINTLOG(ACPIAML, LOG_ERROR, "cannot write buffer to destination", 0);
+			PRINTLOG(ACPIAML, LOG_ERROR, "cannot write buffer to destination");
 			acpi_aml_destroy_object(ctx, res);
 
 			return -1;
@@ -203,13 +203,13 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 	idx = acpi_aml_get_if_arg_local_obj(ctx, idx, 0, 0);
 
 	if(!(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_BUFFER || src->type == ACPI_AML_OT_PACKAGE)) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type for index %i 0x%lp", src->type, src);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch src type for index %i 0x%p", src->type, src);
 
 		return -1;
 	}
 
 	if(idx->type != ACPI_AML_OT_NUMBER) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch idx type for index %i 0x%lp", idx->type, idx);
+		PRINTLOG(ACPIAML, LOG_ERROR, "mismatch idx type for index %i 0x%p", idx->type, idx);
 
 		return -1;
 	}
@@ -217,7 +217,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
 	int64_t idx_val = 0;
 	if(acpi_aml_read_as_integer(ctx, idx, &idx_val) != 0) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "cannotread idx value for index op", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "cannotread idx value for index op");
 
 		return -1;
 	}
@@ -242,7 +242,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
 	if(acpi_aml_is_null_target(dst) != 0) {
 		dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
-		PRINTLOG(ACPIAML, LOG_ERROR, "storing to dest not implemented for index op", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "storing to dest not implemented for index op");
 
 		return -1;
 	}

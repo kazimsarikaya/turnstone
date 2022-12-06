@@ -31,39 +31,39 @@ int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
 
 	switch (opcode->opcode) {
 	case ACPI_AML_LAND:
-		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li && %li", ctx->scope_prefix, op1, op2);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli && %lli", ctx->scope_prefix, op1, op2);
 		ires = op1 && op2;
 		break;
 	case ACPI_AML_LOR:
-		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li || %li", ctx->scope_prefix, op1, op2);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli || %lli", ctx->scope_prefix, op1, op2);
 		ires = op1 || op2;
 		break;
 	case ACPI_AML_LNOT:
-		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s ! %li", ctx->scope_prefix, op1);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s ! %lli", ctx->scope_prefix, op1);
 		ires = !op1;
 		break;
 	case ACPI_AML_LEQUAL << 8 | ACPI_AML_LNOT:
-		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li != %li", ctx->scope_prefix, op1, op2);
+		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli != %lli", ctx->scope_prefix, op1, op2);
 		ires = op1 != op2;
 		break;
 	case ACPI_AML_LGREATER << 8 | ACPI_AML_LNOT:
-		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li <= %li", ctx->scope_prefix, op1, op2);
+		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli <= %lli", ctx->scope_prefix, op1, op2);
 		ires = !(op1 > op2);
 		break;
 	case ACPI_AML_LLESS << 8 | ACPI_AML_LNOT:
-		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li >= %li", ctx->scope_prefix, op1, op2);
+		  PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli >= %lli", ctx->scope_prefix, op1, op2);
 		ires = !(op1 < op2);
 		break;
 	case ACPI_AML_LEQUAL:
-		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li == %li", ctx->scope_prefix, op1, op2);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli == %lli", ctx->scope_prefix, op1, op2);
 		ires = op1 == op2;
 		break;
 	case ACPI_AML_LGREATER:
-		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li > %li", ctx->scope_prefix, op1, op2);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli > %lli", ctx->scope_prefix, op1, op2);
 		ires = op1 > op2;
 		break;
 	case ACPI_AML_LLESS:
-		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %li < %li", ctx->scope_prefix, op1, op2);
+		PRINTLOG(ACPIAML, LOG_TRACE, "scope %s %lli < %lli", ctx->scope_prefix, op1, op2);
 		ires = op1 < op2;
 		break;
 	default:
@@ -175,7 +175,7 @@ int8_t acpi_aml_exec_op2_tgt1_maths(acpi_aml_parser_context_t* ctx, acpi_aml_opc
 		return -1;
 	}
 
-	PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s math op 0x%x with 0x%lx 0x%lx", ctx->scope_prefix, opcode->opcode, op1, op2);
+	PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s math op 0x%x with 0x%llx 0x%llx", ctx->scope_prefix, opcode->opcode, op1, op2);
 
 	int64_t ires = 0;
 

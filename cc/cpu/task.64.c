@@ -36,7 +36,7 @@ task_t* task_get_current_task(){
 }
 
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
-	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started", 0);
+	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started");
 
 	uint64_t rsp;
 
@@ -49,7 +49,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	size_t tmp_selector = (size_t)d_tss - (size_t)gdts;
 	uint16_t tss_selector = (uint16_t)tmp_selector;
 
-	PRINTLOG(TASKING, LOG_TRACE, "tss selector 0x%lx",  tss_selector);
+	PRINTLOG(TASKING, LOG_TRACE, "tss selector 0x%x",  tss_selector);
 
 
 
@@ -65,7 +65,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	frame_t* stack_frames = NULL;
 
 	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
-		PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%lx", frame_count);
+		PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
 		return -1;
 	}
@@ -73,14 +73,14 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 	tss_t* tss = memory_malloc_ext(heap, sizeof(tss_t), 0x1000);
 
 	if(tss == NULL) {
-		PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for tss", 0);
+		PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for tss");
 
 		return -1;
 	}
 
 	memory_paging_add_va_for_frame(stack_bottom, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
-	PRINTLOG(TASKING, LOG_TRACE, "for tasking frames 0x%lx with count 0x%lx mapped to 0x%lx",  stack_frames->frame_address, stack_frames->frame_count, stack_bottom);
+	PRINTLOG(TASKING, LOG_TRACE, "for tasking frames 0x%llx with count 0x%llx mapped to 0x%llx",  stack_frames->frame_address, stack_frames->frame_count, stack_bottom);
 
 	tss->ist7 = stack_bottom + stack_size;
 	tss->ist6 = tss->ist7  + stack_size;
@@ -120,7 +120,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 		: : "r" (tss_selector)
 		);
 
-	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%lx", current_task);
+	PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p", current_task);
 
 	return 0;
 }
@@ -265,7 +265,7 @@ task_t* task_find_next_task() {
 						}
 
 					} else {
-						PRINTLOG(TASKING, LOG_ERROR, "task 0x%li has null queue in message queues, removing task", tmp_task->task_id);
+						PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli has null queue in message queues, removing task", tmp_task->task_id);
 						linkedlist_queue_push(task_cleaner_queue, tmp_task);
 
 						continue;
@@ -274,7 +274,7 @@ task_t* task_find_next_task() {
 				}
 
 			} else {
-				PRINTLOG(TASKING, LOG_ERROR, "task 0x%li in message waiting state without message queues, removing task", tmp_task->task_id);
+				PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli in message waiting state without message queues, removing task", tmp_task->task_id);
 				linkedlist_queue_push(task_cleaner_queue, tmp_task);
 
 				continue;
@@ -333,11 +333,11 @@ __attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
 
 void task_end_task() {
 	cpu_cli();
-	PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%li", current_task->task_id);
+	PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
 	linkedlist_queue_push(task_cleaner_queue, current_task);
 
-	PRINTLOG(TASKING, LOG_TRACE, "task 0x%li added to cleaning queue", current_task->task_id);
+	PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
 
 	current_task = NULL;
 
@@ -366,7 +366,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
 	stack_size = stack_frames_cnt * FRAME_SIZE;
 
 	if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
-		PRINTLOG(TASKING, LOG_TRACE, "cannot allocate stack with frame count 0x%lx", stack_frames_cnt);
+		PRINTLOG(TASKING, LOG_TRACE, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
 
 		return -1;
 	}
@@ -398,7 +398,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
 
 	cpu_cli();
 
-	PRINTLOG(TASKING, LOG_INFO, "scheduling new task 0x%lx 0x%lp stack at 0x%lx-0x%lx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
+	PRINTLOG(TASKING, LOG_INFO, "scheduling new task 0x%llx 0x%p stack at 0x%llx-0x%llx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
 
 	linkedlist_stack_push(task_queue, new_task);
 

@@ -84,7 +84,7 @@ uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
 
 	size = ~size + 1;
 
-	PRINTLOG(PCI, LOG_TRACE, "bar %i size 0x%lx",  bar_no, size);
+	PRINTLOG(PCI, LOG_TRACE, "bar %i size 0x%llx",  bar_no, size);
 
 	return size;
 }
@@ -107,7 +107,7 @@ uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no){
 
 	}
 
-	PRINTLOG(PCI, LOG_TRACE, "bar %i address 0x%lx",  bar_no, bar_fa);
+	PRINTLOG(PCI, LOG_TRACE, "bar %i address 0x%llx",  bar_no, bar_fa);
 
 	return bar_fa;
 }
@@ -137,12 +137,12 @@ int8_t pci_setup(memory_heap_t* heap) {
 	acpi_table_mcfg_t* mcfg = ACPI_CONTEXT->mcfg;
 
 	if(mcfg == NULL) {
-		PRINTLOG(PCI, LOG_FATAL, "there is not mcfg table, pci enumeration isnot supported", 0);
+		PRINTLOG(PCI, LOG_FATAL, "there is not mcfg table, pci enumeration isnot supported");
 
 		return -1;
 	}
 
-	PRINTLOG(PCI, LOG_INFO, "pci devices enumerating", 0);
+	PRINTLOG(PCI, LOG_INFO, "pci devices enumerating");
 
 	PCI_CONTEXT = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
 	PCI_CONTEXT->storage_controllers = linkedlist_create_list_with_heap(heap);
@@ -152,7 +152,7 @@ int8_t pci_setup(memory_heap_t* heap) {
 	linkedlist_t old_mcfgs = linkedlist_create_list();
 
 	while(mcfg) {
-		PRINTLOG(PCI, LOG_TRACE, "mcfg is found at 0x%lp", mcfg);
+		PRINTLOG(PCI, LOG_TRACE, "mcfg is found at 0x%p", mcfg);
 
 
 		iterator_t* iter = pci_iterator_create_with_heap(heap, mcfg);
@@ -221,8 +221,8 @@ int8_t pci_setup(memory_heap_t* heap) {
 
 	linkedlist_destroy(old_mcfgs);
 
-	PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed", 0);
-	PRINTLOG(PCI, LOG_INFO, "total pci storage controllers %i network controllers %i other devices %i",
+	PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
+	PRINTLOG(PCI, LOG_INFO, "total pci storage controllers %lli network controllers %lli other devices %lli",
 	         linkedlist_size(PCI_CONTEXT->storage_controllers),
 	         linkedlist_size(PCI_CONTEXT->network_controllers),
 	         linkedlist_size(PCI_CONTEXT->other_devices)
@@ -302,13 +302,13 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
 					frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_fa);
 
 					if(pci_frames == NULL) {
-						PRINTLOG(PCI, LOG_ERROR, "cannot find frames of mmio 0x%016lx", pci_mmio_addr_fa);
+						PRINTLOG(PCI, LOG_ERROR, "cannot find frames of mmio 0x%016llx", pci_mmio_addr_fa);
 
 						memory_free_ext(heap, iter);
 
 						return NULL;
 					} else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-						PRINTLOG(PCI, LOG_DEBUG, "frames of mmio 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
+						PRINTLOG(PCI, LOG_DEBUG, "frames of mmio 0x%016llx is 0x%llx 0x%llx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
 						memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 						pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 					}
@@ -382,12 +382,12 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 				frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_fa);
 
 				if(pci_frames == NULL) {
-					PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016lx", pci_mmio_addr_fa);
+					PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
 					iter_metadata->end_of_iter = 0; //end iter
 
 					return iterator;
 				} else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-					PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
+					PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016llx is 0x%llx 0x%llx", pci_mmio_addr_fa, pci_frames->frame_address, pci_frames->frame_count);
 					memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 					pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 				}
@@ -412,12 +412,12 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 								frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_f_fa);
 
 								if(pci_frames == NULL) {
-									PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016lx", pci_mmio_addr_fa);
+									PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
 									iter_metadata->end_of_iter = 0; //end iter
 
 									return iterator;
 								} else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-									PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016lx is 0x%lx 0x%lx", pci_mmio_addr_f_fa, pci_frames->frame_address, pci_frames->frame_count);
+									PRINTLOG(PCI, LOG_DEBUG, "frames of pci dev 0x%016llx is 0x%llx 0x%llx", pci_mmio_addr_f_fa, pci_frames->frame_address, pci_frames->frame_count);
 									memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_frames->frame_address), pci_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 									pci_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 								}

@@ -46,7 +46,7 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
 	uint8_t* res = NULL;
 
 	if(d) {
-		PRINTLOG(ACPI, LOG_DEBUG, "device %s found for address 0x%lx", d->name, addr);
+		PRINTLOG(ACPI, LOG_DEBUG, "device %s found for address 0x%llx", d->name, addr);
 		uint64_t ic = linkedlist_size(d->interrupts);
 
 		if(ic) {
@@ -66,7 +66,7 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
 		}
 	}
 
-	PRINTLOG(ACPI, LOG_DEBUG, "device not found for address 0x%lx or doesnot contain interrupt, looking intmap", addr);
+	PRINTLOG(ACPI, LOG_DEBUG, "device not found for address 0x%llx or doesnot contain interrupt, looking intmap", addr);
 
 	res = memory_malloc_ext(ctx->heap, 4, 0);   // max 4 int
 	uint64_t ic = 0;
@@ -80,7 +80,7 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
 			break;
 		}
 
-		PRINTLOG(ACPI, LOG_TRACE, "int addr 0x%lx looking for 0x%lx", int_item->address, addr);
+		PRINTLOG(ACPI, LOG_TRACE, "int addr 0x%x looking for 0x%llx", int_item->address, addr);
 
 		if(int_item->address == (uint32_t)addr) {
 			res[ic++] = int_item->interrupt_no;
@@ -104,12 +104,12 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 	int32_t err_cnt = 0;
 	iterator_t* iter;
 
-	PRINTLOG(ACPI, LOG_DEBUG, "selecting pic mode", 0);
+	PRINTLOG(ACPI, LOG_DEBUG, "selecting pic mode");
 
 	val_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0);
 
 	if(val_obj == NULL) {
-		PRINTLOG(ACPI, LOG_FATAL, "cannot allocate param", 0);
+		PRINTLOG(ACPI, LOG_FATAL, "cannot allocate param");
 
 		return -1;
 	}
@@ -120,12 +120,12 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
 	if(acpi_aml_execute(ctx, ctx->pic, NULL, val_obj) != 0) {
 		memory_free_ext(ctx->heap, val_obj);
-		PRINTLOG(ACPI, LOG_ERROR, "cannot execute pic method", 0);
+		PRINTLOG(ACPI, LOG_ERROR, "cannot execute pic method");
 
 		return -1;
 	}
 
-	PRINTLOG(ACPI, LOG_DEBUG, "pic mode selected, pic interrupt devices will be disabled", 0);
+	PRINTLOG(ACPI, LOG_DEBUG, "pic mode selected, pic interrupt devices will be disabled");
 
 	memory_free_ext(ctx->heap, val_obj);
 
@@ -135,14 +135,14 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 		acpi_aml_device_t* d = iter->get_item(iter);
 
 		if(d->prt) {
-			PRINTLOG(ACPI, LOG_TRACE, "device has prt method executing", 0);
+			PRINTLOG(ACPI, LOG_TRACE, "device has prt method executing");
 
 			acpi_aml_object_t* prt_table = NULL;
 
 			if(acpi_aml_execute(ctx, d->prt, &prt_table) != 0) {
-				PRINTLOG(ACPI, LOG_ERROR, "cannot execute prt method", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "cannot execute prt method");
 			} else if(prt_table == NULL || prt_table->type != ACPI_AML_OT_PACKAGE) {
-				PRINTLOG(ACPI, LOG_ERROR, "prt table is null or not package", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "prt table is null or not package");
 			} else {
 				iterator_t* prt_iter = linkedlist_iterator_create(prt_table->package.elements);
 
@@ -184,12 +184,12 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 	iter->destroy(iter);
 
 
-	PRINTLOG(ACPI, LOG_DEBUG, "pic interrupt devices disabled", 0);
+	PRINTLOG(ACPI, LOG_DEBUG, "pic interrupt devices disabled");
 
 	val_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0);
 
 	if(val_obj == NULL) {
-		PRINTLOG(ACPI, LOG_FATAL, "cannot allocate param", 0);
+		PRINTLOG(ACPI, LOG_FATAL, "cannot allocate param");
 
 		return -1;
 	}
@@ -200,12 +200,12 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
 	if(acpi_aml_execute(ctx, ctx->pic, NULL, val_obj) != 0) {
 		memory_free_ext(ctx->heap, val_obj);
-		PRINTLOG(ACPI, LOG_ERROR, "cannot execute pic method", 0);
+		PRINTLOG(ACPI, LOG_ERROR, "cannot execute pic method");
 
 		return -1;
 	}
 
-	PRINTLOG(ACPI, LOG_DEBUG, "apic mode selected, map build started", 0);
+	PRINTLOG(ACPI, LOG_DEBUG, "apic mode selected, map build started");
 
 	memory_free_ext(ctx->heap, val_obj);
 
@@ -218,14 +218,14 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 		acpi_aml_device_t* d = iter->get_item(iter);
 
 		if(d->prt) {
-			PRINTLOG(ACPI, LOG_TRACE, "device has prt method executing", 0);
+			PRINTLOG(ACPI, LOG_TRACE, "device has prt method executing");
 
 			acpi_aml_object_t* prt_table = NULL;
 
 			if(acpi_aml_execute(ctx, d->prt, &prt_table) != 0) {
-				PRINTLOG(ACPI, LOG_ERROR, "cannot execute prt method", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "cannot execute prt method");
 			} else if(prt_table == NULL || prt_table->type != ACPI_AML_OT_PACKAGE) {
-				PRINTLOG(ACPI, LOG_ERROR, "prt table is null or not package", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "prt table is null or not package");
 			} else {
 
 				iterator_t* prt_iter = linkedlist_iterator_create(prt_table->package.elements);
@@ -244,12 +244,12 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 							uint32_t int_no_val = 0;
 
 							if(int_dev_ref->type == ACPI_AML_OT_NUMBER) {
-								PRINTLOG(ACPI, LOG_TRACE, "direct int no", 0);
+								PRINTLOG(ACPI, LOG_TRACE, "direct int no");
 
 								int_no_val = int_dev_ref->number.value;
 
 								if(int_no_val == 0) {
-									PRINTLOG(ACPI, LOG_TRACE, "global direct int no", 0);
+									PRINTLOG(ACPI, LOG_TRACE, "global direct int no");
 									acpi_aml_object_t* global_int_ref = linkedlist_get_data_at_position(item->package.elements, 3);
 
 									int_no_val = global_int_ref->number.value;
@@ -265,12 +265,12 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
 									int_no_val = int_obj->interrupt_no;
 								} else {
-									PRINTLOG(ACPI, LOG_ERROR, "apic int dev not found", 0);
+									PRINTLOG(ACPI, LOG_ERROR, "apic int dev not found");
 									err_cnt += -1;
 									int_no_val = 0;
 								}
 							} else {
-								PRINTLOG(ACPI, LOG_ERROR, "malformed prt package", 0);
+								PRINTLOG(ACPI, LOG_ERROR, "malformed prt package");
 								err_cnt += -1;
 								int_no_val = 0;
 							}
@@ -283,22 +283,22 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 									int_map_item->address = addr;
 									int_map_item->interrupt_no = int_no_val;
 
-									PRINTLOG(ACPI, LOG_TRACE, "apic map item addr 0x%lx intno 0x%x", addr, int_no_val);
+									PRINTLOG(ACPI, LOG_TRACE, "apic map item addr 0x%llx intno 0x%x", addr, int_no_val);
 
 									linkedlist_sortedlist_insert(ctx->interrupt_map, int_map_item);
 								} else {
-									PRINTLOG(ACPI, LOG_TRACE, "apic map item exists", 0);
+									PRINTLOG(ACPI, LOG_TRACE, "apic map item exists");
 								}
 
 							}
 
 						} else {
-							PRINTLOG(ACPI, LOG_ERROR, "address isnot integer", 0);
+							PRINTLOG(ACPI, LOG_ERROR, "address isnot integer");
 							err_cnt += -1;
 						}
 
 					} else {
-						PRINTLOG(ACPI, LOG_ERROR, "apic prt table isnot package", 0);
+						PRINTLOG(ACPI, LOG_ERROR, "apic prt table isnot package");
 						err_cnt += -1;
 					}
 
@@ -315,8 +315,8 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
 	iter->destroy(iter);
 
-	PRINTLOG(ACPI, LOG_TRACE, "interrupt map size %i error count %i", linkedlist_size(ctx->interrupt_map), err_cnt);
-	PRINTLOG(ACPI, LOG_DEBUG, "apic mode map builded", 0);
+	PRINTLOG(ACPI, LOG_TRACE, "interrupt map size %lli error count %i", linkedlist_size(ctx->interrupt_map), err_cnt);
+	PRINTLOG(ACPI, LOG_DEBUG, "apic mode map builded");
 
 	return err_cnt == 0?0:-1;
 }
@@ -334,7 +334,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 
 		if(sym == NULL && sym->name == NULL) {
 			iter->destroy(iter);
-			PRINTLOG(ACPI, LOG_FATAL, "NULL object at symbol table or no name", 0);
+			PRINTLOG(ACPI, LOG_FATAL, "NULL object at symbol table or no name");
 			return -1;
 		}
 
@@ -350,7 +350,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 
 			if(memory_paging_add_va_for_frame(fva, &f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN) != 0) {
 				iter->destroy(iter);
-				PRINTLOG(ACPI, LOG_FATAL, "cannot allocate pages for system memory opregion", 0);
+				PRINTLOG(ACPI, LOG_FATAL, "cannot allocate pages for system memory opregion");
 				return -1;
 			}
 
@@ -481,7 +481,7 @@ acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* de
 			int64_t adr;
 
 			if(acpi_aml_read_as_integer(ctx, d->adr, &adr) == 0) {
-				PRINTLOG(ACPI, LOG_TRACE, "device addr 0x%lx looking for 0x%lx", adr, address);
+				PRINTLOG(ACPI, LOG_TRACE, "device addr 0x%llx looking for 0x%llx", adr, address);
 				if((uint64_t)adr == address) {
 					res = d;
 					break;
@@ -520,7 +520,7 @@ int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
 			while(mem_iter->end_of_iterator(mem_iter) != 0) {
 				acpi_aml_device_memory_range_t* mem = mem_iter->get_item(mem_iter);
 
-				PRINTLOG(ACPI, LOG_DEBUG, "device %s memory range [0x%lx,0x%lx]", d->name, mem->min, mem->max);
+				PRINTLOG(ACPI, LOG_DEBUG, "device %s memory range [0x%llx,0x%llx]", d->name, mem->min, mem->max);
 
 				uint64_t frm_cnt = (mem->max - mem->min + 1 + FRAME_SIZE - 1) / FRAME_SIZE;
 
@@ -560,10 +560,10 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 			PRINTLOG(ACPI, LOG_TRACE, "device %s has sta method, reading...", d->name);
 
 			if(acpi_aml_read_as_integer(ctx, d->sta, &sta_value) != 0) {
-				PRINTLOG(ACPI, LOG_ERROR, "Cannot read device status", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "Cannot read device status");
 				err_cnt += -1;
 			} else {
-				PRINTLOG(ACPI, LOG_DEBUG, "Device sta method succeed. sta value: 0x%lx", sta_value);
+				PRINTLOG(ACPI, LOG_DEBUG, "Device sta method succeed. sta value: 0x%llx", sta_value);
 			}
 
 			if((sta_value & 1) != 1) {
@@ -577,7 +577,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 			int8_t res = acpi_aml_execute(ctx, d->ini, NULL);
 
 			if(res != 0) {
-				PRINTLOG(ACPI, LOG_ERROR, "Device init method failed", 0);
+				PRINTLOG(ACPI, LOG_ERROR, "Device init method failed");
 				acpi_aml_print_object(ctx, d->ini);
 				err_cnt += -1;
 			} else {
@@ -588,7 +588,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 		if(d->crs) {
 
 			if(d->crs->type == ACPI_AML_OT_BUFFER) {
-				PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with buffer len %i, enumarating...", d->name, d->crs->buffer.buflen);
+				PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with buffer len %lli, enumarating...", d->name, d->crs->buffer.buflen);
 				acpi_aml_resource_parse(ctx, d, d->crs);
 			} else if(d->crs->type == ACPI_AML_OT_METHOD) {
 				PRINTLOG(ACPI, LOG_TRACE, "device %s has crs with method, executing...", d->name);
@@ -628,7 +628,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 	if(err_cnt < 0) {
 		PRINTLOG(ACPI, LOG_ERROR, "some devices have failed resource %i", err_cnt);
 	} else if(err_cnt == 0) {
-		PRINTLOG(ACPI, LOG_DEBUG, "all devices have succeed", 0);
+		PRINTLOG(ACPI, LOG_DEBUG, "all devices have succeed");
 	} else {
 		PRINTLOG(ACPI, LOG_FATAL, "unexpected error state %i", err_cnt);
 	}
@@ -650,7 +650,7 @@ void acpi_device_print_all(acpi_aml_parser_context_t* ctx) {
 
 	iter->destroy(iter);
 
-	printf("totoal devices %i\n", item_count );
+	printf("totoal devices %lli\n", item_count );
 }
 
 void acpi_device_print(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* d) {

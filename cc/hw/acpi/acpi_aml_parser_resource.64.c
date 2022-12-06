@@ -308,17 +308,17 @@ int8_t acpi_aml_resource_parse_largeitem(acpi_aml_parser_context_t* ctx, acpi_am
 
 int32_t acpi_aml_resource_parse(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_object_t* buffer) {
 	if(ctx == NULL) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "acpi ctx is null", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "acpi ctx is null");
 		return -1;
 	}
 
 	if(buffer == NULL) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "buffer is null", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "buffer is null");
 		return -1;
 	}
 
 	if(buffer->type != ACPI_AML_OT_BUFFER) {
-		PRINTLOG(ACPIAML, LOG_ERROR, "buffer type mismatch", 0);
+		PRINTLOG(ACPIAML, LOG_ERROR, "buffer type mismatch");
 		return -1;
 	}
 
