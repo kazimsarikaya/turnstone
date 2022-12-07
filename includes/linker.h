@@ -56,7 +56,7 @@ typedef struct {
 	linker_section_locations_t section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
 }__attribute__((packed)) program_header_t;
 
-int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst_program_addr, uint64_t entry_point_addr);
+int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst_program_addr);
 
 int8_t linker_remap_kernel();
 

@@ -66,4 +66,6 @@ cpu_reg_cr0_t cpu_read_cr0();
 void cpu_write_cr0(cpu_reg_cr0_t cr0);
 void cpu_toggle_cr0_wp();
 
+void cpu_enable_sse();
+
 #endif

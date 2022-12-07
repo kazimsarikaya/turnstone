@@ -100,7 +100,7 @@ typedef struct {
 #define VIRTIO_NET_CTRL_ANNOUNCE       3
 #define VIRTIO_NET_CTRL_ANNOUNCE_ACK             0
 
-struct  {
+typedef struct  {
 	uint16_t virtqueue_pairs;
 } __attribute__((packed)) virtio_network_control_mq_t;
 

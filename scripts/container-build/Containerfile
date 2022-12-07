@@ -1,7 +1,7 @@
 # This work is licensed under TURNSTONE OS Public License.
 # Please read and understand latest version of Licence.
 
-FROM registry.fedoraproject.org/fedora-minimal@sha256:13b422a79980fc4ce26c46b0b6ad573dfaf0825a9d93dda8f6403a66d6709f47
-RUN  microdnf install --setopt=install_weak_deps=0 -y make gcc valgrind-devel valgrind-tools-devel findutils && microdnf clean all
+FROM docker.io/library/alpine:3.17
+RUN  apk add gcc valgrind-dev make findutils bash curl musl-dev && rm -fr /var/cache/apk/*
 WORKDIR /osdev
 CMD make clean gendirs qemu

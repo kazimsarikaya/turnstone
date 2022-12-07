@@ -1,6 +1,7 @@
 output/
 tmp/
 .depend*
+.mkdirsdone
 cc-gen
 includes-gen
 scripts/osx-hacks/edk2-i386-vars.fd

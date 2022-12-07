@@ -1,0 +1,72 @@
+# This work is licensed under TURNSTONE OS Public License.
+# Please read and understand latest version of Licence.
+
+HOSTOS =$(shell uname -s)
+
+MAKE = make
+
+ifeq ($(HOSTOS),Darwin)
+
+CC64 = x86_64-elf-gcc
+OBJCOPY = x86_64-elf-objcopy
+
+SEDNOBAK = sed -i ''
+
+else
+
+CC64 = gcc
+OBJCOPY = objcopy
+
+SEDNOBAK = sed -i
+
+endif
+
+DOCSGEN = doxygen
+DOCSFILES = $(shell find . -type f -name \*.md)
+DOCSCONF = docs.doxygen
+INCLUDESDIR = includes
+
+CCXXFLAGS += -std=gnu11 -O2 -nostdlib -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
+	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
+	-fno-pic
+
+CXXTESTFLAGS= -D___TESTMODE=1
+
+CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 $(CCXXFLAGS)
+CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
+
+OBJDIR = output
+ASOBJDIR = $(OBJDIR)/asm
+CCOBJDIR = $(OBJDIR)/cc
+DOCSOBJDIR = $(OBJDIR)/docs
+ASSRCDIR = asm
+CCSRCDIR = cc
+LDSRCDIR = lds
+CCGENDIR = cc-gen
+INCLUDESGENDIR = includes-gen
+CCGENSCRIPTSDIR = scripts/gen-cc
+TMPDIR = tmp
+
+CCGENSCRIPTS = $(shell find $(CCGENSCRIPTSDIR) -type f -name \*.sh)
+GENCCSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%.c,$(CCGENSCRIPTS))
+GENCC64OBJS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
+
+.NOTPARALLEL:
+
+all: $(GENCC64OBJS)
+
+clean:
+	rm -fr $(CCGENDIR)/*
+	rm -f $(GENCC64OBJS)
+
+$(CCGENDIR)/%.c: $(CCGENSCRIPTSDIR)/%.sh
+	if [[ ! -f $@ ]]; then $^ > $@; else $^ > $@.tmp; diff $@  $@.tmp  2>/dev/null && rm -f $@.tmp || mv $@.tmp $@; fi
+
+$(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
+	$(CC64) $(CC64INTFLAGS) -o $@ $<
+
+print-%: ; @echo $* = $($*)

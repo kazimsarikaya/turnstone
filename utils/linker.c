@@ -47,6 +47,8 @@ typedef struct {
 	uint64_t section_id;
 	char_t* symbol_name;
 	uint64_t value;
+	uint64_t size;
+	uint8_t required;
 } linker_symbol_t;
 
 typedef struct {
@@ -125,6 +127,7 @@ uint64_t linker_get_section_index_of_symbol(linker_context_t* ctx, uint16_t sym_
 uint8_t linker_get_type_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
 uint8_t linker_get_scope_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
 uint64_t linker_get_value_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
+uint64_t linker_get_size_of_symbol(linker_context_t* ctx, uint16_t sym_idx);
 uint64_t linker_get_relocation_symbol_index(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
 uint64_t linker_get_relocation_symbol_offset(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
 uint64_t linker_get_relocation_symbol_type(linker_context_t* ctx, uint16_t reloc_idx, uint8_t is_rela);
@@ -395,6 +398,20 @@ uint64_t linker_get_value_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
 	return 0;
 }
 
+uint64_t linker_get_size_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
+	if(ctx->objectfile_ctx.type == ELFCLASS32) {
+		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_size;
+	} else if(ctx->objectfile_ctx.type == ELFCLASS64) {
+		elf64_sym_t* symbols = (elf64_sym_t*)ctx->objectfile_ctx.symbols;
+
+		return symbols[sym_idx].st_size;
+	}
+
+	return 0;
+}
+
 uint8_t linker_get_type_of_symbol(linker_context_t* ctx, uint16_t sym_idx) {
 	if(ctx->objectfile_ctx.type == ELFCLASS32) {
 		elf32_sym_t* symbols = (elf32_sym_t*)ctx->objectfile_ctx.symbols;
@@ -628,6 +645,8 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 				}
 
 				linker_symbol_t* sym = linker_get_symbol_by_id(ctx, reloc->symbol_id);
+
+				sym->required = 1;
 
 				if(sym == NULL) {
 					printf("cannot find required symbol %li at for section %s reloc list\n", reloc->symbol_id, section->section_name);
@@ -1241,7 +1260,8 @@ int8_t linker_write_output(linker_context_t* ctx) {
 	if(ctx->class == ELFCLASS64) {
 		ctx->direct_relocations = memory_malloc_ext(ctx->heap, sizeof(linker_direct_relocation_t) * ctx->direct_relocation_count, 0x0);
 
-		if(ctx->direct_relocations == NULL) {
+		if(ctx->direct_relocations == NULL && ctx->direct_relocation_count!=0) {
+			printf("cannot malloc relocation list reloc count 0x%llx\n",ctx->direct_relocation_count);
 			return -1;
 		}
 	}
@@ -1249,6 +1269,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 	FILE* fp = fopen(ctx->output, "w" );
 
 	if(fp == NULL) {
+		printf("cannot open output file\n");
 		return -1;
 	}
 
@@ -1259,6 +1280,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		map_fp = fopen(ctx->map_file, "w" );
 
 		if(map_fp == NULL) {
+			printf("cannot open map file\n");
 			return -1;
 		}
 	}
@@ -1266,6 +1288,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 	iterator_t* iter = linkedlist_iterator_create(ctx->sections);
 
 	if(iter == NULL) {
+		printf("cannot create section iter\n");
 		return -1;
 	}
 
@@ -1282,7 +1305,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 		}
 
 		if(map_fp) {
-			fprintf(map_fp, "%016lx %s\n", ctx->start + sec->offset, sec->section_name);
+			fprintf(map_fp, "%016lx %s secid %llx\n", ctx->start + sec->offset, sec->section_name,sec->id);
 			fflush(map_fp);
 		}
 
@@ -1323,7 +1346,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 					}
 
 					if(map_fp) {
-						fprintf(map_fp, "%016lx     reference symbol %s@%s at ", ctx->start + reloc->offset, target_sym->symbol_name, target_sec->section_name);
+						fprintf(map_fp, "%016lx     reference symbol %s@%s ( symid %llx ) at ", ctx->start + reloc->offset, target_sym->symbol_name, target_sec->section_name,reloc->symbol_id);
 					}
 
 					if(reloc->type == LINKER_RELOCATION_TYPE_64_32) {
@@ -1469,7 +1492,9 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
 		uint32_t addr = (uint32_t)ep_sym->value + (uint32_t)ep_sec->offset - (uint32_t)(1 + 4);
 
-		fwrite(&addr, 1, 4, fp);
+		printf("entry point address 0x%x\n",addr);
+
+		fwrite(&addr, 4, 1, fp);
 
 		file_size = ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
 
@@ -1713,7 +1738,13 @@ void linker_print_symbols(linker_context_t* ctx) {
 	while(iter->end_of_iterator(iter) != 0) {
 		linker_symbol_t* sym = iter->get_item(iter);
 
-		printf("symbol id: %08x type: %i scope %i sectionid: %016lx value: %016lx name: %s\n", sym->id, sym->type, sym->scope, sym->section_id, sym->value, sym->symbol_name);
+
+		if(sym->required == 0 && ctx->enable_removing_disabled_sections != 0) {
+			iter = iter->next(iter);
+			continue;
+		}
+
+		printf("symbol id: %08x type: %i scope %i sectionid: %016llx value: %016llx size: %016llx name: %s\n", sym->id, sym->type, sym->scope, sym->section_id, sym->value, sym->size, sym->symbol_name);
 
 		iter = iter->next(iter);
 	}
@@ -1734,6 +1765,12 @@ void linker_print_sections(linker_context_t* ctx) {
 
 	while(iter->end_of_iterator(iter) != 0) {
 		linker_section_t* sec = iter->get_item(iter);
+
+
+		if(sec->required == 0 && ctx->enable_removing_disabled_sections != 0) {
+			iter = iter->next(iter);
+			continue;
+		}
 
 		printf("section id: %016x type: %i offset: %016lx size: %016lx align: %02x name: %s\n", sec->id, sec->type, sec->offset, sec->size, sec->align, sec->section_name);
 
@@ -2169,6 +2206,7 @@ int32_t main(int32_t argc, char** argv) {
 				sym->type = sym_type;
 				sym->value = linker_get_value_of_symbol(ctx, sym_idx);
 				sym->section_id = tmp_section_id;
+				sym->size = linker_get_size_of_symbol(ctx, sym_idx);
 
 				if(strstarts(tmp_section_name, ".text.__test_") == 0 && sym->type == LINKER_SYMBOL_TYPE_FUNCTION) {
 					linkedlist_sortedlist_insert(ctx->test_function_names, sym->symbol_name);

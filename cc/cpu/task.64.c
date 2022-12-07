@@ -153,7 +153,7 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task
 		"popfq\n"
 		"pop %%rax\n"
 		"mov %%rsp, %17\n"
-		"mov %19, %18\n"
+		"movq %19, %18\n"
 		"retq\n"
 		: :
 		"m" (task->rax),
@@ -209,7 +209,7 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
 		"mov %18, %%ax\n"
 		"cmp %19, %%ax\n"
 		"pop %%rax\n"
-		"mov %20, %18\n"
+		"movq %20, %18\n"
 		"mov %12, %%rdi\n"
 		"retq\n"
 		: :

@@ -94,7 +94,7 @@ size_t video_printf(char_t* fmt, ...) {
 				case 'd':
 #if ___BITS == 64
 					if(l_flag == 2) {
-						ival = va_arg(args, int128_t);
+						ival = va_arg(args, uint64_t);
 					} else if(l_flag == 1) {
 						ival = va_arg(args, int64_t);
 					}
@@ -132,7 +132,7 @@ size_t video_printf(char_t* fmt, ...) {
 				case 'u':
 #if ___BITS == 64
 					if(l_flag == 2) {
-						uval = va_arg(args, uint128_t);
+						uval = va_arg(args, uint64_t);
 					} else if(l_flag == 1) {
 						uval = va_arg(args, uint64_t);
 					}
@@ -167,7 +167,7 @@ size_t video_printf(char_t* fmt, ...) {
 				case 'h':
 #if ___BITS == 64
 					if(l_flag == 2) {
-						uval = va_arg(args, uint128_t);
+						uval = va_arg(args, uint64_t);
 					} else if(l_flag == 1) {
 						uval = va_arg(args, uint64_t);
 					}

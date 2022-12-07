@@ -9,15 +9,19 @@ OUTPUTDIR="${BASEDIR}/output"
 
 UEFIBIOSCODE=""
 UEFIBIOSVARS=""
+ACCEL="$([[ -c /dev/kvm ]] && echo kvm || echo tcg)"
+NETDEV=""
 
 if [ `uname -s` == "Linux" ]; then
-  UEFIBIOSCODE="/usr/share/edk2/ovmf/OVMF_CODE.fd"
-  UEFIBIOSVARS="/usr/share/edk2/ovmf/OVMF_VARS.fd"
+  UEFIBIOSCODE="/usr/share/OVMF/OVMF_CODE.fd"  
+  UEFIBIOSVARS="/usr/share/OVMF/OVMF_VARS.fd"
+  NETDEV="bridge,id=t0"
 fi
 
 if [ `uname -s` == "Darwin" ]; then
   UEFIBIOSCODE="/opt/local/share/qemu/edk2-x86_64-code.fd"
   UEFIBIOSVARS="/opt/local/share/qemu/edk2-i386-vars.fd"
+  NETDEV="socket,id=t0,udp=127.0.0.1:16384,localaddr=127.0.0.1:16385"
 fi
 
 if [ ! -f $CURRENTDIR/edk2-x86_64-code.fd ]; then
@@ -33,8 +37,10 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 qemu-system-x86_64 \
+  -nodefaults \
   -M q35 -m 1g -smp cpus=2 -name osdev-hda-boot \
   -cpu max \
+  -accel $ACCEL \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive index=0,media=disk,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
@@ -43,7 +49,8 @@ qemu-system-x86_64 \
   -monitor stdio \
   -device vmware-svga,id=gpu0 \
   -device virtio-net,netdev=t0,id=nic0 \
-  -netdev socket,id=t0,udp=127.0.0.1:16384,localaddr=127.0.0.1:16385  \
+  -netdev $NETDEV  \
   -device virtio-keyboard,id=kbd \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
-  -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402
+  -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
+  -display gtk 

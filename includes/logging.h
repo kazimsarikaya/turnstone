@@ -83,7 +83,7 @@ extern uint8_t logging_module_levels[];
 #endif
 
 #ifndef LOG_LEVEL_LINKER
-#define LOG_LEVEL_LINKER LOG_INFO
+#define LOG_LEVEL_LINKER LOG_DEBUG
 #endif
 
 #ifndef LOG_LEVEL_TASKING

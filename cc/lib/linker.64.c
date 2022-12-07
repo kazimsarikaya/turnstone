@@ -11,7 +11,7 @@
 #include <systeminfo.h>
 #include <video.h>
 
-int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst_program_addr, uint64_t entry_point_addr) {
+int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst_program_addr) {
 	program_header_t* src_program = (program_header_t*)src_program_addr;
 	program_header_t* dst_program = (program_header_t*)dst_program_addr;
 
@@ -51,14 +51,12 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
 
 	memory_memclean(dst_bss, bss_sl.section_size);
 
-	uint64_t ep = (uint64_t)entry_point_addr;
-	dst_program->entry_point_address_pc_relative = ep - src_program_addr - 4;
-
 	return 0;
 }
 
 #if ___TESTMODE != 1
 #if ___EFIBUILD != 1
+int8_t liner_remap_relink_kernel();
 
 int8_t linker_remap_kernel() {
 	program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
@@ -96,7 +94,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start = 2 << 20;
 	kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "text sec 0x%08x  0x%08x", 2 << 20, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "text sec 0x%llx  0x%llx", 2ULL << 20, sec_size);
 
 	sec = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE];
 	sec_start = sec.section_start;
@@ -105,7 +103,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_size = sec_size;
 
 
-	PRINTLOG(LINKER, LOG_TRACE, "reloc sec 0x%08x  0x%08x", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "reloc sec 0x%llx  0x%llx", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -127,7 +125,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "rodata sec 0x%08x  0x%08x", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "rodata sec 0x%llx  0x%llx", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -152,7 +150,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "bss sec 0x%08x  0x%08x", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "bss sec 0x%llx  0x%llx", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -174,7 +172,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "data sec 0x%08x  0x%08x", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "data sec 0x%llx  0x%llx", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -197,7 +195,7 @@ int8_t linker_remap_kernel() {
 	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = data_start;
 	kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "heap sec 0x%016lx  0x%08x", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "heap sec 0x%llx  0x%llx", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -223,7 +221,7 @@ int8_t linker_remap_kernel() {
 
 	data_start = stack_top - sec_size;
 
-	PRINTLOG(LINKER, LOG_TRACE, "stack sec 0x%08x  0x%08x", data_start, sec_size);
+	PRINTLOG(LINKER, LOG_TRACE, "stack sec 0x%llx  0x%llx", data_start, sec_size);
 
 	f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
 	f.frame_count = sec_size / FRAME_SIZE;
@@ -234,7 +232,7 @@ int8_t linker_remap_kernel() {
 
 	data_start += sec_size;
 
-	PRINTLOG(LINKER, LOG_DEBUG, "new sections locations are created on page table", 0);
+	PRINTLOG(LINKER, LOG_DEBUG, "new sections locations are created on page table");
 
 
 	SYSTEM_INFO->remapped = 1;
@@ -273,7 +271,7 @@ int8_t linker_remap_kernel() {
 		}
 	}
 
-	PRINTLOG(LINKER, LOG_DEBUG, "stored system info frame address 0x%016lx", sysinfo_frms->frame_address);
+	PRINTLOG(LINKER, LOG_DEBUG, "stored system info frame address 0x%llx", sysinfo_frms->frame_address);
 
 	uint8_t* mmap_data = (uint8_t*)sysinfo_frms->frame_address;
 	uint8_t* reserved_mmap_data = (uint8_t*)(sysinfo_frms->frame_address + SYSTEM_INFO->mmap_size);
@@ -289,9 +287,8 @@ int8_t linker_remap_kernel() {
 	new_sysinfo->frame_buffer = vfb;
 
 
-	PRINTLOG(LINKER, LOG_DEBUG, "new system info copy created at 0x%08x", new_sysinfo);
+	PRINTLOG(LINKER, LOG_DEBUG, "new system info copy created at 0x%p", new_sysinfo);
 
-	uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
 	linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)(SYSTEM_INFO->kernel_start + kernel->reloc_start);
 	kernel->reloc_start = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
 	uint64_t kernel_start = SYSTEM_INFO->kernel_start;
@@ -321,9 +318,36 @@ int8_t linker_remap_kernel() {
 		}
 	}
 
-	PRINTLOG(LINKER, LOG_DEBUG, "relocs are computed. linking started", 0);
+	PRINTLOG(LINKER, LOG_DEBUG, "relocs are computed. linking started");
 
+	liner_remap_relink_kernel();
+
+	PRINTLOG(LINKER, LOG_DEBUG, "relocs are finished.");
+
+	sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
+	sec_start = sec.section_start;
+	sec_size = sec.section_size;
+
+	PRINTLOG(LINKER, LOG_DEBUG, "reloc completed\nnew sysinfo at 0x%p.\ncleaning bss and try to re-jump kernel at 0x%llx\n", new_sysinfo, kernel_start);
+
+	memory_memclean((uint8_t*)sec_start, sec_size);
+
+	asm volatile (
+		"jmp *%%rax\n"
+		: : "D" (new_sysinfo), "a" (kernel_start)
+		);
+
+	return 0;
+}
+
+
+int8_t liner_remap_relink_kernel() {
+	program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
+	uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
+	linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)kernel->reloc_start;
+	
 	for(uint64_t i = 0; i < kernel->reloc_count; i++) {
+		//PRINTLOG(LINKER, LOG_DEBUG, "reloac %i type %i offset 0x%llx 0x%llx 0x%llx\n", i,relocs[i].relocation_type,relocs[i].offset,relocs[i].addend,dst_bytes);
 		if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_32) {
 			uint32_t* target = (uint32_t*)&dst_bytes[relocs[i].offset];
 			uint32_t target_value = (uint32_t)relocs[i].addend;
@@ -337,25 +361,10 @@ int8_t linker_remap_kernel() {
 			uint64_t target_value = relocs[i].addend;
 			*target = target_value;
 		} else {
-			PRINTLOG(LINKER, LOG_FATAL, "unknown relocation type %i\n", relocs[i].relocation_type);
-			cpu_hlt();
+		//	PRINTLOG(LINKER, LOG_FATAL, "unknown relocation type %i\n", relocs[i].relocation_type);
+			while(1);
 		}
 	}
-
-	PRINTLOG(LINKER, LOG_DEBUG, "relocs are finished.", 0);
-
-	sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
-	sec_start = sec.section_start;
-	sec_size = sec.section_size;
-
-	PRINTLOG(LINKER, LOG_DEBUG, "reloc completed\nnew sysinfo at 0x%p.\ncleaning bss and try to re-jump kernel\n", new_sysinfo);
-
-	memory_memclean((uint8_t*)sec_start, sec_size);
-
-	asm volatile (
-		"jmp *%%rax\n"
-		: : "c" (new_sysinfo), "a" (kernel_start)
-		);
 
 	return 0;
 }

@@ -61,3 +61,27 @@ void cpu_toggle_cr0_wp() {
 
 	cpu_write_cr0(cr0);
 }
+
+void cpu_enable_sse() {
+	cpu_reg_cr0_t cr0 = cpu_read_cr0();
+	cr0.monitor_coprocessor = 1;
+	cr0.emulation = 0;
+	cr0.write_protect = 1;
+	cpu_write_cr0(cr0);
+
+	cpu_reg_cr4_t cr4 = cpu_read_cr4();
+	cr4.fields.os_fx_support = 1;
+	cr4.fields.os_unmasked_exception_support = 1;
+	cpu_write_cr4(cr4);
+}
+
+void cpu_clear_segments() {
+	__asm__ __volatile__(
+		"mov $0x0, %ax\n"
+  		"mov %ax, %ds\n"
+  		"mov %ax, %es\n"
+  		"mov %ax, %ss\n"
+  		"mov %ax, %fs\n"
+  		"mov %ax, %gs\n"
+	);
+}

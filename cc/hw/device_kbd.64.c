@@ -168,15 +168,16 @@ int8_t dev_virtio_kbd_init() {
 }
 
 int8_t kbd_init(){
+	if(dev_virtio_kbd_init()==0) {
+		return 0;
+	}
+
 	if(ACPI_CONTEXT->fadt->boot_architecture_flags & 2) {
 		printf("ps2 exists\n");
 		interrupt_irq_set_handler(0x1, &dev_kbd_isr);
 		apic_ioapic_enable_irq(0x1);
 
 		return 0;
-	} else {
-		printf("no ps2\n");
-		return dev_virtio_kbd_init();
 	}
 
 	return -1;

@@ -327,7 +327,7 @@ size_t video_printf(char_t* fmt, ...){
 			char_t buf[257];
 			char_t ito_buf[64];
 			int32_t val = 0;
-			char_t* str;
+			char_t* str=NULL;
 			int32_t slen = 0;
 			number_t ival = 0;
 			unumber_t uval = 0;

@@ -26,14 +26,36 @@ void cpu_idle();
  *
  * This command disables interrupts with cli assembly command.
  */
-void cpu_cli();
+static inline void cpu_cli() {
+	__asm__ __volatile__ ("cli");
+}
 
 /**
  * @brief enables interrupts
  *
  * This command enables interrupts with sti assembly command.
  */
-void cpu_sti();
+static inline void cpu_sti() {
+	__asm__ __volatile__ ("sti");
+}
+
+/**
+ * @brief nop instruction
+ *
+ * This command nops.
+ */
+static inline void cpu_nop() {
+	__asm__ __volatile__ ("nop");
+}
+
+/**
+ * @brief cld instruction
+ *
+ * This command clears direction flag.
+ */
+static inline void cpu_cld() {
+	__asm__ __volatile__ ("cld");
+}
 
 /**
  * @brief reads data segment (ds) value from cpu.
@@ -79,7 +101,6 @@ uint64_t cpu_read_cr2();
 
 /**
  * @struct cpu_cpuid_regs
- * @brief  registers
  * @brief cpuid command set/get registers.
  *
  * cpuid command needs setting eax and results are returned for registers.
@@ -92,5 +113,26 @@ typedef struct cpu_cpuid_regs {
 } cpu_cpuid_regs_t; ///< struct short hand
 
 uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer);
+
+/**
+ * @brief clears segments
+ *
+ * sets segment registers to zero
+ */
+void cpu_clear_segments();
+
+/**
+ * @brief prepares stack
+ * @param[in] stack_address stack top value
+ *
+ * sets esp and clears ebp
+ */
+static inline void cpu_set_and_clear_stack(uint64_t stack_address) {
+	__asm__ __volatile__(
+		"mov %%rax, %%rsp\n"
+  		"xor %%rbp, %%rbp\n"
+		: : "a" (stack_address)
+	);	
+}
 
 #endif

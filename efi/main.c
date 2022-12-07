@@ -16,7 +16,8 @@ efi_system_table_t* ST;
 efi_boot_services_t* BS;
 efi_runtime_services_t* RS;
 
-typedef int8_t (* kernel_start_t)(system_info_t* sysinfo);
+typedef int8_t (* kernel_start_t)(system_info_t* sysinfo) __attribute__((sysv_abi));
+
 
 typedef struct {
 	uint8_t* data;
@@ -145,7 +146,7 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 
 	while(iter->end_of_iterator(iter) != 0) {
 		disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
-
+		
 		if(tmp_part_ctx == NULL) {
 			res = EFI_OUT_OF_RESOURCES;
 
@@ -223,47 +224,52 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 
 	PRINTLOG(EFI, LOG_DEBUG, "block devs retrived. count %lli", handle_size);
 
-	block_file_t* blk_devs = (block_file_t*)memory_malloc(handle_size * sizeof(block_file_t));
-
-	if(blk_devs == NULL) {
-		PRINTLOG(EFI, LOG_ERROR, "cannot alloc block dev array");
-
-		goto catch_efi_error;
-	}
-
-	int64_t blk_dev_cnt = 0;
+	
 
 	for(uint64_t i = 0; i < handle_size; i++) {
 		res = EFI_NOT_FOUND;
 
-		if(handles[i] && !EFI_ERROR(BS->handle_protocol(handles[i], &bio_guid, (void**) &blk_devs[blk_dev_cnt].bio)) &&
-		   blk_devs[blk_dev_cnt].bio && blk_devs[blk_dev_cnt].bio->media && blk_devs[blk_dev_cnt].bio->media->block_size > 0) {
+		block_file_t* blk_dev = memory_malloc(sizeof(block_file_t));
+
+		if(blk_dev == NULL) {
+			PRINTLOG(EFI, LOG_ERROR, "cannot alloc block dev array");
+
+			goto catch_efi_error;
+		}
+
+		if(handles[i] && !EFI_ERROR(BS->handle_protocol(handles[i], &bio_guid, (void**)&blk_dev->bio)) &&
+		   blk_dev->bio && blk_dev->bio->media && blk_dev->bio->media->block_size > 0) {
 
 			PRINTLOG(EFI, LOG_DEBUG, "disk %lli mid %i block size: %i removable %i present %i readonly %i size %lli",
-			         blk_dev_cnt, blk_devs[blk_dev_cnt].bio->media->media_id, blk_devs[blk_dev_cnt].bio->media->block_size,
-			         blk_devs[blk_dev_cnt].bio->media->removable_media,
-			         blk_devs[blk_dev_cnt].bio->media->media_present, blk_devs[blk_dev_cnt].bio->media->readonly,
-			         blk_devs[blk_dev_cnt].bio->media->last_block);
+			         i, 
+					 blk_dev->bio->media->media_id, 
+					 blk_dev->bio->media->block_size,
+			         blk_dev->bio->media->removable_media,
+			         blk_dev->bio->media->media_present, 
+					 blk_dev->bio->media->readonly,
+			         blk_dev->bio->media->last_block);
 
-			if(blk_devs[blk_dev_cnt].bio->media->media_present != 1) {
+			if(blk_dev->bio->media->media_present != 1 || blk_dev->bio->media->last_block == 0) {
+				memory_free(blk_dev);
+
 				continue;
 			}
 
-			if(blk_devs[blk_dev_cnt].bio->media->block_size == 512) {
+			if(blk_dev->bio->media->block_size == 512) {
 				uint8_t* buffer = memory_malloc(512);
 
-				res = blk_devs[blk_dev_cnt].bio->read(blk_devs[blk_dev_cnt].bio, blk_devs[blk_dev_cnt].bio->media->media_id, 0, 512, buffer);
+				res = blk_dev->bio->read(blk_dev->bio, blk_dev->bio->media->media_id, 0, 512, buffer);
 
 				if(res == EFI_SUCCESS) {
 					efi_pmbr_partition_t* pmbr = (efi_pmbr_partition_t*)&buffer[0x1be];
 
 					if(pmbr->part_type == EFI_PMBR_PART_TYPE) {
-						PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %lli", blk_dev_cnt);
+						PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %lli", i);
 						memory_free(buffer);
 
-						PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", blk_dev_cnt);
+						PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", i);
 
-						res = efi_lookup_kernel_partition(blk_devs[blk_dev_cnt].bio, kernel_data);
+						res = efi_lookup_kernel_partition(blk_dev->bio, kernel_data);
 
 						if(res == EFI_SUCCESS) {
 							break;
@@ -276,10 +282,10 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 
 			}
 
-			blk_dev_cnt++;
-
 
 		}       // end of checking disk existence
+
+		memory_free(blk_dev);
 
 	}       // end of iter over all disks
 
@@ -647,7 +653,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 
 	memory_memclean((void*)new_kernel_address, kernel_page_count * 4096);
 
-	if(linker_memcopy_program_and_relink((size_t)kernel_data->data, new_kernel_address, ((size_t)kernel_data->data) + 0x100 - 1) != 0) {
+	if(linker_memcopy_program_and_relink((size_t)kernel_data->data, new_kernel_address)) {
 		PRINTLOG(EFI, LOG_ERROR, "cannot move and relink kernel");
 
 		goto catch_efi_error;
@@ -703,7 +709,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
 	sysinfo->kernel_4k_frame_count = kernel_page_count;
 	sysinfo->efi_system_table = system_table;
 
-	PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", new_kernel_address, sysinfo);
+	PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p %li", new_kernel_address, sysinfo,sizeof(system_info_t));
 
 	BS->exit_boot_services(image, map_key);
 

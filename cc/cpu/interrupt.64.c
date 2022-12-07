@@ -309,7 +309,6 @@ void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(in
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-	while(1);
 	printf("\nKERN: INFO page fault occured with code 0x%016llx at 0x%016llx task 0x%llx\n", errcode, frame->return_rip, task_get_id());
 	printf("KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p\n", frame->return_ss, frame->return_rsp, frame);
 
