@@ -13,7 +13,7 @@ void crc32_init_table() {
     do{
         crc32_table[index] = index;
         for(z = 8; z; z--) {
-            crc32_table[index] = (crc32_table[index] & 1)?(crc32_table[index] >> 1) ^ 0xEDB88320:crc32_table[index] >> 1;
+            crc32_table[index] = (crc32_table[index] & 1)?((crc32_table[index] >> 1) ^ 0xEDB88320):(crc32_table[index] >> 1);
         }
     }while(++index);
 }
