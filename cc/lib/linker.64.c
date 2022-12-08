@@ -234,6 +234,7 @@ int8_t linker_remap_kernel() {
 
     PRINTLOG(LINKER, LOG_DEBUG, "new sections locations are created on page table");
 
+    cpu_tlb_flush();
 
     SYSTEM_INFO->remapped = 1;
 
@@ -347,7 +348,7 @@ int8_t liner_remap_relink_kernel() {
     linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)kernel->reloc_start;
 
     for(uint64_t i = 0; i < kernel->reloc_count; i++) {
-        //PRINTLOG(LINKER, LOG_DEBUG, "reloac %i type %i offset 0x%llx 0x%llx 0x%llx\n", i,relocs[i].relocation_type,relocs[i].offset,relocs[i].addend,dst_bytes);
+        //PRINTLOG(LINKER, LOG_INFO, "reloac %lli type %i offset 0x%llx addend 0x%llx\n", i,relocs[i].relocation_type,relocs[i].offset,relocs[i].addend);
         if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_32) {
             uint32_t* target = (uint32_t*)&dst_bytes[relocs[i].offset];
             uint32_t target_value = (uint32_t)relocs[i].addend;

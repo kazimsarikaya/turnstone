@@ -135,4 +135,20 @@ static inline void cpu_set_and_clear_stack(uint64_t stack_address) {
         );
 }
 
+/**
+ * @brief invalidates tlb for address
+ * @param[in] address adddress to invalidate
+ *
+ * calls invlpg instruction
+ */
+static inline void cpu_tlb_invalidate(void * address) {
+    __asm__ __volatile__ ("invlpg (%%rax)" : : "a" (address));
+}
+
+static inline void cpu_tlb_flush() {
+    __asm__ __volatile__ ("mov %%cr3, %%rax\n"
+                          "mov %%rax, %%cr3"
+                          ::: "rax");
+}
+
 #endif

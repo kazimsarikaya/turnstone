@@ -589,6 +589,8 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
                 t_p3->pages[p3_idx].user_accessible = ~t_p3->pages[p3_idx].user_accessible;
             }
 
+            cpu_tlb_invalidate(t_p3);
+
         } else {
             t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
             t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
@@ -617,6 +619,9 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
                     t_p2->pages[p2_idx].user_accessible = ~t_p2->pages[p2_idx].user_accessible;
                 }
 
+                cpu_tlb_invalidate(t_p2);
+
+
             } else {
                 t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
                 t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
@@ -642,6 +647,9 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
                 if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
                     t_p1->pages[p1_idx].user_accessible = ~t_p1->pages[p1_idx].user_accessible;
                 }
+
+                cpu_tlb_invalidate(t_p1);
+
 
             }
         }
