@@ -22,12 +22,12 @@ typedef uint64_t time_t;
 extern uint64_t TIME_EPOCH;
 
 typedef struct {
-	uint16_t year;
-	uint8_t month;
-	uint8_t day;
-	uint8_t hours;
-	uint8_t minutes;
-	uint8_t seconds;
+    uint16_t year;
+    uint8_t  month;
+    uint8_t  day;
+    uint8_t  hours;
+    uint8_t  minutes;
+    uint8_t  seconds;
 } timeparsed_t;
 
 time_t time(time_t* t);

@@ -22,31 +22,31 @@
  * each entry is 64bit long
  */
 typedef struct {
-	uint8_t present : 1; ///< bit 0 page present?
-	uint8_t writable : 1; ///< bit 1 page can be writen?
-	uint8_t user_accessible : 1; ///< bit 2 page can be accessable by user space
-	uint8_t write_through_caching : 1; ///< bit 3 how cache will be writen
-	uint8_t disable_cache : 1; ///< bit 4 for disable caching of page when 1
-	uint8_t accessed : 1; ///< bit 5 page is accessed by cpu, cpu sets this bit
-	uint8_t dirty : 1; ///< bit 6 page is writen, cpu sets this bits
-	uint8_t hugepage : 1; ///< bit 7 hugepage flag for p3 (1g) and p2 (2m)
-	uint8_t global : 1; ///< bit 8 page is global? for caching while page switches
-	uint8_t os_avail01 : 1; ///< bit 9 is available for os
-	uint8_t os_avail02 : 1; ///< bit 10 is available for os
-	uint8_t os_avail03 : 1; ///< bit 11 is available for os
-	uint64_t physical_address : 40; ///< bits 12-51 physical address 40 bits, shifted by 12 (long mode)
-	uint8_t os_avail04 : 1; ///< bit 52 is available for os
-	uint8_t os_avail05 : 1; ///< bit 53 is available for os
-	uint8_t os_avail06 : 1; ///< bit 54 is available for os
-	uint8_t os_avail07 : 1; ///< bit 55 is available for os
-	uint8_t os_avail08 : 1; ///< bit 56 is available for os
-	uint8_t os_avail09 : 1; ///< bit 57 is available for os
-	uint8_t os_avail10 : 1; ///< bit 58 is available for os
-	uint8_t os_avail11 : 1; ///< bit 59 is available for os
-	uint8_t os_avail12 : 1; ///< bit 60 is available for os
-	uint8_t os_avail13 : 1; ///< bit 61 is available for os
-	uint8_t os_avail14 : 1; ///< bit 62 is available for os
-	uint8_t no_execute : 1; ///< bit 63 prevents execution of page by kernel programs
+    uint8_t  present               : 1; ///< bit 0 page present?
+    uint8_t  writable              : 1; ///< bit 1 page can be writen?
+    uint8_t  user_accessible       : 1; ///< bit 2 page can be accessable by user space
+    uint8_t  write_through_caching : 1; ///< bit 3 how cache will be writen
+    uint8_t  disable_cache         : 1; ///< bit 4 for disable caching of page when 1
+    uint8_t  accessed              : 1; ///< bit 5 page is accessed by cpu, cpu sets this bit
+    uint8_t  dirty                 : 1; ///< bit 6 page is writen, cpu sets this bits
+    uint8_t  hugepage              : 1; ///< bit 7 hugepage flag for p3 (1g) and p2 (2m)
+    uint8_t  global                : 1; ///< bit 8 page is global? for caching while page switches
+    uint8_t  os_avail01            : 1; ///< bit 9 is available for os
+    uint8_t  os_avail02            : 1; ///< bit 10 is available for os
+    uint8_t  os_avail03            : 1; ///< bit 11 is available for os
+    uint64_t physical_address      : 40; ///< bits 12-51 physical address 40 bits, shifted by 12 (long mode)
+    uint8_t  os_avail04            : 1; ///< bit 52 is available for os
+    uint8_t  os_avail05            : 1; ///< bit 53 is available for os
+    uint8_t  os_avail06            : 1; ///< bit 54 is available for os
+    uint8_t  os_avail07            : 1; ///< bit 55 is available for os
+    uint8_t  os_avail08            : 1; ///< bit 56 is available for os
+    uint8_t  os_avail09            : 1; ///< bit 57 is available for os
+    uint8_t  os_avail10            : 1; ///< bit 58 is available for os
+    uint8_t  os_avail11            : 1; ///< bit 59 is available for os
+    uint8_t  os_avail12            : 1; ///< bit 60 is available for os
+    uint8_t  os_avail13            : 1; ///< bit 61 is available for os
+    uint8_t  os_avail14            : 1; ///< bit 62 is available for os
+    uint8_t  no_execute            : 1; ///< bit 63 prevents execution of page by kernel programs
 } __attribute__((packed)) memory_page_entry_t;
 
 /**
@@ -57,7 +57,7 @@ typedef struct {
  * a page table is 4K page aligned.
  */
 typedef struct {
-	memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
+    memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
 } __attribute__((packed)) memory_page_table_t; ///< short hand for struct
 
 /**
@@ -65,15 +65,15 @@ typedef struct {
  * @brief page type enum.
  */
 typedef enum {
-	MEMORY_PAGING_PAGE_TYPE_UNKNOWN= 0, ///< 4k page
-	MEMORY_PAGING_PAGE_TYPE_4K = 1 << 0, ///< 4k page
-	MEMORY_PAGING_PAGE_TYPE_2M = 1 << 1, ///< 2m page aka hugepage
-	MEMORY_PAGING_PAGE_TYPE_1G = 1 << 2, ///< 1g page aka big hugepage
-	MEMORY_PAGING_PAGE_TYPE_READONLY = 1 << 4, ///< read only
-	MEMORY_PAGING_PAGE_TYPE_NOEXEC = 1 << 5, ///< no executable
-	MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE = 1 << 6, ///< no executable
-	MEMORY_PAGING_PAGE_TYPE_INTERNAL = 1 << 15, ///< no executable
-	MEMORY_PAGING_PAGE_TYPE_WILL_DELETED = 1 << 16, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_UNKNOWN= 0, ///< 4k page
+    MEMORY_PAGING_PAGE_TYPE_4K = 1 << 0, ///< 4k page
+    MEMORY_PAGING_PAGE_TYPE_2M = 1 << 1, ///< 2m page aka hugepage
+    MEMORY_PAGING_PAGE_TYPE_1G = 1 << 2, ///< 1g page aka big hugepage
+    MEMORY_PAGING_PAGE_TYPE_READONLY = 1 << 4, ///< read only
+    MEMORY_PAGING_PAGE_TYPE_NOEXEC = 1 << 5, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE = 1 << 6, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_INTERNAL = 1 << 15, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_WILL_DELETED = 1 << 16, ///< no executable
 } memory_paging_page_type_t; ///< short hand for enum
 
 #define MEMORY_PAGING_PAGE_ALIGN MEMORY_PAGING_PAGE_SIZE

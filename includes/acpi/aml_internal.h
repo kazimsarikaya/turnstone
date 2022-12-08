@@ -185,36 +185,36 @@
 #define ACPI_AML_METHODCALL          0xFE
 
 typedef struct {
-	uint8_t operand_count;
-	uint16_t opcode;
-	acpi_aml_object_t* operands[8];
-	acpi_aml_object_t* return_obj;
+    uint8_t            operand_count;
+    uint16_t           opcode;
+    acpi_aml_object_t* operands[8];
+    acpi_aml_object_t* return_obj;
 }acpi_aml_opcode_t;
 
 typedef struct {
-	uint8_t arg_count;
-	acpi_aml_object_t** mthobjs; // 0-7 -> locals 8-14 -> args 15 -> return
-	uint8_t dirty_args[7];
+    uint8_t             arg_count;
+    acpi_aml_object_t** mthobjs; // 0-7 -> locals 8-14 -> args 15 -> return
+    uint8_t             dirty_args[7];
 }acpi_aml_method_context_t;
 
 int8_t acpi_aml_parse_all_items(acpi_aml_parser_context_t*, void**, uint64_t*);
 int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t*, void**, uint64_t*);
 
 // util functions
-int8_t acpi_aml_is_lead_name_char(uint8_t*);
-int8_t acpi_aml_is_digit_char(uint8_t*);
-int8_t acpi_aml_is_name_char(uint8_t*);
-int8_t acpi_aml_is_root_char(uint8_t*);
-int8_t acpi_aml_is_parent_prefix_char(uint8_t*);
-char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t*, char_t*, char_t*);
-int8_t acpi_aml_is_nameseg(uint8_t*);
-int8_t acpi_aml_is_namestring_start(uint8_t*);
-uint64_t acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
-uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t*);
+int8_t             acpi_aml_is_lead_name_char(uint8_t*);
+int8_t             acpi_aml_is_digit_char(uint8_t*);
+int8_t             acpi_aml_is_name_char(uint8_t*);
+int8_t             acpi_aml_is_root_char(uint8_t*);
+int8_t             acpi_aml_is_parent_prefix_char(uint8_t*);
+char_t*            acpi_aml_normalize_name(acpi_aml_parser_context_t*, char_t*, char_t*);
+int8_t             acpi_aml_is_nameseg(uint8_t*);
+int8_t             acpi_aml_is_namestring_start(uint8_t*);
+uint64_t           acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
+uint64_t           acpi_aml_len_namestring(acpi_aml_parser_context_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
 acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, index_t*, char_t*, char_t*);
-int8_t acpi_aml_executor_opcode(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
-int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
+int8_t             acpi_aml_executor_opcode(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
+int8_t             acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t, uint8_t, acpi_aml_parser_context_t*, void**, uint64_t*, acpi_aml_object_t*);
 

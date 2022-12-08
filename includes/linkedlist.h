@@ -20,15 +20,15 @@
  * inserting/deleting will be performed with this values.
  */
 typedef enum {
-	LINKEDLIST_INSERT_AT_HEAD, ///< insert data at head of list
-	LINKEDLIST_INSERT_AT_TAIL, ///< insert data at tail of list
-	LINKEDLIST_INSERT_AT_POSITION, ///< insert data at given position (start at 0) of list
-	LINKEDLIST_INSERT_AT_SORTED, ///< insert data into list with sorted
-	LINKEDLIST_INSERT_AT_INDEXED, ///< insert data into list with indexed
-	LINKEDLIST_DELETE_AT_HEAD, ///< delete data from head of list
-	LINKEDLIST_DELETE_AT_TAIL, ///< delete data from tail of list
-	LINKEDLIST_DELETE_AT_FINDBY, ///< delete data from list with searching inside the list
-	LINKEDLIST_DELETE_AT_POSITION ///< delete data at given position (start at 0) of list
+    LINKEDLIST_INSERT_AT_HEAD, ///< insert data at head of list
+    LINKEDLIST_INSERT_AT_TAIL, ///< insert data at tail of list
+    LINKEDLIST_INSERT_AT_POSITION, ///< insert data at given position (start at 0) of list
+    LINKEDLIST_INSERT_AT_SORTED, ///< insert data into list with sorted
+    LINKEDLIST_INSERT_AT_INDEXED, ///< insert data into list with indexed
+    LINKEDLIST_DELETE_AT_HEAD, ///< delete data from head of list
+    LINKEDLIST_DELETE_AT_TAIL, ///< delete data from tail of list
+    LINKEDLIST_DELETE_AT_FINDBY, ///< delete data from list with searching inside the list
+    LINKEDLIST_DELETE_AT_POSITION ///< delete data at given position (start at 0) of list
 }linkedlist_insert_delete_at_t;
 
 /*! insert data at anywhere of list (at tail for o(1)) */
@@ -40,32 +40,32 @@ typedef enum {
  * used only information
  */
 typedef enum {
-	LINKEDLIST_TYPE_LIST = 1 << 0, ///< normal list
-	LINKEDLIST_TYPE_SORTEDLIST = 1 << 1, ///< sorted list
-	LINKEDLIST_TYPE_QUEUE = 1 << 2, ///< queue
-	LINKEDLIST_TYPE_STACK = 1 << 3, ///< stack
-	LINKEDLIST_TYPE_INDEXEDLIST = 1 << 8,  ///< indexed list
+    LINKEDLIST_TYPE_LIST = 1 << 0, ///< normal list
+    LINKEDLIST_TYPE_SORTEDLIST = 1 << 1, ///< sorted list
+    LINKEDLIST_TYPE_QUEUE = 1 << 2, ///< queue
+    LINKEDLIST_TYPE_STACK = 1 << 3, ///< stack
+    LINKEDLIST_TYPE_INDEXEDLIST = 1 << 8, ///< indexed list
 }linkedlist_type_t;
 
 /**
  * @brief linked list destroy type
  */
 typedef enum {
-	LINKEDLIST_DESTROY_WITHOUT_DATA, ///< destroy linked list without its data
-	LINKEDLIST_DESTROY_WITH_DATA ///< destroy linked list with its data
+    LINKEDLIST_DESTROY_WITHOUT_DATA, ///< destroy linked list without its data
+    LINKEDLIST_DESTROY_WITH_DATA ///< destroy linked list with its data
 }linkedlist_destroy_type_t;
 
 /**
  * @typedef linkedlist_t
  * @brief linked list implicit type
  */
-typedef void* linkedlist_t;
+typedef void * linkedlist_t;
 
 /**
  * @typedef linkedlist_item_t
  * @brief linked list item implicit type
  */
-typedef void* linkedlist_item_t;
+typedef void * linkedlist_item_t;
 
 /**
  * @brief comparing given to data

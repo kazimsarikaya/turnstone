@@ -16,7 +16,7 @@ void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 
 task_t* task_get_current_task(){
-	return NULL;
+    return NULL;
 }
 
 void task_yield() {

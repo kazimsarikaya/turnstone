@@ -17,8 +17,8 @@
 void time_timer_reset_tick_count();
 
 int8_t time_timer_pit_isr(interrupt_frame_t* frame, uint8_t intnum);
-void time_timer_pit_set_hz(uint16_t hz);
-void time_timer_pit_sleep(uint64_t usecs);
+void   time_timer_pit_set_hz(uint16_t hz);
+void   time_timer_pit_sleep(uint64_t usecs);
 
 
 int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum);

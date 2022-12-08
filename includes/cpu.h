@@ -27,7 +27,7 @@ void cpu_idle();
  * This command disables interrupts with cli assembly command.
  */
 static inline void cpu_cli() {
-	__asm__ __volatile__ ("cli");
+    __asm__ __volatile__ ("cli");
 }
 
 /**
@@ -36,7 +36,7 @@ static inline void cpu_cli() {
  * This command enables interrupts with sti assembly command.
  */
 static inline void cpu_sti() {
-	__asm__ __volatile__ ("sti");
+    __asm__ __volatile__ ("sti");
 }
 
 /**
@@ -45,7 +45,7 @@ static inline void cpu_sti() {
  * This command nops.
  */
 static inline void cpu_nop() {
-	__asm__ __volatile__ ("nop");
+    __asm__ __volatile__ ("nop");
 }
 
 /**
@@ -54,7 +54,7 @@ static inline void cpu_nop() {
  * This command clears direction flag.
  */
 static inline void cpu_cld() {
-	__asm__ __volatile__ ("cld");
+    __asm__ __volatile__ ("cld");
 }
 
 /**
@@ -106,10 +106,10 @@ uint64_t cpu_read_cr2();
  * cpuid command needs setting eax and results are returned for registers.
  */
 typedef struct cpu_cpuid_regs {
-	uint32_t eax; ///< eax register
-	uint32_t ebx; ///< ebx register
-	uint32_t ecx; ///< ecx register
-	uint32_t edx; ///< edx register
+    uint32_t eax; ///< eax register
+    uint32_t ebx; ///< ebx register
+    uint32_t ecx; ///< ecx register
+    uint32_t edx; ///< edx register
 } cpu_cpuid_regs_t; ///< struct short hand
 
 uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer);
@@ -128,11 +128,11 @@ void cpu_clear_segments();
  * sets esp and clears ebp
  */
 static inline void cpu_set_and_clear_stack(uint64_t stack_address) {
-	__asm__ __volatile__(
-		"mov %%rax, %%rsp\n"
-  		"xor %%rbp, %%rbp\n"
-		: : "a" (stack_address)
-	);	
+    __asm__ __volatile__ (
+        "mov %%rax, %%rsp\n"
+        "xor %%rbp, %%rbp\n"
+        : : "a" (stack_address)
+        );
 }
 
 #endif

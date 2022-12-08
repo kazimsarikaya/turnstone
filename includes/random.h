@@ -8,7 +8,7 @@
 
 #include <types.h>
 
-void srand(uint64_t seed);
+void     srand(uint64_t seed);
 uint32_t rand(void);
 
 #endif

@@ -24,13 +24,13 @@
  * @brief  interrupt frame for interrupt function
  */
 typedef struct interrupt_frame {
-	uint64_t return_rip; ///< the ip value after interrupt
-	uint64_t return_cs : 16; ///< the cs value after intterupt
-	uint64_t empty1 : 48; ///< unused value
-	uint64_t return_rflags; ///< the rflags after interrupt
-	uint64_t return_rsp; ///< the rsp value aka stack after interrupt
-	uint64_t return_ss : 16; ///< the ss value aka stack segment after interrupt
-	uint64_t empty2 : 48; ///< unused value
+    uint64_t return_rip; ///< the ip value after interrupt
+    uint64_t return_cs : 16; ///< the cs value after intterupt
+    uint64_t empty1    : 48; ///< unused value
+    uint64_t return_rflags; ///< the rflags after interrupt
+    uint64_t return_rsp; ///< the rsp value aka stack after interrupt
+    uint64_t return_ss : 16; ///< the ss value aka stack segment after interrupt
+    uint64_t empty2    : 48; ///< unused value
 } __attribute__((packed)) interrupt_frame_t; ///< struct short hand
 
 /**

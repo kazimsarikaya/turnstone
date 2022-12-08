@@ -11,14 +11,14 @@
 
 #include <types.h>
 
-typedef void* lock_t;
+typedef void * lock_t;
 
 typedef struct {
-	uint64_t malloc_count;
-	uint64_t free_count;
-	uint64_t total_size;
-	uint64_t free_size;
-	uint64_t fast_hit;
+    uint64_t malloc_count;
+    uint64_t free_count;
+    uint64_t total_size;
+    uint64_t free_size;
+    uint64_t fast_hit;
 }memory_heap_stat_t;
 
 /**
@@ -26,12 +26,12 @@ typedef struct {
  * @brief heap interface for all types
  */
 typedef struct memory_heap {
-	uint32_t header; ///< heap header custom values
-	void* metadata; ///< internal heap metadata filled by heap implementation
-	void* (* malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
-	int8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
-	void (* stat)(struct memory_heap*, memory_heap_stat_t*); ///< return heap stats
-	lock_t lock;
+    uint32_t header; ///< heap header custom values
+    void*    metadata; ///< internal heap metadata filled by heap implementation
+    void* (* malloc)(struct memory_heap*, size_t, size_t); ///< malloc function of heap implementation
+    int8_t (* free)(struct memory_heap*, void*); ///< free function of heap implementation
+    void (* stat)(struct memory_heap*, memory_heap_stat_t*); ///< return heap stats
+    lock_t lock;
 } memory_heap_t; ///< short hand for struct
 
 /**

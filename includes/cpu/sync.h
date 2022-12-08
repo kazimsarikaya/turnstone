@@ -14,7 +14,7 @@
 
 #define SYNC_LOCK_SIZE 0x20
 
-typedef void* lock_t;
+typedef void * lock_t;
 
 lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
 int8_t lock_destroy(lock_t lock);
@@ -26,10 +26,10 @@ int8_t lock_destroy(lock_t lock);
 void lock_acquire(lock_t lock);
 void lock_release(lock_t lock);
 
-typedef void* semaphore_t;
+typedef void * semaphore_t;
 
 semaphore_t semaphore_create_with_heap(memory_heap_t* heap, uint64_t count);
-int8_t semaphore_destroy(semaphore_t semaphore);
+int8_t      semaphore_destroy(semaphore_t semaphore);
 
 #define semaphore_create(c) semaphore_create_with_heap(NULL, c)
 

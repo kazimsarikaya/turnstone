@@ -10,58 +10,58 @@
 #include <utils.h>
 
 uint32_t main(uint32_t argc, char_t** argv) {
-	setup_ram();
+    setup_ram();
 
-	if(argc != 2) {
-		print_error("incorrect args");
+    if(argc != 2) {
+        print_error("incorrect args");
 
-		return -1;
-	}
+        return -1;
+    }
 
-	argv++;
+    argv++;
 
-	sha256_ctx_t ctx = sha256_init();
+    sha256_ctx_t ctx = sha256_init();
 
-	if(!ctx) {
-		print_error("cannot create sha256 ctx");
+    if(!ctx) {
+        print_error("cannot create sha256 ctx");
 
-		return -1;
-	}
+        return -1;
+    }
 
-	FILE* fp_in = fopen(*argv, "r");
+    FILE* fp_in = fopen(*argv, "r");
 
-	if(!fp_in) {
-		print_error("cannot open file");
+    if(!fp_in) {
+        print_error("cannot open file");
 
-		return -1;
-	}
+        return -1;
+    }
 
-	uint8_t chunk[4096];
+    uint8_t chunk[4096];
 
-	while(1) {
-		int64_t r = fread(chunk, 1, 4096, fp_in);
+    while(1) {
+        int64_t r = fread(chunk, 1, 4096, fp_in);
 
-		if(!r) {
-			break;
-		}
+        if(!r) {
+            break;
+        }
 
-		sha256_update(ctx, chunk, r);
-	}
+        sha256_update(ctx, chunk, r);
+    }
 
-	fclose(fp_in);
+    fclose(fp_in);
 
-	uint8_t* sum = sha256_final(ctx);
+    uint8_t* sum = sha256_final(ctx);
 
-	for(int64_t i = 0; i < SHA256_OUTPUT_SIZE; i++) {
-		printf("%02x", sum[i]);
-	}
-	printf(" %s\n", *argv);
+    for(int64_t i = 0; i < SHA256_OUTPUT_SIZE; i++) {
+        printf("%02x", sum[i]);
+    }
+    printf(" %s\n", *argv);
 
-	memory_free(sum);
+    memory_free(sum);
 
-	char_t* xxhash_data = "Hello, world!";
-	uint64_t xxhash_result = xxhash64_hash(xxhash_data, strlen(xxhash_data)), xxhash_verify = 17691043854468224118ULL;
-	printf("%lu %i\n", xxhash_result, xxhash_result == xxhash_verify);
+    char_t* xxhash_data = "Hello, world!";
+    uint64_t xxhash_result = xxhash64_hash(xxhash_data, strlen(xxhash_data)), xxhash_verify = 17691043854468224118ULL;
+    printf("%lu %i\n", xxhash_result, xxhash_result == xxhash_verify);
 
-	return 0;
+    return 0;
 }

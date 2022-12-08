@@ -13,7 +13,7 @@
 #include <memory.h>
 #include <iterator.h>
 
-typedef void* map_t;
+typedef void * map_t;
 
 typedef uint64_t (* map_key_extractor_f)(const void* key);
 
@@ -33,7 +33,7 @@ void* map_insert(map_t map, void* key, void* data);
 void* map_get_with_default(map_t map, void* key, void* def);
 #define map_get(m, k) map_get_with_default(m, k, NULL)
 #define map_exists(m, k) (map_get_with_default(m, k, NULL) != NULL)
-void* map_delete(map_t map, void* key);
+void*  map_delete(map_t map, void* key);
 int8_t map_destroy(map_t map);
 
 iterator_t* map_create_iterator(map_t map);

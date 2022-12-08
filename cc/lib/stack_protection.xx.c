@@ -15,6 +15,6 @@
 size_t __stack_chk_guard = STACK_PROTECTION_CHECK_GUARD;
 
 __attribute__((noreturn)) void __stack_chk_fail(void) {
-	PRINTLOG(KERNEL, LOG_PANIC, "Stack smashed. Halting");
-	cpu_hlt();
+    PRINTLOG(KERNEL, LOG_PANIC, "Stack smashed. Halting");
+    cpu_hlt();
 }

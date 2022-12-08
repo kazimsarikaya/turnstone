@@ -15,8 +15,8 @@
 #include <video.h>
 
 typedef enum {
-	SYSTEM_INFO_BOOT_TYPE_DISK,
-	SYSTEM_INFO_BOOT_TYPE_PXE
+    SYSTEM_INFO_BOOT_TYPE_DISK,
+    SYSTEM_INFO_BOOT_TYPE_PXE
 } system_info_boot_type_t;
 
 /**
@@ -24,22 +24,22 @@ typedef enum {
  * @brief  system information struct
  */
 typedef struct system_info {
-	memory_heap_t* heap;
-	uint8_t* mmap_data;
-	uint64_t mmap_size;
-	uint64_t mmap_descriptor_size;
-	uint64_t mmap_descriptor_version;
-	uint64_t boot_type;
-	video_frame_buffer_t* frame_buffer;
-	uint64_t acpi_version;
-	void* acpi_table;
-	uint64_t kernel_start;
-	uint64_t kernel_4k_frame_count;
-	uint64_t remapped;
-	uint64_t my_page_table;
-	uint8_t* reserved_mmap_data;
-	uint64_t reserved_mmap_size;
-	efi_system_table_t* efi_system_table;
+    memory_heap_t*        heap;
+    uint8_t*              mmap_data;
+    uint64_t              mmap_size;
+    uint64_t              mmap_descriptor_size;
+    uint64_t              mmap_descriptor_version;
+    uint64_t              boot_type;
+    video_frame_buffer_t* frame_buffer;
+    uint64_t              acpi_version;
+    void*                 acpi_table;
+    uint64_t              kernel_start;
+    uint64_t              kernel_4k_frame_count;
+    uint64_t              remapped;
+    uint64_t              my_page_table;
+    uint8_t*              reserved_mmap_data;
+    uint64_t              reserved_mmap_size;
+    efi_system_table_t*   efi_system_table;
 } system_info_t; ///< struct short hand
 
 /*! static location of system information */

@@ -11,12 +11,12 @@
 #include <types.h>
 
 typedef struct stackframe_s {
-	struct stackframe_s* previous;
-	uint64_t rip;
+    struct stackframe_s* previous;
+    uint64_t             rip;
 } stackframe_t;
 
 stackframe_t* backtrace_get_stackframe();
-void backtrace_print(stackframe_t* frame);
-void backtrace();
+void          backtrace_print(stackframe_t* frame);
+void          backtrace();
 
 #endif

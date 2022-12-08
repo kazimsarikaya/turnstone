@@ -64,9 +64,9 @@ extern wchar_t KBD_SCANCODES_ALT[];
 extern wchar_t KBD_SCANCODES_ALTSHIFT[];
 
 typedef struct kbd_state_s {
-	boolean_t is_capson;
-	boolean_t is_shift_pressed;
-	boolean_t is_alt_pressed;
+    boolean_t is_capson;
+    boolean_t is_shift_pressed;
+    boolean_t is_alt_pressed;
 }kbd_state_t;
 
 wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_printable);

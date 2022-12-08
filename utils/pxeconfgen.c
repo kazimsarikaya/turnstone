@@ -13,90 +13,90 @@
 
 
 int32_t main(int32_t argc, char_t** argv) {
-	setup_ram();
+    setup_ram();
 
-	if(argc <= 1) {
-		print_error("invalid argument count");
+    if(argc <= 1) {
+        print_error("invalid argument count");
 
-		return -1;
-	}
+        return -1;
+    }
 
-	argc--;
-	argv++;
+    argc--;
+    argv++;
 
-	char_t* kernel = NULL;
-	char_t* kernelp = NULL;
-	char_t* output = NULL;
+    char_t* kernel = NULL;
+    char_t* kernelp = NULL;
+    char_t* output = NULL;
 
-	while(argc) {
-		if(strcmp(*argv, "-k") == 0) {
-			argc--;
-			argv++;
+    while(argc) {
+        if(strcmp(*argv, "-k") == 0) {
+            argc--;
+            argv++;
 
-			kernel = *argv;
+            kernel = *argv;
 
-			argc--;
-			argv++;
-		} else if(strcmp(*argv, "-o") == 0) {
-			argc--;
-			argv++;
+            argc--;
+            argv++;
+        } else if(strcmp(*argv, "-o") == 0) {
+            argc--;
+            argv++;
 
-			output = *argv;
+            output = *argv;
 
-			argc--;
-			argv++;
-		} else if(strcmp(*argv, "-kp") == 0) {
-			argc--;
-			argv++;
+            argc--;
+            argv++;
+        } else if(strcmp(*argv, "-kp") == 0) {
+            argc--;
+            argv++;
 
-			kernelp = *argv;
+            kernelp = *argv;
 
-			argc--;
-			argv++;
-		} else {
-			print_error("invalid argument");
+            argc--;
+            argv++;
+        } else {
+            print_error("invalid argument");
 
-			return -1;
-		}
-	}
+            return -1;
+        }
+    }
 
-	FILE* kin = fopen(kernelp, "r");
+    FILE* kin = fopen(kernelp, "r");
 
-	if(kin == NULL) {
-		print_error("cannot open kernel");
+    if(kin == NULL) {
+        print_error("cannot open kernel");
 
-		return -1;
-	}
+        return -1;
+    }
 
-	fseek(kin, 0, SEEK_END);
-	int64_t kernel_size   = ftell(kin);
-	fclose(kin);
+    fseek(kin, 0, SEEK_END);
+    int64_t kernel_size   = ftell(kin);
+    fclose(kin);
 
-	data_t kernel_name = {DATA_TYPE_STRING, 0, NULL, "kernel"};
-	data_t kernel_data = {DATA_TYPE_STRING, 0, &kernel_name, kernel};
+    data_t kernel_name = {DATA_TYPE_STRING, 0, NULL, "kernel"};
+    data_t kernel_data = {DATA_TYPE_STRING, 0, &kernel_name, kernel};
 
-	data_t kernel_size_name = {DATA_TYPE_STRING, 0, NULL, "kernel-size"};
-	data_t kernel_size_data = {DATA_TYPE_INT64, 0, &kernel_size_name, (void*)kernel_size};
+    data_t kernel_size_name = {DATA_TYPE_STRING, 0, NULL, "kernel-size"};
+    data_t kernel_size_data = {DATA_TYPE_INT64, 0, &kernel_size_name, (void*)kernel_size};
 
-	data_t pxeconf[] = {kernel_data, kernel_size_data};
+    data_t pxeconf[] = {kernel_data, kernel_size_data};
 
-	data_t pxeconf_name = {DATA_TYPE_STRING, 0, NULL, "pxe-config"};
-	data_t pxeconf_data = {DATA_TYPE_DATA, 2, &pxeconf_name, pxeconf};
+    data_t pxeconf_name = {DATA_TYPE_STRING, 0, NULL, "pxe-config"};
+    data_t pxeconf_data = {DATA_TYPE_DATA, 2, &pxeconf_name, pxeconf};
 
-	printf("kernel %s path %s size: 0x%lx\n", kernel, kernelp, kernel_size);
+    printf("kernel %s path %s size: 0x%lx\n", kernel, kernelp, kernel_size);
 
-	data_t* ser_data = data_bson_serialize(&pxeconf_data, DATA_SERIALIZE_WITH_ALL);
+    data_t* ser_data = data_bson_serialize(&pxeconf_data, DATA_SERIALIZE_WITH_ALL);
 
-	FILE* pco = fopen(output, "w");
+    FILE* pco = fopen(output, "w");
 
-	if(pco == NULL) {
-		print_error("cannot open output");
+    if(pco == NULL) {
+        print_error("cannot open output");
 
-		return -1;
-	}
+        return -1;
+    }
 
-	fwrite(ser_data->value, ser_data->length, 1, pco);
-	fclose(pco);
+    fwrite(ser_data->value, ser_data->length, 1, pco);
+    fclose(pco);
 
-	return 0;
+    return 0;
 }

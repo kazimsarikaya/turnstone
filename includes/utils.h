@@ -85,14 +85,14 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 #define ftoh_with_buffer_and_prec(buf, number, prec) fto_base_with_buffer(buf, number, prec, 16)
 
 static inline uint64_t byte_swap(uint64_t num, uint8_t bc) {
-	if(bc==1){
-		return num;
-	}
+    if(bc == 1) {
+        return num;
+    }
 
-	uint64_t res = num;
-	__asm__ __volatile__ ("bswap %0\n" : "=r" (res) : "0" (res));
+    uint64_t res = num;
+    __asm__ __volatile__ ("bswap %0\n" : "=r" (res) : "0" (res));
 
-	return res >> ((8 - bc) * 8);
+    return res >> ((8 - bc) * 8);
 }
 
 #define BYTE_SWAP16(n) byte_swap(n, 2)

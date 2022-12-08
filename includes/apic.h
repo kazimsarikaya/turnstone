@@ -57,16 +57,16 @@
 #define APIC_IOAPIC_MAX_REDIRECTION_ENTRY(r)  (((r >> 16) & 0xFF) + 1)
 
 typedef struct {
-	uint32_t selector;
-	uint32_t reserved0[3];
-	uint32_t value;
+    uint32_t selector;
+    uint32_t reserved0[3];
+    uint32_t value;
 }__attribute__((packed)) apic_ioapic_register_t;
 
 typedef struct {
-	uint8_t vector : 8;
-	uint8_t apic_software_enable : 1;
-	uint8_t focus_cpu_core_checking : 1;
-	uint32_t reserved0 : 22;
+    uint8_t  vector                  : 8;
+    uint8_t  apic_software_enable    : 1;
+    uint8_t  focus_cpu_core_checking : 1;
+    uint32_t reserved0               : 22;
 }__attribute__((packed)) apic_register_spurious_interrupt_t;
 
 int8_t apic_setup(acpi_xrsdp_descriptor_t* desc);
@@ -81,6 +81,6 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled);
 
 uint8_t apic_get_irq_override(uint8_t old_irq);
 
-void  apic_eoi();
+void apic_eoi();
 
 #endif

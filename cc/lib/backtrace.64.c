@@ -11,28 +11,28 @@
 #include <logging.h>
 
 stackframe_t* backtrace_get_stackframe() {
-	stackframe_t* frame = NULL;
+    stackframe_t* frame = NULL;
 
-	asm ("mov %%rbp, %0\n" : "=r" (frame));
+    asm ("mov %%rbp, %0\n" : "=r" (frame));
 
-	return frame;
+    return frame;
 }
 
 void backtrace_print(stackframe_t* frame) {
-	PRINTLOG(KERNEL, LOG_ERROR, "Trace:");
+    PRINTLOG(KERNEL, LOG_ERROR, "Trace:");
 
-	while(frame) {
-		PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx RBP: 0x%p", frame->rip, frame);
+    while(frame) {
+        PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx RBP: 0x%p", frame->rip, frame);
 
-		frame = frame->previous;
+        frame = frame->previous;
 
-		if(frame->rip < 0x200000) {
-			break;
-		}
-	}
+        if(frame->rip < 0x200000) {
+            break;
+        }
+    }
 
 }
 
 void backtrace(){
-	backtrace_print(backtrace_get_stackframe());
+    backtrace_print(backtrace_get_stackframe());
 }

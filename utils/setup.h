@@ -26,7 +26,7 @@ void* SYSTEM_INFO = NULL;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 
 size_t video_printf(char_t* fmt, va_list args) {
-	return printf(fmt, args);
+    return printf(fmt, args);
 }
 
 void task_switch_task(){
@@ -40,54 +40,54 @@ void  apic_eoi(){
 }
 
 time_t rtc_get_time(){
-	return time(NULL);
+    return time(NULL);
 }
 
 uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
 
 void print_success(const char* msg){
-	printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
+    printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
 }
 
 void print_error(const char* msg){
-	printf("%s%s%s%s", REDCOLOR, msg, RESETCOLOR, "\r\n");
+    printf("%s%s%s%s", REDCOLOR, msg, RESETCOLOR, "\r\n");
 }
 
 void setup_ram() {
-	memory_heap_t* heap = memory_create_heap_simple((size_t)&mem_area[0], (size_t)&mem_area[RAMSIZE]);
-	printf("%p\n", heap);
-	memory_set_default_heap(heap);
+    memory_heap_t* heap = memory_create_heap_simple((size_t)&mem_area[0], (size_t)&mem_area[RAMSIZE]);
+    printf("%p\n", heap);
+    memory_set_default_heap(heap);
 }
 
 void dump_ram(char_t* fname){
-	FILE* fp = fopen( fname, "w" );
-	fwrite(mem_area, 1, RAMSIZE, fp );
+    FILE* fp = fopen( fname, "w" );
+    fwrite(mem_area, 1, RAMSIZE, fp );
 
-	fclose(fp);
+    fclose(fp);
 }
 
 void* task_get_current_task(){
-	return NULL;
+    return NULL;
 }
 
 void* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future){
-	UNUSED(heap);
-	UNUSED(for_future);
-	return NULL;
+    UNUSED(heap);
+    UNUSED(for_future);
+    return NULL;
 }
 
 int8_t lock_destroy(void* lock){
-	UNUSED(lock);
-	return 0;
+    UNUSED(lock);
+    return 0;
 }
 
 void lock_acquire(void* lock){
-	UNUSED(lock);
+    UNUSED(lock);
 }
 
 void lock_release(void* lock){
-	UNUSED(lock);
+    UNUSED(lock);
 }
 
 #endif

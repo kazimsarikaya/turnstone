@@ -41,10 +41,10 @@
 #define VIRTIO_NETWORK_STATUS_ANNOUNCE    2
 
 typedef struct {
-	mac_address_t mac;
-	uint16_t status; /* if VIRTIO_NETWORK_F_STATUS */
-	uint16_t max_virtual_queue_pairs; /* if VIRTIO_NETWORK_F_MQ */
-	uint16_t mtu; /* if VIRTIO_NETWORK_F_MTU */
+    mac_address_t mac;
+    uint16_t      status; /* if VIRTIO_NETWORK_F_STATUS */
+    uint16_t      max_virtual_queue_pairs; /* if VIRTIO_NETWORK_F_MQ */
+    uint16_t      mtu; /* if VIRTIO_NETWORK_F_MTU */
 }__attribute__((packed)) virtio_network_config_t;
 
 #define VIRTIO_NETWORK_HDR_F_NEEDS_CSUM    1
@@ -57,23 +57,23 @@ typedef struct {
 
 
 typedef struct {
-	uint8_t flags;
-	uint8_t gso_type;
-	uint16_t header_length;
-	uint16_t gso_size;
-	uint16_t checksum_start;
-	uint16_t checksum_offset;
-	uint16_t buffer_count;
+    uint8_t  flags;
+    uint8_t  gso_type;
+    uint16_t header_length;
+    uint16_t gso_size;
+    uint16_t checksum_start;
+    uint16_t checksum_offset;
+    uint16_t buffer_count;
 }__attribute__((packed)) virtio_network_header_t;
 
 #define VIRTIO_NETWORK_OK     0
 #define VIRTIO_NETWORK_ERR    1
 
 typedef struct {
-	uint8_t class;
-	uint8_t command;
-	uint8_t command_spesific_data[];
-	//uint8_t ack;
+    uint8_t class;
+    uint8_t command;
+    uint8_t command_spesific_data[];
+    //uint8_t ack;
 }__attribute__((packed)) virtio_network_control_t;
 
 #define VIRTIO_NETWORK_CTRL_RX              0
@@ -89,8 +89,8 @@ typedef struct {
 #define VIRTIO_NETWORK_CTRL_MAC_ADDR_SET         1
 
 typedef struct {
-	uint32_t entry_count;
-	mac_address_t entries[];
+    uint32_t      entry_count;
+    mac_address_t entries[];
 }__attribute__((packed)) virtio_network_control_mac_t;
 
 #define VIRTIO_NETWORK_CTRL_VLAN       2
@@ -101,7 +101,7 @@ typedef struct {
 #define VIRTIO_NET_CTRL_ANNOUNCE_ACK             0
 
 typedef struct  {
-	uint16_t virtqueue_pairs;
+    uint16_t virtqueue_pairs;
 } __attribute__((packed)) virtio_network_control_mq_t;
 
 #define VIRTIO_NETWORK_CTRL_MQ    4
