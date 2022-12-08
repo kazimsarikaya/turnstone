@@ -63,7 +63,7 @@ void __attribute__ ((interrupt)) interrupt_int1D_reserved(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int1E_reserved(interrupt_frame_t*);
 void __attribute__ ((interrupt)) interrupt_int1F_reserved(interrupt_frame_t*);
 
-uint64_t interrupt_system_defined_interrupts[32] = {
+const uint64_t interrupt_system_defined_interrupts[32] = {
     (uint64_t)&interrupt_int00_divide_by_zero_exception,
     (uint64_t)&interrupt_int01_debug_exception,
     (uint64_t)&interrupt_int02_nmi_interrupt,
@@ -226,10 +226,10 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
         }
     }
 
-    printf("Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016llx\n", intnum, frame->return_rip);
-    printf("KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p\n", frame->return_ss, frame->return_rsp, frame);
-    printf("cr4: 0x%llx\n", (cpu_read_cr4()).bits);
-    printf("Cpu is halting.");
+    PRINTLOG(KERNEL, LOG_FATAL, "Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016llx", intnum, frame->return_rip);
+    PRINTLOG(KERNEL, LOG_FATAL, "KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
+    PRINTLOG(KERNEL, LOG_FATAL, "cr4: 0x%llx", (cpu_read_cr4()).bits);
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     backtrace_print((stackframe_t*)frame->return_rsp);
 
@@ -237,9 +237,9 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
 }
 
 void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errcode, uint8_t intnum){
-    printf("Uncatched interrupt 0x%02x occured with error code 0x%08llx.\nReturn address 0x%016llx\n", intnum, errcode, frame->return_rip);
-    printf("KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p\n", frame->return_ss, frame->return_rsp, frame);
-    printf("Cpu is halting.");
+    PRINTLOG(KERNEL, LOG_FATAL, "Uncatched interrupt 0x%02x occured with error code 0x%08llx.\nReturn address 0x%016llx", intnum, errcode, frame->return_rip);
+    PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     backtrace_print((stackframe_t*)frame->return_rsp);
 
@@ -299,9 +299,9 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 }
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-    printf("\nKERN: FATAL general protection error 0x%llx at 0x%x:0x%llx\n", errcode, frame->return_cs, frame->return_rip);
-    printf("KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p\n", frame->return_ss, frame->return_rsp, frame);
-    printf("Cpu is halting.");
+    PRINTLOG(KERNEL, LOG_FATAL, "general protection error 0x%llx at 0x%x:0x%llx", errcode, frame->return_cs, frame->return_rip);
+    PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     backtrace_print((stackframe_t*)frame->return_rsp);
 
@@ -309,12 +309,14 @@ void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(in
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-    printf("\nKERN: INFO page fault occured with code 0x%016llx at 0x%016llx task 0x%llx\n", errcode, frame->return_rip, task_get_id());
-    printf("KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p\n", frame->return_ss, frame->return_rsp, frame);
+    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%016llx task 0x%llx", frame->return_rip, task_get_id());
+    PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     uint64_t cr2 = cpu_read_cr2();
 
-    printf("\nKERN: INFO page does not exists for address 0x%016llx\n", cr2 );
+    interrupt_errorcode_pagefault_t epf = { .bits = (uint32_t)errcode };
+
+    PRINTLOG(KERNEL, LOG_FATAL, "page 0x%016llx P? %i W? %i U? %i", cr2, epf.fields.present, epf.fields.write, epf.fields.user);
 
     printf("Cpu is halting.");
 

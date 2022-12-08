@@ -47,4 +47,20 @@ int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq);
 
 uint8_t interrupt_get_next_empty_interrupt();
 
+typedef union {
+    struct {
+        uint32_t present           : 1;
+        uint32_t write             : 1;
+        uint32_t user              : 1;
+        uint32_t reserved_bits     : 1;
+        uint32_t instruction_fetch : 1;
+        uint32_t protected_keys    : 1;
+        uint32_t shadow_stack      : 1;
+        uint32_t reserved1         : 8;
+        uint32_t sgx               : 1;
+        uint32_t reserved2         : 16;
+    } __attribute__((packed)) fields;
+    uint32_t bits;
+} interrupt_errorcode_pagefault_t;
+
 #endif
