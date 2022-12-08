@@ -709,7 +709,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
     sysinfo->kernel_4k_frame_count = kernel_page_count;
     sysinfo->efi_system_table = system_table;
 
-    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p %li", new_kernel_address, sysinfo, sizeof(system_info_t));
+    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", new_kernel_address, sysinfo);
 
     BS->exit_boot_services(image, map_key);
 
