@@ -6,7 +6,7 @@
 #include <types.h>
 #include <device/kbd_scancodes.h>
 
-wchar_t KBD_SCANCODES_NORMAL[] = {
+const wchar_t KBD_SCANCODES_NORMAL[] = {
     KBD_SCANCODE_NULL,                     KBD_SCANCODE_ESC,                                       '1',                                                        '2',                                                                '3',                                                                 '4',                                                                 '5',                                                                  '6',                                                                      '7',                                          '8',                                      '9',                              '0',                              '-',                                                  '=',                                                                  KBD_SCANCODE_BACKSPACE /*0x0e*/,
     '\t',                                  'q',                                                    'w',                                                        'e',                                                                'r',                                                                 't',                                                                 'y',                                                                  'u',                                                                      'i',                                          'o',                                      'p',                              '[',                              ']',                                                  '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL,                 'a',                                                    's',                                                        'd',                                                                'f',                                                                 'g',                                                                 'h',                                                                  'j',                                                                      'k',                                          'l',                                      ';',                              '\'',                             '`' /*0x29*/,
@@ -28,7 +28,7 @@ wchar_t KBD_SCANCODES_NORMAL[] = {
 
 #define KBD_SCANCODES_NORMAL_SIZE (sizeof(KBD_SCANCODES_NORMAL) / sizeof(wchar_t))
 
-wchar_t KBD_SCANCODES_CAPSON[] = {
+const wchar_t KBD_SCANCODES_CAPSON[] = {
     KBD_SCANCODE_NULL,      KBD_SCANCODE_ESC,      '1',                   '2',                   '3',                   '4',                   '5',                   '6',                   '7',              '8', '9', '0',  '-',                      '=',                                       KBD_SCANCODE_BACKSPACE,
     '\t',                   'Q',                   'W',                   'E',                   'R',                   'T',                   'Y',                   'U',                   'I',              'O', 'P', '[',  ']',                      '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL,  'A',                   'S',                   'D',                   'F',                   'G',                   'H',                   'J',                   'K',              'L', ';', '\'', '`' /*0x29*/,
@@ -37,7 +37,7 @@ wchar_t KBD_SCANCODES_CAPSON[] = {
 
 #define KBD_SCANCODES_CAPSON_SIZE (sizeof(KBD_SCANCODES_CAPSON) / sizeof(wchar_t))
 
-wchar_t KBD_SCANCODES_SHIFT[] = {
+const wchar_t KBD_SCANCODES_SHIFT[] = {
     KBD_SCANCODE_NULL,      KBD_SCANCODE_ESC,      '!',                   '@',                   '#',                   '$',                   '%',                   '^',                   '&',              '*', '(', ')', '_',                     '+',                                      KBD_SCANCODE_BACKSPACE,
     '\t',                   'Q',                   'W',                   'E',                   'R',                   'T',                   'Y',                   'U',                   'I',              'O', 'P', '{', '}',                     '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL,  'A',                   'S',                   'D',                   'F',                   'G',                   'H',                   'J',                   'K',              'L', ':', '"', '~' /*0x29*/,
@@ -46,7 +46,7 @@ wchar_t KBD_SCANCODES_SHIFT[] = {
 
 #define KBD_SCANCODES_SHIFT_SIZE (sizeof(KBD_SCANCODES_SHIFT) / sizeof(wchar_t))
 
-wchar_t KBD_SCANCODES_SHIFTCAPSON[] = {
+const wchar_t KBD_SCANCODES_SHIFTCAPSON[] = {
     KBD_SCANCODE_NULL,      KBD_SCANCODE_ESC,      '!',                   '@',                   '#',                   '$',                   '%',                   '^',                   '&',              '*', '(', ')', '_',                     '+',                                      KBD_SCANCODE_BACKSPACE,
     '\t',                   'q',                   'w',                   'e',                   'r',                   't',                   'y',                   'u',                   'i',              'o', 'p', '{', '}',                     '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL,  'a',                   's',                   'd',                   'f',                   'g',                   'h',                   'j',                   'k',              'l', ':', '"', '~' /*0x29*/,
@@ -55,7 +55,7 @@ wchar_t KBD_SCANCODES_SHIFTCAPSON[] = {
 
 #define KBD_SCANCODES_SHIFTCAPSON_SIZE (sizeof(KBD_SCANCODES_SHIFTCAPSON) / sizeof(wchar_t))
 
-wchar_t KBD_SCANCODES_ALT[] = {
+const wchar_t KBD_SCANCODES_ALT[] = {
     KBD_SCANCODE_NULL,      KBD_SCANCODE_ESC,       L'¡',                   L'™',                   L'£',                                          L'¢',                                          L'∞',                                          L'§',                                          L'¶',                                    L'•',                        L'ª',                        L'º',                        L'–',                    L'≠',                                    KBD_SCANCODE_BACKSPACE,
     '\t',                   L'œ',                   L'´',                   L'´',                   L'®',                                          L'†',                                          L'¥',                                          L'¨',                                          L'ˆ',                                    L'ø',                        L'π',                        L'“',                        L'‘',                    '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL,  L'å',                   L'ß',                   L'∂',                   L'ƒ',                                          L'©',                                          L'˙',                                          L'∆',                                          L'˚',                                    L'¬',                        L'…',                        L'æ',                        L'`' /*0x29*/,
@@ -64,7 +64,7 @@ wchar_t KBD_SCANCODES_ALT[] = {
 
 #define KBD_SCANCODES_ALT_SIZE (sizeof(KBD_SCANCODES_ALT) / sizeof(wchar_t))
 
-wchar_t KBD_SCANCODES_ALTSHIFT[] = {
+const wchar_t KBD_SCANCODES_ALTSHIFT[] = {
     KBD_SCANCODE_NULL,      KBD_SCANCODE_ESC,       L'⁄',                   L'€',                   L'‹',                   L'›',                   L'ﬁ',                   L'ﬂ',                   L'‡',             L'°', L'·', L'‚', L'—',                    L'±',                                    KBD_SCANCODE_BACKSPACE,
     '\t',                   L'Œ',                   L'„',                   L'´',                   L'‰',                   L'ˇ',                   L'Á',                   L'¨',                   L'ˆ',             L'Ø', L'∏', L'”', L'’',                    '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL,  L'Å',                   L'Í',                   L'Î',                   L'Ï',                   L'˝',                   L'Ó',                   L'Ô',                   L'',             L'Ò', L'Ú', L'Æ', L'`' /*0x29*/,

@@ -63,7 +63,7 @@ CREATE_EXEC_F(to_bcd);
 
 CREATE_EXEC_F(method);
 
-acpi_aml_exec_f acpi_aml_exec_fs[] = {
+const acpi_aml_exec_f acpi_aml_exec_fs[] = {
     EXEC_F_NAME(store), // 0x70
     EXEC_F_NAME(refof),
     EXEC_F_NAME(op2_tgt1_maths),

@@ -42,8 +42,8 @@ typedef enum {
     LOG_TRACE=9,
 } logging_level_t;
 
-extern char_t* logging_module_names[];
-extern char_t* logging_level_names[];
+extern const char_t* logging_module_names[];
+extern const char_t* logging_level_names[];
 extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL
@@ -83,7 +83,7 @@ extern uint8_t logging_module_levels[];
 #endif
 
 #ifndef LOG_LEVEL_LINKER
-#define LOG_LEVEL_LINKER LOG_DEBUG
+#define LOG_LEVEL_LINKER LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_TASKING

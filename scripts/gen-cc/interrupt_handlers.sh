@@ -36,7 +36,7 @@ done
 cat <<EOF
 typedef void (*interrupt_dummy_noerrcode_int_ptr)(interrupt_frame_t*);
 
-interrupt_dummy_noerrcode_int_ptr interrupt_dummy_noerrcode_list[224] = {
+const interrupt_dummy_noerrcode_int_ptr interrupt_dummy_noerrcode_list[224] = {
 EOF
 
 for i in $(seq 32 255); do

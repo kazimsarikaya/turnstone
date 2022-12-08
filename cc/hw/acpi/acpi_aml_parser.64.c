@@ -69,7 +69,7 @@ CREATE_PARSER_F(extopcnt_1);
 CREATE_PARSER_F(extopcnt_2);
 CREATE_PARSER_F(extopcnt_6);
 
-acpi_aml_parse_f acpi_aml_parse_fs[] = {
+const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(const_data),
     PARSER_F_NAME(const_data),
     NULL,                       // empty
@@ -305,7 +305,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
     return 0;
 }
 
-acpi_aml_parse_f acpi_aml_parse_extfs[] = {
+const acpi_aml_parse_f acpi_aml_parse_extfs[] = {
     PARSER_F_NAME(mutex), // 0x01 -> 0
     PARSER_F_NAME(event),
     PARSER_F_NAME(extopcnt_2), //0x12 -> 2

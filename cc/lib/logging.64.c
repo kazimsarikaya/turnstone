@@ -6,7 +6,7 @@
 #include <logging.h>
 
 
-char_t* logging_module_names[] = {
+const char_t* logging_module_names[] = {
     "KERNEL",
     "MEMORY",
     "SIMPLEHEAP",
@@ -30,7 +30,7 @@ char_t* logging_module_names[] = {
 };
 
 
-char_t* logging_level_names[] = {
+const char_t* logging_level_names[] = {
     "PANIC" /** 0 **/,
     "FATAL" /** 1 **/,
     "ERROR" /** 2 **/,

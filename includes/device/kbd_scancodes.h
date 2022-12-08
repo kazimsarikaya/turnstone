@@ -56,12 +56,12 @@
 #define KBD_SCANCODE_DELETE       0x6F
 
 
-extern wchar_t KBD_SCANCODES_NORMAL[];
-extern wchar_t KBD_SCANCODES_CAPSON[];
-extern wchar_t KBD_SCANCODES_SHIFT[];
-extern wchar_t KBD_SCANCODES_SHIFTCAPSON[];
-extern wchar_t KBD_SCANCODES_ALT[];
-extern wchar_t KBD_SCANCODES_ALTSHIFT[];
+extern const wchar_t KBD_SCANCODES_NORMAL[];
+extern const wchar_t KBD_SCANCODES_CAPSON[];
+extern const wchar_t KBD_SCANCODES_SHIFT[];
+extern const wchar_t KBD_SCANCODES_SHIFTCAPSON[];
+extern const wchar_t KBD_SCANCODES_ALT[];
+extern const wchar_t KBD_SCANCODES_ALTSHIFT[];
 
 typedef struct kbd_state_s {
     boolean_t is_capson;
