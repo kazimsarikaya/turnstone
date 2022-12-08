@@ -444,7 +444,7 @@ size_t video_printf(char_t* fmt, ...){
                 case 'x':
                 case 'h':
                     if(l_flag == 2) {
-                        uval = va_arg(args, uint128_t);
+                        uval = va_arg(args, uint64_t);
                     } else if(l_flag == 1) {
                         uval = va_arg(args, uint64_t);
                     }
