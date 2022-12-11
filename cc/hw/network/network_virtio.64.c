@@ -11,6 +11,7 @@
 #include <ports.h>
 #include <network.h>
 #include <network/network_ethernet.h>
+#include <network/network_dhcpv4.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <time/timer.h>
@@ -28,6 +29,31 @@ int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t network_virtio_ctrl_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t network_virtio_config_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t network_virtio_combined_isr(interrupt_frame_t* frame, uint8_t intnum);
+
+int8_t network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_t* vdev, virtio_queue_ext_t* vq_tx, virtio_queue_avail_t* avail, virtio_queue_descriptor_t* descs) {
+    PRINTLOG(VIRTIONET, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
+
+    uint16_t avail_tx_id = avail->index;
+
+    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[avail_tx_id % vdev->queue_size].address);
+    virtio_network_header_t* hdr = (virtio_network_header_t*)offset;
+
+    memory_memclean(hdr, sizeof(virtio_network_header_t));
+
+    offset += sizeof(virtio_network_header_t);
+
+    memory_memcopy(packet->packet_data, offset, packet->packet_len);
+
+    descs[avail_tx_id % vdev->queue_size].length = sizeof(virtio_network_header_t) + packet->packet_len;
+
+    memory_free(packet->packet_data);
+    memory_free(packet);
+
+    avail->index++;
+    vq_tx->nd->vqn = 1;
+
+    return 0;
+}
 
 int8_t network_virtio_process_tx(){
 
@@ -49,36 +75,24 @@ int8_t network_virtio_process_tx(){
                 }
             }
 
-
             virtio_queue_ext_t* vq_tx = &vdev->queues[1];
             virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_tx->vq);
             virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_tx->vq);
+
+            network_mac_address_t mac;
+            memory_memcopy(vdev->extra_data, mac, sizeof(network_mac_address_t));
+            network_transmit_packet_t* dhcp_packet = network_dhcpv4_send_discover(mac);
+
+            if(dhcp_packet) {
+                network_virtio_send_packet(dhcp_packet, vdev, vq_tx, avail, descs);
+            }
 
             while(linkedlist_size(vdev->return_queue)) {
                 network_transmit_packet_t* packet = linkedlist_queue_pop(vdev->return_queue);
 
                 if(packet) {
-                    PRINTLOG(VIRTIONET, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
                     packet_exists = 1;
-
-                    uint16_t avail_tx_id = avail->index;
-
-                    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[avail_tx_id % vdev->queue_size].address);
-                    virtio_network_header_t* hdr = (virtio_network_header_t*)offset;
-
-                    memory_memclean(hdr, sizeof(virtio_network_header_t));
-
-                    offset += sizeof(virtio_network_header_t);
-
-                    memory_memcopy(packet->packet_data, offset, packet->packet_len);
-
-                    descs[avail_tx_id % vdev->queue_size].length = sizeof(virtio_network_header_t) + packet->packet_len;
-
-                    memory_free(packet->packet_data);
-                    memory_free(packet);
-
-                    avail->index++;
-                    vq_tx->nd->vqn = 1;
+                    network_virtio_send_packet(packet, vdev, vq_tx, avail, descs);
                 }
 
                 PRINTLOG(VIRTIONET, LOG_TRACE, "tx queue size 0x%llx", linkedlist_size(vdev->return_queue));

@@ -5,13 +5,12 @@
 
 #include <network/network_arp.h>
 #include <network/network_ipv4.h>
+#include <network/network_info.h>
 #include <utils.h>
 #include <memory.h>
 #include <video.h>
 #include <time.h>
 #include <video.h>
-
-extern network_ipv4_address_t NETWORK_TEST_OUR_STATIC_IP;
 
 uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, network_mac_address_t mac, uint16_t* return_packet_len);
 
@@ -31,7 +30,18 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
         return NULL;
     }
 
-    if(!network_ipv4_is_address_eq(NETWORK_TEST_OUR_STATIC_IP, src_arp_packet->target_ip)) {
+    network_info_t* ni = map_get(network_info_map, mac);
+
+    if(!ni) {
+        return NULL;
+    }
+
+    if(!ni->is_ipv4_address_set) {
+        return NULL;
+    }
+
+
+    if(!network_ipv4_is_address_eq(ni->ipv4_address, src_arp_packet->target_ip)) {
         return NULL;
     }
 

@@ -6,17 +6,15 @@
 #include <network/network_ipv4.h>
 #include <network/network_icmpv4.h>
 #include <network/network_udpv4.h>
+#include <network/network_info.h>
 #include <utils.h>
 #include <memory.h>
 #include <video.h>
 #include <time.h>
 #include <video.h>
 
-network_ipv4_address_t NETWORK_TEST_OUR_STATIC_IP = {192, 168, 122, 5};
-network_ipv4_address_t NETWORK_TEST_OUR_BROADCAST_IP = {192, 168, 122, 255};
-
-network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len);
-network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(network_ipv4_address_t sip, network_ipv4_address_t dip, network_udpv4_header_t* udp_hdr);
+network_ipv4_address_t NETWORK_IPV4_GLOBAL_BROADCAST_IP = {255, 255, 255, 255};
+network_ipv4_address_t NETWORK_IPV4_ZERO_IP = {0, 0, 0, 0};
 
 boolean_t network_ipv4_is_address_eq(network_ipv4_address_t ipv4_addr1, network_ipv4_address_t ipv4_addr2) {
     for(uint64_t i = 0; i < sizeof(network_ipv4_address_t); i++) {
@@ -81,13 +79,22 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         return NULL;
     }
 
-    if(network_ipv4_is_address_eq(NETWORK_TEST_OUR_STATIC_IP, recv_ipv4_packet->destination_ip) != 0 &&
-       network_ipv4_is_address_eq(NETWORK_TEST_OUR_BROADCAST_IP, recv_ipv4_packet->destination_ip) != 0) {
+    network_info_t* ni = map_get(network_info_map, network_info);
+
+    if(ni && ni->is_ipv4_address_set && (!network_ipv4_is_address_eq(ni->ipv4_address, recv_ipv4_packet->destination_ip) && !network_ipv4_is_address_eq(ni->ipv4_broadcast, recv_ipv4_packet->destination_ip))) {
         PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet destination isnot us");
         return NULL;
     }
 
     if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_ICMPV4) {
+        if(!ni) {
+            return NULL;
+        }
+
+        if(ni && !ni->is_ipv4_address_set) {
+            return NULL;
+        }
+
         uint8_t* data = (uint8_t*)recv_ipv4_packet;
         data += recv_ipv4_packet->header_length * 4;
         network_icmpv4_header_t* recv_icmp_hdr = (network_icmpv4_header_t*)data;
@@ -97,17 +104,17 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
 
         network_icmpv4_header_t* resp_icmp_hdr = (network_icmpv4_header_t*)network_icmpv4_process_packet(recv_icmp_hdr, &ping_data_len, &pp_len);
 
-        network_ipv4_header_t* ip = network_ipv4_create_packet_from_icmp_packet(NETWORK_TEST_OUR_STATIC_IP, recv_ipv4_packet->source_ip, resp_icmp_hdr, pp_len);
+        network_ipv4_header_t* ip = network_ipv4_create_packet_from_icmp_packet(ni->ipv4_address, recv_ipv4_packet->source_ip, resp_icmp_hdr, pp_len);
 
         *return_packet_len = BYTE_SWAP16(ip->total_length);
 
         return (uint8_t*)ip;
-    } if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_UDPV4) {
+    } else if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_UDPV4) {
         uint8_t* data = (uint8_t*)recv_ipv4_packet;
         data += recv_ipv4_packet->header_length * 4;
         network_udpv4_header_t* recv_udpv4_hdr = (network_udpv4_header_t*)data;
 
-        network_udpv4_header_t* resp_udpv4_hdr = (network_udpv4_header_t*)network_udpv4_process_packet(recv_udpv4_hdr, NULL, NULL);
+        network_udpv4_header_t* resp_udpv4_hdr = (network_udpv4_header_t*)network_udpv4_process_packet(recv_udpv4_hdr, network_info, NULL);
 
         network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, resp_udpv4_hdr);
 

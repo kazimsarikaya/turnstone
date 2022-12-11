@@ -14,10 +14,21 @@
 #include <cpu.h>
 #include <time/timer.h>
 #include <network/network_protocols.h>
+#include <network/network_info.h>
 
 int8_t network_process_rx();
 
 linkedlist_t network_received_packets = NULL;
+
+map_t network_info_map = NULL;
+
+uint64_t network_info_mke(const void* key) {
+    uint64_t x = 0;
+    memory_memcopy(key, &x, sizeof(network_mac_address_t));
+
+    return x;
+}
+
 
 int8_t network_process_rx(){
 
@@ -40,6 +51,19 @@ int8_t network_process_rx(){
                 uint8_t* return_data = NULL;
 
                 if(packet->network_type == NETWORK_TYPE_ETHERNET) {
+
+                    network_info_t* ni = map_get(network_info_map, packet->network_info);
+
+                    if(!ni) {
+                        network_info_t* ni = memory_malloc(sizeof(network_info_t));
+                        memory_memcopy(packet->network_info, ni->mac, sizeof(network_mac_address_t));
+                        map_insert(network_info_map, ni->mac, ni);
+                    } else {
+                        if(!ni->return_queue) {
+                            ni->return_queue = packet->return_queue;
+                        }
+                    }
+
                     return_data = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info, &return_data_len);
                 }
 
@@ -78,6 +102,8 @@ int8_t network_init() {
     PRINTLOG(NETWORK, LOG_INFO, "network devices starting");
     int8_t errors = 0;
 
+    network_info_map = map_new(&network_info_mke);
+
     iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->network_controllers);
 
     while(iter->end_of_iterator(iter) != 0) {
@@ -102,6 +128,7 @@ int8_t network_init() {
     iter->destroy(iter);
 
     network_received_packets = linkedlist_create_queue_with_heap(NULL);
+
     task_create_task(NULL, 64 << 10, &network_process_rx);
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");

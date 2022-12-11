@@ -15,11 +15,8 @@
 network_mac_address_t BROADCAST_MAC = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network_mac_address_t mac2) {
-    uint8_t* mac1_b = (uint8_t*) mac1;
-    uint8_t* mac2_b = (uint8_t*) mac2;
-
     for(uint64_t i = 0; i < sizeof(network_mac_address_t); i++) {
-        if(mac1_b[i] != mac2_b[i]) {
+        if(mac1[i] != mac2[i]) {
             return false;
         }
     }
@@ -76,6 +73,21 @@ uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, vo
     memory_memcopy(return_data, res + sizeof(network_ethernet_t), return_data_len);
 
     memory_free(return_data);
+
+    return res;
+}
+uint8_t* network_ethernet_create_packet(network_mac_address_t dst, network_mac_address_t src, network_ethernet_type_t type, uint16_t data_len, uint8_t* data) {
+    uint8_t* res = memory_malloc(sizeof(network_ethernet_t) + data_len);
+
+    network_ethernet_t* eth_packet = (network_ethernet_t*)res;
+
+    eth_packet->type = BYTE_SWAP16(type);
+
+    memory_memcopy(dst, eth_packet->destination, sizeof(network_mac_address_t));
+    memory_memcopy(src, eth_packet->source, sizeof(network_mac_address_t));
+    memory_memcopy(data, res + sizeof(network_ethernet_t), data_len);
+
+    memory_free(data);
 
     return res;
 }

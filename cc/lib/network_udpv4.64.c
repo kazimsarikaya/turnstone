@@ -5,13 +5,12 @@
 
 #include <network/network_udpv4.h>
 #include <network/network_ipv4.h>
+#include <network/network_dhcpv4.h>
 #include <utils.h>
 #include <memory.h>
 #include <video.h>
 #include <time.h>
 #include <video.h>
-
-network_udpv4_header_t* network_create_udpv4_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data);
 
 uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet, void* network_info, uint16_t* return_packet_len) {
     UNUSED(network_info);
@@ -32,8 +31,14 @@ uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet,
     PRINTLOG(NETWORK, LOG_TRACE, "udpv4 packet dest port %i data len %i", dport, data_len);
 
 
-    if(dport == NETWORK_APPLICATION_PROTOCOL_ECHO_SERVER) {
+    if(dport == NETWORK_APPLICATION_PORT_ECHO_SERVER) {
         return (uint8_t*)network_create_udpv4_packet_from_data(dport, sport, data_len, data);
+    } else if(dport == NETWORK_APPLICATION_PORT_DHCP_CLIENT) {
+        if(data_len < sizeof(network_dhcpv4_t)) {
+            return NULL;
+        }
+
+        network_dhcpv4_process_packet((network_dhcpv4_t*)data, network_info, NULL);
     }
 
     return NULL;
