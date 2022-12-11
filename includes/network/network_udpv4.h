@@ -10,7 +10,7 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
-
+#define NETWORK_APPLICATION_PROTOCOL_ECHO_SERVER 7
 
 typedef struct {
     uint16_t source_port;
@@ -20,5 +20,6 @@ typedef struct {
 }__attribute__((packed)) network_udpv4_header_t;
 
 
+uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet, void* network_info, uint16_t* return_packet_len);
 
 #endif

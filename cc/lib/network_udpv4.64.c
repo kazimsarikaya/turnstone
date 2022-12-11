@@ -11,7 +11,35 @@
 #include <time.h>
 #include <video.h>
 
-network_udpv4_header_t* network_create_udp_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data){
+network_udpv4_header_t* network_create_udpv4_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data);
+
+uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet, void* network_info, uint16_t* return_packet_len) {
+    UNUSED(network_info);
+    UNUSED(return_packet_len);
+
+    if(recv_udpv4_packet == NULL) {
+        return NULL;
+    }
+
+    uint8_t* data = (uint8_t*)recv_udpv4_packet;
+    data += sizeof(network_udpv4_header_t);
+    uint16_t data_len = BYTE_SWAP16(recv_udpv4_packet->length) - sizeof(network_udpv4_header_t);
+
+    uint16_t dport = BYTE_SWAP16(recv_udpv4_packet->destination_port);
+    uint16_t sport = BYTE_SWAP16(recv_udpv4_packet->source_port);
+
+
+    PRINTLOG(NETWORK, LOG_TRACE, "udpv4 packet dest port %i data len %i", dport, data_len);
+
+
+    if(dport == NETWORK_APPLICATION_PROTOCOL_ECHO_SERVER) {
+        return (uint8_t*)network_create_udpv4_packet_from_data(dport, sport, data_len, data);
+    }
+
+    return NULL;
+}
+
+network_udpv4_header_t* network_create_udpv4_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data) {
     uint16_t packet_len = sizeof(network_udpv4_header_t) + len;
 
     network_udpv4_header_t* res = memory_malloc(packet_len);

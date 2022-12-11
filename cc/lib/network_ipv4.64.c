@@ -5,6 +5,7 @@
 
 #include <network/network_ipv4.h>
 #include <network/network_icmpv4.h>
+#include <network/network_udpv4.h>
 #include <utils.h>
 #include <memory.h>
 #include <video.h>
@@ -15,6 +16,7 @@ ipv4_address_t NETWORK_TEST_OUR_STATIC_IP = {192, 168, 122, 5};
 ipv4_address_t NETWORK_TEST_OUR_BROADCAST_IP = {192, 168, 122, 255};
 
 network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(ipv4_address_t sip, ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len);
+network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(ipv4_address_t sip, ipv4_address_t dip, network_udpv4_header_t* udp_hdr);
 
 boolean_t network_ipv4_is_address_eq(ipv4_address_t ipv4_addr1, ipv4_address_t ipv4_addr2) {
     for(uint64_t i = 0; i < sizeof(ipv4_address_t); i++) {
@@ -100,6 +102,23 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         *return_packet_len = BYTE_SWAP16(ip->total_length);
 
         return (uint8_t*)ip;
+    } if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_UDPV4) {
+        uint8_t* data = (uint8_t*)recv_ipv4_packet;
+        data += recv_ipv4_packet->header_length * 4;
+        network_udpv4_header_t* recv_udpv4_hdr = (network_udpv4_header_t*)data;
+
+        network_udpv4_header_t* resp_udpv4_hdr = (network_udpv4_header_t*)network_udpv4_process_packet(recv_udpv4_hdr, NULL, NULL);
+
+        network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, resp_udpv4_hdr);
+
+        if(ip == NULL) {
+            PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet response discarded");
+            return NULL;
+        }
+
+        *return_packet_len = BYTE_SWAP16(ip->total_length);
+
+        return (uint8_t*)ip;
     } else {
         PRINTLOG(NETWORK, LOG_TRACE, "unimplemented ipv4 protocol 0x%02x", recv_ipv4_packet->protocol);
     }
@@ -133,9 +152,11 @@ network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(ipv4_address_
     return ipv4_packet;
 }
 
-/*
+network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(ipv4_address_t sip, ipv4_address_t dip, network_udpv4_header_t* udp_hdr) {
+    if(udp_hdr == NULL) {
+        return NULL;
+    }
 
-   network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(ipv4_address_t sip, ipv4_address_t dip, network_udp_header_t* udp_hdr){
     uint16_t packet_len = sizeof(network_ipv4_header_t) + BYTE_SWAP16(udp_hdr->length);
 
     network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);
@@ -144,7 +165,7 @@ network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(ipv4_address_
     ipv4_packet->header_length = 5;
     ipv4_packet->total_length = BYTE_SWAP16(packet_len);
     ipv4_packet->ttl = NETWORK_IPV4_TTL;
-    ipv4_packet->protocol = NETWORK_IPV4_PROTOCOL_UDP;
+    ipv4_packet->protocol = NETWORK_IPV4_PROTOCOL_UDPV4;
 
     memory_memcopy(sip, ipv4_packet->source_ip, sizeof(ipv4_address_t));
     memory_memcopy(dip, ipv4_packet->destination_ip, sizeof(ipv4_address_t));
@@ -172,5 +193,4 @@ network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(ipv4_address_
 
 
     return ipv4_packet;
-   }
- */
+}
