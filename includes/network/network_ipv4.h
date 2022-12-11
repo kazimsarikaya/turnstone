@@ -10,7 +10,7 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
-typedef uint8_t ipv4_address_t[4];
+typedef uint8_t network_ipv4_address_t[4];
 
 #define NETWORK_IPV4_VERSION 4
 #define NETWORK_IPV4_TTL 128
@@ -37,11 +37,11 @@ typedef struct {
     uint32_t                ttl             : 8;
     network_ipv4_protocol_t protocol        : 8;
     uint32_t                header_checksum : 16;
-    ipv4_address_t          source_ip;
-    ipv4_address_t          destination_ip;
+    network_ipv4_address_t  source_ip;
+    network_ipv4_address_t  destination_ip;
 }__attribute__((packed)) network_ipv4_header_t;
 
-boolean_t network_ipv4_is_address_eq(ipv4_address_t ipv4_addr1, ipv4_address_t ipv4_addr2);
+boolean_t network_ipv4_is_address_eq(network_ipv4_address_t ipv4_addr1, network_ipv4_address_t ipv4_addr2);
 uint8_t*  network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, void* network_info, uint16_t* return_packet_len);
 
 #endif

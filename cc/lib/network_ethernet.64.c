@@ -12,13 +12,13 @@
 #include <time.h>
 #include <video.h>
 
-mac_address_t BROADCAST_MAC = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+network_mac_address_t BROADCAST_MAC = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-boolean_t network_ethernet_is_mac_address_eq(mac_address_t mac1, mac_address_t mac2) {
+boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network_mac_address_t mac2) {
     uint8_t* mac1_b = (uint8_t*) mac1;
     uint8_t* mac2_b = (uint8_t*) mac2;
 
-    for(uint64_t i = 0; i < sizeof(mac_address_t); i++) {
+    for(uint64_t i = 0; i < sizeof(network_mac_address_t); i++) {
         if(mac1_b[i] != mac2_b[i]) {
             return false;
         }
@@ -32,8 +32,8 @@ uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, vo
         return NULL;
     }
 
-    mac_address_t our_mac = {};
-    memory_memcopy(network_info, our_mac, sizeof(mac_address_t));
+    network_mac_address_t our_mac = {};
+    memory_memcopy(network_info, our_mac, sizeof(network_mac_address_t));
 
     uint16_t packet_type = BYTE_SWAP16(recv_eth_packet->type);
 
@@ -71,8 +71,8 @@ uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, vo
 
     network_ethernet_t* eth_packet = (network_ethernet_t*)res;
     eth_packet->type = recv_eth_packet->type;
-    memory_memcopy(recv_eth_packet->source, eth_packet->destination, sizeof(mac_address_t));
-    memory_memcopy(our_mac, eth_packet->source, sizeof(mac_address_t));
+    memory_memcopy(recv_eth_packet->source, eth_packet->destination, sizeof(network_mac_address_t));
+    memory_memcopy(our_mac, eth_packet->source, sizeof(network_mac_address_t));
     memory_memcopy(return_data, res + sizeof(network_ethernet_t), return_data_len);
 
     memory_free(return_data);

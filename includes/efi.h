@@ -672,21 +672,21 @@ typedef uint16_t efi_pxe_base_code_udp_port_t;
 
 typedef struct {
     uint8_t addr[4];
-}efi_ipv4_address_t;
+}efi_network_ipv4_address_t;
 
 typedef struct {
     uint8_t addr[16];
 }efi_ipv6_address_t;
 
 typedef union {
-    uint32_t           addr[4];
-    efi_ipv4_address_t v4;
-    efi_ipv6_address_t v6;
+    uint32_t                   addr[4];
+    efi_network_ipv4_address_t v4;
+    efi_ipv6_address_t         v6;
 } efi_ip_address_t;
 
 typedef struct {
     uint8_t addr[32];
-} efi_mac_address_t;
+} efi_network_mac_address_t;
 
 typedef enum {
     EFI_PXE_BASE_CODE_IP_FILTER_STATION_IP = 1,
@@ -724,8 +724,8 @@ typedef struct {
 } __attribute__((packed)) efi_pxe_base_code_tftp_error_t;
 
 typedef struct {
-    efi_ip_address_t  ip_address;
-    efi_mac_address_t mac_address;
+    efi_ip_address_t          ip_address;
+    efi_network_mac_address_t mac_address;
 } efi_pxe_base_code_arp_entry_t;
 
 typedef struct {
@@ -880,7 +880,7 @@ typedef efi_status_t (EFIAPI* efi_base_code_mtftp_t)(efi_handle_t this, efi_pxe_
 typedef efi_status_t (EFIAPI* efi_base_code_udp_write_t)(efi_handle_t this, uint16_t op_flags, efi_ip_address_t* dst_ip, efi_pxe_base_code_udp_port_t* dst_port, efi_ip_address_t* gw_ip, efi_ip_address_t* src_ip, efi_pxe_base_code_udp_port_t* src_port, uint64_t* header_size, void* header, uint64_t* buffer_size, void* buffer);
 typedef efi_status_t (EFIAPI* efi_base_code_udp_read_t)(efi_handle_t this, uint16_t op_flags, efi_ip_address_t* dst_ip, efi_pxe_base_code_udp_port_t* dst_port, efi_ip_address_t* src_ip, efi_pxe_base_code_udp_port_t* src_port, uint64_t* header_size, void* header, uint64_t* buffer_size, void* buffer);
 typedef efi_status_t (EFIAPI* efi_base_code_set_ip_filer_t)(efi_handle_t this, efi_pxe_base_code_ip_filter_t* new_filter);
-typedef efi_status_t (EFIAPI* efi_base_code_arp_t)(efi_handle_t this, efi_ip_address_t* ip_addr, efi_mac_address_t* mac_addr);
+typedef efi_status_t (EFIAPI* efi_base_code_arp_t)(efi_handle_t this, efi_ip_address_t* ip_addr, efi_network_mac_address_t* mac_addr);
 typedef efi_status_t (EFIAPI* efi_base_code_set_parameters_t)(efi_handle_t this, boolean_t* new_auto_arp, boolean_t* new_send_guid, uint8_t* new_ttl, uint8_t* new_tos, boolean_t* new_make_callback);
 typedef efi_status_t (EFIAPI* efi_base_code_set_station_ip_t)(efi_handle_t this, efi_ip_address_t* new_station_ip, efi_ip_address_t* new_subnet_mask);
 typedef efi_status_t (EFIAPI* efi_base_code_set_packets_t)(efi_handle_t this, boolean_t* new_dhcp_discover_valid, boolean_t* new_dhcp_ack_received, boolean_t* new_proxy_offer_received, boolean_t* new_pxe_discover_valid, boolean_t* new_pxe_reply_received, boolean_t* new_pxe_bis_reply_received, efi_pxe_base_code_packet_t* new_dhcp_discover, efi_pxe_base_code_packet_t* new_dhcp_ack, efi_pxe_base_code_packet_t* new_proxy_offer, efi_pxe_base_code_packet_t* new_pxe_discover, efi_pxe_base_code_packet_t* new_pxe_reply, efi_pxe_base_code_packet_t* new_pxe_bis_reply);

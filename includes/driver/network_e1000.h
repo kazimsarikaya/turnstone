@@ -177,10 +177,10 @@ typedef struct network_e1000_tx_desc_s {
 } __attribute__((packed)) network_e1000_tx_desc_t;
 
 typedef struct {
-    pci_dev_t*    pci_netdev;
-    mac_address_t mac;
-    linkedlist_t  transmit_queue;
-    uint8_t       irq_base;
+    pci_dev_t*            pci_netdev;
+    network_mac_address_t mac;
+    linkedlist_t          transmit_queue;
+    uint8_t               irq_base;
 
     uint64_t rx_count;
     uint64_t tx_count;

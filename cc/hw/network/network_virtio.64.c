@@ -216,10 +216,10 @@ int8_t network_virtio_ctrl_set_mac(virtio_dev_t* vdev){
 
     ctrl->class = VIRTIO_NETWORK_CTRL_MAC;
     ctrl->command = VIRTIO_NETWORK_CTRL_MAC_ADDR_SET;
-    memory_memcopy((mac_address_t*)vdev->extra_data, offset + 2, sizeof(mac_address_t));
+    memory_memcopy((network_mac_address_t*)vdev->extra_data, offset + 2, sizeof(network_mac_address_t));
 
 
-    descs[empty_desc].length = 2 + sizeof(mac_address_t);
+    descs[empty_desc].length = 2 + sizeof(network_mac_address_t);
 
     descs[empty_desc].flags = VIRTIO_QUEUE_DESC_F_NEXT;
     descs[empty_desc].next = empty_desc + 1;
@@ -247,7 +247,7 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
         PRINTLOG(VIRTIONET, LOG_TRACE, "device has mac feature");
         req_features |= VIRTIO_NETWORK_F_MAC;
 
-        mac_address_t* mac = memory_malloc(sizeof(mac_address_t));
+        network_mac_address_t* mac = memory_malloc(sizeof(network_mac_address_t));
 
         if(vdev->is_legacy) {
             int16_t offset = 0;
@@ -270,9 +270,9 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
             offset++;
             mac_bytes[5] = inb(vdev->iobase + VIRTIO_NETWORK_IOPORT_MAC + offset);
 
-            memory_memcopy(mac_bytes, mac, sizeof(mac_address_t));
+            memory_memcopy(mac_bytes, mac, sizeof(network_mac_address_t));
         } else {
-            memory_memcopy(((virtio_network_config_t*)vdev->device_config)->mac, mac, sizeof(mac_address_t));
+            memory_memcopy(((virtio_network_config_t*)vdev->device_config)->mac, mac, sizeof(network_mac_address_t));
         }
 
         vdev->extra_data = mac;

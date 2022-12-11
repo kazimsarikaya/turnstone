@@ -485,7 +485,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
     PRINTLOG(E1000, LOG_TRACE, "device has mac %02x:%02x:%02x:%02x:%02x:%02x", mac_tmp[0], mac_tmp[1], mac_tmp[2], mac_tmp[3], mac_tmp[4], mac_tmp[5]);
 
-    memory_memcopy(mac_tmp, dev->mac, sizeof(mac_address_t));
+    memory_memcopy(mac_tmp, dev->mac, sizeof(network_mac_address_t));
 
     // set the LINK UP
     dev->mmio->ctrl |= NETWORK_E1000_CTRL_SLU;

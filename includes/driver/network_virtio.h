@@ -43,10 +43,10 @@
 #define VIRTIO_NETWORK_STATUS_ANNOUNCE    2
 
 typedef struct {
-    mac_address_t mac;
-    uint16_t      status; /* if VIRTIO_NETWORK_F_STATUS */
-    uint16_t      max_virtual_queue_pairs; /* if VIRTIO_NETWORK_F_MQ */
-    uint16_t      mtu; /* if VIRTIO_NETWORK_F_MTU */
+    network_mac_address_t mac;
+    uint16_t              status; /* if VIRTIO_NETWORK_F_STATUS */
+    uint16_t              max_virtual_queue_pairs; /* if VIRTIO_NETWORK_F_MQ */
+    uint16_t              mtu; /* if VIRTIO_NETWORK_F_MTU */
 }__attribute__((packed)) virtio_network_config_t;
 
 #define VIRTIO_NETWORK_HDR_F_NEEDS_CSUM    1
@@ -91,8 +91,8 @@ typedef struct {
 #define VIRTIO_NETWORK_CTRL_MAC_ADDR_SET         1
 
 typedef struct {
-    uint32_t      entry_count;
-    mac_address_t entries[];
+    uint32_t              entry_count;
+    network_mac_address_t entries[];
 }__attribute__((packed)) virtio_network_control_mac_t;
 
 #define VIRTIO_NETWORK_CTRL_VLAN       2

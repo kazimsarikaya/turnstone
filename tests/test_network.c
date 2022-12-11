@@ -89,11 +89,11 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     fwrite(&ph, sizeof(pcap_packet_header_t), 1, pcap_file);
 
-    mac_address_t src_mac = {0x54, 0x50, 0x00, 0x01, 0x02, 0x03};
-    mac_address_t dst_mac = {0x54, 0x50, 0x00, 0x03, 0x02, 0x01};
+    network_mac_address_t src_mac = {0x54, 0x50, 0x00, 0x01, 0x02, 0x03};
+    network_mac_address_t dst_mac = {0x54, 0x50, 0x00, 0x03, 0x02, 0x01};
 
-    ipv4_address_t src_ip = {192, 168, 122, 5};
-    ipv4_address_t dst_ip = {192, 168, 122, 1};
+    network_ipv4_address_t src_ip = {192, 168, 122, 5};
+    network_ipv4_address_t dst_ip = {192, 168, 122, 1};
 
     network_ethernet_t* arp1 = network_create_arp_request(src_mac, src_ip, dst_ip);
 

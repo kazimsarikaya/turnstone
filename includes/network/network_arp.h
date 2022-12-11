@@ -22,15 +22,15 @@
 #define NETWORK_ARP_OPERATION_CODE_ANSWER 2
 
 typedef struct {
-    uint16_t       hardware_type;
-    uint16_t       protocol_type;
-    uint8_t        hardware_address_length;
-    uint8_t        protocol_address_length;
-    uint16_t       operation_code;
-    mac_address_t  source_mac;
-    ipv4_address_t source_ip;
-    mac_address_t  target_mac;
-    ipv4_address_t target_ip;
+    uint16_t               hardware_type;
+    uint16_t               protocol_type;
+    uint8_t                hardware_address_length;
+    uint8_t                protocol_address_length;
+    uint16_t               operation_code;
+    network_mac_address_t  source_mac;
+    network_ipv4_address_t source_ip;
+    network_mac_address_t  target_mac;
+    network_ipv4_address_t target_ip;
 }__attribute__((packed)) network_arp_t;
 
 uint8_t* network_arp_process_packet(network_arp_t* recv_arp_packet, void* network_info, uint16_t* return_packet_len);
