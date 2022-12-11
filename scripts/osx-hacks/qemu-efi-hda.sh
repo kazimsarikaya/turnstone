@@ -37,7 +37,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults \
+  -nodefaults -no-user-config \
   -M q35 -m 1g -smp cpus=2 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
@@ -49,8 +49,8 @@ qemu-system-x86_64 \
   -monitor stdio \
   -device vmware-svga,id=gpu0 \
   -device virtio-net,netdev=t0,id=nic0 \
-  -netdev $NETDEV  \
+  -netdev $NETDEV \
   -device virtio-keyboard,id=kbd \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
-  -display gtk 
+  -display gtk

@@ -11,6 +11,12 @@ import signal
 import fcntl
 import struct
 from os.path import exists as file_exists
+import platform 
+import subprocess
+
+TUNSETIFF = 0x400454ca
+IFF_TAP = 0x0002
+IFF_NO_PI = 0x1000
 
 PAYLOAD_OFFSET = 14
 
@@ -37,8 +43,20 @@ tunnel_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 tunnel_socket.bind(server_address)
 tunnel_socket.settimeout(1)
 
-tun_fd = os.open("/dev/tap0", os.O_RDWR)
-out_strm = os.popen("ifconfig tap0 | grep ether |cut -dH -f2|cut -d\  -f2")
+if file_exists("/dev/tap0"):
+    tun_fd = os.open("/dev/tap0", os.O_RDWR)
+
+if file_exists("/dev/net/tun"):
+    tun = os.open('/dev/net/tun', os.O_RDWR)
+    ifr = struct.pack('16sH', bytes("tap0","utf-8"), IFF_TAP | IFF_NO_PI)
+    fcntl.ioctl(tun, TUNSETIFF, ifr)
+    tun_fd = tun
+
+if platform.system() == "Darwin":
+    out_strm = os.popen("ifconfig tap0 | grep ether |cut -dH -f2|cut -d\  -f2")
+else: 
+    out_strm = os.popen("ip l show dev tap0 | grep ether |awk '{print $2}'")
+
 mac_str = out_strm.read().strip()
 out_strm.close()
 
@@ -52,6 +70,8 @@ router_mac = int(mac_str.replace(':', ''), 16)
 ip_mac[router_ip_int] = router_mac
 mac_ip[router_mac] = router_ip_int
 
+qemu_ip_int = int(ipaddress.IPv4Address("192.168.122.5"))
+target_qemu[qemu_ip_int] = ("127.0.0.1", 16385)
 
 ROUTER_NOTSTOP = True
 
@@ -76,7 +96,11 @@ def router_stop(signum, frame):
     global ROUTER_NOTSTOP
     global tun_fd
     ROUTER_NOTSTOP = False
-    os.close(tun_fd)
+
+    try:
+        os.close(tun_fd)
+    except:
+        pass
 
     qemus = open("qemus.txt", "w")
 
@@ -203,9 +227,13 @@ def qemu_handler():
     while ROUTER_NOTSTOP:
         try:
             data, address = tunnel_socket.recvfrom(65536)
+
             dst_mac = ':'.join('%02x' % b for b in data[0:6])
             src_mac = ':'.join('%02x' % b for b in data[6:12])
             protocol = int.from_bytes(data[12:14], "big")
+
+            if protocol == 0:
+                continue
 
             src_mac_int = int.from_bytes(data[6:12], "big")
             target_qemu[src_mac_int] = address

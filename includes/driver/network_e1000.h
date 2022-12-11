@@ -8,7 +8,8 @@
 
 #include <types.h>
 #include <pci.h>
-#include <driver/network_protocols.h>
+#include <network/network_protocols.h>
+#include <network/network_ethernet.h>
 
 // mmio register offsets at bar0
 #define NETWORK_E1000_REG_CTRL      0x0000

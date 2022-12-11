@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <driver/network.h>
+#include <network.h>
 #include <driver/network_virtio.h>
 #include <driver/network_e1000.h>
 #include <pci.h>
@@ -13,7 +13,7 @@
 #include <cpu/task.h>
 #include <cpu.h>
 #include <time/timer.h>
-#include <driver/network_protocols.h>
+#include <network/network_protocols.h>
 
 int8_t network_process_rx();
 
@@ -25,6 +25,7 @@ int8_t network_process_rx(){
 
     while(1) {
         if(linkedlist_size(network_received_packets) == 0) {
+            PRINTLOG(NETWORK, LOG_TRACE, "no packet received, changing task");
             task_set_message_waiting();
             task_yield();
         }
@@ -35,25 +36,27 @@ int8_t network_process_rx(){
             if(packet) {
                 PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
 
-                uint16_t return_packet_len = 0;
-                network_ethernet_t* return_packet = network_process_packet(packet, &return_packet_len);
+                uint16_t return_data_len = 0;
+                uint8_t* return_data = NULL;
+
+                if(packet->network_type == NETWORK_TYPE_ETHERNET) {
+                    return_data = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info, &return_data_len);
+                }
 
                 linkedlist_t return_queue = packet->return_queue;
 
                 memory_free(packet->packet_data);
                 memory_free(packet);
 
-                if(return_packet && return_packet_len) {
-                    PRINTLOG(NETWORK, LOG_TRACE, "network packet proccessed with return len 0x%x", return_packet_len);
-
+                if(return_data && return_data_len) {
                     if(return_queue) {
                         network_transmit_packet_t* tx_packet = memory_malloc(sizeof(network_transmit_packet_t));
-                        tx_packet->packet_len = return_packet_len;
-                        tx_packet->packet_data = (uint8_t*)return_packet;
+                        tx_packet->packet_len = return_data_len;
+                        tx_packet->packet_data = return_data;
 
                         linkedlist_queue_push(return_queue, tx_packet);
                     } else {
-                        PRINTLOG(NETWORK, LOG_TRACE, "there is no return packet 0x%x", return_packet_len);
+                        PRINTLOG(NETWORK, LOG_TRACE, "there is no return queue");
                     }
 
                 } else {

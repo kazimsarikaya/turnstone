@@ -8,7 +8,8 @@
 #include <utils.h>
 #include <video.h>
 #include <time/timer.h>
-#include <driver/network.h>
+#include <network.h>
+#include <network/network_ethernet.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <acpi.h>
@@ -285,10 +286,11 @@ void network_e1000_rx_poll(network_e1000_dev_t* dev) {
 
             packet->packet_len = pktlen;
             packet->return_queue = dev->transmit_queue;
+            packet->network_info = dev->mac;
+            packet->network_type = NETWORK_TYPE_ETHERNET;
 
             packet->packet_data = memory_malloc(pktlen);
             memory_memcopy(pkt, packet->packet_data, pktlen);
-            memory_memcopy(dev->mac, packet->device_mac_address, sizeof(mac_address_t));
 
             linkedlist_queue_push(network_received_packets, packet);
         }
@@ -312,6 +314,8 @@ int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
 
     // read the pending interrupt status
     uint32_t icr = dev->mmio->isr_status;
+
+    PRINTLOG(E1000, LOG_TRACE, "interrupt received isr status: %i", icr);
 
     // tx success stuff
     icr &= ~(3);

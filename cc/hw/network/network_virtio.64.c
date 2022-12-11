@@ -9,7 +9,8 @@
 #include <linkedlist.h>
 #include <pci.h>
 #include <ports.h>
-#include <driver/network.h>
+#include <network.h>
+#include <network/network_ethernet.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <time/timer.h>
@@ -41,6 +42,13 @@ int8_t network_virtio_process_tx(){
         for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
             virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
 
+            if(!vdev->is_legacy) {
+                if(vdev->selected_features & VIRTIO_NETWORK_F_STATUS) {
+                    uint32_t link_status = ((virtio_network_config_t*)vdev->device_config)->status;
+                    PRINTLOG(VIRTIONET, LOG_TRACE, "virtnet device link status %i", link_status);
+                }
+            }
+
 
             virtio_queue_ext_t* vq_tx = &vdev->queues[1];
             virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_tx->vq);
@@ -58,11 +66,7 @@ int8_t network_virtio_process_tx(){
                     uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[avail_tx_id % vdev->queue_size].address);
                     virtio_network_header_t* hdr = (virtio_network_header_t*)offset;
 
-                    if(vdev->selected_features & VIRTIO_NETWORK_F_MRG_RXBUF) {
-                        hdr->header_length = sizeof(virtio_network_header_t);
-                    } else {
-                        hdr->header_length = sizeof(virtio_network_header_t) - 2;
-                    }
+                    memory_memclean(hdr, sizeof(virtio_network_header_t));
 
                     offset += sizeof(virtio_network_header_t);
 
@@ -97,53 +101,61 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet received int 0x%02x", intnum);
 
-    virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, 0);
+    for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
+        virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
 
-    virtio_queue_ext_t* vq_rx = &vdev->queues[0];
-    virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
+        virtio_queue_ext_t* vq_rx = &vdev->queues[0];
+        virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
+        virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
+        virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
 
 
-    while(vq_rx->last_used_index < used->index) {
-        network_received_packet_t* packet = memory_malloc(sizeof(network_received_packet_t));
+        while(vq_rx->last_used_index < used->index) {
+            network_received_packet_t* packet = memory_malloc(sizeof(network_received_packet_t));
 
-        uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
-        uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
+            uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
+            uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
 
-        uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
-        virtio_network_header_t* hdr = (virtio_network_header_t*)offset;
+            uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
+            virtio_network_header_t* hdr = (virtio_network_header_t*)offset;
 
-        if(vdev->features & VIRTIO_NETWORK_F_MRG_RXBUF) {
-            hdr->header_length = sizeof(virtio_network_header_t);
-        } else {
-            hdr->header_length = sizeof(virtio_network_header_t) - 2;
+            if(vdev->features & VIRTIO_NETWORK_F_MRG_RXBUF) {
+                hdr->header_length = sizeof(virtio_network_header_t);
+            } else {
+                hdr->header_length = sizeof(virtio_network_header_t) - 2;
+            }
+
+            offset += hdr->header_length;
+            packet_len -= hdr->header_length;
+
+            packet->packet_len = packet_len;
+            packet->return_queue = vdev->return_queue;
+            packet->network_info = vdev->extra_data;
+            packet->network_type = NETWORK_TYPE_ETHERNET;
+
+            packet->packet_data = memory_malloc(packet_len);
+            memory_memcopy(offset, packet->packet_data, packet_len);
+
+            descs[packet_desc_id].flags = VIRTIO_QUEUE_DESC_F_WRITE;
+
+            avail->ring[avail->index % vdev->queue_size] = packet_desc_id;
+            avail->index++;
+            vq_rx->nd->vqn = 0;
+
+            uint8_t* mac = vdev->extra_data;
+
+            PRINTLOG(VIRTIONET, LOG_TRACE, "packet received with length 0x%llx", packet_len);
+            PRINTLOG(VIRTIONET, LOG_TRACE, "dst mac %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+            linkedlist_queue_push(network_received_packets, packet);
+
+            vq_rx->last_used_index++;
         }
 
-        offset += sizeof(virtio_network_header_t);
-        packet_len -= sizeof(virtio_network_header_t);
-
-        packet->packet_len = packet_len;
-        packet->return_queue = vdev->return_queue;
-
-        packet->packet_data = memory_malloc(packet_len);
-        memory_memcopy(offset, packet->packet_data, packet_len);
-        memory_memcopy((mac_address_t*)vdev->extra_data, packet->device_mac_address, sizeof(mac_address_t));
-
-        descs[packet_desc_id].flags = VIRTIO_QUEUE_DESC_F_WRITE;
-
-        avail->ring[avail->index % vdev->queue_size] = packet_desc_id;
-        avail->index++;
-        vq_rx->nd->vqn = 0;
-
-        PRINTLOG(VIRTIONET, LOG_TRACE, "packet received with length 0x%llx", packet_len);
-
-        linkedlist_queue_push(network_received_packets, packet);
-
-        vq_rx->last_used_index++;
+        pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
     }
 
-    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+
     apic_eoi();
 
     return 0;
@@ -328,6 +340,12 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
         req_features |= VIRTIO_F_NOTIFICATION_DATA;
     }
 
+    if(avail_features & VIRTIO_NETWORK_F_GUEST_HDRLEN) {
+        PRINTLOG(VIRTIONET, LOG_TRACE, "device has guest hdr len feature");
+
+        req_features |= VIRTIO_NETWORK_F_GUEST_HDRLEN;
+    }
+
     return req_features;
 }
 
@@ -428,6 +446,16 @@ int8_t network_virtio_init(pci_dev_t* pci_netdev){
     }
 
     task_create_task(NULL, 64 << 10, &network_virtio_process_tx);
+
+    if(!vdev_net->is_legacy) {
+        if(vdev_net->selected_features & VIRTIO_NETWORK_F_STATUS) {
+            uint32_t link_status = ((virtio_network_config_t*)vdev_net->device_config)->status;
+            PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device link status %i", link_status);
+        }
+    }
+
+    uint8_t* mac = (uint8_t*)vdev_net->extra_data;
+    PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device mac %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device started");
 

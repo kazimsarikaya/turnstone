@@ -34,6 +34,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
     frame_t* queue_frames = NULL;
     frame_t* queue_meta_frames = NULL;
 
+    boolean_t do_not_init = !write;
+
 
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) == 0 &&
        KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) == 0) {
@@ -61,7 +63,13 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
 
         for(int32_t i = 0; i < vdev->queue_size; i++) {
             descs[i].address = queue_fa + i * queue_item_size;
-            descs[i].length = queue_item_size;
+
+
+            if(do_not_init) {
+                descs[i].length = 0;
+            } else {
+                descs[i].length = queue_item_size;
+            }
 
             if(iter_rw) {
                 if(write) {
@@ -86,7 +94,12 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
 
         }
 
-        avail->index = avail_idx;
+        if(do_not_init) {
+            avail->index = 0;
+        } else {
+            avail->index = avail_idx;
+        }
+
 
         PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x builded", queue_no);
 
@@ -268,6 +281,10 @@ int8_t virtio_init_modern(virtio_dev_t* vdev, virtio_select_features_f select_fe
 
     if(select_features) {
         vdev->selected_features = select_features(vdev, vdev->features);
+
+        if(avail_features & VIRTIO_F_IN_ORDER) {
+            vdev->selected_features |= VIRTIO_F_IN_ORDER;
+        }
 
         PRINTLOG(VIRTIO, LOG_TRACE, "features avail 0x%llx req 0x%llx", vdev->features, vdev->selected_features );
 

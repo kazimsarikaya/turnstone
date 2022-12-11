@@ -8,7 +8,8 @@
 
 #include <types.h>
 #include <pci.h>
-#include <driver/network_protocols.h>
+#include <network/network_protocols.h>
+#include <network/network_ethernet.h>
 #include <driver/virtio.h>
 #include <linkedlist.h>
 
@@ -34,6 +35,7 @@
 #define VIRTIO_NETWORK_F_GUEST_ANNOUNCE   (1ULL << 21)
 #define VIRTIO_NETWORK_F_MQ               (1ULL << 22)
 #define VIRTIO_NETWORK_F_CTRL_MAC_ADDR    (1ULL << 23)
+#define VIRTIO_NETWORK_F_GUEST_HDRLEN     (1ULL << 59)
 #define VIRTIO_NETWORK_F_RSC_EXT          (1ULL << 61)
 #define VIRTIO_NETWORK_F_STANDBY          (1ULL << 62)
 
