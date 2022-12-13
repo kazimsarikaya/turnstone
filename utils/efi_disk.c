@@ -95,7 +95,6 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
 
 int32_t main(int32_t argc, char** argv) {
     setup_ram();
-    dump_ram("tmp/mem-free.dump");
 
     if (argc < 4) {
         printf("Error: not enough arguments\n");
@@ -237,9 +236,6 @@ int32_t main(int32_t argc, char** argv) {
     fs->close(fs);
 
     d->close(d);
-
-
-    dump_ram("tmp/mem.dump");
 
     print_success("DISK BUILDED");
 

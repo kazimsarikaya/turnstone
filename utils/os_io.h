@@ -17,8 +17,10 @@ size_t  fread (void* ptr, size_t size, size_t count, FILE* stream);
 size_t  ftell(FILE* stream);
 int32_t fseek (FILE* stream, size_t offset, int32_t origin);
 size_t  fclose(FILE* stream);
-int     fflush(FILE* stream);
-int     fprintf(FILE* stream, const char* format, ...);
-int     fscanf(FILE* stream, const char* format, ...);
+int32_t fflush(FILE* stream);
+int32_t fprintf(FILE* stream, const char* format, ...);
+int32_t fscanf(FILE* stream, const char* format, ...);
+int32_t putc(int32_t c, FILE* stream);
+int32_t getc(FILE* stream);
 
 #endif

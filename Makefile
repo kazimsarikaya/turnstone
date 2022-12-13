@@ -91,7 +91,7 @@ MKDIRSDONE = .mkdirsdone
 EFIDISKTOOL = $(OBJDIR)/efi_disk.bin
 EFIBOOTFILE = $(OBJDIR)/BOOTX64.EFI
 
-PROGS = $(OBJDIR)/stage3.bin
+PROGS = $(OBJDIR)/stage3.bin.pack
 
 TESTPROGS = $(OBJDIR)/stage3.test.bin
 
@@ -107,7 +107,7 @@ qemu:
 qemu-internal: $(QEMUDISK)
 
 qemu-pxe: $(PROGS)
-	output/pxeconfgen.bin -k stage3.bin -kp $(OBJDIR)/stage3.bin -o $(OBJDIR)/pxeconf.bson
+	output/pxeconfgen.bin -k stage3.bin.pack -kp $(OBJDIR)/stage3.bin.pack -o $(OBJDIR)/pxeconf.bson
 
 qemu-test: $(TESTQEMUDISK)
 
@@ -131,7 +131,7 @@ $(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS)
 	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
 
 $(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) 
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack
 
 $(TESTQEMUDISK): $(TESTDISK)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin
@@ -142,6 +142,9 @@ $(MKDIRSDONE):
 
 $(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
 	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
+
+$(OBJDIR)/stage3.bin.pack: $(OBJDIR)/stage3.bin
+	$(OBJDIR)/zpack.bin c $^ $@
 
 $(OBJDIR)/stage3.test.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(CC64OBJS) $(CC64GENOBJS) $(CC64TESTOBJS) $(FONTOBJ)
 	$(OBJDIR)/linker.bin --test-section --trim -o $@ -M $@.map -T $(filter-out $<,$^)

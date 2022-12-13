@@ -11,6 +11,8 @@
 #include <cpu/sync.h>
 #include <buffer.h>
 #include <data.h>
+#include <zpack.h>
+#include <xxhash.h>
 
 efi_system_table_t* ST;
 efi_boot_services_t* BS;
@@ -27,8 +29,8 @@ typedef struct {
 efi_status_t efi_setup_heap(){
     efi_status_t res;
 
-    void* heap_area;
-    int64_t heap_size = 1024 * 4096;
+    void* heap_area = NULL;
+    int64_t heap_size = 1024 * 1024 * 4; // 4 MiB
 
     res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
 
@@ -590,7 +592,7 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
     res = BS->handle_protocol(image, &lip_guid, (void**)&loaded_image);
 
     if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot get details of loaded imgage %llx", res);
+        PRINTLOG(EFI, LOG_ERROR, "cannot get details of loaded image 0x%llx", res);
 
         goto catch_efi_error;
     }
@@ -614,7 +616,63 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
     }
 
     if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot load kernel %llx", res);
+        PRINTLOG(EFI, LOG_FATAL, "cannot load kernel 0x%llx", res);
+
+        goto catch_efi_error;
+    }
+
+    zpack_format_t* zf = (zpack_format_t*)kernel_data->data;
+
+    if(zf->magic != ZPACK_FORMAT_MAGIC) {
+        PRINTLOG(EFI, LOG_FATAL, "zpack magic mismatch");
+
+        goto catch_efi_error;
+    }
+
+    if(zf->packed_size + sizeof(zpack_format_t) > kernel_data->size) {
+        PRINTLOG(EFI, LOG_FATAL, "loaded kernel data size deficit");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "packed kernel size %lli", zf->packed_size);
+
+    uint64_t packed_hash = xxhash64_hash(kernel_data->data + sizeof(zpack_format_t), zf->packed_size);
+
+    if(packed_hash != zf->packed_hash) {
+        PRINTLOG(EFI, LOG_FATAL, "kernel packed hash mismatch 0x%llx 0x%llx", zf->packed_hash, packed_hash);
+
+        goto catch_efi_error;
+    }
+
+    buffer_t packed_kernel_buf = buffer_encapsulate(kernel_data->data + sizeof(zpack_format_t), zf->packed_size);
+    buffer_t unpacked_kernel_buf = buffer_new_with_capacity(NULL, kernel_data->size * 2 + 4096);
+
+    kernel_data->size = zpack_unpack(packed_kernel_buf, unpacked_kernel_buf);
+
+    PRINTLOG(EFI, LOG_DEBUG, "unpacked kernel size %lli", kernel_data->size);
+
+    if(kernel_data->size != zf->unpacked_size) {
+        PRINTLOG(EFI, LOG_FATAL, "kernel unpacked size mismatch");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t zf_unpacked_hash = zf->unpacked_hash;
+
+    buffer_destroy(packed_kernel_buf);
+
+    memory_free(kernel_data->data);
+
+
+    kernel_data->data = buffer_get_all_bytes(unpacked_kernel_buf, NULL);
+
+    buffer_destroy(unpacked_kernel_buf);
+
+    uint64_t unpacked_hash = xxhash64_hash(kernel_data->data, kernel_data->size);
+
+    if(unpacked_hash != zf_unpacked_hash) {
+        PRINTLOG(EFI, LOG_FATAL, "kernel unpacked hash mismatch 0x%llx 0x%llx", zf_unpacked_hash, unpacked_hash);
 
         goto catch_efi_error;
     }

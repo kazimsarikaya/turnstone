@@ -14,16 +14,29 @@
 
 typedef void * buffer_t;
 
+typedef enum {
+    BUFFER_SEEK_DIRECTION_START,
+    BUFFER_SEEK_DIRECTION_CURRENT,
+    BUFFER_SEEK_DIRECTION_END,
+} buffer_seek_direction_t;
+
 buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity);
 #define buffer_new() buffer_new_with_capacity(NULL, 128)
 
-buffer_t buffer_append_byte(buffer_t buffer, uint8_t data);
-uint64_t buffer_get_length(buffer_t buffer);
-uint64_t buffer_get_capacity(buffer_t buffer);
-buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length);
-buffer_t buffer_append_buffer(buffer_t buffer, buffer_t appenden);
-uint8_t* buffer_get_bytes(buffer_t buffer, uint64_t* length);
-int8_t   buffer_destroy(buffer_t buffer);
-
+buffer_t  buffer_append_byte(buffer_t buffer, uint8_t data);
+uint64_t  buffer_get_length(buffer_t buffer);
+boolean_t buffer_reset(buffer_t buffer);
+uint64_t  buffer_get_capacity(buffer_t buffer);
+uint64_t  buffer_get_position(buffer_t buffer);
+buffer_t  buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length);
+buffer_t  buffer_append_buffer(buffer_t buffer, buffer_t appenden);
+uint8_t*  buffer_get_bytes(buffer_t buffer, uint64_t length);
+uint8_t   buffer_get_byte(buffer_t buffer);
+uint8_t*  buffer_get_all_bytes(buffer_t buffer, uint64_t* length);
+boolean_t buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction_t direction);
+int8_t    buffer_destroy(buffer_t buffer);
+buffer_t  buffer_encapsulate(uint8_t* data, uint64_t length);
+uint64_t  buffer_remaining(buffer_t buffer);
+uint8_t   buffer_peek_buffer_at_position(buffer_t buffer, uint64_t position);
 
 #endif

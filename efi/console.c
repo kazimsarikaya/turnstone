@@ -94,7 +94,7 @@ size_t video_printf(char_t* fmt, ...) {
                 case 'd':
 #if ___BITS == 64
                     if(l_flag == 2) {
-                        ival = va_arg(args, uint64_t);
+                        ival = va_arg(args, int64_t);
                     } else if(l_flag == 1) {
                         ival = va_arg(args, int64_t);
                     }

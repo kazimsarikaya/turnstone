@@ -134,7 +134,7 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
     data_t* res = memory_malloc(sizeof(data_t));
 
     uint64_t obuflen = 0;
-    uint8_t* obuf = buffer_get_bytes(buf, &obuflen);
+    uint8_t* obuf = buffer_get_all_bytes(buf, &obuflen);
     bc = byte_count(obuflen);
 
     res->type = DATA_TYPE_INT8_ARRAY;
