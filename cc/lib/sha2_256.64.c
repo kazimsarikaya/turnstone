@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <sha256.h>
+#include <sha2.h>
 #include <memory.h>
 #include <utils.h>
 
@@ -43,10 +43,12 @@ uint8_t* sha256_hash(uint8_t* data, size_t length) {
 
 void sha256_transform(sha256_internal_ctx_t* ctx, const uint8_t* data)
 {
-    uint32_t a, b, c, d, e, f, g, h, i, j, t1, t2, m[SHA256_BLOCK_SIZE];
+    uint32_t a, b, c, d, e, f, g, h, i, t1, t2, m[SHA256_BLOCK_SIZE];
 
-    for (i = 0, j = 0; i < 16; ++i, j += 4) {
-        m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
+    uint32_t* t_data = (uint32_t*)data;
+
+    for (i = 0; i < 16; ++i) {
+        m[i] = BYTE_SWAP32(t_data[i]);
     }
 
     for ( ; i < 64; ++i) {
@@ -143,12 +145,12 @@ uint8_t* sha256_final(sha256_ctx_t ctx) {
     else {
         ictx->data[i++] = 0x80;
 
-        while (i < 64) {
+        while (i < SHA256_BLOCK_SIZE) {
             ictx->data[i++] = 0x00;
         }
 
         sha256_transform(ictx, ictx->data);
-        memory_memset(ictx->data, 0, 56);
+        memory_memset(ictx->data, 0, SHA256_BLOCK_SIZE);
     }
 
     ictx->bitlen += ictx->datalen * 8;
@@ -166,21 +168,73 @@ uint8_t* sha256_final(sha256_ctx_t ctx) {
     uint8_t* hash = memory_malloc(SHA256_OUTPUT_SIZE);
 
     if(hash == NULL) {
+        memory_free(ictx);
+
         return NULL;
     }
 
-    for (i = 0; i < 4; ++i) {
-        hash[i]      = (ictx->state[0] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 4]  = (ictx->state[1] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 8]  = (ictx->state[2] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 12] = (ictx->state[3] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 16] = (ictx->state[4] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 20] = (ictx->state[5] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 24] = (ictx->state[6] >> (24 - i * 8)) & 0x000000ff;
-        hash[i + 28] = (ictx->state[7] >> (24 - i * 8)) & 0x000000ff;
+    uint32_t* t_hash = (uint32_t*)hash;
+
+    for (i = 0; i < 8; ++i) {
+        t_hash[i] = BYTE_SWAP32(ictx->state[i]);
     }
 
     memory_free(ictx);
 
     return hash;
+}
+
+sha224_ctx_t sha224_init() {
+    sha256_internal_ctx_t* ctx = memory_malloc(sizeof(sha256_internal_ctx_t));
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
+    ctx->datalen = 0;
+    ctx->bitlen = 0;
+    ctx->state[0] = 0xc1059ed8;
+    ctx->state[1] = 0x367cd507;
+    ctx->state[2] = 0x3070dd17;
+    ctx->state[3] = 0xf70e5939;
+    ctx->state[4] = 0xffc00b31;
+    ctx->state[5] = 0x68581511;
+    ctx->state[6] = 0x64f98fa7;
+    ctx->state[7] = 0xbefa4fa4;
+
+    return (sha224_ctx_t)ctx;
+}
+
+int8_t  sha224_update(sha224_ctx_t ctx, const uint8_t* data, size_t len) {
+    return sha256_update((sha256_ctx_t)ctx, data, len);
+}
+
+uint8_t* sha224_final(sha224_ctx_t ctx) {
+    uint8_t* pre_hash = sha256_final((sha256_ctx_t)ctx);
+
+    if(pre_hash == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
+
+    uint8_t* hash = memory_malloc(SHA224_OUTPUT_SIZE);
+
+    if(hash == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
+
+    memory_memcopy(pre_hash, hash, SHA224_OUTPUT_SIZE);
+
+    memory_free(pre_hash);
+
+    return hash;
+}
+
+uint8_t* sha224_hash(uint8_t* data, size_t length) {
+    sha224_ctx_t ctx = sha224_init();
+    sha224_update(ctx, data, length);
+    return sha224_final(ctx);
 }

@@ -6,14 +6,16 @@ HOSTOS=$(shell uname -s)
 CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu11 \
 	-O3 -nostdlib -ffreestanding -c -m64 -msse4.2\
-	-D___TESTMODE=1 -g \
-	-L/opt/local/lib/valgrind -I/opt/local/include/valgrind -lcoregrind-amd64-darwin -lvex-amd64-darwin
+	-D___TESTMODE=1 -g 
 
 ifeq ($(HOSTOS),Darwin)
+CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = ld
-LDFLAGS = -lc
+LDFLAGS = -lc $(shell pkgconfig --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-darwin -lvex-amd64-darwin
 else
+CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
+LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux
 endif
 
 OUTPUT = ../output

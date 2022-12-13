@@ -11,14 +11,16 @@ Hobby OS:
       ☐ Implement NVMe
       ☐ Implement raid1
     Database:
-      ☐ Implement disk layout
+      ☐  @high Implement disk layout 
       ☐ Implement write/read log on nvme disk
     Network:
       ☐ Implement TCP
-      ☐ Implement DHCP Client
+      ✔ Implement DHCP Client @done (12/13/2022, 9:21:25 AM)
       ☐ Implement DNS Client
+      ☐ arp tables
+      ☐ routing
     Message Queue:
-      ☐ Implement mq system
+      ☐  @high Implement mq system
     Compiler:
       ☐ Write assembler
       ☐ Write C compiler
@@ -29,9 +31,16 @@ Hobby OS:
     Linker-Loader:
       ☐ Write linker/loader for programs readed from disk
       ☐ Write shared library linker/loader
+    Crypto Libraries:
+      ☐ @high bigint implementation 
+      ✔ @high sha384, sha224 @done (12/13/2022, 1:47:29 PM)
+      ☐ aes encryption with gcm
+      ☐ ec implementation
+      ☐ @low rsa implementation
+      ☐ @low dh implementation
+      ☐ tls implementation especially dtls
+      
 
-
-＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
   ✔ Memory bug when store opcode's target (maybe return one) is DEBUG object @done(2022-02-13 18:10) @project(Hobby OS / Issues)
   ✔ Logical operations wrong if source/target not integer. @done(2022-02-13 18:10) @project(Hobby OS / Issues)
