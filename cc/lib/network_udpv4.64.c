@@ -32,7 +32,7 @@ uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet,
 
 
     if(dport == NETWORK_APPLICATION_PORT_ECHO_SERVER) {
-        return (uint8_t*)network_create_udpv4_packet_from_data(dport, sport, data_len, data);
+        return (uint8_t*)network_udpv4_create_packet_from_data(dport, sport, data_len, data);
     } else if(dport == NETWORK_APPLICATION_PORT_DHCP_CLIENT) {
         if(data_len < sizeof(network_dhcpv4_t)) {
             return NULL;
@@ -44,7 +44,7 @@ uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet,
     return NULL;
 }
 
-network_udpv4_header_t* network_create_udpv4_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data) {
+network_udpv4_header_t* network_udpv4_create_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data) {
     uint16_t packet_len = sizeof(network_udpv4_header_t) + len;
 
     network_udpv4_header_t* res = memory_malloc(packet_len);

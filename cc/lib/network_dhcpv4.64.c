@@ -61,7 +61,7 @@ network_transmit_packet_t* network_dhcpv4_send_discover(network_mac_address_t ma
 
     dhcp_discover->options[8] = NETWORK_DHCPV4_OPTION_END;
 
-    network_udpv4_header_t* udp = network_create_udpv4_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
+    network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
 
     memory_free(dhcp_discover);
 
@@ -152,7 +152,7 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
         dhcp_discover->options[15] = NETWORK_DHCPV4_OPTION_END;
 
-        network_udpv4_header_t* udp = network_create_udpv4_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
+        network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
 
         memory_free(dhcp_discover);
 
