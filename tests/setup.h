@@ -72,7 +72,17 @@ memory_heap_t* heap = NULL;
 
 int8_t setup_ram2() {
 
+    if(mmap_size < 4096) {
+        print_error("invalid ram size min should be 4k");
+        return -1;
+    }
+
     mem_backend = tmpfile();
+
+    if(mem_backend == NULL) {
+        print_error("cannot create ram tmpfile");
+        return -2;
+    }
 
     fseek(mem_backend, mmap_size - 1, SEEK_SET);
 
@@ -88,32 +98,53 @@ int8_t setup_ram2() {
     printf("mmap res %p\n", mmap_res);
 
     if(mmap_res != (void*)mmmap_address) {
+        print_error("cannot mmap ram tmpfile");
         fclose(mem_backend);
-        return -2;
+        mem_backend = NULL;
+        return -3;
     }
 
     heap = memory_create_heap_simple(mmmap_address, mmmap_address + mmap_size);
-    printf("%p\n", heap);
+
+    if(heap == NULL) {
+        print_error("cannot setup heap");
+        return -4;
+    }
+
     memory_set_default_heap(heap);
 
     return 0;
 }
 
 void remove_ram2() {
-    munmap((void*)mmmap_address, mmap_size);
-    fclose(mem_backend);
+    if(heap) {
+        memory_heap_stat_t stat;
+        memory_get_heap_stat(&stat);
+        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+
+        if(stat.malloc_count != stat.free_count) {
+            print_error("memory leak detected");
+        } else {
+            print_success("no memeory leak detected");
+        }
+    }
+
+    if(mem_backend) {
+        munmap((void*)mmmap_address, mmap_size);
+        fclose(mem_backend);
+    }
 }
 
-int32_t __attribute__((constructor)) start_ram() {
-    setup_ram2();
-    print_success("hello world");
-    return 0;
+void __attribute__((constructor)) start_ram() {
+    int8_t res = setup_ram2();
+
+    if(res) {
+        exit(res);
+    }
 }
 
-int32_t __attribute__((destructor)) stop_ram() {
+void __attribute__((destructor)) stop_ram() {
     remove_ram2();
-    print_success("bye world");
-    return 0;
 }
 
 void dump_ram(char_t* fname){

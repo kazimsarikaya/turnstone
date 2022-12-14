@@ -33,5 +33,6 @@ int32_t unlink(const char_t * pathname);
 FILE*   tmpfile(void);
 void*   mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd, int32_t offset);
 int     munmap(void * addr, size_t length);
+void    exit(int status);
 
 #endif

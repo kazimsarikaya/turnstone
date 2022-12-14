@@ -54,11 +54,15 @@ int32_t main(int32_t argc, char_t** argv) {
 
     uint8_t* outdata = buffer_get_all_bytes(outbuf, NULL);
 
+    buffer_destroy(outbuf);
+
     zpack_format_t zf = {ZPACK_FORMAT_MAGIC, in_size, ps, xxhash64_hash(in_data, in_size), xxhash64_hash(outdata, ps)};
 
     fwrite(&zf, 1, sizeof(zf), fd);
 
     fwrite(outdata, 1, ps, fd);
+
+    memory_free(outdata);
 
     uint64_t pad_len = (((ps + sizeof(zf) + 511) / 512) * 512) - ps - sizeof(zf);
 
@@ -68,11 +72,11 @@ int32_t main(int32_t argc, char_t** argv) {
         uint8_t* pad = memory_malloc(pad_len);
 
         fwrite(pad, 1, pad_len, fd);
+
+        memory_free(pad);
     }
 
     fclose(fd);
-
-    buffer_destroy(outbuf);
 
     return 0;
 }
