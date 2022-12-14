@@ -6,7 +6,6 @@
 #include "setup.h"
 
 int main(){
-    setup_ram();
     FILE* fp;
 
 

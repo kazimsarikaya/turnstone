@@ -4,7 +4,11 @@
  */
 
 #include "setup.h"
-#include <driver/network_protocols.h>
+#include <network.h>
+#include <network/network_protocols.h>
+#include <network/network_ethernet.h>
+#include <network/network_icmpv4.h>
+#include <network/network_ipv4.h>
 #include <strings.h>
 #include <utils.h>
 
@@ -58,8 +62,6 @@ typedef struct {
 }__attribute__((packed)) pcap_packet_header_t;
 
 uint32_t main(uint32_t argc, char_t** argv) {
-    setup_ram();
-
     UNUSED(argc);
     UNUSED(argv);
 
@@ -101,8 +103,8 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     memory_free(arp1);
 
-    network_udp_header_t* up = network_create_udp_packet_from_data(5060, 8070, strlen(test), (uint8_t*)test);
-    network_ipv4_header_t* ip = network_create_ipv4_packet_from_udp_packet(src_ip, dst_ip, up);
+    network_udpv4_header_t* up = network_create_udpv4_packet_from_data(5060, 8070, strlen(test), (uint8_t*)test);
+    network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(src_ip, dst_ip, up);
     uint16_t ep_len = 0;
     network_ethernet_t* ep1 = network_create_ethernet_packet_from_ipv4_packet(dst_mac, src_mac, ip, &ep_len);
 
@@ -123,8 +125,8 @@ uint32_t main(uint32_t argc, char_t** argv) {
     }
 
     uint16_t pp_len = 0;
-    network_icmp_ping_header_t* ping = network_create_ping_packet(0, 0x1234, 0x0, NETWORK_ICMP_MIN_DATA_SIZE, ping_data, &pp_len);
-    ip = network_create_ipv4_packet_from_icmp_packet(src_ip, dst_ip, (network_icmp_header_t*)ping, pp_len);
+    network_icmpv4_ping_header_t* ping = network_create_ping_packet(0, 0x1234, 0x0, NETWORK_ICMP_MIN_DATA_SIZE, ping_data, &pp_len);
+    ip = network_ipv4_create_packet_from_icmp_packet(src_ip, dst_ip, (network_icmpv4_header_t*)ping, pp_len);
     ep1 = network_create_ethernet_packet_from_ipv4_packet(dst_mac, src_mac, ip, &ep_len);
 
     ph.timestamp = time(NULL);
@@ -138,7 +140,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     memory_free(ep1);
 
     ping = network_create_ping_packet(1, 0x1234, 0x0, NETWORK_ICMP_MIN_DATA_SIZE, ping_data, &pp_len);
-    ip = network_create_ipv4_packet_from_icmp_packet(dst_ip, src_ip, (network_icmp_header_t*)ping, pp_len);
+    ip = network_ipv4_create_packet_from_icmp_packet(dst_ip, src_ip, (network_icmpv4_header_t*)ping, pp_len);
     ep1 = network_create_ethernet_packet_from_ipv4_packet(src_mac, dst_mac, ip, &ep_len);
 
     ph.timestamp = time(NULL);

@@ -198,7 +198,6 @@ int8_t test_ser_deser_recurive() {
 }
 
 uint32_t main(uint32_t argc, char_t** argv) {
-    setup_ram();
 
     UNUSED(argc);
     UNUSED(argv);

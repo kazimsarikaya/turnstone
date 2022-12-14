@@ -8,8 +8,6 @@
 #include <varint.h>
 
 uint32_t main(uint32_t argc, char_t** argv) {
-    setup_ram();
-
     UNUSED(argc);
     UNUSED(argv);
 

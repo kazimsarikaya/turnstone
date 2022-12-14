@@ -94,7 +94,6 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
 }
 
 int32_t main(int32_t argc, char** argv) {
-    setup_ram();
 
     if (argc < 4) {
         printf("Error: not enough arguments\n");

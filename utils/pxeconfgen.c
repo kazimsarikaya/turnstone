@@ -13,7 +13,6 @@
 
 
 int32_t main(int32_t argc, char_t** argv) {
-    setup_ram();
 
     if(argc <= 1) {
         print_error("invalid argument count");

@@ -10,6 +10,12 @@
 #define SEEK_CUR 1
 #define SEEK_END 2
 
+#define PROT_READ    0x1
+#define PROT_WRITE   0x2
+#define MAP_SHARED   0x01
+#define MAP_PRIVATE  0x02
+#define MAP_FIXED    0x10
+
 typedef long FILE;
 FILE*   fopen(const char* filename, const char* mode);
 size_t  fwrite(const void* ptr, size_t size, size_t nmemb, FILE* stream);
@@ -22,5 +28,10 @@ int32_t fprintf(FILE* stream, const char* format, ...);
 int32_t fscanf(FILE* stream, const char* format, ...);
 int32_t putc(int32_t c, FILE* stream);
 int32_t getc(FILE* stream);
+int32_t fileno(FILE * stream);
+int32_t unlink(const char_t * pathname);
+FILE*   tmpfile(void);
+void*   mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd, int32_t offset);
+int     munmap(void * addr, size_t length);
 
 #endif

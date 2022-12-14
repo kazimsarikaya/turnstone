@@ -1830,7 +1830,6 @@ void linker_bind_offset_of_section(linker_context_t* ctx, linker_section_type_t 
 
 
 int32_t main(int32_t argc, char** argv) {
-    setup_ram();
 
     if(argc <= 1) {
         print_error("not enough params");

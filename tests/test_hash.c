@@ -10,7 +10,6 @@
 #include <utils.h>
 
 uint32_t main(uint32_t argc, char_t** argv) {
-    setup_ram();
 
     if(argc != 2) {
         print_error("incorrect args");

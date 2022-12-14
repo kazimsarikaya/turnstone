@@ -20,7 +20,6 @@ int8_t int_comparator(const void* i, const void* j){
 
 
 int main(){
-    setup_ram();
     int t = 9, x = 13, y = 16, z = 7;
     int* i;
     FILE* fp;

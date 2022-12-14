@@ -25,7 +25,6 @@ uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc){
 }
 
 uint32_t main(uint32_t argc, char_t** argv) {
-    setup_ram();
     FILE* fp;
     int64_t size;
     if(argc < 2) {

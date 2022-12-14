@@ -4,7 +4,7 @@
  */
 #define RAMSIZE 0x8000000
 #include "setup.h"
-#include <sha256.h>
+#include <sha2.h>
 #include <strings.h>
 #include <utils.h>
 
@@ -55,7 +55,6 @@ typedef struct database_entries_s {
 }__attribute__((packed)) database_entries_t;
 
 int32_t main(int32_t argc, char** argv) {
-    setup_ram();
 
     if(argc != 3) {
         print_error("argument cound mismatch");

@@ -9,7 +9,6 @@
 #include <utils.h>
 
 uint32_t main(uint32_t argc, char_t** argv) {
-    setup_ram();
 
     UNUSED(argc);
     UNUSED(argv);
@@ -19,7 +18,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     buffer_append_byte(buf, 'H');
 
     uint64_t l = 0;
-    char_t* res = (char_t*)buffer_get_bytes(buf, &l);
+    char_t* res = (char_t*)buffer_get_all_bytes(buf, &l);
 
     if(l != 1 || res[0] != 'H') {
         print_error("append byte failed");
@@ -33,7 +32,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     buffer_append_bytes(buf, (uint8_t*)"ello World\0", strlen("ello World") + 1);
 
-    res = (char_t*)buffer_get_bytes(buf, &l);
+    res = (char_t*)buffer_get_all_bytes(buf, &l);
 
     if(l != strlen(res) + 1 || strcmp(res, "Hello World") != 0) {
         print_error("append bytes failed");
