@@ -360,6 +360,20 @@ int main(){
     printf("\niteration ended\n");
 
 
+    iter = idx->create_iterator(idx);
+
+    printf("iterator created: %p\n", iter);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        item_t* d = (item_t*)iter->get_item(iter);
+
+        memory_free(d);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
     bplustree_destroy_index(idx);
 
     print_success("all tests are passed");
