@@ -65,6 +65,10 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address);
 /*! frees memory addr at default heap */
 #define memory_free(addr) memory_free_ext(NULL, addr)
 
+extern int8_t (*volatile memory_secure_free_ext_f)(memory_heap_t * heap, void* address);
+#define memory_secure_free_ext(h, a) memory_secure_free_ext_f(h, a)
+#define memory_secure_free(a) memory_secure_free_ext(NULL, a)
+
 /**
  * @brief malloc memory
  * @param[in] heap  the heap used for malloc

@@ -87,6 +87,8 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
     return res;
 }
 
+int8_t (*volatile memory_secure_free_ext_f)(memory_heap_t * heap, void* address) = memory_free_ext;
+
 void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat){
     if(heap == NULL) {
         task_t* current_task = task_get_current_task();
