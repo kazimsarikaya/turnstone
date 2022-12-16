@@ -120,7 +120,7 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
             new_r_frm->frame_address = rem_frm_start;
             new_r_frm->frame_count = rem_frm_cnt;
             new_r_frm->type = FRAME_TYPE_RESERVED;
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm);
+            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm, NULL);
 
             PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
@@ -134,7 +134,7 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
             new_r_frm->frame_address = rem_frm_start;
             new_r_frm->frame_count = rem_frm_cnt;
             new_r_frm->type = FRAME_TYPE_RESERVED;
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm);
+            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm, NULL);
 
             PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
 
@@ -246,10 +246,10 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
 
         if(fa_type & FRAME_ALLOCATION_TYPE_RESERVED) {
             new_frm->type = FRAME_TYPE_RESERVED;
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_frm, new_frm);
+            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_frm, new_frm, NULL);
         } else {
             new_frm->type = FRAME_TYPE_USED;
-            ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, new_frm, new_frm);
+            ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, new_frm, new_frm, NULL);
         }
 
 
@@ -266,7 +266,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
             free_rem_frm->type = FRAME_TYPE_FREE;
             free_rem_frm->frame_attributes = tmp_frm->frame_attributes;
 
-            ctx->free_frames_by_address->insert(ctx->free_frames_by_address, free_rem_frm, free_rem_frm);
+            ctx->free_frames_by_address->insert(ctx->free_frames_by_address, free_rem_frm, free_rem_frm, NULL);
             linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, free_rem_frm);
         }
 
@@ -339,7 +339,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
         new_frm->frame_attributes = frm->frame_attributes;
 
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
 
         rem_frms -= new_frm->frame_count;
     }
@@ -355,7 +355,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
         new_frm->frame_attributes = frm->frame_attributes;
 
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
     }
 
 
@@ -367,9 +367,9 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
     new_frm->frame_attributes = f->frame_attributes?f->frame_attributes:frm->frame_attributes;
 
     if(new_frm->type == FRAME_TYPE_USED) {
-        ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, new_frm, new_frm);
+        ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, new_frm, new_frm, NULL);
     } else {
-        ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_frm, new_frm);
+        ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_frm, new_frm, NULL);
     }
 
     memory_free_ext(ctx->heap, frm);
@@ -408,7 +408,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             prev_frm->type = FRAME_TYPE_USED;
             prev_frm->frame_attributes = tmp_frame->frame_attributes;
 
-            ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, prev_frm, prev_frm);
+            ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, prev_frm, prev_frm, NULL);
 
             rem_frms -= prev_frm_count;
         }
@@ -420,7 +420,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             next_frm->type = FRAME_TYPE_USED;
             next_frm->frame_attributes = tmp_frame->frame_attributes;
 
-            ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, next_frm, next_frm);
+            ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, next_frm, next_frm, NULL);
         }
 
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
@@ -435,7 +435,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             memory_paging_delete_page(0x1000, NULL);
         }
 
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
         iter->destroy(iter);
@@ -468,7 +468,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             prev_frm->type = FRAME_TYPE_USED;
             prev_frm->frame_attributes = tmp_frame->frame_attributes;
 
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, prev_frm, prev_frm);
+            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, prev_frm, prev_frm, NULL);
 
             rem_frms -= prev_frm_count;
         }
@@ -480,7 +480,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             next_frm->type = FRAME_TYPE_USED;
             next_frm->frame_attributes = tmp_frame->frame_attributes;
 
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, next_frm, next_frm);
+            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, next_frm, next_frm, NULL);
         }
 
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
@@ -495,7 +495,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             memory_paging_delete_page(0x1000, NULL);
         }
 
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
         memory_free_ext(ctx->heap, tmp_frame);
@@ -555,7 +555,7 @@ int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
         f->type = FRAME_TYPE_FREE;
 
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
 
         iter = iter->next(iter);
     }
@@ -615,7 +615,7 @@ int8_t fa_cleanup(frame_allocator_t* self) {
         f->type = FRAME_TYPE_FREE;
 
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
 
         iter = iter->next(iter);
     }
@@ -658,7 +658,7 @@ int8_t fa_cleanup(frame_allocator_t* self) {
         f->type = FRAME_TYPE_FREE;
 
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
-        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f);
+        ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
 
         iter = iter->next(iter);
     }
@@ -814,18 +814,18 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
             switch (type) {
             case FRAME_TYPE_FREE:
-                ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f);
+                ctx->free_frames_by_address->insert(ctx->free_frames_by_address, f, f, NULL);
                 linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, f);
                 break;
             case FRAME_TYPE_USED:
-                ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, f, f);
+                ctx->allocated_frames_by_address->insert(ctx->allocated_frames_by_address, f, f, NULL);
                 break;
             case FRAME_TYPE_RESERVED:
-                ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f);
+                ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
                 break;
             case FRAME_TYPE_ACPI_RECLAIM_MEMORY:
                 f->frame_attributes |= FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY;
-                ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f);
+                ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
                 break;
             }
 

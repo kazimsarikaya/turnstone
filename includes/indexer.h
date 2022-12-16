@@ -36,7 +36,7 @@ typedef struct index {
     memory_heap_t*         heap;
     void*                  metadata;
     index_key_comparator_f comparator;
-    int8_t (* insert)(struct index* idx, void* key, void* data);
+    int8_t (* insert)(struct index* idx, void* key, void* data, void** removed_data);
     int8_t (*delete)(struct index* idx, void* key, void** deleted_data);
     iterator_t*  (* search)(struct index* idx, void* key1, void* key2, index_key_search_criteria_t criteria);
     iterator_t* (* create_iterator)(struct index* idx);

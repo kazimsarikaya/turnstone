@@ -36,6 +36,7 @@ typedef struct bplustree_node_internal {
 typedef struct {
     bplustree_node_internal_t* root; ///< root node
     uint64_t                   max_key_count; ///< maximum key count for each node
+    boolean_t                  unique; ///< if key present replace data
 } bplustree_internal_t; ///< short hand for struct
 
 /**
@@ -54,7 +55,7 @@ typedef struct {
 } bplustree_iterator_internal_t; ///< short hand for struct
 
 /*! b+ tree insert implementation. see also index_t insert method*/
-int8_t bplustree_insert(index_t* idx, void* key, void* data);
+int8_t bplustree_insert(index_t* idx, void* key, void* data, void** removed_data);
 /*! b+ tree delete implementation. see also index_t delete method*/
 int8_t bplustree_delete(index_t* idx, void* key, void** deleted_data);
 /*! b+ tree search implementation. see also index_t search method*/
@@ -126,14 +127,15 @@ void* bplustree_iterator_get_key(iterator_t* iterator);
  */
 void* bplustree_iterator_get_data(iterator_t* iterator);
 
-index_t* bplustree_create_index_with_heap(memory_heap_t* heap, uint64_t max_key_count,
-                                          index_key_comparator_f comparator){
+index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64_t max_key_count,
+                                                     index_key_comparator_f comparator, boolean_t unique){
     if(max_key_count < 2) {
         return NULL;
     }
     bplustree_internal_t* tree = memory_malloc_ext(heap, sizeof(bplustree_internal_t), 0x0);
     tree->root = NULL;
     tree->max_key_count = max_key_count;
+    tree->unique = unique;
 
     index_t* idx = memory_malloc_ext(heap, sizeof(index_t), 0x0);
     idx->heap = heap;
@@ -261,7 +263,7 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
     return new_node;
 }
 
-int8_t bplustree_insert(index_t* idx, void* key, void* data){
+int8_t bplustree_insert(index_t* idx, void* key, void* data, void** removed_data){
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
     if(tree->root == NULL) {
         tree->root = memory_malloc_ext(idx->heap, sizeof(bplustree_node_internal_t), 0x0);
@@ -274,6 +276,17 @@ int8_t bplustree_insert(index_t* idx, void* key, void* data){
         int8_t inserted = 0;
         while(inserted == 0) {
             if(node->childs == NULL) { // leaf node
+                size_t position;
+
+                if(tree->unique && linkedlist_get_position(node->keys, key, &position) == 0) {
+                    if(removed_data) {
+                        *removed_data = linkedlist_get_data_at_position(node->datas, position);
+                    }
+
+                    linkedlist_delete_at_position(node->keys, position);
+                    linkedlist_delete_at_position(node->datas, position);
+                }
+
                 size_t key_pos = linkedlist_sortedlist_insert(node->keys, key);
                 linkedlist_insert_at_position(node->datas, data, key_pos);
 

@@ -19,10 +19,11 @@
  * @param  heap          heap to use
  * @param  max_key_count maximum key count at each tree node
  * @param  comparator    key comparator
+ * @param  unique        if unique flag set remove and insert key,value
  * @return               index interface
  */
-index_t* bplustree_create_index_with_heap(memory_heap_t* heap, uint64_t max_key_count,
-                                          index_key_comparator_f comparator);
+index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64_t max_key_count,
+                                                     index_key_comparator_f comparator, boolean_t unique);
 
 /**
  * @brief creates b+ tree index with default heap
@@ -30,7 +31,25 @@ index_t* bplustree_create_index_with_heap(memory_heap_t* heap, uint64_t max_key_
  * @param[in]  c   comparator
  * @return     b+ tree  index
  */
-#define bplustree_create_index(mkc, c) bplustree_create_index_with_heap(NULL, mkc, c);
+#define bplustree_create_index(mkc, c) bplustree_create_index_with_heap_and_unique(NULL, mkc, c, false)
+
+/**
+ * @brief creates b+ tree index with default heap
+ * @param[in]  mkc max key count
+ * @param[in]  c   comparator
+ * @param[in]  u unique flag
+ * @return     b+ tree  index
+ */
+#define bplustree_create_index_with_unique(mkc, c, u) bplustree_create_index_with_heap_and_unique(NULL, mkc, c, u)
+
+/**
+ * @brief creates b+ tree index with default heap
+ * @param[in]  h  heap to use
+ * @param[in]  mkc max key count
+ * @param[in]  c   comparator
+ * @return     b+ tree  index
+ */
+#define bplustree_create_index_with_heap(h, mkc, c) bplustree_create_index_with_heap_and_unique(h, mkc, c, false)
 
 /**
  * @brief destroys index

@@ -67,11 +67,12 @@ void* map_insert(map_t map, void* key, void* data) {
 
     lock_acquire(mi->lock);
 
-    void* old_data = map_delete(map, key);
 
     uint64_t ckey = mi->mke(key);
 
-    mi->store->insert(mi->store, (void*)ckey, data);
+    void* old_data = NULL;
+
+    mi->store->insert(mi->store, (void*)ckey, data, &old_data);
 
     lock_release(mi->lock);
 

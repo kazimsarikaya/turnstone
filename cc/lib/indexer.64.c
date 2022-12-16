@@ -81,7 +81,7 @@ int8_t indexer_index(indexer_t idxer, void* key, void* data){
         void* r_key = pair->key_creator(key);
 
         if(r_key != NULL) {
-            pair->idx->insert(pair->idx, r_key, data);
+            pair->idx->insert(pair->idx, r_key, data, NULL);
         }
 
         iter = iter->next(iter);

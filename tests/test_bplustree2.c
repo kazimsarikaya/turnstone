@@ -52,7 +52,7 @@ int main(){
 
         printf("try to insert item: %lx %lx\n", item->key, item->data);
 
-        int res = idx->insert(idx, (void*)test_data[i], item);
+        int res = idx->insert(idx, (void*)test_data[i], item, NULL);
 
         if(res == -1) {
             printf("failed item: %lx %lx\n", item->key, item->data);

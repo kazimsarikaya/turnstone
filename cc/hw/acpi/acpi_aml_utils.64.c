@@ -1277,9 +1277,9 @@ int8_t acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_
     }
 
     if(ctx->local_symbols != NULL) {
-        ctx->local_symbols->insert(ctx->local_symbols, obj->name, obj);
+        ctx->local_symbols->insert(ctx->local_symbols, obj->name, obj, NULL);
     }else {
-        ctx->symbols->insert(ctx->symbols, obj->name, obj);
+        ctx->symbols->insert(ctx->symbols, obj->name, obj, NULL);
     }
 
     return 0;

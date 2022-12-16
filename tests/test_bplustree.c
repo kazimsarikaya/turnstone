@@ -36,7 +36,7 @@ int main(){
 
     for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
         printf("try to insert: %i\n", test_data[i]);
-        int res = idx->insert(idx, &test_data[i], &test_data[i]);
+        int res = idx->insert(idx, &test_data[i], &test_data[i], NULL);
         if(res == -1) {
             printf("failed item: %i\n", test_data[i]);
             print_error("insert failed");
@@ -74,7 +74,7 @@ int main(){
 
     idx = bplustree_create_index(max_key_count, int_comparator);
     for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
-        idx->insert(idx, &test_data[i], &test_data[i]);
+        idx->insert(idx, &test_data[i], &test_data[i], NULL);
     }
     print_success("b+ tree builded for deletion test");
 
