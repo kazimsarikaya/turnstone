@@ -57,7 +57,7 @@ map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key
     mi->heap = heap;
     mi->lock = lock_create_with_heap(mi->heap);
     mi->mke = mke;
-    mi->store = bplustree_create_index_with_heap(mi->heap, factor, &map_key_comparator);
+    mi->store = bplustree_create_index_with_heap_and_unique(mi->heap, factor, &map_key_comparator, true);
 
     return (map_t)mi;
 }
