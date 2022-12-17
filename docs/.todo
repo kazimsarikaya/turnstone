@@ -39,8 +39,9 @@ Hobby OS:
       ☐ @low rsa implementation
       ☐ @low dh implementation
       ☐ tls implementation especially dtls
-      
 
+      
+＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
   ✔ Memory bug when store opcode's target (maybe return one) is DEBUG object @done(2022-02-13 18:10) @project(Hobby OS / Issues)
   ✔ Logical operations wrong if source/target not integer. @done(2022-02-13 18:10) @project(Hobby OS / Issues)
