@@ -105,3 +105,7 @@ void time_timer_spinsleep(uint64_t usecs) {
     }
     PRINTLOG(TIMER, LOG_TRACE, "spinsleep finished");
 }
+
+void time_timer_sleep(uint64_t secs) {
+    task_current_task_sleep(time_timer_get_tick_count() + secs * 1000);
+}

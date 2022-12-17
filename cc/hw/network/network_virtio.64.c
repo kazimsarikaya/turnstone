@@ -60,6 +60,12 @@ int8_t network_virtio_process_tx(){
     for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
         virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
         task_add_message_queue(vdev->return_queue);
+
+        void** args = memory_malloc(sizeof(void*));
+        args[0] = vdev->extra_data;
+        args[1] = vdev->return_queue;
+
+        task_create_task(NULL, 64 << 10, &network_dhcpv4_send_discover, 1, args);
     }
 
     while(1) {
@@ -79,20 +85,14 @@ int8_t network_virtio_process_tx(){
             virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_tx->vq);
             virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_tx->vq);
 
-            network_mac_address_t mac;
-            memory_memcopy(vdev->extra_data, mac, sizeof(network_mac_address_t));
-            network_transmit_packet_t* dhcp_packet = network_dhcpv4_send_discover(mac);
-
-            if(dhcp_packet) {
-                network_virtio_send_packet(dhcp_packet, vdev, vq_tx, avail, descs);
-            }
-
             while(linkedlist_size(vdev->return_queue)) {
-                network_transmit_packet_t* packet = linkedlist_queue_pop(vdev->return_queue);
+                network_transmit_packet_t* packet = linkedlist_queue_peek(vdev->return_queue);
 
                 if(packet) {
                     packet_exists = 1;
                     network_virtio_send_packet(packet, vdev, vq_tx, avail, descs);
+
+                    linkedlist_queue_pop(vdev->return_queue);
                 }
 
                 PRINTLOG(VIRTIONET, LOG_TRACE, "tx queue size 0x%llx", linkedlist_size(vdev->return_queue));
@@ -459,7 +459,7 @@ int8_t network_virtio_init(pci_dev_t* pci_netdev){
         return -1;
     }
 
-    task_create_task(NULL, 64 << 10, &network_virtio_process_tx);
+    task_create_task(NULL, 64 << 10, &network_virtio_process_tx, 0, NULL);
 
     if(!vdev_net->is_legacy) {
         if(vdev_net->selected_features & VIRTIO_NETWORK_F_STATUS) {

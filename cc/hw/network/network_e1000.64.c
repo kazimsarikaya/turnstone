@@ -509,7 +509,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
     network_e1000_rx_enable(dev);
 
-    task_create_task(NULL, 64 << 10, &network_e1000_process_tx);
+    task_create_task(NULL, 64 << 10, &network_e1000_process_tx, 0, NULL);
 
     PRINTLOG(E1000, LOG_INFO, "device initialized");
 

@@ -269,6 +269,9 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position);
  */
 void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
 
+#define linkedlist_queue_peek(l) linkedlist_get_data_at_position(l, 0);
+#define linkedlist_stack_peek(l) linkedlist_get_data_at_position(l, 0);
+
 /**
  * @brief duplicates list at the given heap
  * @param[in]  heap the heap where the list will be created

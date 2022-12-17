@@ -12,81 +12,98 @@
 #include <memory.h>
 #include <utils.h>
 #include <network/network_info.h>
+#include <time/timer.h>
 
 
-network_transmit_packet_t* network_dhcpv4_send_discover(network_mac_address_t mac) {
+int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
+    UNUSED(args_cnt);
+
+    network_mac_address_t mac = {};
+    uint8_t* mac_data = args[0];
+    memory_memcopy(mac_data, mac, sizeof(network_mac_address_t));
+
     network_info_t* ni = NULL;
 
-    if(network_info_map) {
-        ni = map_get(network_info_map, mac);
+    while(1) {
+        if(network_info_map) {
+            ni = map_get(network_info_map, mac);
 
-        if(ni) {
-            if(ni->is_ipv4_address_set) {
-                // check new renew
-                return NULL;
-            } else if (ni->is_ipv4_address_requested) {
-                // TODO: check timeout
-                return NULL;
+            if(ni) {
+                if(ni->is_ipv4_address_set) {
+                    // TODO: check renew
+                    time_timer_sleep(30);
+                    continue;
+                } else if (ni->is_ipv4_address_requested) {
+                    // TODO: check timeout
+                    time_timer_sleep(30);
+                    continue;
+                }
+            } else {
+                ni = memory_malloc(sizeof(network_info_t));
+                memory_memcopy(mac, ni->mac, sizeof(network_mac_address_t));
+                ni->return_queue = args[1];
+                map_insert(network_info_map, ni->mac, ni);
             }
-        } else {
-            ni = memory_malloc(sizeof(network_info_t));
-            memory_memcopy(mac, ni->mac, sizeof(network_mac_address_t));
-            map_insert(network_info_map, ni->mac, ni);
         }
+
+        uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 9;
+
+        network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
+
+        dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
+        dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
+        dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
+        dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
+        dhcp_discover->xid = rand();
+
+        memory_memcopy(mac, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
+
+        dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
+
+        dhcp_discover->options[0] = NETWORK_DHCPV4_OPTION_MESSAGETYPE;
+        dhcp_discover->options[1] = 1;
+        dhcp_discover->options[2] = NETWORK_DHCPV4_OPCODE_DISCOVER;
+
+        dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_PARAMETER_REQUEST_LIST;
+        dhcp_discover->options[4] = 3;
+        dhcp_discover->options[5] = NETWORK_DHCPV4_OPTION_SUBNETMASK;
+        dhcp_discover->options[6] = NETWORK_DHCPV4_OPTION_ROUTER;
+        dhcp_discover->options[7] = NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER;
+
+        dhcp_discover->options[8] = NETWORK_DHCPV4_OPTION_END;
+
+        network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
+
+        memory_free(dhcp_discover);
+
+        if(udp == NULL) {
+            return NULL;
+        }
+
+        network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(NETWORK_IPV4_ZERO_IP, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
+
+        if(ip == NULL) {
+            return NULL;
+        }
+
+        uint16_t tl = BYTE_SWAP16(ip->total_length);
+
+        uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, mac, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
+
+        network_transmit_packet_t* res = memory_malloc(sizeof(network_transmit_packet_t));
+
+        res->packet_len = sizeof(network_ethernet_t) + tl;
+        res->packet_data = eth;
+
+        ni->is_ipv4_address_requested = true;
+
+        if(ni->return_queue) {
+            linkedlist_queue_push(ni->return_queue, res);
+        }
+
     }
 
-    uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 9;
-
-    network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
-
-    dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
-    dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
-    dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
-    dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
-    dhcp_discover->xid = rand();
-
-    memory_memcopy(mac, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
-
-    dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
-
-    dhcp_discover->options[0] = NETWORK_DHCPV4_OPTION_MESSAGETYPE;
-    dhcp_discover->options[1] = 1;
-    dhcp_discover->options[2] = NETWORK_DHCPV4_OPCODE_DISCOVER;
-
-    dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_PARAMETER_REQUEST_LIST;
-    dhcp_discover->options[4] = 3;
-    dhcp_discover->options[5] = NETWORK_DHCPV4_OPTION_SUBNETMASK;
-    dhcp_discover->options[6] = NETWORK_DHCPV4_OPTION_ROUTER;
-    dhcp_discover->options[7] = NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER;
-
-    dhcp_discover->options[8] = NETWORK_DHCPV4_OPTION_END;
-
-    network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
-
-    memory_free(dhcp_discover);
-
-    if(udp == NULL) {
-        return NULL;
-    }
-
-    network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(NETWORK_IPV4_ZERO_IP, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
-
-    if(ip == NULL) {
-        return NULL;
-    }
-
-    uint16_t tl = BYTE_SWAP16(ip->total_length);
-
-    uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, mac, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
-
-    network_transmit_packet_t* res = memory_malloc(sizeof(network_transmit_packet_t));
-
-    res->packet_len = sizeof(network_ethernet_t) + tl;
-    res->packet_data = eth;
-
-    ni->is_ipv4_address_requested = true;
-
-    return res;
+    return 0;
 }
 
 

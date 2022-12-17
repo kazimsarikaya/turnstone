@@ -29,4 +29,6 @@ void time_timer_configure_spinsleep();
 
 void time_timer_spinsleep(uint64_t usecs);
 
+void time_timer_sleep(uint64_t secs);
+
 #endif

@@ -42,7 +42,7 @@ int8_t network_process_rx(){
         }
 
         while(linkedlist_size(network_received_packets)) {
-            network_received_packet_t* packet = linkedlist_queue_pop(network_received_packets);
+            network_received_packet_t* packet = linkedlist_queue_peek(network_received_packets);
 
             if(packet) {
                 PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
@@ -87,6 +87,7 @@ int8_t network_process_rx(){
                     PRINTLOG(NETWORK, LOG_TRACE, "packet discarded");
                 }
 
+                linkedlist_queue_pop(network_received_packets);
             }
 
             PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%llx", linkedlist_size(network_received_packets));
@@ -129,7 +130,7 @@ int8_t network_init() {
 
     network_received_packets = linkedlist_create_queue_with_heap(NULL);
 
-    task_create_task(NULL, 64 << 10, &network_process_rx);
+    task_create_task(NULL, 64 << 10, &network_process_rx, 0, NULL);
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 

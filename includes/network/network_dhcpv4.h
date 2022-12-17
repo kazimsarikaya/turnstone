@@ -80,7 +80,7 @@ typedef struct {
     uint8_t options[];
 } __attribute((packed)) network_dhcpv4_t;
 
-network_transmit_packet_t* network_dhcpv4_send_discover(network_mac_address_t mac);
-uint8_t*                   network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, void* network_info, uint16_t* return_packet_len);
+int32_t  network_dhcpv4_send_discover(uint64_t args_cnt, void** args);
+uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, void* network_info, uint16_t* return_packet_len);
 
 #endif

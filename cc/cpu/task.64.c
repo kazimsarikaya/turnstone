@@ -279,7 +279,14 @@ task_t* task_find_next_task() {
     while(1) {
         tmp_task = linkedlist_queue_pop(task_queue);
 
-        if(tmp_task->message_waiting) {
+        if(tmp_task->sleeping) {
+
+            if(tmp_task->wake_tick >= time_timer_get_tick_count()) {
+                break;
+            }
+
+            linkedlist_queue_push(task_queue, tmp_task);
+        } else if(tmp_task->message_waiting) {
             if(tmp_task->message_queues) {
 
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
@@ -386,7 +393,7 @@ void task_set_message_waiting(){
     current_task->message_waiting = 1;
 }
 
-int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point) {
+int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args) {
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
@@ -417,6 +424,9 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
     rbp += stack_size - 16;
     new_task->rbp = rbp;
     new_task->rsp = rbp - 24;
+
+    new_task->rdi = args_cnt;
+    new_task->rsi = (uint64_t)args;
 
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
@@ -460,4 +470,16 @@ uint64_t task_get_id() {
         return TASK_KERNEL_TASK_ID;
     }
 
+}
+
+void task_current_task_sleep(uint64_t wake_tick) {
+    cpu_cli();
+
+    if(current_task) {
+        current_task->wake_tick = wake_tick;
+        current_task->sleeping = true;
+        task_yield();
+    } else {
+        cpu_sti();
+    }
 }

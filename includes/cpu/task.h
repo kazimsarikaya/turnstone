@@ -94,6 +94,8 @@ typedef struct {
     uint64_t             stack_size;
     linkedlist_t         message_queues;
     boolean_t            message_waiting;
+    boolean_t            sleeping;
+    uint64_t             wake_tick;
     memory_page_table_t* page_table;
     uint64_t             rax;
     uint64_t             rbx;
@@ -126,8 +128,10 @@ task_t*  task_get_current_task();
 void task_set_message_waiting();
 void task_add_message_queue(linkedlist_t queue);
 
-int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point);
+int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args);
 
 boolean_t task_idle_check_need_yield();
+
+void task_current_task_sleep(uint64_t wake_tick);
 
 #endif

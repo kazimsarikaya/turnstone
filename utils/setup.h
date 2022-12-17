@@ -44,6 +44,10 @@ void cpu_sti(){
 void  apic_eoi(){
 }
 
+void task_current_task_sleep(uint64_t when_tick) {
+    UNUSED(when_tick);
+}
+
 time_t rtc_get_time(){
     return time(NULL);
 }
