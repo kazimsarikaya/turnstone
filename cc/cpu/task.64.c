@@ -246,6 +246,33 @@ void task_cleanup(){
     }
 }
 
+boolean_t task_idle_check_need_yield() {
+    cpu_cli();
+
+    boolean_t need_yield = false;
+
+    for(uint64_t i = 0; i < linkedlist_size(task_queue); i++) {
+        task_t* t = linkedlist_get_data_at_position(task_queue, i);
+
+        if(t) {
+            if(t->message_waiting && t->message_queues) {
+                for(uint64_t q_idx = 0; q_idx < linkedlist_size(t->message_queues); q_idx++) {
+                    linkedlist_t q = linkedlist_get_data_at_position(t->message_queues, q_idx);
+
+                    if(linkedlist_size(q)) {
+                        t->message_waiting = 0;
+                        need_yield = true;
+                    }
+                }
+            }
+        }
+    }
+
+    cpu_sti();
+
+    return need_yield;
+}
+
 task_t* task_find_next_task() {
     task_t* tmp_task = NULL;
 

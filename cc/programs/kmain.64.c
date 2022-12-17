@@ -75,7 +75,11 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
         cpu_hlt();
     } else {
         while(1) {
-            cpu_idle();
+            if(task_idle_check_need_yield()) {
+                task_yield();
+            } else {
+                cpu_idle();
+            }
         }
     }
 }

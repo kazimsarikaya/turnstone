@@ -48,14 +48,14 @@ typedef struct descriptor_tss {
  * @param  DPL   privilage level
  */
 #define DESCRIPTOR_BUILD_TSS_SEG(tss, base, limit, DPL) { \
-        tss->type = SYSTEM_SEGMENT_TYPE_TSS_A; \
-        tss->present = 1; \
-        tss->long_mode = 1; \
-        tss->dpl = DPL; \
-        tss->segment_limit1 = limit & 0xFFFF; \
-        tss->segment_limit2 = (limit >> 16) & 0xF; \
-        tss->base_address1 = base & 0xFFFFFF; \
-        tss->base_address2 = (base >> 24); \
+            tss->type = SYSTEM_SEGMENT_TYPE_TSS_A; \
+            tss->present = 1; \
+            tss->long_mode = 1; \
+            tss->dpl = DPL; \
+            tss->segment_limit1 = limit & 0xFFFF; \
+            tss->segment_limit2 = (limit >> 16) & 0xF; \
+            tss->base_address1 = base & 0xFFFFFF; \
+            tss->base_address2 = (base >> 24); \
 }
 
 typedef struct {
@@ -127,5 +127,7 @@ void task_set_message_waiting();
 void task_add_message_queue(linkedlist_t queue);
 
 int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point);
+
+boolean_t task_idle_check_need_yield();
 
 #endif
