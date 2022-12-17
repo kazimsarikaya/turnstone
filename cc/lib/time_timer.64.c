@@ -11,6 +11,7 @@
 #include <apic.h>
 #include <device/rtc.h>
 #include <time.h>
+#include <random.h>
 
 #define TIME_TIMER_PIT_BASE_HZ       1193181
 #define TIME_TIMER_PIT_COMMAND_PORT  0x43
@@ -64,6 +65,8 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     } else {
         TIME_EPOCH += 1000;
     }
+
+    srand(TIME_EPOCH);
 
     if((time_timer_tick_count % 1000) == 0) {
         PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%llx epoch %lli", time_timer_tick_count, TIME_EPOCH);

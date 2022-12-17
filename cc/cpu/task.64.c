@@ -281,7 +281,8 @@ task_t* task_find_next_task() {
 
         if(tmp_task->sleeping) {
 
-            if(tmp_task->wake_tick >= time_timer_get_tick_count()) {
+            if(tmp_task->wake_tick < time_timer_get_tick_count()) {
+                tmp_task->sleeping = false;
                 break;
             }
 
@@ -294,7 +295,7 @@ task_t* task_find_next_task() {
 
                     if(q) {
                         if(linkedlist_size(q)) {
-                            tmp_task->message_waiting = 0;
+                            tmp_task->message_waiting = false;
                             break;
                         }
 

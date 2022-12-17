@@ -15,6 +15,78 @@
 #include <time/timer.h>
 
 
+network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t mac, uint32_t xid, uint16_t * return_packet_len) {
+    uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 9;
+
+    if(return_packet_len) {
+        *return_packet_len = dhcp_discover_size;
+    }
+
+    network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
+
+    dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
+    dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
+    dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
+    dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
+    dhcp_discover->xid = xid;
+
+    memory_memcopy(mac, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
+
+    dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
+
+    dhcp_discover->options[0] = NETWORK_DHCPV4_OPTION_MESSAGETYPE;
+    dhcp_discover->options[1] = 1;
+    dhcp_discover->options[2] = NETWORK_DHCPV4_OPCODE_DISCOVER;
+
+    dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_PARAMETER_REQUEST_LIST;
+    dhcp_discover->options[4] = 3;
+    dhcp_discover->options[5] = NETWORK_DHCPV4_OPTION_SUBNETMASK;
+    dhcp_discover->options[6] = NETWORK_DHCPV4_OPTION_ROUTER;
+    dhcp_discover->options[7] = NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER;
+
+    dhcp_discover->options[8] = NETWORK_DHCPV4_OPTION_END;
+
+    return dhcp_discover;
+}
+
+network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint32_t xid, uint16_t * return_packet_len) {
+    uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 16;
+
+    if(return_packet_len) {
+        *return_packet_len = dhcp_discover_size;
+    }
+
+    network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
+
+    dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
+    dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
+    dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
+    dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
+    dhcp_discover->xid = xid;
+
+    memory_memcopy(ni->ipv4_dhcpserver, dhcp_discover->server_ip, sizeof(network_ipv4_address_t));
+    memory_memcopy(ni->mac, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
+
+    dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
+
+    dhcp_discover->options[0] = NETWORK_DHCPV4_OPTION_MESSAGETYPE;
+    dhcp_discover->options[1] = 1;
+    dhcp_discover->options[2] = NETWORK_DHCPV4_OPCODE_REQUEST;
+
+    dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_REQUESTIP;
+    dhcp_discover->options[4] = 4;
+    memory_memcopy(ni->ipv4_address, &dhcp_discover->options[5], sizeof(network_ipv4_address_t));
+
+
+    dhcp_discover->options[9] = NETWORK_DHCPV4_OPTION_SERVERIP;
+    dhcp_discover->options[10] = 4;
+    memory_memcopy(ni->ipv4_dhcpserver, &dhcp_discover->options[11], sizeof(network_ipv4_address_t));
+
+    dhcp_discover->options[15] = NETWORK_DHCPV4_OPTION_END;
+
+    return dhcp_discover;
+}
+
 int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
     UNUSED(args_cnt);
 
@@ -24,19 +96,32 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
 
     network_info_t* ni = NULL;
 
+    int32_t req_try = 3;
+    uint32_t xid = rand();
+
     while(1) {
         if(network_info_map) {
             ni = map_get(network_info_map, mac);
 
             if(ni) {
-                if(ni->is_ipv4_address_set) {
-                    // TODO: check renew
-                    time_timer_sleep(30);
-                    continue;
+                if(ni->is_ipv4_address_set && !ni->is_ipv4_address_requested) {
+
+                    if(ni->lease_time > ni->renewal_time) {
+                        ni->lease_time -= ni->renewal_time >> 1;
+                        time_timer_sleep(ni->renewal_time >> 1);
+                        continue;
+                    } else {
+                        xid = rand();
+                    }
                 } else if (ni->is_ipv4_address_requested) {
-                    // TODO: check timeout
-                    time_timer_sleep(30);
-                    continue;
+                    if(req_try) {
+                        req_try--;
+                        time_timer_sleep(5);
+                        continue;
+                    } else {
+                        req_try = 3;
+                        ni->is_ipv4_address_requested = 0;
+                    }
                 }
             } else {
                 ni = memory_malloc(sizeof(network_info_t));
@@ -46,41 +131,26 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             }
         }
 
-        uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 9;
 
-        network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
+        network_dhcpv4_t* dhcp_packet = NULL;
+        uint16_t return_packet_len = 0;
 
-        dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
-        dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
-        dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
-        dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
-        dhcp_discover->xid = rand();
+        if(ni->is_ipv4_address_set) {
+            dhcp_packet = network_dhcpv4_create_request_packet(ni, xid, &return_packet_len);
+        } else {
+            dhcp_packet = network_dhcpv4_create_discover_packet(mac, xid, &return_packet_len);
+        }
 
-        memory_memcopy(mac, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
 
-        dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
+        network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, return_packet_len, (uint8_t*)dhcp_packet);
 
-        dhcp_discover->options[0] = NETWORK_DHCPV4_OPTION_MESSAGETYPE;
-        dhcp_discover->options[1] = 1;
-        dhcp_discover->options[2] = NETWORK_DHCPV4_OPCODE_DISCOVER;
-
-        dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_PARAMETER_REQUEST_LIST;
-        dhcp_discover->options[4] = 3;
-        dhcp_discover->options[5] = NETWORK_DHCPV4_OPTION_SUBNETMASK;
-        dhcp_discover->options[6] = NETWORK_DHCPV4_OPTION_ROUTER;
-        dhcp_discover->options[7] = NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER;
-
-        dhcp_discover->options[8] = NETWORK_DHCPV4_OPTION_END;
-
-        network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
-
-        memory_free(dhcp_discover);
+        memory_free(dhcp_packet);
 
         if(udp == NULL) {
             return NULL;
         }
 
-        network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(NETWORK_IPV4_ZERO_IP, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
+        network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(ni->ipv4_address, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
 
         if(ip == NULL) {
             return NULL;
@@ -139,39 +209,15 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     network_info_t* ni = map_get(network_info_map, network_info);
 
     if(type == NETWORK_DHCPV4_OPCODE_OFFER) {
-        uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 16;
+        memory_memcopy(recv_dhcpv4_packet->your_ip, ni->ipv4_address, sizeof(network_ipv4_address_t));
+        memory_memcopy(recv_dhcpv4_packet->server_ip, ni->ipv4_dhcpserver, sizeof(network_ipv4_address_t));
 
-        network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
+        uint16_t dhcp_packet_len = 0;
+        network_dhcpv4_t* dhcp_packet = network_dhcpv4_create_request_packet(ni, recv_dhcpv4_packet->xid, &dhcp_packet_len);
 
-        dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
-        dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
-        dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
-        dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
-        dhcp_discover->xid = recv_dhcpv4_packet->xid;
+        network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_packet_len, (uint8_t*)dhcp_packet);
 
-        memory_memcopy(recv_dhcpv4_packet->server_ip, dhcp_discover->server_ip, sizeof(network_ipv4_address_t));
-        memory_memcopy(network_info, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
-
-        dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
-
-        dhcp_discover->options[0] = NETWORK_DHCPV4_OPTION_MESSAGETYPE;
-        dhcp_discover->options[1] = 1;
-        dhcp_discover->options[2] = NETWORK_DHCPV4_OPCODE_REQUEST;
-
-        dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_REQUESTIP;
-        dhcp_discover->options[4] = 4;
-        memory_memcopy(recv_dhcpv4_packet->your_ip, &dhcp_discover->options[5], sizeof(network_ipv4_address_t));
-
-
-        dhcp_discover->options[9] = NETWORK_DHCPV4_OPTION_SERVERIP;
-        dhcp_discover->options[10] = 4;
-        memory_memcopy(recv_dhcpv4_packet->server_ip, &dhcp_discover->options[11], sizeof(network_ipv4_address_t));
-
-        dhcp_discover->options[15] = NETWORK_DHCPV4_OPTION_END;
-
-        network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_discover_size, (uint8_t*)dhcp_discover);
-
-        memory_free(dhcp_discover);
+        memory_free(dhcp_packet);
 
         if(udp == NULL) {
             return NULL;
@@ -218,9 +264,21 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
                 ni->lease_time = (uint32_t)*((uint32_t*)(options + idx + 2));
                 ni->lease_time = BYTE_SWAP32(ni->lease_time);
                 PRINTLOG(NETWORK, LOG_TRACE, "lease time %lli", ni->lease_time);
+            } else if(options[idx] == NETWORK_DHCPV4_OPTION_RENEWALTIME) {
+                ni->renewal_time = (uint32_t)*((uint32_t*)(options + idx + 2));
+                ni->renewal_time = BYTE_SWAP32(ni->renewal_time);
+                PRINTLOG(NETWORK, LOG_TRACE, "lease time %lli", ni->renewal_time);
+            } else if(options[idx] == NETWORK_DHCPV4_OPTION_REBINDTIME) {
+                ni->rebind_time = (uint32_t)*((uint32_t*)(options + idx + 2));
+                ni->rebind_time = BYTE_SWAP32(ni->rebind_time);
+                PRINTLOG(NETWORK, LOG_TRACE, "lease time %lli", ni->rebind_time);
             }
 
             idx += options[idx + 1] + 2;
+        }
+
+        if(ni->renewal_time == 0) {
+            ni->renewal_time = ni->lease_time >> 1;
         }
 
         ni->is_ipv4_address_set = true;

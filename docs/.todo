@@ -7,11 +7,12 @@ Hobby OS:
         ☐ Implement trampoline code
       ☐ Move kernel threads to the kernel cores
       ☐ Implement user space task scheduling
+      ✔ task sleep @done (12/17/2022, 8:01:01 PM)
     Disk:
-      ☐ Implement NVMe
+      ☐ Implement NVMe driver
       ☐ Implement raid1
     Database:
-      ☐  @high Implement disk layout 
+      ☐  @high Implement disk layout with lsm
       ☐ Implement write/read log on nvme disk
     Network:
       ☐ Implement TCP
@@ -19,6 +20,9 @@ Hobby OS:
       ☐ Implement DNS Client
       ☐ arp tables
       ☐ routing
+      ☐ @high ipv4 packet fragmantation
+      ✔ @high dhcpv4 client renew and timeout @done (12/17/2022, 10:55:57 PM)
+      ☐ @high each network protocol should be module and have in/out tasks
     Message Queue:
       ☐  @high Implement mq system
     Compiler:

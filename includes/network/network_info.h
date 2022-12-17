@@ -19,7 +19,9 @@ typedef struct {
     network_ipv4_address_t ipv4_gateway;
     network_ipv4_address_t ipv4_nameserver;
     network_ipv4_address_t ipv4_dhcpserver;
-    uint64_t               lease_time;
+    int64_t                lease_time;
+    int64_t                rebind_time;
+    int64_t                renewal_time;
     boolean_t              is_ipv4_address_set;
     boolean_t              is_ipv4_address_requested;
     uint32_t               ipv4_address_next_request_time;
