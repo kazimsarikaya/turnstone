@@ -16,7 +16,7 @@ typedef struct {
     uint64_t packed_size;
     uint64_t unpacked_hash;
     uint64_t packed_hash;
-} zpack_format_t;
+} __attribute__((packed)) zpack_format_t;
 
 int64_t zpack_pack(buffer_t in, buffer_t out);
 int64_t zpack_unpack(buffer_t in, buffer_t out);
