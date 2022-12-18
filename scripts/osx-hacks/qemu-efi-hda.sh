@@ -49,7 +49,7 @@ qemu-system-x86_64 \
   -device nvme,drive=cache,serial=qn0001,id=nvme0 \
   -monitor stdio \
   -device vmware-svga,id=gpu0 \
-  -device virtio-net,netdev=t0,id=nic0 \
+  -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \
   -netdev $NETDEV \
   -device virtio-keyboard,id=kbd \
   -serial file:${BASEDIR}/tmp/qemu-video.log \

@@ -360,6 +360,12 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
         req_features |= VIRTIO_NETWORK_F_GUEST_HDRLEN;
     }
 
+    if(avail_features & VIRTIO_NETWORK_F_SPEED_DUPLEX) {
+        PRINTLOG(VIRTIONET, LOG_INFO, "device has speed duplex feature");
+
+        req_features |= VIRTIO_NETWORK_F_SPEED_DUPLEX;
+    }
+
     return req_features;
 }
 
