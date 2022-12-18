@@ -15,8 +15,8 @@
 #define NETWORK_IPV4_VERSION 4
 #define NETWORK_IPV4_TTL 128
 
-#define NETWORK_IPV4_FLAG_DONT_FRAGMENT  1
-#define NETWORK_IPV4_FLAG_MORE_FRAGMENTS 2
+#define NETWORK_IPV4_FLAG_DONT_FRAGMENT  2
+#define NETWORK_IPV4_FLAG_MORE_FRAGMENTS 1
 
 typedef enum {
     NETWORK_IPV4_PROTOCOL_ICMPV4=1,
@@ -26,14 +26,19 @@ typedef enum {
 }network_ipv4_protocol_t;
 
 typedef struct {
-    uint32_t                header_length   : 4;
-    uint32_t                version         : 4;
-    uint32_t                ecn             : 2;
-    uint32_t                dscp            : 6;
-    uint32_t                total_length    : 16;
-    uint32_t                identification  : 16;
-    uint32_t                fragment_offset : 13;
-    uint32_t                flags           : 3;
+    uint32_t header_length  : 4;
+    uint32_t version        : 4;
+    uint32_t ecn            : 2;
+    uint32_t dscp           : 6;
+    uint32_t total_length   : 16;
+    uint32_t identification : 16;
+    union {
+        struct {
+            uint16_t fragment_offset : 13;
+            uint16_t flags           : 3;
+        } __attribute__((packed)) fields;
+        uint16_t bits;
+    }                       flags_fragment_offset;
     uint32_t                ttl             : 8;
     network_ipv4_protocol_t protocol        : 8;
     uint32_t                header_checksum : 16;

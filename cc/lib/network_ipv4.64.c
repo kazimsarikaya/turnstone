@@ -12,9 +12,60 @@
 #include <video.h>
 #include <time.h>
 #include <video.h>
+#include <linkedlist.h>
+#include <map.h>
+
+
+map_t network_ipv4_packet_fragments = NULL;
+
+typedef struct {
+    uint32_t offset;
+    uint16_t data_len;
+    uint8_t* data;
+} network_ipv4_fragment_t;
+
+typedef struct {
+    uint32_t     total_length;
+    linkedlist_t fragments;
+} network_ipv4_fragment_item_t;
+
+typedef union {
+    struct {
+        network_ipv4_address_t ip;
+        uint16_t               identification;
+        uint8_t                protocol;
+        uint8_t                reserved;
+    } __attribute__((packed)) fields;
+    uint64_t bits;
+} network_ipv4_fragment_key_t;
 
 network_ipv4_address_t NETWORK_IPV4_GLOBAL_BROADCAST_IP = {255, 255, 255, 255};
 network_ipv4_address_t NETWORK_IPV4_ZERO_IP = {0, 0, 0, 0};
+
+int8_t network_ipv4_fragment_comparator(const void* f1, const void* f2){
+    const network_ipv4_fragment_t* tf1 = f1;
+    const network_ipv4_fragment_t* tf2 = f2;
+
+    if(tf1->offset < tf2->offset) {
+        return -1;
+    }
+
+    if(tf1->offset > tf2->offset) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static inline uint64_t network_ipv4_fragment_key_generator(network_ipv4_address_t ip, uint16_t identification, uint8_t protocol) {
+    network_ipv4_fragment_key_t res;
+
+    memory_memcopy(ip, res.fields.ip, sizeof(network_ipv4_address_t));
+    res.fields.identification = identification;
+    res.fields.protocol = protocol;
+
+    return res.bits;
+}
 
 boolean_t network_ipv4_is_address_eq(network_ipv4_address_t ipv4_addr1, network_ipv4_address_t ipv4_addr2) {
     for(uint64_t i = 0; i < sizeof(network_ipv4_address_t); i++) {
@@ -67,7 +118,9 @@ int8_t network_ipv4_header_checksum_verify(network_ipv4_header_t* ipv4_hdr){
 }
 
 uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, void* network_info, uint16_t* return_packet_len) {
-    UNUSED(network_info);
+    if(network_ipv4_packet_fragments == NULL) {
+        network_ipv4_packet_fragments = map_integer();
+    }
 
     if(return_packet_len == NULL) {
         return NULL;
@@ -86,6 +139,94 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         return NULL;
     }
 
+    recv_ipv4_packet->flags_fragment_offset.bits = BYTE_SWAP16(recv_ipv4_packet->flags_fragment_offset.bits);
+
+    if(recv_ipv4_packet->flags_fragment_offset.fields.flags & NETWORK_IPV4_FLAG_MORE_FRAGMENTS) {
+        uint64_t key = network_ipv4_fragment_key_generator(recv_ipv4_packet->destination_ip, recv_ipv4_packet->identification, recv_ipv4_packet->protocol);
+
+        network_ipv4_fragment_item_t* frag_item = map_get(network_ipv4_packet_fragments, (void*)key);
+
+        if(frag_item == NULL) {
+            frag_item = memory_malloc(sizeof(network_ipv4_fragment_item_t));
+            frag_item->fragments = linkedlist_create_sortedlist(&network_ipv4_fragment_comparator);
+
+            map_insert(network_ipv4_packet_fragments, (void*)key, frag_item);
+        }
+
+        uint16_t data_len = BYTE_SWAP16(recv_ipv4_packet->total_length) - (recv_ipv4_packet->header_length * 4);
+        uint8_t* data = (uint8_t*)recv_ipv4_packet;
+        data += recv_ipv4_packet->header_length * 4;
+
+        frag_item->total_length += data_len;
+
+        network_ipv4_fragment_t* frag = memory_malloc(sizeof(network_ipv4_fragment_t));
+
+        frag->offset = (uint32_t)recv_ipv4_packet->flags_fragment_offset.fields.fragment_offset << 3;
+        frag->data_len = data_len;
+        frag->data = memory_malloc(data_len);
+        memory_memcopy(data, frag->data, data_len);
+
+        linkedlist_sortedlist_insert(frag_item->fragments, frag);
+
+        return NULL;
+    }
+
+    uint8_t* packet_data = NULL;
+
+    if (recv_ipv4_packet->flags_fragment_offset.fields.fragment_offset) {
+        uint64_t key = network_ipv4_fragment_key_generator(recv_ipv4_packet->destination_ip, recv_ipv4_packet->identification, recv_ipv4_packet->protocol);
+
+        network_ipv4_fragment_item_t* frag_item = map_get(network_ipv4_packet_fragments, (void*)key);
+
+        if(frag_item == NULL) {
+            return NULL;
+        }
+
+        uint16_t data_len = BYTE_SWAP16(recv_ipv4_packet->total_length) - (recv_ipv4_packet->header_length * 4);
+        uint8_t* data = (uint8_t*)recv_ipv4_packet;
+        data += recv_ipv4_packet->header_length * 4;
+
+        frag_item->total_length += data_len;
+
+        network_ipv4_fragment_t* frag = memory_malloc(sizeof(network_ipv4_fragment_t));
+
+        frag->offset = (uint32_t)recv_ipv4_packet->flags_fragment_offset.fields.fragment_offset << 3;
+        frag->data_len = data_len;
+        frag->data = memory_malloc(data_len);
+        memory_memcopy(data, frag->data, data_len);
+
+        linkedlist_sortedlist_insert(frag_item->fragments, frag);
+
+        packet_data = memory_malloc(frag_item->total_length);
+
+        iterator_t* iter = linkedlist_iterator_create(frag_item->fragments);
+
+        while(iter->end_of_iterator(iter) != 0) {
+            frag = iter->get_item(iter);
+
+            memory_memcopy(frag->data, packet_data + frag->offset, frag->data_len);
+
+            memory_free(frag->data);
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
+
+        map_delete(network_ipv4_packet_fragments, (void*)key);
+        linkedlist_destroy_with_data(frag_item->fragments);
+        memory_free(frag_item);
+
+    } else {
+        uint16_t data_len = BYTE_SWAP16(recv_ipv4_packet->total_length) - (recv_ipv4_packet->header_length * 4);
+        uint8_t* data = (uint8_t*)recv_ipv4_packet;
+        data += recv_ipv4_packet->header_length * 4;
+
+        packet_data = memory_malloc(data_len);
+        memory_memcopy(data, packet_data, data_len);
+    }
+
+
     if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_ICMPV4) {
         if(!ni) {
             return NULL;
@@ -95,9 +236,9 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
             return NULL;
         }
 
-        uint8_t* data = (uint8_t*)recv_ipv4_packet;
-        data += recv_ipv4_packet->header_length * 4;
-        network_icmpv4_header_t* recv_icmp_hdr = (network_icmpv4_header_t*)data;
+        uint8_t* icmp_data = (uint8_t*)recv_ipv4_packet;
+        icmp_data += recv_ipv4_packet->header_length * 4;
+        network_icmpv4_header_t* recv_icmp_hdr = (network_icmpv4_header_t*)icmp_data;
 
         uint16_t pp_len = 0;
         uint16_t ping_data_len = BYTE_SWAP16(recv_ipv4_packet->total_length) - ((recv_ipv4_packet->header_length * 4) + sizeof(network_icmpv4_header_t));
@@ -110,11 +251,11 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
 
         return (uint8_t*)ip;
     } else if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_UDPV4) {
-        uint8_t* data = (uint8_t*)recv_ipv4_packet;
-        data += recv_ipv4_packet->header_length * 4;
-        network_udpv4_header_t* recv_udpv4_hdr = (network_udpv4_header_t*)data;
+        network_udpv4_header_t* recv_udpv4_hdr = (network_udpv4_header_t*)packet_data;
 
         network_udpv4_header_t* resp_udpv4_hdr = (network_udpv4_header_t*)network_udpv4_process_packet(recv_udpv4_hdr, network_info, NULL);
+
+        memory_free(packet_data);
 
         network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, resp_udpv4_hdr);
 
