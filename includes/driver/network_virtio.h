@@ -124,8 +124,8 @@ typedef struct  {
 #define VIRTIO_NETWORK_IOPORT_MAX_VQ_COUNT    0x20
 #define VIRTIO_NETWORK_IOPORT_MTU             0x22
 
-#define VIRTIO_NETWORK_QUEUE_ITEM_LENGTH        1536
-#define VIRTIO_NETWORK_CTRL_QUEUE_ITEM_LENGTH     16
+#define VIRTIO_NETWORK_QUEUE_ITEM_LENGTH        16448
+#define VIRTIO_NETWORK_CTRL_QUEUE_ITEM_LENGTH      16
 
 int8_t network_virtio_init(pci_dev_t* pci_netdev);
 

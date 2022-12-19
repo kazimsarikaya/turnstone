@@ -141,26 +141,48 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             dhcp_packet = network_dhcpv4_create_discover_packet(mac, xid, &return_packet_len);
         }
 
+        if(dhcp_packet == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "dhcp packet is null, re trying...");
+
+            continue;
+        }
+
 
         network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, return_packet_len, (uint8_t*)dhcp_packet);
 
         memory_free(dhcp_packet);
 
         if(udp == NULL) {
-            return NULL;
+            PRINTLOG(NETWORK, LOG_ERROR, "udp packet is null, re trying...");
+
+            continue;
         }
 
         network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(ni->ipv4_address, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
 
         if(ip == NULL) {
-            return NULL;
+            PRINTLOG(NETWORK, LOG_ERROR, "ip packet is null, re trying...");
+
+            continue;
         }
 
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 
         uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, mac, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
 
+        if(eth == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "eth packet is null, re trying...");
+
+            continue;
+        }
+
         network_transmit_packet_t* res = memory_malloc(sizeof(network_transmit_packet_t));
+
+        if(res == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "network transmic packet is null, re trying...");
+
+            continue;
+        }
 
         res->packet_len = sizeof(network_ethernet_t) + tl;
         res->packet_data = eth;
@@ -192,6 +214,8 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         return NULL;
     }
 
+    PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet received");
+
     network_dhcpv4_opcode_t type = 0;
 
     uint8_t* options = recv_dhcpv4_packet->options;
@@ -206,6 +230,8 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         idx += options[idx + 1] + 2;
     }
 
+    PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet type %i", type);
+
     network_info_t* ni = map_get(network_info_map, network_info);
 
     if(type == NETWORK_DHCPV4_OPCODE_OFFER) {
@@ -215,17 +241,27 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         uint16_t dhcp_packet_len = 0;
         network_dhcpv4_t* dhcp_packet = network_dhcpv4_create_request_packet(ni, recv_dhcpv4_packet->xid, &dhcp_packet_len);
 
+        if(dhcp_packet == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "dhcp packet is null");
+
+            return NULL;
+        }
+
         network_udpv4_header_t* udp = network_udpv4_create_packet_from_data(NETWORK_DHCPV4_SOURCE_PORT, NETWORK_DHCPV4_DESTINATION_PORT, dhcp_packet_len, (uint8_t*)dhcp_packet);
 
         memory_free(dhcp_packet);
 
         if(udp == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "udp packet is null");
+
             return NULL;
         }
 
         network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(NETWORK_IPV4_ZERO_IP, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
 
         if(ip == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "ip packet is null");
+
             return NULL;
         }
 
@@ -238,9 +274,19 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         res->packet_len = sizeof(network_ethernet_t) + tl;
         res->packet_data = eth;
 
+        if(ni->return_queue == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "no return queue");
+
+            return NULL;
+        }
+
 
         linkedlist_queue_push(ni->return_queue, res);
+
+        PRINTLOG(NETWORK, LOG_TRACE, "dhcp request is send");
     } else if(type == NETWORK_DHCPV4_OPCODE_ACK) {
+        PRINTLOG(NETWORK, LOG_TRACE, "dhcp type is ack");
+
         memory_memcopy(recv_dhcpv4_packet->your_ip, ni->ipv4_address, sizeof(network_ipv4_address_t));
         PRINTLOG(NETWORK, LOG_TRACE, "ipaddr %i.%i.%i.%i", ni->ipv4_address[0], ni->ipv4_address[1], ni->ipv4_address[2], ni->ipv4_address[3]);
         memory_memcopy(recv_dhcpv4_packet->server_ip, ni->ipv4_dhcpserver, sizeof(network_ipv4_address_t));
@@ -283,6 +329,8 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
         ni->is_ipv4_address_set = true;
         ni->is_ipv4_address_requested = false;
+
+        PRINTLOG(NETWORK, LOG_TRACE, "dhcp conf completed");
     }
 
     return NULL;

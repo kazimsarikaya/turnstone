@@ -60,15 +60,13 @@ network_udpv4_header_t* network_udpv4_create_packet_from_data(uint16_t sp, uint1
 
     for(uint32_t i = 0; i < tmp_len; i += 2) {
         hcsum += (data[i + 1] << 8) | data[i];
-
-        uint32_t carry = hcsum >> 16;
-        hcsum &= 0xFFFF;
-        hcsum += carry;
     }
 
     if(single_byte) {
         hcsum += data[len - 1];
+    }
 
+    while(hcsum >> 16) {
         uint32_t carry = hcsum >> 16;
         hcsum &= 0xFFFF;
         hcsum += carry;

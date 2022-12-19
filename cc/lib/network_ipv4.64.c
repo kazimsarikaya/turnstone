@@ -204,6 +204,8 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         while(iter->end_of_iterator(iter) != 0) {
             frag = iter->get_item(iter);
 
+            PRINTLOG(NETWORK, LOG_TRACE, "reassembly offset %i len %i", frag->offset, frag->data_len);
+
             memory_memcopy(frag->data, packet_data + frag->offset, frag->data_len);
 
             memory_free(frag->data);
@@ -324,9 +326,12 @@ network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(network_ipv4_a
     uint16_t* dip_u16 = (uint16_t*)dip;
 
     uint32_t hcsum = udp_hdr->checksum + sip_u16[0] + sip_u16[1] + dip_u16[0] + dip_u16[1];
-    uint32_t carry = hcsum >> 16;
-    hcsum &= 0xFFFF;
-    hcsum += carry;
+
+    while(hcsum >> 16) {
+        uint32_t carry = hcsum >> 16;
+        hcsum &= 0xFFFF;
+        hcsum += carry;
+    }
 
     int16_t csum = hcsum;
 
