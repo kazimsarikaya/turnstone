@@ -260,9 +260,14 @@ boolean_t task_idle_check_need_yield() {
                     linkedlist_t q = linkedlist_get_data_at_position(t->message_queues, q_idx);
 
                     if(linkedlist_size(q)) {
-                        t->message_waiting = 0;
+                        t->message_waiting = false;
                         need_yield = true;
                     }
+                }
+            } else if(t->sleeping) {
+                if(t->wake_tick < time_timer_get_tick_count()) {
+                    t->sleeping = false;
+                    need_yield = true;
                 }
             }
         }
@@ -340,7 +345,7 @@ __attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
     }
 
     if(current_task != NULL) {
-        if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting) {
+        if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting && !current_task->sleeping) {
 
             if(need_eoi) {
                 apic_eoi();
