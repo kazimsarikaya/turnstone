@@ -117,6 +117,10 @@ linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t 
 
     list = memory_malloc_ext(heap, sizeof(linkedlist_internal_t), 0x0);
 
+    if(list == NULL) {
+        return NULL;
+    }
+
     list->heap = heap;
     list->type = type;
     list->comparator = comparator;
@@ -159,6 +163,11 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
     // TODO: check errors
     memory_heap_t* heap = ((linkedlist_internal_t*)list)->heap;
     iterator_t* iter = linkedlist_iterator_create(list);
+
+    if(iter == NULL) {
+        return -1;
+    }
+
     while(iter->end_of_iterator(iter) != 0) {
         void* data = iter->delete_item(iter);
         if(type == LINKEDLIST_DESTROY_WITH_DATA) {
@@ -196,6 +205,8 @@ int8_t linkedlist_set_equality_comparator(linkedlist_t list, linkedlist_data_com
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position){
     if(data == NULL) {
         return NULL;
@@ -211,6 +222,13 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 
     size_t result = 0;
     linkedlist_item_internal_t* item = memory_malloc_ext(l->heap, sizeof(linkedlist_item_internal_t), 0x0);
+
+    if(item == NULL) {
+        lock_release(l->lock);
+
+        return 0;
+    }
+
     item->data = data;
 
     if(l->head == NULL) { // if head is null insert both head and tail and return
@@ -278,38 +296,42 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
     }else if(where == LINKEDLIST_INSERT_AT_POSITION) {
         linkedlist_item_internal_t* cur = l->head;
         size_t index = 0;
-        uint8_t insert_at_end = 0;
 
         while(index < position) {
             cur = cur->next;
 
             if(cur == NULL) {
-                insert_at_end = 1;
                 break;
             }
 
             index++;
         }
 
-        if(insert_at_end == 1) {
+        if(cur == NULL) {
             item->previous = l->tail;
             l->tail->next = item;
             l->tail = item;
             result = l->item_count;
 
         } else {
-            item->next = cur;
-            item->previous = cur->previous;
+            linkedlist_item_internal_t* old_prev = cur->previous;
             cur->previous = item;
+            item->next = cur;
+            item->previous = old_prev;
 
-            if(item->previous != NULL) {
-                item->previous->next = item;
+            if(old_prev != NULL) {
+                old_prev->next = item;
             } else {
                 l->head = item;
             }
 
-            result = position;
+            result = index;
         }
+    } else {
+        memory_free_ext(l->heap, item);
+        lock_release(l->lock);
+
+        return 0;
     }
 
     l->item_count++;
@@ -317,6 +339,7 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 
     return result;
 }
+#pragma GCC diagnostic pop
 
 void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position){
     if(data == NULL && where == LINKEDLIST_DELETE_AT_FINDBY) {
@@ -419,6 +442,12 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
         } else {
             iterator_t* iter = linkedlist_iterator_create(l);
 
+            if(iter == NULL) {
+                lock_release(l->lock);
+
+                return NULL;
+            }
+
             linkedlist_data_comparator_f cmp = l->comparator;
 
             if(l->equality_comparator) {
@@ -438,6 +467,12 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
         }
     } else if(where == LINKEDLIST_DELETE_AT_POSITION) {
         iterator_t* iter = linkedlist_iterator_create(l);
+
+        if(iter == NULL) {
+            lock_release(l->lock);
+
+            return NULL;
+        }
 
         while(iter->end_of_iterator(iter) != 0) {
             if(position == 0) {
@@ -483,6 +518,10 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position){
 
     iterator_t* iter = linkedlist_iterator_create(l);
 
+    if(iter == NULL) {
+        return -1;
+    }
+
     while(iter->end_of_iterator(iter) != 0) {
 
 
@@ -517,6 +556,10 @@ void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
 
     iterator_t* iter = linkedlist_iterator_create(l);
 
+    if(iter == NULL) {
+        return NULL;
+    }
+
     while(iter->end_of_iterator(iter) != 0) {
         if(position == 0) {
             result = iter->get_item(iter);
@@ -543,7 +586,21 @@ iterator_t* linkedlist_iterator_create(linkedlist_t list) {
     lock_acquire(l->lock);
 
     iterator_t* iterator = memory_malloc_ext(l->heap, sizeof(iterator_t), 0x0);
+
+    if(iterator == NULL) {
+        lock_release(l->lock);
+
+        return NULL;
+    }
+
     linkedlist_iterator_internal_t* iter = memory_malloc_ext(l->heap, sizeof(linkedlist_iterator_internal_t), 0x0);
+
+    if(iter == NULL) {
+        memory_free_ext(l->heap, iterator);
+        lock_release(l->lock);
+
+        return NULL;
+    }
 
     iter->list = l;
     iter->current = l->head;
@@ -615,6 +672,11 @@ void* linkedlist_iterator_get_item(iterator_t* iterator) {
 }
 
 void* linkedlist_iterator_delete_item(iterator_t* iterator){
+
+    if(iterator == NULL) {
+        return NULL;
+    }
+
     linkedlist_iterator_internal_t* iter = (linkedlist_iterator_internal_t*)iterator->metadata;
 
     if(iter->current == NULL) {
@@ -660,18 +722,35 @@ void* linkedlist_iterator_delete_item(iterator_t* iterator){
 }
 
 linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist_t list) {
+
+    if(list == NULL) {
+        return NULL;
+    }
+
     linkedlist_internal_t* new_list;
     linkedlist_internal_t* source_list = (linkedlist_internal_t*)list;
     if(heap == NULL) {
         heap = source_list->heap;
     }
     new_list = memory_malloc_ext(heap, sizeof(linkedlist_internal_t), 0x0);
+
+    if(new_list == NULL) {
+        return NULL;
+    }
+
     new_list->heap = heap;
     new_list->type = source_list->type;
     new_list->comparator = source_list->comparator;
     new_list->indexer = source_list->indexer;
 
     iterator_t* iter = linkedlist_iterator_create(list);
+
+    if(iter == NULL) {
+        memory_free_ext(heap, new_list);
+
+        return NULL;
+    }
+
     while(iter->end_of_iterator(iter) != 0) {
         void* item = iter->get_item(iter);
         linkedlist_insert_at(new_list, item, LINKEDLIST_INSERT_AT_TAIL, 0);

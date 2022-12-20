@@ -117,6 +117,12 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
 
         if(iter == NULL) {
             frame_t* new_r_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(new_r_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
+                cpu_hlt();
+            }
+
             new_r_frm->frame_address = rem_frm_start;
             new_r_frm->frame_count = rem_frm_cnt;
             new_r_frm->type = FRAME_TYPE_RESERVED;
@@ -131,6 +137,12 @@ int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
             iter->destroy(iter);
 
             frame_t* new_r_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(new_r_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
+                cpu_hlt();
+            }
+
             new_r_frm->frame_address = rem_frm_start;
             new_r_frm->frame_count = rem_frm_cnt;
             new_r_frm->type = FRAME_TYPE_RESERVED;
@@ -333,6 +345,11 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
     if(frm->frame_address < f->frame_address) {
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
+        if(new_frm == NULL) {
+            lock_release(ctx->lock);
+            return -1;
+        }
+
         new_frm->frame_address = frm->frame_address;
         new_frm->frame_count = (f->frame_address - frm->frame_address) / FRAME_SIZE;
         new_frm->type = FRAME_TYPE_FREE;
@@ -349,6 +366,11 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
     if(rem_frms) {
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
+        if(new_frm == NULL) {
+            lock_release(ctx->lock);
+            return -1;
+        }
+
         new_frm->frame_address = f->frame_address + f->frame_count * FRAME_SIZE;
         new_frm->frame_count = rem_frms;
         new_frm->type = FRAME_TYPE_FREE;
@@ -360,6 +382,11 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
 
 
     frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+    if(new_frm == NULL) {
+        lock_release(ctx->lock);
+        return -1;
+    }
 
     new_frm->frame_address = f->frame_address;
     new_frm->frame_count = f->frame_count;
@@ -403,6 +430,11 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             uint64_t prev_frm_count = (f->frame_address - tmp_frame->frame_address) / FRAME_SIZE;
 
             frame_t* prev_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(prev_frm == NULL) {
+                lock_release(ctx->lock);
+                return -1;
+            }
             prev_frm->frame_address = tmp_frame->frame_address;
             prev_frm->frame_count = prev_frm_count;
             prev_frm->type = FRAME_TYPE_USED;
@@ -415,6 +447,11 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 
         if(rem_frms) {
             frame_t* next_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(next_frm == NULL) {
+                lock_release(ctx->lock);
+                return -1;
+            }
             next_frm->frame_address = f->frame_address + f->frame_count * FRAME_SIZE;
             next_frm->frame_count = rem_frms;
             next_frm->type = FRAME_TYPE_USED;
@@ -424,6 +461,12 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         }
 
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+        if(new_frm == NULL) {
+            lock_release(ctx->lock);
+            return -1;
+        }
+
         new_frm->frame_address = f->frame_address;
         new_frm->frame_count = f->frame_count;
         new_frm->type = FRAME_TYPE_FREE;
@@ -463,6 +506,12 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
             uint64_t prev_frm_count = (f->frame_address - tmp_frame->frame_address) / FRAME_SIZE;
 
             frame_t* prev_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(prev_frm == NULL) {
+                lock_release(ctx->lock);
+                return -1;
+            }
+
             prev_frm->frame_address = tmp_frame->frame_address;
             prev_frm->frame_count = prev_frm_count;
             prev_frm->type = FRAME_TYPE_USED;
@@ -475,6 +524,12 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 
         if(rem_frms) {
             frame_t* next_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(next_frm == NULL) {
+                lock_release(ctx->lock);
+                return -1;
+            }
+
             next_frm->frame_address = f->frame_address + f->frame_count * FRAME_SIZE;
             next_frm->frame_count = rem_frms;
             next_frm->type = FRAME_TYPE_USED;
@@ -484,6 +539,12 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         }
 
         frame_t* new_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+        if(new_frm == NULL) {
+            lock_release(ctx->lock);
+            return -1;
+        }
+
         new_frm->frame_address = f->frame_address;
         new_frm->frame_count = f->frame_count;
         new_frm->type = FRAME_TYPE_FREE;
@@ -695,8 +756,10 @@ frame_t* fa_get_reserved_frames_of_address(struct frame_allocator* self, void* a
     return res;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
-    if(self == NULL) {
+    if(self == NULL || SYSTEM_INFO == NULL) {
         return -1;
     }
 
@@ -754,6 +817,7 @@ int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
     if(efi_m_type >= EFI_LOADER_CODE && efi_m_type <= EFI_BOOT_SERVICES_DATA) {
@@ -773,6 +837,10 @@ frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
 
 frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     frame_allocator_context_t* ctx = memory_malloc_ext(heap, sizeof(frame_allocator_context_t), 0);
+
+    if(ctx == NULL) {
+        return NULL;
+    }
 
     ctx->heap = heap;
     ctx->free_frames_sorted_by_size = linkedlist_create_sortedlist_with_heap(heap, frame_allocator_cmp_by_size);
@@ -802,6 +870,13 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
 
             frame_t* f = memory_malloc_ext(heap, sizeof(frame_t), 0);
+
+            if(f == NULL) {
+                memory_free_ext(ctx->heap, ctx);
+                return NULL;
+            }
+
+
             f->frame_address = frame_start;
             f->frame_count = frame_count;
             f->type = type;
@@ -838,6 +913,11 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     }
 
     frame_allocator_t* fa = memory_malloc_ext(heap, sizeof(frame_allocator_t), 0);
+
+    if(fa == NULL) {
+        memory_free_ext(ctx->heap, ctx);
+        return NULL;
+    }
 
     fa->context = ctx;
     fa->allocate_frame_by_count = fa_allocate_frame_by_count;

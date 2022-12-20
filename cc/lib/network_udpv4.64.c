@@ -49,6 +49,10 @@ network_udpv4_header_t* network_udpv4_create_packet_from_data(uint16_t sp, uint1
 
     network_udpv4_header_t* res = memory_malloc(packet_len);
 
+    if(res == NULL) {
+        return NULL;
+    }
+
     res->source_port = BYTE_SWAP16(sp);
     res->destination_port = BYTE_SWAP16(dp);
     res->length = BYTE_SWAP16(packet_len);

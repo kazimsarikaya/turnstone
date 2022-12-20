@@ -224,6 +224,10 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
     acpi_aml_object_t* res = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
+    if(res == NULL) {
+        return -1;
+    }
+
     if(src->type == ACPI_AML_OT_STRING || src->type == ACPI_AML_OT_BUFFER) {
         res->type = ACPI_AML_OT_BUFFERFIELD;
         res->field.related_object = src;
@@ -243,6 +247,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
     if(acpi_aml_is_null_target(dst) != 0) {
         dst = acpi_aml_get_if_arg_local_obj(ctx, dst, 1, 0);
         PRINTLOG(ACPIAML, LOG_ERROR, "storing to dest not implemented for index op");
+        memory_free_ext(ctx->heap, res);
 
         return -1;
     }
@@ -254,11 +259,11 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
 
 
 #define UNIMPLEXEC(name) \
-    int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
-        UNUSED(ctx); \
-        PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
-        return -1; \
-    }
+        int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
+            UNUSED(ctx); \
+            PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
+            return -1; \
+        }
 
 UNIMPLEXEC(concat);
 UNIMPLEXEC(match);

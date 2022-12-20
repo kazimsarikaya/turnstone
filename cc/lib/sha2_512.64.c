@@ -120,6 +120,11 @@ sha512_ctx_t sha512_init() {
 }
 
 int8_t sha512_update(sha512_ctx_t ctx, const uint8_t* data, size_t len) {
+
+    if(ctx == NULL) {
+        return -1;
+    }
+
     sha512_internal_ctx_t* ictx = (sha512_internal_ctx_t*)ctx;
 
     for (uint32_t i = 0; i < len; ++i) {
@@ -138,6 +143,11 @@ int8_t sha512_update(sha512_ctx_t ctx, const uint8_t* data, size_t len) {
 }
 
 uint8_t* sha512_final(sha512_ctx_t ctx) {
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     sha512_internal_ctx_t* ictx = (sha512_internal_ctx_t*)ctx;
     uint32_t i;
 
@@ -221,15 +231,13 @@ uint8_t* sha384_final(sha384_ctx_t ctx) {
     uint8_t* pre_hash = sha512_final((sha512_ctx_t)ctx);
 
     if(pre_hash == NULL) {
-        memory_free(ctx);
-
         return NULL;
     }
 
     uint8_t* hash = memory_malloc(SHA384_OUTPUT_SIZE);
 
     if(hash == NULL) {
-        memory_free(ctx);
+        memory_free(pre_hash);
 
         return NULL;
     }

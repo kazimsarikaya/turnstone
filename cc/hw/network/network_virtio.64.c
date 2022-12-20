@@ -62,6 +62,11 @@ int8_t network_virtio_process_tx(){
         task_add_message_queue(vdev->return_queue);
 
         void** args = memory_malloc(sizeof(void*));
+
+        if(args == NULL) {
+            return -1;
+        }
+
         args[0] = vdev->extra_data;
         args[1] = vdev->return_queue;
 
@@ -127,6 +132,10 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
         while(vq_rx->last_used_index < used->index) {
             network_received_packet_t* packet = memory_malloc(sizeof(network_received_packet_t));
 
+            if(packet == NULL) {
+                continue;
+            }
+
             uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
             uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
 
@@ -148,6 +157,13 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
             packet->network_type = NETWORK_TYPE_ETHERNET;
 
             packet->packet_data = memory_malloc(packet_len);
+
+            if(packet->packet_data == NULL) {
+                memory_free(packet);
+
+                continue;
+            }
+
             memory_memcopy(offset, packet->packet_data, packet_len);
 
             descs[packet_desc_id].flags = VIRTIO_QUEUE_DESC_F_WRITE;

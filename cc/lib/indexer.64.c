@@ -23,11 +23,17 @@ typedef struct {
 
 indexer_t indexer_create_with_heap(memory_heap_t* heap){
     indexer_internal_t* l_idxer = memory_malloc_ext(heap, sizeof(indexer_internal_t), 0x0);
+
+    if(l_idxer == NULL) {
+        return NULL;
+    }
+
     l_idxer->heap = heap;
     l_idxer->indexes = linkedlist_create_list_with_heap(heap);
 
     if(l_idxer->indexes == NULL) {
         linkedlist_destroy(l_idxer->indexes);
+        memory_free_ext(heap, l_idxer);
 
         return NULL;
     }
@@ -56,6 +62,11 @@ int8_t indexer_register_index(indexer_t idxer, char_t* idx_name, index_t* idx, i
     }
 
     indexer_idx_kc_internal_t* pair = memory_malloc_ext(l_idxer->heap, sizeof(indexer_idx_kc_internal_t), 0x0);
+
+    if(pair == NULL) {
+        return -1;
+    }
+
     pair->idx_name = idx_name;
     pair->idx = idx;
     pair->key_creator = key_creator;

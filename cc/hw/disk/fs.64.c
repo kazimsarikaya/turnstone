@@ -64,6 +64,10 @@ struct path* fs_path_get_basepath(path_t* self) {
 
     char_t* max_path = memory_malloc(strlen(ctx->path_string));
 
+    if(max_path == NULL) {
+        return NULL;
+    }
+
     int16_t idx = 0;
 
     for(int64_t i = 0; i < ctx->part_count - 1; i++) {
@@ -145,12 +149,22 @@ path_t* fs_path_append(path_t* self, path_t* child) {
 path_t* filesystem_new_path(filesystem_t* fs, char_t* path_string) {
     fs_path_ctx_t* ctx = memory_malloc(sizeof(fs_path_ctx_t));
 
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     ctx->path_string = strdup(path_string);
     ctx->parts = strsplit(ctx->path_string, PATH_DELIMETER_CHR, &ctx->part_lengths, &ctx->part_count);
 
     ctx->fs = fs;
 
     path_t* p = memory_malloc(sizeof(path_t));
+
+    if(p == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
 
     p->context = ctx;
 
@@ -238,11 +252,22 @@ int8_t fs_epi_close(path_interface_t* self) {
 path_interface_t* filesystem_empty_path_interface(filesystem_t* fs, path_t* p, fs_stat_type_t type) {
     fs_empty_path_interface_ctx_t* ctx = memory_malloc(sizeof(fs_empty_path_interface_ctx_t));
 
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     ctx->path = p;
     ctx->type = type;
     ctx->fs = fs;
 
     path_interface_t* pi = memory_malloc(sizeof(path_interface_t));
+
+    if(pi == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
+
     pi->context = ctx;
     pi->get_path = fs_epi_get_path;
     pi->get_type = fs_epi_get_type;

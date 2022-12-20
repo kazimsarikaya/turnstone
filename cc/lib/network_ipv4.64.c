@@ -148,6 +148,11 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
 
         if(frag_item == NULL) {
             frag_item = memory_malloc(sizeof(network_ipv4_fragment_item_t));
+
+            if(frag_item == NULL) {
+                return NULL;
+            }
+
             frag_item->fragments = linkedlist_create_sortedlist(&network_ipv4_fragment_comparator);
 
             map_insert(network_ipv4_packet_fragments, (void*)key, frag_item);
@@ -160,6 +165,10 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         frag_item->total_length += data_len;
 
         network_ipv4_fragment_t* frag = memory_malloc(sizeof(network_ipv4_fragment_t));
+
+        if(frag == NULL) {
+            return NULL;
+        }
 
         frag->offset = (uint32_t)recv_ipv4_packet->flags_fragment_offset.fields.fragment_offset << 3;
         frag->data_len = data_len;
@@ -189,6 +198,10 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         frag_item->total_length += data_len;
 
         network_ipv4_fragment_t* frag = memory_malloc(sizeof(network_ipv4_fragment_t));
+
+        if(frag == NULL) {
+            return NULL;
+        }
 
         frag->offset = (uint32_t)recv_ipv4_packet->flags_fragment_offset.fields.fragment_offset << 3;
         frag->data_len = data_len;
@@ -225,16 +238,23 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         data += recv_ipv4_packet->header_length * 4;
 
         packet_data = memory_malloc(data_len);
+
+        if(packet_data == NULL) {
+            return NULL;
+        }
+
         memory_memcopy(data, packet_data, data_len);
     }
 
 
     if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_ICMPV4) {
         if(!ni) {
+            memory_free(packet_data);
             return NULL;
         }
 
         if(ni && !ni->is_ipv4_address_set) {
+            memory_free(packet_data);
             return NULL;
         }
 
@@ -270,6 +290,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
 
         return (uint8_t*)ip;
     } else {
+        memory_free(packet_data);
         PRINTLOG(NETWORK, LOG_TRACE, "unimplemented ipv4 protocol 0x%02x", recv_ipv4_packet->protocol);
     }
 
@@ -280,6 +301,10 @@ network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(network_ipv4_
     uint16_t packet_len = sizeof(network_ipv4_header_t) + icmp_packet_len;
 
     network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);
+
+    if(ipv4_packet == NULL) {
+        return NULL;
+    }
 
     ipv4_packet->version = NETWORK_IPV4_VERSION;
     ipv4_packet->header_length = 5;
@@ -310,6 +335,10 @@ network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(network_ipv4_a
     uint16_t packet_len = sizeof(network_ipv4_header_t) + BYTE_SWAP16(udp_hdr->length);
 
     network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);
+
+    if(ipv4_packet == NULL) {
+        return NULL;
+    }
 
     ipv4_packet->version = NETWORK_IPV4_VERSION;
     ipv4_packet->header_length = 5;

@@ -24,6 +24,10 @@ network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t ma
 
     network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
 
+    if(dhcp_discover == NULL) {
+        return NULL;
+    }
+
     dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
     dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
     dhcp_discover->hardware_address_length = NETWORK_DHCPV4_HLEN;
@@ -57,6 +61,10 @@ network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint3
     }
 
     network_dhcpv4_t * dhcp_discover = memory_malloc(dhcp_discover_size);
+
+    if(dhcp_discover == NULL) {
+        return NULL;
+    }
 
     dhcp_discover->opcode = NETWORK_DHCPV4_OPCODE_DISCOVER;
     dhcp_discover->hardware_type = NETWORK_DHCPV4_HTYPE;
@@ -125,12 +133,20 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
                 }
             } else {
                 ni = memory_malloc(sizeof(network_info_t));
+
+                if(ni == NULL) {
+                    continue;
+                }
+
                 memory_memcopy(mac, ni->mac, sizeof(network_mac_address_t));
                 ni->return_queue = args[1];
                 map_insert(network_info_map, ni->mac, ni);
             }
         }
 
+        if(ni == NULL) {
+            continue;
+        }
 
         network_dhcpv4_t* dhcp_packet = NULL;
         uint16_t return_packet_len = 0;
@@ -198,9 +214,14 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
     return 0;
 }
 
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, void* network_info, uint16_t* return_packet_len) {
     UNUSED(return_packet_len);
+
+    if(recv_dhcpv4_packet == NULL) {
+        return NULL;
+    }
 
     if(!network_ethernet_is_mac_address_eq(network_info, recv_dhcpv4_packet->client_mac_address)) {
         return NULL;
@@ -233,6 +254,10 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet type %i", type);
 
     network_info_t* ni = map_get(network_info_map, network_info);
+
+    if(ni == NULL) {
+        return NULL;
+    }
 
     if(type == NETWORK_DHCPV4_OPCODE_OFFER) {
         memory_memcopy(recv_dhcpv4_packet->your_ip, ni->ipv4_address, sizeof(network_ipv4_address_t));
@@ -270,6 +295,10 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, network_info, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
 
         network_transmit_packet_t* res = memory_malloc(sizeof(network_transmit_packet_t));
+
+        if(res == NULL) {
+            return NULL;
+        }
 
         res->packet_len = sizeof(network_ethernet_t) + tl;
         res->packet_data = eth;
@@ -335,3 +364,4 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
     return NULL;
 }
+#pragma GCC diagnostic pop

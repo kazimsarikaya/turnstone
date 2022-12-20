@@ -173,6 +173,10 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
 
     uint8_t* tmp_data = (uint8_t*)data->value;
 
+    if(tmp_data == NULL) {
+        return NULL;
+    }
+
     bc = *tmp_data;
 
     if(bc > 8 || total_len < 1ULL + bc) {
@@ -192,6 +196,10 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
     }
 
     data_t* res = memory_malloc(sizeof(data_t));
+
+    if(res == NULL) {
+        return NULL;
+    }
 
     if(sw & DATA_SERIALIZE_WITH_FLAGS) {
         sw = (data_serialize_with_t)*tmp_data;
@@ -356,6 +364,13 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
     }
 
     uint8_t* idata = memory_malloc(mlen);
+
+    if(idata == NULL) {
+        memory_free(res);
+
+        return NULL;
+    }
+
     memory_memcopy(tmp_data, idata, ilen);
 
 

@@ -47,6 +47,10 @@ uint64_t xxhash64_hash_with_seed(const void* input, uint64_t length, uint64_t se
 xxhash64_context_t xxhash64_init(uint64_t seed) {
     xxhash64_internal_context_t* ictx = memory_malloc(sizeof(xxhash64_internal_context_t));
 
+    if(ictx == NULL) {
+        return NULL;
+    }
+
     ictx->state[0] = seed + XXHASH64_PRIME1 + XXHASH64_PRIME2;
     ictx->state[1] = seed + XXHASH64_PRIME2;
     ictx->state[2] = seed;
@@ -58,6 +62,11 @@ xxhash64_context_t xxhash64_init(uint64_t seed) {
 }
 
 uint64_t xxhash64_final(xxhash64_context_t ctx) {
+
+    if(ctx == NULL) {
+        return 0;
+    }
+
     xxhash64_internal_context_t* ictx = (xxhash64_internal_context_t*)ctx;
 
     uint64_t result;
@@ -108,6 +117,11 @@ uint64_t xxhash64_final(xxhash64_context_t ctx) {
 
 
 int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t length) {
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     xxhash64_internal_context_t* ictx = (xxhash64_internal_context_t*)ctx;
 
     if (!input || length == 0) {
@@ -195,6 +209,10 @@ uint32_t xxhash32_hash_with_seed(const void* input, uint64_t length, uint32_t se
 xxhash32_context_t xxhash32_init(uint32_t seed) {
     xxhash32_internal_context_t* ictx = memory_malloc(sizeof(xxhash32_internal_context_t));
 
+    if(ictx == NULL) {
+        return NULL;
+    }
+
     ictx->state[0] = seed + XXHASH32_PRIME1 + XXHASH32_PRIME2;
     ictx->state[1] = seed + XXHASH32_PRIME2;
     ictx->state[2] = seed;
@@ -206,6 +224,11 @@ xxhash32_context_t xxhash32_init(uint32_t seed) {
 }
 
 uint32_t xxhash32_final(xxhash32_context_t ctx) {
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     xxhash32_internal_context_t* ictx = (xxhash32_internal_context_t*)ctx;
 
     uint32_t result = (uint32_t)ictx->total_length;
@@ -244,6 +267,11 @@ uint32_t xxhash32_final(xxhash32_context_t ctx) {
 
 
 int8_t xxhash32_update(xxhash32_context_t ctx, const void* input, uint64_t length) {
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     xxhash32_internal_context_t* ictx = (xxhash32_internal_context_t*)ctx;
 
     if (!input || length == 0) {

@@ -27,6 +27,7 @@ const char_t* logging_module_names[] = {
     "VIRTIO",
     "VIRTIONET",
     "E1000",
+    "FAT",
 };
 
 
@@ -64,4 +65,5 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_VIRTIO,
     LOG_LEVEL_VIRTIONET,
     LOG_LEVEL_E1000,
+    LOG_LEVEL_FAT,
 };

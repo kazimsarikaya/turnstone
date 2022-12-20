@@ -54,10 +54,28 @@ int8_t map_key_comparator(const void* data1, const void* data2){
 map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key_extractor_f mke) {
     map_internal_t * mi = memory_malloc_ext(heap, sizeof(map_internal_t), 0);
 
+    if(mi == NULL) {
+        return NULL;
+    }
+
     mi->heap = heap;
     mi->lock = lock_create_with_heap(mi->heap);
+
+    if(mi->lock == NULL) {
+        memory_free(mi);
+
+        return NULL;
+    }
+
     mi->mke = mke;
     mi->store = bplustree_create_index_with_heap_and_unique(mi->heap, factor, &map_key_comparator, true);
+
+    if(mi->store == NULL) {
+        lock_destroy(mi->lock);
+        memory_free(mi);
+
+        return NULL;
+    }
 
     return (map_t)mi;
 }

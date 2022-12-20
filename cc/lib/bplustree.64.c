@@ -133,11 +133,23 @@ index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64
         return NULL;
     }
     bplustree_internal_t* tree = memory_malloc_ext(heap, sizeof(bplustree_internal_t), 0x0);
+
+    if(tree == NULL) {
+        return NULL;
+    }
+
     tree->root = NULL;
     tree->max_key_count = max_key_count;
     tree->unique = unique;
 
     index_t* idx = memory_malloc_ext(heap, sizeof(index_t), 0x0);
+
+    if(idx == NULL) {
+        memory_free_ext(heap, tree);
+
+        return NULL;
+    }
+
     idx->heap = heap;
     idx->metadata = tree;
     idx->comparator = comparator;
@@ -187,6 +199,10 @@ int8_t bplustree_destroy_index(index_t* idx){
 bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_internal_t* node, void** ptr_par_key) {
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
     bplustree_node_internal_t* new_node = memory_malloc_ext(idx->heap, sizeof(bplustree_node_internal_t), 0x0);
+
+    if(new_node == NULL) {
+        return NULL;
+    }
 
     new_node->keys = linkedlist_create_sortedlist_with_heap(idx->heap, idx->comparator);
 
@@ -264,12 +280,37 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
 }
 
 int8_t bplustree_insert(index_t* idx, void* key, void* data, void** removed_data){
+    if(idx == NULL) {
+        return -1;
+    }
+
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
     if(tree->root == NULL) {
         tree->root = memory_malloc_ext(idx->heap, sizeof(bplustree_node_internal_t), 0x0);
+
+        if(tree->root == NULL) {
+            return -1;
+        }
+
+
         tree->root->keys = linkedlist_create_sortedlist_with_heap(idx->heap, idx->comparator);
+
+        if(tree->root->keys == NULL) {
+            memory_free_ext(idx->heap, tree->root);
+
+            return -1;
+        }
+
         linkedlist_sortedlist_insert(tree->root->keys, key);
         tree->root->datas = linkedlist_create_list_with_heap(idx->heap);
+
+        if(tree->root->datas == NULL) {
+            memory_free_ext(idx->heap, tree->root->keys);
+            memory_free_ext(idx->heap, tree->root);
+
+            return -1;
+        }
+
         linkedlist_insert_at_position(tree->root->datas, data, 0);
     } else {
         bplustree_node_internal_t* node = tree->root;
@@ -296,12 +337,42 @@ int8_t bplustree_insert(index_t* idx, void* key, void* data, void** removed_data
                 while(linkedlist_size(node->keys) > tree->max_key_count) { // node is full split it
                     new_node = bplustree_split_node(idx, node, &par_key);
 
+                    if(new_node == NULL) {
+                        return -1;
+                    }
+
                     if(node->parent == NULL) { // root node
                         node->parent = memory_malloc_ext(idx->heap, sizeof(bplustree_node_internal_t), 0x0);
+
+                        if(node->parent == NULL) {
+                            memory_free_ext(idx->heap, new_node);
+
+                            return -1;
+                        }
+
                         new_node->parent = node->parent;
                         node->parent->keys = linkedlist_create_sortedlist_with_heap(idx->heap, idx->comparator);
+
+                        if(node->parent->keys == NULL) {
+                            memory_free_ext(idx->heap, new_node);
+                            memory_free_ext(idx->heap, node->parent);
+                            node->parent = NULL;
+
+                            return -1;
+                        }
+
                         linkedlist_sortedlist_insert(node->parent->keys, par_key);
                         node->parent->childs = linkedlist_create_list_with_heap(idx->heap);
+
+                        if(node->parent->keys == NULL) {
+                            memory_free_ext(idx->heap, new_node);
+                            memory_free_ext(idx->heap, node->parent->keys);
+                            memory_free_ext(idx->heap, node->parent);
+                            node->parent = NULL;
+
+                            return -1;
+                        }
+
                         linkedlist_insert_at_position(node->parent->childs, node, 0);
                         linkedlist_insert_at_position(node->parent->childs, new_node, 1);
                         tree->root = node->parent;
@@ -426,6 +497,10 @@ int8_t bplustree_toss_root(index_t* idx) {
 }
 
 int8_t bplustree_delete(index_t* idx, void* key, void** deleted_data){
+    if(idx == NULL) {
+        return -1;
+    }
+
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
     if(tree->root == NULL) {
         return NULL;
@@ -437,9 +512,21 @@ int8_t bplustree_delete(index_t* idx, void* key, void** deleted_data){
     min_keys--;
     bplustree_node_internal_t* node = tree->root;
     linkedlist_t path = linkedlist_create_stack_with_heap(idx->heap);
+
+    if(path == NULL) {
+        return -1;
+    }
+
     int8_t found = -1;
     while(node != NULL) {
         size_t* position = memory_malloc_ext(idx->heap, sizeof(size_t), 0x0);
+
+        if(position == NULL) {
+            linkedlist_destroy(path);
+
+            return -1;
+        }
+
         *position = 0;
         if(node->childs != NULL) { //internal node
             void* cur = NULL;
@@ -557,6 +644,11 @@ int8_t bplustree_delete(index_t* idx, void* key, void** deleted_data){
                         delete_from = LINKEDLIST_DELETE_AT_HEAD;
                         insert_at = LINKEDLIST_INSERT_AT_TAIL;
                     }
+
+                    if(src == NULL) {
+                        break;
+                    }
+
                     void* tmp_etc;
 
                     if(node->childs == NULL) { //leaf merge
@@ -741,6 +833,11 @@ iterator_t* bplustree_search(index_t* idx, void* key1, void* key2, index_key_sea
     }
 
     bplustree_iterator_internal_t* iter = memory_malloc_ext(idx->heap, sizeof(bplustree_iterator_internal_t), 0x0);
+
+    if(iter == NULL) {
+        return NULL;
+    }
+
     iter->heap = idx->heap;
     iter->criteria = criteria;
     iter->key1 = key1;
@@ -835,6 +932,13 @@ iterator_t* bplustree_search(index_t* idx, void* key1, void* key2, index_key_sea
     }
 
     iterator_t* iterator = memory_malloc_ext(idx->heap, sizeof(iterator_t), 0x0);
+
+    if(iterator == NULL) {
+        memory_free_ext(idx->heap, iter);
+
+        return NULL;
+    }
+
     iterator->metadata = iter;
     iterator->destroy = &bplustree_iterator_destroy;
     iterator->next = &bplustree_iterator_next;

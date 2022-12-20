@@ -52,6 +52,10 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
         if(ic) {
             res = memory_malloc_ext(ctx->heap, ic, 0);
 
+            if(res == NULL) {
+                return NULL;
+            }
+
             for(uint64_t i = 0; i < ic; i++) {
                 acpi_aml_device_interrupt_t* int_item = linkedlist_get_data_at_position(d->interrupts, i);
 
@@ -69,6 +73,11 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
     PRINTLOG(ACPI, LOG_DEBUG, "device not found for address 0x%llx or doesnot contain interrupt, looking intmap", addr);
 
     res = memory_malloc_ext(ctx->heap, 4, 0); // max 4 int
+
+    if(res == NULL) {
+        return NULL;
+    }
+
     uint64_t ic = 0;
 
     iterator_t* iter = linkedlist_iterator_create(ctx->interrupt_map);
@@ -280,6 +289,11 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
                                 if(linkedlist_contains(ctx->interrupt_map, &tmp_int_map_item) != 0) {
                                     acpi_aml_interrupt_map_item_t* int_map_item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_interrupt_map_item_t), 0);
+
+                                    if(int_map_item == NULL) {
+                                        break;
+                                    }
+
                                     int_map_item->address = addr;
                                     int_map_item->interrupt_no = int_no_val;
 
@@ -332,7 +346,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
     while(iter->end_of_iterator(iter) != 0) {
         acpi_aml_object_t* sym = iter->get_item(iter);
 
-        if(sym == NULL && sym->name == NULL) {
+        if(sym == NULL || sym->name == NULL) {
             iter->destroy(iter);
             PRINTLOG(ACPI, LOG_FATAL, "NULL object at symbol table or no name");
             return -1;
@@ -357,6 +371,11 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 
         } else if(sym->type == ACPI_AML_OT_DEVICE || strcmp(sym->name, "\\_SB_") == 0) {
             acpi_aml_device_t* new_device = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_t), 0);
+
+            if(new_device == NULL) {
+                break;
+            }
+
             new_device->name = sym->name;
             linkedlist_sortedlist_insert(ctx->devices, new_device);
 

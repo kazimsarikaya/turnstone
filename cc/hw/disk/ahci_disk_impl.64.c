@@ -139,10 +139,20 @@ disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
 
     ahci_disk_impl_context_t* ctx = memory_malloc(sizeof(ahci_disk_impl_context_t));
 
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     ctx->sata_disk = sata_disk;
     ctx->block_size = 512;
 
     disk_t* d = memory_malloc(sizeof(disk_t));
+
+    if(d == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
 
     d->disk_context = ctx;
     d->get_disk_size = ahci_disk_impl_get_disk_size;

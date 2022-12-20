@@ -267,13 +267,13 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 
                     if(pmbr->part_type == EFI_PMBR_PART_TYPE) {
                         PRINTLOG(EFI, LOG_DEBUG, "gpt disk id %lli", i);
-                        memory_free(buffer);
 
                         PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", i);
 
                         res = efi_lookup_kernel_partition(blk_dev->bio, kernel_data);
 
                         if(res == EFI_SUCCESS) {
+                            memory_free(buffer);
                             break;
                         }
 
@@ -354,13 +354,15 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     char_t* boot_order_idx_str = itoh(boot_order_idx);
 
-    char_t* boot_value_rev = "0000tooB";
+    char_t* boot_value_rev = strdup("0000tooB");
 
     for(int32_t i = strlen(boot_order_idx_str) - 1, j = 0; i >= 0; i--) {
         boot_value_rev[j++] = boot_order_idx_str[i];
     }
 
     char_t* boot_value = strrev(boot_value_rev);
+
+    memory_free(boot_value_rev);
 
     PRINTLOG(EFI, LOG_DEBUG, "current boot order: %i %s", boot_order_idx, boot_value);
 
@@ -615,13 +617,19 @@ efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
         res = efi_load_local_kernel(&kernel_data);
     }
 
-    if(res != EFI_SUCCESS) {
+    if(res != EFI_SUCCESS || kernel_data == NULL) {
         PRINTLOG(EFI, LOG_FATAL, "cannot load kernel 0x%llx", res);
 
         goto catch_efi_error;
     }
 
     zpack_format_t* zf = (zpack_format_t*)kernel_data->data;
+
+    if(zf == NULL) {
+        PRINTLOG(EFI, LOG_FATAL, "no packed kernel data");
+
+        goto catch_efi_error;
+    }
 
     if(zf->magic != ZPACK_FORMAT_MAGIC) {
         PRINTLOG(EFI, LOG_FATAL, "zpack magic mismatch");

@@ -48,12 +48,22 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
         if(la_obj == NULL && laidx <= 7) { // if localX does not exists create it
             PRINTLOG(ACPIAML, LOG_TRACE, "----- creating local arg %i", laidx);
             la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+            if(la_obj == NULL) {
+                return NULL;
+            }
+
             la_obj->type = ACPI_AML_OT_UNINITIALIZED;
             mthctx->mthobjs[laidx] = la_obj;
             PRINTLOG(ACPIAML, LOG_TRACE, "----- new local arg %i for read %p", laidx, la_obj);
         } else if(la_obj != NULL && laidx <= 7 && write) {
             acpi_aml_destroy_object(ctx, la_obj);
             la_obj = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+            if(la_obj == NULL) {
+                return NULL;
+            }
+
             la_obj->type = ACPI_AML_OT_UNINITIALIZED;
             mthctx->mthobjs[laidx] = la_obj;
             PRINTLOG(ACPIAML, LOG_TRACE, "----- new local arg %i for write %p", laidx, la_obj);
@@ -209,7 +219,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
 int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
     UNUSED(ctx);
 
-    if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+    if(obj == NULL || obj->type != ACPI_AML_OT_FIELD || obj->field.related_object == NULL) {
         PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
         return -1;
     }
@@ -513,7 +523,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
 }
 
 int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
-    if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+    if(obj == NULL || obj->type != ACPI_AML_OT_FIELD || obj->field.related_object == NULL) {
         PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
         return -1;
     }
@@ -617,7 +627,12 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
 int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
     UNUSED(ctx);
 
-    if(obj == NULL && !(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
+    if(obj == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
+        return -1;
+    }
+
+    if(!(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
         PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
         return -1;
     }
@@ -1404,6 +1419,11 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 
 char_t* acpi_aml_parse_eisaid(acpi_aml_parser_context_t* ctx, uint64_t eisaid_num) {
     char_t* res = memory_malloc_ext(ctx->heap, 8, 0);
+
+    if(res == NULL) {
+        return NULL;
+    }
+
     eisaid_num = BYTE_SWAP32(eisaid_num);
 
     res[6] = DIGIT_TO_HEX(eisaid_num & 0xF);

@@ -7,6 +7,7 @@ CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu11 \
 	-O2 -nostdlib -ffreestanding -c -m64 -msse4.2\
 	-D___TESTMODE=1 -g -Wno-address-of-packed-member \
+	-fanalyzer
 
 ifeq ($(HOSTOS),Darwin)
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)

@@ -78,11 +78,24 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
 
     disk_file_context_t* ctx = memory_malloc(sizeof(disk_file_context_t));
 
+    if(ctx == NULL) {
+        fclose(fp_disk);
+
+        return NULL;
+    }
+
     ctx->fp_disk = fp_disk;
     ctx->file_size = size;
     ctx->block_size = 512;
 
     disk_t* d = memory_malloc(sizeof(disk_t));
+
+    if(d == NULL) {
+        memory_free(ctx);
+        fclose(fp_disk);
+
+        return NULL;
+    }
 
     d->disk_context = ctx;
     d->get_disk_size = disk_file_get_disk_size;
@@ -179,7 +192,15 @@ int32_t main(int32_t argc, char** argv) {
 
     directory_t* root_dir = fs->get_root_directory(fs);
 
+    if(root_dir == NULL) {
+        print_error("root dir can not getted");
+    }
+
     path_t* efi_path = filesystem_new_path(fs, "EFI");
+
+    if(efi_path == NULL) {
+        print_error("efi path can not created");
+    }
 
     directory_t* efi_dir = root_dir->create_or_open_directory(root_dir, efi_path);
 
@@ -227,6 +248,7 @@ int32_t main(int32_t argc, char** argv) {
 
         efi_dir->close(efi_dir);
     } else{
+        print_error("efi dir can not created");
         efi_path->close(efi_path);
     }
 
@@ -236,7 +258,12 @@ int32_t main(int32_t argc, char** argv) {
 
     d->close(d);
 
-    print_success("DISK BUILDED");
+    if(res == 0) {
+        print_success("DISK BUILDED");
+    } else {
+        print_error("DISK BUILD FAILED");
+    }
+
 
     return res;
 }

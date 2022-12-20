@@ -46,6 +46,11 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
     }
 
     network_arp_t* arp_packet = memory_malloc(sizeof(network_arp_t));
+
+    if(arp_packet == NULL) {
+        return NULL;
+    }
+
     arp_packet->hardware_type = BYTE_SWAP16(NETWORK_ARP_HARDWARE_TYPE_ETHERNET);
     arp_packet->protocol_type = BYTE_SWAP16(NETWORK_ARP_PROTOCOL_TYPE_IP);
     arp_packet->hardware_address_length = NETWORK_ARP_HARDWARE_ADDRESS_LENGTH;
@@ -68,6 +73,10 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
 
 network_arp_t* network_arp_create_request(network_mac_address_t src_mac, network_ipv4_address_t src_ip, network_ipv4_address_t tgt_ip){
     network_arp_t* arp_packet = memory_malloc(sizeof(network_arp_t));
+
+    if(arp_packet == NULL) {
+        return NULL;
+    }
 
     arp_packet->hardware_type = BYTE_SWAP16(NETWORK_ARP_HARDWARE_TYPE_ETHERNET);
     arp_packet->protocol_type = BYTE_SWAP16(NETWORK_ARP_PROTOCOL_TYPE_IP);

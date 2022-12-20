@@ -11,6 +11,8 @@
 #include <linkedlist.h>
 #include <strings.h>
 #include <utils.h>
+#include <logging.h>
+#include <video.h>
 
 file_t*      fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, path_t* p, time_t ct, time_t lat, time_t lmt);
 directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, path_t* p, time_t ct, time_t lat, time_t lmt);
@@ -150,11 +152,23 @@ fat32_dirent_shortname_t* fat32_gen_dirents(path_t* p, fs_stat_type_t type, time
         res = memory_malloc(sizeof(fat32_dirent_shortname_t) * (*ent_cnt));
     }
 
+    if(res == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot allocate result");
+        return NULL;
+    }
+
     int32_t last_idx = (*ent_cnt) - 1;
 
     memory_memset(&res[last_idx].name, ' ', 11);
 
     char_t* name = strndup(p->get_name(p), 8);
+
+    if(name == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot allocate name");
+        memory_free(res);
+
+        return NULL;
+    }
 
     if(need_ln_ent) {
         name[6] = '~';
@@ -165,6 +179,13 @@ fat32_dirent_shortname_t* fat32_gen_dirents(path_t* p, fs_stat_type_t type, time
     memory_free(name);
 
     char_t* ext = strndup(p->get_extension(p), 3);
+
+    if(ext == NULL && strlen(p->get_extension(p))) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot allocate ext");
+        memory_free(res);
+
+        return NULL;
+    }
 
     memory_memcopy(ext, &res[last_idx].name[8], strlen(ext));
     memory_free(ext);
@@ -454,6 +475,10 @@ time_t fat32_file_get_last_modification_time(file_t* self) {
 file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, path_t* p, time_t ct, time_t lat, time_t lmt) {
     fat32_fs_file_context_t* ctx = memory_malloc(sizeof(fat32_fs_file_context_t));
 
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     ctx->fs = fs;
     ctx->dir = dir;
     ctx->dirent_idx = dirent_idx;
@@ -465,6 +490,13 @@ file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, 
     ctx->last_modification_time = lmt;
 
     file_t* f = memory_malloc(sizeof(file_t));
+
+    if(f == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
+
     f->context = ctx;
     f->get_path = fat32_file_get_path;
     f->close = fat32_file_close;
@@ -861,7 +893,17 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
 
     fat32_dirent_shortname_t* dir_dirents = memory_malloc(sizeof(fat32_dirent_shortname_t) * dir_dirent_cnt);
 
+    if(dir_dirents == NULL) {
+        return NULL;
+    }
+
     timeparsed_t* tp = time_to_timeparsed(ct);
+
+    if(tp == NULL) {
+        memory_free(dir_dirents);
+
+        return NULL;
+    }
 
 
     int32_t dirent_cnt = 0;
@@ -870,6 +912,14 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
     path_t* tmp_dir = filesystem_new_path(fs, DIRECTORY_CURRENT_DIR);
 
     dirents = fat32_gen_dirents(tmp_dir, FS_STAT_TYPE_DIR, tp, &dirent_cnt);
+
+    if(dirents == NULL) {
+        memory_free(tp);
+        memory_free(dir_dirents);
+
+        return NULL;
+    }
+
     dirents[0].fat_number_high = clusterno >> 16;
     dirents[0].fat_number_low = clusterno;
 
@@ -881,6 +931,14 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
     tmp_dir = filesystem_new_path(fs, DIRECTORY_PARENT_DIR);
 
     dirents = fat32_gen_dirents(tmp_dir, FS_STAT_TYPE_DIR, tp, &dirent_cnt);
+
+    if(dirents == NULL) {
+        memory_free(tp);
+        memory_free(dir_dirents);
+
+        return NULL;
+    }
+
     if(parent_clusterno != FAT32_ROOT_DIR_CLUSTER_NUMBER) {
         dirents[0].fat_number_high = parent_clusterno >> 16;
         dirents[0].fat_number_low = parent_clusterno;
@@ -908,6 +966,8 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
     return fat32_new_directory(fs, clusterno, p, ct, ct, ct);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* child, fs_stat_type_t type) {
     fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)parent->context;
 
@@ -917,6 +977,11 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* ch
 
     int32_t dirent_cnt = 0;
     fat32_dirent_shortname_t* dirents = fat32_gen_dirents(child, type, &tp, &dirent_cnt);
+
+    if(dirents == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot create dirents");
+        return NULL;
+    }
 
     if(dirent_cnt == 0) {
         if(dirents) {
@@ -939,6 +1004,11 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* ch
 
         uint8_t* data = (uint8_t*)ctx->dirents;
         ctx->dirents = memory_malloc(sizeof(fat32_dirent_shortname_t) * (ctx->dirent_count + inc));
+
+        if(ctx->dirents == NULL) {
+            memory_free(dirents);
+            return NULL;
+        }
 
         memory_memcopy(data, ctx->dirents, sizeof(fat32_dirent_shortname_t) * ctx->dirent_count);
         memory_free(data);
@@ -977,6 +1047,7 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* ch
 
     return NULL;
 }
+#pragma GCC diagnostic pop
 
 directory_t* fat32_create_or_open_directory(directory_t* self, path_t* p) {
     return (directory_t*)fat32_create_or_open_directory_or_file(self, p, FS_STAT_TYPE_DIR);
@@ -1019,6 +1090,10 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, path_t* p
 
     fat32_fs_directory_context_t* ctx = memory_malloc(sizeof(fat32_fs_directory_context_t));
 
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     ctx->fs = fs;
     ctx->clusterno = clusterno;
     ctx->directory_path = p;
@@ -1028,6 +1103,12 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, path_t* p
     ctx->last_modification_time = lmt;
 
     char_t* data = memory_malloc(cluster_count * cluster_size * sector_size);
+
+    if(data == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
 
     uint32_t offset = 0;
 
@@ -1078,6 +1159,12 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, path_t* p
     }
 
     directory_t* d = memory_malloc(sizeof(directory_t));
+
+    if(d == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
 
     d->context = ctx;
     d->get_path = fat32_directory_get_path;
@@ -1162,6 +1249,11 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
 
     disk_partition_context_t* part_ctx = d->get_partition(d, partno);
 
+    if(part_ctx == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot get parititon %i", partno);
+        return NULL;
+    }
+
 
     uint64_t fat_part_start_lba = part_ctx->start_lba;
     uint64_t fat_part_end_lba = part_ctx->end_lba;
@@ -1172,7 +1264,20 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
     fat32_fsinfo_t* fat32_fsinfo;
 
     d->read(d, fat_part_start_lba, sizeof(fat32_bpb_t) / 512, (uint8_t**)&fat32_bpb);
+
+    if(fat32_bpb == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot read fat32 bpb");
+        return NULL;
+    }
+
     d->read(d, fat_part_start_lba + FAT32_FSINFO_SECTOR, sizeof(fat32_fsinfo_t) / 512, (uint8_t**)&fat32_fsinfo);
+
+    if(fat32_fsinfo == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot read fat32 fs info");
+        memory_free(fat32_bpb);
+
+        return NULL;
+    }
 
     if(memory_memcompare(fat32_bpb->identifier, FAT32_IDENTIFIER, 8) == 0 &&
        fat32_fsinfo->signature0 == FAT32_FSINFO_SIGNATURE0 &&
@@ -1185,6 +1290,11 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
 
         fat32_fs_context_t* ctx = memory_malloc(sizeof(fat32_fs_context_t));
 
+        if(ctx == NULL) {
+            PRINTLOG(FAT, LOG_ERROR, "cannot create fs context");
+            return NULL;
+        }
+
         ctx->disk = d;
         ctx->partno = partno;
         ctx->fat_part_start_lba = fat_part_start_lba;
@@ -1194,6 +1304,14 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
         ctx->table = fat32_table;
 
         filesystem_t* fs = memory_malloc(sizeof(filesystem_t));
+
+        if(fs == NULL) {
+            PRINTLOG(FAT, LOG_ERROR, "cannot create fs");
+            memory_free(ctx);
+
+            return NULL;
+        }
+
         fs->context = ctx;
         fs->get_root_directory = fat32_get_root_directory;
         fs->get_total_size = fat32_get_total_size;
@@ -1244,11 +1362,31 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
 
     uint64_t fat32_table_size = fat32_bpb->bytes_per_sector *  fat32_bpb->sectors_per_fat;
     uint32_t* fat32_table = memory_malloc(fat32_table_size);
+
+    if(fat32_table == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot create fat32 table");
+        memory_free(fat32_bpb);
+        memory_free(fat32_fsinfo);
+
+        return NULL;
+    }
+
     fat32_table[0] = FAT32_CLUSTER_END;
     fat32_table[1] = FAT32_CLUSTER_END2;
     fat32_table[2] = FAT32_CLUSTER_END;
 
     fat32_dirent_shortname_t* volid = memory_malloc(sizeof(fat32_dirent_shortname_t));
+
+    if(volid == NULL) {
+        PRINTLOG(FAT, LOG_ERROR, "cannot create volid");
+        memory_free(fat32_bpb);
+        memory_free(fat32_fsinfo);
+        memory_free(fat32_table);
+
+        return NULL;
+    }
+
+
     memory_memcopy(FAT32_ESP_VOLUME_LABEL, volid->name, 11);
     volid->attributes = FAT32_DIRENT_TYPE_VOLUMEID;
 
@@ -1280,6 +1418,16 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
     d->write(d, fat_part_start_lba + fat32_bpb->backup_bpb, sizeof(fat32_bpb_t) / 512, (uint8_t*)fat32_bpb);
 
     uint8_t* data = memory_malloc(512);
+
+    if(data == NULL) {
+        memory_free(fat32_bpb);
+        memory_free(fat32_fsinfo);
+        memory_free(volid);
+        memory_free(fat32_table);
+
+        return NULL;
+    }
+
     memory_memcopy(volid, data, sizeof(fat32_dirent_shortname_t));
     uint64_t root_dir_lba = fat_part_start_lba + fat32_bpb->reserved_sectors + 2 *  fat32_bpb->sectors_per_fat;
     d->write(d, root_dir_lba, 1, data);
@@ -1287,6 +1435,14 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
     memory_free(volid);
 
     fat32_fs_context_t* ctx = memory_malloc(sizeof(fat32_fs_context_t));
+
+    if(ctx == NULL) {
+        memory_free(fat32_bpb);
+        memory_free(fat32_fsinfo);
+        memory_free(fat32_table);
+
+        return NULL;
+    }
 
     ctx->disk = d;
     ctx->partno = partno;
@@ -1297,6 +1453,16 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
     ctx->table = fat32_table;
 
     filesystem_t* fs = memory_malloc(sizeof(filesystem_t));
+
+    if(fs == NULL) {
+        memory_free(fat32_bpb);
+        memory_free(fat32_fsinfo);
+        memory_free(ctx);
+        memory_free(fat32_table);
+
+        return NULL;
+    }
+
     fs->context = ctx;
     fs->get_root_directory = fat32_get_root_directory;
     fs->get_total_size = fat32_get_total_size;
@@ -1313,6 +1479,10 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname)
 }
 
 uint8_t fat32_long_filename_checksum(char_t* file_name){
+    if(file_name == NULL) {
+        return 0;
+    }
+
     uint8_t sum = 0;
 
     for(int16_t i = 0; i < 11; i++) {

@@ -112,6 +112,11 @@ sha256_ctx_t sha256_init() {
 }
 
 int8_t sha256_update(sha256_ctx_t ctx, const uint8_t* data, size_t len) {
+
+    if(ctx == NULL) {
+        return -1;
+    }
+
     sha256_internal_ctx_t* ictx = (sha256_internal_ctx_t*)ctx;
 
     for (uint32_t i = 0; i < len; ++i) {
@@ -130,6 +135,11 @@ int8_t sha256_update(sha256_ctx_t ctx, const uint8_t* data, size_t len) {
 }
 
 uint8_t* sha256_final(sha256_ctx_t ctx) {
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     sha256_internal_ctx_t* ictx = (sha256_internal_ctx_t*)ctx;
     uint32_t i;
 
@@ -210,18 +220,21 @@ int8_t  sha224_update(sha224_ctx_t ctx, const uint8_t* data, size_t len) {
 }
 
 uint8_t* sha224_final(sha224_ctx_t ctx) {
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     uint8_t* pre_hash = sha256_final((sha256_ctx_t)ctx);
 
     if(pre_hash == NULL) {
-        memory_free(ctx);
-
         return NULL;
     }
 
     uint8_t* hash = memory_malloc(SHA224_OUTPUT_SIZE);
 
     if(hash == NULL) {
-        memory_free(ctx);
+        memory_free(pre_hash);
 
         return NULL;
     }

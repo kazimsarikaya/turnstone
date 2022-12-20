@@ -23,6 +23,10 @@ typedef struct buffer_internal_s {
 buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
     buffer_internal_t* bi = memory_malloc_ext(heap, sizeof(buffer_internal_t), 0);
 
+    if(bi == NULL) {
+        return NULL;
+    }
+
     bi->heap = heap;
     bi->lock = lock_create_with_heap(bi->heap);
     bi->capacity = capacity;
@@ -33,6 +37,10 @@ buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
 
 buffer_t buffer_encapsulate(uint8_t* data, uint64_t length) {
     buffer_internal_t* bi = memory_malloc_ext(NULL, sizeof(buffer_internal_t), 0);
+
+    if(bi == NULL) {
+        return NULL;
+    }
 
     bi->lock = lock_create_with_heap(bi->heap);
     bi->capacity = length;

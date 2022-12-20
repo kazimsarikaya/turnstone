@@ -182,30 +182,40 @@ void video_graphics_scroll(){
     }
 }
 
+wchar_t video_get_wc(char_t* string, int64_t * idx) {
+    if(string == NULL || idx == NULL) {
+        return NULL;
+    }
+
+    wchar_t wc = string[0];
+
+    if(wc & 128) {
+        if((wc & 32) == 0) {
+            wc = ((string[0] & 0x1F) << 6) + (string[1] & 0x3F);
+            (*idx)++;
+        } else if((wc & 16) == 0 ) {
+            wc = ((((string[0] & 0xF) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F);
+            (*idx) += 2;
+        } else if((wc & 8) == 0 ) {
+            wc = ((((((string[0] & 0x7) << 6) + (string[1] & 0x3F)) << 6) + (string[2] & 0x3F)) << 6) + (string[3] & 0x3F);
+            (*idx) += 3;
+        } else {
+            wc = 0;
+        }
+    }
+
+    return wc;
+}
+
 void video_graphics_print(char_t* string) {
     int64_t i = 0;
 
-    if(string == NULL) {
+    if(string == NULL || strlen(string) == 0) {
         return;
     }
 
     while(string[i]) {
-        wchar_t wc = string[i];
-
-        if(wc & 128) {
-            if((wc & 32) == 0 ) {
-                wc = ((string[i] & 0x1F) << 6) + (string[i + 1] & 0x3F);
-                i++;
-            } else if((wc & 16) == 0 ) {
-                wc = ((((string[i] & 0xF) << 6) + (string[i + 1] & 0x3F)) << 6) + (string[i + 2] & 0x3F);
-                i += 2;
-            } else if((wc & 8) == 0 ) {
-                wc = ((((((string[i] & 0x7) << 6) + (string[i + 1] & 0x3F)) << 6) + (string[i + 2] & 0x3F)) << 6) + (string[i + 3] & 0x3F);
-                i += 3;
-            } else {
-                wc = 0;
-            }
-        }
+        wchar_t wc = video_get_wc(string + i, &i);
 
         if(wc == '\r') {
             cursor_graphics_x = 0;

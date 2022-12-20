@@ -250,6 +250,10 @@ int8_t strncmp(const char_t* string1, const char_t* string2, size_t n) {
 char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int64_t* count) {
     char_t* tmp = (char_t*)str;
 
+    if(count == NULL || lengths == NULL) {
+        return NULL;
+    }
+
     *count = 0;
 
     while(*tmp != NULL) {
@@ -263,7 +267,19 @@ char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int6
     (*count)++;
 
     *lengths = memory_malloc(sizeof(int64_t) * (*count));
+
+    if(*lengths == NULL) {
+
+        return NULL;
+    }
+
     char_t** result = memory_malloc(sizeof(char_t*) * (*count));
+
+    if(result == NULL) {
+        memory_free(*lengths);
+
+        return NULL;
+    }
 
     char_t** result_start = result;
 
@@ -304,6 +320,11 @@ char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int6
 
 
 char_t* strupper(char_t* str) {
+
+    if(str == NULL) {
+        return NULL;
+    }
+
     int64_t i = 0;
 
     while(str[i] != NULL) {
@@ -322,6 +343,11 @@ char_t* struppercopy(const char_t* str) {
 }
 
 char_t* strlower(char_t* str) {
+
+    if(str == NULL) {
+        return NULL;
+    }
+
     int64_t i = 0;
 
     while(str[i] != NULL) {
@@ -340,6 +366,11 @@ char_t* strlowercopy(const char_t* str) {
 }
 
 int64_t wchar_size(const wchar_t* str){
+
+    if(str == NULL) {
+        return 0;
+    }
+
     int64_t res = 0;
     int64_t i = 0;
 
@@ -351,8 +382,17 @@ int64_t wchar_size(const wchar_t* str){
 }
 
 char_t* wchar_to_char(wchar_t* src){
+
+    if(src == NULL) {
+        return NULL;
+    }
+
     int64_t len = wchar_size(src);
     char_t* dst = memory_malloc(sizeof(char_t) * len * 4 + 1);
+
+    if(dst == NULL) {
+        return NULL;
+    }
 
     int64_t i = 0;
     int64_t j = 0;
@@ -376,8 +416,17 @@ char_t* wchar_to_char(wchar_t* src){
 }
 
 wchar_t* char_to_wchar(char_t* str){
+
+    if(str == NULL) {
+        return NULL;
+    }
+
     int64_t len = strlen(str);
     wchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+
+    if(res == NULL) {
+        return NULL;
+    }
 
     int64_t i = 0;
     int64_t j = 0;
@@ -421,8 +470,17 @@ int64_t lchar_size(const lchar_t* str){
 }
 
 char_t* lchar_to_char(lchar_t* src){
+
+    if(src == NULL) {
+        return NULL;
+    }
+
     int64_t len = lchar_size(src);
     char_t* dst = memory_malloc(sizeof(char_t) * len * 4 + 1);
+
+    if(dst == NULL) {
+        return NULL;
+    }
 
     int64_t i = 0;
     int64_t j = 0;
@@ -451,8 +509,17 @@ char_t* lchar_to_char(lchar_t* src){
 }
 
 lchar_t* char_to_lchar(char_t* str){
+
+    if(str == NULL) {
+        return NULL;
+    }
+
     int64_t len = strlen(str);
     lchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+
+    if(res == NULL) {
+        return NULL;
+    }
 
     int64_t i = 0;
     int64_t j = 0;
@@ -486,6 +553,10 @@ lchar_t* char_to_lchar(char_t* str){
 
 char_t* strtrim_right(char_t* str) {
 
+    if(str == NULL) {
+        return NULL;
+    }
+
     for(int64_t i = strlen(str) - 1; i >= 0; i--) {
         if(str[i] == '\n' || str[i] == '\r' || str[i] == '\t' || str[i] == ' ') {
             str[i] = NULL;
@@ -516,6 +587,11 @@ int8_t str_is_upper(char_t* str) {
 }
 
 uint64_t strhash(const char_t* input) {
+
+    if(input == NULL) {
+        return NULL;
+    }
+
     char_t* tmp = (char_t*)input;
 
     if(tmp == NULL) {

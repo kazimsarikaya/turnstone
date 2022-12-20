@@ -53,6 +53,10 @@ timeparsed_t* timeparsed(timeparsed_t* tp) {
 }
 
 timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
+    if(tp == NULL) {
+        return NULL;
+    }
+
     int64_t days_till_now, extra_time, extra_days, index, flag = 0;
 
     days_till_now = t / TIME_SECONDS_OF_DAY;

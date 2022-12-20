@@ -236,6 +236,10 @@ disk_partition_context_t*  gpt_get_partition(disk_t* d, uint8_t partno) {
 
     disk_partition_context_t* res = memory_malloc(sizeof(disk_partition_context_t));
 
+    if(res == NULL) {
+        return NULL;
+    }
+
     res->internal_context = &gd->partitions[partno];
     res->start_lba = gd->partitions[partno].starting_lba;
     res->end_lba = gd->partitions[partno].ending_lba;
@@ -380,6 +384,10 @@ disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk){
     }
 
     gpt_disk_t* gd = memory_malloc(sizeof(gpt_disk_t));
+
+    if(gd == NULL) {
+        return NULL;
+    }
 
     memory_memcopy(underlaying_disk, gd, sizeof(disk_t));
 

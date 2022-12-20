@@ -75,6 +75,13 @@ int8_t network_process_rx(){
                 if(return_data && return_data_len) {
                     if(return_queue) {
                         network_transmit_packet_t* tx_packet = memory_malloc(sizeof(network_transmit_packet_t));
+
+                        if(tx_packet == NULL) {
+                            memory_free(return_data);
+
+                            continue;
+                        }
+
                         tx_packet->packet_len = return_data_len;
                         tx_packet->packet_data = return_data;
 

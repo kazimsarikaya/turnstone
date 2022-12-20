@@ -25,7 +25,7 @@ boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network
 }
 
 uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, void* network_info, uint16_t* return_packet_len) {
-    if(return_packet_len == NULL) {
+    if(recv_eth_packet == NULL || return_packet_len == NULL) {
         return NULL;
     }
 
@@ -66,6 +66,10 @@ uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, vo
 
     uint8_t* res = memory_malloc(sizeof(network_ethernet_t) + *return_packet_len);
 
+    if(res == NULL) {
+        return NULL;
+    }
+
     network_ethernet_t* eth_packet = (network_ethernet_t*)res;
     eth_packet->type = recv_eth_packet->type;
     memory_memcopy(recv_eth_packet->source, eth_packet->destination, sizeof(network_mac_address_t));
@@ -78,6 +82,10 @@ uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, vo
 }
 uint8_t* network_ethernet_create_packet(network_mac_address_t dst, network_mac_address_t src, network_ethernet_type_t type, uint16_t data_len, uint8_t* data) {
     uint8_t* res = memory_malloc(sizeof(network_ethernet_t) + data_len);
+
+    if(res == NULL) {
+        return NULL;
+    }
 
     network_ethernet_t* eth_packet = (network_ethernet_t*)res;
 

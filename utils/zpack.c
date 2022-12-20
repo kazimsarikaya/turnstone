@@ -32,6 +32,12 @@ int32_t main(int32_t argc, char_t** argv) {
 
     uint8_t* in_data = memory_malloc(in_size);
 
+    if(in_data == NULL) {
+        fclose(fd);
+
+        return -1;
+    }
+
     fread(in_data, 1, in_size, fd);
     fclose(fd);
 
@@ -93,6 +99,8 @@ int32_t main(int32_t argc, char_t** argv) {
             buffer_destroy(inbuf);
             memory_free(in_data);
             buffer_destroy(outbuf);
+
+            return -1;
         }
 
         printf("unpacked size %lli\n", ps);
@@ -108,6 +116,7 @@ int32_t main(int32_t argc, char_t** argv) {
         fd = fopen(argv[3], "w");
 
         zpack_format_t zf = {ZPACK_FORMAT_MAGIC, in_size, ps, xxhash64_hash(in_data, in_size), xxhash64_hash(outdata, ps)};
+        memory_free(in_data);
 
         fwrite(&zf, 1, sizeof(zf), fd);
     } else {
@@ -123,7 +132,6 @@ int32_t main(int32_t argc, char_t** argv) {
 
     fwrite(outdata, 1, ps, fd);
 
-    memory_free(in_data);
     memory_free(outdata);
 
     if(comp) {

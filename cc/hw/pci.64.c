@@ -157,8 +157,18 @@ int8_t pci_setup(memory_heap_t* heap) {
 
         iterator_t* iter = pci_iterator_create_with_heap(heap, mcfg);
 
+        if(iter == NULL) {
+            return -1;
+        }
+
         while(iter->end_of_iterator(iter) != 0) {
             pci_dev_t* p = iter->get_item(iter);
+
+            if(p == NULL) {
+                iter->destroy(iter);
+
+                return -1;
+            }
 
             PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
                      p->group_number, p->bus_number, p->device_number, p->function_number,
@@ -273,7 +283,19 @@ uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc) {
 
 iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t* mcfg){
     iterator_t* iter = memory_malloc_ext(heap, sizeof(iterator_t), 0x0);
+
+    if(iter == NULL) {
+        return NULL;
+    }
+
     pci_iterator_internal_t* iter_metadata = memory_malloc_ext(heap, sizeof(pci_iterator_internal_t), 0x0);
+
+    if(iter_metadata == NULL) {
+        memory_free_ext(heap, iter);
+
+        return NULL;
+    }
+
     iter_metadata->heap = heap;
     iter_metadata->mcfg = mcfg;
 
@@ -303,7 +325,7 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
 
                     if(pci_frames == NULL) {
                         PRINTLOG(PCI, LOG_ERROR, "cannot find frames of mmio 0x%016llx", pci_mmio_addr_fa);
-
+                        memory_free_ext(heap, iter_metadata);
                         memory_free_ext(heap, iter);
 
                         return NULL;
@@ -474,6 +496,11 @@ void* pci_iterator_get_item(iterator_t* iterator){
     pci_iterator_internal_t* iter_metadata = (pci_iterator_internal_t*)iterator->metadata;
     memory_heap_t* heap = iter_metadata->heap;
     pci_dev_t* d = memory_malloc_ext(heap, sizeof(pci_dev_t), 0x0);
+
+    if(d == NULL) {
+        return NULL;
+    }
+
     d->group_number = iter_metadata->group_number;
     d->bus_number = iter_metadata->bus_number;
     d->device_number = iter_metadata->device_number;

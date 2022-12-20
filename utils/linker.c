@@ -610,6 +610,10 @@ int8_t linker_tag_required_sections(linker_context_t* ctx) {
 
 
 int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* section) {
+    if(ctx == NULL) {
+        return -1;
+    }
+
     if(ctx->enable_removing_disabled_sections == 0) {
         return 0;
     }
@@ -646,6 +650,11 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
 
                 linker_symbol_t* sym = linker_get_symbol_by_id(ctx, reloc->symbol_id);
 
+                if(sym == NULL) {
+                    res = -1;
+                    break;
+                }
+
                 sym->required = 1;
 
                 if(sym == NULL) {
@@ -655,6 +664,11 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
                 }
 
                 linker_section_t* sub_section = linker_get_section_by_id(ctx, sym->section_id);
+
+                if(sub_section == NULL) {
+                    res = -1;
+                    break;
+                }
 
                 res = linker_tag_required_section(ctx, sub_section);
 
@@ -1989,6 +2003,10 @@ int32_t main(int32_t argc, char** argv) {
 
     linker_context_t* ctx = memory_malloc_ext(NULL, sizeof(linker_context_t), 0x0);
 
+    if(ctx == NULL) {
+        return -1;
+    }
+
     ctx->heap = NULL;
     ctx->entry_point = entry_point;
 
@@ -2018,6 +2036,13 @@ int32_t main(int32_t argc, char** argv) {
     uint64_t symbol_id = 1;
 
     linker_section_t* stack_sec = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+    if(stack_sec == NULL) {
+        linker_destroy_context(ctx);
+
+        return -1;
+    }
+
     stack_sec->id = section_id++;
     stack_sec->file_name = NULL;
     stack_sec->section_name = strdup_at_heap(ctx->heap, ".stack");
@@ -2035,6 +2060,13 @@ int32_t main(int32_t argc, char** argv) {
     linkedlist_list_insert(ctx->sections, stack_sec);
 
     linker_symbol_t* stack_top_sym =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+    if(stack_top_sym == NULL) {
+        linker_destroy_context(ctx);
+
+        return -1;
+    }
+
     stack_top_sym->id = symbol_id++;
     stack_top_sym->symbol_name = strdup_at_heap(ctx->heap, "__stack_top");
     stack_top_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
@@ -2045,6 +2077,13 @@ int32_t main(int32_t argc, char** argv) {
     linkedlist_list_insert(ctx->symbols, stack_top_sym);
 
     linker_section_t* kheap_sec = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+    if(kheap_sec == NULL) {
+        linker_destroy_context(ctx);
+
+        return -1;
+    }
+
     kheap_sec->id = section_id++;
     kheap_sec->file_name = NULL;
     kheap_sec->section_name = strdup_at_heap(ctx->heap, ".heap");
@@ -2055,6 +2094,13 @@ int32_t main(int32_t argc, char** argv) {
     linkedlist_list_insert(ctx->sections, kheap_sec);
 
     linker_symbol_t* kheap_bottom_sym =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+    if(kheap_bottom_sym == NULL) {
+        linker_destroy_context(ctx);
+
+        return -1;
+    }
+
     kheap_bottom_sym->id = symbol_id++;
     kheap_bottom_sym->symbol_name = strdup_at_heap(ctx->heap, "__kheap_bottom");
     kheap_bottom_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
@@ -2066,6 +2112,13 @@ int32_t main(int32_t argc, char** argv) {
 
     if(ctx->test_section_flag) {
         linker_section_t* test_func_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+        if(test_func_array == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_func_array->id = section_id++;
         test_func_array->file_name = NULL;
         test_func_array->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_array");
@@ -2077,6 +2130,13 @@ int32_t main(int32_t argc, char** argv) {
         linkedlist_list_insert(ctx->sections, test_func_array);
 
         linker_symbol_t* test_functions_array_start =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(test_functions_array_start == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_functions_array_start->id = symbol_id++;
         test_functions_array_start->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_start");
         test_functions_array_start->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
@@ -2087,6 +2147,13 @@ int32_t main(int32_t argc, char** argv) {
         linkedlist_list_insert(ctx->symbols, test_functions_array_start);
 
         linker_symbol_t* test_functions_array_end =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(test_functions_array_end == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_functions_array_end->id = symbol_id++;
         test_functions_array_end->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_end");
         test_functions_array_end->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
@@ -2097,6 +2164,13 @@ int32_t main(int32_t argc, char** argv) {
         linkedlist_list_insert(ctx->symbols, test_functions_array_end);
 
         linker_section_t* test_func_names_array_str = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+        if(test_func_names_array_str == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_func_names_array_str->id = section_id++;
         test_func_names_array_str->file_name = NULL;
         test_func_names_array_str->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_names.str");
@@ -2110,6 +2184,13 @@ int32_t main(int32_t argc, char** argv) {
 
 
         linker_symbol_t* test_functions_names_str =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(test_functions_names_str == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_functions_names_str->id = symbol_id++;
         test_functions_names_str->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names_str");
         test_functions_names_str->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
@@ -2121,6 +2202,13 @@ int32_t main(int32_t argc, char** argv) {
 
 
         linker_section_t* test_functions_names_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+        if(test_functions_names_array == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_functions_names_array->id = section_id++;
         test_functions_names_array->file_name = NULL;
         test_functions_names_array->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_names_array");
@@ -2132,6 +2220,13 @@ int32_t main(int32_t argc, char** argv) {
         linkedlist_list_insert(ctx->sections, test_functions_names_array);
 
         linker_symbol_t* test_functions_names =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(test_functions_names == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
         test_functions_names->id = symbol_id++;
         test_functions_names->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names");
         test_functions_names->scope = LINKER_SYMBOL_SCOPE_GLOBAL;

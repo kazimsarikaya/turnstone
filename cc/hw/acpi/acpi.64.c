@@ -79,6 +79,11 @@ int8_t acpi_poweroff(){
                 PRINTLOG(ACPI, LOG_DEBUG, "acpi poweroff started");
 
                 acpi_pm1_control_register_t* reg = memory_malloc(sizeof(acpi_pm1_control_register_t));
+
+                if(reg == NULL) {
+                    return -1;
+                }
+
                 reg->sleep_enable = 1;
                 reg->sleep_type = slp_type_a_val;
 
@@ -119,6 +124,8 @@ int8_t acpi_poweroff(){
     return -1;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t address_space, uint8_t bit_width, uint8_t bit_offset){
     if(reg == NULL) {
         PRINTLOG(ACPI, LOG_ERROR, "register address null");
@@ -177,6 +184,7 @@ int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t ad
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
 

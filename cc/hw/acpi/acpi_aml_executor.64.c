@@ -248,6 +248,11 @@ int8_t acpi_aml_exec_derefof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* 
         }
 
         acpi_aml_object_t* tmp = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
+
+        if(tmp == NULL) {
+            return -1;
+        }
+
         tmp->type = ACPI_AML_OT_NUMBER;
         tmp->number.bytecnt = 1;
         tmp->number.value = data;
@@ -287,6 +292,11 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
 
 int8_t acpi_aml_execute(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* mth, acpi_aml_object_t** return_obj, ...) {
     acpi_aml_opcode_t* opcode = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_opcode_t), 0);
+
+    if(opcode == NULL) {
+        return -1;
+    }
+
     opcode->opcode = ACPI_AML_METHODCALL;
     opcode->operands[0] = mth;
     opcode->operand_count = 1;
@@ -422,11 +432,11 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 }
 
 #define UNIMPLEXEC(name) \
-    int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
-        UNUSED(ctx); \
-        PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
-        return -1; \
-    }
+        int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
+            UNUSED(ctx); \
+            PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
+            return -1; \
+        }
 
 UNIMPLEXEC(copy);
 

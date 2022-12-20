@@ -33,6 +33,10 @@ int8_t acpi_aml_resource_parse_smallitem_irq(acpi_aml_parser_context_t* ctx, acp
 
     acpi_aml_device_interrupt_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_interrupt_t), 0);
 
+    if(item == NULL) {
+        return -1;
+    }
+
     item->edge = res->irq.mode;
     item->low = res->irq.polarity;
     item->shared = res->irq.sharing;
@@ -58,6 +62,10 @@ int8_t acpi_aml_resource_parse_smallitem_io(acpi_aml_parser_context_t* ctx, acpi
 
     acpi_aml_device_ioport_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_ioport_t), 0);
 
+    if(item == NULL) {
+        return -1;
+    }
+
     item->min = res->io.min;
     item->max = res->io.max;
 
@@ -72,6 +80,10 @@ int8_t acpi_aml_resource_parse_smallitem_dma(acpi_aml_parser_context_t* ctx, acp
     }
 
     acpi_aml_device_dma_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_dma_t), 0);
+
+    if(item == NULL) {
+        return -1;
+    }
 
     item->master = res->dma.bus_master_status;
     item->channels = res->dma.channels;
@@ -96,6 +108,10 @@ int8_t acpi_aml_resource_parse_largeitem_memory_range_32bit_fixed(acpi_aml_parse
 
     acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
 
+    if(item == NULL) {
+        return -1;
+    }
+
     item->writable = res->memory_range_32bit_fixed.rw;
     item->cacheable = 0;
     item->prefetchable = 0;
@@ -118,6 +134,10 @@ int8_t acpi_aml_resource_parse_largeitem_extended_interrupt(acpi_aml_parser_cont
     for(int32_t i = 0; i < res->extended_interrupt.count; i++) {
         acpi_aml_device_interrupt_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_interrupt_t), 0);
 
+        if(item == NULL) {
+            return -1;
+        }
+
         item->edge = res->extended_interrupt.mode;
         item->low = res->extended_interrupt.polarity;
         item->shared = res->extended_interrupt.sharing;
@@ -137,6 +157,11 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
         }
 
         acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
+
+
+        if(item == NULL) {
+            return -1;
+        }
 
         item->writable = res->word_address_space.type_spesific_flags.memory_flag.write;
         item->cacheable = (res->word_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;
@@ -161,6 +186,10 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
 
         acpi_aml_device_ioport_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_ioport_t), 0);
 
+        if(item == NULL) {
+            return -1;
+        }
+
         item->min = res->word_address_space.min;
         item->max = res->word_address_space.max;
 
@@ -179,6 +208,10 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
         }
 
         acpi_aml_device_bus_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_bus_t), 0);
+
+        if(item == NULL) {
+            return -1;
+        }
 
         item->min = res->word_address_space.min;
         item->max = res->word_address_space.max;
@@ -208,6 +241,10 @@ int8_t acpi_aml_resource_parse_largeitem_dword_address_space(acpi_aml_parser_con
 
     acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
 
+    if(item == NULL) {
+        return -1;
+    }
+
     item->writable = res->dword_address_space.type_spesific_flags.memory_flag.write;
     item->cacheable = (res->dword_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;
     item->prefetchable = (res->dword_address_space.type_spesific_flags.memory_flag.mem & 2) == 2;
@@ -234,6 +271,10 @@ int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_con
     }
 
     acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
+
+    if(item == NULL) {
+        return -1;
+    }
 
     item->writable = res->qword_address_space.type_spesific_flags.memory_flag.write;
     item->cacheable = (res->qword_address_space.type_spesific_flags.memory_flag.mem & 1) == 1;

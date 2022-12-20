@@ -161,6 +161,8 @@ int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
     if(interrupt_irqs == NULL) {
         return -1;
@@ -170,6 +172,11 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
 
     if(interrupt_irqs[irqnum] == NULL) {
         interrupt_irqs[irqnum] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+        if(interrupt_irqs[irqnum] == NULL) {
+            return -1;
+        }
+
         interrupt_irqs[irqnum]->irq = irq;
 
     } else {
@@ -180,6 +187,11 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         }
 
         item->next = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+        if(item->next == NULL) {
+            return -1;
+        }
+
         item->next->irq = irq;
     }
 
@@ -187,6 +199,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 
 void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){

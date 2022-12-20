@@ -13,6 +13,8 @@
 int8_t acpi_aml_parse_byte_data(acpi_aml_parser_context_t*, void**, uint64_t*);
 int8_t acpi_aml_parse_op_else(acpi_aml_parser_context_t*, void**, uint64_t*);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed, acpi_aml_object_t* preop){
     uint64_t r_consumed = 0;
     uint8_t idx = 0;
@@ -248,24 +250,25 @@ cleanup:
 
     return res;
 }
+#pragma GCC diagnostic pop
 
 #define OPCODEPARSER(num) \
-    int8_t acpi_aml_parse_opcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
-        uint64_t t_consumed = 1; \
-        uint8_t oc = *ctx->data; \
-        ctx->data++; \
-        ctx->remaining--; \
+        int8_t acpi_aml_parse_opcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
+            uint64_t t_consumed = 1; \
+            uint8_t oc = *ctx->data; \
+            ctx->data++; \
+            ctx->remaining--; \
      \
-        if(acpi_aml_parse_op_code_with_cnt(oc, num, ctx, data, &t_consumed, NULL) != 0) { \
-            return -1; \
-        } \
+            if(acpi_aml_parse_op_code_with_cnt(oc, num, ctx, data, &t_consumed, NULL) != 0) { \
+                return -1; \
+            } \
      \
-        if(consumed != NULL) { \
-            *consumed = t_consumed; \
-        } \
+            if(consumed != NULL) { \
+                *consumed = t_consumed; \
+            } \
      \
-        return 0; \
-    }
+            return 0; \
+        }
 
 OPCODEPARSER(0);
 OPCODEPARSER(1);
@@ -274,24 +277,24 @@ OPCODEPARSER(3);
 OPCODEPARSER(4);
 
 #define EXTOPCODEPARSER(num) \
-    int8_t acpi_aml_parse_extopcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
-        uint64_t t_consumed = 1; \
-        uint16_t oc = 0x5b00; \
-        uint8_t t_oc = *ctx->data; \
-        oc |= t_oc; \
-        ctx->data++; \
-        ctx->remaining--; \
+        int8_t acpi_aml_parse_extopcnt_ ## num(acpi_aml_parser_context_t * ctx, void** data, uint64_t * consumed){ \
+            uint64_t t_consumed = 1; \
+            uint16_t oc = 0x5b00; \
+            uint8_t t_oc = *ctx->data; \
+            oc |= t_oc; \
+            ctx->data++; \
+            ctx->remaining--; \
      \
-        if(acpi_aml_parse_op_code_with_cnt(oc, num, ctx, data, &t_consumed, NULL) != 0) { \
-            return -1; \
-        } \
+            if(acpi_aml_parse_op_code_with_cnt(oc, num, ctx, data, &t_consumed, NULL) != 0) { \
+                return -1; \
+            } \
      \
-        if(consumed != NULL) { \
-            *consumed = t_consumed; \
-        } \
+            if(consumed != NULL) { \
+                *consumed = t_consumed; \
+            } \
      \
-        return 0; \
-    }
+            return 0; \
+        }
 
 EXTOPCODEPARSER(0);
 EXTOPCODEPARSER(1);
@@ -527,7 +530,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
         acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(op == NULL) {
-            return -1;
+            goto cleanup;
         }
 
         t_consumed = 0;
@@ -535,7 +538,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
             if(op->name == NULL) {
                 acpi_aml_destroy_object(ctx, op);
             }
-            return -1;
+            goto cleanup;
         }
         r_consumed += t_consumed;
         opcode->operands[idx++] = op;
@@ -543,13 +546,13 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
         acpi_aml_object_t* moc = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(moc == NULL) {
-            return -1;
+            goto cleanup;
         }
 
         t_consumed = 0;
         if(acpi_aml_parse_byte_data(ctx, (void**)&moc, &t_consumed) != 0) {
             memory_free_ext(ctx->heap, moc);
-            return -1;
+            goto cleanup;
         }
         r_consumed += t_consumed;
         opcode->operands[idx++] = moc;
@@ -559,7 +562,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
         acpi_aml_object_t* op = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_object_t), 0x0);
 
         if(op == NULL) {
-            return -1;
+            goto cleanup;
         }
 
         t_consumed = 0;
@@ -567,7 +570,7 @@ int8_t acpi_aml_parse_op_match(acpi_aml_parser_context_t* ctx, void** data, uint
             if(op->name == NULL) {
                 acpi_aml_destroy_object(ctx, op);
             }
-            return -1;
+            goto cleanup;
         }
         r_consumed += t_consumed;
         opcode->operands[idx++] = op;

@@ -284,12 +284,23 @@ void network_e1000_rx_poll(network_e1000_dev_t* dev) {
 
             network_received_packet_t* packet = memory_malloc(sizeof(network_received_packet_t));
 
+            if(packet == NULL) {
+                continue;
+            }
+
             packet->packet_len = pktlen;
             packet->return_queue = dev->transmit_queue;
             packet->network_info = dev->mac;
             packet->network_type = NETWORK_TYPE_ETHERNET;
 
             packet->packet_data = memory_malloc(pktlen);
+
+            if(packet->packet_data == NULL) {
+                memory_free(packet);
+
+                continue;
+            }
+
             memory_memcopy(pkt, packet->packet_data, pktlen);
 
             linkedlist_queue_push(network_received_packets, packet);

@@ -233,6 +233,8 @@ int8_t acpi_aml_parse_one_item(acpi_aml_parser_context_t* ctx, void** data, uint
     return res;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
     PRINTLOG(ACPIAML, LOG_TRACE, "try to parse symbol");
 
@@ -304,6 +306,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 const acpi_aml_parse_f acpi_aml_parse_extfs[] = {
     PARSER_F_NAME(mutex), // 0x01 -> 0

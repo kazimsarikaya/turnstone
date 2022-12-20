@@ -23,6 +23,11 @@ static int8_t sync_test_set_get(uint64_t* value, int8_t offset){
 
 lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future) {
     lock_internal_t* lock = memory_malloc_ext(heap, sizeof(lock_internal_t), 0x0);
+
+    if(lock == NULL) {
+        return NULL;
+    }
+
     lock->heap = heap;
     lock->for_future = for_future;
 
@@ -78,6 +83,11 @@ typedef struct {
 
 semaphore_t semaphore_create_with_heap(memory_heap_t* heap, uint64_t count){
     semaphore_internal_t* semaphore = memory_malloc_ext(heap, sizeof(semaphore_internal_t), 0x0);
+
+    if(semaphore == NULL) {
+        return NULL;
+    }
+
     semaphore->heap = heap;
     semaphore->lock = lock_create_with_heap(heap);
     semaphore->initial_count = count;

@@ -29,6 +29,7 @@ typedef enum {
     VIRTIO,
     VIRTIONET,
     E1000,
+    FAT,
 } logging_modules_t;
 
 typedef enum {
@@ -128,6 +129,10 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_E1000
 #define LOG_LEVEL_E1000 LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_FAT
+#define LOG_LEVEL_FAT LOG_INFO
 #endif
 
 

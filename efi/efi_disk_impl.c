@@ -50,11 +50,21 @@ disk_t* efi_disk_impl_open(efi_block_io_t* bio) {
 
     efi_disk_impl_context_t* ctx = memory_malloc(sizeof(efi_disk_impl_context_t));
 
+    if(ctx == NULL) {
+        return NULL;
+    }
+
     ctx->bio = bio;
     ctx->disk_size = (bio->media->last_block + 1) * bio->media->block_size;
     ctx->block_size = bio->media->block_size;
 
     disk_t* d = memory_malloc(sizeof(disk_t));
+
+    if(d == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
 
     d->disk_context = ctx;
     d->get_disk_size = efi_disk_impl_get_disk_size;

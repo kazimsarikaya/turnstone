@@ -94,6 +94,13 @@ int32_t main(int32_t argc, char** argv) {
     fwrite(&zero, 1, 1, db_file);
 
     cluster_first_t* fc = memory_malloc(sizeof(cluster_generic_t));
+
+    if(fc == NULL) {
+        fclose(db_file);
+
+        return -1;
+    }
+
     fc->header.version = 0;
     fc->header.old_version_address = 0;
     fc->header.previous_cluster = 0;

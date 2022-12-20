@@ -84,39 +84,61 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     }
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t kmain64(size_t entry_point) {
     srand(0x123456789);
 
     memory_heap_t* heap = memory_create_heap_simple(0, 0);
-
-    memory_set_default_heap(heap);
-
-    video_init();
-    video_clear_screen();
 
     if(heap == NULL) {
         PRINTLOG(KERNEL, LOG_FATAL, "creating heap");
         return -1;
     }
 
+    memory_set_default_heap(heap);
+
+    video_init();
+    video_clear_screen();
+
     PRINTLOG(KERNEL, LOG_INFO, "Initializing stage 3 with remapped kernel? %lli", SYSTEM_INFO->remapped);
     PRINTLOG(KERNEL, LOG_INFO, "new heap created at 0x%p", heap);
     PRINTLOG(KERNEL, LOG_INFO, "Entry point of kernel is 0x%llx", entry_point);
 
     video_frame_buffer_t* new_vfb = memory_malloc(sizeof(video_frame_buffer_t));
+
+    if(new_vfb == NULL) {
+        return -1;
+    }
+
     memory_memcopy(SYSTEM_INFO->frame_buffer, new_vfb, sizeof(video_frame_buffer_t));
 
     uint8_t* new_mmap_data = memory_malloc(SYSTEM_INFO->mmap_size);
+
+    if(new_mmap_data == NULL) {
+        return -1;
+    }
+
     memory_memcopy(SYSTEM_INFO->mmap_data, new_mmap_data, SYSTEM_INFO->mmap_size);
 
     uint8_t* new_reserved_mmap_data = NULL;
 
     if(SYSTEM_INFO->reserved_mmap_size) {
         new_reserved_mmap_data = memory_malloc(SYSTEM_INFO->reserved_mmap_size);
+
+        if(new_reserved_mmap_data == NULL) {
+            return -1;
+        }
+
         memory_memcopy(SYSTEM_INFO->reserved_mmap_data, new_reserved_mmap_data, SYSTEM_INFO->reserved_mmap_size);
     }
 
     system_info_t* new_system_info = memory_malloc(sizeof(system_info_t));
+
+    if(new_system_info == NULL) {
+        return -1;
+    }
+
     memory_memcopy(SYSTEM_INFO, new_system_info, sizeof(system_info_t));
 
     new_system_info->frame_buffer = new_vfb;
@@ -289,3 +311,4 @@ int8_t kmain64(size_t entry_point) {
 
     return 0;
 }
+#pragma GCC diagnostic pop

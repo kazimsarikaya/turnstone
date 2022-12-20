@@ -51,6 +51,10 @@ network_icmpv4_ping_header_t* network_create_ping_packet(boolean_t is_reply, uin
 
     network_icmpv4_ping_header_t* pp = memory_malloc(plen);
 
+    if(pp == NULL) {
+        return NULL;
+    }
+
     pp->header.type = is_reply?NETWORK_ICMP_ECHO_REPLY:NETWORK_ICMP_ECHO_REQUEST;
     pp->header.code = NETWORK_ICMP_ECHO_CODE;
     pp->header.identifier = identifier;

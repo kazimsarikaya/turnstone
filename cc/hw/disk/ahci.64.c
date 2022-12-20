@@ -379,6 +379,11 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
         uint8_t sncq  = (hba_mem->host_capability >> 30) & 1;
 
         ahci_hba_t* hba = memory_malloc_ext(heap, sizeof(ahci_hba_t), 0x0);
+
+        if(hba == NULL) {
+            return -1;
+        }
+
         hba->hba_addr = abar_va;
         hba->disk_base = disk_id;
         hba->disk_count = nr_port;
@@ -443,6 +448,11 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
             PRINTLOG(AHCI, LOG_TRACE, "port type 0x%x", dt);
 
             ahci_sata_disk_t* disk = memory_malloc_ext(heap, sizeof(ahci_sata_disk_t), 0x0);
+
+            if(disk == NULL) {
+                continue;
+            }
+
             disk->disk_id = disk_id++;
             disk->port_address = port_address;
             disk->type = dt;
