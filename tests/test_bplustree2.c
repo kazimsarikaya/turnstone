@@ -47,6 +47,13 @@ int main(){
     for(size_t i = 0; i < item_count; i++) {
         item_t* item = memory_malloc(sizeof(item));
 
+        if(item == NULL) {
+            print_error("cannot create item");
+            bplustree_destroy_index(idx);
+
+            return -1;
+        }
+
         item->key = test_data[i];
         item->data = (i << 32) | test_data[i];
 

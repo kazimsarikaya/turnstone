@@ -128,6 +128,10 @@ int8_t test_ser_deser_datalist() {
 int8_t test_ser_deser_recurive() {
     data_t* data_list = memory_malloc(sizeof(data_t) * 10);
 
+    if(data_list == NULL) {
+        return -1;
+    }
+
     for(int16_t i = 0; i < 10; i++) {
         data_list[i].type = DATA_TYPE_INT32;
         data_list[i].value = (void*)(i * 31ULL + 0x1234);

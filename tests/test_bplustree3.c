@@ -58,6 +58,13 @@ uint32_t main(uint32_t argc, char_t** argv) {
     for(size_t i = 0; i < item_count; i++) {
         item_t* item = memory_malloc(sizeof(item));
 
+        if(item == NULL) {
+            print_error("cannot create item");
+            bplustree_destroy_index(idx);
+
+            return -1;
+        }
+
         item->key = test_key[i];
         item->data = (i << 16) | test_data[i];
 
