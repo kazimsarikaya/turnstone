@@ -42,7 +42,7 @@ typedef struct index {
     iterator_t* (* create_iterator)(struct index* idx);
 } index_t;
 
-typedef void * (* indexer_key_creator_f)(void* key);
+typedef void * (* indexer_key_creator_f)(void* key, void* keyarg);
 
 /**
  * @typedef indexer_t
@@ -53,10 +53,10 @@ typedef void * indexer_t;
 indexer_t indexer_create_with_heap(memory_heap_t* heap);
 #define indexer_create() indexer_create_ext(NULL);
 int8_t      indexer_destroy(indexer_t idxer);
-int8_t      indexer_register_index(indexer_t idxer, char_t* idx_name, index_t* idx, indexer_key_creator_f key_creator);
+int8_t      indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, indexer_key_creator_f key_creator, void* keyarg);
 int8_t      indexer_index(indexer_t idxer, void* key, void* data);
 void*       indexer_delete(indexer_t idxer, void* key);
-iterator_t* indexer_search(indexer_t idxer, char_t* idx_name, void* key1, void* key2, index_key_search_criteria_t criteria);
+iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, void* key1, void* key2, index_key_search_criteria_t criteria);
 
 
 #endif

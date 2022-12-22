@@ -11,9 +11,10 @@
 #include <strings.h>
 
 typedef struct {
-    char_t*               idx_name;
+    uint64_t              idx_id;
     index_t*              idx;
     indexer_key_creator_f key_creator;
+    void*                 keyarg;
 }indexer_idx_kc_internal_t;
 
 typedef struct {
@@ -54,7 +55,7 @@ int8_t indexer_destroy(indexer_t idxer){
     return 0;
 }
 
-int8_t indexer_register_index(indexer_t idxer, char_t* idx_name, index_t* idx, indexer_key_creator_f key_creator){
+int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, indexer_key_creator_f key_creator, void* keyarg){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 
     if(l_idxer == NULL) {
@@ -67,9 +68,10 @@ int8_t indexer_register_index(indexer_t idxer, char_t* idx_name, index_t* idx, i
         return -1;
     }
 
-    pair->idx_name = idx_name;
+    pair->idx_id = idx_id;
     pair->idx = idx;
     pair->key_creator = key_creator;
+    pair->keyarg = keyarg;
     linkedlist_list_insert(l_idxer->indexes, pair);
     return 0;
 }
@@ -89,7 +91,7 @@ int8_t indexer_index(indexer_t idxer, void* key, void* data){
 
     while(iter->end_of_iterator(iter) != 0) {
         indexer_idx_kc_internal_t* pair = iter->get_item(iter);
-        void* r_key = pair->key_creator(key);
+        void* r_key = pair->key_creator(key, pair->keyarg);
 
         if(r_key != NULL) {
             pair->idx->insert(pair->idx, r_key, data, NULL);
@@ -119,7 +121,7 @@ void* indexer_delete(indexer_t idxer, void* key){
 
     while(iter->end_of_iterator(iter) != 0) {
         indexer_idx_kc_internal_t* pair = iter->get_item(iter);
-        void* r_key = pair->key_creator(key);
+        void* r_key = pair->key_creator(key, pair->keyarg);
 
         if(r_key != NULL) {
             void* tmp_data;
@@ -138,7 +140,7 @@ void* indexer_delete(indexer_t idxer, void* key){
     return data;
 }
 
-iterator_t* indexer_search(indexer_t idxer, char_t* idx_name, void* key1, void* key2, index_key_search_criteria_t criteria){
+iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, void* key1, void* key2, index_key_search_criteria_t criteria){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 
     if(l_idxer == NULL) {
@@ -156,7 +158,7 @@ iterator_t* indexer_search(indexer_t idxer, char_t* idx_name, void* key1, void* 
     while(iter->end_of_iterator(iter) != 0) {
         indexer_idx_kc_internal_t* pair = iter->get_item(iter);
 
-        if(strcmp(pair->idx_name, idx_name) == 0) {
+        if(pair->idx_id == idx_id) {
             idx_pair = pair;
             break;
         }
@@ -167,8 +169,8 @@ iterator_t* indexer_search(indexer_t idxer, char_t* idx_name, void* key1, void* 
     iter->destroy(iter);
 
     if(idx_pair) {
-        void* r_key1 = idx_pair->key_creator(key1);
-        void* r_key2 = idx_pair->key_creator(key2);
+        void* r_key1 = idx_pair->key_creator(key1, idx_pair->keyarg);
+        void* r_key2 = idx_pair->key_creator(key2, idx_pair->keyarg);
 
         return idx_pair->idx->search(idx_pair->idx, r_key1, r_key2, criteria);
     }
