@@ -1,0 +1,45 @@
+on:
+  push:
+   paths:
+   - docs/**
+   - docs.doxygen
+   - doxygen-layout.xml
+   - README.md
+   - github/workflows/main.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: make output dir
+        run: |
+          mkdir -p output/docs
+      - name: Setup Pages
+        uses: mattnotmitt/doxygen-action@1.9.5
+        with:
+          doxyfile-path: docs.doxygen
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          # Upload entire repository
+          path: 'output/docs/html'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
+    
