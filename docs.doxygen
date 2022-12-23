@@ -1321,7 +1321,9 @@ HTML_STYLESHEET        =
 
 HTML_EXTRA_STYLESHEET  = docs/assets/doxygen-awesome.css \
                             docs/assets/doxygen-awesome-sidebar-only.css \
-                            docs/assets/doxygen-awesome-sidebar-only-darkmode-toggle.css
+                            docs/assets/doxygen-awesome-sidebar-only-darkmode-toggle.css \
+                            docs/assets/custom.css \
+                            docs/assets/custom-alternative.css
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -1334,7 +1336,8 @@ HTML_EXTRA_STYLESHEET  = docs/assets/doxygen-awesome.css \
 HTML_EXTRA_FILES       = docs/assets/doxygen-awesome-darkmode-toggle.js \
                             docs/assets/doxygen-awesome-fragment-copy-button.js \
                             docs/assets/doxygen-awesome-interactive-toc.js \
-                            docs/assets/doxygen-awesome-paragraph-link.js
+                            docs/assets/doxygen-awesome-paragraph-link.js \
+                            docs/assets/toggle-alternative-theme.js
 
 # The HTML_COLORSTYLE tag can be used to specify if the generated HTML output
 # should be rendered with a dark or light theme. Default setting AUTO_LIGHT
