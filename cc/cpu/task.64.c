@@ -240,7 +240,29 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
 void task_cleanup(){
     while(linkedlist_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
-        memory_free_ext(tmp->heap, tmp->stack);
+
+        uint64_t stack_va = (uint64_t)tmp->stack;
+        uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
+
+        uint64_t stack_size = tmp->stack_size;
+        uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
+
+        memory_memclean(tmp->stack, stack_size);
+
+        frame_t stack_frames = {stack_fa, stack_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
+
+        if(memory_paging_delete_va_for_frame_ext(tmp->page_table, stack_va, &stack_frames) != 0 ) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
+
+            cpu_hlt();
+        }
+
+        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &stack_frames) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
+
+            cpu_hlt();
+        }
+
         memory_free_ext(tmp->heap, tmp->fx_registers);
         memory_free_ext(tmp->heap, tmp);
     }
@@ -406,7 +428,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
-        PRINTLOG(TASKING, LOG_TRACE, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
+        PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
 
         return -1;
     }

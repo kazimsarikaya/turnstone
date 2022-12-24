@@ -1029,3 +1029,34 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
 
     return 0;
 }
+
+int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm){
+    if(frm == NULL) {
+        return -1;
+    }
+
+    uint64_t frm_addr = frm->frame_address;
+    uint64_t frm_cnt = frm->frame_count;
+
+    while(frm_cnt) {
+        if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
+            if(memory_paging_delete_page_ext(p4, va_start, NULL) != 0) {
+                return -1;
+            }
+
+            frm_cnt -= 0x200;
+            frm_addr += MEMORY_PAGING_PAGE_LENGTH_2M;
+            va_start += MEMORY_PAGING_PAGE_LENGTH_2M;
+        } else {
+            if(memory_paging_delete_page_ext(p4, va_start, NULL) != 0) {
+                return -1;
+            }
+
+            frm_cnt--;
+            frm_addr += MEMORY_PAGING_PAGE_LENGTH_4K;
+            va_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+        }
+    }
+
+    return 0;
+}

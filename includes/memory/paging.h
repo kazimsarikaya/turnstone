@@ -166,4 +166,7 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
 #define memory_paging_add_va_for_frame(vas, f, t) memory_paging_add_va_for_frame_ext(NULL, vas, f, t)
 
+int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm);
+#define memory_paging_delete_va_for_frame(vas, f) memory_paging_add_va_for_frame_ext(NULL, vas, f)
+
 #endif
