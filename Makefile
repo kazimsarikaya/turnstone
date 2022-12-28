@@ -29,7 +29,7 @@ INCLUDESDIR = includes
 CCXXFLAGS += -std=gnu11 -O2 -nostdlib -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
-	-fno-pic -fanalyzer
+	-fno-pic ${CCXXEXTRAFLAGS}
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
@@ -98,11 +98,17 @@ TESTPROGS = $(OBJDIR)/stage3.test.bin
 .PHONY: all clean depend $(SUBDIRS) $(CC64GENOBJS)
 .PRECIOUS:
 
+qemu-without-analyzer:
+	CCXXEXTRAFLAGS= make -j $(nproc) -C utils 
+	CCXXEXTRAFLAGS= make -j $(nproc) -C efi 
+	CCXXEXTRAFLAGS= make -j 1 -f Makefile-np 
+	CCXXEXTRAFLAGS= make -j $(nproc) -f Makefile qemu-internal
+
 qemu: 
-	make -j $(nproc) -C utils 
-	make -j $(nproc) -C efi 
-	make -j 1 -f Makefile-np 
-	make -j $(nproc) -f Makefile qemu-internal
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(nproc) -C utils 
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(nproc) -C efi 
+	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np 
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(nproc) -f Makefile qemu-internal
 
 qemu-internal: $(QEMUDISK)
 

@@ -6,7 +6,7 @@ HOSTOS=$(shell uname -s)
 CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu11 \
 	-O3 -nostdlib -ffreestanding -c -m64 -msse4.2\
-	-D___TESTMODE=1 -g -fanalyzer
+	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)

@@ -22,7 +22,7 @@ LD = $(OUTPUT)/linker.bin
 
 CFLAGS += -D___BITS=64 -D___EFIBUILD=1 -std=gnu11 -O2 -I../includes -I./
 CFLAGS +=  -ffreestanding -nostdlib -Wall -Werror -Wextra -mgeneral-regs-only
-CFLAGS += -ffunction-sections -fdata-sections -mabi=ms -c -fanalyzer
+CFLAGS += -ffunction-sections -fdata-sections -mabi=ms -c ${CCXXEXTRAFLAGS}
 
 LDFLAGS = --for-efi --trim -o efitest.efi -e efi_main
 
