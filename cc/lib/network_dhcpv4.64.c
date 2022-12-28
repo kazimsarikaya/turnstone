@@ -144,7 +144,9 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             }
         }
 
-        if(ni == NULL) {
+        if(ni == NULL || ni->return_queue == NULL) {
+            PRINTLOG(NETWORK, LOG_WARNING, "network info or return queue is null");
+
             continue;
         }
 
@@ -192,23 +194,40 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             continue;
         }
 
-        network_transmit_packet_t* res = memory_malloc(sizeof(network_transmit_packet_t));
+        network_transmit_packet_t* res = memory_malloc_ext(linkedlist_get_heap(ni->return_queue), sizeof(network_transmit_packet_t), 0);
 
         if(res == NULL) {
-            PRINTLOG(NETWORK, LOG_ERROR, "network transmic packet is null, re trying...");
+            PRINTLOG(NETWORK, LOG_ERROR, "network transmit packet is null, re trying...");
+
+            memory_free(eth);
 
             continue;
         }
 
         res->packet_len = sizeof(network_ethernet_t) + tl;
-        res->packet_data = eth;
+
+        uint8_t* packet_data = memory_malloc_ext(linkedlist_get_heap(ni->return_queue), res->packet_len, 0);
+
+        if(packet_data == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "packet data allocation failed, re trying...");
+
+            memory_free(eth);
+            memory_free_ext(linkedlist_get_heap(ni->return_queue), res);
+
+            continue;
+        }
+
+        memory_memcopy(eth, packet_data, res->packet_len);
+
+        memory_free(eth);
+
+        res->packet_data = packet_data;
 
         ni->is_ipv4_address_requested = true;
 
-        if(ni->return_queue) {
-            linkedlist_queue_push(ni->return_queue, res);
-        }
+        PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet sending...");
 
+        linkedlist_queue_push(ni->return_queue, res);
     }
 
     return 0;
@@ -255,7 +274,9 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
     network_info_t* ni = map_get(network_info_map, network_info);
 
-    if(ni == NULL) {
+    if(ni == NULL || ni->return_queue == NULL) {
+        PRINTLOG(NETWORK, LOG_ERROR, "no network info or return queue");
+
         return NULL;
     }
 
@@ -294,21 +315,34 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
         uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, network_info, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
 
-        network_transmit_packet_t* res = memory_malloc(sizeof(network_transmit_packet_t));
+        network_transmit_packet_t* res = memory_malloc_ext(linkedlist_get_heap(ni->return_queue), sizeof(network_transmit_packet_t), 0);
 
         if(res == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "network transmit packet is null, re trying...");
+
+            memory_free(eth);
+
             return NULL;
         }
 
         res->packet_len = sizeof(network_ethernet_t) + tl;
-        res->packet_data = eth;
 
-        if(ni->return_queue == NULL) {
-            PRINTLOG(NETWORK, LOG_ERROR, "no return queue");
+        uint8_t* packet_data = memory_malloc_ext(linkedlist_get_heap(ni->return_queue), res->packet_len, 0);
+
+        if(packet_data == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "packet data allocation failed, re trying...");
+
+            memory_free(eth);
+            memory_free_ext(linkedlist_get_heap(ni->return_queue), res);
 
             return NULL;
         }
 
+        memory_memcopy(eth, packet_data, res->packet_len);
+
+        memory_free(eth);
+
+        res->packet_data = packet_data;
 
         linkedlist_queue_push(ni->return_queue, res);
 

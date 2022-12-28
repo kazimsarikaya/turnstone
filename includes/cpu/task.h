@@ -85,7 +85,9 @@ typedef enum {
 } task_state_t;
 
 typedef struct {
+    memory_heap_t*       creator_heap;
     memory_heap_t*       heap;
+    uint64_t             heap_size;
     uint64_t             task_id;
     uint64_t             last_tick_count;
     task_state_t         state;
@@ -128,7 +130,7 @@ task_t*  task_get_current_task();
 void task_set_message_waiting();
 void task_add_message_queue(linkedlist_t queue);
 
-int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args);
+int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args);
 
 boolean_t task_idle_check_need_yield();
 

@@ -337,14 +337,6 @@ virtio_dev_t* virtio_get_device(pci_dev_t* pci_dev) {
         return vdev;
     }
 
-    vdev->return_queue = linkedlist_create_list();
-
-    if(vdev->return_queue == NULL) {
-        memory_free(vdev);
-
-        return NULL;
-    }
-
     pci_common_header_t* pci_header = pci_dev->pci_header;
     pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)pci_header;
 

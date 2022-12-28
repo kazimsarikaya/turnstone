@@ -99,6 +99,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     interrupt_irq_set_handler(0x60, &task_task_switch_isr);
 
     current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+    current_task->creator_heap = heap;
     current_task->heap = heap;
     current_task->task_id = TASK_KERNEL_TASK_ID;
     current_task->state = TASK_STATE_CREATED;
@@ -263,8 +264,30 @@ void task_cleanup(){
             cpu_hlt();
         }
 
-        memory_free_ext(tmp->heap, tmp->fx_registers);
-        memory_free_ext(tmp->heap, tmp);
+        uint64_t heap_va = (uint64_t)tmp->stack;
+        uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
+
+        uint64_t heap_size = tmp->heap_size;
+        uint64_t heap_frames_cnt = heap_size / FRAME_SIZE;
+
+        memory_memclean(tmp->heap, heap_size);
+
+        frame_t heap_frames = {heap_fa, heap_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
+
+        if(memory_paging_delete_va_for_frame_ext(tmp->page_table, heap_va, &heap_frames) != 0 ) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for heap at va 0x%llx", heap_va);
+
+            cpu_hlt();
+        }
+
+        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &heap_frames) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot release heap with frames at 0x%llx with count 0x%llx", stack_fa, heap_frames_cnt);
+
+            cpu_hlt();
+        }
+
+        memory_free_ext(tmp->creator_heap, tmp->fx_registers);
+        memory_free_ext(tmp->creator_heap, tmp);
     }
 }
 
@@ -421,7 +444,16 @@ void task_set_message_waiting(){
     current_task->message_waiting = 1;
 }
 
-int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args) {
+int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args) {
+
+    task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+
+    if(new_task == NULL) {
+        return -1;
+    }
+
+    new_task->creator_heap = heap;
+
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
@@ -429,6 +461,25 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
 
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
+        memory_free_ext(heap, new_task);
+
+        return -1;
+    }
+
+    frame_t* heap_frames;
+    uint64_t heap_frames_cnt = (heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    heap_size = heap_frames_cnt * FRAME_SIZE;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot allocate heap with frame count 0x%llx", heap_frames_cnt);
+
+        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, stack_frames) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_frames->frame_address, stack_frames->frame_count);
+
+            cpu_hlt();
+        }
+
+        memory_free_ext(heap, new_task);
 
         return -1;
     }
@@ -437,8 +488,14 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t stack_size, void* entry_po
 
     memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
-    task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
-    new_task->heap = heap;
+    uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
+
+    memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    memory_heap_t* task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
+
+    new_task->heap = task_heap;
+    new_task->heap_size = heap_size;
     new_task->task_id = task_id++;
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = entry_point;

@@ -49,6 +49,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end);
  */
 memory_heap_t* memory_set_default_heap(memory_heap_t* heap);
 
+memory_heap_t* memory_get_heap(memory_heap_t* heap);
 
 void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat);
 #define memory_get_heap_stat(s) memory_get_heap_stat_ext(NULL, s)

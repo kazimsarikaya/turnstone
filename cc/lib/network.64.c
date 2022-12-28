@@ -31,6 +31,7 @@ uint64_t network_info_mke(const void* key) {
 
 
 int8_t network_process_rx(){
+    network_received_packets = linkedlist_create_queue_with_heap(NULL);
 
     task_add_message_queue(network_received_packets);
 
@@ -74,7 +75,7 @@ int8_t network_process_rx(){
 
                 if(return_data && return_data_len) {
                     if(return_queue) {
-                        network_transmit_packet_t* tx_packet = memory_malloc(sizeof(network_transmit_packet_t));
+                        network_transmit_packet_t* tx_packet = memory_malloc_ext(linkedlist_get_heap(return_queue), sizeof(network_transmit_packet_t), 0);
 
                         if(tx_packet == NULL) {
                             memory_free(return_data);
@@ -82,12 +83,27 @@ int8_t network_process_rx(){
                             continue;
                         }
 
+                        uint8_t* tx_packet_data = memory_malloc_ext(linkedlist_get_heap(return_queue), return_data_len, 0);
+
+                        if(tx_packet_data == NULL) {
+                            memory_free(return_data);
+                            memory_free_ext(linkedlist_get_heap(return_queue), tx_packet);
+
+                            continue;
+                        }
+
+                        memory_memcopy(return_data, tx_packet_data, return_data_len);
+
+                        memory_free(return_data);
+
                         tx_packet->packet_len = return_data_len;
-                        tx_packet->packet_data = return_data;
+                        tx_packet->packet_data = tx_packet_data;
 
                         linkedlist_queue_push(return_queue, tx_packet);
                     } else {
                         PRINTLOG(NETWORK, LOG_TRACE, "there is no return queue");
+
+                        memory_free(return_data);
                     }
 
                 } else {
@@ -135,9 +151,7 @@ int8_t network_init() {
 
     iter->destroy(iter);
 
-    network_received_packets = linkedlist_create_queue_with_heap(NULL);
-
-    task_create_task(NULL, 64 << 10, &network_process_rx, 0, NULL);
+    task_create_task(NULL, 64 << 10, 2 << 20, &network_process_rx, 0, NULL);
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 

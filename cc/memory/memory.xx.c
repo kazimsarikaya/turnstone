@@ -19,6 +19,20 @@ memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
     return res;
 }
 
+memory_heap_t* memory_get_heap(memory_heap_t* heap) {
+    if(heap != NULL) {
+        return heap;
+    }
+
+    task_t* current_task = task_get_current_task();
+
+    if(current_task != NULL && current_task->heap != NULL) {
+        return current_task->heap;
+    }
+
+    return memory_heap_default;
+}
+
 void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     if(size == 0) {
         return NULL;

@@ -112,12 +112,12 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linked
  * @param[in] h @ref memory_heap_t the heap of linked list.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_list_with_heap(h) linkedlist_create_with_type(h, LINKEDLIST_TYPE_LIST, NULL, NULL)
+#define linkedlist_create_list_with_heap(h) linkedlist_create_with_type(memory_get_heap(h), LINKEDLIST_TYPE_LIST, NULL, NULL)
 /**
  * @brief creates a normal linked list at default heap heap
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_list() linkedlist_create_with_type(NULL, LINKEDLIST_TYPE_LIST, NULL, NULL)
+#define linkedlist_create_list() linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_LIST, NULL, NULL)
 
 /**
  * @brief creates a sorted linked list at heap
@@ -125,13 +125,13 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linked
  * @param[in] c @ref linkedlist_data_comparator_f comparator used sorting list.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_sortedlist_with_heap(h, c) linkedlist_create_with_type(h, LINKEDLIST_TYPE_SORTEDLIST, c, NULL)
+#define linkedlist_create_sortedlist_with_heap(h, c) linkedlist_create_with_type(memory_get_heap(h), LINKEDLIST_TYPE_SORTEDLIST, c, NULL)
 /**
  * @brief creates a sorted linked list at default heap
  * @param[in] c @ref linkedlist_data_comparator_f comparator used sorting list.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_sortedlist(c) linkedlist_create_with_type(NULL, LINKEDLIST_TYPE_SORTEDLIST, c, NULL)
+#define linkedlist_create_sortedlist(c) linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_SORTEDLIST, c, NULL)
 
 /**
  * @brief creates a indexed linked list at heap
@@ -139,37 +139,37 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linked
  * @param[in] i @ref indexer_t indexer used sorting list.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_indexedlist_with_heap(h, i) linkedlist_create_with_type(h, LINKEDLIST_TYPE_INDEXEDLIST, NULL, i)
+#define linkedlist_create_indexedlist_with_heap(h, i) linkedlist_create_with_type(memory_get_heap(h), LINKEDLIST_TYPE_INDEXEDLIST, NULL, i)
 /**
  * @brief creates a indexed linked list at default heap
  * @param[in] i @ref indexer_t indexer used sorting list.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_indexedlist(i) linkedlist_create_with_type(NULL, LINKEDLIST_TYPE_INDEXEDLIST, NULL, i)
+#define linkedlist_create_indexedlist(i) linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_INDEXEDLIST, NULL, i)
 
 /**
  * @brief creates a queue at heap
  * @param[in] h @ref memory_heap_t the heap of queue.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_queue_with_heap(h) linkedlist_create_with_type(h, LINKEDLIST_TYPE_QUEUE, NULL, NULL)
+#define linkedlist_create_queue_with_heap(h) linkedlist_create_with_type(memory_get_heap(h), LINKEDLIST_TYPE_QUEUE, NULL, NULL)
 /**
  * @brief creates a queue at default heap heap
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_queue() linkedlist_create_with_type(NULL, LINKEDLIST_TYPE_QUEUE, NULL, NULL)
+#define linkedlist_create_queue() linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_QUEUE, NULL, NULL)
 
 /**
  * @brief creates a stack at heap
  * @param[in] h @ref memory_heap_t the heap of queue.
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_stack_with_heap(h) linkedlist_create_with_type(h, LINKEDLIST_TYPE_STACK, NULL, NULL)
+#define linkedlist_create_stack_with_heap(h) linkedlist_create_with_type(memory_get_heap(h), LINKEDLIST_TYPE_STACK, NULL, NULL)
 /**
  * @brief creates a stack at default heap heap
  * @return @ref linkedlist_t
  */
-#define linkedlist_create_stack() linkedlist_create_with_type(NULL, LINKEDLIST_TYPE_STACK, NULL, NULL)
+#define linkedlist_create_stack() linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_STACK, NULL, NULL)
 
 /**
  * @brief destroys linked list

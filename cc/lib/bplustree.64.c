@@ -279,6 +279,8 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
     return new_node;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t bplustree_insert(index_t* idx, void* key, void* data, void** removed_data){
     if(idx == NULL) {
         return -1;
@@ -412,6 +414,7 @@ int8_t bplustree_insert(index_t* idx, void* key, void* data, void** removed_data
     }
     return 0;
 }
+#pragma GCC diagnostic pop
 
 void* bplustree_get_min_key(const bplustree_node_internal_t* node) {
     if(node == NULL) {
