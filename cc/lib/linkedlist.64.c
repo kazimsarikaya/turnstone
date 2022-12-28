@@ -138,6 +138,16 @@ linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t 
     return list;
 }
 
+memory_heap_t* linkedlist_get_heap(linkedlist_t list) {
+    if(list == NULL) {
+        return NULL;
+    }
+
+    linkedlist_internal_t* l = (linkedlist_internal_t*)list;
+
+    return l->heap;
+}
+
 linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linkedlist_data_comparator_f comparator){
     linkedlist_internal_t* l = (linkedlist_internal_t*)list;
     linkedlist_data_comparator_f old = l->comparator;

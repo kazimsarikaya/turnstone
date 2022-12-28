@@ -97,6 +97,8 @@ int8_t linkedlist_string_comprator(const void* data1, const void* data2);
 linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t type,
                                          linkedlist_data_comparator_f comparator, indexer_t indexer);
 
+memory_heap_t* linkedlist_get_heap(linkedlist_t list);
+
 /**
  * @brief updates list's comparator and returns the old one.
  * @param[in]  list       list to be modified
