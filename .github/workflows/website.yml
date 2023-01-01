@@ -35,6 +35,9 @@ jobs:
         uses: mattnotmitt/doxygen-action@1.9.5
         with:
           doxyfile-path: docs.doxygen
+      - name: Setup sitemap.txt
+        run: |
+          find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
