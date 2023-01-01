@@ -131,6 +131,7 @@ gendirs:
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
+	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
 $(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS)  

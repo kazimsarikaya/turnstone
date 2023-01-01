@@ -1,13 +1,41 @@
-Hobby OS:
+Turnstone OS:
   Issues:
 
   Tasks:
+    Documentation:
+      ☐ Write bootloader documentation.
+        ☐ Write EFI documentation.
+        ☐ Write PXE-EFI documentation.
+      ☐ Write linker documentation.
+      ☐ Write memory allocation documentation.
+        ☐ Write paging documentation.
+        ☐ Write heap documentation.
+        ☐ Write frame allocation documentation.
+      ☐ Write IDT, GDT, TSS documentation.
+      ☐ Write ACPI documentation.
+        ☐ Write AML parsing documentation.
+        ☐ Write ACPI tables documentation.
+        ☐ Write ACPI management documentation.
+      ☐ Write library documentation.
+      ☐ Write PCI documentation.
+      ☐ Write networking documentation.
+        ☐ Write base network device handling documentation.
+        ☐ Write e1000 documentation.
+        ☐ Write virtio-net documentation.
+      ☐ Write AHCI documentation.
+      ☐ Write filesystem documentation.
+        ☐ Write fat32 documentation.
+        ☐ Write gpt documentation.
+      ☐ Write library documentation.
+      ☐ Write tasking documentation.
+      ☐ Write mq system documentation.
+      ☐ Write source files documentation.
     Scheduler:
       ☐ Activate Cores
         ☐ Implement trampoline code
       ☐ Move kernel threads to the kernel cores
       ☐ Implement user space task scheduling
-      ✔ task sleep @done (12/17/2022, 8:01:01 PM)
+      ✔ task sleep @done(2022-12-17 20:01:01)
     Disk:
       ☐ Implement NVMe driver
       ☐ Implement raid1
@@ -16,15 +44,15 @@ Hobby OS:
       ☐ Implement write/read log on nvme disk
     Network:
       ☐ Implement TCP
-      ✔ Implement DHCP Client @done (12/13/2022, 9:21:25 AM)
+      ✔ Implement DHCP Client @done(2022-12-13 21:21:25)
       ☐ Implement DNS Client
       ☐ arp tables
       ☐ routing
-      ✔ @high ipv4 receive packet simple fragmantation reassembly @done (12/18/2022, 7:28:16 AM)
+      ✔ @high ipv4 receive packet simple fragmantation reassembly @done(2022-12-18 07:28:16)
       ☐ @low ipv4 receive packet fragmantation timeout
       ☐ @low ipv4 send packet fragmantation
-      ✔ @high dhcpv4 client renew and timeout @done (12/17/2022, 10:55:57 PM)
-      ☐ @high each network protocol should be module and have in/out tasks
+      ✔ @high dhcpv4 client renew and timeout @done(2022-12-17 22:55:57)
+      ☐ @medium each network protocol should be module and have in/out tasks
     Message Queue:
       ☐  @high Implement mq system
     Compiler:
@@ -39,7 +67,7 @@ Hobby OS:
       ☐ Write shared library linker/loader
     Crypto Libraries:
       ☐ @high bigint implementation 
-      ✔ @high sha384, sha224 @done (12/13/2022, 1:47:29 PM)
+      ✔ @high sha384, sha224 @done(2022-12-13 13:47:29)
       ☐ aes encryption with gcm
       ☐ ec implementation
       ☐ @low rsa implementation
@@ -49,19 +77,19 @@ Hobby OS:
       
 ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
-  ✔ Memory bug when store opcode's target (maybe return one) is DEBUG object @done(2022-02-13 18:10) @project(Hobby OS / Issues)
-  ✔ Logical operations wrong if source/target not integer. @done(2022-02-13 18:10) @project(Hobby OS / Issues)
-  ✔ write casting cannot change dest object type correctly @done(2022-02-13 18:10) @project(Hobby OS / Issues)
-  ✔ handle _crs/_prs buffers @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Parsers)
-  ✔ Write executor methods @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
-  ✔ Write read/write string @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
-  ✔ Write read/write buffer @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
-  ✔ handle logic ops if source is string/buffer @done(2022-02-13 18:10) @project(Hobby OS / Tasks / Implement ACPI/AML / Executors)
-  ✔ After acpi, map interrupts to he apic and io-apic @done(2022-02-13 18:10) @project(Hobby OS / Tasks / PCI)
-  ✔ Memory mapping of BARs @done(2022-02-13 18:10) @project(Hobby OS / Tasks / PCI)
-  ✔ implement sata (ahci) @done(2022-02-13 18:11) @project(Hobby OS / Tasks / Disk)
-  ✔ implement e1000 @done(2022-02-13 18:11) @project(Hobby OS / Tasks / Network)
-  ✔ implement virtio-net @done(2022-02-13 18:11) @project(Hobby OS / Tasks / Network)
-  ✔ Will not boot when stage3 is lge 64kib @done(2021-06-08 01:58) @project(Hobby OS / Issues)
-  ✔ Memory bug while destroying acpi aml objects @done(2021-06-07 08:46) @project(Hobby OS / Issues)
-  ✔ Write parser methods @done(2021-06-07 08:45) @project(Hobby OS / Tasks / Implement ACPI/AML / Parsers)
+  ✔ Memory bug when store opcode's target (maybe return one) is DEBUG object @done(2022-02-13 18:10:00) @project(Turnstone OS / Issues)
+  ✔ Logical operations wrong if source/target not integer. @done(2022-02-13 18:10:00) @project(Turnstone OS / Issues)
+  ✔ write casting cannot change dest object type correctly @done(2022-02-13 18:10:00) @project(Turnstone OS / Issues)
+  ✔ handle _crs/_prs buffers @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / Implement ACPI/AML / Parsers)
+  ✔ Write executor methods @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ Write read/write string @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ Write read/write buffer @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ handle logic ops if source is string/buffer @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / Implement ACPI/AML / Executors)
+  ✔ After acpi, map interrupts to he apic and io-apic @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / PCI)
+  ✔ Memory mapping of BARs @done(2022-02-13 18:10:00) @project(Turnstone OS / Tasks / PCI)
+  ✔ implement sata (ahci) @done(2022-02-13 18:11:00) @project(Turnstone OS / Tasks / Disk)
+  ✔ implement e1000 @done(2022-02-13 18:11:00) @project(Turnstone OS / Tasks / Network)
+  ✔ implement virtio-net @done(2022-02-13 18:11:00) @project(Turnstone OS / Tasks / Network)
+  ✔ Will not boot when stage3 is lge 64kib @done(2021-06-08 01:58:00) @project(Turnstone OS / Issues)
+  ✔ Memory bug while destroying acpi aml objects @done(2021-06-07 08:46:00) @project(Turnstone OS / Issues)
+  ✔ Write parser methods @done(2021-06-07 08:45:00) @project(Turnstone OS / Tasks / Implement ACPI/AML / Parsers)
