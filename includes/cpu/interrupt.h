@@ -16,7 +16,9 @@
  */
 #define interrupt_errcode_t uint64_t
 
+/*! the base interrupt number of irqs */
 #define INTERRUPT_IRQ_BASE        0x20
+/*! apci spurious interrupt number */
 #define INTERRUPT_VECTOR_SPURIOUS 0xFF
 
 /**
@@ -40,27 +42,54 @@ typedef struct interrupt_frame {
  */
 int8_t interrupt_init();
 
+/**
+ * @brief irq method signature
+ * @param[in] frame interrupt frame
+ * @param[in] intnum interrupt/irq number
+ * @return 0 if irq handled success fully.
+ */
 typedef int8_t (* interrupt_irq)(interrupt_frame_t* frame, uint8_t intnum);
 
+/**
+ * @brief registers irq for irq number, for an irq there can be more irq handlers, loops with return of @ref interrupt_irq
+ * @param[in] irqnum irq number to handle
+ * @param[in] irq the irq handler
+ * @return 0 if succeed
+ */
 int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq);
+
+/**
+ * @brief remove irq for irq number
+ * @param[in] irqnum irq number to handle
+ * @param[in] irq the irq handler
+ * @return 0 if succeed
+ */
 int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq);
 
+/**
+ * @brief finds not used interrupt for registering
+ * @return interrupt number
+ */
 uint8_t interrupt_get_next_empty_interrupt();
 
-typedef union {
+/**
+ * @union interrupt_errorcode_pagefault_u
+ * @brief bit fileds for page fault error no
+ */
+typedef union interrupt_errorcode_pagefault_u {
     struct {
-        uint32_t present           : 1;
-        uint32_t write             : 1;
-        uint32_t user              : 1;
-        uint32_t reserved_bits     : 1;
-        uint32_t instruction_fetch : 1;
-        uint32_t protected_keys    : 1;
-        uint32_t shadow_stack      : 1;
-        uint32_t reserved1         : 8;
-        uint32_t sgx               : 1;
-        uint32_t reserved2         : 16;
-    } __attribute__((packed)) fields;
-    uint32_t bits;
-} interrupt_errorcode_pagefault_t;
+        uint32_t present           : 1; ///< fault ocurred when page exits, if 0, then the page mapping not found
+        uint32_t write             : 1; ///< fault occured to writing to a readonly page
+        uint32_t user              : 1; ///< fault occured user mode accesses
+        uint32_t reserved_bits     : 1; ///< fault occured when reserved bits edited at page
+        uint32_t instruction_fetch : 1; ///< fault occured when instruction fetch
+        uint32_t protected_keys    : 1; ///< fault is for protected keys
+        uint32_t shadow_stack      : 1; ///< fault is for shadow stack
+        uint32_t reserved1         : 8; ///< reserved
+        uint32_t sgx               : 1; ///< fault is for sgx
+        uint32_t reserved2         : 16; ///< reserved
+    } __attribute__((packed)) fields; ///< bit fields
+    uint32_t bits; ///< all value in 32bit integer
+} interrupt_errorcode_pagefault_t; ///< union short hand for @ref interrupt_errorcode_pagefault_u
 
 #endif

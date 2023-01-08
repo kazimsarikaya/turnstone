@@ -59,7 +59,7 @@ int8_t frame_allocator_cmp_by_address(const void* data1, const void* data2){
     return 0;
 }
 
-int8_t fa_reserve_system_frames(struct frame_allocator* self, frame_t* f){
+int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
     frame_allocator_context_t* ctx = (frame_allocator_context_t*)self->context;
 
     lock_acquire(ctx->lock);
@@ -734,7 +734,7 @@ int8_t fa_cleanup(frame_allocator_t* self) {
 }
 
 
-frame_t* fa_get_reserved_frames_of_address(struct frame_allocator* self, void* address){
+frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void* address){
     if(self == NULL) {
         return NULL;
     }

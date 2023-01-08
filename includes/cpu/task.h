@@ -15,8 +15,10 @@
 #include <memory/paging.h>
 #include <linkedlist.h>
 
+/*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 50
 
+/*! kernel task id*/
 #define TASK_KERNEL_TASK_ID 1
 
 /**
@@ -58,82 +60,138 @@ typedef struct descriptor_tss {
             tss->base_address2 = (base >> 24); \
 }
 
+/**
+ * @struct tss_s
+ * @brief tss descriptor values
+ */
+typedef struct tss_s {
+    uint32_t reserved0; ///< at long mode this value not used
+    uint64_t rsp0; ///< stack pointer for ring 0
+    uint64_t rsp1; ///< stack pointer for ring 1
+    uint64_t rsp2; ///< stack pointer for ring 2
+    uint64_t reserved1; ///< not used at long mode
+    uint64_t ist1; ///< stack pointer for interrupts with ist 1
+    uint64_t ist2; ///< stack pointer for interrupts with ist 2
+    uint64_t ist3; ///< stack pointer for interrupts with ist 3
+    uint64_t ist4; ///< stack pointer for interrupts with ist 4
+    uint64_t ist5; ///< stack pointer for interrupts with ist 5
+    uint64_t ist6; ///< stack pointer for interrupts with ist 6
+    uint64_t ist7; ///< stack pointer for interrupts with ist 7
+    uint64_t reserved2; ///< not used at long mode
+    uint16_t reserved3; ///< not used at long mode
+    uint16_t iomap_base_address; ///< iomap permission bit array
+}__attribute__((packed)) tss_t; ///< short hand for struct
+
+/**
+ * @enum task_state_e
+ * @brief task states
+ */
+typedef enum task_state_e {
+    TASK_STATE_NULL,  ///< task state not known
+    TASK_STATE_CREATED, ///< task created but never runned
+    TASK_STATE_RUNNING, ///< task is running
+    TASK_STATE_SUSPENDED, ///< task is at wait queue
+    TASK_STATE_ENDED, ///< task is ended
+} task_state_t; ///< short hand for enum
+
 typedef struct {
-    uint32_t reserved0;
-    uint64_t rsp0;
-    uint64_t rsp1;
-    uint64_t rsp2;
-    uint64_t reserved1;
-    uint64_t ist1;
-    uint64_t ist2;
-    uint64_t ist3;
-    uint64_t ist4;
-    uint64_t ist5;
-    uint64_t ist6;
-    uint64_t ist7;
-    uint64_t reserved2;
-    uint16_t reserved3;
-    uint16_t iomap_base_address;
-}__attribute__((packed)) tss_t;
+    memory_heap_t*       creator_heap; ///< the heap which task struct is at
+    memory_heap_t*       heap; ///< task's heap
+    uint64_t             heap_size; ///< task's heap size
+    uint64_t             task_id; ///< task's id
+    uint64_t             last_tick_count; ///< tick count when task removes from executing, used for scheduling
+    task_state_t         state; ///< task state
+    void*                entry_point; ///< entry point address
+    void*                stack; ///< stack pointer
+    uint64_t             stack_size; ///< stack size of task
+    linkedlist_t         message_queues; ///< task's listining queues.
+    boolean_t            message_waiting; ///< task state for sleeping should move @ref task_state_s
+    boolean_t            sleeping; ///< task state for sleeping should move @ref task_state_s
+    uint64_t             wake_tick; ///< tick value when task wakes up
+    memory_page_table_t* page_table; ///< page table
+    uint64_t             rax; ///< register
+    uint64_t             rbx; ///< register
+    uint64_t             rcx; ///< register
+    uint64_t             rdx; ///< register
+    uint64_t             r8; ///< register
+    uint64_t             r9; ///< register
+    uint64_t             r10; ///< register
+    uint64_t             r11; ///< register
+    uint64_t             r12; ///< register
+    uint64_t             r13; ///< register
+    uint64_t             r14; ///< register
+    uint64_t             r15; ///< register
+    uint64_t             rsi; ///< register
+    uint64_t             rdi; ///< register
+    uint64_t             rsp; ///< register
+    uint64_t             rbp; ///< register
+    uint8_t*             fx_registers; ///< register
+    uint64_t             rflags; ///< register
+} task_t; ///< short hand for struct
 
-typedef enum {
-    TASK_STATE_NULL,
-    TASK_STATE_CREATED,
-    TASK_STATE_RUNNING,
-    TASK_STATE_SUSPENDED,
-    TASK_STATE_ENDED,
-} task_state_t;
-
-typedef struct {
-    memory_heap_t*       creator_heap;
-    memory_heap_t*       heap;
-    uint64_t             heap_size;
-    uint64_t             task_id;
-    uint64_t             last_tick_count;
-    task_state_t         state;
-    void*                entry_point;
-    void*                stack;
-    uint64_t             stack_size;
-    linkedlist_t         message_queues;
-    boolean_t            message_waiting;
-    boolean_t            sleeping;
-    uint64_t             wake_tick;
-    memory_page_table_t* page_table;
-    uint64_t             rax;
-    uint64_t             rbx;
-    uint64_t             rcx;
-    uint64_t             rdx;
-    uint64_t             r8;
-    uint64_t             r9;
-    uint64_t             r10;
-    uint64_t             r11;
-    uint64_t             r12;
-    uint64_t             r13;
-    uint64_t             r14;
-    uint64_t             r15;
-    uint64_t             rsi;
-    uint64_t             rdi;
-    uint64_t             rsp;
-    uint64_t             rbp;
-    uint8_t*             fx_registers;
-    uint64_t             rflags;
-} task_t;
-
+/**
+ * @brief inits kernel tasking, configures tss and kernel task
+ * @param[in] heap the heap of kernel task and tasking related variables.
+ */
 int8_t task_init_tasking_ext(memory_heap_t* heap);
+
+/*! inits tasking with default heap*/
 #define task_init_tasking() task_init_tasking_ext(NULL)
 
-void     task_switch_task(boolean_t need_eoi);
-void     task_yield();
-uint64_t task_get_id();
-task_t*  task_get_current_task();
+/**
+ * @brief switches current task to a new one.
+ * @param[in] need_eoi if task switching needs notify local apic this field should be true
+ */
+void task_switch_task(boolean_t need_eoi);
 
+/**
+ * @brief yields task for waiting other tasks.
+ */
+void task_yield();
+
+/**
+ * @brief returns current task's id
+ * @return task id
+ */
+uint64_t task_get_id();
+
+/**
+ * @brief returns current task
+ * @return current task
+ */
+task_t* task_get_current_task();
+
+/**
+ * @brief sets current task's message waiting flag
+ */
 void task_set_message_waiting();
+
+/**
+ * @brief adds a queue to task
+ * @param[in] queue queue which task will have. tasks consumes these queues
+ */
 void task_add_message_queue(linkedlist_t queue);
 
+/**
+ * @brief creates a task and apends it to wait queue
+ * @param[in] heap creator heap
+ * @param[in] heap_size task's heap size, heap allocated with frame allocator
+ * @param[in] stack_size task's stack size, stack allocated with frame allocator
+ * @param[in] entry_point task's entry point
+ * @param[in] args_cnt argument count
+ * @param[in] args argument list
+ */
 int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args);
 
+/**
+ * @brief idle task checks if there is any task neeeds to run. it speeds up task running
+ */
 boolean_t task_idle_check_need_yield();
 
+/**
+ * @brief sleep for current task for ticks
+ * @param[in] wake_tick tick count for sleep
+ */
 void task_current_task_sleep(uint64_t wake_tick);
 
 #endif
