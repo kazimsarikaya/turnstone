@@ -370,7 +370,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
         hba_mem->bios_os_handoff_control_and_status = 2;
         PRINTLOG(AHCI, LOG_TRACE, "hba glovbal host control value 0x%x bohc 0x%x", hba_mem->global_host_control, hba_mem->bios_os_handoff_control_and_status );
 
-        hba_mem->global_host_control = (1 << 31);
+        hba_mem->global_host_control = (1U << 31);
 
         PRINTLOG(AHCI, LOG_TRACE, "hba glovbal host control value 0x%x", hba_mem->global_host_control );
 
