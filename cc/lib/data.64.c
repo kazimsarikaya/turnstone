@@ -40,7 +40,7 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
         buffer_append_bytes(buf, (uint8_t*)&sw, sizeof(uint8_t));
     }
 
-    if(sw & DATA_SERIALIZE_WITH_NAME && data->name) {
+    if((sw & DATA_SERIALIZE_WITH_NAME) && data->name) {
         data_t* tmp_name = data_bson_serialize(data->name, DATA_SERIALIZE_WITH_TYPE | DATA_SERIALIZE_WITH_LENGTH);
 
         buffer_append_bytes(buf, (uint8_t*)tmp_name->value, tmp_name->length);
@@ -53,7 +53,7 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
         buffer_append_bytes(buf, (uint8_t*)&data->type, sizeof(uint8_t));
     }
 
-    if(sw & DATA_SERIALIZE_WITH_LENGTH && data->type >= DATA_TYPE_STRING) {
+    if((sw & DATA_SERIALIZE_WITH_LENGTH) && data->type >= DATA_TYPE_STRING) {
         uint64_t len = data->length;
 
         if(data->type == DATA_TYPE_STRING) {
@@ -242,7 +242,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         res->type = DATA_TYPE_INT8_ARRAY;
     }
 
-    if(sw & DATA_SERIALIZE_WITH_LENGTH && res->type >= DATA_TYPE_STRING) {
+    if((sw & DATA_SERIALIZE_WITH_LENGTH) && res->type >= DATA_TYPE_STRING) {
         if(total_len < 1) {
             goto catch_error;
         }

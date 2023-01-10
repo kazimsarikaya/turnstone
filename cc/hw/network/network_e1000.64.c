@@ -338,7 +338,7 @@ int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
     }
 
     // RX underrun / min threshold
-    if( icr & (1 << 6) || icr & (1 << 4) ) {
+    if( (icr & (1 << 6)) || (icr & (1 << 4)) ) {
         icr &= ~((1 << 6) | (1 << 4));
         PRINTLOG(E1000, LOG_WARNING, "underrun (rx_head = 0x%x, rx_tail = 0x%x)\n", dev->mmio->rdh, dev->rx_tail);
 
