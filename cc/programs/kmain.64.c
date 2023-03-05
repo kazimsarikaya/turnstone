@@ -31,8 +31,6 @@
 #include <network.h>
 
 int8_t kmain64(size_t entry_point);
-int8_t kmain64_init();
-void   move_kernel(size_t src, size_t dst);
 
 __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     cpu_cli();

@@ -9,12 +9,6 @@
 #include <video.h>
 
 /**
- * @brief check cpuid is supported by cpu.
- * @return 0 if cpuid supported.
- */
-uint8_t cpu_check_cpuid();
-
-/**
  * @brief performs cpuid query.
  * @param[in] query registers.
  * @param[out] answer registers.

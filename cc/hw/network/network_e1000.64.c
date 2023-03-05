@@ -27,7 +27,6 @@ uint16_t network_e1000_phy_read(network_e1000_dev_t* dev, int regaddr);
 void     network_e1000_rx_enable(network_e1000_dev_t* dev);
 int8_t   network_e1000_rx_init(network_e1000_dev_t* dev);
 int8_t   network_e1000_tx_init(network_e1000_dev_t* dev);
-void     network_e1000_tx_poll(network_e1000_dev_t* dev, void* pkt, uint16_t length);
 void     network_e1000_rx_poll(network_e1000_dev_t* netdev);
 int8_t   network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t   network_e1000_process_tx();

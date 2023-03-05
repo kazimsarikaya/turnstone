@@ -22,8 +22,6 @@ uint16_t cursor_graphics_y = 0; ///< cursor porsition for row
 extern video_psf2_font_t font_data_start;
 extern video_psf2_font_t font_data_end;
 
-void put_char(char_t c, int32_t cx, int32_t cy, uint32_t fg, uint32_t bg);
-
 /**
  * @brief scrolls video up for one line
  */

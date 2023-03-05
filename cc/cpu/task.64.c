@@ -29,8 +29,6 @@ extern int8_t kmain64();
 
 int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
 
-extern uint64_t __stack_top;
-
 task_t* task_get_current_task(){
     return current_task;
 }
