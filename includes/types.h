@@ -15,34 +15,34 @@
 #define NULL 0
 
 /*! char type */
-#define char_t char
+typedef char char_t;
 /*! signed byte type */
-#define int8_t char
+typedef char int8_t;
 /*! unsigned char type */
-#define uchar_t unsigned char
+typedef unsigned char uchar_t;
 /*! unsigned byte type */
-#define uint8_t unsigned char
+typedef unsigned char uint8_t;
 /*! boolean type */
 #define true        1
 #define false       0
 typedef _Bool boolean_t;
 /*! signed word (two bytes) type */
-#define int16_t short
+typedef short int16_t;
 /*! wide char (two bytes) type */
-#define wchar_t unsigned short
+typedef unsigned short wchar_t;
 /*! unsigned word (two bytes) type */
-#define uint16_t unsigned short
+typedef unsigned short uint16_t;
 /*! signed double word (four bytes) type */
-#define int32_t int
+typedef int int32_t;
 /*! unsigned double word (four bytes) type */
-#define uint32_t unsigned int
+typedef unsigned int uint32_t;
 /*! long char (four bytes) type */
-#define lchar_t unsigned int
+typedef unsigned int lchar_t;
 
 /*! signed quad word (eight bytes) type */
-#define int64_t long long
+typedef long long int64_t;
 /*! unsigned quad word (eight bytes) type */
-#define uint64_t unsigned long long
+typedef unsigned long long uint64_t;
 
 /**
  * @brief gets byte at offset from quad word
@@ -53,21 +53,21 @@ typedef _Bool boolean_t;
 #define EXT_INT64_GET_BYTE(i, bo) (i >> (bo * 4) & 0xFF)
 
 /*! cpu registery type at long mode */
-#define reg_t uint64_t
+typedef uint64_t reg_t;
 /*! cpu extended registery type at long mode*/
-#define regext_t uint64_t
+typedef uint64_t regext_t;
 /*! size of objects type at long mode */
-#define size_t uint64_t
+typedef uint64_t size_t;
 /*! alias for signed quad word at long mode */
 #define number_t int64_t
 /*! alias for signed quad word at long mode */
 #define unumber_t uint64_t
 /*! alias for 32-bit precision floating point */
-#define float32_t float
+typedef float float32_t;
 /*! alias for 64-bit precision floating point */
-#define float64_t double
+typedef double float64_t;
 /*! alias for 64-bit precision floating point */
-#define float128_t long double
+typedef long double float128_t;
 
 /* 128 bit types */
 /*! alias for 128-bit signed integer */
