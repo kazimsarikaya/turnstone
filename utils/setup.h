@@ -27,34 +27,6 @@ uint64_t mmap_size = RAMSIZE;
 
 int printf(const char* format, ...);
 
-void* SYSTEM_INFO = NULL;
-void* KERNEL_FRAME_ALLOCATOR = NULL;
-
-size_t video_printf(char_t* fmt, va_list args) {
-    return printf(fmt, args);
-}
-
-void task_switch_task(){
-}
-
-void cpu_sti(){
-
-}
-
-void  apic_eoi(){
-}
-
-void task_current_task_sleep(uint64_t when_tick) {
-    UNUSED(when_tick);
-}
-
-time_t rtc_get_time(){
-    return time(NULL);
-}
-
-uint8_t mem_area[RAMSIZE] = {0};
-uint64_t __kheap_bottom = 0;
-
 void print_success(const char* msg){
     printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
 }
@@ -142,11 +114,41 @@ void __attribute__((destructor)) stop_ram() {
     remove_ram2();
 }
 
+#ifdef ___TESTMODE
+
+uint8_t mem_area[RAMSIZE] = {0};
+uint64_t __kheap_bottom = 0;
+
 void dump_ram(char_t* fname){
     FILE* fp = fopen( fname, "w" );
     fwrite(mem_area, 1, RAMSIZE, fp );
 
     fclose(fp);
+}
+
+void* SYSTEM_INFO;
+void* KERNEL_FRAME_ALLOCATOR = NULL;
+
+size_t video_printf(char_t* fmt, va_list args) {
+    return printf(fmt, args);
+}
+
+void task_switch_task(){
+}
+
+void cpu_sti(){
+
+}
+
+void  apic_eoi(){
+}
+
+void task_current_task_sleep(uint64_t when_tick) {
+    UNUSED(when_tick);
+}
+
+time_t rtc_get_time(){
+    return time(NULL);
 }
 
 void* task_get_current_task(){
@@ -171,5 +173,7 @@ void lock_acquire(void* lock){
 void lock_release(void* lock){
     UNUSED(lock);
 }
+
+#endif
 
 #endif

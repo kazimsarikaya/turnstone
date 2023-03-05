@@ -8,6 +8,8 @@
 #include <crc.h>
 #include <random.h>
 
+#ifdef ___EFIBUILD
+
 typedef void* task_t;
 typedef void* lock_t;
 
@@ -15,9 +17,11 @@ size_t __kheap_bottom;
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 
-task_t* task_get_current_task(){
+void* task_get_current_task(){
     return NULL;
 }
 
 void task_yield() {
 }
+
+#endif

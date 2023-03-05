@@ -36,11 +36,6 @@ size_t video_printf(char_t* fmt, ...) {
     return res;
 }
 
-uint8_t mem_area[RAMSIZE] = {0};
-uint64_t __kheap_bottom = 0;
-void* SYSTEM_INFO = NULL;
-void* KERNEL_FRAME_ALLOCATOR = NULL;
-
 void print_success(const char* msg){
     printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
 }
@@ -53,20 +48,8 @@ void cpu_hlt(){
 }
 
 #define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
-        if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
-        else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
-
-typedef void   frame_t;
-typedef int8_t memory_paging_page_type_t;
-typedef void   memory_page_table_t;
-
-int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type){
-    UNUSED(p4);
-    UNUSED(va_start);
-    UNUSED(frm);
-    UNUSED(type);
-    return 0;
-}
+            if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
+            else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
 
 memory_heap_t* heap = NULL;
 
@@ -147,6 +130,29 @@ void __attribute__((destructor)) stop_ram() {
     remove_ram2();
 }
 
+
+#ifdef ___TESTMODE
+
+uint8_t mem_area[RAMSIZE] = {0};
+uint64_t __kheap_bottom = 0;
+
+void* SYSTEM_INFO;
+
+void* KERNEL_FRAME_ALLOCATOR = NULL;
+
+typedef void   * frame_t;
+typedef int8_t memory_paging_page_type_t;
+typedef void   * memory_page_table_t;
+
+
+int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type){
+    UNUSED(p4);
+    UNUSED(va_start);
+    UNUSED(frm);
+    UNUSED(type);
+    return 0;
+}
+
 void dump_ram(char_t* fname){
     FILE* fp = fopen( fname, "w" );
     fwrite(mem_area, 1, RAMSIZE, fp );
@@ -181,5 +187,7 @@ void lock_acquire(void* lock){
 void lock_release(void* lock){
     UNUSED(lock);
 }
+
+#endif
 
 #endif
