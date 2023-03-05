@@ -6,3 +6,6 @@ cc-gen
 includes-gen
 scripts/osx-hacks/edk2-i386-vars.fd
 scripts/osx-hacks/edk2-x86_64-code.fd
+.cproject
+.project
+.settings
