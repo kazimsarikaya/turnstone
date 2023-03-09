@@ -16,7 +16,7 @@
 
 frame_allocator_t* KERNEL_FRAME_ALLOCATOR = NULL;
 
-typedef struct {
+typedef struct frame_allocator_context_t {
     memory_heap_t* heap;
     linkedlist_t   free_frames_sorted_by_size;
     index_t*       free_frames_by_address;

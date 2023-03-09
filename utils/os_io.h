@@ -6,6 +6,8 @@
 #ifndef ___OS_IO_H
 #define ___OS_IO_H 0
 
+#include <types.h>
+
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2

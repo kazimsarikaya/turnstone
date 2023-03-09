@@ -16,7 +16,7 @@
 #include <time.h>
 
 
-typedef struct {
+typedef struct disk_file_context_t {
     FILE*    fp_disk;
     uint64_t file_size;
     uint64_t block_size;

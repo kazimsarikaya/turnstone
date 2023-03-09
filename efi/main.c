@@ -21,7 +21,7 @@ efi_runtime_services_t* RS;
 typedef int8_t (*kernel_start_t)(system_info_t* sysinfo) __attribute__((sysv_abi));
 
 
-typedef struct {
+typedef struct efi_kernel_data_t {
     uint8_t* data;
     uint64_t size;
 } efi_kernel_data_t;
