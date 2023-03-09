@@ -9,3 +9,5 @@ scripts/osx-hacks/edk2-x86_64-code.fd
 .cproject
 .project
 .settings
+compile_commands.json
+.ccls*

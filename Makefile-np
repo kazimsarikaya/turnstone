@@ -51,10 +51,13 @@ TMPDIR = tmp
 CCGENSCRIPTS = $(shell find $(CCGENSCRIPTSDIR) -type f -name \*.sh)
 GENCCSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%.c,$(CCGENSCRIPTS))
 GENCC64OBJS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
+GENCC64ASMOUTS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.s,$(CCGENSCRIPTS))
 
 .NOTPARALLEL:
 
 all: $(GENCC64OBJS)
+
+asm: $(GENCC64ASMOUTS)
 
 clean:
 	rm -fr $(CCGENDIR)/*
@@ -68,5 +71,11 @@ $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
 
 $(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
 	$(CC64) $(CC64INTFLAGS) -o $@ $<
+	
+$(CCOBJDIR)/%.cc-gen.x86_64.s: $(CCGENDIR)/%.c
+	$(CC64) $(CC64FLAGS) -S -o $@ $<
+
+$(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.s: $(CCGENDIR)/interrupt_handlers.c
+	$(CC64) $(CC64INTFLAGS) -S -o $@ $<
 
 print-%: ; @echo $* = $($*)

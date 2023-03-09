@@ -29,7 +29,7 @@ INCLUDESDIR = includes
 CCXXFLAGS += -std=gnu11 -O2 -nostdlib -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
-	-fno-pic ${CCXXEXTRAFLAGS}
+	-fno-pic -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
@@ -74,6 +74,10 @@ CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
 CC64GENOBJS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
 
+CC64ASMOUTS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.s,$(CC64SRCS))
+CC64ASMOUTS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.s,$(CCXXSRCS))
+CC64GENASMOUTS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.s,$(CCGENSCRIPTS))
+
 CC64TESTOBJS = $(patsubst $(CCSRCDIR)/%.64.test.c,$(CCOBJDIR)/%.64.test.o,$(CC64TESTSRCS))
 CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(CCXXTESTSRCS))
 
@@ -83,7 +87,7 @@ DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus20x10.psf
 FONTOBJ = $(OBJDIR)/font.o
 
-OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ)
+OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ) $(CC64ASMOUTS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
 MKDIRSDONE = .mkdirsdone
@@ -95,20 +99,20 @@ PROGS = $(OBJDIR)/stage3.bin.pack
 
 TESTPROGS = $(OBJDIR)/stage3.test.bin
 
-.PHONY: all clean depend $(SUBDIRS) $(CC64GENOBJS)
+.PHONY: all clean depend $(SUBDIRS) $(CC64GENOBJS) asm bear
 .PRECIOUS:
 
 qemu-without-analyzer:
-	CCXXEXTRAFLAGS= make -j $(nproc) -C utils 
-	CCXXEXTRAFLAGS= make -j $(nproc) -C efi 
+	CCXXEXTRAFLAGS= make -j $(shell nproc) -C utils 
+	CCXXEXTRAFLAGS= make -j $(shell nproc) -C efi 
 	CCXXEXTRAFLAGS= make -j 1 -f Makefile-np 
-	CCXXEXTRAFLAGS= make -j $(nproc) -f Makefile qemu-internal
+	CCXXEXTRAFLAGS= make -j $(shell nproc) -f Makefile qemu-internal
 
 qemu: 
-	CCXXEXTRAFLAGS=-fanalyzer make -j $(nproc) -C utils 
-	CCXXEXTRAFLAGS=-fanalyzer make -j $(nproc) -C efi 
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -C utils 
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -C efi 
 	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np 
-	CCXXEXTRAFLAGS=-fanalyzer make -j $(nproc) -f Makefile qemu-internal
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -f Makefile qemu-internal
 
 qemu-internal: $(QEMUDISK)
 
@@ -118,6 +122,15 @@ qemu-pxe: $(PROGS)
 qemu-test: $(TESTQEMUDISK)
 
 virtualbox: $(VBBOXDISK)
+
+asm:
+	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np asm
+	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -f Makefile asm-internal
+
+asm-internal: $(CC64ASMOUTS)
+
+bear:
+	bear -- make clean gendirs qemu
 
 test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
@@ -162,11 +175,17 @@ $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 $(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
 
-$(CCOBJDIR)/%.64.test.o: $(CCSRCDIR)/%.64.test.c
-	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $<
-
 $(CCOBJDIR)/%.xx_64.test.o: $(CCSRCDIR)/%.xx.test.c
 	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $<
+	
+$(CCOBJDIR)/%.64.s: $(CCSRCDIR)/%.64.c
+	$(CC64) $(CC64FLAGS) -S -o $@ $<
+
+$(CCOBJDIR)/%.xx_64.s: $(CCSRCDIR)/%.xx.c
+	$(CC64) $(CC64FLAGS) -S -o $@ $<
+	
+$(CCOBJDIR)/%.64.test.s: $(CCSRCDIR)/%.64.test.c
+	$(CC64) $(CC64FLAGS) -S $(CXXTESTFLAGS) -o $@ $<
 
 $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.S
 	$(CC64) $(CC64FLAGS) -o $@ $^
@@ -176,6 +195,9 @@ $(ASOBJDIR)/%64.test.o: $(ASSRCDIR)/%64.S
 
 $(CCOBJDIR)/cpu/interrupt.64.o: $(CCSRCDIR)/cpu/interrupt.64.c
 	$(CC64) $(CC64INTFLAGS) -o $@ $<
+	
+$(CCOBJDIR)/cpu/interrupt.64.s: $(CCSRCDIR)/cpu/interrupt.64.c
+	$(CC64) $(CC64INTFLAGS) -S -o $@ $<
 
 $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
 	$(CC64) $(CC64INTFLAGS) -o $@ $<
