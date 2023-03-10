@@ -18,17 +18,17 @@
  *
  * double linked list item
  */
-typedef struct linkedlist_item_internal {
+typedef struct linkedlist_item_internal_t {
     void*                            data; ///< the data inside list item
-    struct linkedlist_item_internal* next; ///< next list item
-    struct linkedlist_item_internal* previous; ///< previous list item
+    struct linkedlist_item_internal_t* next; ///< next list item
+    struct linkedlist_item_internal_t* previous; ///< previous list item
 }linkedlist_item_internal_t; ///<short hand for struct
 
 /**
  * @struct linkedlist_internal_t
  * @brief linked list internal interface
  */
-typedef struct {
+typedef struct linkedlist_internal_t {
     memory_heap_t*               heap; ///< the heap of the list
     linkedlist_type_t            type; ///< list type
     linkedlist_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
@@ -44,7 +44,7 @@ typedef struct {
  * @struct linkedlist_iterator_internal_t
  * @brief iterator struct
  */
-typedef struct {
+typedef struct linkedlist_iterator_internal_t {
     linkedlist_internal_t*      list; ///< owner list
     linkedlist_item_internal_t* current; ///< current item at the iterator
     uint8_t                     current_deleted; ///< if current item is deleted it is to be 1.
