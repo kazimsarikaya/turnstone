@@ -10,8 +10,8 @@
 
 #include <types.h>
 
-typedef struct stackframe_s {
-    struct stackframe_s* previous;
+typedef struct stackframe_t {
+    struct stackframe_t* previous;
     uint64_t             rip;
 } stackframe_t;
 

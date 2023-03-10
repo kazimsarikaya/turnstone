@@ -10,7 +10,7 @@
 #include <memory.h>
 #include <random.h>
 
-typedef struct gpt_parts_iter_metadata_s {
+typedef struct gpt_parts_iter_metadata_t {
     gpt_disk_t* disk;
     uint8_t     current_part_no;
 } gpt_parts_iter_metadata_t;

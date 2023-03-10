@@ -56,13 +56,13 @@
 
 #define APIC_IOAPIC_MAX_REDIRECTION_ENTRY(r)  (((r >> 16) & 0xFF) + 1)
 
-typedef struct {
+typedef struct apic_ioapic_register_t {
     uint32_t selector;
     uint32_t reserved0[3];
     uint32_t value;
 }__attribute__((packed)) apic_ioapic_register_t;
 
-typedef struct {
+typedef struct apic_register_spurious_interrupt_t {
     uint8_t  vector                  : 8;
     uint8_t  apic_software_enable    : 1;
     uint8_t  focus_cpu_core_checking : 1;

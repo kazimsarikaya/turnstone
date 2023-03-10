@@ -6,7 +6,7 @@
 #include <setup.h>
 
 
-typedef struct {
+typedef struct efi_disk_impl_context_t {
     efi_block_io_t* bio;
     uint64_t        disk_size;
     uint64_t        block_size;

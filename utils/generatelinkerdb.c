@@ -12,7 +12,7 @@
 
 #define DATABASE_FIRST_CLUSTER_MAGIC 0xF3E35CFB028D8B18ULL
 
-typedef struct cluster_header_s {
+typedef struct cluster_header_t {
     uint8_t  checksum[SHA256_OUTPUT_SIZE];
     uint64_t version;
     uint64_t old_version_address;
@@ -20,12 +20,12 @@ typedef struct cluster_header_s {
     uint64_t data_size;
 } __attribute__((packed)) cluster_header_t;
 
-typedef struct cluster_generic_s {
+typedef struct cluster_generic_t {
     cluster_header_t header;
     uint8_t          data[DATABASE_CLUSTER_SIZE - sizeof(cluster_header_t)];
 } __attribute__((packed)) cluster_generic_t;
 
-typedef struct cluster_first_s {
+typedef struct cluster_first_t {
     cluster_header_t header;
     uint64_t         magic;
     uint64_t         cluster_count;
@@ -34,13 +34,13 @@ typedef struct cluster_first_s {
     uint64_t         database_entries_address;
 } __attribute__((packed)) cluster_first_t;
 
-typedef struct database_strings_entry_s {
+typedef struct database_strings_entry_t {
     uint64_t id;
     uint64_t length;
     char_t   string[];
 } __attribute__((packed)) database_strings_entry_t;
 
-typedef struct database_entry_s {
+typedef struct database_entry_t {
     uint64_t id;
     uint64_t name;
     uint64_t owner_id;
@@ -49,7 +49,7 @@ typedef struct database_entry_s {
     uint64_t strings_index_address;
 }__attribute__((packed)) database_entry_t;
 
-typedef struct database_entries_s {
+typedef struct database_entries_t {
     cluster_header_t header;
     database_entry_t entries[];
 }__attribute__((packed)) database_entries_t;

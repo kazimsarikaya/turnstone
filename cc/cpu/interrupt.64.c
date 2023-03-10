@@ -20,9 +20,9 @@ void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
 
-typedef struct interrupt_irq_list_item {
-    interrupt_irq                   irq;
-    struct interrupt_irq_list_item* next;
+typedef struct interrupt_irq_list_item_t {
+    interrupt_irq                     irq;
+    struct interrupt_irq_list_item_t* next;
 } interrupt_irq_list_item_t;
 
 interrupt_irq_list_item_t** interrupt_irqs = NULL;

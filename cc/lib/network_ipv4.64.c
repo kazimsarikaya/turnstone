@@ -18,19 +18,19 @@
 
 map_t network_ipv4_packet_fragments = NULL;
 
-typedef struct {
+typedef struct network_ipv4_fragment_t {
     uint32_t offset;
     uint16_t data_len;
     uint8_t* data;
 } network_ipv4_fragment_t;
 
-typedef struct {
+typedef struct network_ipv4_fragment_item_t {
     uint32_t     total_length;
     linkedlist_t fragments;
 } network_ipv4_fragment_item_t;
 
-typedef union {
-    struct {
+typedef union network_ipv4_fragment_key_t {
+    struct fields_t {
         network_ipv4_address_t ip;
         uint16_t               identification;
         uint8_t                protocol;

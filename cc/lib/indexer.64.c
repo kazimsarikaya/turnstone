@@ -10,14 +10,14 @@
 #include <iterator.h>
 #include <strings.h>
 
-typedef struct {
+typedef struct indexer_idx_kc_internal_t {
     uint64_t              idx_id;
     index_t*              idx;
     indexer_key_creator_f key_creator;
     void*                 keyarg;
 }indexer_idx_kc_internal_t;
 
-typedef struct {
+typedef struct indexer_internal_t {
     memory_heap_t* heap;
     linkedlist_t   indexes;
 } indexer_internal_t;

@@ -13,7 +13,7 @@
 #include <xxhash.h>
 #include <cpu/sync.h>
 
-typedef struct map_internal_s {
+typedef struct map_internal_t {
     memory_heap_t*      heap;
     lock_t              lock;
     map_key_extractor_f mke;

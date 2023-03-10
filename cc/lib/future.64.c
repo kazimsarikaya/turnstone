@@ -4,7 +4,7 @@
  */
 
 #include <future.h>
-typedef struct {
+typedef struct future_internal_t {
     memory_heap_t* heap;
     lock_t         lock;
     void*          data;

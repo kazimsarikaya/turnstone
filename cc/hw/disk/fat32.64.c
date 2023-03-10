@@ -36,7 +36,7 @@ fat32_dirent_shortname_t* fat32_gen_dirents(path_t* p, fs_stat_type_t type, time
 uint32_t fat32_get_empty_cluster(filesystem_t* fs);
 int8_t   fat32_directory_write(directory_t* self, time_t mt);
 
-typedef struct {
+typedef struct fat32_fs_file_context_t {
     filesystem_t* fs;
     uint32_t      clusterno;
     path_t*       file_path;
@@ -49,7 +49,7 @@ typedef struct {
     int64_t       size;
 } fat32_fs_file_context_t;
 
-typedef struct {
+typedef struct fat32_fs_directory_context_t {
     filesystem_t*             fs;
     uint32_t                  clusterno;
     path_t*                   directory_path;
@@ -61,7 +61,7 @@ typedef struct {
 } fat32_fs_directory_context_t;
 
 
-typedef struct {
+typedef struct fat32_fs_context_t {
     disk_t*         disk;
     uint8_t         partno;
     uint64_t        fat_part_start_lba;
@@ -71,7 +71,7 @@ typedef struct {
     uint32_t*       table;
 } fat32_fs_context_t;
 
-typedef struct {
+typedef struct fat32_dir_list_iter_extradata_t {
     uint32_t clusterno;
     int64_t  size;
     time_t   ct;
@@ -80,7 +80,7 @@ typedef struct {
     uint32_t dirent_idx;
 }fat32_dir_list_iter_extradata_t;
 
-typedef struct {
+typedef struct fat32_dir_list_iter_metadata_t {
     directory_t*                    dir;
     uint32_t                        current_idx;
     fat32_dir_list_iter_extradata_t extra_data;

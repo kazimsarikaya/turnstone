@@ -38,19 +38,32 @@
 extern size_t __kheap_bottom;
 
 /**
- * @struct __heapmetainfo
+ * @struct heapinfo_t
  * @brief heap info struct
  */
-typedef struct __heapmetainfo {
+typedef struct heapinfo_t {
     uint16_t           magic; ///< magic value of heap for protection
     uint16_t           flags; ///< flags of hi
-    struct __heapinfo* first; ///< next hi node
-    struct __heapinfo* last; ///< previous hi node
-    struct __heapinfo* first_empty; ///< next hi node
-    struct __heapinfo* last_full; ///< previous hi node
-    struct {
-        struct __heapinfo* head;
-        struct __heapinfo* tail;
+    uint64_t           size; ///< size of slot
+    struct heapinfo_t* next; ///< next hi node
+    struct heapinfo_t* previous; ///< previous hi node
+    uint32_t           padding; ///< for 8 byte align for protection
+}__attribute__ ((packed)) heapinfo_t; ///< short hand for struct
+
+/**
+ * @struct heapmetainfo_t
+ * @brief heap info struct
+ */
+typedef struct heapmetainfo_t {
+    uint16_t    magic;        ///< magic value of heap for protection
+    uint16_t    flags;        ///< flags of hi
+    heapinfo_t* first; ///< next hi node
+    heapinfo_t* last; ///< previous hi node
+    heapinfo_t* first_empty; ///< next hi node
+    heapinfo_t* last_full; ///< previous hi node
+    struct fast_classes_t {
+        heapinfo_t* head;
+        heapinfo_t* tail;
     } __attribute__ ((packed)) fast_classes[128];
     uint64_t malloc_count;
     uint64_t free_count;
@@ -59,19 +72,6 @@ typedef struct __heapmetainfo {
     uint64_t fast_hit;
     uint32_t padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
-
-/**
- * @struct __heapinfo
- * @brief heap info struct
- */
-typedef struct __heapinfo {
-    uint16_t           magic; ///< magic value of heap for protection
-    uint16_t           flags; ///< flags of hi
-    uint64_t           size; ///< size of slot
-    struct __heapinfo* next; ///< next hi node
-    struct __heapinfo* previous; ///< previous hi node
-    uint32_t           padding; ///< for 8 byte align for protection
-}__attribute__ ((packed)) heapinfo_t; ///< short hand for struct
 
 /**
  * @brief simple heap malloc implementation

@@ -10,7 +10,7 @@
 #include <cpu/sync.h>
 
 
-typedef struct buffer_internal_s {
+typedef struct buffer_internal_t {
     memory_heap_t* heap;
     lock_t         lock;
     uint64_t       capacity;

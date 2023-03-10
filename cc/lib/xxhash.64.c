@@ -15,7 +15,7 @@
 
 #define XXHASH64_MAXBUFFERSIZE  32
 
-typedef struct {
+typedef struct xxhash64_internal_context_t {
     uint64_t state[4];
     uint8_t  buffer[XXHASH64_MAXBUFFERSIZE];
     uint64_t buffer_size;
@@ -179,7 +179,7 @@ int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t lengt
 
 #define XXHASH32_MAXBUFFERSIZE  16
 
-typedef struct {
+typedef struct xxhash32_internal_context_t {
     uint32_t state[4];
     uint8_t  buffer[XXHASH32_MAXBUFFERSIZE];
     uint64_t buffer_size;

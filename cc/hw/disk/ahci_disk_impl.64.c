@@ -7,7 +7,7 @@
 #include <utils.h>
 #include <linkedlist.h>
 
-typedef struct {
+typedef struct ahci_disk_impl_context_t {
     ahci_sata_disk_t* sata_disk;
     uint64_t          block_size;
 } ahci_disk_impl_context_t;

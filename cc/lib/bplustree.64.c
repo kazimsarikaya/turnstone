@@ -12,7 +12,7 @@
 #include <utils.h>
 
 /**
- * @struct bplustree_node_internal
+ * @struct bplustree_node_internal_t
  * @brief internal tree node
  *
  * keys are sorted list.
@@ -20,20 +20,20 @@
  *
  * TODO: make datas and childs as union an insert node type enum
  */
-typedef struct bplustree_node_internal {
-    linkedlist_t*                   keys; ///< keys at node (it is a sorted list)
-    struct bplustree_node_internal* next; ///< next node at tree same tree depth
-    struct bplustree_node_internal* previous; ///< previous node at tree same tree depth
-    struct bplustree_node_internal* parent; ///< parent node
-    linkedlist_t*                   datas; ///< data values if it is leaf node
-    linkedlist_t*                   childs; ///< child nodes if it is internal node
+typedef struct bplustree_node_internal_t {
+    linkedlist_t*                     keys; ///< keys at node (it is a sorted list)
+    struct bplustree_node_internal_t* next; ///< next node at tree same tree depth
+    struct bplustree_node_internal_t* previous; ///< previous node at tree same tree depth
+    struct bplustree_node_internal_t* parent; ///< parent node
+    linkedlist_t*                     datas; ///< data values if it is leaf node
+    linkedlist_t*                     childs; ///< child nodes if it is internal node
 }bplustree_node_internal_t; ///< short hand for struct
 
 /**
  * @struct bplustree_internal_t
  * @brief internal tree struct. used as metadata of index.
  */
-typedef struct {
+typedef struct bplustree_internal_t {
     bplustree_node_internal_t* root; ///< root node
     uint64_t                   max_key_count; ///< maximum key count for each node
     boolean_t                  unique; ///< if key present replace data
@@ -43,7 +43,7 @@ typedef struct {
  * @struct bplustree_iterator_internal_t
  * @brief internal iterator struct
  */
-typedef struct {
+typedef struct bplustree_iterator_internal_t {
     memory_heap_t*              heap; ///< the heap used at iteration
     bplustree_node_internal_t*  current_node; ///< the current leaf node
     size_t                      current_index; ///< index at first leaf node

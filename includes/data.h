@@ -12,7 +12,7 @@
 #include <types.h>
 
 
-typedef enum {
+typedef enum data_type_t {
     DATA_TYPE_NULL=0,
     DATA_TYPE_BOOLEAN,
     DATA_TYPE_CHAR,
@@ -33,14 +33,14 @@ typedef enum {
     DATA_TYPE_NR,
 } data_type_t;
 
-typedef struct data_s {
+typedef struct data_t {
     data_type_t    type;
     uint64_t       length;
-    struct data_s* name;
+    struct data_t* name;
     void*          value;
 }data_t;
 
-typedef enum {
+typedef enum data_serialize_with_t {
     DATA_SERIALIZE_WITH_NONE=0,
     DATA_SERIALIZE_WITH_TYPE=1,
     DATA_SERIALIZE_WITH_LENGTH=2,

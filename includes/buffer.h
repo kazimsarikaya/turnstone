@@ -14,7 +14,7 @@
 
 typedef void * buffer_t;
 
-typedef enum {
+typedef enum buffer_seek_direction_t {
     BUFFER_SEEK_DIRECTION_START,
     BUFFER_SEEK_DIRECTION_CURRENT,
     BUFFER_SEEK_DIRECTION_END,

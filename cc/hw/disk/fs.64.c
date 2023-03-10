@@ -8,7 +8,7 @@
 #include <strings.h>
 
 
-typedef struct {
+typedef struct fs_path_ctx_t {
     char_t*       path_string;
     char_t**      parts;
     int64_t       part_count;
@@ -18,7 +18,7 @@ typedef struct {
     filesystem_t* fs;
 } fs_path_ctx_t;
 
-typedef struct {
+typedef struct fs_empty_path_interface_ctx_t {
     filesystem_t*  fs;
     path_t*        path;
     fs_stat_type_t type;

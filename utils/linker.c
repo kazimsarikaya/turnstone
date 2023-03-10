@@ -13,7 +13,7 @@
 #include <crc.h>
 #include <efi.h>
 
-typedef enum {
+typedef enum linker_symbol_type_t {
     LINKER_SYMBOL_TYPE_UNDEF,
     LINKER_SYMBOL_TYPE_OBJECT,
     LINKER_SYMBOL_TYPE_FUNCTION,
@@ -21,12 +21,12 @@ typedef enum {
     LINKER_SYMBOL_TYPE_SYMBOL,
 }linker_symbol_type_t;
 
-typedef enum {
+typedef enum linker_symbol_scope_t {
     LINKER_SYMBOL_SCOPE_LOCAL,
     LINKER_SYMBOL_SCOPE_GLOBAL,
 } linker_symbol_scope_t;
 
-typedef struct {
+typedef struct linker_section_t {
     uint64_t              id;
     linker_section_type_t type;
     char_t*               file_name;
@@ -40,7 +40,7 @@ typedef struct {
     uint8_t               required;
 } linker_section_t;
 
-typedef struct {
+typedef struct linker_symbol_t {
     uint64_t              id;
     linker_symbol_type_t  type;
     linker_symbol_scope_t scope;
@@ -51,14 +51,14 @@ typedef struct {
     uint8_t               required;
 } linker_symbol_t;
 
-typedef struct {
+typedef struct linker_relocation_t {
     linker_relocation_type_t type;
     uint64_t                 symbol_id;
     uint64_t                 offset;
     int64_t                  addend;
 } linker_relocation_t;
 
-typedef struct {
+typedef struct linker_objectfile_ctx_t {
     char_t*  file_name;
     FILE*    file;
     uint8_t  type;
@@ -71,7 +71,7 @@ typedef struct {
     uint64_t section_count;
 } linker_objectfile_ctx_t;
 
-typedef struct {
+typedef struct linker_context_t {
     memory_heap_t*              heap;
     uint8_t                     class;
     char_t*                     entry_point;
@@ -96,7 +96,7 @@ typedef struct {
     boolean_t                   for_efi;
 } linker_context_t;
 
-typedef struct {
+typedef struct linker_efi_reloc_block_t {
     uint32_t     start_rva;
     linkedlist_t relocs;
 } linker_efi_reloc_block_t;

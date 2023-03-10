@@ -16,7 +16,7 @@
 #define SIG1(x) (ROTRIGHT32(x, 17) ^ ROTRIGHT32(x, 19) ^ ((x) >> 10))
 
 
-typedef struct {
+typedef struct sha256_internal_ctx_t {
     uint8_t  data[SHA256_BLOCK_SIZE];
     uint32_t datalen;
     uint64_t bitlen;

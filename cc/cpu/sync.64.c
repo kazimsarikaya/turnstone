@@ -7,7 +7,7 @@
 #include <cpu/task.h>
 #include <video.h>
 
-typedef struct {
+typedef struct lock_internal_t {
     memory_heap_t* heap;
     uint64_t       lock_value;
     uint64_t       owner_task_id;
@@ -74,7 +74,7 @@ void lock_release(lock_t lock) {
     }
 }
 
-typedef struct {
+typedef struct semaphore_internal_t {
     memory_heap_t* heap;
     lock_t         lock;
     uint64_t       initial_count;
