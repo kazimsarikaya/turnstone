@@ -19,7 +19,7 @@
  * double linked list item
  */
 typedef struct linkedlist_item_internal_t {
-    void*                            data; ///< the data inside list item
+    void*                              data; ///< the data inside list item
     struct linkedlist_item_internal_t* next; ///< next list item
     struct linkedlist_item_internal_t* previous; ///< previous list item
 }linkedlist_item_internal_t; ///<short hand for struct
