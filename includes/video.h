@@ -18,10 +18,10 @@
 #define VIDEO_PSF1_FONT_MAGIC 0x0436
 
 /**
- * @struct video_psf2_font_s
+ * @struct video_psf2_font_t
  * @brief psf v2 font header
  */
-typedef struct video_psf2_font_s {
+typedef struct video_psf2_font_t {
     uint32_t magic; ///< magic bytes to identify PSF
     uint32_t version; ///< zero
     uint32_t header_size; ///< offset of bitmaps in file, 32
@@ -33,20 +33,20 @@ typedef struct video_psf2_font_s {
 } video_psf2_font_t; ///< short hand for struct @ref video_psf2_font_s
 
 /**
- * @struct video_psf1_font_s
+ * @struct video_psf1_font_t
  * @brief psf v1 font header
  */
-typedef struct video_psf1_font_s {
+typedef struct video_psf1_font_t {
     uint16_t magic; ///< magic bytes to identify PSF
     uint8_t  mode; ///< mode
     uint8_t  bytes_per_glyph; ///< size of each glyph
 }video_psf1_font_t; ///< short hand for struct @ref video_psf1_font_s
 
 /**
- * @struct video_frame_buffer_s
+ * @struct video_frame_buffer_t
  * @brief video frame buffer information
  */
-typedef struct video_frame_buffer_s {
+typedef struct video_frame_buffer_t {
     uint64_t physical_base_address; ///< frame buffers physical base address
     uint64_t virtual_base_address; ///< frame buffers virtual base address
     uint64_t buffer_size; ///< frame buffer size

@@ -32,7 +32,7 @@
 #define FAT32_CLUSTER_END  0x0FFFFFF8
 #define FAT32_CLUSTER_END2  0x0FFFFFFF
 
-typedef struct {
+typedef struct fat32_bpb_t {
     uint8_t  jump[3]; /* 0xeb 0x58 0x90 */
     char_t   oem_id[8]; /* "hobby.os" */
     uint16_t bytes_per_sector; /* 0x200 */
@@ -68,7 +68,7 @@ typedef struct {
 #define FAT32_FSINFO_SIGNATURE1 0x61417272
 #define FAT32_FSINFO_SIGNATURE2 0xAA550000
 
-typedef struct {
+typedef struct fat32_fsinfo_t {
     uint32_t signature0;
     uint8_t  reserved0[480];
     uint32_t signature1;
@@ -87,19 +87,19 @@ typedef struct {
 #define FAT32_DIRENT_TYPE_LONGNAME    0x0F /* (FAT32_DIRENT_TYPE_READONLY|FAT32_DIRENT_TYPE_HIDDEN|FAT32_DIRENT_TYPE_SYSTEM|FAT32_DIRENT_TYPE_VOLUMEID) */
 #define FAT32_DIRENT_TYPE_UNUSED      0xE5
 
-typedef struct {
+typedef struct fat32_dirent_time {
     uint16_t seconds : 5;
     uint16_t minutes : 6;
     uint16_t hours   : 5;
 }__attribute__((packed)) fat32_dirent_time;
 
-typedef struct {
+typedef struct fat32_dirent_date {
     uint16_t day   : 5;
     uint16_t month : 4;
     uint16_t year  : 7;
 }__attribute__((packed)) fat32_dirent_date;
 
-typedef struct {
+typedef struct fat32_dirent_shortname_t {
     char_t            name[11];
     uint8_t           attributes;
     uint8_t           reserved;
@@ -114,7 +114,7 @@ typedef struct {
     uint32_t          file_size;
 }__attribute__((packed)) fat32_dirent_shortname_t;
 
-typedef struct {
+typedef struct fat32_dirent_longname_t {
     uint8_t  order;
     wchar_t  name_part1[5];
     uint8_t  attributes;

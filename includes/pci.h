@@ -56,7 +56,7 @@
 int8_t   pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc);
 uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc);
 
-typedef struct {
+typedef struct pci_command_register_t {
     uint8_t io_space                           : 1;
     uint8_t memory_space                       : 1;
     uint8_t bus_master                         : 1;
@@ -71,7 +71,7 @@ typedef struct {
     uint8_t reserved1                          : 5;
 } __attribute__((packed)) pci_command_register_t;
 
-typedef struct {
+typedef struct pci_status_register_t {
     uint8_t reserved0                : 3;
     uint8_t interrupt_status         : 1;
     uint8_t capabilities_list        : 1;
@@ -91,12 +91,12 @@ typedef struct {
  * @struct pci_header_type_register_t
  * @brief pci device type data inside pci_common_header_t
  */
-typedef struct {
+typedef struct pci_header_type_register_t {
     uint8_t header_type   : 7; ///< device types: 0x00 generic, 0x01 bridge, 0x02 cardbus
     uint8_t multifunction : 1; ///< if 1 then device is multi-function device and has 8 functions, else only function 0.
 } __attribute__((packed)) pci_header_type_register_t; ///< short hand for struct
 
-typedef struct {
+typedef struct pci_bist_register_t {
     uint8_t completion_code : 4;
     uint8_t reserved0       : 2;
     uint8_t start_bist      : 1;
@@ -104,25 +104,25 @@ typedef struct {
 } __attribute__((packed)) pci_bist_register_t;
 
 
-typedef union {
-    struct {
+typedef union pci_bar_register_t {
+    struct bar_type_t {
         uint32_t type      : 1;
         uint32_t reserved0 : 31;
     } __attribute__((packed)) bar_type;
-    struct {
+    struct memory_space_bar_t {
         uint32_t bar_type     : 1;
         uint32_t type         : 2;
         uint32_t prefetchable : 1;
         uint32_t base_address : 28;
     } __attribute__((packed)) memory_space_bar;
-    struct {
+    struct io_space_bar_t {
         uint32_t bar_type     : 1;
         uint32_t reserved0    : 1;
         uint32_t base_address : 30;
     } __attribute__((packed)) io_space_bar;
 } __attribute__((packed)) pci_bar_register_t;
 
-typedef struct {
+typedef struct pci_common_header_t {
     uint16_t                   vendor_id : 16;
     uint16_t                   device_id : 16;
     pci_command_register_t     command;
@@ -137,7 +137,7 @@ typedef struct {
     pci_bist_register_t        bist;
 } __attribute__((packed)) pci_common_header_t;
 
-typedef struct {
+typedef struct pci_generic_device_t {
     pci_common_header_t common_header;
     pci_bar_register_t  bar0;
     pci_bar_register_t  bar1;
@@ -159,7 +159,7 @@ typedef struct {
 } __attribute__((packed)) pci_generic_device_t;
 
 
-typedef struct {
+typedef struct pci_pci2pci_bridge_t {
     pci_common_header_t   common_header;
     pci_bar_register_t    bar0;
     pci_bar_register_t    bar1;
@@ -187,7 +187,7 @@ typedef struct {
 } __attribute__((packed)) pci_pci2pci_bridge_t;
 
 
-typedef struct {
+typedef struct pci_cardbus_bridge_t {
     pci_common_header_t   common_header;
     uint32_t              cardbus_socket_or_exca_base_address : 32;
     uint8_t               capabilities_pointer                : 8;
@@ -217,7 +217,7 @@ typedef struct {
  * @struct pci_dev_t
  * @brief the pci device info returned by the iterator
  */
-typedef struct {
+typedef struct pci_dev_t {
     uint16_t             group_number; ///< device's bus group number.
     uint8_t              bus_number; ///< bus number of the device
     uint8_t              device_number; ///< device number
@@ -235,12 +235,12 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
 /*! creates pci iterator at default heap */
 #define pci_iterator_create(mcfg) pci_iterator_create_with_heap(NULL, mcfg)
 
-typedef struct {
+typedef struct pci_capability_t {
     uint8_t capability_id : 8;
     uint8_t next_pointer  : 8;
 } __attribute__((packed)) pci_capability_t;
 
-typedef struct {
+typedef struct pci_capability_msi_t {
     pci_capability_t cap;
     uint8_t          enable                  : 1;
     uint8_t          multiple_message_count  : 3;
@@ -249,14 +249,14 @@ typedef struct {
     uint8_t          per_vector_masking      : 1;
     uint8_t          reserved0               : 7;
     union {
-        struct {
+        struct ma32_t {
             uint32_t message_address;
             uint16_t message_data;
             uint16_t reserved0;
             uint32_t mask;
             uint32_t pending;
         } ma32;
-        struct {
+        struct ma64_t {
             uint64_t message_address;
             uint16_t message_data;
             uint16_t reserved0;
@@ -266,7 +266,7 @@ typedef struct {
     };
 } __attribute__((packed)) pci_capability_msi_t;
 
-typedef struct {
+typedef struct pci_capability_msix_t {
     pci_capability_t cap;
     uint16_t         table_size         : 11;
     uint16_t         reserved           : 3;
@@ -278,17 +278,17 @@ typedef struct {
     uint32_t         pending_bit_offset : 29;
 }__attribute__((packed)) pci_capability_msix_t;
 
-typedef struct {
+typedef struct pci_capability_msix_table_entry_t {
     uint64_t message_address;
     uint32_t message_data;
     uint32_t masked;
 }__attribute__((packed)) pci_capability_msix_table_entry_t;
 
-typedef struct {
+typedef struct pci_capability_msix_table_t {
     pci_capability_msix_table_entry_t entries[0];
 }__attribute__((packed)) pci_capability_msix_table_t;
 
-typedef struct {
+typedef struct pci_context_t {
     linkedlist_t storage_controllers;
     linkedlist_t network_controllers;
     linkedlist_t other_devices;

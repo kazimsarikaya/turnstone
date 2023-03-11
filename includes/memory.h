@@ -15,10 +15,10 @@
 typedef void * lock_t;
 
 /**
- * @struct memory_heap_stat_s
+ * @struct memory_heap_stat_t
  * @brief heap statistics, both monitoring and leak analysis.
  */
-typedef struct memory_heap_stat_s {
+typedef struct memory_heap_stat_t {
     uint64_t malloc_count; ///< malloc count at heap
     uint64_t free_count; ///< free count at heap
     uint64_t total_size; ///< heap total size with bounds
@@ -27,15 +27,15 @@ typedef struct memory_heap_stat_s {
 }memory_heap_stat_t; ///< short hand for struct
 
 /**
- * @struct memory_heap_s
+ * @struct memory_heap_t
  * @brief heap interface for all types
  */
-typedef struct memory_heap_s {
+typedef struct memory_heap_t {
     uint32_t header; ///< heap header custom values
     void*    metadata; ///< internal heap metadata filled by heap implementation
-    void* (* malloc)(struct memory_heap_s*, size_t, size_t); ///< malloc function of heap implementation
-    int8_t (* free)(struct memory_heap_s*, void*); ///< free function of heap implementation
-    void (* stat)(struct memory_heap_s*, memory_heap_stat_t*); ///< return heap stats
+    void* (* malloc)(struct memory_heap_t*, size_t, size_t); ///< malloc function of heap implementation
+    int8_t (* free)(struct memory_heap_t*, void*); ///< free function of heap implementation
+    void (* stat)(struct memory_heap_t*, memory_heap_stat_t*); ///< return heap stats
     lock_t lock; ///< heap's lock
 } memory_heap_t; ///< short hand for struct
 

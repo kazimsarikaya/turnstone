@@ -12,11 +12,11 @@
 #include <types.h>
 
 /**
- * @enum linker_section_type_e
+ * @enum linker_section_type_t
  * @brief linker section types.
  *
  */
-typedef enum linker_section_type_e {
+typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
     LINKER_SECTION_TYPE_RODATA, ///< readonly data section
@@ -28,10 +28,10 @@ typedef enum linker_section_type_e {
 } linker_section_type_t; ///< shorthand for enum
 
 /**
- * @enum linker_relocation_type_e
+ * @enum linker_relocation_type_t
  * @brief relocation stypes
  */
-typedef enum linker_relocation_type_e {
+typedef enum linker_relocation_type_t {
     LINKER_RELOCATION_TYPE_32_16, ///< 32 bit wtih 16 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_32_32, ///< 32 bit wtih 32 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_32_PC16, ///< 32 bit wtih 16 bit addend program counter relative relocation
@@ -43,10 +43,10 @@ typedef enum linker_relocation_type_e {
 } linker_relocation_type_t; ///< shorthand for enum
 
 /**
- * @struct linker_direct_relocation_s
+ * @struct linker_direct_relocation_t
  * @brief relocation information
  */
-typedef struct linker_direct_relocation_s {
+typedef struct linker_direct_relocation_t {
     linker_section_type_t    section_type; ///< relocation's section type
     linker_relocation_type_t relocation_type; ///< relocation type
     uint64_t                 offset; ///< where relocation value will be placed from start of program
@@ -54,20 +54,20 @@ typedef struct linker_direct_relocation_s {
 }__attribute__((packed)) linker_direct_relocation_t; ///< shorthand for struct
 
 /**
- * @struct linker_section_locations_s
+ * @struct linker_section_locations_t
  * @brief section information
  */
-typedef struct linker_section_locations_s {
+typedef struct linker_section_locations_t {
     uint64_t section_start; ///< section start for virtual memory
     uint64_t section_pyhsical_start; ///< section start for physical memory
     uint64_t section_size; ///< section size
 }linker_section_locations_t; ///< shorthand for struct
 
 /**
- * @struct program_header_s
+ * @struct program_header_t
  * @brief program definition header.
  */
-typedef struct program_header_s {
+typedef struct program_header_t {
     uint8_t                    jmp_code; ///< the jmp machine code 0x90
     uint32_t                   entry_point_address_pc_relative; ///< jmp address of main
     uint8_t                    padding[11]; ///< align padding

@@ -16,11 +16,11 @@
 #define NETWORK_DEVICE_VENDOR_ID_INTEL  0x8086
 #define NETWORK_DEVICE_DEVICE_ID_E1000  0x100F
 
-typedef enum {
+typedef enum network_type_t {
     NETWORK_TYPE_ETHERNET=0
 } network_type_t;
 
-typedef struct {
+typedef struct network_received_packet_t {
     uint64_t       packet_len;
     uint8_t*       packet_data;
     linkedlist_t   return_queue;
@@ -28,7 +28,7 @@ typedef struct {
     void*          network_info;
 } network_received_packet_t;
 
-typedef struct {
+typedef struct network_transmit_packet_t {
     uint64_t packet_len;
     uint8_t* packet_data;
 } network_transmit_packet_t;

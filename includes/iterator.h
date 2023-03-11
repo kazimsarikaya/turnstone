@@ -12,19 +12,19 @@
 #include <types.h>
 
 /**
- * @struct iterator
+ * @struct iterator_t
  * @brief iterator interface struct
  *
  * the implementation of destroy, next, end_of_iterator and get_item is mendotary.
  */
-typedef struct iterator {
+typedef struct iterator_t {
     void* metadata; ///< iterable struct's metadata
-    int8_t (* destroy)(struct iterator* iter); ///< destroys itself
-    struct iterator* (* next)(struct iterator* iter); ///< travels to next item in iterator
-    int8_t (* end_of_iterator)(struct iterator* iter); ///< checks iterator ended
-    void* (* get_item)(struct iterator* iter); ///< returns current item data in iterator
-    void* (* delete_item)(struct iterator* iter); ///< deletes current item and moves to next
-    void* (* get_extra_data)(struct iterator* iter); ///< if underlaying iterable has extra data for current item, returns them
+    int8_t (* destroy)(struct iterator_t* iter); ///< destroys itself
+    struct iterator_t* (* next)(struct iterator_t* iter); ///< travels to next item in iterator
+    int8_t (* end_of_iterator)(struct iterator_t* iter); ///< checks iterator ended
+    void* (* get_item)(struct iterator_t* iter); ///< returns current item data in iterator
+    void* (* delete_item)(struct iterator_t* iter); ///< deletes current item and moves to next
+    void* (* get_extra_data)(struct iterator_t* iter); ///< if underlaying iterable has extra data for current item, returns them
 }iterator_t; ///< short hand for struct
 
 #endif

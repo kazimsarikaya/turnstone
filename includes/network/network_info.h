@@ -10,7 +10,7 @@
 #include <linkedlist.h>
 #include <map.h>
 
-typedef struct {
+typedef struct network_info_t {
     network_mac_address_t  mac;
     linkedlist_t           return_queue;
     network_ipv4_address_t ipv4_address;

@@ -55,7 +55,7 @@ char_t* fs_path_get_name_and_ext(path_t* self) {
     return last_part;
 }
 
-struct path* fs_path_get_basepath(path_t* self) {
+path_t* fs_path_get_basepath(path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     if(self->is_root(self) == 0) {

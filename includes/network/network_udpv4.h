@@ -13,7 +13,7 @@
 #define NETWORK_APPLICATION_PORT_ECHO_SERVER 7
 #define NETWORK_APPLICATION_PORT_DHCP_CLIENT 68
 
-typedef struct {
+typedef struct network_udpv4_header_t {
     uint16_t source_port;
     uint16_t destination_port;
     uint16_t length;

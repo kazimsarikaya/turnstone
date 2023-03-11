@@ -11,7 +11,7 @@
 #include <network/network_protocols.h>
 
 
-typedef struct {
+typedef struct network_tcp_header_t {
     uint16_t source_port;
     uint16_t destination_port;
     uint32_t sequence;

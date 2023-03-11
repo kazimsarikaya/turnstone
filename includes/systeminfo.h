@@ -15,19 +15,19 @@
 #include <video.h>
 
 /**
- * @enum system_info_boot_type_e
+ * @enum system_info_boot_type_t
  * @brief system boot type
  */
-typedef enum system_info_boot_type_e {
+typedef enum system_info_boot_type_t {
     SYSTEM_INFO_BOOT_TYPE_DISK, ///< system booted from disk
     SYSTEM_INFO_BOOT_TYPE_PXE, ///< system booted from network (pxe)
 } system_info_boot_type_t; ///< short hand for enum system_info_boot_type_e
 
 /**
- * @struct system_info_s
+ * @struct system_info_t
  * @brief  system information struct
  */
-typedef struct system_info_s {
+typedef struct system_info_t {
     memory_heap_t*        heap; ///< kernel heap
     uint8_t*              mmap_data; ///< uefi mmap data
     uint64_t              mmap_size; ///< uefi mmap size

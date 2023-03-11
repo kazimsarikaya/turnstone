@@ -24,10 +24,10 @@
 #define FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED   0x0000000400000000
 
 /**
- * @enum frame_type_e
+ * @enum frame_type_t
  * @brief frame types
  */
-typedef enum frame_type_e {
+typedef enum frame_type_t {
     FRAME_TYPE_FREE, ///< free frame
     FRAME_TYPE_USED, ///< frames are allocated
     FRAME_TYPE_RESERVED, ///< frames are for reserved memory
@@ -35,10 +35,10 @@ typedef enum frame_type_e {
 } frame_type_t; ///< short hand for enum frame_type_e
 
 /**
- * @enum frame_allocation_type_e
+ * @enum frame_allocation_type_t
  * @brief frame allocation types
  */
-typedef enum frame_allocation_type_e {
+typedef enum frame_allocation_type_t {
     FRAME_ALLOCATION_TYPE_RELAX = 1 << 1, ///< frames reserved non blockly
     FRAME_ALLOCATION_TYPE_BLOCK = 1 << 2, ///< frames should be continuous
     FRAME_ALLOCATION_TYPE_USED = 1 << 7, ///< frames for using
@@ -47,18 +47,18 @@ typedef enum frame_allocation_type_e {
 } frame_allocation_type_t; ///< short hand for enum frame_allocation_type_e
 
 /**
- * @struct frame_s
+ * @struct frame_t
  * @brief frame definition
  */
-typedef struct frame_s {
+typedef struct frame_t {
     uint64_t     frame_address; ///< frame start address (physical)
     uint64_t     frame_count; ///< how many frames
     frame_type_t type; ///< frame type
     uint64_t     frame_attributes; ///< frame attributes
 } frame_t; ///< short hand for struct frame_s
 
-/*! opaque struct for frame_allocator_s */
-struct frame_allocator_s;
+/*! opaque struct for frame_allocator_t */
+struct frame_allocator_t;
 
 /**
  * @brief allocate frame with count
@@ -69,7 +69,7 @@ struct frame_allocator_s;
  * @param[out] alloc_list_size fs length
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_allocate_frame_by_count_f)(struct frame_allocator_s* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
+typedef int8_t (* fa_allocate_frame_by_count_f)(struct frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
 
 /**
  * @brief allocate frame with given reference frame, ref frame not used in anywhere as is. it is only for reference.
@@ -77,7 +77,7 @@ typedef int8_t (* fa_allocate_frame_by_count_f)(struct frame_allocator_s* self, 
  * @param[in] f referance frame,
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_allocate_frame_f)(struct frame_allocator_s* self, frame_t* f);
+typedef int8_t (* fa_allocate_frame_f)(struct frame_allocator_t* self, frame_t* f);
 
 /**
  * @brief release frame with given reference frame, ref frame not used in anywhere as is. it is only for reference.
@@ -85,7 +85,7 @@ typedef int8_t (* fa_allocate_frame_f)(struct frame_allocator_s* self, frame_t* 
  * @param[in] f referance frame,
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_release_frame_f)(struct frame_allocator_s* self, frame_t* f);
+typedef int8_t (* fa_release_frame_f)(struct frame_allocator_t* self, frame_t* f);
 
 /**
  * @brief returns the frame that address resides or null
@@ -93,21 +93,21 @@ typedef int8_t (* fa_release_frame_f)(struct frame_allocator_s* self, frame_t* f
  * @param[in] address search address
  * @return frame of given address or null
  */
-typedef frame_t * (* fa_get_reserved_frames_of_address_f)(struct frame_allocator_s* self, void* address);
+typedef frame_t * (* fa_get_reserved_frames_of_address_f)(struct frame_allocator_t* self, void* address);
 
 /**
  * @brief rebuilds reserved memory mappings
  * @param[in] self frame allocator
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_rebuild_reserved_mmap_f)(struct frame_allocator_s* self);
+typedef int8_t (* fa_rebuild_reserved_mmap_f)(struct frame_allocator_t* self);
 
 /**
  * @brief cleans old reserved frames
  * @param[in] self frame allocator
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_cleanup_f)(struct frame_allocator_s* self);
+typedef int8_t (* fa_cleanup_f)(struct frame_allocator_t* self);
 
 /**
  * @brief reserve frames for mmio
@@ -116,20 +116,20 @@ typedef int8_t (* fa_cleanup_f)(struct frame_allocator_s* self);
  * @return 0 if succeed.
  */
 
-typedef int8_t (* fa_reserve_system_frames_f)(struct frame_allocator_s* self, frame_t* f);
+typedef int8_t (* fa_reserve_system_frames_f)(struct frame_allocator_t* self, frame_t* f);
 
 /**
  * @brief release frames with attribute @ref FRAME_TYPE_ACPI_RECLAIM_MEMORY
  * @param[in] self frame allocator
  * @return 0 if succeed.
  */
-typedef int8_t (* fa_release_acpi_reclaim_memory_f)(struct frame_allocator_s* self);
+typedef int8_t (* fa_release_acpi_reclaim_memory_f)(struct frame_allocator_t* self);
 
 /**
- * @struct frame_allocator_s
+ * @struct frame_allocator_t
  * @brief frame allocator class
  **/
-typedef struct frame_allocator_s {
+typedef struct frame_allocator_t {
     void*                               context; ///< internal struct for frame allocator
     fa_allocate_frame_by_count_f        allocate_frame_by_count; ///< allocate frame with count
     fa_allocate_frame_f                 allocate_frame; ///< allocate frame with given reference frame, ref frame not used in anywhere as is. it is only for reference.
@@ -139,7 +139,7 @@ typedef struct frame_allocator_s {
     fa_cleanup_f                        cleanup; ///< cleans old reserved frames
     fa_reserve_system_frames_f          reserve_system_frames; ///< reserve frames for mmio
     fa_release_acpi_reclaim_memory_f    release_acpi_reclaim_memory; ///< release frames with attribute @ref FRAME_TYPE_ACPI_RECLAIM_MEMORY
-} frame_allocator_t; ///< short hand for struct frame_allocator_s
+} frame_allocator_t; ///< short hand for struct frame_allocator_t
 
 /**
  * @brief creates a frame allocator

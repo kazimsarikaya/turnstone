@@ -16,10 +16,10 @@
 #define ZPACK_FORMAT_MAGIC 0x544D464B4341505AULL
 
 /**
- * @struct zpack_format_s
+ * @struct zpack_format_t
  * @brief a zpacked data has this header at the beginig of the file.
  */
-typedef struct zpack_format_s {
+typedef struct zpack_format_t {
     uint64_t magic; ///< header magic @ref ZPACK_FORMAT_MAGIC
     uint64_t unpacked_size; ///< the size of data when it is unpacked
     uint64_t packed_size; ///< size of data when packed.

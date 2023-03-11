@@ -10,7 +10,7 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
-typedef enum {
+typedef enum network_dhcpv4_options_t {
     NETWORK_DHCPV4_OPTION_PAD = 0,
     NETWORK_DHCPV4_OPTION_SUBNETMASK = 1,
     NETWORK_DHCPV4_OPTION_TIMEOFFSET = 2,
@@ -41,7 +41,7 @@ typedef enum {
     NETWORK_DHCPV4_OPTION_END = 255,
 } network_dhcpv4_options_t;
 
-typedef enum {
+typedef enum network_dhcpv4_opcode_t {
     NETWORK_DHCPV4_OPCODE_DISCOVER=1,
     NETWORK_DHCPV4_OPCODE_OFFER=2,
     NETWORK_DHCPV4_OPCODE_REQUEST=3,
@@ -62,7 +62,7 @@ typedef enum {
 #define NETWORK_DHCPV4_SOURCE_PORT 68
 #define NETWORK_DHCPV4_DESTINATION_PORT 67
 
-typedef struct {
+typedef struct network_dhcpv4_t{
     network_dhcpv4_opcode_t opcode : 8;
     uint8_t hardware_type;
     uint8_t hardware_address_length;

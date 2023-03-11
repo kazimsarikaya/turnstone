@@ -19,7 +19,7 @@
  * @enum index_key_search_criteria_t
  * @brief key compression criteria for searching index.
  */
-typedef enum {
+typedef enum index_key_search_criteria_t {
     INDEXER_KEY_COMPARATOR_CRITERIA_NULL,
     INDEXER_KEY_COMPARATOR_CRITERIA_LESS,
     INDEXER_KEY_COMPARATOR_CRITERIA_LESSOREQUAL,
@@ -32,14 +32,14 @@ typedef enum {
 
 typedef int8_t (* index_key_comparator_f)(const void* key1, const void* key2);
 
-typedef struct index {
+typedef struct index_t {
     memory_heap_t*         heap;
     void*                  metadata;
     index_key_comparator_f comparator;
-    int8_t (* insert)(struct index* idx, void* key, void* data, void** removed_data);
-    int8_t (*delete)(struct index* idx, void* key, void** deleted_data);
-    iterator_t*  (* search)(struct index* idx, void* key1, void* key2, index_key_search_criteria_t criteria);
-    iterator_t* (* create_iterator)(struct index* idx);
+    int8_t (* insert)(struct index_t* idx, void* key, void* data, void** removed_data);
+    int8_t (*delete)(struct index_t* idx, void* key, void** deleted_data);
+    iterator_t*  (* search)(struct index_t* idx, void* key1, void* key2, index_key_search_criteria_t criteria);
+    iterator_t* (* create_iterator)(struct index_t* idx);
 } index_t;
 
 typedef void * (* indexer_key_creator_f)(void* key, void* keyarg);

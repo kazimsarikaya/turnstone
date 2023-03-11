@@ -10,12 +10,12 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
-typedef enum {
+typedef enum network_ethernet_type_t {
     NETWORK_ETHERNET_TYPE_ARP=NETWORK_PROTOCOL_ARP,
     NETWORK_ETHERNET_TYPE_IPV4=NETWORK_PROTOCOL_IPV4,
 } network_ethernet_type_t;
 
-typedef struct {
+typedef struct network_ethernet_t {
     network_mac_address_t   destination;
     network_mac_address_t   source;
     network_ethernet_type_t type : 16;

@@ -18,14 +18,14 @@
 #define NETWORK_IPV4_FLAG_DONT_FRAGMENT  2
 #define NETWORK_IPV4_FLAG_MORE_FRAGMENTS 1
 
-typedef enum {
+typedef enum network_ipv4_protocol_t {
     NETWORK_IPV4_PROTOCOL_ICMPV4=1,
     NETWORK_IPV4_PROTOCOL_IGMPV4=2,
     NETWORK_IPV4_PROTOCOL_TCPV4=6,
     NETWORK_IPV4_PROTOCOL_UDPV4=17,
 }network_ipv4_protocol_t;
 
-typedef struct {
+typedef struct network_ipv4_header_t {
     uint32_t header_length  : 4;
     uint32_t version        : 4;
     uint32_t ecn            : 2;
@@ -33,7 +33,7 @@ typedef struct {
     uint32_t total_length   : 16;
     uint32_t identification : 16;
     union {
-        struct {
+        struct flags_fragment_offset_fields_t {
             uint16_t fragment_offset : 13;
             uint16_t flags           : 3;
         } __attribute__((packed)) fields;

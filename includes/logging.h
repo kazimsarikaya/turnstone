@@ -14,10 +14,10 @@
 #include <types.h>
 
 /**
- * @enum logging_modules_e
+ * @enum logging_modules_t
  * @brief logging module enums
  */
-typedef enum logging_modules_e {
+typedef enum logging_modules_t {
     KERNEL,
     MEMORY,
     SIMPLEHEAP,
@@ -42,10 +42,10 @@ typedef enum logging_modules_e {
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
- * @enum logging_level_e
+ * @enum logging_level_t
  * @brief loggging levels
  */
-typedef enum logging_level_e {
+typedef enum logging_level_t {
     LOG_PANIC=0,
     LOG_FATAL=1,
     LOG_ERROR=2,

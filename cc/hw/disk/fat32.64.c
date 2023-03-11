@@ -1057,7 +1057,7 @@ file_t* fat32_create_or_open_file(directory_t* self, path_t* p) {
     return (file_t*)fat32_create_or_open_directory_or_file(self, p, FS_STAT_TYPE_FILE);
 }
 
-fs_stat_type_t fat32_directory_get_type(struct directory* self){
+fs_stat_type_t fat32_directory_get_type(directory_t* self){
     UNUSED(self);
     return FS_STAT_TYPE_DIR;
 }

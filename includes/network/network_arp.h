@@ -21,7 +21,7 @@
 #define NETWORK_ARP_OPERATION_CODE_REQUEST 1
 #define NETWORK_ARP_OPERATION_CODE_ANSWER 2
 
-typedef struct {
+typedef struct network_arp_t {
     uint16_t               hardware_type;
     uint16_t               protocol_type;
     uint8_t                hardware_address_length;

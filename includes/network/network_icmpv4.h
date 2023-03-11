@@ -11,7 +11,7 @@
 #include <network/network_protocols.h>
 
 
-typedef enum {
+typedef enum network_icmpv4_type_t {
     NETWORK_ICMP_ECHO_REQUEST=8,
     NETWORK_ICMP_ECHO_REPLY=0,
 }network_icmpv4_type_t;
@@ -19,7 +19,7 @@ typedef enum {
 #define NETWORK_ICMP_ECHO_CODE 0
 #define NETWORK_ICMP_MIN_DATA_SIZE 48
 
-typedef struct {
+typedef struct network_icmpv4_header_t {
     network_icmpv4_type_t type : 8;
     uint8_t               code;
     uint16_t              checksum;
@@ -27,7 +27,7 @@ typedef struct {
     uint16_t              sequence;
 }__attribute__((packed)) network_icmpv4_header_t;
 
-typedef struct {
+typedef struct network_icmpv4_ping_header_t {
     network_icmpv4_header_t header;
     uint32_t                timestamp_sec;
     uint32_t                timestamp_usec;

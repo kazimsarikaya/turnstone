@@ -19,7 +19,7 @@
  *
  * inserting/deleting will be performed with this values.
  */
-typedef enum {
+typedef enum linkedlist_insert_delete_at_t {
     LINKEDLIST_INSERT_AT_HEAD, ///< insert data at head of list
     LINKEDLIST_INSERT_AT_TAIL, ///< insert data at tail of list
     LINKEDLIST_INSERT_AT_POSITION, ///< insert data at given position (start at 0) of list
@@ -39,7 +39,7 @@ typedef enum {
  *
  * used only information
  */
-typedef enum {
+typedef enum linkedlist_type_t {
     LINKEDLIST_TYPE_LIST = 1 << 0, ///< normal list
     LINKEDLIST_TYPE_SORTEDLIST = 1 << 1, ///< sorted list
     LINKEDLIST_TYPE_QUEUE = 1 << 2, ///< queue
@@ -50,7 +50,7 @@ typedef enum {
 /**
  * @brief linked list destroy type
  */
-typedef enum {
+typedef enum linkedlist_destroy_type_t {
     LINKEDLIST_DESTROY_WITHOUT_DATA, ///< destroy linked list without its data
     LINKEDLIST_DESTROY_WITH_DATA ///< destroy linked list with its data
 }linkedlist_destroy_type_t;
