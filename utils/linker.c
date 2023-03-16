@@ -12,6 +12,7 @@
 #include <linker.h>
 #include <crc.h>
 #include <efi.h>
+#include <xxhash.h>
 
 typedef enum linker_symbol_type_t {
     LINKER_SYMBOL_TYPE_UNDEF,
@@ -30,7 +31,9 @@ typedef struct linker_section_t {
     uint64_t              id;
     linker_section_type_t type;
     char_t*               file_name;
+    uint64_t              file_name_hash;
     char_t*               section_name;
+    uint64_t              section_name_hash;
     uint64_t              offset;
     uint64_t              size;
     uint64_t              align;
@@ -46,6 +49,7 @@ typedef struct linker_symbol_t {
     linker_symbol_scope_t scope;
     uint64_t              section_id;
     char_t*               symbol_name;
+    uint64_t              symbol_name_hash;
     uint64_t              value;
     uint64_t              size;
     uint8_t               required;
@@ -546,7 +550,9 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
             (*section_id)++;
 
             sec->file_name = strdup_at_heap(ctx->heap, ctx->objectfile_ctx.file_name);
+            sec->file_name_hash = xxhash64_hash(sec->file_name, strlen(sec->file_name));
             sec->section_name = strdup_at_heap(ctx->heap, secname);
+            sec->section_name_hash = xxhash64_hash(sec->section_name, strlen(sec->section_name)); 
             sec->size = sec_size;
             sec->align = linker_get_section_addralign(ctx, sec_idx);
 
@@ -1624,16 +1630,21 @@ linker_symbol_t* linker_lookup_symbol(linker_context_t* ctx, char_t* symbol_name
 
     linker_symbol_t* res = NULL;
 
+    uint64_t symbol_name_hash = xxhash64_hash(symbol_name, strlen(symbol_name));
+
     while(iter->end_of_iterator(iter) != 0) {
         linker_symbol_t* sym = iter->get_item(iter);
 
         if(sym->scope == LINKER_SYMBOL_SCOPE_LOCAL) {
-            if(strcmp(symbol_name, sym->symbol_name) == 0 && sym->section_id == section_id) {
+            if(sym->section_id == section_id &&
+                    symbol_name_hash == sym->symbol_name_hash &&
+                    strcmp(symbol_name, sym->symbol_name) == 0) {
                 res = sym;
                 break;
             }
         } else {
-            if(strcmp(symbol_name, sym->symbol_name) == 0) {
+            if(symbol_name_hash == sym->symbol_name_hash &&
+                    strcmp(symbol_name, sym->symbol_name) == 0) {
                 res = sym;
                 break;
             }
@@ -1722,10 +1733,16 @@ uint64_t linker_get_section_id(linker_context_t* ctx, char_t* file_name, char_t*
         return id;
     }
 
+    uint64_t file_name_hash = xxhash64_hash(file_name, strlen(file_name));
+    uint64_t section_name_hash = xxhash64_hash(section_name, strlen(section_name));
+
     while(iter->end_of_iterator(iter) != 0) {
         linker_section_t* sec  = iter->get_item(iter);
 
-        if(strcmp(file_name, sec->file_name) == 0 && strcmp(section_name, sec->section_name) == 0 ) {
+        if(file_name_hash == sec->file_name_hash && 
+                section_name_hash == sec->section_name_hash &&
+                strcmp(file_name, sec->file_name) == 0 && 
+                strcmp(section_name, sec->section_name) == 0 ) {
             id = sec->id;
             break;
         }
@@ -2046,6 +2063,7 @@ int32_t main(int32_t argc, char** argv) {
     stack_sec->id = section_id++;
     stack_sec->file_name = NULL;
     stack_sec->section_name = strdup_at_heap(ctx->heap, ".stack");
+    stack_sec->section_name_hash = xxhash64_hash(stack_sec->section_name, strlen(stack_sec->section_name));
     stack_sec->size = ctx->stack_size;
 
     if(ctx->class == ELFCLASS64) {
@@ -2069,6 +2087,7 @@ int32_t main(int32_t argc, char** argv) {
 
     stack_top_sym->id = symbol_id++;
     stack_top_sym->symbol_name = strdup_at_heap(ctx->heap, "__stack_top");
+    stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strlen(stack_top_sym->symbol_name));
     stack_top_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
     stack_top_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
     stack_top_sym->value = stack_sec->size - 16;
@@ -2087,6 +2106,7 @@ int32_t main(int32_t argc, char** argv) {
     kheap_sec->id = section_id++;
     kheap_sec->file_name = NULL;
     kheap_sec->section_name = strdup_at_heap(ctx->heap, ".heap");
+    kheap_sec->section_name_hash = xxhash64_hash(kheap_sec->section_name, strlen(kheap_sec->section_name));
     kheap_sec->align = 0x100;
     kheap_sec->type = LINKER_SECTION_TYPE_HEAP;
     kheap_sec->required = 1;
@@ -2103,6 +2123,7 @@ int32_t main(int32_t argc, char** argv) {
 
     kheap_bottom_sym->id = symbol_id++;
     kheap_bottom_sym->symbol_name = strdup_at_heap(ctx->heap, "__kheap_bottom");
+    kheap_bottom_sym->symbol_name_hash = xxhash64_hash(kheap_bottom_sym->symbol_name, strlen(kheap_bottom_sym->symbol_name));
     kheap_bottom_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
     kheap_bottom_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
     kheap_bottom_sym->value = 0;
@@ -2122,6 +2143,7 @@ int32_t main(int32_t argc, char** argv) {
         test_func_array->id = section_id++;
         test_func_array->file_name = NULL;
         test_func_array->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_array");
+        test_func_array->section_name_hash = xxhash64_hash(test_func_array->section_name, strlen(test_func_array->section_name));
         test_func_array->align = 0x10;
         test_func_array->type = LINKER_SECTION_TYPE_RODATA;
 
@@ -2139,6 +2161,7 @@ int32_t main(int32_t argc, char** argv) {
 
         test_functions_array_start->id = symbol_id++;
         test_functions_array_start->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_start");
+        test_functions_array_start->symbol_name_hash = xxhash64_hash(test_functions_array_start->symbol_name, strlen(test_functions_array_start->symbol_name));
         test_functions_array_start->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_array_start->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_array_start->value = 0;
@@ -2156,6 +2179,7 @@ int32_t main(int32_t argc, char** argv) {
 
         test_functions_array_end->id = symbol_id++;
         test_functions_array_end->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_end");
+stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strlen(stack_top_sym->symbol_name));
         test_functions_array_end->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_array_end->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_array_end->value = 0;
@@ -2174,6 +2198,7 @@ int32_t main(int32_t argc, char** argv) {
         test_func_names_array_str->id = section_id++;
         test_func_names_array_str->file_name = NULL;
         test_func_names_array_str->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_names.str");
+        test_func_names_array_str->section_name_hash = xxhash64_hash(test_func_names_array_str->section_name, strlen(test_func_names_array_str->section_name));
         test_func_names_array_str->align = 0x10;
         test_func_names_array_str->type = LINKER_SECTION_TYPE_RODATA;
         test_func_names_array_str->required = 1;
@@ -2193,6 +2218,7 @@ int32_t main(int32_t argc, char** argv) {
 
         test_functions_names_str->id = symbol_id++;
         test_functions_names_str->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names_str");
+        test_functions_names_str->symbol_name_hash = xxhash64_hash(test_functions_names_str->symbol_name, strlen(test_functions_names_str->symbol_name));
         test_functions_names_str->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_names_str->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_names_str->value = 0;
@@ -2212,6 +2238,7 @@ int32_t main(int32_t argc, char** argv) {
         test_functions_names_array->id = section_id++;
         test_functions_names_array->file_name = NULL;
         test_functions_names_array->section_name = strdup_at_heap(ctx->heap, ".rodata.__test_functions_names_array");
+        test_functions_names_array->section_name_hash = xxhash64_hash(test_functions_names_array->section_name, strlen(test_functions_names_array->section_name));
         test_functions_names_array->align = 0x10;
         test_functions_names_array->type = LINKER_SECTION_TYPE_RODATA;
 
@@ -2229,6 +2256,7 @@ int32_t main(int32_t argc, char** argv) {
 
         test_functions_names->id = symbol_id++;
         test_functions_names->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names");
+test_functions_names->symbol_name_hash = xxhash64_hash(test_functions_names->symbol_name, strlen(test_functions_names->symbol_name));
         test_functions_names->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_names->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_names->value = 0;
@@ -2286,6 +2314,7 @@ int32_t main(int32_t argc, char** argv) {
                 sym = memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
                 sym->id = symbol_id++;
                 sym->symbol_name = strdup_at_heap(ctx->heap, tmp_symbol_name);
+                sym->symbol_name_hash = xxhash64_hash(sym->symbol_name, strlen(sym->symbol_name));
 
                 if(linker_get_scope_of_symbol(ctx, sym_idx) == STB_GLOBAL) {
                     sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
