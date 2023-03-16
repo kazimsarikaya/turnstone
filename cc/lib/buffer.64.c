@@ -202,6 +202,23 @@ uint8_t  buffer_get_byte(buffer_t buffer) {
     return res;
 }
 
+uint8_t  buffer_peek_byte(buffer_t buffer) {
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    lock_acquire(bi->lock);
+
+    if(bi->position >= bi->length) {
+        lock_release(bi->lock);
+
+        return NULL;
+    }
+    uint8_t res = bi->data[bi->position];
+
+    lock_release(bi->lock);
+
+    return res;
+}
+
 uint8_t buffer_peek_buffer_at_position(buffer_t buffer, uint64_t position) {
     if(!buffer) {
         return 0;
