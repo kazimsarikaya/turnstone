@@ -552,7 +552,7 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
             sec->file_name = strdup_at_heap(ctx->heap, ctx->objectfile_ctx.file_name);
             sec->file_name_hash = xxhash64_hash(sec->file_name, strlen(sec->file_name));
             sec->section_name = strdup_at_heap(ctx->heap, secname);
-            sec->section_name_hash = xxhash64_hash(sec->section_name, strlen(sec->section_name)); 
+            sec->section_name_hash = xxhash64_hash(sec->section_name, strlen(sec->section_name));
             sec->size = sec_size;
             sec->align = linker_get_section_addralign(ctx, sec_idx);
 
@@ -1637,14 +1637,14 @@ linker_symbol_t* linker_lookup_symbol(linker_context_t* ctx, char_t* symbol_name
 
         if(sym->scope == LINKER_SYMBOL_SCOPE_LOCAL) {
             if(sym->section_id == section_id &&
-                    symbol_name_hash == sym->symbol_name_hash &&
-                    strcmp(symbol_name, sym->symbol_name) == 0) {
+               symbol_name_hash == sym->symbol_name_hash &&
+               strcmp(symbol_name, sym->symbol_name) == 0) {
                 res = sym;
                 break;
             }
         } else {
             if(symbol_name_hash == sym->symbol_name_hash &&
-                    strcmp(symbol_name, sym->symbol_name) == 0) {
+               strcmp(symbol_name, sym->symbol_name) == 0) {
                 res = sym;
                 break;
             }
@@ -1739,10 +1739,10 @@ uint64_t linker_get_section_id(linker_context_t* ctx, char_t* file_name, char_t*
     while(iter->end_of_iterator(iter) != 0) {
         linker_section_t* sec  = iter->get_item(iter);
 
-        if(file_name_hash == sec->file_name_hash && 
-                section_name_hash == sec->section_name_hash &&
-                strcmp(file_name, sec->file_name) == 0 && 
-                strcmp(section_name, sec->section_name) == 0 ) {
+        if(file_name_hash == sec->file_name_hash &&
+           section_name_hash == sec->section_name_hash &&
+           strcmp(file_name, sec->file_name) == 0 &&
+           strcmp(section_name, sec->section_name) == 0 ) {
             id = sec->id;
             break;
         }
@@ -2179,7 +2179,7 @@ int32_t main(int32_t argc, char** argv) {
 
         test_functions_array_end->id = symbol_id++;
         test_functions_array_end->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_end");
-stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strlen(stack_top_sym->symbol_name));
+        stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strlen(stack_top_sym->symbol_name));
         test_functions_array_end->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_array_end->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_array_end->value = 0;
@@ -2256,7 +2256,7 @@ stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strl
 
         test_functions_names->id = symbol_id++;
         test_functions_names->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_names");
-test_functions_names->symbol_name_hash = xxhash64_hash(test_functions_names->symbol_name, strlen(test_functions_names->symbol_name));
+        test_functions_names->symbol_name_hash = xxhash64_hash(test_functions_names->symbol_name, strlen(test_functions_names->symbol_name));
         test_functions_names->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_names->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_names->value = 0;
