@@ -130,7 +130,7 @@ asm:
 asm-internal: $(CC64ASMOUTS)
 
 bear:
-	bear -- make clean gendirs qemu
+	bear --append -- make qemu
 
 test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
@@ -216,6 +216,7 @@ clean:
 	if [ -d $(CCGENDIR) ]; then find $(CCGENDIR) -type f -delete; fi
 	if [ -d $(INCLUDESGENDIR) ]; then find $(INCLUDESGENDIR) -type f -delete; fi
 	rm -f $(MKDIRSDONE)
+	rm -f compile_commands.json
 
 cleandirs:
 	rm -fr $(CCGENDIR) $(INCLUDESGENDIR) $(OBJDIR)
