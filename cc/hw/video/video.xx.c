@@ -449,6 +449,8 @@ size_t video_printf(char_t* fmt, ...){
                     l_flag++;
                     break;
                 case 'p':
+                    l_flag = 1;
+                    __attribute__((fallthrough));
                 case 'x':
                 case 'h':
                     if(l_flag == 2) {
@@ -474,6 +476,7 @@ size_t video_printf(char_t* fmt, ...){
                     memory_memclean(ito_buf, 64);
                     cnt += slen;
                     fmt++;
+                    l_flag = 0;
                     break;
                 case '%':
                     buf[0] = '%';
