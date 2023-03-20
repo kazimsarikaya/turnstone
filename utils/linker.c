@@ -2306,6 +2306,10 @@ int32_t main(int32_t argc, char** argv) {
                 continue;
             }
 
+            if(strcmp(tmp_symbol_name, "___module___") == 0 ||  strcmp(tmp_symbol_name, "___module___") == 0 ) {
+                continue;
+            }
+
             uint64_t tmp_section_id = linker_get_section_id(ctx, file_name, tmp_section_name);
 
             linker_symbol_t* sym = linker_lookup_symbol(ctx, tmp_symbol_name, tmp_section_id);

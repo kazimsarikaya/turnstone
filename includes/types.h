@@ -84,4 +84,8 @@ int printf(const char* format, ...);
 #define va_end(v)       __builtin_va_end(v);
 #define va_arg(v, a)   __builtin_va_arg(v, a);
 
+#define MODULE(m) \
+        __attribute__((section(".___module___"), visibility("internal"))) \
+        const char_t ___module___[] = m;
+
 #endif
