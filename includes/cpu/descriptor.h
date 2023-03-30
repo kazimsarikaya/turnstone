@@ -162,17 +162,17 @@ typedef struct descriptor_idt {
  * @param[in]  DPL       privilage level of interrupt
  */
 #define DESCRIPTOR_BUILD_IDT_SEG(IE, FUNC_ADDR, SELECTOR, IST, DPL) { \
-        IE.selector = SELECTOR; \
-        IE.ist = IST; \
-        IE.always0_1 = 0; \
-        IE.type = 0xE; \
-        IE.always0_2 = 0; \
-        IE.dpl = DPL; \
-        IE.present = 1; \
-        IE.zero = 0; \
-        IE.offset_1 = (FUNC_ADDR >> 0) & 0xFFFF; \
-        IE.offset_2 = (FUNC_ADDR >> 16) & 0xFFFF; \
-        IE.offset_3 = (FUNC_ADDR >> 32) & 0xFFFFFFFF; \
+            IE.selector = SELECTOR; \
+            IE.ist = IST; \
+            IE.always0_1 = 0; \
+            IE.type = 0xE; \
+            IE.always0_2 = 0; \
+            IE.dpl = DPL; \
+            IE.present = 1; \
+            IE.zero = 0; \
+            IE.offset_1 = (FUNC_ADDR >> 0) & 0xFFFF; \
+            IE.offset_2 = (FUNC_ADDR >> 16) & 0xFFFF; \
+            IE.offset_3 = (FUNC_ADDR >> 32) & 0xFFFFFFFF; \
 }
 
 /**
@@ -199,12 +199,12 @@ extern descriptor_register_t* IDT_REGISTER;
  * @brief builds a default gdt
  * @return 0 at success.
  */
-uint8_t descriptor_build_gdt_register();
+uint8_t descriptor_build_gdt_register(void);
 
 /**
  * @brief builds a default idt
  * @return 0 at success.
  */
-uint8_t descriptor_build_idt_register();
+uint8_t descriptor_build_idt_register(void);
 
 #endif

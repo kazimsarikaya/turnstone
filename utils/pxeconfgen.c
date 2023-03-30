@@ -71,15 +71,15 @@ int32_t main(int32_t argc, char_t** argv) {
     int64_t kernel_size   = ftell(kin);
     fclose(kin);
 
-    data_t kernel_name = {DATA_TYPE_STRING, 0, NULL, "kernel"};
+    data_t kernel_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"kernel"};
     data_t kernel_data = {DATA_TYPE_STRING, 0, &kernel_name, kernel};
 
-    data_t kernel_size_name = {DATA_TYPE_STRING, 0, NULL, "kernel-size"};
+    data_t kernel_size_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"kernel-size"};
     data_t kernel_size_data = {DATA_TYPE_INT64, 0, &kernel_size_name, (void*)kernel_size};
 
     data_t pxeconf[] = {kernel_data, kernel_size_data};
 
-    data_t pxeconf_name = {DATA_TYPE_STRING, 0, NULL, "pxe-config"};
+    data_t pxeconf_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"pxe-config"};
     data_t pxeconf_data = {DATA_TYPE_DATA, 2, &pxeconf_name, pxeconf};
 
     printf("kernel %s path %s size: 0x%lx\n", kernel, kernelp, kernel_size);

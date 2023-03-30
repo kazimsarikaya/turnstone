@@ -11,6 +11,9 @@ typedef struct {
     uint64_t data;
 }item_t;
 
+int32_t main(void);
+int8_t  key_comparator(const void* i, const void* j);
+
 int8_t key_comparator(const void* i, const void* j){
     size_t t_i = (size_t)i;
     size_t t_j = (size_t)j;
@@ -26,7 +29,7 @@ int8_t key_comparator(const void* i, const void* j){
     return 0;
 }
 
-int main(){
+int32_t main(void){
     size_t test_data[] = {25, 40,   29,   50,   39,   1,    58,    25,    92,  48,  5,   11,   33,   35,  1,   66,   14,   21,   71,  93,   98, 91
                           ,   20,   87,   46,   30,   29,   54,    49,    45,  17,  17,  31,   75,   12,  47,  47,   10,   38,   3,   59,   13, 5
                           ,   80,   77,   97,   1,    6,    79,    5,     19};

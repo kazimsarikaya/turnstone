@@ -6,6 +6,7 @@
 #define RAMSIZE (1ULL << 20)
 #include "setup.h"
 
+int32_t main(int32_t argc, char_t** argv);
 
 int32_t main(int32_t argc, char_t** argv) {
     UNUSED(argc);

@@ -61,12 +61,12 @@ typedef uint32_t pixel_t;
 /**
  * @brief initialize video support on kernel
  */
-void video_init();
+void video_init(void);
 
 /**
  * @brief updates frame buffer address for page mapping changes
  */
-void video_refresh_frame_buffer_address();
+void video_refresh_frame_buffer_address(void);
 
 /**
  * @brief writes string to video buffer
@@ -79,7 +79,7 @@ void video_print(char_t* string);
 /**
  * @brief clears screen aka write space to all buffer
  */
-void video_clear_screen();
+void video_clear_screen(void);
 
 /**
  * @brief writes string to video buffer
@@ -90,7 +90,7 @@ void video_clear_screen();
  * format will be writen at current cursor position and cursor will be updated. also
  * variable args will be converted and written with help of format
  */
-size_t video_printf(char_t* fmt, ...) __attribute__ ((format (printf, 1, 2)));
+size_t video_printf(const char_t* fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 /*! printf macro that calls video_printf */
 #define printf(...) video_printf(__VA_ARGS__)

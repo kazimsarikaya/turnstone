@@ -28,15 +28,15 @@ typedef void * path_context_t;
 
 typedef struct path_t {
     path_context_t context;
-    char_t* (* get_fullpath)(struct path_t* self);
-    char_t* (* get_name)(struct path_t* self);
-    char_t* (* get_extension)(struct path_t* self);
-    char_t* (* get_name_and_ext)(struct path_t* self);
-    struct path_t* (* get_basepath)(struct path_t* self);
-    int8_t (* is_root)(struct path_t* self);
-    int8_t (* is_directory)(struct path_t* self);
-    struct path_t* (* append)(struct path_t* self, struct path_t* child);
-    int8_t (* close)(struct path_t* self);
+    char_t* (* get_fullpath)(const struct path_t* self);
+    char_t* (* get_name)(const struct path_t* self);
+    char_t* (* get_extension)(const struct path_t* self);
+    char_t* (* get_name_and_ext)(const struct path_t* self);
+    struct path_t* (* get_basepath)(const struct path_t* self);
+    int8_t (* is_root)(const struct path_t* self);
+    int8_t (* is_directory)(const struct path_t* self);
+    struct path_t* (* append)(const struct path_t* self, const struct path_t* child);
+    int8_t (* close)(const struct path_t* self);
 } path_t;
 
 typedef enum file_seek_type_t {
@@ -49,7 +49,7 @@ typedef void * file_context_t;
 
 typedef struct file_t {
     file_context_t context;
-    path_t* (* get_path)(struct file_t* self);
+    const path_t* (* get_path)(const struct file_t* self);
     fs_stat_type_t (* get_type)(struct file_t* self);
     time_t (* get_create_time)(struct file_t* self);
     time_t (* get_last_access_time)(struct file_t* self);
@@ -69,25 +69,25 @@ typedef void * directory_context_t;
 
 typedef struct directory_t {
     directory_context_t context;
-    path_t* (* get_path)(struct directory_t* self);
+    const path_t* (* get_path)(const struct directory_t* self);
     fs_stat_type_t (* get_type)(struct directory_t* self);
     time_t (* get_create_time)(struct directory_t* self);
     time_t (* get_last_access_time)(struct directory_t* self);
     time_t (* get_last_modification_time)(struct directory_t* self);
     int8_t (* close)(struct directory_t* self);
     iterator_t* (* list)(struct directory_t* self);
-    struct directory_t* (* create_or_open_directory)(struct directory_t* self, path_t* p);
-    file_t* (* create_or_open_file)(struct directory_t* self, path_t* p);
+    struct directory_t* (* create_or_open_directory)(struct directory_t* self, const path_t* p);
+    file_t* (* create_or_open_file)(struct directory_t* self, const path_t* p);
 } directory_t;
 
 typedef struct path_interface_t {
     void* context;
-    path_t* (* get_path)(struct path_interface_t* self);
-    fs_stat_type_t (* get_type)(struct path_interface_t* self);
-    time_t (* get_create_time)(struct path_interface_t* self);
-    time_t (* get_last_access_time)(struct path_interface_t* self);
-    time_t (* get_last_modification_time)(struct path_interface_t* self);
-    int8_t (* close)(struct path_interface_t* self);
+    const path_t* (* get_path)(const struct path_interface_t* self);
+    fs_stat_type_t (* get_type)(const struct path_interface_t* self);
+    time_t (* get_create_time)(const struct path_interface_t* self);
+    time_t (* get_last_access_time)(const struct path_interface_t* self);
+    time_t (* get_last_modification_time)(const struct path_interface_t* self);
+    int8_t (* close)(const struct path_interface_t* self);
 }path_interface_t;
 
 typedef void * filesystem_context_t;
@@ -97,14 +97,14 @@ typedef struct filesystem_t {
     directory_t* (* get_root_directory)(struct filesystem_t* self);
     uint64_t (* get_total_size)(struct filesystem_t* self);
     uint64_t (* get_free_size)(struct filesystem_t* self);
-    directory_t* (* create_or_open_directory)(struct filesystem_t* self, path_t* p);
-    file_t* (* create_or_open_file)(struct filesystem_t* self, path_t* p);
-    fs_stat_t* (* stat)(struct filesystem_t* self, path_t* p);
-    int8_t (* remove)(struct filesystem_t* self, path_t* p);
+    directory_t* (* create_or_open_directory)(struct filesystem_t* self, const path_t* p);
+    file_t* (* create_or_open_file)(struct filesystem_t* self, const path_t* p);
+    fs_stat_t* (* stat)(struct filesystem_t* self, const path_t* p);
+    int8_t (* remove)(struct filesystem_t* self, const path_t* p);
     int8_t (* close)(struct filesystem_t* self);
 }filesystem_t;
 
-path_t*           filesystem_new_path(filesystem_t* fs, char_t* path_string);
+path_t*           filesystem_new_path(filesystem_t* fs, const char_t* path_string);
 path_interface_t* filesystem_empty_path_interface(filesystem_t* fs, path_t* p, fs_stat_type_t type);
 
 #endif

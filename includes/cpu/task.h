@@ -147,24 +147,24 @@ void task_switch_task(boolean_t need_eoi);
 /**
  * @brief yields task for waiting other tasks.
  */
-void task_yield();
+void task_yield(void);
 
 /**
  * @brief returns current task's id
  * @return task id
  */
-uint64_t task_get_id();
+uint64_t task_get_id(void);
 
 /**
  * @brief returns current task
  * @return current task
  */
-task_t* task_get_current_task();
+task_t* task_get_current_task(void);
 
 /**
  * @brief sets current task's message waiting flag
  */
-void task_set_message_waiting();
+void task_set_message_waiting(void);
 
 /**
  * @brief adds a queue to task
@@ -186,7 +186,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
 /**
  * @brief idle task checks if there is any task neeeds to run. it speeds up task running
  */
-boolean_t task_idle_check_need_yield();
+boolean_t task_idle_check_need_yield(void);
 
 /**
  * @brief sleep for current task for ticks

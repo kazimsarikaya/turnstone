@@ -20,13 +20,21 @@ efi_runtime_services_t* RS;
 
 typedef int8_t (*kernel_start_t)(system_info_t* sysinfo) __attribute__((sysv_abi));
 
-
 typedef struct efi_kernel_data_t {
     uint8_t* data;
     uint64_t size;
 } efi_kernel_data_t;
 
-efi_status_t efi_setup_heap(){
+efi_status_t efi_setup_heap(void);
+efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res);
+efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data);
+efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data);
+efi_status_t efi_print_variable_names(void);
+efi_status_t efi_is_pxe_boot(boolean_t* result);
+efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data);
+efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
+
+efi_status_t efi_setup_heap(void){
     efi_status_t res;
 
     void* heap_area = NULL;
@@ -142,12 +150,12 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
     PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted");
 
     efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
-    disk_partition_context_t* part_ctx = NULL;
+    const disk_partition_context_t* part_ctx = NULL;
 
     iterator_t* iter = sys_disk->get_partitions(sys_disk);
 
     while(iter->end_of_iterator(iter) != 0) {
-        disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
+        const disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
 
         if(tmp_part_ctx == NULL) {
             res = EFI_OUT_OF_RESOURCES;
@@ -163,7 +171,7 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
             break;
         }
 
-        memory_free(tmp_part_ctx);
+        memory_free((void*)tmp_part_ctx);
 
         iter = iter->next(iter);
     }
@@ -295,7 +303,7 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_print_variable_names() {
+efi_status_t efi_print_variable_names(void) {
     efi_status_t res;
 
     wchar_t buffer[256];
@@ -453,7 +461,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
     eipa.v4.addr[3] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3];
 
     uint64_t buffer_size;
-    char_t* pxeconfig = "pxeconf.json";
+    char_t* pxeconfig = (char_t*)"pxeconf.json";
     boolean_t pxeconfig_is_json = true;
 
     res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
@@ -461,7 +469,7 @@ efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot get config size as json: 0x%llx", res);
 
-        pxeconfig = "pxeconf.bson";
+        pxeconfig = (char_t*)"pxeconf.bson";
         pxeconfig_is_json = false;
 
         res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);

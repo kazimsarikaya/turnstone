@@ -12,6 +12,12 @@ typedef struct efi_disk_impl_context_t {
     uint64_t        block_size;
 } efi_disk_impl_context_t;
 
+uint64_t efi_disk_impl_get_disk_size(disk_t* d);
+int8_t   efi_disk_impl_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   efi_disk_impl_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   efi_disk_impl_close(disk_t* d);
+
+
 uint64_t efi_disk_impl_get_disk_size(disk_t* d){
     efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->disk_context;
     return ctx->disk_size;

@@ -9,6 +9,6 @@
 #include <types.h>
 #include <time.h>
 
-time_t rtc_get_time();
+time_t rtc_get_time(void);
 
 #endif

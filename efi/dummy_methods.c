@@ -17,11 +17,14 @@ size_t __kheap_bottom;
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 
-void* task_get_current_task(){
+void* task_get_current_task(void);
+void  task_yield(void);
+
+void* task_get_current_task(void){
     return NULL;
 }
 
-void task_yield() {
+void task_yield(void) {
 }
 
 #endif

@@ -8,14 +8,6 @@
 #include <cpu.h>
 #include <video.h>
 
-/**
- * @brief performs cpuid query.
- * @param[in] query registers.
- * @param[out] answer registers.
- * @return 0 if method succeed.
- */
-uint8_t cpu_cpuid(cpu_cpuid_regs_t, cpu_cpuid_regs_t*);
-
 void cpu_hlt() {
     for(;;) {
         cpu_cli();

@@ -22,6 +22,7 @@ typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_RODATA, ///< readonly data section
     LINKER_SECTION_TYPE_BSS, ///< bss section
     LINKER_SECTION_TYPE_RELOCATION_TABLE, ///< relocation table section
+    LINKER_SECTION_TYPE_GOT, ///< global offset table section
     LINKER_SECTION_TYPE_STACK, ///< stack section
     LINKER_SECTION_TYPE_HEAP, ///< heap section
     LINKER_SECTION_TYPE_NR_SECTIONS, ///< hack four enum item count
@@ -32,14 +33,17 @@ typedef enum linker_section_type_t {
  * @brief relocation stypes
  */
 typedef enum linker_relocation_type_t {
-    LINKER_RELOCATION_TYPE_32_16, ///< 32 bit wtih 16 bit addend section relative relocation
-    LINKER_RELOCATION_TYPE_32_32, ///< 32 bit wtih 32 bit addend section relative relocation
-    LINKER_RELOCATION_TYPE_32_PC16, ///< 32 bit wtih 16 bit addend program counter relative relocation
-    LINKER_RELOCATION_TYPE_32_PC32, ///< 32 bit wtih 32 bit addend program counter relative relocation
-    LINKER_RELOCATION_TYPE_64_32, ///< 64 bit wtih 32 bit addend section relative relocation
-    LINKER_RELOCATION_TYPE_64_32S, ///< 64 bit wtih signed 32 bit addend section relative relocation
-    LINKER_RELOCATION_TYPE_64_64, ///< 64 bit wtih 64 bit addend section relative relocation
-    LINKER_RELOCATION_TYPE_64_PC32, ///< 64 bit wtih 32 bit addend program counter relative relocation
+    LINKER_RELOCATION_TYPE_32_16, ///< 32 bit width 16 bit addend section relative relocation
+    LINKER_RELOCATION_TYPE_32_32, ///< 32 bit width 32 bit addend section relative relocation
+    LINKER_RELOCATION_TYPE_32_PC16, ///< 32 bit width 16 bit addend program counter relative relocation
+    LINKER_RELOCATION_TYPE_32_PC32, ///< 32 bit width 32 bit addend program counter relative relocation
+    LINKER_RELOCATION_TYPE_64_32, ///< 64 bit width 32 bit addend section relative relocation
+    LINKER_RELOCATION_TYPE_64_32S, ///< 64 bit width signed 32 bit addend section relative relocation
+    LINKER_RELOCATION_TYPE_64_64, ///< 64 bit width 64 bit addend section relative relocation
+    LINKER_RELOCATION_TYPE_64_PC32, ///< 64 bit width 32 bit addend program counter relative relocation
+    LINKER_RELOCATION_TYPE_64_GOT64,///< 64 bit width 64 bit got direct
+    LINKER_RELOCATION_TYPE_64_GOTOFF64, ///< 64 bit width 64 bit got offset relocation
+    LINKER_RELOCATION_TYPE_64_GOTPC64, ///< 64 bit width 64 bit got pc relative relocation
 } linker_relocation_type_t; ///< shorthand for enum
 
 /**
@@ -74,6 +78,7 @@ typedef struct program_header_t {
     uint64_t                   program_size; ///< size of program with all data
     uint64_t                   reloc_start; ///< relocations' start location
     uint64_t                   reloc_count; ///< count of relocations defined as @ref linker_section_locations_t
+    uint64_t                   got_entry_count; ///< entry count at got
     linker_section_locations_t section_locations[LINKER_SECTION_TYPE_NR_SECTIONS]; ///< section location table
 }__attribute__((packed)) program_header_t; ///< shorthand for struct
 
@@ -89,6 +94,6 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
  * @brief remaps kernel for moving sections to new virtual addresses
  * @return 0 if success
  */
-int8_t linker_remap_kernel();
+int8_t linker_remap_kernel(void);
 
 #endif

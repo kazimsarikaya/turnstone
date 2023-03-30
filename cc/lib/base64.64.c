@@ -12,6 +12,8 @@
 #define NEWLINE_INVL 76
 static const uint8_t charset[] = {"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"};
 
+uint8_t byte64_convert(uint8_t ch);
+
 uint8_t byte64_convert(uint8_t ch)
 {
     if (ch >= 'A' && ch <= 'Z')

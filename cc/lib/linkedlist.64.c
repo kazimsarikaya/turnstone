@@ -19,7 +19,7 @@
  * double linked list item
  */
 typedef struct linkedlist_item_internal_t {
-    void*                              data; ///< the data inside list item
+    const void*                        data;       ///< the data inside list item
     struct linkedlist_item_internal_t* next; ///< next list item
     struct linkedlist_item_internal_t* previous; ///< previous list item
 }linkedlist_item_internal_t; ///<short hand for struct
@@ -96,7 +96,7 @@ int8_t linkedlist_iterator_end_of_list(iterator_t* iterator);
  * @param[in]  iterator the iterator
  * @return data
  */
-void* linkedlist_iterator_get_item(iterator_t* iterator);
+const void* linkedlist_iterator_get_item(iterator_t* iterator);
 
 int8_t linkedlist_string_comprator(const void* data1, const void* data2) {
     return strcmp((char_t*)data1, (char_t*)data2);
@@ -109,7 +109,7 @@ int8_t linkedlist_string_comprator(const void* data1, const void* data2) {
  *
  * current item is deleted and the value of item is returned. also list metadata is updated.
  */
-void* linkedlist_iterator_delete_item(iterator_t* iterator);
+const void* linkedlist_iterator_delete_item(iterator_t* iterator);
 
 linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t type,
                                          linkedlist_data_comparator_f comparator, indexer_t indexer){
@@ -179,7 +179,7 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        void* data = iter->delete_item(iter);
+        void* data = (void*)iter->delete_item(iter);
         if(type == LINKEDLIST_DESTROY_WITH_DATA) {
             memory_free_ext(heap, data);
         }
@@ -192,7 +192,7 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
     return memory_free_ext(heap, list);
 }
 
-void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item) {
+const void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item) {
     linkedlist_item_internal_t* li = (linkedlist_item_internal_t*)list_item;
 
     if(li == NULL) {
@@ -217,7 +217,7 @@ int8_t linkedlist_set_equality_comparator(linkedlist_t list, linkedlist_data_com
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position){
+size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position){
     if(data == NULL) {
         return NULL;
     }
@@ -351,7 +351,7 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
 }
 #pragma GCC diagnostic pop
 
-void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position){
+const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position){
     if(data == NULL && where == LINKEDLIST_DELETE_AT_FINDBY) {
         return NULL;
     }
@@ -368,7 +368,7 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
         return NULL;
     }
 
-    void* result = NULL;
+    const void* result = NULL;
 
     if(where == LINKEDLIST_DELETE_AT_HEAD) {
         linkedlist_item_internal_t* item = l->head;
@@ -506,7 +506,7 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
     return result;
 }
 
-int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position){
+int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* position){
     if(data == NULL) {
         return -1;
     }
@@ -552,8 +552,8 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position){
     return res;
 }
 
-void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
-    void* result = NULL;
+const void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
+    const void* result = NULL;
     linkedlist_internal_t* l = (linkedlist_internal_t*)list;
 
     if(l == NULL) {
@@ -676,12 +676,12 @@ int8_t linkedlist_iterator_end_of_list(iterator_t* iterator) {
     return iter->current == NULL ? 0 : 1;
 }
 
-void* linkedlist_iterator_get_item(iterator_t* iterator) {
+const void* linkedlist_iterator_get_item(iterator_t* iterator) {
     linkedlist_item_internal_t* li = ((linkedlist_iterator_internal_t*)iterator->metadata)->current;
     return li->data;
 }
 
-void* linkedlist_iterator_delete_item(iterator_t* iterator){
+const void* linkedlist_iterator_delete_item(iterator_t* iterator){
 
     if(iterator == NULL) {
         return NULL;
@@ -693,7 +693,7 @@ void* linkedlist_iterator_delete_item(iterator_t* iterator){
         return NULL;
     }
 
-    void* data = iter->current->data;
+    const void* data = iter->current->data;
     linkedlist_item_internal_t* current = iter->current;
     linkedlist_item_internal_t* previous = iter->current->previous;
     linkedlist_item_internal_t* next = iter->current->next;
@@ -762,7 +762,7 @@ linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        void* item = iter->get_item(iter);
+        const void* item = iter->get_item(iter);
         linkedlist_insert_at(new_list, item, LINKEDLIST_INSERT_AT_TAIL, 0);
         iter = iter->next(iter);
     }

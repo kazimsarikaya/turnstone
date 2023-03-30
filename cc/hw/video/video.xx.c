@@ -319,7 +319,7 @@ void video_text_print(char_t* string)
     }
 }
 
-size_t video_printf(char_t* fmt, ...){
+size_t video_printf(const char_t* fmt, ...){
 
     va_list args;
     va_start(args, fmt);

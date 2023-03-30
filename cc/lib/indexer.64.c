@@ -76,7 +76,7 @@ int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, in
     return 0;
 }
 
-int8_t indexer_index(indexer_t idxer, void* key, void* data){
+int8_t indexer_index(indexer_t idxer, const void* key, const void* data){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 
     if(l_idxer == NULL) {
@@ -90,7 +90,7 @@ int8_t indexer_index(indexer_t idxer, void* key, void* data){
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        indexer_idx_kc_internal_t* pair = iter->get_item(iter);
+        const indexer_idx_kc_internal_t* pair = iter->get_item(iter);
         void* r_key = pair->key_creator(key, pair->keyarg);
 
         if(r_key != NULL) {
@@ -105,7 +105,7 @@ int8_t indexer_index(indexer_t idxer, void* key, void* data){
     return 0;
 }
 
-void* indexer_delete(indexer_t idxer, void* key){
+const void* indexer_delete(indexer_t idxer, const void* key){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 
     if(l_idxer == NULL) {
@@ -120,7 +120,7 @@ void* indexer_delete(indexer_t idxer, void* key){
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        indexer_idx_kc_internal_t* pair = iter->get_item(iter);
+        const indexer_idx_kc_internal_t* pair = iter->get_item(iter);
         void* r_key = pair->key_creator(key, pair->keyarg);
 
         if(r_key != NULL) {
@@ -140,14 +140,14 @@ void* indexer_delete(indexer_t idxer, void* key){
     return data;
 }
 
-iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, void* key1, void* key2, index_key_search_criteria_t criteria){
+iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 
     if(l_idxer == NULL) {
         return NULL;
     }
 
-    indexer_idx_kc_internal_t* idx_pair = NULL;
+    const indexer_idx_kc_internal_t* idx_pair = NULL;
 
     iterator_t* iter = linkedlist_iterator_create(l_idxer->indexes);
 
@@ -156,7 +156,7 @@ iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, void* key1, void* k
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        indexer_idx_kc_internal_t* pair = iter->get_item(iter);
+        const indexer_idx_kc_internal_t* pair = iter->get_item(iter);
 
         if(pair->idx_id == idx_id) {
             idx_pair = pair;

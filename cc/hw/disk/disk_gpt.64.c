@@ -15,6 +15,18 @@ typedef struct gpt_parts_iter_metadata_t {
     uint8_t     current_part_no;
 } gpt_parts_iter_metadata_t;
 
+int8_t                    gpt_disk_close(disk_t* d);
+int8_t                    gpt_write_gpt_metadata(disk_t* d);
+int8_t                    gpt_check_and_format_if_need(disk_t* d);
+uint8_t                   gpt_add_partition(disk_t* d, disk_partition_context_t* part_ctx);
+int8_t                    gpt_del_partition(disk_t* d, uint8_t partno);
+disk_partition_context_t* gpt_get_partition(disk_t* d, uint8_t partno);
+int8_t                    gpt_part_iter_destroy(iterator_t* iter);
+iterator_t*               gpt_part_iter_next(iterator_t* iter);
+int8_t                    gpt_part_iter_end_of_iterator(iterator_t* iter);
+const void*               gpt_part_iter_get_item(iterator_t* iter);
+const void*               gpt_part_iter_delete_item(iterator_t* iter);
+iterator_t*               gpt_get_partitions(disk_t* d);
 
 int8_t efi_create_guid(efi_guid_t* guid){
     guid->time_low = rand();
@@ -292,7 +304,7 @@ int8_t gpt_part_iter_end_of_iterator(iterator_t* iter){
     return -1;
 }
 
-void* gpt_part_iter_get_item(iterator_t* iter){
+const void* gpt_part_iter_get_item(iterator_t* iter){
     if(iter == NULL) {
         return NULL;
     }
@@ -306,7 +318,7 @@ void* gpt_part_iter_get_item(iterator_t* iter){
     return gpt_get_partition((disk_t*)md->disk, md->current_part_no);
 }
 
-void* gpt_part_iter_delete_item(iterator_t* iter){
+const void* gpt_part_iter_delete_item(iterator_t* iter){
     if(iter == NULL) {
         return NULL;
     }
@@ -355,7 +367,7 @@ iterator_t* gpt_get_partitions(disk_t* d){
     return iter;
 }
 
-disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, char_t* name, uint64_t start, uint64_t end){
+disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, const char_t* name, uint64_t start, uint64_t end){
     disk_partition_context_t* res = memory_malloc(sizeof(disk_partition_context_t));
 
     efi_partition_entry_t* ic = memory_malloc(sizeof(efi_partition_entry_t));

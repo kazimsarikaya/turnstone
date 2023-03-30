@@ -14,24 +14,24 @@
 #include <logging.h>
 #include <video.h>
 
-file_t*      fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, path_t* p, time_t ct, time_t lat, time_t lmt);
-directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, path_t* p, time_t ct, time_t lat, time_t lmt);
+file_t*      fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, const path_t* p, time_t ct, time_t lat, time_t lmt);
+directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const path_t* p, time_t ct, time_t lat, time_t lmt);
 
-path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* child, fs_stat_type_t type);
+path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path_t* child, fs_stat_type_t type);
 
 
 uint64_t          fat32_get_absulute_lba_from_clusterno(filesystem_t* fs, uint32_t clusterno);
 uint32_t          fat32_count_cluster(filesystem_t* fs, uint32_t clusterno);
 uint8_t           fat32_long_filename_checksum(char_t* file_name);
-directory_t*      fat32_create_or_open_directory(directory_t* self, path_t* p);
-file_t*           fat32_create_or_open_file(directory_t* self, path_t* p);
-path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, path_t* p, fs_stat_type_t type);
+directory_t*      fat32_create_or_open_directory(directory_t* self, const path_t* p);
+file_t*           fat32_create_or_open_file(directory_t* self, const path_t* p);
+path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, const path_t* p, fs_stat_type_t type);
 int8_t            fat32_write_cluster_data(filesystem_t* fs);
 
-directory_t* fs_create_or_open_directory(filesystem_t* self, path_t* p);
-file_t*      fs_create_or_open_file(filesystem_t* self, path_t* p);
+directory_t* fs_create_or_open_directory(filesystem_t* self, const path_t* p);
+file_t*      fs_create_or_open_file(filesystem_t* self, const path_t* p);
 
-fat32_dirent_shortname_t* fat32_gen_dirents(path_t* p, fs_stat_type_t type, timeparsed_t* tp, int32_t* ent_cnt);
+fat32_dirent_shortname_t* fat32_gen_dirents(const path_t* p, fs_stat_type_t type, timeparsed_t* tp, int32_t* ent_cnt);
 
 uint32_t fat32_get_empty_cluster(filesystem_t* fs);
 int8_t   fat32_directory_write(directory_t* self, time_t mt);
@@ -39,7 +39,7 @@ int8_t   fat32_directory_write(directory_t* self, time_t mt);
 typedef struct fat32_fs_file_context_t {
     filesystem_t* fs;
     uint32_t      clusterno;
-    path_t*       file_path;
+    const path_t* file_path;
     time_t        create_time;
     time_t        last_accessed_time;
     time_t        last_modification_time;
@@ -52,7 +52,7 @@ typedef struct fat32_fs_file_context_t {
 typedef struct fat32_fs_directory_context_t {
     filesystem_t*             fs;
     uint32_t                  clusterno;
-    path_t*                   directory_path;
+    const path_t*             directory_path;
     time_t                    create_time;
     time_t                    last_accessed_time;
     time_t                    last_modification_time;
@@ -87,6 +87,40 @@ typedef struct fat32_dir_list_iter_metadata_t {
 } fat32_dir_list_iter_metadata_t;
 
 
+uint32_t       fat32_cluster_count(filesystem_t* fs, uint32_t clusterno);
+const path_t*  fat32_file_get_path(const file_t* self);
+int8_t         fat32_file_close(file_t* self);
+int64_t        fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen);
+int64_t        fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen);
+int64_t        fat32_file_seek(file_t* self, int64_t pos, file_seek_type_t st);
+int64_t        fat32_file_tell(file_t* self);
+int8_t         fat32_file_flush(file_t* self);
+fs_stat_type_t fat32_file_get_type(file_t* self);
+time_t         fat32_file_get_create_time(file_t* self);
+time_t         fat32_file_get_last_access_time(file_t* self);
+time_t         fat32_file_get_last_modification_time(file_t* self);
+const path_t*  fat32_directory_get_path(const directory_t* self);
+int8_t         fat32_directory_close(directory_t* self);
+const void*    fat32_dir_list_iter_notimpelemented(iterator_t* iter);
+int8_t         fat32_dir_list_iter_destroy(iterator_t* iter);
+iterator_t*    fat32_dir_list_iter_next(iterator_t* iter);
+int8_t         fat32_dir_list_iter_end_of_iterator(iterator_t* iter);
+const void*    fat32_dir_list_iter_get_item(iterator_t* iter);
+const void*    fat32_dir_list_iter_get_extra_data(iterator_t* iter);
+iterator_t*    fat32_directory_list(directory_t* self);
+directory_t*   fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno, uint32_t clusterno, const path_t* p, time_t ct);
+fs_stat_type_t fat32_directory_get_type(directory_t* self);
+time_t         fat32_directory_get_create_time(directory_t* self);
+time_t         fat32_directory_get_last_access_time(directory_t* self);
+time_t         fat32_directory_get_last_modification_time(directory_t* self);
+uint64_t       fat32_get_total_size(filesystem_t* self);
+uint64_t       fat32_get_free_size(filesystem_t* self);
+int8_t         fat32_close(filesystem_t* self);
+fs_stat_t*     fat32_stat(filesystem_t* self, const path_t* p);
+int8_t         fat32_remove(filesystem_t* self, const path_t* p);
+directory_t*   fat32_get_root_directory(filesystem_t* self);
+
+
 uint32_t fat32_cluster_count(filesystem_t* fs, uint32_t clusterno) {
     fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)fs->context;
 
@@ -106,7 +140,7 @@ uint32_t fat32_cluster_count(filesystem_t* fs, uint32_t clusterno) {
     return res;
 }
 
-fat32_dirent_shortname_t* fat32_gen_dirents(path_t* p, fs_stat_type_t type, timeparsed_t* tp, int32_t* ent_cnt) {
+fat32_dirent_shortname_t* fat32_gen_dirents(const path_t* p, fs_stat_type_t type, timeparsed_t* tp, int32_t* ent_cnt) {
     boolean_t need_ln_ent = 0;
     *ent_cnt = 1;
 
@@ -216,7 +250,7 @@ fat32_dirent_shortname_t* fat32_gen_dirents(path_t* p, fs_stat_type_t type, time
     return res;
 }
 
-path_t* fat32_file_get_path(file_t* self) {
+const path_t* fat32_file_get_path(const file_t* self) {
     fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
 
     return ctx->file_path;
@@ -472,7 +506,7 @@ time_t fat32_file_get_last_modification_time(file_t* self) {
     return ctx->last_modification_time;
 }
 
-file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, path_t* p, time_t ct, time_t lat, time_t lmt) {
+file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, const path_t* p, time_t ct, time_t lat, time_t lmt) {
     fat32_fs_file_context_t* ctx = memory_malloc(sizeof(fat32_fs_file_context_t));
 
     if(ctx == NULL) {
@@ -514,7 +548,7 @@ file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, 
 }
 
 
-path_t* fat32_directory_get_path(directory_t* self) {
+const path_t* fat32_directory_get_path(const directory_t* self) {
     fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
 
     return ctx->directory_path;
@@ -532,7 +566,7 @@ int8_t fat32_directory_close(directory_t* self) {
     return 0;
 }
 
-void* fat32_dir_list_iter_notimpelemented(iterator_t* iter){
+const void* fat32_dir_list_iter_notimpelemented(iterator_t* iter){
     UNUSED(iter);
 
     return NULL;
@@ -561,7 +595,7 @@ int8_t fat32_dir_list_iter_end_of_iterator(iterator_t* iter){
 }
 
 
-void* fat32_dir_list_iter_get_item(iterator_t* iter){
+const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
     fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)metadata->dir->context;
 
@@ -635,7 +669,7 @@ void* fat32_dir_list_iter_get_item(iterator_t* iter){
         int64_t wname_idx = 0;
 
         while(linkedlist_size(name_parts)) {
-            p = linkedlist_stack_pop(name_parts);
+            p = (wchar_t*)linkedlist_stack_pop(name_parts);
 
             memory_memcopy(p, wname + wname_idx, sizeof(wchar_t) * wchar_size(p));
             wname_idx += wchar_size(p);
@@ -731,7 +765,7 @@ void* fat32_dir_list_iter_get_item(iterator_t* iter){
     return pi;
 }
 
-void* fat32_dir_list_iter_get_extra_data(iterator_t* iter){
+const void* fat32_dir_list_iter_get_extra_data(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
     return &metadata->extra_data;
 }
@@ -754,7 +788,7 @@ iterator_t* fat32_directory_list(directory_t* self) {
     return iter;
 }
 
-path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, path_t* p, fs_stat_type_t type) {
+path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, const path_t* p, fs_stat_type_t type) {
     fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
 
     char_t* f_path_str = p->get_name_and_ext(p);
@@ -763,7 +797,7 @@ path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, path
 
     filesystem_t* fs = ctx->fs;
 
-    path_t* dir_path = ctx->directory_path;
+    const path_t* dir_path = ctx->directory_path;
 
     boolean_t found = 0;
 
@@ -771,19 +805,19 @@ path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, path
 
     while(iter->end_of_iterator(iter) != 0) {
 
-        path_interface_t* pi = iter->get_item(iter);
+        const path_interface_t* pi = iter->get_item(iter);
 
 
         if(pi) {
-            path_t* t_p = pi->get_path(pi);
+            const path_t* t_p = pi->get_path(pi);
 
-            char_t* t_p_str = t_p->get_name_and_ext(t_p);
+            const char_t* t_p_str = t_p->get_name_and_ext(t_p);
 
             if(strcmp(t_p_str, f_path_str) == 0) {
                 found = 1;
 
                 if(pi->get_type(pi) == type) {
-                    fat32_dir_list_iter_extradata_t* ed = iter->get_extra_data(iter);
+                    const fat32_dir_list_iter_extradata_t* ed = iter->get_extra_data(iter);
 
                     if(type == FS_STAT_TYPE_FILE) {
                         res = (path_interface_t*)fat32_new_file(fs, self, ed->dirent_idx, ed->clusterno, ed->size, dir_path->append(dir_path, p), ed->ct, ed->lat, ed->lmt);
@@ -886,7 +920,7 @@ int8_t  fat32_directory_write(directory_t* self, time_t mt) {
     return 0;
 }
 
-directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno, uint32_t clusterno, path_t* p, time_t ct) {
+directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno, uint32_t clusterno, const path_t* p, time_t ct) {
     fat32_fs_context_t* fs_ctx = fs->context;
 
     uint32_t dir_dirent_cnt = fs_ctx->bpb->sectors_per_cluster * fs_ctx->bpb->bytes_per_sector / sizeof(uint32_t);
@@ -968,7 +1002,7 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* child, fs_stat_type_t type) {
+path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path_t* child, fs_stat_type_t type) {
     fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)parent->context;
 
     timeparsed_t tp;
@@ -1049,11 +1083,11 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, path_t* ch
 }
 #pragma GCC diagnostic pop
 
-directory_t* fat32_create_or_open_directory(directory_t* self, path_t* p) {
+directory_t* fat32_create_or_open_directory(directory_t* self, const path_t* p) {
     return (directory_t*)fat32_create_or_open_directory_or_file(self, p, FS_STAT_TYPE_DIR);
 }
 
-file_t* fat32_create_or_open_file(directory_t* self, path_t* p) {
+file_t* fat32_create_or_open_file(directory_t* self, const path_t* p) {
     return (file_t*)fat32_create_or_open_directory_or_file(self, p, FS_STAT_TYPE_FILE);
 }
 
@@ -1081,7 +1115,7 @@ time_t fat32_directory_get_last_modification_time(directory_t* self) {
 }
 
 
-directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, path_t* p, time_t ct, time_t lat, time_t lmt) {
+directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const path_t* p, time_t ct, time_t lat, time_t lmt) {
     fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)fs->context;
 
     uint32_t cluster_count = fat32_cluster_count(fs, clusterno);
@@ -1208,14 +1242,14 @@ int8_t fat32_close(filesystem_t* self) {
     return 0;
 }
 
-fs_stat_t* fat32_stat(filesystem_t* self, path_t* p) {
+fs_stat_t* fat32_stat(filesystem_t* self, const path_t* p) {
     UNUSED(self);
     UNUSED(p);
 
     return NULL;
 }
 
-int8_t fat32_remove(filesystem_t* self, path_t* p) {
+int8_t fat32_remove(filesystem_t* self, const path_t* p) {
     UNUSED(self);
     UNUSED(p);
 
@@ -1245,7 +1279,7 @@ int8_t fat32_write_cluster_data(filesystem_t* fs){
     return 0;
 }
 
-filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname){
+filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* volname){
 
     disk_partition_context_t* part_ctx = d->get_partition(d, partno);
 

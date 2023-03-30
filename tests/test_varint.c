@@ -7,7 +7,9 @@
 #include <utils.h>
 #include <varint.h>
 
-uint32_t main(uint32_t argc, char_t** argv) {
+int32_t main(uint32_t argc, char_t** argv);
+
+int32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 

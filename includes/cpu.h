@@ -17,16 +17,16 @@
  *
  * This command stops cpu using hlt assembly command inside for.
  */
-__attribute__((noreturn)) void cpu_hlt();
+__attribute__((noreturn)) void cpu_hlt(void);
 
-void cpu_idle();
+void cpu_idle(void);
 
 /**
  * @brief disables interrupts
  *
  * This command disables interrupts with cli assembly command.
  */
-static inline void cpu_cli() {
+static inline void cpu_cli(void) {
     __asm__ __volatile__ ("cli");
 }
 
@@ -35,7 +35,7 @@ static inline void cpu_cli() {
  *
  * This command enables interrupts with sti assembly command.
  */
-static inline void cpu_sti() {
+static inline void cpu_sti(void) {
     __asm__ __volatile__ ("sti");
 }
 
@@ -44,7 +44,7 @@ static inline void cpu_sti() {
  *
  * This command nops.
  */
-static inline void cpu_nop() {
+static inline void cpu_nop(void) {
     __asm__ __volatile__ ("nop");
 }
 
@@ -53,7 +53,7 @@ static inline void cpu_nop() {
  *
  * This command clears direction flag.
  */
-static inline void cpu_cld() {
+static inline void cpu_cld(void) {
     __asm__ __volatile__ ("cld");
 }
 
@@ -64,13 +64,13 @@ static inline void cpu_cld() {
  * This function is meaningful at real mode.
  * At long mode is does nothing
  */
-uint16_t cpu_read_data_segment();
+uint16_t cpu_read_data_segment(void);
 
 /**
  * @brief checks rdrand supported
  * @return 0 when supported else -1
  */
-int8_t cpu_check_rdrand();
+int8_t cpu_check_rdrand(void);
 
 /**
  * @brief read msr and return
@@ -97,7 +97,7 @@ int8_t cpu_write_msr(uint32_t msr_address, uint64_t value);
  *
  * returns cr2 value for page faults
  */
-uint64_t cpu_read_cr2();
+uint64_t cpu_read_cr2(void);
 
 /**
  * @struct cpu_cpuid_regs_t
@@ -119,7 +119,7 @@ uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer);
  *
  * sets segment registers to zero
  */
-void cpu_clear_segments();
+void cpu_clear_segments(void);
 
 /**
  * @brief prepares stack
@@ -141,11 +141,11 @@ static inline void cpu_set_and_clear_stack(uint64_t stack_address) {
  *
  * calls invlpg instruction
  */
-static inline void cpu_tlb_invalidate(void * address) {
+static inline void cpu_tlb_invalidate(void* address) {
     __asm__ __volatile__ ("invlpg (%%rax)" : : "a" (address));
 }
 
-static inline void cpu_tlb_flush() {
+static inline void cpu_tlb_flush(void) {
     __asm__ __volatile__ ("mov %%cr3, %%rax\n"
                           "mov %%rax, %%cr3"
                           ::: "rax");

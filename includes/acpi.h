@@ -200,7 +200,7 @@ typedef struct acpi_contex_t {
 
 extern acpi_contex_t* ACPI_CONTEXT;
 
-acpi_xrsdp_descriptor_t* acpi_find_xrsdp();
+acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void);
 uint8_t                  acpi_validate_checksum(acpi_sdt_header_t* sdt_header);
 
 acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature, linkedlist_t old_tables);
@@ -211,8 +211,8 @@ linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt
 
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);
 
-int8_t acpi_reset();
-int8_t acpi_poweroff();
-int8_t acpi_setup_events();
+int8_t acpi_reset(void);
+int8_t acpi_poweroff(void);
+int8_t acpi_setup_events(void);
 
 #endif

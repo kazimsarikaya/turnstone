@@ -5,7 +5,9 @@
 
 #include "setup.h"
 
-int main(){
+int main(void);
+
+int main(void){
     FILE* fp;
 
 

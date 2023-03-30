@@ -6,6 +6,9 @@
 #include "setup.h"
 #include <linkedlist.h>
 
+int8_t  int_comparator(const void* i, const void* j);
+int32_t main(void);
+
 int8_t int_comparator(const void* i, const void* j){
     int* t_i = (int*)i;
     int* t_j = (int*)j;
@@ -19,7 +22,7 @@ int8_t int_comparator(const void* i, const void* j){
 }
 
 
-int main(){
+int32_t main(void){
     int t = 9, x = 13, y = 16, z = 7;
     int* i;
     FILE* fp;

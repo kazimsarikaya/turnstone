@@ -14,7 +14,7 @@
 
 typedef void * sha256_ctx_t;
 
-sha256_ctx_t sha256_init();
+sha256_ctx_t sha256_init(void);
 int8_t       sha256_update(sha256_ctx_t ctx, const uint8_t* data, size_t len);
 uint8_t*     sha256_final(sha256_ctx_t ctx);
 uint8_t*     sha256_hash(uint8_t* data, size_t length);
@@ -24,7 +24,7 @@ uint8_t*     sha256_hash(uint8_t* data, size_t length);
 
 typedef void * sha224_ctx_t;
 
-sha224_ctx_t sha224_init();
+sha224_ctx_t sha224_init(void);
 int8_t       sha224_update(sha224_ctx_t ctx, const uint8_t* data, size_t len);
 uint8_t*     sha224_final(sha224_ctx_t ctx);
 uint8_t*     sha224_hash(uint8_t* data, size_t length);
@@ -35,7 +35,7 @@ uint8_t*     sha224_hash(uint8_t* data, size_t length);
 
 typedef void * sha512_ctx_t;
 
-sha512_ctx_t sha512_init();
+sha512_ctx_t sha512_init(void);
 int8_t       sha512_update(sha512_ctx_t ctx, const uint8_t* data, size_t len);
 uint8_t*     sha512_final(sha512_ctx_t ctx);
 uint8_t*     sha512_hash(uint8_t* data, size_t length);
@@ -44,7 +44,7 @@ uint8_t*     sha512_hash(uint8_t* data, size_t length);
 
 typedef void * sha384_ctx_t;
 
-sha384_ctx_t sha384_init();
+sha384_ctx_t sha384_init(void);
 int8_t       sha384_update(sha384_ctx_t ctx, const uint8_t* data, size_t len);
 uint8_t*     sha384_final(sha384_ctx_t ctx);
 uint8_t*     sha384_hash(uint8_t* data, size_t length);

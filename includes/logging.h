@@ -39,6 +39,7 @@ typedef enum logging_modules_t {
     VIRTIONET,
     E1000,
     FAT,
+    NVME,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -57,9 +58,9 @@ typedef enum logging_level_t {
 } logging_level_t; ///< type short hand for enum @ref logging_level_e
 
 /*! logging module names */
-extern const char_t* logging_module_names[];
+extern const char_t*const logging_module_names[];
 /*! logging level names */
-extern const char_t* logging_level_names[];
+extern const char_t*const logging_level_names[];
 /*! logging levels for each module, can be changed at run time */
 extern uint8_t logging_module_levels[];
 
@@ -70,7 +71,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_KERNEL
 /*! default log level for kernel module */
-#define LOG_LEVEL_KERNEL LOG_INFO
+#define LOG_LEVEL_KERNEL LOG_DEBUG
 #endif
 
 #ifndef LOG_LEVEL_MEMORY
@@ -110,7 +111,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_LINKER
 /*! default log level for linker module */
-#define LOG_LEVEL_LINKER LOG_INFO
+#define LOG_LEVEL_LINKER LOG_TRACE
 #endif
 
 #ifndef LOG_LEVEL_TASKING
@@ -173,6 +174,10 @@ extern uint8_t logging_module_levels[];
 #define LOG_LEVEL_FAT LOG_INFO
 #endif
 
+#ifndef LOG_LEVEL_NVME
+/*! default log level for nvme module */
+#define LOG_LEVEL_NVME LOG_DEBUG
+#endif
 
 #ifndef LOG_LOCATION
 /*! file and line no will be logged? */

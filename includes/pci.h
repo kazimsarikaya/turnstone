@@ -31,6 +31,7 @@
 #define PCI_DEVICE_CLASS_SERIAL_BUS               0x0C
 
 #define PCI_DEVICE_SUBCLASS_SATA_CONTROLLER  0x06
+#define PCI_DEVICE_SUBCLASS_NVME_CONTROLLER  0x08
 #define PCI_DEVICE_SUBCLASS_ETHERNET         0x00
 #define PCI_DEVICE_SUBCLASS_VGA              0x00
 #define PCI_DEVICE_SUBCLASS_BRIDGE_HOST      0x00
@@ -46,6 +47,7 @@
 #define PCI_DEVICE_CAPABILITY_AER     0x01
 #define PCI_DEVICE_CAPABILITY_MSI     0x05
 #define PCI_DEVICE_CAPABILITY_VENDOR  0x09
+#define PCI_DEVICE_CAPABILITY_PCIE    0x10
 #define PCI_DEVICE_CAPABILITY_MSIX    0x11
 
 #define PCI_IO_PORT_CONFIG 0x0CF8
@@ -289,7 +291,8 @@ typedef struct pci_capability_msix_table_t {
 }__attribute__((packed)) pci_capability_msix_table_t;
 
 typedef struct pci_context_t {
-    linkedlist_t storage_controllers;
+    linkedlist_t sata_controllers;
+    linkedlist_t nvme_controllers;
     linkedlist_t network_controllers;
     linkedlist_t other_devices;
 } pci_context_t;

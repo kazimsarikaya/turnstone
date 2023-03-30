@@ -18,7 +18,7 @@
 /**
  * @brief initialize crc32 tables for fast calculation
  */
-void crc32_init_table();
+void crc32_init_table(void);
 
 /**
  * @brief calculates crc32 sum

@@ -24,26 +24,41 @@ typedef struct fs_empty_path_interface_ctx_t {
     fs_stat_type_t type;
 } fs_empty_path_interface_ctx_t;
 
+char_t*        fs_path_get_fullpath(const path_t* self);
+char_t*        fs_path_get_name(const path_t* self);
+char_t*        fs_path_get_extension(const path_t* self);
+char_t*        fs_path_get_name_and_ext(const path_t* self);
+path_t*        fs_path_get_basepath(const path_t* self);
+int8_t         fs_path_is_root(const path_t* self);
+int8_t         fs_path_is_directory(const path_t* self);
+int8_t         fs_path_close(const path_t* self);
+path_t*        fs_path_append(const path_t* self, const path_t* child);
+directory_t*   fs_create_or_open_directory(filesystem_t* self, const path_t* p);
+file_t*        fs_create_or_open_file(filesystem_t* self, const path_t* p);
+const path_t*  fs_epi_get_path(const path_interface_t* self);
+fs_stat_type_t fs_epi_get_type(const path_interface_t* self);
+int8_t         fs_epi_close(const path_interface_t* self);
 
-char_t* fs_path_get_fullpath(path_t* self) {
+
+char_t* fs_path_get_fullpath(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     return ctx->path_string;
 }
 
-char_t* fs_path_get_name(path_t* self) {
+char_t* fs_path_get_name(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     return ctx->name;
 }
 
-char_t* fs_path_get_extension(path_t* self) {
+char_t* fs_path_get_extension(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     return ctx->ext;
 }
 
-char_t* fs_path_get_name_and_ext(path_t* self) {
+char_t* fs_path_get_name_and_ext(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     if(self->is_root(self) == 0) {
@@ -55,7 +70,7 @@ char_t* fs_path_get_name_and_ext(path_t* self) {
     return last_part;
 }
 
-path_t* fs_path_get_basepath(path_t* self) {
+path_t* fs_path_get_basepath(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     if(self->is_root(self) == 0) {
@@ -91,13 +106,13 @@ path_t* fs_path_get_basepath(path_t* self) {
     return p;
 }
 
-int8_t fs_path_is_root(path_t* self) {
+int8_t fs_path_is_root(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     return strcmp(PATH_DELIMETER_STR, ctx->path_string) == 0?0:-1;
 }
 
-int8_t fs_path_is_directory(path_t* self) {
+int8_t fs_path_is_directory(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     fs_stat_t* stat = ctx->fs->stat(ctx->fs, self);
@@ -109,7 +124,7 @@ int8_t fs_path_is_directory(path_t* self) {
     return res;
 }
 
-int8_t fs_path_close(path_t* self) {
+int8_t fs_path_close(const path_t* self) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     memory_free(ctx->path_string);
@@ -118,13 +133,13 @@ int8_t fs_path_close(path_t* self) {
     memory_free(ctx->name);
     memory_free(ctx->ext);
     memory_free(ctx);
-    memory_free(self);
+    memory_free((void*)self);
 
     return 0;
 }
 
 
-path_t* fs_path_append(path_t* self, path_t* child) {
+path_t* fs_path_append(const path_t* self, const path_t* child) {
     fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
 
     char_t* tmp = NULL;
@@ -146,7 +161,7 @@ path_t* fs_path_append(path_t* self, path_t* child) {
     return p;
 }
 
-path_t* filesystem_new_path(filesystem_t* fs, char_t* path_string) {
+path_t* filesystem_new_path(filesystem_t* fs, const char_t* path_string) {
     fs_path_ctx_t* ctx = memory_malloc(sizeof(fs_path_ctx_t));
 
     if(ctx == NULL) {
@@ -206,7 +221,7 @@ path_t* filesystem_new_path(filesystem_t* fs, char_t* path_string) {
     return p;
 }
 
-directory_t* fs_create_or_open_directory(filesystem_t* self, path_t* p) {
+directory_t* fs_create_or_open_directory(filesystem_t* self, const path_t* p) {
 
     directory_t* root_dir = self->get_root_directory(self);
 
@@ -217,7 +232,7 @@ directory_t* fs_create_or_open_directory(filesystem_t* self, path_t* p) {
     return d;
 }
 
-file_t* fs_create_or_open_file(filesystem_t* self, path_t* p) {
+file_t* fs_create_or_open_file(filesystem_t* self, const path_t* p) {
 
     directory_t* root_dir = self->get_root_directory(self);
 
@@ -228,23 +243,23 @@ file_t* fs_create_or_open_file(filesystem_t* self, path_t* p) {
     return f;
 }
 
-path_t* fs_epi_get_path(path_interface_t* self) {
+const path_t* fs_epi_get_path(const path_interface_t* self) {
     fs_empty_path_interface_ctx_t* ctx = (fs_empty_path_interface_ctx_t*)self->context;
 
     return ctx->path;
 }
 
-fs_stat_type_t fs_epi_get_type(path_interface_t* self) {
+fs_stat_type_t fs_epi_get_type(const path_interface_t* self) {
     fs_empty_path_interface_ctx_t* ctx = (fs_empty_path_interface_ctx_t*)self->context;
 
     return ctx->type;
 }
 
-int8_t fs_epi_close(path_interface_t* self) {
+int8_t fs_epi_close(const path_interface_t* self) {
     fs_empty_path_interface_ctx_t* ctx = (fs_empty_path_interface_ctx_t*)self->context;
     ctx->path->close(ctx->path);
     memory_free(self->context);
-    memory_free(self);
+    memory_free((void*)self);
 
     return 0;
 }

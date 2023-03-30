@@ -29,12 +29,12 @@ map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key
 #define map_string() map_new(&map_string_key_extractor)
 #define map_data() map_new(&map_data_key_extractor)
 
-void* map_insert(map_t map, void* key, void* data);
-void* map_get_with_default(map_t map, void* key, void* def);
+void*       map_insert(map_t map, const void* key, const void* data);
+const void* map_get_with_default(map_t map, const void* key, void* def);
 #define map_get(m, k) map_get_with_default(m, k, NULL)
 #define map_exists(m, k) (map_get_with_default(m, k, NULL) != NULL)
-void*  map_delete(map_t map, void* key);
-int8_t map_destroy(map_t map);
+const void* map_delete(map_t map, const void* key);
+int8_t      map_destroy(map_t map);
 
 iterator_t* map_create_iterator(map_t map);
 

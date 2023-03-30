@@ -23,6 +23,7 @@ typedef struct sha256_internal_ctx_t {
     uint32_t state[SHA256_STATE_SIZE];
 } sha256_internal_ctx_t;
 
+void sha256_transform(sha256_internal_ctx_t* ctx, const uint8_t* data);
 
 static const uint32_t k[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,

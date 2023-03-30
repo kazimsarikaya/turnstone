@@ -43,6 +43,12 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
     if((sw & DATA_SERIALIZE_WITH_NAME) && data->name) {
         data_t* tmp_name = data_bson_serialize(data->name, DATA_SERIALIZE_WITH_TYPE | DATA_SERIALIZE_WITH_LENGTH);
 
+        if(tmp_name == NULL) {
+            buffer_destroy(buf);
+
+            return NULL;
+        }
+
         buffer_append_bytes(buf, (uint8_t*)tmp_name->value, tmp_name->length);
 
         memory_free(tmp_name->value);

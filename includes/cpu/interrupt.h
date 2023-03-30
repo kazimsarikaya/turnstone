@@ -40,7 +40,7 @@ typedef struct interrupt_frame {
  *
  * builds interrupt table at idtr look for @ref descriptor_idt
  */
-int8_t interrupt_init();
+int8_t interrupt_init(void);
 
 /**
  * @brief irq method signature
@@ -70,7 +70,7 @@ int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq);
  * @brief finds not used interrupt for registering
  * @return interrupt number
  */
-uint8_t interrupt_get_next_empty_interrupt();
+uint8_t interrupt_get_next_empty_interrupt(void);
 
 /**
  * @union interrupt_errorcode_pagefault_u

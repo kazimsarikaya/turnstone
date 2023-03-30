@@ -125,6 +125,6 @@ typedef struct fat32_dirent_longname_t {
     wchar_t  name_part3[2];
 }__attribute__((packed)) fat32_dirent_longname_t;
 
-filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, char_t* volname);
+filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* volname);
 
 #endif

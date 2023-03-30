@@ -415,7 +415,7 @@ char_t* wchar_to_char(wchar_t* src){
     return dst;
 }
 
-wchar_t* char_to_wchar(char_t* str){
+wchar_t* char_to_wchar(const char_t* str){
 
     if(str == NULL) {
         return NULL;

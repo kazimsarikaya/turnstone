@@ -81,6 +81,6 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled);
 
 uint8_t apic_get_irq_override(uint8_t old_irq);
 
-void apic_eoi();
+void apic_eoi(void);
 
 #endif

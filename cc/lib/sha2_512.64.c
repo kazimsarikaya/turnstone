@@ -23,6 +23,7 @@ typedef struct sha512_internal_ctx_t {
     uint64_t state[SHA512_STATE_SIZE];
 } sha512_internal_ctx_t;
 
+void sha512_transform(sha512_internal_ctx_t* ctx, const uint8_t* data);
 
 static const uint64_t k[80] = {
     0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL, 0x3956c25bf348b538ULL,

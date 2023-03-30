@@ -31,6 +31,7 @@ time_t time_ns(time_t* t) {
 
 #endif
 
+boolean_t     time_is_leap(int64_t year);
 timeparsed_t* parse_time(timeparsed_t* tp, time_t t);
 
 int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };

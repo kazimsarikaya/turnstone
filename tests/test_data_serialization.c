@@ -10,6 +10,11 @@
 #include <strings.h>
 #include <xxhash.h>
 
+uint32_t main(uint32_t argc, char_t** argv);
+int8_t   test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, void* data);
+int8_t   test_ser_deser_datalist(void);
+int8_t   test_ser_deser_recurive(void);
+
 int8_t test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, void* data) {
     uint64_t ihash = xxhash64_hash((void*)&data, datalen);
 
@@ -68,7 +73,7 @@ int8_t test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, 
     return 0;
 }
 
-int8_t test_ser_deser_datalist() {
+int8_t test_ser_deser_datalist(void) {
 
 
     data_t tmp_data_lvl2 = {DATA_TYPE_INT32, 0, NULL, (void*)0x12345ULL};
@@ -125,7 +130,7 @@ int8_t test_ser_deser_datalist() {
     return 0;
 }
 
-int8_t test_ser_deser_recurive() {
+int8_t test_ser_deser_recurive(void) {
     data_t* data_list = memory_malloc(sizeof(data_t) * 10);
 
     if(data_list == NULL) {
@@ -208,12 +213,12 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     uint64_t res = 0;
 
-    res += test_ser_deser_primitive("test-int16", DATA_TYPE_INT16, sizeof(uint16_t), (void*)0x1254);
-    res += test_ser_deser_primitive("test-of-int-32", DATA_TYPE_INT64, sizeof(uint64_t), (void*)0x1254369856ULL);
+    res += test_ser_deser_primitive((char_t*)"test-int16", DATA_TYPE_INT16, sizeof(uint16_t), (void*)0x1254);
+    res += test_ser_deser_primitive((char_t*)"test-of-int-32", DATA_TYPE_INT64, sizeof(uint64_t), (void*)0x1254369856ULL);
 
     float32_t test = 1234.56789;
 
-    res += test_ser_deser_primitive("single floating point test", DATA_TYPE_FLOAT32, sizeof(float32_t), &test);
+    res += test_ser_deser_primitive((char_t*)"single floating point test", DATA_TYPE_FLOAT32, sizeof(float32_t), &test);
 
     res += test_ser_deser_datalist();
 

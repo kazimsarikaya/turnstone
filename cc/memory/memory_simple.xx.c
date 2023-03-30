@@ -82,6 +82,8 @@ typedef struct heapmetainfo_t {
  */
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
 
+void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item);
+
 /**
  * @brief simple heap free implementation
  * @param[in]  heap simple heap (itself)
@@ -167,7 +169,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     hibottom->next = NULL;
     hibottom->previous = NULL;
     hibottom->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_NOTUSED; // heapstart, empty;
-    hibottom->size = (hitop - hibottom); // inclusive size as heapinfo_t because of alignment
+    hibottom->size = (uint64_t)(hitop - hibottom); // inclusive size as heapinfo_t because of alignment
 
     hitop->magic = HEAP_INFO_MAGIC;
     hitop->padding = HEAP_INFO_PADDING;
@@ -447,7 +449,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         hi_r->magic = HEAP_INFO_MAGIC;
         hi_r->padding = HEAP_INFO_PADDING;
         hi_r->flags = HEAP_INFO_FLAG_USED;
-        hi_r->size = empty_hi + empty_hi->size - hi_r;
+        hi_r->size = (uint64_t)(empty_hi + empty_hi->size - hi_r);
 
         hi_r->next = empty_hi->next;
         if(hi_r->next) {
@@ -463,7 +465,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     // now let's look left side of hi_a, it is still empty_hi. if can contain at least one item let it go
     if(hi_a - empty_hi > 1) {
         // yes we have at least one area
-        empty_hi->size = hi_a - empty_hi; // set its size
+        empty_hi->size = (uint64_t)(hi_a - empty_hi); // set its size
 
         if(empty_hi->previous == NULL) {
             simple_heap->first_empty = empty_hi;

@@ -6,6 +6,10 @@ HOSTOS=$(shell uname -s)
 CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu11 \
 	-O2 -nostdlib -ffreestanding -c -m64 -msse4.2\
+	-Wshadow -Wpointer-arith -Wcast-align \
+	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
+    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
+    -Wstrict-prototypes \
 	-D___TESTMODE=1 -g -Wno-address-of-packed-member ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)

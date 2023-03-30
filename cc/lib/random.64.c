@@ -8,12 +8,14 @@
 uint64_t random_xoroshiro_seed = 0;
 uint64_t random_xoroshiro_state[4] = {};
 
+uint64_t random_xoroshiro_state_next(void);
+uint64_t random_xoroshiro_next(void);
 
 static inline uint64_t random_xoroshiro_rotl(const uint64_t x, int k) {
     return (x << k) | (x >> (64 - k));
 }
 
-uint64_t random_xoroshiro_state_next() {
+uint64_t random_xoroshiro_state_next(void) {
     uint64_t z = (random_xoroshiro_seed += 0x9e3779b97f4a7c15ULL);
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
     z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;

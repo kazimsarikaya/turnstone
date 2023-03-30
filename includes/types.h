@@ -71,15 +71,15 @@ typedef long double float128_t;
 
 /* 128 bit types */
 /*! alias for 128-bit signed integer */
-#define int128_t __int128
+typedef __int128 int128_t;
 /*! alias for 128-bit signed integer */
-#define uint128_t unsigned __int128
+typedef unsigned __int128 uint128_t;
 
 #ifdef ___TESTMODE
 int printf(const char* format, ...);
 #endif
 
-#define va_list     __builtin_va_list
+typedef __builtin_va_list va_list;
 #define va_start(v, f) __builtin_va_start(v, f);
 #define va_end(v)       __builtin_va_end(v);
 #define va_arg(v, a)   __builtin_va_arg(v, a);

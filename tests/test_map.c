@@ -17,10 +17,15 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     map_t map = map_integer();
 
+    if(map == NULL) {
+        print_error("cannot create map");
+        return -1;
+    }
+
     map_insert(map, (void*)3, "elma");
     map_insert(map, (void*)5, "armut");
 
-    char_t* test;
+    const char_t* test;
 
     test = map_get(map, (void*)3);
 
@@ -68,7 +73,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     iterator_t* iter = map_create_iterator(map);
 
     while(iter->end_of_iterator(iter) != 0) {
-        char_t* data = iter->get_item(iter);
+        const char_t* data = iter->get_item(iter);
 
         printf("data: %s\n", data);
 

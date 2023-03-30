@@ -11,6 +11,9 @@ typedef struct {
     uint64_t data;
 }item_t;
 
+uint32_t main(uint32_t argc, char_t** argv);
+int8_t   key_comparator(const void* i, const void* j);
+
 int8_t key_comparator(const void* i, const void* j){
     size_t t_i = (size_t)i;
     size_t t_j = (size_t)j;

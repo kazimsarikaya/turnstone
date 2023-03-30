@@ -6,6 +6,9 @@
 #include "setup.h"
 #include <bplustree.h>
 
+int8_t  int_comparator(const void* i, const void* j);
+int32_t main(void);
+
 int8_t int_comparator(const void* i, const void* j){
     int* t_i = (int*)i;
     int* t_j = (int*)j;
@@ -18,7 +21,7 @@ int8_t int_comparator(const void* i, const void* j){
     return 0;
 }
 
-int main(){
+int32_t main(void){
     int test_data[] = {25, 40,   29,   50,   39,   58,   92,    48,    11,  33,  35,  66,  14,  21, 71, 93, 98,  91
                        ,   20,   87,   46,   30,   54,   49,    45,    17,  31,  75,  12,  47,  10, 38, 3,  59,  13, 5
                        ,   80,   77,   97,   1,    6,    79,    19};//, 62, 43, 27, 84, 99, 86, 44, 65, 26, 57, 37, 36};

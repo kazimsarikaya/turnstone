@@ -22,6 +22,12 @@ typedef struct disk_file_context_t {
     uint64_t block_size;
 } disk_file_context_t;
 
+uint64_t disk_file_get_disk_size(disk_t* d);
+int8_t   disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   disk_file_close(disk_t* d);
+disk_t*  disk_file_open(char_t* file_name, int64_t size);
+
 uint64_t disk_file_get_disk_size(disk_t* d){
     disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
     return ctx->file_size;

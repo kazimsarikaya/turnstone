@@ -8,7 +8,7 @@
 
 uint32_t crc32_table[256] = {};
 
-void crc32_init_table() {
+void crc32_init_table(void) {
     uint8_t index = 0, z;
     do{
         crc32_table[index] = index;

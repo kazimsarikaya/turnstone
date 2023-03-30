@@ -200,7 +200,7 @@ size_t linkedlist_size(linkedlist_t list);
  * @param[in] list_item list item
  * @return data inside the list.
  */
-void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item);
+const void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item);
 
 /**
  * @brief general method for inserting or deleting data from list types.
@@ -210,7 +210,7 @@ void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item);
  * @param[in] position if data will be added by position
  * @return insertation location
  */
-size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position);
+size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
 
 /**
  * @brief general method for inserting or deleting data from list types.
@@ -220,7 +220,7 @@ size_t linkedlist_insert_at(linkedlist_t list, void* data, linkedlist_insert_del
  * @param[in] position if data will be deleted by position
  * @return the deleted data
  */
-void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_delete_at_t where, size_t position);
+const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
 
 
 /*! insert data with position into list */
@@ -260,7 +260,7 @@ void* linkedlist_delete_at(linkedlist_t list, void* data, linkedlist_insert_dele
  * @param[position]  position the position of data if found
  * @return  0 if data found, else -1.
  */
-int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position);
+int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* position);
 
 #define linkedlist_contains(l, d)  linkedlist_get_position(l, d, NULL)
 /**
@@ -269,7 +269,7 @@ int8_t linkedlist_get_position(linkedlist_t list, void* data, size_t* position);
  * @param  position position of data
  * @return data if found or null
  */
-void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
+const void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
 
 #define linkedlist_queue_peek(l) linkedlist_get_data_at_position(l, 0);
 #define linkedlist_stack_peek(l) linkedlist_get_data_at_position(l, 0);

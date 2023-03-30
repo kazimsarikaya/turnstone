@@ -20,6 +20,8 @@ typedef struct map_internal_t {
     index_t*            store;
 } map_internal_t;
 
+int8_t map_key_comparator(const void* data1, const void* data2);
+
 uint64_t map_default_key_extractor(const void* key) {
     return (uint64_t)key;
 }
@@ -80,7 +82,7 @@ map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key
     return (map_t)mi;
 }
 
-void* map_insert(map_t map, void* key, void* data) {
+void* map_insert(map_t map, const void* key, const void* data) {
     map_internal_t* mi = (map_internal_t*)map;
 
     lock_acquire(mi->lock);
@@ -97,7 +99,7 @@ void* map_insert(map_t map, void* key, void* data) {
     return old_data;
 }
 
-void* map_get_with_default(map_t map, void* key, void* def) {
+const void* map_get_with_default(map_t map, const void* key, void* def) {
     map_internal_t* mi = (map_internal_t*)map;
 
     uint64_t ckey = mi->mke(key);
@@ -108,7 +110,7 @@ void* map_get_with_default(map_t map, void* key, void* def) {
         return def;
     }
 
-    void* res = NULL;
+    const void* res = NULL;
 
     if(iter->end_of_iterator(iter) != 0) {
         res = iter->get_item(iter);
@@ -123,7 +125,7 @@ void* map_get_with_default(map_t map, void* key, void* def) {
     return res;
 }
 
-void* map_delete(map_t map, void* key) {
+const void* map_delete(map_t map, const void* key) {
     map_internal_t* mi = (map_internal_t*)map;
 
     uint64_t ckey = mi->mke(key);

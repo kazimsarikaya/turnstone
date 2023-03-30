@@ -11,7 +11,11 @@
 
 extern efi_system_table_t* ST;
 
-void video_clear_screen() {
+void   video_print(char_t* string);
+void   video_clear_screen(void);
+size_t video_printf(const char_t* fmt, ...);
+
+void video_clear_screen(void) {
     ST->console_output->clear_screen(ST->console_output);
 }
 
@@ -43,7 +47,7 @@ void video_print(char_t* string)
     }
 }
 
-size_t video_printf(char_t* fmt, ...) {
+size_t video_printf(const char_t* fmt, ...) {
 
     va_list args;
     va_start(args, fmt);

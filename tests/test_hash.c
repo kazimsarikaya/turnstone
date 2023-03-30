@@ -107,7 +107,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     memory_free(sum3);
     memory_free(sum4);
 
-    char_t* xxhash_data = "Hello, world!";
+    const char_t* xxhash_data = "Hello, world!";
 
     uint64_t xxhash64_result = xxhash64_hash(xxhash_data, strlen(xxhash_data)), xxhash64_verify = 17691043854468224118ULL;
     printf("%lu %i\n", xxhash64_result, xxhash64_result == xxhash64_verify);

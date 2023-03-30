@@ -70,7 +70,7 @@ typedef union cpu_reg_cr4_u {
  * @brief reads cr4 register
  * @return cr4 value
  */
-cpu_reg_cr4_t cpu_read_cr4();
+cpu_reg_cr4_t cpu_read_cr4(void);
 
 /**
  * @brief writes cr4 register
@@ -82,7 +82,7 @@ void cpu_write_cr4(cpu_reg_cr4_t cr4);
  * @brief reads cr0 register
  * @return cr0 value
  */
-cpu_reg_cr0_t cpu_read_cr0();
+cpu_reg_cr0_t cpu_read_cr0(void);
 
 /**
  * @brief writes cr0 register
@@ -93,11 +93,11 @@ void cpu_write_cr0(cpu_reg_cr0_t cr0);
 /**
  * @brief toggles write protect bit cr0, when setted kernel can not modify readonly pages
  */
-void cpu_toggle_cr0_wp();
+void cpu_toggle_cr0_wp(void);
 
 /**
  * @brief enables sse support, modifies cr4 register
  */
-void cpu_enable_sse();
+void cpu_enable_sse(void);
 
 #endif
