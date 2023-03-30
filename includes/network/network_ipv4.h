@@ -49,9 +49,9 @@ typedef struct network_ipv4_header_t {
 extern network_ipv4_address_t NETWORK_IPV4_GLOBAL_BROADCAST_IP;
 extern network_ipv4_address_t NETWORK_IPV4_ZERO_IP;
 
-boolean_t              network_ipv4_is_address_eq(network_ipv4_address_t ipv4_addr1, network_ipv4_address_t ipv4_addr2);
+boolean_t              network_ipv4_is_address_eq(const network_ipv4_address_t ipv4_addr1, const network_ipv4_address_t ipv4_addr2);
 uint8_t*               network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, void* network_info, uint16_t* return_packet_len);
-network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len);
-network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(network_ipv4_address_t sip, network_ipv4_address_t dip, network_udpv4_header_t* udp_hdr);
+network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len);
+network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_udpv4_header_t* udp_hdr);
 
 #endif

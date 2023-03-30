@@ -15,60 +15,6 @@
 
 typedef int8_t (* acpi_aml_parse_f)(acpi_aml_parser_context_t* ctx, void**, uint64_t*);
 
-#define CREATE_PARSER_F(name) int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t*, void**, uint64_t*);
-
-#define PARSER_F_NAME(name) acpi_aml_parse_ ## name
-
-// parser methods
-
-CREATE_PARSER_F(namestring);
-
-CREATE_PARSER_F(alias);
-CREATE_PARSER_F(name);
-CREATE_PARSER_F(scope);
-CREATE_PARSER_F(const_data);
-
-CREATE_PARSER_F(opcnt_0);
-CREATE_PARSER_F(opcnt_1);
-CREATE_PARSER_F(opcnt_2);
-CREATE_PARSER_F(opcnt_3);
-CREATE_PARSER_F(opcnt_4);
-
-CREATE_PARSER_F(op_match);
-CREATE_PARSER_F(logic_ext);
-
-CREATE_PARSER_F(op_if);
-CREATE_PARSER_F(op_else);
-CREATE_PARSER_F(op_while);
-
-CREATE_PARSER_F(create_field);
-
-CREATE_PARSER_F(op_extended);
-
-CREATE_PARSER_F(buffer);
-CREATE_PARSER_F(package);
-CREATE_PARSER_F(varpackage);
-CREATE_PARSER_F(method);
-CREATE_PARSER_F(external);
-
-CREATE_PARSER_F(symbol);
-
-CREATE_PARSER_F(byte_data);
-
-CREATE_PARSER_F(mutex);
-CREATE_PARSER_F(event);
-
-CREATE_PARSER_F(region);
-
-CREATE_PARSER_F(field);
-
-CREATE_PARSER_F(fatal);
-
-CREATE_PARSER_F(extopcnt_0);
-CREATE_PARSER_F(extopcnt_1);
-CREATE_PARSER_F(extopcnt_2);
-CREATE_PARSER_F(extopcnt_6);
-
 const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(const_data),
     PARSER_F_NAME(const_data),
@@ -92,17 +38,17 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(varpackage),
     PARSER_F_NAME(method),
     PARSER_F_NAME(external),
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    /*0x18*/ NULL,                                                                                                                                                                                                                     NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            NULL, NULL, // empty
-    NULL,                       // 0x20 // empty
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0x28*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
-    NULL,                       // 0x30 // empty
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0x38*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
-    NULL,                       // 0x40 // empty
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0x48*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
-    NULL,                       // 0x50 // empty
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0x58*/ NULL, NULL, // empty
+    NULL, NULL, NULL, /*0x18*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
+    NULL,// 0x20 // empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x28*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,//empty
+    NULL,//0x30//empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x38*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,//empty
+    NULL,//0x40//empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x48*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,//empty
+    NULL,//0x50//empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x58*/ NULL, NULL,//empty
     PARSER_F_NAME(op_extended),
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              // empty
+    NULL, NULL, NULL, NULL,//empty
     PARSER_F_NAME(opcnt_0),     // 0x60
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
@@ -172,19 +118,19 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_1),
     PARSER_F_NAME(opcnt_0),
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    /*0xA8*/ NULL,                                                                                                                                                                                                                     NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            NULL, NULL,
-    NULL,                       // 0xB0
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0xB8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,                       // 0xC0
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0xC8*/ NULL, NULL, NULL,
-    PARSER_F_NAME(opcnt_0),     // 0xCC
-    NULL,                       NULL,                        NULL,
-    NULL,                       // 0xD0
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0xD8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,                       // 0xE0
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,                       // 0xF0
-    NULL,                       NULL,                        NULL,                                                                                                                                                                                                                                                                    NULL,                                                                                                                                                                                                                              NULL,                                                                                                                                                                                        NULL,                                                                                                                                                  NULL,                                                                                                            NULL,                                                                                                                                                                                                                                            /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, /*0xA8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL,//0xB0
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xB8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL,//0xC0
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xC8*/ NULL, NULL, NULL,
+    PARSER_F_NAME(opcnt_0),//0xCC
+    NULL, NULL, NULL,
+    NULL,//0xD0
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xD8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL,//0xE0
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL,//0xF0
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL,
     PARSER_F_NAME(const_data)
 };
 
@@ -405,7 +351,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
     ctx->data = acpi_aml_parser_defaults;
     ctx->length = sizeof(acpi_aml_parser_defaults);
     ctx->remaining = sizeof(acpi_aml_parser_defaults);
-    ctx->scope_prefix = "\\";
+    ctx->scope_prefix = (char_t*)"\\";
     ctx->symbols = bplustree_create_index_with_heap(heap, 20, acpi_aml_object_name_comparator);
     ctx->revision = revision;
 
@@ -432,7 +378,7 @@ void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
     iterator_t* iter = linkedlist_iterator_create(ctx->devices);
 
     while(iter->end_of_iterator(iter) != 0) {
-        acpi_aml_device_t* d = iter->get_item(iter);
+        acpi_aml_device_t* d = (acpi_aml_device_t*)iter->get_item(iter);
         memory_free_ext(ctx->heap, d);
 
         iter = iter->next(iter);

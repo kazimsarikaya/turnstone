@@ -10,6 +10,8 @@
 #include <ports.h>
 #include <video.h>
 
+int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum);
+
 int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
     UNUSED(frame);
     UNUSED(intnum);

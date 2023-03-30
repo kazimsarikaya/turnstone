@@ -22,7 +22,10 @@
 #define RTC_REGISTER_STATUS_A  0x0A
 #define RTC_REGISTER_STATUS_B  0x0B
 
-uint8_t rtc_is_in_update() {
+uint8_t rtc_is_in_update(void);
+uint8_t rtc_read_register_value(uint16_t reg);
+
+uint8_t rtc_is_in_update(void) {
     outb(RTC_CMOS_ADDRESS, 0x0A);
     return (inb(RTC_CMOS_DATA) & 0x80);
 }

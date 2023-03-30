@@ -24,11 +24,18 @@
 
 linkedlist_t virtio_net_devs = NULL;
 
-int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t network_virtio_ctrl_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t network_virtio_config_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t network_virtio_combined_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_ctrl_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_config_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_combined_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_t* vdev, virtio_queue_ext_t* vq_tx, virtio_queue_avail_t* avail, virtio_queue_descriptor_t* descs);
+int8_t   network_virtio_process_tx(void);
+int8_t   network_virtio_ctrl_set_mac(virtio_dev_t* vdev);
+uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_features);
+int8_t   network_rx_tx_queue_item_builder(virtio_dev_t* vdev, void* queue_item);
+int8_t   network_virtio_create_queues(virtio_dev_t* vdev);
+
 
 int8_t network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_t* vdev, virtio_queue_ext_t* vq_tx, virtio_queue_avail_t* avail, virtio_queue_descriptor_t* descs) {
     PRINTLOG(VIRTIONET, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
@@ -55,10 +62,10 @@ int8_t network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_
     return 0;
 }
 
-int8_t network_virtio_process_tx(){
+int8_t network_virtio_process_tx(void){
 
     for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-        virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+        virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
 
         vdev->return_queue = linkedlist_create_queue_with_heap(NULL);
         task_add_message_queue(vdev->return_queue);
@@ -79,7 +86,7 @@ int8_t network_virtio_process_tx(){
         boolean_t packet_exists = 0;
 
         for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-            virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+            virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
 
             if(!vdev->is_legacy) {
                 if(vdev->selected_features & VIRTIO_NETWORK_F_STATUS) {
@@ -93,7 +100,7 @@ int8_t network_virtio_process_tx(){
             virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_tx->vq);
 
             while(linkedlist_size(vdev->return_queue)) {
-                network_transmit_packet_t* packet = linkedlist_queue_peek(vdev->return_queue);
+                network_transmit_packet_t* packet = (network_transmit_packet_t*)linkedlist_queue_peek(vdev->return_queue);
 
                 if(packet) {
                     packet_exists = 1;
@@ -117,13 +124,15 @@ int8_t network_virtio_process_tx(){
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet received int 0x%02x", intnum);
 
     for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-        virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+        virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
 
         virtio_queue_ext_t* vq_rx = &vdev->queues[0];
         virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
@@ -194,13 +203,14 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet sended int 0x%02x", intnum);
 
-    virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, 0);
+    const virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, 0);
 
     pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 1);
     apic_eoi();
@@ -458,7 +468,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 }
 
 
-int8_t network_virtio_init(pci_dev_t* pci_netdev){
+int8_t network_virtio_init(const pci_dev_t* pci_netdev){
     PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device starting");
 
     virtio_net_devs = linkedlist_create_list_with_heap(NULL);

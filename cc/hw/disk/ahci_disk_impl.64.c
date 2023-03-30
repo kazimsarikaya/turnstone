@@ -12,6 +12,13 @@ typedef struct ahci_disk_impl_context_t {
     uint64_t          block_size;
 } ahci_disk_impl_context_t;
 
+uint64_t ahci_disk_impl_get_disk_size(disk_t* d);
+int8_t   ahci_disk_impl_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   ahci_disk_impl_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   ahci_disk_impl_flush(disk_t* d);
+int8_t   ahci_disk_impl_close(disk_t* d);
+
+
 uint64_t ahci_disk_impl_get_disk_size(disk_t* d){
     ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->disk_context;
     return ctx->sata_disk->lba_count * ctx->block_size;
@@ -48,7 +55,7 @@ int8_t ahci_disk_impl_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* da
     iterator_t* iter = linkedlist_iterator_create(futs);
 
     while(iter->end_of_iterator(iter) != 0) {
-        fut = iter->get_item(iter);
+        fut = (future_t*)iter->get_item(iter);
 
         future_get_data_and_destroy(fut);
 
@@ -93,7 +100,7 @@ int8_t ahci_disk_impl_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** da
     iterator_t* iter = linkedlist_iterator_create(futs);
 
     while(iter->end_of_iterator(iter) != 0) {
-        fut = iter->get_item(iter);
+        fut = (future_t*)iter->get_item(iter);
 
         future_get_data_and_destroy(fut);
 

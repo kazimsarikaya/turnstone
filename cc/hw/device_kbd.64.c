@@ -21,6 +21,10 @@ wchar_t kbd_ps2_tmp = NULL;
 
 kbd_state_t kbd_state = {0, 0, 0};
 
+int8_t kbd_handle_key(wchar_t key, boolean_t pressed);
+int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev);
+
 int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
     if(key == KBD_SCANCODE_CAPSLOCK && pressed == 0) {
         kbd_state.is_capson = !kbd_state.is_capson;
@@ -124,12 +128,12 @@ int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev){
 }
 
 
-int8_t dev_virtio_kbd_init() {
+int8_t dev_virtio_kbd_init(void) {
     PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device starting");
     int8_t errors = 0;
 
     iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->other_devices);
-    pci_dev_t* pci_dev = NULL;
+    const pci_dev_t* pci_dev = NULL;
 
     while(iter->end_of_iterator(iter) != 0) {
         pci_dev = iter->get_item(iter);
@@ -167,7 +171,7 @@ int8_t dev_virtio_kbd_init() {
     return errors;
 }
 
-int8_t kbd_init(){
+int8_t kbd_init(void){
     if(dev_virtio_kbd_init() == 0) {
         return 0;
     }

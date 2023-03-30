@@ -16,8 +16,8 @@
 #include <time/timer.h>
 #include <linkedlist.h>
 
-uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic);
-int8_t  apic_init_timer();
+uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic);
+int8_t  apic_init_timer(void);
 
 uint64_t ioapic_bases[2] = {0, 0};
 uint8_t ioapic_count = 0;
@@ -83,13 +83,13 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
         cpu_write_msr(APIC_MSR_ADDRESS, apic_msr);
     }
 
-    acpi_table_madt_entry_t* la = NULL;
+    const acpi_table_madt_entry_t* la = NULL;
 
 
     iterator_t* iter = linkedlist_iterator_create(apic_entries);
 
     while(iter->end_of_iterator(iter) != 0) {
-        acpi_table_madt_entry_t* e = iter->get_item(iter);
+        const acpi_table_madt_entry_t* e = iter->get_item(iter);
 
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE) {
             la = e;
@@ -159,7 +159,7 @@ uint8_t apic_get_irq_override(uint8_t old_irq){
     iterator_t* iter = linkedlist_iterator_create(irq_remappings);
 
     while(iter->end_of_iterator(iter) != 0) {
-        acpi_table_madt_entry_t* e = iter->get_item(iter);
+        const acpi_table_madt_entry_t* e = iter->get_item(iter);
 
         if(e->interrupt_source_override.irq_source == old_irq) {
             old_irq = e->interrupt_source_override.global_system_interrupt;
@@ -174,7 +174,7 @@ uint8_t apic_get_irq_override(uint8_t old_irq){
     return old_irq;
 }
 
-int8_t apic_init_timer() {
+int8_t apic_init_timer(void) {
     PRINTLOG(APIC, LOG_DEBUG, "timer init started");
 
     uint8_t timer_irq = apic_get_irq_override(0);
@@ -243,7 +243,7 @@ int8_t apic_init_timer() {
     return 0;
 }
 
-uint8_t apic_init_ioapic(acpi_table_madt_entry_t* ioapic) {
+uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
     uint64_t ioapic_base = ioapic->ioapic.address;
 
     PRINTLOG(IOAPIC, LOG_DEBUG, "address is 0x%08llx", ioapic_base);
@@ -363,7 +363,7 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
 }
 
 
-void  apic_eoi() {
+void  apic_eoi(void) {
     if(apic_enabled) {
         uint32_t* eio = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_EOI);
         *eio = 0;

@@ -18,12 +18,14 @@ cat <<EOF
 #ifndef ___DEPEND_ANALYSIS
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
+void interrupt_register_dummy_handlers(descriptor_idt_t* idt);
 
 EOF
 
 for i in $(seq 32 255); do
 
 cat <<EOF
+void __attribute__ ((interrupt)) interrupt_dummy_noerrcode_int${i}(interrupt_frame_t* frame);
 void __attribute__ ((interrupt)) interrupt_dummy_noerrcode_int${i}(interrupt_frame_t* frame){
 	cpu_cli();
   interrupt_dummy_noerrcode(frame, ${i});

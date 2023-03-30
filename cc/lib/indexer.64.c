@@ -55,6 +55,8 @@ int8_t indexer_destroy(indexer_t idxer){
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, indexer_key_creator_f key_creator, void* keyarg){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
 
@@ -75,6 +77,7 @@ int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, in
     linkedlist_list_insert(l_idxer->indexes, pair);
     return 0;
 }
+#pragma GCC diagnostic pop
 
 int8_t indexer_index(indexer_t idxer, const void* key, const void* data){
     indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;

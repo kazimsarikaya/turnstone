@@ -20,8 +20,8 @@
 #define KBD_DEVICE_VENDOR_ID_VIRTIO  0x1AF4
 #define KBD_DEVICE_DEVICE_ID_VIRTIO  0x1052
 
-int8_t kbd_init();
+int8_t kbd_init(void);
 
 int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t dev_virtio_kbd_init();
+int8_t dev_virtio_kbd_init(void);
 #endif

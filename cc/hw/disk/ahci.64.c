@@ -25,13 +25,15 @@ int8_t             ahci_find_command_slot(ahci_sata_disk_t* disk);
 void               ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slots);
 void               ahci_port_start_cmd(ahci_hba_port_t* port);
 void               ahci_port_stop_cmd(ahci_hba_port_t* port);
-void               ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id);
+void               ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id);
 int8_t             ahci_error_recovery_ncq(ahci_sata_disk_t* disk);
 int8_t             ahci_read_log_ncq(ahci_sata_disk_t* disk);
+int8_t             ahci_port_comreset(ahci_hba_port_t* port);
+int8_t             ahci_disk_id_comparator(const void* disk1, const void* disk2);
 
 int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum);
 
-ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
+const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
     ahci_sata_disk_t tmp_disk;
     tmp_disk.disk_id = disk_id;
     uint64_t pos;
@@ -53,7 +55,7 @@ int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
     iterator_t* iter = linkedlist_iterator_create(sata_hbas);
 
     while(iter->end_of_iterator(iter) != 0) {
-        ahci_hba_t* hba = iter->get_item(iter);
+        const ahci_hba_t* hba = iter->get_item(iter);
 
         if(hba->intnum_base <= intnum && intnum < (hba->intnum_base + hba->intnum_count)) {
             ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)hba->hba_addr;
@@ -92,7 +94,7 @@ int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
     return -1;
 }
 
-void ahci_handle_disk_isr(ahci_hba_t* hba, uint64_t disk_id) {
+void ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id) {
     ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)hba->hba_addr;
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -288,6 +290,8 @@ int8_t ahci_disk_id_comparator(const void* disk1, const void* disk2) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
     PRINTLOG(AHCI, LOG_INFO, "disk searching started");
 
@@ -304,7 +308,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
     iterator_t* iter = linkedlist_iterator_create(sata_pci_devices);
 
     while(iter->end_of_iterator(iter) != 0) {
-        pci_dev_t* p = iter->get_item(iter);
+        const pci_dev_t* p = iter->get_item(iter);
         pci_generic_device_t* pci_sata = (pci_generic_device_t*)p->pci_header;
 
 
@@ -384,6 +388,8 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
         ahci_hba_t* hba = memory_malloc_ext(heap, sizeof(ahci_hba_t), 0x0);
 
         if(hba == NULL) {
+            iter->destroy(iter);
+
             return -1;
         }
 
@@ -432,6 +438,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
         } else {
             PRINTLOG(AHCI, LOG_ERROR, "no msi capability");
+            iter->destroy(iter);
 
             return -1;
         }
@@ -474,12 +481,14 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
                 if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
+                    iter->destroy(iter);
 
                     return -1;
                 }
 
                 if(memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port_frames->frame_address), port_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot page map frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
+                    iter->destroy(iter);
 
                     return -1;
                 }
@@ -517,7 +526,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
     return disk_cnt;
 }
-
+#pragma GCC diagnostic pop
 
 future_t ahci_flush(uint64_t disk_id) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);

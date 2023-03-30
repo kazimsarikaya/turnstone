@@ -209,7 +209,7 @@ typedef struct {
 }virtio_queue_ext_t;
 
 typedef struct {
-    pci_dev_t*                  pci_dev;
+    const pci_dev_t*            pci_dev;
     boolean_t                   is_legacy;
     boolean_t                   has_msix;
     pci_capability_msix_t*      msix_cap;
@@ -281,7 +281,7 @@ typedef int8_t (* virtio_queue_item_builder_f)(virtio_dev_t* vdev, void* queue_i
 
 int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue_item_size, boolean_t write, boolean_t iter_rw, virtio_queue_item_builder_f item_builder, interrupt_irq modern, interrupt_irq legacy);
 
-virtio_dev_t* virtio_get_device(pci_dev_t* pci_dev);
+virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev);
 
 typedef uint64_t (* virtio_select_features_f)(virtio_dev_t* vdev, uint64_t avail_features);
 typedef int8_t   (* virtio_create_queues_f)(virtio_dev_t* vdev);

@@ -9,6 +9,9 @@
 #include <ports.h>
 #include <apic.h>
 
+int8_t virtio_init_legacy(virtio_dev_t* vdev, virtio_select_features_f select_features, virtio_create_queues_f create_queues);
+int8_t virtio_init_modern(virtio_dev_t* vdev, virtio_select_features_f select_features, virtio_create_queues_f create_queues);
+
 int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue_item_size, boolean_t write, boolean_t iter_rw, virtio_queue_item_builder_f item_builder, interrupt_irq modern, interrupt_irq legacy) {
     PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x size 0x%x", queue_no, vdev->queue_size);
 
@@ -330,7 +333,7 @@ int8_t virtio_init_modern(virtio_dev_t* vdev, virtio_select_features_f select_fe
     return -1;
 }
 
-virtio_dev_t* virtio_get_device(pci_dev_t* pci_dev) {
+virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
     virtio_dev_t* vdev = memory_malloc(sizeof(virtio_dev_t));
 
     if(vdev == NULL) {

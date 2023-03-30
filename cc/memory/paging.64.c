@@ -21,9 +21,11 @@ uint64_t MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = 0;
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_2_START = 0;
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT = 0;
 
-uint64_t memory_paging_get_internal_frame();
+uint64_t memory_paging_get_internal_frame(void);
 
-uint64_t memory_paging_get_internal_frame() {
+extern size_t __kheap_bottom;
+
+uint64_t memory_paging_get_internal_frame(void) {
     if(MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT == 0) {
         MEMORY_PAGING_INTERNAL_FRAMES_1_START = MEMORY_PAGING_INTERNAL_FRAMES_2_START;
         MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT;
@@ -473,7 +475,6 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
         }
 
         if(i == LINKER_SECTION_TYPE_HEAP && kernel_header->section_locations[i].section_size == 0) {
-            extern size_t __kheap_bottom;
             size_t heap_start = (size_t)&__kheap_bottom;
             size_t heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
             section_size = heap_end - heap_start;

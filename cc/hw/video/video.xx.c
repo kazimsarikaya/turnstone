@@ -25,9 +25,10 @@ extern video_psf2_font_t font_data_end;
 /**
  * @brief scrolls video up for one line
  */
-void video_graphics_scroll();
-
-void video_text_print(char_t* string);
+void    video_graphics_scroll(void);
+wchar_t video_get_wc(char_t* string, int64_t * idx);
+void    video_text_print(char_t* string);
+void    video_graphics_print(char_t* string);
 
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
@@ -49,7 +50,7 @@ wchar_t* video_font_unicode_table = NULL;
 void video_refresh_frame_buffer_address() {
     VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 }
-void video_init() {
+void video_init(void) {
     VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
     VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
     VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
@@ -167,7 +168,7 @@ void video_init() {
 }
 
 
-void video_graphics_scroll(){
+void video_graphics_scroll(void){
     int64_t j = 0;
 
     for(int64_t i = FONT_HEIGHT * VIDEO_GRAPHICS_WIDTH; i < VIDEO_GRAPHICS_WIDTH * VIDEO_GRAPHICS_HEIGHT; i++) {

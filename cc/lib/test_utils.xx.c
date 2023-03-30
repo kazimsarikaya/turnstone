@@ -6,7 +6,7 @@
 #include <tests.h>
 #include <ports.h>
 
-void test_init_output() {
+void test_init_output(void) {
     init_serial(COM2);
 }
 

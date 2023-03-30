@@ -499,6 +499,8 @@ int8_t bplustree_toss_root(index_t* idx) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
     if(idx == NULL) {
         return -1;
@@ -815,6 +817,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
     linkedlist_destroy_with_data(path);
     return deleted;
 }
+#pragma GCC diagnostic pop
 
 iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
     if(idx == NULL) {

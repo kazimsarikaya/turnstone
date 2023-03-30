@@ -35,6 +35,6 @@ typedef struct network_transmit_packet_t {
 
 extern linkedlist_t network_received_packets;
 
-int8_t network_init();
+int8_t network_init(void);
 
 #endif

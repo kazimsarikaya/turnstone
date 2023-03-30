@@ -10,9 +10,6 @@
  #include <video.h>
 
 
-int8_t acpi_aml_parse_byte_data(acpi_aml_parser_context_t*, void**, uint64_t*);
-int8_t acpi_aml_parse_op_else(acpi_aml_parser_context_t*, void**, uint64_t*);
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_aml_parse_op_code_with_cnt(uint16_t oc, uint8_t opcnt, acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed, acpi_aml_object_t* preop){

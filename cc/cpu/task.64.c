@@ -25,11 +25,17 @@ task_t* current_task = NULL;
 linkedlist_t task_queue = NULL;
 linkedlist_t task_cleaner_queue = NULL;
 
-extern int8_t kmain64();
+extern int8_t kmain64(void);
 
-int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t                                          task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
+__attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task);
+__attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task);
+void                                            task_cleanup(void);
+task_t*                                         task_find_next_task(void);
+void                                            task_end_task(void);
 
-task_t* task_get_current_task(){
+
+task_t* task_get_current_task(void){
     return current_task;
 }
 
@@ -236,7 +242,7 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
         );
 }
 
-void task_cleanup(){
+void task_cleanup(void){
     while(linkedlist_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
 
@@ -295,12 +301,12 @@ boolean_t task_idle_check_need_yield() {
     boolean_t need_yield = false;
 
     for(uint64_t i = 0; i < linkedlist_size(task_queue); i++) {
-        task_t* t = linkedlist_get_data_at_position(task_queue, i);
+        task_t* t = (task_t*)linkedlist_get_data_at_position(task_queue, i);
 
         if(t) {
             if(t->message_waiting && t->message_queues) {
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(t->message_queues); q_idx++) {
-                    linkedlist_t q = linkedlist_get_data_at_position(t->message_queues, q_idx);
+                    linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(t->message_queues, q_idx);
 
                     if(linkedlist_size(q)) {
                         t->message_waiting = false;
@@ -321,11 +327,11 @@ boolean_t task_idle_check_need_yield() {
     return need_yield;
 }
 
-task_t* task_find_next_task() {
+task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
     while(1) {
-        tmp_task = linkedlist_queue_pop(task_queue);
+        tmp_task = (task_t*)linkedlist_queue_pop(task_queue);
 
         if(tmp_task->sleeping) {
 
@@ -339,7 +345,7 @@ task_t* task_find_next_task() {
             if(tmp_task->message_queues) {
 
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
-                    linkedlist_t q = linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
+                    const linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
 
                     if(q) {
                         if(linkedlist_size(q)) {

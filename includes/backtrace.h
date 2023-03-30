@@ -15,8 +15,8 @@ typedef struct stackframe_t {
     uint64_t             rip;
 } stackframe_t;
 
-stackframe_t* backtrace_get_stackframe();
+stackframe_t* backtrace_get_stackframe(void);
 void          backtrace_print(stackframe_t* frame);
-void          backtrace();
+void          backtrace(void);
 
 #endif

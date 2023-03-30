@@ -14,55 +14,6 @@
 
 typedef int8_t (* acpi_aml_exec_f)(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
 
-#define CREATE_EXEC_F(name) int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
-#define EXEC_F_NAME(name) acpi_aml_exec_ ## name
-
-
-CREATE_EXEC_F(store);
-CREATE_EXEC_F(refof);
-CREATE_EXEC_F(concat);
-CREATE_EXEC_F(findsetbit);
-CREATE_EXEC_F(derefof);
-CREATE_EXEC_F(concatres);
-CREATE_EXEC_F(notify);
-CREATE_EXEC_F(op_sizeof);
-CREATE_EXEC_F(index);
-CREATE_EXEC_F(match);
-CREATE_EXEC_F(object_type);
-CREATE_EXEC_F(to_buffer);
-CREATE_EXEC_F(to_decimalstring);
-CREATE_EXEC_F(to_hexstring);
-CREATE_EXEC_F(to_integer);
-CREATE_EXEC_F(to_string);
-
-CREATE_EXEC_F(op1_tgt0_maths);
-CREATE_EXEC_F(op1_tgt1_maths);
-CREATE_EXEC_F(op2_tgt1_maths);
-CREATE_EXEC_F(op2_tgt2_maths);
-
-CREATE_EXEC_F(op2_logic);
-
-
-CREATE_EXEC_F(copy);
-CREATE_EXEC_F(mid);
-
-CREATE_EXEC_F(mth_return);
-
-CREATE_EXEC_F(condrefof);
-CREATE_EXEC_F(load_table);
-CREATE_EXEC_F(load);
-CREATE_EXEC_F(stall);
-CREATE_EXEC_F(sleep);
-CREATE_EXEC_F(acquire);
-CREATE_EXEC_F(signal);
-CREATE_EXEC_F(wait);
-CREATE_EXEC_F(reset);
-CREATE_EXEC_F(release);
-CREATE_EXEC_F(from_bcd);
-CREATE_EXEC_F(to_bcd);
-
-CREATE_EXEC_F(method);
-
 const acpi_aml_exec_f acpi_aml_exec_fs[] = {
     EXEC_F_NAME(store), // 0x70
     EXEC_F_NAME(refof),
@@ -377,7 +328,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
     iterator_t* iter = ctx->local_symbols->create_iterator(ctx->local_symbols);
 
     while(iter->end_of_iterator(iter) != 0) {
-        acpi_aml_object_t* tmp = iter->get_item(iter);
+        acpi_aml_object_t* tmp = (acpi_aml_object_t*)iter->get_item(iter);
 
         if(tmp == mthobjs[15]) {
             tmp = acpi_aml_duplicate_object(ctx, tmp);

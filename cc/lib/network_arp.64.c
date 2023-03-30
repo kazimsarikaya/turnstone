@@ -12,7 +12,8 @@
 #include <time.h>
 #include <video.h>
 
-uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, network_mac_address_t mac, uint16_t* return_packet_len);
+uint8_t*       network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, network_mac_address_t mac, uint16_t* return_packet_len);
+network_arp_t* network_arp_create_request(network_mac_address_t src_mac, network_ipv4_address_t src_ip, network_ipv4_address_t tgt_ip);
 
 uint8_t* network_arp_process_packet(network_arp_t* recv_arp_packet, void* network_info, uint16_t* return_packet_len) {
     UNUSED(network_info);
@@ -30,7 +31,7 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
         return NULL;
     }
 
-    network_info_t* ni = map_get(network_info_map, mac);
+    const network_info_t* ni = map_get(network_info_map, mac);
 
     if(!ni) {
         return NULL;

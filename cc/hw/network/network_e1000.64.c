@@ -27,15 +27,16 @@ uint16_t network_e1000_phy_read(network_e1000_dev_t* dev, int regaddr);
 void     network_e1000_rx_enable(network_e1000_dev_t* dev);
 int8_t   network_e1000_rx_init(network_e1000_dev_t* dev);
 int8_t   network_e1000_tx_init(network_e1000_dev_t* dev);
-void     network_e1000_rx_poll(network_e1000_dev_t* netdev);
+void     network_e1000_rx_poll(const network_e1000_dev_t* netdev);
 int8_t   network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t   network_e1000_process_tx();
+int8_t   network_e1000_process_tx(void);
+void     network_e1000_phy_write(network_e1000_dev_t* dev, int regaddr, uint16_t data);
 
 
-int8_t network_e1000_process_tx() {
+int8_t network_e1000_process_tx(void) {
 
     for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(e1000_net_devs); dev_idx++) {
-        network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, dev_idx);
+        const network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, dev_idx);
         task_add_message_queue(dev->transmit_queue);
     }
 
@@ -43,10 +44,10 @@ int8_t network_e1000_process_tx() {
         boolean_t packet_exists = 0;
 
         for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(e1000_net_devs); dev_idx++) {
-            network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, dev_idx);
+            network_e1000_dev_t* dev = (network_e1000_dev_t*)linkedlist_get_data_at_position(e1000_net_devs, dev_idx);
 
             while(linkedlist_size(dev->transmit_queue)) {
-                network_transmit_packet_t* packet = linkedlist_queue_pop(dev->transmit_queue);
+                const network_transmit_packet_t* packet = linkedlist_queue_pop(dev->transmit_queue);
 
                 if(packet) {
                     PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
@@ -60,7 +61,7 @@ int8_t network_e1000_process_tx() {
                     dev->tx_desc[dev->tx_tail].cmd = 3;
 
                     memory_free(packet->packet_data);
-                    memory_free(packet);
+                    memory_free((void*)packet);
 
                     // update the tail so the hardware knows it's ready
                     dev->tx_tail = (dev->tx_tail + 1) % NETWORK_E1000_NUM_TX_DESCRIPTORS;
@@ -252,8 +253,10 @@ int8_t network_e1000_tx_init(network_e1000_dev_t* dev) {
     return -1;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 // This can be used stand-alone or from an interrupt handler
-void network_e1000_rx_poll(network_e1000_dev_t* dev) {
+void network_e1000_rx_poll(const network_e1000_dev_t* dev) {
     while( (dev->rx_desc[dev->rx_tail].status & (1 << 0)) ) {
         // raw packet and packet length (excluding CRC)
         uint8_t* pkt = (void*)dev->rx_desc[dev->rx_tail].address;
@@ -289,7 +292,7 @@ void network_e1000_rx_poll(network_e1000_dev_t* dev) {
 
             packet->packet_len = pktlen;
             packet->return_queue = dev->transmit_queue;
-            packet->network_info = dev->mac;
+            packet->network_info = (void*)dev->mac;
             packet->network_type = NETWORK_TYPE_ETHERNET;
 
             packet->packet_data = memory_malloc(pktlen);
@@ -306,21 +309,22 @@ void network_e1000_rx_poll(network_e1000_dev_t* dev) {
         }
 
         // update RX counts and the tail pointer
-        dev->rx_count++;
+        ((network_e1000_dev_t*)dev)->rx_count++;
         dev->rx_desc[dev->rx_tail].status = (uint16_t)(0);
 
-        dev->rx_tail = (dev->rx_tail + 1) % NETWORK_E1000_NUM_RX_DESCRIPTORS;
+        ((network_e1000_dev_t*)dev)->rx_tail = (dev->rx_tail + 1) % NETWORK_E1000_NUM_RX_DESCRIPTORS;
 
         // write the tail to the device
         dev->mmio->rdt = dev->rx_tail;
     }
 }
+#pragma GCC diagnostic pop
 
 int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
     UNUSED(frame);
     UNUSED(intnum);
 
-    network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, 0);
+    const network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, 0);
 
     // read the pending interrupt status
     uint32_t icr = dev->mmio->isr_status;
@@ -376,7 +380,9 @@ int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
     return 0;
 }
 
-int8_t network_e1000_init(pci_dev_t* pci_netdev) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
     pci_common_header_t* pci_header = pci_netdev->pci_header;
 
     e1000_net_devs = linkedlist_create_list_with_heap(NULL);
@@ -389,7 +395,11 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
     network_e1000_dev_t* dev = memory_malloc(sizeof(network_e1000_dev_t));
 
-    linkedlist_list_insert(e1000_net_devs, dev);
+    if(dev == NULL) {
+        PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create e1000 network device");
+
+        return -1;
+    }
 
     dev->pci_netdev = pci_netdev;   // pci structure
 
@@ -430,6 +440,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
             if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &tmp_frm) != 0) {
                 PRINTLOG(E1000, LOG_ERROR, "cannot allocate frame");
+                memory_free(dev);
 
                 return -1;
             } else {
@@ -446,6 +457,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
     }
 
     if(bar_va == 0) {
+        memory_free(dev);
 
         return -1;
     }
@@ -476,6 +488,7 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
         memory_free(ints);
     } else {
         PRINTLOG(E1000, LOG_ERROR, "device hasnot any interrupts");
+        memory_free(dev);
 
         return -1;
     }
@@ -521,7 +534,10 @@ int8_t network_e1000_init(pci_dev_t* pci_netdev) {
 
     task_create_task(NULL, 64 << 10, 1 << 20, &network_e1000_process_tx, 0, NULL);
 
+    linkedlist_list_insert(e1000_net_devs, dev);
+
     PRINTLOG(E1000, LOG_INFO, "device initialized");
 
     return 0;
 }
+#pragma GCC diagnostic pop

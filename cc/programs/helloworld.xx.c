@@ -6,6 +6,6 @@
 #include <helloworld.h>
 
 
-char_t* hello_world(){
+const char_t* hello_world(void){
     return "Hello World\n";
 }

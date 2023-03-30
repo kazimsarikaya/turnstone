@@ -27,7 +27,7 @@ int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t ad
 
 int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc);
 
-int8_t acpi_reset(){
+int8_t acpi_reset(void){
     if(ACPI_CONTEXT == NULL) {
         PRINTLOG(ACPI, LOG_ERROR, "acpi context null");
         return -1;
@@ -41,7 +41,7 @@ int8_t acpi_reset(){
     return acpi_aml_write_as_integer(ACPI_CONTEXT->acpi_parser_context, ACPI_CONTEXT->fadt->reset_value, ACPI_RESET_REGISTER);
 }
 
-int8_t acpi_poweroff(){
+int8_t acpi_poweroff(void){
     if(ACPI_CONTEXT == NULL) {
         PRINTLOG(ACPI, LOG_ERROR, "acpi context null");
         return -1;
@@ -64,8 +64,8 @@ int8_t acpi_poweroff(){
     } else if(s5->type != ACPI_AML_OT_PACKAGE) {
         PRINTLOG(ACPI, LOG_ERROR, "s5 wrong object type: %i", s5->type);
     } else {
-        acpi_aml_object_t* slp_type_a = linkedlist_get_data_at_position(s5->package.elements, 0);
-        acpi_aml_object_t* slp_type_b = linkedlist_get_data_at_position(s5->package.elements, 1);
+        const acpi_aml_object_t* slp_type_a = linkedlist_get_data_at_position(s5->package.elements, 0);
+        const acpi_aml_object_t* slp_type_b = linkedlist_get_data_at_position(s5->package.elements, 1);
 
         if(slp_type_a == NULL || slp_type_b == NULL) {
             PRINTLOG(ACPI, LOG_ERROR, "s5 sleep type a 0x%p or b 0x%p is null", slp_type_a, slp_type_b);
@@ -336,7 +336,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
     return 0;
 }
 
-acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char_t* signature, linkedlist_t old_tables) {
+acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t old_tables) {
     if(xrsdp_desc->rsdp.revision == 0) {
         uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
         acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
@@ -393,6 +393,8 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, char
     return NULL;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
     if(memory_memcompare(sdt_header->signature, "APIC", 4) != 0) {
         return NULL;
@@ -419,14 +421,15 @@ linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt
         data += e->info.length;
 
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE) {
-            acpi_table_madt_entry_t* t_e = linkedlist_delete_at_position(entries, 0);
-            memory_free_ext(heap, t_e);
+            const acpi_table_madt_entry_t* t_e = linkedlist_delete_at_position(entries, 0);
+            memory_free_ext(heap, (void*)t_e);
         }
 
     }
 
     return entries;
 }
+#pragma GCC diagnostic pop
 
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
     ACPI_CONTEXT = memory_malloc(sizeof(acpi_contex_t));

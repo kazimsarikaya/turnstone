@@ -16,7 +16,7 @@
 #include <cpu/task.h>
 #include <backtrace.h>
 
-void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
+//void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
 

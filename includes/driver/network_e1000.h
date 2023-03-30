@@ -177,7 +177,7 @@ typedef struct network_e1000_tx_desc_s {
 } __attribute__((packed)) network_e1000_tx_desc_t;
 
 typedef struct {
-    pci_dev_t*            pci_netdev;
+    const pci_dev_t*      pci_netdev;
     network_mac_address_t mac;
     linkedlist_t          transmit_queue;
     uint8_t               irq_base;
@@ -195,6 +195,6 @@ typedef struct {
     volatile uint16_t                 tx_tail;
 }network_e1000_dev_t;
 
-int8_t network_e1000_init(pci_dev_t* pci_netdev);
+int8_t network_e1000_init(const pci_dev_t* pci_netdev);
 
 #endif

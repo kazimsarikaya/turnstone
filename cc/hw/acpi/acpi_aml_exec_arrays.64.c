@@ -10,7 +10,7 @@
 #include <video.h>
 #include <strings.h>
 
-int8_t acpi_aml_exec_op_sizeof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){ \
+int8_t acpi_aml_exec_op_sizeof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
     acpi_aml_object_t* obj = acpi_aml_get_if_arg_local_obj(ctx, opcode->operands[0], 0, 0);
 
     if(obj == NULL) {
@@ -239,7 +239,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
         res->field.offset = 8 * idx_val;
 
     } else {
-        acpi_aml_object_t* tmp = linkedlist_get_data_at_position(src->package.elements, idx_val);
+        acpi_aml_object_t* tmp = (acpi_aml_object_t*)linkedlist_get_data_at_position(src->package.elements, idx_val);
         res->type = ACPI_AML_OT_REFOF;
         res->refof_target = tmp;
     }

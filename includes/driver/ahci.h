@@ -392,7 +392,7 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
 future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
 future_t ahci_flush(uint64_t disk_id);
 
-ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id);
-disk_t*           ahci_disk_impl_open(ahci_sata_disk_t* sata_disk);
+const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id);
+disk_t*                 ahci_disk_impl_open(ahci_sata_disk_t* sata_disk);
 
 #endif

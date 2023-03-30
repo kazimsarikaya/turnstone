@@ -25,7 +25,8 @@ int8_t acpi_aml_resource_parse_largeitem_dword_address_space(acpi_aml_parser_con
 int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res);
 
 
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_aml_resource_parse_smallitem_irq(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res) {
     if(device->interrupts == NULL) {
         device->interrupts = linkedlist_create_list_with_heap(ctx->heap);
@@ -390,3 +391,4 @@ int32_t acpi_aml_resource_parse(acpi_aml_parser_context_t* ctx, acpi_aml_device_
 
     return parse_res;
 }
+#pragma GCC diagnostic pop

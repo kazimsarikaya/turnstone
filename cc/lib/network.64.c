@@ -16,7 +16,8 @@
 #include <network/network_protocols.h>
 #include <network/network_info.h>
 
-int8_t network_process_rx();
+int8_t   network_process_rx(void);
+uint64_t network_info_mke(const void* key);
 
 linkedlist_t network_received_packets = NULL;
 
@@ -30,7 +31,7 @@ uint64_t network_info_mke(const void* key) {
 }
 
 
-int8_t network_process_rx(){
+int8_t network_process_rx(void){
     network_received_packets = linkedlist_create_queue_with_heap(NULL);
 
     task_add_message_queue(network_received_packets);
@@ -43,7 +44,7 @@ int8_t network_process_rx(){
         }
 
         while(linkedlist_size(network_received_packets)) {
-            network_received_packet_t* packet = linkedlist_queue_peek(network_received_packets);
+            const network_received_packet_t* packet = linkedlist_queue_peek(network_received_packets);
 
             if(packet) {
                 PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
@@ -53,10 +54,10 @@ int8_t network_process_rx(){
 
                 if(packet->network_type == NETWORK_TYPE_ETHERNET) {
 
-                    network_info_t* ni = map_get(network_info_map, packet->network_info);
+                    network_info_t* ni = (network_info_t*)map_get(network_info_map, packet->network_info);
 
                     if(!ni) {
-                        network_info_t* ni = memory_malloc(sizeof(network_info_t));
+                        ni = memory_malloc(sizeof(network_info_t));
                         memory_memcopy(packet->network_info, ni->mac, sizeof(network_mac_address_t));
                         map_insert(network_info_map, ni->mac, ni);
                     } else {
@@ -71,7 +72,7 @@ int8_t network_process_rx(){
                 linkedlist_t return_queue = packet->return_queue;
 
                 memory_free(packet->packet_data);
-                memory_free(packet);
+                memory_free((void*)packet);
 
                 if(return_data && return_data_len) {
                     if(return_queue) {
@@ -122,7 +123,7 @@ int8_t network_process_rx(){
 }
 
 
-int8_t network_init() {
+int8_t network_init(void) {
     PRINTLOG(NETWORK, LOG_INFO, "network devices starting");
     int8_t errors = 0;
 
@@ -131,7 +132,7 @@ int8_t network_init() {
     iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->network_controllers);
 
     while(iter->end_of_iterator(iter) != 0) {
-        pci_dev_t* pci_netdev = iter->get_item(iter);
+        const pci_dev_t* pci_netdev = iter->get_item(iter);
 
         pci_common_header_t* pci_header = pci_netdev->pci_header;
 

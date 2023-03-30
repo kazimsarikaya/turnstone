@@ -15,6 +15,6 @@
  * @brief returns hello world string
  * @return "Hello World\r\n" string
  */
-char_t* hello_world();
+const char_t* hello_world(void);
 
 #endif

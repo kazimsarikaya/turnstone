@@ -42,6 +42,10 @@ typedef union network_ipv4_fragment_key_t {
 network_ipv4_address_t NETWORK_IPV4_GLOBAL_BROADCAST_IP = {255, 255, 255, 255};
 network_ipv4_address_t NETWORK_IPV4_ZERO_IP = {0, 0, 0, 0};
 
+int8_t   network_ipv4_fragment_comparator(const void* f1, const void* f2);
+uint16_t network_ipv4_header_checksum(network_ipv4_header_t* ipv4_hdr);
+int8_t   network_ipv4_header_checksum_verify(network_ipv4_header_t* ipv4_hdr);
+
 int8_t network_ipv4_fragment_comparator(const void* f1, const void* f2){
     const network_ipv4_fragment_t* tf1 = f1;
     const network_ipv4_fragment_t* tf2 = f2;
@@ -67,7 +71,7 @@ static inline uint64_t network_ipv4_fragment_key_generator(network_ipv4_address_
     return res.bits;
 }
 
-boolean_t network_ipv4_is_address_eq(network_ipv4_address_t ipv4_addr1, network_ipv4_address_t ipv4_addr2) {
+boolean_t network_ipv4_is_address_eq(const network_ipv4_address_t ipv4_addr1, const network_ipv4_address_t ipv4_addr2) {
     for(uint64_t i = 0; i < sizeof(network_ipv4_address_t); i++) {
         if(ipv4_addr1[i] != ipv4_addr2[i]) {
             return false;
@@ -117,6 +121,8 @@ int8_t network_ipv4_header_checksum_verify(network_ipv4_header_t* ipv4_hdr){
     return (~res == 0)?0:-1;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, void* network_info, uint16_t* return_packet_len) {
     if(network_ipv4_packet_fragments == NULL) {
         network_ipv4_packet_fragments = map_integer();
@@ -132,7 +138,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         return NULL;
     }
 
-    network_info_t* ni = map_get(network_info_map, network_info);
+    const network_info_t* ni = map_get(network_info_map, network_info);
 
     if(ni && ni->is_ipv4_address_set && (!network_ipv4_is_address_eq(ni->ipv4_address, recv_ipv4_packet->destination_ip) && !network_ipv4_is_address_eq(ni->ipv4_broadcast, recv_ipv4_packet->destination_ip))) {
         PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet destination isnot us");
@@ -144,7 +150,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
     if(recv_ipv4_packet->flags_fragment_offset.fields.flags & NETWORK_IPV4_FLAG_MORE_FRAGMENTS) {
         uint64_t key = network_ipv4_fragment_key_generator(recv_ipv4_packet->destination_ip, recv_ipv4_packet->identification, recv_ipv4_packet->protocol);
 
-        network_ipv4_fragment_item_t* frag_item = map_get(network_ipv4_packet_fragments, (void*)key);
+        network_ipv4_fragment_item_t* frag_item = (network_ipv4_fragment_item_t*)map_get(network_ipv4_packet_fragments, (void*)key);
 
         if(frag_item == NULL) {
             frag_item = memory_malloc(sizeof(network_ipv4_fragment_item_t));
@@ -185,7 +191,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
     if (recv_ipv4_packet->flags_fragment_offset.fields.fragment_offset) {
         uint64_t key = network_ipv4_fragment_key_generator(recv_ipv4_packet->destination_ip, recv_ipv4_packet->identification, recv_ipv4_packet->protocol);
 
-        network_ipv4_fragment_item_t* frag_item = map_get(network_ipv4_packet_fragments, (void*)key);
+        network_ipv4_fragment_item_t* frag_item = (network_ipv4_fragment_item_t*)map_get(network_ipv4_packet_fragments, (void*)key);
 
         if(frag_item == NULL) {
             return NULL;
@@ -215,7 +221,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         iterator_t* iter = linkedlist_iterator_create(frag_item->fragments);
 
         while(iter->end_of_iterator(iter) != 0) {
-            frag = iter->get_item(iter);
+            frag =  (network_ipv4_fragment_t*)iter->get_item(iter);
 
             PRINTLOG(NETWORK, LOG_TRACE, "reassembly offset %i len %i", frag->offset, frag->data_len);
 
@@ -296,8 +302,9 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
 
     return NULL;
 }
+#pragma GCC diagnostic pop
 
-network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len) {
+network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len) {
     uint16_t packet_len = sizeof(network_ipv4_header_t) + icmp_packet_len;
 
     network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);
@@ -327,7 +334,7 @@ network_ipv4_header_t* network_ipv4_create_packet_from_icmp_packet(network_ipv4_
     return ipv4_packet;
 }
 
-network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(network_ipv4_address_t sip, network_ipv4_address_t dip, network_udpv4_header_t* udp_hdr) {
+network_ipv4_header_t* network_ipv4_create_packet_from_udp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_udpv4_header_t* udp_hdr) {
     if(udp_hdr == NULL) {
         return NULL;
     }

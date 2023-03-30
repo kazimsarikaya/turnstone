@@ -14,6 +14,8 @@
 #include <network/network_info.h>
 #include <time/timer.h>
 
+network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t mac, uint32_t xid, uint16_t * return_packet_len);
+network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint32_t xid, uint16_t * return_packet_len);
 
 network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t mac, uint32_t xid, uint16_t * return_packet_len) {
     uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 9;
@@ -109,7 +111,7 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
 
     while(1) {
         if(network_info_map) {
-            ni = map_get(network_info_map, mac);
+            ni = (network_info_t*)map_get(network_info_map, mac);
 
             if(ni) {
                 if(ni->is_ipv4_address_set && !ni->is_ipv4_address_requested) {
@@ -272,7 +274,7 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
     PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet type %i", type);
 
-    network_info_t* ni = map_get(network_info_map, network_info);
+    network_info_t* ni = (network_info_t*)map_get(network_info_map, network_info);
 
     if(ni == NULL || ni->return_queue == NULL) {
         PRINTLOG(NETWORK, LOG_ERROR, "no network info or return queue");

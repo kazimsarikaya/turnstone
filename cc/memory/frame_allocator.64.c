@@ -25,6 +25,19 @@ typedef struct frame_allocator_context_t {
     lock_t         lock;
 } frame_allocator_context_t;
 
+
+int8_t       frame_allocator_cmp_by_size(const void* data1, const void* data2);
+int8_t       frame_allocator_cmp_by_address(const void* data1, const void* data2);
+int8_t       fa_reserve_system_frames(frame_allocator_t* self, frame_t* f);
+int8_t       fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame_allocation_type_t fa_type, frame_t** fs, uint64_t* alloc_list_size);
+int8_t       fa_allocate_frame(frame_allocator_t* self, frame_t* f);
+int8_t       fa_release_frame(frame_allocator_t* self, frame_t* f);
+int8_t       fa_release_acpi_reclaim_memory(frame_allocator_t* self);
+int8_t       fa_cleanup(frame_allocator_t* self);
+frame_t*     fa_get_reserved_frames_of_address(frame_allocator_t* self, void* address);
+int8_t       fa_rebuild_reserved_mmap(frame_allocator_t* self);
+frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type);
+
 int8_t frame_allocator_cmp_by_size(const void* data1, const void* data2){
     frame_t* f1 = (frame_t*)data1;
     frame_t* f2 = (frame_t*)data2;
@@ -420,7 +433,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
     iter = ctx->allocated_frames_by_address->search(ctx->allocated_frames_by_address, f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
     if(iter->end_of_iterator(iter) != 0) {
-        frame_t* tmp_frame = iter->get_item(iter);
+        const frame_t* tmp_frame = iter->get_item(iter);
 
         ctx->allocated_frames_by_address->delete(ctx->allocated_frames_by_address, tmp_frame, NULL);
 
@@ -483,7 +496,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 
         iter->destroy(iter);
 
-        memory_free_ext(ctx->heap, tmp_frame);
+        memory_free_ext(ctx->heap, (void*)tmp_frame);
 
         lock_release(ctx->lock);
 
@@ -496,7 +509,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
     iter = ctx->reserved_frames_by_address->search(ctx->reserved_frames_by_address, f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
     if(iter->end_of_iterator(iter) != 0) {
-        frame_t* tmp_frame = iter->get_item(iter);
+        const frame_t* tmp_frame = iter->get_item(iter);
 
         ctx->reserved_frames_by_address->delete(ctx->reserved_frames_by_address, tmp_frame, NULL);
 
@@ -559,7 +572,7 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
-        memory_free_ext(ctx->heap, tmp_frame);
+        memory_free_ext(ctx->heap, (void*)tmp_frame);
     }
 
     iter->destroy(iter);

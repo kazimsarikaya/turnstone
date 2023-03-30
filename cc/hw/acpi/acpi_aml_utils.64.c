@@ -15,6 +15,13 @@
 #include <bplustree.h>
 
 
+int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj);
+int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj);
+int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj);
+int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res);
+int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res);
+int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res);
+
 int8_t acpi_aml_is_null_target(acpi_aml_object_t* obj) {
     if(obj == NULL) {
         return 0;
@@ -103,10 +110,10 @@ acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t* ctx,
     return obj;
 }
 
-int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj) {
     UNUSED(ctx);
 
-    if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+    if(obj == NULL || obj->type != ACPI_AML_OT_FIELD || obj->field.related_object == NULL) {
         PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
         return -1;
     }
@@ -216,7 +223,7 @@ int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t v
     return 0;
 }
 
-int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj) {
     UNUSED(ctx);
 
     if(obj == NULL || obj->type != ACPI_AML_OT_FIELD || obj->field.related_object == NULL) {
@@ -268,7 +275,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
     char_t* region_name = opregion->name;
     char_t* aml_device_name = strndup(region_name, strlen(region_name) - 4);
 
-    acpi_aml_device_t* dev = acpi_device_lookup_by_name(ctx, aml_device_name);
+    const acpi_aml_device_t* dev = acpi_device_lookup_by_name(ctx, aml_device_name);
 
 
     if(dev == NULL) {
@@ -351,7 +358,7 @@ int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val
     return 0;
 }
 
-int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
+int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj) {
     UNUSED(ctx);
 
     if(obj == NULL && !(obj->type == ACPI_AML_OT_FIELD || obj->type == ACPI_AML_OT_BUFFERFIELD) && obj->field.related_object == NULL) {
@@ -444,8 +451,8 @@ int8_t acpi_aml_write_memory_as_integer(acpi_aml_parser_context_t* ctx, int64_t 
     return 0;
 }
 
-int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
-    if(obj == NULL && obj->type != ACPI_AML_OT_FIELD && obj->field.related_object == NULL) {
+int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res){
+    if(obj == NULL || obj->type != ACPI_AML_OT_FIELD || obj->field.related_object == NULL) {
         PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
         return -1;
     }
@@ -522,7 +529,7 @@ int8_t acpi_aml_read_sysio_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_o
     return 0;
 }
 
-int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
+int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res){
     if(obj == NULL || obj->type != ACPI_AML_OT_FIELD || obj->field.related_object == NULL) {
         PRINTLOG(ACPIAML, LOG_ERROR, "Field or region is null %i", obj == NULL?0:1);
         return -1;
@@ -569,7 +576,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
     char_t* region_name = opregion->name;
     char_t* aml_device_name = strndup(region_name, strlen(region_name) - 4);
 
-    acpi_aml_device_t* dev = acpi_device_lookup_by_name(ctx, aml_device_name);
+    const acpi_aml_device_t* dev = acpi_device_lookup_by_name(ctx, aml_device_name);
 
 
     if(dev == NULL) {
@@ -624,7 +631,7 @@ int8_t acpi_aml_read_pci_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_obj
     return 0;
 }
 
-int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
+int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res){
     UNUSED(ctx);
 
     if(obj == NULL) {
@@ -691,10 +698,13 @@ int8_t acpi_aml_read_memory_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_
     return 0;
 }
 
-int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* obj, int64_t* res){
-    obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 0, 0);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_object_t* obj, int64_t* res){
+    acpi_aml_object_t* t_obj = (acpi_aml_object_t*)obj;
+    t_obj = acpi_aml_get_if_arg_local_obj(ctx, t_obj, 0, 0);
 
-    if(obj == NULL || res == NULL) {
+    if(t_obj == NULL || res == NULL) {
         return -1;
     }
 
@@ -704,14 +714,14 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
     acpi_aml_object_t* mth_res = NULL;
     uint8_t region_space;
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "reading from object type %i", obj->type);
+    PRINTLOG(ACPIAML, LOG_TRACE, "reading from object type %i", t_obj->type);
 
-    switch (obj->type) {
+    switch (t_obj->type) {
     case ACPI_AML_OT_NUMBER:
-        *res = obj->number.value;
+        *res = t_obj->number.value;
         break;
     case ACPI_AML_OT_STRING:
-        strptr = obj->string;
+        strptr = t_obj->string;
         if(strptr[0] == '0' && (strptr[1] == 'x' || strptr[1] == 'X')) {
             strptr += 2;
         }
@@ -732,12 +742,12 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
         *res = ival;
         break;
     case ACPI_AML_OT_BUFFER:
-        *res =  *((int64_t*)obj->buffer.buf);
+        *res =  *((int64_t*)t_obj->buffer.buf);
         break;
     case ACPI_AML_OT_OPCODE_EXEC_RETURN:
-        return acpi_aml_read_as_integer(ctx, obj->opcode_exec_return, res);
+        return acpi_aml_read_as_integer(ctx, t_obj->opcode_exec_return, res);
     case ACPI_AML_OT_METHOD:
-        if(acpi_aml_execute(ctx, obj, &mth_res) != 0) {
+        if(acpi_aml_execute(ctx, t_obj, &mth_res) != 0) {
             return -1;
         }
 
@@ -749,35 +759,35 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, acpi_aml_object_
 
         return result;
     case ACPI_AML_OT_FIELD:
-        region_space = obj->field.related_object->opregion.region_space;
+        region_space = t_obj->field.related_object->opregion.region_space;
 
-        if(obj->field.related_object->type == ACPI_AML_OT_FIELD) { // indexedfield
-            region_space = obj->field.related_object->field.related_object->opregion.region_space;
+        if(t_obj->field.related_object->type == ACPI_AML_OT_FIELD) { // indexedfield
+            region_space = t_obj->field.related_object->field.related_object->opregion.region_space;
         }
 
         switch(region_space) {
         case ACPI_AML_OPREGT_SYSMEM:
-            return acpi_aml_read_memory_as_integer(ctx, obj, res);
+            return acpi_aml_read_memory_as_integer(ctx, t_obj, res);
         case ACPI_AML_OPREGT_PCICFG:
-            return acpi_aml_read_pci_as_integer(ctx, obj, res);
+            return acpi_aml_read_pci_as_integer(ctx, t_obj, res);
         case ACPI_AML_OPREGT_SYSIO:
-            return acpi_aml_read_sysio_as_integer(ctx, obj, res);
+            return acpi_aml_read_sysio_as_integer(ctx, t_obj, res);
         default:
-            PRINTLOG(ACPIAML, LOG_ERROR, "region space id not implemented %i", obj->field.related_object->opregion.region_space);
+            PRINTLOG(ACPIAML, LOG_ERROR, "region space id not implemented %i", t_obj->field.related_object->opregion.region_space);
             return -1;
         }
         return -1;
     case ACPI_AML_OT_BUFFERFIELD:
-        return acpi_aml_read_memory_as_integer(ctx, obj, res);
+        return acpi_aml_read_memory_as_integer(ctx, t_obj, res);
     default:
-        PRINTLOG(ACPIAML, LOG_ERROR, "ctx %s read as integer objtype %i 0x%p", ctx->scope_prefix, obj->type, obj);
+        PRINTLOG(ACPIAML, LOG_ERROR, "ctx %s read as integer objtype %i 0x%p", ctx->scope_prefix, t_obj->type, t_obj);
         return -1;
         break;
     }
 
     return 0;
 }
-
+#pragma GCC diagnostic pop
 
 int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, acpi_aml_object_t* obj) {
     obj = acpi_aml_get_if_arg_local_obj(ctx, obj, 1, 0);
@@ -1053,7 +1063,7 @@ int8_t acpi_aml_is_parent_prefix_char(uint8_t* c){
 
 
 
-char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, char_t* name) {
+char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, const char_t* prefix, const char_t* name) {
     uint64_t max_len = strlen(prefix) + strlen(name) + 1;
     char_t* dst_name = memory_malloc_ext(ctx->heap, sizeof(char_t) * max_len, 0x0);
 
@@ -1067,7 +1077,7 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, char_t* prefix, 
         strcpy(name, dst_name);
     } else {
         uint64_t prefix_cnt = 0;
-        char_t* tmp = name;
+        const char_t* tmp = name;
 
         while(acpi_aml_is_parent_prefix_char((uint8_t*)tmp) == 0) {
             tmp++;
@@ -1196,7 +1206,7 @@ uint64_t acpi_aml_len_namestring(acpi_aml_parser_context_t* ctx){
     return res + 4;
 }
 
-acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ctx, index_t* table, char_t* prefix, char_t* symbol_name){
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ctx, index_t* table, const char_t* prefix, const char_t* symbol_name){
     char_t* tmp_prefix = memory_malloc_ext(ctx->heap, strlen(prefix) + 1, 0x0);
 
     if(tmp_prefix == NULL) {
@@ -1220,7 +1230,7 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
         iterator_t* iter = table->search(table, nomname, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
         if(iter != NULL && iter->end_of_iterator(iter) != 0) {
-            acpi_aml_object_t* obj = iter->get_item(iter);
+            acpi_aml_object_t* obj = (acpi_aml_object_t*)iter->get_item(iter);
             iter->destroy(iter);
             memory_free_ext(ctx->heap, nomname);
             memory_free_ext(ctx->heap, tmp_prefix);
@@ -1256,7 +1266,7 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
     return NULL;
 }
 
-acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, char_t* symbol_name){
+acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, const char_t* symbol_name){
     if(ctx->local_symbols != NULL) {
         acpi_aml_object_t* obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->local_symbols, ctx->scope_prefix, symbol_name);
 
@@ -1336,7 +1346,7 @@ void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t* ctx, uint8_t local
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        acpi_aml_object_t* sym = iter->get_item(iter);
+        acpi_aml_object_t* sym = (acpi_aml_object_t*)iter->get_item(iter);
         acpi_aml_destroy_object(ctx, sym);
         item_count++;
         iter = iter->next(iter);
@@ -1364,10 +1374,10 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
         iter = linkedlist_iterator_create(obj->package.elements);
 
         while(iter->end_of_iterator(iter) != 0) {
-            acpi_aml_object_t* obj = iter->get_item(iter);
+            acpi_aml_object_t* t_obj = (acpi_aml_object_t*)iter->get_item(iter);
 
-            if(obj->name == NULL || obj->type == ACPI_AML_OT_RUNTIMEREF || obj->type == ACPI_AML_OT_PACKAGE) {
-                acpi_aml_destroy_object(ctx, obj);
+            if(t_obj->name == NULL || t_obj->type == ACPI_AML_OT_RUNTIMEREF || t_obj->type == ACPI_AML_OT_PACKAGE) {
+                acpi_aml_destroy_object(ctx, t_obj);
             }
 
             iter = iter->next(iter);
@@ -1449,7 +1459,7 @@ void acpi_aml_print_symbol_table(acpi_aml_parser_context_t* ctx){
     iterator_t* iter = ctx->symbols->create_iterator(ctx->symbols);
 
     while(iter->end_of_iterator(iter) != 0) {
-        acpi_aml_object_t* sym = iter->get_item(iter);
+        acpi_aml_object_t* sym = (acpi_aml_object_t*)iter->get_item(iter);
 
         acpi_aml_print_object(ctx, sym);
 

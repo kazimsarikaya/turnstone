@@ -10,7 +10,7 @@
 #include <video.h>
 #include <logging.h>
 
-stackframe_t* backtrace_get_stackframe() {
+stackframe_t* backtrace_get_stackframe(void) {
     stackframe_t* frame = NULL;
 
     asm ("mov %%rbp, %0\n" : "=r" (frame));
@@ -33,6 +33,6 @@ void backtrace_print(stackframe_t* frame) {
 
 }
 
-void backtrace(){
+void backtrace(void){
     backtrace_print(backtrace_get_stackframe());
 }

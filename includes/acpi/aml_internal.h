@@ -206,13 +206,12 @@ int8_t             acpi_aml_is_digit_char(uint8_t*);
 int8_t             acpi_aml_is_name_char(uint8_t*);
 int8_t             acpi_aml_is_root_char(uint8_t*);
 int8_t             acpi_aml_is_parent_prefix_char(uint8_t*);
-char_t*            acpi_aml_normalize_name(acpi_aml_parser_context_t*, char_t*, char_t*);
+char_t*            acpi_aml_normalize_name(acpi_aml_parser_context_t*, const char_t*, const char_t*);
 int8_t             acpi_aml_is_nameseg(uint8_t*);
 int8_t             acpi_aml_is_namestring_start(uint8_t*);
 uint64_t           acpi_aml_parse_package_length(acpi_aml_parser_context_t*);
 uint64_t           acpi_aml_len_namestring(acpi_aml_parser_context_t*);
-acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t*, char_t*);
-acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, index_t*, char_t*, char_t*);
+acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t*, index_t*, const char_t*, const char_t*);
 int8_t             acpi_aml_executor_opcode(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
 int8_t             acpi_aml_add_obj_to_symboltable(acpi_aml_parser_context_t* ctx, acpi_aml_object_t*);
 uint8_t acpi_aml_get_index_of_extended_code(uint8_t);
@@ -224,12 +223,113 @@ acpi_aml_object_t* acpi_aml_duplicate_object(acpi_aml_parser_context_t*, acpi_am
 acpi_aml_object_t* acpi_aml_get_real_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 acpi_aml_object_t* acpi_aml_get_if_arg_local_obj(acpi_aml_parser_context_t*, acpi_aml_object_t*, uint8_t, uint8_t);
 
-int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t*, acpi_aml_object_t*, int64_t*);
-int8_t acpi_aml_write_as_integer(acpi_aml_parser_context_t*, int64_t, acpi_aml_object_t*);
 int8_t acpi_aml_write_as_string(acpi_aml_parser_context_t*, acpi_aml_object_t*, acpi_aml_object_t*);
 int8_t acpi_aml_write_as_buffer(acpi_aml_parser_context_t*, acpi_aml_object_t*, acpi_aml_object_t*);
 
 char_t* acpi_aml_parse_eisaid(acpi_aml_parser_context_t* ctx, uint64_t eisaid_num);
 
 int8_t acpi_aml_execute(acpi_aml_parser_context_t*, acpi_aml_object_t* mth, acpi_aml_object_t** return_obj, ...);
+
+#define CREATE_PARSER_F(name) int8_t acpi_aml_parse_ ## name(acpi_aml_parser_context_t*, void**, uint64_t*);
+// parser methods
+
+CREATE_PARSER_F(namestring);
+
+CREATE_PARSER_F(alias);
+CREATE_PARSER_F(name);
+CREATE_PARSER_F(scope);
+CREATE_PARSER_F(const_data);
+
+CREATE_PARSER_F(opcnt_0);
+CREATE_PARSER_F(opcnt_1);
+CREATE_PARSER_F(opcnt_2);
+CREATE_PARSER_F(opcnt_3);
+CREATE_PARSER_F(opcnt_4);
+
+CREATE_PARSER_F(op_match);
+CREATE_PARSER_F(logic_ext);
+
+CREATE_PARSER_F(op_if);
+CREATE_PARSER_F(op_else);
+CREATE_PARSER_F(op_while);
+
+CREATE_PARSER_F(create_field);
+
+CREATE_PARSER_F(op_extended);
+
+CREATE_PARSER_F(buffer);
+CREATE_PARSER_F(package);
+CREATE_PARSER_F(varpackage);
+CREATE_PARSER_F(method);
+CREATE_PARSER_F(external);
+
+CREATE_PARSER_F(symbol);
+
+CREATE_PARSER_F(byte_data);
+
+CREATE_PARSER_F(mutex);
+CREATE_PARSER_F(event);
+
+CREATE_PARSER_F(region);
+
+CREATE_PARSER_F(field);
+
+CREATE_PARSER_F(fatal);
+
+CREATE_PARSER_F(extopcnt_0);
+CREATE_PARSER_F(extopcnt_1);
+CREATE_PARSER_F(extopcnt_2);
+CREATE_PARSER_F(extopcnt_6);
+
+#define PARSER_F_NAME(name) acpi_aml_parse_ ## name
+
+#define CREATE_EXEC_F(name) int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t*, acpi_aml_opcode_t*);
+
+CREATE_EXEC_F(store);
+CREATE_EXEC_F(refof);
+CREATE_EXEC_F(concat);
+CREATE_EXEC_F(findsetbit);
+CREATE_EXEC_F(derefof);
+CREATE_EXEC_F(concatres);
+CREATE_EXEC_F(notify);
+CREATE_EXEC_F(op_sizeof);
+CREATE_EXEC_F(index);
+CREATE_EXEC_F(match);
+CREATE_EXEC_F(object_type);
+CREATE_EXEC_F(to_buffer);
+CREATE_EXEC_F(to_decimalstring);
+CREATE_EXEC_F(to_hexstring);
+CREATE_EXEC_F(to_integer);
+CREATE_EXEC_F(to_string);
+
+CREATE_EXEC_F(op1_tgt0_maths);
+CREATE_EXEC_F(op1_tgt1_maths);
+CREATE_EXEC_F(op2_tgt1_maths);
+CREATE_EXEC_F(op2_tgt2_maths);
+
+CREATE_EXEC_F(op2_logic);
+
+
+CREATE_EXEC_F(copy);
+CREATE_EXEC_F(mid);
+
+CREATE_EXEC_F(mth_return);
+
+CREATE_EXEC_F(condrefof);
+CREATE_EXEC_F(load_table);
+CREATE_EXEC_F(load);
+CREATE_EXEC_F(stall);
+CREATE_EXEC_F(sleep);
+CREATE_EXEC_F(acquire);
+CREATE_EXEC_F(signal);
+CREATE_EXEC_F(wait);
+CREATE_EXEC_F(reset);
+CREATE_EXEC_F(release);
+CREATE_EXEC_F(from_bcd);
+CREATE_EXEC_F(to_bcd);
+
+CREATE_EXEC_F(method);
+
+#define EXEC_F_NAME(name) acpi_aml_exec_ ## name
+
 #endif
