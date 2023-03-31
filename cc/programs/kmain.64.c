@@ -25,12 +25,14 @@
 #include <cpu/task.h>
 #include <linker.h>
 #include <driver/ahci.h>
+#include <driver/nvme.h>
 #include <random.h>
 #include <memory/frame.h>
 #include <time/timer.h>
 #include <network.h>
 
-int8_t kmain64(size_t entry_point);
+int8_t                         kmain64(size_t entry_point);
+__attribute__((noreturn)) void ___kstart64(system_info_t* sysinfo);
 
 __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     cpu_cli();
@@ -212,7 +214,7 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %lli address 0x%p", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
     }
 
-    char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
+    const char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
     printf("address 0x%p %s\n", test_data, test_data);
 
     printf("random data 0x%x\n", rand());
@@ -257,7 +259,9 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
-    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->storage_controllers);
+    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
+    int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
+
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
@@ -269,7 +273,7 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    ahci_sata_disk_t* d = ahci_get_disk_by_id(0);
+    ahci_sata_disk_t* d = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
     if(d) {
         PRINTLOG(KERNEL, LOG_DEBUG, "try to read disk 0x%p", d);
         disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
@@ -295,6 +299,8 @@ int8_t kmain64(size_t entry_point) {
     } else {
         PRINTLOG(KERNEL, LOG_WARNING, "no disks found");
     }
+
+    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt)
 
     if(kbd_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init keyboard. Halting...");
