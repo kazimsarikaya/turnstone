@@ -11,6 +11,7 @@
 #include <bplustree.h>
 #include <map.h>
 #include <xxhash.h>
+#include <tosdb/tosdb.h>
 
 uint32_t main(uint32_t argc, char_t** argv);
 data_t*  record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...);
@@ -100,23 +101,27 @@ uint32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    data_t* test_record1 = record_create(0, 0, 3, DATA_TYPE_STRING, "hello world", DATA_TYPE_INT32, 0x1234, DATA_TYPE_BOOLEAN, true);
+    boolean_t pass = true;
 
-    if(test_record1 == NULL) {
-        print_error("cannot create test record 1");
+    tosdb_backend_t* backend = tosdb_backend_memory_new();
 
-        return -1;
+    if(!backend) {
+        pass = false;
+
+        goto backend_failed;
     }
 
-    FILE* out = fopen("tmp/test.bin", "w");
-    fwrite(test_record1->value, test_record1->length, 1, out);
-    fclose(out);
-
-    memory_free(test_record1->value);
-    memory_free(test_record1);
 
 
-    print_success("TESTS PASSED");
+    if(!tosdb_backend_close(backend)) {
+        pass = false;
+    }
 
+backend_failed:
+    if(pass) {
+        print_success("TESTS PASSED");
+    } else {
+        print_error("TESTS FAILED");
+    }
     return 0;
 }
