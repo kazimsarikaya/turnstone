@@ -35,7 +35,7 @@ const char_t*const logging_module_names[] = {
 };
 
 
-const char_t* logging_level_names[] = {
+const char_t*const logging_level_names[] = {
     "PANIC" /** 0 **/,
     "FATAL" /** 1 **/,
     "ERROR" /** 2 **/,
