@@ -10,7 +10,7 @@
 #include <logging.h>
 
 
-const char_t* logging_module_names[] = {
+const char_t*const logging_module_names[] = {
     "KERNEL",
     "MEMORY",
     "SIMPLEHEAP",
