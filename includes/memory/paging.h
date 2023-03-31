@@ -12,16 +12,18 @@
 #include <memory.h>
 #include <memory/frame.h>
 
+/*! how many index has a page */
 #define MEMORY_PAGING_INDEX_COUNT 512
+/*! page size (4K) */
 #define MEMORY_PAGING_PAGE_SIZE   0x1000
 
 /**
- * @struct memory_page_entry_t
+ * @struct memory_page_entry_s
  * @brief page entry struct
  *
  * each entry is 64bit long
  */
-typedef struct {
+typedef struct memory_page_entry_s{
     uint8_t  present               : 1; ///< bit 0 page present?
     uint8_t  writable              : 1; ///< bit 1 page can be writen?
     uint8_t  user_accessible       : 1; ///< bit 2 page can be accessable by user space
@@ -30,7 +32,7 @@ typedef struct {
     uint8_t  accessed              : 1; ///< bit 5 page is accessed by cpu, cpu sets this bit
     uint8_t  dirty                 : 1; ///< bit 6 page is writen, cpu sets this bits
     uint8_t  hugepage              : 1; ///< bit 7 hugepage flag for p3 (1g) and p2 (2m)
-    uint8_t  global                : 1; ///< bit 8 page is global? for caching while page switches
+    uint8_t  global                : 1; ///< bit 8 page is global? for caching while page switches needs cr4.pge 1
     uint8_t  os_avail01            : 1; ///< bit 9 is available for os
     uint8_t  os_avail02            : 1; ///< bit 10 is available for os
     uint8_t  os_avail03            : 1; ///< bit 11 is available for os
@@ -42,29 +44,29 @@ typedef struct {
     uint8_t  os_avail08            : 1; ///< bit 56 is available for os
     uint8_t  os_avail09            : 1; ///< bit 57 is available for os
     uint8_t  os_avail10            : 1; ///< bit 58 is available for os
-    uint8_t  os_avail11            : 1; ///< bit 59 is available for os
-    uint8_t  os_avail12            : 1; ///< bit 60 is available for os
-    uint8_t  os_avail13            : 1; ///< bit 61 is available for os
-    uint8_t  os_avail14            : 1; ///< bit 62 is available for os
+    uint8_t  os_avail11            : 1; ///< bit 59 is available for os or pke if cr4.pke 1 orr cr4.pks 1
+    uint8_t  os_avail12            : 1; ///< bit 60 is available for os or pke if cr4.pke 1 orr cr4.pks 1
+    uint8_t  os_avail13            : 1; ///< bit 61 is available for os or pke if cr4.pke 1 orr cr4.pks 1
+    uint8_t  os_avail14            : 1; ///< bit 62 is available for os or pke if cr4.pke 1 orr cr4.pks 1
     uint8_t  no_execute            : 1; ///< bit 63 prevents execution of page by kernel programs
-} __attribute__((packed)) memory_page_entry_t;
+} __attribute__((packed)) memory_page_entry_t; ///< short hand for struct
 
 /**
- * @struct memory_page_table_t
+ * @struct memory_page_table_s
  * @brief page table struct
  *
  * in long mode a page table is consist of 512 page entries.
  * a page table is 4K page aligned.
  */
-typedef struct {
+typedef struct memory_page_table_s{
     memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
 } __attribute__((packed)) memory_page_table_t; ///< short hand for struct
 
 /**
- * @enum memory_paging_page_type_t
+ * @enum memory_paging_page_type_e
  * @brief page type enum.
  */
-typedef enum {
+typedef enum memory_paging_page_type_e {
     MEMORY_PAGING_PAGE_TYPE_UNKNOWN= 0, ///< 4k page
     MEMORY_PAGING_PAGE_TYPE_4K = 1 << 0, ///< 4k page
     MEMORY_PAGING_PAGE_TYPE_2M = 1 << 1, ///< 2m page aka hugepage
@@ -76,10 +78,14 @@ typedef enum {
     MEMORY_PAGING_PAGE_TYPE_WILL_DELETED = 1 << 16, ///< no executable
 } memory_paging_page_type_t; ///< short hand for enum
 
+/*! memory alignment for a page (4k) */
 #define MEMORY_PAGING_PAGE_ALIGN MEMORY_PAGING_PAGE_SIZE
 
+/*! page length for 4K */
 #define MEMORY_PAGING_PAGE_LENGTH_4K (1 << 12)
+/*! page length for 2M */
 #define MEMORY_PAGING_PAGE_LENGTH_2M (1 << 21)
+/*! page length for 1G */
 #define MEMORY_PAGING_PAGE_LENGTH_1G (1 << 30)
 
 #define memory_paging_malloc_page_with_heap(h) memory_malloc_ext(h, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
@@ -160,7 +166,9 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 /*! gets p1 index of virtual address at long mode */
 #define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & 0x1FF)
 
+/*! computes reserved virtual address of frame adddress */
 #define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((64ULL << 40) | (uint64_t)(fa)))
+/*! returns frame address of reserved virtual address */
 #define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(va)  ((typeof(va))(((64ULL << 40 ) - 1) & (uint64_t)(va)))
 
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);

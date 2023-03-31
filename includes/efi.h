@@ -1,49 +1,71 @@
-/*
+/**
+ * @file efi.h
+ * @brief efi interface
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
 #ifndef ___EFI_H
+/*! prevent duplicate header error macro */
 #define ___EFI_H 0
 
 #include <types.h>
 #include <disk.h>
 
+/*! function call abi*/
 #define EFIAPI __attribute__((ms_abi))
 
-typedef struct {
-    uint32_t time_low;
-    uint16_t time_mid;
-    uint16_t time_high_version;
-    uint8_t  data[8];
-}__attribute__((packed))  efi_guid_t;
+/**
+ * @struct efi_guid_s
+ * @brief efi guid has a special formatting
+ */
+typedef struct efi_guid_s {
+    uint32_t time_low; ///< guid's time low part
+    uint16_t time_mid; ///< guid's time mid part
+    uint16_t time_high_version; ///< high part also contains version
+    uint8_t  data[8]; ///< data normally random however efi uses all parts for special meaning.
+}__attribute__((packed))  efi_guid_t; ///< short hand for struct
 
-typedef struct {
-    uint8_t head;
-    uint8_t sector;
-    uint8_t cylinder;
-}__attribute__((packed))  efi_pmbr_chs_t;
+/**
+ * @struct efi_pmbr_chs_s
+ * @brief efi uses a special one part at legacy mbr section. this struct is for CHS part
+ */
+typedef struct efi_pmbr_chs_s {
+    uint8_t head; ///< disk head
+    uint8_t sector; ///< disk sector
+    uint8_t cylinder; ///< disk cylinder
+}__attribute__((packed))  efi_pmbr_chs_t;  ///< short hand for struct
 
+/*! special efi part named as protected efi part and its type is 0xEE */
 #define EFI_PMBR_PART_TYPE 0xEE
 
-typedef struct {
-    uint8_t        status;
-    efi_pmbr_chs_t first_chs;
-    uint8_t        part_type;
-    efi_pmbr_chs_t last_chs;
-    uint32_t       first_lba;
-    uint32_t       sector_count;
-} __attribute__((packed))  efi_pmbr_partition_t;
+/**
+ * @struct efi_pmbr_partition_s
+ * @brief pmbr's partition line format
+ */
+typedef struct efi_pmbr_partition_s {
+    uint8_t        status; ///< partition status
+    efi_pmbr_chs_t first_chs; ///< first chs of partition
+    uint8_t        part_type; ///< part type, always 0xEE
+    efi_pmbr_chs_t last_chs; ///< lots of time, smaller than actual partition size
+    uint32_t       first_lba; ///< gpt table's first lba
+    uint32_t       sector_count; ///< sector count
+} __attribute__((packed))  efi_pmbr_partition_t; ///< short hand for struct
 
-typedef struct {
-    uint64_t signature;
-    uint32_t revision;
-    uint32_t header_size;
-    uint32_t crc32;
-    uint32_t reserved;
-}__attribute__((packed))  efi_table_header_t;
+/**
+ * @struct efi_table_header_s
+ * @brief a gpt disk is also an efi table so it has same header.
+ */
+typedef struct efi_table_header_s {
+    uint64_t signature; ///< singature of gpt table
+    uint32_t revision; ///< gpt table revision
+    uint32_t header_size; ///< actual header size which also contains this header
+    uint32_t crc32; ///< crc32 of all header bytes.
+    uint32_t reserved; ///< always zero
+}__attribute__((packed))  efi_table_header_t; ///< short hand for struct
 
-typedef struct {
+typedef struct efi_partition_table_header_s {
     efi_table_header_t header;
     uint64_t           my_lba;
     uint64_t           alternate_lba;
@@ -56,7 +78,7 @@ typedef struct {
     uint32_t           partition_entries_crc32;
 }__attribute__((packed))  efi_partition_table_header_t;
 
-typedef struct {
+typedef struct efi_partition_entry_s {
     efi_guid_t partition_type_guid;
     efi_guid_t unique_partition_guid;
     uint64_t   starting_lba;
@@ -79,14 +101,14 @@ typedef struct {
 int8_t efi_create_guid(efi_guid_t* guid);
 int8_t efi_guid_equal(efi_guid_t guid1, efi_guid_t guid2);
 
-typedef struct {
+typedef struct gpt_disk_s {
     disk_t                        underlaying_disk;
     disk_t*                       underlaying_disk_pointer;
     efi_partition_table_header_t* gpt_header;
     efi_partition_entry_t*        partitions;
 } gpt_disk_t;
 
-disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, char_t* name, uint64_t start, uint64_t end);
+disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, const char_t* name, uint64_t start, uint64_t end);
 
 disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk);
 
