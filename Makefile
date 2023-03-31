@@ -26,7 +26,7 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-CCXXFLAGS += -std=gnu11 -O2 -nostdlib -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+CCXXFLAGS += -std=gnu11 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
 	-fno-pic -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
@@ -131,6 +131,7 @@ asm-internal: $(CC64ASMOUTS)
 
 bear:
 	bear --append -- make qemu
+	bear --append -- make -C tests
 
 test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
