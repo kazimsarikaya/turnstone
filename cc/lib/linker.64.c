@@ -38,11 +38,22 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
             uint64_t* target = (uint64_t*)&dst_bytes[relocs[i].offset];
 
             *target = dst_program_addr + relocs[i].addend;
-        } else if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_PC32) {
+        } else if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_PC32 ||
+                  relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_GOT64 ||
+                  relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_GOTOFF64 ||
+                  relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_GOTPC64) {
             continue;
         } else {
             printf("LINKER: Fatal unknown relocation type %i\n", relocs[i].relocation_type);
             return -1;
+        }
+    }
+
+    uint64_t* got_table = (uint64_t*)(dst_program->section_locations[LINKER_SECTION_TYPE_GOT].section_start + dst_program_addr);
+
+    for(uint64_t i = 0; i < dst_program->got_entry_count; i++) {
+        if(got_table[i] != 0) {
+            got_table[i] += dst_program_addr;
         }
     }
 
@@ -56,9 +67,9 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
 
 #if ___TESTMODE != 1
 #if ___EFIBUILD != 1
-int8_t liner_remap_relink_kernel();
+int8_t liner_remap_relink_kernel(void);
 
-int8_t linker_remap_kernel() {
+int8_t linker_remap_kernel(void) {
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
 
     uint64_t data_start = 1 << 30; // 1gib
