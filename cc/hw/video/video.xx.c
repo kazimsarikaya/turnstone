@@ -47,7 +47,7 @@ uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
 
 wchar_t* video_font_unicode_table = NULL;
 
-void video_refresh_frame_buffer_address() {
+void video_refresh_frame_buffer_address(void) {
     VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 }
 void video_init(void) {

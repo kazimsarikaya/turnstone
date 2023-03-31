@@ -12,6 +12,22 @@
 #define LN2  ((float64_t)(0.69314718055994506418L))
 #define LN10 ((float64_t)(2.30258509299404590109L))
 
+/**
+ * @brief ceil of given float number
+ * @param[in] num given float number
+ * @return ceiled value
+ *
+ */
+int64_t math_ceil(float64_t num);
+
+/**
+ * @brief floor of given float number
+ * @param[in] num given float number
+ * @return floored value
+ *
+ */
+int64_t math_floor(float64_t num);
+
 
 /**
  * @brief power base with p
@@ -21,13 +37,39 @@
  */
 float64_t math_power(float64_t base, float64_t p);
 
+/**
+ * @brief calculates exp^number
+ * @param[in] number number to calculate
+ * @return exp^number
+ */
 float64_t math_exp(float64_t number);
+
+/**
+ * @brief calculates log given number at base exp
+ * @param[in] number number to calculate
+ * @return log value at base exp
+ */
 float64_t math_log(float64_t number);
+
+///! log2 of n
 #define math_log2(n) (math_log(n) / LN2)
+///! log10 of n
 #define math_log10(n) (math_log(n) / LN10)
 
-float64_t math_antilog(float64_t power, float64_t exp);
+/**
+ * @brief calculates antilog value
+ * @param[in] power given number
+ * @param[in] base  log base
+ * @return antilog value base^power
+ */
+float64_t math_antilog(float64_t power, float64_t base);
 
+/**
+ * @brief calculates root of given number at root
+ * @param[in] number given number
+ * @param[in] root root to calculate
+ * @return root result
+ */
 float64_t math_root(float64_t number, float64_t root);
 
 #endif

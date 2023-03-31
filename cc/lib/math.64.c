@@ -7,6 +7,46 @@
 
 #define MATH_TRESHOLD 0.00000000000001L
 
+int64_t math_ceil(float64_t num) {
+    int64_t res = 0;
+    boolean_t pos = true;
+
+    if(num < 0) {
+        pos = false;
+        num = ABS(num);
+    }
+
+    res = (int64_t)num;
+
+    if(res != num) {
+        res++;
+    }
+
+    if(!pos) {
+        res *= -1;
+    }
+
+    return res;
+}
+
+int64_t math_floor(float64_t num) {
+    int64_t res = 0;
+    boolean_t pos = true;
+
+    if(num < 0) {
+        pos = false;
+        num = ABS(num);
+    }
+
+    res = (int64_t)num;
+
+    if(!pos) {
+        res *= -1;
+    }
+
+    return res;
+}
+
 float64_t math_power(float64_t base, float64_t p) {
     return math_exp(p * math_log(base));
 }
@@ -67,8 +107,8 @@ float64_t math_root(float64_t number, float64_t root) {
     return s;
 }
 
-float64_t math_antilog(float64_t power, float64_t exp){
+float64_t math_antilog(float64_t power, float64_t base){
     float64_t t = math_log(power);
-    t /= exp;
+    t /= base;
     return math_log(t);
 }

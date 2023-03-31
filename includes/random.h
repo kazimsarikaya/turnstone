@@ -8,7 +8,16 @@
 
 #include <types.h>
 
-void     srand(uint64_t seed);
+/**
+ * @brief initialize random generator
+ * @param[in] seed random generator seed
+ */
+void srand(uint64_t seed);
+
+/**
+ * @brief generates random
+ * @return 32 bit random number
+ */
 uint32_t rand(void);
 
 #endif
