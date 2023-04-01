@@ -29,6 +29,10 @@ INCLUDESDIR = includes
 CCXXFLAGS += -std=gnu11 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
+	-Wshadow -Wpointer-arith -Wcast-align \
+	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
+    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
+    -Wstrict-prototypes \
 	-fno-pic -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
 
 CXXTESTFLAGS= -D___TESTMODE=1
