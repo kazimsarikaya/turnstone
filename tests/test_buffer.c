@@ -46,11 +46,25 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     buffer_destroy(buf);
 
-    memory_heap_stat_t stat;
+    buf = buffer_new_with_capacity(NULL, 2);
+    buffer_append_byte(buf, 1);
+    buffer_append_byte(buf, 2);
 
-    memory_get_heap_stat(&stat);
-    printf("mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    if(buffer_get_capacity(buf) != 2) {
+        print_error("cap should not increase");
+        buffer_destroy(buf);
 
+        return -1;
+    }
+
+    if(buffer_get_length(buf) != 2) {
+        print_error("length should not be 2");
+        buffer_destroy(buf);
+
+        return -1;
+    }
+
+    buffer_destroy(buf);
 
     print_success("TESTS PASSED");
 

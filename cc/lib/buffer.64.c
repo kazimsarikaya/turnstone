@@ -110,8 +110,12 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
 
     uint64_t new_cap = bi->capacity;
 
-    while(bi->length + length >= new_cap) {
-        new_cap *= 2;
+    while(bi->position + length > new_cap) {
+        if(new_cap > (1 << 20)) {
+            new_cap += 1 << 20;
+        } else {
+            new_cap *= 2;
+        }
     }
 
     if(bi->capacity != new_cap) {
@@ -129,10 +133,13 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
         bi->data = tmp_data;
     }
 
-    memory_memcopy(data, bi->data + bi->length, length);
+    memory_memcopy(data, bi->data + bi->position, length);
 
-    bi->length += length;
     bi->position += length;
+
+    if(bi->length < bi->position) {
+        bi->length = bi->position;
+    }
 
     lock_release(bi->lock);
 
@@ -247,7 +254,7 @@ boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction
     lock_acquire(bi->lock);
 
     if(direction == BUFFER_SEEK_DIRECTION_START) {
-        if(position < 0 || (uint64_t)position >= bi->length) {
+        if(position < 0 || (uint64_t)position >= bi->capacity) {
             lock_release(bi->lock);
 
             return false;
@@ -257,22 +264,26 @@ boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction
     }
 
     if(direction == BUFFER_SEEK_DIRECTION_END) {
-        if (position > 0 || position + ((int64_t)bi->length) < 0) {
+        if (position > 0 || position + ((int64_t)bi->capacity) < 0) {
             lock_release(bi->lock);
 
             return false;
         }
 
-        bi->position = bi->length;
+        bi->position = bi->capacity;
     }
 
-    if(direction == BUFFER_SEEK_DIRECTION_CURRENT && (bi->position + position > bi->length || ((int64_t)bi->position) + position < 0)) {
+    if(direction == BUFFER_SEEK_DIRECTION_CURRENT && (bi->position + position > bi->capacity || ((int64_t)bi->position) + position < 0)) {
         lock_release(bi->lock);
 
         return false;
     }
 
     bi->position += position;
+
+    if(bi->position > bi->length) {
+        bi->length = bi->position;
+    }
 
     lock_release(bi->lock);
 
