@@ -3,6 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#define RAMSIZE (128 << 20)
 #include "setup.h"
 #include <utils.h>
 #include <buffer.h>
@@ -97,22 +98,51 @@ data_t* record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...) 
     return res;
 }
 
+#define TOSDB_CAP (32 << 20)
+
 uint32_t main(uint32_t argc, char_t** argv) {
-    UNUSED(argc);
-    UNUSED(argv);
+    char_t* tosdb_out_file_name = (char_t*)"./tmp/tosdb.img";
+
+    if(argc == 2) {
+        tosdb_out_file_name = argv[1];
+    }
 
     boolean_t pass = true;
 
-    tosdb_backend_t* backend = tosdb_backend_memory_new();
+    tosdb_backend_t* backend = tosdb_backend_memory_new(TOSDB_CAP);
 
     if(!backend) {
+        print_error("cannot create backend");
         pass = false;
 
         goto backend_failed;
     }
 
 
+    uint8_t* out_data = tosdb_backend_memory_get_contents(backend);
 
+    if(!out_data) {
+        print_error("cannot get backend data");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    FILE* out = fopen(tosdb_out_file_name, "w");
+    if(!out) {
+        print_error("cannot open output file");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    fwrite(out_data, 1, TOSDB_CAP, out);
+
+    memory_free(out_data);
+
+    fclose(out);
+
+backend_close:
     if(!tosdb_backend_close(backend)) {
         pass = false;
     }

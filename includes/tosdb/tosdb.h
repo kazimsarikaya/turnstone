@@ -17,9 +17,17 @@ typedef struct tosdb_backend_t tosdb_backend_t;
 
 /**
  * @brief creates new tosdb memory backend
+ * @param[in] capacity memory backend max capacity
  * @return memory backend
  */
-tosdb_backend_t* tosdb_backend_memory_new(void);
+tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity);
+
+/**
+ * @brief get memory backend contents
+ * @param[in] backend memory backend
+ * @return byte array of conntent
+ */
+uint8_t* tosdb_backend_memory_get_contents(tosdb_backend_t* backend);
 
 /**
  * @brief closes and frees a backend
@@ -34,11 +42,9 @@ typedef struct tosdb_t tosdb_t;
 /**
  * @brief creates tosdb
  * @param[in] backend storage backend
- * @param[in] max_record_count maximum record count at each memtable/sstable
- * @param[in] max_valuelog_size maximum valuelog size
  * @return new tosdb
  */
-tosdb_t* tosdb_new(tosdb_backend_t* backend, uint64_t max_record_count, uint64_t max_valuelog_size);
+tosdb_t* tosdb_new(tosdb_backend_t* backend);
 
 /**
  * @brief closes and destroys a tosdb
@@ -73,9 +79,11 @@ typedef struct tosdb_table_t tosdb_table_t;
  * @brief creates new table
  * @param[in] db database interface
  * @param[in] name table name
+ * @param[in] max_record_count maximum record count at each memtable/sstable
+ * @param[in] max_valuelog_size maximum valuelog size
  * @return a new table or existing one
  */
-tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name);
+tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size);
 
 /**
  * @brief adds a cloumn to given table
