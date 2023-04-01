@@ -7,6 +7,13 @@
 
 #define MATH_TRESHOLD 0.00000000000001L
 
+/**
+ * @brief calculates approx for sin of number
+ * @param[in] number number to calculate
+ * @return sin(number)
+ */
+float64_t math_sin_approx(float64_t number);
+
 int64_t math_ceil(float64_t num) {
     int64_t res = 0;
     boolean_t pos = true;
@@ -111,4 +118,32 @@ float64_t math_antilog(float64_t power, float64_t base){
     float64_t t = math_log(power);
     t /= base;
     return math_log(t);
+}
+
+float64_t math_sin_approx(float64_t number) {
+    float64_t res = number * (180 - number);
+    res = res * (27900 + res);
+    return res / 291600000;
+}
+
+float64_t math_sin(float64_t number) {
+    uint64_t k = math_floor(number / 180);
+    float64_t tmp = number - k * 180;
+
+    if(tmp == 0 || tmp == 180) {
+        return 0;
+    }
+
+    float64_t res = 0;
+
+    switch(k % 2) {
+    case 0:
+        res = math_sin_approx(tmp);
+        break;
+    case 1:
+        res = -math_sin_approx(360 - tmp);
+        break;
+    }
+
+    return res;
 }
