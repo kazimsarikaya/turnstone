@@ -1,9 +1,9 @@
 /**
- * @file sstable.64.c
- * @brief tosdb sstable interface implementation
+ * @file tosdb_wal.64.c
+ * @brief tosdb wal interface implementation
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
-#include <tosdb/sstable.h>
+#include <tosdb/wal.h>

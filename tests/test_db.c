@@ -13,6 +13,7 @@
 #include <map.h>
 #include <xxhash.h>
 #include <tosdb/tosdb.h>
+#include <strings.h>
 
 uint32_t main(uint32_t argc, char_t** argv);
 data_t*  record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...);
@@ -118,6 +119,22 @@ uint32_t main(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
+    tosdb_t* tosdb = tosdb_new(backend);
+
+    if(!tosdb) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
+
+
+    if(!tosdb_close(tosdb)) {
+        print_error("cannot close tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
 
     uint8_t* out_data = tosdb_backend_memory_get_contents(backend);
 
@@ -153,5 +170,5 @@ backend_failed:
     } else {
         print_error("TESTS FAILED");
     }
-    return 0;
+    return pass?0:-1;
 }

@@ -163,6 +163,7 @@ void     lock_acquire(void* lock);
 void     lock_release(void* lock);
 void*    lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
 future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
+void*    future_get_data_and_destroy(future_t fut);
 
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type){
     UNUSED(p4);
@@ -210,9 +211,24 @@ void lock_release(void* lock){
 future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
     UNUSED(heap);
     UNUSED(lock);
-    UNUSED(data);
+
+    if(data) {
+        return data;
+    }
 
     return (void*)0xdeadbeaf;
+}
+
+void* future_get_data_and_destroy(future_t fut) {
+    if(!fut) {
+        return NULL;
+    }
+
+    if(((uint64_t)fut) == 0xdeadbeaf) {
+        return NULL;
+    }
+
+    return fut;
 }
 
 #endif
