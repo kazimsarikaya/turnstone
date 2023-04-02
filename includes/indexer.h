@@ -40,6 +40,7 @@ typedef struct index_t {
     int8_t (*delete)(struct index_t* idx, const void* key, void** deleted_data);
     iterator_t*  (* search)(struct index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
     iterator_t* (* create_iterator)(struct index_t* idx);
+    uint64_t (*size)(struct index_t* idx);
 } index_t;
 
 typedef void * (* indexer_key_creator_f)(const void* key, void* keyarg);

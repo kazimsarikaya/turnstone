@@ -157,3 +157,13 @@ iterator_t* map_create_iterator(map_t map) {
 
     return mi->store->create_iterator(mi->store);
 }
+
+uint64_t map_size(map_t map) {
+    if(!map) {
+        return 0;
+    }
+
+    map_internal_t* mi = (map_internal_t*)map;
+
+    return mi->store->size(mi->store);
+}
