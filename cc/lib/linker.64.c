@@ -56,9 +56,9 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
 
 #if ___TESTMODE != 1
 #if ___EFIBUILD != 1
-int8_t liner_remap_relink_kernel();
+int8_t liner_remap_relink_kernel(void);
 
-int8_t linker_remap_kernel() {
+int8_t linker_remap_kernel(void) {
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
 
     uint64_t data_start = 1 << 30; // 1gib

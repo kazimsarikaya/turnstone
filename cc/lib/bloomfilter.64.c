@@ -140,7 +140,7 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf) {
     fields[0].type = DATA_TYPE_INT64;
     fields[0].value = (void*)bf->entry_count;
 
-    uint64_t tmp;
+    uint64_t tmp = 0;
     memory_memcopy(&bf->bpe, &tmp, sizeof(uint64_t));
     fields[1].type = DATA_TYPE_FLOAT64;
     fields[1].value = (void*)tmp;
@@ -197,10 +197,10 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
     data_t* fields = (data_t*)bf_data->value;
 
     uint64_t entry_count = (uint64_t)fields[0].value;
-    float64_t bpe;
+    float64_t bpe = 0;
     uint64_t tmp = (uint64_t)fields[1].value;
     memory_memcopy(&tmp, &bpe, sizeof(uint64_t));
-    float64_t error;
+    float64_t error = 0;
     tmp = (uint64_t)fields[2].value;
     memory_memcopy(&tmp, &error, sizeof(uint64_t));
     uint64_t hash_count = (uint64_t)fields[3].value;
