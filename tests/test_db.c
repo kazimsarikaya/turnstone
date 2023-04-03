@@ -128,7 +128,17 @@ uint32_t main(uint32_t argc, char_t** argv) {
         goto backend_close;
     }
 
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
 
+    if(!testdb) {
+        print_error("cannot create/open testdb");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+
+tdb_close:
     if(!tosdb_close(tosdb)) {
         print_error("cannot close tosdb");
         pass = false;

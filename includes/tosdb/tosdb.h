@@ -12,7 +12,7 @@
 #include <types.h>
 #include <data.h>
 
-///! tosdb backend struct type
+/*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
 
 /**
@@ -36,7 +36,7 @@ uint8_t* tosdb_backend_memory_get_contents(tosdb_backend_t* backend);
  */
 boolean_t tosdb_backend_close(tosdb_backend_t* backend);
 
-///! tosdb struct type
+/*! tosdb struct type */
 typedef struct tosdb_t tosdb_t;
 
 /**
@@ -53,7 +53,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend);
  */
 boolean_t tosdb_close(tosdb_t* tdb);
 
-///! tosdb database struct type
+/*! tosdb database struct type */
 typedef struct tosdb_database_t tosdb_database_t;
 
 /**
@@ -72,7 +72,7 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name);
  */
 boolean_t tosdb_database_close(tosdb_database_t* db);
 
-///! tosdb table struct type
+/*! tosdb table struct type */
 typedef struct tosdb_table_t tosdb_table_t;
 
 /**
