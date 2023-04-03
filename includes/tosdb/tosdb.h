@@ -11,6 +11,7 @@
 
 #include <types.h>
 #include <data.h>
+#include <buffer.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -21,6 +22,13 @@ typedef struct tosdb_backend_t tosdb_backend_t;
  * @return memory backend
  */
 tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity);
+
+/**
+ * @brief creates new tosdb memory backend from buffer
+ * @param[in] buffer memory backend buffer
+ * @return memory backend
+ */
+tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer);
 
 /**
  * @brief get memory backend contents

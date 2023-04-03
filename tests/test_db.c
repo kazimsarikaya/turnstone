@@ -15,8 +15,11 @@
 #include <tosdb/tosdb.h>
 #include <strings.h>
 
-uint32_t main(uint32_t argc, char_t** argv);
-data_t*  record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...);
+int32_t main(uint32_t argc, char_t** argv);
+int32_t test_step1(uint32_t argc, char_t** argv);
+int32_t test_step2(uint32_t argc, char_t** argv);
+
+data_t* record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...);
 
 data_t* record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...) {
     va_list args;
@@ -101,7 +104,7 @@ data_t* record_create(uint64_t db_id, uint64_t table_id, uint64_t nr_args, ...) 
 
 #define TOSDB_CAP (32 << 20)
 
-uint32_t main(uint32_t argc, char_t** argv) {
+int32_t test_step1(uint32_t argc, char_t** argv) {
     char_t* tosdb_out_file_name = (char_t*)"./tmp/tosdb.img";
 
     if(argc == 2) {
@@ -181,4 +184,145 @@ backend_failed:
         print_error("TESTS FAILED");
     }
     return pass?0:-1;
+}
+
+int32_t test_step2(uint32_t argc, char_t** argv) {
+    char_t* tosdb_out_file_name = (char_t*)"./tmp/tosdb.img";
+
+    if(argc == 2) {
+        tosdb_out_file_name = argv[1];
+    }
+
+    FILE* in = fopen(tosdb_out_file_name, "r");
+
+    if(!in) {
+        print_error("cannot open tosdb file");
+
+        return -1;
+    }
+
+    buffer_t db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
+
+    if(!db_buffer) {
+        print_error("cannot create db buffer");
+        return -1;
+    }
+
+    uint8_t* read_buf = memory_malloc(4 << 10);
+
+    if(!read_buf) {
+        buffer_destroy(db_buffer);
+        print_error("cannot create read buffer");
+
+        return -1;
+    }
+
+    uint64_t total_read = 0;
+    while(1) {
+        uint64_t rc = fread(read_buf, 1, 4 << 10, in);
+        if(rc == 0) {
+            break;
+        }
+
+        total_read += rc;
+
+        buffer_append_bytes(db_buffer, read_buf, 4 << 10);
+        memory_memclean(read_buf, 4 << 10);
+    }
+
+    memory_free(read_buf);
+
+    if(total_read != TOSDB_CAP) {
+        buffer_destroy(db_buffer);
+        print_error("cannot read db file");
+        printf("total read: %lli\n", total_read);
+
+        return -1;
+    }
+
+    boolean_t pass = true;
+
+    tosdb_backend_t* backend = tosdb_backend_memory_from_buffer(db_buffer);
+
+    if(!backend) {
+        print_error("cannot create backend");
+        pass = false;
+
+        goto backend_failed;
+    }
+
+    tosdb_t* tosdb = tosdb_new(backend);
+
+    if(!tosdb) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+
+    if(!testdb) {
+        print_error("cannot create/open testdb");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+
+tdb_close:
+    if(!tosdb_close(tosdb)) {
+        print_error("cannot close tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    uint8_t* out_data = tosdb_backend_memory_get_contents(backend);
+
+    if(!out_data) {
+        print_error("cannot get backend data");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    FILE* out = fopen(tosdb_out_file_name, "w");
+    if(!out) {
+        print_error("cannot open output file");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    fwrite(out_data, 1, TOSDB_CAP, out);
+
+    memory_free(out_data);
+
+    fclose(out);
+
+backend_close:
+    if(!tosdb_backend_close(backend)) {
+        pass = false;
+    }
+
+backend_failed:
+    if(pass) {
+        print_success("TESTS PASSED");
+    } else {
+        print_error("TESTS FAILED");
+    }
+    return pass?0:-1;
+}
+
+
+
+int32_t main(uint32_t argc, char_t** argv) {
+    if(test_step1(argc, argv) != 0) {
+        print_error("test step 1 failed");
+
+        return -1;
+    }
+
+    return test_step2(argc, argv);
 }

@@ -161,11 +161,13 @@ struct tosdb_t {
     lock_t              lock;
 };
 
-tosdb_superblock_t* tosdb_backend_repair(tosdb_backend_t* backend);
-tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend);
-boolean_t           tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);
-uint64_t            tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block);
-boolean_t           tosdb_persist(tosdb_t* tdb);
+tosdb_superblock_t*   tosdb_backend_repair(tosdb_backend_t* backend);
+tosdb_superblock_t*   tosdb_backend_format(tosdb_backend_t* backend);
+boolean_t             tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);
+uint64_t              tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block);
+tosdb_block_header_t* tosdb_block_read(tosdb_t* tdb, uint64_t location, uint64_t size);
+boolean_t             tosdb_persist(tosdb_t* tdb);
+boolean_t             tosdb_load_databases(tosdb_t* tdb);
 
 struct tosdb_database_t {
     tosdb_t*     tdb;
@@ -184,7 +186,9 @@ struct tosdb_database_t {
     uint64_t     table_list_size;
 };
 
-boolean_t tosdb_database_persist(tosdb_database_t* db);
+boolean_t         tosdb_database_persist(tosdb_database_t* db);
+tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db);
+boolean_t         tosdb_database_load_tables(tosdb_database_t* db);
 
 struct tosdb_table_t {
     tosdb_database_t* db;
@@ -197,6 +201,10 @@ struct tosdb_table_t {
     uint64_t          metadata_location;
     uint64_t          metadata_size;
     boolean_t         is_deleted;
+    uint64_t          column_list_location;
+    uint64_t          column_list_size;
+    uint64_t          index_list_location;
+    uint64_t          index_list_size;
 };
 
 boolean_t tosdb_table_persist(tosdb_table_t* tbl);

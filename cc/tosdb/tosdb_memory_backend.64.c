@@ -150,6 +150,53 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity) {
     return backend;
 }
 
+tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer) {
+    if(!buffer) {
+        PRINTLOG(TOSDB, LOG_ERROR, "buffer is null");
+
+        return NULL;
+    }
+
+    uint64_t capacity = buffer_get_capacity(buffer);
+
+    if(capacity == 0) {
+        PRINTLOG(TOSDB, LOG_ERROR, "zero capacity");
+
+        return NULL;
+    }
+
+    tosdb_backend_memory_ctx_t* ctx = memory_malloc(sizeof(tosdb_backend_memory_ctx_t));
+
+    if(!ctx) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend context");
+
+        return NULL;
+    }
+
+
+    ctx->buffer = buffer;
+
+    tosdb_backend_t* backend = memory_malloc(sizeof(tosdb_backend_t));
+
+    if(!backend) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend");
+        buffer_destroy(ctx->buffer);
+        memory_free(ctx);
+
+        return NULL;
+    }
+
+    backend->context = ctx;
+    backend->type = TOSDB_BACKEND_TYPE_MEMORY;
+    backend->capacity = capacity;
+    backend->read = tosdb_backend_memory_read;
+    backend->write = tosdb_backend_memory_write;
+    backend->flush = tosdb_backend_memory_flush;
+
+    return backend;
+}
+
+
 uint8_t* tosdb_backend_memory_get_contents(tosdb_backend_t* backend) {
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend is null");

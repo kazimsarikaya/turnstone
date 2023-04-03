@@ -46,9 +46,11 @@ boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_super
         return false;
     }
 
-    uint64_t csum = xxhash64_hash(sb, sizeof(tosdb_superblock_t));
+    sb->header.checksum = 0;
+    uint64_t csum = xxhash64_hash(sb, sb->header.block_size);
 
     sb->header.checksum = csum;
+    PRINTLOG(TOSDB, LOG_DEBUG, "super block checksum 0x%llx", csum);
 
     future_t fut = backend->write(backend, 0, sizeof(tosdb_superblock_t), (uint8_t*)sb);
 
@@ -66,7 +68,7 @@ boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_super
         return false;
     }
 
-    fut = backend->write(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t), (uint8_t*)sb);
+    fut = backend->write(backend, backend->capacity - sb->header.block_size, sb->header.block_size, (uint8_t*)sb);
 
     if(!fut) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate write backup super block");
@@ -144,56 +146,99 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read main super block");
     }
 
-    tosdb_superblock_t* sb = future_get_data_and_destroy(fut);
+    tosdb_superblock_t* main_sb = future_get_data_and_destroy(fut);
 
-    if(!sb) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot read superblock");
+    if(!main_sb) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read main superblock");
 
         return NULL;
     }
 
     boolean_t need_format = false;
     boolean_t need_repair = false;
+    boolean_t main_superblock_failed = true;
+    boolean_t backup_superblock_failed = true;
 
-    if(strcmp(sb->header.signature, TOSDB_SUPERBLOCK_SIGNATURE) != 0) {
-        PRINTLOG(TOSDB, LOG_WARNING, "main super block signature mismatch");
+    if(strcmp(main_sb->header.signature, TOSDB_SUPERBLOCK_SIGNATURE) == 0) {
+        uint64_t csum_bak = main_sb->header.checksum;
+        main_sb->header.checksum = 0;
+        uint64_t csum = xxhash64_hash(main_sb, main_sb->header.block_size);
 
-        memory_free(sb);
-
-        fut = backend->read(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t));
-
-        if(!fut) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup super block");
-
-            return NULL;
-        }
-
-        sb = future_get_data_and_destroy(fut);
-
-
-        if(!sb) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup superblock");
-
-            return NULL;
-        }
-
-        if(strcmp(sb->header.signature, TOSDB_SUPERBLOCK_SIGNATURE) != 0) {
-            need_format = true;
+        if(csum == csum_bak) {
+            main_superblock_failed = false;
         } else {
-            need_repair = true;
+            PRINTLOG(TOSDB, LOG_WARNING, "main block checksum mismatch 0x%llx 0x%llx", csum_bak, csum);
         }
+
+        main_sb->header.checksum = csum_bak;
+    } else {
+        PRINTLOG(TOSDB, LOG_WARNING, "main block signature mismatch");
     }
 
-    if(need_format || need_repair) {
-        memory_free(sb);
+    if(main_superblock_failed) {
+        PRINTLOG(TOSDB, LOG_WARNING, "main super block failed");
     }
+
+
+    fut = backend->read(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t));
+
+    if(!fut) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup super block");
+
+        memory_free(main_sb);
+
+        return NULL;
+    }
+
+    tosdb_superblock_t* backup_sb = future_get_data_and_destroy(fut);
+
+    if(!backup_sb) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup superblock");
+
+        memory_free(main_sb);
+
+        return NULL;
+    }
+
+    if(strcmp(backup_sb->header.signature, TOSDB_SUPERBLOCK_SIGNATURE) == 0) {
+        uint64_t csum_bak = backup_sb->header.checksum;
+        backup_sb->header.checksum = 0;
+        uint64_t csum = xxhash64_hash(backup_sb, backup_sb->header.block_size);
+
+        if(csum == csum_bak) {
+            backup_superblock_failed = false;
+        } else {
+            PRINTLOG(TOSDB, LOG_WARNING, "backup block checksum mismatch 0x%llx 0x%llx", csum_bak, csum);
+        }
+
+        backup_sb->header.checksum = csum_bak;
+    }else {
+        PRINTLOG(TOSDB, LOG_WARNING, "backup block signature mismatch");
+    }
+
+
+    if(backup_superblock_failed) {
+        PRINTLOG(TOSDB, LOG_WARNING, "backup super block invalid");
+    }
+
+    if(main_superblock_failed && !backup_superblock_failed) {
+        need_repair = true;
+        memory_free(main_sb);
+    }
+
+    if(main_superblock_failed && backup_superblock_failed) {
+        need_format = true;
+        memory_free(main_sb);
+    }
+
+    memory_free(backup_sb);
 
     if(need_repair) {
         PRINTLOG(TOSDB, LOG_WARNING, "backend needs reparing");
 
-        sb = tosdb_backend_repair(backend);
+        main_sb = tosdb_backend_repair(backend);
 
-        if(!sb) {
+        if(!main_sb) {
             return NULL;
         }
     }
@@ -201,9 +246,9 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
     if(need_format) {
         PRINTLOG(TOSDB, LOG_WARNING, "backend needs format");
 
-        sb = tosdb_backend_format(backend);
+        main_sb = tosdb_backend_format(backend);
 
-        if(!sb) {
+        if(!main_sb) {
             return NULL;
         }
     }
@@ -212,19 +257,17 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
 
     if(!res) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create tosdb struct");
-        memory_free(sb);
+        memory_free(main_sb);
 
         return NULL;
     }
 
     res->backend = backend;
-    res->superblock = sb;
+    res->superblock = main_sb;
 
-    res->databases = map_string();
-
-    if(!res->databases) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create database map");
-        memory_free(sb);
+    if(!tosdb_load_databases(res)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot load databases");
+        memory_free(main_sb);
         memory_free(res);
 
         return NULL;
@@ -233,6 +276,76 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
     res->lock = lock_create();
 
     return res;
+}
+
+boolean_t tosdb_load_databases(tosdb_t* tdb) {
+    if(!tdb) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb is null");
+
+        return false;
+    }
+
+    tdb->databases = map_string();
+
+    if(!tdb->databases) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create database map");
+
+        return false;
+    }
+
+    uint64_t db_list_loc = tdb->superblock->database_list_location;
+    uint64_t db_list_size = tdb->superblock->database_list_size;
+
+    while(db_list_loc != 0) {
+        tosdb_block_database_list_t* db_list = (tosdb_block_database_list_t*)tosdb_block_read(tdb, db_list_loc, db_list_size);
+
+        if(!db_list) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read database list");
+
+            return false;
+        }
+
+        char_t name_buf[TOSDB_NAME_MAX_LEN + 1] = {0};
+
+        for(uint64_t i = 0; i < db_list->database_count; i++) {
+            memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);
+            memory_memcopy(db_list->databases[i].name, name_buf, TOSDB_NAME_MAX_LEN);
+
+            if(map_exists(tdb->databases, name_buf)) {
+                continue;
+            }
+
+            tosdb_database_t* db = memory_malloc(sizeof(tosdb_database_t));
+
+            if(!db) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate db");
+                memory_free(db_list);
+
+                return false;
+            }
+
+            db->tdb = tdb;
+            db->id = db_list->databases[i].id;
+            db->name = strdup(name_buf);
+            db->is_deleted = db_list->databases[i].deleted;
+            db->metadata_location = db_list->databases[i].metadata_location;
+            db->metadata_size = db_list->databases[i].metadata_size;
+
+            map_insert(tdb->databases, db->name, db);
+        }
+
+
+        if(db_list->header.previous_block_invalid) {
+            break;
+        }
+
+        db_list_loc = db_list->header.previous_block_location;
+        db_list_size = db_list->header.previous_block_size;
+
+        memory_free(db_list);
+    }
+
+    return true;
 }
 
 boolean_t tosdb_close(tosdb_t* tdb) {
@@ -254,8 +367,6 @@ boolean_t tosdb_close(tosdb_t* tdb) {
         return false;
     }
 
-    printf("bh %li dbli %li dbl %li\n", sizeof(tosdb_block_header_t), sizeof(tosdb_block_database_list_item_t), sizeof(tosdb_block_database_list_t));
-
     if(tdb->is_dirty) {
         if(!tosdb_persist(tdb)) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot persist tosdb metadata");
@@ -269,10 +380,8 @@ boolean_t tosdb_close(tosdb_t* tdb) {
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
 
-        if(db->is_open) {
-            if(!tosdb_database_close(db)) {
-                PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be closed", db->name);
-            }
+        if(!tosdb_database_close(db)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be closed", db->name);
         }
 
         iter = iter->next(iter);
@@ -292,6 +401,63 @@ boolean_t tosdb_close(tosdb_t* tdb) {
     memory_free(tdb);
 
     return true;
+}
+
+tosdb_block_header_t* tosdb_block_read(tosdb_t* tdb, uint64_t location, uint64_t size) {
+    if(!tdb || !location || !size || (size % TOSDB_PAGE_SIZE) ) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb is null or location/size (0x%llx,0x%llx) is zero or size isnot multiple of tosdb page size", location, size);
+
+        return NULL;
+    }
+
+    future_t fut = tdb->backend->read(tdb->backend, location, size);
+
+    if(!fut) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate read block");
+
+        return NULL;
+    }
+
+    tosdb_block_header_t* block = (tosdb_block_header_t*)future_get_data_and_destroy(fut);
+
+    if(!block) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read block");
+
+        return NULL;
+    }
+
+    if(size != block->block_size) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read block");
+
+        memory_free(block);
+
+        return NULL;
+    }
+
+    if(strcmp(TOSDB_SUPERBLOCK_SIGNATURE, block->signature) != 0) {
+        PRINTLOG(TOSDB, LOG_ERROR, "block signature mismatch");
+
+        memory_free(block);
+
+        return NULL;
+    }
+
+
+    uint64_t csum_bak = block->checksum;
+    block->checksum = 0;
+    uint64_t csum = xxhash64_hash(block, block->block_size);
+    block->checksum = csum_bak;
+
+    if(csum != csum_bak) {
+        PRINTLOG(TOSDB, LOG_ERROR, "checksum mismatch");
+
+        memory_free(block);
+
+        return NULL;
+
+    }
+
+    return block;
 }
 
 uint64_t tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block) {

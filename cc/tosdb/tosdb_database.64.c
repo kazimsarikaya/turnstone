@@ -11,6 +11,121 @@
 #include <video.h>
 #include <strings.h>
 
+boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
+    if(!db || !db->tdb) {
+        PRINTLOG(TOSDB, LOG_ERROR, "db or tosdb is null");
+
+        return false;
+    }
+
+    db->tables = map_string();
+
+    if(!db->tables) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create table map");
+
+        return false;
+    }
+
+    uint64_t tbl_list_loc = db->table_list_location;
+    uint64_t tbl_list_size = db->table_list_size;
+
+    while(tbl_list_loc != 0) {
+        tosdb_block_table_list_t* tbl_list = (tosdb_block_table_list_t*)tosdb_block_read(db->tdb, tbl_list_loc, tbl_list_size);
+
+        if(!tbl_list) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read table list");
+
+            return false;
+        }
+
+        char_t name_buf[TOSDB_NAME_MAX_LEN + 1] = {0};
+
+        for(uint64_t i = 0; i < tbl_list->table_count; i++) {
+            memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);
+            memory_memcopy(tbl_list->tables[i].name, name_buf, TOSDB_NAME_MAX_LEN);
+
+            if(map_exists(db->tables, name_buf)) {
+                continue;
+            }
+
+            tosdb_table_t* tbl = memory_malloc(sizeof(tosdb_table_t));
+
+            if(!tbl) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate tbl");
+                memory_free(tbl_list);
+
+                return false;
+            }
+
+            tbl->db = db;
+            tbl->id = tbl_list->tables[i].id;
+            tbl->name = strdup(name_buf);
+            tbl->is_deleted = tbl_list->tables[i].deleted;
+            tbl->metadata_location = tbl_list->tables[i].metadata_location;
+            tbl->metadata_size = tbl_list->tables[i].metadata_size;
+
+            map_insert(db->tables, tbl->name, tbl);
+        }
+
+
+        if(tbl_list->header.previous_block_invalid) {
+            break;
+        }
+
+        tbl_list_loc = tbl_list->header.previous_block_location;
+        tbl_list_size = tbl_list->header.previous_block_size;
+
+        memory_free(tbl_list);
+    }
+
+    return true;
+}
+
+tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db) {
+    if(!db || !db->tdb) {
+        PRINTLOG(TOSDB, LOG_ERROR, "db or tosdb is null");
+
+        return NULL;
+    }
+
+    if(db->is_deleted) {
+        PRINTLOG(TOSDB, LOG_WARNING, "db is deleted");
+        return NULL;
+    }
+
+    if(db->is_open) {
+        return db;
+    }
+
+    if(!db->metadata_location || !db->metadata_size) {
+        PRINTLOG(TOSDB, LOG_ERROR, "metadata not found");
+
+        return NULL;
+    }
+
+    tosdb_block_database_t* db_block = (tosdb_block_database_t*)tosdb_block_read(db->tdb, db->metadata_location, db->metadata_size);
+
+    if(!db_block) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read db %s metadata", db->name);
+
+        return NULL;
+    }
+
+    db->table_next_id = db_block->table_next_id;
+    db->table_list_location = db_block->table_list_location;
+    db->table_list_size = db_block->table_list_size;
+
+    memory_free(db_block);
+
+    if(!tosdb_database_load_tables(db)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot load tables");
+    }
+
+    db->is_open = true;
+
+    return db;
+}
+
 tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
     if(strlen(name) > TOSDB_NAME_MAX_LEN) {
         PRINTLOG(TOSDB, LOG_ERROR, "database name cannot be longer than %i", TOSDB_NAME_MAX_LEN);
@@ -25,7 +140,17 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
 
 
     if(map_exists(tdb->databases, name)) {
-        return (tosdb_database_t*)map_get(tdb->databases, name);
+        tosdb_database_t* db = (tosdb_database_t*)map_get(tdb->databases, name);
+
+        if(db->is_deleted) {
+            return db;
+        }
+
+        if(db->is_open) {
+            return db;
+        }
+
+        return tosdb_database_load_database(db);
     }
 
     if(!tdb->database_new) {
@@ -80,38 +205,41 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
 boolean_t tosdb_database_close(tosdb_database_t* db) {
     if(!db || !db->tdb) {
         PRINTLOG(TOSDB, LOG_ERROR, "db or tosdb is null");
-    }
-
-
-    iterator_t* iter = map_create_iterator(db->tables);
-
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
 
         return false;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
 
-        if(!tosdb_table_close(tbl)) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot close table %s", tbl->name);
+    if(db->is_open) {
+        iterator_t* iter = map_create_iterator(db->tables);
 
-            iter->destroy(iter);
+        if(!iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
 
             return false;
         }
 
-        iter = iter->next(iter);
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
+
+            if(!tosdb_table_close(tbl)) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot close table %s", tbl->name);
+
+                iter->destroy(iter);
+
+                return false;
+            }
+
+            iter = iter->next(iter);
+        }
+
+
+        iter->destroy(iter);
+
+        map_destroy(db->tables);
     }
 
-
-    iter->destroy(iter);
-
-
     memory_free(db->name);
-
-    map_destroy(db->tables);
 
     memory_free(db);
 
@@ -243,6 +371,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
 
         block->id = db->id;
         strcpy(db->name, block->name);
+        block->table_next_id = db->table_next_id;
 
         uint64_t loc = tosdb_block_write(db->tdb, (tosdb_block_header_t*)block);
 
