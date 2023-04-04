@@ -149,6 +149,19 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
+    if(!tosdb_table_column_add(table1, (char_t*)"id", DATA_TYPE_INT64)) {
+        print_error("cannot add id column to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!tosdb_table_column_add(table1, (char_t*)"data", DATA_TYPE_STRING)) {
+        print_error("cannot add data column to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
 
 tdb_close:
     if(!tosdb_close(tosdb)) {

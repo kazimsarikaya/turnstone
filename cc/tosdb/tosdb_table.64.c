@@ -129,7 +129,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
             }
 
             col->id = col_list->columns[i].id;
-            tbl->name = strdup(name_buf);
+            col->name = strdup(name_buf);
             col->is_deleted = col_list->columns[i].deleted;
             col->type = col_list->columns[i].type;
 
@@ -315,6 +315,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         while(iter->end_of_iterator(iter) != 0) {
             tosdb_column_t* col = (tosdb_column_t*)iter->get_item(iter);
 
+            memory_free(col->name);
+
             memory_free(col);
 
             iter = iter->next(iter);
@@ -394,6 +396,8 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
         block->columns[col_idx].type = col->type;
 
         iter = iter->next(iter);
+
+        col_idx++;
     }
 
     iter->destroy(iter);
@@ -491,6 +495,60 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
 
         memory_free(block);
     }
+
+    return true;
+}
+
+boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_t type) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return false;
+    }
+
+    if(strlen(colname) == 0 || strlen(colname) > TOSDB_NAME_MAX_LEN) {
+        PRINTLOG(TOSDB, LOG_ERROR, "col name size error");
+
+        return false;
+    }
+
+    if(map_exists(tbl->columns, colname)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "column %s is exists for table %s", colname, tbl->name);
+
+        return false;
+    }
+
+    if(!tbl->column_new) {
+        tbl->column_new = linkedlist_create_list();
+
+        if(!tbl->column_new) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create new column list for table  %s", tbl->name);
+
+            return false;
+        }
+    }
+
+    tosdb_column_t* col = memory_malloc(sizeof(tosdb_column_t));
+
+    if(!col) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create column %s for table %s", colname, tbl->name);
+
+        return false;
+    }
+
+    col->id = tbl->column_next_id;
+    tbl->column_next_id++;
+
+    col->name = strdup(colname);
+    col->type = type;
+
+    tbl->column_new_count++;
+    tbl->column_next_id++;
+
+    map_insert(tbl->columns, col->name, col);
+    linkedlist_list_insert(tbl->column_new, col);
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "col %s is added to table %s", colname, tbl->name);
 
     return true;
 }

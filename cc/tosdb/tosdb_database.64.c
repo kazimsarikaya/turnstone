@@ -335,6 +335,8 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
             }
 
             iter = iter->next(iter);
+
+            tbl_idx++;
         }
 
         iter->destroy(iter);

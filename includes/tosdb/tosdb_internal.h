@@ -139,11 +139,10 @@ typedef struct tosdb_block_table_t {
 }__attribute__((packed, aligned(8))) tosdb_block_table_t;
 
 typedef struct tosdb_block_column_list_item_t {
-    tosdb_block_header_t header;
-    uint64_t             id;
-    char_t               name[TOSDB_NAME_MAX_LEN];
-    data_type_t          type : 16;
-    boolean_t            deleted;
+    uint64_t    id;
+    char_t      name[TOSDB_NAME_MAX_LEN];
+    data_type_t type : 16;
+    boolean_t   deleted;
 }__attribute__((packed, aligned(8))) tosdb_block_column_list_item_t;
 
 typedef struct tosdb_block_column_list_t {
@@ -155,12 +154,11 @@ typedef struct tosdb_block_column_list_t {
 }__attribute__((packed, aligned(8))) tosdb_block_column_list_t;
 
 typedef struct tosdb_block_index_list_item_t {
-    tosdb_block_header_t header;
-    uint64_t             id;
-    char_t               name[TOSDB_NAME_MAX_LEN];
-    tosdb_index_type_t   type : 16;
-    boolean_t            deleted;
-    uint64_t             column_id;
+    uint64_t           id;
+    char_t             name[TOSDB_NAME_MAX_LEN];
+    tosdb_index_type_t type : 16;
+    boolean_t          deleted;
+    uint64_t           column_id;
 }__attribute__((packed, aligned(8))) tosdb_block_index_list_item_t;
 
 typedef struct tosdb_block_index_list_t {
