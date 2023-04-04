@@ -156,8 +156,43 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table1, (char_t*)"data", DATA_TYPE_STRING)) {
-        print_error("cannot add data column to table1");
+    if(!tosdb_table_column_add(table1, (char_t*)"ssn", DATA_TYPE_STRING)) {
+        print_error("cannot add ssn column to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!tosdb_table_column_add(table1, (char_t*)"fname", DATA_TYPE_STRING)) {
+        print_error("cannot add fname column to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!tosdb_table_column_add(table1, (char_t*)"sname", DATA_TYPE_STRING)) {
+        print_error("cannot add sname column to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!tosdb_table_column_add(table1, (char_t*)"age", DATA_TYPE_INT8)) {
+        print_error("cannot add age column to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!tosdb_table_index_create(table1, (char_t*)"id", TOSDB_INDEX_UNIQUE)) {
+        print_error("cannot add index for id to table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!tosdb_table_index_create(table1, (char_t*)"ssn", TOSDB_INDEX_UNIQUE)) {
+        print_error("cannot add index for ssn to table1");
         pass = false;
 
         goto tdb_close;

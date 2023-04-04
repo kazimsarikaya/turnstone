@@ -155,7 +155,6 @@ typedef struct tosdb_block_column_list_t {
 
 typedef struct tosdb_block_index_list_item_t {
     uint64_t           id;
-    char_t             name[TOSDB_NAME_MAX_LEN];
     tosdb_index_type_t type : 16;
     boolean_t          deleted;
     uint64_t           column_id;
@@ -251,12 +250,12 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl);
 
 typedef struct tosdb_index_t {
     uint64_t           id;
-    char_t*            name;
     tosdb_index_type_t type;
     boolean_t          is_deleted;
     uint64_t           column_id;
 } tosdb_index_t;
 
 boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl);
+boolean_t tosdb_table_index_persist(tosdb_table_t* tbl);
 
 #endif

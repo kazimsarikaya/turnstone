@@ -18,7 +18,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
         return false;
     }
 
-    tbl->indexes = map_string();
+    tbl->indexes = map_integer();
 
     if(!tbl->indexes) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create index map for table %s", tbl->name);
@@ -33,18 +33,14 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
         tosdb_block_index_list_t* idx_list = (tosdb_block_index_list_t*)tosdb_block_read(tbl->db->tdb, idx_list_loc, idx_list_size);
 
         if(!idx_list) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot read table list for table %s", tbl->name);
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read index list for table %s", tbl->name);
 
             return false;
         }
 
-        char_t name_buf[TOSDB_NAME_MAX_LEN + 1] = {0};
-
         for(uint64_t i = 0; i < idx_list->index_count; i++) {
-            memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);
-            memory_memcopy(idx_list->indexes[i].name, name_buf, TOSDB_NAME_MAX_LEN);
 
-            if(map_exists(tbl->indexes, name_buf)) {
+            if(map_exists(tbl->indexes, (void*)idx_list->indexes[i].id)) {
                 continue;
             }
 
@@ -58,12 +54,11 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
             }
 
             idx->id = idx_list->indexes[i].id;
-            tbl->name = strdup(name_buf);
             idx->is_deleted = idx_list->indexes[i].deleted;
             idx->type = idx_list->indexes[i].type;
             idx->column_id = idx_list->indexes[i].column_id;
 
-            map_insert(tbl->indexes, idx->name, idx);
+            map_insert(tbl->indexes, (void*)idx->id, idx);
         }
 
 
@@ -104,7 +99,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
         tosdb_block_column_list_t* col_list = (tosdb_block_column_list_t*)tosdb_block_read(tbl->db->tdb, col_list_loc, col_list_size);
 
         if(!col_list) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot read table list for table %s", tbl->name);
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read column list for table %s", tbl->name);
 
             return false;
         }
@@ -275,7 +270,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
     tbl->columns = map_string();
 
     tbl->index_next_id = 1;
-    tbl->indexes = map_string();
+    tbl->indexes = map_integer();
 
     tbl->max_record_count = max_record_count;
     tbl->max_valuelog_size = max_valuelog_size;
@@ -335,7 +330,9 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         }
 
         while(iter->end_of_iterator(iter) != 0) {
-            //TODO: cleanup indexes
+            tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
+
+            memory_free(idx);
 
             iter = iter->next(iter);
         }
@@ -349,6 +346,75 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
     memory_free(tbl->name);
     lock_destroy(tbl->lock);
     memory_free(tbl);
+
+    return true;
+}
+
+boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
+    uint64_t metadata_size = sizeof(tosdb_block_index_list_t) + sizeof(tosdb_block_index_list_item_t) * tbl->index_new_count;
+    metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+
+    tosdb_block_index_list_t* block = memory_malloc(metadata_size);
+
+    if(!block) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index list");
+
+        return false;
+    }
+
+    block->header.block_type = TOSDB_BLOCK_TYPE_INDEX_LIST;
+    block->header.block_size = metadata_size;
+    block->header.previous_block_location = tbl->index_list_location;
+    block->header.previous_block_size = tbl->index_list_size;
+
+    block->database_id = tbl->db->id;
+    block->table_id = tbl->id;
+
+    iterator_t* iter = linkedlist_iterator_create(tbl->index_new);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
+
+        memory_free(block);
+
+        return false;
+    }
+
+    block->index_count = tbl->index_new_count;
+
+    uint64_t idx_idx = 0;
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_index_t* idx = (tosdb_index_t*)iter->delete_item(iter);
+
+        block->indexes[idx_idx].id = idx->id;
+        block->indexes[idx_idx].column_id = idx->column_id;
+        block->indexes[idx_idx].deleted = idx->is_deleted;
+        block->indexes[idx_idx].type = idx->type;
+
+        iter = iter->next(iter);
+
+        idx_idx++;
+    }
+
+    iter->destroy(iter);
+
+    uint64_t loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
+
+    if(loc == 0) {
+        memory_free(block);
+
+        return false;
+    }
+
+    tbl->index_list_location = loc;
+    tbl->index_list_size = block->header.block_size;
+
+    memory_free(block);
+
+
+    tbl->index_new_count = 0;
+    linkedlist_destroy(tbl->index_new);
 
     return true;
 }
@@ -446,7 +512,17 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         need_persist = true;
 
         if(!tosdb_table_column_persist(tbl)) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot persist columnt list for table %s", tbl->name);
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot persist column list for table %s", tbl->name);
+
+            return false;
+        }
+    }
+
+    if(tbl->index_new_count) {
+        need_persist = true;
+
+        if(!tosdb_table_index_persist(tbl)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot persist index list for table %s", tbl->name);
 
             return false;
         }
@@ -549,6 +625,63 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_
     linkedlist_list_insert(tbl->column_new, col);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "col %s is added to table %s", colname, tbl->name);
+
+    return true;
+}
+
+boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_index_type_t type) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return false;
+    }
+
+    if(strlen(colname) == 0 || strlen(colname) > TOSDB_NAME_MAX_LEN) {
+        PRINTLOG(TOSDB, LOG_ERROR, "col name size error");
+
+        return false;
+    }
+
+    const tosdb_column_t* col = map_get(tbl->columns, colname);
+
+    if(!col) {
+        PRINTLOG(TOSDB, LOG_ERROR, "column %s is not at table %s", colname, tbl->name);
+
+        return false;
+    }
+
+
+    if(!tbl->index_new) {
+        tbl->index_new = linkedlist_create_list();
+
+        if(!tbl->index_new) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create new index list for table  %s", tbl->name);
+
+            return false;
+        }
+    }
+
+    tosdb_index_t* idx = memory_malloc(sizeof(tosdb_index_t));
+
+    if(!idx) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index for column %s for table %s", colname, tbl->name);
+
+        return false;
+    }
+
+    idx->id = tbl->index_next_id;
+    tbl->index_next_id++;
+
+    idx->column_id = col->id;
+    idx->type = type;
+
+    tbl->index_new_count++;
+    tbl->index_next_id++;
+
+    map_insert(tbl->indexes, (void*)idx->id, idx);
+    linkedlist_list_insert(tbl->index_new, idx);
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "index %lli for column %s is added to table %s", idx->id, colname, tbl->name);
 
     return true;
 }
