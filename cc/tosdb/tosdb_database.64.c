@@ -65,10 +65,14 @@ boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
             tbl->metadata_size = tbl_list->tables[i].metadata_size;
 
             map_insert(db->tables, tbl->name, tbl);
+
+            PRINTLOG(TOSDB, LOG_DEBUG, "table %s of db %s is lazy loaded. md 0x%llx(0x%llx)", tbl->name, db->name, tbl->metadata_location, tbl->metadata_size);
         }
 
 
         if(tbl_list->header.previous_block_invalid) {
+            memory_free(tbl_list);
+
             break;
         }
 
@@ -115,6 +119,8 @@ tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db) {
     db->table_list_location = db_block->table_list_location;
     db->table_list_size = db_block->table_list_size;
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "table list is at 0x%llx(0x%llx) for db %s", db->table_list_location, db->table_list_size, db->name);
+
     memory_free(db_block);
 
     if(!tosdb_database_load_tables(db)) {
@@ -122,6 +128,8 @@ tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db) {
     }
 
     db->is_open = true;
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "database %s loaded", db->name);
 
     return db;
 }
@@ -143,7 +151,7 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
         tosdb_database_t* db = (tosdb_database_t*)map_get(tdb->databases, name);
 
         if(db->is_deleted) {
-            return db;
+            return NULL;
         }
 
         if(db->is_open) {
@@ -177,6 +185,7 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
 
 
     db->id = tdb->superblock->database_next_id;
+    db->lock = lock_create();
 
     tdb->superblock->database_next_id++;
     tdb->is_dirty = true;
@@ -198,6 +207,8 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
 
 
     lock_release(tdb->lock);
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "new database %s created", db->name);
 
     return db;
 }
@@ -240,6 +251,7 @@ boolean_t tosdb_database_close(tosdb_database_t* db) {
     }
 
     memory_free(db->name);
+    lock_destroy(db->lock);
 
     memory_free(db);
 
@@ -298,6 +310,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         }
 
         block->table_count = db->table_new_count;
+        block->database_id = db->id;
 
         uint64_t tbl_idx = 0;
 
@@ -316,7 +329,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
             strcpy(tbl->name, block->tables[tbl_idx].name);
             block->tables[tbl_idx].deleted = tbl->is_deleted;
 
-            if(!db->is_deleted) {
+            if(!tbl->is_deleted) {
                 block->tables[tbl_idx].metadata_location = tbl->metadata_location;
                 block->tables[tbl_idx].metadata_size = tbl->metadata_size;
             }
@@ -342,6 +355,8 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
 
         db->table_list_location = loc;
         db->table_list_size = block->header.block_size;
+
+        PRINTLOG(TOSDB, LOG_DEBUG, "db %s table list loc 0x%llx(0x%llx)", db->name, db->table_list_location, db->table_list_size);
 
         memory_free(block);
 
@@ -372,6 +387,8 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         block->id = db->id;
         strcpy(db->name, block->name);
         block->table_next_id = db->table_next_id;
+        block->table_list_location = db->table_list_location;
+        block->table_list_size = db->table_list_size;
 
         uint64_t loc = tosdb_block_write(db->tdb, (tosdb_block_header_t*)block);
 

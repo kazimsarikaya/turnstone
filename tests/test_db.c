@@ -140,6 +140,15 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
+    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10);
+
+    if(!table1) {
+        print_error("cannot create/open table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
 
 tdb_close:
     if(!tosdb_close(tosdb)) {
@@ -264,6 +273,15 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
 
     if(!testdb) {
         print_error("cannot create/open testdb");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10);
+
+    if(!table1) {
+        print_error("cannot create/open table1");
         pass = false;
 
         goto tdb_close;

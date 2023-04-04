@@ -130,8 +130,10 @@ typedef struct tosdb_block_table_t {
     uint64_t             id;
     uint64_t             database_id;
     char_t               name[TOSDB_NAME_MAX_LEN];
+    uint64_t             column_next_id;
     uint64_t             column_list_location;
     uint64_t             column_list_size;
+    uint64_t             index_next_id;
     uint64_t             index_list_location;
     uint64_t             index_list_size;
 }__attribute__((packed, aligned(8))) tosdb_block_table_t;
@@ -141,6 +143,7 @@ typedef struct tosdb_block_column_list_item_t {
     uint64_t             id;
     char_t               name[TOSDB_NAME_MAX_LEN];
     data_type_t          type : 16;
+    boolean_t            deleted;
 }__attribute__((packed, aligned(8))) tosdb_block_column_list_item_t;
 
 typedef struct tosdb_block_column_list_t {
@@ -150,6 +153,24 @@ typedef struct tosdb_block_column_list_t {
     uint64_t                       column_count;
     tosdb_block_column_list_item_t columns[];
 }__attribute__((packed, aligned(8))) tosdb_block_column_list_t;
+
+typedef struct tosdb_block_index_list_item_t {
+    tosdb_block_header_t header;
+    uint64_t             id;
+    char_t               name[TOSDB_NAME_MAX_LEN];
+    tosdb_index_type_t   type : 16;
+    boolean_t            deleted;
+    uint64_t             column_id;
+}__attribute__((packed, aligned(8))) tosdb_block_index_list_item_t;
+
+typedef struct tosdb_block_index_list_t {
+    tosdb_block_header_t          header;
+    uint64_t                      database_id;
+    uint64_t                      table_id;
+    uint64_t                      index_count;
+    tosdb_block_index_list_item_t indexes[];
+}__attribute__((packed, aligned(8))) tosdb_block_index_list_t;
+
 
 struct tosdb_t {
     tosdb_backend_t*    backend;
@@ -177,6 +198,7 @@ struct tosdb_database_t {
     uint64_t     id;
     uint64_t     table_next_id;
     char_t*      name;
+    lock_t       lock;
     map_t        tables;
     uint64_t     table_new_count;
     linkedlist_t table_new;
@@ -196,17 +218,47 @@ struct tosdb_table_t {
     boolean_t         is_dirty;
     uint64_t          id;
     char_t*           name;
+    lock_t            lock;
     map_t             columns;
     map_t             indexes;
     uint64_t          metadata_location;
     uint64_t          metadata_size;
     boolean_t         is_deleted;
+    uint64_t          column_next_id;
+    uint64_t          column_new_count;
+    linkedlist_t      column_new;
     uint64_t          column_list_location;
     uint64_t          column_list_size;
+    uint64_t          index_next_id;
+    uint64_t          index_new_count;
+    linkedlist_t      index_new;
     uint64_t          index_list_location;
     uint64_t          index_list_size;
+    uint64_t          max_record_count;
+    uint64_t          max_valuelog_size;
 };
 
-boolean_t tosdb_table_persist(tosdb_table_t* tbl);
+boolean_t      tosdb_table_persist(tosdb_table_t* tbl);
+tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl);
+boolean_t      tosdb_table_load_columns(tosdb_table_t* tbl);
+
+typedef struct tosdb_column_t {
+    uint64_t    id;
+    char_t*     name;
+    data_type_t type;
+    boolean_t   is_deleted;
+} tosdb_column_t;
+
+boolean_t tosdb_table_column_persist(tosdb_table_t* tbl);
+
+typedef struct tosdb_index_t {
+    uint64_t           id;
+    char_t*            name;
+    tosdb_index_type_t type;
+    boolean_t          is_deleted;
+    uint64_t           column_id;
+} tosdb_index_t;
+
+boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl);
 
 #endif

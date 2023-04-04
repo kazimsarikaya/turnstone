@@ -327,11 +327,14 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
             db->tdb = tdb;
             db->id = db_list->databases[i].id;
             db->name = strdup(name_buf);
+            db->lock = lock_create();
             db->is_deleted = db_list->databases[i].deleted;
             db->metadata_location = db_list->databases[i].metadata_location;
             db->metadata_size = db_list->databases[i].metadata_size;
 
             map_insert(tdb->databases, db->name, db);
+
+            PRINTLOG(TOSDB, LOG_DEBUG, "database %s lazy loaded. md loc 0x%llx(0x%llx)", db->name, db->metadata_location, db->metadata_size);
         }
 
 
