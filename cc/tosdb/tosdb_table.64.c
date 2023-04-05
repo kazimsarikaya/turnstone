@@ -685,3 +685,12 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_in
 
     return true;
 }
+
+boolean_t tosdb_table_upsert(tosdb_table_t* tbl, tosdb_record_t* record) {
+    UNUSED(tbl);
+    UNUSED(record);
+
+    NOTIMPLEMENTEDLOG(TOSDB);
+
+    return false;
+}

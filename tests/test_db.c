@@ -198,6 +198,59 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
+    tosdb_record_t * rec = tosdb_table_create_record(table1);
+
+    if(!rec) {
+        print_error("cannot create rec for table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!rec->set_int64(rec, "id", 1)) {
+        print_error("cannot set id column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_string(rec, "ssn", "123456")) {
+        print_error("cannot set ssn column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_string(rec, "fname", "joe")) {
+        print_error("cannot set fname column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_string(rec, "sname", "doe")) {
+        print_error("cannot set sname column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_int8(rec, "age", 37)) {
+        print_error("cannot set age column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!tosdb_table_upsert(table1, rec)) {
+        print_error("cannot insert rec to table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+rec_destroy:
+    rec->destroy(rec);
 tdb_close:
     if(!tosdb_close(tosdb)) {
         print_error("cannot close tosdb");
