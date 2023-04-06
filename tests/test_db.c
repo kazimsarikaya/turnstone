@@ -198,6 +198,33 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
+    if(!tosdb_database_close(testdb)) {
+        print_error("cannot colse testdb");
+        pass = false;
+
+        goto tdb_close;
+
+    }
+
+    testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+
+    if(!testdb) {
+        print_error("cannot re-open testdb");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10);
+
+    if(!table1) {
+        print_error("cannot re-open table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+
     tosdb_record_t * rec = tosdb_table_create_record(table1);
 
     if(!rec) {
@@ -251,9 +278,17 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
 
 rec_destroy:
     rec->destroy(rec);
+
 tdb_close:
     if(!tosdb_close(tosdb)) {
         print_error("cannot close tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    if(!tosdb_free(tosdb)) {
+        print_error("cannot free tosdb");
         pass = false;
 
         goto backend_close;

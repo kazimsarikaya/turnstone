@@ -212,7 +212,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
         }
 
         backup_sb->header.checksum = csum_bak;
-    }else {
+    } else {
         PRINTLOG(TOSDB, LOG_WARNING, "backup block signature mismatch");
     }
 
@@ -285,7 +285,9 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
         return false;
     }
 
-    tdb->databases = map_string();
+    if(!tdb->databases) {
+        tdb->databases = map_string();
+    }
 
     if(!tdb->databases) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create database map");
@@ -370,20 +372,12 @@ boolean_t tosdb_close(tosdb_t* tdb) {
         return false;
     }
 
-    if(tdb->is_dirty) {
-        if(!tosdb_persist(tdb)) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot persist tosdb metadata");
-
-            return false;
-        }
-    }
-
     iterator_t* iter = map_create_iterator(tdb->databases);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
+    while (iter->end_of_iterator(iter) != 0) {
+        tosdb_database_t * db = (tosdb_database_t *)iter->get_item(iter);
 
-        if(!tosdb_database_close(db)) {
+        if (!tosdb_database_close(db)) {
             PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be closed", db->name);
         }
 
@@ -392,11 +386,49 @@ boolean_t tosdb_close(tosdb_t* tdb) {
 
     iter->destroy(iter);
 
-    if(!tosdb_write_and_flush_superblock(tdb->backend, tdb->superblock)) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot write and flush super block");
+    if (tdb->is_dirty) {
+        if (!tosdb_persist(tdb)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot persist tosdb metadata");
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
+boolean_t tosdb_free(tosdb_t * tdb) {
+    if(!tdb) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb is null");
 
         return false;
     }
+
+    if(!tdb->backend) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb backend is null");
+
+        return false;
+    }
+
+    if(!tdb->superblock) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb superblock is null");
+
+        return false;
+    }
+
+    iterator_t* iter = map_create_iterator(tdb->databases);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
+
+        if(!tosdb_database_free(db)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be closed", db->name);
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
 
     memory_free(tdb->superblock);
     lock_destroy(tdb->lock);
@@ -595,6 +627,12 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
     tdb->database_new_count = 0;
     linkedlist_destroy(tdb->database_new);
+
+    if(!tosdb_write_and_flush_superblock(tdb->backend, tdb->superblock)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot write and flush super block");
+
+        return false;
+    }
 
     tdb->is_dirty = false;
 

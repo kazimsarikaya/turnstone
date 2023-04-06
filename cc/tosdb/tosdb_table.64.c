@@ -219,18 +219,26 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
         tosdb_table_t* tbl = (tosdb_table_t*)map_get(db->tables, name);
 
         if(tbl->is_deleted) {
+            PRINTLOG(TOSDB, LOG_ERROR, "table %s was deleted", tbl->name);
+
             return NULL;
         }
 
         if(tbl->is_open) {
+            PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be returned", tbl->name);
+
             return tbl;
         }
 
         tbl->max_record_count = max_record_count;
         tbl->max_valuelog_size = max_valuelog_size;
 
+        PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be lazy loaded", tbl->name);
+
         return tosdb_table_load_table(tbl);
     }
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "table %s not found, new one will be created", name);
 
     if(!db->table_new) {
         db->table_new = linkedlist_create_list();
@@ -299,6 +307,16 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
 
     if(tbl->is_open) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table %s will be closed", tbl->name);
+
+        if(tbl->is_dirty) {
+            if(!tosdb_table_persist(tbl)) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot persist table %s", tbl->name);
+
+                return false;
+            }
+        }
+
         iterator_t* iter = map_create_iterator(tbl->columns);
 
         if(!iter) {
@@ -320,6 +338,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         iter->destroy(iter);
 
         map_destroy(tbl->columns);
+        tbl->columns = NULL;
 
         iter = map_create_iterator(tbl->indexes);
 
@@ -340,12 +359,76 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         iter->destroy(iter);
 
         map_destroy(tbl->indexes);
+        tbl->indexes = NULL;
 
+        tbl->is_open = false;
     }
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "table %s is closed", tbl->name);
+
+    return true;
+}
+
+boolean_t tosdb_table_free(tosdb_table_t* tbl) {
+    if(!tbl || !tbl->db) {
+        PRINTLOG(TOSDB, LOG_ERROR, "db or tosdb is null");
+
+        return false;
+    }
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be freed", tbl->name);
+
+    if(tbl->columns) {
+        iterator_t* iter = map_create_iterator(tbl->columns);
+
+        if(!iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create column iterator");
+
+            return false;
+        }
+
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_column_t* col = (tosdb_column_t*)iter->get_item(iter);
+
+            memory_free(col->name);
+
+            memory_free(col);
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
+
+        map_destroy(tbl->columns);
+    }
+
+    if(tbl->indexes) {
+        iterator_t* iter = map_create_iterator(tbl->indexes);
+
+        if(!iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
+
+            return false;
+        }
+
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
+
+            memory_free(idx);
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
+
+        map_destroy(tbl->indexes);
+    }
+
 
     memory_free(tbl->name);
     lock_destroy(tbl->lock);
     memory_free(tbl);
+    PRINTLOG(TOSDB, LOG_DEBUG, "table freed");
 
     return true;
 }
@@ -567,7 +650,10 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         tbl->metadata_location = loc;
         tbl->metadata_size = block->header.block_size;
 
-        PRINTLOG(TOSDB, LOG_DEBUG, "table loc 0x%llx size 0x%llx", loc, block->header.block_size);
+        PRINTLOG(TOSDB, LOG_DEBUG, "table %s is persisted at loc 0x%llx size 0x%llx", tbl->name, loc, block->header.block_size);
+
+        tbl->is_dirty = false;
+        tbl->db->is_dirty = true;
 
         memory_free(block);
     }

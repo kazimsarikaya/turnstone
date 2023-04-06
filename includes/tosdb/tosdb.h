@@ -56,11 +56,18 @@ typedef struct tosdb_t tosdb_t;
 tosdb_t* tosdb_new(tosdb_backend_t* backend);
 
 /**
- * @brief closes and destroys a tosdb
+ * @brief closes a tosdb
  * @param[in] tdb tosdb
  * @return true if succeed.
  */
 boolean_t tosdb_close(tosdb_t* tdb);
+
+/**
+ * @brief frees a tosdb
+ * @param[in] tdb tosdb
+ * @return true if succeed.
+ */
+boolean_t tosdb_free(tosdb_t* tdb);
 
 /*! tosdb database struct type */
 typedef struct tosdb_database_t tosdb_database_t;
@@ -74,12 +81,20 @@ typedef struct tosdb_database_t tosdb_database_t;
 tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name);
 
 /**
- * @brief closes and frees a database
+ * @brief closes a database
  * @param[in] db the database to close
  * @return true if succeed.
  *
  */
 boolean_t tosdb_database_close(tosdb_database_t* db);
+
+/**
+ * @brief frees a database
+ * @param[in] db the database to free
+ * @return true if succeed.
+ *
+ */
+boolean_t tosdb_database_free(tosdb_database_t* db);
 
 /*! tosdb table struct type */
 typedef struct tosdb_table_t tosdb_table_t;
@@ -118,12 +133,20 @@ typedef enum tosdb_index_type_t {
 boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_index_type_t type);
 
 /**
- * @brief closes and frees a table
+ * @brief closes a table
  * @param[in] tbl the table to close
  * @return true if succeed.
  *
  */
 boolean_t tosdb_table_close(tosdb_table_t* tbl);
+
+/**
+ * @brief frees a table
+ * @param[in] tbl the table to close
+ * @return true if succeed.
+ *
+ */
+boolean_t tosdb_table_free(tosdb_table_t* tbl);
 
 /*! tosdb record struct type */
 typedef struct tosdb_record_t tosdb_record_t;
