@@ -749,6 +749,19 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         tbl->metadata_location = loc;
         tbl->metadata_size = block->header.block_size;
 
+        if(!tbl->db->table_new) {
+            tbl->db->table_new = linkedlist_create_list();
+
+            if(!tbl->db->table_new) {
+                memory_free(block);
+
+                return false;
+            }
+        }
+
+        linkedlist_list_insert(tbl->db->table_new, tbl);
+        tbl->db->table_new_count++;
+
         PRINTLOG(TOSDB, LOG_DEBUG, "table %s is persisted at loc 0x%llx size 0x%llx", tbl->name, loc, block->header.block_size);
 
         tbl->is_dirty = false;
@@ -968,6 +981,7 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     tbl->sstable_list_size = block_size;
     tbl->sstable_list_location = block_loc;
+    tbl->is_dirty = true;
 
     tbl->current_memtable = NULL;
 
