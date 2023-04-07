@@ -11,6 +11,24 @@
 #include <video.h>
 #include <strings.h>
 
+boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
+    if(!tbl || !tbl->db) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table or db is null");
+
+        return false;
+    }
+
+    if(!tbl->sstable_list_location) {
+        PRINTLOG(TOSDB, LOG_DEBUG, "no sstable for table %s", tbl->name);
+
+        return true;
+    }
+
+    NOTIMPLEMENTEDLOG(TOSDB);
+
+    return false;
+}
+
 boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
     if(!tbl || !tbl->db) {
         PRINTLOG(TOSDB, LOG_ERROR, "table or db is null");
@@ -193,6 +211,14 @@ tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot load indexes of table %s", tbl->name);
     }
 
+    tbl->memtable_next_id = tbl_block->memtable_next_id;
+    tbl->sstable_list_location = tbl_block->sstable_list_location;
+    tbl->sstable_list_size = tbl_block->sstable_list_size;
+
+    if(!tosdb_table_load_sstables(tbl)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot load lazy load sstables of table %s", tbl->name);
+    }
+
     memory_free(tbl_block);
 
     tbl->is_open = true;
@@ -202,7 +228,7 @@ tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
     return tbl;
 }
 
-tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size) {
+tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count) {
     if(strlen(name) > TOSDB_NAME_MAX_LEN) {
         PRINTLOG(TOSDB, LOG_ERROR, "table name cannot be longer than %i", TOSDB_NAME_MAX_LEN);
         return NULL;
@@ -232,6 +258,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
 
         tbl->max_record_count = max_record_count;
         tbl->max_valuelog_size = max_valuelog_size;
+        tbl->max_memtable_count = max_memtable_count;
 
         PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be lazy loaded", tbl->name);
 
@@ -280,8 +307,11 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
     tbl->index_next_id = 1;
     tbl->indexes = map_integer();
 
+    tbl->memtable_next_id = 1;
+
     tbl->max_record_count = max_record_count;
     tbl->max_valuelog_size = max_valuelog_size;
+    tbl->max_memtable_count = max_memtable_count;
 
 
     map_insert(db->tables, name, tbl);
@@ -305,15 +335,15 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         return false;
     }
 
+    boolean_t error = false;
 
     if(tbl->is_open) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table %s will be closed", tbl->name);
+        PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be closed", tbl->name);
 
         if(tbl->is_dirty) {
             if(!tosdb_table_persist(tbl)) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot persist table %s", tbl->name);
-
-                return false;
+                error = true;
             }
         }
 
@@ -361,12 +391,42 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         map_destroy(tbl->indexes);
         tbl->indexes = NULL;
 
+        if(tbl->memtables) {
+            iter = linkedlist_iterator_create(tbl->memtables);
+
+            if(!iter) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable iterator");
+
+                return false;
+            }
+
+            while(iter->end_of_iterator(iter) != 0) {
+                tosdb_memtable_t* mt = (tosdb_memtable_t*)iter->delete_item(iter);
+
+                if(!tosdb_memtable_free(mt)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot free memtable for table %s", tbl->name);
+                }
+
+                iter = iter->next(iter);
+            }
+
+            iter->destroy(iter);
+
+            linkedlist_destroy(tbl->memtables);
+            tbl->memtables = NULL;
+            tbl->current_memtable = NULL;
+        }
+
+        if(tbl->sstables) {
+            linkedlist_destroy_with_data(tbl->sstables);
+        }
+
         tbl->is_open = false;
     }
 
     PRINTLOG(TOSDB, LOG_DEBUG, "table %s is closed", tbl->name);
 
-    return true;
+    return !error;
 }
 
 boolean_t tosdb_table_free(tosdb_table_t* tbl) {
@@ -424,6 +484,33 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         map_destroy(tbl->indexes);
     }
 
+    if(tbl->memtables) {
+        iterator_t* iter = linkedlist_iterator_create(tbl->memtables);
+
+        if(!iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable iterator");
+
+            return false;
+        }
+
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_memtable_t* mt = (tosdb_memtable_t*)iter->get_item(iter);
+
+            if(!tosdb_memtable_free(mt)) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot free memtable for table %s", tbl->name);
+            }
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
+
+        linkedlist_destroy(tbl->memtables);
+    }
+
+    if(tbl->sstables) {
+        linkedlist_destroy_with_data(tbl->sstables);
+    }
 
     memory_free(tbl->name);
     lock_destroy(tbl->lock);
@@ -611,6 +698,15 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         }
     }
 
+    if(tbl->memtables && linkedlist_size(tbl->memtables)) {
+        need_persist = true;
+
+        if(!tosdb_table_memtable_persist(tbl)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot persist memtables for table %s", tbl->name);
+
+            return false;
+        }
+    }
 
     if(!tbl->metadata_location) {
         need_persist = true;
@@ -638,6 +734,9 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         block->column_list_size = tbl->column_list_size;
         block->index_list_location = tbl->index_list_location;
         block->index_list_size = tbl->index_list_size;
+        block->memtable_next_id = tbl->memtable_next_id;
+        block->sstable_list_location = tbl->sstable_list_location;
+        block->sstable_list_size = tbl->sstable_list_size;
 
         uint64_t loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
 
@@ -762,7 +861,6 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_in
     idx->type = type;
 
     tbl->index_new_count++;
-    tbl->index_next_id++;
 
     map_insert(tbl->indexes, (void*)idx->id, idx);
     linkedlist_list_insert(tbl->index_new, idx);
@@ -773,10 +871,107 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_in
 }
 
 boolean_t tosdb_table_upsert(tosdb_table_t* tbl, tosdb_record_t* record) {
-    UNUSED(tbl);
-    UNUSED(record);
+    return tosdb_memtable_upsert(tbl, record, false);
+}
 
-    NOTIMPLEMENTEDLOG(TOSDB);
+boolean_t tosdb_table_delete(tosdb_table_t* tbl, tosdb_record_t* record) {
+    return tosdb_memtable_upsert(tbl, record, true);
+}
 
-    return false;
+boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return false;
+    }
+
+    if(!tbl->memtables) {
+        return true;
+    }
+
+    boolean_t error = false;
+
+    lock_acquire(tbl->lock);
+
+    uint64_t idx = linkedlist_size(tbl->memtables);
+
+    do {
+        idx--;
+
+        tosdb_memtable_t* mt = (tosdb_memtable_t*)linkedlist_get_data_at_position(tbl->memtables, idx);
+
+        if(!mt->is_dirty) {
+            continue;
+        }
+
+        if(!tosdb_memtable_persist(mt)) {
+            error = true;
+        }
+
+    } while(idx > 0);
+
+    if(!linkedlist_size(tbl->sstables)) {
+        return true;
+    }
+
+    uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstables) * sizeof(tosdb_block_sstable_list_item_t);
+    block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
+    tosdb_block_sstable_list_t* block = memory_malloc(block_size);
+
+    block->header.block_size = block_size;
+    block->header.block_type = TOSDB_BLOCK_TYPE_SSTABLE_LIST;
+    block->header.previous_block_location = tbl->sstable_list_location;
+    block->header.previous_block_size = tbl->sstable_list_size;
+    block->database_id = tbl->db->id;
+    block->table_id = tbl->id;
+    block->sstable_count = linkedlist_size(tbl->sstables);
+
+
+    iterator_t* iter = linkedlist_iterator_create(tbl->sstables);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
+        memory_free(block);
+        lock_release(tbl->lock);
+
+        return false;
+    }
+
+    idx = 0;
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
+
+        uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
+
+        memory_memcopy(stli, &block->sstables[idx], size);
+
+        memory_free(stli);
+
+        iter = iter->next(iter);
+        idx++;
+    }
+
+    iter->destroy(iter);
+
+    uint64_t block_loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
+
+    memory_free(block);
+
+    if(!block_loc) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot write sstable list");
+
+        return false;
+    }
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "sstable list for table %s persisted at 0x%llx(0x%llx)", tbl->name, block_loc, block_size);
+
+    tbl->sstable_list_size = block_size;
+    tbl->sstable_list_location = block_loc;
+
+    tbl->current_memtable = NULL;
+
+    lock_release(tbl->lock);
+
+    return !error;
 }

@@ -372,6 +372,8 @@ boolean_t tosdb_close(tosdb_t* tdb) {
         return false;
     }
 
+    boolean_t error = false;
+
     iterator_t* iter = map_create_iterator(tdb->databases);
 
     while (iter->end_of_iterator(iter) != 0) {
@@ -379,6 +381,7 @@ boolean_t tosdb_close(tosdb_t* tdb) {
 
         if (!tosdb_database_close(db)) {
             PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be closed", db->name);
+            error = true;
         }
 
         iter = iter->next(iter);
@@ -394,7 +397,7 @@ boolean_t tosdb_close(tosdb_t* tdb) {
         }
     }
 
-    return true;
+    return !error;
 }
 
 boolean_t tosdb_free(tosdb_t * tdb) {
@@ -416,13 +419,18 @@ boolean_t tosdb_free(tosdb_t * tdb) {
         return false;
     }
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "tosdb will be freed");
+
+    boolean_t error = false;
+
     iterator_t* iter = map_create_iterator(tdb->databases);
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
 
         if(!tosdb_database_free(db)) {
-            PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be closed", db->name);
+            PRINTLOG(TOSDB, LOG_ERROR, "database %s cannot be freed", db->name);
+            error = true;
         }
 
         iter = iter->next(iter);
@@ -435,7 +443,9 @@ boolean_t tosdb_free(tosdb_t * tdb) {
     map_destroy(tdb->databases);
     memory_free(tdb);
 
-    return true;
+    PRINTLOG(TOSDB, LOG_DEBUG, "tosdb freed");
+
+    return !error;
 }
 
 tosdb_block_header_t* tosdb_block_read(tosdb_t* tdb, uint64_t location, uint64_t size) {

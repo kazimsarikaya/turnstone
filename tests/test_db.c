@@ -14,6 +14,9 @@
 #include <xxhash.h>
 #include <tosdb/tosdb.h>
 #include <strings.h>
+#include <bloomfilter.h>
+#include <math.h>
+#include <zpack.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int32_t test_step1(uint32_t argc, char_t** argv);
@@ -140,7 +143,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10);
+    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10, 8);
 
     if(!table1) {
         print_error("cannot create/open table1");
@@ -215,7 +218,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10);
+    table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10, 8);
 
     if(!table1) {
         print_error("cannot re-open table1");
@@ -283,8 +286,6 @@ tdb_close:
     if(!tosdb_close(tosdb)) {
         print_error("cannot close tosdb");
         pass = false;
-
-        goto backend_close;
     }
 
     if(!tosdb_free(tosdb)) {
@@ -414,7 +415,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10);
+    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10, 8);
 
     if(!table1) {
         print_error("cannot create/open table1");
@@ -427,6 +428,11 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
 tdb_close:
     if(!tosdb_close(tosdb)) {
         print_error("cannot close tosdb");
+        pass = false;
+    }
+
+    if(!tosdb_free(tosdb)) {
+        print_error("cannot free tosdb");
         pass = false;
 
         goto backend_close;

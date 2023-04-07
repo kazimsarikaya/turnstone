@@ -105,9 +105,10 @@ typedef struct tosdb_table_t tosdb_table_t;
  * @param[in] name table name
  * @param[in] max_record_count maximum record count at each memtable/sstable
  * @param[in] max_valuelog_size maximum valuelog size
+ * @param[in] max_memtable_count maximum memtable count at memory
  * @return a new table or existing one
  */
-tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size);
+tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count);
 
 /**
  * @brief adds a cloumn to given table

@@ -15,6 +15,8 @@
 #include <map.h>
 #include <cpu/sync.h>
 #include <linkedlist.h>
+#include <indexer.h>
+#include <bloomfilter.h>
 
 
 #define TOSDB_PAGE_SIZE 4096
@@ -56,6 +58,7 @@ typedef enum tosdb_block_type_t {
     TOSDB_BLOCK_TYPE_INDEX_LIST,
     TOSDB_BLOCK_TYPE_SSTABLE_LIST,
     TOSDB_BLOCK_TYPE_SSTABLE,
+    TOSDB_BLOCK_TYPE_SSTABLE_INDEX,
     TOSDB_BLOCK_TYPE_VALUELOG_LIST,
     TOSDB_BLOCK_TYPE_VALUELOG,
 } tosdb_block_type_t;
@@ -136,6 +139,9 @@ typedef struct tosdb_block_table_t {
     uint64_t             index_next_id;
     uint64_t             index_list_location;
     uint64_t             index_list_size;
+    uint64_t             memtable_next_id;
+    uint64_t             sstable_list_location;
+    uint64_t             sstable_list_size;
 }__attribute__((packed, aligned(8))) tosdb_block_table_t;
 
 typedef struct tosdb_block_column_list_item_t {
@@ -168,6 +174,47 @@ typedef struct tosdb_block_index_list_t {
     tosdb_block_index_list_item_t indexes[];
 }__attribute__((packed, aligned(8))) tosdb_block_index_list_t;
 
+typedef struct tosdb_block_valuelog_t {
+    tosdb_block_header_t header;
+    uint64_t             database_id;
+    uint64_t             table_id;
+    uint64_t             sstable_id;
+    uint64_t             data_size;
+    uint8_t*             data[];
+}__attribute__((packed, aligned(8))) tosdb_block_valuelog_t;
+
+typedef struct tosdb_block_sstable_list_item_index_pair_t {
+    uint64_t index_location;
+    uint64_t index_size;
+}__attribute__((packed, aligned(8))) tosdb_block_sstable_list_item_index_pair_t;
+
+typedef struct tosdb_block_sstable_list_item_t {
+    uint64_t                                   sstable_id;
+    uint64_t                                   record_count;
+    uint64_t                                   valuelog_location;
+    uint64_t                                   valuelog_size;
+    uint64_t                                   index_count;
+    tosdb_block_sstable_list_item_index_pair_t indexes[];
+}__attribute__((packed, aligned(8))) tosdb_block_sstable_list_item_t;
+
+typedef struct tosdb_block_sstable_list_t {
+    tosdb_block_header_t            header;
+    uint64_t                        database_id;
+    uint64_t                        table_id;
+    uint64_t                        sstable_count;
+    tosdb_block_sstable_list_item_t sstables[];
+}__attribute__((packed, aligned(8))) tosdb_block_sstable_list_t;
+
+typedef struct tosdb_block_sstable_index_t {
+    tosdb_block_header_t header;
+    uint64_t             database_id;
+    uint64_t             table_id;
+    uint64_t             sstable_id;
+    uint64_t             index_id;
+    uint64_t             bloomfilter_size;
+    uint64_t             index_size;
+    uint8_t              data[];
+}__attribute__((packed, aligned(8))) tosdb_block_sstable_index_t;
 
 struct tosdb_t {
     tosdb_backend_t*    backend;
@@ -209,6 +256,8 @@ boolean_t         tosdb_database_persist(tosdb_database_t* db);
 tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db);
 boolean_t         tosdb_database_load_tables(tosdb_database_t* db);
 
+typedef struct tosdb_memtable_t tosdb_memtable_t;
+
 struct tosdb_table_t {
     tosdb_database_t* db;
     boolean_t         is_open;
@@ -233,11 +282,20 @@ struct tosdb_table_t {
     uint64_t          index_list_size;
     uint64_t          max_record_count;
     uint64_t          max_valuelog_size;
+    uint64_t          max_memtable_count;
+    tosdb_memtable_t* current_memtable;
+    linkedlist_t      memtables;
+    uint64_t          memtable_next_id;
+    uint64_t          sstable_list_location;
+    uint64_t          sstable_list_size;
+    linkedlist_t      sstables;
 };
 
 boolean_t      tosdb_table_persist(tosdb_table_t* tbl);
 tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl);
 boolean_t      tosdb_table_load_columns(tosdb_table_t* tbl);
+boolean_t      tosdb_table_load_indexes(tosdb_table_t* tbl);
+boolean_t      tosdb_table_load_sstables(tosdb_table_t* tbl);
 
 typedef struct tosdb_column_t {
     uint64_t    id;
@@ -255,7 +313,56 @@ typedef struct tosdb_index_t {
     uint64_t           column_id;
 } tosdb_index_t;
 
-boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl);
 boolean_t tosdb_table_index_persist(tosdb_table_t* tbl);
+boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl);
+
+typedef struct tosdb_memtable_index_item_t {
+    uint64_t  key_hash;
+    boolean_t is_deleted;
+    uint64_t  offset;
+    uint64_t  length;
+    uint64_t  key_length;
+    uint8_t   key[];
+}__attribute__((packed, aligned(8))) tosdb_memtable_index_item_t;
+
+int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2);
+
+typedef struct tosdb_memtable_index_t {
+    tosdb_index_t* ti;
+    bloomfilter_t* bloomfilter;
+    index_t*       index;
+} tosdb_memtable_index_t;
+
+struct tosdb_memtable_t {
+    tosdb_table_t* tbl;
+    uint64_t       id;
+    boolean_t      is_readonly;
+    boolean_t      is_full;
+    boolean_t      is_dirty;
+    map_t          indexes;
+    buffer_t       values;
+    uint64_t       record_count;
+};
+
+boolean_t tosdb_memtable_new(tosdb_table_t * tbl);
+boolean_t tosdb_memtable_free(tosdb_memtable_t* mt);
+boolean_t tosdb_memtable_upsert(tosdb_table_t * tbl, tosdb_record_t * record, boolean_t del);
+boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt);
+boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable_list_item_t* stli, uint64_t idx, tosdb_memtable_index_t* mt_idx);
+
+typedef struct tosdb_record_context_t {
+    tosdb_table_t* table;
+    map_t          columns;
+    map_t          keys;
+} tosdb_record_context_t;
+
+typedef struct tosdb_record_key_t {
+    uint64_t index_id;
+    uint64_t key_hash;
+    uint64_t key_length;
+    uint8_t* key;
+}tosdb_record_key_t;
+
+data_t* tosdb_record_serialize(tosdb_record_t* record);
 
 #endif

@@ -227,6 +227,7 @@ boolean_t tosdb_database_close(tosdb_database_t* db) {
         return false;
     }
 
+    boolean_t error = false;
 
     if(db->is_open) {
         PRINTLOG(TOSDB, LOG_DEBUG, "database %s will be closed", db->name);
@@ -244,10 +245,7 @@ boolean_t tosdb_database_close(tosdb_database_t* db) {
 
             if(!tosdb_table_close(tbl)) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot close table %s", tbl->name);
-
-                iter->destroy(iter);
-
-                return false;
+                error = true;
             }
 
             iter = iter->next(iter);
@@ -268,7 +266,7 @@ boolean_t tosdb_database_close(tosdb_database_t* db) {
     db->is_open = false;
     PRINTLOG(TOSDB, LOG_DEBUG, "database %s is closed", db->name);
 
-    return true;
+    return !error;
 }
 
 boolean_t tosdb_database_free(tosdb_database_t* db) {
@@ -431,7 +429,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         need_persist = true;
     }
 
-    if(need_persist) {
+    if(need_persist || db->is_dirty) {
         tosdb_block_database_t* block = memory_malloc(TOSDB_PAGE_SIZE);
 
         if(!block) {

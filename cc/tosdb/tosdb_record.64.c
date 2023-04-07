@@ -11,6 +11,7 @@
 #include <video.h>
 #include <strings.h>
 #include <iterator.h>
+#include <xxhash.h>
 
 boolean_t tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value);
 boolean_t tosdb_record_get_boolean(tosdb_record_t * record, const char_t* colname, boolean_t* value);
@@ -44,10 +45,7 @@ boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, 
 boolean_t tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t len, void** value);
 boolean_t tosdb_record_destroy(tosdb_record_t* record);
 
-typedef struct tosdb_record_context_t {
-    tosdb_table_t* table;
-    map_t          columns;
-} tosdb_record_context_t;
+uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid);
 
 boolean_t tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value) {
     return tosdb_record_set_data(record, colname, DATA_TYPE_BOOLEAN, sizeof(boolean_t), (void*)(uint64_t)value);
@@ -287,10 +285,49 @@ boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, 
         return false;
     }
 
+    void* l_value = memory_malloc(len);
+
+    if(!l_value) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create required item");
+        memory_free(col_value);
+        memory_free(name);
+
+        return false;
+    }
+
+    if(type == DATA_TYPE_STRING || type == DATA_TYPE_INT8_ARRAY) {
+        memory_memcopy(value, l_value, len);
+    } else {
+        uint64_t tmp = (uint64_t)value;
+        memory_memcopy(&tmp, l_value, len);
+    }
+
     col_value->name = name;
     col_value->type = type;
     col_value->length = len;
-    col_value->value = (void*)value;
+    col_value->value = (void*)l_value;
+
+    uint64_t idx_id = tosdb_record_get_index_id(record, col->id);
+
+    if(idx_id) {
+        uint64_t key_hash = xxhash64_hash(l_value, len);
+
+        tosdb_record_key_t* r_key = memory_malloc(sizeof(tosdb_record_key_t));
+
+        if(!r_key) {
+            memory_free(name);
+            memory_free(col_value);
+
+            return false;
+        }
+
+        r_key->index_id = idx_id;
+        r_key->key_hash = key_hash;
+        r_key->key_length = len;
+        r_key->key = (uint8_t*)l_value;
+
+        map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
+    }
 
     map_insert(ctx->columns, (void*)col->id, col_value);
 
@@ -309,6 +346,42 @@ boolean_t tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, 
     return false;
 }
 
+uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid) {
+    if(!record || !record->context || !colid) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record or colid failed");
+
+        return 0;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    uint64_t idx_id = 0;
+
+    iterator_t* iter = map_create_iterator(ctx->table->indexes);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
+
+        return 0;
+    }
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
+
+
+        if(idx->column_id == colid) {
+            idx_id = idx->id;
+            break;
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    return idx_id;
+}
+
 boolean_t tosdb_record_destroy(tosdb_record_t * record){
     if(!record) {
         return true;
@@ -321,6 +394,7 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
     while(iter->end_of_iterator(iter) != 0) {
         data_t* d = (data_t*)iter->get_item(iter);
         memory_free(d->name);
+        memory_free(d->value);
         memory_free(d);
 
         iter = iter->next(iter);
@@ -329,11 +403,80 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
     iter->destroy(iter);
 
     map_destroy(ctx->columns);
+
+    iter = map_create_iterator(ctx->keys);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_record_key_t* key = (tosdb_record_key_t*)iter->get_item(iter);
+        memory_free(key);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    map_destroy(ctx->keys);
+
     memory_free(record->context);
 
     memory_free(record);
 
     return false;
+}
+
+data_t* tosdb_record_serialize(tosdb_record_t* record) {
+    if(!record || !record->context) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record is null");
+
+        return NULL;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    if(!ctx->columns) {
+        PRINTLOG(TOSDB, LOG_ERROR, "empty record");
+
+        return NULL;
+    }
+
+    data_t s_data = {0};
+
+    s_data.type = DATA_TYPE_DATA;
+    s_data.length = map_size(ctx->columns);
+
+    data_t* s_items = memory_malloc(sizeof(data_t) * s_data.length);
+
+    if(!s_items) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create record item list");
+
+        return NULL;
+    }
+
+    s_data.value = s_items;
+
+    uint64_t idx = 0;
+
+    iterator_t* iter = map_create_iterator(ctx->columns);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        data_t* d = (data_t*)iter->get_item(iter);
+
+        s_items[idx].length = d->length;
+        s_items[idx].name = d->name;
+        s_items[idx].type = d->type;
+        s_items[idx].value = d->value;
+
+        idx++;
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    data_t* res = data_bson_serialize(&s_data, DATA_SERIALIZE_WITH_ALL);
+
+    memory_free(s_items);
+
+    return res;
 }
 
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
@@ -366,6 +509,17 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
 
     if(!ctx->columns) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create record context column map");
+        memory_free(ctx);
+        memory_free(rec);
+
+        return NULL;
+    }
+
+    ctx->keys = map_integer();
+
+    if(!ctx->keys) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create record context keys map");
+        map_destroy(ctx->columns);
         memory_free(ctx);
         memory_free(rec);
 
