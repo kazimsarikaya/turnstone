@@ -268,7 +268,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
     PRINTLOG(TOSDB, LOG_DEBUG, "table %s not found, new one will be created", name);
 
     if(!db->table_new) {
-        db->table_new = linkedlist_create_list();
+        db->table_new = map_integer();
 
         if(!db->table_new) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create new table list");
@@ -316,10 +316,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
 
     map_insert(db->tables, name, tbl);
 
-    linkedlist_list_insert(db->table_new, tbl);
-
-    db->table_new_count++;
-
+    map_insert(db->table_new, (void*)tbl->id, tbl);
 
     lock_release(db->lock);
 
@@ -750,7 +747,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         tbl->metadata_size = block->header.block_size;
 
         if(!tbl->db->table_new) {
-            tbl->db->table_new = linkedlist_create_list();
+            tbl->db->table_new = map_integer();
 
             if(!tbl->db->table_new) {
                 memory_free(block);
@@ -759,8 +756,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
             }
         }
 
-        linkedlist_list_insert(tbl->db->table_new, tbl);
-        tbl->db->table_new_count++;
+        map_insert(tbl->db->table_new, (void*)tbl->id, tbl);
 
         PRINTLOG(TOSDB, LOG_DEBUG, "table %s is persisted at loc 0x%llx size 0x%llx", tbl->name, loc, block->header.block_size);
 
@@ -989,3 +985,4 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     return !error;
 }
+

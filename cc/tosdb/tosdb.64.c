@@ -553,7 +553,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
     boolean_t error = false;
 
-    uint64_t metadata_size = sizeof(tosdb_block_database_list_t) + sizeof(tosdb_block_database_list_item_t) * tdb->database_new_count;
+    uint64_t metadata_size = sizeof(tosdb_block_database_list_t) + sizeof(tosdb_block_database_list_item_t) * map_size(tdb->database_new);
     metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
 
     tosdb_block_database_list_t * block = memory_malloc(metadata_size);
@@ -569,7 +569,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
     block->header.previous_block_location = tdb->superblock->database_list_location;
     block->header.previous_block_size = tdb->superblock->database_list_size;
 
-    iterator_t* iter = linkedlist_iterator_create(tdb->database_new);
+    iterator_t* iter = map_create_iterator(tdb->database_new);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create database iterator");
@@ -579,12 +579,12 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
         return false;
     }
 
-    block->database_count = tdb->database_new_count;
+    block->database_count = map_size(tdb->database_new);
 
     uint64_t db_idx = 0;
 
     while(iter->end_of_iterator(iter) != 0) {
-        tosdb_database_t* db = (tosdb_database_t*)iter->delete_item(iter);
+        tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
 
         if(db->is_dirty) {
             if(!tosdb_database_persist(db)) {
@@ -635,8 +635,8 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
     memory_free(block);
 
-    tdb->database_new_count = 0;
-    linkedlist_destroy(tdb->database_new);
+    map_destroy(tdb->database_new);
+    tdb->database_new = NULL;
 
     if(!tosdb_write_and_flush_superblock(tdb->backend, tdb->superblock)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot write and flush super block");

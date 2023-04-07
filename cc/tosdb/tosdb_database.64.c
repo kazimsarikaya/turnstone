@@ -169,7 +169,7 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
     }
 
     if(!tdb->database_new) {
-        tdb->database_new = linkedlist_create_list();
+        tdb->database_new = map_integer();
 
         if(!tdb->database_new) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create new database list");
@@ -208,10 +208,7 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
 
     map_insert(tdb->databases, name, db);
 
-    linkedlist_list_insert(tdb->database_new, db);
-
-    tdb->database_new_count++;
-
+    map_insert(tdb->database_new, (void*)db->id, db);
 
     lock_release(tdb->lock);
 
@@ -335,12 +332,12 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
     boolean_t need_persist = false;
 
 
-    if(db->table_new_count) {
+    if(db->table_new && map_size(db->table_new)) {
         need_persist = true;
 
         boolean_t error = false;
 
-        uint64_t metadata_size = sizeof(tosdb_block_table_list_t) + sizeof(tosdb_block_table_list_item_t) * db->table_new_count;
+        uint64_t metadata_size = sizeof(tosdb_block_table_list_t) + sizeof(tosdb_block_table_list_item_t) * map_size(db->table_new);
         metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
 
         tosdb_block_table_list_t* block = memory_malloc(metadata_size);
@@ -355,10 +352,10 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         block->header.block_size = metadata_size;
         block->header.previous_block_location = db->table_list_location;
         block->header.previous_block_size = db->table_list_size;
-        block->table_count = db->table_new_count;
+        block->table_count = map_size(db->table_new);
         block->database_id = db->id;
 
-        iterator_t* iter = linkedlist_iterator_create(db->table_new);
+        iterator_t* iter = map_create_iterator(db->table_new);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create database iterator");
@@ -371,7 +368,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         uint64_t tbl_idx = 0;
 
         while(iter->end_of_iterator(iter) != 0) {
-            tosdb_table_t* tbl = (tosdb_table_t*)iter->delete_item(iter);
+            tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
 
             if(tbl->is_dirty) {
                 if(!tosdb_table_persist(tbl)) {
@@ -419,8 +416,8 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         memory_free(block);
 
 
-        db->table_new_count = 0;
-        linkedlist_destroy(db->table_new);
+        map_destroy(db->table_new);
+        db->table_new = NULL;
 
     }
 
@@ -461,6 +458,19 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
 
         db->tdb->is_dirty = true;
         db->is_dirty = false;
+
+        if(!db->tdb->database_new) {
+            db->tdb->database_new = map_integer();
+
+            if(!db->tdb->database_new) {
+                memory_free(block);
+
+                return false;
+            }
+        }
+
+        map_insert(db->tdb->database_new, (void*)db->id, db);
+
 
         PRINTLOG(TOSDB, LOG_DEBUG, "database %s is persisted at loc 0x%llx size 0x%llx", db->name, loc, block->header.block_size);
 
