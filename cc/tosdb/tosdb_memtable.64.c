@@ -479,10 +479,10 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         return false;
     }
 
-    if(!mt->tbl->sstables) {
-        mt->tbl->sstables = linkedlist_create_stack();
+    if(!mt->tbl->sstable_list_items) {
+        mt->tbl->sstable_list_items = linkedlist_create_stack();
 
-        if(!mt->tbl->sstables) {
+        if(!mt->tbl->sstable_list_items) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list items stack");
             memory_free(stli);
 
@@ -490,7 +490,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         }
     }
 
-    linkedlist_stack_push(mt->tbl->sstables, stli);
+    linkedlist_stack_push(mt->tbl->sstable_list_items, stli);
 
     if(!error) {
         mt->is_dirty = false;

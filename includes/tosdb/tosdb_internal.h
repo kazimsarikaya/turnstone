@@ -288,7 +288,7 @@ struct tosdb_table_t {
     uint64_t          memtable_next_id;
     uint64_t          sstable_list_location;
     uint64_t          sstable_list_size;
-    linkedlist_t      sstables;
+    linkedlist_t      sstable_list_items;
 };
 
 boolean_t      tosdb_table_persist(tosdb_table_t* tbl);

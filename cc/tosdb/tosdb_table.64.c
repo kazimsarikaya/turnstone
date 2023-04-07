@@ -417,8 +417,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             tbl->current_memtable = NULL;
         }
 
-        if(tbl->sstables) {
-            linkedlist_destroy_with_data(tbl->sstables);
+        if(tbl->sstable_list_items) {
+            linkedlist_destroy_with_data(tbl->sstable_list_items);
         }
 
         tbl->is_open = false;
@@ -508,8 +508,8 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         linkedlist_destroy(tbl->memtables);
     }
 
-    if(tbl->sstables) {
-        linkedlist_destroy_with_data(tbl->sstables);
+    if(tbl->sstable_list_items) {
+        linkedlist_destroy_with_data(tbl->sstable_list_items);
     }
 
     memory_free(tbl->name);
@@ -923,11 +923,11 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     } while(idx > 0);
 
-    if(!linkedlist_size(tbl->sstables)) {
+    if(!linkedlist_size(tbl->sstable_list_items)) {
         return true;
     }
 
-    uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstables) * sizeof(tosdb_block_sstable_list_item_t);
+    uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
     tosdb_block_sstable_list_t* block = memory_malloc(block_size);
 
@@ -937,10 +937,10 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     block->header.previous_block_size = tbl->sstable_list_size;
     block->database_id = tbl->db->id;
     block->table_id = tbl->id;
-    block->sstable_count = linkedlist_size(tbl->sstables);
+    block->sstable_count = linkedlist_size(tbl->sstable_list_items);
 
 
-    iterator_t* iter = linkedlist_iterator_create(tbl->sstables);
+    iterator_t* iter = linkedlist_iterator_create(tbl->sstable_list_items);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
