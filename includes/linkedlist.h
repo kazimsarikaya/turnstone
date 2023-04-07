@@ -228,6 +228,9 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
 /*! delete data with position from list */
 #define linkedlist_delete_at_position(l, p ) linkedlist_delete_at(l, NULL, LINKEDLIST_DELETE_AT_POSITION, p)
 
+/*! delete data at tail (end) of list */
+#define linkedlist_delete_at_tail(l) linkedlist_delete_at(l, NULL, LINKEDLIST_DELETE_AT_TAIL, 0)
+
 /*! insert data into normal list */
 #define linkedlist_list_insert(l, d) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_ANYWHERE, 0)
 /*! delete and get data from normal list */
