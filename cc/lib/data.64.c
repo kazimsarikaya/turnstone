@@ -28,6 +28,8 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
         return NULL;
     }
 
+    data_serialize_with_t org_sw = sw;
+
     buffer_t buf = buffer_new();
 
     uint8_t bc = 0;
@@ -100,7 +102,7 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
         break;
     case DATA_TYPE_DATA:
         for(uint64_t i = 0; i < data->length; i++) {
-            data_t* tmp_data = data_bson_serialize(&(((data_t*)(data->value))[i]), sw);
+            data_t* tmp_data = data_bson_serialize(&(((data_t*)(data->value))[i]), org_sw);
 
             if(tmp_data == NULL) {
                 buffer_destroy(buf);
@@ -438,4 +440,35 @@ catch_error:
     memory_free(res);
 
     return NULL;
+}
+
+void data_free(data_t* data) {
+    if(data->name) {
+        data_free(data->name);
+    }
+
+    if(data->type >= DATA_TYPE_STRING) {
+        if(data->type == DATA_TYPE_DATA) {
+            data_t* ds = data->value;
+            for(uint64_t i = 0; i < data->length; i++) {
+                if(ds[i].name) {
+                    data_free(ds[i].name);
+                }
+
+                if(ds[i].type >= DATA_TYPE_STRING) {
+                    if(ds[i].type == DATA_TYPE_DATA) {
+                        data_free(ds[i].value);
+                    } else {
+                        memory_free(ds[i].value);
+                    }
+                }
+            }
+
+            memory_free(ds);
+        } else {
+            memory_free(data->value);
+        }
+    }
+
+    memory_free(data);
 }

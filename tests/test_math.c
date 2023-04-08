@@ -27,5 +27,18 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     printf("%030.025f %030.025f\n", math_root(625, 4), math_root(12.45, 3.7));
 
+    if(math_floor(3.5) != 3) {
+        print_error("math floor error");
+    }
+
+    if(math_ceil(3.5) != 4) {
+        print_error("math ceil error");
+    }
+
+    if(math_sin(90) != 1 || math_sin(180) != 0) {
+        print_error("error at sin");
+        printf("%01.016f %01.08f\n", math_sin(90), math_sin(180));
+    }
+
     return 0;
 }

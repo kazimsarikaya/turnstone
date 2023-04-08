@@ -107,4 +107,5 @@ size_t video_printf(const char_t* fmt, ...) __attribute__ ((format (printf, 1, 2
             else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
 
 
+#define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
 #endif

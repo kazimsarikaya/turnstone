@@ -451,7 +451,7 @@ size_t video_printf(const char_t* fmt, ...){
                     break;
                 case 'p':
                     l_flag = 1;
-                    __attribute__((fallthrough));
+                    nobreak;
                 case 'x':
                 case 'h':
                     if(l_flag == 2) {
