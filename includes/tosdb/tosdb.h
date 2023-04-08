@@ -402,7 +402,7 @@ typedef boolean_t (*tosdb_record_set_bytearray_f)(tosdb_record_t * record, const
  * @param[out] value column value
  * @return true if value can be getted
  */
-typedef boolean_t (*tosdb_record_get_bytearray_f)(tosdb_record_t * record, const char_t* colname, uint64_t len, uint8_t** value);
+typedef boolean_t (*tosdb_record_get_bytearray_f)(tosdb_record_t * record, const char_t* colname, uint64_t* len, uint8_t** value);
 
 /**
  * @brief set column value with data type to the record
@@ -422,7 +422,7 @@ typedef boolean_t (*tosdb_record_set_data_f)(tosdb_record_t * record, const char
  * @param[out] value column value
  * @return true if value can be getted
  */
-typedef boolean_t (*tosdb_record_get_data_f)(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t len, void** value);
+typedef boolean_t (*tosdb_record_get_data_f)(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t* len, void** value);
 
 
 /**

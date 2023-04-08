@@ -364,5 +364,8 @@ typedef struct tosdb_record_key_t {
 }tosdb_record_key_t;
 
 data_t* tosdb_record_serialize(tosdb_record_t* record);
+data_t*   tosdb_record_serialize(tosdb_record_t* record);
+boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t len, const void* value);
+boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t* len, void** value);
 
 #endif
