@@ -54,4 +54,6 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw);
 data_t* data_json_serialize(data_t* data);
 data_t* data_json_deserialize(data_t* data);
 
+void data_free(data_t* data);
+
 #endif
