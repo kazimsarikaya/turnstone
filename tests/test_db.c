@@ -272,7 +272,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto rec_destroy;
     }
 
-    if(!tosdb_table_upsert(table1, rec)) {
+    if(!rec->upsert_record(rec)) {
         print_error("cannot insert rec to table1");
         pass = false;
 
@@ -424,6 +424,171 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
+    tosdb_record_t * rec = tosdb_table_create_record(table1);
+
+    if(!rec) {
+        print_error("cannot create rec for table1");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!rec->set_int64(rec, "id", 2)) {
+        print_error("cannot set id column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_string(rec, "ssn", "123457")) {
+        print_error("cannot set ssn column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_string(rec, "fname", "john")) {
+        print_error("cannot set fname column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_string(rec, "sname", "wick")) {
+        print_error("cannot set sname column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->set_int8(rec, "age", 43)) {
+        print_error("cannot set age column for rec of table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->upsert_record(rec)) {
+        print_error("cannot insert rec to table1");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    rec->destroy(rec);
+
+    rec = tosdb_table_create_record(table1);
+
+    if(!rec) {
+        print_error("cannot create key record");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!rec->set_int64(rec, "id", 2)) {
+        print_error("cannot set ssn for search");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->get_record(rec)) {
+        print_error("cannot find record at memtable");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    char_t* fname = NULL;
+
+    if(!rec->get_string(rec, "fname", &fname)) {
+        print_error("cannot get fname");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    int8_t age;
+
+    if(!rec->get_int8(rec, "age", &age)) {
+        print_error("cannot get age");
+        pass = false;
+        memory_free(fname);
+
+        goto rec_destroy;
+    }
+
+    printf("fname: %s age: %i\n", fname, age);
+
+    if(!strcmp(fname, "john") && age != 43) {
+        print_error("record values wrong");
+        pass = false;
+        memory_free(fname);
+
+        goto rec_destroy;
+    }
+
+    memory_free(fname);
+
+    rec->destroy(rec);
+
+    rec = tosdb_table_create_record(table1);
+
+    if(!rec) {
+        print_error("cannot create key record");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!rec->set_string(rec, "ssn", "123456")) {
+        print_error("cannot set ssn for search");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    if(!rec->get_record(rec)) {
+        print_error("cannot find record at sstable");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    fname = NULL;
+
+    if(!rec->get_string(rec, "fname", &fname)) {
+        print_error("cannot get fname");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    age = 0;
+
+    if(!rec->get_int8(rec, "age", &age)) {
+        print_error("cannot get age");
+        pass = false;
+        memory_free(fname);
+
+        goto rec_destroy;
+    }
+
+    printf("fname: %s age: %i\n", fname, age);
+
+    if(!strcmp(fname, "joe") && age != 37) {
+        print_error("record values wrong");
+        pass = false;
+        memory_free(fname);
+
+        goto rec_destroy;
+    }
+
+    memory_free(fname);
+
+rec_destroy:
+    rec->destroy(rec);
 
 tdb_close:
     if(!tosdb_close(tosdb)) {
