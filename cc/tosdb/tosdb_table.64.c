@@ -48,6 +48,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
 
         for(uint64_t i = 0; i < st_list->sstable_count; i++) {
             uint64_t level = st_list->sstables[i].level;
+            tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
 
             uint64_t st_size = sizeof(tosdb_block_sstable_list_item_t);
             st_size += sizeof(tosdb_block_sstable_list_item_index_pair_t) * st_list->sstables[i].index_count;
