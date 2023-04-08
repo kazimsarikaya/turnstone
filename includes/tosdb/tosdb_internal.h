@@ -221,8 +221,7 @@ struct tosdb_t {
     tosdb_superblock_t* superblock;
     boolean_t           is_dirty;
     map_t               databases;
-    uint64_t            database_new_count;
-    linkedlist_t        database_new;
+    map_t               database_new;
     lock_t              lock;
 };
 

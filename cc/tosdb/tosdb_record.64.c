@@ -262,7 +262,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         }
     }
 
-    map_insert(ctx->columns, (void*)col->id, col_value);
+    map_insert(ctx->columns, (void*)col_id, col_value);
 
     return true;
 }

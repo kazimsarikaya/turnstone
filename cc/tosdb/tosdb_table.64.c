@@ -813,7 +813,6 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_
     col->type = type;
 
     tbl->column_new_count++;
-    tbl->column_next_id++;
 
     map_insert(tbl->columns, col->name, col);
     linkedlist_list_insert(tbl->column_new, col);
