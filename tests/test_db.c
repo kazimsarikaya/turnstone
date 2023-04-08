@@ -17,6 +17,7 @@
 #include <bloomfilter.h>
 #include <math.h>
 #include <zpack.h>
+#include <binarysearch.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int32_t test_step1(uint32_t argc, char_t** argv);

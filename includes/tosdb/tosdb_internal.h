@@ -180,10 +180,11 @@ typedef struct tosdb_block_valuelog_t {
     uint64_t             table_id;
     uint64_t             sstable_id;
     uint64_t             data_size;
-    uint8_t*             data[];
+    uint8_t              data[];
 }__attribute__((packed, aligned(8))) tosdb_block_valuelog_t;
 
 typedef struct tosdb_block_sstable_list_item_index_pair_t {
+    uint64_t index_id;
     uint64_t index_location;
     uint64_t index_size;
 }__attribute__((packed, aligned(8))) tosdb_block_sstable_list_item_index_pair_t;

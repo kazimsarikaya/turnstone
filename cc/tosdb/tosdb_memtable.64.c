@@ -359,6 +359,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
         idx_item->offset = offset;
 
         data_t d_key = {0};
+        d_key.type = DATA_TYPE_INT8_ARRAY;
         d_key.length = idx_item->key_length;
         d_key.value = r_key->key;
 
@@ -651,6 +652,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     PRINTLOG(TOSDB, LOG_DEBUG, "index %lli of memtable %lli of table %s persisted at 0x%llx(0x%llx)", mt_idx->ti->id, mt->id, mt->tbl->name, block_loc, block_size);
 
+    stli->indexes[idx].index_id = mt_idx->ti->id;
     stli->indexes[idx].index_location = block_loc;
     stli->indexes[idx].index_size = block_size;
 
@@ -754,7 +756,6 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
 
     if(!r_d) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot deserialize data");
-        data_free(r_d);
 
         return false;
     }

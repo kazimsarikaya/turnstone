@@ -83,6 +83,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
 
             linkedlist_queue_push(st_l, st);
 
+            PRINTLOG(TOSDB, LOG_DEBUG, "sstable %lli with level %lli lazy loaded", st->sstable_id, st->level);
         }
 
         if(st_list->header.previous_block_invalid) {
@@ -97,6 +98,8 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
         memory_free(st_list);
 
     }
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "table %s max sstable level value %lli map size %lli", tbl->name, tbl->sstable_max_level, map_size(tbl->sstable_levels));
 
     return true;
 }
