@@ -43,6 +43,11 @@ boolean_t   tosdb_record_set_bytearray(tosdb_record_t * record, const char_t* co
 boolean_t   tosdb_record_get_bytearray(tosdb_record_t * record, const char_t* colname, uint64_t* len, uint8_t** value);
 boolean_t   tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t len, const void* value);
 boolean_t   tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t* len, void** value);
+boolean_t   tosdb_record_upsert(tosdb_record_t* record);
+boolean_t   tosdb_record_delete(tosdb_record_t* record);
+boolean_t   tosdb_record_get(tosdb_record_t* record);
+iterator_t* tosdb_record_search(tosdb_record_t* record);
+boolean_t   tosdb_record_destroy(tosdb_record_t* record);
 
 uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid);
 
@@ -337,15 +342,33 @@ boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64
 
     return true;
 }
+
+boolean_t tosdb_record_upsert(tosdb_record_t* record) {
+    return tosdb_memtable_upsert(record, false);
+}
+
+boolean_t tosdb_record_delete(tosdb_record_t* record) {
+    return tosdb_memtable_upsert(record, true);
+}
+
+boolean_t tosdb_record_get(tosdb_record_t* record) {
+    if(!record) {
+        return false;
+    }
+
+    if(tosdb_memtable_get(record)) {
+        return true;
+    }
+
+    return tosdb_sstable_get(record);
+}
+
+iterator_t* tosdb_record_search(tosdb_record_t* record) {
     UNUSED(record);
-    UNUSED(colname);
-    UNUSED(type);
-    UNUSED(len);
-    UNUSED(value);
 
     NOTIMPLEMENTEDLOG(TOSDB);
 
-    return false;
+    return NULL;
 }
 
 uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid) {
@@ -569,6 +592,10 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec->get_data = tosdb_record_get_data;
     rec->set_data = tosdb_record_set_data;
     rec->destroy = tosdb_record_destroy;
+    rec->get_record = tosdb_record_get;
+    rec->upsert_record = tosdb_record_upsert;
+    rec->delete_record = tosdb_record_delete;
+    rec->search_record = tosdb_record_search;
 
     return rec;
 }

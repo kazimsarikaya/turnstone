@@ -190,6 +190,7 @@ typedef struct tosdb_block_sstable_list_item_index_pair_t {
 
 typedef struct tosdb_block_sstable_list_item_t {
     uint64_t                                   sstable_id;
+    uint64_t                                   level;
     uint64_t                                   record_count;
     uint64_t                                   valuelog_location;
     uint64_t                                   valuelog_size;
@@ -234,21 +235,20 @@ boolean_t             tosdb_persist(tosdb_t* tdb);
 boolean_t             tosdb_load_databases(tosdb_t* tdb);
 
 struct tosdb_database_t {
-    tosdb_t*     tdb;
-    boolean_t    is_open;
-    boolean_t    is_dirty;
-    boolean_t    is_deleted;
-    uint64_t     id;
-    uint64_t     table_next_id;
-    char_t*      name;
-    lock_t       lock;
-    map_t        tables;
-    uint64_t     table_new_count;
-    linkedlist_t table_new;
-    uint64_t     metadata_location;
-    uint64_t     metadata_size;
-    uint64_t     table_list_location;
-    uint64_t     table_list_size;
+    tosdb_t*  tdb;
+    boolean_t is_open;
+    boolean_t is_dirty;
+    boolean_t is_deleted;
+    uint64_t  id;
+    uint64_t  table_next_id;
+    char_t*   name;
+    lock_t    lock;
+    map_t     tables;
+    map_t     table_new;
+    uint64_t  metadata_location;
+    uint64_t  metadata_size;
+    uint64_t  table_list_location;
+    uint64_t  table_list_size;
 };
 
 boolean_t         tosdb_database_persist(tosdb_database_t* db);
@@ -288,6 +288,7 @@ struct tosdb_table_t {
     uint64_t          sstable_list_location;
     uint64_t          sstable_list_size;
     linkedlist_t      sstable_list_items;
+    linkedlist_t      sstable_lazy_load_lists;
 };
 
 boolean_t      tosdb_table_persist(tosdb_table_t* tbl);
@@ -345,7 +346,7 @@ struct tosdb_memtable_t {
 
 boolean_t tosdb_memtable_new(tosdb_table_t * tbl);
 boolean_t tosdb_memtable_free(tosdb_memtable_t* mt);
-boolean_t tosdb_memtable_upsert(tosdb_table_t * tbl, tosdb_record_t * record, boolean_t del);
+boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del);
 boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt);
 boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable_list_item_t* stli, uint64_t idx, tosdb_memtable_index_t* mt_idx);
 
@@ -362,9 +363,11 @@ typedef struct tosdb_record_key_t {
     uint8_t* key;
 }tosdb_record_key_t;
 
-data_t* tosdb_record_serialize(tosdb_record_t* record);
 data_t*   tosdb_record_serialize(tosdb_record_t* record);
 boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t len, const void* value);
 boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t* len, void** value);
+
+boolean_t tosdb_memtable_get(tosdb_record_t* record);
+boolean_t tosdb_sstable_get(tosdb_record_t* record);
 
 #endif

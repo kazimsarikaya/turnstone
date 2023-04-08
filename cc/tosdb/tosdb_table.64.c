@@ -24,9 +24,42 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
         return true;
     }
 
-    NOTIMPLEMENTEDLOG(TOSDB);
+    if(!tbl->sstable_lazy_load_lists) {
+        tbl->sstable_lazy_load_lists = linkedlist_create_list();
 
-    return false;
+        if(!tbl->sstable_lazy_load_lists) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable lazy list");
+
+            return false;
+        }
+    }
+
+    uint64_t st_list_loc = tbl->sstable_list_location;
+    uint64_t st_list_size = tbl->sstable_list_size;
+
+    while(st_list_loc != 0) {
+        tosdb_block_sstable_list_t* st_list = (tosdb_block_sstable_list_t*)tosdb_block_read(tbl->db->tdb, st_list_loc, st_list_size);
+
+        if(!st_list) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read sstable list for table %s", tbl->name);
+
+            return false;
+        }
+
+        linkedlist_list_insert(tbl->sstable_lazy_load_lists, st_list);
+
+        if(st_list->header.previous_block_invalid) {
+            memory_free(st_list);
+
+            break;
+        }
+
+        st_list_loc = st_list->header.previous_block_location;
+        st_list_size = st_list->header.previous_block_size;
+
+    }
+
+    return true;
 }
 
 boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
@@ -509,6 +542,10 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         linkedlist_destroy_with_data(tbl->sstable_list_items);
     }
 
+    if(tbl->sstable_lazy_load_lists) {
+        linkedlist_destroy_with_data(tbl->sstable_lazy_load_lists);
+    }
+
     memory_free(tbl->name);
     lock_destroy(tbl->lock);
     memory_free(tbl);
@@ -876,14 +913,6 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_in
     PRINTLOG(TOSDB, LOG_DEBUG, "index %lli for column %s is added to table %s", idx->id, colname, tbl->name);
 
     return true;
-}
-
-boolean_t tosdb_table_upsert(tosdb_table_t* tbl, tosdb_record_t* record) {
-    return tosdb_memtable_upsert(tbl, record, false);
-}
-
-boolean_t tosdb_table_delete(tosdb_table_t* tbl, tosdb_record_t* record) {
-    return tosdb_memtable_upsert(tbl, record, true);
 }
 
 boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {

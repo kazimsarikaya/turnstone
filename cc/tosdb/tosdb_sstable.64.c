@@ -6,4 +6,16 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <tosdb/sstable.h>
+#include <tosdb/tosdb.h>
+#include <tosdb/tosdb_internal.h>
+#include <video.h>
+
+
+boolean_t tosdb_sstable_get(tosdb_record_t* record) {
+    UNUSED(record);
+
+    NOTIMPLEMENTEDLOG(TOSDB);
+
+    return false;
+}
+

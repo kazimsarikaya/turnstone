@@ -432,6 +432,37 @@ typedef boolean_t (*tosdb_record_get_data_f)(tosdb_record_t * record, const char
  */
 typedef boolean_t (*tosdb_record_destroy_f)(tosdb_record_t* record);
 
+/**
+ * @brief updates or deletes record
+ * @param[in] tbl table interface
+ * @param[in] record record to upsert
+ * @return true if succeed
+ */
+typedef boolean_t (*tosdb_record_upsert_f)(tosdb_record_t* record);
+
+/**
+ * @brief deletes a record
+ * @param[in] tbl table interface
+ * @param[in] record a unique key
+ * @return deletes a record
+ */
+typedef boolean_t (*tosdb_record_delete_f)(tosdb_record_t* record);
+
+/**
+ * @brief gets a record
+ * @param[in] tbl table interface
+ * @param[in,out] record record for retrive. for in it must contain a indexed key. for out it is populated with values.
+ * @return true if record found. record populated with values.
+ */
+typedef boolean_t (*tosdb_record_get_f)(tosdb_record_t* record);
+
+/**
+ * @brief searches a record
+ * @param[in] tbl table interface
+ * @param[in] record secondary key of record for retrive
+ * @return the record itreator
+ */
+typedef iterator_t * (*tosdb_record_search_f)(tosdb_record_t* record);
 
 /**
  * @struct tosdb_record_t
@@ -469,6 +500,10 @@ struct tosdb_record_t {
     tosdb_record_get_bytearray_f get_bytearray;      ///< set bytearray
     tosdb_record_set_data_f      set_data; ///< set data
     tosdb_record_get_data_f      get_data; ///< get data
+    tosdb_record_get_f           get_record; ///< gets record from table
+    tosdb_record_search_f        search_record; ///< search records with secondary index
+    tosdb_record_upsert_f        upsert_record; ///< upsert record to the table
+    tosdb_record_delete_f        delete_record; ///< delete record from table
     tosdb_record_destroy_f       destroy; ///< destroy record
 };
 
@@ -478,39 +513,6 @@ struct tosdb_record_t {
  * @return record
  */
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl);
-
-/**
- * @brief updates or deletes record
- * @param[in] tbl table interface
- * @param[in] record record to upsert
- * @return true if succeed
- */
-boolean_t tosdb_table_upsert(tosdb_table_t* tbl, tosdb_record_t* record);
-
-/**
- * @brief deletes a record
- * @param[in] tbl table interface
- * @param[in] key a unique key
- * @return deletes a record
- */
-boolean_t tosdb_table_delete(tosdb_table_t* tbl, tosdb_record_t* key);
-
-/**
- * @brief gets a record
- * @param[in] tbl table interface
- * @param[in] key key for retrive
- * @return the record
- */
-tosdb_record_t* tosdb_table_get(tosdb_table_t* tbl, tosdb_record_t* key);
-
-/**
- * @brief searches a record
- * @param[in] tbl table interface
- * @param[in] key key for retrive
- * @return the record itreator
- */
-iterator_t* tosdb_table_search(tosdb_table_t* tbl, tosdb_record_t* key);
-
 
 #endif
 

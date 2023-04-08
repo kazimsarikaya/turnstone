@@ -249,9 +249,18 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
     return !error;
 }
 
-boolean_t tosdb_memtable_upsert(tosdb_table_t * tbl, tosdb_record_t * record, boolean_t del) {
-    if(!tbl || !tbl->is_open || !record || !record->context) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table or record is null");
+boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
+    if(!record || !record->context) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record is null");
+
+        return false;
+    }
+
+    tosdb_record_context_t* r_ctx = record->context;
+    tosdb_table_t* tbl = r_ctx->table;
+
+    if(!tbl || !tbl->is_open) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null or closed");
 
         return false;
     }
@@ -266,8 +275,6 @@ boolean_t tosdb_memtable_upsert(tosdb_table_t * tbl, tosdb_record_t * record, bo
             return false;
         }
     }
-
-    tosdb_record_context_t* r_ctx = record->context;
 
     if(map_size(tbl->indexes) != map_size(r_ctx->keys)) {
         lock_release(tbl->lock);
@@ -447,6 +454,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     stli->record_count = mt->record_count;
     stli->sstable_id = mt->id;
+    stli->level = 1;
     stli->valuelog_location = b_vl_loc;
     stli->valuelog_size = b_vl_size;
     stli->index_count = map_size(mt->indexes);
@@ -648,3 +656,126 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     return true;
 }
+
+boolean_t tosdb_memtable_get(tosdb_record_t* record) {
+    if(!record || !record->context) {
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    if(map_size(ctx->keys) != 1) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
+
+        return false;
+    }
+
+    iterator_t* iter = map_create_iterator(ctx->keys);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+
+        return false;
+    }
+
+    const tosdb_record_key_t* r_key = iter->get_item(iter);
+
+    iter->destroy(iter);
+
+    tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
+
+    item->key_hash = r_key->key_hash;
+    item->key_length = r_key->key_length;
+    memory_memcopy(r_key->key, item->key, item->key_length);
+
+    linkedlist_t mts = ctx->table->memtables;
+
+    boolean_t found = false;
+    const tosdb_memtable_index_item_t* found_item = NULL;
+    const tosdb_memtable_t* mt = NULL;
+
+    iter = linkedlist_iterator_create(mts);
+
+    uint64_t col_id = 0;
+
+    while(iter->end_of_iterator(iter) != 0) {
+        mt = iter->get_item(iter);
+
+        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+
+        col_id = mt_idx->ti->column_id;
+
+        iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+        if(s_iter->end_of_iterator(s_iter) != 0) {
+            found_item = s_iter->get_item(s_iter);
+            found = true;
+            s_iter->destroy(s_iter);
+
+            break;
+        }
+
+        s_iter->destroy(s_iter);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    memory_free(item);
+
+    if(!found) {
+        return false;
+    }
+
+    if(!found_item) {
+        return false;
+    }
+
+    if(found_item->is_deleted) {
+        return false;
+    }
+
+    lock_acquire(mt->tbl->lock);
+    uint64_t old_pos = buffer_get_position(mt->values);
+    buffer_seek(mt->values, found_item->offset, BUFFER_SEEK_DIRECTION_START);
+    uint8_t* f_d = buffer_get_bytes(mt->values, found_item->length);
+    buffer_seek(mt->values, old_pos, BUFFER_SEEK_DIRECTION_START);
+    lock_release(mt->tbl->lock);
+
+    data_t s_d = {0};
+    s_d.length = found_item->length;
+    s_d.type = DATA_TYPE_INT8_ARRAY;
+    s_d.value = f_d;
+
+    data_t* r_d = data_bson_deserialize(&s_d, DATA_SERIALIZE_WITH_ALL);
+
+    memory_free(f_d);
+
+    if(!r_d) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot deserialize data");
+        data_free(r_d);
+
+        return false;
+    }
+
+
+    data_t* tmp = r_d->value;
+
+    for(uint64_t i = 0; i < r_d->length; i++) {
+        uint64_t tmp_col_id = (uint64_t)tmp[i].name->value;
+
+        if(tmp_col_id == col_id) {
+            continue;
+        }
+
+        if(!tosdb_record_set_data_with_colid(record, tmp_col_id, tmp[i].type, tmp[i].length, tmp[i].value)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot populate record");
+        }
+    }
+
+    data_free(r_d);
+
+    return found;
+}
+
