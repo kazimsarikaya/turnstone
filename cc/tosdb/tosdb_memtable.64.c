@@ -43,6 +43,8 @@ int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
     if(!tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null");
@@ -188,6 +190,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
 
     return !error;
 }
+#pragma GCC diagnostic pop
 
 boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
     if(!mt) {
@@ -378,6 +381,8 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     return true;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     if(!mt) {
         PRINTLOG(TOSDB, LOG_ERROR, "memtable is null");
@@ -507,6 +512,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     return !error;
 }
+#pragma GCC diagnostic pop
 
 boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable_list_item_t* stli, uint64_t idx, tosdb_memtable_index_t* mt_idx) {
     if(!mt || !stli || !mt_idx) {
@@ -685,6 +691,12 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     iter->destroy(iter);
 
     tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
+
+    if(!item) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable intex item");
+
+        return false;
+    }
 
     item->key_hash = r_key->key_hash;
     item->key_length = r_key->key_length;

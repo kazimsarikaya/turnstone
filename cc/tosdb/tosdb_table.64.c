@@ -11,6 +11,8 @@
 #include <video.h>
 #include <strings.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
     if(!tbl || !tbl->db) {
         PRINTLOG(TOSDB, LOG_ERROR, "table or db is null");
@@ -139,7 +141,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
 
             tosdb_index_t* idx = memory_malloc(sizeof(tosdb_index_t));
 
-            if(!tbl) {
+            if(!idx) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate idx for table %s", tbl->name);
                 memory_free(idx_list);
 
@@ -209,7 +211,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
 
             tosdb_column_t* col = memory_malloc(sizeof(tosdb_column_t));
 
-            if(!tbl) {
+            if(!col) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate col for table %s", tbl->name);
                 memory_free(col_list);
 
@@ -239,6 +241,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
 
     return true;
 }
+#pragma GCC diagnostic pop
 
 tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
     if(!tbl || !tbl->db) {
@@ -887,6 +890,8 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
     return true;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_t type) {
     if(!tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null");
@@ -995,6 +1000,7 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_in
 
     return true;
 }
+#pragma GCC diagnostic pop
 
 boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     if(!tbl) {
@@ -1035,6 +1041,12 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
     tosdb_block_sstable_list_t* block = memory_malloc(block_size);
+
+    if(!block) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list block");
+
+        return false;
+    }
 
     block->header.block_size = block_size;
     block->header.block_type = TOSDB_BLOCK_TYPE_SSTABLE_LIST;

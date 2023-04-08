@@ -319,6 +319,12 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
 
     tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
 
+    if(!item) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index item");
+
+        return false;
+    }
+
     item->key_hash = r_key->key_hash;
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);

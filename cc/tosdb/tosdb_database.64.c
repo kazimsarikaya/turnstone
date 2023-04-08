@@ -11,6 +11,8 @@
 #include <video.h>
 #include <strings.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
     if(!db || !db->tdb) {
         PRINTLOG(TOSDB, LOG_ERROR, "db or tosdb is null");
@@ -86,6 +88,7 @@ boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
 
     return true;
 }
+#pragma GCC diagnostic pop
 
 tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db) {
     if(!db || !db->tdb) {

@@ -351,6 +351,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
     buffer_t db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
 
     if(!db_buffer) {
+        fclose(in);
         print_error("cannot create db buffer");
         return -1;
     }
@@ -360,6 +361,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
     if(!read_buf) {
         buffer_destroy(db_buffer);
         print_error("cannot create read buffer");
+        fclose(in);
 
         return -1;
     }
@@ -378,6 +380,8 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
     }
 
     memory_free(read_buf);
+
+    fclose(in);
 
     if(total_read != TOSDB_CAP) {
         buffer_destroy(db_buffer);
