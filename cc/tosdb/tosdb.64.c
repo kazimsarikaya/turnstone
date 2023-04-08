@@ -278,6 +278,8 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
     return res;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_load_databases(tosdb_t* tdb) {
     if(!tdb) {
         PRINTLOG(TOSDB, LOG_ERROR, "tosdb is null");
@@ -352,6 +354,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
 
     return true;
 }
+#pragma GCC diagnostic pop
 
 boolean_t tosdb_close(tosdb_t* tdb) {
     if(!tdb) {

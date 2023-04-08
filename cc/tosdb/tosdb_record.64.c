@@ -189,6 +189,8 @@ boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, 
     return tosdb_record_set_data_with_colid(record, col_id, type, len, value);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t len, const void* value) {
     if(!record || !record->context || !col_id) {
         PRINTLOG(TOSDB, LOG_ERROR, "record or colname is null");
@@ -271,6 +273,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
 
     return true;
 }
+#pragma GCC diagnostic pop
 
 boolean_t tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t* len, void** value) {
     if(!record || !record->context || !strlen(colname)) {
@@ -418,16 +421,16 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
 
     while(iter->end_of_iterator(iter) != 0) {
         data_t* d = (data_t*)iter->get_item(iter);
-        memory_free(d->name);
 
         if(d->type >= DATA_TYPE_STRING) {
             uint64_t col_id = (uint64_t)d->name->value;
 
-            if(!col_id || !tosdb_record_get_index_id(record, col_id)) {
+            if(!tosdb_record_get_index_id(record, col_id)) {
                 memory_free(d->value);
             }
         }
 
+        memory_free(d->name);
         memory_free(d);
 
         iter = iter->next(iter);
