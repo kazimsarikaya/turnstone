@@ -24,11 +24,11 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
         return true;
     }
 
-    if(!tbl->sstable_lazy_load_lists) {
-        tbl->sstable_lazy_load_lists = linkedlist_create_list();
+    if(!tbl->sstable_levels) {
+        tbl->sstable_levels = map_integer();
 
-        if(!tbl->sstable_lazy_load_lists) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable lazy list");
+        if(!tbl->sstable_levels) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels map");
 
             return false;
         }
@@ -46,7 +46,43 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             return false;
         }
 
-        linkedlist_list_insert(tbl->sstable_lazy_load_lists, st_list);
+        for(uint64_t i = 0; i < st_list->sstable_count; i++) {
+            uint64_t level = st_list->sstables[i].level;
+
+            uint64_t st_size = sizeof(tosdb_block_sstable_list_item_t);
+            st_size += sizeof(tosdb_block_sstable_list_item_index_pair_t) * st_list->sstables[i].index_count;
+
+            tosdb_block_sstable_list_item_t* st = memory_malloc(st_size);
+
+            if(!st) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list for level");
+                memory_free(st_list);
+
+                return false;
+            }
+
+            memory_memcopy(&st_list->sstables[i], st, st_size);
+
+
+            linkedlist_t st_l = (linkedlist_t)map_get(tbl->sstable_levels, (void*)level);
+
+            if(!st_l) {
+                st_l = linkedlist_create_queue();
+
+                if(!st_l) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list for level");
+                    memory_free(st_list);
+                    memory_free(st);
+
+                    return false;
+                }
+
+                map_insert(tbl->sstable_levels, (void*)level, st_l);
+            }
+
+            linkedlist_queue_push(st_l, st);
+
+        }
 
         if(st_list->header.previous_block_invalid) {
             memory_free(st_list);
@@ -56,6 +92,8 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
 
         st_list_loc = st_list->header.previous_block_location;
         st_list_size = st_list->header.previous_block_size;
+
+        memory_free(st_list);
 
     }
 
@@ -447,8 +485,28 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             tbl->current_memtable = NULL;
         }
 
-        if(tbl->sstable_list_items) {
-            linkedlist_destroy_with_data(tbl->sstable_list_items);
+        if(tbl->sstable_levels) {
+            iterator_t* stl_iter = map_create_iterator(tbl->sstable_levels);
+
+            if(!stl_iter) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels iterator");
+
+                return false;
+            }
+
+            while(stl_iter->end_of_iterator(stl_iter) != 0) {
+                linkedlist_t* st_list = (linkedlist_t*)stl_iter->get_item(stl_iter);
+
+                linkedlist_destroy_with_data(st_list);
+
+                stl_iter = stl_iter->next(stl_iter);
+            }
+
+            stl_iter->destroy(stl_iter);
+
+            map_destroy(tbl->sstable_levels);
+            tbl->sstable_levels = NULL;
+
         }
 
         tbl->is_open = false;
@@ -542,8 +600,27 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         linkedlist_destroy_with_data(tbl->sstable_list_items);
     }
 
-    if(tbl->sstable_lazy_load_lists) {
-        linkedlist_destroy_with_data(tbl->sstable_lazy_load_lists);
+    if(tbl->sstable_levels) {
+        iterator_t* stl_iter = map_create_iterator(tbl->sstable_levels);
+
+        if(!stl_iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels iterator");
+
+            return false;
+        }
+
+        while(stl_iter->end_of_iterator(stl_iter) != 0) {
+            linkedlist_t* st_list = (linkedlist_t*)stl_iter->get_item(stl_iter);
+
+            linkedlist_destroy_with_data(st_list);
+
+            stl_iter = stl_iter->next(stl_iter);
+        }
+
+        stl_iter->destroy(stl_iter);
+
+        map_destroy(tbl->sstable_levels);
+        tbl->sstable_levels = NULL;
     }
 
     memory_free(tbl->name);
