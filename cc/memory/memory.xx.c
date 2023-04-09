@@ -1,4 +1,5 @@
 /**
+ *
  * @file memory.xx.c
  * @brief main memory interface and functions implementation
  *
@@ -180,6 +181,10 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 }
 
 int8_t memory_memcopy(const void* source, const void* destination, size_t size){
+    if((!source && !destination) || !size) {
+        return 0;
+    }
+
     if(source == NULL || destination == NULL) {
         return -1;
     }
@@ -241,8 +246,20 @@ int8_t memory_memcopy(const void* source, const void* destination, size_t size){
 }
 
 int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
-    if(mem1 == NULL || mem2 == NULL) {
+    if(!size && ((!mem1 && !mem2) || (mem1 && mem2))) {
+        return 0;
+    }
+
+    if(!mem1 && mem2) {
         return -1;
+    }
+
+    if(mem1 && !mem2) {
+        return 1;
+    }
+
+    if(size && !mem1 && !mem2) {
+        return 0;
     }
 
     uint8_t* mem1_t = (uint8_t*)mem1;
