@@ -358,6 +358,10 @@ boolean_t tosdb_record_upsert(tosdb_record_t* record) {
 }
 
 boolean_t tosdb_record_delete(tosdb_record_t* record) {
+    if(tosdb_memtable_is_deleted(record)) {
+        return true;
+    }
+
     return tosdb_memtable_upsert(record, true);
 }
 

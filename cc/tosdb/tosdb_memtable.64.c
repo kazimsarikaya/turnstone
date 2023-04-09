@@ -693,6 +693,90 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     return true;
 }
 
+boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
+    if(!record || !record->context) {
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    if(map_size(ctx->keys) != 1) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
+
+        return false;
+    }
+
+    iterator_t* iter = map_create_iterator(ctx->keys);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+
+        return false;
+    }
+
+    const tosdb_record_key_t* r_key = iter->get_item(iter);
+
+    iter->destroy(iter);
+
+    tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
+
+    if(!item) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable intex item");
+
+        return false;
+    }
+
+    item->key_hash = r_key->key_hash;
+    item->key_length = r_key->key_length;
+    memory_memcopy(r_key->key, item->key, item->key_length);
+
+    linkedlist_t mts = ctx->table->memtables;
+
+    boolean_t found = false;
+    const tosdb_memtable_index_item_t* found_item = NULL;
+    const tosdb_memtable_t* mt = NULL;
+
+    iter = linkedlist_iterator_create(mts);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        mt = iter->get_item(iter);
+
+        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+
+        iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+        if(s_iter->end_of_iterator(s_iter) != 0) {
+            found_item = s_iter->get_item(s_iter);
+            found = true;
+            s_iter->destroy(s_iter);
+
+            break;
+        }
+
+        s_iter->destroy(s_iter);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    memory_free(item);
+
+    if(!found) {
+        return false;
+    }
+
+    if(!found_item) {
+        return false;
+    }
+
+    if(found_item->is_deleted) {
+        return true;
+    }
+
+    return false;
+}
+
 boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     if(!record || !record->context) {
         return false;

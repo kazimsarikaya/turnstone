@@ -45,7 +45,7 @@ Turnstone OS:
       ☐ Implement backend cache.
       ☐ Implement wal.
       ☐ Implement compaction.
-      ☐ Optimise delete.
+      ✔ Optimise delete. @done (2023-04-09 23:11)
       ☐ Implement secondary index and search.
     Network:
       ☐ Implement TCP
