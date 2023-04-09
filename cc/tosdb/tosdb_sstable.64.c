@@ -80,7 +80,19 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         return false;
     }
 
-    buffer_t buf_bf_in = buffer_encapsulate(st_idx->data, st_idx->bloomfilter_size);
+    tosdb_memtable_index_item_t* first = (tosdb_memtable_index_item_t*)st_idx->data;
+    tosdb_memtable_index_item_t* last = (tosdb_memtable_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_index_item_t) + first->key_length);
+
+    int8_t first_limit = tosdb_sstable_index_comparator(&first, &item);
+    int8_t last_limit = tosdb_sstable_index_comparator(&last, &item);
+
+    if(first_limit == 1 || last_limit == -1) {
+        memory_free(st_idx);
+
+        return false;
+    }
+
+    buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
     buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_size * 2);
 
     uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
@@ -131,7 +143,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     bloomfilter_destroy(bf);
 
 
-    buffer_t buf_idx_in = buffer_encapsulate(&st_idx->data[st_idx->bloomfilter_size], st_idx->index_size);
+    buffer_t buf_idx_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size + st_idx->bloomfilter_size, st_idx->index_size);
     buffer_t buf_idx_out = buffer_new_with_capacity(NULL, st_idx->index_size * 2);
 
     zc = zpack_unpack(buf_idx_in, buf_idx_out);

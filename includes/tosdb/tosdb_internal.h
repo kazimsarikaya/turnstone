@@ -213,6 +213,7 @@ typedef struct tosdb_block_sstable_index_t {
     uint64_t             table_id;
     uint64_t             sstable_id;
     uint64_t             index_id;
+    uint64_t             minmax_key_size;
     uint64_t             bloomfilter_size;
     uint64_t             index_size;
     uint8_t              data[];

@@ -575,6 +575,9 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
+    tosdb_memtable_index_item_t* first = NULL;
+    tosdb_memtable_index_item_t* last = NULL;
+
     buffer_t buf_id_in = buffer_new();
 
     iterator_t* iter = mt_idx->index->create_iterator(mt_idx->index);
@@ -582,12 +585,25 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_memtable_index_item_t* ii = (tosdb_memtable_index_item_t*) iter->get_item(iter);
 
+        if(!first) {
+            first = ii;
+        }
+
+        last = ii;
+
         buffer_append_bytes(buf_id_in, (uint8_t*)ii, sizeof(tosdb_memtable_index_item_t) + ii->key_length);
 
         iter = iter->next(iter);
     }
 
     iter->destroy(iter);
+
+    if(!first || !last) {
+        memory_free(bf_data);
+        memory_free(buf_id_in);
+
+        return false;
+    }
 
 
     buffer_seek(buf_id_in, 0, BUFFER_SEEK_DIRECTION_START);
@@ -622,7 +638,8 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
-    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + bf_size + index_size;
+    uint64_t minmax_key_size = 2 * sizeof(tosdb_memtable_index_item_t) + first->key_length + last->key_length;
+    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + bf_size + index_size + minmax_key_size;
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
 
     tosdb_block_sstable_index_t* b_si = memory_malloc(block_size);
@@ -642,14 +659,21 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_si->table_id = mt->tbl->id;
     b_si->sstable_id = mt->id;
     b_si->index_id = mt_idx->ti->id;
+    b_si->minmax_key_size = minmax_key_size;
     b_si->bloomfilter_size = bf_size;
     b_si->index_size = index_size;
 
     uint8_t* tmp = &b_si->data[0];
+    uint64_t offset = 0;
 
-    memory_memcopy(bf_data, tmp, bf_size);
+    memory_memcopy(first, tmp + offset, sizeof(tosdb_memtable_index_item_t) + first->key_length);
+    offset += sizeof(tosdb_memtable_index_item_t) + first->key_length;
+    memory_memcopy(last, tmp + offset, sizeof(tosdb_memtable_index_item_t) + last->key_length);
+    offset += sizeof(tosdb_memtable_index_item_t) + last->key_length;
+    memory_memcopy(bf_data, tmp + offset, bf_size);
+    offset += bf_size;
     memory_free(bf_data);
-    memory_memcopy(index_data, tmp + bf_size, index_size);
+    memory_memcopy(index_data, tmp + offset, index_size);
     memory_free(index_data);
 
     uint64_t block_loc = tosdb_block_write(mt->tbl->db->tdb, (tosdb_block_header_t*)b_si);
