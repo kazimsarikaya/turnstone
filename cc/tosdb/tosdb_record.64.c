@@ -220,22 +220,22 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         return false;
     }
 
-    void* l_value = memory_malloc(len);
-
-    if(!l_value) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create required item");
-        memory_free(col_value);
-        memory_free(name);
-
-        return false;
-    }
+    void* l_value = NULL;
 
     if(type == DATA_TYPE_STRING || type == DATA_TYPE_INT8_ARRAY) {
+        l_value = memory_malloc(len);
+
+        if(!l_value) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create required item");
+            memory_free(col_value);
+            memory_free(name);
+
+            return false;
+        }
+
         memory_memcopy(value, l_value, len);
         col_value->value = (void*)l_value;
     } else {
-        uint64_t tmp = (uint64_t)value;
-        memory_memcopy(&tmp, l_value, len);
         col_value->value = (void*)value;
     }
 
@@ -246,7 +246,14 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
     uint64_t idx_id = tosdb_record_get_index_id(record, col_id);
 
     if(idx_id) {
-        uint64_t key_hash = xxhash64_hash(l_value, len);
+        uint64_t key_hash = 0;
+
+        if(type < DATA_TYPE_STRING) {
+            key_hash = (uint64_t)value;
+            len = 0;
+        } else {
+            key_hash = xxhash64_hash(l_value, len);
+        }
 
         tosdb_record_key_t* r_key = memory_malloc(sizeof(tosdb_record_key_t));
 

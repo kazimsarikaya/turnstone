@@ -24,6 +24,10 @@ int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2) {
         return 1;
     }
 
+    if(!ti1->key_length && !ti1->key_length) {
+        return 0;
+    }
+
     uint64_t min = MIN(ti1->key_length, ti2->key_length);
 
     int8_t res = memory_memcompare(ti1->key, ti2->key, min);
