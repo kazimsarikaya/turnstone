@@ -219,7 +219,7 @@ uint8_t  buffer_peek_byte(buffer_t buffer) {
     return res;
 }
 
-uint8_t buffer_peek_buffer_at_position(buffer_t buffer, uint64_t position) {
+uint8_t buffer_peek_byte_at_position(buffer_t buffer, uint64_t position) {
     if(!buffer) {
         return 0;
     }
