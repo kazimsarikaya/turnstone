@@ -23,7 +23,7 @@ LD = $(OUTPUT)/linker.bin
 CFLAGS += -D___BITS=64 -D___EFIBUILD=1 -std=gnu11 -O2 -I../includes -I./
 CFLAGS += -ffreestanding -nostdlib -nostdinc -Wall -Werror -Wextra -mgeneral-regs-only
 # CFLAGS += -fpic -fno-plt -mcmodel=large -fno-jump-tables  
-CFLAGS += -ffunction-sections -fdata-sections -mabi=ms -c ${CCXXEXTRAFLAGS}
+CFLAGS += -ffunction-sections -fdata-sections -c ${CCXXEXTRAFLAGS}
 CFLAGS += -Wshadow -Wpointer-arith -Wcast-align \
           -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
           -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
