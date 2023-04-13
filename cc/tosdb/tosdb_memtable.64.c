@@ -116,7 +116,13 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
             break;
         }
 
-        mt_idx->index = bplustree_create_index_with_unique(32, tosdb_memtable_index_comparator, true);
+        boolean_t idx_unique = true;
+
+        if(index->type == TOSDB_INDEX_SECONDARY) {
+            idx_unique = false;
+        }
+
+        mt_idx->index = bplustree_create_index_with_unique(32, tosdb_memtable_index_comparator, idx_unique);
 
         if(!mt_idx->index) {
             error = true;
@@ -439,7 +445,6 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     b_vl->data_size = ol;
     memory_memcopy(b_vl_data, b_vl->data, ol);
     memory_free(b_vl_data);
-    buffer_destroy(valuelog_out);
 
     uint64_t b_vl_loc = tosdb_block_write(mt->tbl->db->tdb, (tosdb_block_header_t*)b_vl);
 
