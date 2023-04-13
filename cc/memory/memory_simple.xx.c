@@ -223,14 +223,30 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
             VALGRIND_MAKE_MEM_NOACCESS(prev, sizeof(heapinfo_t));
 #endif
         } else {
-
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+#endif
             while(prev->next != NULL && prev->next < item) {
+#if ___TESTMODE == 1
+                heapinfo_t* tmp = prev;
+#endif
                 prev = prev->next;
+#if ___TESTMODE == 1
+                VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+                VALGRIND_MAKE_MEM_NOACCESS(tmp, sizeof(heapinfo_t));
+#endif
             }
 
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+#endif
             item->next = prev->next;
             prev->next = item;
             item->previous = prev;
+
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(prev, sizeof(heapinfo_t));
+#endif
 
             if(item->next) {
 #if ___TESTMODE == 1
@@ -270,6 +286,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             VALGRIND_MAKE_MEM_DEFINED(simple_heap->fast_classes[t_size - 1].head, sizeof(heapinfo_t));
 #endif
             simple_heap->fast_classes[t_size - 1].head->previous = NULL;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(simple_heap->fast_classes[t_size - 1].head, sizeof(heapinfo_t));
+#endif
         }
 
         if(res == simple_heap->fast_classes[t_size - 1].tail) {
@@ -277,6 +296,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             VALGRIND_MAKE_MEM_DEFINED(simple_heap->fast_classes[t_size - 1].tail, sizeof(heapinfo_t));
 #endif
             simple_heap->fast_classes[t_size - 1].tail = NULL;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(simple_heap->fast_classes[t_size - 1].tail, sizeof(heapinfo_t));
+#endif
         }
 
         res->previous = NULL;
@@ -299,13 +321,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
     empty_hi = simple_heap->first_empty;
 
-
-#if ___TESTMODE == 1
-    VALGRIND_MAKE_MEM_DEFINED(empty_hi, sizeof(heapinfo_t));
-#endif
-
     //find first empty and enough slot
     while(1) { // size enough?
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_DEFINED(empty_hi, sizeof(heapinfo_t));
+#endif
+
         if(align) {
             if(empty_hi->size == (t_size + 1)) {
                 break;
@@ -320,6 +341,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_hi = empty_hi->next;
 
 #if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_NOACCESS(empty_hi_t, sizeof(heapinfo_t));
         VALGRIND_MAKE_MEM_DEFINED(empty_hi, sizeof(heapinfo_t));
 #endif
 
@@ -426,7 +448,14 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             VALGRIND_MAKE_MEM_DEFINED(empty_tmp->next, sizeof(heapinfo_t));
 #endif
             empty_tmp->next->previous = empty_tmp;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(empty_tmp->next, sizeof(heapinfo_t));
+#endif
         }
+
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_NOACCESS(empty_tmp, sizeof(heapinfo_t));
+#endif
 
         empty_hi->next = empty_tmp;
 
@@ -443,6 +472,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             VALGRIND_MAKE_MEM_DEFINED(empty_hi->previous, sizeof(heapinfo_t));
 #endif
             empty_hi->previous->next = empty_hi->next; // set that's next to the empty_hi' next
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(empty_hi->previous, sizeof(heapinfo_t));
+#endif
         } else {
             simple_heap->first_empty = empty_hi->next; //update first_empty because we are removing first_empty
         }
@@ -452,6 +484,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             VALGRIND_MAKE_MEM_DEFINED(empty_hi->next, sizeof(heapinfo_t));
 #endif
             empty_hi->next->previous = empty_hi->previous;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(empty_hi->next, sizeof(heapinfo_t));
+#endif
         }
 
         // cleanup pointers and set used
@@ -495,13 +530,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     // probable right side: at the end of hi_a
     heapinfo_t* hi_r = hi_a + hi_a_size + 1;
 
+#if ___TESTMODE == 1
+    VALGRIND_MAKE_MEM_DEFINED(hi_r, sizeof(heapinfo_t));
+#endif
 
     if(empty_hi + empty_hi->size > hi_r + 1 ) {
         // we have empty space between hi_r and end of empty_hi, let's divide it
-#if ___TESTMODE == 1
-        VALGRIND_MAKE_MEM_DEFINED(hi_r, sizeof(heapinfo_t));
-#endif
-
         hi_r->magic = HEAP_INFO_MAGIC;
         hi_r->padding = HEAP_INFO_PADDING;
         hi_r->flags = HEAP_INFO_FLAG_USED;
@@ -560,6 +594,14 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
         simple_heap->free_size -= sizeof(heapinfo_t);
     }
+
+#if ___TESTMODE == 1
+    VALGRIND_MAKE_MEM_NOACCESS(empty_hi, sizeof(heapinfo_t));
+
+    if(right_exists) {
+        VALGRIND_MAKE_MEM_NOACCESS(hi_r, sizeof(heapinfo_t));
+    }
+#endif
 
     // memory_simple_insert_sorted(simple_heap, 1, hi_a); // add area used
 
@@ -645,6 +687,9 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
             VALGRIND_MAKE_MEM_DEFINED(simple_heap->fast_classes[hi->size - 2].tail, sizeof(heapinfo_t));
 #endif
             simple_heap->fast_classes[hi->size - 2].tail->next = hi;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(simple_heap->fast_classes[hi->size - 2].tail, sizeof(heapinfo_t));
+#endif
             simple_heap->fast_classes[hi->size - 2].tail = hi;
         }
     } else {
