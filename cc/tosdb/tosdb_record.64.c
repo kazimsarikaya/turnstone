@@ -270,10 +270,6 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         r_key->key = (uint8_t*)l_value;
 
         map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
-    } else {
-        if(type < DATA_TYPE_STRING) {
-            memory_free(l_value);
-        }
     }
 
     map_insert(ctx->columns, (void*)col_id, col_value);
