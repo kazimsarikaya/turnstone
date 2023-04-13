@@ -65,6 +65,10 @@ int8_t tokenizer_destroy(iterator_t* iter) {
 
     tokenizer_iterator_ctx_t* ctx = iter->metadata;
 
+    if(ctx->item) {
+        memory_free(ctx->item);
+    }
+
     memory_free(ctx);
     memory_free(iter);
 
@@ -82,12 +86,7 @@ int8_t tokenizer_end_of_iterator(iterator_t* iter) {
         return -2;
     }
 
-    buffer_t buf = ctx->buf;
-
-    uint64_t pos = buffer_get_position(buf);
-    uint64_t len = buffer_get_length(buf);
-
-    if(!ctx->item && pos == len) {
+    if(!ctx->item) {
         return 0;
     }
 
@@ -113,6 +112,8 @@ iterator_t* tokenizer_next(iterator_t* iter) {
     uint64_t len = buffer_get_length(buf);
 
     if(pos == len) {
+        ctx->item = NULL;
+
         return iter;
     }
 
@@ -133,12 +134,20 @@ iterator_t* tokenizer_next(iterator_t* iter) {
         c = buffer_peek_byte_at_position(ctx->buf, pos);
     }
 
+    if(pos == len) {
+        ctx->item = NULL;
+
+        return iter;
+    }
+
     buffer_seek(ctx->buf, pos, BUFFER_SEEK_DIRECTION_START);
 
     if(tokenizer_is_in_list(iter, c, ctx->delimeters, &type)) {
         token_t* token = memory_malloc(sizeof(token_t) + 2);
 
         if(!token) {
+            ctx->item = NULL;
+
             return iter;
         }
 
@@ -165,6 +174,8 @@ iterator_t* tokenizer_next(iterator_t* iter) {
     }
 
     if(pos == len) {
+        ctx->item = NULL;
+
         return iter;
     }
 
@@ -172,6 +183,8 @@ iterator_t* tokenizer_next(iterator_t* iter) {
     buffer_t res_buf = buffer_new();
 
     if(!res_buf) {
+        ctx->item = NULL;
+
         return iter;
     }
 
@@ -201,6 +214,7 @@ iterator_t* tokenizer_next(iterator_t* iter) {
     token_t* item = memory_malloc(sizeof(token_t) + buffer_get_length(res_buf) + 1);
 
     if(!item) {
+        ctx->item = NULL;
         buffer_destroy(res_buf);
 
         return iter;
