@@ -10,7 +10,7 @@ static int32_t zpack_count_similar(buffer_t in,  int64_t p, int64_t in_p) {
     int32_t similar = 0;
     int64_t in_len = buffer_get_length(in);
 
-    while (in_p < in_len && buffer_peek_buffer_at_position(in, p) == buffer_peek_buffer_at_position(in, in_p)) {
+    while (in_p < in_len && buffer_peek_byte_at_position(in, p) == buffer_peek_byte_at_position(in, in_p)) {
         similar++;
         p++;
         in_p++;
@@ -113,7 +113,7 @@ int64_t zpack_unpack(buffer_t in, buffer_t out) {
             int64_t o_p = buffer_get_position(out);
 
             while(size-- >= 0 ) {
-                out = buffer_append_byte(out, buffer_peek_buffer_at_position(out, o_p + offset));
+                out = buffer_append_byte(out, buffer_peek_byte_at_position(out, o_p + offset));
                 o_p++;
             }
         }
