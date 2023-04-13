@@ -60,7 +60,7 @@ bloomfilter_t* bloomfilter_new(uint64_t entry_count, float64_t error) {
 
     uint64_t bc = (res->bit_count + 63) / 64;
 
-    res->bits = memory_malloc(bc);
+    res->bits = memory_malloc(bc * sizeof(uint64_t));
 
     if(!res->bits) {
         memory_free(res);
@@ -127,7 +127,7 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf) {
         return NULL;
     }
 
-    data_t d;
+    data_t d = {0};
     d.type = DATA_TYPE_DATA;
     d.length = 7;
 
