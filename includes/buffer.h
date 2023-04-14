@@ -37,7 +37,7 @@ boolean_t buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction_t
 int8_t    buffer_destroy(buffer_t buffer);
 buffer_t  buffer_encapsulate(uint8_t* data, uint64_t length);
 uint64_t  buffer_remaining(buffer_t buffer);
-uint8_t   buffer_peek_buffer_at_position(buffer_t buffer, uint64_t position);
+uint8_t   buffer_peek_byte_at_position(buffer_t buffer, uint64_t position);
 uint8_t   buffer_peek_byte(buffer_t buffer);
 
 #endif

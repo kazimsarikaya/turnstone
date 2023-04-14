@@ -24,6 +24,10 @@ int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2) {
         return 1;
     }
 
+    if(!ti1->key_length && !ti1->key_length) {
+        return 0;
+    }
+
     uint64_t min = MIN(ti1->key_length, ti2->key_length);
 
     int8_t res = memory_memcompare(ti1->key, ti2->key, min);
@@ -42,6 +46,42 @@ int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2) {
 
     return 0;
 }
+
+int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2) {
+    const tosdb_memtable_secondary_index_item_t* ti1 = (tosdb_memtable_secondary_index_item_t*)i1;
+    const tosdb_memtable_secondary_index_item_t* ti2 = (tosdb_memtable_secondary_index_item_t*)i2;
+
+    if(ti1->secondary_key_hash < ti2->secondary_key_hash) {
+        return -1;
+    }
+
+    if(ti1->secondary_key_hash > ti2->secondary_key_hash) {
+        return 1;
+    }
+
+    if(!ti1->secondary_key_length && !ti1->secondary_key_length) {
+        return 0;
+    }
+
+    uint64_t min = MIN(ti1->secondary_key_length, ti2->secondary_key_length);
+
+    int8_t res = memory_memcompare(ti1->data, ti2->data, min);
+
+    if(res != 0) {
+        return res;
+    }
+
+    if(ti1->secondary_key_length < ti2->secondary_key_length) {
+        return -1;
+    }
+
+    if(ti1->secondary_key_length > ti2->secondary_key_length) {
+        return 1;
+    }
+
+    return 0;
+}
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -112,7 +152,15 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
             break;
         }
 
-        mt_idx->index = bplustree_create_index_with_unique(32, tosdb_memtable_index_comparator, true);
+        boolean_t idx_unique = true;
+        index_key_comparator_f cmp = tosdb_memtable_index_comparator;
+
+        if(index->type == TOSDB_INDEX_SECONDARY) {
+            idx_unique = false;
+            cmp = tosdb_memtable_secondary_index_comparator;
+        }
+
+        mt_idx->index = bplustree_create_index_with_unique(32, cmp, idx_unique);
 
         if(!mt_idx->index) {
             error = true;
@@ -280,10 +328,19 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     }
 
     if(map_size(tbl->indexes) != map_size(r_ctx->keys)) {
-        lock_release(tbl->lock);
-        PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
+        if(del) {
+            if(!tosdb_memtable_get(record)) {
+                lock_release(tbl->lock);
+                PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
 
-        return false;
+                return false;
+            }
+        } else {
+            lock_release(tbl->lock);
+            PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
+
+            return false;
+        }
     }
 
 
@@ -320,6 +377,8 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
         memory_free(sd);
     }
 
+    boolean_t need_rc_inc = true;
+
     iterator_t* iter = map_create_iterator(tbl->indexes);
 
     while(iter->end_of_iterator(iter) != 0) {
@@ -344,38 +403,95 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
         }
 
 
+        if(index->type != TOSDB_INDEX_SECONDARY) {
+            tosdb_memtable_index_item_t* idx_item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
 
-        tosdb_memtable_index_item_t* idx_item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
+            if(!idx_item) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index item for table %s", tbl->name);
+                lock_release(tbl->lock);
 
-        if(!idx_item) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index item for table %s", tbl->name);
-            lock_release(tbl->lock);
+                return false;
+            }
 
-            return false;
+            idx_item->is_deleted = del;
+            memory_memcopy(r_key->key, idx_item->key, r_key->key_length);
+            idx_item->key_length = r_key->key_length;
+            idx_item->key_hash = r_key->key_hash;
+            idx_item->length = length;
+            idx_item->offset = offset;
+
+            uint8_t* u8_key = r_key->key;
+            uint64_t u8_key_length = r_key->key_length;
+
+            if(!u8_key_length) {
+                u8_key_length = sizeof(uint64_t);
+                u8_key = (uint8_t*)&r_key->key_hash;
+            }
+
+            data_t d_key = {0};
+            d_key.type = DATA_TYPE_INT8_ARRAY;
+            d_key.length = u8_key_length;
+            d_key.value = u8_key;
+
+            bloomfilter_add(mt_idx->bloomfilter, &d_key);
+
+            tosdb_memtable_index_item_t* old_item = NULL;
+
+            mt_idx->index->insert(mt_idx->index, idx_item, idx_item, (void**)&old_item);
+
+            if(old_item) {
+                memory_free(old_item);
+                need_rc_inc = false;
+            }
+
+        } else {
+            const tosdb_record_key_t* pri_r_key = map_get(r_ctx->keys, (void*)tbl->primary_index_id);
+            uint64_t sec_idx_item_len = sizeof(tosdb_memtable_secondary_index_item_t) + r_key->key_length + pri_r_key->key_length;
+
+            tosdb_memtable_secondary_index_item_t* sec_idx_item = memory_malloc(sec_idx_item_len);
+
+            if(!sec_idx_item) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable secondary index item for table %s", tbl->name);
+                lock_release(tbl->lock);
+
+                return false;
+            }
+
+            sec_idx_item->secondary_key_hash = r_key->key_hash;
+            sec_idx_item->secondary_key_length = r_key->key_length;
+            sec_idx_item->primary_key_hash = pri_r_key->key_hash;
+            sec_idx_item->primary_key_length = pri_r_key->key_length;
+            sec_idx_item->is_primary_key_deleted = del;
+
+            memory_memcopy(r_key->key, sec_idx_item->data, r_key->key_length);
+            memory_memcopy(pri_r_key->key, sec_idx_item->data + r_key->key_length, pri_r_key->key_length);
+
+            uint8_t* u8_key = r_key->key;
+            uint64_t u8_key_length = r_key->key_length;
+
+            if(!u8_key_length) {
+                u8_key_length = sizeof(uint64_t);
+                u8_key = (uint8_t*)&r_key->key_hash;
+            }
+
+            data_t d_key = {0};
+            d_key.type = DATA_TYPE_INT8_ARRAY;
+            d_key.length = u8_key_length;
+            d_key.value = u8_key;
+
+            bloomfilter_add(mt_idx->bloomfilter, &d_key);
+
+            mt_idx->index->insert(mt_idx->index, sec_idx_item, sec_idx_item, NULL);
         }
-
-        idx_item->is_deleted = del;
-        memory_memcopy(r_key->key, idx_item->key, r_key->key_length);
-        idx_item->key_length = r_key->key_length;
-        idx_item->key_hash = r_key->key_hash;
-        idx_item->length = length;
-        idx_item->offset = offset;
-
-        data_t d_key = {0};
-        d_key.type = DATA_TYPE_INT8_ARRAY;
-        d_key.length = idx_item->key_length;
-        d_key.value = r_key->key;
-
-        bloomfilter_add(mt_idx->bloomfilter, &d_key);
-
-        mt_idx->index->insert(mt_idx->index, idx_item, idx_item, NULL);
 
         iter = iter->next(iter);
     }
 
     iter->destroy(iter);
 
-    tbl->current_memtable->record_count++;
+    if(need_rc_inc) {
+        tbl->current_memtable->record_count++;
+    }
 
     lock_release(tbl->lock);
     return true;
@@ -435,7 +551,6 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     b_vl->data_size = ol;
     memory_memcopy(b_vl_data, b_vl->data, ol);
     memory_free(b_vl_data);
-    buffer_destroy(valuelog_out);
 
     uint64_t b_vl_loc = tosdb_block_write(mt->tbl->db->tdb, (tosdb_block_header_t*)b_vl);
 
@@ -480,6 +595,8 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)iter->get_item(iter);
 
         error |= !tosdb_memtable_index_persist(mt, stli, idx, mt_idx);
+
+        idx++;
 
         iter = iter->next(iter);
     }
@@ -571,19 +688,57 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
+    void* first_key = NULL;
+    uint64_t first_key_length = 0;
+    void* last_key = NULL;
+    uint64_t last_key_length = 0;
+
     buffer_t buf_id_in = buffer_new();
 
     iterator_t* iter = mt_idx->index->create_iterator(mt_idx->index);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_memtable_index_item_t* ii = (tosdb_memtable_index_item_t*) iter->get_item(iter);
+    if(mt_idx->ti->type != TOSDB_INDEX_SECONDARY) {
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_memtable_index_item_t* ii = (tosdb_memtable_index_item_t*) iter->get_item(iter);
 
-        buffer_append_bytes(buf_id_in, (uint8_t*)ii, sizeof(tosdb_memtable_index_item_t) + ii->key_length);
+            if(!first_key) {
+                first_key = ii;
+                first_key_length = sizeof(tosdb_memtable_index_item_t) + ii->key_length;
+            }
 
-        iter = iter->next(iter);
+            last_key = ii;
+            last_key_length = sizeof(tosdb_memtable_index_item_t) + ii->key_length;
+
+            buffer_append_bytes(buf_id_in, (uint8_t*)ii, last_key_length);
+
+            iter = iter->next(iter);
+        }
+    } else {
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_memtable_secondary_index_item_t* ii = (tosdb_memtable_secondary_index_item_t*) iter->get_item(iter);
+
+            if(!first_key) {
+                first_key = ii;
+                first_key_length = sizeof(tosdb_memtable_secondary_index_item_t) + ii->secondary_key_length + ii->primary_key_length;
+            }
+
+            last_key = ii;
+            last_key_length = sizeof(tosdb_memtable_secondary_index_item_t) + ii->secondary_key_length + ii->primary_key_length;
+
+            buffer_append_bytes(buf_id_in, (uint8_t*)ii, last_key_length);
+
+            iter = iter->next(iter);
+        }
     }
 
     iter->destroy(iter);
+
+    if(!first_key || !last_key) {
+        memory_free(bf_data);
+        memory_free(buf_id_in);
+
+        return false;
+    }
 
 
     buffer_seek(buf_id_in, 0, BUFFER_SEEK_DIRECTION_START);
@@ -618,7 +773,8 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
-    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + bf_size + index_size;
+    uint64_t minmax_key_size = first_key_length + last_key_length;
+    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + bf_size + index_size + minmax_key_size;
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
 
     tosdb_block_sstable_index_t* b_si = memory_malloc(block_size);
@@ -638,14 +794,21 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_si->table_id = mt->tbl->id;
     b_si->sstable_id = mt->id;
     b_si->index_id = mt_idx->ti->id;
+    b_si->minmax_key_size = minmax_key_size;
     b_si->bloomfilter_size = bf_size;
     b_si->index_size = index_size;
 
     uint8_t* tmp = &b_si->data[0];
+    uint64_t offset = 0;
 
-    memory_memcopy(bf_data, tmp, bf_size);
+    memory_memcopy(first_key, tmp + offset, first_key_length);
+    offset += first_key_length;
+    memory_memcopy(last_key, tmp + offset, last_key_length);
+    offset += last_key_length;
+    memory_memcopy(bf_data, tmp + offset, bf_size);
+    offset += bf_size;
     memory_free(bf_data);
-    memory_memcopy(index_data, tmp + bf_size, index_size);
+    memory_memcopy(index_data, tmp + offset, index_size);
     memory_free(index_data);
 
     uint64_t block_loc = tosdb_block_write(mt->tbl->db->tdb, (tosdb_block_header_t*)b_si);
@@ -663,6 +826,90 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     stli->indexes[idx].index_size = block_size;
 
     return true;
+}
+
+boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
+    if(!record || !record->context) {
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    if(map_size(ctx->keys) != 1) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
+
+        return false;
+    }
+
+    iterator_t* iter = map_create_iterator(ctx->keys);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+
+        return false;
+    }
+
+    const tosdb_record_key_t* r_key = iter->get_item(iter);
+
+    iter->destroy(iter);
+
+    tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
+
+    if(!item) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable intex item");
+
+        return false;
+    }
+
+    item->key_hash = r_key->key_hash;
+    item->key_length = r_key->key_length;
+    memory_memcopy(r_key->key, item->key, item->key_length);
+
+    linkedlist_t mts = ctx->table->memtables;
+
+    boolean_t found = false;
+    const tosdb_memtable_index_item_t* found_item = NULL;
+    const tosdb_memtable_t* mt = NULL;
+
+    iter = linkedlist_iterator_create(mts);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        mt = iter->get_item(iter);
+
+        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+
+        iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+        if(s_iter->end_of_iterator(s_iter) != 0) {
+            found_item = s_iter->get_item(s_iter);
+            found = true;
+            s_iter->destroy(s_iter);
+
+            break;
+        }
+
+        s_iter->destroy(s_iter);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    memory_free(item);
+
+    if(!found) {
+        return false;
+    }
+
+    if(!found_item) {
+        return false;
+    }
+
+    if(found_item->is_deleted) {
+        return true;
+    }
+
+    return false;
 }
 
 boolean_t tosdb_memtable_get(tosdb_record_t* record) {
@@ -703,6 +950,12 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     memory_memcopy(r_key->key, item->key, item->key_length);
 
     linkedlist_t mts = ctx->table->memtables;
+
+    if(linkedlist_size(mts) == 0) {
+        memory_free(item);
+
+        return false;
+    }
 
     boolean_t found = false;
     const tosdb_memtable_index_item_t* found_item = NULL;
@@ -790,5 +1043,100 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     data_free(r_d);
 
     return found;
+}
+
+boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
+    if(!record || !record->context) {
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    if(map_size(ctx->keys) != 1) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
+
+        return false;
+    }
+
+    iterator_t* iter = map_create_iterator(ctx->keys);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+
+        return false;
+    }
+
+    const tosdb_record_key_t* r_key = iter->get_item(iter);
+
+    iter->destroy(iter);
+
+    tosdb_memtable_secondary_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_secondary_index_item_t) + r_key->key_length);
+
+    if(!item) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable secondary index item");
+
+        return false;
+    }
+
+    item->secondary_key_hash = r_key->key_hash;
+    item->secondary_key_length = r_key->key_length;
+    memory_memcopy(r_key->key, item->data, item->secondary_key_length);
+
+    linkedlist_t mts = ctx->table->memtables;
+
+    if(linkedlist_size(mts) == 0) {
+        memory_free(item);
+
+        return true;
+    }
+
+    const tosdb_memtable_t* mt = NULL;
+    boolean_t error = false;
+
+    iter = linkedlist_iterator_create(mts);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        mt = iter->get_item(iter);
+
+        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+
+        iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+        while(s_iter->end_of_iterator(s_iter) != 0) {
+            const tosdb_memtable_secondary_index_item_t* s_idx_item = s_iter->get_item(s_iter);
+
+            uint64_t idx_item_len = sizeof(tosdb_memtable_index_item_t) + s_idx_item->primary_key_length;
+
+            tosdb_memtable_index_item_t* res = memory_malloc(idx_item_len);
+
+            if(!res) {
+                error = true;
+
+                break;
+            }
+
+            res->is_deleted = s_idx_item->is_primary_key_deleted;
+            res->key_hash = s_idx_item->primary_key_hash;
+            res->key_length = s_idx_item->primary_key_length;
+            memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
+
+            if(!set_append(results, res)) {
+                memory_free(res);
+            }
+
+            s_iter = s_iter->next(s_iter);
+        }
+
+        s_iter->destroy(s_iter);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    memory_free(item);
+
+
+    return !error;
 }
 

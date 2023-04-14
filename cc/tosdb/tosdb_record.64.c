@@ -12,42 +12,42 @@
 #include <strings.h>
 #include <iterator.h>
 #include <xxhash.h>
+#include <set.h>
 
-boolean_t   tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value);
-boolean_t   tosdb_record_get_boolean(tosdb_record_t * record, const char_t* colname, boolean_t* value);
-boolean_t   tosdb_record_set_char(tosdb_record_t * record, const char_t* colname, const char_t value);
-boolean_t   tosdb_record_get_char(tosdb_record_t * record, const char_t* colname, char_t* value);
-boolean_t   tosdb_record_set_int8(tosdb_record_t * record, const char_t* colname, const int8_t value);
-boolean_t   tosdb_record_get_int8(tosdb_record_t * record, const char_t* colname, int8_t* value);
-boolean_t   tosdb_record_set_uint8(tosdb_record_t * record, const char_t* colname, const uint8_t value);
-boolean_t   tosdb_record_get_uint8(tosdb_record_t * record, const char_t* colname, uint8_t* value);
-boolean_t   tosdb_record_set_int16(tosdb_record_t * record, const char_t* colname, const int16_t value);
-boolean_t   tosdb_record_get_int16(tosdb_record_t * record, const char_t* colname, int16_t* value);
-boolean_t   tosdb_record_set_uint16(tosdb_record_t * record, const char_t* colname, const uint16_t value);
-boolean_t   tosdb_record_get_uint16(tosdb_record_t * record, const char_t* colname, uint16_t* value);
-boolean_t   tosdb_record_set_int32(tosdb_record_t * record, const char_t* colname, const int32_t value);
-boolean_t   tosdb_record_get_int32(tosdb_record_t * record, const char_t* colname, int32_t* value);
-boolean_t   tosdb_record_set_uint32(tosdb_record_t * record, const char_t* colname, const uint32_t value);
-boolean_t   tosdb_record_get_uint32(tosdb_record_t * record, const char_t* colname, uint32_t* value);
-boolean_t   tosdb_record_set_int64(tosdb_record_t * record, const char_t* colname, const int64_t value);
-boolean_t   tosdb_record_get_int64(tosdb_record_t * record, const char_t* colname, int64_t* value);
-boolean_t   tosdb_record_set_uint64(tosdb_record_t * record, const char_t* colname, const uint64_t value);
-boolean_t   tosdb_record_get_uint64(tosdb_record_t * record, const char_t* colname, uint64_t* value);
-boolean_t   tosdb_record_set_string(tosdb_record_t * record, const char_t* colname, const char_t* value);
-boolean_t   tosdb_record_get_string(tosdb_record_t * record, const char_t* colname, char_t** value);
-boolean_t   tosdb_record_set_float32(tosdb_record_t * record, const char_t* colname, const float32_t value);
-boolean_t   tosdb_record_get_float32(tosdb_record_t * record, const char_t* colname, float32_t* value);
-boolean_t   tosdb_record_set_float64(tosdb_record_t * record, const char_t* colname, const float64_t value);
-boolean_t   tosdb_record_get_float64(tosdb_record_t * record, const char_t* colname, float64_t* value);
-boolean_t   tosdb_record_set_bytearray(tosdb_record_t * record, const char_t* colname, uint64_t len, const uint8_t* value);
-boolean_t   tosdb_record_get_bytearray(tosdb_record_t * record, const char_t* colname, uint64_t* len, uint8_t** value);
-boolean_t   tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t len, const void* value);
-boolean_t   tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t* len, void** value);
-boolean_t   tosdb_record_upsert(tosdb_record_t* record);
-boolean_t   tosdb_record_delete(tosdb_record_t* record);
-boolean_t   tosdb_record_get(tosdb_record_t* record);
-iterator_t* tosdb_record_search(tosdb_record_t* record);
-boolean_t   tosdb_record_destroy(tosdb_record_t* record);
+boolean_t tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value);
+boolean_t tosdb_record_get_boolean(tosdb_record_t * record, const char_t* colname, boolean_t* value);
+boolean_t tosdb_record_set_char(tosdb_record_t * record, const char_t* colname, const char_t value);
+boolean_t tosdb_record_get_char(tosdb_record_t * record, const char_t* colname, char_t* value);
+boolean_t tosdb_record_set_int8(tosdb_record_t * record, const char_t* colname, const int8_t value);
+boolean_t tosdb_record_get_int8(tosdb_record_t * record, const char_t* colname, int8_t* value);
+boolean_t tosdb_record_set_uint8(tosdb_record_t * record, const char_t* colname, const uint8_t value);
+boolean_t tosdb_record_get_uint8(tosdb_record_t * record, const char_t* colname, uint8_t* value);
+boolean_t tosdb_record_set_int16(tosdb_record_t * record, const char_t* colname, const int16_t value);
+boolean_t tosdb_record_get_int16(tosdb_record_t * record, const char_t* colname, int16_t* value);
+boolean_t tosdb_record_set_uint16(tosdb_record_t * record, const char_t* colname, const uint16_t value);
+boolean_t tosdb_record_get_uint16(tosdb_record_t * record, const char_t* colname, uint16_t* value);
+boolean_t tosdb_record_set_int32(tosdb_record_t * record, const char_t* colname, const int32_t value);
+boolean_t tosdb_record_get_int32(tosdb_record_t * record, const char_t* colname, int32_t* value);
+boolean_t tosdb_record_set_uint32(tosdb_record_t * record, const char_t* colname, const uint32_t value);
+boolean_t tosdb_record_get_uint32(tosdb_record_t * record, const char_t* colname, uint32_t* value);
+boolean_t tosdb_record_set_int64(tosdb_record_t * record, const char_t* colname, const int64_t value);
+boolean_t tosdb_record_get_int64(tosdb_record_t * record, const char_t* colname, int64_t* value);
+boolean_t tosdb_record_set_uint64(tosdb_record_t * record, const char_t* colname, const uint64_t value);
+boolean_t tosdb_record_get_uint64(tosdb_record_t * record, const char_t* colname, uint64_t* value);
+boolean_t tosdb_record_set_string(tosdb_record_t * record, const char_t* colname, const char_t* value);
+boolean_t tosdb_record_get_string(tosdb_record_t * record, const char_t* colname, char_t** value);
+boolean_t tosdb_record_set_float32(tosdb_record_t * record, const char_t* colname, const float32_t value);
+boolean_t tosdb_record_get_float32(tosdb_record_t * record, const char_t* colname, float32_t* value);
+boolean_t tosdb_record_set_float64(tosdb_record_t * record, const char_t* colname, const float64_t value);
+boolean_t tosdb_record_get_float64(tosdb_record_t * record, const char_t* colname, float64_t* value);
+boolean_t tosdb_record_set_bytearray(tosdb_record_t * record, const char_t* colname, uint64_t len, const uint8_t* value);
+boolean_t tosdb_record_get_bytearray(tosdb_record_t * record, const char_t* colname, uint64_t* len, uint8_t** value);
+boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t len, const void* value);
+boolean_t tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t* len, void** value);
+boolean_t tosdb_record_upsert(tosdb_record_t* record);
+boolean_t tosdb_record_delete(tosdb_record_t* record);
+boolean_t tosdb_record_get(tosdb_record_t* record);
+boolean_t tosdb_record_destroy(tosdb_record_t* record);
 
 uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid);
 
@@ -220,22 +220,22 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         return false;
     }
 
-    void* l_value = memory_malloc(len);
-
-    if(!l_value) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create required item");
-        memory_free(col_value);
-        memory_free(name);
-
-        return false;
-    }
+    void* l_value = NULL;
 
     if(type == DATA_TYPE_STRING || type == DATA_TYPE_INT8_ARRAY) {
+        l_value = memory_malloc(len);
+
+        if(!l_value) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create required item");
+            memory_free(col_value);
+            memory_free(name);
+
+            return false;
+        }
+
         memory_memcopy(value, l_value, len);
         col_value->value = (void*)l_value;
     } else {
-        uint64_t tmp = (uint64_t)value;
-        memory_memcopy(&tmp, l_value, len);
         col_value->value = (void*)value;
     }
 
@@ -246,7 +246,14 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
     uint64_t idx_id = tosdb_record_get_index_id(record, col_id);
 
     if(idx_id) {
-        uint64_t key_hash = xxhash64_hash(l_value, len);
+        uint64_t key_hash = 0;
+
+        if(type < DATA_TYPE_STRING) {
+            key_hash = (uint64_t)value;
+            len = 0;
+        } else {
+            key_hash = xxhash64_hash(l_value, len);
+        }
 
         tosdb_record_key_t* r_key = memory_malloc(sizeof(tosdb_record_key_t));
 
@@ -262,14 +269,22 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         r_key->key_length = len;
         r_key->key = (uint8_t*)l_value;
 
-        map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
-    } else {
-        if(type < DATA_TYPE_STRING) {
-            memory_free(l_value);
+        tosdb_record_key_t* old_r_key = map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
+
+        if(old_r_key) {
+            if(old_r_key->key_length) {
+                memory_free(old_r_key->key);
+            }
+
+            memory_free(old_r_key);
         }
     }
 
-    map_insert(ctx->columns, (void*)col_id, col_value);
+    data_t* old_col_value = map_insert(ctx->columns, (void*)col_id, col_value);
+
+    if(old_col_value) {
+        data_free(old_col_value);
+    }
 
     return true;
 }
@@ -351,6 +366,10 @@ boolean_t tosdb_record_upsert(tosdb_record_t* record) {
 }
 
 boolean_t tosdb_record_delete(tosdb_record_t* record) {
+    if(tosdb_memtable_is_deleted(record)) {
+        return true;
+    }
+
     return tosdb_memtable_upsert(record, true);
 }
 
@@ -366,13 +385,112 @@ boolean_t tosdb_record_get(tosdb_record_t* record) {
     return tosdb_sstable_get(record);
 }
 
-iterator_t* tosdb_record_search(tosdb_record_t* record) {
-    UNUSED(record);
+linkedlist_t tosdb_record_search(tosdb_record_t* record) {
 
-    NOTIMPLEMENTEDLOG(TOSDB);
+    set_t* results = set_create(tosdb_memtable_index_comparator);
 
-    return NULL;
+    if(!results) {
+        return NULL;
+    }
+
+    if(!tosdb_memtable_search(record, results)) {
+        set_destroy(results);
+
+        return NULL;
+    }
+
+    if(!tosdb_sstable_search(record, results)) {
+        set_destroy(results);
+
+        return NULL;
+    }
+
+    iterator_t* f_iter = set_create_iterator(results);
+
+    if(!f_iter) {
+        set_destroy(results);
+
+        return NULL;
+    }
+
+    tosdb_record_context_t* r_ctx = record->context;
+
+    linkedlist_t recs = linkedlist_create_list();
+
+    boolean_t dont_add = false;
+
+    if(!recs) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create results list");
+        dont_add = true;
+    }
+
+    while(f_iter->end_of_iterator(f_iter) != 0) {
+        tosdb_memtable_index_item_t* item = (tosdb_memtable_index_item_t*)f_iter->get_item(f_iter);
+
+        if(!dont_add) {
+            tosdb_record_t* rec = tosdb_table_create_record(r_ctx->table);
+
+            uint64_t len = item->key_length;
+            void* value = item->key;
+
+            if(len == 0) {
+                switch(r_ctx->table->primary_column_type) {
+                case DATA_TYPE_CHAR:
+                case DATA_TYPE_INT8:
+                case DATA_TYPE_BOOLEAN:
+                    len = 1;
+                    break;
+                case DATA_TYPE_INT16:
+                    len = 2;
+                    break;
+                case DATA_TYPE_INT32:
+                    len = 4;
+                    break;
+                case DATA_TYPE_INT64:
+                    len = 8;
+                    break;
+                default:
+                    break;
+                }
+
+                value = (void*)item->key_hash;
+            }
+
+            if(rec) {
+                if(!tosdb_record_set_data_with_colid(rec,
+                                                     r_ctx->table->primary_column_id,
+                                                     r_ctx->table->primary_column_type,
+                                                     len,
+                                                     value)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
+                    dont_add = true;
+                    rec->destroy(rec);
+                }
+
+                if(rec->get_record(rec)) {
+                    linkedlist_list_insert(recs, rec);
+                } else {
+                    rec->destroy(rec);
+                }
+
+            } else {
+                dont_add = true;
+            }
+        }
+
+        memory_free(item);
+
+        f_iter = f_iter->next(f_iter);
+    }
+
+    f_iter->destroy(f_iter);
+
+    set_destroy(results);
+
+
+    return recs;
 }
+
 
 uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid) {
     if(!record || !record->context || !colid) {

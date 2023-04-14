@@ -12,7 +12,7 @@
 #include <types.h>
 #include <data.h>
 #include <buffer.h>
-#include <iterator.h>
+#include <linkedlist.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -119,7 +119,12 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
  */
 boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_t type);
 
+/**
+ * @enum tosdb_index_type_t
+ * @brief tosdb index types
+ */
 typedef enum tosdb_index_type_t {
+    TOSDB_INDEX_PRIMARY, ///< primary index
     TOSDB_INDEX_UNIQUE, ///< a unique index
     TOSDB_INDEX_SECONDARY, ///< a secondary index
 } tosdb_index_type_t; ///< shorthand for enum
@@ -460,9 +465,9 @@ typedef boolean_t (*tosdb_record_get_f)(tosdb_record_t* record);
  * @brief searches a record
  * @param[in] tbl table interface
  * @param[in] record secondary key of record for retrive
- * @return the record itreator
+ * @return the record list
  */
-typedef iterator_t * (*tosdb_record_search_f)(tosdb_record_t* record);
+typedef linkedlist_t (*tosdb_record_search_f)(tosdb_record_t* record);
 
 /**
  * @struct tosdb_record_t
