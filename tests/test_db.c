@@ -862,7 +862,9 @@ token_error:
         goto rec_destroy;
     }
 
-    iterator_t* iter = s_rec->search_record(s_rec);
+    linkedlist_t s_recs = s_rec->search_record(s_rec);
+
+    iterator_t* iter = linkedlist_iterator_create(s_recs);
 
     if(!iter) {
         print_error("cannot create search iterator");
@@ -872,7 +874,7 @@ token_error:
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        tosdb_record_t* res_rec = (tosdb_record_t*)iter->get_item(iter);
+        tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!res_rec) {
             print_error("cannot get one of search result");
@@ -908,6 +910,11 @@ token_error:
             goto search_iter_destroy;
         }
 
+        if(id == 22) {
+            res_rec->set_string(res_rec, "country", "Colombia");
+            res_rec->upsert_record(res_rec);
+        }
+
         printf("%lli %s %s\n", id, fname, country);
 
         memory_free(fname);
@@ -920,10 +927,22 @@ token_error:
 
 search_iter_destroy:
     iter->destroy(iter);
+    linkedlist_destroy(s_recs);
 
 rec_destroy:
 
     s_rec->destroy(s_rec);
+
+    tosdb_record_t* d_rec = tosdb_table_create_record(table2);
+
+    d_rec->set_int64(d_rec, "id", 52);
+
+    if(!d_rec->delete_record(d_rec)) {
+        print_error("cannot delete record");
+        pass = false;
+    }
+
+    d_rec->destroy(d_rec);
 
 tdb_close:
     if(!tosdb_close(tosdb)) {
@@ -1087,7 +1106,9 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto rec_destroy;
     }
 
-    iterator_t* iter = s_rec->search_record(s_rec);
+    linkedlist_t s_recs = s_rec->search_record(s_rec);
+
+    iterator_t* iter = linkedlist_iterator_create(s_recs);
 
     if(!iter) {
         print_error("cannot create search iterator");
@@ -1097,7 +1118,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
     }
 
     while(iter->end_of_iterator(iter) != 0) {
-        tosdb_record_t* res_rec = (tosdb_record_t*)iter->get_item(iter);
+        tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!res_rec) {
             print_error("cannot get one of search result");
@@ -1145,6 +1166,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
 
 search_iter_destroy:
     iter->destroy(iter);
+    linkedlist_destroy(s_recs);
 
 rec_destroy:
 

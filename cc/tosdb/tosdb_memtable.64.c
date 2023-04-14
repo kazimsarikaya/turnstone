@@ -328,10 +328,19 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     }
 
     if(map_size(tbl->indexes) != map_size(r_ctx->keys)) {
-        lock_release(tbl->lock);
-        PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
+        if(del) {
+            if(!tosdb_memtable_get(record)) {
+                lock_release(tbl->lock);
+                PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
 
-        return false;
+                return false;
+            }
+        } else {
+            lock_release(tbl->lock);
+            PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
+
+            return false;
+        }
     }
 
 
@@ -367,6 +376,8 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
         memory_free(sd->value);
         memory_free(sd);
     }
+
+    boolean_t need_rc_inc = true;
 
     iterator_t* iter = map_create_iterator(tbl->indexes);
 
@@ -424,7 +435,14 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
             bloomfilter_add(mt_idx->bloomfilter, &d_key);
 
-            mt_idx->index->insert(mt_idx->index, idx_item, idx_item, NULL);
+            tosdb_memtable_index_item_t* old_item = NULL;
+
+            mt_idx->index->insert(mt_idx->index, idx_item, idx_item, (void**)&old_item);
+
+            if(old_item) {
+                memory_free(old_item);
+                need_rc_inc = false;
+            }
 
         } else {
             const tosdb_record_key_t* pri_r_key = map_get(r_ctx->keys, (void*)tbl->primary_index_id);
@@ -471,7 +489,9 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
     iter->destroy(iter);
 
-    tbl->current_memtable->record_count++;
+    if(need_rc_inc) {
+        tbl->current_memtable->record_count++;
+    }
 
     lock_release(tbl->lock);
     return true;

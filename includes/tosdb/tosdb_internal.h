@@ -394,5 +394,5 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record);
 boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results);
 boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
 
-iterator_t* tosdb_record_search(tosdb_record_t* record);
+linkedlist_t tosdb_record_search(tosdb_record_t* record);
 #endif

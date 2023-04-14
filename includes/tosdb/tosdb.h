@@ -12,7 +12,7 @@
 #include <types.h>
 #include <data.h>
 #include <buffer.h>
-#include <iterator.h>
+#include <linkedlist.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -465,9 +465,9 @@ typedef boolean_t (*tosdb_record_get_f)(tosdb_record_t* record);
  * @brief searches a record
  * @param[in] tbl table interface
  * @param[in] record secondary key of record for retrive
- * @return the record itreator
+ * @return the record list
  */
-typedef iterator_t * (*tosdb_record_search_f)(tosdb_record_t* record);
+typedef linkedlist_t (*tosdb_record_search_f)(tosdb_record_t* record);
 
 /**
  * @struct tosdb_record_t

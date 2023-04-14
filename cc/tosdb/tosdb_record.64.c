@@ -269,10 +269,22 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         r_key->key_length = len;
         r_key->key = (uint8_t*)l_value;
 
-        map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
+        tosdb_record_key_t* old_r_key = map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
+
+        if(old_r_key) {
+            if(old_r_key->key_length) {
+                memory_free(old_r_key->key);
+            }
+
+            memory_free(old_r_key);
+        }
     }
 
-    map_insert(ctx->columns, (void*)col_id, col_value);
+    data_t* old_col_value = map_insert(ctx->columns, (void*)col_id, col_value);
+
+    if(old_col_value) {
+        data_free(old_col_value);
+    }
 
     return true;
 }
@@ -372,6 +384,113 @@ boolean_t tosdb_record_get(tosdb_record_t* record) {
 
     return tosdb_sstable_get(record);
 }
+
+linkedlist_t tosdb_record_search(tosdb_record_t* record) {
+
+    set_t* results = set_create(tosdb_memtable_index_comparator);
+
+    if(!results) {
+        return NULL;
+    }
+
+    if(!tosdb_memtable_search(record, results)) {
+        set_destroy(results);
+
+        return NULL;
+    }
+
+    if(!tosdb_sstable_search(record, results)) {
+        set_destroy(results);
+
+        return NULL;
+    }
+
+    iterator_t* f_iter = set_create_iterator(results);
+
+    if(!f_iter) {
+        set_destroy(results);
+
+        return NULL;
+    }
+
+    tosdb_record_context_t* r_ctx = record->context;
+
+    linkedlist_t recs = linkedlist_create_list();
+
+    boolean_t dont_add = false;
+
+    if(!recs) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create results list");
+        dont_add = true;
+    }
+
+    while(f_iter->end_of_iterator(f_iter) != 0) {
+        tosdb_memtable_index_item_t* item = (tosdb_memtable_index_item_t*)f_iter->get_item(f_iter);
+
+        if(!dont_add) {
+            tosdb_record_t* rec = tosdb_table_create_record(r_ctx->table);
+
+            uint64_t len = item->key_length;
+            void* value = item->key;
+
+            if(len == 0) {
+                switch(r_ctx->table->primary_column_type) {
+                case DATA_TYPE_CHAR:
+                case DATA_TYPE_INT8:
+                case DATA_TYPE_BOOLEAN:
+                    len = 1;
+                    break;
+                case DATA_TYPE_INT16:
+                    len = 2;
+                    break;
+                case DATA_TYPE_INT32:
+                    len = 4;
+                    break;
+                case DATA_TYPE_INT64:
+                    len = 8;
+                    break;
+                default:
+                    break;
+                }
+
+                value = (void*)item->key_hash;
+            }
+
+            if(rec) {
+                if(!tosdb_record_set_data_with_colid(rec,
+                                                     r_ctx->table->primary_column_id,
+                                                     r_ctx->table->primary_column_type,
+                                                     len,
+                                                     value)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
+                    dont_add = true;
+                    rec->destroy(rec);
+                }
+
+                if(rec->get_record(rec)) {
+                    linkedlist_list_insert(recs, rec);
+                } else {
+                    rec->destroy(rec);
+                }
+
+            } else {
+                dont_add = true;
+            }
+        }
+
+        memory_free(item);
+
+        f_iter = f_iter->next(f_iter);
+    }
+
+    f_iter->destroy(f_iter);
+
+    set_destroy(results);
+
+
+    return recs;
+}
+
 
 uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid) {
     if(!record || !record->context || !colid) {
