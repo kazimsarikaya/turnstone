@@ -51,7 +51,6 @@ int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
     return 0;
 }
 
-
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id){
     tosdb_record_context_t* ctx = record->context;
 
@@ -128,10 +127,18 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         return false;
     }
 
+    uint8_t* u8_key = item->key;
+    uint64_t u8_key_length = item->key_length;
+
+    if(!u8_key_length) {
+        u8_key_length = sizeof(uint64_t);
+        u8_key = (uint8_t*)&item->key_hash;
+    }
+
     data_t item_tmp_data = {0};
     item_tmp_data.type = DATA_TYPE_INT8_ARRAY;
-    item_tmp_data.length = item->key_length;
-    item_tmp_data.value = item->key;
+    item_tmp_data.length = u8_key_length;
+    item_tmp_data.value = u8_key;
 
     if(!bloomfilter_check(bf, &item_tmp_data)) {
         bloomfilter_destroy(bf);
@@ -183,7 +190,6 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
                                                                                           sizeof(tosdb_memtable_index_item_t*),
                                                                                           &item,
                                                                                           tosdb_sstable_index_comparator);
-
 
     if(!found_item) {
         memory_free(st_idx_items);

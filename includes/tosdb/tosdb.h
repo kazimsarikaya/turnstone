@@ -119,7 +119,12 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
  */
 boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_t type);
 
+/**
+ * @enum tosdb_index_type_t
+ * @brief tosdb index types
+ */
 typedef enum tosdb_index_type_t {
+    TOSDB_INDEX_PRIMARY, ///< primary index
     TOSDB_INDEX_UNIQUE, ///< a unique index
     TOSDB_INDEX_SECONDARY, ///< a secondary index
 } tosdb_index_type_t; ///< shorthand for enum

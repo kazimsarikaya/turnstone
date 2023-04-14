@@ -17,6 +17,7 @@
 #include <linkedlist.h>
 #include <indexer.h>
 #include <bloomfilter.h>
+#include <set.h>
 
 
 #define TOSDB_PAGE_SIZE 4096
@@ -142,6 +143,9 @@ typedef struct tosdb_block_table_t {
     uint64_t             memtable_next_id;
     uint64_t             sstable_list_location;
     uint64_t             sstable_list_size;
+    uint64_t             primary_index_id;
+    uint64_t             primary_column_id;
+    data_type_t          primary_column_type;
 }__attribute__((packed, aligned(8))) tosdb_block_table_t;
 
 typedef struct tosdb_block_column_list_item_t {
@@ -268,6 +272,9 @@ struct tosdb_table_t {
     lock_t            lock;
     map_t             columns;
     map_t             indexes;
+    uint64_t          primary_index_id;
+    uint64_t          primary_column_id;
+    data_type_t       primary_column_type;
     uint64_t          metadata_location;
     uint64_t          metadata_size;
     boolean_t         is_deleted;
@@ -328,7 +335,17 @@ typedef struct tosdb_memtable_index_item_t {
     uint8_t   key[];
 }__attribute__((packed, aligned(8))) tosdb_memtable_index_item_t;
 
+typedef struct tosdb_memtable_secondary_index_item_t {
+    uint64_t  secondary_key_hash;
+    uint64_t  secondary_key_length;
+    boolean_t is_primary_key_deleted;
+    uint64_t  primary_key_hash;
+    uint64_t  primary_key_length;
+    uint8_t   data[];
+}__attribute__((packed, aligned(8))) tosdb_memtable_secondary_index_item_t;
+
 int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2);
+int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2);
 
 typedef struct tosdb_memtable_index_t {
     tosdb_index_t* ti;
@@ -374,4 +391,8 @@ boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64
 boolean_t tosdb_memtable_get(tosdb_record_t* record);
 boolean_t tosdb_sstable_get(tosdb_record_t* record);
 
+boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results);
+boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
+
+iterator_t* tosdb_record_search(tosdb_record_t* record);
 #endif

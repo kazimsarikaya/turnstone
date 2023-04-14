@@ -19,11 +19,13 @@
 #include <zpack.h>
 #include <binarysearch.h>
 #include <tokenizer.h>
+#include <set.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int32_t test_step1(uint32_t argc, char_t** argv);
 int32_t test_step2(uint32_t argc, char_t** argv);
 int32_t test_step3(uint32_t argc, char_t** argv);
+int32_t test_step4(uint32_t argc, char_t** argv);
 
 
 #define TOSDB_CAP (32 << 20)
@@ -108,7 +110,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    if(!tosdb_table_index_create(table1, (char_t*)"id", TOSDB_INDEX_UNIQUE)) {
+    if(!tosdb_table_index_create(table1, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
         print_error("cannot add index for id to table1");
         pass = false;
 
@@ -689,7 +691,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    if(!tosdb_table_index_create(table2, (char_t*)"id", TOSDB_INDEX_UNIQUE)) {
+    if(!tosdb_table_index_create(table2, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
         print_error("cannot add index for id to table2");
         pass = false;
 
@@ -872,6 +874,13 @@ token_error:
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_record_t* res_rec = (tosdb_record_t*)iter->get_item(iter);
 
+        if(!res_rec) {
+            print_error("cannot get one of search result");
+            pass = false;
+
+            break;
+        }
+
         int64_t id = 0;
 
         if(!res_rec->get_int64(res_rec, "id", &id)) {
@@ -966,7 +975,230 @@ backend_failed:
     return pass?0:-1;
 }
 
+int32_t test_step4(uint32_t argc, char_t** argv) {
+    char_t* tosdb_out_file_name = (char_t*)"./tmp/tosdb.img";
 
+    if(argc == 2) {
+        tosdb_out_file_name = argv[1];
+    }
+
+    FILE* in = fopen(tosdb_out_file_name, "r");
+
+    if(!in) {
+        print_error("cannot open tosdb file");
+
+        return -1;
+    }
+
+    buffer_t db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
+
+    if(!db_buffer) {
+        fclose(in);
+        print_error("cannot create db buffer");
+        return -1;
+    }
+
+    uint8_t* read_buf = memory_malloc(4 << 10);
+
+    if(!read_buf) {
+        buffer_destroy(db_buffer);
+        print_error("cannot create read buffer");
+        fclose(in);
+
+        return -1;
+    }
+
+    uint64_t total_read = 0;
+    while(1) {
+        uint64_t rc = fread(read_buf, 1, 4 << 10, in);
+        if(rc == 0) {
+            break;
+        }
+
+        total_read += rc;
+
+        buffer_append_bytes(db_buffer, read_buf, 4 << 10);
+        memory_memclean(read_buf, 4 << 10);
+    }
+
+    memory_free(read_buf);
+
+    fclose(in);
+
+    if(total_read != TOSDB_CAP) {
+        buffer_destroy(db_buffer);
+        print_error("cannot read db file");
+        printf("total read: %lli\n", total_read);
+
+        return -1;
+    }
+
+    boolean_t pass = true;
+
+    tosdb_backend_t* backend = tosdb_backend_memory_from_buffer(db_buffer);
+
+    if(!backend) {
+        print_error("cannot create backend");
+        pass = false;
+
+        goto backend_failed;
+    }
+
+    tosdb_t* tosdb = tosdb_new(backend);
+
+    if(!tosdb) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+
+    if(!testdb) {
+        print_error("cannot create/open testdb");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, (char_t*)"table2", 1 << 10, 128 << 10, 8);
+
+    if(!table2) {
+        print_error("cannot create/open table2");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    tosdb_record_t* s_rec = tosdb_table_create_record(table2);
+
+    if(!s_rec) {
+        print_error("cannot create key record");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    if(!s_rec->set_string(s_rec, "country", "Colombia")) {
+        print_error("cannot set ssn for search");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    iterator_t* iter = s_rec->search_record(s_rec);
+
+    if(!iter) {
+        print_error("cannot create search iterator");
+        pass = false;
+
+        goto rec_destroy;
+    }
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_record_t* res_rec = (tosdb_record_t*)iter->get_item(iter);
+
+        if(!res_rec) {
+            print_error("cannot get one of search result");
+            pass = false;
+
+            break;
+        }
+
+        int64_t id = 0;
+
+        if(!res_rec->get_int64(res_rec, "id", &id)) {
+            print_error("cannot get id");
+            pass = false;
+
+            goto search_iter_destroy;
+        }
+
+        char_t* fname = NULL;
+
+        if(!res_rec->get_string(res_rec, "fname", &fname)) {
+            print_error("cannot get fname");
+            pass = false;
+
+            goto search_iter_destroy;
+        }
+
+        char_t* country = NULL;
+
+        if(!res_rec->get_string(res_rec, "country", &country)) {
+            print_error("cannot get country");
+            pass = false;
+
+            goto search_iter_destroy;
+        }
+
+        printf("%lli %s %s\n", id, fname, country);
+
+        memory_free(fname);
+        memory_free(country);
+
+        res_rec->destroy(res_rec);
+
+        iter = iter->next(iter);
+    }
+
+search_iter_destroy:
+    iter->destroy(iter);
+
+rec_destroy:
+
+    s_rec->destroy(s_rec);
+
+tdb_close:
+    if(!tosdb_close(tosdb)) {
+        print_error("cannot close tosdb");
+        pass = false;
+    }
+
+    if(!tosdb_free(tosdb)) {
+        print_error("cannot free tosdb");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    uint8_t* out_data = tosdb_backend_memory_get_contents(backend);
+
+    if(!out_data) {
+        print_error("cannot get backend data");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    FILE* out = fopen(tosdb_out_file_name, "w");
+    if(!out) {
+        print_error("cannot open output file");
+        pass = false;
+
+        goto backend_close;
+    }
+
+    fwrite(out_data, 1, TOSDB_CAP, out);
+
+    memory_free(out_data);
+
+    fclose(out);
+
+backend_close:
+    if(!tosdb_backend_close(backend)) {
+        pass = false;
+    }
+
+backend_failed:
+    if(pass) {
+        print_success("TESTS PASSED");
+    } else {
+        print_error("TESTS FAILED");
+    }
+    return pass?0:-1;
+}
 
 int32_t main(uint32_t argc, char_t** argv) {
     if(test_step1(argc, argv) != 0) {
@@ -983,6 +1215,12 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     if(test_step3(argc, argv) != 0) {
         print_error("test step 3 failed");
+
+        return -1;
+    }
+
+    if(test_step4(argc, argv) != 0) {
+        print_error("test step 4 failed");
 
         return -1;
     }

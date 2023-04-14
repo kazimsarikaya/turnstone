@@ -289,6 +289,10 @@ tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot load indexes of table %s", tbl->name);
     }
 
+    tbl->primary_column_id = tbl_block->primary_column_id;
+    tbl->primary_index_id = tbl_block->primary_index_id;
+    tbl->primary_column_type = tbl_block->primary_column_type;
+
     tbl->memtable_next_id = tbl_block->memtable_next_id;
     tbl->sstable_list_location = tbl_block->sstable_list_location;
     tbl->sstable_list_size = tbl_block->sstable_list_size;
@@ -855,6 +859,9 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         block->memtable_next_id = tbl->memtable_next_id;
         block->sstable_list_location = tbl->sstable_list_location;
         block->sstable_list_size = tbl->sstable_list_size;
+        block->primary_column_id = tbl->primary_column_id;
+        block->primary_index_id = tbl->primary_index_id;
+        block->primary_column_type = tbl->primary_column_type;
 
         uint64_t loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
 
@@ -991,6 +998,12 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_in
     idx->column_id = col->id;
     idx->type = type;
 
+    if(type == TOSDB_INDEX_PRIMARY) {
+        tbl->primary_column_id = col->id;
+        tbl->primary_index_id = idx->id;
+        tbl->primary_column_type = col->type;
+    }
+
     tbl->index_new_count++;
 
     map_insert(tbl->indexes, (void*)idx->id, idx);
@@ -1069,12 +1082,16 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     idx = 0;
 
+    uint8_t* ssts_loc = (uint8_t*)&block->sstables[0];
+
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
 
         uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
 
-        memory_memcopy(stli, &block->sstables[idx], size);
+        memory_memcopy(stli, ssts_loc, size);
+
+        ssts_loc += size;
 
         memory_free(stli);
 
