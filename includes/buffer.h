@@ -39,5 +39,6 @@ buffer_t  buffer_encapsulate(uint8_t* data, uint64_t length);
 uint64_t  buffer_remaining(buffer_t buffer);
 uint8_t   buffer_peek_byte_at_position(buffer_t buffer, uint64_t position);
 uint8_t   buffer_peek_byte(buffer_t buffer);
+boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro);
 
 #endif
