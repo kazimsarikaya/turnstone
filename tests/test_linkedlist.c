@@ -25,7 +25,6 @@ int8_t int_comparator(const void* i, const void* j){
 int32_t main(void){
     int t = 9, x = 13, y = 16, z = 7;
     int* i;
-    FILE* fp;
 
     printf("%p %p %p %p\n", &t, &x, &y, &z);
 
@@ -213,11 +212,6 @@ int32_t main(void){
 
 
     print_success("All tests are finished");
-
-    fp = fopen( "tmp/mem1.dump", "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-
-    fclose(fp);
 
     return 0;
 }
