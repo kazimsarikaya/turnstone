@@ -182,7 +182,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_TOSDB
 /*! default log level for nvme module */
-#define LOG_LEVEL_TOSDB LOG_DEBUG
+#define LOG_LEVEL_TOSDB LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION
