@@ -1110,6 +1110,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
             tosdb_memtable_index_item_t* res = memory_malloc(idx_item_len);
 
             if(!res) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index item");
                 error = true;
 
                 break;

@@ -91,7 +91,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     if(first_limit == 1 || last_limit == -1) {
         memory_free(st_idx);
 
-        return false;
+        return true;
     }
 
     buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
@@ -139,7 +139,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         bloomfilter_destroy(bf);
         memory_free(st_idx);
 
-        return false;
+        return true;
     }
 
     bloomfilter_destroy(bf);
@@ -234,6 +234,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             tosdb_memtable_index_item_t* res = memory_malloc(idx_item_len);
 
             if(!res) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index item");
                 error = true;
 
                 break;

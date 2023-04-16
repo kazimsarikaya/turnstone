@@ -178,6 +178,12 @@ boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, 
 
     const tosdb_column_t* col = map_get(ctx->table->columns, colname);
 
+    if(!col) {
+        PRINTLOG(TOSDB, LOG_ERROR, "column %s is not exists at table %s", colname, ctx->table->name);
+
+        return false;
+    }
+
     if(col->type != type) {
         PRINTLOG(TOSDB, LOG_ERROR, "column %s type mismatch for table %s", colname, ctx->table->name);
 
@@ -223,7 +229,9 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
     void* l_value = NULL;
 
     if(type == DATA_TYPE_STRING || type == DATA_TYPE_INT8_ARRAY) {
-        l_value = memory_malloc(len);
+        uint64_t null_byte = (type == DATA_TYPE_STRING)?1:0;
+
+        l_value = memory_malloc(len + null_byte);
 
         if(!l_value) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create required item");
@@ -394,12 +402,14 @@ linkedlist_t tosdb_record_search(tosdb_record_t* record) {
     }
 
     if(!tosdb_memtable_search(record, results)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot search at memtable");
         set_destroy(results);
 
         return NULL;
     }
 
     if(!tosdb_sstable_search(record, results)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot search at sstables");
         set_destroy(results);
 
         return NULL;

@@ -191,6 +191,15 @@ uint8_t* buffer_get_all_bytes(buffer_t buffer, uint64_t* length) {
     buffer_internal_t* bi = (buffer_internal_t*)buffer;
 
     uint8_t* res = memory_malloc_ext(bi->heap, bi->length, 0);
+
+    if(!res) {
+        if(length) {
+            *length = 0;
+        }
+
+        return NULL;
+    }
+
     memory_memcopy(bi->data, res, bi->length);
 
     if(length) {
