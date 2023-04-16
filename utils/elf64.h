@@ -249,4 +249,27 @@ typedef struct {
     int64_t  r_addend;
 }__attribute__((packed)) elf64_rela_t;
 
+
+#define ELF_SECTION_SIZE(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_size):(((elf32_shdr_t*)s)[idx].sh_size)))
+#define ELF_SECTION_OFFSET(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_offset):(((elf32_shdr_t*)s)[idx].sh_offset)))
+#define ELF_SECTION_NAME(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_name):(((elf32_shdr_t*)s)[idx].sh_name)))
+#define ELF_SECTION_TYPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_type):(((elf32_shdr_t*)s)[idx].sh_type)))
+#define ELF_SECTION_ALIGN(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_addralign):(((elf32_shdr_t*)s)[idx].sh_addralign)))
+
+#define ELF_SYMBOL_COUNT(c, s) ((c) == ELFCLASS64?(s / sizeof(elf64_sym_t)):(s / sizeof(elf32_sym_t)))
+
+#define ELF_SYMBOL_NAME(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_name):(((elf32_sym_t*)s)[idx].st_name)))
+#define ELF_SYMBOL_TYPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_type):(((elf32_sym_t*)s)[idx].st_type)))
+#define ELF_SYMBOL_SCOPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_scope):(((elf32_sym_t*)s)[idx].st_scope)))
+#define ELF_SYMBOL_SHNDX(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_shndx):(((elf32_sym_t*)s)[idx].st_shndx)))
+#define ELF_SYMBOL_VALUE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_value):(((elf32_sym_t*)s)[idx].st_value)))
+#define ELF_SYMBOL_SIZE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_size):(((elf32_sym_t*)s)[idx].st_size)))
+
+#define ELF_RELOC_COUNT(c, rt, rs) ((rs) / ((c) == ELFCLASS64?((rt)?sizeof(elf64_rela_t):sizeof(elf64_rel_t)):((rt)?sizeof(elf32_rela_t):sizeof(elf32_rel_t))))
+
+#define ELF_RELOC_OFFSET(c, rt, rs, idx) ((c) == ELFCLASS64?((rt)?((elf64_rela_t*)rs)[idx].r_offset:((elf64_rel_t*)rs)[idx].r_offset):((rt)?((elf32_rela_t*)rs)[idx].r_offset:((elf32_rel_t*)rs)[idx].r_offset))
+#define ELF_RELOC_TYPE(c, rt, rs, idx) ((c) == ELFCLASS64?((rt)?((elf64_rela_t*)rs)[idx].r_symtype:((elf64_rel_t*)rs)[idx].r_symtype):((rt)?((elf32_rela_t*)rs)[idx].r_symtype:((elf32_rel_t*)rs)[idx].r_symtype))
+#define ELF_RELOC_SYMIDX(c, rt, rs, idx) ((c) == ELFCLASS64?((rt)?((elf64_rela_t*)rs)[idx].r_symindx:((elf64_rel_t*)rs)[idx].r_symindx):((rt)?((elf32_rela_t*)rs)[idx].r_symindx:((elf32_rel_t*)rs)[idx].r_symindx))
+#define ELF_RELOC_ADDEND(c, rs, idx) (((c) == ELFCLASS64?(((elf64_rela_t*)rs)[idx].r_addend):(((elf32_rela_t*)rs)[idx].r_addend)))
+
 #endif

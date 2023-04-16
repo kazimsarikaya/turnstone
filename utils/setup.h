@@ -25,6 +25,10 @@ int32_t mem_backend_fd = 0;
 uint64_t mmmap_address = 4ULL << 30;
 uint64_t mmap_size = RAMSIZE;
 
+#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
+            if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
+            else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
+
 int                               vprintf ( const char* format, va_list arg );
 size_t                            video_printf(const char_t* fmt, ...);
 void                              print_success(const char* msg);
