@@ -143,12 +143,29 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
 
     uint64_t obuflen = 0;
     uint8_t* obuf = buffer_get_all_bytes(buf, &obuflen);
+
+    if(!obuflen || !obuf) {
+        memory_free(res);
+        buffer_destroy(buf);
+
+        return NULL;
+    }
+
     bc = byte_count(obuflen);
 
     res->type = DATA_TYPE_INT8_ARRAY;
     res->length = 1 + bc + obuflen;
 
     uint8_t* ores = memory_malloc(res->length);
+
+    if(!ores) {
+        memory_free(obuf);
+        memory_free(res);
+        buffer_destroy(buf);
+
+        return NULL;
+    }
+
     ores[0] = bc;
     memory_memcopy((uint8_t*)&obuflen, ores + 1, bc);
     memory_memcopy(obuf, ores + 1 + bc, obuflen);

@@ -305,7 +305,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         res->next = NULL;
         res->flags |= HEAP_INFO_FLAG_USED;
 
-        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", res + 1, t_size * sizeof(heapinfo_t));
 
         simple_heap->free_size -= (res->size - 1) * sizeof(heapinfo_t);
         simple_heap->malloc_count++;
@@ -462,8 +462,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_hi->size = 1 + t_size; // new slot's size 1 for include header, t_size aligned requested size
 
         simple_heap->free_size -= sizeof(heapinfo_t); // meta occupies free area
-    } // if we not we should keep slot's original size
-
+    } else if(rem == 1) { // if we not we should keep slot's original size and increment t_size if rem==1
+        t_size++;
+    }
 
     if (align == 0) { // if we donot need a alignment shortcut malloc remove empty_hi from list and append allocated list
 
@@ -496,7 +497,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
         //memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
 
-        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t), (empty_hi->size - 1) * sizeof(heapinfo_t));
 
         simple_heap->free_size -= (empty_hi->size - 1) * sizeof(heapinfo_t);
         simple_heap->malloc_count++;
