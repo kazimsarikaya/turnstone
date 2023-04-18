@@ -12,5 +12,6 @@
 #include <types.h>
 
 uint128_t siphash128(const void* data, uint64_t len, uint128_t seed);
+uint64_t  siphash64(const void* data, uint64_t len, uint64_t seed);
 
 #endif
