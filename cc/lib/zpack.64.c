@@ -6,14 +6,17 @@
 #include <zpack.h>
 
 
-static int32_t zpack_count_similar(buffer_t in,  int64_t p, int64_t in_p) {
+static int32_t zpack_count_similar(buffer_t in, int64_t in_len, int64_t p, int64_t in_p) {
     int32_t similar = 0;
-    int64_t in_len = buffer_get_length(in);
 
     while (in_p < in_len && buffer_peek_byte_at_position(in, p) == buffer_peek_byte_at_position(in, in_p)) {
         similar++;
         p++;
         in_p++;
+
+        if(similar == 0x7f + 0x40 + 4) {
+            break;
+        }
     }
 
     return similar;
@@ -21,6 +24,7 @@ static int32_t zpack_count_similar(buffer_t in,  int64_t p, int64_t in_p) {
 
 int64_t zpack_pack(buffer_t in, buffer_t out) {
     buffer_t individuals = buffer_new_with_capacity(NULL, 257);
+    int64_t in_len = buffer_get_length(in);
 
     while (buffer_remaining(in)) {
         int64_t in_p = (int64_t)buffer_get_position(in);
@@ -29,12 +33,17 @@ int64_t zpack_pack(buffer_t in, buffer_t out) {
         int64_t best_pos = p;
 
         while (p > 0 && p >= (in_p - 255)) {
-            int32_t size = zpack_count_similar(in, p, in_p);
+            int32_t size = zpack_count_similar(in, in_len, p, in_p);
 
             if (size > best_size) {
                 best_size = size;
                 best_pos = p;
             }
+
+            if(best_size == 0x7f + 0x40 + 4) {
+                break;
+            }
+
             p--;
         }
 
