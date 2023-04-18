@@ -31,7 +31,9 @@
             v2 = ROTLEFT64(v2, 32);   \
 }
 
-uint128_t siphash128(const void* data, uint64_t len, uint128_t seed) {
+uint128_t siphash128_internal(const void* data, uint64_t len, boolean_t full, uint128_t seed);
+
+uint128_t siphash128_internal(const void* data, uint64_t len, boolean_t full, uint128_t seed) {
 
     const uint8_t* ni = (const uint8_t*)data;
 
@@ -55,7 +57,9 @@ uint128_t siphash128(const void* data, uint64_t len, uint128_t seed) {
     v1 ^= k1;
     v0 ^= k0;
 
-    v1 ^= 0xee;
+    if(full) {
+        v1 ^= 0xee;
+    }
 
     for (; ni != end; ni += 8) {
         m = *((uint64_t*)(ni));
@@ -101,7 +105,11 @@ uint128_t siphash128(const void* data, uint64_t len, uint128_t seed) {
 
     v0 ^= b;
 
-    v2 ^= 0xee;
+    if(full) {
+        v2 ^= 0xee;
+    } else {
+        v2 ^= 0xff;
+    }
 
     for (i = 0; i < 4; ++i) {
         SIPROUND;
@@ -112,6 +120,10 @@ uint128_t siphash128(const void* data, uint64_t len, uint128_t seed) {
 
     b = v0 ^ v1 ^ v2 ^ v3;
     h1 = b;
+
+    if(!full) {
+        return h1;
+    }
 
     v1 ^= 0xdd;
 
@@ -125,3 +137,10 @@ uint128_t siphash128(const void* data, uint64_t len, uint128_t seed) {
     return h2 << 64 | h1;
 }
 
+uint128_t siphash128(const void* data, uint64_t len, uint128_t seed) {
+    return siphash128_internal(data, len, true, seed);
+}
+
+uint64_t siphash64(const void* data, uint64_t len, uint64_t seed) {
+    return siphash128_internal(data, len, false, seed);
+}
