@@ -395,4 +395,6 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results);
 boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
 
 linkedlist_t tosdb_record_search(tosdb_record_t* record);
+boolean_t    record_search_set_destroy_cb(void * item);
+
 #endif

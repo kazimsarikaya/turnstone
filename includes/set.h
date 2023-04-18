@@ -54,11 +54,22 @@ boolean_t set_remove(set_t* s, void* value);
 boolean_t set_exists(set_t* s, void* value);
 
 /**
+ * @brief set destroy callback
+ * @param[in] item item to destroy
+ * @return true if free succeed
+ */
+typedef boolean_t (*set_destroy_callback_f)(void* item);
+
+/**
  * @brief destroys set
  * @param[in] s the set
+ * @param[in] cb destroy callback which frees items.
  * @return true if succeed.
  */
-boolean_t set_destroy(set_t* s);
+boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb);
+
+/*! destroys set without callback */
+#define set_destroy(s) set_destroy_with_callback(s, NULL);
 
 /**
  * @brief creates set iterator
