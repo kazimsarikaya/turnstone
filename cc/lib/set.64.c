@@ -110,9 +110,27 @@ boolean_t set_remove(set_t* s, void* value) {
     return true;
 }
 
-boolean_t set_destroy(set_t* s) {
+boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
     if(!s) {
         return true;
+    }
+
+    boolean_t error = false;
+
+    if(cb) {
+        iterator_t* iter = set_create_iterator(s);
+
+        if(iter) {
+            while(iter->end_of_iterator(iter) != 0) {
+                void* item = (void*)iter->get_item(iter);
+
+                error |= !cb(item);
+            }
+
+            iter->destroy(iter);
+        } else {
+            error = true;
+        }
     }
 
     bplustree_destroy_index(s->index);
@@ -120,7 +138,7 @@ boolean_t set_destroy(set_t* s) {
 
     memory_free(s);
 
-    return true;
+    return !error;
 }
 
 iterator_t* set_create_iterator(set_t* s) {

@@ -4,50 +4,84 @@
  */
 
 #include <zpack.h>
+#include <utils.h>
+
+#define ZPACK_MAX_MATCH (0x3f + 0x40 + 4)
+#define ZPACK_MIN_MATCH (4)
 
 
-static int32_t zpack_count_similar(buffer_t in, int64_t in_len, int64_t p, int64_t in_p) {
-    int32_t similar = 0;
+typedef struct zpack_match_t {
+    int32_t best_size;
+    int64_t best_pos;
+} zpack_match_t;
 
-    while (in_p < in_len && buffer_peek_byte_at_position(in, p) == buffer_peek_byte_at_position(in, in_p)) {
-        similar++;
-        p++;
-        in_p++;
+static zpack_match_t zpack_find_bestmatch(buffer_t in, int64_t in_len, int64_t in_p) {
+    int64_t max_match = MIN(in_len - in_p, ZPACK_MAX_MATCH);
+    int64_t start = in_p - 255;
 
-        if(similar == 0x7f + 0x40 + 4) {
-            break;
-        }
+    if(start < 0) {
+        start = 0;
     }
 
-    return similar;
+    int16_t skip[256] = {0};
+
+    for(int64_t i = 0; i < ZPACK_MIN_MATCH; i++) {
+        skip[buffer_peek_byte_at_position(in, in_p + i)] = ZPACK_MIN_MATCH - i;
+    }
+
+    int64_t i = start;
+
+    int64_t best_size = ZPACK_MIN_MATCH;
+    int64_t best_pos = -1;
+
+    while(i < in_p - best_size) {
+        int64_t j = 0;
+
+        while(j < max_match && buffer_peek_byte_at_position(in, i + j) == buffer_peek_byte_at_position(in, in_p + j)) {
+            j++;
+        }
+
+
+        if(best_size < j) {
+            for(int64_t k = 0; k < j; k++) {
+                skip[buffer_peek_byte_at_position(in, in_p + k)] = j - k;
+            }
+
+            best_size = j;
+            best_pos = i;
+
+            if(best_size == max_match) {
+                break;
+            }
+        }
+
+        int64_t shift = 1;
+
+        if(i + best_size < in_len) {
+            shift = skip[buffer_peek_byte_at_position(in, i + best_size)];
+
+            if(shift == 0) {
+                shift = best_size + 1;
+            }
+        }
+
+        i += shift;
+    }
+
+    return (zpack_match_t){.best_size = best_size, .best_pos = best_pos};
 }
 
-int64_t zpack_pack(buffer_t in, buffer_t out) {
+int64_t zpack_pack (buffer_t in, buffer_t out) {
     buffer_t individuals = buffer_new_with_capacity(NULL, 257);
     int64_t in_len = buffer_get_length(in);
 
     while (buffer_remaining(in)) {
         int64_t in_p = (int64_t)buffer_get_position(in);
-        int64_t p =  in_p - 1;
-        int32_t best_size = 0;
-        int64_t best_pos = p;
 
-        while (p > 0 && p >= (in_p - 255)) {
-            int32_t size = zpack_count_similar(in, in_len, p, in_p);
 
-            if (size > best_size) {
-                best_size = size;
-                best_pos = p;
-            }
+        zpack_match_t zpm = zpack_find_bestmatch(in, in_len, in_p);
 
-            if(best_size == 0x7f + 0x40 + 4) {
-                break;
-            }
-
-            p--;
-        }
-
-        if (best_size > 3) {
+        if(zpm.best_pos != -1 && zpm.best_size > 3) {
             /* copy */
             if (buffer_get_length(individuals)) {
                 out = buffer_append_byte(out, (buffer_get_length(individuals) - 1) | 0xC0);
@@ -57,19 +91,15 @@ int64_t zpack_pack(buffer_t in, buffer_t out) {
                 buffer_reset(individuals);
             }
 
-            if (best_size > 0x7f + 0x40 + 4) {
-                best_size = 0x7f + 0x40 + 4;
-            }
+            int32_t offset = zpm.best_pos - in_p;
 
-            int32_t offset = best_pos - in_p;
-
-            if(!buffer_seek(in, best_size, BUFFER_SEEK_DIRECTION_CURRENT)) {
+            if(!buffer_seek(in, zpm.best_size, BUFFER_SEEK_DIRECTION_CURRENT)) {
                 return -1;
             }
 
-            best_size -= 4;
+            zpm.best_size -= 4;
 
-            out = buffer_append_byte(out, best_size);
+            out = buffer_append_byte(out, zpm.best_size);
             out = buffer_append_byte(out, offset);
 
         } else {
