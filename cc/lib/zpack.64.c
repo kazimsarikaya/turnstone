@@ -4,46 +4,67 @@
  */
 
 #include <zpack.h>
+#include <utils.h>
+
+#define ZPACK_MAX_MATCH (0x3f + 0x40 + 4)
+#define ZPACK_MIN_MATCH (4)
 
 typedef struct zpack_match_t {
     int32_t best_size;
     int64_t best_pos;
 } zpack_match_t;
 
-static int32_t zpack_count_similar (buffer_t in, int64_t in_len, int64_t p, int64_t in_p) {
-    int32_t similar = 0;
+static zpack_match_t zpack_find_bestmatch(buffer_t in, int64_t in_len, int64_t in_p) {
+    int64_t max_match = MIN(in_len - in_p, ZPACK_MAX_MATCH);
+    int64_t start = in_p - 255;
 
-    while (in_p < in_len && buffer_peek_byte_at_position(in, p) == buffer_peek_byte_at_position(in, in_p)) {
-        similar++;
-        p++;
-        in_p++;
-
-        if(similar == 0x7f + 0x40 + 4) {
-            break;
-        }
+    if(start < 0) {
+        start = 0;
     }
 
-    return similar;
-}
+    int16_t skip[256] = {0};
 
-static zpack_match_t zpack_find_bestmatch(buffer_t in, int64_t in_len, int64_t in_p) {
-    int64_t p =  in_p - 1;
-    int32_t best_size = 0;
-    int64_t best_pos = p;
+    for(int64_t i = 0; i < ZPACK_MIN_MATCH; i++) {
+        skip[buffer_peek_byte_at_position(in, in_p + i)] = ZPACK_MIN_MATCH - i;
+    }
 
-    while (p > 0 && p >= (in_p - 255)) {
-        int32_t size = zpack_count_similar(in, in_len, p, in_p);
+    int64_t i = start;
 
-        if (size > best_size) {
-            best_size = size;
-            best_pos = p;
+    int64_t best_size = ZPACK_MIN_MATCH;
+    int64_t best_pos = -1;
+
+    while(i < in_p - best_size) {
+        int64_t j = 0;
+
+        while(j < max_match && buffer_peek_byte_at_position(in, i + j) == buffer_peek_byte_at_position(in, in_p + j)) {
+            j++;
         }
 
-        if(best_size == 0x7f + 0x40 + 4) {
-            break;
+
+        if(best_size < j) {
+            for(int64_t k = 0; k < j; k++) {
+                skip[buffer_peek_byte_at_position(in, in_p + k)] = j - k;
+            }
+
+            best_size = j;
+            best_pos = i;
+
+            if(best_size == max_match) {
+                break;
+            }
         }
 
-        p--;
+        int64_t shift = 1;
+
+        if(i + best_size < in_len) {
+            shift = skip[buffer_peek_byte_at_position(in, i + best_size)];
+
+            if(shift == 0) {
+                shift = best_size + 1;
+            }
+        }
+
+        i += shift;
     }
 
     return (zpack_match_t){.best_size = best_size, .best_pos = best_pos};
@@ -58,7 +79,7 @@ int64_t zpack_pack (buffer_t in, buffer_t out) {
 
         zpack_match_t zpm = zpack_find_bestmatch(in, in_len, in_p);
 
-        if(zpm.best_size > 3) {
+        if(zpm.best_pos != -1 && zpm.best_size > 3) {
             /* copy */
             if (buffer_get_length(individuals)) {
                 out = buffer_append_byte(out, (buffer_get_length(individuals) - 1) | 0xC0);
@@ -66,10 +87,6 @@ int64_t zpack_pack (buffer_t in, buffer_t out) {
                 out = buffer_append_buffer(out, individuals);
 
                 buffer_reset(individuals);
-            }
-
-            if(zpm.best_size > 0x7f + 0x40 + 4) {
-                zpm.best_size = 0x7f + 0x40 + 4;
             }
 
             int32_t offset = zpm.best_pos - in_p;
