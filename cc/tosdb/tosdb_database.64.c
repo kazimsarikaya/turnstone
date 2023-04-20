@@ -139,7 +139,7 @@ tosdb_database_t* tosdb_database_load_database(tosdb_database_t* db) {
     return db;
 }
 
-tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name) {
+tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, const char_t* name) {
     if(strlen(name) > TOSDB_NAME_MAX_LEN) {
         PRINTLOG(TOSDB, LOG_ERROR, "database name cannot be longer than %i", TOSDB_NAME_MAX_LEN);
         return NULL;

@@ -57,7 +57,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto backend_close;
     }
 
-    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
 
     if(!testdb) {
         print_error("cannot create/open testdb");
@@ -66,7 +66,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, "table1", 1 << 10, 128 << 10, 8);
 
     if(!table1) {
         print_error("cannot create/open table1");
@@ -75,49 +75,49 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table1, (char_t*)"id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(table1, "id", DATA_TYPE_INT64)) {
         print_error("cannot add id column to table1");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table1, (char_t*)"ssn", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(table1, "ssn", DATA_TYPE_STRING)) {
         print_error("cannot add ssn column to table1");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table1, (char_t*)"fname", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(table1, "fname", DATA_TYPE_STRING)) {
         print_error("cannot add fname column to table1");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table1, (char_t*)"sname", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(table1, "sname", DATA_TYPE_STRING)) {
         print_error("cannot add sname column to table1");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table1, (char_t*)"age", DATA_TYPE_INT8)) {
+    if(!tosdb_table_column_add(table1, "age", DATA_TYPE_INT8)) {
         print_error("cannot add age column to table1");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_index_create(table1, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+    if(!tosdb_table_index_create(table1, "id", TOSDB_INDEX_PRIMARY)) {
         print_error("cannot add index for id to table1");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_index_create(table1, (char_t*)"ssn", TOSDB_INDEX_UNIQUE)) {
+    if(!tosdb_table_index_create(table1, "ssn", TOSDB_INDEX_UNIQUE)) {
         print_error("cannot add index for ssn to table1");
         pass = false;
 
@@ -132,7 +132,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
 
     }
 
-    testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+    testdb = tosdb_database_create_or_open(tosdb, "testdb");
 
     if(!testdb) {
         print_error("cannot re-open testdb");
@@ -141,7 +141,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10, 8);
+    table1 = tosdb_table_create_or_open(testdb, "table1", 1 << 10, 128 << 10, 8);
 
     if(!table1) {
         print_error("cannot re-open table1");
@@ -333,7 +333,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         goto backend_close;
     }
 
-    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
 
     if(!testdb) {
         print_error("cannot create/open testdb");
@@ -342,7 +342,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, (char_t*)"table1", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* table1 = tosdb_table_create_or_open(testdb, "table1", 1 << 10, 128 << 10, 8);
 
     if(!table1) {
         print_error("cannot create/open table1");
@@ -645,7 +645,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         goto backend_close;
     }
 
-    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
 
     if(!testdb) {
         print_error("cannot create/open testdb");
@@ -654,7 +654,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, (char_t*)"table2", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
     if(!table2) {
         print_error("cannot create/open table2");
@@ -663,42 +663,42 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table2, (char_t*)"id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(table2, "id", DATA_TYPE_INT64)) {
         print_error("cannot add id column to table2");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table2, (char_t*)"fname", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(table2, "fname", DATA_TYPE_STRING)) {
         print_error("cannot add fname column to table2");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table2, (char_t*)"sname", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(table2, "sname", DATA_TYPE_STRING)) {
         print_error("cannot add sname column to table2");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_column_add(table2, (char_t*)"country", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(table2, "country", DATA_TYPE_STRING)) {
         print_error("cannot add age column to table2");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_index_create(table2, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+    if(!tosdb_table_index_create(table2, "id", TOSDB_INDEX_PRIMARY)) {
         print_error("cannot add index for id to table2");
         pass = false;
 
         goto tdb_close;
     }
 
-    if(!tosdb_table_index_create(table2, (char_t*)"country", TOSDB_INDEX_SECONDARY)) {
+    if(!tosdb_table_index_create(table2, "country", TOSDB_INDEX_SECONDARY)) {
         print_error("cannot add index for ssn to table2");
         pass = false;
 
@@ -1072,7 +1072,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto backend_close;
     }
 
-    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, (char_t*)"testdb");
+    tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
 
     if(!testdb) {
         print_error("cannot create/open testdb");
@@ -1081,7 +1081,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, (char_t*)"table2", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
     if(!table2) {
         print_error("cannot create/open table2");
