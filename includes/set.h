@@ -30,6 +30,18 @@ typedef struct set_t set_t;
 set_t* set_create(set_comparator_f cmp);
 
 /**
+ * @brief creates string set
+ * @return set of strings
+ */
+set_t* set_string(void);
+
+/**
+ * @brief creates integer set
+ * @return set of integers
+ */
+set_t* set_integer(void);
+
+/**
  * @brief append the value to the set if not exists
  * @param[in] s the set
  * @param[in] value item to append
@@ -52,6 +64,13 @@ boolean_t set_remove(set_t* s, void* value);
  * @return true if value in set.
  */
 boolean_t set_exists(set_t* s, void* value);
+
+/**
+ * @brief returns size of the set
+ * @param[in] s the set
+ * @return set size
+ */
+uint64_t set_size(set_t* s);
 
 /**
  * @brief set destroy callback
