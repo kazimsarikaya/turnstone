@@ -17,7 +17,7 @@
  * @param[in] item2 second item
  * @return -1 if item1<item2, 1 if item1>item2, 0 otherwise
  */
-typedef int8_t (*binarsearch_comparator_f)(const void* item1, const void* item2);
+typedef int8_t (*binarysearch_comparator_f)(const void* item1, const void* item2);
 
 /**
  * @brief binarsearch
@@ -28,7 +28,7 @@ typedef int8_t (*binarsearch_comparator_f)(const void* item1, const void* item2)
  * @param[in] cmp binarsearch comparator \ref binarsearch_comparator_f
  * @return found item or null
  */
-void* binarsearch(void* list, uint64_t size, uint64_t item_size, void* key, binarsearch_comparator_f cmp);
+void* binarysearch(void* list, uint64_t size, uint64_t item_size, void* key, binarysearch_comparator_f cmp);
 
 #endif
 

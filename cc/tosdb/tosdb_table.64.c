@@ -48,12 +48,13 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             return false;
         }
 
+        uint8_t* st_list_data = (uint8_t*)&st_list->sstables[0];
+
         for(uint64_t i = 0; i < st_list->sstable_count; i++) {
-            uint64_t level = st_list->sstables[i].level;
-            tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
+            tosdb_block_sstable_list_item_t* t_st = (tosdb_block_sstable_list_item_t*)st_list_data;
 
             uint64_t st_size = sizeof(tosdb_block_sstable_list_item_t);
-            st_size += sizeof(tosdb_block_sstable_list_item_index_pair_t) * st_list->sstables[i].index_count;
+            st_size += sizeof(tosdb_block_sstable_list_item_index_pair_t) * t_st->index_count;
 
             tosdb_block_sstable_list_item_t* st = memory_malloc(st_size);
 
@@ -64,7 +65,11 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
                 return false;
             }
 
-            memory_memcopy(&st_list->sstables[i], st, st_size);
+            memory_memcopy(st_list_data, st, st_size);
+            st_list_data += st_size;
+
+            uint64_t level = st->level;
+            tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
 
 
             linkedlist_t st_l = (linkedlist_t)map_get(tbl->sstable_levels, (void*)level);
@@ -85,7 +90,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
 
             linkedlist_queue_push(st_l, st);
 
-            PRINTLOG(TOSDB, LOG_DEBUG, "sstable %lli with level %lli lazy loaded", st->sstable_id, st->level);
+            PRINTLOG(TOSDB, LOG_INFO, "table %s sstable %lli with level %lli lazy loaded", tbl->name, st->sstable_id, st->level);
         }
 
         if(st_list->header.previous_block_invalid) {

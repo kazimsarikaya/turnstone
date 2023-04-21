@@ -10,11 +10,26 @@
 #include <indexer.h>
 #include <bplustree.h>
 #include <cpu/sync.h>
+#include <strings.h>
 
 struct set_t {
     index_t* index;
     lock_t   lock;
 };
+
+int8_t set_string_cmp(const void* i1, const void* i2);
+int8_t set_integer_cmp(const void* i1, const void* i2);
+
+int8_t set_string_cmp(const void* i1, const void* i2) {
+    return strcmp(i1, i2);
+}
+
+int8_t set_integer_cmp(const void * i1, const void* i2) {
+    int64_t ii1 = (int64_t)i1;
+    int64_t ii2 = (int64_t)i2;
+
+    return ii1 - ii2;
+}
 
 set_t* set_create(set_comparator_f cmp) {
     set_t* s = memory_malloc(sizeof(set_t));
@@ -36,6 +51,13 @@ set_t* set_create(set_comparator_f cmp) {
     return s;
 }
 
+set_t* set_string(void) {
+    return set_create(set_string_cmp);
+}
+
+set_t* set_integer(void) {
+    return set_create(set_integer_cmp);
+}
 
 boolean_t set_append(set_t* s, void* value) {
     if(!s) {
@@ -95,6 +117,13 @@ boolean_t set_exists(set_t* s, void* value) {
     return true;
 }
 
+uint64_t set_size(set_t* s) {
+    if(!s) {
+        return 0;
+    }
+
+    return s->index->size(s->index);
+}
 
 boolean_t set_remove(set_t* s, void* value) {
     if(!s) {

@@ -130,10 +130,18 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         return false;
     }
 
+    uint8_t* u8_key = item->data;
+    uint64_t u8_key_length = item->secondary_key_length;
+
+    if(!u8_key_length) {
+        u8_key_length = sizeof(uint64_t);
+        u8_key = (uint8_t*)&item->secondary_key_hash;
+    }
+
     data_t item_tmp_data = {0};
     item_tmp_data.type = DATA_TYPE_INT8_ARRAY;
-    item_tmp_data.length = item->secondary_key_length;
-    item_tmp_data.value = item->data;
+    item_tmp_data.length = u8_key_length;
+    item_tmp_data.value = u8_key;
 
     if(!bloomfilter_check(bf, &item_tmp_data)) {
         bloomfilter_destroy(bf);
@@ -180,11 +188,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         idx_data += sizeof(tosdb_memtable_secondary_index_item_t) + st_idx_items[i]->secondary_key_length + st_idx_items[i]->primary_key_length;
     }
 
-    tosdb_memtable_secondary_index_item_t** found_item = (tosdb_memtable_secondary_index_item_t**)binarsearch(st_idx_items,
-                                                                                                              sli->record_count,
-                                                                                                              sizeof(tosdb_memtable_index_item_t*),
-                                                                                                              &item,
-                                                                                                              tosdb_sstable_secondary_index_comparator);
+    tosdb_memtable_secondary_index_item_t** found_item = (tosdb_memtable_secondary_index_item_t**)binarysearch(st_idx_items,
+                                                                                                               sli->record_count,
+                                                                                                               sizeof(tosdb_memtable_index_item_t*),
+                                                                                                               &item,
+                                                                                                               tosdb_sstable_secondary_index_comparator);
 
     tosdb_memtable_secondary_index_item_t** org_found_item = found_item;
 
@@ -222,7 +230,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     if(!error) {
         found_item = org_found_item;
 
-        while(found_item) {
+        while(found_item && found_item >= st_idx_items) {
             if(tosdb_sstable_secondary_index_comparator(&item, found_item)) {
                 break;
             }
