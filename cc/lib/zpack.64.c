@@ -48,10 +48,13 @@ static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t 
     int64_t best_size = 0;
     int64_t best_pos = -1;
     int64_t i = ht->head[hash];
-    int64_t prev_i;
     int64_t max_match_step = 4096;
 
     while(i != ZPACK_NO_POS && max_match_step > 0) {
+        if(i < start) {
+            break;
+        }
+
         if(best_size >= 32) {
             max_match_step >>= 2;
         }
@@ -60,18 +63,6 @@ static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t 
 
         int64_t j = 0;
         boolean_t not_matched = false;
-
-        if(i < start) {
-            prev_i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
-
-            if(prev_i == i) {
-                break;
-            }
-
-            i = prev_i;
-
-            continue;
-        }
 
         for(; j < best_size && j < max_match; j++) {
             if(buffer_peek_byte_at_position(in, i + j) != buffer_peek_byte_at_position(in, in_p + j)) {
@@ -82,13 +73,7 @@ static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t 
         }
 
         if(not_matched) {
-            prev_i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
-
-            if(prev_i == i) {
-                break;
-            }
-
-            i = prev_i;
+            i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
 
             continue;
         }
@@ -108,7 +93,7 @@ static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t 
             break;
         }
 
-        prev_i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
+        int64_t prev_i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
 
         if(prev_i == i) {
             break;
