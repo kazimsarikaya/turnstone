@@ -22,6 +22,7 @@
 #include <set.h>
 #include "elf64.h"
 #include <linker.h>
+#include <time.h>
 
 #define LINKERDB_CAP (32 << 20)
 
@@ -180,7 +181,7 @@ boolean_t linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const 
         return false;
     }
 
-    tosdb_table_t* tbl_config = tosdb_table_create_or_open(db, (char_t*)"config", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_config = tosdb_table_create_or_open(db, (char_t*)"config", 1 << 10, 512 << 10, 8);
 
     if(!tbl_config) {
         return false;
@@ -214,7 +215,7 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, (char_t*)"sections", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, (char_t*)"sections", 1 << 10, 512 << 10, 8);
 
     if(!tbl_sections) {
         return false;
@@ -256,7 +257,7 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, (char_t*)"symbols", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, (char_t*)"symbols", 1 << 10, 512 << 10, 8);
 
     if(!tbl_symbols) {
         return false;
@@ -302,7 +303,7 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, (char_t*)"relocations", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, (char_t*)"relocations", 1 << 10, 512 << 10, 8);
 
     if(!tbl_relocations) {
         return false;
@@ -447,7 +448,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
     uint64_t symbol_count = 0;
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, (char_t*)"system");
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, (char_t*)"sections", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, (char_t*)"sections", 1 << 10, 512 << 10, 8);
 
 
     boolean_t error = false;
@@ -566,7 +567,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
     uint64_t sym_id_base = *sym_id;
     (*sym_id) += symbol_count;
 
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, (char_t*)"symbols", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, (char_t*)"symbols", 1 << 10, 512 << 10, 8);
 
     for(uint16_t sym_idx = 0; sym_idx < symbol_count; sym_idx++) {
         uint8_t sym_type = ELF_SYMBOL_TYPE(e_class, symbols, sym_idx);
@@ -643,7 +644,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
         goto close;
     }
 
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, (char_t*)"relocations", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, (char_t*)"relocations", 1 << 10, 512 << 10, 8);
 
     for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
         uint8_t is_rela = 0;
@@ -851,8 +852,8 @@ close:
 
 boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, (char_t*)"system");
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, (char_t*)"relocations", 1 << 10, 128 << 10, 8);
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, (char_t*)"symbols", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, (char_t*)"relocations", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, (char_t*)"symbols", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_recs_need = tosdb_table_create_record(tbl_relocations);
 
@@ -1067,6 +1068,8 @@ int32_t main(int32_t argc, char_t** argv) {
     uint64_t sym_id = 1;
     uint64_t reloc_id = 1;
 
+    printf("%lli\n", time_ns(NULL));
+
     while(argc) {
         if(!linkerdb_parse_object_file(ldb, *argv, &sec_id, &sym_id, &reloc_id)) {
             print_error("cannot parse object file");
@@ -1079,10 +1082,14 @@ int32_t main(int32_t argc, char_t** argv) {
         argv++;
     }
 
+    printf("%lli\n", time_ns(NULL));
+
     if(!linkerdb_fix_reloc_symbol_section_ids(ldb)) {
         print_error("cannot fix relocations missing symbol sections");
         exit_code = -1;
     }
+
+    printf("%lli\n", time_ns(NULL));
 
 close:
     if(!linkerdb_close(ldb)) {
@@ -1091,6 +1098,8 @@ close:
 
         exit_code = -1;
     }
+
+    printf("%lli\n", time_ns(NULL));
 
     return exit_code;
 
