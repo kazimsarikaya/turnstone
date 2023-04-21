@@ -971,7 +971,9 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                     for(size_t i = 0; i < key_count; i++) { // search at internal node
                         const void* key_at_pos = linkedlist_get_data_at_position(node->keys, i);
 
-                        if(iter->comparator(key1, key_at_pos) < 0) {
+                        int8_t c_res = iter->comparator(key1, key_at_pos);
+
+                        if(c_res < 0 || (!tree->unique && c_res == 0)) {
                             node = linkedlist_get_data_at_position(node->childs, i);
                             break; // break search at internal node
                         }
@@ -979,7 +981,9 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                         if(i + 1 != key_count) {
                             key_at_pos = linkedlist_get_data_at_position(node->keys, i + 1);
 
-                            if(iter->comparator(key1, key_at_pos) < 0) {
+                            c_res = iter->comparator(key1, key_at_pos);
+
+                            if(c_res < 0 || (!tree->unique && c_res == 0)) {
                                 node = linkedlist_get_data_at_position(node->childs, i);
                                 break; // break search at internal node
                             }
