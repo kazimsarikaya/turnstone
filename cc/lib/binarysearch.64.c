@@ -9,7 +9,7 @@
 
 #include <binarysearch.h>
 
-void* binarsearch(void* list, uint64_t size, uint64_t item_size, void* key, binarsearch_comparator_f cmp) {
+void* binarysearch(void* list, uint64_t size, uint64_t item_size, void* key, binarysearch_comparator_f cmp) {
     uint8_t* tmp_list = list;
 
     uint64_t first = 0;
