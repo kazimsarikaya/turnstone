@@ -218,31 +218,52 @@ uint8_t  buffer_get_byte(buffer_t buffer) {
     return res;
 }
 
-uint8_t  buffer_peek_byte(buffer_t buffer) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    lock_acquire(bi->lock);
-
-    if(bi->position >= bi->length) {
-        lock_release(bi->lock);
-
-        return NULL;
-    }
-    uint8_t res = bi->data[bi->position];
-
-    lock_release(bi->lock);
-
-    return res;
-}
-
-uint8_t buffer_peek_byte_at_position(buffer_t buffer, uint64_t position) {
+uint8_t buffer_peek_byte(buffer_t buffer) {
     if(!buffer) {
         return 0;
     }
 
-    return ((buffer_internal_t*)buffer)->data[position];
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    return buffer_peek_ints_at_position(buffer, bi->position, 1);
 }
 
+uint8_t buffer_peek_byte_at_position(buffer_t buffer, uint64_t position) {
+    return buffer_peek_ints_at_position(buffer, position, 1);
+}
+
+uint64_t buffer_peek_ints_at_position(buffer_t buffer, uint64_t position, uint8_t bc) {
+    if(!buffer) {
+        return 0;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    if(bc <= 0 || bc > 8) {
+        return 0;
+    }
+
+    if(position + bc  > bi->length) {
+        return 0;
+    }
+
+    uint64_t* res_p = (uint64_t*)&bi->data[position];
+    uint64_t res = *res_p;
+
+    res = res & ((1ULL << (bc * 8)) - 1);
+
+    return res;
+}
+
+uint64_t buffer_peek_ints(buffer_t buffer, uint8_t bc) {
+    if(!buffer) {
+        return 0;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    return buffer_peek_ints_at_position(buffer, bi->position, bc);
+}
 
 uint64_t buffer_remaining(buffer_t buffer) {
     buffer_internal_t* bi = (buffer_internal_t*)buffer;
