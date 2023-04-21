@@ -78,7 +78,7 @@ typedef struct tosdb_database_t tosdb_database_t;
  * @param[in] name database name
  * @return a new database or existing one
  */
-tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, char_t* name);
+tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, const char_t* name);
 
 /**
  * @brief closes a database
@@ -108,7 +108,7 @@ typedef struct tosdb_table_t tosdb_table_t;
  * @param[in] max_memtable_count maximum memtable count at memory
  * @return a new table or existing one
  */
-tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count);
+tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count);
 
 /**
  * @brief adds a cloumn to given table
@@ -117,7 +117,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, ui
  * @param[in] column type
  * @return true if succeed.
  */
-boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_t type);
+boolean_t tosdb_table_column_add(tosdb_table_t* tbl, const char_t* colname, data_type_t type);
 
 /**
  * @enum tosdb_index_type_t
@@ -136,7 +136,7 @@ typedef enum tosdb_index_type_t {
  * @param[in] type index type
  * @return true if succeed.
  */
-boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_index_type_t type);
+boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, tosdb_index_type_t type);
 
 /**
  * @brief closes a table

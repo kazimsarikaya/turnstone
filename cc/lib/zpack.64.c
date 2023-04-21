@@ -8,6 +8,11 @@
 
 #define ZPACK_MAX_MATCH (0x3f + 0x40 + 4)
 #define ZPACK_MIN_MATCH (4)
+#define ZPACK_WINDOW_SIZE 16383
+#define ZPACK_HASHTABLE_SIZE 15
+#define ZPACK_HASHTABLE_MUL 2654435761U
+#define ZPACK_HASHTABLE_PREV_SIZE 16384
+#define ZPACK_NO_POS (-1)
 
 
 typedef struct zpack_match_t {
@@ -15,71 +20,110 @@ typedef struct zpack_match_t {
     int64_t best_pos;
 } zpack_match_t;
 
-static zpack_match_t zpack_find_bestmatch(buffer_t in, int64_t in_len, int64_t in_p) {
+typedef struct zpack_hashtable_t {
+    int64_t prev[ZPACK_HASHTABLE_PREV_SIZE];
+    int64_t head[1ULL << ZPACK_HASHTABLE_SIZE];
+} zpack_hashtable_t;
+
+
+static inline uint32_t zpack_hash4(uint32_t data) {
+    return (data * ZPACK_HASHTABLE_MUL) >> (32 - ZPACK_HASHTABLE_SIZE);
+}
+
+static inline void zpack_hash_insert(int64_t pos, uint32_t h, zpack_hashtable_t* ht) {
+    ht->prev[pos % ZPACK_WINDOW_SIZE] = ht->head[h];
+    ht->head[h] = pos;
+}
+
+static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t in_p, zpack_hashtable_t* ht) {
     int64_t max_match = MIN(in_len - in_p, ZPACK_MAX_MATCH);
-    int64_t start = in_p - 255;
+    int64_t start = in_p - ZPACK_WINDOW_SIZE;
 
     if(start < 0) {
         start = 0;
     }
 
-    int16_t skip[256] = {0};
+    uint32_t hash = buffer_peek_ints(in, ZPACK_MIN_MATCH);
+    hash = zpack_hash4(hash);
 
-    for(int64_t i = 0; i < ZPACK_MIN_MATCH; i++) {
-        skip[buffer_peek_byte_at_position(in, in_p + i)] = ZPACK_MIN_MATCH - i;
-    }
-
-    int64_t i = start;
-
-    int64_t best_size = ZPACK_MIN_MATCH;
+    int64_t best_size = 0;
     int64_t best_pos = -1;
+    int64_t i = ht->head[hash];
+    int64_t max_match_step = 4096;
 
-    while(i < in_p - best_size) {
-        int64_t j = 0;
-
-        while(j < max_match && buffer_peek_byte_at_position(in, i + j) == buffer_peek_byte_at_position(in, in_p + j)) {
-            j++;
+    while(i != ZPACK_NO_POS && max_match_step > 0) {
+        if(i < start) {
+            break;
         }
 
+        if(best_size >= 32) {
+            max_match_step >>= 2;
+        }
 
-        if(best_size < j) {
-            for(int64_t k = 0; k < j; k++) {
-                skip[buffer_peek_byte_at_position(in, in_p + k)] = j - k;
-            }
+        max_match_step--;
 
-            best_size = j;
-            best_pos = i;
+        int64_t j = 0;
+        boolean_t not_matched = false;
 
-            if(best_size == max_match) {
+        for(; j < best_size && j < max_match; j++) {
+            if(buffer_peek_byte_at_position(in, i + j) != buffer_peek_byte_at_position(in, in_p + j)) {
+                not_matched = true;
+
                 break;
             }
         }
 
-        int64_t shift = 1;
+        if(not_matched) {
+            i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
 
-        if(i + best_size < in_len) {
-            shift = skip[buffer_peek_byte_at_position(in, i + best_size)];
+            continue;
+        }
 
-            if(shift == 0) {
-                shift = best_size + 1;
+        for(; j < max_match; j++) {
+            if(buffer_peek_byte_at_position(in, i + j) != buffer_peek_byte_at_position(in, in_p + j)) {
+                break;
             }
         }
 
-        i += shift;
+        if(j >= ZPACK_MIN_MATCH && j > best_size) {
+            best_size = j;
+            best_pos = i;
+        }
+
+        if(j == max_match) {
+            break;
+        }
+
+        int64_t prev_i = ht->prev[i % ZPACK_HASHTABLE_PREV_SIZE];
+
+        if(prev_i == i) {
+            break;
+        }
+
+        i = prev_i;
     }
+
+    zpack_hash_insert(in_p, hash, ht);
 
     return (zpack_match_t){.best_size = best_size, .best_pos = best_pos};
 }
 
 int64_t zpack_pack (buffer_t in, buffer_t out) {
+    zpack_hashtable_t* ht = memory_malloc(sizeof(zpack_hashtable_t));
+
+    if(!ht) {
+        return 0;
+    }
+
+    memory_memset(ht->head, 0xFF, sizeof(ht->head));
+
     buffer_t individuals = buffer_new_with_capacity(NULL, 257);
     int64_t in_len = buffer_get_length(in);
 
     while (buffer_remaining(in)) {
         int64_t in_p = (int64_t)buffer_get_position(in);
 
-
-        zpack_match_t zpm = zpack_find_bestmatch(in, in_len, in_p);
+        zpack_match_t zpm = zpack_find_bestmatch(in, in_len, in_p, ht);
 
         if(zpm.best_pos != -1 && zpm.best_size > 3) {
             /* copy */
@@ -91,16 +135,25 @@ int64_t zpack_pack (buffer_t in, buffer_t out) {
                 buffer_reset(individuals);
             }
 
-            int32_t offset = zpm.best_pos - in_p;
+            int32_t offset = in_p - zpm.best_pos;
 
             if(!buffer_seek(in, zpm.best_size, BUFFER_SEEK_DIRECTION_CURRENT)) {
+                buffer_destroy(individuals);
+                memory_free(ht);
+
                 return -1;
             }
 
             zpm.best_size -= 4;
 
             out = buffer_append_byte(out, zpm.best_size);
-            out = buffer_append_byte(out, offset);
+
+            if(offset > 0xBF) {
+                out = buffer_append_byte(out, (offset >> 8) | 0xC0);
+                out = buffer_append_byte(out, offset & 0xFF);
+            } else {
+                out = buffer_append_byte(out, offset);
+            }
 
         } else {
             /* individual bytes */
@@ -125,6 +178,7 @@ int64_t zpack_pack (buffer_t in, buffer_t out) {
     }
 
     buffer_destroy(individuals);
+    memory_free(ht);
 
     return buffer_get_length(out);
 }
@@ -144,15 +198,19 @@ int64_t zpack_unpack(buffer_t in, buffer_t out) {
             memory_free(data);
 
         } else {
-            int32_t offset;
+            int32_t offset = buffer_get_byte(in);
 
-            offset = -256 | (int8_t)buffer_get_byte(in);
+            if((offset & 0xC0) == 0xC0) {
+                offset &= 0x3f;
+                offset = (offset << 8) | buffer_get_byte(in);
+            }
+
             size += 3;
 
-            int64_t o_p = buffer_get_position(out);
+            int64_t o_p = buffer_get_position(out) - offset;
 
             while(size-- >= 0 ) {
-                out = buffer_append_byte(out, buffer_peek_byte_at_position(out, o_p + offset));
+                out = buffer_append_byte(out, buffer_peek_byte_at_position(out, o_p));
                 o_p++;
             }
         }

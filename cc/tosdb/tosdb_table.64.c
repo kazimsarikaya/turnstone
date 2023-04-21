@@ -310,7 +310,7 @@ tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
     return tbl;
 }
 
-tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count) {
+tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count) {
     if(strlen(name) > TOSDB_NAME_MAX_LEN) {
         PRINTLOG(TOSDB, LOG_ERROR, "table name cannot be longer than %i", TOSDB_NAME_MAX_LEN);
         return NULL;
@@ -899,7 +899,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_t type) {
+boolean_t tosdb_table_column_add(tosdb_table_t* tbl, const char_t* colname, data_type_t type) {
     if(!tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null");
 
@@ -952,7 +952,7 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, char_t* colname, data_type_
     return true;
 }
 
-boolean_t tosdb_table_index_create(tosdb_table_t* tbl, char_t* colname, tosdb_index_type_t type) {
+boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, tosdb_index_type_t type) {
     if(!tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null");
 

@@ -90,7 +90,19 @@ int32_t main(int32_t argc, char_t** argv) {
         ps = zpack_pack(inbuf, outbuf);
         printf("packed size %lli\n", ps);
     } else if(*argv[1] == 'd') {
-        outbuf = buffer_new_with_capacity(NULL, in_size * 2);
+        printf("expected unpacked size %lli\n", unpacked_size);
+
+        outbuf = buffer_new_with_capacity(NULL, unpacked_size);
+
+        if(!outbuf) {
+            print_error("unpack failed, cannot create outbuf");
+
+            buffer_destroy(inbuf);
+            memory_free(in_data);
+
+            return -1;
+        }
+
         ps = zpack_unpack(inbuf, outbuf);
 
         if(unpacked_size != (uint64_t)ps ) {
@@ -116,10 +128,13 @@ int32_t main(int32_t argc, char_t** argv) {
         fd = fopen(argv[3], "w");
 
         zpack_format_t zf = {ZPACK_FORMAT_MAGIC, in_size, ps, xxhash64_hash(in_data, in_size), xxhash64_hash(outdata, ps)};
+
         memory_free(in_data);
 
         fwrite(&zf, 1, sizeof(zf), fd);
     } else {
+        memory_free(in_data);
+
         if(unpacked_hash != xxhash64_hash(outdata, ps)) {
             print_error("unpack hash mismatch");
             memory_free(outdata);
