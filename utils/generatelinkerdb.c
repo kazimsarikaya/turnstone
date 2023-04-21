@@ -609,7 +609,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
 
         boolean_t free_sym_name = false;
 
-        if(sym_type == STB_LOCAL) {
+        if(sym_scope == STB_LOCAL) {
             sym_name = strcat(shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx), sym_name);
             free_sym_name = true;
         }
@@ -886,6 +886,8 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     boolean_t error = false;
 
+    set_t* set_nf = set_string();
+
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_record_t* reloc_rec = (tosdb_record_t*)iter->delete_item(iter);
 
@@ -917,9 +919,10 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
         s_sym_rec->set_string(s_sym_rec, "name", sym_name);
 
         if(!s_sym_rec->get_record(s_sym_rec)) {
-            PRINTLOG(LINKER, LOG_WARNING, "cannot find symbol %s", sym_name);
+            if(!set_append(set_nf, sym_name)) {
+                memory_free(sym_name);
+            }
 
-            memory_free(sym_name);
             s_sym_rec->destroy(s_sym_rec);
             reloc_rec->destroy(reloc_rec);
             iter = iter->next(iter);
@@ -959,6 +962,22 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     linkedlist_destroy(res_recs);
     s_recs_need->destroy(s_recs_need);
+
+    iter = set_create_iterator(set_nf);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        char_t* sym_name = (char_t*)iter->get_item(iter);
+
+        PRINTLOG(LINKER, LOG_WARNING, "cannot find symbol %s", sym_name);
+
+        memory_free(sym_name);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    set_destroy(set_nf);
 
     return !error;
 }
