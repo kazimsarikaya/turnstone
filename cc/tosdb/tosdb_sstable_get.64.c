@@ -185,11 +185,21 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         idx_data += sizeof(tosdb_memtable_index_item_t) + st_idx_items[i]->key_length;
     }
 
-    tosdb_memtable_index_item_t* found_item = *(tosdb_memtable_index_item_t**)binarsearch(st_idx_items,
-                                                                                          sli->record_count,
-                                                                                          sizeof(tosdb_memtable_index_item_t*),
-                                                                                          &item,
-                                                                                          tosdb_sstable_index_comparator);
+    tosdb_memtable_index_item_t** t_found_item = (tosdb_memtable_index_item_t**)binarysearch(st_idx_items,
+                                                                                             sli->record_count,
+                                                                                             sizeof(tosdb_memtable_index_item_t*),
+                                                                                             &item,
+                                                                                             tosdb_sstable_index_comparator);
+
+    if(!t_found_item) {
+        memory_free(st_idx_items);
+        memory_free(st_idx);
+        memory_free(org_idx_data);
+
+        return false;
+    }
+
+    tosdb_memtable_index_item_t* found_item = *t_found_item;
 
     if(!found_item) {
         memory_free(st_idx_items);

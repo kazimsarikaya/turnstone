@@ -59,7 +59,7 @@ int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2)
         return 1;
     }
 
-    if(!ti1->secondary_key_length && !ti1->secondary_key_length) {
+    if(!ti1->secondary_key_length && !ti2->secondary_key_length) {
         return 0;
     }
 
@@ -67,7 +67,7 @@ int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2)
 
     int8_t res = memory_memcompare(ti1->data, ti2->data, min);
 
-    if(res != 0) {
+    if(min && res != 0) {
         return res;
     }
 
@@ -433,7 +433,13 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             d_key.length = u8_key_length;
             d_key.value = u8_key;
 
-            bloomfilter_add(mt_idx->bloomfilter, &d_key);
+            if(!bloomfilter_add(mt_idx->bloomfilter, &d_key)) {
+                memory_free(idx_item);
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot add primary/unique index to bloomfilter for table %s", tbl->name);
+                lock_release(tbl->lock);
+
+                return false;
+            }
 
             tosdb_memtable_index_item_t* old_item = NULL;
 
@@ -479,7 +485,13 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             d_key.length = u8_key_length;
             d_key.value = u8_key;
 
-            bloomfilter_add(mt_idx->bloomfilter, &d_key);
+            if(!bloomfilter_add(mt_idx->bloomfilter, &d_key)) {
+                memory_free(sec_idx_item);
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot add secondary index to bloomfilter for table %s", tbl->name);
+                lock_release(tbl->lock);
+
+                return false;
+            }
 
             mt_idx->index->insert(mt_idx->index, sec_idx_item, sec_idx_item, NULL);
         }
