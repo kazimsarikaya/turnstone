@@ -22,19 +22,19 @@ typedef struct disk_file_context_t {
     uint64_t block_size;
 } disk_file_context_t;
 
-uint64_t disk_file_get_disk_size(disk_t* d);
-int8_t   disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   disk_file_close(disk_t* d);
+uint64_t disk_file_get_disk_size(const disk_or_partition_t* d);
+int8_t   disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   disk_file_close(const disk_or_partition_t* d);
 disk_t*  disk_file_open(char_t* file_name, int64_t size);
 
-uint64_t disk_file_get_disk_size(disk_t* d){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+uint64_t disk_file_get_disk_size(const disk_or_partition_t* d){
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
     return ctx->file_size;
 }
 
-int8_t disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+int8_t disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
@@ -44,8 +44,8 @@ int8_t disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
     return 0;
 }
 
-int8_t disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+int8_t disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
@@ -55,13 +55,13 @@ int8_t disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data){
     return 0;
 }
 
-int8_t disk_file_close(disk_t* d) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+int8_t disk_file_close(const disk_or_partition_t* d) {
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
     fclose(ctx->fp_disk);
 
     memory_free(ctx);
 
-    memory_free(d);
+    memory_free((void*)d);
 
     return 0;
 }
@@ -103,11 +103,11 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
         return NULL;
     }
 
-    d->disk_context = ctx;
-    d->get_disk_size = disk_file_get_disk_size;
-    d->write = disk_file_write;
-    d->read = disk_file_read;
-    d->close = disk_file_close;
+    d->disk.context = ctx;
+    d->disk.get_size = disk_file_get_disk_size;
+    d->disk.write = disk_file_write;
+    d->disk.read = disk_file_read;
+    d->disk.close = disk_file_close;
 
     return d;
 }
@@ -116,6 +116,8 @@ int32_t main(int32_t argc, char** argv) {
 
     if (argc < 4) {
         printf("Error: not enough arguments\n");
+        printf("%s <diskpath> <efiimage> <kernel>\n", argv[0]);
+
         return -1;
     }
 
@@ -172,7 +174,7 @@ int32_t main(int32_t argc, char** argv) {
         uint8_t* buf = memory_malloc(kernel_size);
         fread(buf, 1, kernel_size, fp_kernel);
 
-        d->write(d, 206848, kernel_size / 512, buf);
+        d->disk.write((disk_or_partition_t*)d, 206848, kernel_size / 512, buf);
 
         memory_free(buf);
         fclose(fp_kernel);
@@ -190,7 +192,9 @@ int32_t main(int32_t argc, char** argv) {
 
     int res = -1;
 
-    filesystem_t* fs = fat32_get_or_create_fs(d, 0, FAT32_ESP_VOLUME_LABEL);
+    disk_or_partition_t* dp = (disk_or_partition_t*)d->get_partition(d, 0);
+
+    filesystem_t* fs = fat32_get_or_create_fs(dp, FAT32_ESP_VOLUME_LABEL);
 
     printf("disk size: %i\n", fs->get_total_size(fs));
 
@@ -262,7 +266,9 @@ int32_t main(int32_t argc, char** argv) {
 
     fs->close(fs);
 
-    d->close(d);
+    dp->close(dp);
+
+    d->disk.close((disk_or_partition_t*)d);
 
     if(res == 0) {
         print_success("DISK BUILDED");

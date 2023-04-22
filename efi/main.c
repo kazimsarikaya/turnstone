@@ -152,7 +152,7 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
     efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
     const disk_partition_context_t* part_ctx = NULL;
 
-    iterator_t* iter = sys_disk->get_partitions(sys_disk);
+    iterator_t* iter = sys_disk->get_partition_contexts(sys_disk);
 
     while(iter->end_of_iterator(iter) != 0) {
         const disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
@@ -201,7 +201,7 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 
     PRINTLOG(EFI, LOG_DEBUG, "kernel size %lli", (*kernel_data)->size);
 
-    res = sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
+    res = sys_disk->disk.read((disk_or_partition_t*)sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "kernel load failed");

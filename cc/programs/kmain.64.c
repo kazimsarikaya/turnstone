@@ -276,19 +276,19 @@ int8_t kmain64(size_t entry_point) {
         disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
 
         if(sata0) {
-            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->get_disk_size(sata0));
+            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
 
             disk_partition_context_t* part_ctx;
 
-            part_ctx = sata0->get_partition(sata0, 0);
+            part_ctx = sata0->get_partition_context(sata0, 0);
             PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
             memory_free(part_ctx);
 
-            part_ctx = sata0->get_partition(sata0, 1);
+            part_ctx = sata0->get_partition_context(sata0, 1);
             PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
             memory_free(part_ctx);
 
-            sata0->flush(sata0);
+            sata0->disk.flush((disk_or_partition_t*)sata0);
         } else {
             PRINTLOG(KERNEL, LOG_INFO, "sata0 is empty");
         }

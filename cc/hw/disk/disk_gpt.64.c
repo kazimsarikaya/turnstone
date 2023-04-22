@@ -15,18 +15,19 @@ typedef struct gpt_parts_iter_metadata_t {
     uint8_t     current_part_no;
 } gpt_parts_iter_metadata_t;
 
-int8_t                    gpt_disk_close(disk_t* d);
-int8_t                    gpt_write_gpt_metadata(disk_t* d);
-int8_t                    gpt_check_and_format_if_need(disk_t* d);
-uint8_t                   gpt_add_partition(disk_t* d, disk_partition_context_t* part_ctx);
-int8_t                    gpt_del_partition(disk_t* d, uint8_t partno);
-disk_partition_context_t* gpt_get_partition(disk_t* d, uint8_t partno);
+int8_t                    gpt_disk_close(const disk_or_partition_t* d);
+int8_t                    gpt_write_gpt_metadata(const disk_t* d);
+int8_t                    gpt_check_and_format_if_need(const disk_t* d);
+uint8_t                   gpt_add_partition(const disk_t* d, disk_partition_context_t* part_ctx);
+int8_t                    gpt_del_partition(const disk_t* d, uint8_t partno);
+disk_partition_context_t* gpt_get_partition_context(const disk_t* d, uint8_t partno);
+disk_partition_t*         gpt_get_partition(const disk_t* d, uint8_t partno);
 int8_t                    gpt_part_iter_destroy(iterator_t* iter);
 iterator_t*               gpt_part_iter_next(iterator_t* iter);
 int8_t                    gpt_part_iter_end_of_iterator(iterator_t* iter);
 const void*               gpt_part_iter_get_item(iterator_t* iter);
 const void*               gpt_part_iter_delete_item(iterator_t* iter);
-iterator_t*               gpt_get_partitions(disk_t* d);
+iterator_t*               gpt_get_partition_contexts(const disk_t* d);
 
 int8_t efi_create_guid(efi_guid_t* guid){
     guid->time_low = rand();
@@ -56,11 +57,11 @@ int8_t efi_guid_equal(efi_guid_t guid1, efi_guid_t guid2) {
 
 
 
-int8_t gpt_disk_close(disk_t* d) {
+int8_t gpt_disk_close(const disk_or_partition_t* d) {
 
     gpt_disk_t* gd = (gpt_disk_t*)d;
 
-    gd->underlaying_disk_pointer->close(gd->underlaying_disk_pointer);
+    gd->underlaying_disk_pointer->close((disk_or_partition_t*)gd->underlaying_disk_pointer);
 
     memory_free(gd->gpt_header);
     memory_free(gd->partitions);
@@ -70,10 +71,11 @@ int8_t gpt_disk_close(disk_t* d) {
     return 0;
 }
 
-int8_t gpt_write_gpt_metadata(disk_t* d) {
+int8_t gpt_write_gpt_metadata(const disk_t* d) {
     gpt_disk_t* gd = (gpt_disk_t*)d;
+    disk_or_partition_t* dp = (disk_or_partition_t*)d;
 
-    uint64_t size = d->get_disk_size(d);
+    uint64_t size = dp->get_size(dp);
     int64_t gpt_parts_size = sizeof(efi_partition_entry_t) * 128;
     int64_t max_lba = size / 512 - 1;
     uint64_t gpt_parts_block_count = gpt_parts_size / 512;
@@ -92,10 +94,10 @@ int8_t gpt_write_gpt_metadata(disk_t* d) {
     gpt_crc32 ^= CRC32_SEED;
     gpt->header.crc32 = gpt_crc32;
 
-    d->write(d, 1, 1, (uint8_t*)gd->gpt_header);
+    dp->write(dp, 1, 1, (uint8_t*)gd->gpt_header);
 
-    d->write(d, 2, gpt_parts_block_count, (uint8_t*)gd->partitions);
-    d->write(d, gpt->last_usable_lba + 1, gpt_parts_block_count, (uint8_t*)gd->partitions);
+    dp->write(dp, 2, gpt_parts_block_count, (uint8_t*)gd->partitions);
+    dp->write(dp, gpt->last_usable_lba + 1, gpt_parts_block_count, (uint8_t*)gd->partitions);
 
     gpt->partition_entry_lba = gpt->last_usable_lba + 1;
     gpt->my_lba = max_lba;
@@ -107,20 +109,21 @@ int8_t gpt_write_gpt_metadata(disk_t* d) {
     gpt_crc32 ^= CRC32_SEED;
     gpt->header.crc32 = gpt_crc32;
 
-    d->write(d, max_lba, 1, (uint8_t*)gd->gpt_header);
+    dp->write(dp, max_lba, 1, (uint8_t*)gd->gpt_header);
 
     memory_free(gd->gpt_header);
 
-    d->read(d, 1, 1, (uint8_t**)&gd->gpt_header);
+    dp->read(dp, 1, 1, (uint8_t**)&gd->gpt_header);
 
     return 0;
 }
 
-int8_t gpt_check_and_format_if_need(disk_t* d) {
+int8_t gpt_check_and_format_if_need(const disk_t* d) {
     gpt_disk_t* gd = (gpt_disk_t*)d;
+    disk_or_partition_t* dp = (disk_or_partition_t*)d;
 
 
-    uint64_t size = d->get_disk_size(d);
+    uint64_t size = dp->get_size((disk_or_partition_t*)d);
     uint32_t max_sectors_tmp = -1;
     uint64_t max_sectors = max_sectors_tmp;
     uint64_t sector_count = size / 512;
@@ -131,23 +134,23 @@ int8_t gpt_check_and_format_if_need(disk_t* d) {
 
     uint8_t* data;
 
-    d->read(d, 0, 1, &data);
+    dp->read(dp, 0, 1, &data);
 
     efi_pmbr_partition_t* pmbr_part = (efi_pmbr_partition_t*)(data + 0x1be);
 
     if(pmbr_part->part_type == EFI_PMBR_PART_TYPE) {
         memory_free(data);
 
-        d->read(d, 1, 1, &data);
+        dp->read(dp, 1, 1, &data);
 
         efi_partition_table_header_t* gpt_table = (efi_partition_table_header_t*)data;
 
         if(gpt_table->header.signature == EFI_PART_TABLE_HEADER_SIGNATURE) {
             memory_free(data);
 
-            d->read(d, 1, 1, (uint8_t**)&gd->gpt_header);
+            dp->read(dp, 1, 1, (uint8_t**)&gd->gpt_header);
 
-            d->read(d, 2, gpt_parts_block_count, (uint8_t**)&gd->partitions);
+            dp->read(dp, 2, gpt_parts_block_count, (uint8_t**)&gd->partitions);
 
             return 0;
         }
@@ -176,7 +179,7 @@ int8_t gpt_check_and_format_if_need(disk_t* d) {
     data[510] = 0x55;
     data[511] = 0xAA;
 
-    d->write(d, 0, 1, data);
+    dp->write(dp, 0, 1, data);
 
     memory_free(data);
 
@@ -204,7 +207,7 @@ int8_t gpt_check_and_format_if_need(disk_t* d) {
     return 0;
 }
 
-uint8_t gpt_add_partition(disk_t* d, disk_partition_context_t* part_ctx){
+uint8_t gpt_add_partition(const disk_t* d, disk_partition_context_t* part_ctx){
 
     efi_partition_entry_t* ic = ( efi_partition_entry_t*)part_ctx->internal_context;
 
@@ -224,7 +227,7 @@ uint8_t gpt_add_partition(disk_t* d, disk_partition_context_t* part_ctx){
     return -1;
 }
 
-int8_t gpt_del_partition(disk_t* d, uint8_t partno){
+int8_t gpt_del_partition(const disk_t* d, uint8_t partno){
 
     if(partno > 127) {
         return -1;
@@ -239,7 +242,7 @@ int8_t gpt_del_partition(disk_t* d, uint8_t partno){
     return 0;
 }
 
-disk_partition_context_t*  gpt_get_partition(disk_t* d, uint8_t partno) {
+disk_partition_context_t*  gpt_get_partition_context(const disk_t* d, uint8_t partno) {
     if(partno > 127) {
         return NULL;
     }
@@ -315,7 +318,7 @@ const void* gpt_part_iter_get_item(iterator_t* iter){
         return NULL;
     }
 
-    return gpt_get_partition((disk_t*)md->disk, md->current_part_no);
+    return gpt_get_partition_context((disk_t*)md->disk, md->current_part_no);
 }
 
 const void* gpt_part_iter_delete_item(iterator_t* iter){
@@ -329,13 +332,13 @@ const void* gpt_part_iter_delete_item(iterator_t* iter){
         return NULL;
     }
 
-    disk_partition_context_t* tmp = gpt_get_partition((disk_t*)md->disk, md->current_part_no);
+    disk_partition_context_t* tmp = gpt_get_partition_context((disk_t*)md->disk, md->current_part_no);
     gpt_del_partition((disk_t*)md->disk, md->current_part_no);
 
     return tmp;
 }
 
-iterator_t* gpt_get_partitions(disk_t* d){
+iterator_t* gpt_get_partition_contexts(const disk_t* d){
     if(d == NULL) {
         return NULL;
     }
@@ -403,17 +406,146 @@ disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk){
 
     memory_memcopy(underlaying_disk, gd, sizeof(disk_t));
 
-    gd->underlaying_disk.close = gpt_disk_close;
+    gd->underlaying_disk.disk.close = gpt_disk_close;
     gd->underlaying_disk.add_partition = gpt_add_partition;
     gd->underlaying_disk.del_partition = gpt_del_partition;
+    gd->underlaying_disk.get_partition_context = gpt_get_partition_context;
+    gd->underlaying_disk.get_partition_contexts = gpt_get_partition_contexts;
     gd->underlaying_disk.get_partition = gpt_get_partition;
-    gd->underlaying_disk.get_partitions = gpt_get_partitions;
-
-    gd->underlaying_disk_pointer = underlaying_disk;
+    gd->underlaying_disk_pointer = (disk_or_partition_t*)underlaying_disk;
 
     disk_t* d = (disk_t*)gd;
 
     gpt_check_and_format_if_need(d);
 
     return d;
+}
+
+typedef struct disk_partition_ctx_t {
+    const disk_t*                   disk;
+    const disk_partition_context_t* ctx;
+} disk_partition_ctx_t;
+
+uint64_t                        disk_partition_get_size(const disk_or_partition_t* d);
+int8_t                          disk_partition_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t                          disk_partition_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t                          disk_partition_flush(const disk_or_partition_t* d);
+int8_t                          disk_partition_close(const disk_or_partition_t* d);
+const disk_partition_context_t* disk_partition_get_context(const disk_partition_t* p);
+const disk_t*                   disk_partition_get_disk(const disk_partition_t* p);
+
+disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
+    gpt_disk_t* gd = (gpt_disk_t*) d;
+
+    disk_partition_context_t* ctx = gd->underlaying_disk.get_partition_context(d, partno);
+
+    if(!ctx) {
+        return NULL;
+    }
+
+    disk_partition_ctx_t* dctx = memory_malloc(sizeof(disk_partition_ctx_t));
+
+    if(!dctx) {
+        memory_free(ctx);
+
+        return NULL;
+    }
+
+    dctx->ctx = ctx;
+    dctx->disk = d;
+
+    disk_partition_t* res = memory_malloc(sizeof(disk_partition_t));
+
+    if(!res) {
+        memory_free(ctx);
+        memory_free(dctx);
+
+        return NULL;
+    }
+
+    res->partition.context = dctx;
+    res->partition.close = disk_partition_close;
+    res->partition.read = disk_partition_read;
+    res->partition.write = disk_partition_write;
+    res->partition.get_size = disk_partition_get_size;
+    res->get_disk = disk_partition_get_disk;
+    res->get_context = disk_partition_get_context;
+
+    return res;
+}
+
+
+const disk_partition_context_t* disk_partition_get_context(const disk_partition_t* p) {
+    if(!p) {
+        return NULL;
+    }
+
+    disk_partition_ctx_t* dctx = p->partition.context;
+
+    return dctx->ctx;
+}
+
+const disk_t* disk_partition_get_disk(const disk_partition_t* p) {
+    if(!p) {
+        return NULL;
+    }
+
+    disk_partition_ctx_t* dctx = p->partition.context;
+
+    return dctx->disk;
+}
+
+uint64_t disk_partition_get_size(const disk_or_partition_t* d) {
+    if(!d) {
+        return 0;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+
+    return 512 * (dctx->ctx->end_lba - dctx->ctx->start_lba + 1);
+}
+
+int8_t disk_partition_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
+    if(!d) {
+        return 0;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+
+    return dctx->disk->disk.write((disk_or_partition_t*)dctx->disk, dctx->ctx->start_lba + lba, count, data);
+}
+
+int8_t disk_partition_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data) {
+    if(!d) {
+        return 0;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+
+    return dctx->disk->disk.read((disk_or_partition_t*)dctx->disk, dctx->ctx->start_lba + lba, count, data);
+}
+
+
+int8_t disk_partition_flush(const disk_or_partition_t* d) {
+    if(!d) {
+        return 0;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+
+    return dctx->disk->disk.flush((disk_or_partition_t*)dctx->disk);
+}
+
+int8_t disk_partition_close(const disk_or_partition_t* d) {
+    if(!d) {
+        return 0;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+
+    memory_free((void*)dctx->ctx);
+    memory_free(dctx);
+    memory_free((void*)d);
+
+    return 0;
 }
