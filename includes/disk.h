@@ -21,18 +21,20 @@ typedef struct disk_partition_t    disk_partition_t;
 typedef struct disk_or_partition_t disk_or_partition_t;
 
 typedef uint64_t (*disk_or_partition_get_size_f)(const disk_or_partition_t* dp);
+typedef uint64_t (*disk_or_partition_get_block_size_f)(const disk_or_partition_t* dp);
 typedef int8_t   (*disk_or_partition_write_f)(const disk_or_partition_t* dp, uint64_t lba, uint64_t count, uint8_t* data);
 typedef int8_t   (*disk_or_partition_read_f)(const disk_or_partition_t* dp, uint64_t lba, uint64_t count, uint8_t** data);
 typedef int8_t   (*disk_or_partition_flush_f)(const disk_or_partition_t* dp);
 typedef int8_t   (*disk_or_partition_close_f)(const disk_or_partition_t* dp);
 
 struct disk_or_partition_t {
-    disk_context_t               context;
-    disk_or_partition_get_size_f get_size;
-    disk_or_partition_write_f    write;
-    disk_or_partition_read_f     read;
-    disk_or_partition_flush_f    flush;
-    disk_or_partition_close_f    close;
+    disk_context_t                     context;
+    disk_or_partition_get_size_f       get_size;
+    disk_or_partition_get_block_size_f get_block_size;
+    disk_or_partition_write_f          write;
+    disk_or_partition_read_f           read;
+    disk_or_partition_flush_f          flush;
+    disk_or_partition_close_f          close;
 };
 
 struct disk_partition_t {

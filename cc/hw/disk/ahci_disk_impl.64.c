@@ -13,6 +13,7 @@ typedef struct ahci_disk_impl_context_t {
 } ahci_disk_impl_context_t;
 
 uint64_t ahci_disk_impl_get_size(const disk_or_partition_t* d);
+uint64_t ahci_disk_impl_get_block_size(const disk_or_partition_t* d);
 int8_t   ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
 int8_t   ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
 int8_t   ahci_disk_impl_flush(const disk_or_partition_t* d);
@@ -22,6 +23,11 @@ int8_t   ahci_disk_impl_close(const disk_or_partition_t* d);
 uint64_t ahci_disk_impl_get_size(const disk_or_partition_t* d){
     ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
     return ctx->sata_disk->lba_count * ctx->block_size;
+}
+
+uint64_t ahci_disk_impl_get_block_size(const disk_or_partition_t* d){
+    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    return ctx->block_size;
 }
 
 int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
@@ -163,6 +169,7 @@ disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
 
     d->disk.context = ctx;
     d->disk.get_size = ahci_disk_impl_get_size;
+    d->disk.get_block_size = ahci_disk_impl_get_block_size;
     d->disk.write = ahci_disk_impl_write;
     d->disk.read = ahci_disk_impl_read;
     d->disk.flush = ahci_disk_impl_flush;

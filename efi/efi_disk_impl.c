@@ -13,6 +13,7 @@ typedef struct efi_disk_impl_context_t {
 } efi_disk_impl_context_t;
 
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d);
+uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d);
 int8_t   efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
 int8_t   efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
 int8_t   efi_disk_impl_close(const disk_or_partition_t* d);
@@ -21,6 +22,11 @@ int8_t   efi_disk_impl_close(const disk_or_partition_t* d);
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d){
     efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
     return ctx->disk_size;
+}
+
+uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d){
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    return ctx->block_size;
 }
 
 int8_t efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
@@ -74,6 +80,7 @@ disk_t* efi_disk_impl_open(efi_block_io_t* bio) {
 
     d->disk.context = ctx;
     d->disk.get_size = efi_disk_impl_get_disk_size;
+    d->disk.get_block_size = efi_disk_impl_get_block_size;
     d->disk.write = efi_disk_impl_write;
     d->disk.read = efi_disk_impl_read;
     d->disk.close = efi_disk_impl_close;

@@ -23,6 +23,7 @@ typedef struct disk_file_context_t {
 } disk_file_context_t;
 
 uint64_t disk_file_get_disk_size(const disk_or_partition_t* d);
+uint64_t disk_file_get_block_size(const disk_or_partition_t* d);
 int8_t   disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
 int8_t   disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
 int8_t   disk_file_close(const disk_or_partition_t* d);
@@ -31,6 +32,11 @@ disk_t*  disk_file_open(char_t* file_name, int64_t size);
 uint64_t disk_file_get_disk_size(const disk_or_partition_t* d){
     disk_file_context_t* ctx = (disk_file_context_t*)d->context;
     return ctx->file_size;
+}
+
+uint64_t disk_file_get_block_size(const disk_or_partition_t* d){
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    return ctx->block_size;
 }
 
 int8_t disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
@@ -105,6 +111,7 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
 
     d->disk.context = ctx;
     d->disk.get_size = disk_file_get_disk_size;
+    d->disk.get_block_size = disk_file_get_block_size;
     d->disk.write = disk_file_write;
     d->disk.read = disk_file_read;
     d->disk.close = disk_file_close;

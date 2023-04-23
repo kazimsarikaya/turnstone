@@ -427,6 +427,7 @@ typedef struct disk_partition_ctx_t {
 } disk_partition_ctx_t;
 
 uint64_t                        disk_partition_get_size(const disk_or_partition_t* d);
+uint64_t                        disk_partition_get_block_size(const disk_or_partition_t* d);
 int8_t                          disk_partition_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
 int8_t                          disk_partition_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
 int8_t                          disk_partition_flush(const disk_or_partition_t* d);
@@ -467,7 +468,9 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
     res->partition.close = disk_partition_close;
     res->partition.read = disk_partition_read;
     res->partition.write = disk_partition_write;
+    res->partition.flush = disk_partition_flush;
     res->partition.get_size = disk_partition_get_size;
+    res->partition.get_block_size = disk_partition_get_block_size;
     res->get_disk = disk_partition_get_disk;
     res->get_context = disk_partition_get_context;
 
@@ -502,7 +505,20 @@ uint64_t disk_partition_get_size(const disk_or_partition_t* d) {
 
     disk_partition_ctx_t* dctx = d->context;
 
-    return 512 * (dctx->ctx->end_lba - dctx->ctx->start_lba + 1);
+    uint64_t bs = disk_partition_get_block_size(d);
+
+    return bs * (dctx->ctx->end_lba - dctx->ctx->start_lba + 1);
+}
+
+uint64_t disk_partition_get_block_size(const disk_or_partition_t* d) {
+    if(!d) {
+        return 0;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+    uint64_t bs = ((disk_or_partition_t*)dctx->disk)->get_block_size((disk_or_partition_t*)dctx->disk);
+
+    return bs;
 }
 
 int8_t disk_partition_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
