@@ -145,7 +145,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         }
 
         mt_idx->ti = index;
-        mt_idx->bloomfilter = bloomfilter_new(tbl->max_record_count, 0.8);
+        mt_idx->bloomfilter = bloomfilter_new(tbl->max_record_count, 0.1);
 
         if(!mt_idx->bloomfilter) {
             error = true;
@@ -782,11 +782,50 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     if(!index_data) {
         memory_free(bf_data);
+
         return false;
     }
 
+    uint64_t idx_data_block_size = sizeof(tosdb_block_sstable_index_data_t) + index_size;
+    idx_data_block_size += TOSDB_PAGE_SIZE - (idx_data_block_size % TOSDB_PAGE_SIZE);
+
+    tosdb_block_sstable_index_data_t* b_sid = memory_malloc(idx_data_block_size);
+
+    if(!b_sid) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable index data block");
+        memory_free(bf_data);
+        memory_free(index_data);
+
+        return false;
+    }
+
+    b_sid->header.block_size = idx_data_block_size;
+    b_sid->header.block_type = TOSDB_BLOCK_TYPE_SSTABLE_INDEX_DATA;
+
+    b_sid->database_id = mt->tbl->db->id;
+    b_sid->table_id = mt->tbl->id;
+    b_sid->sstable_id = mt->id;
+    b_sid->index_id = mt_idx->ti->id;
+    b_sid->index_data_size = index_size;
+
+    memory_memcopy(index_data, b_sid->data, index_size);
+    memory_free(index_data);
+
+    uint64_t idx_data_block_loc = tosdb_block_write(mt->tbl->db->tdb, (tosdb_block_header_t*)b_sid);
+
+    memory_free(b_sid);
+
+    if(!idx_data_block_loc) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot write sstable index data block");
+        memory_free(bf_data);
+
+        return false;
+    }
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "data index %lli of memtable %lli of table %s persisted at 0x%llx(0x%llx)", mt_idx->ti->id, mt->id, mt->tbl->name, idx_data_block_loc, idx_data_block_size);
+
     uint64_t minmax_key_size = first_key_length + last_key_length;
-    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + bf_size + index_size + minmax_key_size;
+    uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + minmax_key_size + bf_size;
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
 
     tosdb_block_sstable_index_t* b_si = memory_malloc(block_size);
@@ -794,7 +833,6 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     if(!b_si) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable index block");
         memory_free(bf_data);
-        memory_free(index_data);
 
         return false;
     }
@@ -808,20 +846,17 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_si->index_id = mt_idx->ti->id;
     b_si->minmax_key_size = minmax_key_size;
     b_si->bloomfilter_size = bf_size;
-    b_si->index_size = index_size;
+    b_si->index_data_size = idx_data_block_size;
+    b_si->index_data_location = idx_data_block_loc;
 
     uint8_t* tmp = &b_si->data[0];
-    uint64_t offset = 0;
 
-    memory_memcopy(first_key, tmp + offset, first_key_length);
-    offset += first_key_length;
-    memory_memcopy(last_key, tmp + offset, last_key_length);
-    offset += last_key_length;
-    memory_memcopy(bf_data, tmp + offset, bf_size);
-    offset += bf_size;
+    memory_memcopy(first_key, tmp, first_key_length);
+    tmp += first_key_length;
+    memory_memcopy(last_key, tmp, last_key_length);
+    tmp += last_key_length;
+    memory_memcopy(bf_data, tmp, bf_size);
     memory_free(bf_data);
-    memory_memcopy(index_data, tmp + offset, index_size);
-    memory_free(index_data);
 
     uint64_t block_loc = tosdb_block_write(mt->tbl->db->tdb, (tosdb_block_header_t*)b_si);
 

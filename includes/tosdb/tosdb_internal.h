@@ -39,7 +39,7 @@ typedef enum tosdb_block_type_t {
     TOSDB_BLOCK_TYPE_SSTABLE_LIST,
     TOSDB_BLOCK_TYPE_SSTABLE,
     TOSDB_BLOCK_TYPE_SSTABLE_INDEX,
-    TOSDB_BLOCK_TYPE_VALUELOG_LIST,
+    TOSDB_BLOCK_TYPE_SSTABLE_INDEX_DATA,
     TOSDB_BLOCK_TYPE_VALUELOG,
 } tosdb_block_type_t;
 
@@ -198,9 +198,20 @@ typedef struct tosdb_block_sstable_index_t {
     uint64_t             index_id;
     uint64_t             minmax_key_size;
     uint64_t             bloomfilter_size;
-    uint64_t             index_size;
+    uint64_t             index_data_location;
+    uint64_t             index_data_size;
     uint8_t              data[];
 }__attribute__((packed, aligned(8))) tosdb_block_sstable_index_t;
+
+typedef struct tosdb_block_sstable_index_data_t {
+    tosdb_block_header_t header;
+    uint64_t             database_id;
+    uint64_t             table_id;
+    uint64_t             sstable_id;
+    uint64_t             index_id;
+    uint64_t             index_data_size;
+    uint8_t              data[];
+}__attribute__((packed, aligned(8))) tosdb_block_sstable_index_data_t;
 
 struct tosdb_t {
     tosdb_backend_t*    backend;

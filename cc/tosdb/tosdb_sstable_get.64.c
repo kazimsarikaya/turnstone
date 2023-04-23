@@ -149,11 +149,22 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
     bloomfilter_destroy(bf);
 
+    tosdb_block_sstable_index_data_t* b_sid = (tosdb_block_sstable_index_data_t*)tosdb_block_read(ctx->table->db->tdb, st_idx->index_data_location, st_idx->index_data_size);
 
-    buffer_t buf_idx_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size + st_idx->bloomfilter_size, st_idx->index_size);
-    buffer_t buf_idx_out = buffer_new_with_capacity(NULL, st_idx->index_size * 2);
+    if(!b_sid) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot read index data");
+        memory_free(st_idx);
+
+        return false;
+
+    }
+
+    buffer_t buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+    buffer_t buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_size * 2);
 
     zc = zpack_unpack(buf_idx_in, buf_idx_out);
+
+    memory_free(b_sid);
 
     buffer_destroy(buf_idx_in);
 
