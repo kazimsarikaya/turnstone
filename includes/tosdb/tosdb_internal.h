@@ -27,27 +27,6 @@
 
 #define TOSDB_NAME_MAX_LEN 256
 
-
-typedef enum tosdb_backend_type_t {
-    TOSDB_BACKEND_TYPE_NONE,
-    TOSDB_BACKEND_TYPE_MEMORY,
-}tosdb_backend_type_t;
-
-typedef future_t (*tosdb_backend_read_f)(tosdb_backend_t* backend, uint64_t position, uint64_t size);
-typedef future_t (*tosdb_backend_write_f)(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data);
-typedef future_t (*tosdb_backend_flush_f)(tosdb_backend_t* backend);
-
-struct tosdb_backend_t {
-    void*                 context;
-    tosdb_backend_type_t  type;
-    uint64_t              capacity;
-    tosdb_backend_read_f  read;
-    tosdb_backend_write_f write;
-    tosdb_backend_flush_f flush;
-};
-
-boolean_t tosdb_backend_memory_close(tosdb_backend_t* backend);
-
 typedef enum tosdb_block_type_t {
     TOSDB_BLOCK_TYPE_NONE,
     TOSDB_BLOCK_TYPE_SUPERBLOCK,
@@ -232,8 +211,6 @@ struct tosdb_t {
     lock_t              lock;
 };
 
-tosdb_superblock_t*   tosdb_backend_repair(tosdb_backend_t* backend);
-tosdb_superblock_t*   tosdb_backend_format(tosdb_backend_t* backend);
 boolean_t             tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);
 uint64_t              tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block);
 tosdb_block_header_t* tosdb_block_read(tosdb_t* tdb, uint64_t location, uint64_t size);

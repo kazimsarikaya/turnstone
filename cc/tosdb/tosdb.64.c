@@ -8,36 +8,12 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
+#include <tosdb/tosdb_backend.h>
 #include <buffer.h>
 #include <cpu/sync.h>
 #include <video.h>
 #include <strings.h>
 #include <xxhash.h>
-
-boolean_t tosdb_backend_close(tosdb_backend_t* backend) {
-    if(!backend) {
-        PRINTLOG(TOSDB, LOG_ERROR, "backend is null");
-
-        return false;
-    }
-
-    if(backend->type == TOSDB_BACKEND_TYPE_MEMORY) {
-        return tosdb_backend_memory_close(backend);
-    }
-
-    PRINTLOG(TOSDB, LOG_ERROR, "not implemented backend");
-
-
-    return false;
-}
-
-tosdb_superblock_t* tosdb_backend_repair(tosdb_backend_t* backend) {
-    UNUSED(backend);
-
-    NOTIMPLEMENTEDLOG(TOSDB);
-
-    return NULL;
-}
 
 boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb) {
     if(!backend || !sb) {
@@ -52,15 +28,7 @@ boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_super
     sb->header.checksum = csum;
     PRINTLOG(TOSDB, LOG_DEBUG, "super block checksum 0x%llx", csum);
 
-    future_t fut = backend->write(backend, 0, sizeof(tosdb_superblock_t), (uint8_t*)sb);
-
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate write main super block");
-
-        return false;
-    }
-
-    uint64_t w_cnt = (uint64_t)future_get_data_and_destroy(fut);
+    uint64_t w_cnt =  backend->write(backend, 0, sizeof(tosdb_superblock_t), (uint8_t*)sb);
 
     if(w_cnt != sizeof(tosdb_superblock_t)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot write main super block");
@@ -68,15 +36,8 @@ boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_super
         return false;
     }
 
-    fut = backend->write(backend, backend->capacity - sb->header.block_size, sb->header.block_size, (uint8_t*)sb);
+    w_cnt = backend->write(backend, backend->capacity - sb->header.block_size, sb->header.block_size, (uint8_t*)sb);
 
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate write backup super block");
-
-        return false;
-    }
-
-    w_cnt = (uint64_t)future_get_data_and_destroy(fut);
 
     if(w_cnt != sizeof(tosdb_superblock_t)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot write backup super block");
@@ -84,51 +45,13 @@ boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_super
         return false;
     }
 
-    fut = backend->flush(backend);
-
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate flush");
-
-        return NULL;
-    }
-
-    boolean_t f_res = (uint64_t)future_get_data_and_destroy(fut);
+    boolean_t f_res = backend->flush(backend);
 
     if(!f_res) {
         PRINTLOG(TOSDB, LOG_ERROR, "flush failed");
     }
 
     return true;
-}
-
-tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend) {
-
-    tosdb_superblock_t* sb = memory_malloc(sizeof(tosdb_superblock_t));
-
-    if(!sb) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create super block struct");
-
-        return NULL;
-    }
-
-    strcpy(TOSDB_SUPERBLOCK_SIGNATURE, sb->header.signature);
-    sb->header.block_type = TOSDB_BLOCK_TYPE_SUPERBLOCK;
-    sb->header.block_size = sizeof(tosdb_superblock_t);
-    sb->header.version_major = TOSDB_VERSION_MAJOR;
-    sb->header.version_minor = TOSDB_VERSION_MINOR;
-    sb->capacity = backend->capacity;
-    sb->page_size = TOSDB_PAGE_SIZE;
-    sb->free_next_location = sizeof(tosdb_superblock_t);
-    sb->database_next_id = 1;
-
-    if(!tosdb_write_and_flush_superblock(backend, sb)) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot write and flush super block");
-        memory_free(sb);
-
-        return NULL;
-    }
-
-    return sb;
 }
 
 tosdb_t* tosdb_new(tosdb_backend_t* backend) {
@@ -458,15 +381,7 @@ tosdb_block_header_t* tosdb_block_read(tosdb_t* tdb, uint64_t location, uint64_t
         return NULL;
     }
 
-    future_t fut = tdb->backend->read(tdb->backend, location, size);
-
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate read block");
-
-        return NULL;
-    }
-
-    tosdb_block_header_t* block = (tosdb_block_header_t*)future_get_data_and_destroy(fut);
+    tosdb_block_header_t* block = (tosdb_block_header_t*)tdb->backend->read(tdb->backend, location, size);
 
     if(!block) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read block");
@@ -523,15 +438,7 @@ uint64_t tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block) {
 
     block->checksum = csum;
 
-    future_t fut = tdb->backend->write(tdb->backend, tdb->superblock->free_next_location, block->block_size, (uint8_t*)block);
-
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot initiate write block");
-
-        return false;
-    }
-
-    uint64_t w_cnt = (uint64_t)future_get_data_and_destroy(fut);
+    uint64_t w_cnt = tdb->backend->write(tdb->backend, tdb->superblock->free_next_location, block->block_size, (uint8_t*)block);
 
     if(w_cnt != block->block_size) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot write block");
