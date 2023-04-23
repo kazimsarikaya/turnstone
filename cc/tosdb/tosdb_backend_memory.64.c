@@ -1,5 +1,5 @@
 /**
- * @file tosdb_memory_backend.64.c
+ * @file tosdb_backend_memory.64.c
  * @brief tosdb memory backend implementation
  *
  * This work is licensed under TURNSTONE OS Public License.

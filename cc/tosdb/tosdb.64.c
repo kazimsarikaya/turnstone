@@ -15,45 +15,6 @@
 #include <strings.h>
 #include <xxhash.h>
 
-boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb) {
-    if(!backend || !sb) {
-        PRINTLOG(TOSDB, LOG_ERROR, "backend or super block is null");
-
-        return false;
-    }
-
-    sb->header.checksum = 0;
-    uint64_t csum = xxhash64_hash(sb, sb->header.block_size);
-
-    sb->header.checksum = csum;
-    PRINTLOG(TOSDB, LOG_DEBUG, "super block checksum 0x%llx", csum);
-
-    uint64_t w_cnt =  backend->write(backend, 0, sizeof(tosdb_superblock_t), (uint8_t*)sb);
-
-    if(w_cnt != sizeof(tosdb_superblock_t)) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot write main super block");
-
-        return false;
-    }
-
-    w_cnt = backend->write(backend, backend->capacity - sb->header.block_size, sb->header.block_size, (uint8_t*)sb);
-
-
-    if(w_cnt != sizeof(tosdb_superblock_t)) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot write backup super block");
-
-        return false;
-    }
-
-    boolean_t f_res = backend->flush(backend);
-
-    if(!f_res) {
-        PRINTLOG(TOSDB, LOG_ERROR, "flush failed");
-    }
-
-    return true;
-}
-
 tosdb_t* tosdb_new(tosdb_backend_t* backend) {
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend is null");

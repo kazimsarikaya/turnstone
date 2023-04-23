@@ -15,6 +15,7 @@
 typedef enum tosdb_backend_type_t {
     TOSDB_BACKEND_TYPE_NONE,
     TOSDB_BACKEND_TYPE_MEMORY,
+    TOSDB_BACKEND_TYPE_DISK,
 }tosdb_backend_type_t;
 
 typedef uint8_t   * (*tosdb_backend_read_f)(tosdb_backend_t* backend, uint64_t position, uint64_t size);
@@ -31,6 +32,7 @@ struct tosdb_backend_t {
 };
 
 boolean_t tosdb_backend_memory_close(tosdb_backend_t* backend);
+boolean_t tosdb_backend_disk_close(tosdb_backend_t* backend);
 
 typedef struct tosdb_superblock_t tosdb_superblock_t;
 

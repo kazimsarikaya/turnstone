@@ -13,6 +13,7 @@
 #include <data.h>
 #include <buffer.h>
 #include <linkedlist.h>
+#include <disk.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -37,6 +38,13 @@ tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer);
  * @return byte array of conntent
  */
 uint8_t* tosdb_backend_memory_get_contents(tosdb_backend_t* backend);
+
+/**
+ * @brief creates new tosdb disk backend
+ * @param[in] dp disk or partition
+ * @return disk backend
+ */
+tosdb_backend_t* tosdb_backend_disk_new(disk_or_partition_t* dp);
 
 /**
  * @brief closes and frees a backend
