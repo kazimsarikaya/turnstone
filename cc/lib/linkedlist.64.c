@@ -769,3 +769,78 @@ linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist
     iter->destroy(iter);
     return new_list;
 }
+
+linkedlist_item_t linkedlist_insert_at_head_and_get_linkedlist_item(linkedlist_t list, const void* data) {
+    if(!list) {
+        return NULL;
+    }
+
+    linkedlist_insert_at_position(list, data, 0);
+
+    linkedlist_internal_t* l = list;
+
+    return l->head;
+}
+
+boolean_t linkedlist_move_item_to_head(linkedlist_t list, linkedlist_item_t item) {
+    if(!list || !item) {
+        return false;
+    }
+
+    linkedlist_internal_t* l = list;
+    linkedlist_item_internal_t* li = item;
+
+    if(l->head == li) {
+        return true;
+    }
+
+    if(li->previous) {
+        li->previous->next = li->next;
+    }
+
+    if(li->next) {
+        li->next->previous = li->previous;
+    }
+
+    if(l->tail == li) {
+        l->tail = li->previous;
+
+        if(!l->tail) {
+            l->tail = l->head;
+        }
+    }
+
+    li->next = l->head;
+    li->previous = NULL;
+    l->head = li;
+
+    return true;
+}
+
+boolean_t linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlist_item_t item) {
+    if(!list || !item) {
+        return false;
+    }
+
+    linkedlist_internal_t* l = list;
+    linkedlist_item_internal_t* li = item;
+
+    if(li->previous) {
+        li->previous->next = li->next;
+    } else {
+        l->head = li->next;
+    }
+
+    if(li->next) {
+        li->next->previous = li->previous;
+    } else {
+        l->tail = li->previous;
+    }
+
+    l->item_count--;
+
+    memory_free(li);
+
+    return true;
+
+}
