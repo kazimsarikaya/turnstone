@@ -6,8 +6,8 @@
  * Please read and understand latest version of Licence.
  */
 
-#ifndef ___TOSDB_TOSDB_HASHMAP_H
-#define ___TOSDB_TOSDB_HASHMAP_H 0
+#ifndef ___HASHMAP_H
+#define ___HASHMAP_H 0
 
 #include <types.h>
 
