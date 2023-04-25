@@ -72,6 +72,10 @@ bloomfilter_t* bloomfilter_new(uint64_t entry_count, float64_t error) {
 }
 
 boolean_t bloomfilter_destroy(bloomfilter_t* bf) {
+    if(!bf) {
+        return true;
+    }
+
     memory_free(bf->bits);
     memory_free(bf);
     return true;
