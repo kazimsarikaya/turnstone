@@ -23,6 +23,8 @@
 #include "elf64.h"
 #include <linker.h>
 #include <time.h>
+#include <cache.h>
+#include <crc.h>
 
 #define LINKERDB_CAP (32 << 20)
 
@@ -103,6 +105,23 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
     tosdb_t* tdb = tosdb_new(bend);
 
     if(!tdb) {
+        buffer_set_readonly(buf, true);
+        tosdb_backend_close(bend);
+        munmap(mmap_res, capacity);
+        fclose(fp);
+        print_error("cannot create backend");
+
+        return NULL;
+    }
+
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tdb, &cc)) {
+        print_error("cannot set cache");
         buffer_set_readonly(buf, true);
         tosdb_backend_close(bend);
         munmap(mmap_res, capacity);
