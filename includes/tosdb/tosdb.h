@@ -77,6 +77,25 @@ boolean_t tosdb_close(tosdb_t* tdb);
  */
 boolean_t tosdb_free(tosdb_t* tdb);
 
+/**
+ * @struct tosdb_cache_config_t
+ * @brief tosdb cache config
+ */
+typedef struct tosdb_cache_config_t {
+    uint64_t bloomfilter_size; ///< bloom filter cache max size
+    uint64_t index_data_size; ///< index data cache max size
+    uint64_t secondary_index_data_size; ///< index data cache max size
+    uint64_t valuelog_size; ///< value log cache max size
+} tosdb_cache_config_t; ///< shorthand for struct
+
+/**
+ * @brief sets tosdb cache config
+ * @param[in] tdb tosdb instance
+ * @param[in] config tosdb cache config
+ * @return true if cache config can be setted
+ */
+boolean_t tosdb_cache_config_set(tosdb_t* tdb, tosdb_cache_config_t* config);
+
 /*! tosdb database struct type */
 typedef struct tosdb_database_t tosdb_database_t;
 

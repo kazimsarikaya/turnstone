@@ -9,6 +9,7 @@
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
 #include <tosdb/tosdb_backend.h>
+#include <tosdb/tosdb_cache.h>
 #include <buffer.h>
 #include <cpu/sync.h>
 #include <video.h>
@@ -328,6 +329,7 @@ boolean_t tosdb_free(tosdb_t * tdb) {
     memory_free(tdb->superblock);
     lock_destroy(tdb->lock);
     map_destroy(tdb->databases);
+    tosdb_cache_close(tdb->cache);
     memory_free(tdb);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "tosdb freed");
@@ -516,6 +518,30 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
     }
 
     tdb->is_dirty = false;
+
+    return true;
+}
+
+boolean_t tosdb_cache_config_set(tosdb_t* tdb, tosdb_cache_config_t* config) {
+    if(!tdb || !config) {
+        PRINTLOG(TOSDB, LOG_ERROR, "required fields are null");
+
+        return false;
+    }
+
+    if(tdb->cache) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cache config already setted");
+
+        return false;
+    }
+
+    tdb->cache = tosdb_cache_new(config);
+
+    if(!tdb->cache) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create tosdb cache");
+
+        return false;
+    }
 
     return true;
 }

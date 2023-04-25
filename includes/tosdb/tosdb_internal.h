@@ -163,6 +163,7 @@ typedef struct tosdb_block_valuelog_t {
     uint64_t             table_id;
     uint64_t             sstable_id;
     uint64_t             data_size;
+    uint64_t             valuelog_unpacked_size;
     uint8_t              data[];
 }__attribute__((packed, aligned(8))) tosdb_block_valuelog_t;
 
@@ -198,6 +199,7 @@ typedef struct tosdb_block_sstable_index_t {
     uint64_t             index_id;
     uint64_t             minmax_key_size;
     uint64_t             bloomfilter_size;
+    uint64_t             bloomfilter_unpacked_size;
     uint64_t             index_data_location;
     uint64_t             index_data_size;
     uint8_t              data[];
@@ -210,8 +212,11 @@ typedef struct tosdb_block_sstable_index_data_t {
     uint64_t             sstable_id;
     uint64_t             index_id;
     uint64_t             index_data_size;
+    uint64_t             index_data_unpacked_size;
     uint8_t              data[];
 }__attribute__((packed, aligned(8))) tosdb_block_sstable_index_data_t;
+
+typedef struct tosdb_cache_t tosdb_cache_t;
 
 struct tosdb_t {
     tosdb_backend_t*    backend;
@@ -220,6 +225,7 @@ struct tosdb_t {
     map_t               databases;
     map_t               database_new;
     lock_t              lock;
+    tosdb_cache_t*      cache;
 };
 
 boolean_t             tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);

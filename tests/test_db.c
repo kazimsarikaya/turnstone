@@ -20,6 +20,7 @@
 #include <binarysearch.h>
 #include <tokenizer.h>
 #include <set.h>
+#include <cache.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int32_t test_step1(uint32_t argc, char_t** argv);
@@ -55,6 +56,19 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         pass = false;
 
         goto backend_close;
+    }
+
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tosdb, &cc)) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto tdb_close;
     }
 
     tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
@@ -331,6 +345,19 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         pass = false;
 
         goto backend_close;
+    }
+
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tosdb, &cc)) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto tdb_close;
     }
 
     tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
@@ -643,6 +670,19 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         pass = false;
 
         goto backend_close;
+    }
+
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tosdb, &cc)) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto tdb_close;
     }
 
     tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
@@ -1072,6 +1112,19 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto backend_close;
     }
 
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tosdb, &cc)) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto tdb_close;
+    }
+
     tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");
 
     if(!testdb) {
@@ -1117,6 +1170,8 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto rec_destroy;
     }
 
+    pass = false;
+
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
@@ -1155,6 +1210,8 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         }
 
         printf("%lli %s %s\n", id, fname, country);
+
+        pass = true;
 
         memory_free(fname);
         memory_free(country);

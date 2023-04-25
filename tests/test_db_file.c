@@ -28,6 +28,9 @@
 #include <binarysearch.h>
 #include <tokenizer.h>
 #include <set.h>
+#include <tosdb/tosdb_cache.h>
+#include <cache.h>
+#include <hashmap.h>
 
 #define TOSDB_CAP (32 << 20)
 
@@ -198,6 +201,19 @@ int32_t main(uint32_t argc, char_t** argv) {
         pass = false;
 
         goto backend_close;
+    }
+
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tosdb, &cc)) {
+        print_error("cannot create tosdb");
+        pass = false;
+
+        goto tdb_close;
     }
 
     tosdb_database_t* testdb = tosdb_database_create_or_open(tosdb, "testdb");

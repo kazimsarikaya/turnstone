@@ -528,7 +528,8 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     boolean_t error = false;
 
-    buffer_t valuelog_out = buffer_new_with_capacity(NULL, buffer_get_length(mt->values));
+    uint64_t valuelog_unpacked_size = buffer_get_length(mt->values);
+    buffer_t valuelog_out = buffer_new_with_capacity(NULL, valuelog_unpacked_size);
 
     buffer_seek(mt->values, 0, BUFFER_SEEK_DIRECTION_START);
     uint64_t len = (uint64_t)zpack_pack(mt->values, valuelog_out);
@@ -561,6 +562,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     b_vl->table_id = mt->tbl->id;
     b_vl->sstable_id = mt->id;
     b_vl->data_size = ol;
+    b_vl->valuelog_unpacked_size = valuelog_unpacked_size;
     memory_memcopy(b_vl_data, b_vl->data, ol);
     memory_free(b_vl_data);
 
@@ -677,6 +679,8 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
+    uint64_t bloomfilter_unpacked_size = bf_d->length;
+
     uint64_t zc = zpack_pack(buf_bf_in, buf_bf_out);
 
     memory_free(bf_d->value);
@@ -754,7 +758,10 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
 
     buffer_seek(buf_id_in, 0, BUFFER_SEEK_DIRECTION_START);
-    buffer_t buf_id_out = buffer_new_with_capacity(NULL, buffer_get_length(buf_id_in));
+
+    uint64_t index_data_unpacked_size = buffer_get_length(buf_id_in);
+
+    buffer_t buf_id_out = buffer_new_with_capacity(NULL, index_data_unpacked_size);
 
     if(!buf_id_out) {
         memory_free(bf_data);
@@ -807,6 +814,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_sid->sstable_id = mt->id;
     b_sid->index_id = mt_idx->ti->id;
     b_sid->index_data_size = index_size;
+    b_sid->index_data_unpacked_size = index_data_unpacked_size;
 
     memory_memcopy(index_data, b_sid->data, index_size);
     memory_free(index_data);
@@ -846,6 +854,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_si->index_id = mt_idx->ti->id;
     b_si->minmax_key_size = minmax_key_size;
     b_si->bloomfilter_size = bf_size;
+    b_si->bloomfilter_unpacked_size = bloomfilter_unpacked_size;
     b_si->index_data_size = idx_data_block_size;
     b_si->index_data_location = idx_data_block_loc;
 
