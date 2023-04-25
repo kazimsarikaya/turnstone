@@ -13,6 +13,7 @@
 #include <data.h>
 #include <buffer.h>
 #include <linkedlist.h>
+#include <disk.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -37,6 +38,13 @@ tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer);
  * @return byte array of conntent
  */
 uint8_t* tosdb_backend_memory_get_contents(tosdb_backend_t* backend);
+
+/**
+ * @brief creates new tosdb disk backend
+ * @param[in] dp disk or partition
+ * @return disk backend
+ */
+tosdb_backend_t* tosdb_backend_disk_new(disk_or_partition_t* dp);
 
 /**
  * @brief closes and frees a backend
@@ -68,6 +76,25 @@ boolean_t tosdb_close(tosdb_t* tdb);
  * @return true if succeed.
  */
 boolean_t tosdb_free(tosdb_t* tdb);
+
+/**
+ * @struct tosdb_cache_config_t
+ * @brief tosdb cache config
+ */
+typedef struct tosdb_cache_config_t {
+    uint64_t bloomfilter_size; ///< bloom filter cache max size
+    uint64_t index_data_size; ///< index data cache max size
+    uint64_t secondary_index_data_size; ///< index data cache max size
+    uint64_t valuelog_size; ///< value log cache max size
+} tosdb_cache_config_t; ///< shorthand for struct
+
+/**
+ * @brief sets tosdb cache config
+ * @param[in] tdb tosdb instance
+ * @param[in] config tosdb cache config
+ * @return true if cache config can be setted
+ */
+boolean_t tosdb_cache_config_set(tosdb_t* tdb, tosdb_cache_config_t* config);
 
 /*! tosdb database struct type */
 typedef struct tosdb_database_t tosdb_database_t;

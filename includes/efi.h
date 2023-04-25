@@ -103,7 +103,7 @@ int8_t efi_guid_equal(efi_guid_t guid1, efi_guid_t guid2);
 
 typedef struct gpt_disk_s {
     disk_t                        underlaying_disk;
-    disk_t*                       underlaying_disk_pointer;
+    disk_or_partition_t*          underlaying_disk_pointer;
     efi_partition_table_header_t* gpt_header;
     efi_partition_entry_t*        partitions;
 } gpt_disk_t;

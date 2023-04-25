@@ -1,6 +1,6 @@
 /**
- * @file tosdb_memory_backend.64.c
- * @brief tosdb interface implementation
+ * @file tosdb_backend_memory.64.c
+ * @brief tosdb memory backend implementation
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
@@ -8,6 +8,7 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
+#include <tosdb/tosdb_backend.h>
 #include <future.h>
 #include <buffer.h>
 #include <cpu/sync.h>
@@ -20,11 +21,11 @@ typedef struct tosdb_backend_memory_ctx_t {
     buffer_t buffer;
 } tosdb_backend_memory_ctx_t;
 
-future_t tosdb_backend_memory_read(tosdb_backend_t* backend, uint64_t position, uint64_t size);
-future_t tosdb_backend_memory_write(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data);
-future_t tosdb_backend_memory_flush(tosdb_backend_t* backend);
+uint8_t*  tosdb_backend_memory_read(tosdb_backend_t* backend, uint64_t position, uint64_t size);
+uint64_t  tosdb_backend_memory_write(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data);
+boolean_t tosdb_backend_memory_flush(tosdb_backend_t* backend);
 
-future_t tosdb_backend_memory_read(tosdb_backend_t* backend, uint64_t position, uint64_t size) {
+uint8_t* tosdb_backend_memory_read(tosdb_backend_t* backend, uint64_t position, uint64_t size) {
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend is null");
 
@@ -56,10 +57,10 @@ future_t tosdb_backend_memory_read(tosdb_backend_t* backend, uint64_t position, 
 
     uint8_t* data = buffer_get_bytes(ctx->buffer, size);
 
-    return future_create_with_heap_and_data(NULL, NULL, data);
+    return data;
 }
 
-future_t tosdb_backend_memory_write(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data) {
+uint64_t tosdb_backend_memory_write(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data) {
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend is null");
 
@@ -94,13 +95,13 @@ future_t tosdb_backend_memory_write(tosdb_backend_t* backend, uint64_t position,
         return NULL;
     }
 
-    return future_create_with_heap_and_data(NULL, NULL, (void*)size);
+    return size;
 }
 
-future_t tosdb_backend_memory_flush(tosdb_backend_t* backend) {
+boolean_t tosdb_backend_memory_flush(tosdb_backend_t* backend) {
     UNUSED(backend);
 
-    return future_create_with_heap_and_data(NULL, NULL, (void*)1);
+    return true;
 }
 
 tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity) {

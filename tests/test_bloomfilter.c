@@ -21,7 +21,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     boolean_t pass = true;
 
-    bloomfilter_t* bf = bloomfilter_new(100, 0.80);
+    bloomfilter_t* bf = bloomfilter_new(1024, 0.1);
 
     if(!bf) {
         print_error("cannot create bloom filter");

@@ -8,6 +8,7 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
+#include <tosdb/tosdb_cache.h>
 #include <video.h>
 #include <zpack.h>
 #include <binarysearch.h>
@@ -71,63 +72,129 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         return false;
     }
 
-    tosdb_block_sstable_index_t* st_idx = (tosdb_block_sstable_index_t*)tosdb_block_read(ctx->table->db->tdb, idx_loc, idx_size);
+    tosdb_cache_t* tdb_cache = ctx->table->db->tdb->cache;
 
-    if(!st_idx) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot read sstable index from backend");
+    tosdb_memtable_secondary_index_item_t* first = NULL;
+    tosdb_memtable_secondary_index_item_t* last = NULL;
+    bloomfilter_t* bf = NULL;
+    uint64_t index_data_size = 0;
+    uint64_t index_data_location;
 
-        return false;
+    tosdb_cached_bloomfilter_t* c_bf = NULL;
+
+    tosdb_cache_key_t cache_key = {0};
+
+    cache_key.type = TOSDB_CACHE_ITEM_TYPE_BLOOMFILTER;
+    cache_key.database_id = ctx->table->db->id;
+    cache_key.table_id = ctx->table->id;
+    cache_key.index_id = index_id;
+    cache_key.level = sli->level;
+    cache_key.sstable_id = sli->sstable_id;
+
+    if(tdb_cache) {
+        c_bf = (tosdb_cached_bloomfilter_t*)tosdb_cache_get(tdb_cache, &cache_key);
     }
 
-    tosdb_memtable_secondary_index_item_t* first = (tosdb_memtable_secondary_index_item_t*)st_idx->data;
-    tosdb_memtable_secondary_index_item_t* last = (tosdb_memtable_secondary_index_item_t*)(st_idx->data +
-                                                                                           sizeof(tosdb_memtable_secondary_index_item_t) +
-                                                                                           first->secondary_key_length +
-                                                                                           first->primary_key_length);
+    if(c_bf) {
+        first = c_bf->secondary_first_key;
+        last = c_bf->secondary_last_key;
+        bf = c_bf->bloomfilter;
+        index_data_size = c_bf->index_data_size;
+        index_data_location = c_bf->index_data_location;
+    } else {
+        tosdb_block_sstable_index_t* st_idx = (tosdb_block_sstable_index_t*)tosdb_block_read(ctx->table->db->tdb, idx_loc, idx_size);
+
+        if(!st_idx) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read sstable index from backend");
+
+            return false;
+        }
+
+        tosdb_memtable_secondary_index_item_t* t_first = (tosdb_memtable_secondary_index_item_t*)st_idx->data;
+
+        uint64_t first_key_length = t_first->secondary_key_length + t_first->primary_key_length + sizeof(tosdb_memtable_secondary_index_item_t);
+        first = memory_malloc(first_key_length);
+        memory_memcopy(t_first, first, first_key_length);
+
+        tosdb_memtable_secondary_index_item_t* t_last = (tosdb_memtable_secondary_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_index_item_t) + first->secondary_key_length + first->primary_key_length);
+
+        uint64_t last_key_length = t_last->secondary_key_length + t_last->primary_key_length + sizeof(tosdb_memtable_index_item_t);
+        last = memory_malloc(last_key_length);
+        memory_memcopy(t_last, last, last_key_length);
+
+        buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
+        buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
+
+        uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
+
+        buffer_destroy(buf_bf_in);
+
+        if(!zc) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack bf");
+            memory_free(st_idx);
+            buffer_destroy(buf_bf_out);
+
+            return false;
+        }
+
+        uint64_t bf_data_len = 0;
+        uint8_t* bf_data = buffer_get_all_bytes(buf_bf_out, &bf_data_len);
+
+        buffer_destroy(buf_bf_out);
+
+        data_t bf_tmp_d = {0};
+        bf_tmp_d.type = DATA_TYPE_INT8_ARRAY;
+        bf_tmp_d.length = bf_data_len;
+        bf_tmp_d.value = bf_data;
+
+        bf = bloomfilter_deserialize(&bf_tmp_d);
+
+        memory_free(bf_data);
+
+        if(!bf) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot deserialize bloom filter");
+            memory_free(st_idx);
+
+            return false;
+        }
+
+        if(tdb_cache) {
+            c_bf = memory_malloc(sizeof(tosdb_cached_bloomfilter_t));
+            memory_memcopy(&cache_key, c_bf, sizeof(tosdb_cache_key_t));
+            c_bf->index_data_location = st_idx->index_data_location;
+            c_bf->index_data_size = st_idx->index_data_size;
+            c_bf->bloomfilter = bf;
+            c_bf->secondary_first_key = first;
+            c_bf->secondary_last_key = last;
+
+            c_bf->cache_key.data_size = sizeof(tosdb_cached_bloomfilter_t) + st_idx->bloomfilter_unpacked_size + first_key_length + last_key_length + 64; //near size
+
+            tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_bf);
+        }
+
+        index_data_size = st_idx->index_data_size;
+        index_data_location = st_idx->index_data_location;
+
+        memory_free(st_idx);
+    }
 
     int8_t first_limit = tosdb_sstable_secondary_index_comparator(&first, &item);
     int8_t last_limit = tosdb_sstable_secondary_index_comparator(&last, &item);
 
     if(first_limit == 1 || last_limit == -1) {
-        memory_free(st_idx);
-
-        return true;
-    }
-
-    buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
-    buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_size * 2);
-
-    uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
-
-    buffer_destroy(buf_bf_in);
-
-    if(!zc) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack bf");
-        memory_free(st_idx);
-        buffer_destroy(buf_bf_out);
+        if(!tdb_cache) {
+            bloomfilter_destroy(bf);
+            memory_free(first);
+            memory_free(last);
+        }
 
         return false;
     }
 
-    uint64_t bf_data_len = 0;
-    uint8_t* bf_data = buffer_get_all_bytes(buf_bf_out, &bf_data_len);
-
-    buffer_destroy(buf_bf_out);
-
-    data_t bf_tmp_d = {0};
-    bf_tmp_d.type = DATA_TYPE_INT8_ARRAY;
-    bf_tmp_d.length = bf_data_len;
-    bf_tmp_d.value = bf_data;
-
-    bloomfilter_t* bf = bloomfilter_deserialize(&bf_tmp_d);
-
-    memory_free(bf_data);
-
-    if(!bf) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot deserialize bloom filter");
-        memory_free(st_idx);
-
-        return false;
+    if(!tdb_cache) {
+        bloomfilter_destroy(bf);
+        memory_free(first);
+        memory_free(last);
     }
 
     uint8_t* u8_key = item->data;
@@ -144,53 +211,99 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     item_tmp_data.value = u8_key;
 
     if(!bloomfilter_check(bf, &item_tmp_data)) {
-        bloomfilter_destroy(bf);
-        memory_free(st_idx);
+        if(!tdb_cache) {
+            bloomfilter_destroy(bf);
+        }
 
-        return true;
+        return false;
     }
 
-    bloomfilter_destroy(bf);
+    if(!tdb_cache) {
+        bloomfilter_destroy(bf);
+    }
+
+    tosdb_memtable_secondary_index_item_t** st_idx_items = NULL;
+    uint64_t record_count = 0;
+    uint8_t* idx_data = NULL;
+    uint8_t* org_idx_data = NULL;
+
+    tosdb_cached_secondary_index_data_t* c_id = NULL;
 
 
-    buffer_t buf_idx_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size + st_idx->bloomfilter_size, st_idx->index_size);
-    buffer_t buf_idx_out = buffer_new_with_capacity(NULL, st_idx->index_size * 2);
+    cache_key.type = TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA;
 
-    zc = zpack_unpack(buf_idx_in, buf_idx_out);
+    if(tdb_cache) {
+        c_id = (tosdb_cached_secondary_index_data_t*)tosdb_cache_get(tdb_cache, &cache_key);
+    }
 
-    buffer_destroy(buf_idx_in);
+    if(c_id) {
+        st_idx_items = c_id->index_items;
+        record_count = c_id->record_count;
+    } else {
+        record_count = sli->record_count;
 
-    if(!zc) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack idx");
-        memory_free(st_idx);
+        tosdb_block_sstable_index_data_t* b_sid = (tosdb_block_sstable_index_data_t*)tosdb_block_read(ctx->table->db->tdb, index_data_location, index_data_size);
+
+        if(!b_sid) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot read index data");
+
+            return false;
+
+        }
+
+        buffer_t buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
+
+        uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
+
+        uint64_t index_data_unpacked_size = b_sid->index_data_unpacked_size;
+
+        memory_free(b_sid);
+
+        buffer_destroy(buf_idx_in);
+
+        if(!zc) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack idx");
+            buffer_destroy(buf_idx_out);
+
+            return false;
+        }
+
+        idx_data = buffer_get_all_bytes(buf_idx_out, NULL);
+        org_idx_data = idx_data;
+
         buffer_destroy(buf_idx_out);
 
-        return false;
+        st_idx_items = memory_malloc(sizeof(tosdb_memtable_secondary_index_item_t*) * record_count);
+
+        if(!st_idx_items) {
+            memory_free(idx_data);
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create index item array");
+
+            return false;
+        }
+
+        for(uint64_t i = 0; i < sli->record_count; i++) {
+            st_idx_items[i] = (tosdb_memtable_secondary_index_item_t*)idx_data;
+
+            idx_data += sizeof(tosdb_memtable_secondary_index_item_t) + st_idx_items[i]->secondary_key_length + st_idx_items[i]->primary_key_length;
+        }
+
+        if(tdb_cache) {
+            c_id = memory_malloc(sizeof(tosdb_cached_secondary_index_data_t));
+            memory_memcopy(&cache_key, c_id, sizeof(tosdb_cache_key_t));
+            c_id->index_items = st_idx_items;
+            c_id->record_count = record_count;
+            c_id->cache_key.data_size = sizeof(tosdb_cached_secondary_index_data_t) + index_data_unpacked_size + sizeof(tosdb_memtable_secondary_index_item_t*) * record_count;
+
+            tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_id);
+        }
     }
 
-    uint8_t* idx_data = buffer_get_all_bytes(buf_idx_out, NULL);
-    uint8_t* org_idx_data = idx_data;
-
-    buffer_destroy(buf_idx_out);
-
-    tosdb_memtable_secondary_index_item_t** st_idx_items = memory_malloc(sizeof(tosdb_memtable_index_item_t*) * (sli->record_count + 1));
-
-    if(!st_idx_items) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index item array");
-        memory_free(st_idx);
-
-        return false;
-    }
-
-    for(uint64_t i = 0; i < sli->record_count; i++) {
-        st_idx_items[i] = (tosdb_memtable_secondary_index_item_t*)idx_data;
-
-        idx_data += sizeof(tosdb_memtable_secondary_index_item_t) + st_idx_items[i]->secondary_key_length + st_idx_items[i]->primary_key_length;
-    }
 
     tosdb_memtable_secondary_index_item_t** found_item = (tosdb_memtable_secondary_index_item_t**)binarysearch(st_idx_items,
                                                                                                                sli->record_count,
-                                                                                                               sizeof(tosdb_memtable_index_item_t*),
+                                                                                                               sizeof(tosdb_memtable_secondary_index_item_t*),
                                                                                                                &item,
                                                                                                                tosdb_sstable_secondary_index_comparator);
 
@@ -262,10 +375,10 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
     }
 
-
-    memory_free(st_idx_items);
-    memory_free(st_idx);
-    memory_free(org_idx_data);
+    if(!tdb_cache) {
+        memory_free(st_idx_items);
+        memory_free(org_idx_data);
+    }
 
     return !error;
 }

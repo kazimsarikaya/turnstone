@@ -145,6 +145,7 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf) {
     fields[1].type = DATA_TYPE_FLOAT64;
     fields[1].value = (void*)tmp;
 
+    tmp = 0;
     memory_memcopy(&bf->error, &tmp, sizeof(uint64_t));
     fields[2].type = DATA_TYPE_FLOAT64;
     fields[2].value = (void*)tmp;
@@ -189,7 +190,7 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
     }
 
     if(bf_data->length != 7 || bf_data->value == NULL) {
-        memory_free(bf_data);
+        data_free(bf_data);
 
         return NULL;
     }
@@ -211,9 +212,8 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
     bloomfilter_t* res = memory_malloc(sizeof(bloomfilter_t));
 
     if(!res) {
-        memory_free(fields[6].value);
-        memory_free(fields);
-        memory_free(bf_data);
+        data_free(bf_data);
+
         return NULL;
     }
 

@@ -27,27 +27,6 @@
 
 #define TOSDB_NAME_MAX_LEN 256
 
-
-typedef enum tosdb_backend_type_t {
-    TOSDB_BACKEND_TYPE_NONE,
-    TOSDB_BACKEND_TYPE_MEMORY,
-}tosdb_backend_type_t;
-
-typedef future_t (*tosdb_backend_read_f)(tosdb_backend_t* backend, uint64_t position, uint64_t size);
-typedef future_t (*tosdb_backend_write_f)(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data);
-typedef future_t (*tosdb_backend_flush_f)(tosdb_backend_t* backend);
-
-struct tosdb_backend_t {
-    void*                 context;
-    tosdb_backend_type_t  type;
-    uint64_t              capacity;
-    tosdb_backend_read_f  read;
-    tosdb_backend_write_f write;
-    tosdb_backend_flush_f flush;
-};
-
-boolean_t tosdb_backend_memory_close(tosdb_backend_t* backend);
-
 typedef enum tosdb_block_type_t {
     TOSDB_BLOCK_TYPE_NONE,
     TOSDB_BLOCK_TYPE_SUPERBLOCK,
@@ -60,7 +39,7 @@ typedef enum tosdb_block_type_t {
     TOSDB_BLOCK_TYPE_SSTABLE_LIST,
     TOSDB_BLOCK_TYPE_SSTABLE,
     TOSDB_BLOCK_TYPE_SSTABLE_INDEX,
-    TOSDB_BLOCK_TYPE_VALUELOG_LIST,
+    TOSDB_BLOCK_TYPE_SSTABLE_INDEX_DATA,
     TOSDB_BLOCK_TYPE_VALUELOG,
 } tosdb_block_type_t;
 
@@ -184,6 +163,7 @@ typedef struct tosdb_block_valuelog_t {
     uint64_t             table_id;
     uint64_t             sstable_id;
     uint64_t             data_size;
+    uint64_t             valuelog_unpacked_size;
     uint8_t              data[];
 }__attribute__((packed, aligned(8))) tosdb_block_valuelog_t;
 
@@ -219,9 +199,24 @@ typedef struct tosdb_block_sstable_index_t {
     uint64_t             index_id;
     uint64_t             minmax_key_size;
     uint64_t             bloomfilter_size;
-    uint64_t             index_size;
+    uint64_t             bloomfilter_unpacked_size;
+    uint64_t             index_data_location;
+    uint64_t             index_data_size;
     uint8_t              data[];
 }__attribute__((packed, aligned(8))) tosdb_block_sstable_index_t;
+
+typedef struct tosdb_block_sstable_index_data_t {
+    tosdb_block_header_t header;
+    uint64_t             database_id;
+    uint64_t             table_id;
+    uint64_t             sstable_id;
+    uint64_t             index_id;
+    uint64_t             index_data_size;
+    uint64_t             index_data_unpacked_size;
+    uint8_t              data[];
+}__attribute__((packed, aligned(8))) tosdb_block_sstable_index_data_t;
+
+typedef struct tosdb_cache_t tosdb_cache_t;
 
 struct tosdb_t {
     tosdb_backend_t*    backend;
@@ -230,10 +225,9 @@ struct tosdb_t {
     map_t               databases;
     map_t               database_new;
     lock_t              lock;
+    tosdb_cache_t*      cache;
 };
 
-tosdb_superblock_t*   tosdb_backend_repair(tosdb_backend_t* backend);
-tosdb_superblock_t*   tosdb_backend_format(tosdb_backend_t* backend);
 boolean_t             tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);
 uint64_t              tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block);
 tosdb_block_header_t* tosdb_block_read(tosdb_t* tdb, uint64_t location, uint64_t size);

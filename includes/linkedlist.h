@@ -222,6 +222,9 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
  */
 const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
 
+linkedlist_item_t linkedlist_insert_at_head_and_get_linkedlist_item(linkedlist_t list, const void* data);
+boolean_t         linkedlist_move_item_to_head(linkedlist_t list, linkedlist_item_t item);
+boolean_t         linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlist_item_t item);
 
 /*! insert data with position into list */
 #define linkedlist_insert_at_position(l, d, p ) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_POSITION, p)

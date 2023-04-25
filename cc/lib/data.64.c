@@ -249,6 +249,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         bc = *tmp_data;
         tmp_data++;
         total_len--;
+        len = 0;
         memory_memcopy(tmp_data, blen, bc);
 
         tmp_data += len + bc;
@@ -281,6 +282,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         tmp_data++;
         total_len--;
 
+        len = 0;
         memory_memcopy(tmp_data, blen, bc);
 
         tmp_data += bc;
@@ -340,6 +342,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
             bc = *tmp_data;
             tmp_data++;
             total_len--;
+            len = 0;
             memory_memcopy(tmp_data, blen, bc);
 
             tmp_data += len + bc;

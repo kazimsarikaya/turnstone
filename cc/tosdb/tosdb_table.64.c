@@ -90,7 +90,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
 
             linkedlist_queue_push(st_l, st);
 
-            PRINTLOG(TOSDB, LOG_INFO, "table %s sstable %lli with level %lli lazy loaded", tbl->name, st->sstable_id, st->level);
+            PRINTLOG(TOSDB, LOG_DEBUG, "table %s sstable %lli with level %lli lazy loaded", tbl->name, st->sstable_id, st->level);
         }
 
         if(st_list->header.previous_block_invalid) {
