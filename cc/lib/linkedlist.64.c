@@ -807,10 +807,12 @@ boolean_t linkedlist_move_item_to_head(linkedlist_t list, linkedlist_item_t item
 
         if(!l->tail) {
             l->tail = l->head;
+            l->tail->next = NULL;
         }
     }
 
     li->next = l->head;
+    l->head->previous = li;
     li->previous = NULL;
     l->head = li;
 
@@ -829,12 +831,14 @@ boolean_t linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlist_item_t
         li->previous->next = li->next;
     } else {
         l->head = li->next;
+        l->head->previous = NULL;
     }
 
     if(li->next) {
         li->next->previous = li->previous;
     } else {
         l->tail = li->previous;
+        l->tail->next = NULL;
     }
 
     l->item_count--;
