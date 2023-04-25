@@ -18,7 +18,7 @@
 typedef struct xxhash64_internal_context_t {
     uint64_t state[4];
     uint8_t  buffer[XXHASH64_MAXBUFFERSIZE];
-    uint64_t buffer_size;
+    int64_t  buffer_size;
     uint64_t total_length;
 } xxhash64_internal_context_t;
 
@@ -162,7 +162,7 @@ int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t lengt
     ictx->state[0] = s0; ictx->state[1] = s1; ictx->state[2] = s2; ictx->state[3] = s3;
 
     ictx->buffer_size = stop - data;
-    for (uint64_t i = 0; i < ictx->buffer_size; i++) {
+    for (int64_t i = 0; i < ictx->buffer_size; i++) {
         ictx->buffer[i] = data[i];
     }
 
@@ -182,7 +182,7 @@ int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t lengt
 typedef struct xxhash32_internal_context_t {
     uint32_t state[4];
     uint8_t  buffer[XXHASH32_MAXBUFFERSIZE];
-    uint64_t buffer_size;
+    int64_t  buffer_size;
     uint64_t total_length;
 } xxhash32_internal_context_t;
 
@@ -312,7 +312,7 @@ int8_t xxhash32_update(xxhash32_context_t ctx, const void* input, uint64_t lengt
     ictx->state[0] = s0; ictx->state[1] = s1; ictx->state[2] = s2; ictx->state[3] = s3;
 
     ictx->buffer_size = stop - data;
-    for (uint32_t i = 0; i < ictx->buffer_size; i++) {
+    for (int32_t i = 0; i < ictx->buffer_size; i++) {
         ictx->buffer[i] = data[i];
     }
 
