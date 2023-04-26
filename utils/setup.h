@@ -49,7 +49,7 @@ void print_error(const char* msg){
 
 memory_heap_t* d_heap = NULL;
 
-int8_t setup_ram2() {
+int8_t setup_ram2(void) {
 
     if(mmap_size < 4096) {
         print_error("invalid ram size min should be 4k");
@@ -95,11 +95,11 @@ int8_t setup_ram2() {
     return 0;
 }
 
-void remove_ram2() {
+void remove_ram2(void) {
     if(d_heap) {
         memory_heap_stat_t stat;
         memory_get_heap_stat(&stat);
-        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n\tfast hit: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit);
 
         if(stat.malloc_count != stat.free_count) {
             print_error("memory leak detected");
@@ -114,7 +114,7 @@ void remove_ram2() {
     }
 }
 
-void __attribute__((constructor)) start_ram() {
+void __attribute__((constructor)) start_ram(void) {
     int8_t res = setup_ram2();
 
     if(res) {
@@ -122,7 +122,7 @@ void __attribute__((constructor)) start_ram() {
     }
 }
 
-void __attribute__((destructor)) stop_ram() {
+void __attribute__((destructor)) stop_ram(void) {
     remove_ram2();
 }
 

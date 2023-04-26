@@ -4,13 +4,14 @@
 HOSTOS=$(shell uname -s)
 
 CC = gcc
-CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I./ -std=gnu11 \
+CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu11 \
 	-O2 -nostdlib -ffreestanding -c -m64 -msse4.2\
+	-fdata-sections -ffunction-sections \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
     -Wstrict-prototypes \
-	-D___TESTMODE=1 -g -Wno-address-of-packed-member ${CCXXEXTRAFLAGS}
+	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
@@ -19,7 +20,7 @@ LDFLAGS = -lc $(shell pkgconfig --libs valgrind|cut -f1 -d " ") -lcoregrind-amd6
 else
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
-LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux
+LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux -Wl,--gc-sections
 endif
 
 
