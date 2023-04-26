@@ -254,7 +254,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 }
 #pragma GCC diagnostic pop
 
-const acpi_aml_parse_f acpi_aml_parse_extfs[] = {
+const acpi_aml_parse_f acpi_aml_parse_ext_fs[] = {
     PARSER_F_NAME(mutex), // 0x01 -> 0
     PARSER_F_NAME(event),
     PARSER_F_NAME(extopcnt_2), //0x12 -> 2
@@ -297,7 +297,7 @@ int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, u
 
     uint8_t idx = acpi_aml_get_index_of_extended_code(ext_opcode);
 
-    acpi_aml_parse_f parser = acpi_aml_parse_extfs[idx];
+    acpi_aml_parse_f parser = acpi_aml_parse_ext_fs[idx];
     if(parser(ctx, data, &t_consumed) != 0) {
         return -1;
     }
