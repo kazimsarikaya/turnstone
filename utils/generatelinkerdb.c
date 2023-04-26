@@ -512,7 +512,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
 
         uint8_t sec_type = LINKER_SECTION_TYPE_TEXT;
 
-        if(strstarts(sec_name, ".data") == 0) {
+        if(strstarts(sec_name, ".data.rel.ro") == 0) {
+            sec_type = LINKER_SECTION_TYPE_ROREL;
+        } else if(strstarts(sec_name, ".data") == 0) {
             sec_type = LINKER_SECTION_TYPE_DATA;
         } else if(strstarts(sec_name, ".rodata") == 0) {
             sec_type = LINKER_SECTION_TYPE_RODATA;
@@ -684,16 +686,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
             continue;
         }
 
-        uint64_t reloc_sec_id = 0;
-
-        for(uint16_t s_sec_idx = 0; s_sec_idx < e_shnum; s_sec_idx++) {
-            char_t* s_sec_name = shstrtab + ELF_SECTION_NAME(e_class, sections, s_sec_idx);
-            if(strcmp(tmp_section_name, s_sec_name) == 0) {
-                reloc_sec_id = sec_id_base + s_sec_idx;
-                break;
-            }
-
-        }
+        uint64_t reloc_sec_id = ELF_SECTION_LINK(e_class, sections, sec_idx);
 
         if(!reloc_sec_id) {
             print_error("cannot find section of relocations");
@@ -701,6 +694,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
 
             break;
         }
+
+        reloc_sec_id += sec_id_base;
 
         uint64_t sec_size = ELF_SECTION_SIZE(e_class, sections, sec_idx);
         uint64_t sec_offset = ELF_SECTION_OFFSET(e_class, sections, sec_idx);
