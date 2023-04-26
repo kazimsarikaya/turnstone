@@ -14,6 +14,8 @@
 #include <linker.h>
 #include <cpu/descriptor.h>
 
+MODULE("turnstone.kernel.memory.paging");
+
 #define MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT 64
 
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_1_START = 0;

@@ -17,6 +17,8 @@
 #include <memcheck.h>
 #endif
 
+MODULE("turnstone.lib.memory");
+
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
 /*! used heap hole flag */

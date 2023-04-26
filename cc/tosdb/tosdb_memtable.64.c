@@ -12,6 +12,8 @@
 #include <bplustree.h>
 #include <zpack.h>
 
+MODULE("turnstone.kernel.db");
+
 int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2) {
     const tosdb_memtable_index_item_t* ti1 = (tosdb_memtable_index_item_t*)i1;
     const tosdb_memtable_index_item_t* ti2 = (tosdb_memtable_index_item_t*)i2;

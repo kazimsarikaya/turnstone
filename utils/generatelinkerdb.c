@@ -47,7 +47,8 @@ boolean_t   linkerdb_parse_object_file(linkerdb_t*   ldb,
                                        const char_t* filename,
                                        uint64_t*     sec_id,
                                        uint64_t*     sym_id,
-                                       uint64_t*     reloc_id);
+                                       uint64_t*     reloc_id,
+                                       uint64_t*     nm_id);
 boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb);
 
 
@@ -234,6 +235,28 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db, (char_t*)"modules", 1 << 10, 512 << 10, 8);
+
+    if(!tbl_modules) {
+        return false;
+    }
+
+    if(!tosdb_table_column_add(tbl_modules, (char_t*)"id", DATA_TYPE_INT64)) {
+        return false;
+    }
+
+    if(!tosdb_table_column_add(tbl_modules, (char_t*)"name", DATA_TYPE_STRING)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_modules, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_modules, (char_t*)"name", TOSDB_INDEX_UNIQUE)) {
+        return false;
+    }
+
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, (char_t*)"sections", 1 << 10, 512 << 10, 8);
 
     if(!tbl_sections) {
@@ -245,6 +268,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
     }
 
     if(!tosdb_table_column_add(tbl_sections, (char_t*)"name", DATA_TYPE_STRING)) {
+        return false;
+    }
+
+    if(!tosdb_table_column_add(tbl_sections, (char_t*)"module_id", DATA_TYPE_INT64)) {
         return false;
     }
 
@@ -273,6 +300,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
     }
 
     if(!tosdb_table_index_create(tbl_sections, (char_t*)"name", TOSDB_INDEX_UNIQUE)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_sections, (char_t*)"module_id", TOSDB_INDEX_SECONDARY)) {
         return false;
     }
 
@@ -379,7 +410,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
                                      const char_t* filename,
                                      uint64_t*     sec_id,
                                      uint64_t*     sym_id,
-                                     uint64_t*     reloc_id) {
+                                     uint64_t*     reloc_id,
+                                     uint64_t*     nm_id) {
 
     FILE* fp = fopen(filename, "r");
 
@@ -468,9 +500,76 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, (char_t*)"system");
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, (char_t*)"sections", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, (char_t*)"modules", 1 << 10, 512 << 10, 8);
 
 
     boolean_t error = false;
+
+    int64_t module_id = 0;
+
+    for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
+        uint64_t sec_size = ELF_SECTION_SIZE(e_class, sections, sec_idx);
+        uint64_t sec_offset = ELF_SECTION_OFFSET(e_class, sections, sec_idx);
+        char_t* sec_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sec_idx);
+
+        if(strcmp(".___module___", sec_name) == 0 && sec_size) {
+            char_t* module_name = memory_malloc(sec_size + 1);
+
+            if(!module_name) {
+                print_error("cannot allocate module name");
+                error = true;
+
+                break;
+            }
+
+            fseek(fp, sec_offset, SEEK_SET);
+            fread(module_name, sec_size, 1, fp);
+
+            tosdb_record_t* mn_rec = tosdb_table_create_record(tbl_modules);
+
+            if(!mn_rec) {
+                print_error("cannot create module name search record");
+                error = true;
+
+                break;
+            }
+
+            mn_rec->set_string(mn_rec, "name", module_name);
+
+            if(mn_rec->get_record(mn_rec)) {
+                mn_rec->get_int64(mn_rec, "id", &module_id);
+            } else {
+                mn_rec->set_int64(mn_rec, "id", *nm_id);
+
+                if(!mn_rec->upsert_record(mn_rec)) {
+                    print_error("cannot insert module into linker db");
+                    error = true;
+
+                    break;
+                }
+
+                module_id = *nm_id;
+                (*nm_id)++;
+            }
+
+            mn_rec->destroy(mn_rec);
+
+            memory_free(module_name);
+
+            break;
+        }
+    }
+
+    if(!module_id) {
+        print_error("module name not found");
+        PRINTLOG(LINKER, LOG_ERROR, "module name not found at file %s", filename);
+
+        error = true;
+    }
+
+    if(error) {
+        goto close;
+    }
 
     uint64_t sec_id_base = *sec_id;
     (*sec_id) += e_shnum;
@@ -539,6 +638,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
 
             rec->set_int64(rec, "id", sec_id_base + sec_idx);
             rec->set_string(rec, "name", sec_name);
+            rec->set_int64(rec, "module_id", module_id);
             rec->set_int64(rec, "alignment", ELF_SECTION_ALIGN(e_class, sections, sec_idx));
             rec->set_int8(rec, "class", e_class);
             rec->set_int64(rec, "size", sec_size);
@@ -613,6 +713,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
             sym_name = shstrtab + ELF_SECTION_NAME(e_class, sections, sym_shndx);
         }
 
+        if(strcmp(sym_name, "___module___") == 0) {
+            continue;
+        }
 
         if(sym_sec_id == sec_id_base) {
             print_error("unknown symbol");
@@ -1104,20 +1207,24 @@ int32_t main(int32_t argc, char_t** argv) {
     uint64_t sec_id = 1;
     uint64_t sym_id = 1;
     uint64_t reloc_id = 1;
+    uint64_t nm_id = 1;
 
     printf("%lli\n", time_ns(NULL));
 
     while(argc) {
-        if(!linkerdb_parse_object_file(ldb, *argv, &sec_id, &sym_id, &reloc_id)) {
+        if(!linkerdb_parse_object_file(ldb, *argv, &sec_id, &sym_id, &reloc_id, &nm_id)) {
             print_error("cannot parse object file");
 
             exit_code = -1;
-            break;
+            goto close;
         }
 
         argc--;
         argv++;
     }
+
+    printf("total\n\tmodules: %lli\n\tsections: %lli\n\tsymbols: %lli\n\trelocations: %lli\n",
+           nm_id - 1, sec_id - 1, sym_id - 1, reloc_id - 1);
 
     printf("%lli\n", time_ns(NULL));
 

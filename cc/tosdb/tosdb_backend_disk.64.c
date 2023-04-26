@@ -12,6 +12,8 @@
 #include <video.h>
 #include <logging.h>
 
+MODULE("turnstone.kernel.db");
+
 
 typedef struct tosdb_backend_disk_ctx_t {
     disk_or_partition_t* dp;

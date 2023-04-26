@@ -21,6 +21,7 @@
 #include <utils.h>
 #include <cpu/task.h>
 
+MODULE("turnstone.kernel.hw.network.virtnet");
 
 linkedlist_t virtio_net_devs = NULL;
 

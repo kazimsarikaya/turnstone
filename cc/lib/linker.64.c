@@ -11,6 +11,8 @@
 #include <systeminfo.h>
 #include <video.h>
 
+MODULE("turnstone.lib");
+
 int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst_program_addr) {
     program_header_t* src_program = (program_header_t*)src_program_addr;
     program_header_t* dst_program = (program_header_t*)dst_program_addr;

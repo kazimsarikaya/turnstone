@@ -9,6 +9,8 @@
 #include <memory/frame.h>
 #include <systeminfo.h>
 
+MODULE("turnstone.kernel.cpu.descriptor");
+
 descriptor_register_t* GDT_REGISTER = NULL;
 descriptor_register_t* IDT_REGISTER = NULL;
 

@@ -9,6 +9,8 @@
 #include <acpi/aml_internal.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 int8_t acpi_aml_exec_object_type(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
     acpi_aml_object_t* op1 = opcode->operands[0];
 
@@ -137,11 +139,11 @@ int8_t acpi_aml_exec_from_bcd(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t*
 
 
 #define UNIMPLEXEC(name) \
-    int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
-        UNUSED(ctx); \
-        PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
-        return -1; \
-    }
+        int8_t acpi_aml_exec_ ## name(acpi_aml_parser_context_t * ctx, acpi_aml_opcode_t * opcode){ \
+            UNUSED(ctx); \
+            PRINTLOG(ACPIAML, LOG_ERROR, "method %s for opcode 0x%04x not implemented", #name, opcode->opcode); \
+            return -1; \
+        }
 
 
 UNIMPLEXEC(to_buffer);

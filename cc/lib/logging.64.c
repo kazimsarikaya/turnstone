@@ -9,6 +9,8 @@
 
 #include <logging.h>
 
+MODULE("turnstone.lib");
+
 
 const char_t*const logging_module_names[] = {
     "KERNEL",

@@ -17,6 +17,8 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 
+MODULE("turnstone.kernel.hw.pci");
+
 typedef struct {
     memory_heap_t*     heap;
     acpi_table_mcfg_t* mcfg;

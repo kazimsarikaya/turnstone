@@ -18,6 +18,8 @@
 #include <linker.h>
 #include <utils.h>
 
+MODULE("turnstone.kernel.cpu.task");
+
 uint64_t task_id = 0;
 
 task_t* current_task = NULL;

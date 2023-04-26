@@ -8,6 +8,8 @@
 #include <cpu.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.cpu");
+
 void cpu_hlt() {
     for(;;) {
         cpu_cli();

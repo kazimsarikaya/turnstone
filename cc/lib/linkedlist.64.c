@@ -12,6 +12,8 @@
 #include <strings.h>
 #include <video.h>
 
+MODULE("turnstone.lib");
+
 /**
  * @struct linkedlist_item_internal
  * @brief linked list internal  type.

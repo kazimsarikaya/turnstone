@@ -14,6 +14,8 @@
 #include <logging.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.hw.disk.fs");
+
 file_t*      fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, const path_t* p, time_t ct, time_t lat, time_t lmt);
 directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const path_t* p, time_t ct, time_t lat, time_t lmt);
 

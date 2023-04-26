@@ -7,6 +7,8 @@
 
 #include <tokenizer.h>
 
+MODULE("turnstone.lib");
+
 const uint8_t token_delimeter_chars[] = {
     NULL, '\n', '\r', ' ', '\t', ',', ';', ':',
     '.', '\'', '"', '+', '-', '*', '/', '\\',

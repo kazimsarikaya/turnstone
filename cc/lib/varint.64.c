@@ -8,6 +8,8 @@
 #include <memory.h>
 #include <varint.h>
 
+MODULE("turnstone.lib");
+
 
 uint8_t* varint_encode(uint64_t num, int8_t* size) {
     const uint64_t max = 128;

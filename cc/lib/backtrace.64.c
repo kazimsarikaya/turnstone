@@ -10,6 +10,8 @@
 #include <video.h>
 #include <logging.h>
 
+MODULE("turnstone.lib");
+
 stackframe_t* backtrace_get_stackframe(void) {
     stackframe_t* frame = NULL;
 

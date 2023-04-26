@@ -6,6 +6,8 @@
 #include <zpack.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 #define ZPACK_MAX_MATCH (0x3f + 0x40 + 4)
 #define ZPACK_MIN_MATCH (4)
 #define ZPACK_WINDOW_SIZE 16383

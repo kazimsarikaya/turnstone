@@ -14,6 +14,8 @@
 #include <utils.h>
 #include <systeminfo.h>
 
+MODULE("turnstone.kernel.hw.video");
+
 #define VIDEO_TAB_STOP 8
 
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column

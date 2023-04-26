@@ -15,6 +15,8 @@
 #include <linkedlist.h>
 #include <map.h>
 
+MODULE("turnstone.lib");
+
 
 map_t network_ipv4_packet_fragments = NULL;
 

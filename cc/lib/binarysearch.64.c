@@ -9,6 +9,8 @@
 
 #include <binarysearch.h>
 
+MODULE("turnstone.lib");
+
 void* binarysearch(void* list, uint64_t size, uint64_t item_size, void* key, binarysearch_comparator_f cmp) {
     uint8_t* tmp_list = list;
 

@@ -10,6 +10,8 @@
 #include <iterator.h>
 #include <strings.h>
 
+MODULE("turnstone.lib");
+
 typedef struct indexer_idx_kc_internal_t {
     uint64_t              idx_id;
     index_t*              idx;

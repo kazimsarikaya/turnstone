@@ -20,6 +20,8 @@
 #include <utils.h>
 #include <cpu/task.h>
 
+MODULE("turnstone.kernel.hw.network.e1000");
+
 linkedlist_t e1000_net_devs = NULL;
 
 uint16_t network_e1000_eeprom_read(network_e1000_dev_t* dev, uint8_t addr);

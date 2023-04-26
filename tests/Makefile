@@ -20,7 +20,8 @@ LDFLAGS = -lc $(shell pkgconfig --libs valgrind|cut -f1 -d " ") -lcoregrind-amd6
 else
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
-LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux -Wl,--gc-sections
+LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux \
+		  -Wl,--gc-sections -Wl,--allow-multiple-definition
 endif
 
 OUTPUT = ../output

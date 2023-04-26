@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <strings.h>
 
+MODULE("turnstone.lib");
+
 number_t power(number_t base, number_t p) {
     if (p == 0 ) {
         return 1;

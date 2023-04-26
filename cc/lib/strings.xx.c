@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 
 size_t strlen(const char_t* string) {
     if(string == NULL) {

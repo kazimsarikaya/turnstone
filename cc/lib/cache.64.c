@@ -11,6 +11,8 @@
 #include <cpu/sync.h>
 #include <memory.h>
 
+MODULE("turnstone.lib");
+
 struct cache_t {
     cache_config_t config;
     linkedlist_t   mru_list;

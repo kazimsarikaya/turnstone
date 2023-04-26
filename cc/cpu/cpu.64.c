@@ -9,6 +9,8 @@
 #include <cpu.h>
 #include <cpu/crx.h>
 
+MODULE("turnstone.kernel.cpu");
+
 uint64_t cpu_read_msr(uint32_t msr_address){
     uint64_t low_part, high_part;
     __asm__ __volatile__ ("rdmsr" : "=a" (low_part), "=d" (high_part) : "c" (msr_address));

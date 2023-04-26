@@ -11,6 +11,8 @@
 #include <cpu/task.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib.memory");
+
 /*! default heap variable */
 memory_heap_t* memory_heap_default = NULL;
 

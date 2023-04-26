@@ -11,6 +11,8 @@
  #include <strings.h>
  #include <bplustree.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 
 
 typedef int8_t (* acpi_aml_parse_f)(acpi_aml_parser_context_t* ctx, void**, uint64_t*);

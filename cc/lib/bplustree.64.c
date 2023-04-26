@@ -11,6 +11,8 @@
 #include <linkedlist.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 /**
  * @struct bplustree_node_internal_t
  * @brief internal tree node

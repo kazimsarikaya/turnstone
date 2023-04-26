@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <strings.h>
 
+MODULE("turnstone.kernel.hw.disk.fs");
+
 
 typedef struct fs_path_ctx_t {
     char_t*       path_string;

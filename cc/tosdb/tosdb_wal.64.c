@@ -7,3 +7,5 @@
  */
 
 #include <tosdb/wal.h>
+
+MODULE("turnstone.kernel.db");

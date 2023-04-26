@@ -6,6 +6,8 @@
 #include <types.h>
 #include <device/kbd_scancodes.h>
 
+MODULE("turnstone.kernel.hw.kbd");
+
 const wchar_t KBD_SCANCODES_NORMAL[] = {
     KBD_SCANCODE_NULL,                     KBD_SCANCODE_ESC,                                       '1',                                                        '2',                                                                '3',                                                                 '4',                                                                 '5',                                                                  '6',                                                                      '7',                                          '8',                                      '9',                              '0',                              '-',                                                  '=',                                                                  KBD_SCANCODE_BACKSPACE /*0x0e*/,
     '\t',                                  'q',                                                    'w',                                                        'e',                                                                'r',                                                                 't',                                                                 'y',                                                                  'u',                                                                      'i',                                          'o',                                      'p',                              '[',                              ']',                                                  '\n' /* enter 0x1c*/,

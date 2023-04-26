@@ -9,6 +9,8 @@
 #include <buffer.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib");
+
 
 typedef struct buffer_internal_t {
     memory_heap_t* heap;

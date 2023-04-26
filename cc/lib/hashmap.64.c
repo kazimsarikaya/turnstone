@@ -10,6 +10,8 @@
 #include <memory.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib");
+
 typedef struct hashmap_item_t {
     boolean_t   exists;
     const void* key;
