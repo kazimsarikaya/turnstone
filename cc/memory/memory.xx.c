@@ -262,16 +262,32 @@ int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
         return 0;
     }
 
-    uint8_t* mem1_t = (uint8_t*)mem1;
-    uint8_t* mem2_t = (uint8_t*)mem2;
-    for(size_t i = 0; i < size; i++) {
+    size_t q_size = size / sizeof(size_t);
+    size_t rem = size % sizeof(size_t);
+
+    size_t* s_mem1 = (size_t*)mem1;
+    size_t* s_mem2 = (size_t*)mem2;
+
+    for(size_t i = 0; i < q_size; i++) {
+        if(s_mem1[i] < s_mem2[i]) {
+            return -1;
+        } else if(s_mem1[i] > s_mem2[i]) {
+            return 1;
+        }
+    }
+
+    size_t jump = sizeof(size_t) * q_size;
+
+    uint8_t* mem1_t = (uint8_t*)mem1 + jump;
+    uint8_t* mem2_t = (uint8_t*)mem2 + jump;
+
+    for(size_t i = 0; i < rem; i++) {
         if(mem1_t[i] < mem2_t[i]) {
             return -1;
-        } else if(mem1_t[i] == mem2_t[i]) {
-            continue;
         } else if(mem1_t[i] > mem2_t[i]) {
             return 1;
         }
     }
+
     return 0;
 }
