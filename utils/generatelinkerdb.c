@@ -686,6 +686,10 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
             continue;
         }
 
+        if(strstarts(tmp_section_name, ".data") == 0 && strstarts(tmp_section_name, ".data.rel.ro") != 0) {
+            PRINTLOG(LINKER, LOG_WARNING, "relocation at data section %s at %s", tmp_section_name, filename);
+        }
+
         uint64_t reloc_sec_id = ELF_SECTION_LINK(e_class, sections, sec_idx);
 
         if(!reloc_sec_id) {
