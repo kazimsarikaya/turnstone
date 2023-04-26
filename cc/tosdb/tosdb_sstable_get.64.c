@@ -21,6 +21,14 @@ int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
     const tosdb_memtable_index_item_t* ti1 = (tosdb_memtable_index_item_t*)*((void**)i1);
     const tosdb_memtable_index_item_t* ti2 = (tosdb_memtable_index_item_t*)*((void**)i2);
 
+    if(!ti1 && ti2) {
+        return -1;
+    }
+
+    if(ti1 && !ti2) {
+        return 1;
+    }
+
     if(ti1->key_hash < ti2->key_hash) {
         return -1;
     }
@@ -52,6 +60,8 @@ int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id){
     tosdb_record_context_t* ctx = record->context;
 
@@ -114,12 +124,29 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         uint64_t first_key_length = t_first->key_length + sizeof(tosdb_memtable_index_item_t);
         first = memory_malloc(first_key_length);
+
+        if(!first) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate first item");
+            memory_free(st_idx);
+
+            return false;
+        }
+
         memory_memcopy(t_first, first, first_key_length);
 
         tosdb_memtable_index_item_t* t_last = (tosdb_memtable_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_index_item_t) + first->key_length);
 
         uint64_t last_key_length = t_last->key_length + sizeof(tosdb_memtable_index_item_t);
         last = memory_malloc(last_key_length);
+
+        if(!last) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate last item");
+            memory_free(first);
+            memory_free(st_idx);
+
+            return false;
+        }
+
         memory_memcopy(t_last, last, last_key_length);
 
         buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
@@ -131,6 +158,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         if(!zc) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack bf");
+            memory_free(first);
+            memory_free(last);
             memory_free(st_idx);
             buffer_destroy(buf_bf_out);
 
@@ -160,6 +189,17 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         if(tdb_cache) {
             c_bf = memory_malloc(sizeof(tosdb_cached_bloomfilter_t));
+
+            if(!c_bf) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate cached bloom filter");
+                memory_free(first);
+                memory_free(last);
+                memory_free(st_idx);
+                bloomfilter_destroy(bf);
+
+                return false;
+            }
+
             memory_memcopy(&cache_key, c_bf, sizeof(tosdb_cache_key_t));
             c_bf->index_data_location = st_idx->index_data_location;
             c_bf->index_data_size = st_idx->index_data_size;
@@ -297,6 +337,15 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         if(tdb_cache) {
             c_id = memory_malloc(sizeof(tosdb_cached_index_data_t));
+
+            if(!c_id) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate cached index data");
+                memory_free(st_idx_items);
+                memory_free(idx_data);
+
+                return false;
+            }
+
             memory_memcopy(&cache_key, c_id, sizeof(tosdb_cache_key_t));
             c_id->index_items = st_idx_items;
             c_id->record_count = record_count;
@@ -393,6 +442,14 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         if(tdb_cache) {
             c_vl = memory_malloc(sizeof(tosdb_cached_valuelog_t));
+
+            if(!c_vl) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate cached valuelog");
+                buffer_destroy(buf_vl_out);
+
+                return false;
+            }
+
             memory_memcopy(&cache_key, c_vl, sizeof(tosdb_cache_key_t));
             c_vl->values = buf_vl_out;
             c_vl->cache_key.data_size = sizeof(tosdb_cached_valuelog_t) + buffer_get_length(c_vl->values);
@@ -449,6 +506,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
     return true;
 }
+#pragma GCC diagnostic pop
 
 boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, linkedlist_t st_list, tosdb_memtable_index_item_t* item, uint64_t index_id) {
     boolean_t found = false;
