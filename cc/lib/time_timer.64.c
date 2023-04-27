@@ -25,7 +25,7 @@ __volatile__ uint64_t time_timer_tick_count = 0;
 __volatile__ uint64_t time_timer_spinsleep_counter_value = 0;
 __volatile__ uint8_t time_timer_start_spinsleep_counter = 0;
 
-void time_timer_reset_tick_count() {
+void time_timer_reset_tick_count(void) {
     time_timer_tick_count = 0;
 }
 
@@ -88,11 +88,11 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     return 0;
 }
 
-uint64_t time_timer_get_tick_count() {
+uint64_t time_timer_get_tick_count(void) {
     return time_timer_tick_count;
 }
 
-void time_timer_configure_spinsleep() {
+void time_timer_configure_spinsleep(void) {
     time_timer_start_spinsleep_counter = 1;
 
     while(time_timer_start_spinsleep_counter) {

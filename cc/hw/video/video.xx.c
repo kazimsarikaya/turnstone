@@ -292,7 +292,7 @@ void video_graphics_print(char_t* string) {
     }
 }
 
-void video_clear_screen(){
+void video_clear_screen(void){
     if(GRAPHICS_MODE) {
         for(int64_t i = 0; i < VIDEO_GRAPHICS_HEIGHT * VIDEO_GRAPHICS_WIDTH; i++) {
             *((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = VIDEO_GRAPHICS_BACKGROUND;

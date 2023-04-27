@@ -355,7 +355,7 @@ int8_t linker_remap_kernel(void) {
 }
 
 
-int8_t liner_remap_relink_kernel() {
+int8_t liner_remap_relink_kernel(void) {
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
     uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
     linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)kernel->reloc_start;

@@ -101,7 +101,7 @@ void sha512_transform(sha512_internal_ctx_t* ctx, const uint8_t* data)
 
 
 
-sha512_ctx_t sha512_init() {
+sha512_ctx_t sha512_init(void) {
     sha512_internal_ctx_t* ctx = memory_malloc(sizeof(sha512_internal_ctx_t));
 
     if(ctx == NULL) {
@@ -205,7 +205,7 @@ uint8_t* sha512_final(sha512_ctx_t ctx) {
     return hash;
 }
 
-sha384_ctx_t sha384_init() {
+sha384_ctx_t sha384_init(void) {
     sha512_internal_ctx_t* ctx = memory_malloc(sizeof(sha512_internal_ctx_t));
 
     if(ctx == NULL) {

@@ -10,25 +10,25 @@
 
 MODULE("turnstone.kernel.cpu");
 
-void cpu_hlt() {
+void cpu_hlt(void) {
     for(;;) {
         cpu_cli();
         __asm__ __volatile__ ("hlt");
     }
 }
 
-void cpu_idle() {
+void cpu_idle(void) {
     __asm__ __volatile__ ("hlt");
 }
 
 
-uint16_t cpu_read_data_segment(){
+uint16_t cpu_read_data_segment(void){
     uint16_t ds;
     __asm__ __volatile__ ("mov %%ds, %0" : "=r" (ds));
     return ds;
 }
 
-int8_t cpu_check_rdrand(){
+int8_t cpu_check_rdrand(void){
     cpu_cpuid_regs_t query = {0x00000001, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 

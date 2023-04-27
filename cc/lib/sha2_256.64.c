@@ -93,7 +93,7 @@ void sha256_transform(sha256_internal_ctx_t* ctx, const uint8_t* data)
 
 
 
-sha256_ctx_t sha256_init() {
+sha256_ctx_t sha256_init(void) {
     sha256_internal_ctx_t* ctx = memory_malloc(sizeof(sha256_internal_ctx_t));
 
     if(ctx == NULL) {
@@ -197,7 +197,7 @@ uint8_t* sha256_final(sha256_ctx_t ctx) {
     return hash;
 }
 
-sha224_ctx_t sha224_init() {
+sha224_ctx_t sha224_init(void) {
     sha256_internal_ctx_t* ctx = memory_malloc(sizeof(sha256_internal_ctx_t));
 
     if(ctx == NULL) {

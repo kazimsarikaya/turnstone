@@ -297,7 +297,7 @@ void task_cleanup(void){
     }
 }
 
-boolean_t task_idle_check_need_yield() {
+boolean_t task_idle_check_need_yield(void) {
     cpu_cli();
 
     boolean_t need_yield = false;
@@ -422,7 +422,7 @@ __attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
     }
 }
 
-void task_end_task() {
+void task_end_task(void) {
     cpu_cli();
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
@@ -446,7 +446,7 @@ void task_add_message_queue(linkedlist_t queue){
     linkedlist_list_insert(current_task->message_queues, queue);
 }
 
-void task_set_message_waiting(){
+void task_set_message_waiting(void){
     current_task->message_waiting = 1;
 }
 
@@ -535,7 +535,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
     return 0;
 }
 
-void task_yield() {
+void task_yield(void) {
     if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
         //	__asm__ __volatile__ ("int $0x80\n");
         cpu_cli();
@@ -554,7 +554,7 @@ int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
 }
 
 
-uint64_t task_get_id() {
+uint64_t task_get_id(void) {
     if(current_task) {
         return current_task->task_id;
     } else {
