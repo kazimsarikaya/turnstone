@@ -1059,6 +1059,41 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     }
 
     uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
+
+
+    buffer_t buf_stli = buffer_new_with_capacity(NULL, block_size * 2);
+
+    if(!buf_stli) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
+        lock_release(tbl->lock);
+
+        return false;
+    }
+
+    iterator_t* iter = linkedlist_iterator_create(tbl->sstable_list_items);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
+        lock_release(tbl->lock);
+
+        return false;
+    }
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
+
+        uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
+
+        buffer_append_bytes(buf_stli, (uint8_t*)stli, size);
+
+        memory_free(stli);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    block_size = buffer_get_length(buf_stli);
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
     tosdb_block_sstable_list_t* block = memory_malloc(block_size);
 
@@ -1076,37 +1111,11 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     block->table_id = tbl->id;
     block->sstable_count = linkedlist_size(tbl->sstable_list_items);
 
-
-    iterator_t* iter = linkedlist_iterator_create(tbl->sstable_list_items);
-
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
-        memory_free(block);
-        lock_release(tbl->lock);
-
-        return false;
-    }
-
-    idx = 0;
-
     uint8_t* ssts_loc = (uint8_t*)&block->sstables[0];
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
+    buffer_write_all_into(buf_stli, ssts_loc);
 
-        uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
-
-        memory_memcopy(stli, ssts_loc, size);
-
-        ssts_loc += size;
-
-        memory_free(stli);
-
-        iter = iter->next(iter);
-        idx++;
-    }
-
-    iter->destroy(iter);
+    buffer_destroy(buf_stli);
 
     uint64_t block_loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
 
