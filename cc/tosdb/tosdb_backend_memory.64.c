@@ -16,6 +16,8 @@
 #include <strings.h>
 #include <xxhash.h>
 
+MODULE("turnstone.kernel.db");
+
 
 typedef struct tosdb_backend_memory_ctx_t {
     buffer_t buffer;

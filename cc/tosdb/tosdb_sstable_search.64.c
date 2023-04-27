@@ -13,6 +13,8 @@
 #include <zpack.h>
 #include <binarysearch.h>
 
+MODULE("turnstone.kernel.db");
+
 boolean_t tosdb_sstable_search_on_list(tosdb_record_t * record, set_t* results, linkedlist_t st_list, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id);
 boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id);
 int8_t    tosdb_sstable_secondary_index_comparator(const void* i1, const void* i2);

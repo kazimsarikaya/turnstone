@@ -13,6 +13,8 @@
 #include <cpu/descriptor.h>
 #include <memory/paging.h>
 
+MODULE("turnstone.kernel.memory.frame");
+
 
 frame_allocator_t* KERNEL_FRAME_ALLOCATOR = NULL;
 

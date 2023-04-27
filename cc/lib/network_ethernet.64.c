@@ -12,6 +12,8 @@
 #include <time.h>
 #include <video.h>
 
+MODULE("turnstone.lib");
+
 network_mac_address_t BROADCAST_MAC = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network_mac_address_t mac2) {

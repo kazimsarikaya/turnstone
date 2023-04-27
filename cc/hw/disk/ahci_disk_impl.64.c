@@ -7,6 +7,8 @@
 #include <utils.h>
 #include <linkedlist.h>
 
+MODULE("turnstone.kernel.hw.disk.ahci");
+
 typedef struct ahci_disk_impl_context_t {
     ahci_sata_disk_t* sata_disk;
     uint64_t          block_size;

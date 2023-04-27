@@ -25,6 +25,10 @@ int32_t mem_backend_fd = 0;
 uint64_t mmmap_address = 4ULL << 30;
 uint64_t mmap_size = RAMSIZE;
 
+#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
+            if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
+            else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
+
 int                               vprintf ( const char* format, va_list arg );
 size_t                            video_printf(const char_t* fmt, ...);
 void                              print_success(const char* msg);
@@ -45,7 +49,7 @@ void print_error(const char* msg){
 
 memory_heap_t* d_heap = NULL;
 
-int8_t setup_ram2() {
+int8_t setup_ram2(void) {
 
     if(mmap_size < 4096) {
         print_error("invalid ram size min should be 4k");
@@ -91,11 +95,11 @@ int8_t setup_ram2() {
     return 0;
 }
 
-void remove_ram2() {
+void remove_ram2(void) {
     if(d_heap) {
         memory_heap_stat_t stat;
         memory_get_heap_stat(&stat);
-        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n\tfast hit: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit);
 
         if(stat.malloc_count != stat.free_count) {
             print_error("memory leak detected");
@@ -110,7 +114,7 @@ void remove_ram2() {
     }
 }
 
-void __attribute__((constructor)) start_ram() {
+void __attribute__((constructor)) start_ram(void) {
     int8_t res = setup_ram2();
 
     if(res) {
@@ -118,37 +122,31 @@ void __attribute__((constructor)) start_ram() {
     }
 }
 
-void __attribute__((destructor)) stop_ram() {
+void __attribute__((destructor)) stop_ram(void) {
     remove_ram2();
 }
 
 #ifdef ___TESTMODE
+typedef void * future_t;
 
-void*  lock_create_with_heap(memory_heap_t* heap);
-int8_t lock_destroy(void* lock);
-void   lock_acquire(void* lock);
-void   lock_release(void* lock);
-void*  lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
-void   dump_ram(char_t* fname);
-void   cpu_sti(void);
-void   apic_eoi(void);
-void   task_current_task_sleep(uint64_t when_tick);
-time_t rtc_get_time(void);
-void*  task_get_current_task(void);
-void   task_switch_task(void);
-
-uint8_t mem_area[RAMSIZE] = {0};
-uint64_t __kheap_bottom = 0;
-
-void dump_ram(char_t* fname){
-    FILE* fp = fopen( fname, "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-
-    fclose(fp);
-}
+void*    lock_create_with_heap(memory_heap_t* heap);
+int8_t   lock_destroy(void* lock);
+void     lock_acquire(void* lock);
+void     lock_release(void* lock);
+void*    lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+void     dump_ram(char_t* fname);
+void     cpu_sti(void);
+void     apic_eoi(void);
+void     task_current_task_sleep(uint64_t when_tick);
+time_t   rtc_get_time(void);
+void*    task_get_current_task(void);
+void     task_switch_task(void);
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
+void*    future_get_data_and_destroy(future_t fut);
 
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
+uint64_t __kheap_bottom = 0;
 
 size_t video_printf(const char_t* fmt, ...) {
     va_list args;
@@ -181,10 +179,15 @@ void* task_get_current_task(void){
     return NULL;
 }
 
+void* lock_create_with_heap(memory_heap_t* heap){
+    UNUSED(heap);
+    return (void*)0xdeadbeaf;
+}
+
 void* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future){
     UNUSED(heap);
     UNUSED(for_future);
-    return NULL;
+    return (void*)0xdeadbeaf;
 }
 
 int8_t lock_destroy(void* lock){
@@ -198,6 +201,40 @@ void lock_acquire(void* lock){
 
 void lock_release(void* lock){
     UNUSED(lock);
+}
+
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
+    UNUSED(heap);
+    UNUSED(lock);
+
+    if(data) {
+        return data;
+    }
+
+    return (void*)0xdeadbeaf;
+}
+
+void* future_get_data_and_destroy(future_t fut) {
+    if(!fut) {
+        return NULL;
+    }
+
+    if(((uint64_t)fut) == 0xdeadbeaf) {
+        return NULL;
+    }
+
+    return fut;
+}
+
+struct timespec {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+} ts;
+struct timespec clock_gettime(int, struct timespec* ts);
+time_t time_ns(time_t* t) {
+    UNUSED(t);
+    clock_gettime(1, &ts);
+    return 1000000000L * ts.tv_sec + ts.tv_nsec;
 }
 
 #endif

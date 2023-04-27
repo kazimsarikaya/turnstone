@@ -66,18 +66,35 @@
 #define STT_LOPROC   13
 #define STT_HIPROC   15
 
+/**
+ * A: addend
+ * G: symbol's got entry offset
+ * GOT: address of got
+ * P: current offset
+ * S: symbol value
+ * L: plt entry offset
+ * R_X86_64_64 S+A
+ * R_X86_64_GOT64 G+A
+ * R_X86_64_GOTOFF64 S+A-GOT
+ * R_X86_64_GOTPC64 GOT-P+A
+ * R_X86_64_PC32 S+A-P
+ * R_X86_64_PLT32 L+A-P
+ * R_X86_64_32 S+A
+ * R_X86_64_32S S+A
+ **/
+
 #define R_X86_64_NONE            0   /* No reloc */
-#define R_X86_64_64              1   /* Direct 64 bit  */
-#define R_X86_64_PC32            2   /* PC relative 32 bit signed */
-#define R_X86_64_GOT32           3   /* 32 bit GOT entry */
-#define R_X86_64_PLT32           4   /* 32 bit PLT address */
+#define R_X86_64_64              1   /* Direct 64 bit S+A */
+#define R_X86_64_PC32            2   /* PC relative 32 bit signed S+A-P */
+#define R_X86_64_GOT32           3   /* 32 bit GOT entry G+A */
+#define R_X86_64_PLT32           4   /* 32 bit PLT address L+A-P */
 #define R_X86_64_COPY            5   /* Copy symbol at runtime */
 #define R_X86_64_GLOB_DAT        6   /* Create GOT entry */
 #define R_X86_64_JUMP_SLOT       7   /* Create PLT entry */
 #define R_X86_64_RELATIVE        8   /* Adjust by program base */
-#define R_X86_64_GOTPCREL        9   /* 32 bit signed PC relative offset to GOT */
-#define R_X86_64_32              10  /* Direct 32 bit zero extended */
-#define R_X86_64_32S             11  /* Direct 32 bit sign extended */
+#define R_X86_64_GOTPCREL        9   /* 32 bit signed PC relative offset to GOT G+GOT+A-P*/
+#define R_X86_64_32              10  /* Direct 32 bit zero extended S+A */
+#define R_X86_64_32S             11  /* Direct 32 bit sign extended S+A */
 #define R_X86_64_16              12  /* Direct 16 bit zero extended */
 #define R_X86_64_PC16            13  /* 16 bit sign extended pc relative */
 #define R_X86_64_8               14  /* Direct 8 bit sign extended  */
@@ -91,11 +108,11 @@
 #define R_X86_64_GOTTPOFF        22  /* 32 bit signed PC relative offset to GOT entry for IE symbol */
 #define R_X86_64_TPOFF32         23  /* Offset in initial TLS block */
 #define R_X86_64_PC64            24  /* PC relative 64 bit */
-#define R_X86_64_GOTOFF64        25  /* 64 bit offset to GOT */
+#define R_X86_64_GOTOFF64        25  /* 64 bit offset to GOT S+A-GOT*/
 #define R_X86_64_GOTPC32         26  /* 32 bit signed pc relative offset to GOT */
-#define R_X86_64_GOT64           27  /* 64-bit GOT entry offset */
+#define R_X86_64_GOT64           27  /* 64-bit GOT entry offset G+A */
 #define R_X86_64_GOTPCREL64      28  /* 64-bit PC relative offset to GOT entry */
-#define R_X86_64_GOTPC64         29  /* 64-bit PC relative offset to GOT */
+#define R_X86_64_GOTPC64         29  /* 64-bit PC relative offset to GOT GOT-P+A */
 #define R_X86_64_GOTPLT64        30  /* like GOT64, says PLT entry needed */
 #define R_X86_64_PLTOFF64        31  /* 64-bit GOT relative offset to PLT entry */
 #define R_X86_64_SIZE32          32  /* Size of symbol plus 32-bit addend */
@@ -231,5 +248,29 @@ typedef struct {
     uint32_t r_symindx;
     int64_t  r_addend;
 }__attribute__((packed)) elf64_rela_t;
+
+
+#define ELF_SECTION_SIZE(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_size):(((elf32_shdr_t*)s)[idx].sh_size)))
+#define ELF_SECTION_OFFSET(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_offset):(((elf32_shdr_t*)s)[idx].sh_offset)))
+#define ELF_SECTION_NAME(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_name):(((elf32_shdr_t*)s)[idx].sh_name)))
+#define ELF_SECTION_TYPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_type):(((elf32_shdr_t*)s)[idx].sh_type)))
+#define ELF_SECTION_ALIGN(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_addralign):(((elf32_shdr_t*)s)[idx].sh_addralign)))
+#define ELF_SECTION_LINK(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_link):(((elf32_shdr_t*)s)[idx].sh_link)))
+
+#define ELF_SYMBOL_COUNT(c, s) ((c) == ELFCLASS64?(s / sizeof(elf64_sym_t)):(s / sizeof(elf32_sym_t)))
+
+#define ELF_SYMBOL_NAME(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_name):(((elf32_sym_t*)s)[idx].st_name)))
+#define ELF_SYMBOL_TYPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_type):(((elf32_sym_t*)s)[idx].st_type)))
+#define ELF_SYMBOL_SCOPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_scope):(((elf32_sym_t*)s)[idx].st_scope)))
+#define ELF_SYMBOL_SHNDX(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_shndx):(((elf32_sym_t*)s)[idx].st_shndx)))
+#define ELF_SYMBOL_VALUE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_value):(((elf32_sym_t*)s)[idx].st_value)))
+#define ELF_SYMBOL_SIZE(c, s, idx) (((c) == ELFCLASS64?(((elf64_sym_t*)s)[idx].st_size):(((elf32_sym_t*)s)[idx].st_size)))
+
+#define ELF_RELOC_COUNT(c, rt, rs) ((rs) / ((c) == ELFCLASS64?((rt)?sizeof(elf64_rela_t):sizeof(elf64_rel_t)):((rt)?sizeof(elf32_rela_t):sizeof(elf32_rel_t))))
+
+#define ELF_RELOC_OFFSET(c, rt, rs, idx) ((c) == ELFCLASS64?((rt)?((elf64_rela_t*)rs)[idx].r_offset:((elf64_rel_t*)rs)[idx].r_offset):((rt)?((elf32_rela_t*)rs)[idx].r_offset:((elf32_rel_t*)rs)[idx].r_offset))
+#define ELF_RELOC_TYPE(c, rt, rs, idx) ((c) == ELFCLASS64?((rt)?((elf64_rela_t*)rs)[idx].r_symtype:((elf64_rel_t*)rs)[idx].r_symtype):((rt)?((elf32_rela_t*)rs)[idx].r_symtype:((elf32_rel_t*)rs)[idx].r_symtype))
+#define ELF_RELOC_SYMIDX(c, rt, rs, idx) ((c) == ELFCLASS64?((rt)?((elf64_rela_t*)rs)[idx].r_symindx:((elf64_rel_t*)rs)[idx].r_symindx):((rt)?((elf32_rela_t*)rs)[idx].r_symindx:((elf32_rel_t*)rs)[idx].r_symindx))
+#define ELF_RELOC_ADDEND(c, rs, idx) (((c) == ELFCLASS64?(((elf64_rela_t*)rs)[idx].r_addend):(((elf32_rela_t*)rs)[idx].r_addend)))
 
 #endif

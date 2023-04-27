@@ -10,6 +10,8 @@
 #include <video.h>
 #include <strings.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 int8_t acpi_aml_exec_op_sizeof(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode) {
     acpi_aml_object_t* obj = acpi_aml_get_if_arg_local_obj(ctx, opcode->operands[0], 0, 0);
 

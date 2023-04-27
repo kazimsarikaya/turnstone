@@ -7,6 +7,8 @@
 #include <ports.h>
 #include <acpi.h>
 
+MODULE("turnstone.kernel.hw.rtc");
+
 #define RTC_CURRENT_YEAR        2022
 
 #define RTC_CMOS_ADDRESS       0x70

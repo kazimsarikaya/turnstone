@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 
 #define CH(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
 #define MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))

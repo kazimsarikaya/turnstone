@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <strings.h>
 
+MODULE("turnstone.lib");
+
 number_t power(number_t base, number_t p) {
     if (p == 0 ) {
         return 1;
@@ -116,6 +118,7 @@ int8_t uto_base_with_buffer(char_t* buffer, unumber_t number, number_t base) {
     return 0;
 }
 
+#ifndef ___EFIBUILD
 int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, number_t base) {
     if(buffer == NULL) {
         return -1;
@@ -180,6 +183,7 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 
     return 0;
 }
+#endif
 
 uint8_t byte_count(const uint64_t num) {
     uint8_t res = sizeof(uint64_t);

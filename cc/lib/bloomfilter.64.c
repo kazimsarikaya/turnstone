@@ -12,6 +12,8 @@
 #include <memory.h>
 #include <random.h>
 
+MODULE("turnstone.lib");
+
 /**
  * @struct bloomfilter_t
  * @brief bloom filter struct

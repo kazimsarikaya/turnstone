@@ -6,6 +6,8 @@
 #include <zpack.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 #define ZPACK_MAX_MATCH (0x3f + 0x40 + 4)
 #define ZPACK_MIN_MATCH (4)
 #define ZPACK_WINDOW_SIZE 16383
@@ -13,6 +15,7 @@
 #define ZPACK_HASHTABLE_MUL 2654435761U
 #define ZPACK_HASHTABLE_PREV_SIZE 16384
 #define ZPACK_NO_POS (-1)
+
 
 typedef struct zpack_match_t {
     int32_t best_size;

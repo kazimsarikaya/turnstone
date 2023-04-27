@@ -11,6 +11,8 @@
 #include <video.h>
 #include <strings.h>
 
+MODULE("turnstone.kernel.db");
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {

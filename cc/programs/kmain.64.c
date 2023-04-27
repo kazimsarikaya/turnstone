@@ -30,6 +30,8 @@
 #include <time/timer.h>
 #include <network.h>
 
+MODULE("turnstone.kernel.programs.kmain");
+
 int8_t                         kmain64(size_t entry_point);
 __attribute__((noreturn)) void ___kstart64(system_info_t* sysinfo);
 

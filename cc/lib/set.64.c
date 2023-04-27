@@ -12,6 +12,8 @@
 #include <cpu/sync.h>
 #include <strings.h>
 
+MODULE("turnstone.lib");
+
 struct set_t {
     index_t* index;
     lock_t   lock;

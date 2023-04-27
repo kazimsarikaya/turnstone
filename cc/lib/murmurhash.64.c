@@ -9,6 +9,8 @@
 #include <murmurhash.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 #define MURMURHASH_64A_CONST 0xc6a4a7935bd1e995ULL
 #define MURMURHASH_64A_R     47
 

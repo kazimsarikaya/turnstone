@@ -14,6 +14,8 @@
 #include <ports.h>
 #include <bplustree.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 
 int8_t acpi_aml_write_sysio_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj);
 int8_t acpi_aml_write_pci_as_integer(acpi_aml_parser_context_t* ctx, int64_t val, const acpi_aml_object_t* obj);

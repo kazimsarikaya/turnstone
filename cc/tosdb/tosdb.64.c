@@ -16,6 +16,8 @@
 #include <strings.h>
 #include <xxhash.h>
 
+MODULE("turnstone.kernel.db");
+
 tosdb_t* tosdb_new(tosdb_backend_t* backend) {
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend is null");

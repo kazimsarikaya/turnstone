@@ -6,6 +6,8 @@
 #include <time.h>
 #include <memory.h>
 
+MODULE("turnstone.lib");
+
 
 uint64_t TIME_EPOCH = 0;
 

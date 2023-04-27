@@ -6,6 +6,8 @@
 #include <tests.h>
 #include <ports.h>
 
+MODULE("turnstone.lib");
+
 void test_init_output(void) {
     init_serial(COM2);
 }

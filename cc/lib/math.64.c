@@ -5,6 +5,8 @@
 
 #include <math.h>
 
+MODULE("turnstone.lib");
+
 #define MATH_TRESHOLD 0.00000000000001L
 
 /**

@@ -13,6 +13,8 @@
 #include <xxhash.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib");
+
 typedef struct map_internal_t {
     memory_heap_t*      heap;
     lock_t              lock;

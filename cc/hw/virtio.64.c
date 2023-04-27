@@ -9,6 +9,8 @@
 #include <ports.h>
 #include <apic.h>
 
+MODULE("turnstone.kernel.hw.virtio");
+
 int8_t virtio_init_legacy(virtio_dev_t* vdev, virtio_select_features_f select_features, virtio_create_queues_f create_queues);
 int8_t virtio_init_modern(virtio_dev_t* vdev, virtio_select_features_f select_features, virtio_create_queues_f create_queues);
 

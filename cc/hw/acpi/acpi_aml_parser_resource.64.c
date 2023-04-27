@@ -10,6 +10,8 @@
  #include <acpi/aml_resource.h>
  #include <video.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 int8_t acpi_aml_resource_parse_smallitem(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res);
 int8_t acpi_aml_resource_parse_smallitem_irq(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res);
 int8_t acpi_aml_resource_parse_smallitem_io(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res);

@@ -14,6 +14,8 @@
 #include <xxhash.h>
 #include <set.h>
 
+MODULE("turnstone.kernel.db");
+
 boolean_t tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value);
 boolean_t tosdb_record_get_boolean(tosdb_record_t * record, const char_t* colname, boolean_t* value);
 boolean_t tosdb_record_set_char(tosdb_record_t * record, const char_t* colname, const char_t value);

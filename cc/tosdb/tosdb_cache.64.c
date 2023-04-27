@@ -13,6 +13,8 @@
 #include <logging.h>
 #include <xxhash.h>
 
+MODULE("turnstone.kernel.db");
+
 struct tosdb_cache_t {
     tosdb_cache_config_t config;
     cache_t*             bloomfilter_cache;

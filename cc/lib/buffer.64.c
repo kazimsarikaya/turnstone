@@ -9,6 +9,8 @@
 #include <buffer.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib");
+
 
 typedef struct buffer_internal_t {
     memory_heap_t* heap;
@@ -49,6 +51,16 @@ buffer_t buffer_encapsulate(uint8_t* data, uint64_t length) {
     bi->data = data;
 
     return (buffer_t)bi;
+}
+
+boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro) {
+    if(!buffer) {
+        return false;
+    }
+
+    ((buffer_internal_t*)buffer)->readonly = ro;
+
+    return true;
 }
 
 uint64_t buffer_get_length(buffer_t buffer) {

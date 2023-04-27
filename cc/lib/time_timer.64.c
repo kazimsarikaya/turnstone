@@ -13,6 +13,8 @@
 #include <time.h>
 #include <random.h>
 
+MODULE("turnstone.lib");
+
 #define TIME_TIMER_PIT_BASE_HZ       1193181
 #define TIME_TIMER_PIT_COMMAND_PORT  0x43
 #define TIME_TIMER_PIT_COMMAND_WRITE 0x34

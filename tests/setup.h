@@ -142,7 +142,6 @@ void __attribute__((destructor)) stop_ram(void) {
 
 #ifdef ___TESTMODE
 
-uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
 
 void* SYSTEM_INFO;
@@ -171,13 +170,6 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
     UNUSED(frm);
     UNUSED(type);
     return 0;
-}
-
-void dump_ram(char_t* fname){
-    FILE* fp = fopen( fname, "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-
-    fclose(fp);
 }
 
 void* task_get_current_task(void){

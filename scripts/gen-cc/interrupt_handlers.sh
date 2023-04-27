@@ -15,6 +15,8 @@ cat <<EOF
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 
+MODULE("turnstone.kernel.cpu.interrupt");
+
 #ifndef ___DEPEND_ANALYSIS
 
 void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);

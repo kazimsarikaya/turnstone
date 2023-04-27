@@ -5,6 +5,8 @@
 
 #include <random.h>
 
+MODULE("turnstone.lib");
+
 uint64_t random_xoroshiro_seed = 0;
 uint64_t random_xoroshiro_state[4] = {};
 

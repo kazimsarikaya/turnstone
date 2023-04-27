@@ -8,6 +8,7 @@
 #include <hashmap.h>
 #include <linkedlist.h>
 #include <strings.h>
+#include <utils.h>
 
 int32_t   main(uint32_t argc, char_t** argv);
 boolean_t test_item_key_destroyer(const void* key, const void* item);

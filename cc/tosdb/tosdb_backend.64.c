@@ -14,6 +14,8 @@
 #include <strings.h>
 #include <xxhash.h>
 
+MODULE("turnstone.kernel.db");
+
 boolean_t tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb) {
     if(!backend || !sb) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend or super block is null");

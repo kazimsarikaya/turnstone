@@ -8,6 +8,8 @@
 #include <siphash.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 #define SIPHASH128_0 0x736f6d6570736575ULL
 #define SIPHASH128_1 0x646f72616e646f6dULL
 #define SIPHASH128_2 0x6c7967656e657261ULL

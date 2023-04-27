@@ -12,6 +12,8 @@
 #include <strings.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 
 data_t* data_json_serialize(data_t* data) {
     UNUSED(data);

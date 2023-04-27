@@ -20,6 +20,7 @@ typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
     LINKER_SECTION_TYPE_RODATA, ///< readonly data section
+    LINKER_SECTION_TYPE_ROREL, ///< readonly relocation data section
     LINKER_SECTION_TYPE_BSS, ///< bss section
     LINKER_SECTION_TYPE_RELOCATION_TABLE, ///< relocation table section
     LINKER_SECTION_TYPE_GOT, ///< global offset table section
