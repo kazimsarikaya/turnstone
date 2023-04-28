@@ -12,7 +12,7 @@
 #include <tosdb/tosdb.h>
 #include <future.h>
 #include <utils.h>
-#include <map.h>
+#include <hashmap.h>
 #include <cpu/sync.h>
 #include <linkedlist.h>
 #include <indexer.h>
@@ -222,8 +222,8 @@ struct tosdb_t {
     tosdb_backend_t*    backend;
     tosdb_superblock_t* superblock;
     boolean_t           is_dirty;
-    map_t               databases;
-    map_t               database_new;
+    hashmap_t*          databases;
+    hashmap_t*          database_new;
     lock_t              lock;
     tosdb_cache_t*      cache;
 };
@@ -235,20 +235,20 @@ boolean_t             tosdb_persist(tosdb_t* tdb);
 boolean_t             tosdb_load_databases(tosdb_t* tdb);
 
 struct tosdb_database_t {
-    tosdb_t*  tdb;
-    boolean_t is_open;
-    boolean_t is_dirty;
-    boolean_t is_deleted;
-    uint64_t  id;
-    uint64_t  table_next_id;
-    char_t*   name;
-    lock_t    lock;
-    map_t     tables;
-    map_t     table_new;
-    uint64_t  metadata_location;
-    uint64_t  metadata_size;
-    uint64_t  table_list_location;
-    uint64_t  table_list_size;
+    tosdb_t*   tdb;
+    boolean_t  is_open;
+    boolean_t  is_dirty;
+    boolean_t  is_deleted;
+    uint64_t   id;
+    uint64_t   table_next_id;
+    char_t*    name;
+    lock_t     lock;
+    hashmap_t* tables;
+    hashmap_t* table_new;
+    uint64_t   metadata_location;
+    uint64_t   metadata_size;
+    uint64_t   table_list_location;
+    uint64_t   table_list_size;
 };
 
 boolean_t         tosdb_database_persist(tosdb_database_t* db);
@@ -264,8 +264,8 @@ struct tosdb_table_t {
     uint64_t          id;
     char_t*           name;
     lock_t            lock;
-    map_t             columns;
-    map_t             indexes;
+    hashmap_t*        columns;
+    hashmap_t*        indexes;
     uint64_t          primary_index_id;
     uint64_t          primary_column_id;
     data_type_t       primary_column_type;
@@ -291,7 +291,7 @@ struct tosdb_table_t {
     uint64_t          sstable_list_location;
     uint64_t          sstable_list_size;
     linkedlist_t      sstable_list_items;
-    map_t             sstable_levels;
+    hashmap_t*        sstable_levels;
     uint64_t          sstable_max_level;
 };
 
@@ -353,7 +353,7 @@ struct tosdb_memtable_t {
     boolean_t      is_readonly;
     boolean_t      is_full;
     boolean_t      is_dirty;
-    map_t          indexes;
+    hashmap_t*     indexes;
     buffer_t       values;
     uint64_t       record_count;
 };
@@ -367,8 +367,10 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record);
 
 typedef struct tosdb_record_context_t {
     tosdb_table_t* table;
-    map_t          columns;
-    map_t          keys;
+    hashmap_t*     columns;
+    hashmap_t*     keys;
+    uint64_t       level;
+    uint64_t       sstable_id;
 } tosdb_record_context_t;
 
 typedef struct tosdb_record_key_t {
@@ -389,6 +391,5 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results);
 boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
 
 linkedlist_t tosdb_record_search(tosdb_record_t* record);
-boolean_t    record_search_set_destroy_cb(void * item);
-
+boolean_t    tosdb_record_search_set_destroy_cb(void * item);
 #endif

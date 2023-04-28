@@ -122,7 +122,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         return false;
     }
 
-    mt->indexes = map_integer();
+    mt->indexes = hashmap_integer(128);
 
     if(!mt->indexes) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable indexes for table %s at memory", tbl->name);
@@ -134,7 +134,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
 
     boolean_t error = false;
 
-    iterator_t* iter = map_create_iterator(tbl->indexes);
+    iterator_t* iter = hashmap_iterator_create(tbl->indexes);
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_index_t* index = (tosdb_index_t*)iter->get_item(iter);
@@ -169,7 +169,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
             break;
         }
 
-        map_insert(mt->indexes, (void*)index->id, (void*)mt_idx);
+        hashmap_put(mt->indexes, (void*)index->id, (void*)mt_idx);
         iter = iter->next(iter);
     }
 
@@ -179,11 +179,11 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot build memory index map for table %s", tbl->name);
         buffer_destroy(mt->values);
 
-        iterator_t* mt_idx_iter = map_create_iterator(mt->indexes);
+        iterator_t* mt_idx_iter = hashmap_iterator_create(mt->indexes);
 
         if(!mt_idx_iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index iterator for cleanup for table %s", tbl->name);
-            map_destroy(mt->indexes);
+            hashmap_destroy(mt->indexes);
             buffer_destroy(mt->values);
             memory_free(mt);
 
@@ -206,7 +206,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
 
         mt_idx_iter->destroy(mt_idx_iter);
 
-        map_destroy(mt->indexes);
+        hashmap_destroy(mt->indexes);
         memory_free(mt);
 
         return false;
@@ -249,11 +249,11 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
 
     boolean_t error = false;
 
-    iterator_t* mt_idx_iter = map_create_iterator(mt->indexes);
+    iterator_t* mt_idx_iter = hashmap_iterator_create(mt->indexes);
 
     if(!mt_idx_iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index iterator for cleanup for table %s", mt->tbl->name);
-        map_destroy(mt->indexes);
+        hashmap_destroy(mt->indexes);
         buffer_destroy(mt->values);
         memory_free(mt);
 
@@ -294,7 +294,7 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
 
     mt_idx_iter->destroy(mt_idx_iter);
 
-    map_destroy(mt->indexes);
+    hashmap_destroy(mt->indexes);
 
     buffer_destroy(mt->values);
     memory_free(mt);
@@ -329,9 +329,9 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
         }
     }
 
-    if(map_size(tbl->indexes) != map_size(r_ctx->keys)) {
+    if(hashmap_size(tbl->indexes) != hashmap_size(r_ctx->keys)) {
         if(del) {
-            if(!tosdb_memtable_get(record)) {
+            if(!record->get_record(record)) {
                 lock_release(tbl->lock);
                 PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
 
@@ -381,12 +381,12 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
     boolean_t need_rc_inc = true;
 
-    iterator_t* iter = map_create_iterator(tbl->indexes);
+    iterator_t* iter = hashmap_iterator_create(tbl->indexes);
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_index_t* index = (tosdb_index_t*)iter->get_item(iter);
 
-        tosdb_record_key_t* r_key = (tosdb_record_key_t*)map_get(r_ctx->keys, (void*)index->id);
+        tosdb_record_key_t* r_key = (tosdb_record_key_t*)hashmap_get(r_ctx->keys, (void*)index->id);
 
         if(!r_key) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot find record key for table %s", tbl->name);
@@ -395,7 +395,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             return false;
         }
 
-        tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)map_get(tbl->current_memtable->indexes, (void*)index->id);
+        tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)hashmap_get(tbl->current_memtable->indexes, (void*)index->id);
 
         if(!mt_idx) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot find memtable index for table %s", tbl->name);
@@ -453,7 +453,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             }
 
         } else {
-            const tosdb_record_key_t* pri_r_key = map_get(r_ctx->keys, (void*)tbl->primary_index_id);
+            const tosdb_record_key_t* pri_r_key = hashmap_get(r_ctx->keys, (void*)tbl->primary_index_id);
             uint64_t sec_idx_item_len = sizeof(tosdb_memtable_secondary_index_item_t) + r_key->key_length + pri_r_key->key_length;
 
             tosdb_memtable_secondary_index_item_t* sec_idx_item = memory_malloc(sec_idx_item_len);
@@ -580,7 +580,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     PRINTLOG(TOSDB, LOG_DEBUG, "valuelog for memtable %lli of table %s persisted at 0x%llx(0x%llx)", mt->id, mt->tbl->name, b_vl_loc, b_vl_size);
 
-    uint64_t stli_size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * map_size(mt->indexes);
+    uint64_t stli_size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * hashmap_size(mt->indexes);
     tosdb_block_sstable_list_item_t* stli = memory_malloc(stli_size);
 
     if(!stli) {
@@ -594,11 +594,11 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     stli->level = 1;
     stli->valuelog_location = b_vl_loc;
     stli->valuelog_size = b_vl_size;
-    stli->index_count = map_size(mt->indexes);
+    stli->index_count = hashmap_size(mt->indexes);
 
     uint64_t idx = 0;
 
-    iterator_t* iter = map_create_iterator(mt->indexes);
+    iterator_t* iter = hashmap_iterator_create(mt->indexes);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index iterator");
@@ -893,13 +893,13 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
 
     tosdb_record_context_t* ctx = record->context;
 
-    if(map_size(ctx->keys) != 1) {
+    if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
 
         return false;
     }
 
-    iterator_t* iter = map_create_iterator(ctx->keys);
+    iterator_t* iter = hashmap_iterator_create(ctx->keys);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
@@ -934,7 +934,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);
 
-        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+        const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
 
         iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
@@ -977,13 +977,13 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
 
     tosdb_record_context_t* ctx = record->context;
 
-    if(map_size(ctx->keys) != 1) {
+    if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
 
         return false;
     }
 
-    iterator_t* iter = map_create_iterator(ctx->keys);
+    iterator_t* iter = hashmap_iterator_create(ctx->keys);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
@@ -1026,7 +1026,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);
 
-        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+        const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
 
         col_id = mt_idx->ti->column_id;
 
@@ -1110,13 +1110,13 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
 
     tosdb_record_context_t* ctx = record->context;
 
-    if(map_size(ctx->keys) != 1) {
+    if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
 
         return false;
     }
 
-    iterator_t* iter = map_create_iterator(ctx->keys);
+    iterator_t* iter = hashmap_iterator_create(ctx->keys);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
@@ -1156,7 +1156,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);
 
-        const tosdb_memtable_index_t* mt_idx = map_get(mt->indexes, (void*)r_key->index_id);
+        const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
 
         iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 

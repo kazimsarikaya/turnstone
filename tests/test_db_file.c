@@ -418,6 +418,9 @@ token_error:
         goto tdb_close;
     }
 
+    tosdb_table_close(table2);
+    table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
+
     tosdb_record_t* s_rec = tosdb_table_create_record(table2);
 
     if(!s_rec) {
@@ -515,6 +518,10 @@ rec_destroy:
     }
 
     d_rec->destroy(d_rec);
+
+    if(!pass) {
+        goto tdb_close;
+    }
 
 tdb_close:
     if(!tosdb_close(tosdb)) {
