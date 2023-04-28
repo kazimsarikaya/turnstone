@@ -6,6 +6,7 @@
 #include "setup.h"
 #include <hashmap.h>
 #include <strings.h>
+#include <xxhash.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 
@@ -70,7 +71,42 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     hashmap_destroy(hm);
 
-    print_success("TESTS PASSED");
+    hm = hashmap_string(128);
+
+    hashmap_put(hm, "key", "value");
+
+    if(strcmp("value", hashmap_get(hm, "key")) != 0) {
+        print_error("cannot get key");
+        hashmap_destroy(hm);
+
+        return -1;
+    }
+
+    boolean_t pass = false;
+
+    iterator_t* iter = hashmap_iterator_create(hm);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        const char_t* v = iter->get_item(iter);
+
+        printf("!!! %s\n", v);
+
+        if(strcmp("value", v) == 0) {
+            pass = true;
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    hashmap_destroy(hm);
+
+    if(!pass) {
+        print_error("TESTS FAILED");
+    } else {
+        print_success("TESTS PASSED");
+    }
 
     return 0;
 }

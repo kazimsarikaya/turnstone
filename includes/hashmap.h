@@ -21,6 +21,8 @@ hashmap_t* hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generato
 #define hashmap_new_with_hkg(c, hkg) hashmap_new_with_hkg_with_hkc(c, hkg, NULL)
 #define hashmap_new_with_hkc(c, hkc) hashmap_new_with_hkg_with_hkc(c, NULL, hkc);
 #define hashmap_new(c) hashmap_new_with_hkg_with_hkc(c, NULL, NULL)
+hashmap_t* hashmap_string(uint64_t capacity);
+#define hashmap_integer(c) hashmap_new(c)
 boolean_t   hashmap_destroy(hashmap_t* hm);
 const void* hashmap_put(hashmap_t* hm, const void* key, const void* item);
 const void* hashmap_get(hashmap_t* hm, const void* key);
