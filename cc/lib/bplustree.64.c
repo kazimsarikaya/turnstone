@@ -921,20 +921,24 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                 if(criteria >= INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL) {
                     size_t key_count = linkedlist_size(iter->current_node->keys);
 
-                    while(1) {
-                        const void* key_at_pos = linkedlist_get_data_at_position(iter->current_node->keys, iter->current_index);
+                    iterator_t* k_iter = linkedlist_iterator_create(iter->current_node->keys);
+
+                    while(k_iter->end_of_iterator(k_iter) != 0) {
+                        const void* key_at_pos = k_iter->get_item(k_iter);
+
+                        int8_t c_res = iter->comparator(key1, key_at_pos);
 
                         if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_GREATER) {
-                            if(iter->comparator(key1, key_at_pos) < 0) {
+                            if(c_res < 0) {
                                 iter->end_of_iter = 1;
                                 break;
                             }
 
                         } else {
-                            if( iter->comparator(key1, key_at_pos) == 0) {
+                            if(c_res == 0) {
                                 iter->end_of_iter = 1;
                                 break;
-                            } else if( iter->comparator(key1, key_at_pos) < 0)  {
+                            } else if(c_res < 0)  {
                                 iter->current_node = NULL;
                                 iter->current_index = 0;
                                 iter->end_of_iter = 0;
@@ -954,9 +958,16 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                                 break;
                             }
 
+                            k_iter->destroy(k_iter);
+                            k_iter = linkedlist_iterator_create(iter->current_node->keys);
+
                             key_count = linkedlist_size(iter->current_node->keys);
+                        } else {
+                            k_iter = k_iter->next(k_iter);
                         }
                     }
+
+                    k_iter->destroy(k_iter);
 
                 } else {
                     iter->end_of_iter = 1;
@@ -970,8 +981,11 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                 } else {
                     size_t key_count = linkedlist_size(node->keys);
 
-                    for(size_t i = 0; i < key_count; i++) { // search at internal node
-                        const void* key_at_pos = linkedlist_get_data_at_position(node->keys, i);
+                    iterator_t* k_iter = linkedlist_iterator_create(node->keys);
+                    size_t i = 0;
+
+                    while(k_iter->end_of_iterator(k_iter) != 0) { //search at leaf keys
+                        const void* key_at_pos = k_iter->get_item(k_iter);
 
                         int8_t c_res = iter->comparator(key1, key_at_pos);
 
@@ -992,7 +1006,12 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                         } else {
                             node = linkedlist_get_data_at_position(node->childs, i + 1);
                         }
+
+                        i++;
+                        k_iter = k_iter->next(k_iter);
                     }
+
+                    k_iter->destroy(k_iter);
                 }
             } //end of internal node
         }

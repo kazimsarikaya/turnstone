@@ -566,24 +566,18 @@ const void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
         return result;
     }
 
-    iterator_t* iter = linkedlist_iterator_create(l);
+    linkedlist_item_internal_t* li = l->head;
 
-    if(iter == NULL) {
-        return NULL;
-    }
-
-    while(iter->end_of_iterator(iter) != 0) {
+    while(li) {
         if(position == 0) {
-            result = iter->get_item(iter);
+            result = li->data;
 
             break;
         }
 
         position--;
-        iter = iter->next(iter);
+        li = li->next;
     }
-
-    iter->destroy(iter);
 
     return result;
 }
