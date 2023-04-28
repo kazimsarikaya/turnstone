@@ -30,7 +30,15 @@ int8_t set_integer_cmp(const void * i1, const void* i2) {
     int64_t ii1 = (int64_t)i1;
     int64_t ii2 = (int64_t)i2;
 
-    return ii1 - ii2;
+    if(ii1 < ii2) {
+        return -1;
+    }
+
+    if(ii1 > ii2) {
+        return 1;
+    }
+
+    return 0;
 }
 
 set_t* set_create(set_comparator_f cmp) {
@@ -156,6 +164,8 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
                 void* item = (void*)iter->get_item(iter);
 
                 error |= !cb(item);
+
+                iter = iter->next(iter);
             }
 
             iter->destroy(iter);
