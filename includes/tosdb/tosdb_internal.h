@@ -392,4 +392,6 @@ boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
 
 linkedlist_t tosdb_record_search(tosdb_record_t* record);
 boolean_t    tosdb_record_search_set_destroy_cb(void * item);
+int8_t    tosdb_record_primary_key_comparator(const void* item1, const void* item2);
+boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t old_pks);
 #endif

@@ -1142,3 +1142,22 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     return !error;
 }
 
+set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl) {
+    if(!tbl) {
+        return NULL;
+    }
+
+    set_t* res = set_create(tosdb_record_primary_key_comparator);
+
+    if(!res) {
+        return NULL;
+    }
+
+    if(!tosdb_table_get_primary_keys_internal(tbl, res, NULL)) {
+        set_destroy_with_callback(res, tosdb_record_search_set_destroy_cb);
+
+        return NULL;
+    }
+
+    return res;
+}
