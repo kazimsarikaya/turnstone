@@ -247,7 +247,9 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
         return true;
     }
 
-    linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
+    if(mt->stli) {
+        linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
+    }
 
     boolean_t error = false;
 
@@ -538,7 +540,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     buffer_seek(mt->values, 0, BUFFER_SEEK_DIRECTION_START);
     uint64_t len = (uint64_t)zpack_pack(mt->values, valuelog_out);
 
-    if(!len) {
+    if(valuelog_unpacked_size && !len) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot zpack valuelog");
         buffer_destroy(valuelog_out);
 
@@ -926,6 +928,12 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     memory_memcopy(r_key->key, item->key, item->key_length);
 
     linkedlist_t mts = ctx->table->memtables;
+
+    if(!mts) {
+        memory_free(item);
+
+        return false;
+    }
 
     boolean_t found = false;
     const tosdb_memtable_index_item_t* found_item = NULL;
