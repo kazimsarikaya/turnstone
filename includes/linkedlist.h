@@ -259,6 +259,9 @@ boolean_t         linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlis
 /*! delete and get data from stack */
 #define linkedlist_stack_pop(l) linkedlist_delete_at(l, NULL, LINKEDLIST_DELETE_AT_HEAD, 0)
 
+/*! insert data into head */
+#define linkedlist_insert_at_head(l, d) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_HEAD, 0)
+
 /**
  * @brief returns position of given data.
  * @param[in]  list list to search
