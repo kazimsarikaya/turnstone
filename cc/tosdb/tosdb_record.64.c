@@ -656,12 +656,17 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
 }
 
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
-    if(!tbl || !tbl->is_open || tbl->is_deleted) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is null or closed or deleted");
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
 
         return NULL;
     }
 
+    if(!tbl->is_open || tbl->is_deleted) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed(%i) or deleted(%i)", !tbl->is_open, tbl->is_deleted);
+
+        return NULL;
+    }
 
     tosdb_record_t* rec = memory_malloc(sizeof(tosdb_record_t));
 
