@@ -265,6 +265,37 @@ const void* hashmap_get_key(hashmap_t* hm, const void* key) {
     return NULL;
 }
 
+boolean_t hashmap_exists(hashmap_t* hm, const void* key) {
+    if(!hm) {
+        return false;
+    }
+
+    const uint64_t h_key = hm->hkg(key) % hm->segment_capacity;
+
+    hashmap_segment_t* seg = hm->segments;
+
+    while(seg) {
+        if(seg->items[h_key].exists) {
+            if(hm->hkc(key, seg->items[h_key].key) == 0) {
+                return true;
+            }
+
+            uint64_t t_h_key = (h_key + 1) % hm->segment_capacity;
+
+            if(seg->items[t_h_key].exists) {
+                if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
+                    return true;
+                }
+            }
+        }
+
+        seg = seg->next;
+    }
+
+    return false;
+}
+
+
 const void* hashmap_get(hashmap_t* hm, const void* key) {
     if(!hm) {
         return NULL;

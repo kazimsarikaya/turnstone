@@ -27,7 +27,7 @@ boolean_t   hashmap_destroy(hashmap_t* hm);
 const void* hashmap_put(hashmap_t* hm, const void* key, const void* item);
 const void* hashmap_get(hashmap_t* hm, const void* key);
 const void* hashmap_get_key(hashmap_t* hm, const void* key);
-#define hashmap_exists(hm, k) (hashmap_get_key(hm, k) != NULL)
+boolean_t   hashmap_exists(hashmap_t* hm, const void* key);
 boolean_t   hashmap_delete(hashmap_t* hm, const void* key);
 uint64_t    hashmap_size(hashmap_t* hm);
 iterator_t* hashmap_iterator_create(hashmap_t* hm);
