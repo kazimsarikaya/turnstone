@@ -1052,6 +1052,11 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
             error = true;
         }
 
+        if(mt->stli) {
+            linkedlist_stack_push(tbl->sstable_list_items, mt->stli);
+            mt->stli = NULL;
+        }
+
     } while(idx > 0);
 
     if(!linkedlist_size(tbl->sstable_list_items)) {
