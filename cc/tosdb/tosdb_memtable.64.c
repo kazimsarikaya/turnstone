@@ -223,15 +223,15 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         tbl->current_memtable->is_readonly = true;
     }
 
+    if(tbl->current_memtable && !tosdb_memtable_persist(tbl->current_memtable)) {
+        return false;
+    }
+
     tbl->current_memtable = mt;
     linkedlist_stack_push(tbl->memtables, mt);
 
     while(linkedlist_size(tbl->memtables) > tbl->max_memtable_count)  {
         tosdb_memtable_t* r_mt = (tosdb_memtable_t*)linkedlist_delete_at_tail(tbl->memtables);
-
-        if(!tosdb_memtable_persist(r_mt)) {
-            error = true;
-        }
 
         if(!tosdb_memtable_free(r_mt)) {
             error = true;
@@ -246,6 +246,8 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
     if(!mt) {
         return true;
     }
+
+    linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
 
     boolean_t error = false;
 
@@ -637,7 +639,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
         }
     }
 
-    linkedlist_stack_push(mt->tbl->sstable_list_items, stli);
+    mt->stli = stli;
 
     if(!error) {
         mt->is_dirty = false;
