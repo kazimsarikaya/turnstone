@@ -234,7 +234,6 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     }
 
     if(!tdb_cache) {
-        bloomfilter_destroy(bf);
         memory_free(first);
         memory_free(last);
     }
