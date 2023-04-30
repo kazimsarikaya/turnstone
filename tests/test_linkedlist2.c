@@ -35,52 +35,26 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     int64_t sign = 1;
 
-    for(int64_t i = 0; i < 11; i++) {
+    for(int64_t i = 0; i < 102; i++) {
         linkedlist_sortedlist_insert(list, (void*)(i * sign));
-        sign *= -1;
+        //sign *= -1;
     }
-    printf("\n");
 
-    iterator_t* iter = linkedlist_iterator_create(list);
+    for(uint64_t i = 0; i < linkedlist_size(list); i++) {
+        size_t pos = -1;
 
-    uint64_t pos = 0;
+        if(linkedlist_get_position(list, (void*)i, &pos) != 0 || pos != i) {
+            print_error("get pos failed");
+            printf("i %lli pos %lli\n", i, pos);
+        }
 
-    while(iter->end_of_iterator(iter)) {
-        int64_t i = (int64_t)iter->get_item(iter);
-        printf("%lli: %lli\n", pos++, i);
-        iter = iter->next(iter);
+        size_t res = (size_t)linkedlist_get_data_at_position(list, i);
+        if(res != i) {
+            print_error("get data at pos failed");
+            printf("!!! i %lli res %lli\n", i, res);
+        }
     }
-    printf("\n");
 
-    iter->destroy(iter);
-
-    sign = 1;
-
-    linkedlist_get_position(list, (void*)(4 * sign), &pos);
-
-    printf("pos of %lli: %lli\n", 4 * sign, pos);
-
-    linkedlist_get_position(list, (void*)(8 * sign), &pos);
-
-    printf("pos of %lli: %lli\n", 8 * sign, pos);
-
-    int64_t d = (int64_t)linkedlist_get_data_at_position(list, 5);
-    printf("data at 5 is %lli\n", d);
-    d = (int64_t)linkedlist_delete_at_position(list, 5);
-    printf("old data at 5 is %lli\n", d);
-
-    iter = linkedlist_iterator_create(list);
-
-    pos = 0;
-
-    while(iter->end_of_iterator(iter)) {
-        int64_t i = (int64_t)iter->get_item(iter);
-        printf("%lli: %lli\n", pos++, i);
-        iter = iter->next(iter);
-    }
-    printf("\n");
-
-    iter->destroy(iter);
 
     linkedlist_destroy(list);
 

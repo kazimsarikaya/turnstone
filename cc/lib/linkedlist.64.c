@@ -177,21 +177,20 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
     }
 
     // TODO: check errors
-    memory_heap_t* heap = ((linkedlist_internal_t*)list)->heap;
-    iterator_t* iter = linkedlist_iterator_create(list);
+    linkedlist_internal_t* l = list;
+    memory_heap_t* heap = l->heap;
 
-    if(iter == NULL) {
-        return -1;
-    }
+    linkedlist_item_internal_t* li = l->head;
 
-    while(iter->end_of_iterator(iter) != 0) {
-        void* data = (void*)iter->delete_item(iter);
+    while(li) {
         if(type == LINKEDLIST_DESTROY_WITH_DATA) {
-            memory_free_ext(heap, data);
+            memory_free_ext(heap, (void*)li->data);
         }
-        iter = iter->next(iter);
+
+        linkedlist_item_internal_t* n_li = li->next;
+        memory_free_ext(heap, li);
+        li = n_li;
     }
-    iter->destroy(iter);
 
     lock_destroy(((linkedlist_internal_t*)list)->lock);
 
@@ -252,10 +251,6 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
         lock_release(l->lock);
 
         return 0;
-    }
-
-    if(l->middle == NULL) {
-        printf("/*7*7 %lli %lli %i\n", l->middle_position, l->item_count, l->balance);
     }
 
     if(where == LINKEDLIST_INSERT_AT_HEAD) {
@@ -580,7 +575,6 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
             l->item_count--;
 
         } else {
-            printf("!!!! hhiiii");
             iterator_t* iter = linkedlist_iterator_create(l);
 
             if(iter == NULL) {
@@ -689,16 +683,106 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
 
     return result;
 }
+int8_t linkedlist_narrow(linkedlist_internal_t* list, size_t s, const void* data, linkedlist_item_internal_t** head, linkedlist_item_internal_t** tail, size_t* position);
 
-int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* position){
-    if(data == NULL) {
+int8_t linkedlist_narrow(linkedlist_internal_t* list, size_t s, const void* data, linkedlist_item_internal_t** head, linkedlist_item_internal_t** tail, size_t* position) {
+    linkedlist_item_internal_t* h = *head;
+    linkedlist_item_internal_t* t = *tail;
+
+    if(!h || !t) {
         return -1;
     }
 
+    while(h != t && s) {
+        int8_t c_res_h = list->comparator(data, h->data);
+
+        if(c_res_h == 0) {
+            return 0;
+        }
+
+        int8_t c_res_t = list->comparator(data, t->data);
+
+        if(c_res_t == 0) {
+            (*position) += s - 1;
+            return 0;
+        }
+
+        if(s == 2) {
+            break;
+        }
+
+        if(s == 3) {
+            if(position) {
+                (*position) += 1;
+            }
+
+            h = h->next;
+
+            break;
+        }
+
+        size_t q_s = s >> 2;
+        size_t iter_c = q_s;
+
+        while(iter_c) {
+            h = h->next;
+            t = t->previous;
+            iter_c--;
+        }
+
+        if(list->comparator(data, h->data) <= 0) {
+            t = h;
+            h = *head;
+
+            s = q_s + 1;
+        } else if(list->comparator(data, t->data) >= 0) {
+            h = t;
+            t = *tail;
+
+            if(position) {
+                (*position) += s - (q_s + 1);
+            }
+
+            s = q_s + 1;
+        } else {
+            s -= 2 * q_s;
+
+            if(position) {
+                (*position) += q_s;
+            }
+        }
+
+        *head = h;
+        *tail = t;
+    }
+
+    return list->comparator(data, h->data);
+}
+
+int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* position) {
     linkedlist_internal_t* l = (linkedlist_internal_t*)list;
 
     if(position) {
         *position = 0;
+    }
+
+    if(l->type == LINKEDLIST_TYPE_SORTEDLIST) {
+        linkedlist_item_internal_t* h = l->head;
+        linkedlist_item_internal_t* t = l->tail;
+        linkedlist_item_internal_t* m = l->middle;
+
+        int8_t c_res = -1;
+
+        if(l->comparator(data, m->data) < 0) {
+            c_res = linkedlist_narrow(l, l->middle_position + 1, data, &h, &m, position);
+        } else {
+            if(position) {
+                (*position) = l->middle_position;
+            }
+            c_res = linkedlist_narrow(l, l->item_count - l->middle_position, data, &m, &t, position);
+        }
+
+        return c_res;
     }
 
     int8_t res = -1;
@@ -753,38 +837,68 @@ const void* linkedlist_get_data_at_position(linkedlist_t list, size_t position){
         return result;
     }
 
-    if(l->item_count > position + 1) {
-        size_t rev_position = l->item_count - position - 1;
+    size_t rem = position;
+    linkedlist_item_internal_t* li = l->head;
+    boolean_t to_left = false;
 
-        if(rev_position < position) {
-            linkedlist_item_internal_t* li = l->tail;
+    if(l->middle) {
+        if(rem >= l->middle_position) {
+            li = l->middle;
+            rem -= l->middle_position;
 
-            while(li) {
-                if(rev_position == 0) {
-                    result = li->data;
+            size_t rev_position = l->item_count - l->middle_position - rem - 1;
 
-                    break;
-                }
-
-                rev_position--;
-                li = li->previous;
+            if(rem > rev_position) {
+                li = l->tail;
+                rem = rev_position;
+                to_left = true;
             }
 
-            return result;
+        } else {
+            size_t rev_position = l->middle_position - rem;
+
+            if(rem > rev_position) {
+                li = l->middle;
+                rem = rev_position;
+                to_left = true;
+            }
+
+        }
+    } else if(l->item_count > position + 1) {
+        size_t rev_position = l->item_count - rem - 1;
+
+        if(rem > rev_position) {
+            li = l->tail;
+            rem = rev_position;
+            to_left = true;
         }
     }
 
-    linkedlist_item_internal_t* li = l->head;
+    if(to_left) {
+        while(li) {
+            if(rem == 0) {
+                result = li->data;
 
-    while(li) {
-        if(position == 0) {
-            result = li->data;
+                break;
+            }
 
-            break;
+            rem--;
+            li = li->previous;
         }
 
-        position--;
-        li = li->next;
+        return result;
+    } else {
+        while(li) {
+            if(rem == 0) {
+                result = li->data;
+
+                break;
+            }
+
+            rem--;
+            li = li->next;
+        }
+
     }
 
     return result;
