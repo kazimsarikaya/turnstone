@@ -58,6 +58,39 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     linkedlist_destroy(list);
 
+    list = linkedlist_create_sortedlist(integer_cmp);
+
+    for(int64_t i = 1; i < 100; i++) {
+        linkedlist_sortedlist_insert(list, (void*)(i % 17));
+    }
+
+    for(uint64_t i = 0; i < linkedlist_size(list); i++) {
+        size_t res = (size_t)linkedlist_get_data_at_position(list, i);
+        printf("!!! i %lli res %lli\n", i, res);
+    }
+/*
+    for(uint64_t i = 1; i < 100; i++) {
+        size_t pos = -1;
+
+        if(linkedlist_get_position(list, (void*)(i % 17), &pos) != 0 || pos != i) {
+            print_error("get pos failed");
+            printf("i %lli pos %lli\n", i, pos);
+        }
+
+    }
+
+    for(uint64_t i = 0; i < linkedlist_size(list); i++) {
+
+        size_t res = (size_t)linkedlist_get_data_at_position(list, i);
+        if(res != i) {
+            print_error("get data at pos failed");
+            printf("!!! i %lli res %lli\n", i, res);
+        }
+    }
+ */
+
+    linkedlist_destroy(list);
+
     print_success("TESTS PASSED");
 
     return 0;

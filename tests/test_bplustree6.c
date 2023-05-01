@@ -14,6 +14,7 @@
 typedef struct tosdb_memtable_secondary_index_item_t {
     uint64_t secondary_key_hash;
     uint64_t secondary_key_length;
+    uint64_t id;
     uint8_t  data[];
 }__attribute__((packed, aligned(8))) tosdb_memtable_secondary_index_item_t;
 
@@ -62,7 +63,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     index_t* idx = bplustree_create_index_with_unique(16, key_cmp, false);
 
     for(int64_t i = 1; i < 100; i++) {
-        char_t* s_i = itoa(i);
+        char_t* s_i = itoa(i % 17);
         char_t* item = strcat("item ", s_i);
         memory_free(s_i);
 
@@ -76,6 +77,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         ii->secondary_key_length = strlen(item);
         ii->secondary_key_hash = xxhash64_hash(item, ii->secondary_key_length);
         memory_memcopy(item, ii->data, ii->secondary_key_length);
+        ii->id = i;
 
         memory_free(item);
 
@@ -88,10 +90,18 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     printf("!!! ls %i\n", idx->size(idx));
 
+    uint64_t prev_hash = 0;
+
     while(iter->end_of_iterator(iter)) {
         const tosdb_memtable_secondary_index_item_t* ii = iter->get_item(iter);
 
-        printf("!!! 0x%llx %lli ", ii->secondary_key_hash, ii->secondary_key_length);
+        if(prev_hash > ii->secondary_key_hash) {
+            print_error("order mismatch");
+        }
+
+        prev_hash = ii->secondary_key_hash;
+
+        printf("!!! %03i 0x%llx %lli ", ii->id, ii->secondary_key_hash, ii->secondary_key_length);
 
         for(uint64_t i = 0; i < ii->secondary_key_length; i++) {
             printf("%c", ii->data[i]);
