@@ -8,7 +8,7 @@
 
 #include <set.h>
 #include <indexer.h>
-#include <bplustree.h>
+#include <rbtree.h>
 #include <cpu/sync.h>
 #include <strings.h>
 
@@ -48,7 +48,7 @@ set_t* set_create(set_comparator_f cmp) {
         return NULL;
     }
 
-    s->index = bplustree_create_index_with_unique(128, cmp, true);
+    s->index = rbtree_create_index(cmp);
 
     if(!s->index) {
         memory_free(s);
@@ -161,7 +161,7 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
         }
     }
 
-    bplustree_destroy_index(s->index);
+    rbtree_destroy_index(s->index);
     lock_destroy(s->lock);
 
     memory_free(s);
