@@ -107,24 +107,11 @@ boolean_t set_exists(set_t* s, void* value) {
 
     lock_acquire(s->lock);
 
-    iterator_t* iter = s->index->search(s->index, value, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(!iter) {
-        lock_release(s->lock);
-
-        return false;
-    }
-
-    if(iter->end_of_iterator(iter) == 0) {
-        iter->destroy(iter);
-        lock_release(s->lock);
-
-        return false;
-    }
+    boolean_t res = s->index->contains(s->index, value);
 
     lock_release(s->lock);
 
-    return true;
+    return res;
 }
 
 uint64_t set_size(set_t* s) {

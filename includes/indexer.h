@@ -38,6 +38,7 @@ typedef struct index_t {
     index_key_comparator_f comparator;
     int8_t (* insert)(struct index_t* idx, const void* key, const void* data, void** removed_data);
     int8_t (*delete)(struct index_t* idx, const void* key, void** deleted_data);
+    boolean_t (*contains)(struct index_t* idx, const void* key);
     iterator_t*  (* search)(struct index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
     iterator_t* (* create_iterator)(struct index_t* idx);
     uint64_t (*size)(struct index_t* idx);

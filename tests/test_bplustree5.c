@@ -28,7 +28,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    index_t* idx = bplustree_create_index_with_unique(16, key_comparator, true);
+    index_t* idx = bplustree_create_index_with_unique(128, key_comparator, true);
 
     if(idx == NULL) {
         print_error("b+ tree can not created");
@@ -39,6 +39,10 @@ uint32_t main(uint32_t argc, char_t** argv) {
     for(int64_t i = 0; i < 128 * 1024; i++) {
         idx->insert(idx, (void*)(i * sign), (void*)i, NULL);
         sign *= -1;
+    }
+
+    if(!idx->contains(idx, (void*)123456)) {
+        print_error("key not found");
     }
 
     bplustree_destroy_index(idx);
