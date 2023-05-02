@@ -444,8 +444,6 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
         where = LINKEDLIST_DELETE_AT_HEAD;
     }
 
-    lock_acquire(l->lock);
-
     if(l->item_count == 0) {
         return NULL;
     }
@@ -453,6 +451,8 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
     if(!l->head) {
         return NULL;
     }
+
+    lock_acquire(l->lock);
 
     const void* result = NULL;
 
@@ -465,6 +465,11 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
             l->middle = NULL;
         } else {
             l->head->previous = NULL;
+
+            if(l->middle == item) {
+                l->middle = l->middle->next;
+                l->balance--;
+            }
         }
 
         result = item->data;
@@ -498,6 +503,11 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
             l->middle = NULL;
         } else {
             l->tail->next = NULL;
+
+            if(l->middle == item) {
+                l->middle = l->middle->previous;
+                l->balance++;
+            }
         }
 
         result = item->data;
