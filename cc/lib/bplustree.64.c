@@ -887,14 +887,6 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
         return NULL;
     }
 
-    if(key1 == NULL && criteria != INDEXER_KEY_COMPARATOR_CRITERIA_NULL) {
-        return NULL;
-    }
-
-    if(key2 == NULL && criteria == INDEXER_KEY_COMPARATOR_CRITERIA_BETWEEN) {
-        return NULL;
-    }
-
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
 
     if(tree == NULL) {
