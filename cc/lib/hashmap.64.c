@@ -387,7 +387,6 @@ typedef struct hashmap_iterator_metadata_t {
     hashmap_segment_t* current_segment;
     uint64_t           segment_capacity;
     uint64_t           current_index;
-    boolean_t          started;
 } hashmap_iterator_metadata_t;
 
 const void* hashmap_iterator_get_item(iterator_t* iter);
@@ -428,11 +427,7 @@ iterator_t* hashmap_iterator_next(iterator_t* iter) {
     }
 
     while(true) {
-        if(iter_md->started) {
-            iter_md->current_index++;
-        }else {
-            iter_md->started = true;
-        }
+        iter_md->current_index++;
 
         if(iter_md->current_index == iter_md->segment_capacity) {
             iter_md->current_index = 0;
@@ -498,5 +493,22 @@ iterator_t* hashmap_iterator_create(hashmap_t* hm) {
     iter->get_extra_data = hashmap_iterator_get_extra_data;
     iter->next = hashmap_iterator_next;
 
-    return iter->next(iter);
+    if(hm->total_size == 0) {
+        iter_md->current_segment = NULL;
+    } else {
+        while(iter_md->current_segment) {
+            if(iter_md->current_segment->items[iter_md->current_index].exists) {
+                break;
+            }
+
+            iter_md->current_index++;
+
+            if(iter_md->current_index == iter_md->segment_capacity) {
+                iter_md->current_segment = iter_md->current_segment->next;
+                iter_md->current_segment = iter_md->current_segment->next;
+            }
+        }
+    }
+
+    return iter;
 }
