@@ -399,10 +399,19 @@ boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t*
 
             const tosdb_memtable_index_t* idx = hashmap_get(mt->indexes, (void*)pk_idx_id);
 
-            error = !tosdb_primary_key_memtable_get(tbl, mt->id, idx, pks);
+            if(!mt->stli) {
+                error = !tosdb_primary_key_memtable_get(tbl, mt->id, idx, pks);
 
-            if(error) {
-                PRINTLOG(TOSDB, LOG_ERROR, "error at getting pks at memtables");
+                if(error) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "error at getting pks at memtables");
+
+                    break;
+                }
+            }
+
+            if(mt->stli && !tosdb_primary_key_sstable_get_on_index(tbl, mt->stli, pks, old_pks)) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot get pks on sstable %lli at level %lli", mt->stli->sstable_id, mt->stli->level);
+                error = true;
 
                 break;
             }

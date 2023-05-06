@@ -348,14 +348,15 @@ typedef struct tosdb_memtable_index_t {
 } tosdb_memtable_index_t;
 
 struct tosdb_memtable_t {
-    tosdb_table_t* tbl;
-    uint64_t       id;
-    boolean_t      is_readonly;
-    boolean_t      is_full;
-    boolean_t      is_dirty;
-    hashmap_t*     indexes;
-    buffer_t       values;
-    uint64_t       record_count;
+    tosdb_table_t*                   tbl;
+    uint64_t                         id;
+    boolean_t                        is_readonly;
+    boolean_t                        is_full;
+    boolean_t                        is_dirty;
+    hashmap_t*                       indexes;
+    buffer_t                         values;
+    uint64_t                         record_count;
+    tosdb_block_sstable_list_item_t* stli;
 };
 
 boolean_t tosdb_memtable_new(tosdb_table_t * tbl);

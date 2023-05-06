@@ -14,6 +14,7 @@
 #include <buffer.h>
 #include <linkedlist.h>
 #include <disk.h>
+#include <set.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
