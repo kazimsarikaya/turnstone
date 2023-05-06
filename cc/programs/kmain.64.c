@@ -125,6 +125,7 @@ int8_t kmain64(size_t entry_point) {
     uint8_t* new_reserved_mmap_data = NULL;
 
     if(SYSTEM_INFO->reserved_mmap_size) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "reserved mmap size is %lli", SYSTEM_INFO->reserved_mmap_size);
         new_reserved_mmap_data = memory_malloc(SYSTEM_INFO->reserved_mmap_size);
 
         if(new_reserved_mmap_data == NULL) {

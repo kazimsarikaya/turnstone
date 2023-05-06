@@ -90,7 +90,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     tosdb_memtable_index_item_t* last = NULL;
     bloomfilter_t* bf = NULL;
     uint64_t index_data_size = 0;
-    uint64_t index_data_location;
+    uint64_t index_data_location = 0;
 
     tosdb_cached_bloomfilter_t* c_bf = NULL;
 
@@ -158,7 +158,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         buffer_destroy(buf_bf_in);
 
-        if(!zc) {
+        if(zc != st_idx->bloomfilter_unpacked_size) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack bf");
             memory_free(first);
             memory_free(last);
@@ -234,7 +234,6 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     }
 
     if(!tdb_cache) {
-        bloomfilter_destroy(bf);
         memory_free(first);
         memory_free(last);
     }
@@ -310,7 +309,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         buffer_destroy(buf_idx_in);
 
-        if(!zc) {
+        if(zc != index_data_unpacked_size) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack idx");
             buffer_destroy(buf_idx_out);
 
@@ -358,8 +357,6 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_id);
         }
     }
-
-
 
 
     tosdb_memtable_index_item_t** t_found_item = (tosdb_memtable_index_item_t**)binarysearch(st_idx_items,
@@ -429,13 +426,14 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         buffer_t buf_vl_in = buffer_encapsulate(b_vl->data, b_vl->data_size);
         buf_vl_out = buffer_new_with_capacity(NULL, b_vl->valuelog_unpacked_size);
+        uint64_t buf_vl_unpacked_size = b_vl->valuelog_unpacked_size;
 
         uint64_t zc = zpack_unpack(buf_vl_in, buf_vl_out);
 
         memory_free(b_vl);
         buffer_destroy(buf_vl_in);
 
-        if(!zc) {
+        if(zc != buf_vl_unpacked_size) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack valuelog");
             buffer_destroy(buf_vl_out);
 
@@ -488,7 +486,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         return false;
     }
 
-    tosdb_index_t* idx = (tosdb_index_t*)map_get(ctx->table->indexes, (void*)index_id);
+    tosdb_index_t* idx = (tosdb_index_t*)hashmap_get(ctx->table->indexes, (void*)index_id);
 
     data_t* tmp = r_d->value;
 
@@ -503,6 +501,9 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             PRINTLOG(TOSDB, LOG_ERROR, "cannot populate record");
         }
     }
+
+    ctx->level = sli->level;
+    ctx->sstable_id = sli->sstable_id;
 
     data_free(r_d);
 
@@ -547,13 +548,13 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
 
     tosdb_record_context_t* ctx = record->context;
 
-    if(map_size(ctx->keys) != 1) {
+    if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
 
         return false;
     }
 
-    iterator_t* iter = map_create_iterator(ctx->keys);
+    iterator_t* iter = hashmap_iterator_create(ctx->keys);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
@@ -586,7 +587,7 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
 
     if(ctx->table->sstable_levels) {
         for(uint64_t i = 1; i <= ctx->table->sstable_max_level; i++) {
-            linkedlist_t st_lvl_l = (linkedlist_t)map_get(ctx->table->sstable_levels, (void*)i);
+            linkedlist_t st_lvl_l = (linkedlist_t)hashmap_get(ctx->table->sstable_levels, (void*)i);
 
             if(st_lvl_l) {
                 if(tosdb_sstable_get_on_list(record, st_lvl_l, item, r_key->index_id)) {

@@ -29,7 +29,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
     }
 
     if(!tbl->sstable_levels) {
-        tbl->sstable_levels = map_integer();
+        tbl->sstable_levels = hashmap_integer(128);
 
         if(!tbl->sstable_levels) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels map");
@@ -74,7 +74,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
 
 
-            linkedlist_t st_l = (linkedlist_t)map_get(tbl->sstable_levels, (void*)level);
+            linkedlist_t st_l = (linkedlist_t)hashmap_get(tbl->sstable_levels, (void*)level);
 
             if(!st_l) {
                 st_l = linkedlist_create_queue();
@@ -87,7 +87,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
                     return false;
                 }
 
-                map_insert(tbl->sstable_levels, (void*)level, st_l);
+                hashmap_put(tbl->sstable_levels, (void*)level, st_l);
             }
 
             linkedlist_queue_push(st_l, st);
@@ -108,7 +108,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
 
     }
 
-    PRINTLOG(TOSDB, LOG_DEBUG, "table %s max sstable level value %lli map size %lli", tbl->name, tbl->sstable_max_level, map_size(tbl->sstable_levels));
+    PRINTLOG(TOSDB, LOG_DEBUG, "table %s max sstable level value %lli map size %lli", tbl->name, tbl->sstable_max_level, hashmap_size(tbl->sstable_levels));
 
     return true;
 }
@@ -120,7 +120,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
         return false;
     }
 
-    tbl->indexes = map_integer();
+    tbl->indexes = hashmap_integer(128);
 
     if(!tbl->indexes) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create index map for table %s", tbl->name);
@@ -142,7 +142,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
 
         for(uint64_t i = 0; i < idx_list->index_count; i++) {
 
-            if(map_exists(tbl->indexes, (void*)idx_list->indexes[i].id)) {
+            if(hashmap_exists(tbl->indexes, (void*)idx_list->indexes[i].id)) {
                 continue;
             }
 
@@ -160,7 +160,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
             idx->type = idx_list->indexes[i].type;
             idx->column_id = idx_list->indexes[i].column_id;
 
-            map_insert(tbl->indexes, (void*)idx->id, idx);
+            hashmap_put(tbl->indexes, (void*)idx->id, idx);
         }
 
 
@@ -186,7 +186,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
         return false;
     }
 
-    tbl->columns = map_string();
+    tbl->columns = hashmap_string(128);
 
     if(!tbl->columns) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create column map for table %s", tbl->name);
@@ -212,7 +212,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
             memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);
             memory_memcopy(col_list->columns[i].name, name_buf, TOSDB_NAME_MAX_LEN);
 
-            if(map_exists(tbl->columns, name_buf)) {
+            if(hashmap_exists(tbl->columns, name_buf)) {
                 continue;
             }
 
@@ -230,7 +230,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
             col->is_deleted = col_list->columns[i].deleted;
             col->type = col_list->columns[i].type;
 
-            map_insert(tbl->columns, col->name, col);
+            hashmap_put(tbl->columns, col->name, col);
         }
 
 
@@ -330,8 +330,8 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
     }
 
 
-    if(map_exists(db->tables, name)) {
-        tosdb_table_t* tbl = (tosdb_table_t*)map_get(db->tables, name);
+    if(hashmap_exists(db->tables, name)) {
+        tosdb_table_t* tbl = (tosdb_table_t*)hashmap_get(db->tables, name);
 
         if(tbl->is_deleted) {
             PRINTLOG(TOSDB, LOG_ERROR, "table %s was deleted", tbl->name);
@@ -357,7 +357,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
     PRINTLOG(TOSDB, LOG_DEBUG, "table %s not found, new one will be created", name);
 
     if(!db->table_new) {
-        db->table_new = map_integer();
+        db->table_new = hashmap_integer(128);
 
         if(!db->table_new) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create new table list");
@@ -391,10 +391,10 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
     tbl->is_dirty = true;
 
     tbl->column_next_id = 1;
-    tbl->columns = map_string();
+    tbl->columns = hashmap_string(128);
 
     tbl->index_next_id = 1;
-    tbl->indexes = map_integer();
+    tbl->indexes = hashmap_integer(128);
 
     tbl->memtable_next_id = 1;
 
@@ -403,9 +403,9 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
     tbl->max_memtable_count = max_memtable_count;
 
 
-    map_insert(db->tables, name, tbl);
+    hashmap_put(db->tables, name, tbl);
 
-    map_insert(db->table_new, (void*)tbl->id, tbl);
+    hashmap_put(db->table_new, (void*)tbl->id, tbl);
 
     lock_release(db->lock);
 
@@ -433,7 +433,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             }
         }
 
-        iterator_t* iter = map_create_iterator(tbl->columns);
+        iterator_t* iter = hashmap_iterator_create(tbl->columns);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create column iterator");
@@ -453,10 +453,10 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
         iter->destroy(iter);
 
-        map_destroy(tbl->columns);
+        hashmap_destroy(tbl->columns);
         tbl->columns = NULL;
 
-        iter = map_create_iterator(tbl->indexes);
+        iter = hashmap_iterator_create(tbl->indexes);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
@@ -474,7 +474,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
         iter->destroy(iter);
 
-        map_destroy(tbl->indexes);
+        hashmap_destroy(tbl->indexes);
         tbl->indexes = NULL;
 
         if(tbl->memtables) {
@@ -504,7 +504,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         }
 
         if(tbl->sstable_levels) {
-            iterator_t* stl_iter = map_create_iterator(tbl->sstable_levels);
+            iterator_t* stl_iter = hashmap_iterator_create(tbl->sstable_levels);
 
             if(!stl_iter) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels iterator");
@@ -522,7 +522,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
             stl_iter->destroy(stl_iter);
 
-            map_destroy(tbl->sstable_levels);
+            hashmap_destroy(tbl->sstable_levels);
             tbl->sstable_levels = NULL;
 
         }
@@ -545,7 +545,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
     PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be freed", tbl->name);
 
     if(tbl->columns) {
-        iterator_t* iter = map_create_iterator(tbl->columns);
+        iterator_t* iter = hashmap_iterator_create(tbl->columns);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create column iterator");
@@ -565,11 +565,11 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
         iter->destroy(iter);
 
-        map_destroy(tbl->columns);
+        hashmap_destroy(tbl->columns);
     }
 
     if(tbl->indexes) {
-        iterator_t* iter = map_create_iterator(tbl->indexes);
+        iterator_t* iter = hashmap_iterator_create(tbl->indexes);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
@@ -587,7 +587,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
         iter->destroy(iter);
 
-        map_destroy(tbl->indexes);
+        hashmap_destroy(tbl->indexes);
     }
 
     if(tbl->memtables) {
@@ -619,7 +619,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
     }
 
     if(tbl->sstable_levels) {
-        iterator_t* stl_iter = map_create_iterator(tbl->sstable_levels);
+        iterator_t* stl_iter = hashmap_iterator_create(tbl->sstable_levels);
 
         if(!stl_iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels iterator");
@@ -637,7 +637,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
         stl_iter->destroy(stl_iter);
 
-        map_destroy(tbl->sstable_levels);
+        hashmap_destroy(tbl->sstable_levels);
         tbl->sstable_levels = NULL;
     }
 
@@ -882,7 +882,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         tbl->metadata_size = block->header.block_size;
 
         if(!tbl->db->table_new) {
-            tbl->db->table_new = map_integer();
+            tbl->db->table_new = hashmap_integer(128);
 
             if(!tbl->db->table_new) {
                 memory_free(block);
@@ -891,7 +891,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
             }
         }
 
-        map_insert(tbl->db->table_new, (void*)tbl->id, tbl);
+        hashmap_put(tbl->db->table_new, (void*)tbl->id, tbl);
 
         PRINTLOG(TOSDB, LOG_DEBUG, "table %s is persisted at loc 0x%llx size 0x%llx", tbl->name, loc, block->header.block_size);
 
@@ -919,7 +919,7 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, const char_t* colname, data
         return false;
     }
 
-    if(map_exists(tbl->columns, colname)) {
+    if(hashmap_exists(tbl->columns, colname)) {
         PRINTLOG(TOSDB, LOG_ERROR, "column %s is exists for table %s", colname, tbl->name);
 
         return false;
@@ -951,7 +951,7 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, const char_t* colname, data
 
     tbl->column_new_count++;
 
-    map_insert(tbl->columns, col->name, col);
+    hashmap_put(tbl->columns, col->name, col);
     linkedlist_list_insert(tbl->column_new, col);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "col %s is added to table %s", colname, tbl->name);
@@ -972,7 +972,7 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, to
         return false;
     }
 
-    const tosdb_column_t* col = map_get(tbl->columns, colname);
+    const tosdb_column_t* col = hashmap_get(tbl->columns, colname);
 
     if(!col) {
         PRINTLOG(TOSDB, LOG_ERROR, "column %s is not at table %s", colname, tbl->name);
@@ -1013,7 +1013,7 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, to
 
     tbl->index_new_count++;
 
-    map_insert(tbl->indexes, (void*)idx->id, idx);
+    hashmap_put(tbl->indexes, (void*)idx->id, idx);
     linkedlist_list_insert(tbl->index_new, idx);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "index %lli for column %s is added to table %s", idx->id, colname, tbl->name);
@@ -1052,6 +1052,11 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
             error = true;
         }
 
+        if(mt->stli) {
+            linkedlist_stack_push(tbl->sstable_list_items, mt->stli);
+            mt->stli = NULL;
+        }
+
     } while(idx > 0);
 
     if(!linkedlist_size(tbl->sstable_list_items)) {
@@ -1059,6 +1064,43 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     }
 
     uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
+
+
+    buffer_t buf_stli = buffer_new_with_capacity(NULL, block_size * 2);
+
+    if(!buf_stli) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
+        lock_release(tbl->lock);
+
+        return false;
+    }
+
+    iterator_t* iter = linkedlist_iterator_create(tbl->sstable_list_items);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
+        lock_release(tbl->lock);
+
+        return false;
+    }
+
+    uint64_t stli_cnt = linkedlist_size(tbl->sstable_list_items);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
+
+        uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
+
+        buffer_append_bytes(buf_stli, (uint8_t*)stli, size);
+
+        memory_free(stli);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    block_size = buffer_get_length(buf_stli);
     block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
     tosdb_block_sstable_list_t* block = memory_malloc(block_size);
 
@@ -1074,39 +1116,13 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     block->header.previous_block_size = tbl->sstable_list_size;
     block->database_id = tbl->db->id;
     block->table_id = tbl->id;
-    block->sstable_count = linkedlist_size(tbl->sstable_list_items);
-
-
-    iterator_t* iter = linkedlist_iterator_create(tbl->sstable_list_items);
-
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
-        memory_free(block);
-        lock_release(tbl->lock);
-
-        return false;
-    }
-
-    idx = 0;
+    block->sstable_count = stli_cnt;
 
     uint8_t* ssts_loc = (uint8_t*)&block->sstables[0];
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);
+    buffer_write_all_into(buf_stli, ssts_loc);
 
-        uint64_t size = sizeof(tosdb_block_sstable_list_item_t) + sizeof(tosdb_block_sstable_list_item_index_pair_t) * stli->index_count;
-
-        memory_memcopy(stli, ssts_loc, size);
-
-        ssts_loc += size;
-
-        memory_free(stli);
-
-        iter = iter->next(iter);
-        idx++;
-    }
-
-    iter->destroy(iter);
+    buffer_destroy(buf_stli);
 
     uint64_t block_loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
 
@@ -1131,3 +1147,22 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     return !error;
 }
 
+set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl) {
+    if(!tbl) {
+        return NULL;
+    }
+
+    set_t* res = set_create(tosdb_record_primary_key_comparator);
+
+    if(!res) {
+        return NULL;
+    }
+
+    if(!tosdb_table_get_primary_keys_internal(tbl, res, NULL)) {
+        set_destroy_with_callback(res, tosdb_record_search_set_destroy_cb);
+
+        return NULL;
+    }
+
+    return res;
+}

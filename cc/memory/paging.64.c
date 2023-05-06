@@ -25,8 +25,6 @@ uint64_t MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT = 0;
 
 uint64_t memory_paging_get_internal_frame(void);
 
-extern size_t __kheap_bottom;
-
 uint64_t memory_paging_get_internal_frame(void) {
     if(MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT == 0) {
         MEMORY_PAGING_INTERNAL_FRAMES_1_START = MEMORY_PAGING_INTERNAL_FRAMES_2_START;
@@ -470,14 +468,14 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
         section_start -= (section_start % FRAME_SIZE);
 
         if(SYSTEM_INFO->remapped == 0 && i == LINKER_SECTION_TYPE_TEXT) {
-            section_size += 0x100; // add header to text section size
+            section_size += 0x200; // add header to text section size
             kernel_header->section_locations[i].section_pyhsical_start = 0;
             kernel_header->section_locations[i].section_start = section_start;
             kernel_header->section_locations[i].section_size = section_size;
         }
 
         if(i == LINKER_SECTION_TYPE_HEAP && kernel_header->section_locations[i].section_size == 0) {
-            size_t heap_start = (size_t)&__kheap_bottom;
+            size_t heap_start = SYSTEM_INFO->kernel_start + kernel_header->section_locations[i].section_start;
             size_t heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
             section_size = heap_end - heap_start;
             kernel_header->section_locations[i].section_start = heap_start - kernel_offset;
@@ -502,7 +500,12 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
             p_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
         }
 
-        if(i == LINKER_SECTION_TYPE_RODATA || (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_RELOCATION_TABLE)) {
+        if(i == LINKER_SECTION_TYPE_RODATA ||
+           i == LINKER_SECTION_TYPE_ROREL ||
+           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_RELOCATION_TABLE) ||
+           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_GOT) ||
+           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE) ||
+           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_TEXT)) {
             p_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
         }
 

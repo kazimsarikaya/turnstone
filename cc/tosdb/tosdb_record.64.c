@@ -178,7 +178,7 @@ boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, 
 
     tosdb_record_context_t* ctx = record->context;
 
-    const tosdb_column_t* col = map_get(ctx->table->columns, colname);
+    const tosdb_column_t* col = hashmap_get(ctx->table->columns, colname);
 
     if(!col) {
         PRINTLOG(TOSDB, LOG_ERROR, "column %s is not exists at table %s", colname, ctx->table->name);
@@ -279,7 +279,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         r_key->key_length = len;
         r_key->key = (uint8_t*)l_value;
 
-        tosdb_record_key_t* old_r_key = map_insert(ctx->keys, (void*)idx_id, (void*)r_key);
+        tosdb_record_key_t* old_r_key = (tosdb_record_key_t*)hashmap_put(ctx->keys, (void*)idx_id, (void*)r_key);
 
         if(old_r_key) {
             if(old_r_key->key_length) {
@@ -290,7 +290,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
         }
     }
 
-    data_t* old_col_value = map_insert(ctx->columns, (void*)col_id, col_value);
+    data_t* old_col_value = (data_t*)hashmap_put(ctx->columns, (void*)col_id, col_value);
 
     if(old_col_value) {
         data_free(old_col_value);
@@ -309,7 +309,7 @@ boolean_t tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, 
 
     tosdb_record_context_t* ctx = record->context;
 
-    const tosdb_column_t* col = map_get(ctx->table->columns, colname);
+    const tosdb_column_t* col = hashmap_get(ctx->table->columns, colname);
 
     if(col->type != type) {
         PRINTLOG(TOSDB, LOG_ERROR, "column %s type mismatch for table %s", colname, ctx->table->name);
@@ -335,7 +335,7 @@ boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64
 
     tosdb_record_context_t* ctx = record->context;
 
-    const data_t* d = map_get(ctx->columns, (void*)col_id);
+    const data_t* d = hashmap_get(ctx->columns, (void*)col_id);
 
     if(!d || d->type != type) {
         return false;
@@ -395,7 +395,7 @@ boolean_t tosdb_record_get(tosdb_record_t* record) {
     return tosdb_sstable_get(record);
 }
 
-boolean_t record_search_set_destroy_cb(void * item) {
+boolean_t tosdb_record_search_set_destroy_cb(void * item) {
     if(!item) {
         return true;
     }
@@ -415,14 +415,14 @@ linkedlist_t tosdb_record_search(tosdb_record_t* record) {
 
     if(!tosdb_memtable_search(record, results)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot search at memtable");
-        set_destroy_with_callback(results, record_search_set_destroy_cb);
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_cb);
 
         return NULL;
     }
 
     if(!tosdb_sstable_search(record, results)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot search at sstables");
-        set_destroy_with_callback(results, record_search_set_destroy_cb);
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_cb);
 
         return NULL;
     }
@@ -430,7 +430,7 @@ linkedlist_t tosdb_record_search(tosdb_record_t* record) {
     iterator_t* f_iter = set_create_iterator(results);
 
     if(!f_iter) {
-        set_destroy_with_callback(results, record_search_set_destroy_cb);
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_cb);
 
         return NULL;
     }
@@ -524,7 +524,7 @@ uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid) {
 
     uint64_t idx_id = 0;
 
-    iterator_t* iter = map_create_iterator(ctx->table->indexes);
+    iterator_t* iter = hashmap_iterator_create(ctx->table->indexes);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
@@ -556,7 +556,7 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
 
     tosdb_record_context_t* ctx = record->context;
 
-    iterator_t* iter = map_create_iterator(ctx->columns);
+    iterator_t* iter = hashmap_iterator_create(ctx->columns);
 
     while(iter->end_of_iterator(iter) != 0) {
         data_t* d = (data_t*)iter->get_item(iter);
@@ -577,9 +577,9 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
 
     iter->destroy(iter);
 
-    map_destroy(ctx->columns);
+    hashmap_destroy(ctx->columns);
 
-    iter = map_create_iterator(ctx->keys);
+    iter = hashmap_iterator_create(ctx->keys);
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_record_key_t* key = (tosdb_record_key_t*)iter->get_item(iter);
@@ -591,13 +591,13 @@ boolean_t tosdb_record_destroy(tosdb_record_t * record){
 
     iter->destroy(iter);
 
-    map_destroy(ctx->keys);
+    hashmap_destroy(ctx->keys);
 
     memory_free(record->context);
 
     memory_free(record);
 
-    return false;
+    return true;
 }
 
 data_t* tosdb_record_serialize(tosdb_record_t* record) {
@@ -618,7 +618,7 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
     data_t s_data = {0};
 
     s_data.type = DATA_TYPE_DATA;
-    s_data.length = map_size(ctx->columns);
+    s_data.length = hashmap_size(ctx->columns);
 
     data_t* s_items = memory_malloc(sizeof(data_t) * s_data.length);
 
@@ -632,7 +632,7 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
 
     uint64_t idx = 0;
 
-    iterator_t* iter = map_create_iterator(ctx->columns);
+    iterator_t* iter = hashmap_iterator_create(ctx->columns);
 
     while(iter->end_of_iterator(iter) != 0) {
         data_t* d = (data_t*)iter->get_item(iter);
@@ -656,12 +656,17 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
 }
 
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
-    if(!tbl || !tbl->is_open || tbl->is_deleted) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is null or closed or deleted");
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
 
         return NULL;
     }
 
+    if(!tbl->is_open || tbl->is_deleted) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed(%i) or deleted(%i)", !tbl->is_open, tbl->is_deleted);
+
+        return NULL;
+    }
 
     tosdb_record_t* rec = memory_malloc(sizeof(tosdb_record_t));
 
@@ -681,7 +686,7 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     }
 
     ctx->table = tbl;
-    ctx->columns = map_integer();
+    ctx->columns = hashmap_integer(128);
 
     if(!ctx->columns) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create record context column map");
@@ -691,11 +696,11 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
         return NULL;
     }
 
-    ctx->keys = map_integer();
+    ctx->keys = hashmap_integer(128);
 
     if(!ctx->keys) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create record context keys map");
-        map_destroy(ctx->columns);
+        hashmap_destroy(ctx->columns);
         memory_free(ctx);
         memory_free(rec);
 

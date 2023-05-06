@@ -345,3 +345,27 @@ int8_t buffer_destroy(buffer_t buffer) {
 
     return 0;
 }
+
+boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, uint8_t* dest) {
+    if(!buffer || !dest) {
+        return false;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    if(pos > bi->length) {
+        return false;
+    }
+
+    if(len > bi->length - pos) {
+        len = bi->length - pos;
+    }
+
+    if(!len) {
+        return false;
+    }
+
+    memory_memcopy(bi->data + pos, dest, len);
+
+    return true;
+}

@@ -8,7 +8,7 @@
 
 #include <set.h>
 #include <indexer.h>
-#include <bplustree.h>
+#include <rbtree.h>
 #include <cpu/sync.h>
 #include <strings.h>
 
@@ -30,7 +30,15 @@ int8_t set_integer_cmp(const void * i1, const void* i2) {
     int64_t ii1 = (int64_t)i1;
     int64_t ii2 = (int64_t)i2;
 
-    return ii1 - ii2;
+    if(ii1 < ii2) {
+        return -1;
+    }
+
+    if(ii1 > ii2) {
+        return 1;
+    }
+
+    return 0;
 }
 
 set_t* set_create(set_comparator_f cmp) {
@@ -40,7 +48,7 @@ set_t* set_create(set_comparator_f cmp) {
         return NULL;
     }
 
-    s->index = bplustree_create_index_with_unique(128, cmp, true);
+    s->index = rbtree_create_index(cmp);
 
     if(!s->index) {
         memory_free(s);
@@ -68,22 +76,11 @@ boolean_t set_append(set_t* s, void* value) {
 
     lock_acquire(s->lock);
 
-    iterator_t* iter = s->index->search(s->index, value, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(!iter) {
+    if(s->index->contains(s->index, value)) {
         lock_release(s->lock);
 
         return false;
     }
-
-    if(iter->end_of_iterator(iter) != 0) {
-        iter->destroy(iter);
-        lock_release(s->lock);
-
-        return false;
-    }
-
-    iter->destroy(iter);
 
     s->index->insert(s->index, value, value, NULL);
 
@@ -99,24 +96,11 @@ boolean_t set_exists(set_t* s, void* value) {
 
     lock_acquire(s->lock);
 
-    iterator_t* iter = s->index->search(s->index, value, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(!iter) {
-        lock_release(s->lock);
-
-        return false;
-    }
-
-    if(iter->end_of_iterator(iter) == 0) {
-        iter->destroy(iter);
-        lock_release(s->lock);
-
-        return false;
-    }
+    boolean_t res = s->index->contains(s->index, value);
 
     lock_release(s->lock);
 
-    return true;
+    return res;
 }
 
 uint64_t set_size(set_t* s) {
@@ -156,6 +140,8 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
                 void* item = (void*)iter->get_item(iter);
 
                 error |= !cb(item);
+
+                iter = iter->next(iter);
             }
 
             iter->destroy(iter);
@@ -164,7 +150,7 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
         }
     }
 
-    bplustree_destroy_index(s->index);
+    rbtree_destroy_index(s->index);
     lock_destroy(s->lock);
 
     memory_free(s);

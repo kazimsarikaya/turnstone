@@ -14,6 +14,7 @@
 #include <buffer.h>
 #include <linkedlist.h>
 #include <disk.h>
+#include <set.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -546,5 +547,12 @@ struct tosdb_record_t {
  */
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl);
 
-#endif
+/**
+ * @brief get all primary keys in terms of record
+ * @param[in] tbl table
+ * @return set of record with only contains primary key
+ */
+set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl);
+
+ #endif
 

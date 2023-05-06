@@ -37,9 +37,6 @@ MODULE("turnstone.lib.memory");
 #define HEAP_HEADER                    HEAP_INFO_PADDING
 
 
-/*! heap bottom address comes frome linker script */
-extern size_t __kheap_bottom;
-
 /**
  * @struct heapinfo_t
  * @brief heap info struct
@@ -98,7 +95,8 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address);
 void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat);
 
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
-    size_t heap_start, heap_end;
+    size_t heap_start = 0, heap_end = 0;
+
     if(start == 0 || end == 0) {
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
 
@@ -106,7 +104,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
             heap_start = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
             heap_end = heap_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size;
         } else {
-            heap_start = (size_t)&__kheap_bottom;
+            heap_start = SYSTEM_INFO->kernel_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
             heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
         }
     } else {

@@ -314,6 +314,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
 
     acpi_aml_object_t* mth = opcode->operands[0];
 
+    PRINTLOG(ACPIAML, LOG_TRACE, "executing method %s argument count %i", mth->name, mthctx->arg_count);
 
     ctx->scope_prefix = mth->name;
     ctx->flags.inside_method = 1;
@@ -321,7 +322,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
     ctx->length = mth->method.termlist_length;
     ctx->remaining = mth->method.termlist_length;
     ctx->method_context = mthctx;
-    ctx->local_symbols = bplustree_create_index_with_heap(ctx->heap, 20, acpi_aml_object_name_comparator);
+    ctx->local_symbols = bplustree_create_index_with_heap_and_unique(ctx->heap, 20, acpi_aml_object_name_comparator, true);
 
     res = acpi_aml_parse_all_items(ctx, NULL, NULL);
 

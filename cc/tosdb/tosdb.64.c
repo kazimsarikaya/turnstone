@@ -175,7 +175,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
     }
 
     if(!tdb->databases) {
-        tdb->databases = map_string();
+        tdb->databases = hashmap_string(128);
     }
 
     if(!tdb->databases) {
@@ -202,7 +202,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
             memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);
             memory_memcopy(db_list->databases[i].name, name_buf, TOSDB_NAME_MAX_LEN);
 
-            if(map_exists(tdb->databases, name_buf)) {
+            if(hashmap_exists(tdb->databases, name_buf)) {
                 continue;
             }
 
@@ -223,7 +223,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
             db->metadata_location = db_list->databases[i].metadata_location;
             db->metadata_size = db_list->databases[i].metadata_size;
 
-            map_insert(tdb->databases, db->name, db);
+            hashmap_put(tdb->databases, db->name, db);
 
             PRINTLOG(TOSDB, LOG_DEBUG, "database %s lazy loaded. md loc 0x%llx(0x%llx)", db->name, db->metadata_location, db->metadata_size);
         }
@@ -264,7 +264,7 @@ boolean_t tosdb_close(tosdb_t* tdb) {
 
     boolean_t error = false;
 
-    iterator_t* iter = map_create_iterator(tdb->databases);
+    iterator_t* iter = hashmap_iterator_create(tdb->databases);
 
     while (iter->end_of_iterator(iter) != 0) {
         tosdb_database_t * db = (tosdb_database_t *)iter->get_item(iter);
@@ -313,7 +313,7 @@ boolean_t tosdb_free(tosdb_t * tdb) {
 
     boolean_t error = false;
 
-    iterator_t* iter = map_create_iterator(tdb->databases);
+    iterator_t* iter = hashmap_iterator_create(tdb->databases);
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_database_t* db = (tosdb_database_t*)iter->get_item(iter);
@@ -330,7 +330,7 @@ boolean_t tosdb_free(tosdb_t * tdb) {
 
     memory_free(tdb->superblock);
     lock_destroy(tdb->lock);
-    map_destroy(tdb->databases);
+    hashmap_destroy(tdb->databases);
     tosdb_cache_close(tdb->cache);
     memory_free(tdb);
 
@@ -428,7 +428,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
     boolean_t error = false;
 
-    uint64_t metadata_size = sizeof(tosdb_block_database_list_t) + sizeof(tosdb_block_database_list_item_t) * map_size(tdb->database_new);
+    uint64_t metadata_size = sizeof(tosdb_block_database_list_t) + sizeof(tosdb_block_database_list_item_t) * hashmap_size(tdb->database_new);
     metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
 
     tosdb_block_database_list_t * block = memory_malloc(metadata_size);
@@ -444,7 +444,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
     block->header.previous_block_location = tdb->superblock->database_list_location;
     block->header.previous_block_size = tdb->superblock->database_list_size;
 
-    iterator_t* iter = map_create_iterator(tdb->database_new);
+    iterator_t* iter = hashmap_iterator_create(tdb->database_new);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create database iterator");
@@ -454,7 +454,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
         return false;
     }
 
-    block->database_count = map_size(tdb->database_new);
+    block->database_count = hashmap_size(tdb->database_new);
 
     uint64_t db_idx = 0;
 
@@ -510,7 +510,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
 
     memory_free(block);
 
-    map_destroy(tdb->database_new);
+    hashmap_destroy(tdb->database_new);
     tdb->database_new = NULL;
 
     if(!tosdb_write_and_flush_superblock(tdb->backend, tdb->superblock)) {

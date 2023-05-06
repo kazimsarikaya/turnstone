@@ -10,6 +10,7 @@
 #include <data.h>
 #include <sha2.h>
 #include <bplustree.h>
+#include <rbtree.h>
 #include <map.h>
 #include <xxhash.h>
 #include <tosdb/tosdb.h>

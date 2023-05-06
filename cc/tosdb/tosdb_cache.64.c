@@ -47,33 +47,47 @@ int8_t tosdb_cache_key_comparator(const void* item1, const void* item2) {
     const tosdb_cache_key_t* key1 = item1;
     const tosdb_cache_key_t* key2 = item2;
 
-    uint64_t res = key1->database_id - key2->database_id;
-
-    if(res) {
-        return res;
+    if(key1->database_id < key2->database_id) {
+        return -1;
     }
 
-    res = key1->table_id - key2->table_id;
-
-    if(res) {
-        return res;
+    if(key1->database_id > key2->database_id) {
+        return 1;
     }
 
-    res = key1->index_id - key2->index_id;
-
-    if(res) {
-        return res;
+    if(key1->table_id < key2->table_id) {
+        return -1;
     }
 
-    res = key1->level - key2->level;
-
-    if(res) {
-        return res;
+    if(key1->table_id > key2->table_id) {
+        return 1;
     }
 
-    res = key1->sstable_id - key2->sstable_id;
+    if(key1->index_id < key2->index_id) {
+        return -1;
+    }
 
-    return res;
+    if(key1->index_id > key2->index_id) {
+        return 1;
+    }
+
+    if(key1->level < key2->level) {
+        return -1;
+    }
+
+    if(key1->level > key2->level) {
+        return 1;
+    }
+
+    if(key1->sstable_id < key2->sstable_id) {
+        return -1;
+    }
+
+    if(key1->sstable_id > key2->sstable_id) {
+        return 1;
+    }
+
+    return 0;
 }
 
 boolean_t tosdb_cache_item_key_destroyer(const void* key, const void* item) {

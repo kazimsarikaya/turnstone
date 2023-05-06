@@ -23,7 +23,7 @@ boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
     }
 
     if(!db->tables) {
-        db->tables = map_string();
+        db->tables = hashmap_string(128);
     }
 
     if(!db->tables) {
@@ -50,7 +50,7 @@ boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
             memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);
             memory_memcopy(tbl_list->tables[i].name, name_buf, TOSDB_NAME_MAX_LEN);
 
-            if(map_exists(db->tables, name_buf)) {
+            if(hashmap_exists(db->tables, name_buf)) {
                 continue;
             }
 
@@ -70,7 +70,7 @@ boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
             tbl->metadata_location = tbl_list->tables[i].metadata_location;
             tbl->metadata_size = tbl_list->tables[i].metadata_size;
 
-            map_insert(db->tables, tbl->name, tbl);
+            hashmap_put(db->tables, tbl->name, tbl);
 
             PRINTLOG(TOSDB, LOG_DEBUG, "table %s of db %s is lazy loaded. md 0x%llx(0x%llx)", tbl->name, db->name, tbl->metadata_location, tbl->metadata_size);
         }
@@ -154,8 +154,8 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, const char_t* name
     }
 
 
-    if(map_exists(tdb->databases, name)) {
-        tosdb_database_t* db = (tosdb_database_t*)map_get(tdb->databases, name);
+    if(hashmap_exists(tdb->databases, name)) {
+        tosdb_database_t* db = (tosdb_database_t*)hashmap_get(tdb->databases, name);
 
         if(db->is_deleted) {
             PRINTLOG(TOSDB, LOG_ERROR, "db %s was deleted", db->name);
@@ -174,7 +174,7 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, const char_t* name
     }
 
     if(!tdb->database_new) {
-        tdb->database_new = map_integer();
+        tdb->database_new = hashmap_integer(128);
 
         if(!tdb->database_new) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create new database list");
@@ -209,11 +209,11 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, const char_t* name
     db->is_dirty = true;
 
     db->table_next_id = 1;
-    db->tables = map_string();
+    db->tables = hashmap_string(128);
 
-    map_insert(tdb->databases, name, db);
+    hashmap_put(tdb->databases, name, db);
 
-    map_insert(tdb->database_new, (void*)db->id, db);
+    hashmap_put(tdb->database_new, (void*)db->id, db);
 
     lock_release(tdb->lock);
 
@@ -234,7 +234,7 @@ boolean_t tosdb_database_close(tosdb_database_t* db) {
     if(db->is_open) {
         PRINTLOG(TOSDB, LOG_DEBUG, "database %s will be closed", db->name);
 
-        iterator_t* iter = map_create_iterator(db->tables);
+        iterator_t* iter = hashmap_iterator_create(db->tables);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
@@ -281,7 +281,7 @@ boolean_t tosdb_database_free(tosdb_database_t* db) {
     PRINTLOG(TOSDB, LOG_DEBUG, "database %s will be freed.", db->name);
 
 
-    iterator_t* iter = map_create_iterator(db->tables);
+    iterator_t* iter = hashmap_iterator_create(db->tables);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
@@ -306,7 +306,7 @@ boolean_t tosdb_database_free(tosdb_database_t* db) {
 
     iter->destroy(iter);
 
-    map_destroy(db->tables);
+    hashmap_destroy(db->tables);
 
     memory_free(db->name);
     lock_destroy(db->lock);
@@ -337,12 +337,12 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
     boolean_t need_persist = false;
 
 
-    if(db->table_new && map_size(db->table_new)) {
+    if(db->table_new && hashmap_size(db->table_new)) {
         need_persist = true;
 
         boolean_t error = false;
 
-        uint64_t metadata_size = sizeof(tosdb_block_table_list_t) + sizeof(tosdb_block_table_list_item_t) * map_size(db->table_new);
+        uint64_t metadata_size = sizeof(tosdb_block_table_list_t) + sizeof(tosdb_block_table_list_item_t) * hashmap_size(db->table_new);
         metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
 
         tosdb_block_table_list_t* block = memory_malloc(metadata_size);
@@ -357,10 +357,10 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         block->header.block_size = metadata_size;
         block->header.previous_block_location = db->table_list_location;
         block->header.previous_block_size = db->table_list_size;
-        block->table_count = map_size(db->table_new);
+        block->table_count = hashmap_size(db->table_new);
         block->database_id = db->id;
 
-        iterator_t* iter = map_create_iterator(db->table_new);
+        iterator_t* iter = hashmap_iterator_create(db->table_new);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create database iterator");
@@ -421,7 +421,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         memory_free(block);
 
 
-        map_destroy(db->table_new);
+        hashmap_destroy(db->table_new);
         db->table_new = NULL;
 
     }
@@ -465,7 +465,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         db->is_dirty = false;
 
         if(!db->tdb->database_new) {
-            db->tdb->database_new = map_integer();
+            db->tdb->database_new = hashmap_integer(128);
 
             if(!db->tdb->database_new) {
                 memory_free(block);
@@ -474,7 +474,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
             }
         }
 
-        map_insert(db->tdb->database_new, (void*)db->id, db);
+        hashmap_put(db->tdb->database_new, (void*)db->id, db);
 
 
         PRINTLOG(TOSDB, LOG_DEBUG, "database %s is persisted at loc 0x%llx size 0x%llx", db->name, loc, block->header.block_size);

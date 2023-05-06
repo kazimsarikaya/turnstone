@@ -418,6 +418,9 @@ token_error:
         goto tdb_close;
     }
 
+    tosdb_table_close(table2);
+    table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
+
     tosdb_record_t* s_rec = tosdb_table_create_record(table2);
 
     if(!s_rec) {
@@ -515,6 +518,52 @@ rec_destroy:
     }
 
     d_rec->destroy(d_rec);
+
+    if(!pass) {
+        goto tdb_close;
+    }
+
+
+    set_t* pks = tosdb_table_get_primary_keys(table2);
+
+    if(!pks) {
+        print_error("cannot get pks");
+        pass = false;
+
+        goto tdb_close;
+    }
+
+    int64_t rec_cnt = 0;
+
+    iter = set_create_iterator(pks);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        d_rec = (tosdb_record_t*)iter->get_item(iter);
+
+        int64_t id = 0;
+
+        if(d_rec->get_int64(d_rec, "id", &id)) {
+            //printf("pk id %lli\n", id);
+            rec_cnt++;
+        }
+
+        d_rec->destroy(d_rec);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+    set_destroy(pks);
+
+    if(rec_cnt != 100) {
+        print_error("pk count failed");
+        pass = false;
+    }
+
+    logging_module_levels[TOSDB] = LOG_DEBUG;
+
+    tosdb_table_close(table2);
+    table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
 tdb_close:
     if(!tosdb_close(tosdb)) {

@@ -9,6 +9,8 @@
 #include <hashmap.h>
 #include <memory.h>
 #include <cpu/sync.h>
+#include <xxhash.h>
+#include <strings.h>
 
 MODULE("turnstone.lib");
 
@@ -36,16 +38,39 @@ struct hashmap_t {
 
 uint64_t hashmap_default_kg(const void* key);
 int8_t   hashmap_default_kc(const void* item1, const void* item2);
+uint64_t hashmap_string_kg(const void * key);
+int8_t   hashmap_string_kc(const void* item1, const void* item2);
 
 uint64_t hashmap_default_kg(const void* key) {
     return (uint64_t)key;
 }
 
-int8_t   hashmap_default_kc(const void* item1, const void* item2) {
+uint64_t hashmap_string_kg(const void * key) {
+    char_t* str_key = (char_t*)key;
+
+    return xxhash32_hash(str_key, strlen(str_key));
+}
+
+int8_t hashmap_default_kc(const void* item1, const void* item2) {
     uint64_t ti1 = (uint64_t)item1;
     uint64_t ti2 = (uint64_t)item2;
 
-    return ti1 - ti2;
+    if(ti1 < ti2) {
+        return -1;
+    }
+
+    if(ti1 > ti2) {
+        return 1;
+    }
+
+    return 0;
+}
+
+int8_t hashmap_string_kc(const void* item1, const void* item2) {
+    char_t* ti1 = (char_t*)item1;
+    char_t* ti2 = (char_t*)item2;
+
+    return strcmp(ti1, ti2);
 }
 
 hashmap_t*  hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generator_f hkg, hashmap_key_comparator_f hkc) {
@@ -85,6 +110,10 @@ hashmap_t*  hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generat
     }
 
     return hm;
+}
+
+hashmap_t* hashmap_string(uint64_t capacity) {
+    return hashmap_new_with_hkg_with_hkc(capacity, hashmap_string_kg, hashmap_string_kc);
 }
 
 boolean_t   hashmap_destroy(hashmap_t* hm) {
@@ -236,6 +265,37 @@ const void* hashmap_get_key(hashmap_t* hm, const void* key) {
     return NULL;
 }
 
+boolean_t hashmap_exists(hashmap_t* hm, const void* key) {
+    if(!hm) {
+        return false;
+    }
+
+    const uint64_t h_key = hm->hkg(key) % hm->segment_capacity;
+
+    hashmap_segment_t* seg = hm->segments;
+
+    while(seg) {
+        if(seg->items[h_key].exists) {
+            if(hm->hkc(key, seg->items[h_key].key) == 0) {
+                return true;
+            }
+
+            uint64_t t_h_key = (h_key + 1) % hm->segment_capacity;
+
+            if(seg->items[t_h_key].exists) {
+                if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
+                    return true;
+                }
+            }
+        }
+
+        seg = seg->next;
+    }
+
+    return false;
+}
+
+
 const void* hashmap_get(hashmap_t* hm, const void* key) {
     if(!hm) {
         return NULL;
@@ -362,13 +422,26 @@ iterator_t* hashmap_iterator_next(iterator_t* iter) {
 
     hashmap_iterator_metadata_t* iter_md = iter->metadata;
 
-    iter_md->current_index++;
+    if(!iter_md->current_segment) {
+        return iter;
+    }
 
-    if(iter_md->current_segment) {
+    while(true) {
+        iter_md->current_index++;
+
         if(iter_md->current_index == iter_md->segment_capacity) {
             iter_md->current_index = 0;
             iter_md->current_segment = iter_md->current_segment->next;
         }
+
+        if(!iter_md->current_segment) {
+            break;
+        }
+
+        if(iter_md->current_segment->items[iter_md->current_index].exists) {
+            break;
+        }
+
     }
 
     return iter;
@@ -403,6 +476,7 @@ iterator_t* hashmap_iterator_create(hashmap_t* hm) {
     }
 
     iter_md->current_segment = hm->segments;
+    iter_md->segment_capacity = hm->segment_capacity;
 
     iterator_t* iter = memory_malloc(sizeof(iterator_t));
 
@@ -418,6 +492,23 @@ iterator_t* hashmap_iterator_create(hashmap_t* hm) {
     iter->destroy = hashmap_iterator_destroy;
     iter->get_extra_data = hashmap_iterator_get_extra_data;
     iter->next = hashmap_iterator_next;
+
+    if(hm->total_size == 0) {
+        iter_md->current_segment = NULL;
+    } else {
+        while(iter_md->current_segment) {
+            if(iter_md->current_segment->items[iter_md->current_index].exists) {
+                break;
+            }
+
+            iter_md->current_index++;
+
+            if(iter_md->current_index == iter_md->segment_capacity) {
+                iter_md->current_segment = iter_md->current_segment->next;
+                iter_md->current_segment = iter_md->current_segment->next;
+            }
+        }
+    }
 
     return iter;
 }

@@ -1221,6 +1221,10 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         iter = iter->next(iter);
     }
 
+    if(!pass) {
+        print_error("cannot search by country on non unique key");
+    }
+
 search_iter_destroy:
     iter->destroy(iter);
     linkedlist_destroy(s_recs);
