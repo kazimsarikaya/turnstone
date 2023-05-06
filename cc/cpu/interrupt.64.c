@@ -16,6 +16,8 @@
 #include <cpu/task.h>
 #include <backtrace.h>
 
+MODULE("turnstone.kernel.cpu.interrupt");
+
 //void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
@@ -98,7 +100,7 @@ const uint64_t interrupt_system_defined_interrupts[32] = {
     (uint64_t)&interrupt_int1F_reserved
 };
 
-int8_t interrupt_init() {
+int8_t interrupt_init(void) {
     descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
 
     for(int32_t i = 0; i < 32; i++) {
@@ -120,7 +122,7 @@ int8_t interrupt_init() {
     return 0;
 }
 
-uint8_t interrupt_get_next_empty_interrupt(){
+uint8_t interrupt_get_next_empty_interrupt(void){
     uint8_t res = next_empty_interrupt;
     next_empty_interrupt++;
     return res;

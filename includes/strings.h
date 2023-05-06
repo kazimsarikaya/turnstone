@@ -11,6 +11,7 @@
 
 #include <types.h>
 #include <memory.h>
+#include <sunday_match.h>
 
 /**
  * @brief calculates null ended string's length
@@ -51,6 +52,14 @@ int8_t strstarts(const char_t* str, const char_t* prefix);
  * @return 0 if str ends with suffix, else -1
  */
 int8_t strends(const char_t* str, const char_t* suffix);
+
+/**
+ * @brief checks str contains pattern
+ * @param  str string for look
+ * @param  pattern to check
+ * @return -1 if str does not contain pattern, else position
+ */
+#define strcontains(str, pattern) sunday_match((uint8_t*)str, strlen(str), (uint8_t*)pattern, strlen(pattern))
 
 /**
  * @brief concanates two string and returns new one

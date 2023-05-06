@@ -25,6 +25,13 @@ uint32_t main(uint32_t argc, char_t** argv) {
     map_insert(map, (void*)3, "elma");
     map_insert(map, (void*)5, "armut");
 
+    if(map_size(map) != 2) {
+        print_error("map size failed");
+        map_destroy(map);
+
+        return -1;
+    }
+
     const char_t* test;
 
     test = map_get(map, (void*)3);
@@ -49,6 +56,14 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     if(map_exists(map, (void*)3)) {
         print_error("cannot delete data");
+        map_destroy(map);
+
+        return -1;
+    }
+
+    if(map_size(map) != 1) {
+        print_error("map size should be 1");
+        printf("map size %lli\n", map_size(map));
         map_destroy(map);
 
         return -1;

@@ -135,14 +135,13 @@ void __attribute__((constructor)) start_ram(void) {
     }
 }
 
-void __attribute__((destructor)) stop_ram() {
+void __attribute__((destructor)) stop_ram(void) {
     remove_ram2();
 }
 
 
 #ifdef ___TESTMODE
 
-uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
 
 void* SYSTEM_INFO;
@@ -152,16 +151,18 @@ void* KERNEL_FRAME_ALLOCATOR = NULL;
 typedef void   * frame_t;
 typedef int8_t memory_paging_page_type_t;
 typedef void   * memory_page_table_t;
+typedef void   * future_t;
 
-int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
-void   dump_ram(char_t* fname);
-void*  task_get_current_task(void);
-void*  lock_create_with_heap(memory_heap_t* heap);
-int8_t lock_destroy(void* lock);
-void   lock_acquire(void* lock);
-void   lock_release(void* lock);
-void*  lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
-
+int8_t   memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
+void     dump_ram(char_t* fname);
+void*    task_get_current_task(void);
+void*    lock_create_with_heap(memory_heap_t* heap);
+int8_t   lock_destroy(void* lock);
+void     lock_acquire(void* lock);
+void     lock_release(void* lock);
+void*    lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
+void*    future_get_data_and_destroy(future_t fut);
 
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type){
     UNUSED(p4);
@@ -169,13 +170,6 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
     UNUSED(frm);
     UNUSED(type);
     return 0;
-}
-
-void dump_ram(char_t* fname){
-    FILE* fp = fopen( fname, "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-
-    fclose(fp);
 }
 
 void* task_get_current_task(void){
@@ -204,6 +198,29 @@ void lock_acquire(void* lock){
 
 void lock_release(void* lock){
     UNUSED(lock);
+}
+
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
+    UNUSED(heap);
+    UNUSED(lock);
+
+    if(data) {
+        return data;
+    }
+
+    return (void*)0xdeadbeaf;
+}
+
+void* future_get_data_and_destroy(future_t fut) {
+    if(!fut) {
+        return NULL;
+    }
+
+    if(((uint64_t)fut) == 0xdeadbeaf) {
+        return NULL;
+    }
+
+    return fut;
 }
 
 #endif

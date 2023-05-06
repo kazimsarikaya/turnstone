@@ -35,6 +35,7 @@ const void* map_get_with_default(map_t map, const void* key, void* def);
 #define map_exists(m, k) (map_get_with_default(m, k, NULL) != NULL)
 const void* map_delete(map_t map, const void* key);
 int8_t      map_destroy(map_t map);
+uint64_t    map_size(map_t map);
 
 iterator_t* map_create_iterator(map_t map);
 

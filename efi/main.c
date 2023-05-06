@@ -18,21 +18,21 @@ efi_system_table_t* ST;
 efi_boot_services_t* BS;
 efi_runtime_services_t* RS;
 
-typedef int8_t (*kernel_start_t)(system_info_t* sysinfo) __attribute__((sysv_abi));
+typedef int8_t (*kernel_start_t)(system_info_t* sysinfo);
 
 typedef struct efi_kernel_data_t {
     uint8_t* data;
     uint64_t size;
 } efi_kernel_data_t;
 
-efi_status_t efi_setup_heap(void);
-efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res);
-efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data);
-efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data);
-efi_status_t efi_print_variable_names(void);
-efi_status_t efi_is_pxe_boot(boolean_t* result);
-efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data);
-efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
+efi_status_t        efi_setup_heap(void);
+efi_status_t        efi_setup_graphics(video_frame_buffer_t** vfb_res);
+efi_status_t        efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data);
+efi_status_t        efi_load_local_kernel(efi_kernel_data_t** kernel_data);
+efi_status_t        efi_print_variable_names(void);
+efi_status_t        efi_is_pxe_boot(boolean_t* result);
+efi_status_t        efi_load_pxe_kernel(efi_kernel_data_t** kernel_data);
+EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
 
 efi_status_t efi_setup_heap(void){
     efi_status_t res;
@@ -152,7 +152,7 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
     efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
     const disk_partition_context_t* part_ctx = NULL;
 
-    iterator_t* iter = sys_disk->get_partitions(sys_disk);
+    iterator_t* iter = sys_disk->get_partition_contexts(sys_disk);
 
     while(iter->end_of_iterator(iter) != 0) {
         const disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
@@ -201,7 +201,7 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 
     PRINTLOG(EFI, LOG_DEBUG, "kernel size %lli", (*kernel_data)->size);
 
-    res = sys_disk->read(sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
+    res = sys_disk->disk.read((disk_or_partition_t*)sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "kernel load failed");
@@ -566,7 +566,7 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
     ST = system_table;
     BS = system_table->boot_services;
     RS = system_table->runtime_services;

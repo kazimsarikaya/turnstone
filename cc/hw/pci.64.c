@@ -17,6 +17,8 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 
+MODULE("turnstone.kernel.hw.pci");
+
 typedef struct {
     memory_heap_t*     heap;
     acpi_table_mcfg_t* mcfg;
@@ -31,7 +33,7 @@ typedef struct {
 int8_t      pci_iterator_destroy(iterator_t* iterator);
 iterator_t* pci_iterator_next(iterator_t* iterator);
 int8_t      pci_iterator_end_of_iterator(iterator_t* iterator);
-void*       pci_iterator_get_item(iterator_t* iterator);
+const void* pci_iterator_get_item(iterator_t* iterator);
 
 pci_context_t* PCI_CONTEXT = NULL;
 
@@ -132,6 +134,8 @@ int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t pci_setup(memory_heap_t* heap) {
 
     acpi_table_mcfg_t* mcfg = ACPI_CONTEXT->mcfg;
@@ -145,7 +149,8 @@ int8_t pci_setup(memory_heap_t* heap) {
     PRINTLOG(PCI, LOG_INFO, "pci devices enumerating");
 
     PCI_CONTEXT = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
-    PCI_CONTEXT->storage_controllers = linkedlist_create_list_with_heap(heap);
+    PCI_CONTEXT->sata_controllers = linkedlist_create_list_with_heap(heap);
+    PCI_CONTEXT->nvme_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->network_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->other_devices = linkedlist_create_list_with_heap(heap);
 
@@ -162,7 +167,7 @@ int8_t pci_setup(memory_heap_t* heap) {
         }
 
         while(iter->end_of_iterator(iter) != 0) {
-            pci_dev_t* p = iter->get_item(iter);
+            const pci_dev_t* p = iter->get_item(iter);
 
             if(p == NULL) {
                 iter->destroy(iter);
@@ -178,8 +183,15 @@ int8_t pci_setup(memory_heap_t* heap) {
             if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                 p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
 
-                linkedlist_list_insert(PCI_CONTEXT->storage_controllers, p);
-                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as storage controller",
+                linkedlist_list_insert(PCI_CONTEXT->sata_controllers, p);
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as sata controller",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+
+            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
+                       p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_NVME_CONTROLLER) {
+
+                linkedlist_list_insert(PCI_CONTEXT->nvme_controllers, p);
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as nvme controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_NETWORK_CONTROLLER &&
@@ -232,15 +244,16 @@ int8_t pci_setup(memory_heap_t* heap) {
     linkedlist_destroy(old_mcfgs);
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
-    PRINTLOG(PCI, LOG_INFO, "total pci storage controllers %lli network controllers %lli other devices %lli",
-             linkedlist_size(PCI_CONTEXT->storage_controllers),
+    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli other devices %lli",
+             linkedlist_size(PCI_CONTEXT->sata_controllers),
+             linkedlist_size(PCI_CONTEXT->nvme_controllers),
              linkedlist_size(PCI_CONTEXT->network_controllers),
              linkedlist_size(PCI_CONTEXT->other_devices)
              );
 
     return 0;
 }
-
+#pragma GCC diagnostic pop
 
 int8_t pci_io_port_write_data(uint32_t address, uint32_t data, uint8_t bc) {
     outl(address, PCI_IO_PORT_CONFIG);
@@ -431,7 +444,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
                                 size_t pci_mmio_addr_f_fa = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
                                 size_t pci_mmio_addr_f_va  = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_f_fa);
 
-                                frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_f_fa);
+                                pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_f_fa);
 
                                 if(pci_frames == NULL) {
                                     PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
@@ -492,7 +505,7 @@ int8_t pci_iterator_end_of_iterator(iterator_t* iterator){
     return iter_metadata->end_of_iter;
 }
 
-void* pci_iterator_get_item(iterator_t* iterator){
+const void* pci_iterator_get_item(iterator_t* iterator){
     pci_iterator_internal_t* iter_metadata = (pci_iterator_internal_t*)iterator->metadata;
     memory_heap_t* heap = iter_metadata->heap;
     pci_dev_t* d = memory_malloc_ext(heap, sizeof(pci_dev_t), 0x0);

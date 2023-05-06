@@ -14,6 +14,8 @@
 #include <logging.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.hw.disk.fs");
+
 file_t*      fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, const path_t* p, time_t ct, time_t lat, time_t lmt);
 directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const path_t* p, time_t ct, time_t lat, time_t lmt);
 
@@ -62,13 +64,12 @@ typedef struct fat32_fs_directory_context_t {
 
 
 typedef struct fat32_fs_context_t {
-    disk_t*         disk;
-    uint8_t         partno;
-    uint64_t        fat_part_start_lba;
-    uint64_t        data_start_lba;
-    fat32_bpb_t*    bpb;
-    fat32_fsinfo_t* fsinfo;
-    uint32_t*       table;
+    disk_or_partition_t* disk;
+    uint8_t              partno;
+    uint64_t             data_start_lba;
+    fat32_bpb_t*         bpb;
+    fat32_fsinfo_t*      fsinfo;
+    uint32_t*            table;
 } fat32_fs_context_t;
 
 typedef struct fat32_dir_list_iter_extradata_t {
@@ -1268,43 +1269,29 @@ directory_t* fat32_get_root_directory(filesystem_t* self) {
 int8_t fat32_write_cluster_data(filesystem_t* fs){
     fat32_fs_context_t* ctx = fs->context;
 
-    uint64_t fat_part_start_lba = ctx->fat_part_start_lba;
+    ctx->disk->write(ctx->disk, ctx->bpb->fsinfo_sector, sizeof(fat32_fsinfo_t) / 512, (uint8_t*)ctx->fsinfo);
+    ctx->disk->write(ctx->disk, ctx->bpb->backup_bpb + ctx->bpb->fsinfo_sector, sizeof(fat32_fsinfo_t) / 512, (uint8_t*)ctx->fsinfo);
 
-    ctx->disk->write(ctx->disk, fat_part_start_lba + ctx->bpb->fsinfo_sector, sizeof(fat32_fsinfo_t) / 512, (uint8_t*)ctx->fsinfo);
-    ctx->disk->write(ctx->disk, fat_part_start_lba + ctx->bpb->backup_bpb + ctx->bpb->fsinfo_sector, sizeof(fat32_fsinfo_t) / 512, (uint8_t*)ctx->fsinfo);
-
-    ctx->disk->write(ctx->disk, fat_part_start_lba + ctx->bpb->reserved_sectors, ctx->bpb->sectors_per_fat, (uint8_t*)ctx->table);
-    ctx->disk->write(ctx->disk, fat_part_start_lba + ctx->bpb->reserved_sectors + ctx->bpb->sectors_per_fat, ctx->bpb->sectors_per_fat, (uint8_t*)ctx->table);
+    ctx->disk->write(ctx->disk, ctx->bpb->reserved_sectors, ctx->bpb->sectors_per_fat, (uint8_t*)ctx->table);
+    ctx->disk->write(ctx->disk, ctx->bpb->reserved_sectors + ctx->bpb->sectors_per_fat, ctx->bpb->sectors_per_fat, (uint8_t*)ctx->table);
 
     return 0;
 }
 
-filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* volname){
-
-    disk_partition_context_t* part_ctx = d->get_partition(d, partno);
-
-    if(part_ctx == NULL) {
-        PRINTLOG(FAT, LOG_ERROR, "cannot get parititon %i", partno);
-        return NULL;
-    }
-
-
-    uint64_t fat_part_start_lba = part_ctx->start_lba;
-    uint64_t fat_part_end_lba = part_ctx->end_lba;
-
-    memory_free(part_ctx);
+filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volname){
+    uint64_t fat_part_end_lba = d->get_size(d) >> 9;
 
     fat32_bpb_t* fat32_bpb;
     fat32_fsinfo_t* fat32_fsinfo;
 
-    d->read(d, fat_part_start_lba, sizeof(fat32_bpb_t) / 512, (uint8_t**)&fat32_bpb);
+    d->read(d, 0, sizeof(fat32_bpb_t) / 512, (uint8_t**)&fat32_bpb);
 
     if(fat32_bpb == NULL) {
         PRINTLOG(FAT, LOG_ERROR, "cannot read fat32 bpb");
         return NULL;
     }
 
-    d->read(d, fat_part_start_lba + FAT32_FSINFO_SECTOR, sizeof(fat32_fsinfo_t) / 512, (uint8_t**)&fat32_fsinfo);
+    d->read(d, FAT32_FSINFO_SECTOR, sizeof(fat32_fsinfo_t) / 512, (uint8_t**)&fat32_fsinfo);
 
     if(fat32_fsinfo == NULL) {
         PRINTLOG(FAT, LOG_ERROR, "cannot read fat32 fs info");
@@ -1320,7 +1307,7 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* vo
 
         uint32_t* fat32_table;
 
-        d->read(d, fat_part_start_lba + fat32_bpb->reserved_sectors, fat32_bpb->sectors_per_fat, (uint8_t**)&fat32_table);
+        d->read(d, fat32_bpb->reserved_sectors, fat32_bpb->sectors_per_fat, (uint8_t**)&fat32_table);
 
         fat32_fs_context_t* ctx = memory_malloc(sizeof(fat32_fs_context_t));
 
@@ -1330,9 +1317,7 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* vo
         }
 
         ctx->disk = d;
-        ctx->partno = partno;
-        ctx->fat_part_start_lba = fat_part_start_lba;
-        ctx->data_start_lba = fat_part_start_lba + fat32_bpb->reserved_sectors + 2 * fat32_bpb->sectors_per_fat - 2;
+        ctx->data_start_lba = fat32_bpb->reserved_sectors + 2 * fat32_bpb->sectors_per_fat - 2;
         ctx->bpb = fat32_bpb;
         ctx->fsinfo = fat32_fsinfo;
         ctx->table = fat32_table;
@@ -1373,8 +1358,8 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* vo
     fat32_bpb->sectors_per_fat_unused = 0x0;
     fat32_bpb->sectors_per_track = FAT32_SECTORS_PER_TRACK;
     fat32_bpb->head_count = FAT32_HEAD_COUNT;
-    fat32_bpb->hidden_sector_count = fat_part_start_lba;
-    fat32_bpb->sectors_per_fat = (fat_part_end_lba - fat_part_start_lba + 1 - fat32_bpb->reserved_sectors) / 130;
+    fat32_bpb->hidden_sector_count = 0;
+    fat32_bpb->sectors_per_fat = (fat_part_end_lba + 1 - fat32_bpb->reserved_sectors) / 130;
     fat32_bpb->large_sector_count =   fat32_bpb->sectors_per_fat * 128 + 2 * fat32_bpb->sectors_per_fat +  fat32_bpb->reserved_sectors - 2;
     fat32_bpb->flags = 0x0;
     fat32_bpb->version_number = 0x0;
@@ -1448,8 +1433,8 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* vo
     volid->last_modification_date.year = tp.year - FAT32_YEAR_START;
 
 
-    d->write(d, fat_part_start_lba, sizeof(fat32_bpb_t) / 512, (uint8_t*)fat32_bpb);
-    d->write(d, fat_part_start_lba + fat32_bpb->backup_bpb, sizeof(fat32_bpb_t) / 512, (uint8_t*)fat32_bpb);
+    d->write(d, 0, sizeof(fat32_bpb_t) / 512, (uint8_t*)fat32_bpb);
+    d->write(d, fat32_bpb->backup_bpb, sizeof(fat32_bpb_t) / 512, (uint8_t*)fat32_bpb);
 
     uint8_t* data = memory_malloc(512);
 
@@ -1463,7 +1448,7 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* vo
     }
 
     memory_memcopy(volid, data, sizeof(fat32_dirent_shortname_t));
-    uint64_t root_dir_lba = fat_part_start_lba + fat32_bpb->reserved_sectors + 2 *  fat32_bpb->sectors_per_fat;
+    uint64_t root_dir_lba = fat32_bpb->reserved_sectors + 2 *  fat32_bpb->sectors_per_fat;
     d->write(d, root_dir_lba, 1, data);
     memory_free(data);
     memory_free(volid);
@@ -1479,9 +1464,7 @@ filesystem_t* fat32_get_or_create_fs(disk_t* d, uint8_t partno, const char_t* vo
     }
 
     ctx->disk = d;
-    ctx->partno = partno;
-    ctx->fat_part_start_lba = fat_part_start_lba;
-    ctx->data_start_lba = fat_part_start_lba + fat32_bpb->reserved_sectors + 2 * fat32_bpb->sectors_per_fat - 2;
+    ctx->data_start_lba = fat32_bpb->reserved_sectors + 2 * fat32_bpb->sectors_per_fat - 2;
     ctx->bpb = fat32_bpb;
     ctx->fsinfo = fat32_fsinfo;
     ctx->table = fat32_table;

@@ -88,4 +88,5 @@ typedef __builtin_va_list va_list;
         __attribute__((section(".___module___"), visibility("internal"))) \
         const char_t ___module___[] = m;
 
+#define nobreak __attribute__((fallthrough))
 #endif

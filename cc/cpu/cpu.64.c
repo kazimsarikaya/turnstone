@@ -9,6 +9,8 @@
 #include <cpu.h>
 #include <cpu/crx.h>
 
+MODULE("turnstone.kernel.cpu");
+
 uint64_t cpu_read_msr(uint32_t msr_address){
     uint64_t low_part, high_part;
     __asm__ __volatile__ ("rdmsr" : "=a" (low_part), "=d" (high_part) : "c" (msr_address));
@@ -21,7 +23,7 @@ int8_t cpu_write_msr(uint32_t msr_address, uint64_t value) {
     return 0;
 }
 
-uint64_t cpu_read_cr2() {
+uint64_t cpu_read_cr2(void) {
     uint64_t cr2 = 0;
     __asm__ __volatile__ ("mov %%cr2, %0\n"
                           : "=r" (cr2));
@@ -29,7 +31,7 @@ uint64_t cpu_read_cr2() {
 }
 
 
-cpu_reg_cr4_t cpu_read_cr4() {
+cpu_reg_cr4_t cpu_read_cr4(void) {
     cpu_reg_cr4_t cr4;
     __asm__ __volatile__ ("mov %%cr4, %0\n"
                           : "=r" (cr4));
@@ -42,7 +44,7 @@ void cpu_write_cr4(cpu_reg_cr4_t cr4) {
 }
 
 
-cpu_reg_cr0_t cpu_read_cr0() {
+cpu_reg_cr0_t cpu_read_cr0(void) {
     cpu_reg_cr0_t cr0;
     __asm__ __volatile__ ("mov %%cr0, %0\n"
                           : "=r" (cr0));
@@ -54,7 +56,7 @@ void cpu_write_cr0(cpu_reg_cr0_t cr0) {
                           : : "r" (cr0));
 }
 
-void cpu_toggle_cr0_wp() {
+void cpu_toggle_cr0_wp(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
 
     cr0.write_protect = ~cr0.write_protect;
@@ -62,7 +64,7 @@ void cpu_toggle_cr0_wp() {
     cpu_write_cr0(cr0);
 }
 
-void cpu_enable_sse() {
+void cpu_enable_sse(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
     cr0.monitor_coprocessor = 1;
     cr0.emulation = 0;
@@ -75,7 +77,7 @@ void cpu_enable_sse() {
     cpu_write_cr4(cr4);
 }
 
-void cpu_clear_segments() {
+void cpu_clear_segments(void) {
     __asm__ __volatile__ (
         "mov $0x0, %ax\n"
         "mov %ax, %ds\n"

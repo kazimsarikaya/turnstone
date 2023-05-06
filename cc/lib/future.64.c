@@ -4,6 +4,9 @@
  */
 
 #include <future.h>
+
+MODULE("turnstone.lib");
+
 typedef struct future_internal_t {
     memory_heap_t* heap;
     lock_t         lock;

@@ -9,6 +9,8 @@
 
 #include <logging.h>
 
+MODULE("turnstone.lib");
+
 
 const char_t*const logging_module_names[] = {
     "KERNEL",
@@ -32,10 +34,12 @@ const char_t*const logging_module_names[] = {
     "VIRTIONET",
     "E1000",
     "FAT",
+    "NVME",
+    "TOSDB",
 };
 
 
-const char_t* logging_level_names[] = {
+const char_t*const logging_level_names[] = {
     "PANIC" /** 0 **/,
     "FATAL" /** 1 **/,
     "ERROR" /** 2 **/,
@@ -70,4 +74,6 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_VIRTIONET,
     LOG_LEVEL_E1000,
     LOG_LEVEL_FAT,
+    LOG_LEVEL_NVME,
+    LOG_LEVEL_TOSDB,
 };

@@ -15,6 +15,8 @@
 #include <device/kbd_scancodes.h>
 #include <acpi.h>
 
+MODULE("turnstone.kernel.hw.kbd");
+
 virtio_dev_t* virtio_kbd = NULL;
 
 wchar_t kbd_ps2_tmp = NULL;

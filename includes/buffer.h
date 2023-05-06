@@ -37,7 +37,12 @@ boolean_t buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction_t
 int8_t    buffer_destroy(buffer_t buffer);
 buffer_t  buffer_encapsulate(uint8_t* data, uint64_t length);
 uint64_t  buffer_remaining(buffer_t buffer);
-uint8_t   buffer_peek_buffer_at_position(buffer_t buffer, uint64_t position);
+uint8_t   buffer_peek_byte_at_position(buffer_t buffer, uint64_t position);
 uint8_t   buffer_peek_byte(buffer_t buffer);
+uint64_t  buffer_peek_ints_at_position(buffer_t buffer, uint64_t position, uint8_t bc);
+uint64_t  buffer_peek_ints(buffer_t buffer, uint8_t bc);
+boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro);
+boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, uint8_t* dest);
+#define buffer_write_all_into(b, d) buffer_write_slice_into(b, 0, buffer_get_length(b), d)
 
 #endif

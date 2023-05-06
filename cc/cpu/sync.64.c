@@ -7,6 +7,8 @@
 #include <cpu/task.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.cpu.sync");
+
 typedef struct lock_internal_t {
     memory_heap_t* heap;
     uint64_t       lock_value;

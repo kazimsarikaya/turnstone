@@ -17,6 +17,11 @@
 #define MAP_SHARED   0x01
 #define MAP_PRIVATE  0x02
 #define MAP_FIXED    0x10
+#define MAP_HUGE_2MB (21 << 26)
+#define MAP_SHARED_VALIDATE 0x03
+#define MAP_SYNC       0x80000
+#define MS_SYNC        4
+#define MAP_FILE       0
 
 typedef long FILE;
 FILE*   fopen(const char* filename, const char* mode);
@@ -35,6 +40,7 @@ int32_t unlink(const char_t * pathname);
 FILE*   tmpfile(void);
 void*   mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd, int32_t offset);
 int     munmap(void * addr, size_t length);
+int     msync(void * addr, size_t length, int flags);
 void    exit(int status);
 
 #endif

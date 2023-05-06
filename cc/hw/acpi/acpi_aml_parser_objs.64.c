@@ -9,6 +9,8 @@
 #include <acpi/aml_internal.h>
 #include <strings.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 
 int8_t acpi_aml_parse_namestring(acpi_aml_parser_context_t* ctx, void** data, uint64_t* consumed){
     if(data == NULL || *data == NULL) {

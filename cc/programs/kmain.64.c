@@ -30,7 +30,10 @@
 #include <time/timer.h>
 #include <network.h>
 
-int8_t kmain64(size_t entry_point);
+MODULE("turnstone.kernel.programs.kmain");
+
+int8_t                         kmain64(size_t entry_point);
+__attribute__((noreturn)) void ___kstart64(system_info_t* sysinfo);
 
 __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     cpu_cli();
@@ -122,6 +125,7 @@ int8_t kmain64(size_t entry_point) {
     uint8_t* new_reserved_mmap_data = NULL;
 
     if(SYSTEM_INFO->reserved_mmap_size) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "reserved mmap size is %lli", SYSTEM_INFO->reserved_mmap_size);
         new_reserved_mmap_data = memory_malloc(SYSTEM_INFO->reserved_mmap_size);
 
         if(new_reserved_mmap_data == NULL) {
@@ -212,7 +216,7 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(ACPI, LOG_DEBUG, "acpi rsdp table version: %lli address 0x%p", SYSTEM_INFO->acpi_version, SYSTEM_INFO->acpi_table);
     }
 
-    char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
+    const char_t* test_data = "çok güzel bir kış ayı İĞÜŞÖÇ ığüşöç";
     printf("address 0x%p %s\n", test_data, test_data);
 
     printf("random data 0x%x\n", rand());
@@ -257,7 +261,7 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
-    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->storage_controllers);
+    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
@@ -269,25 +273,25 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    ahci_sata_disk_t* d = ahci_get_disk_by_id(0);
+    ahci_sata_disk_t* d = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
     if(d) {
         PRINTLOG(KERNEL, LOG_DEBUG, "try to read disk 0x%p", d);
         disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
 
         if(sata0) {
-            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->get_disk_size(sata0));
+            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
 
             disk_partition_context_t* part_ctx;
 
-            part_ctx = sata0->get_partition(sata0, 0);
+            part_ctx = sata0->get_partition_context(sata0, 0);
             PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
             memory_free(part_ctx);
 
-            part_ctx = sata0->get_partition(sata0, 1);
+            part_ctx = sata0->get_partition_context(sata0, 1);
             PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
             memory_free(part_ctx);
 
-            sata0->flush(sata0);
+            sata0->disk.flush((disk_or_partition_t*)sata0);
         } else {
             PRINTLOG(KERNEL, LOG_INFO, "sata0 is empty");
         }

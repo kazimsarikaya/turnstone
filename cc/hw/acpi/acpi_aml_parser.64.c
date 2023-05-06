@@ -6,10 +6,12 @@
  * Please read and understand latest version of Licence.
  */
 
- #include <acpi/aml_internal.h>
- #include <video.h>
- #include <strings.h>
- #include <bplustree.h>
+#include <acpi/aml_internal.h>
+#include <video.h>
+#include <strings.h>
+#include <bplustree.h>
+
+MODULE("turnstone.kernel.hw.acpi");
 
 
 
@@ -254,7 +256,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 }
 #pragma GCC diagnostic pop
 
-const acpi_aml_parse_f acpi_aml_parse_extfs[] = {
+const acpi_aml_parse_f acpi_aml_parse_ext_fs[] = {
     PARSER_F_NAME(mutex), // 0x01 -> 0
     PARSER_F_NAME(event),
     PARSER_F_NAME(extopcnt_2), //0x12 -> 2
@@ -297,7 +299,7 @@ int8_t acpi_aml_parse_op_extended(acpi_aml_parser_context_t* ctx, void** data, u
 
     uint8_t idx = acpi_aml_get_index_of_extended_code(ext_opcode);
 
-    acpi_aml_parse_f parser = acpi_aml_parse_extfs[idx];
+    acpi_aml_parse_f parser = acpi_aml_parse_ext_fs[idx];
     if(parser(ctx, data, &t_consumed) != 0) {
         return -1;
     }
@@ -352,7 +354,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
     ctx->length = sizeof(acpi_aml_parser_defaults);
     ctx->remaining = sizeof(acpi_aml_parser_defaults);
     ctx->scope_prefix = (char_t*)"\\";
-    ctx->symbols = bplustree_create_index_with_heap(heap, 20, acpi_aml_object_name_comparator);
+    ctx->symbols = bplustree_create_index_with_heap_and_unique(heap, 32, acpi_aml_object_name_comparator, true);
     ctx->revision = revision;
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {

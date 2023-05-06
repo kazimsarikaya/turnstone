@@ -14,6 +14,8 @@
 #include <utils.h>
 #include <systeminfo.h>
 
+MODULE("turnstone.kernel.hw.video");
+
 #define VIDEO_TAB_STOP 8
 
 uint16_t cursor_graphics_x = 0; ///< cursor postion for column
@@ -290,7 +292,7 @@ void video_graphics_print(char_t* string) {
     }
 }
 
-void video_clear_screen(){
+void video_clear_screen(void){
     if(GRAPHICS_MODE) {
         for(int64_t i = 0; i < VIDEO_GRAPHICS_HEIGHT * VIDEO_GRAPHICS_WIDTH; i++) {
             *((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = VIDEO_GRAPHICS_BACKGROUND;
@@ -451,7 +453,7 @@ size_t video_printf(const char_t* fmt, ...){
                     break;
                 case 'p':
                     l_flag = 1;
-                    __attribute__((fallthrough));
+                    nobreak;
                 case 'x':
                 case 'h':
                     if(l_flag == 2) {

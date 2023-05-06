@@ -17,6 +17,8 @@
 #include <cpu.h>
 #include <strings.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 acpi_aml_object_t* ACPI_PM1A_CONTROL_REGISTER = NULL;
 acpi_aml_object_t* ACPI_PM1B_CONTROL_REGISTER = NULL;
 acpi_aml_object_t* ACPI_RESET_REGISTER = NULL;

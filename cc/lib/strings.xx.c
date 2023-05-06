@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 
 size_t strlen(const char_t* string) {
     if(string == NULL) {
@@ -28,14 +30,10 @@ int8_t strcmp(const char_t* string1, const char_t* string2) {
 
     size_t minlen = MIN(len1, len2);
 
-    for(size_t i = 0; i < minlen; i++) {
-        if(string1[i] < string2[i]) {
-            return -1;
-        }
+    int8_t res = memory_memcompare(string1, string2, minlen);
 
-        if(string1[i] > string2[i]) {
-            return 1;
-        }
+    if(res) {
+        return res;
     }
 
     if(len1 == len2) {

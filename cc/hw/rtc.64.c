@@ -7,6 +7,8 @@
 #include <ports.h>
 #include <acpi.h>
 
+MODULE("turnstone.kernel.hw.rtc");
+
 #define RTC_CURRENT_YEAR        2022
 
 #define RTC_CMOS_ADDRESS       0x70
@@ -35,7 +37,7 @@ uint8_t rtc_read_register_value(uint16_t reg) {
     return inb(RTC_CMOS_DATA);
 }
 
-time_t rtc_get_time() {
+time_t rtc_get_time(void) {
 
     uint8_t second;
     uint8_t minute;

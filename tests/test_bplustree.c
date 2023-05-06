@@ -26,7 +26,6 @@ int32_t main(void){
                        ,   20,   87,   46,   30,   54,   49,    45,    17,  31,  75,  12,  47,  10, 38, 3,  59,  13, 5
                        ,   80,   77,   97,   1,    6,    79,    19};//, 62, 43, 27, 84, 99, 86, 44, 65, 26, 57, 37, 36};
     //int test_data[] = {10, 3, 8, 1, 15, 23, 16, 2, 9, 17, 29, 5, 6, 35, 41};
-    FILE* fp;
     int max_key_count = 8;
 
 
@@ -127,11 +126,6 @@ int32_t main(void){
     bplustree_destroy_index(idx);
 
     print_success("all tests are passed");
-
-    fp = fopen( "tmp/mem1.dump", "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-
-    fclose(fp);
 
     return 0;
 }

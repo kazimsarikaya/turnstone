@@ -17,6 +17,8 @@
 #include <time/timer.h>
 #include <utils.h>
 
+MODULE("turnstone.kernel.hw.disk.ahci");
+
 linkedlist_t sata_ports = NULL;
 linkedlist_t sata_hbas = NULL;
 

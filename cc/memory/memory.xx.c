@@ -1,4 +1,5 @@
 /**
+ *
  * @file memory.xx.c
  * @brief main memory interface and functions implementation
  *
@@ -9,6 +10,8 @@
 #include <memory.h>
 #include <cpu/task.h>
 #include <cpu/sync.h>
+
+MODULE("turnstone.lib.memory");
 
 /*! default heap variable */
 memory_heap_t* memory_heap_default = NULL;
@@ -101,8 +104,6 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
     return res;
 }
 
-int8_t (*volatile memory_secure_free_ext_f)(memory_heap_t * heap, void* address) = memory_free_ext;
-
 void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat){
     if(heap == NULL) {
         task_t* current_task = task_get_current_task();
@@ -180,6 +181,10 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 }
 
 int8_t memory_memcopy(const void* source, const void* destination, size_t size){
+    if((!source && !destination) || !size) {
+        return 0;
+    }
+
     if(source == NULL || destination == NULL) {
         return -1;
     }
@@ -241,20 +246,48 @@ int8_t memory_memcopy(const void* source, const void* destination, size_t size){
 }
 
 int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
-    if(mem1 == NULL || mem2 == NULL) {
+    if(!size && ((!mem1 && !mem2) || (mem1 && mem2))) {
+        return 0;
+    }
+
+    if(!mem1 && mem2) {
         return -1;
     }
 
-    uint8_t* mem1_t = (uint8_t*)mem1;
-    uint8_t* mem2_t = (uint8_t*)mem2;
-    for(size_t i = 0; i < size; i++) {
+    if(mem1 && !mem2) {
+        return 1;
+    }
+
+    if(size && !mem1 && !mem2) {
+        return 0;
+    }
+
+    size_t q_size = size / sizeof(size_t);
+    size_t rem = size % sizeof(size_t);
+
+    size_t* s_mem1 = (size_t*)mem1;
+    size_t* s_mem2 = (size_t*)mem2;
+
+    for(size_t i = 0; i < q_size; i++) {
+        if(s_mem1[i] < s_mem2[i]) {
+            return -1;
+        } else if(s_mem1[i] > s_mem2[i]) {
+            return 1;
+        }
+    }
+
+    size_t jump = sizeof(size_t) * q_size;
+
+    uint8_t* mem1_t = (uint8_t*)mem1 + jump;
+    uint8_t* mem2_t = (uint8_t*)mem2 + jump;
+
+    for(size_t i = 0; i < rem; i++) {
         if(mem1_t[i] < mem2_t[i]) {
             return -1;
-        } else if(mem1_t[i] == mem2_t[i]) {
-            continue;
         } else if(mem1_t[i] > mem2_t[i]) {
             return 1;
         }
     }
+
     return 0;
 }

@@ -40,6 +40,7 @@ typedef enum logging_modules_t {
     E1000,
     FAT,
     NVME,
+    TOSDB,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -177,6 +178,11 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_NVME
 /*! default log level for nvme module */
 #define LOG_LEVEL_NVME LOG_DEBUG
+#endif
+
+#ifndef LOG_LEVEL_TOSDB
+/*! default log level for nvme module */
+#define LOG_LEVEL_TOSDB LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

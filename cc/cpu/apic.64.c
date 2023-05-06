@@ -16,6 +16,8 @@
 #include <time/timer.h>
 #include <linkedlist.h>
 
+MODULE("turnstone.kernel.cpu.apic");
+
 uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic);
 int8_t  apic_init_timer(void);
 
