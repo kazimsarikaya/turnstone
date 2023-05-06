@@ -76,22 +76,11 @@ boolean_t set_append(set_t* s, void* value) {
 
     lock_acquire(s->lock);
 
-    iterator_t* iter = s->index->search(s->index, value, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(!iter) {
+    if(s->index->contains(s->index, value)) {
         lock_release(s->lock);
 
         return false;
     }
-
-    if(iter->end_of_iterator(iter) != 0) {
-        iter->destroy(iter);
-        lock_release(s->lock);
-
-        return false;
-    }
-
-    iter->destroy(iter);
 
     s->index->insert(s->index, value, value, NULL);
 
