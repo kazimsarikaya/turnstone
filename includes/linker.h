@@ -23,6 +23,7 @@ typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_ROREL, ///< readonly relocation data section
     LINKER_SECTION_TYPE_BSS, ///< bss section
     LINKER_SECTION_TYPE_RELOCATION_TABLE, ///< relocation table section
+    LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE, ///< got relative relocation table section
     LINKER_SECTION_TYPE_GOT, ///< global offset table section
     LINKER_SECTION_TYPE_STACK, ///< stack section
     LINKER_SECTION_TYPE_HEAP, ///< heap section
@@ -52,8 +53,8 @@ typedef enum linker_relocation_type_t {
  * @brief relocation information
  */
 typedef struct linker_direct_relocation_t {
-    linker_section_type_t    section_type; ///< relocation's section type
-    linker_relocation_type_t relocation_type; ///< relocation type
+    linker_section_type_t    section_type    : 8; ///< relocation's section type
+    linker_relocation_type_t relocation_type : 8; ///< relocation type
     uint64_t                 offset; ///< where relocation value will be placed from start of program
     uint64_t                 addend; ///< destination displacement
 }__attribute__((packed)) linker_direct_relocation_t; ///< shorthand for struct
@@ -66,7 +67,13 @@ typedef struct linker_section_locations_t {
     uint64_t section_start; ///< section start for virtual memory
     uint64_t section_pyhsical_start; ///< section start for physical memory
     uint64_t section_size; ///< section size
-}linker_section_locations_t; ///< shorthand for struct
+}__attribute__((packed)) linker_section_locations_t; ///< shorthand for struct
+
+typedef struct linker_global_offset_table_entry_t {
+    uint64_t              entry_value; ///< entry value
+    linker_section_type_t section_type : 8; ///< section type
+    uint8_t               padding[7]; ///< align padding
+}__attribute__((packed)) linker_global_offset_table_entry_t; ///< shorthand for struct
 
 /**
  * @struct program_header_t
@@ -79,6 +86,8 @@ typedef struct program_header_t {
     uint64_t                   program_size; ///< size of program with all data
     uint64_t                   reloc_start; ///< relocations' start location
     uint64_t                   reloc_count; ///< count of relocations defined as @ref linker_section_locations_t
+    uint64_t                   got_rel_reloc_start; ///< got relative relocations' start location
+    uint64_t                   got_rel_reloc_count; ///< count of got relative relocations defined as @ref linker_section_locations_t
     uint64_t                   got_entry_count; ///< entry count at got
     linker_section_locations_t section_locations[LINKER_SECTION_TYPE_NR_SECTIONS]; ///< section location table
 }__attribute__((packed)) program_header_t; ///< shorthand for struct

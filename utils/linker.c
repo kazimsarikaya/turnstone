@@ -87,6 +87,8 @@ typedef struct linker_context_t {
     linkedlist_t                sections;
     uint64_t                    direct_relocation_count;
     linker_direct_relocation_t* direct_relocations;
+    uint64_t                    got_relative_relocation_count;
+    linker_direct_relocation_t* got_relative_relocations;
     linker_section_locations_t  section_locations[LINKER_SECTION_TYPE_NR_SECTIONS];
     uint8_t                     enable_removing_disabled_sections;
     uint8_t                     boot_flag;
@@ -98,6 +100,7 @@ typedef struct linker_context_t {
     uint64_t                    test_func_names_array_str_secid;
     uint64_t                    test_functions_names_array_secid;
     boolean_t                   for_efi;
+    boolean_t                   need_got;
     linker_section_t*           got;
 } linker_context_t;
 
@@ -561,6 +564,8 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
 
             if(strstarts(secname, ".text") == 0) {
                 sec->type = LINKER_SECTION_TYPE_TEXT;
+            } else if(strstarts(secname, ".data.rel.ro") == 0) {
+                sec->type = LINKER_SECTION_TYPE_ROREL;
             } else if(strstarts(secname, ".data") == 0) {
                 sec->type = LINKER_SECTION_TYPE_DATA;
             } else if(strstarts(secname, ".rodata") == 0) {
@@ -589,8 +594,6 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
     return 0;
 }
 
-
-
 int8_t linker_tag_required_sections(linker_context_t* ctx) {
     if(ctx->enable_removing_disabled_sections == 0) {
         return 0;
@@ -598,6 +601,7 @@ int8_t linker_tag_required_sections(linker_context_t* ctx) {
 
     if(ctx->test_section_flag == 0) {
         ctx->direct_relocation_count = 0;
+        ctx->got_relative_relocation_count = 0;
     }
 
     linker_symbol_t* ep_sym = (linker_symbol_t*)linker_lookup_symbol(ctx, ctx->entry_point, 0);
@@ -654,12 +658,13 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
                    reloc->type == LINKER_RELOCATION_TYPE_32_32 ||
                    reloc->type == LINKER_RELOCATION_TYPE_64_32 ||
                    reloc->type == LINKER_RELOCATION_TYPE_64_32S ||
-                   reloc->type == LINKER_RELOCATION_TYPE_64_64 ||
-                   reloc->type == LINKER_RELOCATION_TYPE_64_PC32 ||
-                   reloc->type == LINKER_RELOCATION_TYPE_64_GOT64 ||
-                   reloc->type == LINKER_RELOCATION_TYPE_64_GOTOFF64 ||
-                   reloc->type == LINKER_RELOCATION_TYPE_64_GOTPC64) {
+                   reloc->type == LINKER_RELOCATION_TYPE_64_64) {
                     ctx->direct_relocation_count++;
+                }
+
+                if(reloc->type == LINKER_RELOCATION_TYPE_64_GOTOFF64 ||
+                   reloc->type == LINKER_RELOCATION_TYPE_64_GOTPC64) {
+                    ctx->got_relative_relocation_count++;
                 }
 
                 linker_symbol_t* sym = (linker_symbol_t*)linker_get_symbol_by_id(ctx, reloc->symbol_id);
@@ -869,6 +874,10 @@ void linker_destroy_context(linker_context_t* ctx) {
         memory_free_ext(ctx->heap, ctx->direct_relocations);
     }
 
+    if(ctx->got_relative_relocations) {
+        memory_free_ext(ctx->heap, ctx->got_relative_relocations);
+    }
+
     if(ctx->sections) {
         iterator_t* iter = linkedlist_iterator_create(ctx->sections);
 
@@ -1012,7 +1021,7 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
     efi_image_header_t p_hdr = {};
     p_hdr.magic = EFI_IMAGE_HEADER_MAGIC;
     p_hdr.machine = EFI_IMAGE_MACHINE_AMD64;
-    p_hdr.number_of_sections = 5;
+    p_hdr.number_of_sections = 6;
     p_hdr.size_of_optional_header = sizeof(efi_image_optional_header_t);
     p_hdr.characteristics = EFI_IMAGE_CHARACTERISTISCS;
 
@@ -1026,7 +1035,7 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
     opt_hdr.subsystem = 10;
     opt_hdr.number_of_rva_nd_sizes = 16;
 
-    efi_image_section_header_t sec_hdrs[5] = {};
+    efi_image_section_header_t sec_hdrs[6] = {};
 
     strcpy(".text", sec_hdrs[0].name);
     sec_hdrs[0].characteristics = 0x68000020;
@@ -1034,27 +1043,30 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
     strcpy(".rodata", sec_hdrs[1].name);
     sec_hdrs[1].characteristics = 0x48000040;
 
-    strcpy(".data", sec_hdrs[2].name);
-    sec_hdrs[2].characteristics = 0xC8000040;
+    strcpy(".rorel", sec_hdrs[2].name);
+    sec_hdrs[2].characteristics = 0x48000040;
 
-    strcpy(".bss", sec_hdrs[3].name);
-    sec_hdrs[3].characteristics = 0xC8000080;
-    sec_hdrs[3].virtual_address = ctx->section_locations[LINKER_SECTION_TYPE_BSS].section_start;
-    sec_hdrs[3].virtual_size = ctx->section_locations[LINKER_SECTION_TYPE_BSS].section_size;
-    opt_hdr.size_of_uninitialized_data = sec_hdrs[3].virtual_size;
+    strcpy(".data", sec_hdrs[3].name);
+    sec_hdrs[3].characteristics = 0xC8000040;
 
-    strcpy(".reloc", sec_hdrs[4].name);
-    sec_hdrs[4].characteristics = 0x48000040;
-    sec_hdrs[4].virtual_address = sec_hdrs[3].virtual_address + sec_hdrs[3].virtual_size;
+    strcpy(".bss", sec_hdrs[4].name);
+    sec_hdrs[4].characteristics = 0xC8000080;
+    sec_hdrs[4].virtual_address = ctx->section_locations[LINKER_SECTION_TYPE_BSS].section_start;
+    sec_hdrs[4].virtual_size = ctx->section_locations[LINKER_SECTION_TYPE_BSS].section_size;
+    opt_hdr.size_of_uninitialized_data = sec_hdrs[4].virtual_size;
 
-    if(sec_hdrs[4].virtual_address % 0x1000) {
-        sec_hdrs[4].virtual_address += 0x1000 - (sec_hdrs[4].virtual_address % 0x1000);
+    strcpy(".reloc", sec_hdrs[5].name);
+    sec_hdrs[5].characteristics = 0x48000040;
+    sec_hdrs[5].virtual_address = sec_hdrs[4].virtual_address + sec_hdrs[4].virtual_size;
+
+    if(sec_hdrs[5].virtual_address % 0x1000) {
+        sec_hdrs[5].virtual_address += 0x1000 - (sec_hdrs[5].virtual_address % 0x1000);
     }
 
     int64_t w_offset = EFI_IMAGE_DOSSTUB_LENGTH + sizeof(efi_image_header_t) + sizeof(efi_image_optional_header_t) + sizeof(sec_hdrs);
 
     if(w_offset % opt_hdr.file_alignment) {
-        w_offset += 0x20 - (w_offset % opt_hdr.file_alignment);
+        w_offset += opt_hdr.file_alignment - (w_offset % opt_hdr.file_alignment);
     }
 
     opt_hdr.size_of_headers = w_offset;
@@ -1064,6 +1076,7 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
     boolean_t text_offset_setted = false;
     boolean_t data_offset_setted = false;
     boolean_t rodata_offset_setted = false;
+    boolean_t rorel_offset_setted = false;
 
     linkedlist_t tmp_relocs = linkedlist_create_list_with_heap(ctx->heap);
 
@@ -1082,7 +1095,7 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
             continue;
         }
 
-        if(sec->type <= LINKER_SECTION_TYPE_RODATA) {
+        if(sec->type <= LINKER_SECTION_TYPE_ROREL) {
 
             if(sec->type == LINKER_SECTION_TYPE_TEXT) {
                 sec_hdrs[0].virtual_size += sec->size + sec->padding;
@@ -1108,14 +1121,26 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
                 }
             }
 
-            if(sec->type == LINKER_SECTION_TYPE_DATA) {
+            if(sec->type == LINKER_SECTION_TYPE_ROREL) {
                 sec_hdrs[2].virtual_size += sec->size + sec->padding;
                 sec_hdrs[2].size_of_raw_data += sec->size + sec->padding;
                 opt_hdr.size_of_initialized_data += sec->size + sec->padding;
 
-                if(!data_offset_setted) {
+                if(!rorel_offset_setted) {
                     sec_hdrs[2].virtual_address = sec->offset;
                     sec_hdrs[2].pointer_to_raw_data = sec->offset;
+                    rorel_offset_setted = true;
+                }
+            }
+
+            if(sec->type == LINKER_SECTION_TYPE_DATA) {
+                sec_hdrs[3].virtual_size += sec->size + sec->padding;
+                sec_hdrs[3].size_of_raw_data += sec->size + sec->padding;
+                opt_hdr.size_of_initialized_data += sec->size + sec->padding;
+
+                if(!data_offset_setted) {
+                    sec_hdrs[3].virtual_address = sec->offset;
+                    sec_hdrs[3].pointer_to_raw_data = sec->offset;
                     data_offset_setted = true;
                 }
             }
@@ -1223,17 +1248,17 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
     iter->destroy(iter);
 
 
-    opt_hdr.base_relocation_table.virtual_address = sec_hdrs[4].virtual_address;
+    opt_hdr.base_relocation_table.virtual_address = sec_hdrs[5].virtual_address;
     opt_hdr.base_relocation_table.size = sizeof(efi_image_relocation_entry_t) * linkedlist_size(tmp_relocs);
-    sec_hdrs[4].virtual_size = opt_hdr.base_relocation_table.size;
-    sec_hdrs[4].size_of_raw_data = opt_hdr.base_relocation_table.size;
-    sec_hdrs[4].pointer_to_raw_data = ftell(fp);
+    sec_hdrs[5].virtual_size = opt_hdr.base_relocation_table.size;
+    sec_hdrs[5].size_of_raw_data = opt_hdr.base_relocation_table.size;
+    sec_hdrs[5].pointer_to_raw_data = ftell(fp);
 
-    if(sec_hdrs[4].pointer_to_raw_data % opt_hdr.file_alignment) {
-        sec_hdrs[4].pointer_to_raw_data += opt_hdr.file_alignment - (sec_hdrs[4].pointer_to_raw_data % opt_hdr.file_alignment);
+    if(sec_hdrs[5].pointer_to_raw_data % opt_hdr.file_alignment) {
+        sec_hdrs[5].pointer_to_raw_data += opt_hdr.file_alignment - (sec_hdrs[5].pointer_to_raw_data % opt_hdr.file_alignment);
     }
 
-    fseek(fp, sec_hdrs[4].pointer_to_raw_data, SEEK_SET);
+    fseek(fp, sec_hdrs[5].pointer_to_raw_data, SEEK_SET);
 
     iter = linkedlist_iterator_create(tmp_relocs);
 
@@ -1250,9 +1275,9 @@ int8_t linker_write_efi_output(linker_context_t* ctx) {
 
     linkedlist_destroy_with_data(tmp_relocs);
 
-    opt_hdr.size_of_image = sec_hdrs[4].virtual_address;
+    opt_hdr.size_of_image = sec_hdrs[5].virtual_address;
 
-    uint64_t soi = sec_hdrs[4].virtual_size;
+    uint64_t soi = sec_hdrs[5].virtual_size;
 
     if(soi % 0x1000) {
         soi += 0x1000 - (soi % 0x1000);
@@ -1287,6 +1312,13 @@ int8_t linker_write_output(linker_context_t* ctx) {
             printf("cannot malloc relocation list reloc count 0x%llx\n", ctx->direct_relocation_count);
             return -1;
         }
+
+        ctx->got_relative_relocations = memory_malloc_ext(ctx->heap, sizeof(linker_direct_relocation_t) * ctx->got_relative_relocation_count, 0x0);
+
+        if(ctx->got_relative_relocations == NULL && ctx->got_relative_relocation_count != 0) {
+            printf("cannot malloc relocation list reloc count 0x%llx\n", ctx->got_relative_relocation_count);
+            return -1;
+        }
     }
 
     FILE* fp = fopen(ctx->output, "w" );
@@ -1316,6 +1348,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
     }
 
     uint64_t dr_index = 0;
+    uint64_t grr_index = 0;
 
     int8_t res = 0;
 
@@ -1327,10 +1360,15 @@ int8_t linker_write_output(linker_context_t* ctx) {
             continue;
         }
 
+        if(sec->size == 0) {
+            iter = iter->next(iter);
+            continue;
+        }
+
         if(map_fp) {
             fprintf(map_fp, "%016lx %s secid %llx\n", ctx->start + sec->offset, sec->section_name, sec->id);
 
-            if(sec->type == LINKER_SECTION_TYPE_GOT) {
+            if(sec->type == LINKER_SECTION_TYPE_GOT && ctx->need_got) {
                 iterator_t* got_iter = linkedlist_iterator_create(ctx->symbols);
 
                 if(got_iter == NULL) {
@@ -1341,7 +1379,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                 uint64_t got_offset = 0;
 
-                fprintf(map_fp, "%016lx got value %llx\n", ctx->start + sec->offset + got_offset, 0);
+                fprintf(map_fp, "%016lx got value %016llx\n", ctx->start + sec->offset + got_offset, 0);
 
                 got_offset += sizeof(uint64_t);
 
@@ -1359,7 +1397,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                     const linker_section_t* t_sec = linker_get_section_by_id(ctx, sym->section_id);
 
-                    fprintf(map_fp, "%016lx got value %llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[sym->id], sym->symbol_name, t_sec->section_name);
+                    fprintf(map_fp, "%016lx got value %016llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[sym->id], sym->symbol_name, t_sec->section_name);
                     fflush(map_fp);
 
                     got_offset += sizeof(uint64_t);
@@ -1374,7 +1412,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
             fflush(map_fp);
         }
 
-        if(sec->type <= LINKER_SECTION_TYPE_RODATA) {
+        if(sec->type <= LINKER_SECTION_TYPE_ROREL) {
 
             fseek (fp, sec->offset, SEEK_SET);
 
@@ -1437,7 +1475,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
                     }
 
                     if(reloc->type == LINKER_RELOCATION_TYPE_64_32) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
+                        ctx->direct_relocations[dr_index].section_type = target_sec->type;
                         ctx->direct_relocations[dr_index].relocation_type = reloc->type;
                         ctx->direct_relocations[dr_index].offset = reloc->offset;
                         ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
@@ -1452,7 +1490,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 4, fp);
                     } else if(reloc->type == LINKER_RELOCATION_TYPE_64_32S) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
+                        ctx->direct_relocations[dr_index].section_type = target_sec->type;
                         ctx->direct_relocations[dr_index].relocation_type = reloc->type;
                         ctx->direct_relocations[dr_index].offset = reloc->offset;
                         ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
@@ -1467,7 +1505,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 4, fp);
                     }  else if(reloc->type == LINKER_RELOCATION_TYPE_64_64) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
+                        ctx->direct_relocations[dr_index].section_type = target_sec->type;
                         ctx->direct_relocations[dr_index].relocation_type = reloc->type;
                         ctx->direct_relocations[dr_index].offset = reloc->offset;
                         ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend;
@@ -1482,14 +1520,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 8, fp);
                     }  else if(reloc->type == LINKER_RELOCATION_TYPE_64_PC32) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
-                        ctx->direct_relocations[dr_index].relocation_type = reloc->type;
-                        ctx->direct_relocations[dr_index].offset = reloc->offset;
-                        ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend - reloc->offset;
-                        dr_index++;
-
                         uint32_t addr = (uint32_t)target_sym->value + (uint32_t)target_sec->offset + (uint32_t)reloc->addend  - (uint32_t)(reloc->offset);
-
 
                         if(map_fp) {
                             fprintf(map_fp, "%08x ", ctx->start + reloc->offset + addr + 4);
@@ -1497,14 +1528,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 4, fp);
                     } else if(reloc->type == LINKER_RELOCATION_TYPE_64_GOT64) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
-                        ctx->direct_relocations[dr_index].relocation_type = reloc->type;
-                        ctx->direct_relocations[dr_index].offset = reloc->offset;
-                        ctx->direct_relocations[dr_index].addend = target_sym->id * sizeof(uint64_t) + reloc->addend;
-                        dr_index++;
-
-                        int64_t addr = target_sym->id * sizeof(uint64_t) + reloc->addend;
-
+                        int64_t addr = target_sym->id * sizeof(linker_global_offset_table_entry_t) + reloc->addend;
 
                         if(map_fp) {
                             fprintf(map_fp, "%016llx ", ctx->got->offset +  addr);
@@ -1512,11 +1536,11 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 8, fp);
                     }  else if(reloc->type == LINKER_RELOCATION_TYPE_64_GOTOFF64) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
-                        ctx->direct_relocations[dr_index].relocation_type = reloc->type;
-                        ctx->direct_relocations[dr_index].offset = reloc->offset;
-                        ctx->direct_relocations[dr_index].addend = target_sym->value + target_sec->offset + reloc->addend - ctx->got->offset;
-                        dr_index++;
+                        ctx->got_relative_relocations[grr_index].section_type = target_sec->type;
+                        ctx->got_relative_relocations[grr_index].relocation_type = reloc->type;
+                        ctx->got_relative_relocations[grr_index].offset = reloc->offset;
+                        ctx->got_relative_relocations[grr_index].addend = target_sym->value + target_sec->offset + reloc->addend - ctx->got->offset;
+                        grr_index++;
 
                         int64_t addr = target_sym->value + target_sec->offset + reloc->addend - ctx->got->offset;
 
@@ -1526,11 +1550,11 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 8, fp);
                     }  else if(reloc->type == LINKER_RELOCATION_TYPE_64_GOTPC64) {
-                        ctx->direct_relocations[dr_index].section_type = sec->type;
-                        ctx->direct_relocations[dr_index].relocation_type = reloc->type;
-                        ctx->direct_relocations[dr_index].offset = reloc->offset;
-                        ctx->direct_relocations[dr_index].addend = ctx->got->offset + reloc->addend - reloc->offset;
-                        dr_index++;
+                        ctx->got_relative_relocations[grr_index].section_type = target_sec->type;
+                        ctx->got_relative_relocations[grr_index].relocation_type = reloc->type;
+                        ctx->got_relative_relocations[grr_index].offset = reloc->offset;
+                        ctx->got_relative_relocations[grr_index].addend = ctx->got->offset + reloc->addend - reloc->offset;
+                        grr_index++;
 
                         int64_t addr = ctx->got->offset + reloc->addend - reloc->offset;
 
@@ -1643,6 +1667,20 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
         printf(" end %lx\n", file_size);
 
+        file_size = ctx->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start;
+
+        printf("got relative reloc table start %lx count: %lx ", file_size, ctx->got_relative_relocation_count);
+
+        fseek (fp, file_size, SEEK_SET);
+
+        fwrite(ctx->got_relative_relocations, 1, sizeof(linker_direct_relocation_t) * ctx->got_relative_relocation_count, fp);
+
+        fseek (fp, 0, SEEK_END);
+
+        file_size = ftell(fp);
+
+        printf(" end %lx\n", file_size);
+
         file_size = ctx->section_locations[LINKER_SECTION_TYPE_GOT].section_start;
 
         printf("got table start %lx count: %lx ", file_size, ctx->got->size);
@@ -1682,6 +1720,14 @@ int8_t linker_write_output(linker_context_t* ctx) {
         fseek (fp, 0x20, SEEK_SET);
 
         fwrite(&ctx->direct_relocation_count, 1, sizeof(uint64_t), fp);
+
+        fseek (fp, 0x28, SEEK_SET);
+
+        fwrite(&ctx->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start, 1, sizeof(uint64_t), fp);
+
+        fseek (fp, 0x30, SEEK_SET);
+
+        fwrite(&ctx->got_relative_relocation_count, 1, sizeof(uint64_t), fp);
 
         uint64_t got_entry_count = linkedlist_size(ctx->symbols) + 1;
 
@@ -1911,7 +1957,7 @@ int8_t linker_build_got(linker_context_t* ctx) {
         return res;
     }
 
-    uint64_t* got_table = (uint64_t*)ctx->got->data;
+    linker_global_offset_table_entry_t* got_table = (linker_global_offset_table_entry_t*)ctx->got->data;
 
     while(iter->end_of_iterator(iter) != 0) {
         const linker_symbol_t* sym = iter->get_item(iter);
@@ -1930,7 +1976,8 @@ int8_t linker_build_got(linker_context_t* ctx) {
             break;
         }
 
-        got_table[sym->id] = sym->value + sec->offset;
+        got_table[sym->id].entry_value = sym->value + sec->offset;
+        got_table[sym->id].section_type = sec->type;
 
         iter = iter->next(iter);
     }
@@ -2327,24 +2374,6 @@ int32_t main(int32_t argc, char** argv) {
 
     linkedlist_list_insert(ctx->sections, stack_sec);
 
-    linker_symbol_t* stack_top_sym =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
-
-    if(stack_top_sym == NULL) {
-        linker_destroy_context(ctx);
-
-        return -1;
-    }
-
-    stack_top_sym->id = symbol_id++;
-    stack_top_sym->symbol_name = strdup_at_heap(ctx->heap, "__stack_top");
-    stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strlen(stack_top_sym->symbol_name));
-    stack_top_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
-    stack_top_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
-    stack_top_sym->value = stack_sec->size - 16;
-    stack_top_sym->section_id = stack_sec->id;
-
-    linkedlist_list_insert(ctx->symbols, stack_top_sym);
-
     linker_section_t* kheap_sec = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
 
     if(kheap_sec == NULL) {
@@ -2362,24 +2391,6 @@ int32_t main(int32_t argc, char** argv) {
     kheap_sec->required = 1;
 
     linkedlist_list_insert(ctx->sections, kheap_sec);
-
-    linker_symbol_t* kheap_bottom_sym =  memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
-
-    if(kheap_bottom_sym == NULL) {
-        linker_destroy_context(ctx);
-
-        return -1;
-    }
-
-    kheap_bottom_sym->id = symbol_id++;
-    kheap_bottom_sym->symbol_name = strdup_at_heap(ctx->heap, "__kheap_bottom");
-    kheap_bottom_sym->symbol_name_hash = xxhash64_hash(kheap_bottom_sym->symbol_name, strlen(kheap_bottom_sym->symbol_name));
-    kheap_bottom_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
-    kheap_bottom_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
-    kheap_bottom_sym->value = 0;
-    kheap_bottom_sym->section_id = kheap_sec->id;
-
-    linkedlist_list_insert(ctx->symbols, kheap_bottom_sym);
 
     if(ctx->test_section_flag) {
         linker_section_t* test_func_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
@@ -2429,7 +2440,7 @@ int32_t main(int32_t argc, char** argv) {
 
         test_functions_array_end->id = symbol_id++;
         test_functions_array_end->symbol_name = strdup_at_heap(ctx->heap, "__test_functions_array_end");
-        stack_top_sym->symbol_name_hash = xxhash64_hash(stack_top_sym->symbol_name, strlen(stack_top_sym->symbol_name));
+        test_functions_array_end->symbol_name_hash = xxhash64_hash(test_functions_array_end->symbol_name, strlen(test_functions_array_end->symbol_name));
         test_functions_array_end->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
         test_functions_array_end->type = LINKER_SYMBOL_TYPE_SYMBOL;
         test_functions_array_end->value = 0;
@@ -2742,12 +2753,15 @@ int32_t main(int32_t argc, char** argv) {
                     switch (reloc_type) {
                     case R_X86_64_32:
                         reloc->type = LINKER_RELOCATION_TYPE_64_32;
+                        ctx->direct_relocation_count++;
                         break;
                     case R_X86_64_32S:
                         reloc->type = LINKER_RELOCATION_TYPE_64_32S;
+                        ctx->direct_relocation_count++;
                         break;
                     case R_X86_64_64:
                         reloc->type = LINKER_RELOCATION_TYPE_64_64;
+                        ctx->direct_relocation_count++;
                         break;
                     case R_X86_64_PC32:
                     case R_X86_64_PLT32:
@@ -2755,12 +2769,17 @@ int32_t main(int32_t argc, char** argv) {
                         break;
                     case R_X86_64_GOT64:
                         reloc->type = LINKER_RELOCATION_TYPE_64_GOT64;
+                        ctx->need_got = true;
                         break;
                     case R_X86_64_GOTOFF64:
                         reloc->type = LINKER_RELOCATION_TYPE_64_GOTOFF64;
+                        ctx->need_got = true;
+                        ctx->got_relative_relocation_count++;
                         break;
                     case R_X86_64_GOTPC64:
                         reloc->type = LINKER_RELOCATION_TYPE_64_GOTPC64;
+                        ctx->need_got = true;
+                        ctx->got_relative_relocation_count++;
                         break;
                     default:
                         print_error("unknown reloc type");
@@ -2772,11 +2791,7 @@ int32_t main(int32_t argc, char** argv) {
                         return -1;
                     }
 
-                    ctx->direct_relocation_count++;
-
                 }
-
-
 
                 linkedlist_list_insert(sec->relocations, reloc);
             }
@@ -2790,7 +2805,10 @@ int32_t main(int32_t argc, char** argv) {
         argv++;
     }
 
-    got_sec->size = sizeof(uint64_t) * (linkedlist_size(ctx->symbols) + 1);
+    if(ctx->need_got) {
+        got_sec->size = sizeof(linker_global_offset_table_entry_t) * (linkedlist_size(ctx->symbols) + 1);
+    }
+
 
     if(ctx->test_section_flag && linker_relocate_test_functions(ctx) != 0) {
         print_error("error at relocation test functions");
@@ -2811,7 +2829,7 @@ int32_t main(int32_t argc, char** argv) {
     uint64_t output_offset_base = 0;
 
     if(ctx->class == ELFCLASS64 && !ctx->for_efi) {
-        output_offset_base = 0x100;
+        output_offset_base = 0x200;
     }
 
     if(ctx->class == ELFCLASS64 && ctx->for_efi) {
@@ -2825,6 +2843,12 @@ int32_t main(int32_t argc, char** argv) {
     }
 
     linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_RODATA, &output_offset_base);
+
+    if(output_offset_base % 0x1000) {
+        output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
+    }
+
+    linker_bind_offset_of_section(ctx, LINKER_SECTION_TYPE_ROREL, &output_offset_base);
 
     if(output_offset_base % 0x1000) {
         output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
@@ -2849,11 +2873,27 @@ int32_t main(int32_t argc, char** argv) {
 
     }
 
+    if(ctx->class == ELFCLASS64 && !ctx->for_efi && ctx->need_got) {
+        if(output_offset_base % 0x1000) {
+            output_offset_base += 0x1000 - (output_offset_base % 0x1000);
+        }
+
+        printf("got relative reloc table should start at 0x%lx ", output_offset_base);
+        ctx->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start = output_offset_base;
+        ctx->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_pyhsical_start = output_offset_base;
+
+        output_offset_base += sizeof(linker_direct_relocation_t) * ctx->got_relative_relocation_count;
+
+        printf("ends at 0x%lx\n", output_offset_base);
+
+        ctx->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_size = output_offset_base -  ctx->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start;
+    }
+
     if(output_offset_base % 0x1000) {
         output_offset_base +=  0x1000 - (output_offset_base %  0x1000);
     }
 
-    if(ctx->class == ELFCLASS64 && !ctx->for_efi) {
+    if(ctx->need_got && ctx->class == ELFCLASS64 && !ctx->for_efi) {
         if(output_offset_base % 0x1000) {
             output_offset_base += 0x1000 - (output_offset_base % 0x1000);
         }
@@ -2904,7 +2944,7 @@ int32_t main(int32_t argc, char** argv) {
         return -1;
     }
 
-    if(linker_build_got(ctx) != 0) {
+    if(ctx->need_got && linker_build_got(ctx) != 0) {
         printf("cannot build got\n");
         linker_destroy_context(ctx);
         print_error("LINKER FAILED");

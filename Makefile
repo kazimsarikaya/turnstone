@@ -33,7 +33,7 @@ CCXXFLAGS += -std=gnu11 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
     -Wstrict-prototypes \
-	-fpic -fno-plt -mcmodel=large -fno-jump-tables -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
+	-fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
@@ -213,7 +213,7 @@ $(SUBDIRS):
 $(FONTOBJ):
 	curl -sL -o $(OBJDIR)/font.psf $(FONTSRC)
 	echo -n turnstone.kernel.hw.video > $(OBJDIR)/font.module_name.txt
-	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.data.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(OBJDIR)/font.psf $@
+	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(OBJDIR)/font.psf $@
 	rm -f $(OBJDIR)/font.module_name.txt
 
 clean:
