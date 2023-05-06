@@ -852,7 +852,7 @@ int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* posi
         *position = 0;
     }
 
-    if(l->type == LINKEDLIST_TYPE_SORTEDLIST) {
+    if(l->type == LINKEDLIST_TYPE_SORTEDLIST && !l->equality_comparator) {
         linkedlist_item_internal_t* h = l->head;
         linkedlist_item_internal_t* t = l->tail;
         linkedlist_item_internal_t* m = l->middle;
@@ -878,6 +878,10 @@ int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* posi
 
     if(l->equality_comparator) {
         cmp = l->equality_comparator;
+    }
+
+    if(!cmp) {
+        cmp = linkedlist_default_data_comparator;
     }
 
     linkedlist_item_internal_t* li = l->middle;
