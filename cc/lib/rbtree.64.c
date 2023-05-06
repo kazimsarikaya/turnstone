@@ -341,7 +341,9 @@ void rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v) {
                 if(rbtree_node_is_on_left(v)) {
                     parent->left = NULL;
                 } else {
-                    parent->right = NULL;
+                    if(parent) {
+                        parent->right = NULL;
+                    }
                 }
             }
 
@@ -785,6 +787,8 @@ iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, con
 
     if(!iter->items) {
         memory_free_ext(idx->heap, iter);
+
+        return NULL;
     }
 
     iterator_t* iterator = memory_malloc_ext(idx->heap, sizeof(iterator_t), 0x0);
