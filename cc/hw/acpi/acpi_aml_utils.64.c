@@ -707,6 +707,8 @@ int8_t acpi_aml_read_as_integer(acpi_aml_parser_context_t* ctx, const acpi_aml_o
     t_obj = acpi_aml_get_if_arg_local_obj(ctx, t_obj, 0, 0);
 
     if(t_obj == NULL || res == NULL) {
+        PRINTLOG(ACPIAML, LOG_ERROR, "object or res is null %i %i", t_obj == NULL?0:1, res == NULL?0:1);
+
         return -1;
     }
 
@@ -1270,11 +1272,14 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 
 acpi_aml_object_t* acpi_aml_symbol_lookup(acpi_aml_parser_context_t* ctx, const char_t* symbol_name){
     if(ctx->local_symbols != NULL) {
+        PRINTLOG(ACPIAML, LOG_TRACE, "searching symbol %s in local symbols", symbol_name);
         acpi_aml_object_t* obj = acpi_aml_symbol_lookup_at_table(ctx, ctx->local_symbols, ctx->scope_prefix, symbol_name);
 
         if(obj != NULL) {
             return obj;
         }
+
+        PRINTLOG(ACPIAML, LOG_TRACE, "symbol %s not found in local symbols, searching in global symbols", symbol_name);
 
     }
 

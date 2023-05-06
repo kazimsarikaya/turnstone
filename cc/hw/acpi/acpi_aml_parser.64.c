@@ -6,10 +6,10 @@
  * Please read and understand latest version of Licence.
  */
 
- #include <acpi/aml_internal.h>
- #include <video.h>
- #include <strings.h>
- #include <bplustree.h>
+#include <acpi/aml_internal.h>
+#include <video.h>
+#include <strings.h>
+#include <bplustree.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 
@@ -354,7 +354,7 @@ acpi_aml_parser_context_t* acpi_aml_parser_context_create_with_heap(memory_heap_
     ctx->length = sizeof(acpi_aml_parser_defaults);
     ctx->remaining = sizeof(acpi_aml_parser_defaults);
     ctx->scope_prefix = (char_t*)"\\";
-    ctx->symbols = bplustree_create_index_with_heap(heap, 20, acpi_aml_object_name_comparator);
+    ctx->symbols = bplustree_create_index_with_heap_and_unique(heap, 32, acpi_aml_object_name_comparator, true);
     ctx->revision = revision;
 
     if(acpi_aml_parse_all_items(ctx, NULL, NULL) != 0) {

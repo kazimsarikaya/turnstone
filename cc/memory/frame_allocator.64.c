@@ -861,9 +861,9 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     ctx->free_frames_sorted_by_size = linkedlist_create_sortedlist_with_heap(heap, frame_allocator_cmp_by_size);
     linkedlist_set_equality_comparator(ctx->free_frames_sorted_by_size, frame_allocator_cmp_by_address);
 
-    ctx->free_frames_by_address = bplustree_create_index_with_heap(heap, 64, frame_allocator_cmp_by_address);
-    ctx->allocated_frames_by_address = bplustree_create_index_with_heap(heap, 64, frame_allocator_cmp_by_address);
-    ctx->reserved_frames_by_address = bplustree_create_index_with_heap(heap, 64, frame_allocator_cmp_by_address);
+    ctx->free_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
+    ctx->allocated_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
+    ctx->reserved_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
     ctx->lock = lock_create_with_heap(heap);
 
     efi_memory_descriptor_t* mem_desc;
@@ -968,9 +968,11 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
                 f.frame_attributes &= ~FRAME_ATTRIBUTE_OLD_RESERVED;
             }
 
-            fa->allocate_frame(fa, &f);
-
-            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "old reserved frame start 0x%016llx count 0x%llx\n", mem_desc->physical_start, mem_desc->page_count);
+            if(fa->allocate_frame(fa, &f) != 0) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_WARNING, "failed to allocate frame 0x%016llx count 0x%llx", f.frame_address, f.frame_count);
+            } else {
+                PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "old reserved frame start 0x%016llx count 0x%llx", mem_desc->physical_start, mem_desc->page_count);
+            }
 
         }
     }else {
