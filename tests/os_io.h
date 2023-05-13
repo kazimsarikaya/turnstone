@@ -17,6 +17,7 @@
 #define MAP_SHARED   0x01
 #define MAP_PRIVATE  0x02
 #define MAP_FIXED    0x10
+#define MAP_ANONYMOUS 0x20
 
 typedef long FILE;
 FILE*   fopen(const char* filename, const char* mode);

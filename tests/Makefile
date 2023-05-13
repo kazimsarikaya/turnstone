@@ -4,13 +4,22 @@
 HOSTOS=$(shell uname -s)
 
 CC = gcc
-CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu11 \
-	-O2 -nostdlib -ffreestanding -c -m64 -msse4.2\
+CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
+	-O2 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
 	-fdata-sections -ffunction-sections \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes \
+    -Wstrict-prototypes -fpic -fPIC \
+	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
+
+NOTSTD_CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
+	-O0 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
+	-fdata-sections -ffunction-sections \
+	-Wshadow -Wpointer-arith -Wcast-align \
+	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
+    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
+    -Wstrict-prototypes -fpic -fPIC \
 	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)
@@ -21,26 +30,32 @@ else
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
 LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux \
-		  -Wl,--gc-sections -Wl,--allow-multiple-definition
+		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -static -nostdlib -Wl,-e_tos_start
 endif
 
 OUTPUT = ../output
 TESTOUTPUT = $(OUTPUT)/cc-local
+NOSTDLIB_DIR = nostdlib
+NOSTDLIB_OUTPUT = $(TESTOUTPUT)/$(NOSTDLIB_DIR)
 
 CCSOURCEDIR = ../cc
 
-SOURCES = $(shell find . -type f -name \*.c )
+SOURCES = $(shell find . -maxdepth 1 -type f -name \*.c )
+NOSTDLIB_SOURCES = $(shell find nostdlib -maxdepth 1 -type f -name \*.c)
 
 PROGS = $(patsubst ./%.c,%,$(SOURCES))
+
+NOSTDLIB_OBJECTS = $(patsubst $(NOSTDLIB_DIR)/%.c,$(NOSTDLIB_OUTPUT)/%.o,$(NOSTDLIB_SOURCES))
 
 OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 
 .PHONY: all clean depend
-.PRECIOUS: $(TESTOUTPUT)/%.o
+.PRECIOUS: $(TESTOUTPUT)/%.o $(NOSTDLIB_OBJECTS)
 all: $(OUTPUTS)
 
 gendirs:
 	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
+	mkdir -p $(NOSTDLIB_OUTPUT)
 
 $(TESTOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<
@@ -51,9 +66,11 @@ $(TESTOUTPUT)/%.xx_64.o: $(CCSOURCEDIR)/%.xx.c
 $(TESTOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.c
 	$(CC) $(CCFLAGS) -o $@ $<
 
-$(OUTPUT)/%.bin: $(TESTOUTPUT)/%.o
+$(OUTPUT)/%.bin: $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
+$(NOSTDLIB_OUTPUT)/%.o: $(NOSTDLIB_DIR)/%.c 
+	$(CC) $(NOTSTD_CCFLAGS) -o $@ $<
 
 clean:
 	rm -fr $(TESTOUTPUT)/*
