@@ -31,6 +31,7 @@
 #include <tosdb/tosdb_cache.h>
 #include <cache.h>
 #include <hashmap.h>
+#include <rbtree.h>
 
 #define TOSDB_CAP (32 << 20)
 
