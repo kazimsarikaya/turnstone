@@ -71,7 +71,7 @@ rbtree_node_t* rbtree_node_uncle(rbtree_node_t* rbn) {
         return NULL;
     }
 
-    if(rbtree_node_is_on_left(rbn)) {
+    if(rbtree_node_is_on_left(rbn->parent)) {
         return rbn->parent->parent->right;
     }
 
