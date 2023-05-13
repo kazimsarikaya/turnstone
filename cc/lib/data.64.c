@@ -34,6 +34,10 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
 
     buffer_t buf = buffer_new();
 
+    if(buf == NULL) {
+        return NULL;
+    }
+
     uint8_t bc = 0;
 
     if(data->name == NULL) {
