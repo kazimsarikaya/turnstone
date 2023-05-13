@@ -15,7 +15,20 @@
 
 #define ET_NONE      0
 #define ET_REL       1
+#define ET_EXEC      2
+#define ET_DYN       3
+#define ET_CORE      4
+#define ET_LOOS      0xFE00
+#define ET_HIOS      0xFEFF
+#define ET_LOPROC    0xFF00
+#define ET_HIPROC    0xFFFF
 
+#define EM_NONE      0
+#define EM_M32       1
+#define EM_X86_64    62
+
+#define EV_NONE      0
+#define EV_CURRENT   1
 
 #define SHN_UNDEF    0
 #define SHN_LOPROC   0xFF00
@@ -42,6 +55,7 @@
 #define SHT_LOPROC       0x70000000
 #define SHT_HIPROC       0x7FFFFFFF
 
+#define SHF_NONE         0
 #define SHF_WRITE        1
 #define SHF_ALLOC        2
 #define SHF_EXECINSTR    4
@@ -65,6 +79,59 @@
 #define STT_HIOS     12
 #define STT_LOPROC   13
 #define STT_HIPROC   15
+
+#define PT_NULL    0
+#define PT_LOAD    1
+#define PT_DYNAMIC 2
+#define PT_INTERP  3
+#define PT_NOTE    4
+#define PT_SHLIB   5
+#define PT_PHDR    6
+#define PT_LOOS    0x60000000
+#define PT_HIOS    0x6FFFFFFF
+#define PT_LOPROC  0x70000000
+#define PT_HIPROC  0x7FFFFFFF
+
+#define PF_X        1
+#define PF_W        2
+#define PF_R        4
+#define PF_MASKOS   0x0F000000
+#define PF_MASKPROC 0xF0000000
+
+#define DT_NULL     0
+#define DT_NEEDED   1
+#define DT_PLTRELSZ 2
+#define DT_PLTGOT   3
+#define DT_HASH     4
+#define DT_STRTAB   5
+#define DT_SYMTAB   6
+#define DT_RELA     7
+#define DT_RELASZ   8
+#define DT_RELAENT  9
+#define DT_STRSZ    10
+#define DT_SYMENT   11
+#define DT_INIT     12
+#define DT_FINI     13
+#define DT_SONAME   14
+#define DT_RPATH    15
+#define DT_SYMBOLIC 16
+#define DT_REL      17
+#define DT_RELSZ    18
+#define DT_RELENT   19
+#define DT_PLTREL   20
+#define DT_DEBUG    21
+#define DT_TEXTREL  22
+#define DT_JMPREL   23
+#define DT_BIND_NOW 24
+#define DT_INIT_ARRAY   25
+#define DT_FINI_ARRAY   26
+#define DT_INIT_ARRAYSZ 27
+#define DT_FINI_ARRAYSZ 28
+#define DT_LOOS     0x60000000
+#define DT_HIOS     0x6FFFFFFF
+#define DT_LOPROC   0x70000000
+#define DT_HIPROC   0x7FFFFFFF
+
 
 /**
  * A: addend
@@ -225,6 +292,17 @@ typedef struct {
     uint64_t sh_addralign;
     uint64_t sh_entsize;
 }__attribute__((packed)) elf64_shdr_t;
+
+typedef struct {
+    uint32_t p_type;
+    uint32_t p_flags;
+    uint64_t p_offset;
+    uint64_t p_vaddr;
+    uint64_t p_paddr;
+    uint64_t p_filesz;
+    uint64_t p_memsz;
+    uint64_t p_align;
+}__attribute__((packed)) elf64_phdr_t;
 
 typedef struct {
     uint32_t st_name;
