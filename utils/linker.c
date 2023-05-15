@@ -287,7 +287,6 @@ void linker_destroy_objectctx(linker_context_t* ctx) {
     memory_free_ext(ctx->heap, ctx->objectfile_ctx.shstrtab);
     memory_free_ext(ctx->heap, ctx->objectfile_ctx.strtab);
     memory_free_ext(ctx->heap, ctx->objectfile_ctx.symbols);
-    memory_free_ext(ctx->heap, ctx->objectfile_ctx.relocs);
 
     memory_memclean(&ctx->objectfile_ctx, sizeof(linker_objectfile_ctx_t));
 }
@@ -297,6 +296,13 @@ uint64_t linker_get_symbol_count(linker_context_t* ctx){
 }
 
 const char_t* linker_get_section_name(linker_context_t* ctx, uint16_t sec_idx){
+    if(sec_idx >= ctx->objectfile_ctx.section_count) {
+        print_error("linker_get_section_name: section index out of bounds.");
+        printf("section index: %d section count %d\n", sec_idx, ctx->objectfile_ctx.section_count);
+
+        return NULL;
+    }
+
     if(ctx->objectfile_ctx.type == ELFCLASS32) {
         elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
 
@@ -311,6 +317,13 @@ const char_t* linker_get_section_name(linker_context_t* ctx, uint16_t sec_idx){
 }
 
 uint64_t linker_get_section_size(linker_context_t* ctx, uint16_t sec_idx){
+    if(sec_idx >= ctx->objectfile_ctx.section_count) {
+        print_error("linker_get_section_size: section index out of bounds.");
+        printf("section index: %d section count %d\n", sec_idx, ctx->objectfile_ctx.section_count);
+
+        return 0;
+    }
+
     if(ctx->objectfile_ctx.type  == ELFCLASS32) {
         elf32_shdr_t* sections = (elf32_shdr_t*)ctx->objectfile_ctx.sections;
 
@@ -2548,7 +2561,7 @@ int32_t main(int32_t argc, char** argv) {
             uint8_t sym_type = linker_get_type_of_symbol(ctx, sym_idx);
             uint64_t sym_shndx = linker_get_section_index_of_symbol(ctx, sym_idx);
 
-            if(sym_type > STT_SECTION) {
+            if(sym_type > STT_SECTION || sym_shndx == SHN_ABS) {
                 continue;
             }
 
