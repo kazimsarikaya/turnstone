@@ -102,7 +102,8 @@ int8_t setup_ram2(void) {
         return -3;
     }
 
-    d_heap = memory_create_heap_simple(mmmap_address, mmmap_address + mmap_size);
+    logging_module_levels[HEAP_HASH] = LOG_INFO;
+    d_heap = memory_create_heap_hash(mmmap_address, mmmap_address + mmap_size);
 
     if(d_heap == NULL) {
         print_error("cannot setup heap");
