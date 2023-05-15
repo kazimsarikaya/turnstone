@@ -36,6 +36,7 @@ const char_t*const logging_module_names[] = {
     "FAT",
     "NVME",
     "TOSDB",
+    "HEAP_HASH",
 };
 
 
@@ -76,4 +77,5 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_FAT,
     LOG_LEVEL_NVME,
     LOG_LEVEL_TOSDB,
+    LOG_LEVEL_HEAP_HASH,
 };

@@ -83,7 +83,7 @@ int8_t setup_ram2(void) {
         return -3;
     }
 
-    d_heap = memory_create_heap_simple(mmmap_address, mmmap_address + mmap_size);
+    d_heap = memory_create_heap_hash(mmmap_address, mmmap_address + mmap_size);
 
     if(d_heap == NULL) {
         print_error("cannot setup heap");
@@ -99,7 +99,7 @@ void remove_ram2(void) {
     if(d_heap) {
         memory_heap_stat_t stat;
         memory_get_heap_stat(&stat);
-        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n\tfast hit: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit);
+        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n\tfast hit: 0x%lx\n\theader count: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit, stat.header_count);
 
         if(stat.malloc_count != stat.free_count) {
             print_error("memory leak detected");
