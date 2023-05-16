@@ -269,10 +269,17 @@ int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
     size_t* s_mem2 = (size_t*)mem2;
 
     for(size_t i = 0; i < q_size; i++) {
-        if(s_mem1[i] < s_mem2[i]) {
-            return -1;
-        } else if(s_mem1[i] > s_mem2[i]) {
-            return 1;
+        if(s_mem1[i] != s_mem2[i]) {
+            uint8_t* t_mem1 = (uint8_t*)&s_mem1[i];
+            uint8_t* t_mem2 = (uint8_t*)&s_mem2[i];
+
+            for(size_t j = 0; j < sizeof(size_t); j++) {
+                if(t_mem1[j] < t_mem2[j]) {
+                    return -1;
+                } else if(t_mem1[j] > t_mem2[j]) {
+                    return 1;
+                }
+            }
         }
     }
 
