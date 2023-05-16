@@ -663,7 +663,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
     }
 
     if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
-        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p is already freed.", address);
+        PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed.", address);
         return 0;
     }
 
