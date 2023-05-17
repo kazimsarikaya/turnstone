@@ -727,11 +727,16 @@ uint64_t fseek(const FILE* stream, size_t offset, int32_t origin) {
 
 int32_t _tos_start(void) {
     asm volatile (
-        "mov (%rsp), %rdi\n"
-        "mov 8(%rsp), %rsi\n"
-        "mov 16(%rsp), %rdx\n"
+        "mov %rsp, %rbp\n"
         "call __premain\n"
         "jnz __exit_tos_start\n"
+        "mov 0(%rbp), %rdi\n"
+        "lea 8(%rbp), %rsi\n"
+        "mov %rdi, %rax\n"
+        "add $2, %rax\n"
+        "shl $3, %rax\n"
+        "add %rbp, %rax\n"
+        "lea (%rax), %rdx\n"
         "call main\n"
         "push %rax\n"
         "call __postmain\n"
