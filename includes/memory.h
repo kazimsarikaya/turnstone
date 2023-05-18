@@ -24,6 +24,7 @@ typedef struct memory_heap_stat_t {
     uint64_t total_size; ///< heap total size with bounds
     uint64_t free_size; ///< free size
     uint64_t fast_hit; ///< heap has a hit map, this field gives hit count
+    uint64_t header_count; ///< header count of allocated blocks
 }memory_heap_stat_t; ///< short hand for struct
 
 /**
@@ -46,6 +47,14 @@ typedef struct memory_heap_t {
  * @return       heap
  */
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end);
+
+/**
+ * @brief creates hash backended heap
+ * @param[in]  start start address of heap
+ * @param[in]  end   end address of heap
+ * @return       heap
+ */
+memory_heap_t* memory_create_heap_hash(size_t start, size_t end);
 
 /**
  * @brief sets default heap

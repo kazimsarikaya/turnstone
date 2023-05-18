@@ -19,6 +19,7 @@
 #define MAP_FIXED    0x10
 #define MAP_HUGE_2MB (21 << 26)
 #define MAP_SHARED_VALIDATE 0x03
+#define MAP_ANONYMOUS 0x20
 #define MAP_SYNC       0x80000
 #define MS_SYNC        4
 #define MAP_FILE       0

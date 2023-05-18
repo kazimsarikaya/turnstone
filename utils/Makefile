@@ -10,7 +10,7 @@ CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu11 \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes \
+    -Wstrict-prototypes -fpic -fPIC \
 	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)
@@ -21,7 +21,7 @@ else
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
 LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux \
-		  -Wl,--gc-sections -Wl,--allow-multiple-definition
+		  -Wl,--gc-sections -static -Wl,-static -Wl,--allow-multiple-definition
 endif
 
 

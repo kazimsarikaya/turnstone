@@ -70,6 +70,7 @@ typedef struct heapmetainfo_t {
     uint64_t total_size;
     uint64_t free_size;
     uint64_t fast_hit;
+    uint64_t header_count;
     uint32_t padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
 
@@ -462,6 +463,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_hi->size = 1 + t_size; // new slot's size 1 for include header, t_size aligned requested size
 
         simple_heap->free_size -= sizeof(heapinfo_t); // meta occupies free area
+
+        simple_heap->header_count++;
     } else if(rem == 1) { // if we not we should keep slot's original size and increment t_size if rem==1
         t_size++;
     }
@@ -542,6 +545,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         hi_r->flags = HEAP_INFO_FLAG_USED;
         hi_r->size = (uint64_t)(empty_hi + empty_hi->size - hi_r);
 
+        simple_heap->header_count++;
+
         hi_r->next = empty_hi->next;
         if(hi_r->next) {
             hi_r->next->previous = hi_r;
@@ -612,6 +617,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     hi_a->size = hi_a_size + 1; // inclusive size
     hi_a->flags = HEAP_INFO_FLAG_USED;
 
+    simple_heap->header_count++;
 
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%llx allocated with size 0x%llx", aligned_addr, hi_a_size * sizeof(heapinfo_t));
 
@@ -657,6 +663,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
     }
 
     if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
+        PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed.", address);
         return 0;
     }
 
@@ -717,6 +724,7 @@ void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat) {
         stat->total_size = simple_heap->total_size;
         stat->free_size = simple_heap->free_size;
         stat->fast_hit = simple_heap->fast_hit;
+        stat->header_count = simple_heap->header_count;
 
     }
 }

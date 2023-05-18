@@ -21,6 +21,7 @@
 #include <tokenizer.h>
 #include <set.h>
 #include <cache.h>
+#include <rbtree.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int32_t test_step1(uint32_t argc, char_t** argv);
