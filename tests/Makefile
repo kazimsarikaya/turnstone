@@ -13,15 +13,6 @@ CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
     -Wstrict-prototypes -fpic -fPIC \
 	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
-NOTSTD_CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
-	-O0 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
-	-fdata-sections -ffunction-sections \
-	-Wshadow -Wpointer-arith -Wcast-align \
-	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
-    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes -fpic -fPIC \
-	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
-
 ifeq ($(HOSTOS),Darwin)
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = ld
@@ -30,7 +21,7 @@ else
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
 LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux \
-		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -static -nostdlib -Wl,-e_tos_start
+		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -static -nostdlib -Wl,-e_tos_start -Wl,-pie -Wl,-I/lib/ld-musl-x86_64.so.1
 endif
 
 OUTPUT = ../output
@@ -70,7 +61,7 @@ $(OUTPUT)/%.bin: $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(NOSTDLIB_OUTPUT)/%.o: $(NOSTDLIB_DIR)/%.c 
-	$(CC) $(NOTSTD_CCFLAGS) -o $@ $<
+	$(CC) $(CCFLAGS) -o $@ $<
 
 clean:
 	rm -fr $(TESTOUTPUT)/*

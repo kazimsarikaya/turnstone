@@ -16,6 +16,8 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
 
     PRINTLOG(KERNEL, LOG_INFO, "deneme mesajı %i", 1234);
 
+    printf("argc: %i\n", argc);
+
     for (uint32_t i = 0; i < argc; i++) {
         PRINTLOG(KERNEL, LOG_INFO, "argument: %i %s", i, argv[i]);
     }

@@ -120,16 +120,16 @@ void    __postmain(void);
 
 typedef uint64_t FILE;
 
-int32_t  open(const char_t* pathname, int32_t flags, int32_t mode);
-int64_t  read(uint64_t fd, void* buf, uint64_t count);
-int64_t  write(uint64_t fd, const void* buf, uint64_t count);
-int64_t  close(uint64_t fd);
-uint64_t lseek(uint64_t fd, uint64_t offset, int32_t whence);
-void*    mmap(uint64_t addr, uint64_t length, int32_t prot, int32_t flags, uint64_t fd, uint64_t offset);
-int32_t  mprotect(void* addr, uint64_t len, int32_t prot);
-int64_t  munmap(void* addr, uint64_t length);
-int64_t  exit(int64_t status);
-int32_t  unlink(const char_t * pathname);
+int32_t                        open(const char_t* pathname, int32_t flags, int32_t mode);
+int64_t                        read(uint64_t fd, void* buf, uint64_t count);
+int64_t                        write(uint64_t fd, const void* buf, uint64_t count);
+int64_t                        close(uint64_t fd);
+uint64_t                       lseek(uint64_t fd, uint64_t offset, int32_t whence);
+void*                          mmap(uint64_t addr, uint64_t length, int32_t prot, int32_t flags, uint64_t fd, uint64_t offset);
+int32_t                        mprotect(void* addr, uint64_t len, int32_t prot);
+int64_t                        munmap(void* addr, uint64_t length);
+__attribute__((noreturn)) void exit(int64_t status);
+int32_t                        unlink(const char_t * pathname);
 
 
 //int32_t printf(const char_t* format, ...);
@@ -503,7 +503,7 @@ int64_t munmap(void* addr, uint64_t length) {
     return ret;
 }
 
-int64_t exit(int64_t status) {
+void exit(int64_t status) {
     __clean_tmpfiles();
 
     int64_t ret = 0;
@@ -515,7 +515,7 @@ int64_t exit(int64_t status) {
         : "D" (status)
         );
 
-    return ret;
+    __builtin_unreachable();
 }
 
 int32_t unlink(const char_t* pathname) {
@@ -725,24 +725,30 @@ uint64_t fseek(const FILE* stream, size_t offset, int32_t origin) {
     return lseek((uint64_t)stream, offset, origin);
 }
 
+__attribute__((noreturn)) void _tos_start_2(uint64_t* rsp);
+
+void _tos_start_2(uint64_t* _rsp) {
+    int32_t argc = (int32_t)*_rsp;
+    char_t** argv = (char_t**)(_rsp + 1);
+    char_t** envp = (char_t**)(_rsp + argc + 2);
+
+    int32_t ret = 0;
+
+    __premain();
+
+    ret = main(argc, argv, envp);
+
+    __postmain();
+
+    exit(ret);
+}
+
 int32_t _tos_start(void) {
     asm volatile (
-        "mov %rsp, %rbp\n"
-        "call __premain\n"
-        "jnz __exit_tos_start\n"
-        "mov 0(%rbp), %rdi\n"
-        "lea 8(%rbp), %rsi\n"
-        "mov %rdi, %rax\n"
-        "add $2, %rax\n"
-        "shl $3, %rax\n"
-        "add %rbp, %rax\n"
-        "lea (%rax), %rdx\n"
-        "call main\n"
-        "push %rax\n"
-        "call __postmain\n"
-        "pop %rax\n"
-        "__exit_tos_start:mov %rax, %rdi\n"
-        "call exit\n"
+        "xor %rbp, %rbp\n"
+        "mov %rsp, %rdi\n"
+        "andq $-16, %rsp\n"
+        "call _tos_start_2\n"
         );
 }
 
