@@ -309,6 +309,24 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
 
+    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
+
+    wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
+    uint32_t var_attrs = 0;
+    uint64_t buffer_size = sizeof(uint16_t);
+    uint16_t boot_order_idx;
+
+    efi_runtime_services_t * RS = SYSTEM_INFO->efi_system_table->runtime_services;
+
+    efi_status_t res = RS->get_variable(var_name_boot_current, &var_global, &var_attrs, &buffer_size, &boot_order_idx);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(KERNEL, LOG_WARNING, "cannot get BootCurrent variable");
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "BootCurrent %i", boot_order_idx);
+    }
+
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 
     return 0;
