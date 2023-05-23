@@ -83,8 +83,6 @@ typedef struct heapmetainfo_t {
  */
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
 
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item);
-
 /**
  * @brief simple heap free implementation
  * @param[in]  heap simple heap (itself)
@@ -188,7 +186,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     return heap;
 }
 
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
+static inline void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
     if (tofull) {
         heapinfo_t* end = heap->last_full;
 

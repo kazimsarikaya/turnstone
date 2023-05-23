@@ -65,7 +65,7 @@ typedef struct memory_heap_hash_metadata_t {
     uint64_t header_count;
 }__attribute__((packed)) memory_heap_hash_metadata_t;
 
-static memory_heap_hash_pool_t* memory_heap_hash_pool_get(memory_heap_hash_metadata_t* metadata, uint16_t pool_id) {
+static inline memory_heap_hash_pool_t* memory_heap_hash_pool_get(memory_heap_hash_metadata_t* metadata, uint16_t pool_id) {
     if(!metadata) {
         return NULL;
     }
@@ -78,7 +78,7 @@ static memory_heap_hash_pool_t* memory_heap_hash_pool_get(memory_heap_hash_metad
 }
 
 
-static memory_heap_hash_pool_t* memory_heap_hash_find_pool_by_address(memory_heap_hash_metadata_t * metadata, uint64_t address) {
+static inline memory_heap_hash_pool_t* memory_heap_hash_find_pool_by_address(memory_heap_hash_metadata_t * metadata, uint64_t address) {
     for(uint16_t i = 0; i < metadata->pool_count; i++) {
         memory_heap_hash_pool_t* pool = memory_heap_hash_pool_get(metadata, i);
         uint32_t relative_address = address - pool->pool_base;
@@ -91,7 +91,7 @@ static memory_heap_hash_pool_t* memory_heap_hash_find_pool_by_address(memory_hea
     return NULL;
 }
 
-static memory_heap_hash_block_t* memory_heap_hash_pool_get_hash_block(memory_heap_hash_pool_t* pool, uint32_t block_address) {
+static inline memory_heap_hash_block_t* memory_heap_hash_pool_get_hash_block(memory_heap_hash_pool_t* pool, uint32_t block_address) {
     if(!pool) {
         return NULL;
     }
@@ -104,7 +104,7 @@ static memory_heap_hash_block_t* memory_heap_hash_pool_get_hash_block(memory_hea
     return (memory_heap_hash_block_t*)(pool->pool_base + block_address);
 }
 
-static void* memory_heap_hash_try_alloc_from_fast_class(memory_heap_hash_metadata_t* metadata, uint32_t size) {
+static inline void* memory_heap_hash_try_alloc_from_fast_class(memory_heap_hash_metadata_t* metadata, uint32_t size) {
     uint32_t fast_class = size / 16;
 
     if(fast_class >= MEMORY_HEAP_HASH_FAST_CLASSES_COUNT) {
@@ -148,7 +148,7 @@ static void* memory_heap_hash_try_alloc_from_fast_class(memory_heap_hash_metadat
     return NULL;
 }
 
-static void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_metadata_t* metadata, uint64_t alignment, uint32_t size) {
+static inline void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_metadata_t* metadata, uint64_t alignment, uint32_t size) {
     for(uint16_t pool_id = 0; pool_id < metadata->pool_count; pool_id++) {
         memory_heap_hash_pool_t* pool = memory_heap_hash_pool_get(metadata, pool_id);
 
@@ -204,7 +204,7 @@ static void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_metadata
     return NULL;
 }
 
-static memory_heap_hash_block_t* memory_heap_hash_pool_new_hash_block(memory_heap_hash_metadata_t* metadata, memory_heap_hash_pool_t* pool, uint32_t address, uint32_t size) {
+static inline memory_heap_hash_block_t* memory_heap_hash_pool_new_hash_block(memory_heap_hash_metadata_t* metadata, memory_heap_hash_pool_t* pool, uint32_t address, uint32_t size) {
     uint32_t hash = (address >> 4) & metadata->segment_hash_mask;
 
     uint8_t* segment_offset = (uint8_t*)(pool->pool_base + pool->segment_start);
@@ -246,7 +246,7 @@ static memory_heap_hash_block_t* memory_heap_hash_pool_new_hash_block(memory_hea
     return NULL;
 }
 
-static memory_heap_hash_block_t* memory_heap_hash_pool_search_hash_block(memory_heap_hash_metadata_t* metadata, memory_heap_hash_pool_t* pool, uint32_t address) {
+static inline memory_heap_hash_block_t* memory_heap_hash_pool_search_hash_block(memory_heap_hash_metadata_t* metadata, memory_heap_hash_pool_t* pool, uint32_t address) {
     uint32_t hash = (address >> 4) & metadata->segment_hash_mask;
 
     uint8_t* segment_offset = (uint8_t*)(pool->pool_base + pool->segment_start);
@@ -274,7 +274,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr);
 void   memory_heap_hash_stat(memory_heap_t* heap, memory_heap_stat_t* stat);
 
 
-static void memory_heap_hash_pool_insert_sorted_at_free_list(memory_heap_hash_pool_t* pool, memory_heap_hash_block_t* hash_block) {
+static inline void memory_heap_hash_pool_insert_sorted_at_free_list(memory_heap_hash_pool_t* pool, memory_heap_hash_block_t* hash_block) {
     uint32_t hash_block_address = (uint32_t)((uint64_t)hash_block - pool->pool_base);
 
     if(!pool->free_list) {
