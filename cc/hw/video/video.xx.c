@@ -41,6 +41,8 @@ int32_t FONT_HEIGHT = 0;
 int32_t FONT_BYTES_PER_GLYPH = 0;
 int32_t FONT_CHARS_PER_LINE = 0;
 int32_t FONT_LINES_ON_SCREEN = 0;
+uint32_t FONT_MASK = 0;
+uint32_t FONT_BYTES_PERLINE = 0;
 boolean_t GRAPHICS_MODE = 0;
 int32_t VIDEO_GRAPHICS_WIDTH = 0;
 int32_t VIDEO_GRAPHICS_HEIGHT = 0;
@@ -63,7 +65,7 @@ void video_init(void) {
     if(font2) {
         if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
             PRINTLOG(VIDEO, LOG_DEBUG, "font v2 ok");
-            FONT_ADDRESS = (uint8_t*)&font_data_start + font2->header_size;
+            FONT_ADDRESS = ((uint8_t*)&font_data_start) + font2->header_size;
             FONT_WIDTH = font2->width;
             FONT_HEIGHT = font2->height;
             FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
@@ -105,6 +107,11 @@ void video_init(void) {
 
             FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
             FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
+
+            FONT_BYTES_PERLINE = (FONT_WIDTH + 7) / 8;
+
+            FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
+
 
             GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
         } else {
@@ -157,6 +164,10 @@ void video_init(void) {
 
                 FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
                 FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
+
+                FONT_BYTES_PERLINE = (FONT_WIDTH + 7) / 8;
+
+                FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
 
                 GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
             } else {
@@ -241,6 +252,11 @@ void video_graphics_print(char_t* string) {
 
             i++;
 
+            if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
+                video_graphics_scroll();
+                cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
+            }
+
             continue;
         }
 
@@ -255,24 +271,25 @@ void video_graphics_print(char_t* string) {
 
         uint8_t* glyph = FONT_ADDRESS + (wc * FONT_BYTES_PER_GLYPH);
 
-        int bytesperline = (FONT_WIDTH + 7) / 8;
-
         int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
 
         int32_t x, y, line, mask;
 
         for(y = 0; y < FONT_HEIGHT; y++) {
             line = offs;
-            mask = 1 << (FONT_WIDTH - 1);
+            mask = FONT_MASK;
+
+            uint32_t tmp = BYTE_SWAP32(*((uint32_t*)glyph));
 
             for(x = 0; x < FONT_WIDTH; x++) {
-                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = *((uint8_t*)glyph) & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
+
+                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = tmp & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
 
                 mask >>= 1;
                 line++;
             }
 
-            glyph += bytesperline;
+            glyph += FONT_BYTES_PERLINE;
             offs  += VIDEO_PIXELS_PER_SCANLINE;
         }
 

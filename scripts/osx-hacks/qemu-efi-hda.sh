@@ -15,8 +15,8 @@ NETDEV=""
 if [ `uname -s` == "Linux" ]; then
   UEFIBIOSCODE="/usr/share/OVMF/OVMF_CODE.fd"  
   UEFIBIOSVARS="/usr/share/OVMF/OVMF_VARS.fd"
-  #NETDEV="bridge,id=t0"
-  NETDEV="tap,id=t0,ifname=tap0,script=no,downscript=no"
+  NETDEV="bridge,id=t0"
+  #NETDEV="tap,id=t0,ifname=tap0,script=no,downscript=no"
 fi
 
 if [ `uname -s` == "Darwin" ]; then

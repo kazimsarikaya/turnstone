@@ -311,9 +311,9 @@ int8_t virtio_init_modern(virtio_dev_t* vdev, virtio_select_features_f select_fe
 
             return -1;
         }
-    }
 
-    PRINTLOG(VIRTIO, LOG_TRACE, "device accepted requested features");
+        PRINTLOG(VIRTIO, LOG_TRACE, "device accepted requested features");
+    }
 
     if(create_queues != NULL && create_queues(vdev) == 0) {
         PRINTLOG(VIRTIO, LOG_TRACE, "try to set driver ok");
