@@ -275,6 +275,8 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
 
         network_icmpv4_header_t* resp_icmp_hdr = (network_icmpv4_header_t*)network_icmpv4_process_packet(recv_icmp_hdr, &ping_data_len, &pp_len);
 
+        memory_free(packet_data);
+
         network_ipv4_header_t* ip = network_ipv4_create_packet_from_icmp_packet(ni->ipv4_address, recv_ipv4_packet->source_ip, resp_icmp_hdr, pp_len);
 
         *return_packet_len = BYTE_SWAP16(ip->total_length);
