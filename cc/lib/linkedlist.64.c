@@ -228,7 +228,7 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
     linkedlist_internal_t* l = (linkedlist_internal_t*)list;
 
     if(l == NULL) {
-        return 0;
+        return -1ULL;
     }
 
     lock_acquire(l->lock);
@@ -239,7 +239,7 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
     if(item == NULL) {
         lock_release(l->lock);
 
-        return 0;
+        return -1ULL;
     }
 
     item->data = data;
@@ -415,7 +415,7 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
         memory_free_ext(l->heap, item);
         lock_release(l->lock);
 
-        return 0;
+        return -1ULL;
     }
 
     l->item_count++;
