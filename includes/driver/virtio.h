@@ -229,6 +229,7 @@ typedef struct {
     virtio_queue_ext_t*         queues;
     linkedlist_t                return_queue;
     void*                       extra_data;
+    uint64_t                    rx_task_id;
 }virtio_dev_t;
 
 

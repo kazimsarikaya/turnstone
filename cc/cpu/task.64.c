@@ -17,6 +17,7 @@
 #include <systeminfo.h>
 #include <linker.h>
 #include <utils.h>
+#include <map.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -26,6 +27,7 @@ task_t* current_task = NULL;
 
 linkedlist_t task_queue = NULL;
 linkedlist_t task_cleaner_queue = NULL;
+map_t task_map = NULL;
 
 extern int8_t kmain64(void);
 
@@ -112,8 +114,21 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_task->entry_point = kmain64;
     current_task->page_table = memory_paging_get_table();
     current_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+    current_task->stack = (void*)(stack_top + stack_size);
+    current_task->stack_size = stack_size;
+    current_task->task_name = "kernel";
 
     task_id = current_task->task_id + 1;
+
+    task_map = map_integer();
+
+    if(task_map == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task map");
+
+        return -1;
+    }
+
+    map_insert(task_map, (void*)current_task->task_id, current_task);
 
     uint32_t tss_limit = sizeof(tss_t) - 1;
     DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
@@ -344,7 +359,16 @@ task_t* task_find_next_task(void) {
 
             linkedlist_queue_push(task_queue, tmp_task);
         } else if(tmp_task->message_waiting) {
-            if(tmp_task->message_queues) {
+
+
+            if(tmp_task->interruptible) {
+                if(tmp_task->interrupt_received) {
+                    tmp_task->interrupt_received = false;
+                    tmp_task->message_waiting = false;
+
+                    break;
+                }
+            } else if(tmp_task->message_queues) {
 
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
                     const linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
@@ -450,7 +474,7 @@ void task_set_message_waiting(void){
     current_task->message_waiting = 1;
 }
 
-int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args) {
+uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
 
     task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 
@@ -510,6 +534,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
     new_task->rflags = 0x202;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
+    new_task->task_name = task_name;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
@@ -526,13 +551,15 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
 
     cpu_cli();
 
-    PRINTLOG(TASKING, LOG_INFO, "scheduling new task 0x%llx 0x%p stack at 0x%llx-0x%llx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
+    PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
+             new_task->task_name, new_task->task_id, new_task, new_task->rsp, new_task->rbp, new_task->heap, new_task->heap_size);
 
     linkedlist_stack_push(task_queue, new_task);
+    map_insert(task_map, (void*)new_task->task_id, new_task);
 
     cpu_sti();
 
-    return 0;
+    return new_task->task_id;
 }
 
 void task_yield(void) {
@@ -574,3 +601,30 @@ void task_current_task_sleep(uint64_t wake_tick) {
         cpu_sti();
     }
 }
+
+void task_clear_message_waiting(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        task->message_waiting = false;
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
+    }
+}
+
+void task_set_interrupt_received(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        task->interrupt_received = true;
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
+    }
+}
+
+void task_set_interruptible(void) {
+    if(current_task) {
+        current_task->interruptible = true;
+    }
+}
+

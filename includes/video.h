@@ -30,7 +30,7 @@ typedef struct video_psf2_font_t {
     int32_t  bytes_per_glyph; ///< size of each glyph
     int32_t  height; ///< height in pixels
     int32_t  width; ///< width in pixels
-} video_psf2_font_t; ///< short hand for struct @ref video_psf2_font_s
+} __attribute__((packed)) video_psf2_font_t; ///< short hand for struct @ref video_psf2_font_s
 
 /**
  * @struct video_psf1_font_t
@@ -40,7 +40,7 @@ typedef struct video_psf1_font_t {
     uint16_t magic; ///< magic bytes to identify PSF
     uint8_t  mode; ///< mode
     uint8_t  bytes_per_glyph; ///< size of each glyph
-}video_psf1_font_t; ///< short hand for struct @ref video_psf1_font_s
+} __attribute__((packed)) video_psf1_font_t; ///< short hand for struct @ref video_psf1_font_s
 
 /**
  * @struct video_frame_buffer_t
