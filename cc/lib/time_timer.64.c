@@ -79,7 +79,7 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
         PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx fh 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
     }
 
-    if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
+    if(apic_get_local_apic_id() == 0 && (time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
         task_switch_task(true);
     } else {
         apic_eoi();

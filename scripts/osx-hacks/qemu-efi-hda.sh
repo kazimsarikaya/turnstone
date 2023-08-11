@@ -39,7 +39,7 @@ fi
 
 qemu-system-x86_64 \
   -nodefaults -no-user-config \
-  -M q35 -m 1g -smp cpus=2 -name osdev-hda-boot \
+  -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \

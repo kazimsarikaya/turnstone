@@ -20,6 +20,7 @@
 #include <linkedlist.h>
 #include <cpu.h>
 #include <cpu/crx.h>
+#include <cpu/smp.h>
 #include <utils.h>
 #include <device/kbd.h>
 #include <cpu/task.h>
@@ -260,6 +261,11 @@ int8_t kmain64(size_t entry_point) {
     }
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
+
+    if(smp_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init sm. Halting...");
+        cpu_hlt();
+    }
 
     int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
 
