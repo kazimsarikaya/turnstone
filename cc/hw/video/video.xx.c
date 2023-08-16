@@ -13,6 +13,7 @@
 #include <strings.h>
 #include <utils.h>
 #include <systeminfo.h>
+#include <cpu/sync.h>
 
 MODULE("turnstone.kernel.hw.video");
 
@@ -49,6 +50,8 @@ int32_t VIDEO_GRAPHICS_HEIGHT = 0;
 uint32_t VIDEO_GRAPHICS_FOREGROUND = 0xFFFFFF;
 uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
 
+lock_t video_lock = NULL;
+
 wchar_t* video_font_unicode_table = NULL;
 
 void video_refresh_frame_buffer_address(void) {
@@ -61,6 +64,8 @@ void video_init(void) {
     VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;
 
     video_psf2_font_t* font2 = (video_psf2_font_t*)&font_data_start;
+
+    video_lock = lock_create();
 
     if(font2) {
         if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
@@ -344,7 +349,15 @@ size_t video_printf(const char_t* fmt, ...){
     va_list args;
     va_start(args, fmt);
 
+    lock_acquire(video_lock);
+
     size_t cnt = 0;
+
+    if(!fmt) {
+        lock_release(video_lock);
+
+        return 0;
+    }
 
     while (*fmt) {
         char_t data = *fmt;
@@ -352,8 +365,8 @@ size_t video_printf(const char_t* fmt, ...){
         if(data == '%') {
             fmt++;
             int8_t wfmtb = 1;
-            char_t buf[257];
-            char_t ito_buf[64];
+            char_t buf[257] = {0};
+            char_t ito_buf[64] = {0};
             int32_t val = 0;
             char_t* str = NULL;
             int32_t slen = 0;
@@ -531,12 +544,12 @@ size_t video_printf(const char_t* fmt, ...){
 
         } else {
             size_t idx = 0;
-            char_t buf[17];
+            char_t buf[17] = {0};
             memory_memclean(buf, 17);
 
             while(*fmt) {
                 if(idx == 16) {
-                    video_printf(buf);
+                    video_print(buf);
                     idx = 0;
                     memory_memclean(buf, 17);
                 }
@@ -555,6 +568,8 @@ size_t video_printf(const char_t* fmt, ...){
     }
 
     va_end(args);
+
+    lock_release(video_lock);
 
     return cnt;
 }

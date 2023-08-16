@@ -33,7 +33,7 @@ typedef struct smp_data_t {
 int8_t  smp_init_cpu(uint8_t cpu_id);
 int32_t smp_ap_boot(uint8_t cpu_id);
 
-uint8_t trampoline_code[] = {
+const uint8_t trampoline_code[] = {
     0xea, 0x05, 0x80, 0x00, 0x00,             // 8000: jmp $0x0:$0x8005
     0xfa,                                     // 8005: cli
     0xfc,                                     // 8006: cld
@@ -219,12 +219,15 @@ extern uint64_t lapic_addr;
 
 int32_t smp_ap_boot(uint8_t cpu_id) {
     UNUSED(cpu_id);
+    __asm__ __volatile__ ("lgdt (%%rax)\n"
+                          "push $0x08\n"
+                          "lea fix_gdt_jmpA%=(%%rip),%%rax\n"
+                          "push %%rax\n"
+                          "lretq\n"
+                          "fix_gdt_jmpA%=:"
+                          : : "a" (GDT_REGISTER));
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting", cpu_id);
-
-    apic_register_spurious_interrupt_t* ar_si = (apic_register_spurious_interrupt_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT);
-    ar_si->vector = 0x0f;
-    ar_si->apic_software_enable = 1;
 
     uint32_t* tmp = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT);
     *tmp = 0x10f;
@@ -241,11 +244,24 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     cpu_sti();
 
+    char_t* test_data = memory_malloc(sizeof(char_t*) * 32);
+
+    if(test_data == NULL) {
+        PRINTLOG(APIC, LOG_ERROR, "SMP: AP %i Failed to allocate test data", cpu_id);
+        return -1;
+    }
+
+    memory_memcopy("hello world", test_data, 11);
+
+    test_data[11] = ' ';
+    test_data[12] = '0' + cpu_id;
+
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s", cpu_id, test_data);
+
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booted", cpu_id);
 
     while(true) {
-        //asm volatile ("hlt");
         cpu_idle();
     }
 

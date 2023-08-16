@@ -836,7 +836,7 @@ int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
 #pragma GCC diagnostic pop
 
 frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
-    if(efi_m_type >= EFI_LOADER_CODE && efi_m_type <= EFI_LOADER_DATA) {
+    if(efi_m_type == EFI_LOADER_CODE || efi_m_type == EFI_LOADER_DATA) {
         return FRAME_TYPE_FREE;
     }
 

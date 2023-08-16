@@ -392,6 +392,11 @@ uint8_t apic_get_local_apic_id(void) {
     if(apic_enabled) {
         uint32_t* id = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ID);
         return *id >> 24;
+    } else {
+        cpu_cpuid_regs_t query = {1, 0, 0, 0};
+        cpu_cpuid_regs_t answer = {0};
+        cpu_cpuid(query, &answer);
+        return answer.ebx >> 24;
     }
 
     return 0;

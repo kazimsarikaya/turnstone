@@ -96,6 +96,16 @@ void cpu_write_cr0(cpu_reg_cr0_t cr0);
 void cpu_toggle_cr0_wp(void);
 
 /**
+ * @brief disables write protect bit cr0, when setted kernel can not modify readonly pages
+ */
+void cpu_cr0_disable_wp(void);
+
+/**
+ * @brief enables write protect bit cr0, when setted kernel can not modify readonly pages
+ */
+void cpu_cr0_enable_wp(void);
+
+/**
  * @brief enables sse support, modifies cr4 register
  */
 void cpu_enable_sse(void);
