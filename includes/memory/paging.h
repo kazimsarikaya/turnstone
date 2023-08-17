@@ -23,7 +23,7 @@
  *
  * each entry is 64bit long
  */
-typedef struct memory_page_entry_s{
+typedef struct memory_page_entry_s {
     uint8_t  present               : 1; ///< bit 0 page present?
     uint8_t  writable              : 1; ///< bit 1 page can be writen?
     uint8_t  user_accessible       : 1; ///< bit 2 page can be accessable by user space
@@ -58,7 +58,7 @@ typedef struct memory_page_entry_s{
  * in long mode a page table is consist of 512 page entries.
  * a page table is 4K page aligned.
  */
-typedef struct memory_page_table_s{
+typedef struct memory_page_table_s {
     memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
 } __attribute__((packed)) memory_page_table_t; ///< short hand for struct
 
@@ -156,6 +156,16 @@ int8_t memory_paging_get_physical_address_ext(memory_page_table_t* p4, uint64_t 
 
 int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type);
 #define memory_paging_toggle_attributes(va, t) memory_paging_toggle_attributes_ext(NULL, va, t)
+int8_t memory_paging_set_user_accessible_ext(memory_page_table_t* p4, uint64_t virtual_address);
+#define memory_paging_set_user_accessible(va) memory_paging_set_user_accessible_ext(NULL, va)
+
+typedef enum memory_paging_clear_type_t {
+    MEMORY_PAGING_CLEAR_TYPE_DIRTY =1,
+    MEMORY_PAGING_CLEAR_TYPE_ACCESSED=2,
+} memory_paging_clear_type_t;
+
+int8_t memory_paging_clear_page_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_clear_type_t type);
+#define memory_paging_clear_page(va, t) memory_paging_clear_page_ext(NULL, va, t)
 
 /*! gets p4 index of virtual address at long mode */
 #define MEMORY_PT_GET_P4_INDEX(u64) ((u64 >> 39) & 0x1FF)

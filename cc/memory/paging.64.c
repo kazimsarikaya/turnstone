@@ -575,7 +575,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
     return p4;
 }
 
-int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type) {
+int8_t memory_paging_clear_page_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_clear_type_t type) {
     if(p4 == NULL) {
         p4 = memory_paging_switch_table(NULL);
     }
@@ -607,6 +607,111 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
 
+            if(type & MEMORY_PAGING_CLEAR_TYPE_DIRTY) {
+                t_p3->pages[p3_idx].dirty = 0;
+            }
+
+            if(type & MEMORY_PAGING_CLEAR_TYPE_ACCESSED) {
+                t_p3->pages[p3_idx].accessed = 0;
+            }
+
+            cpu_tlb_invalidate(t_p3);
+
+        } else {
+            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+
+            size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
+            if(p2_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].present == 0) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].hugepage == 1) {
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_DIRTY) {
+                    t_p2->pages[p2_idx].dirty = 0;
+                }
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_ACCESSED) {
+                    t_p2->pages[p2_idx].accessed = 0;
+                }
+
+                cpu_tlb_invalidate(t_p2);
+
+
+            } else {
+                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+
+                size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
+                if(p1_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                    return -1;
+                }
+
+                if(t_p1->pages[p1_idx].present == 0) {
+                    return -1;
+                }
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_DIRTY) {
+                    t_p1->pages[p1_idx].dirty = 0;
+                }
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_ACCESSED) {
+                    t_p1->pages[p1_idx].accessed = 0;
+                }
+
+                cpu_tlb_invalidate(t_p1);
+
+
+            }
+        }
+    }
+
+    return 0;
+}
+
+int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type) {
+    if(p4 == NULL) {
+        p4 = memory_paging_switch_table(NULL);
+    }
+
+    memory_page_table_t* t_p3;
+    memory_page_table_t* t_p2;
+    memory_page_table_t* t_p1;
+
+    size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
+
+    if(p4_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+    if(p4->pages[p4_idx].present == 0) {
+        return -1;
+    }
+
+    if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+        p4->pages[p4_idx].user_accessible = ~p4->pages[p4_idx].user_accessible;
+    }
+
+    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+
+    size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
+    if(p3_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+
+    if(t_p3->pages[p3_idx].present == 0) {
+        return -1;
+    } else {
+        if(t_p3->pages[p3_idx].hugepage == 1) {
+
             if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
                 t_p3->pages[p3_idx].writable = ~t_p3->pages[p3_idx].writable;
             }
@@ -622,6 +727,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
             cpu_tlb_invalidate(t_p3);
 
         } else {
+            if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+                t_p3->pages[p3_idx].user_accessible = ~t_p3->pages[p3_idx].user_accessible;
+            }
+
             t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
             t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
 
@@ -653,6 +762,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 
 
             } else {
+                if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+                    t_p2->pages[p2_idx].user_accessible = ~t_p2->pages[p2_idx].user_accessible;
+                }
+
                 t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
                 t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
 
@@ -687,6 +800,95 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 
     return 0;
 }
+
+
+int8_t memory_paging_set_user_accessible_ext(memory_page_table_t* p4, uint64_t virtual_address) {
+    if(p4 == NULL) {
+        p4 = memory_paging_switch_table(NULL);
+    }
+
+    memory_page_table_t* t_p3;
+    memory_page_table_t* t_p2;
+    memory_page_table_t* t_p1;
+
+    size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
+
+    if(p4_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+    if(p4->pages[p4_idx].present == 0) {
+        return -1;
+    }
+
+    p4->pages[p4_idx].user_accessible = 1;
+
+    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+
+    size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
+    if(p3_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+
+    if(t_p3->pages[p3_idx].present == 0) {
+        return -1;
+    } else {
+        if(t_p3->pages[p3_idx].hugepage == 1) {
+            t_p3->pages[p3_idx].user_accessible = 1;
+
+            cpu_tlb_invalidate(t_p3);
+
+        } else {
+            t_p3->pages[p3_idx].user_accessible = 1;
+
+            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+
+            size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
+            if(p2_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].present == 0) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].hugepage == 1) {
+                t_p2->pages[p2_idx].user_accessible = 1;
+
+                cpu_tlb_invalidate(t_p2);
+
+            } else {
+                t_p2->pages[p2_idx].user_accessible = 1;
+
+                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+
+                size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
+                if(p1_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                    return -1;
+                }
+
+                if(t_p1->pages[p1_idx].present == 0) {
+                    return -1;
+                }
+
+                t_p1->pages[p1_idx].user_accessible = 1;
+
+
+                cpu_tlb_invalidate(t_p1);
+
+
+            }
+        }
+    }
+
+    return 0;
+}
+
 
 int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_address){
     UNUSED(heap);

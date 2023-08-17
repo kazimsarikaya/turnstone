@@ -18,17 +18,7 @@
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
-
-
-typedef struct smp_data_t {
-    uint64_t               stack_base;
-    uint64_t               stack_size;
-    cpu_reg_cr0_t          cr0;
-    memory_page_table_t*   cr3;
-    cpu_reg_cr4_t          cr4;
-    descriptor_register_t* idt;
-} smp_data_t;
-
+#include <cpu/syscall.h>
 
 int8_t  smp_init_cpu(uint8_t cpu_id);
 int32_t smp_ap_boot(uint8_t cpu_id);
@@ -125,7 +115,7 @@ int8_t smp_init(void) {
     PRINTLOG(APIC, LOG_INFO, "SMP Initialisation");
 
     uint8_t local_apic_id = apic_get_local_apic_id();
-    uint8_t ap_cpu_count = 0;
+    uint8_t ap_cpu_count = apic_get_ap_count();
 
     acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
 
@@ -150,24 +140,6 @@ int8_t smp_init(void) {
 
     linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
 
-    iterator_t* iter = linkedlist_iterator_create(apic_entries);
-
-    while(iter->end_of_iterator(iter) != 0) {
-        const acpi_table_madt_entry_t* e = iter->get_item(iter);
-
-        if(e->info.type == ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC) {
-            uint8_t apic_id = e->processor_local_apic.apic_id;
-
-            if (apic_id != local_apic_id) {
-                ap_cpu_count++;
-            }
-        }
-
-        iter = iter->next(iter);
-    }
-
-    iter->destroy(iter);
-
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = 16 * ap_cpu_count;
     uint64_t stack_size = 16 * FRAME_SIZE;
@@ -191,7 +163,7 @@ int8_t smp_init(void) {
     smp_data->cr4 = cpu_read_cr4();
     smp_data->idt = IDT_REGISTER;
 
-    iter = linkedlist_iterator_create(apic_entries);
+    iterator_t* iter = linkedlist_iterator_create(apic_entries);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);
@@ -218,20 +190,12 @@ int8_t smp_init(void) {
 extern uint64_t lapic_addr;
 
 int32_t smp_ap_boot(uint8_t cpu_id) {
-    UNUSED(cpu_id);
-    __asm__ __volatile__ ("lgdt (%%rax)\n"
-                          "push $0x08\n"
-                          "lea fix_gdt_jmpA%=(%%rip),%%rax\n"
-                          "push %%rax\n"
-                          "lretq\n"
-                          "fix_gdt_jmpA%=:"
-                          : : "a" (GDT_REGISTER));
-
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting", cpu_id);
+
+    descriptor_build_ap_descriptors_register();
 
     uint32_t* tmp = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT);
     *tmp = 0x10f;
-
 
     lapic_init_timer();
 
@@ -258,8 +222,74 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s", cpu_id, test_data);
 
+    uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
+    msr_efer |= 1;
+    cpu_write_msr(CPU_MSR_EFER, msr_efer);
+
+    uint64_t msr_star = 0x00200008ULL << 32;
+    cpu_write_msr(CPU_MSR_STAR, msr_star);
+
+    uint64_t msr_lstar = (uint64_t)syscall_handler;
+    cpu_write_msr(CPU_MSR_LSTAR, msr_lstar);
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i syscall handler: %llx", cpu_id, msr_lstar);
+
+    uint64_t msr_fmask = 0x200;
+    cpu_write_msr(CPU_MSR_FMASK, msr_fmask);
+
+
+    frame_t* user_code_frames = NULL;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
+                                                       2,
+                                                       FRAME_ALLOCATION_TYPE_BLOCK,
+                                                       &user_code_frames,
+                                                       NULL) != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate user code frame");
+
+        cpu_hlt();
+    }
+
+    uint64_t user_code_fa = user_code_frames->frame_address;
+    uint64_t user_code_va = 8ULL << 40 | user_code_fa;
+    uint64_t user_stack_fa = user_code_fa + 0x1000;
+    uint64_t user_stack_va = 8ULL << 40 | user_stack_fa;
+
+    memory_paging_add_page_ext(NULL, NULL,
+                               user_code_va, user_code_fa,
+                               MEMORY_PAGING_PAGE_TYPE_4K);
+
+    memory_paging_add_page_ext(NULL, NULL,
+                               user_stack_va, user_stack_fa,
+                               MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE | MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    memory_memclean((uint8_t*)user_code_va, FRAME_SIZE);
+    memory_memclean((uint8_t*)user_stack_va, FRAME_SIZE);
+
+    uint8_t* user_code = (uint8_t*)user_code_va;
+    user_code[0] = 0x48;
+    user_code[1] = 0x31;
+    user_code[2] = 0xc0;
+    user_code[3] = 0x0f;
+    user_code[4] = 0x05;
+    user_code[5] = 0xeb;
+    user_code[6] = 0xf9;
+
+    memory_paging_toggle_attributes(user_code_va, MEMORY_PAGING_PAGE_TYPE_READONLY);
+    memory_paging_set_user_accessible(user_code_va);
+    memory_paging_clear_page(user_code_va, MEMORY_PAGING_CLEAR_TYPE_DIRTY | MEMORY_PAGING_CLEAR_TYPE_ACCESSED);
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booted", cpu_id);
+
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Jumping to user code code at 0x%llx stack at 0x%llx", cpu_id, user_code_va, user_stack_va);
+
+    // jump user mode with sysretq
+    asm volatile (
+        "mov %%rax, %%rsp\n"
+        "mov $0x200, %%r11\n"
+        "sysretq\n"
+        : : "a" (user_stack_va + 0x1000 - 0x10), "c" (user_code_va)
+        );
+
 
     while(true) {
         cpu_idle();

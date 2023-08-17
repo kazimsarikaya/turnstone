@@ -120,9 +120,10 @@ uint8_t apic_get_irq_override(uint8_t old_irq);
 
 void apic_eoi(void);
 
-uint8_t apic_get_local_apic_id(void);
-void    apic_send_ini(uint8_t destination);
-void    apic_send_sipi(uint8_t destination, uint8_t vector);
-uint8_t lapic_init_timer(void);
+uint8_t  apic_get_local_apic_id(void);
+void     apic_send_ini(uint8_t destination);
+void     apic_send_sipi(uint8_t destination, uint8_t vector);
+uint8_t  lapic_init_timer(void);
+uint64_t apic_get_ap_count(void);
 
 #endif

@@ -26,6 +26,7 @@ uint8_t ioapic_count = 0;
 uint64_t lapic_addr = 0;
 int8_t apic_enabled = 0;
 uint32_t lapic_initial_timer_count = 0;
+uint64_t apic_ap_count = 0;
 
 linkedlist_t irq_remappings = NULL;
 
@@ -153,6 +154,7 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
     ar_si->vector = INTERRUPT_VECTOR_SPURIOUS;
     ar_si->apic_software_enable = 1;
 
+    apic_ap_count = apic_get_ap_count();
     apic_enabled = 1;
 
     return apic_init_timer();
@@ -425,4 +427,34 @@ void apic_send_sipi(uint8_t destination, uint8_t vector) {
 
         while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
     }
+}
+
+uint64_t apic_get_ap_count(void) {
+    uint64_t ap_count = 0;
+
+    uint8_t local_apic_id = apic_get_local_apic_id();
+
+    acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
+
+    linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+
+    iterator_t* iter = linkedlist_iterator_create(apic_entries);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        const acpi_table_madt_entry_t* e = iter->get_item(iter);
+
+        if(e->info.type == ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC) {
+            uint8_t apic_id = e->processor_local_apic.apic_id;
+
+            if (apic_id != local_apic_id) {
+                ap_count++;
+            }
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    return ap_count;
 }
