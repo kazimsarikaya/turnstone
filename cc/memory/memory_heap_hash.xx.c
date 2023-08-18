@@ -476,6 +476,10 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
 
 
     PRINTLOG(HEAP_HASH, LOG_ERROR, "out of memory");
+    memory_heap_stat_t stat;
+    memory_heap_hash_stat(heap, &stat);
+
+    PRINTLOG(HEAP_HASH, LOG_ERROR, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
 
     return NULL;
 }
@@ -599,7 +603,7 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
         heap_end = end;
     }
 
-    PRINTLOG(SIMPLEHEAP, LOG_DEBUG, "heap boundaries 0x%llx 0x%llx", heap_start, heap_end);
+    PRINTLOG(HEAP_HASH, LOG_DEBUG, "heap boundaries 0x%llx 0x%llx", heap_start, heap_end);
 
     uint64_t heap_size = heap_end - heap_start;
 
