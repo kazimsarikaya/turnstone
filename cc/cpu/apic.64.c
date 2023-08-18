@@ -429,6 +429,19 @@ void apic_send_sipi(uint8_t destination, uint8_t vector) {
     }
 }
 
+void apic_send_ipi(uint8_t destination, uint8_t vector) {
+    if(apic_enabled) {
+        uint32_t* icr_high = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
+        uint32_t* icr_low = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+
+        *icr_high = destination << 24;
+        *icr_low = APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
+        *icr_low |= vector;
+
+        while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+    }
+}
+
 uint64_t apic_get_ap_count(void) {
     uint64_t ap_count = 0;
 

@@ -266,13 +266,25 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     memory_memclean((uint8_t*)user_stack_va, FRAME_SIZE);
 
     uint8_t* user_code = (uint8_t*)user_code_va;
+    /*
+     * user space example code
+     * byte array of this assembly
+     * start:
+     *    mov $1, %rax
+     *    syscallq
+     *    jmp start
+     */
     user_code[0] = 0x48;
-    user_code[1] = 0x31;
+    user_code[1] = 0xc7;
     user_code[2] = 0xc0;
-    user_code[3] = 0x0f;
-    user_code[4] = 0x05;
-    user_code[5] = 0xeb;
-    user_code[6] = 0xf9;
+    user_code[3] = 0x01;
+    user_code[4] = 0x00;
+    user_code[5] = 0x00;
+    user_code[6] = 0x00;
+    user_code[7] = 0x0f;
+    user_code[8] = 0x05;
+    user_code[9] = 0xeb;
+    user_code[10] = 0xf5;
 
     memory_paging_toggle_attributes(user_code_va, MEMORY_PAGING_PAGE_TYPE_READONLY);
     memory_paging_set_user_accessible(user_code_va);
@@ -284,6 +296,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     // jump user mode with sysretq
     asm volatile (
+        "xor %%rbp, %%rbp\n"
         "mov %%rax, %%rsp\n"
         "mov $0x200, %%r11\n"
         "sysretq\n"

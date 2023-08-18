@@ -246,7 +246,8 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
     PRINTLOG(KERNEL, LOG_FATAL, "cr4: 0x%llx", (cpu_read_cr4()).bits);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    uint64_t if_addr = (uint64_t)frame;
+    backtrace_print((stackframe_t*)(if_addr - 8));
 
     cpu_hlt();
 }
@@ -256,7 +257,8 @@ void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errco
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    uint64_t if_addr = (uint64_t)frame;
+    backtrace_print((stackframe_t*)(if_addr - 8));
 
     cpu_hlt();
 }
@@ -314,28 +316,36 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 }
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
+    uint64_t rsp = 0;
+    asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
+    stackframe_t* s_frame = backtrace_print_interrupt_registers(rsp);
+
     PRINTLOG(KERNEL, LOG_FATAL, "general protection error 0x%llx at 0x%x:0x%llx", errcode, frame->return_cs, frame->return_rip);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    backtrace_print(s_frame);
 
     cpu_hlt();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%016llx task 0x%llx", frame->return_rip, task_get_id());
+    uint64_t rsp = 0;
+    asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
+    stackframe_t* s_frame =  backtrace_print_interrupt_registers(rsp);
+
+    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx task 0x%llx", frame->return_cs, frame->return_rip, task_get_id());
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     uint64_t cr2 = cpu_read_cr2();
 
     interrupt_errorcode_pagefault_t epf = { .bits = (uint32_t)errcode };
 
-    PRINTLOG(KERNEL, LOG_FATAL, "page 0x%016llx P? %i W? %i U? %i", cr2, epf.fields.present, epf.fields.write, epf.fields.user);
+    PRINTLOG(KERNEL, LOG_FATAL, "page 0x%016llx P? %i W? %i U? %i I? %i", cr2, epf.fields.present, epf.fields.write, epf.fields.user, epf.fields.instruction_fetch);
 
-    printf("Cpu is halting.");
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    backtrace_print(s_frame);
 
     cpu_hlt();
 }

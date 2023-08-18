@@ -18,5 +18,6 @@ typedef struct stackframe_t {
 stackframe_t* backtrace_get_stackframe(void);
 void          backtrace_print(stackframe_t* frame);
 void          backtrace(void);
+stackframe_t* backtrace_print_interrupt_registers(uint64_t rsp);
 
 #endif
