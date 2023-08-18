@@ -20,8 +20,10 @@
 #define FRAME_ATTRIBUTE_OLD_RESERVED           0x0000000100000000
 /*! frame attribure for acpi reclaim memory */
 #define FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY    0x0000000200000000
+/*! frame attribure for acpi memory */
+#define FRAME_ATTRIBUTE_ACPI                   0x0000000400000000
 /*! frame attribure for reserved pages which are mapped */
-#define FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED   0x0000000400000000
+#define FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED   0x0000000800000000
 
 /**
  * @enum frame_type_t
@@ -32,6 +34,8 @@ typedef enum frame_type_t {
     FRAME_TYPE_USED, ///< frames are allocated
     FRAME_TYPE_RESERVED, ///< frames are for reserved memory
     FRAME_TYPE_ACPI_RECLAIM_MEMORY, ///< frames for acpi area
+    FRAME_TYPE_ACPI_CODE, ///< frames for acpi code
+    FRAME_TYPE_ACPI_DATA, ///< frames for acpi data
 } frame_type_t; ///< short hand for enum frame_type_e
 
 /**
@@ -156,6 +160,12 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap);
  * @param[in] fa frame allocator
  */
 void frame_allocator_print(frame_allocator_t* fa);
+
+/**
+ * @brief map virtual pages of acpi code and data frames
+ * @param[in] fa frame allocator
+ */
+void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t * fa);
 
 /*! kernel frame allocator */
 extern frame_allocator_t* KERNEL_FRAME_ALLOCATOR;

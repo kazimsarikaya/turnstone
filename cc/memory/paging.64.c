@@ -23,9 +23,73 @@ uint64_t MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = 0;
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_2_START = 0;
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT = 0;
 
+typedef enum memory_paging_internal_frame_init_state_t {
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_UNINITIALIZED = 0,
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING = 1,
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED = 2,
+} memory_paging_internal_frame_init_state_t;
+
+memory_paging_internal_frame_init_state_t MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_UNINITIALIZED;
+
 uint64_t memory_paging_get_internal_frame(void);
 
+static inline void memory_paging_internal_frame_build(void) {
+    frame_t* internal_frms;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
+                                                       MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
+                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                       &internal_frms, NULL) != 0) {
+        PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
+        cpu_hlt();
+    }
+
+    MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT;
+    MEMORY_PAGING_INTERNAL_FRAMES_2_START = internal_frms->frame_address;
+
+    for(uint64_t i = 0; i < MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT; i++) {
+        if(memory_paging_add_page_ext(NULL, NULL,
+                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(MEMORY_PAGING_INTERNAL_FRAMES_2_START + i * MEMORY_PAGING_PAGE_SIZE),
+                                      MEMORY_PAGING_INTERNAL_FRAMES_2_START + i * MEMORY_PAGING_PAGE_SIZE,
+                                      MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+            PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
+            cpu_hlt();
+        }
+    }
+
+    uint64_t internal_frm_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(MEMORY_PAGING_INTERNAL_FRAMES_2_START);
+
+    memory_memclean((void*)internal_frm_va, MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT * FRAME_SIZE);
+}
+
 uint64_t memory_paging_get_internal_frame(void) {
+    if(MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING) {
+        frame_t* internal_frm;
+        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
+                                                           1,
+                                                           FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                           &internal_frm, NULL) != 0) {
+            PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
+            cpu_hlt();
+        }
+
+        uint64_t internal_frm_address = internal_frm->frame_address;
+        uint64_t internal_frm_va = internal_frm_address;
+
+        if(memory_paging_add_page_ext(NULL, NULL,
+                                      internal_frm_va,
+                                      internal_frm_address,
+                                      MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+            PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
+            cpu_hlt();
+        }
+
+        PRINTLOG(PAGING, LOG_DEBUG, "Internal frame returned during initialization: %llx", internal_frm_address);
+
+        return internal_frm_address;
+    }
+
+
     if(MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT == 0) {
         MEMORY_PAGING_INTERNAL_FRAMES_1_START = MEMORY_PAGING_INTERNAL_FRAMES_2_START;
         MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT;
@@ -35,30 +99,20 @@ uint64_t memory_paging_get_internal_frame(void) {
 
     if(MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT < (MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT >> 1)) {
         PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache needs refilling");
-        frame_t* internal_frms;
 
-        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                           MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
-                                                           FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                           &internal_frms, NULL) != 0) {
-            PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
-            cpu_hlt();
+        if(MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_UNINITIALIZED) {
+            MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING;
         }
 
-        MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT;
-        MEMORY_PAGING_INTERNAL_FRAMES_2_START = internal_frms->frame_address;
+        memory_paging_internal_frame_build();
 
-        for(uint64_t i = 0; i < MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT; i++) {
-            if(memory_paging_add_page_ext(NULL, NULL,
-                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(MEMORY_PAGING_INTERNAL_FRAMES_2_START + i * MEMORY_PAGING_PAGE_SIZE),
-                                          MEMORY_PAGING_INTERNAL_FRAMES_2_START + i * MEMORY_PAGING_PAGE_SIZE,
-                                          MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
-                PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
-                cpu_hlt();
-            }
+        if(MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING) {
+            MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED;
+            MEMORY_PAGING_INTERNAL_FRAMES_1_START = MEMORY_PAGING_INTERNAL_FRAMES_2_START;
+            MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT;
+
+            memory_paging_internal_frame_build();
         }
-
-        memory_memclean((void*)MEMORY_PAGING_INTERNAL_FRAMES_2_START, MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT * FRAME_SIZE);
 
         PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache refilled");
     }
@@ -309,6 +363,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
                 if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 1, fa_type, &t_p1_frm, NULL) != 0) {
                     KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, t_p1_frm);
+                    PRINTLOG(PAGING, LOG_ERROR, "Failed to allocate frame for p1 table");
 
                     return -1;
                 }
@@ -316,10 +371,14 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
                 p1_addr = t_p1_frm->frame_address;
 
                 if(curr_p4_diffrent_target_p4 && memory_paging_add_page_ext(heap, NULL, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_addr), p1_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL | MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) != 0) {
+                    PRINTLOG(PAGING, LOG_ERROR, "Failed to add page to p4 table %llx curr diff", p1_addr);
+
                     return -1;
                 }
 
                 if(memory_paging_add_page_ext(heap, p4, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_addr), p1_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
+                    PRINTLOG(PAGING, LOG_ERROR, "Failed to add page to p4 table %llx", p1_addr);
+
                     return -1;
                 }
             }
@@ -381,76 +440,39 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
         t_p1->pages[p1idx].physical_address = frame_address >> 12;
     }
 
+    PRINTLOG(PAGING, LOG_TRACE, "for p4 address: 0x%p va: 0x%llx fa: 0x%llx added", p4, virtual_address, frame_address);
+
     return 0;
 }
 
 memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
     PRINTLOG(PAGING, LOG_DEBUG, "building page table started");
+    cpu_cr0_disable_wp();
 
-    frame_t* t_p4_frm;
-
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                       &t_p4_frm, NULL) != 0) {
-        PRINTLOG(PAGING, LOG_ERROR, "cannot allocate frames for p4");
-
-        return NULL;
+    if(SYSTEM_INFO->remapped) {
+        //logging_module_levels[PAGING] = LOG_TRACE;
     }
 
-    if(SYSTEM_INFO->my_page_table == 0) {
-        cpu_toggle_cr0_wp();
-    }
-
-    for(uint64_t i = 0; i < MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT; i++) {
-        if(memory_paging_add_page_ext(NULL, NULL,
-                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K),
-                                      t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K,
-                                      MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
-            PRINTLOG(PAGING, LOG_ERROR, "cannot allocate internal frames for page table build");
-
-            return NULL;
-        }
-    }
-
-    PRINTLOG(PAGING, LOG_DEBUG, "building internal frames ended");
-
-    if(SYSTEM_INFO->my_page_table == 0) {
-        cpu_toggle_cr0_wp();
-    }
-
-    uint64_t p4_fa = t_p4_frm->frame_address;
+    uint64_t p4_fa = memory_paging_get_internal_frame();
     memory_page_table_t* p4 = (memory_page_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
 
+    PRINTLOG(PAGING, LOG_DEBUG, "p4 address: 0x%p 0x%llx", p4, MEMORY_PAGING_INTERNAL_FRAMES_1_START);
+
     memory_memclean(p4, sizeof(memory_page_table_t));
+    //logging_module_levels[PAGING] = LOG_TRACE;
 
-    MEMORY_PAGING_INTERNAL_FRAMES_1_START = t_p4_frm->frame_address + MEMORY_PAGING_PAGE_LENGTH_4K;
-    MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT - 1;
-
-    memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(MEMORY_PAGING_INTERNAL_FRAMES_1_START), MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT * sizeof(memory_page_table_t));
-
-    PRINTLOG(PAGING, LOG_DEBUG, "frame pool start 0x%016llx", MEMORY_PAGING_INTERNAL_FRAMES_1_START);
-
-    if(memory_paging_add_page_ext(heap, p4, (uint64_t)p4, p4_fa, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-        PRINTLOG(PAGING, LOG_ERROR, "cannot build p4's itself");
-
-        return NULL;
-    }
-
-    PRINTLOG(PAGING, LOG_DEBUG, "p4 self mapping completed");
-
-    for(uint64_t i = 0; i < MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT; i++) {
-        if(memory_paging_add_page_ext(NULL, p4,
-                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K),
-                                      t_p4_frm->frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K,
+    for(int64_t i = 0; i < MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT; i++) {
+        if(memory_paging_add_page_ext(heap, p4,
+                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa + i * FRAME_SIZE),
+                                      p4_fa + i * FRAME_SIZE,
                                       MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-            PRINTLOG(PAGING, LOG_ERROR, "cannot allocate internal frames for page table build");
+            PRINTLOG(PAGING, LOG_ERROR, "Failed to add page to p4 table %llx", p4_fa + i * FRAME_SIZE);
 
-            return NULL;
+            cpu_hlt();
         }
     }
 
-    PRINTLOG(PAGING, LOG_DEBUG, "internal frames mapping completed");
+    //cpu_hlt();
 
     program_header_t* kernel_header = (program_header_t*)SYSTEM_INFO->kernel_start;
 
@@ -548,10 +570,12 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
         return NULL;
     }
 
+    cpu_cr0_enable_wp();
+
     return p4;
 }
 
-int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type) {
+int8_t memory_paging_clear_page_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_clear_type_t type) {
     if(p4 == NULL) {
         p4 = memory_paging_switch_table(NULL);
     }
@@ -583,6 +607,111 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
     } else {
         if(t_p3->pages[p3_idx].hugepage == 1) {
 
+            if(type & MEMORY_PAGING_CLEAR_TYPE_DIRTY) {
+                t_p3->pages[p3_idx].dirty = 0;
+            }
+
+            if(type & MEMORY_PAGING_CLEAR_TYPE_ACCESSED) {
+                t_p3->pages[p3_idx].accessed = 0;
+            }
+
+            cpu_tlb_invalidate(t_p3);
+
+        } else {
+            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+
+            size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
+            if(p2_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].present == 0) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].hugepage == 1) {
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_DIRTY) {
+                    t_p2->pages[p2_idx].dirty = 0;
+                }
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_ACCESSED) {
+                    t_p2->pages[p2_idx].accessed = 0;
+                }
+
+                cpu_tlb_invalidate(t_p2);
+
+
+            } else {
+                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+
+                size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
+                if(p1_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                    return -1;
+                }
+
+                if(t_p1->pages[p1_idx].present == 0) {
+                    return -1;
+                }
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_DIRTY) {
+                    t_p1->pages[p1_idx].dirty = 0;
+                }
+
+                if(type & MEMORY_PAGING_CLEAR_TYPE_ACCESSED) {
+                    t_p1->pages[p1_idx].accessed = 0;
+                }
+
+                cpu_tlb_invalidate(t_p1);
+
+
+            }
+        }
+    }
+
+    return 0;
+}
+
+int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type) {
+    if(p4 == NULL) {
+        p4 = memory_paging_switch_table(NULL);
+    }
+
+    memory_page_table_t* t_p3;
+    memory_page_table_t* t_p2;
+    memory_page_table_t* t_p1;
+
+    size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
+
+    if(p4_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+    if(p4->pages[p4_idx].present == 0) {
+        return -1;
+    }
+
+    if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+        p4->pages[p4_idx].user_accessible = ~p4->pages[p4_idx].user_accessible;
+    }
+
+    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+
+    size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
+    if(p3_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+
+    if(t_p3->pages[p3_idx].present == 0) {
+        return -1;
+    } else {
+        if(t_p3->pages[p3_idx].hugepage == 1) {
+
             if(type & MEMORY_PAGING_PAGE_TYPE_READONLY) {
                 t_p3->pages[p3_idx].writable = ~t_p3->pages[p3_idx].writable;
             }
@@ -598,6 +727,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
             cpu_tlb_invalidate(t_p3);
 
         } else {
+            if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+                t_p3->pages[p3_idx].user_accessible = ~t_p3->pages[p3_idx].user_accessible;
+            }
+
             t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
             t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
 
@@ -629,6 +762,10 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 
 
             } else {
+                if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
+                    t_p2->pages[p2_idx].user_accessible = ~t_p2->pages[p2_idx].user_accessible;
+                }
+
                 t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
                 t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
 
@@ -663,6 +800,95 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t vir
 
     return 0;
 }
+
+
+int8_t memory_paging_set_user_accessible_ext(memory_page_table_t* p4, uint64_t virtual_address) {
+    if(p4 == NULL) {
+        p4 = memory_paging_switch_table(NULL);
+    }
+
+    memory_page_table_t* t_p3;
+    memory_page_table_t* t_p2;
+    memory_page_table_t* t_p1;
+
+    size_t p4_idx = MEMORY_PT_GET_P4_INDEX(virtual_address);
+
+    if(p4_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+    if(p4->pages[p4_idx].present == 0) {
+        return -1;
+    }
+
+    p4->pages[p4_idx].user_accessible = 1;
+
+    t_p3 = (memory_page_table_t*)((uint64_t)(p4->pages[p4_idx].physical_address << 12));
+    t_p3 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p3);
+
+    size_t p3_idx = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
+    if(p3_idx >= MEMORY_PAGING_INDEX_COUNT) {
+        return -1;
+    }
+
+    if(t_p3->pages[p3_idx].present == 0) {
+        return -1;
+    } else {
+        if(t_p3->pages[p3_idx].hugepage == 1) {
+            t_p3->pages[p3_idx].user_accessible = 1;
+
+            cpu_tlb_invalidate(t_p3);
+
+        } else {
+            t_p3->pages[p3_idx].user_accessible = 1;
+
+            t_p2 = (memory_page_table_t*)((uint64_t)(t_p3->pages[p3_idx].physical_address << 12));
+            t_p2 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p2);
+
+            size_t p2_idx = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
+            if(p2_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].present == 0) {
+                return -1;
+            }
+
+            if(t_p2->pages[p2_idx].hugepage == 1) {
+                t_p2->pages[p2_idx].user_accessible = 1;
+
+                cpu_tlb_invalidate(t_p2);
+
+            } else {
+                t_p2->pages[p2_idx].user_accessible = 1;
+
+                t_p1 = (memory_page_table_t*)((uint64_t)(t_p2->pages[p2_idx].physical_address << 12));
+                t_p1 = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(t_p1);
+
+                size_t p1_idx = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
+                if(p1_idx >= MEMORY_PAGING_INDEX_COUNT) {
+                    return -1;
+                }
+
+                if(t_p1->pages[p1_idx].present == 0) {
+                    return -1;
+                }
+
+                t_p1->pages[p1_idx].user_accessible = 1;
+
+
+                cpu_tlb_invalidate(t_p1);
+
+
+            }
+        }
+    }
+
+    return 0;
+}
+
 
 int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_address){
     UNUSED(heap);

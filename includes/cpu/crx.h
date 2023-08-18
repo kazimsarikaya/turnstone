@@ -11,6 +11,11 @@
 
 #include <types.h>
 
+#define CPU_MSR_EFER  0xC0000080 ///< extended feature register
+#define CPU_MSR_STAR  0xC0000081 ///< system call target address register
+#define CPU_MSR_LSTAR 0xC0000082 ///< system call target address register
+#define CPU_MSR_FMASK 0xC0000084 ///< system call rflags mask register
+
 /**
  * @struct cpu_reg_cr0_s
  * @brief cr0 register bit fields
@@ -94,6 +99,16 @@ void cpu_write_cr0(cpu_reg_cr0_t cr0);
  * @brief toggles write protect bit cr0, when setted kernel can not modify readonly pages
  */
 void cpu_toggle_cr0_wp(void);
+
+/**
+ * @brief disables write protect bit cr0, when setted kernel can not modify readonly pages
+ */
+void cpu_cr0_disable_wp(void);
+
+/**
+ * @brief enables write protect bit cr0, when setted kernel can not modify readonly pages
+ */
+void cpu_cr0_enable_wp(void);
 
 /**
  * @brief enables sse support, modifies cr4 register

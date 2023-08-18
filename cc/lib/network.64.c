@@ -83,6 +83,10 @@ int8_t network_process_rx(void){
                         if(tx_packet == NULL) {
                             memory_free(return_data);
 
+                            linkedlist_queue_pop(network_received_packets);
+
+                            task_yield();
+
                             continue;
                         }
 
@@ -91,6 +95,10 @@ int8_t network_process_rx(void){
                         if(tx_packet_data == NULL) {
                             memory_free(return_data);
                             memory_free_ext(linkedlist_get_heap(return_queue), tx_packet);
+
+                            linkedlist_queue_pop(network_received_packets);
+
+                            task_yield();
 
                             continue;
                         }
@@ -102,7 +110,18 @@ int8_t network_process_rx(void){
                         tx_packet->packet_len = return_data_len;
                         tx_packet->packet_data = tx_packet_data;
 
-                        linkedlist_queue_push(return_queue, tx_packet);
+                        if(linkedlist_queue_push(return_queue, tx_packet) == -1ULL) {
+                            memory_free_ext(linkedlist_get_heap(return_queue), tx_packet_data);
+                            memory_free_ext(linkedlist_get_heap(return_queue), tx_packet);
+
+                            linkedlist_queue_pop(network_received_packets);
+
+                            task_yield();
+
+                            continue;
+                        } else {
+                            PRINTLOG(NETWORK, LOG_TRACE, "packet pushed to return queue");
+                        }
                     } else {
                         PRINTLOG(NETWORK, LOG_TRACE, "there is no return queue");
 
@@ -154,7 +173,7 @@ int8_t network_init(void) {
 
     iter->destroy(iter);
 
-    task_create_task(NULL, 64 << 10, 2 << 20, &network_process_rx, 0, NULL);
+    task_create_task(NULL, 64 << 10, 2 << 20, &network_process_rx, 0, NULL, "network rx task");
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 

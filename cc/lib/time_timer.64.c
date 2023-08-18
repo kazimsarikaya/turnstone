@@ -56,31 +56,43 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
     UNUSED(intnum);
 
-    time_timer_tick_count++;
+    if(apic_get_local_apic_id() == 0) {
 
-    if(time_timer_start_spinsleep_counter) {
-        time_timer_start_spinsleep_counter = 0;
+        time_timer_tick_count++;
+
+        if(time_timer_start_spinsleep_counter) {
+            time_timer_start_spinsleep_counter = 0;
+        }
+
+        if(TIME_EPOCH == 0 || (time_timer_tick_count % (1000 * 60 * 15)) == 0) {
+            TIME_EPOCH = rtc_get_time() * 1000000;
+        } else {
+            TIME_EPOCH += 1000;
+        }
+
+        srand(TIME_EPOCH);
     }
 
-    if(TIME_EPOCH == 0 || (time_timer_tick_count % (1000 * 60 * 15)) == 0) {
-        TIME_EPOCH = rtc_get_time() * 1000000;
-    } else {
-        TIME_EPOCH += 1000;
+    LOGBLOCK(TIMER, LOG_DEBUG) {
+
+        if((time_timer_tick_count % 1000) == 0) {
+            PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%llx epoch %lli", time_timer_tick_count, TIME_EPOCH);
+
+            memory_heap_stat_t stat;
+            memory_get_heap_stat(&stat);
+
+            PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx fh 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
+        }
+
     }
 
-    srand(TIME_EPOCH);
 
-    if((time_timer_tick_count % 1000) == 0) {
-        PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%llx epoch %lli", time_timer_tick_count, TIME_EPOCH);
-
-        memory_heap_stat_t stat;
-        memory_get_heap_stat(&stat);
-
-        PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx fh 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
-    }
-
-    if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
-        task_switch_task(true);
+    if(apic_get_local_apic_id() == 0) {
+        if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
+            task_switch_task(true);
+        } else {
+            apic_eoi();
+        }
     } else {
         apic_eoi();
     }

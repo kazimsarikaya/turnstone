@@ -64,6 +64,22 @@ void cpu_toggle_cr0_wp(void) {
     cpu_write_cr0(cr0);
 }
 
+void cpu_cr0_disable_wp(void) {
+    cpu_reg_cr0_t cr0 = cpu_read_cr0();
+
+    cr0.write_protect = 0;
+
+    cpu_write_cr0(cr0);
+}
+
+void cpu_cr0_enable_wp(void) {
+    cpu_reg_cr0_t cr0 = cpu_read_cr0();
+
+    cr0.write_protect = 1;
+
+    cpu_write_cr0(cr0);
+}
+
 void cpu_enable_sse(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
     cr0.monitor_coprocessor = 1;

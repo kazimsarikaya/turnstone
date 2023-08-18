@@ -8,6 +8,7 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/task.h>
 #include <video.h>
 #include <cpu/sync.h>
 #include <linker.h>
@@ -82,8 +83,6 @@ typedef struct heapmetainfo_t {
  * @return allocated memory start address
  */
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
-
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item);
 
 /**
  * @brief simple heap free implementation
@@ -188,7 +187,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     return heap;
 }
 
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
+static inline void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
     if (tofull) {
         heapinfo_t* end = heap->last_full;
 
@@ -264,6 +263,12 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
 }
 
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
+    if(heap == NULL) {
+        PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap is NULL");
+
+        return NULL;
+    }
+
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "requesting memory with size 0x%llx and align 0x%llx", size, align);
 
     heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
@@ -322,6 +327,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
     empty_hi = simple_heap->first_empty;
 
+    if(empty_hi == NULL) {
+        PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no empty slots");
+
+        return NULL;
+    }
+
     //find first empty and enough slot
     while(1) { // size enough?
 #if ___TESTMODE == 1
@@ -349,8 +360,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         if(empty_hi == NULL) {
             if(align == 0) {
                 memory_heap_stat_t stat;
-                memory_get_heap_stat(&stat);
+                memory_simple_stat(heap, &stat);
 
+                PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap 0x%p task 0x%llx", heap, task_get_id());
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot 0x%p 0x%llx 0x%x", empty_hi_t, empty_hi_t->size * sizeof(heapinfo_t), empty_hi_t->flags);
                 return NULL;

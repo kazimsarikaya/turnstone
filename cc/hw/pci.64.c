@@ -51,7 +51,7 @@ int8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* ms
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
     interrupt_irq_set_handler(isrnum, isr);
 
-    PRINTLOG(PCI, LOG_TRACE, "msix isr 0x%02x",  msix_table->entries[msix_vector].message_data);
+    PRINTLOG(PCI, LOG_TRACE, "msix table %p vector 0x%x isr 0x%02x", msix_table, msix_vector,  msix_table->entries[msix_vector].message_data);
 
     return 0;
 }

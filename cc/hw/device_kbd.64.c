@@ -123,6 +123,8 @@ int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev){
     uint64_t item_size = sizeof(virtio_input_event_t);
 
     if(virtio_create_queue(vdev, 0, item_size, 1, 0, NULL, &dev_virtio_kbd_isr, NULL) != 0) {
+        PRINTLOG(VIRTIO, LOG_ERROR, "cannot create virtio keyboard queue");
+
         return -1;
     }
 
@@ -166,9 +168,13 @@ int8_t dev_virtio_kbd_init(void) {
 
     virtio_kbd->queue_size = VIRTIO_QUEUE_SIZE;
 
-    virtio_init_dev(virtio_kbd, NULL, &dev_virtio_kbd_create_queues);
+    if(virtio_init_dev(virtio_kbd, NULL, &dev_virtio_kbd_create_queues) != 0) {
+        PRINTLOG(VIRTIO, LOG_ERROR, "cannot init virtio keyboard");
 
-    PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device started");
+        errors = -1;
+    } else {
+        PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device started");
+    }
 
     return errors;
 }

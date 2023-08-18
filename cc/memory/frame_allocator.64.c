@@ -21,6 +21,7 @@ frame_allocator_t* KERNEL_FRAME_ALLOCATOR = NULL;
 typedef struct frame_allocator_context_t {
     memory_heap_t* heap;
     linkedlist_t   free_frames_sorted_by_size;
+    linkedlist_t   acpi_frames;
     index_t*       free_frames_by_address;
     index_t*       allocated_frames_by_address;
     index_t*       reserved_frames_by_address;
@@ -835,8 +836,16 @@ int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
 #pragma GCC diagnostic pop
 
 frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
-    if(efi_m_type >= EFI_LOADER_CODE && efi_m_type <= EFI_BOOT_SERVICES_DATA) {
+    if(efi_m_type == EFI_LOADER_CODE || efi_m_type == EFI_LOADER_DATA) {
         return FRAME_TYPE_FREE;
+    }
+
+    if(efi_m_type == EFI_BOOT_SERVICES_CODE || efi_m_type == EFI_RUNTIME_SERVICES_CODE || efi_m_type == EFI_PAL_CODE) {
+        return FRAME_TYPE_ACPI_CODE;
+    }
+
+    if(efi_m_type == EFI_BOOT_SERVICES_DATA || efi_m_type == EFI_RUNTIME_SERVICES_DATA) {
+        return FRAME_TYPE_ACPI_DATA;
     }
 
     if(efi_m_type == EFI_CONVENTIONAL_MEMORY) {
@@ -860,6 +869,8 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     ctx->heap = heap;
     ctx->free_frames_sorted_by_size = linkedlist_create_sortedlist_with_heap(heap, frame_allocator_cmp_by_size);
     linkedlist_set_equality_comparator(ctx->free_frames_sorted_by_size, frame_allocator_cmp_by_address);
+
+    ctx->acpi_frames = linkedlist_create_sortedlist_with_heap(heap, frame_allocator_cmp_by_address);
 
     ctx->free_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
     ctx->allocated_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
@@ -917,6 +928,10 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
                 f->frame_attributes |= FRAME_ATTRIBUTE_ACPI_RECLAIM_MEMORY;
                 ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, f, f, NULL);
                 break;
+            case FRAME_TYPE_ACPI_CODE:
+            case FRAME_TYPE_ACPI_DATA:
+                f->frame_attributes |= FRAME_ATTRIBUTE_ACPI;
+                linkedlist_sortedlist_insert(ctx->acpi_frames, f);
             }
 
 
@@ -1048,4 +1063,44 @@ void frame_allocator_print(frame_allocator_t* fa) {
 
     iter->destroy(iter);
 
+    iter = linkedlist_iterator_create(ctx->acpi_frames);
+
+    printf("acpi code/data frames by address\n");
+
+    while(iter->end_of_iterator(iter) != 0) {
+        frame_t* f = (frame_t*)iter->get_item(iter);
+
+        printf("0x%016llx \t 0x%016llx \t 0x%016llx\n", f->frame_address, f->frame_count, f->frame_attributes);
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+}
+
+void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
+    if(fa == NULL) {
+        return;
+    }
+
+    frame_allocator_context_t* ctx = fa->context;
+
+    iterator_t* iter = linkedlist_iterator_create(ctx->acpi_frames);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        frame_t* f = (frame_t*)iter->get_item(iter);
+
+        if(f->type == FRAME_TYPE_ACPI_CODE) {
+            memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_UNKNOWN);
+        } else if(f->type == FRAME_TYPE_ACPI_DATA) {
+            memory_paging_add_va_for_frame(f->frame_address, f, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        } else {
+            PRINTLOG(FRAMEALLOCATOR, LOG_WARNING, "unknown acpi runtime frame type 0x%x", f->type);
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
 }
