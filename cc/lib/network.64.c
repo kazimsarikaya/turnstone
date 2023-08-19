@@ -173,7 +173,7 @@ int8_t network_init(void) {
 
     iter->destroy(iter);
 
-    task_create_task(NULL, 64 << 10, 2 << 20, &network_process_rx, 0, NULL, "network rx task");
+    task_create_task(NULL, 2 << 20, 64 << 10, &network_process_rx, 0, NULL, "network rx task");
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 

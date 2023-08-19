@@ -16,7 +16,7 @@
 
 MODULE("turnstone.kernel.memory.paging");
 
-#define MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT 64
+#define MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT 0x200
 
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_1_START = 0;
 uint64_t MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = 0;
@@ -510,7 +510,14 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
             section_size += MEMORY_PAGING_PAGE_LENGTH_4K - (section_size % MEMORY_PAGING_PAGE_LENGTH_4K);
         }
 
-        uint64_t fa_addr = kernel_header->section_locations[i].section_pyhsical_start + kernel_physical_offset;
+        uint64_t fa_addr = 0;
+
+        if(i == LINKER_SECTION_TYPE_HEAP) {
+            fa_addr = kernel_header->section_locations[i].section_pyhsical_start;
+            section_start = kernel_header->section_locations[i].section_start;
+        } else {
+            fa_addr = kernel_header->section_locations[i].section_pyhsical_start + kernel_physical_offset;
+        }
 
         if(fa_addr % FRAME_SIZE) {
             fa_addr -= (fa_addr % FRAME_SIZE);
@@ -1240,7 +1247,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
     uint64_t frm_cnt = frm->frame_count;
 
     while(frm_cnt) {
-        if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
+        if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0 && (va_start % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
             if(memory_paging_add_page_with_p4(p4, va_start, frm_addr, type | MEMORY_PAGING_PAGE_TYPE_2M) != 0) {
                 return -1;
             }
@@ -1271,7 +1278,7 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_t* p4, uint64_t v
     uint64_t frm_cnt = frm->frame_count;
 
     while(frm_cnt) {
-        if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
+        if(frm_cnt >= 0x200 && (frm_addr % MEMORY_PAGING_PAGE_LENGTH_2M) == 0 && (va_start % MEMORY_PAGING_PAGE_LENGTH_2M) == 0) {
             if(memory_paging_delete_page_ext(p4, va_start, NULL) != 0) {
                 return -1;
             }

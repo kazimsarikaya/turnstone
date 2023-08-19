@@ -81,7 +81,7 @@ int8_t network_virtio_process_tx(void){
         args[0] = vdev->extra_data;
         args[1] = vdev->return_queue;
 
-        task_create_task(NULL, 64 << 10, 1 << 20, &network_dhcpv4_send_discover, 2, args, "dhcp");
+        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, "dhcp");
     }
 
     while(1) {
@@ -546,10 +546,10 @@ int8_t network_virtio_init(const pci_dev_t* pci_netdev){
 
     rx_args[0] = (void*)vdev_net;
 
-    uint64_t rx_task_id = task_create_task(NULL, 64 << 10, 2 << 20, &network_virtio_process_rx, 1, rx_args, "vnet rx");
+    uint64_t rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_rx, 1, rx_args, "vnet rx");
     vdev_net->rx_task_id = rx_task_id;
 
-    task_create_task(NULL, 64 << 10, 2 << 20, &network_virtio_process_tx, 0, NULL, "vnet tx");
+    task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_tx, 0, NULL, "vnet tx");
 
     if(!vdev_net->is_legacy) {
         if(vdev_net->selected_features & VIRTIO_NETWORK_F_STATUS) {

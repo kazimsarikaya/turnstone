@@ -119,6 +119,13 @@ int8_t smp_init(void) {
     uint8_t local_apic_id = apic_get_local_apic_id();
     uint8_t ap_cpu_count = apic_get_ap_count();
 
+    if(ap_cpu_count == 0) {
+        PRINTLOG(APIC, LOG_INFO, "SMP: No APs found");
+        PRINTLOG(APIC, LOG_INFO, "SMP: No need to initialise SMP");
+
+        return 0;
+    }
+
     acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
 
     if (madt == NULL) {

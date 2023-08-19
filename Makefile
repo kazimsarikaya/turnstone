@@ -153,13 +153,13 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS)  $(TOSDBIMG)
+$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin $(TOSDBIMG)
 
-$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) 
+$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack $(TOSDBIMG)
 
-$(TESTQEMUDISK): $(TESTDISK)
+$(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin $(TOSDBIMG)
 
 $(MKDIRSDONE):

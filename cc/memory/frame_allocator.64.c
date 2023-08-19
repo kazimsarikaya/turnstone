@@ -214,6 +214,14 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
     if(fa_type & FRAME_ALLOCATION_TYPE_RELAX) {
 
     } else if(fa_type & FRAME_ALLOCATION_TYPE_BLOCK) {
+        uint64_t old_count = 0;
+
+        if((count % 0x200) == 0) {
+            old_count = count;
+            count += 0x200;
+        }
+
+
         iterator_t* iter = linkedlist_iterator_create(ctx->free_frames_sorted_by_size);
 
         if(iter == NULL) {
@@ -258,6 +266,34 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
             PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
             cpu_hlt();
         }
+
+        if(old_count) {
+            // 0x200 aligment remove from begining to align frame address
+            uint64_t free_prev_frame_address = tmp_frm->frame_address;
+            uint64_t free_prev_frame_count = (MEMORY_PAGING_PAGE_LENGTH_2M - (tmp_frm->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M)) / FRAME_SIZE;
+            tmp_frm->frame_address += MEMORY_PAGING_PAGE_LENGTH_2M - (tmp_frm->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M);
+            tmp_frm->frame_count -= (tmp_frm->frame_address - free_prev_frame_address) / FRAME_SIZE;
+            count -= free_prev_frame_count;
+
+
+            // add free prev frame to free frames
+            frame_t* free_prev_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+            if(free_prev_frm == NULL) {
+                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
+                cpu_hlt();
+            }
+
+            free_prev_frm->frame_address = free_prev_frame_address;
+            free_prev_frm->frame_count = free_prev_frame_count;
+            free_prev_frm->type = FRAME_TYPE_FREE;
+            free_prev_frm->frame_attributes = tmp_frm->frame_attributes;
+
+            ctx->free_frames_by_address->insert(ctx->free_frames_by_address, free_prev_frm, free_prev_frm, NULL);
+            linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, free_prev_frm);
+        }
+
+
 
 
         uint64_t rem_frms = tmp_frm->frame_count - count;

@@ -38,7 +38,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config \
+  -nodefaults -no-user-config -no-reboot --no-shutdown -d int,cpu_reset\
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \

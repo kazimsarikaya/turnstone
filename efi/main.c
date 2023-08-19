@@ -705,11 +705,13 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     memory_memclean((void*)frm_start_1mib, 0x100 * 4096);
 
-    int64_t kernel_page_count = (kernel_data->size + 4096 - 1) / 4096 + 0x150;
+    program_header_t* kernel_phdr = (program_header_t*)kernel_data->data;
 
-    int64_t new_kernel_2m_factor = 0;
-    new_kernel_2m_factor = (kernel_page_count + 512 - 1) / 512;
-    kernel_page_count = new_kernel_2m_factor * 512;
+    uint64_t kernel_real_size = (kernel_data->size + 4096 - 1) / 4096 * 4096;
+    kernel_real_size += (kernel_phdr->section_locations[LINKER_SECTION_TYPE_BSS].section_size + 4096 - 1) / 4096 * 4096;
+    kernel_real_size += (kernel_phdr->section_locations[LINKER_SECTION_TYPE_STACK].section_size + 4096 - 1) / 4096 * 4096;
+
+    int64_t kernel_page_count = (kernel_real_size + 4096 - 1) / 4096;
 
     PRINTLOG(EFI, LOG_DEBUG, "new kernel page count 0x%llx", kernel_page_count);
 
@@ -736,6 +738,37 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%llx succed", new_kernel_address);
     memory_free(kernel_data->data);
     memory_free(kernel_data);
+
+    uint64_t kernel_heap_address = 0;
+    uint64_t kernel_heap_size = 10 << 20;
+    uint64_t kernel_heap_page_count = (kernel_heap_size + 4096 - 1) / 4096;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, kernel_heap_page_count, &kernel_heap_address);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for kernel heap. res 0x%llx", res);
+
+        goto catch_efi_error;
+    }
+
+    // align to 2mib
+    uint64_t aligned_kernel_heap_address = (kernel_heap_address + 0x200000 - 1) / 0x200000 * 0x200000;
+    uint64_t aligned_kernel_heap_size = kernel_heap_size - (aligned_kernel_heap_address - kernel_heap_address);
+
+    if(aligned_kernel_heap_size < 8 << 20) {
+        PRINTLOG(EFI, LOG_ERROR, "kernel heap size mismatch: 0x%llx", aligned_kernel_heap_size);
+
+        goto catch_efi_error;
+    }
+
+    aligned_kernel_heap_size = 8 << 20;
+    kernel_heap_page_count = (aligned_kernel_heap_size + 4096 - 1) / 4096;
+
+
+    kernel_phdr = (program_header_t*)new_kernel_address;
+    kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_pyhsical_start = aligned_kernel_heap_address;
+    kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = aligned_kernel_heap_address;
+    kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = aligned_kernel_heap_size;
 
 
     PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
@@ -781,6 +814,8 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
     sysinfo->kernel_start = new_kernel_address;
     sysinfo->kernel_4k_frame_count = kernel_page_count;
+    sysinfo->kernel_default_heap_start = kernel_heap_address;
+    sysinfo->kernel_default_heap_4k_frame_count = kernel_heap_page_count;
     sysinfo->efi_system_table = system_table;
 
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", new_kernel_address, sysinfo);
