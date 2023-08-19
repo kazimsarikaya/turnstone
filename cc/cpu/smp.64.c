@@ -20,6 +20,8 @@
 #include <cpu/interrupt.h>
 #include <cpu/syscall.h>
 
+MODULE("turnstone.kernel.cpu");
+
 int8_t  smp_init_cpu(uint8_t cpu_id);
 int32_t smp_ap_boot(uint8_t cpu_id);
 

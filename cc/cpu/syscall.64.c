@@ -10,6 +10,8 @@
 #include <video.h>
 #include <memory.h>
 
+MODULE("turnstone.kernel.cpu");
+
 typedef int64_t (*syscall_f)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 
 uint64_t syscall_handler_create_stack(uint64_t old_stack);
