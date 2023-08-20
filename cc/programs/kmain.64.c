@@ -171,6 +171,17 @@ int8_t kmain64(size_t entry_point) {
             cpu_hlt();
         }
 
+        if(!SYSTEM_INFO->remapped) {
+
+            frame_t page_table_helper_frame = {SYSTEM_INFO->page_table_helper_frame, 4, FRAME_TYPE_RESERVED, 0};
+
+            if(fa->allocate_frame(fa, &page_table_helper_frame) != 0) {
+                PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate page table helper frame");
+                frame_allocator_print(fa);
+                cpu_hlt();
+            }
+        }
+
     } else {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...");
         cpu_hlt();

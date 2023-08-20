@@ -770,6 +770,16 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = aligned_kernel_heap_address;
     kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = aligned_kernel_heap_size;
 
+    uint64_t page_table_helper_frame = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 4, &page_table_helper_frame);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for page table helper frame. res 0x%llx", res);
+
+        goto catch_efi_error;
+    }
+
 
     PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
     efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
@@ -817,6 +827,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->kernel_default_heap_start = kernel_heap_address;
     sysinfo->kernel_default_heap_4k_frame_count = kernel_heap_page_count;
     sysinfo->efi_system_table = system_table;
+    sysinfo->page_table_helper_frame = page_table_helper_frame;
 
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", new_kernel_address, sysinfo);
 

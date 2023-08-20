@@ -64,27 +64,8 @@ static inline void memory_paging_internal_frame_build(void) {
 
 uint64_t memory_paging_get_internal_frame(void) {
     if(MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING) {
-        frame_t* internal_frm;
-        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                           1,
-                                                           FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                           &internal_frm, NULL) != 0) {
-            PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
-            cpu_hlt();
-        }
-
-        uint64_t internal_frm_address = internal_frm->frame_address;
-        uint64_t internal_frm_va = internal_frm_address;
-
-        if(memory_paging_add_page_ext(NULL, NULL,
-                                      internal_frm_va,
-                                      internal_frm_address,
-                                      MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
-            PRINTLOG(PAGING, LOG_PANIC, "cannot map internal paging frames. Halting...");
-            cpu_hlt();
-        }
-
-        PRINTLOG(PAGING, LOG_DEBUG, "Internal frame returned during initialization: %llx", internal_frm_address);
+        uint64_t internal_frm_address = SYSTEM_INFO->page_table_helper_frame;
+        SYSTEM_INFO->page_table_helper_frame += MEMORY_PAGING_PAGE_SIZE;
 
         return internal_frm_address;
     }
@@ -112,6 +93,17 @@ uint64_t memory_paging_get_internal_frame(void) {
             MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT = MEMORY_PAGING_INTERNAL_FRAMES_2_COUNT;
 
             memory_paging_internal_frame_build();
+
+            SYSTEM_INFO->page_table_helper_frame = MEMORY_PAGING_INTERNAL_FRAMES_1_START;
+            MEMORY_PAGING_INTERNAL_FRAMES_1_START += 4 * MEMORY_PAGING_PAGE_SIZE;
+            MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT -= 4;
+
+            for(int32_t i = 0; i < 4; i++) {
+                memory_paging_add_page(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->page_table_helper_frame + i * MEMORY_PAGING_PAGE_SIZE),
+                                       SYSTEM_INFO->page_table_helper_frame + i * MEMORY_PAGING_PAGE_SIZE,
+                                       MEMORY_PAGING_PAGE_TYPE_4K);
+            }
+
         }
 
         PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache refilled");
@@ -146,6 +138,8 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
 int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
                                   uint64_t virtual_address, uint64_t frame_address,
                                   memory_paging_page_type_t type) {
+    UNUSED(heap);
+
     memory_page_table_t* t_p3;
     memory_page_table_t* t_p2;
     memory_page_table_t* t_p1;
@@ -173,34 +167,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
     }
 
     if(p4->pages[p4idx].present != 1) {
-
-        if(type & MEMORY_PAGING_PAGE_TYPE_INTERNAL) {
-            p3_addr = memory_paging_get_internal_frame();
-        } else {
-            frame_t* t_p3_frm;
-
-            frame_allocation_type_t fa_type = FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED;
-
-            if(type & MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) {
-                fa_type |= FRAME_ALLOCATION_TYPE_OLD_RESERVED;
-            }
-
-            if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 1, fa_type, &t_p3_frm, NULL) != 0) {
-                KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, t_p3_frm);
-
-                return -1;
-            }
-
-            p3_addr = t_p3_frm->frame_address;
-
-            if(curr_p4_diffrent_target_p4 && memory_paging_add_page_ext(heap, NULL, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_addr), p3_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL | MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) != 0) {
-                return -1;
-            }
-
-            if(memory_paging_add_page_ext(heap, p4, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_addr), p3_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-                return -1;
-            }
-        }
+        p3_addr = memory_paging_get_internal_frame();
 
         t_p3 = (memory_page_table_t*)p3_addr;
 
@@ -259,34 +226,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
             return 0;
         } else {
-
-            if(type & MEMORY_PAGING_PAGE_TYPE_INTERNAL) {
-                p2_addr = memory_paging_get_internal_frame();
-            } else {
-                frame_t* t_p2_frm;
-
-                frame_allocation_type_t fa_type = FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED;
-
-                if(type & MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) {
-                    fa_type |= FRAME_ALLOCATION_TYPE_OLD_RESERVED;
-                }
-
-                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 1, fa_type, &t_p2_frm, NULL) != 0) {
-                    KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, t_p2_frm);
-
-                    return -1;
-                }
-
-                p2_addr = t_p2_frm->frame_address;
-
-                if(curr_p4_diffrent_target_p4 && memory_paging_add_page_ext(heap, NULL, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_addr), p2_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL | MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) != 0) {
-                    return -1;
-                }
-
-                if(memory_paging_add_page_ext(heap, p4, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_addr), p2_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-                    return -1;
-                }
-            }
+            p2_addr = memory_paging_get_internal_frame();
 
             t_p2 = (memory_page_table_t*)p2_addr;
 
@@ -349,39 +289,7 @@ int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
 
             return 0;
         } else {
-
-            if(type & MEMORY_PAGING_PAGE_TYPE_INTERNAL) {
-                p1_addr = memory_paging_get_internal_frame();
-            } else {
-                frame_t* t_p1_frm;
-
-                frame_allocation_type_t fa_type = FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED;
-
-                if(type & MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) {
-                    fa_type |= FRAME_ALLOCATION_TYPE_OLD_RESERVED;
-                }
-
-                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 1, fa_type, &t_p1_frm, NULL) != 0) {
-                    KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, t_p1_frm);
-                    PRINTLOG(PAGING, LOG_ERROR, "Failed to allocate frame for p1 table");
-
-                    return -1;
-                }
-
-                p1_addr = t_p1_frm->frame_address;
-
-                if(curr_p4_diffrent_target_p4 && memory_paging_add_page_ext(heap, NULL, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_addr), p1_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL | MEMORY_PAGING_PAGE_TYPE_WILL_DELETED) != 0) {
-                    PRINTLOG(PAGING, LOG_ERROR, "Failed to add page to p4 table %llx curr diff", p1_addr);
-
-                    return -1;
-                }
-
-                if(memory_paging_add_page_ext(heap, p4, MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_addr), p1_addr, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_INTERNAL) != 0) {
-                    PRINTLOG(PAGING, LOG_ERROR, "Failed to add page to p4 table %llx", p1_addr);
-
-                    return -1;
-                }
-            }
+            p1_addr = memory_paging_get_internal_frame();
 
             t_p1 = (memory_page_table_t*)p1_addr;
 
@@ -470,6 +378,13 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
 
             cpu_hlt();
         }
+    }
+
+    for(int32_t i = 0; i < 4; i++) {
+        memory_paging_add_page_ext(NULL, p4,
+                                   MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(SYSTEM_INFO->page_table_helper_frame + i * MEMORY_PAGING_PAGE_SIZE),
+                                   SYSTEM_INFO->page_table_helper_frame + i * MEMORY_PAGING_PAGE_SIZE,
+                                   MEMORY_PAGING_PAGE_TYPE_4K);
     }
 
     //cpu_hlt();
