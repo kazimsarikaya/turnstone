@@ -103,7 +103,7 @@ const uint8_t trampoline_code[] = {
 int8_t smp_init_cpu(uint8_t cpu_id) {
     PRINTLOG(APIC, LOG_INFO, "SMP: Initialising CPU %d", cpu_id);
 
-    apic_send_ini(cpu_id);
+    apic_send_init(cpu_id);
 
     apic_send_sipi(cpu_id, 0x08);
 
@@ -116,7 +116,9 @@ int8_t smp_init_cpu(uint8_t cpu_id) {
 int8_t smp_init(void) {
     PRINTLOG(APIC, LOG_INFO, "SMP Initialisation");
 
-    uint8_t local_apic_id = apic_get_local_apic_id();
+    uint32_t local_apic_id = apic_get_local_apic_id();
+
+    PRINTLOG(APIC, LOG_INFO, "SMP: Bootstrap APIC ID: 0x%x", local_apic_id);
     uint8_t ap_cpu_count = apic_get_ap_count();
 
     if(ap_cpu_count == 0) {
@@ -196,24 +198,21 @@ int8_t smp_init(void) {
     return 0;
 }
 
-extern uint64_t lapic_addr;
-
 int32_t smp_ap_boot(uint8_t cpu_id) {
+    cpu_cli();
+
+    apic_enable_lapic();
+
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting", cpu_id);
 
-    descriptor_build_ap_descriptors_register();
+    if(descriptor_build_ap_descriptors_register() != 0) {
+        PRINTLOG(APIC, LOG_ERROR, "SMP: AP %i Failed to build descriptors", cpu_id);
+        cpu_hlt();
 
-    uint32_t* tmp = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT);
-    *tmp = 0x10f;
+        return -1;
+    }
 
-    lapic_init_timer();
-
-    uint32_t* lapic_lint0 = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_LINT0_LVT);
-    uint32_t* lapic_lint1 = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_LINT1_LVT);
-
-    *lapic_lint0 = APIC_ICR_DELIVERY_MODE_EXTERNAL_INT;
-    *lapic_lint1 = APIC_ICR_DELIVERY_MODE_NMI;
-
+    apic_configure_lapic();
 
     cpu_sti();
 
@@ -229,7 +228,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     test_data[11] = ' ';
     test_data[12] = '0' + cpu_id;
 
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s", cpu_id, test_data);
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s apic id %x", cpu_id, test_data, apic_get_local_apic_id());
 
     uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
     msr_efer |= 1;
@@ -240,6 +239,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     uint64_t msr_lstar = (uint64_t)syscall_handler;
     cpu_write_msr(CPU_MSR_LSTAR, msr_lstar);
+
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i syscall handler: %llx", cpu_id, msr_lstar);
 
     uint64_t msr_fmask = 0x200;
@@ -286,7 +286,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     user_code[0] = 0x48;
     user_code[1] = 0xc7;
     user_code[2] = 0xc0;
-    user_code[3] = 0x01;
+    user_code[3] = 0x00;
     user_code[4] = 0x00;
     user_code[5] = 0x00;
     user_code[6] = 0x00;

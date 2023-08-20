@@ -30,6 +30,51 @@
 #define APIC_REGISTER_OFFSET_ICR_LOW               0x300
 #define APIC_REGISTER_OFFSET_ICR_HIGH              0x310
 
+#define APIC_X2APIC_MSR_APICID                      0x802
+#define APIC_X2APIC_MSR_VERSION                     0x803
+#define APIC_X2APIC_MSR_TPR                         0x808
+#define APIC_X2APIC_MSR_PPR                         0x80A
+#define APIC_X2APIC_MSR_EOI                         0x80B
+#define APIC_X2APIC_MSR_LDR                         0x80D
+#define APIC_X2APIC_MSR_SIVR                        0x80F
+#define APIC_X2APIC_MSR_ISR0                        0x810
+#define APIC_X2APIC_MSR_ISR1                        0x811
+#define APIC_X2APIC_MSR_ISR2                        0x812
+#define APIC_X2APIC_MSR_ISR3                        0x813
+#define APIC_X2APIC_MSR_ISR4                        0x814
+#define APIC_X2APIC_MSR_ISR5                        0x815
+#define APIC_X2APIC_MSR_ISR6                        0x816
+#define APIC_X2APIC_MSR_ISR7                        0x817
+#define APIC_X2APIC_MSR_TMR0                        0x818
+#define APIC_X2APIC_MSR_TMR1                        0x819
+#define APIC_X2APIC_MSR_TMR2                        0x81A
+#define APIC_X2APIC_MSR_TMR3                        0x81B
+#define APIC_X2APIC_MSR_TMR4                        0x81C
+#define APIC_X2APIC_MSR_TMR5                        0x81D
+#define APIC_X2APIC_MSR_TMR6                        0x81E
+#define APIC_X2APIC_MSR_TMR7                        0x81F
+#define APIC_X2APIC_MSR_IRR0                        0x820
+#define APIC_X2APIC_MSR_IRR1                        0x821
+#define APIC_X2APIC_MSR_IRR2                        0x822
+#define APIC_X2APIC_MSR_IRR3                        0x823
+#define APIC_X2APIC_MSR_IRR4                        0x824
+#define APIC_X2APIC_MSR_IRR5                        0x825
+#define APIC_X2APIC_MSR_IRR6                        0x826
+#define APIC_X2APIC_MSR_IRR7                        0x827
+#define APIC_X2APIC_MSR_ESR                         0x828
+#define APIC_X2APIC_MSR_LVT_CMCI                    0x82F
+#define APIC_X2APIC_MSR_ICR                         0x830
+#define APIC_X2APIC_MSR_LVT_TIMER                   0x832
+#define APIC_X2APIC_MSR_LVT_THERMAL                 0x833
+#define APIC_X2APIC_MSR_LVT_PMI                     0x834
+#define APIC_X2APIC_MSR_LVT_LINT0                   0x835
+#define APIC_X2APIC_MSR_LVT_LINT1                   0x836
+#define APIC_X2APIC_MSR_LVT_ERROR                   0x837
+#define APIC_X2APIC_MSR_TIMER_INITIAL_VALUE         0x838
+#define APIC_X2APIC_MSR_TIMER_CURRENT_VALUE         0x839
+#define APIC_X2APIC_MSR_TIMER_DIVIDER               0x83E
+#define APIC_X2APIC_MSR_SELF_IPI                    0x83F
+
 #define APIC_ICR_DESTINATION_MODE_PHYSICAL          (0 << 11)
 #define APIC_ICR_DESTINATION_MODE_LOGICAL           (1 << 11)
 #define APIC_ICR_DELIVERY_MODE_FIXED                (0 << 8)
@@ -120,11 +165,12 @@ uint8_t apic_get_irq_override(uint8_t old_irq);
 
 void apic_eoi(void);
 
-uint8_t  apic_get_local_apic_id(void);
+uint32_t apic_get_local_apic_id(void);
 void     apic_send_ipi(uint8_t destination, uint8_t vector);
-void     apic_send_ini(uint8_t destination);
+void     apic_send_init(uint8_t destination);
 void     apic_send_sipi(uint8_t destination, uint8_t vector);
-uint8_t  lapic_init_timer(void);
+void     apic_enable_lapic(void);
+uint8_t  apic_configure_lapic(void);
 uint64_t apic_get_ap_count(void);
 
 #endif
