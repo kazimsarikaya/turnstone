@@ -263,6 +263,8 @@ void task_cleanup(void){
     while(linkedlist_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
 
+        map_delete(task_map, (void*)tmp->task_id);
+
         uint64_t stack_va = (uint64_t)tmp->stack;
         uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
