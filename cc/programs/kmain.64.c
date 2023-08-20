@@ -91,7 +91,7 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 int8_t kmain64(size_t entry_point) {
     srand(0x123456789);
 
-    memory_heap_t* heap = memory_create_heap_simple(0, 0);
+    memory_heap_t* heap = memory_create_heap_hash(0, 0);
 
     if(heap == NULL) {
         PRINTLOG(KERNEL, LOG_FATAL, "creating heap");
@@ -158,10 +158,30 @@ int8_t kmain64(size_t entry_point) {
         KERNEL_FRAME_ALLOCATOR = fa;
 
         frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
             cpu_hlt();
         }
+
+        frame_t kernel_default_heap_frames = {SYSTEM_INFO->kernel_default_heap_start, SYSTEM_INFO->kernel_default_heap_4k_frame_count, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &kernel_default_heap_frames) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default heap frames");
+            cpu_hlt();
+        }
+
+        if(!SYSTEM_INFO->remapped) {
+
+            frame_t page_table_helper_frame = {SYSTEM_INFO->page_table_helper_frame, 4, FRAME_TYPE_RESERVED, 0};
+
+            if(fa->allocate_frame(fa, &page_table_helper_frame) != 0) {
+                PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate page table helper frame");
+                frame_allocator_print(fa);
+                cpu_hlt();
+            }
+        }
+
     } else {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...");
         cpu_hlt();
@@ -227,6 +247,8 @@ int8_t kmain64(size_t entry_point) {
     LOGBLOCK(FRAMEALLOCATOR, LOG_DEBUG){
         frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
     }
+
+    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
 
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
@@ -314,8 +336,6 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "rdrand %i", cpu_check_rdrand());
 
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
-
-    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
 
     wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
     efi_guid_t var_global = EFI_GLOBAL_VARIABLE;

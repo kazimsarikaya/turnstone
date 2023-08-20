@@ -263,6 +263,8 @@ void task_cleanup(void){
     while(linkedlist_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
 
+        map_delete(task_map, (void*)tmp->task_id);
+
         uint64_t stack_va = (uint64_t)tmp->stack;
         uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
@@ -516,11 +518,19 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
 
-    memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
+
+        cpu_hlt();
+    }
 
     uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
 
-    memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add heap va 0x%llx for frame at 0x%llx with count 0x%llx", heap_va, heap_frames->frame_address, heap_frames->frame_count);
+
+        cpu_hlt();
+    }
 
     memory_heap_t* task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
 

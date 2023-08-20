@@ -55,6 +55,7 @@ TMPDIR = tmp
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
 TESTQEMUDISK  = $(OBJDIR)/qemu-test-hda
+TOSDBIMG = $(OBJDIR)/tosdb.img
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.S)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
@@ -152,14 +153,14 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS)  
-	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
+$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
+	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin $(TOSDBIMG)
 
-$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) 
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack
+$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack $(TOSDBIMG)
 
-$(TESTQEMUDISK): $(TESTDISK)
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin
+$(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin $(TOSDBIMG)
 
 $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
@@ -167,6 +168,9 @@ $(MKDIRSDONE):
 
 $(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
 	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
+
+$(TOSDBIMG): $(OBJDIR)/generatelinkerdb.bin $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
+	$(OBJDIR)/generatelinkerdb.bin -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
 
 $(OBJDIR)/stage3.bin.pack: $(OBJDIR)/stage3.bin
 	$(OBJDIR)/zpack.bin c $^ $@

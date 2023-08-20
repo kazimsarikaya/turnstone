@@ -4,6 +4,7 @@
  */
 
 #include <types.h>
+#include <cpu.h>
 #include <cpu/descriptor.h>
 #include <cpu/task.h>
 #include <memory.h>
@@ -78,6 +79,8 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     descriptor_register_t* gdtr = memory_malloc(sizeof(descriptor_register_t));
 
     if(gdtr == NULL) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate memory for gdtr");
+
         return -1;
     }
 
@@ -147,9 +150,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
 
     __asm__ __volatile__ (
-        "cli\n"
         "ltr %0\n"
-        "sti\n"
         : : "r" (tss_selector)
         );
 

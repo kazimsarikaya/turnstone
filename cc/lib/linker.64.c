@@ -66,6 +66,7 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
 }
 
 #if ___TESTMODE != 1 && ___EFIBUILD != 1
+void linker_remap_kernel_cont(system_info_t* new_sysinfo);
 
 int8_t linker_remap_kernel(void) {
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
@@ -270,7 +271,7 @@ int8_t linker_remap_kernel(void) {
 
     PRINTLOG(LINKER, LOG_TRACE, "heap sec 0x%llx  0x%llx", data_start, sec_size);
 
-    f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
+    f.frame_address = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_pyhsical_start;
     f.frame_count = sec_size / FRAME_SIZE;
 
     if(memory_paging_add_va_for_frame(data_start, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
@@ -367,7 +368,6 @@ int8_t linker_remap_kernel(void) {
     linker_direct_relocation_t* got_rel_relocs = (linker_direct_relocation_t*)(SYSTEM_INFO->kernel_start + kernel->got_rel_reloc_start);
     kernel->reloc_start = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
     kernel->got_rel_reloc_start = kernel->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start;
-    uint64_t kernel_start = SYSTEM_INFO->kernel_start;
 
     for(uint64_t i = 0; i < kernel->reloc_count; i++)
     {
@@ -406,7 +406,7 @@ int8_t linker_remap_kernel(void) {
     uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
 
     for(uint64_t i = 0; i < kernel->reloc_count; i++) {
-        //PRINTLOG(LINKER, LOG_INFO, "reloac %lli type %i offset 0x%llx addend 0x%llx\n", i,relocs[i].relocation_type,relocs[i].offset,relocs[i].addend);
+        //PRINTLOG(LINKER, LOG_INFO, "reloc %lli type %i offset 0x%llx addend 0x%llx", i, relocs[i].relocation_type, relocs[i].offset, relocs[i].addend);
         if(relocs[i].relocation_type == LINKER_RELOCATION_TYPE_64_32) {
             uint32_t* target = (uint32_t*)&dst_bytes[relocs[i].offset];
             uint32_t target_value = (uint32_t)relocs[i].addend;
@@ -433,32 +433,30 @@ int8_t linker_remap_kernel(void) {
         *target = target_value;
     }
 
-    /*  while(true) {
-          asm volatile ("mov %0, %%rax\n" : : "r" (kernel_start), "D" (new_sysinfo));
-          asm volatile ("hlt\n");
-       } */
+    // we need fresh registers because we changed link values. registers are not valid anymore.
+    linker_remap_kernel_cont(new_sysinfo);
 
+    return 0;
+}
+
+void linker_remap_kernel_cont(system_info_t* new_sysinfo) {
     PRINTLOG(LINKER, LOG_DEBUG, "relocs are finished.");
 
-    sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
-    sec_start = sec.section_start;
-    sec_size = sec.section_size;
+    uint64_t kernel_start = SYSTEM_INFO->kernel_start;
+    program_header_t* kernel = (program_header_t*)kernel_start;
 
-    PRINTLOG(LINKER, LOG_DEBUG, "reloc completed\nnew sysinfo at 0x%p.\ncleaning bss and try to re-jump kernel at 0x%llx\n", new_sysinfo, kernel_start);
+    PRINTLOG(LINKER, LOG_DEBUG, "new sysinfo at 0x%p.", new_sysinfo);
+    PRINTLOG(LINKER, LOG_DEBUG, "cleaning bss and try to re-jump kernel at 0x%llx", kernel_start);
 
+    linker_section_locations_t sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
+    uint64_t sec_start = sec.section_start;
+    uint64_t sec_size = sec.section_size;
     memory_memclean((uint8_t*)sec_start, sec_size);
-/*
-    while(true) {
-        asm volatile ("mov %0, %%rax\n" : : "r" (kernel_start), "D" (new_sysinfo));
-        asm volatile ("hlt\n");
-    }*/
 
     asm volatile (
         "jmp *%%rax\n"
         : : "D" (new_sysinfo), "a" (kernel_start)
         );
-
-    return 0;
 }
 
 #endif
