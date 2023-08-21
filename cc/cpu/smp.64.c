@@ -203,7 +203,16 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     apic_enable_lapic();
 
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting", cpu_id);
+    uint32_t local_apic_id = apic_get_local_apic_id();
+
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting local apic id %i", cpu_id, local_apic_id);
+
+    if(local_apic_id != cpu_id) {
+        PRINTLOG(APIC, LOG_ERROR, "SMP: AP cpu id %i mismatch local apic id %i", cpu_id, local_apic_id);
+        cpu_hlt();
+
+        return -1;
+    }
 
     if(descriptor_build_ap_descriptors_register() != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: AP %i Failed to build descriptors", cpu_id);
@@ -228,7 +237,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     test_data[11] = ' ';
     test_data[12] = '0' + cpu_id;
 
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s apic id %x", cpu_id, test_data, apic_get_local_apic_id());
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s", cpu_id, test_data);
 
     uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
     msr_efer |= 1;
