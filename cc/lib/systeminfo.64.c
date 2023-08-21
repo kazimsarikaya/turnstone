@@ -5,4 +5,6 @@
 
 #include <systeminfo.h>
 
+MODULE("turnstone.lib");
+
 system_info_t* SYSTEM_INFO = NULL;

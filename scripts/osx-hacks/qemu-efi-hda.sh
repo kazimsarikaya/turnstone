@@ -15,8 +15,8 @@ NETDEV=""
 if [ `uname -s` == "Linux" ]; then
   UEFIBIOSCODE="/usr/share/OVMF/OVMF_CODE.fd"  
   UEFIBIOSVARS="/usr/share/OVMF/OVMF_VARS.fd"
-  #NETDEV="bridge,id=t0"
-  NETDEV="tap,id=t0,ifname=tap0,script=no,downscript=no"
+  NETDEV="bridge,id=t0"
+  #NETDEV="tap,id=t0,ifname=tap0,script=no,downscript=no"
 fi
 
 if [ `uname -s` == "Darwin" ]; then
@@ -38,8 +38,8 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config \
-  -M q35 -m 1g -smp cpus=2 -name osdev-hda-boot \
+  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:nvme*"\
+  -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \

@@ -24,6 +24,7 @@ typedef struct memory_heap_stat_t {
     uint64_t total_size; ///< heap total size with bounds
     uint64_t free_size; ///< free size
     uint64_t fast_hit; ///< heap has a hit map, this field gives hit count
+    uint64_t header_count; ///< header count of allocated blocks
 }memory_heap_stat_t; ///< short hand for struct
 
 /**
@@ -46,6 +47,14 @@ typedef struct memory_heap_t {
  * @return       heap
  */
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end);
+
+/**
+ * @brief creates hash backended heap
+ * @param[in]  start start address of heap
+ * @param[in]  end   end address of heap
+ * @return       heap
+ */
+memory_heap_t* memory_create_heap_hash(size_t start, size_t end);
 
 /**
  * @brief sets default heap
@@ -78,21 +87,9 @@ void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat);
  *
  * if heap is NULL, address will be freed at default heap
  */
-int8_t memory_free_ext(memory_heap_t* heap, void* address);
+__attribute__((no_reorder)) int8_t memory_free_ext(memory_heap_t* heap, void* address);
 /*! frees memory addr at default heap */
 #define memory_free(addr) memory_free_ext(NULL, addr)
-
-/**
- * @brief secure memory_free, overrides optimization and free performs at code location, it calls memory_free_ext
- * @param[in] heap heap
- * @param[in] address address to free
- * @return 0 if successed
- */
-extern int8_t (*volatile memory_secure_free_ext_f)(memory_heap_t * heap, void* address);
-/*! forces memory_free at code location, for security purposes, overrides optimization */
-#define memory_secure_free_ext(h, a) memory_secure_free_ext_f(h, a)
-/*! forces memory_free at code location with default heap, for security purposes, overrides optimization */
-#define memory_secure_free(a) memory_secure_free_ext(NULL, a)
 
 /**
  * @brief malloc memory

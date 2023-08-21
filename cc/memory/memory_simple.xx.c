@@ -8,13 +8,17 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/task.h>
 #include <video.h>
 #include <cpu/sync.h>
 #include <linker.h>
 #include <utils.h>
 #if ___TESTMODE == 1
 #include <valgrind.h>
+#include <memcheck.h>
 #endif
+
+MODULE("turnstone.lib.memory");
 
 /*! heap flag for heap start and end hi */
 #define HEAP_INFO_FLAG_STARTEND        (1 << 0)
@@ -33,9 +37,6 @@
 /*! heap header */
 #define HEAP_HEADER                    HEAP_INFO_PADDING
 
-
-/*! heap bottom address comes frome linker script */
-extern size_t __kheap_bottom;
 
 /**
  * @struct heapinfo_t
@@ -70,6 +71,7 @@ typedef struct heapmetainfo_t {
     uint64_t total_size;
     uint64_t free_size;
     uint64_t fast_hit;
+    uint64_t header_count;
     uint32_t padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
 
@@ -82,8 +84,6 @@ typedef struct heapmetainfo_t {
  */
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
 
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item);
-
 /**
  * @brief simple heap free implementation
  * @param[in]  heap simple heap (itself)
@@ -95,7 +95,8 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address);
 void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat);
 
 memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
-    size_t heap_start, heap_end;
+    size_t heap_start = 0, heap_end = 0;
+
     if(start == 0 || end == 0) {
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
 
@@ -103,7 +104,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
             heap_start = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
             heap_end = heap_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size;
         } else {
-            heap_start = (size_t)&__kheap_bottom;
+            heap_start = SYSTEM_INFO->kernel_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
             heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
         }
     } else {
@@ -186,7 +187,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     return heap;
 }
 
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
+static inline void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
     if (tofull) {
         heapinfo_t* end = heap->last_full;
 
@@ -214,20 +215,47 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
         if (item < prev) {
             heap->first_empty = item;
             item->next = prev;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+#endif
             prev->previous = item;
-
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(prev, sizeof(heapinfo_t));
+#endif
         } else {
-
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+#endif
             while(prev->next != NULL && prev->next < item) {
+#if ___TESTMODE == 1
+                heapinfo_t* tmp = prev;
+#endif
                 prev = prev->next;
+#if ___TESTMODE == 1
+                VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+                VALGRIND_MAKE_MEM_NOACCESS(tmp, sizeof(heapinfo_t));
+#endif
             }
 
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(heapinfo_t));
+#endif
             item->next = prev->next;
             prev->next = item;
             item->previous = prev;
 
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(prev, sizeof(heapinfo_t));
+#endif
+
             if(item->next) {
+#if ___TESTMODE == 1
+                VALGRIND_MAKE_MEM_DEFINED(item->next, sizeof(heapinfo_t));
+#endif
                 item->next->previous = item;
+#if ___TESTMODE == 1
+                VALGRIND_MAKE_MEM_NOACCESS(item->next, sizeof(heapinfo_t));
+#endif
             }
         }
 
@@ -235,6 +263,12 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
 }
 
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
+    if(heap == NULL) {
+        PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap is NULL");
+
+        return NULL;
+    }
+
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "requesting memory with size 0x%llx and align 0x%llx", size, align);
 
     heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
@@ -247,37 +281,64 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     if(align <= sizeof(heapinfo_t) && (t_size - 1) < 128 && simple_heap->fast_classes[t_size - 1].head != NULL) {
         heapinfo_t* res = simple_heap->fast_classes[t_size - 1].head;
 
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_DEFINED(res, sizeof(heapinfo_t));
+#endif
+
         simple_heap->fast_classes[t_size - 1].head = simple_heap->fast_classes[t_size - 1].head->next;
 
         if(simple_heap->fast_classes[t_size - 1].head) {
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(simple_heap->fast_classes[t_size - 1].head, sizeof(heapinfo_t));
+#endif
             simple_heap->fast_classes[t_size - 1].head->previous = NULL;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(simple_heap->fast_classes[t_size - 1].head, sizeof(heapinfo_t));
+#endif
         }
 
         if(res == simple_heap->fast_classes[t_size - 1].tail) {
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(simple_heap->fast_classes[t_size - 1].tail, sizeof(heapinfo_t));
+#endif
             simple_heap->fast_classes[t_size - 1].tail = NULL;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(simple_heap->fast_classes[t_size - 1].tail, sizeof(heapinfo_t));
+#endif
         }
 
         res->previous = NULL;
         res->next = NULL;
         res->flags |= HEAP_INFO_FLAG_USED;
 
-#if ___TESTMODE == 1
-        VALGRIND_MALLOCLIKE_BLOCK(res + 1, t_size * sizeof(heapinfo_t), 2, 1);
-#endif
-
-        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", res + 1, t_size * sizeof(heapinfo_t));
 
         simple_heap->free_size -= (res->size - 1) * sizeof(heapinfo_t);
         simple_heap->malloc_count++;
         simple_heap->fast_hit++;
+
+#if ___TESTMODE == 1
+        VALGRIND_MALLOCLIKE_BLOCK(res + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+        VALGRIND_MAKE_MEM_NOACCESS(res, sizeof(heapinfo_t));
+#endif
 
         return res + 1;
     }
 
     empty_hi = simple_heap->first_empty;
 
+    if(empty_hi == NULL) {
+        PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no empty slots");
+
+        return NULL;
+    }
+
     //find first empty and enough slot
     while(1) { // size enough?
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_DEFINED(empty_hi, sizeof(heapinfo_t));
+#endif
+
         if(align) {
             if(empty_hi->size == (t_size + 1)) {
                 break;
@@ -291,11 +352,17 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         heapinfo_t* empty_hi_t = empty_hi;
         empty_hi = empty_hi->next;
 
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_NOACCESS(empty_hi_t, sizeof(heapinfo_t));
+        VALGRIND_MAKE_MEM_DEFINED(empty_hi, sizeof(heapinfo_t));
+#endif
+
         if(empty_hi == NULL) {
             if(align == 0) {
                 memory_heap_stat_t stat;
-                memory_get_heap_stat(&stat);
+                memory_simple_stat(heap, &stat);
 
+                PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap 0x%p task 0x%llx", heap, task_get_id());
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot 0x%p 0x%llx 0x%x", empty_hi_t, empty_hi_t->size * sizeof(heapinfo_t), empty_hi_t->flags);
                 return NULL;
@@ -354,14 +421,16 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
             //memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
-#if ___TESTMODE == 1
-            VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 2, 1);
-#endif
-
             PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t));
 
             simple_heap->free_size -= (empty_hi->size - 1) * sizeof(heapinfo_t);
             simple_heap->malloc_count++;
+
+#if ___TESTMODE == 1
+            VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+            VALGRIND_MAKE_MEM_NOACCESS(empty_hi, sizeof(heapinfo_t));
+#endif
+
 
             return empty_hi + 1;
         }
@@ -374,6 +443,10 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         // we need divide slot
         heapinfo_t* empty_tmp = empty_hi + (1 + t_size); // (1+t_size) is our allocation size 1 for header t_size for request
 
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_DEFINED(empty_tmp, sizeof(heapinfo_t));
+#endif
+
         empty_tmp->magic =  HEAP_INFO_MAGIC;
         empty_tmp->padding = HEAP_INFO_PADDING;
         empty_tmp->flags = HEAP_INFO_FLAG_NOTUSED;
@@ -384,27 +457,52 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_tmp->next = empty_hi->next;
 
         if(empty_tmp->next) {
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(empty_tmp->next, sizeof(heapinfo_t));
+#endif
             empty_tmp->next->previous = empty_tmp;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(empty_tmp->next, sizeof(heapinfo_t));
+#endif
         }
+
+#if ___TESTMODE == 1
+        VALGRIND_MAKE_MEM_NOACCESS(empty_tmp, sizeof(heapinfo_t));
+#endif
 
         empty_hi->next = empty_tmp;
 
         empty_hi->size = 1 + t_size; // new slot's size 1 for include header, t_size aligned requested size
 
         simple_heap->free_size -= sizeof(heapinfo_t); // meta occupies free area
-    } // if we not we should keep slot's original size
 
+        simple_heap->header_count++;
+    } else if(rem == 1) { // if we not we should keep slot's original size and increment t_size if rem==1
+        t_size++;
+    }
 
     if (align == 0) { // if we donot need a alignment shortcut malloc remove empty_hi from list and append allocated list
 
         if(empty_hi->previous) { // if we have previous
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(empty_hi->previous, sizeof(heapinfo_t));
+#endif
             empty_hi->previous->next = empty_hi->next; // set that's next to the empty_hi' next
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(empty_hi->previous, sizeof(heapinfo_t));
+#endif
         } else {
             simple_heap->first_empty = empty_hi->next; //update first_empty because we are removing first_empty
         }
 
         if(empty_hi->next) {
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(empty_hi->next, sizeof(heapinfo_t));
+#endif
             empty_hi->next->previous = empty_hi->previous;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(empty_hi->next, sizeof(heapinfo_t));
+#endif
         }
 
         // cleanup pointers and set used
@@ -413,14 +511,16 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
         //memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
-#if ___TESTMODE == 1
-        VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), 2, 1);
-#endif
 
-        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t));
+        PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t), (empty_hi->size - 1) * sizeof(heapinfo_t));
 
         simple_heap->free_size -= (empty_hi->size - 1) * sizeof(heapinfo_t);
         simple_heap->malloc_count++;
+
+#if ___TESTMODE == 1
+        VALGRIND_MALLOCLIKE_BLOCK(empty_hi + 1, t_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+        VALGRIND_MAKE_MEM_NOACCESS(empty_hi, sizeof(heapinfo_t));
+#endif
 
         return empty_hi + 1;
     }
@@ -439,17 +539,25 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
     heapinfo_t* hi_a = (heapinfo_t*)hi_aligned_addr;                   // our rel addr
 
+#if ___TESTMODE == 1
+    VALGRIND_MAKE_MEM_DEFINED(hi_a, sizeof(heapinfo_t));
+#endif
+
     // probable right side: at the end of hi_a
     heapinfo_t* hi_r = hi_a + hi_a_size + 1;
 
+#if ___TESTMODE == 1
+    VALGRIND_MAKE_MEM_DEFINED(hi_r, sizeof(heapinfo_t));
+#endif
 
     if(empty_hi + empty_hi->size > hi_r + 1 ) {
         // we have empty space between hi_r and end of empty_hi, let's divide it
-
         hi_r->magic = HEAP_INFO_MAGIC;
         hi_r->padding = HEAP_INFO_PADDING;
         hi_r->flags = HEAP_INFO_FLAG_USED;
         hi_r->size = (uint64_t)(empty_hi + empty_hi->size - hi_r);
+
+        simple_heap->header_count++;
 
         hi_r->next = empty_hi->next;
         if(hi_r->next) {
@@ -505,6 +613,14 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         simple_heap->free_size -= sizeof(heapinfo_t);
     }
 
+#if ___TESTMODE == 1
+    VALGRIND_MAKE_MEM_NOACCESS(empty_hi, sizeof(heapinfo_t));
+
+    if(right_exists) {
+        VALGRIND_MAKE_MEM_NOACCESS(hi_r, sizeof(heapinfo_t));
+    }
+#endif
+
     // memory_simple_insert_sorted(simple_heap, 1, hi_a); // add area used
 
     // fill ha
@@ -513,16 +629,17 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     hi_a->size = hi_a_size + 1; // inclusive size
     hi_a->flags = HEAP_INFO_FLAG_USED;
 
-
-
-  #if ___TESTMODE == 1
-    VALGRIND_MALLOCLIKE_BLOCK(aligned_addr, hi_a_size * sizeof(heapinfo_t), 2, 1);
-  #endif
+    simple_heap->header_count++;
 
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%llx allocated with size 0x%llx", aligned_addr, hi_a_size * sizeof(heapinfo_t));
 
     simple_heap->free_size -= ( hi_a->size - 1) * sizeof(heapinfo_t);
     simple_heap->malloc_count++;
+
+  #if ___TESTMODE == 1
+    VALGRIND_MALLOCLIKE_BLOCK(aligned_addr, hi_a_size * sizeof(heapinfo_t), sizeof(heapinfo_t), 1);
+    VALGRIND_MAKE_MEM_NOACCESS(hi_a, sizeof(heapinfo_t));
+  #endif
 
     return (uint8_t*)aligned_addr;
 
@@ -547,6 +664,10 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 
     heapinfo_t* hi = ((heapinfo_t*)address) - 1;
 
+#if ___TESTMODE == 1
+    VALGRIND_MAKE_MEM_DEFINED(hi, sizeof(heapinfo_t));
+#endif
+
     if(hi->magic != HEAP_INFO_MAGIC && hi->padding != HEAP_INFO_PADDING) {
         PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p broken", address);
 
@@ -554,6 +675,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
     }
 
     if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
+        PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed.", address);
         return 0;
     }
 
@@ -581,7 +703,13 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
             simple_heap->fast_classes[hi->size - 2].head = hi;
         } else {
             hi->previous = simple_heap->fast_classes[hi->size - 2].tail;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_DEFINED(simple_heap->fast_classes[hi->size - 2].tail, sizeof(heapinfo_t));
+#endif
             simple_heap->fast_classes[hi->size - 2].tail->next = hi;
+#if ___TESTMODE == 1
+            VALGRIND_MAKE_MEM_NOACCESS(simple_heap->fast_classes[hi->size - 2].tail, sizeof(heapinfo_t));
+#endif
             simple_heap->fast_classes[hi->size - 2].tail = hi;
         }
     } else {
@@ -592,7 +720,8 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 
 
 #if ___TESTMODE == 1
-    VALGRIND_FREELIKE_BLOCK(address, 0);
+    VALGRIND_FREELIKE_BLOCK(address, sizeof(heapinfo_t));
+    VALGRIND_MAKE_MEM_NOACCESS(hi, sizeof(heapinfo_t));
 #endif
 
     return 0;
@@ -607,6 +736,7 @@ void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat) {
         stat->total_size = simple_heap->total_size;
         stat->free_size = simple_heap->free_size;
         stat->fast_hit = simple_heap->fast_hit;
+        stat->header_count = simple_heap->header_count;
 
     }
 }

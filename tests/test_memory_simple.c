@@ -8,13 +8,6 @@
 int main(void);
 
 int main(void){
-    FILE* fp;
-
-
-    fp = fopen( "tmp/mem0.dump", "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-    fclose(fp);
-
     memory_heap_stat_t stat;
 
     memory_get_heap_stat(&stat);
@@ -128,34 +121,43 @@ int main(void){
     memory_get_heap_stat(&stat);
     printf("mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
-    fp = fopen( "tmp/mem2.dump", "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-    fclose(fp);
-
     print_success("OK");
 
     printf("testing aligned malloc\n");
 
-    uint8_t* items[10];
+    uint8_t** items = memory_malloc(sizeof(uint8_t*) * 10);
+
+    if(items == NULL) {
+        print_error("Cannot malloc");
+        return -1;
+    }
 
     for(int i = 0; i < 10; i++) {
-        items[i] = memory_malloc_ext(NULL, 0x1000, 0x1000);
-        printf("0x%08lx\n", items[i] );
-        memory_free_ext(NULL, items[i]);
+        uint8_t* test = memory_malloc_ext(NULL, 0x1000, 0x1000);
+
+        if(test == NULL) {
+            print_error("Cannot malloc");
+            return -1;
+        }
+
+        items[i] = test;
+        test[0] = 0x55;
+        printf("0x1000 aligned address %p %x\n", test, test[0]);
+        memory_free_ext(NULL, test);
     }
 
 
     for(int i = 0; i < 10; i++) {
-        items[i] = memory_malloc_ext(NULL, 0x1000, 0x100);
-        printf("0x%08lx\n", items[i] );
+        uint8_t* test = memory_malloc_ext(NULL, 0x1000, 0x100);
+        items[i] = test;
+        printf("0x100 aligned address %p\n", items[i]);
         memory_free_ext(NULL, items[i]);
     }
+
+    memory_free(items);
 
     memory_get_heap_stat(&stat);
     printf("mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
-    fp = fopen( "tmp/mem3.dump", "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-    fclose(fp);
     return 0;
 }

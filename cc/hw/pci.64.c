@@ -17,6 +17,8 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 
+MODULE("turnstone.kernel.hw.pci");
+
 typedef struct {
     memory_heap_t*     heap;
     acpi_table_mcfg_t* mcfg;
@@ -49,7 +51,7 @@ int8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* ms
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
     interrupt_irq_set_handler(isrnum, isr);
 
-    PRINTLOG(PCI, LOG_TRACE, "msix isr 0x%02x",  msix_table->entries[msix_vector].message_data);
+    PRINTLOG(PCI, LOG_TRACE, "msix table %p vector 0x%x isr 0x%02x", msix_table, msix_vector,  msix_table->entries[msix_vector].message_data);
 
     return 0;
 }
@@ -83,6 +85,13 @@ uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
     pci_set_bar_address(pci_dev, bar_no, old_address);
 
     size = ~size + 1;
+
+    pci_bar_register_t* bar = &pci_dev->bar0;
+    bar += bar_no;
+
+    if(bar->memory_space_bar.type != 2) {
+        size &= 0xFFFFFFFF;
+    }
 
     PRINTLOG(PCI, LOG_TRACE, "bar %i size 0x%llx",  bar_no, size);
 

@@ -29,7 +29,11 @@ INCLUDESDIR = includes
 CCXXFLAGS += -std=gnu11 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
-	-fno-pic -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
+    -Wshadow -Wpointer-arith -Wcast-align \
+	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
+    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
+    -Wstrict-prototypes \
+	-fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
@@ -51,6 +55,7 @@ TMPDIR = tmp
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
 TESTQEMUDISK  = $(OBJDIR)/qemu-test-hda
+TOSDBIMG = $(OBJDIR)/tosdb.img
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.S)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
@@ -84,7 +89,7 @@ CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(
 DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 
-FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus20x10.psf
+FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus24x12.psf
 FONTOBJ = $(OBJDIR)/font.o
 
 OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ) $(CC64ASMOUTS)
@@ -148,14 +153,14 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS)  
-	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin
+$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
+	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin $(TOSDBIMG)
 
-$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) 
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack
+$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack $(TOSDBIMG)
 
-$(TESTQEMUDISK): $(TESTDISK)
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin
+$(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin $(TOSDBIMG)
 
 $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
@@ -163,6 +168,9 @@ $(MKDIRSDONE):
 
 $(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
 	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
+
+$(TOSDBIMG): $(OBJDIR)/generatelinkerdb.bin $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
+	$(OBJDIR)/generatelinkerdb.bin -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
 
 $(OBJDIR)/stage3.bin.pack: $(OBJDIR)/stage3.bin
 	$(OBJDIR)/zpack.bin c $^ $@
@@ -208,7 +216,9 @@ $(SUBDIRS):
 
 $(FONTOBJ):
 	curl -sL -o $(OBJDIR)/font.psf $(FONTSRC)
-	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.data.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size $(OBJDIR)/font.psf $@
+	echo -n turnstone.kernel.hw.video > $(OBJDIR)/font.module_name.txt
+	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(OBJDIR)/font.psf $@
+	rm -f $(OBJDIR)/font.module_name.txt
 
 clean:
 	rm -fr $(DOCSOBJDIR)/*

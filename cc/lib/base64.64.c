@@ -9,6 +9,8 @@
 #include <base64.h>
 #include <memory.h>
 
+MODULE("turnstone.lib");
+
 #define NEWLINE_INVL 76
 static const uint8_t charset[] = {"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"};
 

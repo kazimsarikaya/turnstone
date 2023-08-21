@@ -40,8 +40,13 @@ Turnstone OS:
       ☐ Implement NVMe driver
       ☐ Implement raid1
     Database:
-      ☐  @high Implement disk layout with lsm
-      ☐ Implement write/read log on nvme disk
+      ✔  @high Implement disk layout with lsm @done (2023-04-09 22:52)
+      ☐ Implement memory cache.
+      ☐ Implement backend cache.
+      ☐ Implement wal.
+      ☐ Implement compaction.
+      ✔ Optimise delete. @done (2023-04-09 23:11)
+      ☐ Implement secondary index and search.
     Network:
       ☐ Implement TCP
       ✔ Implement DHCP Client @done(2022-12-13 21:21:25)

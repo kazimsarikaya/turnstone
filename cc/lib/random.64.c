@@ -5,6 +5,8 @@
 
 #include <random.h>
 
+MODULE("turnstone.lib");
+
 uint64_t random_xoroshiro_seed = 0;
 uint64_t random_xoroshiro_state[4] = {};
 
@@ -47,6 +49,6 @@ void srand(uint64_t seed) {
     random_xoroshiro_state[3] = random_xoroshiro_state_next();
 }
 
-uint32_t rand() {
+uint32_t rand(void) {
     return random_xoroshiro_next() >> 32;
 }

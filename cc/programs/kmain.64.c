@@ -20,6 +20,7 @@
 #include <linkedlist.h>
 #include <cpu.h>
 #include <cpu/crx.h>
+#include <cpu/smp.h>
 #include <utils.h>
 #include <device/kbd.h>
 #include <cpu/task.h>
@@ -30,6 +31,8 @@
 #include <memory/frame.h>
 #include <time/timer.h>
 #include <network.h>
+
+MODULE("turnstone.kernel.programs.kmain");
 
 int8_t                         kmain64(size_t entry_point);
 __attribute__((noreturn)) void ___kstart64(system_info_t* sysinfo);
@@ -89,7 +92,7 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 int8_t kmain64(size_t entry_point) {
     srand(0x123456789);
 
-    memory_heap_t* heap = memory_create_heap_simple(0, 0);
+    memory_heap_t* heap = memory_create_heap_hash(0, 0);
 
     if(heap == NULL) {
         PRINTLOG(KERNEL, LOG_FATAL, "creating heap");
@@ -124,6 +127,7 @@ int8_t kmain64(size_t entry_point) {
     uint8_t* new_reserved_mmap_data = NULL;
 
     if(SYSTEM_INFO->reserved_mmap_size) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "reserved mmap size is %lli", SYSTEM_INFO->reserved_mmap_size);
         new_reserved_mmap_data = memory_malloc(SYSTEM_INFO->reserved_mmap_size);
 
         if(new_reserved_mmap_data == NULL) {
@@ -155,10 +159,30 @@ int8_t kmain64(size_t entry_point) {
         KERNEL_FRAME_ALLOCATOR = fa;
 
         frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
             cpu_hlt();
         }
+
+        frame_t kernel_default_heap_frames = {SYSTEM_INFO->kernel_default_heap_start, SYSTEM_INFO->kernel_default_heap_4k_frame_count, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &kernel_default_heap_frames) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default heap frames");
+            cpu_hlt();
+        }
+
+        if(!SYSTEM_INFO->remapped) {
+
+            frame_t page_table_helper_frame = {SYSTEM_INFO->page_table_helper_frame, 4, FRAME_TYPE_RESERVED, 0};
+
+            if(fa->allocate_frame(fa, &page_table_helper_frame) != 0) {
+                PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate page table helper frame");
+                frame_allocator_print(fa);
+                cpu_hlt();
+            }
+        }
+
     } else {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...");
         cpu_hlt();
@@ -225,6 +249,8 @@ int8_t kmain64(size_t entry_point) {
         frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
     }
 
+    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
+
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
     if(desc == NULL) {
@@ -259,9 +285,14 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
+    if(smp_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
+        cpu_hlt();
+    }
+
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
     int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
     int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
-
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
@@ -279,19 +310,19 @@ int8_t kmain64(size_t entry_point) {
         disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
 
         if(sata0) {
-            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->get_disk_size(sata0));
+            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
 
             disk_partition_context_t* part_ctx;
 
-            part_ctx = sata0->get_partition(sata0, 0);
+            part_ctx = sata0->get_partition_context(sata0, 0);
             PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
             memory_free(part_ctx);
 
-            part_ctx = sata0->get_partition(sata0, 1);
+            part_ctx = sata0->get_partition_context(sata0, 1);
             PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
             memory_free(part_ctx);
 
-            sata0->flush(sata0);
+            sata0->disk.flush((disk_or_partition_t*)sata0);
         } else {
             PRINTLOG(KERNEL, LOG_INFO, "sata0 is empty");
         }
@@ -310,6 +341,22 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "rdrand %i", cpu_check_rdrand());
 
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
+
+    wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
+    uint32_t var_attrs = 0;
+    uint64_t buffer_size = sizeof(uint16_t);
+    uint16_t boot_order_idx;
+
+    efi_runtime_services_t * RS = SYSTEM_INFO->efi_system_table->runtime_services;
+
+    efi_status_t res = RS->get_variable(var_name_boot_current, &var_global, &var_attrs, &buffer_size, &boot_order_idx);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(KERNEL, LOG_WARNING, "cannot get BootCurrent variable");
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "BootCurrent %i", boot_order_idx);
+    }
 
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 

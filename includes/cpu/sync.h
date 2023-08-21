@@ -13,7 +13,7 @@
 #include <memory.h>
 
 /*! memory size for lock*/
-#define SYNC_LOCK_SIZE 0x20
+#define SYNC_LOCK_SIZE 0x28
 
 /*! lock type */
 typedef void * lock_t;

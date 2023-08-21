@@ -12,19 +12,25 @@ typedef struct efi_disk_impl_context_t {
     uint64_t        block_size;
 } efi_disk_impl_context_t;
 
-uint64_t efi_disk_impl_get_disk_size(disk_t* d);
-int8_t   efi_disk_impl_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   efi_disk_impl_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   efi_disk_impl_close(disk_t* d);
+uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d);
+uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d);
+int8_t   efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   efi_disk_impl_close(const disk_or_partition_t* d);
 
 
-uint64_t efi_disk_impl_get_disk_size(disk_t* d){
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->disk_context;
+uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d){
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
     return ctx->disk_size;
 }
 
-int8_t efi_disk_impl_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->disk_context;
+uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d){
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    return ctx->block_size;
+}
+
+int8_t efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
 
     ctx->bio->write(ctx->bio, ctx->bio->media->media_id, lba, count * ctx->block_size, data);
     ctx->bio->flush(ctx->bio);
@@ -32,8 +38,8 @@ int8_t efi_disk_impl_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* dat
     return 0;
 }
 
-int8_t efi_disk_impl_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data){
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->disk_context;
+int8_t efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
 
     *data = memory_malloc(count * ctx->block_size);
 
@@ -42,12 +48,12 @@ int8_t efi_disk_impl_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** dat
     return res == EFI_SUCCESS?0:-1;
 }
 
-int8_t efi_disk_impl_close(disk_t* d) {
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->disk_context;
+int8_t efi_disk_impl_close(const disk_or_partition_t* d) {
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
 
     memory_free(ctx);
 
-    memory_free(d);
+    memory_free((void*)d);
 
     return 0;
 }
@@ -72,11 +78,12 @@ disk_t* efi_disk_impl_open(efi_block_io_t* bio) {
         return NULL;
     }
 
-    d->disk_context = ctx;
-    d->get_disk_size = efi_disk_impl_get_disk_size;
-    d->write = efi_disk_impl_write;
-    d->read = efi_disk_impl_read;
-    d->close = efi_disk_impl_close;
+    d->disk.context = ctx;
+    d->disk.get_size = efi_disk_impl_get_disk_size;
+    d->disk.get_block_size = efi_disk_impl_get_block_size;
+    d->disk.write = efi_disk_impl_write;
+    d->disk.read = efi_disk_impl_read;
+    d->disk.close = efi_disk_impl_close;
 
     return d;
 }

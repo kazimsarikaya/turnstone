@@ -17,6 +17,8 @@
 #include <time/timer.h>
 #include <utils.h>
 
+MODULE("turnstone.kernel.hw.disk.ahci");
+
 linkedlist_t sata_ports = NULL;
 linkedlist_t sata_hbas = NULL;
 
@@ -349,28 +351,26 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
             abar_fa = tmp << 32 | abar_fa;
         }
 
+
+        PRINTLOG(AHCI, LOG_TRACE, "frame address at bar 0x%llx", abar_fa);
+
+        frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
+        uint64_t bar_frm_cnt = 2;
+        frame_t bar_req_frm = {abar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+
         uint64_t abar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(abar_fa);
 
-        PRINTLOG(AHCI, LOG_TRACE, "abar fa 0x%llx va  0x%llx", abar_fa, abar_va);
+        if(bar_frames == NULL) {
+            PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", abar_fa);
 
-        frame_t* hba_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
+            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+                PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frame");
 
-        if(hba_frames == NULL) {
-            PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for abar");
-
-            frame_t f = {abar_fa, 2, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
-
-            if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &f) != 0) {
-                PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for abar");
+                return -1;
             }
-
-            hba_frames = &f;
         }
 
-        PRINTLOG(AHCI, LOG_TRACE, "frames for abar 0x%llx,0x%llx", hba_frames->frame_address, hba_frames->frame_count);
-        memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(hba_frames->frame_address), hba_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-        hba_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-
+        memory_paging_add_va_for_frame(abar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
         ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)abar_va;
 

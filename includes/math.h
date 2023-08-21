@@ -8,9 +8,13 @@
 
 #include <utils.h>
 
-#define EXP  ((float64_t)(2.71828182845904523536L))
-#define LN2  ((float64_t)(0.69314718055994506418L))
-#define LN10 ((float64_t)(2.30258509299404590109L))
+#define EXP    ((float64_t)(2.71828182845904523536L))
+#define LN2    ((float64_t)(0.69314718055994506418L))
+#define LN10   ((float64_t)(2.30258509299404590109L))
+#define PI     ((float64_t)(3.14159265358979323846L))
+#define PI_2   ((float64_t)(1.57079632679489661923L))
+#define PI_1_2 ((float64_t)(0.318309886183790671538L))
+#define PI_2_2 ((float64_t)(0.636619772367581343076L))
 
 /**
  * @brief ceil of given float number
@@ -71,5 +75,12 @@ float64_t math_antilog(float64_t power, float64_t base);
  * @return root result
  */
 float64_t math_root(float64_t number, float64_t root);
+
+/**
+ * @brief calculates sin of x
+ * @param[in] number number for calculation
+ * @return sin(number)
+ */
+float64_t math_sin(float64_t number);
 
 #endif

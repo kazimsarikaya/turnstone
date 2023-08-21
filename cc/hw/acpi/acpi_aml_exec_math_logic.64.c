@@ -9,6 +9,8 @@
 #include <acpi/aml_internal.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 int8_t acpi_aml_exec_op2_logic(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* opcode){
     int64_t op1 = 0;
     int64_t op2 = 0;

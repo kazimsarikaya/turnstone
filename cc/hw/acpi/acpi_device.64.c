@@ -14,6 +14,8 @@
 #include <memory/paging.h>
 #include <linkedlist.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 int8_t acpi_aml_intmap_addr_sorter(const void* data1, const void* data2);
 int8_t acpi_aml_intmap_eq(const void* data1, const void* data2);
 

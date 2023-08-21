@@ -10,6 +10,8 @@
 #include <logging.h>
 #include <memory.h>
 #include "os_io.h"
+#include <strings.h>
+#include <utils.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -35,6 +37,7 @@ void                              remove_ram2(void);
 void __attribute__((constructor)) start_ram(void);
 void __attribute__((destructor))  stop_ram(void);
 
+extern int64_t errno;
 
 size_t video_printf(const char_t* fmt, ...) {
     va_list args;
@@ -68,8 +71,10 @@ int8_t setup_ram2(void) {
         print_error("invalid ram size min should be 4k");
         return -1;
     }
-
+/*
     mem_backend = tmpfile();
+
+    printf("error: %i\n", errno);
 
     if(mem_backend == NULL) {
         print_error("cannot create ram tmpfile");
@@ -84,19 +89,21 @@ int8_t setup_ram2(void) {
     fseek(mem_backend, 0, SEEK_SET);
 
     mem_backend_fd  = fileno(mem_backend);
+ */
+    void* mmap_res = mmap((void*)mmmap_address, mmap_size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
-    void* mmap_res = mmap((void*)mmmap_address, mmap_size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE, mem_backend_fd, 0);
-
-    printf("mmap res %p\n", mmap_res);
+    printf("mmap res %p 0x%llx\n", mmap_res, mem_backend_fd);
 
     if(mmap_res != (void*)mmmap_address) {
         print_error("cannot mmap ram tmpfile");
+        printf("error: %i\n", errno);
         fclose(mem_backend);
         mem_backend = NULL;
         return -3;
     }
 
-    d_heap = memory_create_heap_simple(mmmap_address, mmmap_address + mmap_size);
+    logging_module_levels[HEAP_HASH] = LOG_INFO;
+    d_heap = memory_create_heap_hash(mmmap_address, mmmap_address + mmap_size);
 
     if(d_heap == NULL) {
         print_error("cannot setup heap");
@@ -112,7 +119,7 @@ void remove_ram2(void) {
     if(d_heap) {
         memory_heap_stat_t stat;
         memory_get_heap_stat(&stat);
-        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n\tfast hit: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit);
 
         if(stat.malloc_count != stat.free_count) {
             print_error("memory leak detected");
@@ -135,14 +142,13 @@ void __attribute__((constructor)) start_ram(void) {
     }
 }
 
-void __attribute__((destructor)) stop_ram() {
+void __attribute__((destructor)) stop_ram(void) {
     remove_ram2();
 }
 
 
 #ifdef ___TESTMODE
 
-uint8_t mem_area[RAMSIZE] = {0};
 uint64_t __kheap_bottom = 0;
 
 void* SYSTEM_INFO;
@@ -152,16 +158,18 @@ void* KERNEL_FRAME_ALLOCATOR = NULL;
 typedef void   * frame_t;
 typedef int8_t memory_paging_page_type_t;
 typedef void   * memory_page_table_t;
+typedef void   * future_t;
 
-int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
-void   dump_ram(char_t* fname);
-void*  task_get_current_task(void);
-void*  lock_create_with_heap(memory_heap_t* heap);
-int8_t lock_destroy(void* lock);
-void   lock_acquire(void* lock);
-void   lock_release(void* lock);
-void*  lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
-
+int8_t   memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
+void     dump_ram(char_t* fname);
+void*    task_get_current_task(void);
+void*    lock_create_with_heap(memory_heap_t* heap);
+int8_t   lock_destroy(void* lock);
+void     lock_acquire(void* lock);
+void     lock_release(void* lock);
+void*    lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
+void*    future_get_data_and_destroy(future_t fut);
 
 int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type){
     UNUSED(p4);
@@ -169,13 +177,6 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_s
     UNUSED(frm);
     UNUSED(type);
     return 0;
-}
-
-void dump_ram(char_t* fname){
-    FILE* fp = fopen( fname, "w" );
-    fwrite(mem_area, 1, RAMSIZE, fp );
-
-    fclose(fp);
 }
 
 void* task_get_current_task(void){
@@ -204,6 +205,29 @@ void lock_acquire(void* lock){
 
 void lock_release(void* lock){
     UNUSED(lock);
+}
+
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
+    UNUSED(heap);
+    UNUSED(lock);
+
+    if(data) {
+        return data;
+    }
+
+    return (void*)0xdeadbeaf;
+}
+
+void* future_get_data_and_destroy(future_t fut) {
+    if(!fut) {
+        return NULL;
+    }
+
+    if(((uint64_t)fut) == 0xdeadbeaf) {
+        return NULL;
+    }
+
+    return fut;
 }
 
 #endif

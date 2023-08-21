@@ -12,6 +12,8 @@
 #include <strings.h>
 #include <utils.h>
 
+MODULE("turnstone.lib");
+
 
 data_t* data_json_serialize(data_t* data) {
     UNUSED(data);
@@ -28,7 +30,13 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
         return NULL;
     }
 
+    data_serialize_with_t org_sw = sw;
+
     buffer_t buf = buffer_new();
+
+    if(buf == NULL) {
+        return NULL;
+    }
 
     uint8_t bc = 0;
 
@@ -100,7 +108,7 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
         break;
     case DATA_TYPE_DATA:
         for(uint64_t i = 0; i < data->length; i++) {
-            data_t* tmp_data = data_bson_serialize(&(((data_t*)(data->value))[i]), sw);
+            data_t* tmp_data = data_bson_serialize(&(((data_t*)(data->value))[i]), org_sw);
 
             if(tmp_data == NULL) {
                 buffer_destroy(buf);
@@ -141,12 +149,29 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
 
     uint64_t obuflen = 0;
     uint8_t* obuf = buffer_get_all_bytes(buf, &obuflen);
+
+    if(!obuflen || !obuf) {
+        memory_free(res);
+        buffer_destroy(buf);
+
+        return NULL;
+    }
+
     bc = byte_count(obuflen);
 
     res->type = DATA_TYPE_INT8_ARRAY;
     res->length = 1 + bc + obuflen;
 
     uint8_t* ores = memory_malloc(res->length);
+
+    if(!ores) {
+        memory_free(obuf);
+        memory_free(res);
+        buffer_destroy(buf);
+
+        return NULL;
+    }
+
     ores[0] = bc;
     memory_memcopy((uint8_t*)&obuflen, ores + 1, bc);
     memory_memcopy(obuf, ores + 1 + bc, obuflen);
@@ -230,6 +255,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         bc = *tmp_data;
         tmp_data++;
         total_len--;
+        len = 0;
         memory_memcopy(tmp_data, blen, bc);
 
         tmp_data += len + bc;
@@ -262,6 +288,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         tmp_data++;
         total_len--;
 
+        len = 0;
         memory_memcopy(tmp_data, blen, bc);
 
         tmp_data += bc;
@@ -321,6 +348,7 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
             bc = *tmp_data;
             tmp_data++;
             total_len--;
+            len = 0;
             memory_memcopy(tmp_data, blen, bc);
 
             tmp_data += len + bc;
@@ -438,4 +466,35 @@ catch_error:
     memory_free(res);
 
     return NULL;
+}
+
+void data_free(data_t* data) {
+    if(data->name) {
+        data_free(data->name);
+    }
+
+    if(data->type >= DATA_TYPE_STRING) {
+        if(data->type == DATA_TYPE_DATA) {
+            data_t* ds = data->value;
+            for(uint64_t i = 0; i < data->length; i++) {
+                if(ds[i].name) {
+                    data_free(ds[i].name);
+                }
+
+                if(ds[i].type >= DATA_TYPE_STRING) {
+                    if(ds[i].type == DATA_TYPE_DATA) {
+                        data_free(ds[i].value);
+                    } else {
+                        memory_free(ds[i].value);
+                    }
+                }
+            }
+
+            memory_free(ds);
+        } else {
+            memory_free(data->value);
+        }
+    }
+
+    memory_free(data);
 }

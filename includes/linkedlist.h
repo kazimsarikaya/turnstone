@@ -222,11 +222,17 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
  */
 const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
 
+linkedlist_item_t linkedlist_insert_at_head_and_get_linkedlist_item(linkedlist_t list, const void* data);
+boolean_t         linkedlist_move_item_to_head(linkedlist_t list, linkedlist_item_t item);
+boolean_t         linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlist_item_t item);
 
 /*! insert data with position into list */
 #define linkedlist_insert_at_position(l, d, p ) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_POSITION, p)
 /*! delete data with position from list */
 #define linkedlist_delete_at_position(l, p ) linkedlist_delete_at(l, NULL, LINKEDLIST_DELETE_AT_POSITION, p)
+
+/*! delete data at tail (end) of list */
+#define linkedlist_delete_at_tail(l) linkedlist_delete_at(l, NULL, LINKEDLIST_DELETE_AT_TAIL, 0)
 
 /*! insert data into normal list */
 #define linkedlist_list_insert(l, d) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_ANYWHERE, 0)
@@ -252,6 +258,9 @@ const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist
 #define linkedlist_stack_push(l, d) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_HEAD, 0)
 /*! delete and get data from stack */
 #define linkedlist_stack_pop(l) linkedlist_delete_at(l, NULL, LINKEDLIST_DELETE_AT_HEAD, 0)
+
+/*! insert data into head */
+#define linkedlist_insert_at_head(l, d) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_HEAD, 0)
 
 /**
  * @brief returns position of given data.

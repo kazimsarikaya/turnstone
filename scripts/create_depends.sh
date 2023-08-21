@@ -20,9 +20,9 @@ do
   _headers=$(echo $_depends|tr ' ' '\n'|grep -v ^$|grep -v ".c$"|sort|uniq)
   for _h in $_headers;
   do
-   _f=$(find ../includes|grep $_h|tr -d '\n')
+   _f=$(find ../includes|grep $_h|tr '\n' ' ')
    if [[ "${_f}x" != "x" ]]; then
-     echo -e "$var.c: $_f"
+     echo -e "../output/cc-local/$var.o: $_f"
    fi
   done
   echo

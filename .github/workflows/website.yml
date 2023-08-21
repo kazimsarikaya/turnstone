@@ -1,12 +1,14 @@
 on:
   workflow_dispatch:
   push:
-   paths:
-   - docs/**
-   - docs.doxygen
-   - doxygen-layout.xml
-   - README.md
-   - github/workflows/main.yml
+    branches:
+      - master
+    paths:
+    - docs/**
+    - docs.doxygen
+    - doxygen-layout.xml
+    - README.md
+    - github/workflows/main.yml
 
 permissions:
   contents: read

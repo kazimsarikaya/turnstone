@@ -9,6 +9,8 @@
 #include <buffer.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib");
+
 
 typedef struct buffer_internal_t {
     memory_heap_t* heap;
@@ -49,6 +51,16 @@ buffer_t buffer_encapsulate(uint8_t* data, uint64_t length) {
     bi->data = data;
 
     return (buffer_t)bi;
+}
+
+boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro) {
+    if(!buffer) {
+        return false;
+    }
+
+    ((buffer_internal_t*)buffer)->readonly = ro;
+
+    return true;
 }
 
 uint64_t buffer_get_length(buffer_t buffer) {
@@ -110,8 +122,12 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
 
     uint64_t new_cap = bi->capacity;
 
-    while(bi->length + length >= new_cap) {
-        new_cap *= 2;
+    while(bi->position + length > new_cap) {
+        if(new_cap > (1 << 20)) {
+            new_cap += 1 << 20;
+        } else {
+            new_cap *= 2;
+        }
     }
 
     if(bi->capacity != new_cap) {
@@ -129,10 +145,13 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
         bi->data = tmp_data;
     }
 
-    memory_memcopy(data, bi->data + bi->length, length);
+    memory_memcopy(data, bi->data + bi->position, length);
 
-    bi->length += length;
     bi->position += length;
+
+    if(bi->length < bi->position) {
+        bi->length = bi->position;
+    }
 
     lock_release(bi->lock);
 
@@ -174,6 +193,15 @@ uint8_t* buffer_get_all_bytes(buffer_t buffer, uint64_t* length) {
     buffer_internal_t* bi = (buffer_internal_t*)buffer;
 
     uint8_t* res = memory_malloc_ext(bi->heap, bi->length, 0);
+
+    if(!res) {
+        if(length) {
+            *length = 0;
+        }
+
+        return NULL;
+    }
+
     memory_memcopy(bi->data, res, bi->length);
 
     if(length) {
@@ -202,31 +230,52 @@ uint8_t  buffer_get_byte(buffer_t buffer) {
     return res;
 }
 
-uint8_t  buffer_peek_byte(buffer_t buffer) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    lock_acquire(bi->lock);
-
-    if(bi->position >= bi->length) {
-        lock_release(bi->lock);
-
-        return NULL;
-    }
-    uint8_t res = bi->data[bi->position];
-
-    lock_release(bi->lock);
-
-    return res;
-}
-
-uint8_t buffer_peek_buffer_at_position(buffer_t buffer, uint64_t position) {
+uint8_t buffer_peek_byte(buffer_t buffer) {
     if(!buffer) {
         return 0;
     }
 
-    return ((buffer_internal_t*)buffer)->data[position];
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    return buffer_peek_ints_at_position(buffer, bi->position, 1);
 }
 
+uint8_t buffer_peek_byte_at_position(buffer_t buffer, uint64_t position) {
+    return buffer_peek_ints_at_position(buffer, position, 1);
+}
+
+uint64_t buffer_peek_ints_at_position(buffer_t buffer, uint64_t position, uint8_t bc) {
+    if(!buffer) {
+        return 0;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    if(bc <= 0 || bc > 8) {
+        return 0;
+    }
+
+    if(position + bc  > bi->length) {
+        return 0;
+    }
+
+    uint64_t* res_p = (uint64_t*)&bi->data[position];
+    uint64_t res = *res_p;
+
+    res = res & ((1ULL << (bc * 8)) - 1);
+
+    return res;
+}
+
+uint64_t buffer_peek_ints(buffer_t buffer, uint8_t bc) {
+    if(!buffer) {
+        return 0;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    return buffer_peek_ints_at_position(buffer, bi->position, bc);
+}
 
 uint64_t buffer_remaining(buffer_t buffer) {
     buffer_internal_t* bi = (buffer_internal_t*)buffer;
@@ -247,7 +296,7 @@ boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction
     lock_acquire(bi->lock);
 
     if(direction == BUFFER_SEEK_DIRECTION_START) {
-        if(position < 0 || (uint64_t)position >= bi->length) {
+        if(position < 0 || (uint64_t)position >= bi->capacity) {
             lock_release(bi->lock);
 
             return false;
@@ -257,22 +306,26 @@ boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction
     }
 
     if(direction == BUFFER_SEEK_DIRECTION_END) {
-        if (position > 0 || position + ((int64_t)bi->length) < 0) {
+        if (position > 0 || position + ((int64_t)bi->capacity) < 0) {
             lock_release(bi->lock);
 
             return false;
         }
 
-        bi->position = bi->length;
+        bi->position = bi->capacity;
     }
 
-    if(direction == BUFFER_SEEK_DIRECTION_CURRENT && (bi->position + position > bi->length || ((int64_t)bi->position) + position < 0)) {
+    if(direction == BUFFER_SEEK_DIRECTION_CURRENT && (bi->position + position > bi->capacity || ((int64_t)bi->position) + position < 0)) {
         lock_release(bi->lock);
 
         return false;
     }
 
     bi->position += position;
+
+    if(bi->position > bi->length) {
+        bi->length = bi->position;
+    }
 
     lock_release(bi->lock);
 
@@ -291,4 +344,28 @@ int8_t buffer_destroy(buffer_t buffer) {
     memory_free_ext(bi->heap, bi);
 
     return 0;
+}
+
+boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, uint8_t* dest) {
+    if(!buffer || !dest) {
+        return false;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    if(pos > bi->length) {
+        return false;
+    }
+
+    if(len > bi->length - pos) {
+        len = bi->length - pos;
+    }
+
+    if(!len) {
+        return false;
+    }
+
+    memory_memcopy(bi->data + pos, dest, len);
+
+    return true;
 }

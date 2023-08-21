@@ -10,6 +10,8 @@
  */
 #include <ports.h>
 
+MODULE("turnstone.kernel.hw.io");
+
 /**
  * @brief checks data present at port
  * @param[in]  port port to check

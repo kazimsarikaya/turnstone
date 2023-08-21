@@ -131,7 +131,7 @@ static inline void cpu_set_and_clear_stack(uint64_t stack_address) {
     __asm__ __volatile__ (
         "mov %%rax, %%rsp\n"
         "xor %%rbp, %%rbp\n"
-        : : "a" (stack_address)
+        : : "a" (stack_address - 0x10)
         );
 }
 

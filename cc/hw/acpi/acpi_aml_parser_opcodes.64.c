@@ -9,6 +9,8 @@
  #include <acpi/aml_internal.h>
  #include <video.h>
 
+MODULE("turnstone.kernel.hw.acpi");
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"

@@ -12,6 +12,8 @@
 #include <memory.h>
 #include <random.h>
 
+MODULE("turnstone.lib");
+
 /**
  * @struct bloomfilter_t
  * @brief bloom filter struct
@@ -60,7 +62,7 @@ bloomfilter_t* bloomfilter_new(uint64_t entry_count, float64_t error) {
 
     uint64_t bc = (res->bit_count + 63) / 64;
 
-    res->bits = memory_malloc(bc);
+    res->bits = memory_malloc(bc * sizeof(uint64_t));
 
     if(!res->bits) {
         memory_free(res);
@@ -72,6 +74,10 @@ bloomfilter_t* bloomfilter_new(uint64_t entry_count, float64_t error) {
 }
 
 boolean_t bloomfilter_destroy(bloomfilter_t* bf) {
+    if(!bf) {
+        return true;
+    }
+
     memory_free(bf->bits);
     memory_free(bf);
     return true;
@@ -127,7 +133,7 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf) {
         return NULL;
     }
 
-    data_t d;
+    data_t d = {0};
     d.type = DATA_TYPE_DATA;
     d.length = 7;
 
@@ -140,11 +146,12 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf) {
     fields[0].type = DATA_TYPE_INT64;
     fields[0].value = (void*)bf->entry_count;
 
-    uint64_t tmp;
+    uint64_t tmp = 0;
     memory_memcopy(&bf->bpe, &tmp, sizeof(uint64_t));
     fields[1].type = DATA_TYPE_FLOAT64;
     fields[1].value = (void*)tmp;
 
+    tmp = 0;
     memory_memcopy(&bf->error, &tmp, sizeof(uint64_t));
     fields[2].type = DATA_TYPE_FLOAT64;
     fields[2].value = (void*)tmp;
@@ -189,7 +196,7 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
     }
 
     if(bf_data->length != 7 || bf_data->value == NULL) {
-        memory_free(bf_data);
+        data_free(bf_data);
 
         return NULL;
     }
@@ -197,10 +204,10 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
     data_t* fields = (data_t*)bf_data->value;
 
     uint64_t entry_count = (uint64_t)fields[0].value;
-    float64_t bpe;
+    float64_t bpe = 0;
     uint64_t tmp = (uint64_t)fields[1].value;
     memory_memcopy(&tmp, &bpe, sizeof(uint64_t));
-    float64_t error;
+    float64_t error = 0;
     tmp = (uint64_t)fields[2].value;
     memory_memcopy(&tmp, &error, sizeof(uint64_t));
     uint64_t hash_count = (uint64_t)fields[3].value;
@@ -211,9 +218,8 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
     bloomfilter_t* res = memory_malloc(sizeof(bloomfilter_t));
 
     if(!res) {
-        memory_free(fields[6].value);
-        memory_free(fields);
-        memory_free(bf_data);
+        data_free(bf_data);
+
         return NULL;
     }
 

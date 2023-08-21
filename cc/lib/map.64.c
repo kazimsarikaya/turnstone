@@ -13,6 +13,8 @@
 #include <xxhash.h>
 #include <cpu/sync.h>
 
+MODULE("turnstone.lib");
+
 typedef struct map_internal_t {
     memory_heap_t*      heap;
     lock_t              lock;
@@ -153,7 +155,21 @@ int8_t map_destroy(map_t map) {
 }
 
 iterator_t* map_create_iterator(map_t map) {
+    if(!map) {
+        return NULL;
+    }
+
     map_internal_t* mi = (map_internal_t*)map;
 
     return mi->store->create_iterator(mi->store);
+}
+
+uint64_t map_size(map_t map) {
+    if(!map) {
+        return 0;
+    }
+
+    map_internal_t* mi = (map_internal_t*)map;
+
+    return mi->store->size(mi->store);
 }

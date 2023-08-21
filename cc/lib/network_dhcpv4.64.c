@@ -14,6 +14,8 @@
 #include <network/network_info.h>
 #include <time/timer.h>
 
+MODULE("turnstone.lib");
+
 network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t mac, uint32_t xid, uint16_t * return_packet_len);
 network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint32_t xid, uint16_t * return_packet_len);
 

@@ -30,7 +30,7 @@ typedef struct video_psf2_font_t {
     int32_t  bytes_per_glyph; ///< size of each glyph
     int32_t  height; ///< height in pixels
     int32_t  width; ///< width in pixels
-} video_psf2_font_t; ///< short hand for struct @ref video_psf2_font_s
+} __attribute__((packed)) video_psf2_font_t; ///< short hand for struct @ref video_psf2_font_s
 
 /**
  * @struct video_psf1_font_t
@@ -40,7 +40,7 @@ typedef struct video_psf1_font_t {
     uint16_t magic; ///< magic bytes to identify PSF
     uint8_t  mode; ///< mode
     uint8_t  bytes_per_glyph; ///< size of each glyph
-}video_psf1_font_t; ///< short hand for struct @ref video_psf1_font_s
+} __attribute__((packed)) video_psf1_font_t; ///< short hand for struct @ref video_psf1_font_s
 
 /**
  * @struct video_frame_buffer_t
@@ -107,4 +107,5 @@ size_t video_printf(const char_t* fmt, ...) __attribute__ ((format (printf, 1, 2
             else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
 
 
+#define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
 #endif

@@ -65,28 +65,24 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         PRINTLOG(NVME, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
         frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+        uint64_t size = pci_get_bar_size(pci_nvme, 0);
+        PRINTLOG(NVME, LOG_TRACE, "bar size 0x%llx", size);
+        uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
+        frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
         uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
         if(bar_frames == NULL) {
             PRINTLOG(NVME, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-            uint64_t size = pci_get_bar_size(pci_nvme, 0);
-            uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-            frame_t tmp_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &tmp_frm) != 0) {
+            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
                 PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame");
 
-                return 0;
+                return -1;
             }
-
-            bar_frames = &tmp_frm;
         }
 
-        if((bar_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-            memory_paging_add_va_for_frame(bar_va, bar_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-            bar_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-        }
+        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
         nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)bar_va;
 

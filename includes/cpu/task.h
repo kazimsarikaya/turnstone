@@ -107,7 +107,10 @@ typedef struct {
     linkedlist_t         message_queues; ///< task's listining queues.
     boolean_t            message_waiting; ///< task state for sleeping should move @ref task_state_s
     boolean_t            sleeping; ///< task state for sleeping should move @ref task_state_s
+    boolean_t            interruptible; ///< task state for interruptible should move @ref task_state_s
+    boolean_t            interrupt_received; ///< task state for interrupt received should move @ref task_state_s
     uint64_t             wake_tick; ///< tick value when task wakes up
+    const char*          task_name; ///< task name
     memory_page_table_t* page_table; ///< page table
     uint64_t             rax; ///< register
     uint64_t             rbx; ///< register
@@ -167,6 +170,23 @@ task_t* task_get_current_task(void);
 void task_set_message_waiting(void);
 
 /**
+ * @brief clears current task's message waiting flag
+ * @param[in] task_id task id
+ */
+void task_clear_message_waiting(uint64_t task_id);
+
+/**
+ * @brief sets current task's interruptible flag
+ */
+void task_set_interruptible(void);
+
+/**
+ * @brief sets current task's interrupt received flag
+ * @param[in] task_id task id
+ */
+void task_set_interrupt_received(uint64_t task_id);
+
+/**
  * @brief adds a queue to task
  * @param[in] queue queue which task will have. tasks consumes these queues
  */
@@ -180,8 +200,9 @@ void task_add_message_queue(linkedlist_t queue);
  * @param[in] entry_point task's entry point
  * @param[in] args_cnt argument count
  * @param[in] args argument list
+ * @param[in] task_name task's name
  */
-int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args);
+uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name);
 
 /**
  * @brief idle task checks if there is any task neeeds to run. it speeds up task running
@@ -193,5 +214,6 @@ boolean_t task_idle_check_need_yield(void);
  * @param[in] wake_tick tick count for sleep
  */
 void task_current_task_sleep(uint64_t wake_tick);
+
 
 #endif

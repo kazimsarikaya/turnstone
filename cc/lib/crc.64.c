@@ -5,6 +5,8 @@
 
 #include <crc.h>
 
+MODULE("turnstone.lib");
+
 
 uint32_t crc32_table[256] = {};
 

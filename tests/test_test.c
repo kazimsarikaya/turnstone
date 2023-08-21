@@ -5,9 +5,9 @@
 
 #include "setup.h"
 
-int32_t main(uint32_t argc, char_t** argv);
+int32_t main(uint32_t argc, char_t** argv, char_t** en);
 
-int32_t main(uint32_t argc, char_t** argv) {
+int32_t main(uint32_t argc, char_t** argv, char_t** en) {
     UNUSED(argc);
     UNUSED(argv);
 
@@ -15,6 +15,17 @@ int32_t main(uint32_t argc, char_t** argv) {
     memory_free(test);
 
     PRINTLOG(KERNEL, LOG_INFO, "deneme mesajı %i", 1234);
+
+    printf("argc: %i\n", argc);
+
+    for (uint32_t i = 0; i < argc; i++) {
+        PRINTLOG(KERNEL, LOG_INFO, "argument: %i %s", i, argv[i]);
+    }
+
+    for(char_t** env = en; *env != 0; env++) {
+        char* thisEnv = *env;
+        PRINTLOG(KERNEL, LOG_INFO, "environment: %s", thisEnv);
+    }
 
     print_success("TESTS PASSED");
 

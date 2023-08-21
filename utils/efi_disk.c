@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#define RAMSIZE 0x800000
+#define RAMSIZE 0x8000000
 #include "setup.h"
 #include <crc.h>
 #include <disk.h>
@@ -22,19 +22,25 @@ typedef struct disk_file_context_t {
     uint64_t block_size;
 } disk_file_context_t;
 
-uint64_t disk_file_get_disk_size(disk_t* d);
-int8_t   disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   disk_file_close(disk_t* d);
+uint64_t disk_file_get_disk_size(const disk_or_partition_t* d);
+uint64_t disk_file_get_block_size(const disk_or_partition_t* d);
+int8_t   disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   disk_file_close(const disk_or_partition_t* d);
 disk_t*  disk_file_open(char_t* file_name, int64_t size);
 
-uint64_t disk_file_get_disk_size(disk_t* d){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+uint64_t disk_file_get_disk_size(const disk_or_partition_t* d){
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
     return ctx->file_size;
 }
 
-int8_t disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+uint64_t disk_file_get_block_size(const disk_or_partition_t* d){
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    return ctx->block_size;
+}
+
+int8_t disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
@@ -44,8 +50,8 @@ int8_t disk_file_write(disk_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
     return 0;
 }
 
-int8_t disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+int8_t disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
@@ -55,13 +61,13 @@ int8_t disk_file_read(disk_t* d, uint64_t lba, uint64_t count, uint8_t** data){
     return 0;
 }
 
-int8_t disk_file_close(disk_t* d) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->disk_context;
+int8_t disk_file_close(const disk_or_partition_t* d) {
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
     fclose(ctx->fp_disk);
 
     memory_free(ctx);
 
-    memory_free(d);
+    memory_free((void*)d);
 
     return 0;
 }
@@ -103,19 +109,22 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
         return NULL;
     }
 
-    d->disk_context = ctx;
-    d->get_disk_size = disk_file_get_disk_size;
-    d->write = disk_file_write;
-    d->read = disk_file_read;
-    d->close = disk_file_close;
+    d->disk.context = ctx;
+    d->disk.get_size = disk_file_get_disk_size;
+    d->disk.get_block_size = disk_file_get_block_size;
+    d->disk.write = disk_file_write;
+    d->disk.read = disk_file_read;
+    d->disk.close = disk_file_close;
 
     return d;
 }
 
 int32_t main(int32_t argc, char** argv) {
 
-    if (argc < 4) {
+    if (argc < 5) {
         printf("Error: not enough arguments\n");
+        printf("%s <diskpath> <efiimage> <kernel> <tosdbimg>\n", argv[0]);
+
         return -1;
     }
 
@@ -132,6 +141,7 @@ int32_t main(int32_t argc, char** argv) {
     char_t* disk_name = argv[item++];
     char_t* efi_boot_file_name = argv[item++];
     char_t* kernel_name = argv[item++];
+    char_t* tosdbimg_name = argv[item++];
 
 
 
@@ -146,6 +156,16 @@ int32_t main(int32_t argc, char** argv) {
         int64_t kernel_sec_count = kernel_size / 512;
         if(kernel_size % 512) {
             kernel_sec_count++;
+        }
+
+        FILE* fp_tosdbimg = fopen(tosdbimg_name, "r");
+        fseek(fp_tosdbimg, 0, SEEK_END);
+        int64_t tosdbimg_size = ftell(fp_tosdbimg);
+        fseek(fp_tosdbimg, 0, SEEK_SET);
+
+        int64_t tosdbimg_sec_count = tosdbimg_size / 512;
+        if(tosdbimg_size % 512) {
+            tosdbimg_sec_count++;
         }
 
         d = disk_file_open(disk_name, 1 << 30);
@@ -172,10 +192,26 @@ int32_t main(int32_t argc, char** argv) {
         uint8_t* buf = memory_malloc(kernel_size);
         fread(buf, 1, kernel_size, fp_kernel);
 
-        d->write(d, 206848, kernel_size / 512, buf);
+        d->disk.write((disk_or_partition_t*)d, 206848, kernel_size / 512, buf);
 
         memory_free(buf);
         fclose(fp_kernel);
+
+
+        efi_guid_t tosdb_guid = EFI_PART_TYPE_TURNSTONE_TOSDB_PART_GUID;
+        uint64_t tosdb_start = 206848 + kernel_sec_count;
+        part_ctx = gpt_create_partition_context(&tosdb_guid, "tosdb_sys", tosdb_start, tosdb_start + tosdbimg_sec_count - 1);
+        d->add_partition(d, part_ctx);
+        memory_free(part_ctx->internal_context);
+        memory_free(part_ctx);
+
+        buf = memory_malloc(tosdbimg_size);
+        fread(buf, 1, kernel_size, fp_tosdbimg);
+
+        d->disk.write((disk_or_partition_t*)d, tosdb_start, tosdbimg_size / 512, buf);
+
+        memory_free(buf);
+        fclose(fp_tosdbimg);
 
     } else {
         d = disk_file_open(disk_name, -1);
@@ -190,7 +226,9 @@ int32_t main(int32_t argc, char** argv) {
 
     int res = -1;
 
-    filesystem_t* fs = fat32_get_or_create_fs(d, 0, FAT32_ESP_VOLUME_LABEL);
+    disk_or_partition_t* dp = (disk_or_partition_t*)d->get_partition(d, 0);
+
+    filesystem_t* fs = fat32_get_or_create_fs(dp, FAT32_ESP_VOLUME_LABEL);
 
     printf("disk size: %i\n", fs->get_total_size(fs));
 
@@ -262,7 +300,9 @@ int32_t main(int32_t argc, char** argv) {
 
     fs->close(fs);
 
-    d->close(d);
+    dp->close(dp);
+
+    d->disk.close((disk_or_partition_t*)d);
 
     if(res == 0) {
         print_success("DISK BUILDED");

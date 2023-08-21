@@ -5,21 +5,24 @@
 
 #include <cpu/sync.h>
 #include <cpu/task.h>
+#include <apic.h>
 #include <video.h>
 
+MODULE("turnstone.kernel.cpu.sync");
+
 typedef struct lock_internal_t {
-    memory_heap_t* heap;
-    uint64_t       lock_value;
-    uint64_t       owner_task_id;
-    boolean_t      for_future;
+    memory_heap_t*    heap;
+    volatile uint64_t lock_value;
+    uint64_t          owner_task_id;
+    uint64_t          owner_cpu_id;
+    boolean_t         for_future;
 }lock_internal_t;
 
-static int8_t sync_test_set_get(uint64_t* value, int8_t offset){
+static inline int8_t sync_test_set_get(volatile uint64_t* value, uint64_t offset){
     int8_t res = 0;
-    __asm__ __volatile__ ("lock bts %%rbx, (%%rax)\n" : "=@ccc" (res) : "a" (value), "b" (offset));
+    __asm__ __volatile__ ("lock bts %[offset], %[value]\n" : "=@ccc" (res), [value] "+m" (*value), [offset] "+r" (offset) : : "memory");
     return res;
 }
-
 
 lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future) {
     lock_internal_t* lock = memory_malloc_ext(heap, sizeof(lock_internal_t), 0x0);
@@ -48,29 +51,37 @@ void lock_acquire(lock_t lock) {
     task_t* current_task = task_get_current_task();
     uint64_t current_task_id;
 
+    uint64_t current_cpu_id = apic_get_local_apic_id() + 1; // add one for preventing bsp cpu id 0
+
     if(current_task == NULL) {
         current_task_id = TASK_KERNEL_TASK_ID;
     } else {
         current_task_id = current_task->task_id;
     }
 
-    if(li->for_future == 0 && li->owner_task_id == current_task_id) {
+    if(li->lock_value && li->for_future == 0 && li->owner_cpu_id == current_cpu_id && li->owner_task_id == current_task_id) {
         return;
     }
 
     while(sync_test_set_get(&li->lock_value, 0)) {
-        task_yield();
+        if(current_cpu_id == 1) {
+            task_yield();
+        } else {
+            asm volatile ("pause");
+        }
     }
 
     li->owner_task_id = current_task_id;
+    li->owner_cpu_id = current_cpu_id;
 }
 
 void lock_release(lock_t lock) {
     lock_internal_t* li = (lock_internal_t*)lock;
 
     if(li) {
-        li->lock_value = 0;
         li->owner_task_id = 0;
+        li->owner_cpu_id = 0;
+        li->lock_value = 0;
     }
 }
 

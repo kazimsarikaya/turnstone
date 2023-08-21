@@ -10,6 +10,8 @@
 #include <video.h>
 #include <cpu.h>
 
+MODULE("turnstone.lib");
+
 #define STACK_PROTECTION_CHECK_GUARD 0xE85093A9FABF3890
 
 size_t __stack_chk_guard = STACK_PROTECTION_CHECK_GUARD;

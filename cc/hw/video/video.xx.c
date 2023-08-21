@@ -13,6 +13,9 @@
 #include <strings.h>
 #include <utils.h>
 #include <systeminfo.h>
+#include <cpu/sync.h>
+
+MODULE("turnstone.kernel.hw.video");
 
 #define VIDEO_TAB_STOP 8
 
@@ -39,11 +42,15 @@ int32_t FONT_HEIGHT = 0;
 int32_t FONT_BYTES_PER_GLYPH = 0;
 int32_t FONT_CHARS_PER_LINE = 0;
 int32_t FONT_LINES_ON_SCREEN = 0;
+uint32_t FONT_MASK = 0;
+uint32_t FONT_BYTES_PERLINE = 0;
 boolean_t GRAPHICS_MODE = 0;
 int32_t VIDEO_GRAPHICS_WIDTH = 0;
 int32_t VIDEO_GRAPHICS_HEIGHT = 0;
 uint32_t VIDEO_GRAPHICS_FOREGROUND = 0xFFFFFF;
 uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
+
+lock_t video_lock = NULL;
 
 wchar_t* video_font_unicode_table = NULL;
 
@@ -58,10 +65,12 @@ void video_init(void) {
 
     video_psf2_font_t* font2 = (video_psf2_font_t*)&font_data_start;
 
+    video_lock = lock_create();
+
     if(font2) {
         if(font2->magic == VIDEO_PSF2_FONT_MAGIC) {
             PRINTLOG(VIDEO, LOG_DEBUG, "font v2 ok");
-            FONT_ADDRESS = (uint8_t*)&font_data_start + font2->header_size;
+            FONT_ADDRESS = ((uint8_t*)&font_data_start) + font2->header_size;
             FONT_WIDTH = font2->width;
             FONT_HEIGHT = font2->height;
             FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
@@ -103,6 +112,11 @@ void video_init(void) {
 
             FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
             FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
+
+            FONT_BYTES_PERLINE = (FONT_WIDTH + 7) / 8;
+
+            FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
+
 
             GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
         } else {
@@ -155,6 +169,10 @@ void video_init(void) {
 
                 FONT_CHARS_PER_LINE = VIDEO_GRAPHICS_WIDTH / FONT_WIDTH;
                 FONT_LINES_ON_SCREEN = VIDEO_GRAPHICS_HEIGHT / FONT_HEIGHT;
+
+                FONT_BYTES_PERLINE = (FONT_WIDTH + 7) / 8;
+
+                FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
 
                 GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
             } else {
@@ -239,6 +257,11 @@ void video_graphics_print(char_t* string) {
 
             i++;
 
+            if(cursor_graphics_y >= FONT_LINES_ON_SCREEN) {
+                video_graphics_scroll();
+                cursor_graphics_y = FONT_LINES_ON_SCREEN - 1;
+            }
+
             continue;
         }
 
@@ -253,24 +276,25 @@ void video_graphics_print(char_t* string) {
 
         uint8_t* glyph = FONT_ADDRESS + (wc * FONT_BYTES_PER_GLYPH);
 
-        int bytesperline = (FONT_WIDTH + 7) / 8;
-
         int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
 
         int32_t x, y, line, mask;
 
         for(y = 0; y < FONT_HEIGHT; y++) {
             line = offs;
-            mask = 1 << (FONT_WIDTH - 1);
+            mask = FONT_MASK;
+
+            uint32_t tmp = BYTE_SWAP32(*((uint32_t*)glyph));
 
             for(x = 0; x < FONT_WIDTH; x++) {
-                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = *((uint8_t*)glyph) & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
+
+                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = tmp & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
 
                 mask >>= 1;
                 line++;
             }
 
-            glyph += bytesperline;
+            glyph += FONT_BYTES_PERLINE;
             offs  += VIDEO_PIXELS_PER_SCANLINE;
         }
 
@@ -290,7 +314,7 @@ void video_graphics_print(char_t* string) {
     }
 }
 
-void video_clear_screen(){
+void video_clear_screen(void){
     if(GRAPHICS_MODE) {
         for(int64_t i = 0; i < VIDEO_GRAPHICS_HEIGHT * VIDEO_GRAPHICS_WIDTH; i++) {
             *((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = VIDEO_GRAPHICS_BACKGROUND;
@@ -325,7 +349,15 @@ size_t video_printf(const char_t* fmt, ...){
     va_list args;
     va_start(args, fmt);
 
+    lock_acquire(video_lock);
+
     size_t cnt = 0;
+
+    if(!fmt) {
+        lock_release(video_lock);
+
+        return 0;
+    }
 
     while (*fmt) {
         char_t data = *fmt;
@@ -333,8 +365,8 @@ size_t video_printf(const char_t* fmt, ...){
         if(data == '%') {
             fmt++;
             int8_t wfmtb = 1;
-            char_t buf[257];
-            char_t ito_buf[64];
+            char_t buf[257] = {0};
+            char_t ito_buf[64] = {0};
             int32_t val = 0;
             char_t* str = NULL;
             int32_t slen = 0;
@@ -451,7 +483,7 @@ size_t video_printf(const char_t* fmt, ...){
                     break;
                 case 'p':
                     l_flag = 1;
-                    __attribute__((fallthrough));
+                    nobreak;
                 case 'x':
                 case 'h':
                     if(l_flag == 2) {
@@ -512,12 +544,12 @@ size_t video_printf(const char_t* fmt, ...){
 
         } else {
             size_t idx = 0;
-            char_t buf[17];
+            char_t buf[17] = {0};
             memory_memclean(buf, 17);
 
             while(*fmt) {
                 if(idx == 16) {
-                    video_printf(buf);
+                    video_print(buf);
                     idx = 0;
                     memory_memclean(buf, 17);
                 }
@@ -536,6 +568,8 @@ size_t video_printf(const char_t* fmt, ...){
     }
 
     va_end(args);
+
+    lock_release(video_lock);
 
     return cnt;
 }
