@@ -86,6 +86,13 @@ uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
 
     size = ~size + 1;
 
+    pci_bar_register_t* bar = &pci_dev->bar0;
+    bar += bar_no;
+
+    if(bar->memory_space_bar.type != 2) {
+        size &= 0xFFFFFFFF;
+    }
+
     PRINTLOG(PCI, LOG_TRACE, "bar %i size 0x%llx",  bar_no, size);
 
     return size;

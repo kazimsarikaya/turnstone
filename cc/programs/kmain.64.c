@@ -26,6 +26,7 @@
 #include <cpu/task.h>
 #include <linker.h>
 #include <driver/ahci.h>
+#include <driver/nvme.h>
 #include <random.h>
 #include <memory/frame.h>
 #include <time/timer.h>
@@ -285,11 +286,13 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
     if(smp_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init sm. Halting...");
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
         cpu_hlt();
     }
 
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
     int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
+    int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
@@ -327,6 +330,8 @@ int8_t kmain64(size_t entry_point) {
     } else {
         PRINTLOG(KERNEL, LOG_WARNING, "no disks found");
     }
+
+    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt)
 
     if(kbd_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init keyboard. Halting...");
