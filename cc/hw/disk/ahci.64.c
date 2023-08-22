@@ -643,19 +643,19 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     PRINTLOG(AHCI, LOG_TRACE, "building identify data");
 
-    disk->cylinders = identify_data.cylinders;
-    disk->heads = identify_data.heads;
-    disk->sectors = identify_data.sectors_per_track;
+    disk->cylinders = identify_data.num_cylinders;
+    disk->heads = identify_data.num_heads;
+    disk->sectors = identify_data.num_sectors_per_track;
 
-    if(1 & (identify_data.command_set_supported_83 >> 10)) {
+    if(identify_data.command_set_support.big_lba) {
         disk->lba_count = identify_data.user_addressable_sectors_ext;
     } else {
         disk->lba_count = identify_data.user_addressable_sectors;
     }
 
     for(uint8_t i = 0; i < 20; i += 2) {
-        disk->serial[i] = identify_data.serial_no[i + 1];
-        disk->serial[i + 1] = identify_data.serial_no[i];
+        disk->serial[i] = identify_data.serial_number[i + 1];
+        disk->serial[i + 1] = identify_data.serial_number[i];
     }
 
     for(uint8_t i = 20; i > 0; i--) {
@@ -666,8 +666,8 @@ int8_t ahci_identify(uint64_t disk_id) {
     }
 
     for(uint8_t i = 0; i < 40; i += 2) {
-        disk->model[i] = identify_data.model_name[i + 1];
-        disk->model[i + 1] = identify_data.model_name[i];
+        disk->model[i] = identify_data.model_number[i + 1];
+        disk->model[i + 1] = identify_data.model_number[i];
     }
 
     for(uint8_t i = 40; i > 0; i--) {
@@ -678,27 +678,36 @@ int8_t ahci_identify(uint64_t disk_id) {
     }
 
     disk->queue_depth = identify_data.queue_depth + 1;
-    disk->sncq &= (identify_data.serial_ata_capabilities >> 8) & 1;
-    disk->volatile_write_cache = ((identify_data.command_set_supported_82 >> 5) & 1 ) | (((identify_data.command_set_feature_enabled_85 >> 5) & 1) << 1);
+    disk->sncq &= identify_data.serial_ata_capabilities.ncq;
+    disk->volatile_write_cache = identify_data.command_set_support.write_cache | identify_data.command_set_active.write_cache;
 
-    disk->logging.fields.gpl_supported = (identify_data.command_set_supported_84 >> 5) & 1;
-    disk->logging.fields.gpl_enabled = (identify_data.command_set_feature_enabled_87 >> 5) & 1;
-    disk->logging.fields.dma_ext_supported = (identify_data.command_set_supported_119 >> 3) & 1;
-    disk->logging.fields.dma_ext_enabled = (identify_data.command_set_feature_enabled_120 >> 3) & 1;
-    disk->logging.fields.dma_ext_is_log_ext = (identify_data.serial_ata_capabilities >> 15) & 1;
+    disk->logging.fields.gpl_supported = identify_data.command_set_support.gp_logging;
+    disk->logging.fields.gpl_enabled = identify_data.command_set_active.gp_logging;
+    disk->logging.fields.dma_ext_supported = identify_data.command_set_support_ext.read_write_log_dma_ext;
+    disk->logging.fields.dma_ext_enabled = identify_data.command_set_active_ext.read_write_log_dma_ext;
+    disk->logging.fields.dma_ext_is_log_ext = identify_data.serial_ata_capabilities.read_logdma;
 
-    disk->smart_status.fields.supported = identify_data.command_set_supported_82 & 1;
-    disk->smart_status.fields.enabled = identify_data.command_set_feature_enabled_85 & 1;
-    disk->smart_status.fields.errlog_supported = identify_data.command_set_supported_84 & 1;
-    disk->smart_status.fields.errlog_enabled = identify_data.command_set_feature_enabled_87 & 1;
-    disk->smart_status.fields.selftest_supported = (identify_data.command_set_supported_84 >> 1) & 1;
-    disk->smart_status.fields.selftest_enabled = (identify_data.command_set_feature_enabled_87 >> 1) & 1;
+    disk->smart_status.fields.supported = identify_data.command_set_support.smart_commands;
+    disk->smart_status.fields.enabled = identify_data.command_set_active.smart_commands;
+    disk->smart_status.fields.errlog_supported = identify_data.command_set_support.smart_error_log;
+    disk->smart_status.fields.errlog_enabled = identify_data.command_set_active.smart_error_log;
+    disk->smart_status.fields.selftest_supported = identify_data.command_set_support.smart_self_test;
+    disk->smart_status.fields.selftest_enabled = identify_data.command_set_active.smart_self_test;
 
-    PRINTLOG(AHCI, LOG_TRACE, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x",
+    if(identify_data.physical_logical_sector_size.logical_sector_longer_than256words) {
+        disk->logical_sector_size = 4096;
+    } else {
+        disk->logical_sector_size = 512;
+    }
+
+    disk->physical_sector_size = disk->logical_sector_size << identify_data.physical_logical_sector_size.logical_sectors_per_physical_sector;
+
+    PRINTLOG(AHCI, LOG_INFO, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
              disk->disk_id, disk->cylinders, disk->heads,
              disk->sectors, disk->lba_count, disk->serial, disk->model,
              disk->queue_depth, disk->sncq, disk->volatile_write_cache,
-             disk->logging.bits, disk->smart_status.bits);
+             disk->logging.bits, disk->smart_status.bits,
+             disk->physical_sector_size, disk->logical_sector_size);
 
     port->sata_active = 0;
     port->interrupt_status = (uint32_t)-1;

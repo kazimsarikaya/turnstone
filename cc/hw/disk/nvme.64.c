@@ -22,10 +22,11 @@ MODULE("turnstone.kernel.hw.drivers");
 hashmap_t* nvme_disks = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
 
-int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t nvme_identify(nvme_disk_t* nvme_disk, uint32_t cns, uint32_t nsid, uint64_t data_address);
-int8_t nvme_enable_cache(nvme_disk_t* nvme_disk);
-int8_t nvme_set_queue_count(nvme_disk_t* nvme_disk, uint16_t io_sq_count, uint16_t io_cq_count);
+int8_t   nvme_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   nvme_identify(nvme_disk_t* nvme_disk, uint32_t cns, uint32_t nsid, uint64_t data_address);
+int8_t   nvme_enable_cache(nvme_disk_t* nvme_disk);
+int8_t   nvme_set_queue_count(nvme_disk_t* nvme_disk, uint16_t io_sq_count, uint16_t io_cq_count);
+future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer, boolean_t write);
 
 
 int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
@@ -342,7 +343,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
                      nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].lbads,
                      nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].rp);
 
-            nvme_disk->ns_id = i;
+            nvme_disk->ns_id = nvme_disk->active_ns_list[i];
             nvme_disk->lba_count = nvme_disk->ns_identify->nsze;
             nvme_disk->lba_size = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].lbads;
         }
@@ -445,6 +446,20 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
 
         PRINTLOG(NVME, LOG_DEBUG, "io sq created");
+
+        frame_t* prp_frames = NULL;
+
+        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &prp_frames, NULL) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for prp");
+            memory_free_ext(heap, nvme_disk);
+
+            return -1;
+        }
+
+        nvme_disk->prp_frame_fa = prp_frames->frame_address;
+        nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(nvme_disk->prp_frame_fa);
+
+        memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
         hashmap_put(nvme_disks, (void*)nvme_disk->disk_id, nvme_disk);
 
@@ -612,21 +627,97 @@ int8_t nvme_identify(nvme_disk_t* nvme_disk,  uint32_t cns, uint32_t nsid, uint6
 }
 
 future_t nvme_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
-    UNUSED(disk_id);
-    UNUSED(lba);
-    UNUSED(size);
-    UNUSED(buffer);
-
-    return NULL;
+    return nvme_read_write(disk_id, lba, size, buffer, false);
 }
 
 future_t nvme_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
-    UNUSED(disk_id);
-    UNUSED(lba);
-    UNUSED(size);
-    UNUSED(buffer);
+    return nvme_read_write(disk_id, lba, size, buffer, true);
+}
 
-    return NULL;
+future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer, boolean_t write) {
+    if(size % 0x1000) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: size not multiple of 4k", write?"write":"read");
+
+        return NULL;
+    }
+
+    uint64_t fcnt = size / 0x1000;
+
+    if(fcnt > 512) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: size too big", write?"write":"read");
+
+        return NULL;
+    }
+
+    uint64_t buffer_va = (uint64_t)buffer;
+
+    if(buffer_va % 0x1000) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: buffer not aligned to 4k", write?"write":"read");
+
+        return NULL;
+    }
+
+    uint64_t buffer_fa = 0;
+
+    if(memory_paging_get_physical_address(buffer_va, &buffer_fa) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: buffer physical address not found", write?"write":"read");
+
+        return NULL;
+    }
+
+    nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disks, (void*)disk_id);
+
+    if(nvme_disk == NULL) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: disk not found", write?"write":"read");
+
+        return NULL;
+    }
+
+    uint16_t cid = nvme_disk->next_cid++;
+
+    uint64_t iosqt = nvme_disk->io_s_queue_tail;
+
+    uint64_t prp1 = buffer_fa;
+
+    uint64_t prp2 = 0;
+
+    if(fcnt == 2) {
+        prp2 = prp1 + 0x1000;
+    } else if(fcnt > 2) {
+        prp2 = nvme_disk->prp_frame_fa + iosqt * 0x1000;
+        uint64_t* prp2_list = (uint64_t*)nvme_disk->prp_frame_va + iosqt * 0x1000;
+        memory_memclean(prp2_list, 0x1000);
+
+        for(uint64_t i = 0; i < fcnt - 1; i++) {
+            prp2_list[i] = prp1 + (i + 1) * 0x1000;
+        }
+    }
+
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].opc = write?NVME_CMD_WRITE:NVME_CMD_READ;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].fuse = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cid = cid;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].nsid = nvme_disk->ns_id;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].psdt = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].mptr = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp1 = prp1;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp2 = prp2;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw10 = lba & 0xFFFFFFFF;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw11 = (lba >> 32) & 0xFFFFFFFF;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12 = fcnt - 1;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw13 = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14 = 0;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15 = 0;
+
+    lock_t lock = lock_create_with_heap_for_future(nvme_disk->heap, true);
+    hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
+    future_t fut = future_create(lock);
+
+    nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % 64;
+    *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
+
+    PRINTLOG(NVME, LOG_DEBUG, "%s command sent with cid %x and s tail %llx", write?"write":"read", cid, nvme_disk->io_s_queue_tail - 1);
+
+    return fut;
 }
 
 future_t nvme_flush(uint64_t disk_id) {

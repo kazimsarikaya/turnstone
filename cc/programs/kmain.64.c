@@ -365,6 +365,19 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 
+    char_t* test = memory_malloc_ext(NULL, 0x1000, 0x1000);
+    strcpy("hello world", test);
+
+    future_t fut = nvme_write(0, 0, 0x1000, (uint8_t*)test);
+    future_get_data_and_destroy(fut);
+
+    char_t* test2 = memory_malloc_ext(NULL, 0x1000, 0x1000);
+    fut = nvme_read(0, 0, 0x1000, (uint8_t*)test2);
+    future_get_data_and_destroy(fut);
+    PRINTLOG(KERNEL, LOG_INFO, "read %s", test2);
+
+    nvme_flush(0);
+
     return 0;
 }
 #pragma GCC diagnostic pop

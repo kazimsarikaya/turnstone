@@ -77,10 +77,12 @@ int8_t gpt_write_gpt_metadata(const disk_t* d) {
     gpt_disk_t* gd = (gpt_disk_t*)d;
     disk_or_partition_t* dp = (disk_or_partition_t*)d;
 
+    uint64_t block_size = dp->get_block_size(dp);
+
     uint64_t size = dp->get_size(dp);
     int64_t gpt_parts_size = sizeof(efi_partition_entry_t) * 128;
-    int64_t max_lba = size / 512 - 1;
-    uint64_t gpt_parts_block_count = gpt_parts_size / 512;
+    int64_t max_lba = size / block_size - 1;
+    uint64_t gpt_parts_block_count = gpt_parts_size / block_size;
 
     int32_t pes_crc32 = CRC32_SEED;
     pes_crc32 = crc32_sum((uint8_t*)gd->partitions, gpt_parts_size, pes_crc32);
@@ -124,15 +126,16 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
     gpt_disk_t* gd = (gpt_disk_t*)d;
     disk_or_partition_t* dp = (disk_or_partition_t*)d;
 
+    uint64_t block_size = dp->get_block_size(dp);
 
     uint64_t size = dp->get_size((disk_or_partition_t*)d);
     uint32_t max_sectors_tmp = -1;
     uint64_t max_sectors = max_sectors_tmp;
-    uint64_t sector_count = size / 512;
+    uint64_t sector_count = size / block_size;
 
     int64_t gpt_parts_size = sizeof(efi_partition_entry_t) * 128;
-    int64_t max_lba = size / 512 - 1;
-    uint64_t gpt_parts_block_count = gpt_parts_size / 512;
+    int64_t max_lba = size / block_size - 1;
+    uint64_t gpt_parts_block_count = gpt_parts_size / block_size;
 
     uint8_t* data;
 
@@ -163,7 +166,7 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
     }
 
 
-    data = memory_malloc(512);
+    data = memory_malloc_ext(0, block_size, 0x1000);
 
     pmbr_part = (efi_pmbr_partition_t*)(data + 0x1be);
     pmbr_part->first_chs.sector = 2;
@@ -185,8 +188,8 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
 
     memory_free(data);
 
-    gd->gpt_header = memory_malloc(512);
-    gd->partitions = memory_malloc(gpt_parts_size);
+    gd->gpt_header = memory_malloc_ext(0, block_size, 0x1000);
+    gd->partitions = memory_malloc_ext(0, gpt_parts_size, 0x1000);
 
 
     efi_partition_table_header_t* gpt =   (efi_partition_table_header_t* )gd->gpt_header;
@@ -197,8 +200,8 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
 
     gpt->my_lba = 1;
     gpt->alternate_lba = max_lba;
-    gpt->first_usable_lba = gpt->my_lba + gpt_parts_size / 512 + 1;
-    gpt->last_usable_lba =  gpt->alternate_lba - gpt_parts_size / 512 - 1;
+    gpt->first_usable_lba = gpt->my_lba + gpt_parts_size / block_size + 1;
+    gpt->last_usable_lba =  gpt->alternate_lba - gpt_parts_size / block_size - 1;
     efi_create_guid(&gpt->disk_guid);
     gpt->partition_entry_lba = 2;
     gpt->partition_entry_count = 128;

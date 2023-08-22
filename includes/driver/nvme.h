@@ -482,6 +482,8 @@ typedef struct nvme_disk_t {
     uint16_t                       io_cq_count; ///< io completion queue count
     uint64_t                       io_queue_isr;  ///< io queue isr
     hashmap_t*                     command_lock_map; ///< command lock map
+    uint64_t                       prp_frame_fa; ///< prp frame fa
+    uint64_t                       prp_frame_va; ///< prp frame va
 } nvme_disk_t; ///< shorthand for struct
 
 
