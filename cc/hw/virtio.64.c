@@ -127,7 +127,7 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                         time_timer_spinsleep(1000);
                     }
 
-                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
+                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern, false);
                 }
 
             } else {
@@ -176,8 +176,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                         time_timer_spinsleep(1000);
                     }
 
-                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
-                    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no);
+                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern, false);
+                    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, false);
 
                 }
             } else {
@@ -363,62 +363,11 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
 
                 vdev->msix_cap = msix_cap;
 
-                msix_cap->enable = 1;
-                msix_cap->function_mask = 0;
+                if(pci_msix_configure(pci_gen_dev, msix_cap) != 0) {
+                    PRINTLOG(VIRTIO, LOG_ERROR, "failed to configure msix");
+                    memory_free(vdev);
 
-                PRINTLOG(VIRTIO, LOG_TRACE, "device has msix cap enabled %i fmask %i", msix_cap->enable, msix_cap->function_mask);
-                PRINTLOG(VIRTIO, LOG_TRACE, "msix bir %i tables offset 0x%x  size 0x%x", msix_cap->bir, msix_cap->table_offset, msix_cap->table_size + 1);
-                PRINTLOG(VIRTIO, LOG_TRACE, "msix pending bit bir %i tables offset 0x%x", msix_cap->pending_bit_bir, msix_cap->pending_bit_offset);
-
-                uint64_t bar_fa = 0;
-                uint64_t bar_size = 0;
-                uint64_t bar_va = 0;
-
-                bar_fa = pci_get_bar_address(pci_gen_dev, msix_cap->bir);
-                bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->bir);
-                bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-                frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
-
-                uint64_t bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
-                frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
-
-                if(bar_frames == NULL) {
-                    PRINTLOG(VIRTIO, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-                    if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
-                        PRINTLOG(VIRTIO, LOG_ERROR, "cannot allocate frame");
-                        memory_free(vdev);
-
-                        return NULL;
-                    }
-                }
-
-                memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-
-                if(msix_cap->bir != msix_cap->pending_bit_bir) {
-                    bar_fa = pci_get_bar_address(pci_gen_dev, msix_cap->pending_bit_bir);
-                    bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->pending_bit_bir);
-                    bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-                    bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
-
-                    bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
-                    bar_req_frm.frame_address = bar_fa;
-                    bar_req_frm.frame_count = bar_frm_cnt;
-
-                    if(bar_frames == NULL) {
-                        PRINTLOG(VIRTIO, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-                        if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
-                            PRINTLOG(VIRTIO, LOG_ERROR, "cannot allocate frame");
-                            memory_free(vdev);
-
-                            return NULL;
-                        }
-                    }
-
-                    memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+                    return NULL;
                 }
 
                 vdev->has_msix = 1;

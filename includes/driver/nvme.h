@@ -12,6 +12,10 @@
 #include <types.h>
 #include <memory.h>
 #include <linkedlist.h>
+#include <pci.h>
+#include <utils.h>
+#include <future.h>
+#include <hashmap.h>
 
 /**
  * @brief initialize nvme devices
@@ -239,11 +243,15 @@ typedef struct nvme_submission_queue_entry_t {
 typedef struct nvme_completion_queue_entry_t {
     uint32_t cdw0; ///< completion dword 0 command specific
     uint32_t reserved; ///< reserved
-    uint32_t sqhd : 16; ///< submission queue head pointer
-    uint32_t sqid : 16; ///< submission queue identifier
-    uint32_t cid; ///< command identifier
-    uint32_t p      : 1; ///< phase tag
-    uint32_t status : 16; ///< status of command
+    uint32_t sqhd                : 16; ///< submission queue head pointer
+    uint32_t sqid                : 16; ///< submission queue identifier
+    uint32_t cid                 : 16; ///< command identifier
+    uint32_t p                   : 1; ///< phase tag
+    uint32_t status_code         : 8; ///< status of command
+    uint32_t status_type         : 3; ///< status type
+    uint32_t command_retry_delay : 2; ///< command retry delay
+    uint32_t more                : 1; ///< more
+    uint32_t do_not_retry        : 1; ///< do not retry
 }__attribute__((packed)) nvme_completion_queue_entry_t; ///< shorthand for struct
 
 /**
@@ -311,39 +319,49 @@ typedef struct nvme_identify_t {
     uint8_t  vs[4096 - 3072]; ///< Vendor specific
 }__attribute__((packed)) nvme_identify_t; ///< shorthand for struct
 
+typedef struct nvme_lba_format_t {
+    uint32_t ms       : 16; ///< Metadata size
+    uint32_t lbads    : 8; ///< LBA data size
+    uint32_t rp       : 2; ///< Relative performance
+    uint32_t reserved : 6;  ///< reserved
+}__attribute__((packed)) nvme_lba_format_t;
+
+
 /**
  * @struct nvme_ns_identify_t
  * @brief nvme namespace identify data fields
  */
 typedef struct nvme_ns_identify_t {
-    uint64_t nsze; ///< Namespace size
-    uint64_t ncap; ///< Namespace capacity
-    uint64_t nuse; ///< Namespace utilization
-    uint8_t  nsfeat; ///< Namespace features
-    uint8_t  nlbaf; ///< Number of LBA formats
-    uint8_t  flbas; ///< Formatted LBA size
-    uint8_t  mc; ///< Metadata capabilities
-    uint8_t  dpc; ///< End to end data protection capabilitities
-    uint8_t  dps; ///< End to end protection type settings
-    uint8_t  nmic; ///< Namespace multipath I/O and namespace sharing capabilities
-    uint8_t  rescap; ///< Reservation capabilities
-    uint8_t  fpi; ///< Format progress indicator
-    uint8_t  reserved0; ///< reserved
-    uint16_t nawun; ///< Namespace atomic write unit normal
-    uint16_t nawupf; ///< namespace atomic write unit power fail
-    uint16_t nacwu; ///< namespace atomic compare and write unit
-    uint16_t nsabsn; ///< namespace atomic boundary size normal
-    uint16_t nsabo; ///< namespace atomic boundary offset
-    uint16_t nabspf; ///< namespace atomic boundary size power fail
-    uint16_t reserved1; ///< reserved
-    uint64_t nvmcap_lo; ///< NVM capacity low 54 bits
-    uint64_t nvmcap_hi; ///< NVM capacity high 54 bits
-    uint8_t  reserved2[104 - 64];
-    uint8_t  nguid[16]; ///< namespace globally unique identifier
-    uint64_t eui64; ///< ieee extended unique identifier
-    uint32_t lbaf[16]; ///< LBA formats
-    uint8_t  reserved3[4096 - 192]; ///< reserved
+    uint64_t          nsze; ///< Namespace size
+    uint64_t          ncap; ///< Namespace capacity
+    uint64_t          nuse; ///< Namespace utilization
+    uint8_t           nsfeat; ///< Namespace features
+    uint8_t           nlbaf; ///< Number of LBA formats
+    uint8_t           flbas; ///< Formatted LBA size
+    uint8_t           mc; ///< Metadata capabilities
+    uint8_t           dpc; ///< End to end data protection capabilitities
+    uint8_t           dps; ///< End to end protection type settings
+    uint8_t           nmic; ///< Namespace multipath I/O and namespace sharing capabilities
+    uint8_t           rescap; ///< Reservation capabilities
+    uint8_t           fpi; ///< Format progress indicator
+    uint8_t           reserved0; ///< reserved
+    uint16_t          nawun; ///< Namespace atomic write unit normal
+    uint16_t          nawupf; ///< namespace atomic write unit power fail
+    uint16_t          nacwu; ///< namespace atomic compare and write unit
+    uint16_t          nsabsn; ///< namespace atomic boundary size normal
+    uint16_t          nsabo; ///< namespace atomic boundary offset
+    uint16_t          nabspf; ///< namespace atomic boundary size power fail
+    uint16_t          reserved1; ///< reserved
+    uint64_t          nvmcap_lo; ///< NVM capacity low 64 bits
+    uint64_t          nvmcap_hi; ///< NVM capacity high 64 bits
+    uint8_t           reserved2[104 - 64];
+    uint8_t           nguid[16]; ///< namespace globally unique identifier
+    uint64_t          eui64; ///< ieee extended unique identifier
+    nvme_lba_format_t lbaf[16];  ///< LBA formats
+    uint8_t           reserved3[4096 - 192]; ///< reserved
 } __attribute__((packed)) nvme_ns_identify_t; ///< shorthand for struct
+
+_Static_assert(offsetof_field(nvme_ns_identify_t, lbaf) == 128, "nvme_ns_identify_t size mismatch");
 
 /**
  * @enum nvme_admin_cmd_opcode_t
@@ -430,4 +448,44 @@ typedef enum nvme_cmd_status_t {
     NVME_CMD_STATUS_RESERVATION_CONFLICT = 0X83,
     NVME_CMD_STATUS_FORMAT_IN_PROGRESS = 0X84, ///< nvme formatting in progress
 } nvme_cmd_status_t; ///< shorthand for enum
+
+
+
+typedef struct nvme_disk_t {
+    memory_heap_t*                 heap; ///< heap to allocate memory from
+    uint64_t                       disk_id; ///< disk id
+    pci_generic_device_t*          pci_device;         ///< pci device
+    nvme_controller_registers_t*   nvme_registers;                ///< nvme registers
+    pci_capability_msix_t*         msix_capability; ///< msix capability
+    uint64_t                       admin_s_queue_tail; ///< admin submission queue tail
+    uint64_t                       admin_c_queue_head; ///< admin completion queue head
+    uint32_t*                      admin_submission_queue_tail_doorbell; ///< admin submission queue tail doorbell
+    uint32_t*                      admin_completion_queue_head_doorbell; ///< admin completion queue head doorbell
+    nvme_submission_queue_entry_t* admin_submission_queue; ///< admin submission queue
+    nvme_completion_queue_entry_t* admin_completion_queue; ///< admin completion queue
+    uint64_t                       io_s_queue_tail; ///< io queue tail
+    uint64_t                       io_c_queue_head; ///< io completion queue head
+    uint32_t*                      io_submission_queue_tail_doorbell; ///< io submission queue tail doorbell
+    uint32_t*                      io_completion_queue_head_doorbell; ///< io completion queue head doorbell
+    nvme_submission_queue_entry_t* io_submission_queue; ///< io submission queue
+    nvme_completion_queue_entry_t* io_completion_queue; ///< io completion queue
+    nvme_identify_t*               identify; ///< identify
+    nvme_ns_identify_t*            ns_identify; ///< namespace identify
+    uint32_t*                      active_ns_list; ///< active namespace list
+    uint64_t                       timeout; ///< timeout
+    uint32_t                       ns_id; ///< namespace id
+    uint64_t                       lba_count; ///< lba count
+    uint32_t                       lba_size; ///< lba size
+    uint16_t                       next_cid; ///< next command id
+    boolean_t                      flush_supported; ///< flush supported
+    uint16_t                       io_sq_count; ///< io submission queue count
+    uint16_t                       io_cq_count; ///< io completion queue count
+    uint64_t                       io_queue_isr;  ///< io queue isr
+    hashmap_t*                     command_lock_map; ///< command lock map
+} nvme_disk_t; ///< shorthand for struct
+
+
+future_t nvme_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
+future_t nvme_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
+future_t nvme_flush(uint64_t disk_id);
 #endif

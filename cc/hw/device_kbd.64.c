@@ -111,7 +111,7 @@ int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
         vq_ev->last_used_index++;
     }
 
-    pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_kbd->pci_dev->pci_header, virtio_kbd->msix_cap, 0);
+    pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_kbd->pci_dev->pci_header, virtio_kbd->msix_cap, 0, false);
     apic_eoi();
 
     return 0;

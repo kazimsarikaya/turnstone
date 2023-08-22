@@ -38,7 +38,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:nvme*"\
+  -nodefaults -no-user-config -no-reboot --no-shutdown\
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
@@ -46,7 +46,7 @@ qemu-system-x86_64 \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive index=0,media=disk,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
   -drive id=cache,if=none,format=raw,file=${OUTPUTDIR}/qemu-nvme-cache,werror=report,rerror=report \
-  -device nvme,drive=cache,serial=qn0001,id=nvme0 \
+  -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096 \
   -monitor stdio \
   -device vmware-svga,id=gpu0 \
   -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \

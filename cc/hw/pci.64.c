@@ -37,9 +37,76 @@ const void* pci_iterator_get_item(iterator_t* iterator);
 
 pci_context_t* PCI_CONTEXT = NULL;
 
-int8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr) {
-    uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);;
-    msix_table_address += msix_cap->table_offset;
+int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap) {
+
+    msix_cap->enable = 1;
+    msix_cap->function_mask = 0;
+
+    PRINTLOG(PCI, LOG_TRACE, "device has msix cap enabled %i fmask %i", msix_cap->enable, msix_cap->function_mask);
+    PRINTLOG(PCI, LOG_TRACE, "msix bir %i tables offset 0x%x  size 0x%x", msix_cap->bir, msix_cap->table_offset, msix_cap->table_size + 1);
+    PRINTLOG(PCI, LOG_TRACE, "msix pending bit bir %i tables offset 0x%x", msix_cap->pending_bit_bir, msix_cap->pending_bit_offset);
+
+    uint64_t bar_fa = 0;
+    uint64_t bar_size = 0;
+    uint64_t bar_va = 0;
+
+    bar_fa = pci_get_bar_address(pci_gen_dev, msix_cap->bir);
+    bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->bir);
+    bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
+
+    frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+
+    uint64_t bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+
+    if(bar_frames == NULL) {
+        PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
+
+        if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+            PRINTLOG(PCI, LOG_ERROR, "cannot allocate frame");
+
+            return -1;
+        }
+    }
+
+    memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    if(msix_cap->bir != msix_cap->pending_bit_bir) {
+        bar_fa = pci_get_bar_address(pci_gen_dev, msix_cap->pending_bit_bir);
+        bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->pending_bit_bir);
+        bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
+
+        bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+
+        bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
+        bar_req_frm.frame_address = bar_fa;
+        bar_req_frm.frame_count = bar_frm_cnt;
+
+        if(bar_frames == NULL) {
+            PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
+
+            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+                PRINTLOG(PCI, LOG_ERROR, "cannot allocate frame");
+
+                return -1;
+            }
+        }
+
+        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    }
+
+    return 0;
+}
+
+uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr, boolean_t need_fix) {
+    uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);
+
+    if(need_fix) {
+        msix_table_address += (msix_cap->table_offset << 3);
+    } else {
+        msix_table_address += (msix_cap->table_offset << 0);
+    }
+
 
     pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
 
@@ -51,15 +118,20 @@ int8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* ms
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
     interrupt_irq_set_handler(isrnum, isr);
 
-    PRINTLOG(PCI, LOG_TRACE, "msix table %p vector 0x%x isr 0x%02x", msix_table, msix_vector,  msix_table->entries[msix_vector].message_data);
+    PRINTLOG(PCI, LOG_TRACE, "msixcap %p intnum 0x%x isrnum 0x%x", msix_cap, intnum, isrnum);
+    PRINTLOG(PCI, LOG_TRACE, "msix table %p vector 0x%x int 0x%02x", msix_table, msix_vector,  msix_table->entries[msix_vector].message_data);
 
-    return 0;
+    return isrnum;
 }
 
-int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, boolean_t need_fix) {
     uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
 
-    msix_pendind_bit_table_address += msix_cap->pending_bit_offset;
+    if(need_fix) {
+        msix_pendind_bit_table_address += (msix_cap->table_offset << 3);
+    } else {
+        msix_pendind_bit_table_address += (msix_cap->table_offset << 0);
+    }
 
     uint8_t* pending_bit_table = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
 

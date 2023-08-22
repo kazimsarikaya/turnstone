@@ -299,6 +299,11 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    if(nvme_port_cnt == -1) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init nvme. Halting...");
+        cpu_hlt();
+    }
+
     if(network_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init network. Halting...");
         cpu_hlt();
