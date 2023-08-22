@@ -127,7 +127,7 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                         time_timer_spinsleep(1000);
                     }
 
-                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern, false);
+                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
                 }
 
             } else {
@@ -176,8 +176,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                         time_timer_spinsleep(1000);
                     }
 
-                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern, false);
-                    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, false);
+                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
+                    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no);
 
                 }
             } else {

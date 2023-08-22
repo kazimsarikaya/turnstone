@@ -65,7 +65,7 @@ int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
     *nvme_disk->io_completion_queue_head_doorbell = nvme_disk->io_c_queue_head;
 
 
-    pci_msix_clear_pending_bit(nvme_disk->pci_device, nvme_disk->msix_capability, 1, true);
+    pci_msix_clear_pending_bit(nvme_disk->pci_device, nvme_disk->msix_capability, 1);
     apic_eoi();
     return 0;
 }
@@ -360,7 +360,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
 
         PRINTLOG(NVME, LOG_DEBUG, "creating io cq");
 
-        nvme_disk->io_queue_isr = pci_msix_set_isr(pci_nvme,  msix_cap, 1, nvme_isr, true);
+        nvme_disk->io_queue_isr = pci_msix_set_isr(pci_nvme,  msix_cap, 1, nvme_isr);
         hashmap_put(nvme_disk_isr_map, (void*)nvme_disk->io_queue_isr, nvme_disk);
 
         nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_CREATE_CQ;
@@ -400,7 +400,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
         *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
 
-        pci_msix_clear_pending_bit(pci_nvme, msix_cap, 1, true);
+        pci_msix_clear_pending_bit(pci_nvme, msix_cap, 1);
 
         PRINTLOG(NVME, LOG_DEBUG, "io cq created");
 

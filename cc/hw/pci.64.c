@@ -98,15 +98,10 @@ int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix
     return 0;
 }
 
-uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr, boolean_t need_fix) {
+uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr) {
     uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);
 
-    if(need_fix) {
-        msix_table_address += (msix_cap->table_offset << 3);
-    } else {
-        msix_table_address += (msix_cap->table_offset << 0);
-    }
-
+    msix_table_address += (msix_cap->table_offset << 3);
 
     pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
 
@@ -119,28 +114,25 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
     interrupt_irq_set_handler(isrnum, isr);
 
     PRINTLOG(PCI, LOG_TRACE, "msixcap %p intnum 0x%x isrnum 0x%x", msix_cap, intnum, isrnum);
-    PRINTLOG(PCI, LOG_TRACE, "msix table %p vector 0x%x int 0x%02x", msix_table, msix_vector,  msix_table->entries[msix_vector].message_data);
+    PRINTLOG(PCI, LOG_TRACE, "msix table %p offset %x vector 0x%x int 0x%02x", msix_table, msix_cap->table_offset, msix_vector,  msix_table->entries[msix_vector].message_data);
 
     return isrnum;
 }
 
-int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, boolean_t need_fix) {
+int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
     uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
 
-    if(need_fix) {
-        msix_pendind_bit_table_address += (msix_cap->table_offset << 3);
-    } else {
-        msix_pendind_bit_table_address += (msix_cap->table_offset << 0);
-    }
+    msix_pendind_bit_table_address += (msix_cap->table_offset << 3);
 
-    uint8_t* pending_bit_table = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
+    uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
 
-    uint8_t mask1 = (1 << msix_cap->table_size) - 1;
+    uint32_t tbl_idx = msix_vector / 64;
+    uint32_t bit_idx = msix_vector % 64;
 
-    uint8_t mask2 = ~(1 << msix_vector);
-    mask1 &=  mask2;
+    uint64_t* pending_bit_table_entry = pending_bit_table + tbl_idx;
 
-    *pending_bit_table &= mask1;
+    // clear pending bit
+    *pending_bit_table_entry &= ~(1ULL << bit_idx);
 
     PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i",  msix_vector);
 

@@ -209,7 +209,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
                 vq_rx->last_used_index++;
             }
 
-            pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0, false);
+            pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
 
         }
 
@@ -247,7 +247,7 @@ int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
     const virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, 0);
 
-    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 1, false);
+    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 1);
     apic_eoi();
 
     return 0;
@@ -488,7 +488,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
                 time_timer_spinsleep(1000);
             }
 
-            pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 3, &network_virtio_config_isr, false);
+            pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 3, &network_virtio_config_isr);
         }
     } else if(vdev->has_msix) {
         vdev->common_config->msix_config = 3;
@@ -500,7 +500,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
             time_timer_spinsleep(1000);
         }
 
-        pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 3, &network_virtio_config_isr, false);
+        pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 3, &network_virtio_config_isr);
     }
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "queue configuration completed");
