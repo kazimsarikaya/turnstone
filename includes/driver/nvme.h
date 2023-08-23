@@ -16,6 +16,7 @@
 #include <utils.h>
 #include <future.h>
 #include <hashmap.h>
+#include <disk.h>
 
 /**
  * @brief initialize nvme devices
@@ -381,7 +382,8 @@ typedef enum nvme_admin_cmd_opcode_t {
     NVME_ADMIN_CMD_FIRMWARE_COMMIT = 0X10, ///< nvme admin command for uploading firmare
     NVME_ADMIN_CMD_FIRMWARE_DOWNLOAD = 0X11, ///< nvme admin command for downloading firmware
     NVME_ADMIN_CMD_NS_ATTACH = 0X15, ///< nvme admin command for attaching namespace
-    NVME_ADMIN_CMD_KEEP_ALIVE = 0X18,
+    NVME_ADMIN_CMD_KEEP_ALIVE = 0X18, ///< nvme admin command for keeping alive
+    NVME_ADMIN_CMD_FORMAT_NVM = 0X80, ///< nvme admin command for formatting nvme
 } nvme_admin_cmd_opcode_t; ///< shorthand for enum
 
 /**
@@ -484,10 +486,13 @@ typedef struct nvme_disk_t {
     hashmap_t*                     command_lock_map; ///< command lock map
     uint64_t                       prp_frame_fa; ///< prp frame fa
     uint64_t                       prp_frame_va; ///< prp frame va
+    uint64_t                       max_prp_entries; ///< max prp entries
 } nvme_disk_t; ///< shorthand for struct
 
 
-future_t nvme_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
-future_t nvme_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer);
-future_t nvme_flush(uint64_t disk_id);
+future_t           nvme_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
+future_t           nvme_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
+future_t           nvme_flush(uint64_t disk_id);
+disk_t*            nvme_disk_impl_open(nvme_disk_t* nvme_disk);
+const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id);
 #endif

@@ -23,15 +23,21 @@ hashmap_t* nvme_disks = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
 
 int8_t   nvme_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   nvme_format(nvme_disk_t* nvme_disk);
 int8_t   nvme_identify(nvme_disk_t* nvme_disk, uint32_t cns, uint32_t nsid, uint64_t data_address);
 int8_t   nvme_enable_cache(nvme_disk_t* nvme_disk);
 int8_t   nvme_set_queue_count(nvme_disk_t* nvme_disk, uint16_t io_sq_count, uint16_t io_cq_count);
-future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer, boolean_t write);
+future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer, boolean_t write);
 
+
+
+const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id) {
+    return hashmap_get(nvme_disks, (void*)disk_id);
+}
 
 int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
-    PRINTLOG(NVME, LOG_DEBUG, "nvme isr %i", intnum);
+    PRINTLOG(NVME, LOG_TRACE, "nvme isr %i", intnum);
     nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disk_isr_map, (void*)(uint64_t)intnum);
 
     if(nvme_disk == NULL) {
@@ -47,11 +53,11 @@ int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
     uint32_t sqid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqid;
     uint32_t cid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].cid;
 
-    PRINTLOG(NVME, LOG_DEBUG, "status code %i", status_code);
-    PRINTLOG(NVME, LOG_DEBUG, "status type %i", status_type);
-    PRINTLOG(NVME, LOG_DEBUG, "sqhd %i", sqhd);
-    PRINTLOG(NVME, LOG_DEBUG, "sqid %i", sqid);
-    PRINTLOG(NVME, LOG_DEBUG, "cid %i", cid);
+    PRINTLOG(NVME, LOG_TRACE, "status code %i", status_code);
+    PRINTLOG(NVME, LOG_TRACE, "status type %i", status_type);
+    PRINTLOG(NVME, LOG_TRACE, "sqhd %i", sqhd);
+    PRINTLOG(NVME, LOG_TRACE, "sqid %i", sqid);
+    PRINTLOG(NVME, LOG_TRACE, "cid %i", cid);
 
     lock_t lock = (lock_t)hashmap_get(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
 
@@ -196,9 +202,9 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
 
         nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)bar_va;
 
-        PRINTLOG(NVME, LOG_DEBUG, "nvme controller %lli ready? %i has msi? %i has_msix? %i", disk_id, nvme_regs->status.ready, msi_cap != NULL, msix_cap != NULL);
+        PRINTLOG(NVME, LOG_TRACE, "nvme controller %lli ready? %i has msi? %i has_msix? %i", disk_id, nvme_regs->status.ready, msi_cap != NULL, msix_cap != NULL);
         PRINTLOG(NVME, LOG_DEBUG, "nvme version %i.%i.%i", nvme_regs->version.major, nvme_regs->version.minor, nvme_regs->version.reserved_or_ter);
-        PRINTLOG(NVME, LOG_DEBUG, "nvme queue size %i", nvme_regs->capabilities.fields.mqes + 1);
+        PRINTLOG(NVME, LOG_TRACE, "nvme queue size %i", nvme_regs->capabilities.fields.mqes + 1);
 
         frame_t* queue_frames = NULL;
 
@@ -234,7 +240,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
             return -1;
         }
 
-        PRINTLOG(NVME, LOG_DEBUG, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
+        PRINTLOG(NVME, LOG_TRACE, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
         nvme_regs->config.css = 0;
         nvme_regs->asq = queue_frames->frame_address;
         nvme_regs->acq = queue_frames->frame_address + FRAME_SIZE;
@@ -268,8 +274,8 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         uint64_t io_sqtdb = bar_va + 0x1000 + (2 * 1) * (4 << dstrd);
         uint64_t io_cqhdb = bar_va + 0x1000 + (2 * 1 + 1) * (4 << dstrd);
 
-        PRINTLOG(NVME, LOG_DEBUG, "nvme admin sqtdb %llx cqhdb %llx", admin_sqtdb, admin_cqhdb);
-        PRINTLOG(NVME, LOG_DEBUG, "nvme io sqtdb %llx cqhdb %llx", io_sqtdb, io_cqhdb);
+        PRINTLOG(NVME, LOG_TRACE, "nvme admin sqtdb %llx cqhdb %llx", admin_sqtdb, admin_cqhdb);
+        PRINTLOG(NVME, LOG_TRACE, "nvme io sqtdb %llx cqhdb %llx", io_sqtdb, io_cqhdb);
 
         nvme_disk->admin_completion_queue_head_doorbell = (uint32_t*)admin_cqhdb;
         nvme_disk->admin_submission_queue_tail_doorbell = (uint32_t*)admin_sqtdb;
@@ -304,7 +310,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
             return -1;
         }
 
-        PRINTLOG(NVME, LOG_DEBUG, "nvme controller has vwc? %x", nvme_disk->identify->vwc);
+        PRINTLOG(NVME, LOG_TRACE, "nvme controller has vwc? %x", nvme_disk->identify->vwc);
         nvme_disk->flush_supported = nvme_disk->identify->vwc & 1;
 
         if(nvme_disk->flush_supported && nvme_enable_cache(nvme_disk) == -1) {
@@ -321,6 +327,9 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
             return -1;
         }
 
+        PRINTLOG(NVME, LOG_TRACE, "mdts 0x%x", nvme_disk->identify->mdts);
+        nvme_disk->max_prp_entries = (1 << (nvme_disk->identify->mdts + 4)) / 16;
+
         for(int32_t i = 0; i < 0x1000 / 4; i++) {
             if(nvme_disk->active_ns_list[i] == 0) {
                 break;
@@ -335,19 +344,35 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
             }
 
             PRINTLOG(NVME, LOG_DEBUG, "ns capacity %llx", nvme_disk->ns_identify->ncap);
-            PRINTLOG(NVME, LOG_DEBUG, "ns size %llx", nvme_disk->ns_identify->nsze);
-            PRINTLOG(NVME, LOG_DEBUG, "ns lba format count %x", nvme_disk->ns_identify->nlbaf);
-            PRINTLOG(NVME, LOG_DEBUG, "ns lba format %x", nvme_disk->ns_identify->flbas);
-            PRINTLOG(NVME, LOG_DEBUG, "ns lba format size %x %x %x",
-                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].ms,
-                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].lbads,
-                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].rp);
+            PRINTLOG(NVME, LOG_TRACE, "ns size %llx", nvme_disk->ns_identify->nsze);
+            PRINTLOG(NVME, LOG_TRACE, "ns lba format count %x", nvme_disk->ns_identify->nlbaf);
+            PRINTLOG(NVME, LOG_TRACE, "ns lba format %x", nvme_disk->ns_identify->flbas);
+            PRINTLOG(NVME, LOG_TRACE, "ns lba format size %x %x %x",
+                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].ms,
+                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads,
+                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].rp);
 
             nvme_disk->ns_id = nvme_disk->active_ns_list[i];
             nvme_disk->lba_count = nvme_disk->ns_identify->nsze;
-            nvme_disk->lba_size = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas].lbads;
+            nvme_disk->lba_size = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads;
+
+            PRINTLOG(NVME, LOG_TRACE, "format types");
+            for(int32_t j = 0; j <= nvme_disk->ns_identify->nlbaf; j++) {
+                PRINTLOG(NVME, LOG_TRACE, "ns lba format size %x %x %x",
+                         nvme_disk->ns_identify->lbaf[j].ms,
+                         nvme_disk->ns_identify->lbaf[j].lbads,
+                         nvme_disk->ns_identify->lbaf[j].rp);
+            }
         }
 
+        /*
+           if(nvme_format(nvme_disk) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot format nvme controller");
+            memory_free_ext(heap, nvme_disk);
+
+            return -1;
+           }
+         */
 
         if(nvme_set_queue_count(nvme_disk, 1, 1) != 0) {
             PRINTLOG(NVME, LOG_ERROR, "cannot set queue count");
@@ -358,7 +383,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
 
         uint16_t cid = nvme_disk->next_cid++;
 
-        PRINTLOG(NVME, LOG_DEBUG, "creating io cq");
+        PRINTLOG(NVME, LOG_TRACE, "creating io cq");
 
         nvme_disk->io_queue_isr = pci_msix_set_isr(pci_nvme,  msix_cap, 1, nvme_isr);
         hashmap_put(nvme_disk_isr_map, (void*)nvme_disk->io_queue_isr, nvme_disk);
@@ -402,9 +427,9 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
 
         pci_msix_clear_pending_bit(pci_nvme, msix_cap, 1);
 
-        PRINTLOG(NVME, LOG_DEBUG, "io cq created");
+        PRINTLOG(NVME, LOG_TRACE, "io cq created");
 
-        PRINTLOG(NVME, LOG_DEBUG, "creating io sq");
+        PRINTLOG(NVME, LOG_TRACE, "creating io sq");
 
         cid = nvme_disk->next_cid++;
 
@@ -445,7 +470,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
         *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
 
-        PRINTLOG(NVME, LOG_DEBUG, "io sq created");
+        PRINTLOG(NVME, LOG_TRACE, "io sq created");
 
         frame_t* prp_frames = NULL;
 
@@ -472,6 +497,56 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
     return hashmap_size(nvme_disks);
 }
 #pragma GCC diagnostic pop
+
+int8_t nvme_format(nvme_disk_t* nvme_disk) {
+    PRINTLOG(NVME, LOG_DEBUG, "formatting");
+
+    uint16_t cid = nvme_disk->next_cid++;
+
+    uint32_t format_params = (nvme_disk->ns_identify->flbas & 0xF);
+
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_FORMAT_NVM;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = nvme_disk->ns_id;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = format_params;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = 1;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
+
+
+    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
+    *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
+
+    while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
+        time_timer_spinsleep(500 * nvme_disk->timeout);
+    }
+
+    int8_t res = 0;
+
+    if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
+       nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot format: %x",
+                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
+        PRINTLOG(NVME, LOG_ERROR, "cannot format: %x",
+                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
+
+        res = -1;
+    }
+
+    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
+    *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
+
+    PRINTLOG(NVME, LOG_DEBUG, "formatting done");
+
+    return res;
+}
 
 int8_t nvme_enable_cache(nvme_disk_t* nvme_disk) {
     PRINTLOG(NVME, LOG_DEBUG, "enabling cache");
@@ -507,7 +582,7 @@ int8_t nvme_enable_cache(nvme_disk_t* nvme_disk) {
        nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
         PRINTLOG(NVME, LOG_ERROR, "cannot enable cache: %x",
                  nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-        PRINTLOG(NVME, LOG_ERROR, "cannot cache: %x",
+        PRINTLOG(NVME, LOG_ERROR, "cannot enable cache: %x",
                  nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
 
         res = -1;
@@ -626,22 +701,31 @@ int8_t nvme_identify(nvme_disk_t* nvme_disk,  uint32_t cns, uint32_t nsid, uint6
     return res;
 }
 
-future_t nvme_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t nvme_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     return nvme_read_write(disk_id, lba, size, buffer, false);
 }
 
-future_t nvme_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t nvme_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     return nvme_read_write(disk_id, lba, size, buffer, true);
 }
 
-future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer, boolean_t write) {
-    if(size % 0x1000) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot %s: size not multiple of 4k", write?"write":"read");
+future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer, boolean_t write) {
+    nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disks, (void*)disk_id);
+
+    if(nvme_disk == NULL) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: disk not found", write?"write":"read");
 
         return NULL;
     }
 
-    uint64_t fcnt = size / 0x1000;
+    if(size % nvme_disk->lba_size) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: size not multiple of 0x%x", write?"write":"read", nvme_disk->lba_size);
+
+        return NULL;
+    }
+
+    uint64_t fcnt = size / nvme_disk->lba_size;
+    uint64_t fa_cnt = fcnt / (0x1000 / nvme_disk->lba_size);
 
     if(fcnt > 512) {
         PRINTLOG(NVME, LOG_ERROR, "cannot %s: size too big", write?"write":"read");
@@ -665,31 +749,26 @@ future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t*
         return NULL;
     }
 
-    nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disks, (void*)disk_id);
-
-    if(nvme_disk == NULL) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot %s: disk not found", write?"write":"read");
-
-        return NULL;
-    }
-
     uint16_t cid = nvme_disk->next_cid++;
 
     uint64_t iosqt = nvme_disk->io_s_queue_tail;
 
     uint64_t prp1 = buffer_fa;
 
+    PRINTLOG(NVME, LOG_TRACE, "prp1: %llx va %llx", prp1, buffer_va);
+
     uint64_t prp2 = 0;
 
-    if(fcnt == 2) {
+    if(fa_cnt == 2) {
         prp2 = prp1 + 0x1000;
-    } else if(fcnt > 2) {
+    } else if(fa_cnt > 2) {
         prp2 = nvme_disk->prp_frame_fa + iosqt * 0x1000;
-        uint64_t* prp2_list = (uint64_t*)nvme_disk->prp_frame_va + iosqt * 0x1000;
+        uint64_t* prp2_list = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(prp2);
         memory_memclean(prp2_list, 0x1000);
 
-        for(uint64_t i = 0; i < fcnt - 1; i++) {
+        for(uint64_t i = 0; i < fa_cnt - 1; i++) {
             prp2_list[i] = prp1 + (i + 1) * 0x1000;
+            PRINTLOG(NVME, LOG_TRACE, "prp2: %llx va %llx", prp2_list[i], buffer_va + (i + 1) * 0x1000);
         }
     }
 
@@ -703,7 +782,7 @@ future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t*
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].dptr.prplist.prp2 = prp2;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw10 = lba & 0xFFFFFFFF;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw11 = (lba >> 32) & 0xFFFFFFFF;
-    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12 = fcnt - 1;
+    nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw12 = (fcnt - 1);
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw13 = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14 = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15 = 0;
@@ -715,13 +794,13 @@ future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t*
     nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % 64;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
 
-    PRINTLOG(NVME, LOG_DEBUG, "%s command sent with cid %x and s tail %llx", write?"write":"read", cid, nvme_disk->io_s_queue_tail - 1);
+    PRINTLOG(NVME, LOG_TRACE, "%s command sent with cid %x and s tail %llx", write?"write":"read", cid, nvme_disk->io_s_queue_tail - 1);
 
     return fut;
 }
 
 future_t nvme_flush(uint64_t disk_id) {
-    PRINTLOG(NVME, LOG_DEBUG, "flushing disk %llx", disk_id);
+    PRINTLOG(NVME, LOG_TRACE, "flushing disk %llx", disk_id);
 
     nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disks, (void*)disk_id);
 
@@ -732,7 +811,7 @@ future_t nvme_flush(uint64_t disk_id) {
     }
 
     if(!nvme_disk->flush_supported) {
-        PRINTLOG(NVME, LOG_DEBUG, "cannot flush: flush not supported");
+        PRINTLOG(NVME, LOG_TRACE, "cannot flush: flush not supported");
 
         return NULL;
     }
@@ -761,7 +840,7 @@ future_t nvme_flush(uint64_t disk_id) {
     nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % 64;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
 
-    PRINTLOG(NVME, LOG_DEBUG, "flush command sent with cid %x and s tail %llx", cid, nvme_disk->io_s_queue_tail - 1);
+    PRINTLOG(NVME, LOG_TRACE, "flush command sent with cid %x and s tail %llx", cid, nvme_disk->io_s_queue_tail - 1);
 
     return fut;
 }

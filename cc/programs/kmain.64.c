@@ -31,6 +31,7 @@
 #include <memory/frame.h>
 #include <time/timer.h>
 #include <network.h>
+#include <crc.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -91,6 +92,7 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t kmain64(size_t entry_point) {
     srand(0x123456789);
+    crc32_init_table();
 
     memory_heap_t* heap = memory_create_heap_hash(0, 0);
 
@@ -309,13 +311,16 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    ahci_sata_disk_t* d = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
-    if(d) {
-        PRINTLOG(KERNEL, LOG_DEBUG, "try to read disk 0x%p", d);
-        disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
+    PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
+
+    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
+
+    if(sd) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "try to read sata disk 0x%p", sd);
+        disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(sd));
 
         if(sata0) {
-            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
+            PRINTLOG(KERNEL, LOG_INFO, "sata disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
 
             disk_partition_context_t* part_ctx;
 
@@ -333,10 +338,38 @@ int8_t kmain64(size_t entry_point) {
         }
 
     } else {
-        PRINTLOG(KERNEL, LOG_WARNING, "no disks found");
+        PRINTLOG(KERNEL, LOG_WARNING, "sata disk 0 not found");
     }
 
-    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt)
+    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
+
+    nvme_disk_t* nd = (nvme_disk_t*)nvme_get_disk_by_id(0);
+
+    if(nd) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "try to read nvme disk 0x%p", nd);
+        disk_t* nvme0 = gpt_get_or_create_gpt_disk(nvme_disk_impl_open(nd));
+
+        if(nvme0) {
+            PRINTLOG(KERNEL, LOG_INFO, "nvme disk size 0x%llx", nvme0->disk.get_size((disk_or_partition_t*)nvme0));
+
+            disk_partition_context_t* part_ctx;
+
+            part_ctx = nvme0->get_partition_context(nvme0, 0);
+            PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+            memory_free(part_ctx);
+
+            part_ctx = nvme0->get_partition_context(nvme0, 1);
+            PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+            memory_free(part_ctx);
+
+            nvme0->disk.flush((disk_or_partition_t*)nvme0);
+        } else {
+            PRINTLOG(KERNEL, LOG_INFO, "nvme0 is empty");
+        }
+
+    } else {
+        PRINTLOG(KERNEL, LOG_WARNING, "nvme disk 0 not found");
+    }
 
     if(kbd_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init keyboard. Halting...");
@@ -364,19 +397,6 @@ int8_t kmain64(size_t entry_point) {
     }
 
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
-
-    char_t* test = memory_malloc_ext(NULL, 0x1000, 0x1000);
-    strcpy("hello world", test);
-
-    future_t fut = nvme_write(0, 0, 0x1000, (uint8_t*)test);
-    future_get_data_and_destroy(fut);
-
-    char_t* test2 = memory_malloc_ext(NULL, 0x1000, 0x1000);
-    fut = nvme_read(0, 0, 0x1000, (uint8_t*)test2);
-    future_get_data_and_destroy(fut);
-    PRINTLOG(KERNEL, LOG_INFO, "read %s", test2);
-
-    nvme_flush(0);
 
     return 0;
 }
