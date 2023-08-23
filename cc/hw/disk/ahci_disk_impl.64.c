@@ -159,7 +159,7 @@ disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
     }
 
     ctx->sata_disk = sata_disk;
-    ctx->block_size = 512;
+    ctx->block_size = sata_disk->logical_sector_size;
 
     disk_t* d = memory_malloc(sizeof(disk_t));
 

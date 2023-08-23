@@ -824,7 +824,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
     sysinfo->kernel_start = new_kernel_address;
     sysinfo->kernel_4k_frame_count = kernel_page_count;
-    sysinfo->kernel_default_heap_start = kernel_heap_address;
+    sysinfo->kernel_default_heap_start = aligned_kernel_heap_address;
     sysinfo->kernel_default_heap_4k_frame_count = kernel_heap_page_count;
     sysinfo->efi_system_table = system_table;
     sysinfo->page_table_helper_frame = page_table_helper_frame;

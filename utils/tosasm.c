@@ -24,8 +24,8 @@ boolean_t asm_parser_emit_whitespace(buffer_t buf);
 
 boolean_t asm_parser_emit_whitespace(buffer_t buf) {
 
-    while(buffer_remaining(buf) > 0 && 
-            (buffer_peek_byte(buf) == ' ' || buffer_peek_byte(buf) == '\t' || buffer_peek_byte(buf) == '\r')) {
+    while(buffer_remaining(buf) > 0 &&
+          (buffer_peek_byte(buf) == ' ' || buffer_peek_byte(buf) == '\t' || buffer_peek_byte(buf) == '\r')) {
         buffer_get_byte(buf);
     }
 
@@ -37,7 +37,7 @@ linkedlist_t asm_parser_parse(buffer_t buf) {
     while(buffer_remaining(buf) > 0 ) {
         asm_parser_emit_whitespace(buf);
 
-        printf("%c \n",buffer_get_byte(buf));
+        printf("%c \n", buffer_get_byte(buf));
 
         break;
     }
