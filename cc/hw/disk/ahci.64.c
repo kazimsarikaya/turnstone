@@ -702,7 +702,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     disk->physical_sector_size = disk->logical_sector_size << identify_data.physical_logical_sector_size.logical_sectors_per_physical_sector;
 
-    PRINTLOG(AHCI, LOG_INFO, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
+    PRINTLOG(AHCI, LOG_TRACE, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
              disk->disk_id, disk->cylinders, disk->heads,
              disk->sectors, disk->lba_count, disk->serial, disk->model,
              disk->queue_depth, disk->sncq, disk->volatile_write_cache,
