@@ -466,6 +466,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(nvme_disk->prp_frame_fa);
 
         memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        memory_memclean((void*)nvme_disk->prp_frame_va, 64 * FRAME_SIZE);
 
         hashmap_put(nvme_disks, (void*)nvme_disk->disk_id, nvme_disk);
 

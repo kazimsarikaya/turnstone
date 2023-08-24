@@ -479,7 +479,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
                 frame_t* port_frames = NULL;
 
-                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
+                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 10, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
                     iter->destroy(iter);
 
@@ -492,6 +492,8 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
                     return -1;
                 }
+
+                memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port_frames->frame_address), 4096 * 10);
 
                 ahci_port_rebase(port, port_frames->frame_address, nr_cmd_slots);
 
@@ -716,7 +718,7 @@ int8_t ahci_identify(uint64_t disk_id) {
     return 0;
 }
 
-future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -728,12 +730,36 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
         return NULL;
     }
 
+    uint32_t sector_count = size / disk->logical_sector_size;
+
+    if(size % disk->logical_sector_size != 0) {
+        sector_count++;
+    }
+
+    if(sector_count > 65536) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot read more than 65536 sectors at on");
+
+        return NULL;
+    }
+
+    uint32_t prdt_length = size / (4 << 20);
+
+    if(size % (4 << 20) != 0) {
+        prdt_length++;
+    }
+
+    if(prdt_length > 64) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot read more than 0x%llx at on", 65536 * disk->logical_sector_size);
+
+        return NULL;
+    }
+
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
     cmd_hdr += slot;
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
     cmd_hdr->write_direction = 0;
-    cmd_hdr->prdt_length = 1;
+    cmd_hdr->prdt_length = prdt_length;
     cmd_hdr->clear_busy = 1;
 
     ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
@@ -747,8 +773,15 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
         return NULL;
     }
 
-    cmd_table->prdt_entry[0].data_base_address = buffer_phy_addr;
-    cmd_table->prdt_entry[0].data_byte_count = size - 1;
+    uint32_t tmp_size = size;
+
+    for(uint32_t i = 0; i < cmd_hdr->prdt_length; i++) {
+        cmd_table->prdt_entry[i].data_base_address = buffer_phy_addr;
+        cmd_table->prdt_entry[i].data_byte_count = (tmp_size > (4 << 20)) ? (4 << 20) - 1 : tmp_size - 1;
+
+        tmp_size -= (4 << 20);
+        buffer_phy_addr += (4 << 20);
+    }
 
     ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
@@ -758,12 +791,12 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
 
     if(!(disk->sncq && disk->queue_depth)) {
         fis->command = AHCI_ATA_CMD_READ_DMA_EXT;
-        fis->count = size / 512;
+        fis->count = size / disk->logical_sector_size;
     }else {
         fis->command = AHCI_ATA_CMD_READ_FPDMA_QUEUED;
         fis->count = slot << 3;
-        fis->featurel = (size / 512) & 0xFF;
-        fis->featureh = ((size / 512) >> 8) & 0xFF;
+        fis->featurel = (size / disk->logical_sector_size) & 0xFF;
+        fis->featureh = ((size / disk->logical_sector_size) >> 8) & 0xFF;
     }
 
     fis->lba0 = lba & 0xFFFFFF;
@@ -784,7 +817,7 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
     return fut;
 }
 
-future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -796,6 +829,30 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
         return NULL;
     }
 
+    uint32_t sector_count = size / disk->logical_sector_size;
+
+    if(size % disk->logical_sector_size != 0) {
+        sector_count++;
+    }
+
+    if(sector_count > 65536) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot write more than 65536 sectors at on");
+
+        return NULL;
+    }
+
+    uint32_t prdt_length = size / (4 << 20);
+
+    if(size % (4 << 20) != 0) {
+        prdt_length++;
+    }
+
+    if(prdt_length > 64) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot write more than 0x%llx at on", 65536 * disk->logical_sector_size);
+
+        return NULL;
+    }
+
     PRINTLOG(AHCI, LOG_TRACE, "write to port 0x%p at lba 0x%llx with size 0x%x from buffer 0x%p slot %i", port, lba, size, buffer, slot);
 
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
@@ -803,7 +860,7 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
     cmd_hdr->write_direction = 1;
-    cmd_hdr->prdt_length = 1;
+    cmd_hdr->prdt_length = prdt_length;
     cmd_hdr->clear_busy = 1;
 
     ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
@@ -817,8 +874,15 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
         return NULL;
     }
 
-    cmd_table->prdt_entry[0].data_base_address = buffer_phy_addr;
-    cmd_table->prdt_entry[0].data_byte_count = size - 1;
+    uint32_t tmp_size = size;
+
+    for(uint32_t i = 0; i < cmd_hdr->prdt_length; i++) {
+        cmd_table->prdt_entry[i].data_base_address = buffer_phy_addr;
+        cmd_table->prdt_entry[i].data_byte_count = (tmp_size > (4 << 20)) ? (4 << 20) - 1 : tmp_size - 1;
+
+        tmp_size -= (4 << 20);
+        buffer_phy_addr += (4 << 20);
+    }
 
     ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
@@ -828,12 +892,12 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
 
     if(!(disk->sncq && disk->queue_depth)) {
         fis->command = AHCI_ATA_CMD_WRITE_DMA_EXT;
-        fis->count = size / 512;
+        fis->count = size / disk->logical_sector_size;
     }else {
         fis->command = AHCI_ATA_CMD_WRITE_FPDMA_QUEUED;
         fis->count = slot << 3;
-        fis->featurel = (size / 512) & 0xFF;
-        fis->featureh = ((size / 512) >> 8) & 0xFF;
+        fis->featurel = (size / disk->logical_sector_size) & 0xFF;
+        fis->featureh = ((size / disk->logical_sector_size) >> 8) & 0xFF;
         fis->device = 3 << 6; // fua and always 1
     }
 
@@ -971,10 +1035,12 @@ void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slot
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 
     for(uint8_t i = 0; i < nr_cmd_slots; i++) {
-        cmd_hdr[i].prdt_length = 16;
+        cmd_hdr[i].prdt_length = 64;
         cmd_hdr[i].prdt_base_address = offset;
 
         uint64_t size = sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr[i].prdt_length - 1));
+
+        PRINTLOG(AHCI, LOG_TRACE, "prdt offset 0x%llx size 0x%llx", offset, size);
 
         memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr[i].prdt_base_address), size);
 
