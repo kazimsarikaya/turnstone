@@ -73,7 +73,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_KERNEL
 /*! default log level for kernel module */
-#define LOG_LEVEL_KERNEL LOG_DEBUG
+#define LOG_LEVEL_KERNEL LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_MEMORY
@@ -113,7 +113,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_LINKER
 /*! default log level for linker module */
-#define LOG_LEVEL_LINKER LOG_TRACE
+#define LOG_LEVEL_LINKER LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_TASKING
@@ -178,7 +178,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_NVME
 /*! default log level for nvme module */
-#define LOG_LEVEL_NVME LOG_DEBUG
+#define LOG_LEVEL_NVME LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_TOSDB

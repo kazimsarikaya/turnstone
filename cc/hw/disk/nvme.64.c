@@ -28,6 +28,20 @@ int8_t   nvme_identify(nvme_disk_t* nvme_disk, uint32_t cns, uint32_t nsid, uint
 int8_t   nvme_enable_cache(nvme_disk_t* nvme_disk);
 int8_t   nvme_set_queue_count(nvme_disk_t* nvme_disk, uint16_t io_sq_count, uint16_t io_cq_count);
 future_t nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer, boolean_t write);
+int8_t   nvme_send_admin_command(nvme_disk_t* nvme_disk,
+                                 uint8_t      opcode,
+                                 uint8_t      fuse,
+                                 uint32_t     nsid,
+                                 uint64_t     mptr,
+                                 uint64_t     prp1,
+                                 uint64_t     prp2,
+                                 uint32_t     cdw10,
+                                 uint32_t     cdw11,
+                                 uint32_t     cdw12,
+                                 uint32_t     cdw13,
+                                 uint32_t     cdw14,
+                                 uint32_t     cdw15,
+                                 uint32_t*    sdw0);
 
 
 
@@ -67,7 +81,7 @@ int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
     lock_release(lock);
 
-    nvme_disk->io_c_queue_head = (nvme_disk->io_c_queue_head + 1) % 64;
+    nvme_disk->io_c_queue_head = (nvme_disk->io_c_queue_head + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_completion_queue_head_doorbell = nvme_disk->io_c_queue_head;
 
 
@@ -240,12 +254,15 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
             return -1;
         }
 
+
+        nvme_disk->admin_queue_size = 64;
+        nvme_disk->io_queue_size = 64;
+
         PRINTLOG(NVME, LOG_TRACE, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
         nvme_regs->config.css = 0;
         nvme_regs->asq = queue_frames->frame_address;
         nvme_regs->acq = queue_frames->frame_address + FRAME_SIZE;
-        nvme_regs->aqa.acqs = 63;
-        nvme_regs->aqa.asqs = 63;
+        nvme_regs->aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
         nvme_regs->config.iosqes = 6;
         nvme_regs->config.iocqes = 4;
         nvme_regs->config.ams = 0;
@@ -381,49 +398,31 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
             return -1;
         }
 
-        uint16_t cid = nvme_disk->next_cid++;
-
         PRINTLOG(NVME, LOG_TRACE, "creating io cq");
 
         nvme_disk->io_queue_isr = pci_msix_set_isr(pci_nvme,  msix_cap, 1, nvme_isr);
         hashmap_put(nvme_disk_isr_map, (void*)nvme_disk->io_queue_isr, nvme_disk);
 
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_CREATE_CQ;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = queue_frames->frame_address + 3 * FRAME_SIZE;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = 0x003f0001;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = (1 << 16) | (1 << 1) | 1;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
-
-
-        nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
-        *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
-
-        while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
-            time_timer_spinsleep(500 * (nvme_regs->capabilities.fields.timeout + 1));
-        }
-
-        if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
-           nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot create io cq: %x",
-                     nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-            PRINTLOG(NVME, LOG_ERROR, "cannot create io cq: %x",
-                     nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
+        if(nvme_send_admin_command(nvme_disk,
+                                   NVME_ADMIN_CMD_CREATE_CQ,  // opcode
+                                   0x0, // fuse
+                                   0x0, // nsid
+                                   0x0, // mptr
+                                   queue_frames->frame_address + 3 * FRAME_SIZE, // prp1
+                                   0x0, // prp2
+                                   ((nvme_disk->io_queue_size) << 16) | 1, // cdw10
+                                   (1 << 16) | (1 << 1) | 1,  // cdw11
+                                   0x0,  // cdw12
+                                   0x0, // cdw13
+                                   0x0, // cdw14
+                                   0x0,  // cdw15
+                                   0x0  // sdw0
+                                   ) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot create io cq");
             memory_free_ext(heap, nvme_disk);
 
             return -1;
         }
-
-        nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
-        *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
 
         pci_msix_clear_pending_bit(pci_nvme, msix_cap, 1);
 
@@ -431,44 +430,26 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
 
         PRINTLOG(NVME, LOG_TRACE, "creating io sq");
 
-        cid = nvme_disk->next_cid++;
-
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_CREATE_SQ;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = queue_frames->frame_address + 2 * FRAME_SIZE;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = 0x003f0001;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = (1 << 16) | 1;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
-        nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
-
-
-        nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
-        *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
-
-        while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
-            time_timer_spinsleep(500 * (nvme_regs->capabilities.fields.timeout + 1));
-        }
-
-        if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
-           nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot create io sq: %x",
-                     nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-            PRINTLOG(NVME, LOG_ERROR, "cannot create io sq: %x",
-                     nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
+        if(nvme_send_admin_command(nvme_disk,
+                                   NVME_ADMIN_CMD_CREATE_SQ,  // opcode
+                                   0x0, // fuse
+                                   0x0, // nsid
+                                   0x0, // mptr
+                                   queue_frames->frame_address + 2 * FRAME_SIZE, // prp1
+                                   0x0, // prp2
+                                   ((nvme_disk->io_queue_size) << 16) | 1, // cdw10
+                                   (1 << 16) | 1,  // cdw11
+                                   0x0,  // cdw12
+                                   0x0, // cdw13
+                                   0x0, // cdw14
+                                   0x0,  // cdw15
+                                   0x0  // sdw0
+                                   ) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot create io sq");
             memory_free_ext(heap, nvme_disk);
 
             return -1;
         }
-
-        nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
-        *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
 
         PRINTLOG(NVME, LOG_TRACE, "io sq created");
 
@@ -501,49 +482,23 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
 int8_t nvme_format(nvme_disk_t* nvme_disk) {
     PRINTLOG(NVME, LOG_DEBUG, "formatting");
 
-    uint16_t cid = nvme_disk->next_cid++;
-
     uint32_t format_params = (nvme_disk->ns_identify->flbas & 0xF);
 
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_FORMAT_NVM;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = nvme_disk->ns_id;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = format_params;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = 1;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
-
-
-    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
-    *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
-
-    while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
-        time_timer_spinsleep(500 * nvme_disk->timeout);
-    }
-
-    int8_t res = 0;
-
-    if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
-       nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot format: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-        PRINTLOG(NVME, LOG_ERROR, "cannot format: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
-
-        res = -1;
-    }
-
-    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
-    *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
-
-    PRINTLOG(NVME, LOG_DEBUG, "formatting done");
+    int8_t res = nvme_send_admin_command(nvme_disk,
+                                         NVME_ADMIN_CMD_FORMAT_NVM, // opcode
+                                         0x0, // fuse
+                                         nvme_disk->ns_id, // nsid
+                                         0x0, // mptr
+                                         0x0, // prp1
+                                         0x0, // prp2
+                                         format_params, // cdw10
+                                         0x0, // cdw11
+                                         0x0, // cdw12
+                                         0x0, // cdw13
+                                         0x0, // cdw14
+                                         0x0, // cdw15
+                                         0x0 // sdw0
+                                         );
 
     return res;
 }
@@ -551,47 +506,21 @@ int8_t nvme_format(nvme_disk_t* nvme_disk) {
 int8_t nvme_enable_cache(nvme_disk_t* nvme_disk) {
     PRINTLOG(NVME, LOG_DEBUG, "enabling cache");
 
-    uint16_t cid = nvme_disk->next_cid++;
-
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_SET_FEATURES;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = 0x6;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = 1;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
-
-
-    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
-    *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
-
-    while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
-        time_timer_spinsleep(500 * nvme_disk->timeout);
-    }
-
-    int8_t res = 0;
-
-    if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
-       nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot enable cache: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-        PRINTLOG(NVME, LOG_ERROR, "cannot enable cache: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
-
-        res = -1;
-    }
-
-    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
-    *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
-
-    PRINTLOG(NVME, LOG_DEBUG, "cache enabled");
+    int8_t res = nvme_send_admin_command(nvme_disk,
+                                         NVME_ADMIN_CMD_SET_FEATURES, // opcode
+                                         0x0, // fuse
+                                         0x0, // nsid
+                                         0x0, // mptr
+                                         0x0, // prp1
+                                         0x0, // prp2
+                                         0x6, // cdw10
+                                         0x0, // cdw11
+                                         0x0, // cdw12
+                                         0x0, // cdw13
+                                         0x0, // cdw14
+                                         0x0, // cdw15
+                                         0x0 // sdw0
+                                         );
 
     return res;
 }
@@ -599,56 +528,31 @@ int8_t nvme_enable_cache(nvme_disk_t* nvme_disk) {
 int8_t nvme_set_queue_count(nvme_disk_t* nvme_disk, uint16_t io_sq_count, uint16_t io_cq_count) {
     PRINTLOG(NVME, LOG_DEBUG, "enabling io queues with %d sq and %d cq", io_sq_count, io_cq_count);
 
-    uint16_t cid = nvme_disk->next_cid++;
     io_sq_count--;
     io_cq_count--;
 
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_SET_FEATURES;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = 0x7;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = (io_cq_count << 16) | io_sq_count;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
+    uint32_t result = 0;
 
+    int8_t res = nvme_send_admin_command(nvme_disk,
+                                         NVME_ADMIN_CMD_SET_FEATURES, // opcode
+                                         0x0, // fuse
+                                         0x0, // nsid
+                                         0x0, // mptr
+                                         0x0, // prp1
+                                         0x0, // prp2
+                                         0x7, // cdw10
+                                         (io_cq_count << 16) | io_sq_count, // cdw11
+                                         0x0, // cdw12
+                                         0x0, // cdw13
+                                         0x0, // cdw14
+                                         0x0, // cdw15
+                                         &result // sdw0
+                                         );
 
-    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
-    *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
-
-    while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
-        time_timer_spinsleep(500 * nvme_disk->timeout);
+    if(res == 0) {
+        nvme_disk->io_sq_count = (result >> 16) & 0xFFFF;
+        nvme_disk->io_cq_count = result & 0xFFFF;
     }
-
-    int8_t res = 0;
-
-    if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
-       nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot set queue counts: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-        PRINTLOG(NVME, LOG_ERROR, "cannot set queue counts: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
-
-        res = -1;
-    }
-
-    nvme_disk->io_sq_count = (nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cdw0 & 0xFFFF) + 1;
-    nvme_disk->io_cq_count = ((nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cdw0 >> 16) & 0xFFFF) + 1;
-
-    PRINTLOG(NVME, LOG_DEBUG, "queue counts set with %d sq and %d cq",
-             nvme_disk->io_sq_count, nvme_disk->io_cq_count);
-
-
-    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
-    *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
-
-    PRINTLOG(NVME, LOG_DEBUG, "io queues enabled");
 
     return res;
 }
@@ -656,47 +560,21 @@ int8_t nvme_set_queue_count(nvme_disk_t* nvme_disk, uint16_t io_sq_count, uint16
 int8_t nvme_identify(nvme_disk_t* nvme_disk,  uint32_t cns, uint32_t nsid, uint64_t data_address) {
     PRINTLOG(NVME, LOG_DEBUG, "querying identify");
 
-    uint16_t cid = nvme_disk->next_cid++;
-
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = NVME_ADMIN_CMD_IDENTIFY;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = nsid;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = data_address;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = cns;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = 0;
-    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = 0;
-
-
-    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % 64;
-    *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
-
-    while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
-        time_timer_spinsleep(500 * nvme_disk->timeout);
-    }
-
-    int8_t res = 0;
-
-    if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
-       nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot identify: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
-        PRINTLOG(NVME, LOG_ERROR, "cannot identify: %x",
-                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
-
-        res = -1;
-    }
-
-    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % 64;
-    *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
-
-    PRINTLOG(NVME, LOG_DEBUG, "identify completed");
+    int8_t res = nvme_send_admin_command(nvme_disk,
+                                         NVME_ADMIN_CMD_IDENTIFY, // opcode
+                                         0x0, // fuse
+                                         nsid, // nsid
+                                         0x0, // mptr
+                                         data_address, // prp1
+                                         0x0, // prp2
+                                         cns, // cdw10
+                                         0x0, // cdw11
+                                         0x0, // cdw12
+                                         0x0, // cdw13
+                                         0x0, // cdw14
+                                         0x0, // cdw15
+                                         0x0 // sdw0
+                                         );
 
     return res;
 }
@@ -837,10 +715,78 @@ future_t nvme_flush(uint64_t disk_id) {
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
     future_t fut = future_create(lock);
 
-    nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % 64;
+    nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
 
     PRINTLOG(NVME, LOG_TRACE, "flush command sent with cid %x and s tail %llx", cid, nvme_disk->io_s_queue_tail - 1);
 
     return fut;
+}
+
+int8_t nvme_send_admin_command(nvme_disk_t* nvme_disk,
+                               uint8_t      opcode,
+                               uint8_t      fuse,
+                               uint32_t     nsid,
+                               uint64_t     mptr,
+                               uint64_t     prp1,
+                               uint64_t     prp2,
+                               uint32_t     cdw10,
+                               uint32_t     cdw11,
+                               uint32_t     cdw12,
+                               uint32_t     cdw13,
+                               uint32_t     cdw14,
+                               uint32_t     cdw15,
+                               uint32_t*    sdw0) {
+
+    uint16_t cid = nvme_disk->next_cid++;
+
+    PRINTLOG(NVME, LOG_TRACE, "sending admin command %x with cid %x", opcode, cid);
+
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].opc = opcode;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].fuse = fuse;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cid = cid;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].nsid = nsid;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].psdt = 0;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].mptr = mptr;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp1 = prp1;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].dptr.prplist.prp2 = prp2;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw10 = cdw10;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw11 = cdw11;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw12 = cdw12;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw13 = cdw13;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw14 = cdw14;
+    nvme_disk->admin_submission_queue[nvme_disk->admin_s_queue_tail].cdw15 = cdw15;
+
+    nvme_disk->admin_s_queue_tail = (nvme_disk->admin_s_queue_tail + 1) % nvme_disk->admin_queue_size;
+    *nvme_disk->admin_submission_queue_tail_doorbell = nvme_disk->admin_s_queue_tail;
+
+    while(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cid != cid) {
+        time_timer_spinsleep(500 * nvme_disk->timeout);
+    }
+
+    int8_t res = 0;
+
+    if(nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code != 0 ||
+       nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "command %x failed. status code: %x",
+                 opcode,
+                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_code);
+        PRINTLOG(NVME, LOG_ERROR, "command %x failed. status type: %x",
+                 opcode,
+                 nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].status_type);
+
+        res = -1;
+    }
+
+    if(sdw0) {
+        *sdw0 = nvme_disk->admin_completion_queue[nvme_disk->admin_c_queue_head].cdw0;
+    }
+
+
+    nvme_disk->admin_c_queue_head = (nvme_disk->admin_c_queue_head + 1) % nvme_disk->admin_queue_size;
+    *nvme_disk->admin_completion_queue_head_doorbell = nvme_disk->admin_c_queue_head;
+
+    PRINTLOG(NVME, LOG_TRACE, "command %x completed with cid %x", opcode, cid);
+
+    return res;
 }
