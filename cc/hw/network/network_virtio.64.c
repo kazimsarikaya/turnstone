@@ -129,8 +129,6 @@ int8_t network_virtio_process_tx(void){
 int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
     UNUSED(args_cnt);
 
-    task_set_interruptible();
-
     virtio_dev_t* vdev = (virtio_dev_t*)args[0];
 
     virtio_queue_ext_t* vq_rx = &vdev->queues[0];
@@ -138,16 +136,20 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
     virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
     virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
 
+    PRINTLOG(VIRTIONET, LOG_TRACE, "virtio network rx clear pending bit send set interruptible");
+    cpu_cli();
+    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+    task_set_interruptible();
+    cpu_sti();
+
     while(true) {
 
         if(network_received_packets != NULL && vdev->return_queue != NULL) {
 
             while(vq_rx->last_used_index < used->index) {
                 PRINTLOG(VIRTIONET, LOG_TRACE, "packet received. last used index %i", vq_rx->last_used_index);
-                network_received_packet_t* packet = memory_malloc_ext(linkedlist_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
 
-                uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
-                uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
+                network_received_packet_t* packet = memory_malloc_ext(linkedlist_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
 
                 if(packet == NULL) {
                     PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet");
@@ -156,6 +158,9 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
 
                     continue;
                 }
+
+                uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
+                uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
 
                 uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
                 virtio_network_header_t* hdr = (virtio_network_header_t*)offset;
@@ -177,7 +182,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
                 packet->packet_data = memory_malloc_ext(linkedlist_get_heap(network_received_packets), packet_len, 0);
 
                 if(packet->packet_data == NULL) {
-                    PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet data");
+                    PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet data. packet len 0x%llx", packet_len);
                     memory_free_ext(linkedlist_get_heap(network_received_packets), packet);
 
                     task_yield();

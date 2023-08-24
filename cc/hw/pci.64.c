@@ -122,7 +122,9 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
 int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
     uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
 
-    msix_pendind_bit_table_address += (msix_cap->table_offset << 3);
+    msix_pendind_bit_table_address += (msix_cap->pending_bit_offset << 3);
+
+    PRINTLOG(PCI, LOG_TRACE, "msix pending bit table address 0x%llx", msix_pendind_bit_table_address);
 
     uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
 
@@ -134,7 +136,7 @@ int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_
     // clear pending bit
     *pending_bit_table_entry &= ~(1ULL << bit_idx);
 
-    PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i",  msix_vector);
+    PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i 0x%llx",  msix_vector, *pending_bit_table_entry);
 
     return 0;
 }
