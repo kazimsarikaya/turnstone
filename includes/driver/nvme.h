@@ -43,7 +43,7 @@ typedef union nvme_controller_cap_t {
         uint64_t bps       : 1; ///< boot partition support
         uint64_t reserved1 : 2; ///< reserved
         uint64_t mpsmin    : 4; ///< memory page size minimum
-        uint8_t  mpsmax    : 4; ///< memory page size maximum
+        uint64_t mpsmax    : 4;  ///< memory page size maximum
         uint64_t pmrs      : 1; ///< persistent memory region supported
         uint64_t cmbs      : 1; ///< controller memory buffer supported
         uint64_t reserved2 : 6; ///< reserved
