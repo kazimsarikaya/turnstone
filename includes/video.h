@@ -11,11 +11,16 @@
 
 #include <types.h>
 #include <logging.h>
+#include <memory.h>
+#include <linkedlist.h>
 
 /*! magic for psf2 fonts*/
 #define VIDEO_PSF2_FONT_MAGIC 0x864ab572
 /*! magic for psf1 fonts*/
 #define VIDEO_PSF1_FONT_MAGIC 0x0436
+
+#define VIDEO_PCI_DEVICE_VENDOR_VIRTIO 0x1AF4
+#define VIDEO_PCI_DEVICE_ID_VIRTIO_GPU 0x1050
 
 /**
  * @struct video_psf2_font_t
@@ -108,4 +113,18 @@ size_t video_printf(const char_t* fmt, ...) __attribute__ ((format (printf, 1, 2
 
 
 #define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
+
+/**
+ * @brief video diplay pci devices init
+ * @param[in] heap heap to allocate memory
+ * @param[in] display_controllers list of display controllers
+ * @return 0 if success
+ */
+int8_t video_display_init(memory_heap_t* heap, linkedlist_t display_controllers);
+int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline);
+
+typedef void (*video_display_flush_f)(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+
+extern video_display_flush_f VIDEO_DISPLAY_FLUSH;
+
 #endif

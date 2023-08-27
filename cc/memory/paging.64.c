@@ -465,6 +465,15 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
     }
 
     uint64_t vfb_fa_addr = SYSTEM_INFO->frame_buffer->physical_base_address;
+
+    if(!vfb_fa_addr) {
+        PRINTLOG(KERNEL, LOG_WARNING, "cannot get vfb physical address");
+
+        cpu_cr0_enable_wp();
+
+        return p4;
+    }
+
     uint64_t vfb_frm_cnt = (SYSTEM_INFO->frame_buffer->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     frame_t* vfb_fa_frm = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)vfb_fa_addr);

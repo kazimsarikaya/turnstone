@@ -42,6 +42,7 @@ typedef enum logging_modules_t {
     NVME,
     TOSDB,
     HEAP_HASH,
+    VIRTIOGPU,
     HPET,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
@@ -192,10 +193,16 @@ extern uint8_t logging_module_levels[];
 #define LOG_LEVEL_HEAP_HASH LOG_INFO
 #endif
 
+#ifndef LOG_LEVEL_VIRTIOGPU
+/*! default log level for vmware svga module */
+#define LOG_LEVEL_VIRTIOGPU LOG_INFO
+#endif
+
 #ifndef LOG_LEVEL_HPET
 /*! default log level for hpet module */
 #define LOG_LEVEL_HPET LOG_INFO
 #endif
+
 #ifndef LOG_LOCATION
 /*! file and line no will be logged? */
 #define LOG_LOCATION 1

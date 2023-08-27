@@ -82,6 +82,7 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                 if(write) {
                     descs[i].flags = write?VIRTIO_QUEUE_DESC_F_WRITE:0;
                     write = 0;
+                    descs[i].length = queue_item_size;
                 } else {
                     descs[i].flags = VIRTIO_QUEUE_DESC_F_NEXT;
                     descs[i].next = i + 1;
@@ -167,6 +168,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
             vdev->common_config->queue_enable = 1;
             time_timer_spinsleep(1000);
 
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x interrupt configuration started. has msix? %i", queue_no, vdev->has_msix);
+
             if(vdev->has_msix) {
                 if(modern) {
                     vdev->common_config->queue_msix_vector = queue_no;
@@ -193,6 +196,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                 }
 
             }
+
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x interrupt configuration finished", queue_no);
 
             // TODO: if nd not exists?
 
