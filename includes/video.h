@@ -22,6 +22,9 @@
 #define VIDEO_PCI_DEVICE_VENDOR_VIRTIO 0x1AF4
 #define VIDEO_PCI_DEVICE_ID_VIRTIO_GPU 0x1050
 
+#define VIDEO_PCI_DEVICE_VENDOR_VMWARE 0x15AD
+#define VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2 0x0405
+
 /**
  * @struct video_psf2_font_t
  * @brief psf v2 font header

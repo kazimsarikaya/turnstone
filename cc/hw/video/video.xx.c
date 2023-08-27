@@ -17,6 +17,7 @@
 #include <linkedlist.h>
 #include <pci.h>
 #include <driver/video_virtio.h>
+#include <driver/video_vmwaresvga.h>
 
 MODULE("turnstone.kernel.hw.video");
 
@@ -711,6 +712,8 @@ int8_t video_display_init(memory_heap_t* heap, linkedlist_t display_controllers)
 
         if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VIRTIO && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VIRTIO_GPU) {
             virtio_video_init(heap, device);
+        } else if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
+            vmware_svga2_init(heap, device);
         }
 
         iter->next(iter);

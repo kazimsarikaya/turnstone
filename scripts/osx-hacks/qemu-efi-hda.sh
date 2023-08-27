@@ -54,4 +54,4 @@ qemu-system-x86_64 \
   -device virtio-keyboard,id=kbd \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
-  -display gtk
+  -display sdl,gl=on 
