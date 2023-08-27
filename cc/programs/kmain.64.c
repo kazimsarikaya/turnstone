@@ -32,6 +32,7 @@
 #include <time/timer.h>
 #include <network.h>
 #include <crc.h>
+#include <device/hpet.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -286,6 +287,11 @@ int8_t kmain64(size_t entry_point) {
     }
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
+
+    if(hpet_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init hpet. Halting...");
+        cpu_hlt();
+    }
 
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
