@@ -47,6 +47,10 @@ int8_t lock_destroy(lock_t lock){
 }
 
 void lock_acquire(lock_t lock) {
+    if(lock == NULL) {
+        return;
+    }
+
     lock_internal_t* li = (lock_internal_t*)lock;
     task_t* current_task = task_get_current_task();
     uint64_t current_task_id;
@@ -76,6 +80,10 @@ void lock_acquire(lock_t lock) {
 }
 
 void lock_release(lock_t lock) {
+    if(lock == NULL) {
+        return;
+    }
+
     lock_internal_t* li = (lock_internal_t*)lock;
 
     if(li) {
