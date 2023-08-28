@@ -130,4 +130,6 @@ typedef void (*video_display_flush_f)(uint64_t offset, uint32_t x, uint32_t y, u
 
 extern video_display_flush_f VIDEO_DISPLAY_FLUSH;
 
+void video_set_color(uint32_t foreground, uint32_t background);
+
 #endif

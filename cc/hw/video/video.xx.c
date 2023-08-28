@@ -63,6 +63,11 @@ wchar_t* video_font_unicode_table = NULL;
 
 #define VIDEO_PRINTF_BUFFER_SIZE 2048
 
+void video_set_color(uint32_t foreground, uint32_t background) {
+    VIDEO_GRAPHICS_FOREGROUND = foreground;
+    VIDEO_GRAPHICS_BACKGROUND = background;
+}
+
 void  video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     UNUSED(offset);
     UNUSED(x);

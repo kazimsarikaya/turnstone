@@ -411,7 +411,7 @@ void virtio_gpu_get_display_info(void) {
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     future_get_data_and_destroy(fut);
 

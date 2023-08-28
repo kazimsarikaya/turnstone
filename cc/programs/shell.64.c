@@ -8,6 +8,7 @@
 #include <video.h>
 #include <strings.h>
 #include <acpi.h>
+#include <time.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -35,6 +36,9 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
                "\tclear\t\t: clears the screen\n"
                "\tpoweroff\t: powers off the system alias shutdown\n"
                "\treboot\t\t: reboots the system\n"
+               "\tcolor\t\t: changes the color first argument foreground second is background in hex\n"
+               "\tps\t\t: prints the current processes\n"
+               "\tdate\t\t: prints the current date with time alias time\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -44,6 +48,46 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
         acpi_poweroff();
     } else if(strcmp(command, "reboot") == 0) {
         acpi_reset();
+    } else if(strcmp(command, "color") == 0) {
+        if(arguments == NULL) {
+            printf("Usage: color <foreground> <background>\n");
+            res = -1;
+        } else {
+            uint32_t foreground = 0;
+            uint32_t background = 0;
+
+            if(strlen(arguments) == 6) {
+                foreground = atoh(arguments);
+                res = 0;
+            } else if(strlen(arguments) == 13 && arguments[6] == ' ') {
+                arguments[6] = 0;
+                foreground = atoh(arguments);
+                background = atoh(arguments + 7);
+                res = 0;
+            } else {
+                printf("Usage: color <foreground> <background>\n");
+                printf("\tgiven arguments: %s %lli\n", arguments, strlen(arguments));
+                res = -1;
+            }
+
+            if(res != -1) {
+                printf("request foreground: %x background: %x\n", foreground, background);
+                video_set_color(foreground, background);
+            }
+        }
+    } else if(strcmp(command, "ps") == 0) {
+        task_print_all();
+        res = 0;
+    } else if(strcmp(command, "date") == 0 || strcmp(command, "time") == 0) {
+        timeparsed_t tp;
+        timeparsed(&tp);
+
+        printf("\t%04i-%02i-%02i %02i:%02i:%02i\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds);
+
+        res = 0;
+    } else {
+        printf("Unknown command: %s\n", command);
+        res = -1;
     }
 
 
@@ -99,7 +143,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
                 buffer_append_byte(argument_buffer, NULL);
 
                 if(shell_process_command(command_buffer, argument_buffer) == -1) {
-                    printf("Command not found\n");
+                    printf("Command failed\n");
                 }
 
                 printf("$ ");

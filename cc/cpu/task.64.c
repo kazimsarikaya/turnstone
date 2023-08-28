@@ -638,3 +638,17 @@ void task_set_interruptible(void) {
     }
 }
 
+void task_print_all(void) {
+    iterator_t* it = map_create_iterator(task_map);
+
+    while(it->end_of_iterator(it) != 0) {
+        const task_t* task = it->get_item(it);
+
+        printf("\ttask %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
+               task->task_name, task->task_id, task, task->rsp, task->rbp, task->heap, task->heap_size);
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+}
