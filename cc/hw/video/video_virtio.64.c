@@ -45,6 +45,10 @@ int8_t   virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
 
     //video_text_print((char_t*)"virtio gpu control queue isr\n");
 
+    volatile virtio_gpu_config_t* cfg = (volatile virtio_gpu_config_t*)virtio_gpu_dev->device_config;
+
+    cfg->events_clear = cfg->events_read;
+
     if(virtio_gpu_lock) {
         lock_release(virtio_gpu_lock);
     }
@@ -81,7 +85,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     transfer_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     transfer_hdr->hdr.fence_id = virtio_gpu_fence_id++;
     transfer_hdr->hdr.ctx_id = 0;
-    transfer_hdr->hdr.padding = 0;
+    //transfer_hdr->hdr.padding = 0;
 
     transfer_hdr->resource_id = 1;
     transfer_hdr->rec.x = x;
@@ -96,7 +100,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     //future_t fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     /*
        video_text_print((char_t*)"waiting for virtio gpu transfer to host 2d\n");
@@ -111,7 +115,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     while(hdr->type == 0) {
-        //task_yield();
+        task_yield();
         asm volatile ("pause");
         //asm volatile ("hlt");
     }
@@ -140,7 +144,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     flush_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     flush_hdr->hdr.fence_id = virtio_gpu_fence_id++;
     flush_hdr->hdr.ctx_id = 0;
-    flush_hdr->hdr.padding = 0;
+    //flush_hdr->hdr.padding = 0;
 
     flush_hdr->rec.x = x;
     flush_hdr->rec.y = y;
@@ -156,7 +160,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     //fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     /*
        video_text_print((char_t*)"waiting for virtio gpu resource flush\n");
@@ -170,7 +174,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     while(hdr->type == 0) {
-        //task_yield();
+        task_yield();
         asm volatile ("pause");
         //asm volatile ("hlt");
     }
@@ -228,7 +232,7 @@ void virtio_gpu_get_display_info(void) {
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     future_get_data_and_destroy(fut);
 
@@ -263,7 +267,7 @@ void virtio_gpu_get_display_info(void) {
     hdr->flags = 0;
     hdr->fence_id = 0;
     hdr->ctx_id = 0;
-    hdr->padding = 0;
+    //hdr->padding = 0;
 
     descs[desc_index].length = sizeof(virtio_gpu_ctrl_hdr_t);
 
@@ -271,7 +275,7 @@ void virtio_gpu_get_display_info(void) {
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     future_get_data_and_destroy(fut);
 
@@ -308,7 +312,7 @@ void virtio_gpu_get_display_info(void) {
     create_hdr->hdr.flags = 0;
     create_hdr->hdr.fence_id = 0;
     create_hdr->hdr.ctx_id = 0;
-    create_hdr->hdr.padding = 0;
+    //create_hdr->hdr.padding = 0;
 
     uint32_t screen_resource_id = resource_id++;
 
@@ -323,7 +327,7 @@ void virtio_gpu_get_display_info(void) {
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     future_get_data_and_destroy(fut);
 
@@ -369,7 +373,7 @@ void virtio_gpu_get_display_info(void) {
     attach_hdr->hdr.flags = 0;
     attach_hdr->hdr.fence_id = 0;
     attach_hdr->hdr.ctx_id = 0;
-    attach_hdr->hdr.padding = 0;
+    //attach_hdr->hdr.padding = 0;
 
     attach_hdr->resource_id = screen_resource_id;
     attach_hdr->nr_entries = 1;
@@ -383,7 +387,7 @@ void virtio_gpu_get_display_info(void) {
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     future_get_data_and_destroy(fut);
 
@@ -409,7 +413,7 @@ void virtio_gpu_get_display_info(void) {
     transfer_hdr->hdr.flags = 0;
     transfer_hdr->hdr.fence_id = 0;
     transfer_hdr->hdr.ctx_id = 0;
-    transfer_hdr->hdr.padding = 0;
+    //transfer_hdr->hdr.padding = 0;
 
     transfer_hdr->resource_id = screen_resource_id;
     transfer_hdr->rec.x = 0;
@@ -450,7 +454,7 @@ void virtio_gpu_get_display_info(void) {
     scanout_hdr->hdr.flags = 0;
     scanout_hdr->hdr.fence_id = 0;
     scanout_hdr->hdr.ctx_id = 0;
-    scanout_hdr->hdr.padding = 0;
+    //scanout_hdr->hdr.padding = 0;
 
     scanout_hdr->rec.x = 0;
     scanout_hdr->rec.y = 0;
@@ -466,7 +470,7 @@ void virtio_gpu_get_display_info(void) {
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
-    vq_control->nd->vqn = 1;
+    vq_control->nd->vqn = 0;
 
     future_get_data_and_destroy(fut);
 

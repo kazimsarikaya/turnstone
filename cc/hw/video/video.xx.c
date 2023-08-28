@@ -62,7 +62,6 @@ lock_t video_lock = NULL;
 wchar_t* video_font_unicode_table = NULL;
 
 #define VIDEO_PRINTF_BUFFER_SIZE 2048
-char_t video_printf_buffer[VIDEO_PRINTF_BUFFER_SIZE + 128] = {0};
 
 void  video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     UNUSED(offset);
@@ -217,29 +216,30 @@ void video_init(void) {
 
 void video_graphics_scroll(void){
     int64_t j = 0;
-    int64_t i = FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE;
+    int64_t i = (FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) / 2;
     int64_t x = 0;
-    pixel_t* dst = (pixel_t*)VIDEO_BASE_ADDRESS;
-    int64_t empty_area_size = VIDEO_PIXELS_PER_SCANLINE - VIDEO_GRAPHICS_WIDTH;
+    uint64_t* dst = (uint64_t*)VIDEO_BASE_ADDRESS;
+    int64_t empty_area_size = (VIDEO_PIXELS_PER_SCANLINE - VIDEO_GRAPHICS_WIDTH) / 2;
+    int64_t half_width = VIDEO_GRAPHICS_WIDTH / 2;
 
-    while(i < VIDEO_PIXELS_PER_SCANLINE * VIDEO_GRAPHICS_HEIGHT) {
+    while(i < VIDEO_PIXELS_PER_SCANLINE * VIDEO_GRAPHICS_HEIGHT / 2) {
         dst[j] = dst[i];
 
         i++;
         j++;
         x++;
 
-        if(x == VIDEO_GRAPHICS_WIDTH) {
+        if(x == half_width) {
             x = 0;
             i += empty_area_size;
             j += empty_area_size;
         }
     }
 
-    i = FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE * (FONT_LINES_ON_SCREEN - 1);
+    i = (FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE * (FONT_LINES_ON_SCREEN - 1)) / 2;
     x = 0;
 
-    while(i < VIDEO_PIXELS_PER_SCANLINE * VIDEO_GRAPHICS_HEIGHT) {
+    while(i < VIDEO_PIXELS_PER_SCANLINE * VIDEO_GRAPHICS_HEIGHT / 2) {
         dst[i] = VIDEO_GRAPHICS_BACKGROUND;
 
         i++;
@@ -426,11 +426,15 @@ void video_clear_screen(void){
 }
 
 void video_print(char_t* string) {
+    lock_acquire(video_lock);
+
     video_text_print(string);
 
     if(GRAPHICS_MODE) {
         video_graphics_print(string);
     }
+
+    lock_release(video_lock);
 }
 
 void video_text_print(char_t* string)
@@ -450,16 +454,14 @@ size_t video_printf(const char_t* fmt, ...){
     va_list args;
     va_start(args, fmt);
 
-    lock_acquire(video_lock);
 
     size_t cnt = 0;
 
     if(!fmt) {
-        lock_release(video_lock);
-
         return 0;
     }
 
+    char_t video_printf_buffer[VIDEO_PRINTF_BUFFER_SIZE + 128] = {0};
     uint64_t video_printf_buffer_idx = 0;
 
     while (*fmt) {
@@ -694,8 +696,6 @@ size_t video_printf(const char_t* fmt, ...){
     }
 
     va_end(args);
-
-    lock_release(video_lock);
 
     return cnt;
 }
