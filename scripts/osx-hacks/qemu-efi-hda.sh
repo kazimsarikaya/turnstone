@@ -48,7 +48,7 @@ qemu-system-x86_64 \
   -drive id=cache,if=none,format=raw,file=${OUTPUTDIR}/qemu-nvme-cache,werror=report,rerror=report \
   -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096 \
   -monitor stdio \
-  -device vmware-svga,id=gpu0 \
+  -device virtio-vga-gl,id=gpu0 \
   -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \
   -netdev $NETDEV \
   -device virtio-keyboard,id=kbd \

@@ -47,11 +47,15 @@ int8_t   virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
 
     volatile virtio_gpu_config_t* cfg = (volatile virtio_gpu_config_t*)virtio_gpu_dev->device_config;
 
-    cfg->events_clear = cfg->events_read;
+    if(cfg->events_read) {
+        cfg->events_clear = cfg->events_read;
+    }
 
     if(virtio_gpu_lock) {
         lock_release(virtio_gpu_lock);
     }
+
+    //video_text_print((char_t*)".");
 
     pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_gpu_dev->pci_dev->pci_header, virtio_gpu_dev->msix_cap, 0);
     apic_eoi();
@@ -96,29 +100,18 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
 
     descs[desc_index].length = sizeof(virtio_gpu_transfer_to_host_2d_t);
 
-    //virtio_gpu_lock = lock_create_for_future();
-    //future_t fut = future_create(virtio_gpu_lock);
+    virtio_gpu_lock = lock_create_for_future();
+    future_t fut = future_create(virtio_gpu_lock);
 
     avail->index++;
     vq_control->nd->vqn = 0;
 
-    /*
-       video_text_print((char_t*)"waiting for virtio gpu transfer to host 2d\n");
-       future_get_data_and_destroy(fut);
-       video_text_print((char_t*)"virtio gpu transfer to host 2d done\n");
-     */
-
+    future_get_data_and_destroy(fut);
 
     desc_index = descs[desc_index].next;
 
     offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
-
-    while(hdr->type == 0) {
-        task_yield();
-        asm volatile ("pause");
-        //asm volatile ("hlt");
-    }
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
         video_text_print((char_t*)"virtio gpu transfer to host 2d failed: ");
@@ -156,28 +149,18 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_flush_t);
 
-    //virtio_gpu_lock = lock_create_for_future();
-    //fut = future_create(virtio_gpu_lock);
+    virtio_gpu_lock = lock_create_for_future();
+    fut = future_create(virtio_gpu_lock);
 
     avail->index++;
     vq_control->nd->vqn = 0;
 
-    /*
-       video_text_print((char_t*)"waiting for virtio gpu resource flush\n");
-       future_get_data_and_destroy(fut);
-       video_text_print((char_t*)"virtio gpu resource flush done\n");
-     */
+    future_get_data_and_destroy(fut);
 
     desc_index = descs[desc_index].next;
 
     offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
-
-    while(hdr->type == 0) {
-        task_yield();
-        asm volatile ("pause");
-        //asm volatile ("hlt");
-    }
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
         video_text_print((char_t*)"virtio gpu resource flush failed\n");
@@ -546,8 +529,6 @@ int8_t virtio_gpu_create_queues(virtio_dev_t* vdev) {
 int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
     UNUSED(heap);
 
-    logging_module_levels[VIRTIO] = LOG_TRACE;
-
     virtio_dev_t* vgpu = virtio_get_device(pci_dev);
 
     if (vgpu == NULL) {
@@ -560,7 +541,6 @@ int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
 
     if(virtio_init_dev(vgpu, virtio_gpu_select_features, virtio_gpu_create_queues) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
-        logging_module_levels[VIRTIO] = LOG_INFO;
 
         return -1;
     }
@@ -570,8 +550,6 @@ int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
     virtio_gpu_get_display_info();
 
     PRINTLOG(VIRTIOGPU, LOG_INFO, "virtio gpu init success");
-
-    logging_module_levels[VIRTIO] = LOG_INFO;
 
     return 0;
 }
