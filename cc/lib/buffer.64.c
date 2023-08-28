@@ -211,6 +211,26 @@ uint8_t* buffer_get_all_bytes(buffer_t buffer, uint64_t* length) {
     return res;
 }
 
+uint8_t* buffer_get_all_bytes_and_reset(buffer_t buffer, uint64_t* length) {
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    lock_acquire(bi->lock);
+
+    uint8_t* res = bi->data;
+
+    if(length) {
+        *length = bi->length;
+    }
+
+    bi->data = memory_malloc_ext(bi->heap, bi->capacity, 0);
+    bi->length = 0;
+    bi->position = 0;
+
+    lock_release(bi->lock);
+
+    return res;
+}
+
 
 uint8_t  buffer_get_byte(buffer_t buffer) {
     buffer_internal_t* bi = (buffer_internal_t*)buffer;

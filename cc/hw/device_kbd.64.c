@@ -14,6 +14,8 @@
 #include <strings.h>
 #include <device/kbd_scancodes.h>
 #include <acpi.h>
+#include <time.h>
+#include <shell.h>
 
 MODULE("turnstone.kernel.hw.kbd");
 
@@ -49,7 +51,11 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
         if(is_p) {
             char_t* data = wchar_to_char(buffer);
-            printf("%s", data);
+
+            if(shell_buffer != NULL) {
+                buffer_append_byte(shell_buffer, data[0]);
+            }
+
             memory_free(data);
         }
     }
