@@ -43,7 +43,7 @@ typedef union nvme_controller_cap_t {
         uint64_t bps       : 1; ///< boot partition support
         uint64_t reserved1 : 2; ///< reserved
         uint64_t mpsmin    : 4; ///< memory page size minimum
-        uint8_t  mpsmax    : 4; ///< memory page size maximum
+        uint64_t mpsmax    : 4;  ///< memory page size maximum
         uint64_t pmrs      : 1; ///< persistent memory region supported
         uint64_t cmbs      : 1; ///< controller memory buffer supported
         uint64_t reserved2 : 6; ///< reserved
@@ -94,11 +94,14 @@ typedef struct nvme_controller_sts_t {
  * @struct nvme_controller_aqa_t
  * @brief nvme admin queue attributes
  */
-typedef struct nvme_controller_aqa_t {
-    uint32_t asqs      : 12; ///< admin submission queue size
-    uint32_t reserved0 : 4; ///< reserved
-    uint32_t acqs      : 12; ///< admin completion queue size
-    uint32_t reserved1 : 4; ///< reserved
+typedef union nvme_controller_aqa_t {
+    struct {
+        uint32_t asqs      : 12; ///< admin submission queue size
+        uint32_t reserved0 : 4; ///< reserved
+        uint32_t acqs      : 12; ///< admin completion queue size
+        uint32_t reserved1 : 4; ///< reserved
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_aqa_t; ///< shorthand for struct
 
 /**
@@ -459,12 +462,14 @@ typedef struct nvme_disk_t {
     pci_generic_device_t*          pci_device;         ///< pci device
     nvme_controller_registers_t*   nvme_registers;                ///< nvme registers
     pci_capability_msix_t*         msix_capability; ///< msix capability
+    uint64_t                       admin_queue_size;  ///< admin queue size
     uint64_t                       admin_s_queue_tail; ///< admin submission queue tail
     uint64_t                       admin_c_queue_head; ///< admin completion queue head
     uint32_t*                      admin_submission_queue_tail_doorbell; ///< admin submission queue tail doorbell
     uint32_t*                      admin_completion_queue_head_doorbell; ///< admin completion queue head doorbell
     nvme_submission_queue_entry_t* admin_submission_queue; ///< admin submission queue
     nvme_completion_queue_entry_t* admin_completion_queue; ///< admin completion queue
+    uint64_t                       io_queue_size; ///< io queue size
     uint64_t                       io_s_queue_tail; ///< io queue tail
     uint64_t                       io_c_queue_head; ///< io completion queue head
     uint32_t*                      io_submission_queue_tail_doorbell; ///< io submission queue tail doorbell

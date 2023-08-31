@@ -114,9 +114,11 @@ unumber_t atou_base(const char_t* source, number_t base) {
     size_t l = strlen(source);
     for(size_t i = 1; i <= l; i++) {
         if(source[l - i] <= '9') {
-            ret += ((number_t)(source[l - i] - 48)) * power(base, p);
+            ret += ((number_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((number_t)(source[l - i] - 'A') + 10) * power(base, p);
         } else {
-            ret += ((number_t)(source[l - i] - 55)) * power(base, p);
+            ret += ((number_t)(source[l - i] - 'a') + 10) * power(base, p);
         }
         p++;
     }

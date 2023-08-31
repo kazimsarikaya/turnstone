@@ -10,6 +10,7 @@
 #include <cpu.h>
 #include <apic.h>
 #include <device/rtc.h>
+#include <device/hpet.h>
 #include <time.h>
 #include <random.h>
 
@@ -56,7 +57,9 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
     UNUSED(intnum);
 
-    if(apic_get_local_apic_id() == 0) {
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    if(apic_id == 0) {
 
         time_timer_tick_count++;
 
@@ -66,7 +69,7 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
         if(TIME_EPOCH == 0 || (time_timer_tick_count % (1000 * 60 * 15)) == 0) {
             TIME_EPOCH = rtc_get_time() * 1000000;
-        } else {
+        } else if(!hpet_enabled) {
             TIME_EPOCH += 1000;
         }
 
@@ -87,7 +90,7 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     }
 
 
-    if(apic_get_local_apic_id() == 0) {
+    if(apic_id == 0) {
         if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
             task_switch_task(true);
         } else {

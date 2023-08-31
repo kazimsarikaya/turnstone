@@ -122,7 +122,9 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
 int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
     uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
 
-    msix_pendind_bit_table_address += (msix_cap->table_offset << 3);
+    msix_pendind_bit_table_address += (msix_cap->pending_bit_offset << 3);
+
+    PRINTLOG(PCI, LOG_TRACE, "msix pending bit table address 0x%llx", msix_pendind_bit_table_address);
 
     uint64_t* pending_bit_table = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_pendind_bit_table_address);
 
@@ -134,7 +136,7 @@ int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_
     // clear pending bit
     *pending_bit_table_entry &= ~(1ULL << bit_idx);
 
-    PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i",  msix_vector);
+    PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i 0x%llx",  msix_vector, *pending_bit_table_entry);
 
     return 0;
 }
@@ -178,9 +180,12 @@ uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no){
             bar_fa = tmp << 32 | bar_fa;
         }
 
+    } else {
+        bar_fa = (uint64_t)bar->io_space_bar.base_address;
+        bar_fa <<= 2;
     }
 
-    PRINTLOG(PCI, LOG_TRACE, "bar %i address 0x%llx",  bar_no, bar_fa);
+    PRINTLOG(PCI, LOG_TRACE, "get bar %i address 0x%llx",  bar_no, bar_fa);
 
     return bar_fa;
 }
@@ -189,13 +194,15 @@ int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64
     pci_bar_register_t* bar = &pci_dev->bar0;
     bar += bar_no;
 
+    PRINTLOG(PCI, LOG_TRACE, "set bar %i address 0x%llx",  bar_no, bar_fa);
+
     if(bar->bar_type.type == 0) {
         bar->memory_space_bar.base_address = (bar_fa >> 4) & 0xFFFFFFF;
 
         if(bar->memory_space_bar.type == 2) {
             bar++;
 
-            (*(uint64_t*)bar) = bar_fa >> 32;
+            (*(uint32_t*)bar) = bar_fa >> 32;
         }
 
     } else {
@@ -223,6 +230,7 @@ int8_t pci_setup(memory_heap_t* heap) {
     PCI_CONTEXT->sata_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->nvme_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->network_controllers = linkedlist_create_list_with_heap(heap);
+    PCI_CONTEXT->display_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->other_devices = linkedlist_create_list_with_heap(heap);
 
     linkedlist_t old_mcfgs = linkedlist_create_list();
@@ -272,7 +280,13 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as network controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            } else {
+            } else if(p->pci_header->class_code == PCI_DEVICE_CLASS_DISPLAY_CONTROLLER) {
+
+                linkedlist_list_insert(PCI_CONTEXT->display_controllers, p);
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+
+            }else {
                 linkedlist_list_insert(PCI_CONTEXT->other_devices, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
@@ -315,10 +329,11 @@ int8_t pci_setup(memory_heap_t* heap) {
     linkedlist_destroy(old_mcfgs);
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
-    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli other devices %lli",
+    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli other devices %lli",
              linkedlist_size(PCI_CONTEXT->sata_controllers),
              linkedlist_size(PCI_CONTEXT->nvme_controllers),
              linkedlist_size(PCI_CONTEXT->network_controllers),
+             linkedlist_size(PCI_CONTEXT->display_controllers),
              linkedlist_size(PCI_CONTEXT->other_devices)
              );
 

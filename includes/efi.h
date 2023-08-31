@@ -1021,4 +1021,15 @@ typedef struct efi_image_relocation_entry_s {
     uint16_t type   : 4;
 } __attribute__((packed)) efi_image_relocation_entry_t;
 
+#define EFI_EDID_DISCOVERED_PROTOCOL_GUID \
+        { 0x1C0C34F6, 0xD380, 0x41FA, { 0xA0, 0x49, 0x8A, 0xD0, 0x6C, 0x1A, 0x66, 0xDD } }
+
+#define EFI_EDID_ACTIVE_PROTOCOL_GUID \
+        { 0xBD8C1056, 0x9F36, 0x44EC, { 0x92, 0xA8, 0xA6, 0x33, 0x7F, 0x81, 0x79, 0x86 } }
+
+typedef struct efi_edid_discovered_protocol_t {
+    uint32_t size_of_edid;
+    uint8_t* edid;
+} efi_edid_discovered_protocol_t;
+
 #endif

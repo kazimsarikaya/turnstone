@@ -37,6 +37,9 @@ const char_t*const logging_module_names[] = {
     "NVME",
     "TOSDB",
     "HEAP_HASH",
+    "VIRTIOGPU",
+    "HPET",
+    "VMWARESVGA",
 };
 
 
@@ -78,4 +81,7 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_NVME,
     LOG_LEVEL_TOSDB,
     LOG_LEVEL_HEAP_HASH,
+    LOG_LEVEL_VIRTIOGPU,
+    LOG_LEVEL_HPET,
+    LOG_LEVEL_VMWARESVGA,
 };

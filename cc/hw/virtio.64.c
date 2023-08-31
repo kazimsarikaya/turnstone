@@ -50,12 +50,14 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
         uint64_t queue_fa = queue_frames->frame_address;
         uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
         memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        memory_memclean((void*)queue_va, queue_frames->frame_count * FRAME_SIZE);
 
         PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x data is at fa 0x%llx va 0x%llx", queue_no, queue_fa, queue_va);
 
         uint64_t queue_meta_fa = queue_meta_frames->frame_address;
         uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_meta_frames->frame_address);
         memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        memory_memclean((void*)queue_meta_va, queue_meta_frames->frame_count * FRAME_SIZE);
 
         virtio_queue_t vq = (virtio_queue_t)queue_meta_va;
         virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq);
@@ -80,6 +82,7 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                 if(write) {
                     descs[i].flags = write?VIRTIO_QUEUE_DESC_F_WRITE:0;
                     write = 0;
+                    descs[i].length = queue_item_size;
                 } else {
                     descs[i].flags = VIRTIO_QUEUE_DESC_F_NEXT;
                     descs[i].next = i + 1;
@@ -165,6 +168,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
             vdev->common_config->queue_enable = 1;
             time_timer_spinsleep(1000);
 
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x interrupt configuration started. has msix? %i", queue_no, vdev->has_msix);
+
             if(vdev->has_msix) {
                 if(modern) {
                     vdev->common_config->queue_msix_vector = queue_no;
@@ -191,6 +196,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                 }
 
             }
+
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x interrupt configuration finished", queue_no);
 
             // TODO: if nd not exists?
 

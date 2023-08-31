@@ -90,9 +90,13 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     for(int64_t i = 0; i < gop->mode->max_mode; i++) {
         uint64_t gop_mode_size = 0;
         efi_gop_mode_info_t* gop_mi = NULL;
-        if(gop->query_mode(gop, i, &gop_mode_size, &gop_mi) == EFI_SUCCESS && gop_mi->horizontal_resolution == 1280 && gop_mi->vertical_resolution == 1024) {
-            next_mode = i;
-            break;
+
+        if(gop->query_mode(gop, i, &gop_mode_size, &gop_mi) == EFI_SUCCESS) {
+            PRINTLOG(EFI, LOG_DEBUG, "gop mode %lli %ix%i", i, gop_mi->horizontal_resolution, gop_mi->vertical_resolution);
+
+            if(gop_mi->vertical_resolution == 1080 && gop_mi->horizontal_resolution == 1920) {
+                next_mode = i;
+            }
         }
     }
 
@@ -120,7 +124,7 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     vfb->height = gop->mode->information->vertical_resolution;
     vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
 
-    PRINTLOG(EFI, LOG_DEBUG, "frame buffer info %ix%i pps %i at 0x%llx size 0x%llx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
+    PRINTLOG(EFI, LOG_INFO, "frame buffer info %ix%i pps %i at 0x%llx size 0x%llx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
     PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%p", vfb);
 
     *vfb_res = vfb;

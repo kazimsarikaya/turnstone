@@ -559,10 +559,10 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     stack[-2] = (uint64_t)entry_point;
     stack[-3] = (uint64_t)apic_eoi;
 
-    cpu_cli();
-
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, new_task->rsp, new_task->rbp, new_task->heap, new_task->heap_size);
+
+    cpu_cli();
 
     linkedlist_stack_push(task_queue, new_task);
     map_insert(task_map, (void*)new_task->task_id, new_task);
@@ -638,3 +638,17 @@ void task_set_interruptible(void) {
     }
 }
 
+void task_print_all(void) {
+    iterator_t* it = map_create_iterator(task_map);
+
+    while(it->end_of_iterator(it) != 0) {
+        const task_t* task = it->get_item(it);
+
+        printf("\ttask %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
+               task->task_name, task->task_id, task, task->rsp, task->rbp, task->heap, task->heap_size);
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+}
