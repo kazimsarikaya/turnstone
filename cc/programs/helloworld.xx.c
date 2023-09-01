@@ -14,5 +14,5 @@ MODULE("turnstone.user.programs.helloworld");
 
 
 const char_t* hello_world(void){
-    return "Hello World\n";
+    return "Hello, World\n";
 }
