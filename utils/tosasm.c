@@ -1,57 +1,25 @@
-/**
- * @file tosasm.c
- * @brief TOS assembler userland tool.
- *
+/*
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
+#define RAM_SIZE 0x1000000 // 16 MB
 #include "setup.h"
-#include <buffer.h>
-#include <linkedlist.h>
+#include <compiler/asm_parser.h>
+#include <compiler/asm_encoder.h>
+#include <strings.h>
+#include <int_limits.h>
+#include <utils.h>
+#include <linker.h>
 
-typedef enum asm_token_type_t {
-    ASM_TOKEN_TYPE_NULL,
-    ASM_TOKEN_TYPE_DIRECTIVE,
-    ASM_TOKEN_TYPE_INSTRUCTION,
-} asm_token_type_t;
 
-typedef struct asm_token_t {
-    asm_token_type_t token_type;
-    char_t*          token_text;
-} asm_token_t;
 
-linkedlist_t* asm_parser_parse(buffer_t* buf);
 
-boolean_t asm_parser_emit_whitespace(buffer_t* buf);
-
-boolean_t asm_parser_emit_whitespace(buffer_t* buf) {
-
-    while(buffer_remaining(buf) > 0 &&
-          (buffer_peek_byte(buf) == ' ' || buffer_peek_byte(buf) == '\t' || buffer_peek_byte(buf) == '\r')) {
-        buffer_get_byte(buf);
-    }
-
-    return true;
-}
-
-linkedlist_t* asm_parser_parse(buffer_t* buf) {
-
-    while(buffer_remaining(buf) > 0 ) {
-        asm_parser_emit_whitespace(buf);
-
-        printf("%c \n", buffer_get_byte(buf));
-
-        break;
-    }
-
-    return NULL;
-}
 
 uint32_t main(uint32_t argc, char_t** argv) {
     if(argc != 3) {
         print_error("not enough paramters");
-        printf("usage tosasm <in> <out>\n");
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "usage tosasm <in> <out>");
 
         return -1;
     }
@@ -82,13 +50,39 @@ uint32_t main(uint32_t argc, char_t** argv) {
     fread(in_data, 1, in_size, fd);
     fclose(fd);
 
-    buffer_t* inbuf  = buffer_encapsulate(in_data, in_size);
+    buffer_t inbuf  = buffer_encapsulate(in_data, in_size);
 
 
-    asm_parser_parse(inbuf);
+    linkedlist_t tokens = asm_parser_parse(inbuf);
 
     buffer_destroy(inbuf);
     memory_free(in_data);
+
+    asm_parser_print_tokens(tokens);
+
+
+    buffer_t outbuf = buffer_new_with_capacity(NULL, 1024);
+
+    linkedlist_t relocs = linkedlist_create_list();
+
+    int8_t result = asm_encode_instructions(tokens, outbuf, relocs);
+
+    asm_encoder_print_relocs(relocs);
+
+    asm_encoder_destroy_relocs(relocs);
+    asm_parser_destroy_tokens(tokens);
+
+    if(result == false) {
+        print_error("cannot encode instructions");
+    }
+
+    fd = fopen(argv[2], "w");
+    uint64_t length = 0;
+    uint8_t* out_data = buffer_get_all_bytes(outbuf, &length);
+    buffer_destroy(outbuf);
+    fwrite(out_data, 1, length, fd);
+    memory_free(out_data);
+    fclose(fd);
 
     return 0;
 }

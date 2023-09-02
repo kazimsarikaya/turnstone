@@ -42,6 +42,7 @@ const char_t*const logging_module_names[] = {
     "VMWARESVGA",
     "USB",
     "COMPRESSION",
+    "COMPILER_ASSEMBLER",
 };
 
 
@@ -88,6 +89,7 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_VMWARESVGA,
     LOG_LEVEL_USB,
     LOG_LEVEL_COMPRESSION,
+    LOG_LEVEL_COMPILER_ASSEMBLER,
 };
 
 extern boolean_t windowmanager_initialized;
