@@ -405,6 +405,10 @@ boolean_t asm_encode_adc(iterator_t* it, buffer_t out, linkedlist_t relocs) {
 
             modrm |= (op1.registers[0].register_index & 0x07) << 3 | 0x04;
 
+            if(op1.registers[0].register_size == 8) {
+                opcode = 0x12;
+            }
+
             if(op1.registers[0].register_size == 16) {
                 buffer_append_byte(out, 0x66);
                 opcode = 0x13;
@@ -440,6 +444,10 @@ boolean_t asm_encode_adc(iterator_t* it, buffer_t out, linkedlist_t relocs) {
 
             if(op2.registers[0].register_size == 16) {
                 buffer_append_byte(out, 0x66);
+                opcode = 0x13;
+            }
+
+            if(op2.registers[0].register_size == 32) {
                 opcode = 0x13;
             }
 
