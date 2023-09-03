@@ -854,6 +854,14 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
 
     const asm_instruction_mnemonic_map_t* map = asm_instruction_mnemonic_get(mnemonic_str);
 
+    if(map == NULL) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid instruction mnemonic %s", mnemonic_str);
+
+        memory_free(mnemonic_str);
+
+        return false;
+    }
+
     asm_instruction_param_t params[4] = {0};
     uint8_t param_count = 0;
 
@@ -1043,7 +1051,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
             need_rex = true;
             rex |= 0x04;
         }
-    } else {
+    } else if(instr->instruction_length > 1) {
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Instruction does not support register operand");
 
         return false;
