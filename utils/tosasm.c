@@ -7,14 +7,11 @@
 #include "setup.h"
 #include <compiler/asm_parser.h>
 #include <compiler/asm_encoder.h>
+#include <compiler/asm_instructions.h>
 #include <strings.h>
 #include <int_limits.h>
 #include <utils.h>
 #include <linker.h>
-
-
-
-
 
 uint32_t main(uint32_t argc, char_t** argv) {
     if(argc != 3) {

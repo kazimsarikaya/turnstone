@@ -5,6 +5,7 @@
 
 #include <compiler/asm_encoder.h>
 #include <compiler/asm_parser.h>
+#include <compiler/asm_instructions.h>
 #include <strings.h>
 #include <int_limits.h>
 #include <video.h>
@@ -19,17 +20,7 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param);
 boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, uint8_t* modrm, uint8_t* sib,
                                boolean_t* need_rex, uint8_t* rex,
                                boolean_t* has_displacement, uint8_t* disp_size);
-
-
-const asm_encoder_instruction_t encoders[] = {
-    {"adc", asm_encode_adc},
-    {"adcb", asm_encode_adc},
-    {"adcw", asm_encode_adc},
-    {"adcl", asm_encode_adc},
-    {"adcq", asm_encode_adc},
-    {NULL, NULL},
-};
-
+boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t relocs);
 
 boolean_t asm_parse_number(char_t* data, uint64_t* result) {
     boolean_t is_hex = false;
@@ -52,6 +43,7 @@ boolean_t asm_parse_number(char_t* data, uint64_t* result) {
 }
 
 boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
+    boolean_t end_paran = false;
 
     if(data[0] != '(') {
         // we have a displacement may be label or number
@@ -114,6 +106,7 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
     if(*data && *data == '%') {
         data++;
     } else { // format is not correct
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "format is not correct not reg %s\n", data);
         return false;
     }
 
@@ -125,10 +118,21 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
         data++;
     }
 
+    if(*data == ')') {
+        end_paran = true;
+    } else {
+        end_paran = false;
+    }
+
     *data = '\0';
 
     if(!asm_parse_register_param(base_reg_str, ASM_REGISTER_TYPE_BASE, param)) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "format is not correct not reg %s\n", base_reg_str);
         return false;
+    }
+
+    if(end_paran) {
+        return true;
     }
 
     data++; // skip comma or closing parenthesis (we have overwritten it with null terminator)
@@ -149,10 +153,21 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
                 data++;
             }
 
+            if(*data == ')') {
+                end_paran = true;
+            } else {
+                end_paran = false;
+            }
+
             *data = '\0';
 
             if(!asm_parse_register_param(index_reg_str, ASM_REGISTER_TYPE_INDEX, param)) {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "format is not correct index not reg %s\n", index_reg_str);
                 return false;
+            }
+
+            if(end_paran) {
+                return true;
             }
 
             data++; // skip comma or closing parenthesis (we have overwritten it with null terminator)
@@ -171,12 +186,14 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
                 data[1] = '\0';
 
                 if(!asm_parse_number(data, &param->scale)) {
+                    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "format is not correct not scale %s\n", data);
                     return false;
                 }
 
                 return true;
 
             } else {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "format is not correct, end of token %s\n", data);
                 return false;
             }
         } else if(*data == ')') {
@@ -252,6 +269,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr0", reg_str) == 0) {
         param->registers[reg_idx].register_index = 0;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("cl", reg_str) == 0) {
         param->registers[reg_idx].register_index = 1;
         param->registers[reg_idx].register_size  = 8;
@@ -273,6 +291,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr1", reg_str) == 0) {
         param->registers[reg_idx].register_index = 1;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("dl", reg_str) == 0) {
         param->registers[reg_idx].register_index = 2;
         param->registers[reg_idx].register_size  = 8;
@@ -294,6 +313,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr2", reg_str) == 0) {
         param->registers[reg_idx].register_index = 2;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("bl", reg_str) == 0) {
         param->registers[reg_idx].register_index = 3;
         param->registers[reg_idx].register_size  = 8;
@@ -315,6 +335,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr3", reg_str) == 0) {
         param->registers[reg_idx].register_index = 3;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("ah", reg_str) == 0) {
         param->registers[reg_idx].register_index = 4;
         param->registers[reg_idx].register_size  = 8;
@@ -340,6 +361,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr4", reg_str) == 0) {
         param->registers[reg_idx].register_index = 4;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("ch", reg_str) == 0) {
         param->registers[reg_idx].register_index = 5;
         param->registers[reg_idx].register_size  = 8;
@@ -362,6 +384,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("gs", reg_str) == 0) {
         param->registers[reg_idx].register_index = 5;
         param->registers[reg_idx].register_size  = 16;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("cr5", reg_str) == 0) {
         param->registers[reg_idx].register_index = 5;
         param->registers[reg_idx].register_size  = 32;
@@ -387,6 +410,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr6", reg_str) == 0) {
         param->registers[reg_idx].register_index = 6;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("bh", reg_str) == 0) {
         param->registers[reg_idx].register_index = 7;
         param->registers[reg_idx].register_size  = 8;
@@ -409,6 +433,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr7", reg_str) == 0) {
         param->registers[reg_idx].register_index = 7;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r8b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 8;
         param->registers[reg_idx].register_size  = 8;
@@ -427,6 +452,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr8", reg_str) == 0) {
         param->registers[reg_idx].register_index = 8;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r9b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 9;
         param->registers[reg_idx].register_size  = 8;
@@ -445,6 +471,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr9", reg_str) == 0) {
         param->registers[reg_idx].register_index = 9;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r10b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 10;
         param->registers[reg_idx].register_size  = 8;
@@ -463,6 +490,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr10", reg_str) == 0) {
         param->registers[reg_idx].register_index = 10;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r11b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 11;
         param->registers[reg_idx].register_size  = 8;
@@ -481,6 +509,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr11", reg_str) == 0) {
         param->registers[reg_idx].register_index = 11;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r12b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 12;
         param->registers[reg_idx].register_size  = 8;
@@ -499,6 +528,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr12", reg_str) == 0) {
         param->registers[reg_idx].register_index = 12;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r13b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 13;
         param->registers[reg_idx].register_size  = 8;
@@ -517,6 +547,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr13", reg_str) == 0) {
         param->registers[reg_idx].register_index = 13;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r14b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 14;
         param->registers[reg_idx].register_size  = 8;
@@ -535,6 +566,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr14", reg_str) == 0) {
         param->registers[reg_idx].register_index = 14;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else if(strcmp("r15b", reg_str) == 0) {
         param->registers[reg_idx].register_index = 15;
         param->registers[reg_idx].register_size  = 8;
@@ -553,6 +585,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
     } else if(strcmp("cr15", reg_str) == 0) {
         param->registers[reg_idx].register_index = 15;
         param->registers[reg_idx].register_size  = 32;
+        param->registers[reg_idx].is_control = true;
     } else {
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unknown register: -%s-", reg_str);
         result = false;
@@ -740,16 +773,10 @@ boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_
                 continue;
             }
 
-            for(int64_t i = 0; encoders[i].name != NULL; i++) {
-                if(strcmp(encoders[i].name, tok->token_value) == 0) {
-                    if(!encoders[i].encode(it, out, relocs)) {
-                        result = false;
+            if(!asm_encode_instruction(it, out, relocs)) {
+                result = false;
 
-                        break;
-                    }
-
-                    break;
-                }
+                break;
             }
 
         } else {
@@ -758,7 +785,7 @@ boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_
             break;
         }
 
-        it = it->next(it);
+        //it = it->next(it);
     }
 
     it->destroy(it);
@@ -794,4 +821,301 @@ void asm_encoder_destroy_relocs(linkedlist_t relocs) {
     iter->destroy(iter);
 
     linkedlist_destroy_with_data(relocs);
+}
+
+boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t relocs) {
+    boolean_t result = true;
+
+    const asm_token_t* tok_operand = it->get_item(it);
+
+    char_t* mnemonic_str = strdup(tok_operand->token_value);
+    uint64_t mnemonic_str_len = strlen(mnemonic_str) - 1;
+    uint8_t operand_size = 0;
+    uint8_t mem_operand_size = 0;
+
+    if(strends(mnemonic_str, "b") == 0) {
+        operand_size = 8;
+        mem_operand_size = 8;
+        mnemonic_str[mnemonic_str_len] = '\0';
+    } else if(strends(mnemonic_str, "w") == 0) {
+        operand_size = 16;
+        mem_operand_size = 16;
+        mnemonic_str[mnemonic_str_len] = '\0';
+    } else if(strends(mnemonic_str, "l") == 0) {
+        operand_size = 32;
+        mem_operand_size = 32;
+        mnemonic_str[mnemonic_str_len] = '\0';
+    } else if(strends(mnemonic_str, "q") == 0) {
+        operand_size = 64;
+        mem_operand_size = 64;
+        mnemonic_str[mnemonic_str_len] = '\0';
+    }
+
+
+    const asm_instruction_mnemonic_map_t* map = asm_instruction_mnemonic_get(mnemonic_str);
+
+    asm_instruction_param_t params[4] = {0};
+    uint8_t param_count = 0;
+
+    while(true) {
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            break;
+        }
+
+        const asm_token_t* tok = it->get_item(it);
+
+        if(tok->token_type != ASM_TOKEN_TYPE_PARAMETER) {
+            break;
+        }
+
+        if(param_count >= 4) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Too many parameters");
+
+            memory_free(mnemonic_str);
+
+            return false;
+        }
+
+
+        if(!asm_parse_instruction_param(tok, &params[param_count])) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to parse instruction parameter op1 %s %i", tok->token_value, tok->token_type);
+
+            memory_free(mnemonic_str);
+
+            return false;
+        }
+
+        param_count++;
+    }
+
+    asm_instruction_mnemonic_t mnemonics[5] = {0};
+    mnemonics[0] = map->mnemonic;
+
+    uint8_t idx = 1;
+
+    if(operand_size == 0 && params[param_count - 1].type == ASM_INSTRUCTION_PARAM_TYPE_REGISTER) {
+        operand_size = params[param_count - 1].registers[0].register_size;
+    }
+
+    if(operand_size == 0) {
+        operand_size = map->default_operand_size;
+    }
+
+    if(operand_size > map->max_operand_size) {
+        operand_size = map->max_operand_size;
+    }
+
+    if(mem_operand_size == 0 && params[param_count - 1].type == ASM_INSTRUCTION_PARAM_TYPE_MEMORY) {
+        mem_operand_size = 64;
+    }
+
+    if(mem_operand_size == 0 && params[param_count - 1].type == ASM_INSTRUCTION_PARAM_TYPE_REGISTER) {
+        mem_operand_size = params[param_count - 1].registers[0].register_size;
+    }
+
+    for(int64_t i = param_count - 1; i >= 0; i--) {
+        mnemonics[idx] = asm_instruction_mnemonic_get_by_param(&params[i], operand_size, mem_operand_size);
+
+        idx++;
+    }
+
+    const asm_instruction_t* instr = asm_instruction_get(map, param_count + 1, mnemonics);
+
+    if(instr == NULL) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to find instruction");
+
+        memory_free(mnemonic_str);
+
+        for(int64_t i = 0; i < param_count + 1; i++) {
+            printf("mnemonic %i\n", mnemonics[i]);
+        }
+
+        return false;
+    }
+
+    memory_free(mnemonic_str);
+
+
+    if(instr->has_operand_size_override) {
+        buffer_append_byte(outbuf, ASM_INSTRUCTION_PREFIX_OPERAND_SIZE_OVERRIDE);
+    }
+
+    if(instr->has_address_size_override) {
+        buffer_append_byte(outbuf, ASM_INSTRUCTION_PREFIX_ADDRESS_SIZE_OVERRIDE);
+    }
+
+    boolean_t need_rex = instr->has_rex;
+    uint8_t rex = 0;
+
+    if(need_rex) {
+        rex |= 0x40;
+
+        if(instr->has_rex_w) {
+            rex |= 0x08;
+        }
+    }
+
+    uint8_t modrm = 0;
+    boolean_t need_sib = false;
+    uint8_t sib = 0;
+
+    boolean_t has_displacement = false;
+    uint8_t disp_size = 0;
+
+
+    asm_instruction_param_t op_mem = {0};
+    asm_instruction_param_t op_regs[2] = {0};
+    asm_instruction_param_t op_imm = {0};
+    uint8_t op_reg_count = 0;
+
+    boolean_t has_mem_operand = false;
+    boolean_t has_imm_operand = false;
+
+    for(int64_t i = 0; i < param_count; i++) {
+        if(params[i].type == ASM_INSTRUCTION_PARAM_TYPE_MEMORY) {
+            op_mem = params[i];
+            has_mem_operand = true;
+        } else if(params[i].type == ASM_INSTRUCTION_PARAM_TYPE_REGISTER) {
+            op_regs[op_reg_count++] = params[i];
+        } else if(params[i].type == ASM_INSTRUCTION_PARAM_TYPE_IMMEDIATE) {
+            op_imm = params[i];
+            has_imm_operand = true;
+        }
+    }
+
+    if(has_mem_operand && !asm_encode_modrm_sib(op_mem, &need_sib, &modrm, &sib, &need_rex, &rex, &has_displacement, &disp_size)) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to encode modrm/sib");
+
+        return false;
+    }
+
+    if(!has_mem_operand) {
+        modrm |= 0xc0;
+    }
+
+    if(instr->has_modrm) {
+        if(instr->modrm != 'r') {
+            modrm |= (instr->modrm & 0x07) << 3;
+
+            if(op_reg_count == 1) {
+                modrm |= (op_regs[0].registers[0].register_index & 0x07);
+
+                if(op_regs[0].registers[0].register_index > 7) {
+                    need_rex = true;
+                    rex |= 0x01;
+                }
+            }
+
+            if(has_mem_operand) {
+                modrm |= 0x04;
+            }
+
+        } else {
+            if(op_reg_count == 0) {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Instruction requires register operand");
+
+                return false;
+            } else if(op_reg_count == 1) {
+                modrm |= (op_regs[0].registers[0].register_index & 0x07) << 3 | 0x04;
+
+                if(op_regs[0].registers[0].register_index > 7) {
+                    need_rex = true;
+                    rex |= 0x04;
+                }
+            } else {
+                modrm |= (op_regs[0].registers[0].register_index & 0x07) << 3 | (op_regs[1].registers[0].register_index & 0x07);
+
+                if(op_regs[1].registers[0].register_index > 7) {
+                    need_rex = true;
+                    rex |= 0x01;
+                }
+
+                if(op_regs[0].registers[0].register_index > 7) {
+                    need_rex = true;
+                    rex |= 0x04;
+                }
+            }
+        }
+    } else if(op_reg_count == 1) {
+        if(op_regs[0].registers[0].register_index > 7) {
+            need_rex = true;
+            rex |= 0x04;
+        }
+    } else {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Instruction does not support register operand");
+
+        return false;
+    }
+
+    if(need_rex) {
+        rex |= 0x40;
+        buffer_append_byte(outbuf, rex);
+    }
+
+    buffer_append_bytes(outbuf, (uint8_t*)instr->opcodes, instr->opcode_length);
+
+    if(instr->has_modrm) {
+        buffer_append_byte(outbuf, modrm);
+    }
+
+    if(need_sib) {
+        buffer_append_byte(outbuf, sib);
+    }
+
+    if(has_displacement) {
+        if(disp_size == 0) {
+            disp_size = op_mem.signed_displacement_size / 8;
+
+            if(disp_size == 0) {
+                disp_size = operand_size / 8;
+            }
+        }
+
+        if(op_mem.label) {
+            asm_relocation_t* reloc = memory_malloc(sizeof(asm_relocation_t));
+
+            if(reloc == NULL) {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for relocation");
+
+                return false;
+            }
+
+            reloc->addend = 0;
+            reloc->offset = buffer_get_position(outbuf);
+            reloc->type = disp_size == 1?LINKER_RELOCATION_TYPE_64_8:
+                          disp_size == 4?LINKER_RELOCATION_TYPE_64_32:LINKER_RELOCATION_TYPE_64_64;
+            reloc->label = op_mem.label;
+
+            linkedlist_queue_push(relocs, reloc);
+        }
+
+        buffer_append_bytes(outbuf, (uint8_t*)&op_mem.displacement, disp_size);
+    }
+
+    if(has_imm_operand) {
+        uint8_t imm_size = asm_instruction_get_imm_size(instr);
+
+        if(op_imm.label) {
+            asm_relocation_t* reloc = memory_malloc(sizeof(asm_relocation_t));
+
+            if(reloc == NULL) {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for relocation");
+
+                return false;
+            }
+
+            reloc->type = imm_size == 1?LINKER_RELOCATION_TYPE_64_8:
+                          imm_size == 4?LINKER_RELOCATION_TYPE_64_32:LINKER_RELOCATION_TYPE_64_32S;
+            reloc->offset = buffer_get_position(outbuf);
+            reloc->label = op_imm.label;
+
+            linkedlist_queue_push(relocs, reloc);
+        }
+        buffer_append_bytes(outbuf, (uint8_t*)&op_imm.immediate, imm_size);
+
+    }
+
+    return result;
 }
