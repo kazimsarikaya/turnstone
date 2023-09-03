@@ -20,6 +20,17 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
                                boolean_t* need_rex, uint8_t* rex,
                                boolean_t* has_displacement, uint8_t* disp_size);
 
+
+const asm_encoder_instruction_t encoders[] = {
+    {"adc", asm_encode_adc},
+    {"adcb", asm_encode_adc},
+    {"adcw", asm_encode_adc},
+    {"adcl", asm_encode_adc},
+    {"adcq", asm_encode_adc},
+    {NULL, NULL},
+};
+
+
 boolean_t asm_parse_number(char_t* data, uint64_t* result) {
     boolean_t is_hex = false;
 
@@ -729,19 +740,17 @@ boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_
                 continue;
             }
 
-            if(strcmp("adc", tok->token_value) == 0 ||
-               strcmp("adcb", tok->token_value) == 0 ||
-               strcmp("adcw", tok->token_value) == 0 ||
-               strcmp("adcl", tok->token_value) == 0 ||
-               strcmp("adcq", tok->token_value) == 0) {
+            for(int64_t i = 0; encoders[i].name != NULL; i++) {
+                if(strcmp(encoders[i].name, tok->token_value) == 0) {
+                    if(!encoders[i].encode(it, out, relocs)) {
+                        result = false;
 
-                if(!asm_encode_adc(it, out, relocs)) {
-                    result = false;
+                        break;
+                    }
 
                     break;
                 }
             }
-
 
         } else {
             result = false;

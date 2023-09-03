@@ -61,6 +61,13 @@ boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_
 void      asm_encoder_print_relocs(linkedlist_t relocs);
 void      asm_encoder_destroy_relocs(linkedlist_t relocs);
 
+typedef boolean_t (*asm_encode_instruction_f)(iterator_t* it, buffer_t out, linkedlist_t relocs);
+
+typedef struct asm_encoder_instruction_t {
+    const char_t*            name;
+    asm_encode_instruction_f encode;
+} asm_encoder_instruction_t;
+
 boolean_t asm_encode_adc(iterator_t* it, buffer_t out, linkedlist_t relocs);
 
 #endif /* asm_encoder.h */
