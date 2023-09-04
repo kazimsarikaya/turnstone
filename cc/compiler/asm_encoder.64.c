@@ -63,6 +63,8 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
         if(!asm_parse_number(disp_str, &param->displacement)) {
             param->label = disp_str;
         } else {
+            memory_free(disp_str);
+
             // find size of displacement
             int64_t signed_disp = (int64_t)param->displacement;
 
@@ -687,12 +689,15 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
                 }
             } else {
                 if(*has_displacement) {
-                    *sib |= 0x20;
+                    *need_sib = false;
+                    //*sib |= 0x20;
+
+                    *modrm |= op.registers[ASM_REGISTER_TYPE_BASE].register_index & 0x07;
 
                     if(op.signed_displacement_size == 8) {
                         *modrm |= 0x40;
                         *disp_size = 1;
-                    } else if(op.signed_displacement_size == 32 || op.label) {
+                    } else if(op.signed_displacement_size == 16 || op.signed_displacement_size == 32 || op.label) {
                         *modrm |= 0x80;
                         *disp_size = 4;
                     } else {
@@ -915,6 +920,10 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
         operand_size = map->max_operand_size;
     }
 
+    if(mem_operand_size == 0) {
+        mem_operand_size = map->default_mem_operand_size;
+    }
+
     if(mem_operand_size == 0 && params[param_count - 1].type == ASM_INSTRUCTION_PARAM_TYPE_MEMORY) {
         mem_operand_size = 64;
     }
@@ -1007,7 +1016,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
         if(instr->modrm != 'r') {
             modrm |= (instr->modrm & 0x07) << 3;
 
-            if(op_reg_count == 1) {
+            if(!has_mem_operand && op_reg_count == 1) {
                 modrm |= (op_regs[0].registers[0].register_index & 0x07);
 
                 if(op_regs[0].registers[0].register_index > 7) {
@@ -1016,8 +1025,17 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
                 }
             }
 
-            if(has_mem_operand) {
+            if(has_mem_operand && need_sib) {
                 modrm |= 0x04;
+            }
+
+            if(has_mem_operand && !need_sib) {
+                modrm |= op_mem.registers[ASM_REGISTER_TYPE_BASE].register_index & 0x07;
+
+                if(op_mem.registers[ASM_REGISTER_TYPE_BASE].register_index > 7) {
+                    need_rex = true;
+                    rex |= 0x01;
+                }
             }
 
         } else {
@@ -1026,21 +1044,40 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
 
                 return false;
             } else if(op_reg_count == 1) {
-                modrm |= (op_regs[0].registers[0].register_index & 0x07) << 3 | 0x04;
+                modrm |= (op_regs[0].registers[0].register_index & 0x07) << 3;
+
+                if(need_sib) {
+                    modrm |= 0x04;
+                }
 
                 if(op_regs[0].registers[0].register_index > 7) {
                     need_rex = true;
                     rex |= 0x04;
                 }
             } else {
-                modrm |= (op_regs[0].registers[0].register_index & 0x07) << 3 | (op_regs[1].registers[0].register_index & 0x07);
+                int64_t modrm_reg = 0;
+                int64_t modrm_rm = 0;
 
-                if(op_regs[1].registers[0].register_index > 7) {
+                if(instr->operand_encode == ASM_INSTRUCTION_OPERAND_ENCODE_RM_REG) {
+                    modrm_reg = 0;
+                    modrm_rm = 1;
+                } else if(instr->operand_encode == ASM_INSTRUCTION_OPERAND_ENCODE_REG_RM) {
+                    modrm_reg = 1;
+                    modrm_rm = 0;
+                } else {
+                    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid operand encoding");
+
+                    return false;
+                }
+
+                modrm |= (op_regs[modrm_reg].registers[0].register_index & 0x07) << 3 | (op_regs[modrm_rm].registers[0].register_index & 0x07);
+
+                if(op_regs[modrm_rm].registers[0].register_index > 7) {
                     need_rex = true;
                     rex |= 0x01;
                 }
 
-                if(op_regs[0].registers[0].register_index > 7) {
+                if(op_regs[modrm_reg].registers[0].register_index > 7) {
                     need_rex = true;
                     rex |= 0x04;
                 }
@@ -1074,10 +1111,10 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t r
 
     if(has_displacement) {
         if(disp_size == 0) {
-            disp_size = op_mem.signed_displacement_size / 8;
+            disp_size = op_mem.signed_displacement_size == 8?1:4;
 
             if(disp_size == 0) {
-                disp_size = operand_size / 8;
+                disp_size = operand_size == 8?1:4;
             }
         }
 
