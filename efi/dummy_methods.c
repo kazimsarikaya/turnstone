@@ -17,6 +17,7 @@ size_t __kheap_bottom;
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 lock_t video_lock = NULL;
+boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
 
 void*    task_get_current_task(void);
 void     task_yield(void);

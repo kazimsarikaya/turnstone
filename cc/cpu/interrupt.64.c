@@ -100,6 +100,8 @@ const uint64_t interrupt_system_defined_interrupts[32] = {
     (uint64_t)&interrupt_int1F_reserved
 };
 
+boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
+
 int8_t interrupt_init(void) {
     descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
 
@@ -116,6 +118,19 @@ int8_t interrupt_init(void) {
     }
 
     next_empty_interrupt = INTERRUPT_IRQ_BASE;
+
+    cpu_sti();
+
+    return 0;
+}
+
+int8_t interrupt_redirect_main_interrupts(uint8_t ist) {
+    cpu_cli();
+    descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
+
+    for(int32_t i = 0; i < 32; i++) {
+        idt_table[i].ist = ist;
+    }
 
     cpu_sti();
 
@@ -212,6 +227,7 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
         if(interrupt_irqs[intnum] != NULL) {
             interrupt_irq_list_item_t* item = interrupt_irqs[intnum];
             uint8_t miss_count = 0;
+            boolean_t found = false;
 
             while(item) {
                 interrupt_irq irq = item->irq;
@@ -219,27 +235,32 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
                 if(irq != NULL) {
                     int8_t irq_res = irq(frame, intnum);
 
-                    if(irq_res == 0) {
-                        return;
+                    if(irq_res != 0) {
+                        miss_count++;
+                        PRINTLOG(KERNEL, LOG_DEBUG, "irq res status %i for 0x%02x", irq_res, intnum);
                     } else {
-                        PRINTLOG(KERNEL, LOG_WARNING, "irq res status %i for 0x%02x", irq_res, intnum);
+                        found = true;
                     }
 
                 } else {
                     PRINTLOG(KERNEL, LOG_FATAL, "null irq at shared irq list for 0x%02x", intnum);
                 }
 
-                miss_count++;
                 item = item->next;
             }
 
-            PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
+            if(!found) {
+                PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
+            } else {
+                PRINTLOG(KERNEL, LOG_DEBUG, "found shared irq for 0x%02x", intnum);
 
-            return;
-        } else {
-            PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
+                return;
+            }
         }
+    } else {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
     }
+
 
     PRINTLOG(KERNEL, LOG_FATAL, "Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016llx", intnum, frame->return_rip);
     PRINTLOG(KERNEL, LOG_FATAL, "KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
@@ -316,6 +337,7 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 }
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
+    KERNEL_PANIC_DISABLE_LOCKS = true;
     uint64_t rsp = 0;
     asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
     stackframe_t* s_frame = backtrace_print_interrupt_registers(rsp);
@@ -330,6 +352,7 @@ void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(in
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
+    KERNEL_PANIC_DISABLE_LOCKS = true;
     uint64_t rsp = 0;
     asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
     stackframe_t* s_frame =  backtrace_print_interrupt_registers(rsp);

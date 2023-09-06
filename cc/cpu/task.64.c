@@ -142,6 +142,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         : : "r" (tss_selector)
         );
 
+    interrupt_redirect_main_interrupts(7);
+
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p", current_task);
 
     return 0;

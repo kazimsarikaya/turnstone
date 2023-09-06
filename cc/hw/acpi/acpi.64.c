@@ -188,7 +188,7 @@ int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t ad
 }
 #pragma GCC diagnostic pop
 
-acpi_xrsdp_descriptor_t* acpi_find_xrsdp(){
+acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void){
 
     frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, SYSTEM_INFO->acpi_table);
 
