@@ -34,6 +34,7 @@
 #include <crc.h>
 #include <device/hpet.h>
 #include <shell.h>
+#include <driver/usb.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -301,6 +302,12 @@ int8_t kmain64(size_t entry_point) {
 
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
+        cpu_hlt();
+    }
+
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing usb");
+    if(usb_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init usb. Halting...");
         cpu_hlt();
     }
 

@@ -37,8 +37,12 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
   dd if=/dev/zero of=${OUTPUTDIR}/qemu-nvme-cache bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
 fi
 
+if [ ! -f ${OUTPUTDIR}/qemu-usbstick ]; then
+  dd if=/dev/zero of=${OUTPUTDIR}/qemu-usbstick bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
+fi
+
 qemu-system-x86_64 \
-  -nodefaults -no-user-config -no-reboot --no-shutdown\
+  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_desc*,trace:usb_ehci_packet_action,trace:usb_ehci_qtd_*,trace:usb_ehci_queue_action"\
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
@@ -51,7 +55,12 @@ qemu-system-x86_64 \
   -device virtio-vga-gl,id=gpu0 \
   -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \
   -netdev $NETDEV \
-  -device virtio-keyboard,id=kbd \
+  -device virtio-keyboard,id=kdb0 \
+  -device usb-ehci,id=ehci \
+  -device usb-kbd,bus=ehci.0,port=1,id=usbkbd \
+  -device qemu-xhci,id=xhci \
+  -device usb-storage,bus=xhci.0,port=1,drive=usbstick \
+  -drive id=usbstick,if=none,format=raw,file=${OUTPUTDIR}/qemu-usbstick,werror=report,rerror=report \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -display sdl,gl=on 

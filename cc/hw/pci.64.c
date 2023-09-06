@@ -231,6 +231,7 @@ int8_t pci_setup(memory_heap_t* heap) {
     PCI_CONTEXT->nvme_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->network_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->display_controllers = linkedlist_create_list_with_heap(heap);
+    PCI_CONTEXT->usb_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->other_devices = linkedlist_create_list_with_heap(heap);
 
     linkedlist_t old_mcfgs = linkedlist_create_list();
@@ -286,8 +287,19 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            }else {
+            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
+                       p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
+
+                linkedlist_list_insert(PCI_CONTEXT->usb_controllers, p);
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+
+            } else {
+                PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x is not supported",
+                         p->group_number, p->bus_number, p->device_number, p->function_number, p->pci_header->class_code, p->pci_header->subclass_code);
+
                 linkedlist_list_insert(PCI_CONTEXT->other_devices, p);
+
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
             }
@@ -329,11 +341,12 @@ int8_t pci_setup(memory_heap_t* heap) {
     linkedlist_destroy(old_mcfgs);
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
-    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli other devices %lli",
+    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli other devices %lli",
              linkedlist_size(PCI_CONTEXT->sata_controllers),
              linkedlist_size(PCI_CONTEXT->nvme_controllers),
              linkedlist_size(PCI_CONTEXT->network_controllers),
              linkedlist_size(PCI_CONTEXT->display_controllers),
+             linkedlist_size(PCI_CONTEXT->usb_controllers),
              linkedlist_size(PCI_CONTEXT->other_devices)
              );
 

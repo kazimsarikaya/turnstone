@@ -45,6 +45,7 @@ typedef enum logging_modules_t {
     VIRTIOGPU,
     HPET,
     VMWARESVGA,
+    USB,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -207,6 +208,11 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_VMWARESVGA
 /*! default log level for vmware svga module */
 #define LOG_LEVEL_VMWARESVGA LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_USB
+/*! default log level for usb module */
+#define LOG_LEVEL_USB LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

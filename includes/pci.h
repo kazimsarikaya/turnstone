@@ -30,6 +30,7 @@
 #define PCI_DEVICE_CLASS_SYSTEM_PERIPHERAL        0x08
 #define PCI_DEVICE_CLASS_SERIAL_BUS               0x0C
 
+#define PCI_DEVICE_SUBCLASS_USB_CONTROLLER   0x03
 #define PCI_DEVICE_SUBCLASS_SATA_CONTROLLER  0x06
 #define PCI_DEVICE_SUBCLASS_NVME_CONTROLLER  0x08
 #define PCI_DEVICE_SUBCLASS_ETHERNET         0x00
@@ -295,6 +296,7 @@ typedef struct pci_context_t {
     linkedlist_t nvme_controllers;
     linkedlist_t network_controllers;
     linkedlist_t display_controllers;
+    linkedlist_t usb_controllers;
     linkedlist_t other_devices;
 } pci_context_t;
 
