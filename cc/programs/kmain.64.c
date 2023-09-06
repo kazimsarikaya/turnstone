@@ -162,7 +162,7 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
         KERNEL_FRAME_ALLOCATOR = fa;
 
-        frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+        frame_t kernel_frames = {SYSTEM_INFO->kernel_physical_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
