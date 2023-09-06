@@ -43,6 +43,7 @@ const char_t*const logging_module_names[] = {
     "USB",
     "COMPRESSION",
     "COMPILER_ASSEMBLER",
+    "USB",
 };
 
 
@@ -90,6 +91,7 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_USB,
     LOG_LEVEL_COMPRESSION,
     LOG_LEVEL_COMPILER_ASSEMBLER,
+    LOG_LEVEL_USB,
 };
 
 extern boolean_t windowmanager_initialized;

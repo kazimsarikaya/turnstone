@@ -50,6 +50,7 @@ typedef enum logging_modules_t {
     USB,
     COMPRESSION,
     COMPILER_ASSEMBLER,
+    USB,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -227,6 +228,11 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_COMPILER_ASSEMBLER
 /*! default log level for compiler assembler module */
 #define LOG_LEVEL_COMPILER_ASSEMBLER LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_USB
+/*! default log level for usb module */
+#define LOG_LEVEL_USB LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION
