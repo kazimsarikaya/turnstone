@@ -307,14 +307,16 @@ void apic_enable_lapic(void) {
 }
 
 uint8_t apic_configure_lapic(void) {
-    apic_write_timer_divide_configuration(0x3);
-    apic_write_timer_initial_value(lapic_initial_timer_count);
-    apic_write_timer_lvt(APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
+    apic_write_spurious_interrupt_vector(0x10f);
 
     apic_write_lvt_lint0(APIC_ICR_DELIVERY_MODE_EXTERNAL_INT);
     apic_write_lvt_lint1(APIC_ICR_DELIVERY_MODE_NMI);
 
-    apic_write_spurious_interrupt_vector(0x10f);
+    apic_write_timer_divide_configuration(0x3);
+    apic_write_timer_initial_value(lapic_initial_timer_count);
+
+    apic_write_timer_lvt(APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
+
     return 0;
 }
 
