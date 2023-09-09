@@ -233,6 +233,7 @@ usb_ehci_qh_t* usb_ehci_find_qh(usb_controller_t * usb_controller) {
             metadata->qh_used_mask[part_idx] |= (1 << bit_idx);
 
             qhs[i].id = i;
+            qhs[i].this_raw = (uint32_t)(uint64_t)&qhs[i];
 
             return &qhs[i];
         }
@@ -376,7 +377,7 @@ int8_t usb_ehci_link_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, u
 
     qh->prev_raw = list_prev_raw;
 
-    list->prev_raw = qh->horizontal_link_pointer.raw;
+    list->prev_raw = qh->this_raw;
 
     if(has_prev) {
         prev = (usb_ehci_qh_t*)prev_addr;
@@ -384,12 +385,13 @@ int8_t usb_ehci_link_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, u
         prev->horizontal_link_pointer.raw = (uint32_t)(uint64_t)qh | (USB_EHCI_QTD_TYPE_QH << 1);
     }
 
+    PRINTLOG(USB, LOG_TRACE, "linked pre raw 0x%x qh 0x%x next 0x%x", qh->prev_raw, qh->this_raw, qh->horizontal_link_pointer.raw);
+    PRINTLOG(USB, LOG_TRACE, "aqh 0x%x next: 0x%x prev 0x%x", list->this_raw, list->horizontal_link_pointer.raw, list->prev_raw);
+
     return 0;
 }
 
 int8_t usb_ehci_unlink_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, usb_ehci_qh_t* qh) {
-    UNUSED(list);
-
     usb_controller_metadata_t* metadata = usb_controller->metadata;
 
     usb_ehci_qh_t* prev = NULL;
@@ -409,13 +411,18 @@ int8_t usb_ehci_unlink_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list,
         has_prev = true;
     }
 
-    PRINTLOG(USB, LOG_TRACE, "removing qh %p", qh);
+    PRINTLOG(USB, LOG_TRACE, "removing qh 0x%p 0x%x prev 0x%x next 0x%x", qh, qh->this_raw, qh->prev_raw, qh->horizontal_link_pointer.raw);
 
     if(has_prev) {
         prev = (usb_ehci_qh_t*)prev_addr;
         prev = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(prev);
         prev->horizontal_link_pointer.raw = qh->horizontal_link_pointer.raw;
-        PRINTLOG(USB, LOG_TRACE, "prev: %x list %x", prev->horizontal_link_pointer.raw, list->horizontal_link_pointer.raw);
+        uint64_t next_addr = mem_hi | (qh->horizontal_link_pointer.raw & 0xFFFFFFE0);
+        next_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(next_addr);
+        usb_ehci_qh_t* next = (usb_ehci_qh_t*)next_addr;
+        next->prev_raw = qh->prev_raw;
+
+        PRINTLOG(USB, LOG_TRACE, "prev: 0x%p 0x%x next 0x%x list 0x%x", prev, prev->this_raw, prev->horizontal_link_pointer.raw, list->horizontal_link_pointer.raw);
     }
 
     uint64_t aqh = metadata->op_regs->async_list_addr;
@@ -423,7 +430,7 @@ int8_t usb_ehci_unlink_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list,
 
     usb_ehci_qh_t* a_qh = (usb_ehci_qh_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((void*)aqh);
 
-    PRINTLOG(USB, LOG_TRACE, "aqh %p aqh: %x", a_qh, a_qh->horizontal_link_pointer.raw);
+    PRINTLOG(USB, LOG_TRACE, "aqh 0x%p 0x%x next: 0x%x prev 0x%x", a_qh, a_qh->this_raw, a_qh->horizontal_link_pointer.raw, a_qh->prev_raw);
 
     qh->horizontal_link_pointer.raw = a_qh->horizontal_link_pointer.raw;
 
