@@ -42,7 +42,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-usbstick ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_desc*,trace:usb_ehci_packet_action,trace:usb_ehci_qtd_*,trace:usb_ehci_queue_action"\
+  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_ehci_guest_bug"\
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
@@ -55,11 +55,10 @@ qemu-system-x86_64 \
   -device virtio-vga-gl,id=gpu0 \
   -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \
   -netdev $NETDEV \
-  -device virtio-keyboard,id=kdb0 \
   -device usb-ehci,id=ehci \
   -device usb-kbd,bus=ehci.0,port=1,id=usbkbd \
   -device qemu-xhci,id=xhci \
-  -device usb-storage,bus=xhci.0,port=1,drive=usbstick \
+  -device usb-storage,id=usbstorage0,bus=xhci.0,port=2,drive=usbstick,logical_block_size=4096,physical_block_size=4096\
   -drive id=usbstick,if=none,format=raw,file=${OUTPUTDIR}/qemu-usbstick,werror=report,rerror=report \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \

@@ -11,18 +11,10 @@
 
 MODULE("turnstone.kernel.hw.usb");
 
-boolean_t usb_device_request(usb_device_t*           usb_device,
-                             usb_request_type_t      request_type,
-                             usb_request_recipient_t request_recipient,
-                             usb_request_direction_t request_direction,
-                             uint32_t                request,
-                             uint16_t                value,
-                             uint16_t                index,
-                             uint16_t                length,
-                             void*                   data);
 void      usb_device_print_desc(usb_device_desc_t device_desc);
 boolean_t usb_device_get_langs(usb_device_t* usb_device, wchar_t* langs);
 boolean_t usb_device_get_string(usb_device_t* usb_device, wchar_t lang_id, uint32_t str_index, wchar_t* str);
+void      usb_device_free(usb_device_t* usb_device);
 
 hashmap_t* usb_devices = NULL;
 
@@ -129,8 +121,20 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
 
     usb_transfer_t usb_transfer = {0};
 
+    usb_endpoint_t* ep = NULL;
+
+    if(usb_device->configurations) {
+        if(usb_device->configurations[usb_device->selected_config]) {
+            usb_config_t* config = usb_device->configurations[usb_device->selected_config];
+
+            if(config->endpoints) {
+                ep = config->endpoints[0];
+            }
+        }
+    }
+
     usb_transfer.device = usb_device;
-    usb_transfer.endpoint = usb_device->endpoint;
+    usb_transfer.endpoint = ep;
     usb_transfer.request = &usb_request;
     usb_transfer.data = data;
     usb_transfer.length = length;
@@ -143,6 +147,52 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
 
     return usb_transfer.success;
 };
+
+void usb_device_free(usb_device_t* usb_device) {
+    hashmap_delete(usb_devices, (void*)usb_device->device_id);
+
+    if(usb_device->serial) {
+        memory_free(usb_device->serial);
+    }
+
+    if(usb_device->vendor) {
+        memory_free(usb_device->vendor);
+    }
+
+    if(usb_device->product) {
+        memory_free(usb_device->product);
+    }
+
+    if(usb_device->configurations) {
+        for(uint32_t i = 0; i < usb_device->num_configurations; i++) {
+            usb_config_t* config = usb_device->configurations[i];
+
+            if(!config) {
+                continue;
+            }
+
+            for(uint32_t j = 0; j < config->num_endpoints; j++) {
+                usb_endpoint_t* endpoint = config->endpoints[j];
+
+                if(!endpoint) {
+                    continue;
+                }
+
+                memory_free(endpoint);
+            }
+
+            if(config->config_buffer) {
+                memory_free(config->config_buffer);
+            }
+
+            memory_free(config);
+        }
+
+        memory_free(usb_device->configurations);
+    }
+
+    memory_free(usb_device);
+}
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -184,13 +234,12 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                            USB_BASE_DESC_TYPE_DEVICE << 8, 0,
                            8, &device_desc)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get device descriptor");
-        hashmap_delete(usb_devices, (void*)usb_device->device_id);
-        memory_free(usb_device);
+        usb_device_free(usb_device);
 
         return -1;
     }
 
-    PRINTLOG(USB, LOG_TRACE, "max packet size: %d", device_desc.max_packet_size);
+    PRINTLOG(USB, LOG_DEBUG, "max packet size: %d", device_desc.max_packet_size);
 
     usb_device->max_packet_size = device_desc.max_packet_size;
 
@@ -200,8 +249,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                            usb_device->device_id + 1, 0,
                            0, 0)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set device address");
-        hashmap_delete(usb_devices, (void*)usb_device->device_id);
-        memory_free(usb_device);
+        usb_device_free(usb_device);
 
         return -1;
     }
@@ -219,8 +267,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                            USB_BASE_DESC_TYPE_DEVICE << 8, 0,
                            sizeof(usb_device_desc_t), &device_desc)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get device descriptor");
-        hashmap_delete(usb_devices, (void*)usb_device->device_id);
-        memory_free(usb_device);
+        usb_device_free(usb_device);
 
         return -1;
     }
@@ -231,8 +278,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     if(!usb_device_get_langs(usb_device, lang_ids)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get langs");
-        hashmap_delete(usb_devices, (void*)usb_device->device_id);
-        memory_free(usb_device);
+        usb_device_free(usb_device);
 
         return -1;
     }
@@ -265,59 +311,63 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         usb_device->serial = serial_str;
     }
 
-    uint8_t* config_buffer = memory_malloc(256);
+    usb_device->num_configurations = device_desc.num_configurations;
+    usb_device->configurations = memory_malloc(sizeof(usb_config_desc_t*) * device_desc.num_configurations);
 
-    if(!config_buffer) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for config buffer");
-        hashmap_delete(usb_devices, (void*)usb_device->device_id);
-        memory_free(usb_device->product);
-        memory_free(usb_device->vendor);
-        memory_free(usb_device->serial);
-        memory_free(usb_device);
+    if(!usb_device->configurations) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for configurations");
+        usb_device_free(usb_device);
 
         return -1;
     }
 
-    usb_endpoint_desc_t* endpoint_desc = NULL;
-    usb_interface_desc_t* interface_desc = NULL;
-    usb_hid_desc_t* hid_desc = NULL;
-    int32_t picked_config = -1;
-    int8_t found = 0;
-
     for(int32_t i = 0; i < device_desc.num_configurations; i++) {
-        if(!usb_device_request(usb_device,
-                               USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
-                               USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
-                               (USB_BASE_DESC_TYPE_CONFIG << 8) | i, 0,
-                               4, config_buffer)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot get config descriptor");
-            hashmap_delete(usb_devices, (void*)usb_device->device_id);
-            memory_free(usb_device->product);
-            memory_free(usb_device->vendor);
-            memory_free(usb_device->serial);
-            memory_free(usb_device);
-            memory_free(config_buffer);
+        usb_device->configurations[i] = memory_malloc(sizeof(usb_config_t));
+
+        if(!usb_device->configurations[i]) {
+            PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for configuration");
+            usb_device_free(usb_device);
 
             return -1;
         }
 
-        usb_config_desc_t* config_desc = (usb_config_desc_t*)config_buffer;
+        usb_config_t* config = usb_device->configurations[i];
+        config->config_id = i;
+
+        config->config_buffer = memory_malloc(256);
+
+        if(!config->config_buffer) {
+            PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for config buffer");
+            usb_device_free(usb_device);
+
+            return -1;
+        }
+
+
+        if(!usb_device_request(usb_device,
+                               USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
+                               USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
+                               (USB_BASE_DESC_TYPE_CONFIG << 8) | i, 0,
+                               4, config->config_buffer)) {
+            PRINTLOG(USB, LOG_ERROR, "cannot get config descriptor");
+            usb_device_free(usb_device);
+
+            return -1;
+        }
+
+        usb_config_desc_t* config_desc = (usb_config_desc_t*)config->config_buffer;
 
         PRINTLOG(USB, LOG_TRACE, "config descriptor total length: %d", config_desc->total_length);
         uint32_t total_length = config_desc->total_length;
 
         if(config_desc->total_length > 256) {
-            memory_free(config_buffer);
+            memory_free(config->config_buffer);
 
-            config_buffer = memory_malloc(total_length);
+            config->config_buffer = memory_malloc(total_length);
 
-            if(!config_buffer) {
+            if(!config->config_buffer) {
                 PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for config buffer");
-                hashmap_delete(usb_devices, (void*)usb_device->device_id);
-                memory_free(usb_device->product);
-                memory_free(usb_device->vendor);
-                memory_free(usb_device->serial);
-                memory_free(usb_device);
+                usb_device_free(usb_device);
 
                 return -1;
             }
@@ -327,37 +377,65 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                                USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                                USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                                (USB_BASE_DESC_TYPE_CONFIG << 8) | i, 0,
-                               total_length, config_buffer)) {
+                               total_length, config->config_buffer)) {
             PRINTLOG(USB, LOG_ERROR, "cannot get config descriptor");
-            hashmap_delete(usb_devices, (void*)usb_device->device_id);
-            memory_free(usb_device->product);
-            memory_free(usb_device->vendor);
-            memory_free(usb_device->serial);
-            memory_free(usb_device);
-            memory_free(config_buffer);
+            usb_device_free(usb_device);
 
             return -1;
         }
 
-        config_desc = (usb_config_desc_t*)config_buffer;
+        config_desc = (usb_config_desc_t*)config->config_buffer;
 
         uint32_t idx = config_desc->length;
-        found = 0;
 
         PRINTLOG(USB, LOG_TRACE, "config data between %d-%d", config_desc->length, config_desc->total_length);
 
+        uint32_t ep_idx = 0;
+
         while(idx < total_length) {
-            uint8_t length = config_buffer[idx];
-            uint8_t type = config_buffer[idx + 1];
+            uint8_t length = config->config_buffer[idx];
+            uint8_t type = config->config_buffer[idx + 1];
 
             if(type == USB_BASE_DESC_TYPE_INTERFACE) {
-                interface_desc = (usb_interface_desc_t*)(config_buffer + idx);
-                found++;
+                usb_interface_desc_t* interface_desc = (usb_interface_desc_t*)(config->config_buffer + idx);
+
+                config->interface = interface_desc;
+                config->num_endpoints = interface_desc->num_endpoints;
+                config->endpoints = memory_malloc(sizeof(usb_endpoint_t*) * interface_desc->num_endpoints);
+
+                if(!config->endpoints) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for endpoints");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+
+                PRINTLOG(USB, LOG_DEBUG, "interface number: %d", interface_desc->interface_number);
+                PRINTLOG(USB, LOG_DEBUG, "interface class: %d subclass: %d protocol: %d endpoint count %d",
+                         interface_desc->interface_class,
+                         interface_desc->interface_subclass,
+                         interface_desc->interface_protocol,
+                         interface_desc->num_endpoints);
             } else if(type == USB_BASE_DESC_TYPE_ENDPOINT) {
-                endpoint_desc = (usb_endpoint_desc_t*)(config_buffer + idx);
-                found++;
+                usb_endpoint_desc_t* endpoint_desc = (usb_endpoint_desc_t*)(config->config_buffer + idx);
+
+                config->endpoints[ep_idx] = memory_malloc(sizeof(usb_endpoint_t));
+
+                if(!config->endpoints[ep_idx]) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for endpoint");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+
+                config->endpoints[ep_idx]->desc = endpoint_desc;
+                config->endpoints[ep_idx]->in = endpoint_desc->endpoint_address >> 7;
+
+                ep_idx++;
+
+                PRINTLOG(USB, LOG_DEBUG, "endpoint address: %d %d", endpoint_desc->endpoint_address, endpoint_desc->max_packet_size);
             } else if(type == USB_HID_DESC_TYPE_HID) {
-                hid_desc = (usb_hid_desc_t*)(config_buffer + idx);
+                config->hid = (usb_hid_desc_t*)(config->config_buffer + idx);
             } else {
                 PRINTLOG(USB, LOG_TRACE, "unknown descriptor type: %d length %d idx %d", type, length, idx);
             }
@@ -365,63 +443,51 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
             idx += length;
         }
 
-        if(found == 2) {
-            picked_config = i;
-            break;
-        } else {
-            hid_desc = NULL;
-        }
-
     }
 
-    if(found == 2) {
+    usb_device->selected_config = 0;
 
-        if(!usb_device_request(usb_device,
-                               USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
-                               USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_CONFIGURATION,
-                               picked_config, 0,
-                               0, 0)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot set picked config 0x%x", picked_config);
-            hashmap_delete(usb_devices, (void*)usb_device->device_id);
-            memory_free(usb_device->product);
-            memory_free(usb_device->vendor);
-            memory_free(usb_device->serial);
-            memory_free(usb_device);
-            memory_free(config_buffer);
 
-            return -1;
-        }
-
-        usb_device->interface = interface_desc;
-        usb_device->endpoint = memory_malloc(sizeof(usb_endpoint_t));
-
-        if(!usb_device->endpoint) {
-            PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for endpoint");
-            hashmap_delete(usb_devices, (void*)usb_device->device_id);
-            memory_free(usb_device->product);
-            memory_free(usb_device->vendor);
-            memory_free(usb_device->serial);
-            memory_free(usb_device);
-            memory_free(config_buffer);
-
-            return -1;
-        }
-
-        usb_device->endpoint->desc = endpoint_desc;
-        usb_device->hid = hid_desc;
-
-        PRINTLOG(USB, LOG_TRACE, "picked config: 0x%x", picked_config);
-
-    } else {
-        PRINTLOG(USB, LOG_ERROR, "cannot find interface and endpoint descriptors");
-        hashmap_delete(usb_devices, (void*)usb_device->device_id);
-        memory_free(usb_device->product);
-        memory_free(usb_device->vendor);
-        memory_free(usb_device->serial);
-        memory_free(usb_device);
-        memory_free(config_buffer);
+    if(!usb_device_request(usb_device,
+                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
+                           USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_CONFIGURATION,
+                           usb_device->selected_config, 0,
+                           0, 0)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot set selected config 0x%x", usb_device->selected_config);
+        usb_device_free(usb_device);
 
         return -1;
+    }
+
+
+    PRINTLOG(USB, LOG_TRACE, "picked config: 0x%x", usb_device->selected_config);
+
+
+
+
+    PRINTLOG(USB, LOG_DEBUG, "selected interface class: %d subclass: %d protocol: %d endpoint count %d",
+             usb_device->configurations[usb_device->selected_config]->interface->interface_class,
+             usb_device->configurations[usb_device->selected_config]->interface->interface_subclass,
+             usb_device->configurations[usb_device->selected_config]->interface->interface_protocol,
+             usb_device->configurations[usb_device->selected_config]->interface->num_endpoints);
+
+    for(uint32_t i = 0; i < usb_device->configurations[usb_device->selected_config]->interface->num_endpoints; i++) {
+        PRINTLOG(USB, LOG_DEBUG, "selected endpoint address: %d %d",
+                 usb_device->configurations[usb_device->selected_config]->endpoints[i]->desc->endpoint_address,
+                 usb_device->configurations[usb_device->selected_config]->endpoints[i]->desc->max_packet_size);
+    }
+
+    if(usb_device->configurations[usb_device->selected_config]->interface->interface_class == USB_CLASS_HID) {
+        if(usb_device->configurations[usb_device->selected_config]->interface->interface_subclass == USB_SUBCLASS_BOOT) {
+            if(usb_device->configurations[usb_device->selected_config]->interface->interface_protocol == USB_PROTOCOL_KEYBOARD) {
+                if(usb_keyboard_init(usb_device) != 0) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot initialize keyboard");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+            }
+        }
     }
 
     PRINTLOG(USB, LOG_INFO, "device %s is ready", usb_device->product);

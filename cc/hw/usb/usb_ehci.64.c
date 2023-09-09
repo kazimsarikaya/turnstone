@@ -12,51 +12,86 @@
 #include <time/timer.h>
 #include <hashmap.h>
 #include <cpu/task.h>
+#include <cpu/sync.h>
+#include <future.h>
+#include <cpu.h>
 
 MODULE("turnstone.kernel.hw.usb");
 
 typedef struct usb_controller_metadata_t {
-    usb_ehci_controller_capabilties_t* cap;
-    usb_ehci_op_regs_t*                op_regs;
-    usb_legacy_support_capabilities_t* legacy_cap;
-    boolean_t                          addr64;
-    uint64_t                           framelist_fa;
-    uint64_t                           framelist_va;
-    uint64_t                           qh_count;
-    uint64_t                           qh_used_mask;
-    uint64_t                           qh_fa;
-    uint64_t                           qh_va;
-    uint64_t                           qtd_count;
-    uint64_t                           qtd_used_mask;
-    uint64_t                           qtd_fa;
-    uint64_t                           qtd_va;
-    usb_ehci_qh_t*                     qh_asynclist_head;
-    usb_ehci_qh_t*                     qh_periodiclist_head;
-    usb_ehci_framelist_item_t*         framelist;
-    uint8_t                            port_count;
-    uint64_t                           int_frame_entries_count;
-    uint64_t                           int_frame_entries_fa;
-    uint64_t                           int_frame_entries_va;
-    uint64_t                           v_frame_entries_count;
-    uint64_t                           itd_fa;
-    uint64_t                           itd_va;
-    uint64_t                           sitd_fa;
-    uint64_t                           sitd_va;
-    uint64_t                           framelist_entries_count;
+    usb_ehci_controller_capabilties_t*          cap;
+    usb_ehci_op_regs_t*                         op_regs;
+    volatile usb_legacy_support_capabilities_t* legacy_cap;
+    boolean_t                                   addr64;
+    uint64_t                                    framelist_fa;
+    uint64_t                                    framelist_va;
+    uint64_t                                    qh_count;
+    uint64_t*                                   qh_used_mask;
+    uint64_t                                    qh_fa;
+    uint64_t                                    qh_va;
+    uint64_t                                    qtd_count;
+    uint64_t*                                   qtd_used_mask;
+    uint64_t                                    qtd_fa;
+    uint64_t                                    qtd_va;
+    uint64_t                                    itd_pool_count;
+    uint64_t*                                   itd_pool_used_mask;
+    uint64_t                                    itd_pool_fa;
+    uint64_t                                    itd_pool_va;
+    usb_ehci_qh_t*                              qh_asynclist_head;
+    usb_ehci_qh_t*                              qh_periodiclist_head;
+    usb_ehci_framelist_item_t*                  framelist;
+    uint8_t                                     port_count;
+    uint64_t                                    int_frame_entries_count;
+    uint64_t                                    int_frame_entries_fa;
+    uint64_t                                    int_frame_entries_va;
+    uint64_t                                    v_frame_entries_count;
+    uint64_t                                    itd_fa;
+    uint64_t                                    itd_va;
+    uint64_t                                    sitd_fa;
+    uint64_t                                    sitd_va;
+    uint64_t                                    framelist_entries_count;
+    lock_t                                      async_list_lock;
+    uint64_t                                    current_async_transfer_count;
+    uint64_t                                    async_list_tid;
+    lock_t                                      periodic_list_lock;
+    uint64_t                                    current_periodic_transfer_count;
+    uint64_t                                    periodic_list_tid;
 } usb_controller_metadata_t;
 
 hashmap_t* usb_ehci_controllers = NULL;
 
-usb_ehci_qh_t*  usb_ehci_find_qh(usb_controller_t* usb_controller);
-usb_ehci_qtd_t* usb_ehci_find_qtd(usb_controller_t* usb_controller);
-int8_t          usb_ehci_free_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh);
-int8_t          usb_ehci_free_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd);
-int8_t          usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq);
-int8_t          usb_ehci_probe_all_ports(usb_controller_t* usb_controller);
-int8_t          usb_ehci_probe_port(usb_controller_t* usb_controller, uint8_t port);
-int8_t          usb_ehci_reset_port(usb_controller_t* usb_controller, uint8_t port);
-int8_t          usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer);
+usb_ehci_qh_t* usb_ehci_find_qh(usb_controller_t* usb_controller);
+int8_t         usb_ehci_init_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_ehci_qtd_t* head, usb_ehci_qtd_t* tail, usb_transfer_t* transfer, boolean_t ioc);
+int8_t         usb_ehci_link_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, usb_ehci_qh_t* qh);
+int8_t         usb_ehci_unlink_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, usb_ehci_qh_t* qh);
+int8_t         usb_ehci_free_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh);
 
+
+usb_ehci_qtd_t* usb_ehci_find_qtd(usb_controller_t* usb_controller);
+int8_t          usb_ehci_free_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd);
+int8_t          usb_ehci_free_qtd_chain(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd);
+int8_t          usb_ehci_init_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd, usb_ehci_qtd_t* prev,
+                                  uint32_t data_toggle, uint32_t packet_type, void* data, uint32_t data_size);
+
+usb_ehci_itd_t* usb_ehci_find_itd(usb_controller_t* usb_controller);
+int8_t          usb_ehci_free_itd(usb_controller_t* usb_controller, usb_ehci_itd_t* itd);
+
+
+int8_t usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq);
+
+int8_t usb_ehci_probe_all_ports(usb_controller_t* usb_controller);
+int8_t usb_ehci_probe_port(usb_controller_t* usb_controller, uint8_t port);
+int8_t usb_ehci_reset_port(usb_controller_t* usb_controller, uint8_t port);
+
+int8_t usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer);
+int8_t usb_ehci_isochronous_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer);
+int8_t usb_ehci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer);
+
+int8_t usb_ehci_periodiclist_lookup_task(int32_t argc, void** argv);
+int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv);
+
+void usb_ehci_wait_for_transfer(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_transfer_t* transfer);
+void usb_ehci_poll(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_transfer_t* transfer);
 
 
 void video_text_print(char_t* string);
@@ -67,6 +102,8 @@ int8_t usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq) {
 
     //PRINTLOG(USB, LOG_DEBUG, "EHCI ISR %x", irq);
 
+    boolean_t handled = false;
+
     iterator_t* it = hashmap_iterator_create(usb_ehci_controllers);
 
     while(it->end_of_iterator(it) != 0) {
@@ -74,16 +111,46 @@ int8_t usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq) {
         usb_controller_metadata_t* metadata = usb_controller->metadata;
 
         uint32_t usbsts = metadata->op_regs->usb_sts;
+        uint32_t usbintr = metadata->op_regs->usb_intr;
+
+        if(usbsts & usbintr) {
+            handled = true;
+        } else {
+            it = it->next(it);
+
+            continue;
+        }
+
+        /*
+           char_t buffer[256] = {0};
+           memory_memclean(buffer, 256);
+
+           utoh_with_buffer(buffer, usbsts);
+
+           video_text_print((char_t*)"EHCI ISR usb_sts: 0x");
+           video_text_print(buffer);
+           video_text_print((char_t*)"\n");
+         */
 
         usb_ehci_sts_reg_t sts_reg = { .raw = usbsts };
+        usb_ehci_int_enable_reg_t intr_reg = { .raw = usbintr };
 
-        if(sts_reg.bits.port_change) {
+        if(sts_reg.bits.port_change && intr_reg.bits.port_change_enable) {
             sts_reg.bits.port_change = 1;
         }
 
-        if(sts_reg.bits.frame_list_rollover) {
-            sts_reg.bits.frame_list_rollover = 1;
+        if(sts_reg.bits.frame_list_rollover && intr_reg.bits.frame_list_rollover_enable) {
             video_text_print((char_t*)"EHCI frame list rollover\n");
+        }
+
+        if(sts_reg.bits.usb_interrupt && intr_reg.bits.usb_interrupt_enable) {
+            if(metadata->current_periodic_transfer_count) {
+                task_set_interrupt_received(metadata->periodic_list_tid);
+            }
+
+            if(metadata->current_async_transfer_count) {
+                task_set_interrupt_received(metadata->async_list_tid);
+            }
         }
 
         metadata->op_regs->usb_sts = sts_reg.raw;
@@ -94,25 +161,153 @@ int8_t usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq) {
 
     it->destroy(it);
 
-    apic_eoi();
+    if(handled) {
+        apic_eoi();
+
+        return 0;
+    }
+
+    return -1;
+}
+
+usb_ehci_itd_t* usb_ehci_find_itd(usb_controller_t* usb_controller) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+
+    usb_ehci_itd_t* itds = (usb_ehci_itd_t*)metadata->itd_pool_va;
+
+
+    uint32_t idx = 0;
+    boolean_t found = false;
+
+    for(uint32_t i = 0; i < metadata->itd_pool_count; i++) {
+        uint32_t part_idx = i / 64;
+        uint32_t bit_idx = i % 64;
+
+        if((metadata->itd_pool_used_mask[part_idx] & (1 << bit_idx)) == 0) {
+            idx = i;
+            found = true;
+            metadata->itd_pool_used_mask[part_idx] |= (1 << bit_idx);
+
+            itds[idx].id = idx;
+            itds[idx].this_raw = (uint32_t)(uint64_t)&itds[idx];
+
+            break;
+        }
+
+    }
+
+    if(!found) {
+        return NULL;
+    }
+
+    return &itds[idx];
+}
+
+int8_t usb_ehci_free_itd(usb_controller_t* usb_controller, usb_ehci_itd_t* itd) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+    uint64_t id = itd->id;
+
+    if(id >= metadata->itd_pool_count) {
+        return -1;
+    }
+
+    uint32_t part_idx = id / 64;
+    uint32_t bit_idx = id % 64;
+
+    metadata->itd_pool_used_mask[part_idx] &= ~(1 << bit_idx);
+
+    memory_memclean(itd, sizeof(usb_ehci_itd_t));
+
     return 0;
 }
 
-int8_t usb_ehci_init_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd, usb_ehci_qtd_t* prev,
-                         uint32_t data_toggle, uint32_t packet_type, void* data, uint32_t data_size);
-int8_t usb_ehci_free_qtd_chain(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd);
-void   usb_ehci_wait_for_transfer(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_transfer_t* transfer);
-void   usb_ehci_poll(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_transfer_t* transfer);
-int8_t usb_ehci_init_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_ehci_qtd_t* head, usb_ehci_qtd_t* tail, usb_transfer_t* transfer, boolean_t ioc);
-int8_t usb_ehci_link_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, usb_ehci_qh_t* qh);
-int8_t usb_ehci_unlink_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* list, usb_ehci_qh_t* qh);
+usb_ehci_qh_t* usb_ehci_find_qh(usb_controller_t * usb_controller) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+    usb_ehci_qh_t* qhs = (usb_ehci_qh_t*)metadata->qh_va;
 
+    for(uint64_t i = 0; i < metadata->qh_count; i++) {
+        uint32_t part_idx = i / 64;
+        uint32_t bit_idx = i % 64;
+
+        if((metadata->qh_used_mask[part_idx] & (1 << bit_idx)) == 0) {
+            metadata->qh_used_mask[part_idx] |= (1 << bit_idx);
+
+            qhs[i].id = i;
+
+            return &qhs[i];
+        }
+    }
+
+    return NULL;
+}
+
+int8_t usb_ehci_free_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+
+    if(usb_ehci_free_qtd_chain(usb_controller, qh->qtd_tail) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot free qtd chain for qh %d", qh->id);
+    }
+
+    if(qh->id >= metadata->qh_count) {
+        return -1;
+    }
+
+    uint32_t part_idx = qh->id / 64;
+    uint32_t bit_idx = qh->id % 64;
+
+    metadata->qh_used_mask[part_idx] &= ~(1 << bit_idx);
+
+    memory_memclean(qh, sizeof(usb_ehci_qh_t));
+
+    PRINTLOG(USB, LOG_TRACE, "freed qh %d", qh->id);
+
+    return 0;
+}
+
+usb_ehci_qtd_t* usb_ehci_find_qtd(usb_controller_t* usb_controller) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+    usb_ehci_qtd_t* qtds = (usb_ehci_qtd_t*)metadata->qtd_va;
+
+    for(uint64_t i = 0; i < metadata->qtd_count; i++) {
+        uint32_t part_idx = i / 64;
+        uint32_t bit_idx = i % 64;
+
+        if((metadata->qtd_used_mask[part_idx] & (1 << bit_idx)) == 0) {
+            metadata->qtd_used_mask[part_idx] |= (1 << bit_idx);
+
+            qtds[i].id = i;
+
+            return &qtds[i];
+        }
+    }
+
+    return NULL;
+}
+
+int8_t usb_ehci_free_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+
+    if(qtd->id >= metadata->qtd_count) {
+        return -1;
+    }
+
+    uint32_t part_idx = qtd->id / 64;
+    uint32_t bit_idx = qtd->id % 64;
+
+    metadata->qtd_used_mask[part_idx] &= ~(1 << bit_idx);
+
+    memory_memclean(qtd, sizeof(usb_ehci_qtd_t));
+
+    PRINTLOG(USB, LOG_TRACE, "freed qtd %d", qtd->id);
+
+    return 0;
+}
 int8_t usb_ehci_init_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_ehci_qtd_t* head, usb_ehci_qtd_t* tail, usb_transfer_t* transfer, boolean_t ioc) {
     UNUSED(usb_controller);
 
     uint32_t endpoint_number = 0;
 
-    if(transfer->endpoint) {
+    if(transfer->endpoint && transfer->length) {
         endpoint_number = transfer->endpoint->desc->endpoint_address;
     }
 
@@ -371,18 +566,258 @@ int8_t usb_ehci_init_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd, 
     return 0;
 }
 
+int8_t usb_ehci_isochronous_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
+    logging_module_levels[USB] = LOG_TRACE;
+    PRINTLOG(USB, LOG_TRACE, "EHCI isochronous transfer");
+
+    usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
+
+    uint32_t data_size = transfer->length;
+    uint8_t* data = transfer->data;
+    uint64_t data_phy_addr = 0;
+
+    PRINTLOG(USB, LOG_TRACE, "EHCI isochronous transfer 0x%p data 0x%p len 0x%x", transfer, data, data_size);
+
+    if(data_size && memory_paging_get_physical_address((uint64_t)data, &data_phy_addr) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot get read buffer physical address 0x%p", data);
+
+        return NULL;
+    }
+
+    uint32_t buffer_lo = (uint32_t)data_phy_addr;
+    uint32_t buffer_hi = (uint32_t)(data_phy_addr >> 32);
+
+    usb_ehci_itd_t* itd = usb_ehci_find_itd(usb_controller);
+
+    if(itd == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "no free itd found");
+
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_TRACE, "EHCI itd buffer 0x%x:%x len 0x%x", buffer_hi, buffer_lo, data_size);
+    PRINTLOG(USB, LOG_TRACE, "EHCI itd 0x%p", itd);
+    PRINTLOG(USB, LOG_TRACE, "EHCI itd id 0x%x", itd->id);
+
+    itd->transfer = transfer;
+
+    itd->next_link_pointer.bits.type = USB_EHCI_QTD_TYPE_ITD;
+    itd->next_link_pointer.bits.terminate_bit = 1;
+    itd->this_raw = (uint32_t)(uint64_t)itd | (USB_EHCI_QTD_TYPE_ITD << 1);
+
+    itd->buffer_page_0.bits.device_address = transfer->device->address;
+    itd->buffer_page_0.bits.endpoint = transfer->endpoint->desc->endpoint_address & 0x7F;
+    itd->buffer_page_1.bits.max_packet_length = transfer->endpoint->desc->max_packet_size;
+    itd->buffer_page_1.bits.direction = transfer->endpoint->in;
+    itd->buffer_page_2.bits.multi_count = 1;
+
+    PRINTLOG(USB, LOG_TRACE, "EHCI itd %x metadata builded, buffer filling...", itd->id);
+
+    uint32_t offset = buffer_lo & 0xFFF;
+
+    if(data_size > 0) {
+        itd->transactions[0].bits.active = 1;
+        itd->transactions[0].bits.offset = offset;
+        itd->transactions[0].bits.length = MIN(data_size, FRAME_SIZE - offset);
+
+        data_size -= itd->transactions[0].bits.length;
+        buffer_lo += itd->transactions[0].bits.length;
+
+        itd->buffer_page_0.bits.buffer_address = buffer_lo >> 12;
+
+        if(metadata->addr64) {
+            itd->ext_buffer_pages[0] = buffer_hi;
+        }
+
+        itd->last_transaction = 0;
+    }
+
+
+
+    if(data_size > 0) {
+        itd->transactions[1].bits.active = 1;
+        itd->transactions[1].bits.offset = 0;
+        itd->transactions[1].bits.length = MIN(data_size, FRAME_SIZE);
+
+        data_size -= itd->transactions[1].bits.length;
+        buffer_lo += itd->transactions[1].bits.length;
+
+        itd->transactions[1].bits.page_select = 1;
+
+        itd->buffer_page_1.bits.buffer_address = buffer_lo >> 12;
+
+        if(metadata->addr64) {
+            itd->ext_buffer_pages[1] = buffer_hi;
+        }
+
+        itd->last_transaction = 1;
+    }
+
+
+    if(data_size > 0) {
+        itd->transactions[2].bits.active = 1;
+        itd->transactions[2].bits.offset = 0;
+        itd->transactions[2].bits.length = MIN(data_size, FRAME_SIZE);
+
+        data_size -= itd->transactions[2].bits.length;
+        buffer_lo += itd->transactions[2].bits.length;
+
+        itd->transactions[2].bits.page_select = 2;
+
+        itd->buffer_page_2.bits.buffer_address = buffer_lo >> 12;
+
+        if(metadata->addr64) {
+            itd->ext_buffer_pages[2] = buffer_hi;
+        }
+
+        itd->last_transaction = 2;
+    }
+
+    itd->transactions[itd->last_transaction].bits.ioc = 1;
+
+    //TODO: remaining length for testing keyboard it is enough
+
+    PRINTLOG(USB, LOG_TRACE, "EHCI itd %x buffer filled, frame linking...", itd->id);
+
+    uint32_t frame_index = ((metadata->op_regs->frame_index + 31) / 8) % metadata->v_frame_entries_count;
+
+    PRINTLOG(USB, LOG_DEBUG, "frame index %d", frame_index);
+
+    lock_acquire(metadata->periodic_list_lock);
+
+    usb_ehci_itd_t* frame_itds = (usb_ehci_itd_t*)metadata->itd_va;
+
+    usb_ehci_itd_t* frame_itd = &frame_itds[frame_index];
+
+    itd->prev = frame_itd;
+    itd->next_link_pointer.raw = frame_itd->next_link_pointer.raw;
+
+    if(itd->next_link_pointer.bits.next_link_pointer == 0) {
+        itd->next_link_pointer.bits.terminate_bit = 1;
+    }
+
+    frame_itd->next_link_pointer.raw = itd->this_raw;
+    frame_itd->need_seek = true;
+
+    metadata->current_periodic_transfer_count++;
+
+    lock_release(metadata->periodic_list_lock);
+
+
+    PRINTLOG(USB, LOG_TRACE, "EHCI itd %x frame linked to 0x%p nlp 0x%x this raw 0x%x", itd->id, frame_itd, itd->next_link_pointer.raw, itd->this_raw);
+    logging_module_levels[USB] = LOG_DEBUG;
+    return 0;
+}
+
+int8_t usb_ehci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
+    PRINTLOG(USB, LOG_TRACE, "EHCI bulk transfer");
+
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+
+    usb_ehci_qtd_t* qtd = NULL;
+    usb_ehci_qtd_t* head = NULL;
+    usb_ehci_qtd_t* prev = NULL;
+
+    uint32_t toggle = transfer->endpoint->toggle;
+    uint32_t max_packet_size = transfer->endpoint->desc->max_packet_size;
+
+    uint32_t packet_type = transfer->endpoint->in;
+    uint32_t remaining = transfer->length;
+    uint8_t* data = transfer->data;
+
+    PRINTLOG(USB, LOG_TRACE, "remaining: 0x%x", remaining);
+
+    while(remaining) {
+        lock_acquire(metadata->async_list_lock);
+        qtd = usb_ehci_find_qtd(usb_controller);
+        lock_release(metadata->async_list_lock);
+
+        if(qtd == NULL) {
+            PRINTLOG(USB, LOG_ERROR, "no free qtds");
+
+            return -1;
+        }
+
+        if(head == NULL) {
+            head = qtd;
+        }
+
+        toggle ^= 1;
+
+        uint32_t data_size = MIN(remaining, max_packet_size);
+
+        if(usb_ehci_init_qtd(usb_controller, qtd, prev, toggle, packet_type, data, data_size) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "failed to init qtd");
+
+            return -1;
+        }
+
+        prev = qtd;
+
+        remaining -= data_size;
+        data += data_size;
+    }
+
+    qtd->token.bits.interrupt_on_complete = 1;
+
+
+    lock_acquire(metadata->async_list_lock);
+    usb_ehci_qh_t* qh = usb_ehci_find_qh(usb_controller);
+    lock_release(metadata->async_list_lock);
+
+    if(qh == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "no free qhs");
+
+        return -1;
+    }
+
+    if(usb_ehci_init_qh(usb_controller, qh, head, qtd, transfer, false) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "failed to init qh");
+
+        return -1;
+    }
+
+    lock_acquire(metadata->async_list_lock);
+
+    qh->transfer = transfer;
+
+    if(usb_ehci_link_qh(usb_controller, metadata->qh_asynclist_head, qh) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "failed to link qh");
+        lock_release(metadata->async_list_lock);
+
+        return -1;
+    }
+
+    metadata->current_async_transfer_count++;
+
+    lock_release(metadata->async_list_lock);
+
+    PRINTLOG(USB, LOG_TRACE, "EHCI qh 0x%p qtd 0x%p", qh, qtd);
+
+    if(transfer->need_future) {
+        qh->transfer_lock = lock_create_for_future();
+        transfer->transfer_future = future_create(qh->transfer_lock);
+    }
+
+    return 0;
+}
+
 int8_t usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     PRINTLOG(USB, LOG_TRACE, "EHCI control transfer");
 
     usb_controller_metadata_t* metadata = usb_controller->metadata;
 
+
     usb_device_request_t* request = transfer->request;
     usb_device_t* device = transfer->device;
 
+    lock_acquire(metadata->async_list_lock);
     usb_ehci_qtd_t* qtd = usb_ehci_find_qtd(usb_controller);
+    lock_release(metadata->async_list_lock);
 
     if(qtd == NULL) {
         PRINTLOG(USB, LOG_ERROR, "no free qtds");
+
         return -1;
     }
 
@@ -409,10 +844,13 @@ int8_t usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_
     PRINTLOG(USB, LOG_TRACE, "remaining: 0x%x", remaining);
 
     while(remaining) {
+        lock_acquire(metadata->async_list_lock);
         qtd = usb_ehci_find_qtd(usb_controller);
+        lock_release(metadata->async_list_lock);
 
         if(qtd == NULL) {
             PRINTLOG(USB, LOG_ERROR, "no free qtds");
+
             return -1;
         }
 
@@ -432,10 +870,13 @@ int8_t usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_
         data += data_size;
     }
 
+    lock_acquire(metadata->async_list_lock);
     qtd = usb_ehci_find_qtd(usb_controller);
+    lock_release(metadata->async_list_lock);
 
     if(qtd == NULL) {
         PRINTLOG(USB, LOG_ERROR, "no free qtds");
+
         return -1;
     }
 
@@ -449,10 +890,13 @@ int8_t usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_
         return -1;
     }
 
+    lock_acquire(metadata->async_list_lock);
     usb_ehci_qh_t* qh = usb_ehci_find_qh(usb_controller);
+    lock_release(metadata->async_list_lock);
 
     if(qh == NULL) {
         PRINTLOG(USB, LOG_ERROR, "no free qhs");
+
         return -1;
     }
 
@@ -462,13 +906,18 @@ int8_t usb_ehci_control_transfer(usb_controller_t* usb_controller, usb_transfer_
         return -1;
     }
 
+    lock_acquire(metadata->async_list_lock);
+
     if(usb_ehci_link_qh(usb_controller, metadata->qh_asynclist_head, qh) != 0) {
         PRINTLOG(USB, LOG_ERROR, "failed to link qh");
+        lock_release(metadata->async_list_lock);
 
         return -1;
     }
 
     usb_ehci_wait_for_transfer(usb_controller, qh, transfer);
+
+    lock_release(metadata->async_list_lock);
 
     return 0;
 }
@@ -607,74 +1056,6 @@ int8_t usb_ehci_probe_all_ports(usb_controller_t* usb_controller) {
     return failed ? -1 : 0;
 }
 
-usb_ehci_qh_t* usb_ehci_find_qh(usb_controller_t * usb_controller) {
-    usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_ehci_qh_t* qhs = (usb_ehci_qh_t*)metadata->qh_va;
-
-    for(uint64_t i = 0; i < metadata->qh_count; i++) {
-        if((metadata->qh_used_mask & (1 << i)) == 0) {
-            metadata->qh_used_mask |= (1 << i);
-
-            qhs[i].id = i;
-
-            return &qhs[i];
-        }
-    }
-
-    return NULL;
-}
-
-int8_t usb_ehci_free_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh) {
-    usb_controller_metadata_t* metadata = usb_controller->metadata;
-
-    if(usb_ehci_free_qtd_chain(usb_controller, qh->qtd_tail) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot free qtd chain for qh %d", qh->id);
-    }
-
-    if(qh->id >= metadata->qh_count) {
-        return -1;
-    }
-
-    metadata->qh_used_mask &= ~(1 << qh->id);
-
-    PRINTLOG(USB, LOG_TRACE, "freed qh %d", qh->id);
-    PRINTLOG(USB, LOG_TRACE, "qh used mask: 0x%llx", metadata->qh_used_mask);
-
-    return 0;
-}
-
-usb_ehci_qtd_t* usb_ehci_find_qtd(usb_controller_t* usb_controller) {
-    usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_ehci_qtd_t* qtds = (usb_ehci_qtd_t*)metadata->qtd_va;
-
-    for(uint64_t i = 0; i < metadata->qtd_count; i++) {
-        if((metadata->qtd_used_mask & (1 << i)) == 0) {
-            metadata->qtd_used_mask |= (1 << i);
-
-            qtds[i].id = i;
-
-            return &qtds[i];
-        }
-    }
-
-    return NULL;
-}
-
-int8_t usb_ehci_free_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd) {
-    usb_controller_metadata_t* metadata = usb_controller->metadata;
-
-    if(qtd->id >= metadata->qtd_count) {
-        return -1;
-    }
-
-    metadata->qtd_used_mask &= ~(1 << qtd->id);
-
-    PRINTLOG(USB, LOG_TRACE, "freed qtd %d", qtd->id);
-    PRINTLOG(USB, LOG_TRACE, "qtd used mask: 0x%llx", metadata->qtd_used_mask);
-
-    return 0;
-}
-
 int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     if(usb_ehci_controllers == NULL) {
         usb_ehci_controllers = hashmap_integer(16);
@@ -699,14 +1080,35 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
         return -1;
     }
 
+    metadata->async_list_lock = lock_create();
+
+    if(!metadata->async_list_lock) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create lock for async list");
+        memory_free(metadata);
+
+        return -1;
+    }
+
+    metadata->periodic_list_lock = lock_create();
+
+    if(!metadata->periodic_list_lock) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create lock for periodic list");
+        lock_destroy(metadata->async_list_lock);
+        memory_free(metadata);
+
+        return -1;
+    }
+
     usb_controller->metadata = metadata;
     usb_controller->probe_all_ports = usb_ehci_probe_all_ports;
     usb_controller->probe_port = usb_ehci_probe_port;
     usb_controller->reset_port = usb_ehci_reset_port;
     usb_controller->control_transfer = usb_ehci_control_transfer;
+    usb_controller->isochronous_transfer = usb_ehci_isochronous_transfer;
+    usb_controller->bulk_transfer = usb_ehci_bulk_transfer;
 
-    PRINTLOG(USB, LOG_INFO, "EHCI controller found: %02x:%02x:%02x:%02x",
-             pci_dev->group_number, pci_dev->bus_number, pci_dev->device_number, pci_dev->function_number);
+    PRINTLOG(USB, LOG_INFO, "EHCI controller found: %02x:%02x:%02x:%02x at mem 0x%p",
+             pci_dev->group_number, pci_dev->bus_number, pci_dev->device_number, pci_dev->function_number, pci_dev->pci_header);
 
     uint64_t bar_fa = pci_get_bar_address((pci_generic_device_t*)pci_dev->pci_header, 0);
     uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
@@ -715,21 +1117,42 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
 
     usb_ehci_hcsparams_t hcsparams = (usb_ehci_hcsparams_t)cap->hcsparams;
     usb_ehci_hccparams_t hccparams = (usb_ehci_hccparams_t)cap->hccparams;
-    PRINTLOG(USB, LOG_TRACE, "EHCI controller capabilities:");
-    PRINTLOG(USB, LOG_TRACE, "  Port count: %d", hcsparams.bits.n_ports);
-    PRINTLOG(USB, LOG_TRACE, "  64-bit addressing: %d", hccparams.bits.addr64);
-    PRINTLOG(USB, LOG_TRACE, "  EECP: %d", hccparams.bits.eecp);
+    PRINTLOG(USB, LOG_DEBUG, "EHCI controller capabilities:");
+    PRINTLOG(USB, LOG_DEBUG, "  Port count: %d", hcsparams.bits.n_ports);
+    PRINTLOG(USB, LOG_DEBUG, "  64-bit addressing: %d", hccparams.bits.addr64);
+    PRINTLOG(USB, LOG_DEBUG, "  EECP: %d", hccparams.bits.eecp);
 
     metadata->port_count = hcsparams.bits.n_ports;
 
     metadata->addr64 = hccparams.bits.addr64;
 
-    if(hccparams.bits.eecp != 0) {
-        usb_legacy_support_capabilities_t* legacy_support_capabilities = (usb_legacy_support_capabilities_t*)(bar_va + hccparams.bits.eecp);
-        metadata->legacy_cap = legacy_support_capabilities;
+    if(hccparams.bits.eecp != 0 && hccparams.bits.eecp >= 0x40) {
+        uint64_t pci_base = (uint64_t)pci_dev->pci_header;
+        uint32_t raw_l_caps = read_memio(pci_base + hccparams.bits.eecp, 32);
+        usb_legacy_support_capabilities_t l_caps = (usb_legacy_support_capabilities_t)raw_l_caps;
+        PRINTLOG(USB, LOG_DEBUG, "EHCI controller legacy support capabilities: 0x%x", raw_l_caps)
 
-        PRINTLOG(USB, LOG_TRACE, "  Bios owned: %d", legacy_support_capabilities->bits.bios_owned_semaphore);
-        PRINTLOG(USB, LOG_TRACE, "  OS owned: %d", legacy_support_capabilities->bits.os_owned_semaphore);
+
+        if(l_caps.bits.capability_id == 1) {
+            PRINTLOG(USB, LOG_TRACE, "  Bios owned: %d", l_caps.bits.bios_owned_semaphore);
+            PRINTLOG(USB, LOG_TRACE, "  OS owned: %d", l_caps.bits.os_owned_semaphore);
+
+            if(l_caps.bits.os_owned_semaphore == 0 || l_caps.bits.bios_owned_semaphore) {
+                PRINTLOG(USB, LOG_WARNING, "  Releasing BIOS ownership of EHCI controller");
+                l_caps.bits.os_owned_semaphore = 1;
+                l_caps.bits.bios_owned_semaphore = 0;
+
+                PRINTLOG(USB, LOG_WARNING, "  Writing 0x%x to EHCI controller, original 0x%x", l_caps.raw, raw_l_caps);
+
+                write_memio(pci_base + hccparams.bits.eecp, 32, l_caps.raw);
+
+                time_timer_spinsleep(500);
+
+                raw_l_caps = read_memio(pci_base + hccparams.bits.eecp, 32);
+
+                PRINTLOG(USB, LOG_WARNING, "result 0x%x", raw_l_caps);
+            }
+        }
     }
 
     if(usb_controller->msix_cap == NULL) {
@@ -742,6 +1165,7 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
         apic_ioapic_setup_irq(irq, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
 
         apic_ioapic_enable_irq(irq);
+        pci_enable_interrupt(pci_generic_device);
     } else {
         PRINTLOG(USB, LOG_TRACE, "TODO: MSI-X enabled");
     }
@@ -772,11 +1196,24 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
         }
     }
 
-    metadata->qh_count = 8;
-    metadata->qtd_count = 64;
+    metadata->qh_count = 128;
+    metadata->qh_used_mask = memory_malloc(metadata->qh_count / (sizeof(uint64_t) * 8));
+    metadata->qtd_count = 1024;
+    metadata->qtd_used_mask = memory_malloc(metadata->qtd_count / (sizeof(uint64_t) * 8));
     metadata->int_frame_entries_count = 8;
     metadata->v_frame_entries_count = 128;
     metadata->framelist_entries_count = 1024;
+    metadata->itd_pool_count = 256;
+    metadata->itd_pool_used_mask = memory_malloc(metadata->itd_pool_count / (sizeof(uint64_t) * 8));
+
+    if(!metadata->itd_pool_used_mask) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for ITD pool used mask");
+        lock_destroy(metadata->async_list_lock);
+        lock_destroy(metadata->periodic_list_lock);
+        memory_free(metadata);
+
+        return -1;
+    }
 
     uint64_t data_fa_size = sizeof(uint32_t) * 1024;
     data_fa_size += (FRAME_SIZE - (data_fa_size % FRAME_SIZE));
@@ -794,6 +1231,9 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     data_fa_size += (FRAME_SIZE - (data_fa_size % FRAME_SIZE));
     uint64_t sitd_offset = data_fa_size;
     data_fa_size += sizeof(usb_ehci_sitd_t) * metadata->v_frame_entries_count;
+    data_fa_size += (FRAME_SIZE - (data_fa_size % FRAME_SIZE));
+    uint64_t itd_pool_offset = data_fa_size;
+    data_fa_size += sizeof(usb_ehci_itd_t) * metadata->itd_pool_count;
     data_fa_size += (FRAME_SIZE - (data_fa_size % FRAME_SIZE));
 
     uint64_t data_fa_count = data_fa_size / FRAME_SIZE;
@@ -842,6 +1282,9 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     metadata->sitd_fa = data_frames->frame_address + sitd_offset;
     metadata->sitd_va = data_va + sitd_offset;
 
+    metadata->itd_pool_fa = data_frames->frame_address + itd_pool_offset;
+    metadata->itd_pool_va = data_va + itd_pool_offset;
+
     if(metadata->addr64) {
         op_regs->ctrl_ds_segment = data_frames->frame_address >> 32;
     }
@@ -874,6 +1317,36 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     PRINTLOG(USB, LOG_TRACE, "aync list addr: 0x%llx", qh_asynclist_head_fa);
 
     PRINTLOG(USB, LOG_TRACE, "build periodic list");
+
+    void** plt_args = memory_malloc(sizeof(void*) * 2);
+
+    if(plt_args == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for periodic list task args");
+        memory_free(metadata);
+
+        return -1;
+    }
+
+    plt_args[0] = usb_controller;
+    metadata->periodic_list_tid = task_create_task(NULL, 128 << 10, 64 << 10, usb_ehci_periodiclist_lookup_task, 1, plt_args, "usb_ehci_periodiclist_task");
+
+    if(metadata->periodic_list_tid == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create periodic list task");
+        memory_free(plt_args);
+        memory_free(metadata);
+
+        return -1;
+    }
+
+    metadata->async_list_tid = task_create_task(NULL, 128 << 10, 64 << 10, usb_ehci_asynclist_lookup_task, 1, plt_args, "usb_ehci_asynclist_task");
+
+    if(metadata->async_list_tid == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create async list task");
+        memory_free(plt_args);
+        memory_free(metadata);
+
+        return -1;
+    }
 
     usb_ehci_qh_t* int_qh = (usb_ehci_qh_t*)metadata->int_frame_entries_va;
     uint64_t int_qh_phys = metadata->int_frame_entries_fa;
@@ -963,6 +1436,7 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
 
     cmd_reg.raw = 0;
     cmd_reg.bits.run_stop = 1;
+    cmd_reg.bits.interrupt_on_async_advance_enable = 1;
     cmd_reg.bits.async_schedule_enable = 1;
     cmd_reg.bits.periodic_schedule_enable = 1;
     cmd_reg.bits.interrupt_threshold_control = 8;
@@ -985,6 +1459,309 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
 
     usb_controller->probe_all_ports(usb_controller);
 
+
+    return 0;
+}
+
+int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
+    if(argc != 1 || argv == NULL || argv[0] == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "invalid argument count");
+
+        return -1;
+    }
+
+    cpu_sti();
+    task_set_interruptible();
+    cpu_cli();
+
+
+    usb_controller_t* usb_controller = (usb_controller_t*)argv[0];
+    usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
+
+    uint64_t mem_hi = 0;
+
+    if(metadata->addr64) {
+        mem_hi = metadata->op_regs->ctrl_ds_segment;
+        mem_hi <<= 32;
+    }
+
+    boolean_t need_yield = false;
+
+    while(true) {
+        uint64_t transfer_count = 0;
+
+        lock_acquire(metadata->periodic_list_lock);
+        transfer_count = metadata->current_async_transfer_count;
+        lock_release(metadata->periodic_list_lock);
+
+        if(transfer_count == 0 || need_yield) {
+            task_set_message_waiting();
+            task_yield();
+
+            need_yield = false;
+
+            continue;
+        }
+
+        PRINTLOG(USB, LOG_TRACE, "transfer count: %llx", transfer_count);
+
+        uint64_t async_list_head_fa = mem_hi | metadata->op_regs->async_list_addr;
+        uint64_t async_list_head_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(async_list_head_fa);
+
+        usb_ehci_qh_t* async_list_head = (usb_ehci_qh_t*)async_list_head_va;
+        usb_ehci_qh_t* qh = async_list_head;
+
+        lock_acquire(metadata->async_list_lock);
+
+        while(transfer_count) {
+            if(qh->horizontal_link_pointer.bits.terminate) {
+                PRINTLOG(USB, LOG_TRACE, "async list finished");
+                break;
+            }
+
+
+
+            if(qh->transfer && !qh->token.bits.active) {
+                usb_transfer_t* transfer = qh->transfer;
+                PRINTLOG(USB, LOG_TRACE, "transfer: 0x%p", transfer);
+
+                if(qh->token.bits.halted) {
+                    PRINTLOG(USB, LOG_ERROR, "transfer halted");
+                    transfer->complete = true;
+                    transfer->success = false;
+                } else if(qh->next_qtd_pointer.bits.next_qtd_terminate) {
+                    if(qh->token.bits.data_buffer_err) {
+                        PRINTLOG(USB, LOG_ERROR, "data buffer error");
+                    } else if(qh->token.bits.babble_err) {
+                        PRINTLOG(USB, LOG_ERROR, "babble error");
+                    } else if(qh->token.bits.xact_err) {
+                        PRINTLOG(USB, LOG_ERROR, "transaction error");
+                    } else if(qh->token.bits.missed_microframe) {
+                        PRINTLOG(USB, LOG_ERROR, "missed microframe");
+                    } else {
+                        transfer->success = true;
+                        PRINTLOG(USB, LOG_TRACE, "transfer successful");
+                    }
+
+                    transfer->complete = true;
+                    PRINTLOG(USB, LOG_TRACE, "transfer completed.");
+                }
+
+                if(transfer->complete) {
+                    PRINTLOG(USB, LOG_TRACE, "success: %d", transfer->success);
+
+                    if(transfer->success && transfer->endpoint) {
+                        transfer->endpoint->toggle ^= 1;
+                    }
+
+                    lock_t* transfer_lock = qh->transfer_lock;
+
+                    usb_ehci_unlink_qh(usb_controller, metadata->qh_asynclist_head, qh);
+                    usb_ehci_free_qh(usb_controller, qh);
+
+                    if(transfer->need_future) {
+                        lock_release(transfer_lock);
+                    }
+
+                    if(transfer->transfer_callback) {
+                        transfer->transfer_callback(usb_controller, transfer);
+                    }
+
+                    metadata->current_async_transfer_count--;
+                    transfer_count--;
+                }
+            }
+
+            uint64_t next_qh_fa = mem_hi | (qh->horizontal_link_pointer.raw & 0xFFFFFFE0);
+            uint64_t next_qh_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(next_qh_fa);
+
+            qh = (usb_ehci_qh_t*)next_qh_va;
+            PRINTLOG(USB, LOG_TRACE, "next qh: 0x%p", qh);
+
+            if(qh == async_list_head) {
+                PRINTLOG(USB, LOG_TRACE, "async list looped");
+                need_yield = true;
+                break;
+            }
+        }
+
+        lock_release(metadata->async_list_lock);
+    }
+
+}
+
+int8_t usb_ehci_periodiclist_lookup_task(int32_t argc, void** argv) {
+    if(argc != 1 || argv == NULL || argv[0] == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "invalid argument count");
+
+        return -1;
+    }
+
+    cpu_sti();
+    task_set_interruptible();
+    cpu_cli();
+
+
+    usb_controller_t* usb_controller = (usb_controller_t*)argv[0];
+    usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
+
+    uint64_t mem_hi = 0;
+
+    if(metadata->addr64) {
+        mem_hi = metadata->op_regs->ctrl_ds_segment;
+        mem_hi <<= 32;
+    }
+
+    while(true) {
+        uint64_t transfer_count = 0;
+
+        lock_acquire(metadata->periodic_list_lock);
+        transfer_count = metadata->current_periodic_transfer_count;
+        lock_release(metadata->periodic_list_lock);
+
+        if(transfer_count == 0) {
+            task_set_message_waiting();
+            task_yield();
+
+            continue;
+        }
+
+        PRINTLOG(USB, LOG_DEBUG, "transfer count: %llx", transfer_count);
+
+        usb_ehci_itd_t* itds = (usb_ehci_itd_t*)metadata->itd_va;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+        volatile uint32_t* v_current_frame_index = (volatile uint32_t*)&metadata->op_regs->frame_index;
+#pragma GCC diagnostic pop
+
+        uint32_t current_frame_index = *v_current_frame_index / 8 % metadata->v_frame_entries_count;
+        uint32_t current_frame = (current_frame_index + metadata->v_frame_entries_count - 5) % metadata->v_frame_entries_count;
+
+        uint32_t idx = 0;
+
+        while(transfer_count && idx++ < metadata->v_frame_entries_count) {
+            while(current_frame == (*v_current_frame_index / 8 % metadata->v_frame_entries_count)) {
+                PRINTLOG(USB, LOG_TRACE, "we reached the current frame, need to wait");
+
+                time_timer_spinsleep(500);
+            }
+
+            usb_ehci_itd_t* itd = &itds[current_frame];
+            usb_ehci_itd_t* itd_head = itd;
+
+            lock_acquire(metadata->periodic_list_lock);
+
+            if(!itd->need_seek) {
+                lock_release(metadata->periodic_list_lock);
+
+                current_frame = (current_frame + 1) % metadata->v_frame_entries_count;
+
+                continue;
+            }
+
+            while (itd->next_link_pointer.bits.terminate_bit != 1) {
+                uint32_t this_raw = (uint32_t)(uint64_t)itd & 0xFFFFFFE0;
+                uint32_t next_raw = itd->next_link_pointer.raw & 0xFFFFFFE0;
+                PRINTLOG(USB, LOG_TRACE, "itd: 0x%p 0x%x 0x%x nlp 0x%x", itd, this_raw, next_raw, itd->next_link_pointer.raw);
+
+                if(this_raw == next_raw) {
+                    break;
+                }
+
+                uint64_t mem_lo = mem_hi | (itd->next_link_pointer.raw & 0xFFFFFFE0);
+                mem_lo = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(mem_lo);
+
+                usb_ehci_itd_t* itd_entry = (usb_ehci_itd_t*)mem_lo;
+
+                if(itd->next_link_pointer.bits.type != USB_EHCI_QTD_TYPE_ITD) {
+                    itd = itd_entry;
+
+                    continue;
+                }
+
+                if(itd_entry->transfer) {
+                    usb_transfer_t* transfer = itd_entry->transfer;
+
+                    PRINTLOG(USB, LOG_TRACE, "we have a transfer 0x%p", itd_entry->transfer);
+
+                    int8_t finished_tran_count = 0;
+
+                    for(int32_t i = 0; i <= itd_entry->last_transaction; i++) {
+                        if(itd_entry->transactions[i].bits.active == 0) {
+                            PRINTLOG(USB, LOG_TRACE, "transaction %d finished", i);
+
+                            PRINTLOG(USB, LOG_TRACE, "status %d %d %d",
+                                     itd_entry->transactions[i].bits.data_buffer_err,
+                                     itd_entry->transactions[i].bits.babble_err,
+                                     itd_entry->transactions[i].bits.xact_err);
+
+
+                            if(itd_entry->transactions[i].bits.data_buffer_err) {
+                                transfer->error_count++;
+                            }
+
+                            if(itd_entry->transactions[i].bits.babble_err) {
+                                transfer->error_count++;
+                            }
+
+                            if(itd_entry->transactions[i].bits.xact_err) {
+                                transfer->error_count++;
+                            }
+
+                            finished_tran_count++;
+                        }
+                    }
+
+                    if(finished_tran_count == itd_entry->last_transaction + 1) {
+                        PRINTLOG(USB, LOG_DEBUG, "all transactions finished");
+
+                        transfer->complete = true;
+
+                        if(transfer->error_count) {
+                            transfer->success = false;
+                            transfer->error_count = 0;
+                        } else {
+                            transfer->success = true;
+                        }
+
+                        if(metadata->current_periodic_transfer_count == 0) {
+                            PRINTLOG(USB, LOG_ERROR, "we have no more transfers");
+
+                            break;
+                        }
+
+                        metadata->current_periodic_transfer_count--;
+
+                        itd_head->need_seek = false;
+
+                        // TODO: remove idt_entry
+
+
+                        // inform the transfer callback
+                        if(transfer->transfer_callback) {
+                            PRINTLOG(USB, LOG_TRACE, "calling transfer callback 0x%p", transfer->transfer_callback);
+                            transfer->transfer_callback(usb_controller, transfer);
+                        }
+                    }
+
+                }
+
+                if(itd->next_link_pointer.bits.next_link_pointer == 0) {
+                    PRINTLOG(USB, LOG_TRACE, "we reached the end of the list");
+
+                    break;
+                }
+
+                itd = itd_entry;
+            }
+
+
+            lock_release(metadata->periodic_list_lock);
+
+            current_frame = (current_frame + 1) % metadata->v_frame_entries_count;
+        }
+    }
 
     return 0;
 }

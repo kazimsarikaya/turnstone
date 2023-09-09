@@ -8,6 +8,7 @@
 
 #include <types.h>
 #include <pci.h>
+#include <future.h>
 
 #define USB_EHCI 0x20
 #define USB_XHCI 0x30
@@ -257,9 +258,12 @@ typedef struct usb_device_request_t {
 typedef struct usb_endpoint_t {
     usb_endpoint_desc_t* desc;
     uint32_t             toggle;
+    boolean_t            in;
 } usb_endpoint_t;
 
-typedef struct usb_device_t usb_device_t;
+typedef struct usb_device_t     usb_device_t;
+typedef struct usb_controller_t usb_controller_t;
+typedef struct usb_transfer_t   usb_transfer_t;
 
 typedef struct usb_transfer_t {
     usb_device_t*         device;
@@ -267,11 +271,15 @@ typedef struct usb_transfer_t {
     usb_device_request_t* request;
     uint8_t*              data;
     uint32_t              length;
+    boolean_t             is_async;
+    lock_t                async_lock;
     boolean_t             complete;
     boolean_t             success;
+    uint64_t              error_count;
+    int8_t (*transfer_callback)(usb_controller_t* controller, usb_transfer_t* transfer);
+    boolean_t need_future;
+    future_t  transfer_future;
 } usb_transfer_t;
-
-typedef struct usb_controller_t usb_controller_t;
 
 typedef struct usb_controller_t {
     usb_controler_type_t         controller_type;
@@ -284,30 +292,88 @@ typedef struct usb_controller_t {
     int8_t (*probe_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*reset_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*control_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
+    int8_t (*isochronous_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
+    int8_t (*bulk_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
 } usb_controller_t;
 
 typedef struct usb_device_t usb_device_t;
+typedef struct usb_driver_t usb_driver_t;
+typedef struct usb_config_t usb_config_t;
+
+typedef struct usb_config_t {
+    uint32_t              config_id;
+    uint8_t*              config_buffer;
+    usb_interface_desc_t* interface;
+    uint32_t              num_endpoints;
+    usb_endpoint_t**      endpoints;
+    usb_hid_desc_t*       hid;
+} usb_config_t;
 
 typedef struct usb_device_t {
-    uint64_t              device_id;
-    usb_device_t*         parent;
-    usb_controller_t*     controller;
-    uint32_t              port;
-    uint32_t              speed;
-    uint32_t              address;
-    uint32_t              max_packet_size;
-    usb_endpoint_t*       endpoint;
-    usb_interface_desc_t* interface;
-    usb_hid_desc_t*       hid;
-    char_t*               vendor;
-    char_t*               product;
-    char_t*               serial;
+    uint64_t          device_id;
+    usb_device_t*     parent;
+    usb_controller_t* controller;
+    uint32_t          port;
+    uint32_t          speed;
+    uint32_t          address;
+    uint32_t          max_packet_size;
+    uint32_t          num_configurations;
+    usb_config_t**    configurations;
+    uint32_t          selected_config;
+    char_t*           vendor;
+    char_t*           product;
+    char_t*           serial;
+    usb_driver_t*     driver;
 } usb_device_t;
+
+typedef enum usb_class_t {
+    USB_CLASS_AUDIO = 0x01,
+    USB_CLASS_COMMUNICATIONS_AND_CDC_CONTROL = 0x02,
+    USB_CLASS_HID = 0x03,
+    USB_CLASS_PHYSICAL = 0x05,
+    USB_CLASS_IMAGE = 0x06,
+    USB_CLASS_PRINTER = 0x07,
+    USB_CLASS_MASS_STORAGE = 0x08,
+    USB_CLASS_HUB = 0x09,
+    USB_CLASS_CDC_DATA = 0x0A,
+    USB_CLASS_SMART_CARD = 0x0B,
+    USB_CLASS_CONTENT_SECURITY = 0x0D,
+    USB_CLASS_VIDEO = 0x0E,
+    USB_CLASS_PERSONAL_HEALTHCARE = 0x0F,
+    USB_CLASS_AUDIO_VIDEO = 0x10,
+    USB_CLASS_BILLBOARD = 0x11,
+    USB_CLASS_DIAGNOSTIC_DEVICE = 0xDC,
+    USB_CLASS_WIRELESS_CONTROLLER = 0xE0,
+    USB_CLASS_MISCELLANEOUS = 0xEF,
+    USB_CLASS_APPLICATION_SPECIFIC = 0xFE,
+    USB_CLASS_VENDOR_SPECIFIC = 0xFF,
+} usb_interface_class_t;
+
+typedef enum usb_subclass_t {
+    USB_SUBCLASS_BOOT = 0x01,
+} usb_interface_subclass_t;
+
+typedef enum usb_protocol_t {
+    USB_PROTOCOL_KEYBOARD = 0x01,
+    USB_PROTOCOL_MOUSE = 0x02,
+} usb_interface_protocol_t;
 
 int8_t usb_init(void);
 
 int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint32_t port, uint32_t speed);
 
 int8_t usb_probe_all_devices_all_ports(void);
+
+int8_t usb_keyboard_init(usb_device_t* device);
+
+boolean_t usb_device_request(usb_device_t*           usb_device,
+                             usb_request_type_t      request_type,
+                             usb_request_recipient_t request_recipient,
+                             usb_request_direction_t request_direction,
+                             uint32_t                request,
+                             uint16_t                value,
+                             uint16_t                index,
+                             uint16_t                length,
+                             void*                   data);
 
 #endif

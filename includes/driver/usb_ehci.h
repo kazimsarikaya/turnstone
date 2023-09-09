@@ -177,6 +177,8 @@ typedef union usb_ehci_framelist_item_t {
 
 _Static_assert(sizeof(usb_ehci_framelist_item_t) == sizeof(uint32_t), "usb_ehci_framelist_item_t is not 32 bits");
 
+typedef struct usb_ehci_itd_t usb_ehci_itd_t;
+
 typedef struct usb_ehci_itd_t {
     union {
         struct {
@@ -240,8 +242,13 @@ typedef struct usb_ehci_itd_t {
 
     volatile uint32_t ext_buffer_pages[6];
 
-    uint8_t           padding[4];
+    uint8_t           padding[15];          // count bytes below to the next 32 bytes boundary
     volatile uint32_t this_raw;
+    int16_t           last_transaction;
+    int16_t           id;
+    usb_transfer_t*   transfer;
+    usb_ehci_itd_t*   prev;
+    boolean_t         need_seek;
 } __attribute__((packed)) usb_ehci_itd_t;
 
 _Static_assert((sizeof(usb_ehci_itd_t) % 32) == 0, "usb_ehci_itq_t is not 32 bytes boundary aligned");
@@ -428,12 +435,14 @@ typedef struct usb_ehci_qh_t {
     volatile uint32_t buffer_page_pointer[5];
     volatile uint32_t ext_buffer_page_pointer[5];
 
-    uint8_t           padding[3];
+    uint8_t           padding[19];
     volatile uint32_t this_raw;
     volatile uint32_t prev_raw;
     volatile uint8_t  id;
     usb_ehci_qtd_t*   qtd_head;
     usb_ehci_qtd_t*   qtd_tail;
+    usb_transfer_t*   transfer;
+    lock_t*           transfer_lock;
 } __attribute__((packed)) usb_ehci_qh_t;
 
 _Static_assert((sizeof(usb_ehci_qh_t) % 32) == 0, "usb_ehci_qh_t is not 32 bytes aligned");
