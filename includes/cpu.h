@@ -151,4 +151,5 @@ static inline void cpu_tlb_flush(void) {
                           ::: "rax");
 }
 
+boolean_t cpu_is_interrupt_enabled(void);
 #endif
