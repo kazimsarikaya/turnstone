@@ -138,7 +138,7 @@ typedef struct pci_common_header_t {
     uint8_t                    latency_timer   : 8;
     pci_header_type_register_t header_type;
     pci_bist_register_t        bist;
-} __attribute__((packed)) pci_common_header_t;
+} __attribute__((packed, aligned(4))) pci_common_header_t;
 
 typedef struct pci_generic_device_t {
     pci_common_header_t common_header;
@@ -159,7 +159,7 @@ typedef struct pci_generic_device_t {
     uint8_t             interrupt_pin              : 8;
     uint8_t             min_grant                  : 8;
     uint8_t             max_latency                : 8;
-} __attribute__((packed)) pci_generic_device_t;
+} __attribute__((packed, aligned(4))) pci_generic_device_t;
 
 
 typedef struct pci_pci2pci_bridge_t {
@@ -187,7 +187,7 @@ typedef struct pci_pci2pci_bridge_t {
     uint8_t               interrupt_line                  : 8;
     uint8_t               interrupt_pin                   : 8;
     uint16_t              bridge_control                  : 16;
-} __attribute__((packed)) pci_pci2pci_bridge_t;
+} __attribute__((packed, aligned(4))) pci_pci2pci_bridge_t;
 
 
 typedef struct pci_cardbus_bridge_t {
@@ -214,7 +214,7 @@ typedef struct pci_cardbus_bridge_t {
     uint16_t              subsystem_vendor_id                   : 16;
     uint16_t              subsystem_device_id                   : 16;
     uint32_t              pccard_16bit_legacy_mode_base_address : 32;
-} __attribute__((packed)) pci_cardbus_bridge_t;
+} __attribute__((packed, aligned(4))) pci_cardbus_bridge_t;
 
 /**
  * @struct pci_dev_t
@@ -308,6 +308,9 @@ int8_t   pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint
 int8_t   pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap);
 uint8_t  pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr);
 int8_t   pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
+
+void pci_disable_interrupt(pci_generic_device_t* pci_dev);
+void pci_enable_interrupt(pci_generic_device_t* pci_dev);
 
 int8_t pci_setup(memory_heap_t* heap);
 

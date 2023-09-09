@@ -16,6 +16,7 @@
 #include <ports.h>
 #include <cpu.h>
 #include <cpu/interrupt.h>
+#include <time/timer.h>
 
 MODULE("turnstone.kernel.hw.pci");
 
@@ -212,6 +213,62 @@ int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64
     return 0;
 }
 
+void pci_disable_interrupt(pci_generic_device_t* pci_dev) {
+    if(pci_dev == NULL) {
+        return;
+    }
+
+    uint64_t dest = ((uint64_t)pci_dev) + 4;
+
+    uint32_t value = read_memio(dest, 32);
+    PRINTLOG(PCI, LOG_TRACE, "interrupt disable 0x%p 0x%llx: 0x%x 0x%x", pci_dev, dest, value, value | (1 << 10));
+    value |= (1 << 10);
+    write_memio(dest, 32, value);
+
+    for(int32_t i = 0; i < 1000; i++) {
+        asm volatile ("pause");
+
+        value = read_memio(dest, 32);
+
+        if((value & (1 << 10)) == (1 << 10)) {
+            break;
+        }
+    }
+
+    if((value & (1 << 10)) == 0) {
+        PRINTLOG(PCI, LOG_ERROR, "interrupt disable failed for 0x%p 0x%llx: 0x%x", pci_dev, dest, value);
+    }
+}
+
+void pci_enable_interrupt(pci_generic_device_t* pci_dev) {
+    if(pci_dev == NULL) {
+        return;
+    }
+
+    uint64_t dest = ((uint64_t)pci_dev) + 4;
+
+    // only change bit 10
+    uint32_t value = read_memio(dest, 32);
+    PRINTLOG(PCI, LOG_TRACE, "interrupt enable 0x%p 0x%llx: 0x%x 0x%x", pci_dev, dest, value, value & ~(1 << 10));
+    value &= ~(1 << 10);
+    write_memio(((uint64_t)pci_dev) + 4, 32, value);
+
+    for(int32_t i = 0; i < 1000; i++) {
+        asm volatile ("pause");
+
+        value = read_memio(dest, 32);
+
+        if((value & (1 << 10)) == 0) {
+            break;
+        }
+    }
+
+    if((value & (1 << 10)) != 0) {
+        PRINTLOG(PCI, LOG_ERROR, "interrupt enable failed for 0x%p 0x%llx: 0x%x", pci_dev, dest, value);
+    }
+}
+
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t pci_setup(memory_heap_t* heap) {
@@ -254,6 +311,8 @@ int8_t pci_setup(memory_heap_t* heap) {
 
                 return -1;
             }
+
+            pci_disable_interrupt((pci_generic_device_t*)p->pci_header);
 
             PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
                      p->group_number, p->bus_number, p->device_number, p->function_number,

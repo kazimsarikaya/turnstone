@@ -124,6 +124,8 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         const pci_dev_t* p = iter->get_item(iter);
         pci_generic_device_t* pci_nvme = (pci_generic_device_t*)p->pci_header;
 
+        pci_disable_interrupt(pci_nvme);
+
         nvme_disk_t* nvme_disk = memory_malloc_ext(heap, sizeof(nvme_disk_t), 0);
 
         if(nvme_disk == NULL) {

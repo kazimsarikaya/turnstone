@@ -483,6 +483,8 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
 
             return NULL;
         }
+    } else {
+        pci_disable_interrupt(pci_gen_dev);
     }
 
     if(vdev->is_legacy) {
