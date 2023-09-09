@@ -63,6 +63,14 @@ static inline void apic_write_timer_lvt(uint32_t value) {
     }
 }
 
+static inline uint32_t apic_read_timer_lvt(void) {
+    if(apic_x2apic) {
+        return cpu_read_msr(APIC_X2APIC_MSR_LVT_TIMER);
+    } else {
+        return *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_LVT));
+    }
+}
+
 static inline void apic_write_spurious_interrupt_vector(uint32_t value) {
     if(apic_x2apic) {
         cpu_write_msr(APIC_X2APIC_MSR_SIVR, value);
@@ -320,6 +328,29 @@ uint8_t apic_configure_lapic(void) {
     return 0;
 }
 
+boolean_t apic_is_waiting_timer(void) {
+    if(apic_enabled) {
+        uint32_t current_lvt = apic_read_timer_lvt();
+        uint8_t timer_irq = current_lvt & 0xFF;
+
+        uint32_t isr_index = timer_irq / 32;
+        uint32_t isr_bit = timer_irq % 32;
+
+        if(apic_x2apic) {
+            uint32_t isr = cpu_read_msr(APIC_X2APIC_MSR_ISR0 + isr_index);
+
+            return (isr & (1 << isr_bit)) != 0;
+        } else {
+            volatile uint32_t* isr = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ISR0 + isr_index * 0x10);
+
+            return (*isr & (1 << isr_bit)) != 0;
+        }
+
+    }
+
+    return false;
+}
+
 uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
     uint64_t ioapic_base = ioapic->ioapic.address;
 
@@ -540,6 +571,26 @@ void apic_send_ipi(uint8_t destination, uint8_t vector) {
             *icr_high = destination << 24;
             *icr_low = APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
                        vector;
+
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        }
+    }
+}
+
+void apic_send_nmi(uint8_t destination) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            cpu_write_msr(APIC_X2APIC_MSR_ICR,
+                          (uint64_t)destination << 32 |
+                          APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE);
+
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        } else {
+            volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
+            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+
+            *icr_high = destination << 24;
+            *icr_low = APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
 
             while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
         }
