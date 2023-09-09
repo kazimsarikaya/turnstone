@@ -18,6 +18,8 @@
 
 MODULE("turnstone.kernel.cpu.interrupt");
 
+void video_text_print(char_t* string);
+
 //void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
@@ -185,6 +187,8 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         return -1;
     }
 
+    PRINTLOG(KERNEL, LOG_DEBUG, "Setting IRQ handler for IRQ 0x%x func at 0x%p", irqnum, irq);
+
     cpu_cli();
 
     if(interrupt_irqs[irqnum] == NULL) {
@@ -292,7 +296,18 @@ void __attribute__ ((interrupt)) interrupt_int01_debug_exception(interrupt_frame
     interrupt_dummy_noerrcode(frame, 0x01);
 }
 
+extern boolean_t we_sended_nmi_to_bsp;
+
 void __attribute__ ((interrupt)) interrupt_int02_nmi_interrupt(interrupt_frame_t* frame) {
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    if(apic_id == 0 && apic_is_waiting_timer()) {
+        video_text_print((char_t*)"bsp stucked, recovering...\n");
+        interrupt_dummy_noerrcode(frame, 0x20);
+
+        return;
+    }
+
     interrupt_dummy_noerrcode(frame, 0x02);
 }
 
