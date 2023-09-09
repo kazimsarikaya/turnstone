@@ -15,14 +15,14 @@ extern boolean_t kbd_is_usb;
 
 typedef struct usb_kbd_report_t {
     struct {
-        boolean_t left_control  : 1;
-        boolean_t left_shift    : 1;
-        boolean_t left_alt      : 1;
-        boolean_t left_gui      : 1;
-        boolean_t right_control : 1;
-        boolean_t right_shift   : 1;
-        boolean_t right_alt     : 1;
-        boolean_t right_gui     : 1;
+        boolean_t left_ctrl   : 1;
+        boolean_t left_shift  : 1;
+        boolean_t left_alt    : 1;
+        boolean_t left_meta   : 1;
+        boolean_t right_ctrl  : 1;
+        boolean_t right_shift : 1;
+        boolean_t right_alt   : 1;
+        boolean_t right_meta  : 1;
     } __attribute__((packed)) modifiers;
     uint8_t reserved;
     uint8_t key[6];
@@ -316,6 +316,73 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
         if(phantoms) {
             memory_memclean(&usb_keyboard->new_usb_kbd_report, sizeof(usb_kbd_report_t));
         }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.left_alt && !usb_keyboard->old_usb_kbd_report.modifiers.left_alt) {
+            kbd_handle_key(KBD_SCANCODE_LEFTALT, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.left_alt && usb_keyboard->old_usb_kbd_report.modifiers.left_alt) {
+            kbd_handle_key(KBD_SCANCODE_LEFTALT, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.right_alt && !usb_keyboard->old_usb_kbd_report.modifiers.right_alt) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTALT, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.right_alt && usb_keyboard->old_usb_kbd_report.modifiers.right_alt) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTALT, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.left_ctrl && !usb_keyboard->old_usb_kbd_report.modifiers.left_ctrl) {
+            kbd_handle_key(KBD_SCANCODE_LEFTCTRL, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.left_ctrl && usb_keyboard->old_usb_kbd_report.modifiers.left_ctrl) {
+            kbd_handle_key(KBD_SCANCODE_LEFTCTRL, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.right_ctrl && !usb_keyboard->old_usb_kbd_report.modifiers.right_ctrl) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTCTRL, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.right_ctrl && usb_keyboard->old_usb_kbd_report.modifiers.right_ctrl) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTCTRL, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.left_shift && !usb_keyboard->old_usb_kbd_report.modifiers.left_shift) {
+            kbd_handle_key(KBD_SCANCODE_LEFTSHIFT, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.left_shift && usb_keyboard->old_usb_kbd_report.modifiers.left_shift) {
+            kbd_handle_key(KBD_SCANCODE_LEFTSHIFT, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.right_shift && !usb_keyboard->old_usb_kbd_report.modifiers.right_shift) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTSHIFT, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.right_shift && usb_keyboard->old_usb_kbd_report.modifiers.right_shift) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTSHIFT, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.left_meta && !usb_keyboard->old_usb_kbd_report.modifiers.left_meta) {
+            kbd_handle_key(KBD_SCANCODE_LEFTMETA, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.left_meta && usb_keyboard->old_usb_kbd_report.modifiers.left_meta) {
+            kbd_handle_key(KBD_SCANCODE_LEFTMETA, false);
+        }
+
+        if(usb_keyboard->new_usb_kbd_report.modifiers.right_meta && !usb_keyboard->old_usb_kbd_report.modifiers.right_meta) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTMETA, true);
+        }
+
+        if(!usb_keyboard->new_usb_kbd_report.modifiers.right_meta && usb_keyboard->old_usb_kbd_report.modifiers.right_meta) {
+            kbd_handle_key(KBD_SCANCODE_RIGHTMETA, false);
+        }
+
+
+
 
         for(uint8_t i = 0; i < 6; i++) {
             if(usb_keyboard->old_usb_kbd_report.key[i] == 0) {

@@ -42,7 +42,7 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
         kbd_state.is_alt_pressed = pressed;
     }
 
-    if(key == KBD_SCANCODE_LEFTCTRL || key == KBD_SCANCODE_RIGHTTCTRL) {
+    if(key == KBD_SCANCODE_LEFTCTRL || key == KBD_SCANCODE_RIGHTCTRL) {
         kbd_state.is_ctrl_pressed = pressed;
     }
 
