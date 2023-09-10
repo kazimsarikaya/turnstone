@@ -33,8 +33,29 @@ typedef struct tms {
 
 typedef uint32_t time_t;
 
+typedef int32_t clockid_t;
+
 int32_t  gettimeofday(timeval_t* tv, timezone_t* tz);
 uint32_t time(time_t* t);
+int32_t  clock_gettime(clockid_t clk_id, timespec_t* tp);
+
+int32_t clock_gettime(clockid_t clk_id, timespec_t* tp) {
+    if(tp) {
+        tp->tv_sec = 0;
+        tp->tv_nsec = 0;
+    }
+
+    int64_t ret = 0;
+
+    asm volatile (
+        "mov $0xe4, %%rax\n"
+        "syscall\n"
+        : "=a" (ret)
+        : "D" (clk_id), "S" (tp)
+        );
+
+    return ret;
+}
 
 int32_t gettimeofday(timeval_t* tv, timezone_t* tz) {
     if(tv) {
@@ -133,8 +154,11 @@ int32_t                        unlink(const char_t * pathname);
 
 
 //int32_t printf(const char_t* format, ...);
+int32_t fprintf(uint32_t fd, const char_t* format, ...);
+int32_t fvprintf(uint32_t fd, const char_t* format, va_list arg );
 int32_t vprintf(const char_t* format, va_list arg );
 int64_t video_print(const char_t* buf);
+int64_t fvideo_print(uint32_t fd, const char_t* buf);
 
 int32_t __popcountdi2(uint64_t x);
 
@@ -143,17 +167,36 @@ int32_t printf(const char_t* format, ...) {
     int done;
 
     va_start(arg, format);
-    done = vprintf(format, arg);
+    done = fvprintf(1, format, arg);
+    va_end(arg);
+
+    return done;
+}
+
+int32_t fprintf(uint32_t fd, const char_t* format, ...) {
+    va_list arg;
+    int done;
+
+    va_start(arg, format);
+    done = fvprintf(fd, format, arg);
     va_end(arg);
 
     return done;
 }
 
 int64_t video_print(const char_t* buf) {
-    return write(1, buf, strlen(buf));
+    return fvideo_print(1, buf);
 }
 
-int32_t vprintf(const char_t* fmt, va_list args) {
+int64_t fvideo_print(uint32_t fd, const char_t* buf) {
+    return write(fd, buf, strlen(buf));
+}
+
+int32_t vprintf(const char_t* format, va_list arg ) {
+    return fvprintf(1, format, arg);
+}
+
+int32_t fvprintf(uint32_t fd, const char_t* fmt, va_list args) {
     size_t cnt = 0;
 
     while (*fmt) {
@@ -200,13 +243,13 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                 case 'c':
                     val = va_arg(args, int32_t);
                     buf[0] = (char_t)val;
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     cnt++;
                     fmt++;
                     break;
                 case 's':
                     str = va_arg(args, char_t*);
-                    video_print(str);
+                    fvideo_print(fd, str);
                     cnt += strlen(str);
                     fmt++;
                     break;
@@ -238,9 +281,9 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                         buf[0] = '-';
                     }
 
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     memory_memclean(buf, 257);
-                    video_print(ito_buf + sign);
+                    fvideo_print(fd, ito_buf + sign);
                     memory_memclean(ito_buf, 64);
 
                     cnt += slen;
@@ -265,9 +308,9 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                         cnt++;
                     }
 
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     memory_memclean(buf, 257);
-                    video_print(ito_buf);
+                    fvideo_print(fd, ito_buf);
                     memory_memclean(ito_buf, 64);
 
                     cnt += slen;
@@ -280,7 +323,7 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                     break;
                 case 'p':
                     l_flag = 1;
-                    video_print("0x");
+                    fvideo_print(fd, "0x");
                     nobreak;
                 case 'x':
                 case 'h':
@@ -301,9 +344,9 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                         cnt++;
                     }
 
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     memory_memclean(buf, 257);
-                    video_print(ito_buf);
+                    fvideo_print(fd, ito_buf);
                     memory_memclean(ito_buf, 64);
                     cnt += slen;
                     fmt++;
@@ -311,7 +354,7 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                     break;
                 case '%':
                     buf[0] = '%';
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     memory_memclean(buf, 257);
                     fmt++;
                     cnt++;
@@ -325,7 +368,7 @@ int32_t vprintf(const char_t* fmt, va_list args) {
 
                     ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
                     slen = strlen(fto_buf);
-                    video_print(fto_buf);
+                    fvideo_print(fd, fto_buf);
                     memory_memclean(fto_buf, 128);
 
                     cnt += slen;
@@ -347,12 +390,12 @@ int32_t vprintf(const char_t* fmt, va_list args) {
 
             while(*fmt) {
                 if(idx == 16) {
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     idx = 0;
                     memory_memclean(buf, 17);
                 }
                 if(*fmt == '%') {
-                    video_print(buf);
+                    fvideo_print(fd, buf);
                     memory_memclean(buf, 17);
 
                     break;
@@ -361,7 +404,7 @@ int32_t vprintf(const char_t* fmt, va_list args) {
                 fmt++;
                 cnt++;
             }
-            video_print(buf);
+            fvideo_print(fd, buf);
         }
     }
 

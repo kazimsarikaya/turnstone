@@ -14,6 +14,7 @@
 
 #define PROT_READ    0x1
 #define PROT_WRITE   0x2
+#define PROT_EXEC    0x4
 #define MAP_SHARED   0x01
 #define MAP_PRIVATE  0x02
 #define MAP_FIXED    0x10
@@ -23,6 +24,7 @@
 #define MAP_SYNC       0x80000
 #define MS_SYNC        4
 #define MAP_FILE       0
+#define MAP_FAILED     ((void *) -1)
 
 typedef long FILE;
 FILE*   fopen(const char* filename, const char* mode);

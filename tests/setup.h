@@ -92,7 +92,7 @@ int8_t setup_ram2(void) {
  */
     void* mmap_res = mmap((void*)mmmap_address, mmap_size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
-    printf("mmap res %p 0x%llx\n", mmap_res, mem_backend_fd);
+    printf("mmap res %p size 0x%llx\n", mmap_res, mmap_size);
 
     if(mmap_res != (void*)mmmap_address) {
         print_error("cannot mmap ram tmpfile");

@@ -14,6 +14,7 @@ do
     do
       _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
       echo -e "../output/$var.bin: ../output/cc-local/$_f"
+      echo -e "../output/$var.tosbin: ../output/cc-local/$_f"
     done
   done
 
