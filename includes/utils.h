@@ -166,4 +166,26 @@ static inline boolean_t bit_change(uint64_t* data, uint8_t bitloc) {
     return res;
 }
 
+/**
+ * @brief gets most significant bit location
+ * @param[in] num number to get
+ * @return bit location
+ *
+ **/
+static inline uint64_t bit_most_significant(uint64_t num) {
+    uint64_t res = 0;
+    boolean_t zf = false;
+    asm volatile ("bsrq %2, %0" : "=r" (res), "=@ccz" (zf) : "r" (num));
+
+    if(zf) {
+        res = 0;
+    }
+
+    return res;
+}
+
+
+uint64_t __attribute__((noinline, optimize("O0"))) read_memio(uint64_t va, uint8_t size);
+void __attribute__((noinline, optimize("O0")))     write_memio(uint64_t va, uint64_t val, uint8_t size);
+
 #endif

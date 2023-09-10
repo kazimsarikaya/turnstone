@@ -534,7 +534,7 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
 
     network_e1000_rx_enable(dev);
 
-    task_create_task(NULL, 64 << 10, 1 << 20, &network_e1000_process_tx, 0, NULL);
+    task_create_task(NULL, 64 << 10, 1 << 20, &network_e1000_process_tx, 0, NULL, "e1000 tx");
 
     linkedlist_list_insert(e1000_net_devs, dev);
 

@@ -18,6 +18,8 @@
 
 MODULE("turnstone.kernel.cpu.interrupt");
 
+void video_text_print(char_t* string);
+
 //void interrupt_dummy_noerrcode(interrupt_frame_t*, uint8_t);
 void interrupt_dummy_errcode(interrupt_frame_t*, interrupt_errcode_t, uint8_t);
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
@@ -100,7 +102,9 @@ const uint64_t interrupt_system_defined_interrupts[32] = {
     (uint64_t)&interrupt_int1F_reserved
 };
 
-int8_t interrupt_init() {
+boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
+
+int8_t interrupt_init(void) {
     descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
 
     for(int32_t i = 0; i < 32; i++) {
@@ -122,7 +126,20 @@ int8_t interrupt_init() {
     return 0;
 }
 
-uint8_t interrupt_get_next_empty_interrupt(){
+int8_t interrupt_redirect_main_interrupts(uint8_t ist) {
+    cpu_cli();
+    descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
+
+    for(int32_t i = 0; i < 32; i++) {
+        idt_table[i].ist = ist;
+    }
+
+    cpu_sti();
+
+    return 0;
+}
+
+uint8_t interrupt_get_next_empty_interrupt(void){
     uint8_t res = next_empty_interrupt;
     next_empty_interrupt++;
     return res;
@@ -170,6 +187,8 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         return -1;
     }
 
+    PRINTLOG(KERNEL, LOG_DEBUG, "Setting IRQ handler for IRQ 0x%x func at 0x%p", irqnum, irq);
+
     cpu_cli();
 
     if(interrupt_irqs[irqnum] == NULL) {
@@ -212,6 +231,7 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
         if(interrupt_irqs[intnum] != NULL) {
             interrupt_irq_list_item_t* item = interrupt_irqs[intnum];
             uint8_t miss_count = 0;
+            boolean_t found = false;
 
             while(item) {
                 interrupt_irq irq = item->irq;
@@ -219,34 +239,40 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
                 if(irq != NULL) {
                     int8_t irq_res = irq(frame, intnum);
 
-                    if(irq_res == 0) {
-                        return;
+                    if(irq_res != 0) {
+                        miss_count++;
+                        PRINTLOG(KERNEL, LOG_DEBUG, "irq res status %i for 0x%02x", irq_res, intnum);
                     } else {
-                        PRINTLOG(KERNEL, LOG_WARNING, "irq res status %i for 0x%02x", irq_res, intnum);
+                        found = true;
                     }
 
                 } else {
                     PRINTLOG(KERNEL, LOG_FATAL, "null irq at shared irq list for 0x%02x", intnum);
                 }
 
-                miss_count++;
                 item = item->next;
             }
 
-            PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
+            if(!found) {
+                PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
+            } else {
+                PRINTLOG(KERNEL, LOG_DEBUG, "found shared irq for 0x%02x", intnum);
 
-            return;
-        } else {
-            PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
+                return;
+            }
         }
+    } else {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
     }
+
 
     PRINTLOG(KERNEL, LOG_FATAL, "Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016llx", intnum, frame->return_rip);
     PRINTLOG(KERNEL, LOG_FATAL, "KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "cr4: 0x%llx", (cpu_read_cr4()).bits);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    uint64_t if_addr = (uint64_t)frame;
+    backtrace_print((stackframe_t*)(if_addr - 8));
 
     cpu_hlt();
 }
@@ -256,7 +282,8 @@ void interrupt_dummy_errcode(interrupt_frame_t* frame, interrupt_errcode_t errco
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    uint64_t if_addr = (uint64_t)frame;
+    backtrace_print((stackframe_t*)(if_addr - 8));
 
     cpu_hlt();
 }
@@ -269,7 +296,18 @@ void __attribute__ ((interrupt)) interrupt_int01_debug_exception(interrupt_frame
     interrupt_dummy_noerrcode(frame, 0x01);
 }
 
+extern boolean_t we_sended_nmi_to_bsp;
+
 void __attribute__ ((interrupt)) interrupt_int02_nmi_interrupt(interrupt_frame_t* frame) {
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    if(apic_id == 0 && apic_is_waiting_timer()) {
+        video_text_print((char_t*)"bsp stucked, recovering...\n");
+        interrupt_dummy_noerrcode(frame, 0x20);
+
+        return;
+    }
+
     interrupt_dummy_noerrcode(frame, 0x02);
 }
 
@@ -314,28 +352,38 @@ void __attribute__ ((interrupt)) interrupt_int0C_stack_fault_exception(interrupt
 }
 
 void __attribute__ ((interrupt)) interrupt_int0D_general_protection_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
+    KERNEL_PANIC_DISABLE_LOCKS = true;
+    uint64_t rsp = 0;
+    asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
+    stackframe_t* s_frame = backtrace_print_interrupt_registers(rsp);
+
     PRINTLOG(KERNEL, LOG_FATAL, "general protection error 0x%llx at 0x%x:0x%llx", errcode, frame->return_cs, frame->return_rip);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    backtrace_print(s_frame);
 
     cpu_hlt();
 }
 
 void __attribute__ ((interrupt)) interrupt_int0E_page_fault_exception(interrupt_frame_t* frame, interrupt_errcode_t errcode){
-    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%016llx task 0x%llx", frame->return_rip, task_get_id());
+    KERNEL_PANIC_DISABLE_LOCKS = true;
+    uint64_t rsp = 0;
+    asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
+    stackframe_t* s_frame =  backtrace_print_interrupt_registers(rsp);
+
+    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx task 0x%llx", frame->return_cs, frame->return_rip, task_get_id());
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     uint64_t cr2 = cpu_read_cr2();
 
     interrupt_errorcode_pagefault_t epf = { .bits = (uint32_t)errcode };
 
-    PRINTLOG(KERNEL, LOG_FATAL, "page 0x%016llx P? %i W? %i U? %i", cr2, epf.fields.present, epf.fields.write, epf.fields.user);
+    PRINTLOG(KERNEL, LOG_FATAL, "page 0x%016llx P? %i W? %i U? %i I? %i", cr2, epf.fields.present, epf.fields.write, epf.fields.user, epf.fields.instruction_fetch);
 
-    printf("Cpu is halting.");
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
-    backtrace_print((stackframe_t*)frame->return_rsp);
+    backtrace_print(s_frame);
 
     cpu_hlt();
 }

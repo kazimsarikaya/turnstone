@@ -32,6 +32,7 @@ int8_t   network_virtio_config_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t   network_virtio_combined_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t   network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_t* vdev, virtio_queue_ext_t* vq_tx, virtio_queue_avail_t* avail, virtio_queue_descriptor_t* descs);
 int8_t   network_virtio_process_tx(void);
+int32_t  network_virtio_process_rx(uint64_t args_cnt, void** args);
 int8_t   network_virtio_ctrl_set_mac(virtio_dev_t* vdev);
 uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_features);
 int8_t   network_rx_tx_queue_item_builder(virtio_dev_t* vdev, void* queue_item);
@@ -80,7 +81,7 @@ int8_t network_virtio_process_tx(void){
         args[0] = vdev->extra_data;
         args[1] = vdev->return_queue;
 
-        task_create_task(NULL, 64 << 10, 1 << 20, &network_dhcpv4_send_discover, 2, args);
+        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, "dhcp");
     }
 
     while(1) {
@@ -125,27 +126,36 @@ int8_t network_virtio_process_tx(void){
     return 0;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
+    UNUSED(args_cnt);
 
-    PRINTLOG(VIRTIONET, LOG_TRACE, "packet received int 0x%02x", intnum);
+    virtio_dev_t* vdev = (virtio_dev_t*)args[0];
 
-    for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-        virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+    virtio_queue_ext_t* vq_rx = &vdev->queues[0];
+    virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
+    virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
+    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
 
-        virtio_queue_ext_t* vq_rx = &vdev->queues[0];
-        virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
-        virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
-        virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
+    PRINTLOG(VIRTIONET, LOG_TRACE, "virtio network rx clear pending bit send set interruptible");
+    cpu_cli();
+    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+    task_set_interruptible();
+    cpu_sti();
 
+    while(true) {
 
         if(network_received_packets != NULL && vdev->return_queue != NULL) {
+
             while(vq_rx->last_used_index < used->index) {
+                PRINTLOG(VIRTIONET, LOG_TRACE, "packet received. last used index %i", vq_rx->last_used_index);
+
                 network_received_packet_t* packet = memory_malloc_ext(linkedlist_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
 
                 if(packet == NULL) {
+                    PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet");
+
+                    task_yield();
+
                     continue;
                 }
 
@@ -172,7 +182,10 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
                 packet->packet_data = memory_malloc_ext(linkedlist_get_heap(network_received_packets), packet_len, 0);
 
                 if(packet->packet_data == NULL) {
+                    PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet data. packet len 0x%llx", packet_len);
                     memory_free_ext(linkedlist_get_heap(network_received_packets), packet);
+
+                    task_yield();
 
                     continue;
                 }
@@ -190,21 +203,47 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
                 PRINTLOG(VIRTIONET, LOG_TRACE, "packet received with length 0x%llx", packet_len);
                 PRINTLOG(VIRTIONET, LOG_TRACE, "dst mac %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-                linkedlist_queue_push(network_received_packets, packet);
+                if(linkedlist_queue_push(network_received_packets, packet) == -1ULL) {
+                    PRINTLOG(VIRTIONET, LOG_ERROR, "failed to queue packet");
+                    memory_free_ext(linkedlist_get_heap(network_received_packets), packet->packet_data);
+                    memory_free_ext(linkedlist_get_heap(network_received_packets), packet);
+                } else {
+                    PRINTLOG(VIRTIONET, LOG_TRACE, "packet queued");
+                }
 
                 vq_rx->last_used_index++;
             }
 
+            pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+
         }
 
-        pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+        task_set_message_waiting();
+        task_yield();
+
+    }
+
+    PRINTLOG(VIRTIONET, LOG_ERROR, "exited rx task");
+
+    return 0;
+}
+
+int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
+    UNUSED(frame);
+
+    PRINTLOG(VIRTIONET, LOG_TRACE, "packet received int 0x%02x", intnum);
+
+    for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
+        virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+
+        task_set_interrupt_received(vdev->rx_task_id);
+        PRINTLOG(VIRTIONET, LOG_TRACE, "cleared message waiting for rx task 0x%llx", vdev->rx_task_id);
     }
 
     apic_eoi();
 
     return 0;
 }
-#pragma GCC diagnostic pop
 
 int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
@@ -370,6 +409,12 @@ uint64_t network_virtio_select_features(virtio_dev_t* vdev, uint64_t avail_featu
             PRINTLOG(VIRTIONET, LOG_TRACE, "device has control mac feature");
             req_features |= VIRTIO_NETWORK_F_CTRL_MAC_ADDR;
         }
+
+        if(avail_features & VIRTIO_NETWORK_F_NOTF_COALESCE) {
+            PRINTLOG(VIRTIONET, LOG_INFO, "device has guest coalesce feature");
+
+            req_features |= VIRTIO_NETWORK_F_NOTF_COALESCE;
+        }
     }
 
     if(avail_features & VIRTIO_NETWORK_F_MTU) {
@@ -496,7 +541,20 @@ int8_t network_virtio_init(const pci_dev_t* pci_netdev){
         return -1;
     }
 
-    task_create_task(NULL, 64 << 10, 2 << 20, &network_virtio_process_tx, 0, NULL);
+    void** rx_args = memory_malloc(sizeof(void*) * 1);
+
+    if(rx_args == NULL) {
+        PRINTLOG(VIRTIONET, LOG_ERROR, "cannot allocate memory for rx task args");
+
+        return -1;
+    }
+
+    rx_args[0] = (void*)vdev_net;
+
+    uint64_t rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_rx, 1, rx_args, "vnet rx");
+    vdev_net->rx_task_id = rx_task_id;
+
+    task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_tx, 0, NULL, "vnet tx");
 
     if(!vdev_net->is_legacy) {
         if(vdev_net->selected_features & VIRTIO_NETWORK_F_STATUS) {

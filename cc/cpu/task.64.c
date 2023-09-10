@@ -17,6 +17,7 @@
 #include <systeminfo.h>
 #include <linker.h>
 #include <utils.h>
+#include <map.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -26,6 +27,7 @@ task_t* current_task = NULL;
 
 linkedlist_t task_queue = NULL;
 linkedlist_t task_cleaner_queue = NULL;
+map_t task_map = NULL;
 
 extern int8_t kmain64(void);
 
@@ -112,8 +114,21 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_task->entry_point = kmain64;
     current_task->page_table = memory_paging_get_table();
     current_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+    current_task->stack = (void*)(stack_top + stack_size);
+    current_task->stack_size = stack_size;
+    current_task->task_name = "kernel";
 
     task_id = current_task->task_id + 1;
+
+    task_map = map_integer();
+
+    if(task_map == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task map");
+
+        return -1;
+    }
+
+    map_insert(task_map, (void*)current_task->task_id, current_task);
 
     uint32_t tss_limit = sizeof(tss_t) - 1;
     DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
@@ -126,6 +141,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         "sti\n"
         : : "r" (tss_selector)
         );
+
+    interrupt_redirect_main_interrupts(7);
 
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p", current_task);
 
@@ -248,6 +265,8 @@ void task_cleanup(void){
     while(linkedlist_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
 
+        map_delete(task_map, (void*)tmp->task_id);
+
         uint64_t stack_va = (uint64_t)tmp->stack;
         uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
@@ -297,7 +316,7 @@ void task_cleanup(void){
     }
 }
 
-boolean_t task_idle_check_need_yield() {
+boolean_t task_idle_check_need_yield(void) {
     cpu_cli();
 
     boolean_t need_yield = false;
@@ -344,7 +363,16 @@ task_t* task_find_next_task(void) {
 
             linkedlist_queue_push(task_queue, tmp_task);
         } else if(tmp_task->message_waiting) {
-            if(tmp_task->message_queues) {
+
+
+            if(tmp_task->interruptible) {
+                if(tmp_task->interrupt_received) {
+                    tmp_task->interrupt_received = false;
+                    tmp_task->message_waiting = false;
+
+                    break;
+                }
+            } else if(tmp_task->message_queues) {
 
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
                     const linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
@@ -378,51 +406,59 @@ task_t* task_find_next_task(void) {
 
     }
 
+    //PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution", tmp_task->task_id);
+
     return tmp_task;
 }
 
-__attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
-    if(task_queue == NULL) {
+boolean_t task_switch_paramters_need_eoi = false;
+boolean_t task_switch_paramters_need_sti = false;
+
+void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti) {
+    task_switch_paramters_need_eoi = need_eoi;
+    task_switch_paramters_need_sti = need_sti;
+}
+
+
+static inline void task_switch_task_exit_prep(void) {
+    if(task_switch_paramters_need_eoi) {
+        apic_eoi();
+    }
+
+    if(task_switch_paramters_need_sti) {
+        cpu_sti();
+    }
+}
+
+__attribute__((no_stack_protector)) void task_switch_task(void) {
+    if(current_task == NULL || task_queue == NULL || linkedlist_size(task_queue) == 0) {
+        task_switch_task_exit_prep();
+
         return;
     }
 
-    if(linkedlist_size(task_queue) == 0) {
+    if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting && !current_task->sleeping) {
 
-        if(need_eoi) {
-            apic_eoi();
-        }
+        task_switch_task_exit_prep();
 
         return;
     }
 
-    if(current_task != NULL) {
-        if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting && !current_task->sleeping) {
+    task_save_registers(current_task);
+    linkedlist_queue_push(task_queue, current_task);
 
-            if(need_eoi) {
-                apic_eoi();
-            }
-
-            return;
-        }
-
-        task_save_registers(current_task);
-        linkedlist_queue_push(task_queue, current_task);
-
-        if(current_task->task_id == TASK_KERNEL_TASK_ID) {
-            task_cleanup();
-        }
+    if(current_task->task_id == TASK_KERNEL_TASK_ID) {
+        task_cleanup();
     }
 
     current_task = task_find_next_task();
     current_task->last_tick_count = time_timer_get_tick_count();
     task_load_registers(current_task);
 
-    if(need_eoi) {
-        apic_eoi();
-    }
+    task_switch_task_exit_prep();
 }
 
-void task_end_task() {
+void task_end_task(void) {
     cpu_cli();
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
@@ -439,18 +475,25 @@ void task_end_task() {
 
 
 void task_add_message_queue(linkedlist_t queue){
+    cpu_cli();
     if(current_task->message_queues == NULL) {
         current_task->message_queues = linkedlist_create_list();
     }
 
     linkedlist_list_insert(current_task->message_queues, queue);
+
+    cpu_sti();
 }
 
-void task_set_message_waiting(){
+void task_set_message_waiting(void){
+    cpu_cli();
+
     current_task->message_waiting = 1;
+
+    cpu_sti();
 }
 
-int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args) {
+uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
 
     task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 
@@ -492,17 +535,31 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
 
     uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
 
-    memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
+
+        cpu_hlt();
+    }
 
     uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
 
-    memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    if(memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add heap va 0x%llx for frame at 0x%llx with count 0x%llx", heap_va, heap_frames->frame_address, heap_frames->frame_count);
+
+        cpu_hlt();
+    }
 
     memory_heap_t* task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
 
+    cpu_cli();
+
+    uint64_t new_task_id = task_id++;
+
+    cpu_sti();
+
     new_task->heap = task_heap;
     new_task->heap_size = heap_size;
-    new_task->task_id = task_id++;
+    new_task->task_id = new_task_id;
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = entry_point;
     new_task->page_table = memory_paging_get_table();
@@ -510,6 +567,7 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
     new_task->rflags = 0x202;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
+    new_task->task_name = task_name;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
@@ -524,23 +582,25 @@ int8_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_
     stack[-2] = (uint64_t)entry_point;
     stack[-3] = (uint64_t)apic_eoi;
 
+    PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
+             new_task->task_name, new_task->task_id, new_task, new_task->rsp, new_task->rbp, new_task->heap, new_task->heap_size);
+
     cpu_cli();
 
-    PRINTLOG(TASKING, LOG_INFO, "scheduling new task 0x%llx 0x%p stack at 0x%llx-0x%llx", new_task->task_id, new_task, new_task->rsp, new_task->rbp);
-
     linkedlist_stack_push(task_queue, new_task);
+    map_insert(task_map, (void*)new_task->task_id, new_task);
 
     cpu_sti();
 
-    return 0;
+    return new_task->task_id;
 }
 
-void task_yield() {
+void task_yield(void) {
     if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
         //	__asm__ __volatile__ ("int $0x80\n");
         cpu_cli();
-        task_switch_task(false);
-        cpu_sti();
+        task_task_switch_set_parameters(false, true);
+        task_switch_task();
     }
 }
 
@@ -548,19 +608,25 @@ int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
     UNUSED(intnum);
 
-    task_switch_task(true);
+    task_task_switch_set_parameters(true, false);
+    task_switch_task();
 
     return 0;
 }
 
 
-uint64_t task_get_id() {
+uint64_t task_get_id(void) {
+    uint64_t id = TASK_KERNEL_TASK_ID;
+
+    cpu_cli();
+
     if(current_task) {
-        return current_task->task_id;
-    } else {
-        return TASK_KERNEL_TASK_ID;
+        id = current_task->task_id;
     }
 
+    cpu_sti();
+
+    return id;
 }
 
 void task_current_task_sleep(uint64_t wake_tick) {
@@ -573,4 +639,49 @@ void task_current_task_sleep(uint64_t wake_tick) {
     } else {
         cpu_sti();
     }
+}
+
+void task_clear_message_waiting(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        task->message_waiting = false;
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
+    }
+}
+
+void task_set_interrupt_received(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        task->interrupt_received = true;
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
+    }
+}
+
+void task_set_interruptible(void) {
+    cpu_cli();
+
+    if(current_task) {
+        current_task->interruptible = true;
+    }
+
+    cpu_sti();
+}
+
+void task_print_all(void) {
+    iterator_t* it = map_create_iterator(task_map);
+
+    while(it->end_of_iterator(it) != 0) {
+        const task_t* task = it->get_item(it);
+
+        printf("\ttask %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
+               task->task_name, task->task_id, task, task->rsp, task->rbp, task->heap, task->heap_size);
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
 }

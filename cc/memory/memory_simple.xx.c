@@ -8,6 +8,7 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/task.h>
 #include <video.h>
 #include <cpu/sync.h>
 #include <linker.h>
@@ -70,6 +71,7 @@ typedef struct heapmetainfo_t {
     uint64_t total_size;
     uint64_t free_size;
     uint64_t fast_hit;
+    uint64_t header_count;
     uint32_t padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
 
@@ -81,8 +83,6 @@ typedef struct heapmetainfo_t {
  * @return allocated memory start address
  */
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align);
-
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item);
 
 /**
  * @brief simple heap free implementation
@@ -187,7 +187,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     return heap;
 }
 
-void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
+static inline void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t* item) {
     if (tofull) {
         heapinfo_t* end = heap->last_full;
 
@@ -263,6 +263,12 @@ void memory_simple_insert_sorted(heapmetainfo_t* heap, int8_t tofull, heapinfo_t
 }
 
 void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
+    if(heap == NULL) {
+        PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap is NULL");
+
+        return NULL;
+    }
+
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "requesting memory with size 0x%llx and align 0x%llx", size, align);
 
     heapmetainfo_t* simple_heap = (heapmetainfo_t*)heap->metadata;
@@ -321,6 +327,12 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
     empty_hi = simple_heap->first_empty;
 
+    if(empty_hi == NULL) {
+        PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no empty slots");
+
+        return NULL;
+    }
+
     //find first empty and enough slot
     while(1) { // size enough?
 #if ___TESTMODE == 1
@@ -348,8 +360,9 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         if(empty_hi == NULL) {
             if(align == 0) {
                 memory_heap_stat_t stat;
-                memory_get_heap_stat(&stat);
+                memory_simple_stat(heap, &stat);
 
+                PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap 0x%p task 0x%llx", heap, task_get_id());
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot 0x%p 0x%llx 0x%x", empty_hi_t, empty_hi_t->size * sizeof(heapinfo_t), empty_hi_t->flags);
                 return NULL;
@@ -462,6 +475,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_hi->size = 1 + t_size; // new slot's size 1 for include header, t_size aligned requested size
 
         simple_heap->free_size -= sizeof(heapinfo_t); // meta occupies free area
+
+        simple_heap->header_count++;
     } else if(rem == 1) { // if we not we should keep slot's original size and increment t_size if rem==1
         t_size++;
     }
@@ -542,6 +557,8 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         hi_r->flags = HEAP_INFO_FLAG_USED;
         hi_r->size = (uint64_t)(empty_hi + empty_hi->size - hi_r);
 
+        simple_heap->header_count++;
+
         hi_r->next = empty_hi->next;
         if(hi_r->next) {
             hi_r->next->previous = hi_r;
@@ -612,6 +629,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     hi_a->size = hi_a_size + 1; // inclusive size
     hi_a->flags = HEAP_INFO_FLAG_USED;
 
+    simple_heap->header_count++;
 
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%llx allocated with size 0x%llx", aligned_addr, hi_a_size * sizeof(heapinfo_t));
 
@@ -657,6 +675,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
     }
 
     if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
+        PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed.", address);
         return 0;
     }
 
@@ -717,6 +736,7 @@ void memory_simple_stat(memory_heap_t* heap, memory_heap_stat_t* stat) {
         stat->total_size = simple_heap->total_size;
         stat->free_size = simple_heap->free_size;
         stat->fast_hit = simple_heap->fast_hit;
+        stat->header_count = simple_heap->header_count;
 
     }
 }

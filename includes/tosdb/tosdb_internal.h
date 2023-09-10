@@ -400,4 +400,5 @@ boolean_t tosdb_sstable_level_minor_compact(const tosdb_table_t* tbl, uint64_t l
 boolean_t tosdb_sstable_level_major_compact(const tosdb_table_t* tbl, uint64_t level);
 int8_t    tosdb_record_primary_key_comparator(const void* item1, const void* item2);
 boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t old_pks);
+
 #endif

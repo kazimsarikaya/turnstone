@@ -35,6 +35,7 @@
 #define VIRTIO_NETWORK_F_GUEST_ANNOUNCE   (1ULL << 21)
 #define VIRTIO_NETWORK_F_MQ               (1ULL << 22)
 #define VIRTIO_NETWORK_F_CTRL_MAC_ADDR    (1ULL << 23)
+#define VIRTIO_NETWORK_F_NOTF_COALESCE    (1ULL << 53)
 #define VIRTIO_NETWORK_F_HOST_USO         (1ULL << 56)
 #define VIRTIO_NETWORK_F_HASH_REPORT      (1ULL << 57)
 #define VIRTIO_NETWORK_F_GUEST_HDRLEN     (1ULL << 59)
@@ -126,6 +127,20 @@ typedef struct  {
 
 #define VIRTIO_NETWORK_QUEUE_ITEM_LENGTH        16448
 #define VIRTIO_NETWORK_CTRL_QUEUE_ITEM_LENGTH      16
+
+#define VIRTIO_NETWORK_CTRL_NOTF_COALESCE           6
+#define VIRTIO_NETWORK_CTRL_NOTF_COALESCE_TX_SET    0
+#define VIRTIO_NETWORK_CTRL_NOTF_COALESCE_RX_SET    1
+
+typedef struct {
+    uint32_t tx_max_packets;
+    uint32_t tx_usecs;
+}__attribute__((packed)) virtio_network_control_notf_coalesce_tx_t;
+
+typedef struct {
+    uint32_t rx_max_packets;
+    uint32_t rx_usecs;
+}__attribute__((packed)) virtio_network_control_notf_coalesce_rx_t;
 
 int8_t network_virtio_init(const pci_dev_t* pci_netdev);
 

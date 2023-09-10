@@ -50,12 +50,14 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
         uint64_t queue_fa = queue_frames->frame_address;
         uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
         memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        memory_memclean((void*)queue_va, queue_frames->frame_count * FRAME_SIZE);
 
         PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x data is at fa 0x%llx va 0x%llx", queue_no, queue_fa, queue_va);
 
         uint64_t queue_meta_fa = queue_meta_frames->frame_address;
         uint64_t queue_meta_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_meta_frames->frame_address);
         memory_paging_add_va_for_frame(queue_meta_va, queue_meta_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+        memory_memclean((void*)queue_meta_va, queue_meta_frames->frame_count * FRAME_SIZE);
 
         virtio_queue_t vq = (virtio_queue_t)queue_meta_va;
         virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq);
@@ -80,6 +82,7 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                 if(write) {
                     descs[i].flags = write?VIRTIO_QUEUE_DESC_F_WRITE:0;
                     write = 0;
+                    descs[i].length = queue_item_size;
                 } else {
                     descs[i].flags = VIRTIO_QUEUE_DESC_F_NEXT;
                     descs[i].next = i + 1;
@@ -165,6 +168,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
             vdev->common_config->queue_enable = 1;
             time_timer_spinsleep(1000);
 
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x interrupt configuration started. has msix? %i", queue_no, vdev->has_msix);
+
             if(vdev->has_msix) {
                 if(modern) {
                     vdev->common_config->queue_msix_vector = queue_no;
@@ -177,6 +182,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                     }
 
                     pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
+                    pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no);
+
                 }
             } else {
                 if(legacy) {
@@ -189,6 +196,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                 }
 
             }
+
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x interrupt configuration finished", queue_no);
 
             // TODO: if nd not exists?
 
@@ -311,9 +320,9 @@ int8_t virtio_init_modern(virtio_dev_t* vdev, virtio_select_features_f select_fe
 
             return -1;
         }
-    }
 
-    PRINTLOG(VIRTIO, LOG_TRACE, "device accepted requested features");
+        PRINTLOG(VIRTIO, LOG_TRACE, "device accepted requested features");
+    }
 
     if(create_queues != NULL && create_queues(vdev) == 0) {
         PRINTLOG(VIRTIO, LOG_TRACE, "try to set driver ok");
@@ -361,12 +370,12 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
 
                 vdev->msix_cap = msix_cap;
 
-                msix_cap->enable = 1;
-                msix_cap->function_mask = 0;
+                if(pci_msix_configure(pci_gen_dev, msix_cap) != 0) {
+                    PRINTLOG(VIRTIO, LOG_ERROR, "failed to configure msix");
+                    memory_free(vdev);
 
-                PRINTLOG(VIRTIO, LOG_TRACE, "device has msix cap enabled %i fmask %i", msix_cap->enable, msix_cap->function_mask);
-                PRINTLOG(VIRTIO, LOG_TRACE, "msix bir %i tables offset 0x%x  size 0x%x", msix_cap->bir, msix_cap->table_offset, msix_cap->table_size + 1);
-                PRINTLOG(VIRTIO, LOG_TRACE, "msix pending bit bir %i tables offset 0x%x", msix_cap->pending_bit_bir, msix_cap->pending_bit_offset);
+                    return NULL;
+                }
 
                 vdev->has_msix = 1;
             } else if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_VENDOR) {
@@ -385,29 +394,25 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
                     PRINTLOG(VIRTIO, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
                     frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+                    uint64_t size = pci_get_bar_size(pci_gen_dev, vcap->bar_no);
+                    PRINTLOG(VIRTIO, LOG_TRACE, "bar size 0x%llx", size);
+                    uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
+                    frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
                     uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
                     if(bar_frames == NULL) {
                         PRINTLOG(VIRTIO, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-                        uint64_t size = pci_get_bar_size(pci_gen_dev, vcap->bar_no);
-                        uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-                        frame_t tmp_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
-                        if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &tmp_frm) != 0) {
+                        if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
                             PRINTLOG(VIRTIO, LOG_ERROR, "cannot allocate frame");
                             memory_free(vdev);
 
                             return NULL;
                         }
-
-                        bar_frames = &tmp_frm;
                     }
 
-                    if((bar_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-                        memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_frames->frame_address), bar_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-                        bar_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-                    }
+                    memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
                     switch (vcap->config_type) {
                     case VIRTIO_PCI_CAP_COMMON_CFG:
@@ -478,6 +483,8 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
 
             return NULL;
         }
+    } else {
+        pci_disable_interrupt(pci_gen_dev);
     }
 
     if(vdev->is_legacy) {

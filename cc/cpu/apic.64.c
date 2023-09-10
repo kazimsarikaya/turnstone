@@ -25,8 +25,75 @@ uint64_t ioapic_bases[2] = {0, 0};
 uint8_t ioapic_count = 0;
 uint64_t lapic_addr = 0;
 int8_t apic_enabled = 0;
+uint32_t lapic_initial_timer_count = 0;
+uint64_t apic_ap_count = 0;
+boolean_t apic_x2apic = false;
 
 linkedlist_t irq_remappings = NULL;
+
+static inline uint64_t apic_read_timer_current_value(void) {
+    if(apic_x2apic) {
+        return cpu_read_msr(APIC_X2APIC_MSR_TIMER_CURRENT_VALUE);
+    } else {
+        return *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_CURRENT_VALUE));
+    }
+}
+
+static inline void apic_write_timer_initial_value(uint32_t value) {
+    if(apic_x2apic) {
+        cpu_write_msr(APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, value);
+    } else {
+        *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_INITIAL_VALUE)) = value;
+    }
+}
+
+static inline void apic_write_timer_divide_configuration(uint32_t value) {
+    if(apic_x2apic) {
+        cpu_write_msr(APIC_X2APIC_MSR_TIMER_DIVIDER, value);
+    } else {
+        *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_DIVIDER)) = value;
+    }
+}
+
+static inline void apic_write_timer_lvt(uint32_t value) {
+    if(apic_x2apic) {
+        cpu_write_msr(APIC_X2APIC_MSR_LVT_TIMER, value);
+    } else {
+        *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_LVT)) = value;
+    }
+}
+
+static inline uint32_t apic_read_timer_lvt(void) {
+    if(apic_x2apic) {
+        return cpu_read_msr(APIC_X2APIC_MSR_LVT_TIMER);
+    } else {
+        return *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_LVT));
+    }
+}
+
+static inline void apic_write_spurious_interrupt_vector(uint32_t value) {
+    if(apic_x2apic) {
+        cpu_write_msr(APIC_X2APIC_MSR_SIVR, value);
+    } else {
+        *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT)) = value;
+    }
+}
+
+static inline void apic_write_lvt_lint0(uint32_t value) {
+    if(apic_x2apic) {
+        cpu_write_msr(APIC_X2APIC_MSR_LVT_LINT0, value);
+    } else {
+        *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_LINT0_LVT)) = value;
+    }
+}
+
+static inline void apic_write_lvt_lint1(uint32_t value) {
+    if(apic_x2apic) {
+        cpu_write_msr(APIC_X2APIC_MSR_LVT_LINT1, value);
+    } else {
+        *((volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_LINT1_LVT)) = value;
+    }
+}
 
 int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
     acpi_sdt_header_t* madt = acpi_get_table(desc, "APIC");
@@ -55,7 +122,7 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
 }
 
 int8_t apic_init_apic(linkedlist_t apic_entries){
-    cpu_cpuid_regs_t query = {0x80000001, 0, 0, 0};
+    cpu_cpuid_regs_t query = {0x1, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 
     if(cpu_cpuid(query, &answer) != 0) {
@@ -72,18 +139,16 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 
     uint64_t apic_enable_flag = APIC_MSR_ENABLE_APIC;
     if(answer.ecx & (1 << 21)) {
-        PRINTLOG(APIC, LOG_DEBUG, "x2apic found");
-        // apic_enable_flag |= APIC_MSR_ENABLE_X2APIC; // TODO: x2apic needs rdmsr wrmsr
+        PRINTLOG(APIC, LOG_INFO, "x2apic found");
+        apic_enable_flag |= APIC_MSR_ENABLE_X2APIC;
+        apic_x2apic = true;
     } else {
-        PRINTLOG(APIC, LOG_DEBUG, "apic found");
+        PRINTLOG(APIC, LOG_INFO, "apic found");
     }
 
     uint64_t apic_msr = cpu_read_msr(APIC_MSR_ADDRESS);
-
-    if((apic_msr & APIC_MSR_ENABLE_APIC) != APIC_MSR_ENABLE_APIC) {
-        apic_msr |= apic_enable_flag;
-        cpu_write_msr(APIC_MSR_ADDRESS, apic_msr);
-    }
+    apic_msr |= apic_enable_flag;
+    cpu_write_msr(APIC_MSR_ADDRESS, apic_msr);
 
     const acpi_table_madt_entry_t* la = NULL;
 
@@ -148,10 +213,9 @@ int8_t apic_init_apic(linkedlist_t apic_entries){
 
     PRINTLOG(APIC, LOG_DEBUG, "local apic address is: 0x%08llx", lapic_addr);
 
-    apic_register_spurious_interrupt_t* ar_si = (apic_register_spurious_interrupt_t*)(lapic_addr + APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT);
-    ar_si->vector = INTERRUPT_VECTOR_SPURIOUS;
-    ar_si->apic_software_enable = 1;
+    apic_write_spurious_interrupt_vector(0x10f);
 
+    apic_ap_count = apic_get_ap_count();
     apic_enabled = 1;
 
     return apic_init_timer();
@@ -201,27 +265,21 @@ int8_t apic_init_timer(void) {
     PRINTLOG(APIC, LOG_DEBUG, "pic timer enabled");
 
 
-    uint32_t* timer_divier = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_DIVIDER);
-    *timer_divier = 0x3;
-
-    uint32_t* timer_lvt = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_LVT);
-
-    uint32_t* timer_init = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_INITIAL_VALUE);
-    uint32_t* timer_curr = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_TIMER_CURRENT_VALUE);
+    apic_write_timer_divide_configuration(0x3);
 
     uint32_t total_inits = 0;
 
     for(uint8_t i = 0; i < 10; i++) {
-        *timer_init = 0xFFFFFFFF;
+        apic_write_timer_initial_value(0xFFFFFFFF);
 
         time_timer_pit_sleep(100);
 
-        *timer_lvt ^= APIC_INTERRUPT_DISABLED;
-
-        total_inits += (0xFFFFFFFF - *timer_curr) / 100;
+        total_inits += (0xFFFFFFFF - apic_read_timer_current_value()) / 100;
     }
 
-    *timer_init = total_inits / 10;
+    lapic_initial_timer_count = total_inits / 10;
+
+    apic_write_timer_initial_value(lapic_initial_timer_count);
 
     PRINTLOG(APIC, LOG_DEBUG, "apic timer configuration started");
 
@@ -231,7 +289,7 @@ int8_t apic_init_timer(void) {
         return -1;
     }
 
-    *timer_lvt = APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20;
+    apic_write_timer_lvt(APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
 
     PRINTLOG(APIC, LOG_DEBUG, "apic timer initialized");
 
@@ -243,6 +301,54 @@ int8_t apic_init_timer(void) {
     time_timer_configure_spinsleep();
 
     return 0;
+}
+
+void apic_enable_lapic(void) {
+    uint64_t apic_msr = cpu_read_msr(APIC_MSR_ADDRESS);
+    apic_msr |= APIC_MSR_ENABLE_APIC;
+
+    if(apic_x2apic) {
+        apic_msr |= APIC_MSR_ENABLE_X2APIC;
+    }
+
+    cpu_write_msr(APIC_MSR_ADDRESS, apic_msr);
+}
+
+uint8_t apic_configure_lapic(void) {
+    apic_write_spurious_interrupt_vector(0x10f);
+
+    apic_write_lvt_lint0(APIC_ICR_DELIVERY_MODE_EXTERNAL_INT);
+    apic_write_lvt_lint1(APIC_ICR_DELIVERY_MODE_NMI);
+
+    apic_write_timer_divide_configuration(0x3);
+    apic_write_timer_initial_value(lapic_initial_timer_count);
+
+    apic_write_timer_lvt(APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
+
+    return 0;
+}
+
+boolean_t apic_is_waiting_timer(void) {
+    if(apic_enabled) {
+        uint32_t current_lvt = apic_read_timer_lvt();
+        uint8_t timer_irq = current_lvt & 0xFF;
+
+        uint32_t isr_index = timer_irq / 32;
+        uint32_t isr_bit = timer_irq % 32;
+
+        if(apic_x2apic) {
+            uint32_t isr = cpu_read_msr(APIC_X2APIC_MSR_ISR0 + isr_index);
+
+            return (isr & (1 << isr_bit)) != 0;
+        } else {
+            volatile uint32_t* isr = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ISR0 + isr_index * 0x10);
+
+            return (*isr & (1 << isr_bit)) != 0;
+        }
+
+    }
+
+    return false;
 }
 
 uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
@@ -367,7 +473,156 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
 
 void  apic_eoi(void) {
     if(apic_enabled) {
-        uint32_t* eio = (uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_EOI);
-        *eio = 0;
+        if(apic_x2apic) {
+            // write msr should be inline assembly
+            asm volatile (
+                "pushq %rax\n"
+                "pushq %rdx\n"
+                "pushq %rcx\n"
+                "movq $0x80B, %rcx\n"
+                "xorq %rdx, %rdx\n"
+                "xorq %rax, %rax\n"
+                "wrmsr\n"
+                "popq %rcx\n"
+                "popq %rdx\n"
+                "popq %rax\n"
+                );
+        } else {
+            volatile uint32_t* eio = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_EOI);
+            *eio = 0;
+        }
     }
+}
+
+uint32_t apic_get_local_apic_id(void) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            uint64_t msr = cpu_read_msr(APIC_X2APIC_MSR_APICID);
+            return msr & 0xFFFFFFFF;
+        } else {
+            volatile uint32_t* id = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ID);
+            return (*id >> 24) & 0xFF;
+        }
+    } else {
+        cpu_cpuid_regs_t query = {1, 0, 0, 0};
+        cpu_cpuid_regs_t answer = {0};
+        cpu_cpuid(query, &answer);
+        return answer.ebx >> 24;
+    }
+
+    return 0;
+}
+
+void apic_send_init(uint8_t destination) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            cpu_write_msr(APIC_X2APIC_MSR_ICR,
+                          (uint64_t)destination << 32 |
+                          APIC_ICR_DELIVERY_MODE_INIT | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE);
+
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        } else {
+            volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
+            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+
+            *icr_high = destination << 24;
+            *icr_low = APIC_ICR_DELIVERY_MODE_INIT | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
+
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        }
+    }
+}
+
+void apic_send_sipi(uint8_t destination, uint8_t vector) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            cpu_write_msr(APIC_X2APIC_MSR_ICR,
+                          (uint64_t)destination << 32 |
+                          APIC_ICR_DELIVERY_MODE_STARTUP | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
+                          vector);
+
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        } else {
+            volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
+            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+
+            *icr_high = destination << 24;
+            *icr_low = APIC_ICR_DELIVERY_MODE_STARTUP | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
+                       vector;
+
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        }
+    }
+}
+
+void apic_send_ipi(uint8_t destination, uint8_t vector) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            cpu_write_msr(APIC_X2APIC_MSR_ICR,
+                          (uint64_t)destination << 32 |
+                          APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
+                          vector);
+
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        } else {
+            volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
+            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+
+            *icr_high = destination << 24;
+            *icr_low = APIC_ICR_DELIVERY_MODE_FIXED | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE |
+                       vector;
+
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        }
+    }
+}
+
+void apic_send_nmi(uint8_t destination) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            cpu_write_msr(APIC_X2APIC_MSR_ICR,
+                          (uint64_t)destination << 32 |
+                          APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE);
+
+            while(cpu_read_msr(APIC_X2APIC_MSR_ICR) & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        } else {
+            volatile uint32_t* icr_high = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_HIGH);
+            volatile uint32_t* icr_low = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_ICR_LOW);
+
+            *icr_high = destination << 24;
+            *icr_low = APIC_ICR_DELIVERY_MODE_NMI | APIC_ICR_LEVEL_ASSERT | APIC_ICR_TRIGGER_MODE_EDGE | APIC_ICR_DESTINATION_MODE_PHYSICAL | APIC_ICR_DELIVERY_STATUS_IDLE;
+
+            while(*icr_low & APIC_ICR_DELIVERY_STATUS_SEND_PENDING);
+        }
+    }
+}
+
+uint64_t apic_get_ap_count(void) {
+    uint64_t ap_count = 0;
+
+    uint8_t local_apic_id = apic_get_local_apic_id();
+
+    acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
+
+    linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+
+    iterator_t* iter = linkedlist_iterator_create(apic_entries);
+
+    while(iter->end_of_iterator(iter) != 0) {
+        const acpi_table_madt_entry_t* e = iter->get_item(iter);
+
+        if(e->info.type == ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC) {
+            uint8_t apic_id = e->processor_local_apic.apic_id;
+
+            if (apic_id != local_apic_id) {
+                ap_count++;
+            }
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    return ap_count;
 }

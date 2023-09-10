@@ -49,6 +49,6 @@ void srand(uint64_t seed) {
     random_xoroshiro_state[3] = random_xoroshiro_state_next();
 }
 
-uint32_t rand() {
+uint32_t rand(void) {
     return random_xoroshiro_next() >> 32;
 }

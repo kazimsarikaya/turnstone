@@ -150,6 +150,7 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
 
         if(ni == NULL || ni->return_queue == NULL) {
             PRINTLOG(NETWORK, LOG_WARNING, "network info or return queue is null");
+            time_timer_sleep(5);
 
             continue;
         }

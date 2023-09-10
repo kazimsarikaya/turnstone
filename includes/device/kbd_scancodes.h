@@ -15,7 +15,7 @@
 #define KBD_SCANCODE_BACKSPACE    0x0E
 
 #define KBD_SCANCODE_LEFTCTRL     0x1D
-#define KBD_SCANCODE_RIGHTTCTRL   0x61
+#define KBD_SCANCODE_RIGHTCTRL    0x61
 
 #define KBD_SCANCODE_LEFTSHIFT    0x2A
 #define KBD_SCANCODE_RIGHTSHIFT   0x36
@@ -44,6 +44,9 @@
 #define KBD_SCANCODE_NUMLOCK      0x45
 #define KBD_SCANCODE_SCROLLLOCK   0x46
 
+#define KBD_KEYPAD_START          0x47
+#define KBD_KEYPAD_END            0x53
+
 #define KBD_SCANCODE_HOME         0x66
 #define KBD_SCANCODE_UP           0x67
 #define KBD_SCANCODE_PAGEUP       0x68
@@ -54,6 +57,9 @@
 #define KBD_SCANCODE_PAGEDOWN     0x6D
 #define KBD_SCANCODE_INSERT       0x6E
 #define KBD_SCANCODE_DELETE       0x6F
+
+#define KBD_SCANCODE_SPACE        0x39
+#define KBD_SCANCODE_KEYPAD_ENTER 0x60
 
 
 extern const wchar_t KBD_SCANCODES_NORMAL[];
@@ -67,6 +73,8 @@ typedef struct kbd_state_s {
     boolean_t is_capson;
     boolean_t is_shift_pressed;
     boolean_t is_alt_pressed;
+    boolean_t is_ctrl_pressed;
+    boolean_t is_meta_pressed;
 }kbd_state_t;
 
 wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_printable);

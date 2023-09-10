@@ -20,15 +20,22 @@
 #include <linkedlist.h>
 #include <cpu.h>
 #include <cpu/crx.h>
+#include <cpu/smp.h>
 #include <utils.h>
 #include <device/kbd.h>
 #include <cpu/task.h>
 #include <linker.h>
 #include <driver/ahci.h>
+#include <driver/nvme.h>
 #include <random.h>
 #include <memory/frame.h>
 #include <time/timer.h>
 #include <network.h>
+#include <crc.h>
+#include <device/hpet.h>
+#include <shell.h>
+#include <driver/usb.h>
+#include <driver/usb_mass_storage_disk.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -89,8 +96,9 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t kmain64(size_t entry_point) {
     srand(0x123456789);
+    crc32_init_table();
 
-    memory_heap_t* heap = memory_create_heap_simple(0, 0);
+    memory_heap_t* heap = memory_create_heap_hash(0, 0);
 
     if(heap == NULL) {
         PRINTLOG(KERNEL, LOG_FATAL, "creating heap");
@@ -156,11 +164,31 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
         KERNEL_FRAME_ALLOCATOR = fa;
 
-        frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+        frame_t kernel_frames = {SYSTEM_INFO->kernel_physical_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
             cpu_hlt();
         }
+
+        frame_t kernel_default_heap_frames = {SYSTEM_INFO->kernel_default_heap_start, SYSTEM_INFO->kernel_default_heap_4k_frame_count, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &kernel_default_heap_frames) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default heap frames");
+            cpu_hlt();
+        }
+
+        if(!SYSTEM_INFO->remapped) {
+
+            frame_t page_table_helper_frame = {SYSTEM_INFO->page_table_helper_frame, 4, FRAME_TYPE_RESERVED, 0};
+
+            if(fa->allocate_frame(fa, &page_table_helper_frame) != 0) {
+                PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate page table helper frame");
+                frame_allocator_print(fa);
+                cpu_hlt();
+            }
+        }
+
     } else {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...");
         cpu_hlt();
@@ -227,6 +255,8 @@ int8_t kmain64(size_t entry_point) {
         frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
     }
 
+    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
+
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
     if(desc == NULL) {
@@ -261,10 +291,38 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
+    if(hpet_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init hpet. Halting...");
+        cpu_hlt();
+    }
+
+    if(video_display_init(NULL, PCI_CONTEXT->display_controllers) != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init video display. Halting...");
+        cpu_hlt();
+    }
+
+    if(smp_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
+        cpu_hlt();
+    }
+
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing usb");
+    if(usb_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init usb. Halting...");
+        cpu_hlt();
+    }
+
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
     int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
+    int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
+        cpu_hlt();
+    }
+
+    if(nvme_port_cnt == -1) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init nvme. Halting...");
         cpu_hlt();
     }
 
@@ -273,13 +331,16 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    ahci_sata_disk_t* d = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
-    if(d) {
-        PRINTLOG(KERNEL, LOG_DEBUG, "try to read disk 0x%p", d);
-        disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(d));
+    PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
+
+    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
+
+    if(sd) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "try to read sata disk 0x%p", sd);
+        disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(sd));
 
         if(sata0) {
-            PRINTLOG(KERNEL, LOG_INFO, "disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
+            PRINTLOG(KERNEL, LOG_INFO, "sata disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
 
             disk_partition_context_t* part_ctx;
 
@@ -297,7 +358,70 @@ int8_t kmain64(size_t entry_point) {
         }
 
     } else {
-        PRINTLOG(KERNEL, LOG_WARNING, "no disks found");
+        PRINTLOG(KERNEL, LOG_WARNING, "sata disk 0 not found");
+    }
+
+    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
+
+    nvme_disk_t* nd = (nvme_disk_t*)nvme_get_disk_by_id(0);
+
+    if(nd) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "try to read nvme disk 0x%p", nd);
+        disk_t* nvme0 = gpt_get_or_create_gpt_disk(nvme_disk_impl_open(nd));
+
+        if(nvme0) {
+            PRINTLOG(KERNEL, LOG_INFO, "nvme disk size 0x%llx", nvme0->disk.get_size((disk_or_partition_t*)nvme0));
+
+            disk_partition_context_t* part_ctx;
+
+            part_ctx = nvme0->get_partition_context(nvme0, 0);
+            PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+            memory_free(part_ctx);
+
+            part_ctx = nvme0->get_partition_context(nvme0, 1);
+            PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+            memory_free(part_ctx);
+
+            nvme0->disk.flush((disk_or_partition_t*)nvme0);
+        } else {
+            PRINTLOG(KERNEL, LOG_INFO, "nvme0 is empty");
+        }
+
+    } else {
+        PRINTLOG(KERNEL, LOG_WARNING, "nvme disk 0 not found");
+    }
+
+    if(usb_mass_storage_get_disk_count()) {
+        usb_driver_t* usb_ms = usb_mass_storage_get_disk_by_id(0);
+
+        if(usb_ms) {
+            disk_t* usb0 = gpt_get_or_create_gpt_disk(usb_mass_storage_disk_impl_open(usb_ms, 0));
+
+            if(usb0) {
+                PRINTLOG(KERNEL, LOG_INFO, "usb disk size 0x%llx", usb0->disk.get_size((disk_or_partition_t*)usb0));
+
+                disk_partition_context_t* part_ctx;
+
+                part_ctx = usb0->get_partition_context(usb0, 0);
+                PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+                memory_free(part_ctx);
+
+                part_ctx = usb0->get_partition_context(usb0, 1);
+                PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+                memory_free(part_ctx);
+
+                usb0->disk.flush((disk_or_partition_t*)usb0);
+            } else {
+                PRINTLOG(KERNEL, LOG_INFO, "usb0 is empty");
+            }
+        } else {
+            PRINTLOG(KERNEL, LOG_WARNING, "usb mass storage disk 0 not found");
+        }
+    }
+
+    if(shell_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init shell. Halting...");
+        cpu_hlt();
     }
 
     if(kbd_init() != 0) {
@@ -308,6 +432,22 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "rdrand %i", cpu_check_rdrand());
 
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
+
+    wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
+    uint32_t var_attrs = 0;
+    uint64_t buffer_size = sizeof(uint16_t);
+    uint16_t boot_order_idx;
+
+    efi_runtime_services_t * RS = SYSTEM_INFO->efi_system_table->runtime_services;
+
+    efi_status_t res = RS->get_variable(var_name_boot_current, &var_global, &var_attrs, &buffer_size, &boot_order_idx);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(KERNEL, LOG_WARNING, "cannot get BootCurrent variable");
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "BootCurrent %i", boot_order_idx);
+    }
 
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 

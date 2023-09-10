@@ -43,17 +43,19 @@ typedef struct descriptor_gdt_null {
  */
 typedef struct descriptor_gdt_code {
     uint32_t unused1; ///< 1/0-31 are unused
-    uint16_t unused2        : 10; ///< 2/0-9 aka 32-41 are unused
+    uint8_t  unused2        : 8; ///< 2/0-7 aka 32-39 are unused
+    uint8_t  unused3        : 1; ///< 2/8 aka 40 is unused
+    uint8_t  readable       : 1; ///< 2/9 aka 41 readable bit
     uint8_t  conforming     : 1; ///< 2/10 aka 42 conforming allow diffrent levels run code
     uint8_t  always1        : 2; ///< 2/11-12 aka 43-44 are always 1
     uint8_t  dpl            : 2; ///< 2/13-14 aka 45-46 bits are for privilage levels
     uint8_t  present        : 1; ///< 2/15 aka 47 the page or page table is present?
-    uint8_t  unused3        : 4; ///< 2/16-19 aka 48-51 are unused
+    uint8_t  unused4        : 4; ///< 2/16-19 aka 48-51 are unused
     uint8_t  avl            : 1; ///< 2/20 aka 52 are avl bits aka unused
     uint8_t  long_mode      : 1; ///< 2/21 aka 53 this bit is always 1 for long mode
     uint8_t  default_opsize : 1; ///< 2/22 aka 54 this bit is always 0 for long mode
-    uint8_t  unused4        : 1; ///< 2/23 aka 55 is unused
-    uint8_t  unused5; ///< 2/24-31 aka 56-63 is unused
+    uint8_t  unused5        : 1; ///< 2/23 aka 55 is unused
+    uint8_t  unused6; ///< 2/24-31 aka 56-63 is unused
 
 }__attribute__((packed)) descriptor_gdt_code_t; ///< struct short hand
 
@@ -63,12 +65,17 @@ typedef struct descriptor_gdt_code {
  */
 typedef struct descriptor_gdt_data {
     uint32_t unused1; ///< 1/0-31 are unused
-    uint16_t unused2 : 11; ///< 2/0-10 aka 32-42 are unused
-    uint8_t  always0 : 1; ///< 2/11 aka 43 is always 0
-    uint8_t  always1 : 1; ///< 2/12 aka 44 is always 1
-    uint8_t  dpl     : 2; ///< 2/13-14 aka 45-46 are unused, page dpl is used for data see also memory_page_entry_t
-    uint8_t  present : 1; ///< 2/15 aka 47 is always 1
-    uint16_t unused3; ///< 2/16-31 aka 48-63 are unused
+    uint8_t  unused2; ///< 2/0-7 aka 32-39 are unused
+    uint8_t  unused3   : 1; ///< 2/8 aka 40 is unused
+    uint8_t  rw        : 1; ///< 2/9 aka 41 read write bit
+    uint8_t  unused4   : 1; ///< 2/10 aka 42 is unused
+    uint8_t  always0   : 1; ///< 2/11 aka 43 is always 0
+    uint8_t  always1   : 1; ///< 2/12 aka 44 is always 1
+    uint8_t  dpl       : 2; ///< 2/13-14 aka 45-46 are unused, page dpl is used for data see also memory_page_entry_t
+    uint8_t  present   : 1; ///< 2/15 aka 47 is always 1
+    uint16_t unused5   : 5; ///< 2/16-20 aka 48-52 are unused
+    uint16_t long_mode : 1; ///< 2/21 aka 53 is always 1
+    uint16_t unused6   : 10;///< 2/22-31 aka 54-63 are unused
 }__attribute__((packed)) descriptor_gdt_data_t; ///< struct short hand
 
 /**
@@ -98,27 +105,36 @@ typedef struct descriptor_gdt {
  */
 #define DESCRIPTOR_BUILD_GDT_CODE_SEG(seg, DPL) {seg.code.unused1 = 0; \
                                                  seg.code.unused2 = 0; \
+                                                 seg.code.unused3 = 0; \
+                                                 seg.code.readable = 1; \
                                                  seg.code.conforming = 0; \
                                                  seg.code.always1 = 3; \
                                                  seg.code.dpl = DPL; \
                                                  seg.code.present = 1; \
-                                                 seg.code.unused3 = 0; \
+                                                 seg.code.unused4 = 0; \
                                                  seg.code.avl = 0; \
                                                  seg.code.long_mode = 1; \
                                                  seg.code.default_opsize = 0; \
-                                                 seg.code.unused4 = 0;}
+                                                 seg.code.unused5 = 0; \
+                                                 seg.code.unused6 = 0;}
 
 /**
  * @brief data segment builder macro
  * @param  seg segment to build as data
  */
-#define DESCRIPTOR_BUILD_GDT_DATA_SEG(seg) {seg.data.unused1 = 0; \
-                                            seg.data.unused2 = 0; \
-                                            seg.data.always0 = 0; \
-                                            seg.data.always1 = 1; \
-                                            seg.data.dpl = 0; \
-                                            seg.data.present = 1; \
-                                            seg.data.unused3 = 0;}
+#define DESCRIPTOR_BUILD_GDT_DATA_SEG(seg, DPL) {seg.data.unused1 = 0; \
+                                                 seg.data.unused2 = 0; \
+                                                 seg.data.unused3 = 0; \
+                                                 seg.data.rw = 1; \
+                                                 seg.data.unused4 = 0; \
+                                                 seg.data.always0 = 0; \
+                                                 seg.data.always1 = 1; \
+                                                 seg.data.dpl = DPL; \
+                                                 seg.data.present = 1; \
+                                                 seg.data.unused5 = 0; \
+                                                 seg.data.long_mode = 1; \
+                                                 seg.data.unused6 = 0;}
+
 #define IDT_BASE_ADDRESS (1 << 20)
 /*! IDT segment type */
 #define SYSTEM_SEGMENT_TYPE_IDT           0x02
@@ -206,5 +222,11 @@ uint8_t descriptor_build_gdt_register(void);
  * @return 0 at success.
  */
 uint8_t descriptor_build_idt_register(void);
+
+/**
+ * @brief builds gdt and tss for application processor
+ * @return 0 at success.
+ */
+uint8_t descriptor_build_ap_descriptors_register(void);
 
 #endif

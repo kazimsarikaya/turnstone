@@ -38,9 +38,13 @@ typedef struct system_info_t {
     uint64_t              acpi_version; ///< acpi table version
     void*                 acpi_table; ///< acpi table address
     uint64_t              kernel_start; ///< kernel start address
+    uint64_t              kernel_physical_start; ///< kernel physical start address
     uint64_t              kernel_4k_frame_count; ///< kernel frame count in 4k bytes
+    uint64_t              kernel_default_heap_start; ///< kernel default heap start address
+    uint64_t              kernel_default_heap_4k_frame_count; ///< kernel default heap frame count in 4k bytes
     uint64_t              remapped; ///< is kernel remapped?
     uint64_t              my_page_table; ///< kernel's page table, for uefi's pt diff
+    uint64_t              page_table_helper_frame; ///< page table helper frame hold 4 frame
     uint8_t*              reserved_mmap_data; ///< reserved mmap data for remapping
     uint64_t              reserved_mmap_size; ///< size of reserved mmap data for remapping
     efi_system_table_t*   efi_system_table; ///< accessing efi tables from kernel

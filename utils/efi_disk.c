@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#define RAMSIZE 0x800000
+#define RAMSIZE 0x8000000
 #include "setup.h"
 #include <crc.h>
 #include <disk.h>
@@ -121,9 +121,9 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
 
 int32_t main(int32_t argc, char** argv) {
 
-    if (argc < 4) {
+    if (argc < 5) {
         printf("Error: not enough arguments\n");
-        printf("%s <diskpath> <efiimage> <kernel>\n", argv[0]);
+        printf("%s <diskpath> <efiimage> <kernel> <tosdbimg>\n", argv[0]);
 
         return -1;
     }
@@ -141,6 +141,7 @@ int32_t main(int32_t argc, char** argv) {
     char_t* disk_name = argv[item++];
     char_t* efi_boot_file_name = argv[item++];
     char_t* kernel_name = argv[item++];
+    char_t* tosdbimg_name = argv[item++];
 
 
 
@@ -155,6 +156,16 @@ int32_t main(int32_t argc, char** argv) {
         int64_t kernel_sec_count = kernel_size / 512;
         if(kernel_size % 512) {
             kernel_sec_count++;
+        }
+
+        FILE* fp_tosdbimg = fopen(tosdbimg_name, "r");
+        fseek(fp_tosdbimg, 0, SEEK_END);
+        int64_t tosdbimg_size = ftell(fp_tosdbimg);
+        fseek(fp_tosdbimg, 0, SEEK_SET);
+
+        int64_t tosdbimg_sec_count = tosdbimg_size / 512;
+        if(tosdbimg_size % 512) {
+            tosdbimg_sec_count++;
         }
 
         d = disk_file_open(disk_name, 1 << 30);
@@ -185,6 +196,22 @@ int32_t main(int32_t argc, char** argv) {
 
         memory_free(buf);
         fclose(fp_kernel);
+
+
+        efi_guid_t tosdb_guid = EFI_PART_TYPE_TURNSTONE_TOSDB_PART_GUID;
+        uint64_t tosdb_start = 206848 + kernel_sec_count;
+        part_ctx = gpt_create_partition_context(&tosdb_guid, "tosdb_sys", tosdb_start, tosdb_start + tosdbimg_sec_count - 1);
+        d->add_partition(d, part_ctx);
+        memory_free(part_ctx->internal_context);
+        memory_free(part_ctx);
+
+        buf = memory_malloc(tosdbimg_size);
+        fread(buf, 1, kernel_size, fp_tosdbimg);
+
+        d->disk.write((disk_or_partition_t*)d, tosdb_start, tosdbimg_size / 512, buf);
+
+        memory_free(buf);
+        fclose(fp_tosdbimg);
 
     } else {
         d = disk_file_open(disk_name, -1);
