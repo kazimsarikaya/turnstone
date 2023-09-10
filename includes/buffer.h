@@ -33,6 +33,7 @@ buffer_t  buffer_append_buffer(buffer_t buffer, buffer_t appenden);
 uint8_t*  buffer_get_bytes(buffer_t buffer, uint64_t length);
 uint8_t   buffer_get_byte(buffer_t buffer);
 uint8_t*  buffer_get_all_bytes(buffer_t buffer, uint64_t* length);
+uint8_t*  buffer_get_all_bytes_and_reset(buffer_t buffer, uint64_t* length);
 boolean_t buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction_t direction);
 int8_t    buffer_destroy(buffer_t buffer);
 buffer_t  buffer_encapsulate(uint8_t* data, uint64_t length);

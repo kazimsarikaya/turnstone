@@ -313,6 +313,8 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
         const pci_dev_t* p = iter->get_item(iter);
         pci_generic_device_t* pci_sata = (pci_generic_device_t*)p->pci_header;
 
+        pci_disable_interrupt(pci_sata);
+
 
         pci_capability_msi_t* msi_cap = NULL;
         ahci_pci_capability_sata_t* sata_cap = NULL;
@@ -351,28 +353,26 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
             abar_fa = tmp << 32 | abar_fa;
         }
 
+
+        PRINTLOG(AHCI, LOG_TRACE, "frame address at bar 0x%llx", abar_fa);
+
+        frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
+        uint64_t bar_frm_cnt = 2;
+        frame_t bar_req_frm = {abar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+
         uint64_t abar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(abar_fa);
 
-        PRINTLOG(AHCI, LOG_TRACE, "abar fa 0x%llx va  0x%llx", abar_fa, abar_va);
+        if(bar_frames == NULL) {
+            PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", abar_fa);
 
-        frame_t* hba_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
+            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+                PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frame");
 
-        if(hba_frames == NULL) {
-            PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for abar");
-
-            frame_t f = {abar_fa, 2, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
-
-            if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &f) != 0) {
-                PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for abar");
+                return -1;
             }
-
-            hba_frames = &f;
         }
 
-        PRINTLOG(AHCI, LOG_TRACE, "frames for abar 0x%llx,0x%llx", hba_frames->frame_address, hba_frames->frame_count);
-        memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(hba_frames->frame_address), hba_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-        hba_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-
+        memory_paging_add_va_for_frame(abar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
         ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)abar_va;
 
@@ -481,7 +481,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
                 frame_t* port_frames = NULL;
 
-                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
+                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 10, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
                     iter->destroy(iter);
 
@@ -494,6 +494,8 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
 
                     return -1;
                 }
+
+                memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port_frames->frame_address), 4096 * 10);
 
                 ahci_port_rebase(port, port_frames->frame_address, nr_cmd_slots);
 
@@ -645,19 +647,19 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     PRINTLOG(AHCI, LOG_TRACE, "building identify data");
 
-    disk->cylinders = identify_data.cylinders;
-    disk->heads = identify_data.heads;
-    disk->sectors = identify_data.sectors_per_track;
+    disk->cylinders = identify_data.num_cylinders;
+    disk->heads = identify_data.num_heads;
+    disk->sectors = identify_data.num_sectors_per_track;
 
-    if(1 & (identify_data.command_set_supported_83 >> 10)) {
+    if(identify_data.command_set_support.big_lba) {
         disk->lba_count = identify_data.user_addressable_sectors_ext;
     } else {
         disk->lba_count = identify_data.user_addressable_sectors;
     }
 
     for(uint8_t i = 0; i < 20; i += 2) {
-        disk->serial[i] = identify_data.serial_no[i + 1];
-        disk->serial[i + 1] = identify_data.serial_no[i];
+        disk->serial[i] = identify_data.serial_number[i + 1];
+        disk->serial[i + 1] = identify_data.serial_number[i];
     }
 
     for(uint8_t i = 20; i > 0; i--) {
@@ -668,8 +670,8 @@ int8_t ahci_identify(uint64_t disk_id) {
     }
 
     for(uint8_t i = 0; i < 40; i += 2) {
-        disk->model[i] = identify_data.model_name[i + 1];
-        disk->model[i + 1] = identify_data.model_name[i];
+        disk->model[i] = identify_data.model_number[i + 1];
+        disk->model[i + 1] = identify_data.model_number[i];
     }
 
     for(uint8_t i = 40; i > 0; i--) {
@@ -680,27 +682,36 @@ int8_t ahci_identify(uint64_t disk_id) {
     }
 
     disk->queue_depth = identify_data.queue_depth + 1;
-    disk->sncq &= (identify_data.serial_ata_capabilities >> 8) & 1;
-    disk->volatile_write_cache = ((identify_data.command_set_supported_82 >> 5) & 1 ) | (((identify_data.command_set_feature_enabled_85 >> 5) & 1) << 1);
+    disk->sncq &= identify_data.serial_ata_capabilities.ncq;
+    disk->volatile_write_cache = identify_data.command_set_support.write_cache | identify_data.command_set_active.write_cache;
 
-    disk->logging.fields.gpl_supported = (identify_data.command_set_supported_84 >> 5) & 1;
-    disk->logging.fields.gpl_enabled = (identify_data.command_set_feature_enabled_87 >> 5) & 1;
-    disk->logging.fields.dma_ext_supported = (identify_data.command_set_supported_119 >> 3) & 1;
-    disk->logging.fields.dma_ext_enabled = (identify_data.command_set_feature_enabled_120 >> 3) & 1;
-    disk->logging.fields.dma_ext_is_log_ext = (identify_data.serial_ata_capabilities >> 15) & 1;
+    disk->logging.fields.gpl_supported = identify_data.command_set_support.gp_logging;
+    disk->logging.fields.gpl_enabled = identify_data.command_set_active.gp_logging;
+    disk->logging.fields.dma_ext_supported = identify_data.command_set_support_ext.read_write_log_dma_ext;
+    disk->logging.fields.dma_ext_enabled = identify_data.command_set_active_ext.read_write_log_dma_ext;
+    disk->logging.fields.dma_ext_is_log_ext = identify_data.serial_ata_capabilities.read_logdma;
 
-    disk->smart_status.fields.supported = identify_data.command_set_supported_82 & 1;
-    disk->smart_status.fields.enabled = identify_data.command_set_feature_enabled_85 & 1;
-    disk->smart_status.fields.errlog_supported = identify_data.command_set_supported_84 & 1;
-    disk->smart_status.fields.errlog_enabled = identify_data.command_set_feature_enabled_87 & 1;
-    disk->smart_status.fields.selftest_supported = (identify_data.command_set_supported_84 >> 1) & 1;
-    disk->smart_status.fields.selftest_enabled = (identify_data.command_set_feature_enabled_87 >> 1) & 1;
+    disk->smart_status.fields.supported = identify_data.command_set_support.smart_commands;
+    disk->smart_status.fields.enabled = identify_data.command_set_active.smart_commands;
+    disk->smart_status.fields.errlog_supported = identify_data.command_set_support.smart_error_log;
+    disk->smart_status.fields.errlog_enabled = identify_data.command_set_active.smart_error_log;
+    disk->smart_status.fields.selftest_supported = identify_data.command_set_support.smart_self_test;
+    disk->smart_status.fields.selftest_enabled = identify_data.command_set_active.smart_self_test;
 
-    PRINTLOG(AHCI, LOG_TRACE, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x",
+    if(identify_data.physical_logical_sector_size.logical_sector_longer_than256words) {
+        disk->logical_sector_size = 4096;
+    } else {
+        disk->logical_sector_size = 512;
+    }
+
+    disk->physical_sector_size = disk->logical_sector_size << identify_data.physical_logical_sector_size.logical_sectors_per_physical_sector;
+
+    PRINTLOG(AHCI, LOG_TRACE, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
              disk->disk_id, disk->cylinders, disk->heads,
              disk->sectors, disk->lba_count, disk->serial, disk->model,
              disk->queue_depth, disk->sncq, disk->volatile_write_cache,
-             disk->logging.bits, disk->smart_status.bits);
+             disk->logging.bits, disk->smart_status.bits,
+             disk->physical_sector_size, disk->logical_sector_size);
 
     port->sata_active = 0;
     port->interrupt_status = (uint32_t)-1;
@@ -709,7 +720,7 @@ int8_t ahci_identify(uint64_t disk_id) {
     return 0;
 }
 
-future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -721,12 +732,36 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
         return NULL;
     }
 
+    uint32_t sector_count = size / disk->logical_sector_size;
+
+    if(size % disk->logical_sector_size != 0) {
+        sector_count++;
+    }
+
+    if(sector_count > 65536) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot read more than 65536 sectors at on");
+
+        return NULL;
+    }
+
+    uint32_t prdt_length = size / (4 << 20);
+
+    if(size % (4 << 20) != 0) {
+        prdt_length++;
+    }
+
+    if(prdt_length > 64) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot read more than 0x%llx at on", 65536 * disk->logical_sector_size);
+
+        return NULL;
+    }
+
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
     cmd_hdr += slot;
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
     cmd_hdr->write_direction = 0;
-    cmd_hdr->prdt_length = 1;
+    cmd_hdr->prdt_length = prdt_length;
     cmd_hdr->clear_busy = 1;
 
     ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
@@ -740,8 +775,15 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
         return NULL;
     }
 
-    cmd_table->prdt_entry[0].data_base_address = buffer_phy_addr;
-    cmd_table->prdt_entry[0].data_byte_count = size - 1;
+    uint32_t tmp_size = size;
+
+    for(uint32_t i = 0; i < cmd_hdr->prdt_length; i++) {
+        cmd_table->prdt_entry[i].data_base_address = buffer_phy_addr;
+        cmd_table->prdt_entry[i].data_byte_count = (tmp_size > (4 << 20)) ? (4 << 20) - 1 : tmp_size - 1;
+
+        tmp_size -= (4 << 20);
+        buffer_phy_addr += (4 << 20);
+    }
 
     ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
@@ -751,12 +793,12 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
 
     if(!(disk->sncq && disk->queue_depth)) {
         fis->command = AHCI_ATA_CMD_READ_DMA_EXT;
-        fis->count = size / 512;
+        fis->count = size / disk->logical_sector_size;
     }else {
         fis->command = AHCI_ATA_CMD_READ_FPDMA_QUEUED;
         fis->count = slot << 3;
-        fis->featurel = (size / 512) & 0xFF;
-        fis->featureh = ((size / 512) >> 8) & 0xFF;
+        fis->featurel = (size / disk->logical_sector_size) & 0xFF;
+        fis->featureh = ((size / disk->logical_sector_size) >> 8) & 0xFF;
     }
 
     fis->lba0 = lba & 0xFFFFFF;
@@ -777,7 +819,7 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffe
     return fut;
 }
 
-future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buffer) {
+future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -789,6 +831,30 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
         return NULL;
     }
 
+    uint32_t sector_count = size / disk->logical_sector_size;
+
+    if(size % disk->logical_sector_size != 0) {
+        sector_count++;
+    }
+
+    if(sector_count > 65536) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot write more than 65536 sectors at on");
+
+        return NULL;
+    }
+
+    uint32_t prdt_length = size / (4 << 20);
+
+    if(size % (4 << 20) != 0) {
+        prdt_length++;
+    }
+
+    if(prdt_length > 64) {
+        PRINTLOG(AHCI, LOG_FATAL, "cannot write more than 0x%llx at on", 65536 * disk->logical_sector_size);
+
+        return NULL;
+    }
+
     PRINTLOG(AHCI, LOG_TRACE, "write to port 0x%p at lba 0x%llx with size 0x%x from buffer 0x%p slot %i", port, lba, size, buffer, slot);
 
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
@@ -796,7 +862,7 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
     cmd_hdr->write_direction = 1;
-    cmd_hdr->prdt_length = 1;
+    cmd_hdr->prdt_length = prdt_length;
     cmd_hdr->clear_busy = 1;
 
     ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
@@ -810,8 +876,15 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
         return NULL;
     }
 
-    cmd_table->prdt_entry[0].data_base_address = buffer_phy_addr;
-    cmd_table->prdt_entry[0].data_byte_count = size - 1;
+    uint32_t tmp_size = size;
+
+    for(uint32_t i = 0; i < cmd_hdr->prdt_length; i++) {
+        cmd_table->prdt_entry[i].data_base_address = buffer_phy_addr;
+        cmd_table->prdt_entry[i].data_byte_count = (tmp_size > (4 << 20)) ? (4 << 20) - 1 : tmp_size - 1;
+
+        tmp_size -= (4 << 20);
+        buffer_phy_addr += (4 << 20);
+    }
 
     ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
@@ -821,12 +894,12 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint16_t size, uint8_t* buff
 
     if(!(disk->sncq && disk->queue_depth)) {
         fis->command = AHCI_ATA_CMD_WRITE_DMA_EXT;
-        fis->count = size / 512;
+        fis->count = size / disk->logical_sector_size;
     }else {
         fis->command = AHCI_ATA_CMD_WRITE_FPDMA_QUEUED;
         fis->count = slot << 3;
-        fis->featurel = (size / 512) & 0xFF;
-        fis->featureh = ((size / 512) >> 8) & 0xFF;
+        fis->featurel = (size / disk->logical_sector_size) & 0xFF;
+        fis->featureh = ((size / disk->logical_sector_size) >> 8) & 0xFF;
         fis->device = 3 << 6; // fua and always 1
     }
 
@@ -964,10 +1037,12 @@ void ahci_port_rebase(ahci_hba_port_t* port, uint64_t offset, int8_t nr_cmd_slot
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
 
     for(uint8_t i = 0; i < nr_cmd_slots; i++) {
-        cmd_hdr[i].prdt_length = 16;
+        cmd_hdr[i].prdt_length = 64;
         cmd_hdr[i].prdt_base_address = offset;
 
         uint64_t size = sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr[i].prdt_length - 1));
+
+        PRINTLOG(AHCI, LOG_TRACE, "prdt offset 0x%llx size 0x%llx", offset, size);
 
         memory_memclean((void*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr[i].prdt_base_address), size);
 

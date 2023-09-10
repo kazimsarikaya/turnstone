@@ -14,16 +14,18 @@
 #include <strings.h>
 #include <device/kbd_scancodes.h>
 #include <acpi.h>
+#include <time.h>
+#include <shell.h>
 
 MODULE("turnstone.kernel.hw.kbd");
 
 virtio_dev_t* virtio_kbd = NULL;
+boolean_t kbd_is_usb = false;
 
 wchar_t kbd_ps2_tmp = NULL;
 
-kbd_state_t kbd_state = {0, 0, 0};
+kbd_state_t kbd_state = {0, 0, 0, 0, 0};
 
-int8_t kbd_handle_key(wchar_t key, boolean_t pressed);
 int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev);
 
@@ -40,6 +42,14 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
         kbd_state.is_alt_pressed = pressed;
     }
 
+    if(key == KBD_SCANCODE_LEFTCTRL || key == KBD_SCANCODE_RIGHTCTRL) {
+        kbd_state.is_ctrl_pressed = pressed;
+    }
+
+    if(key == KBD_SCANCODE_LEFTMETA || key == KBD_SCANCODE_RIGHTMETA) {
+        kbd_state.is_meta_pressed = pressed;
+    }
+
 
     if(pressed == 1) {
         wchar_t buffer[2] = {0, 0};
@@ -49,7 +59,11 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
         if(is_p) {
             char_t* data = wchar_to_char(buffer);
-            printf("%s", data);
+
+            if(shell_buffer != NULL) {
+                buffer_append_byte(shell_buffer, data[0]);
+            }
+
             memory_free(data);
         }
     }
@@ -133,11 +147,11 @@ int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev){
 
 
 int8_t dev_virtio_kbd_init(void) {
-    PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device starting");
     int8_t errors = 0;
 
     iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->other_devices);
     const pci_dev_t* pci_dev = NULL;
+    boolean_t is_found = false;
 
     while(iter->end_of_iterator(iter) != 0) {
         pci_dev = iter->get_item(iter);
@@ -145,6 +159,9 @@ int8_t dev_virtio_kbd_init(void) {
         pci_common_header_t* pci_header = pci_dev->pci_header;
 
         if(pci_header->vendor_id == KBD_DEVICE_VENDOR_ID_VIRTIO && pci_header->device_id == KBD_DEVICE_DEVICE_ID_VIRTIO) {
+            PRINTLOG(VIRTIO, LOG_INFO, "vendor: 0x%x, device: 0x%x", pci_header->vendor_id, pci_header->device_id);
+            PRINTLOG(VIRTIO, LOG_INFO, "class: 0x%x, subclass: 0x%x", pci_header->class_code, pci_header->subclass_code);
+            is_found = true;
             break;
         }
 
@@ -153,11 +170,13 @@ int8_t dev_virtio_kbd_init(void) {
 
     iter->destroy(iter);
 
-    if(pci_dev == NULL) {
+    if(!is_found) {
         PRINTLOG(VIRTIO, LOG_ERROR, "virtkbd device not found");
 
         return -1;
     }
+
+    PRINTLOG(VIRTIO, LOG_INFO, "virtkbd device found starting");
 
     virtio_kbd = virtio_get_device(pci_dev);
 
@@ -185,9 +204,14 @@ int8_t kbd_init(void){
     }
 
     if(ACPI_CONTEXT->fadt->boot_architecture_flags & 2) {
-        printf("ps2 exists\n");
-        interrupt_irq_set_handler(0x1, &dev_kbd_isr);
-        apic_ioapic_enable_irq(0x1);
+        if(kbd_is_usb) {
+            outb(KBD_CMD_PORT, KBD_CMD_DISABLE_KBD_PORT);
+            outb(KBD_CMD_PORT, KBD_CMD_DISABLE_MOUSE_PORT);
+        } else {
+            PRINTLOG(KERNEL, LOG_INFO, "PS/2 keyboard found");
+            interrupt_irq_set_handler(0x1, &dev_kbd_isr);
+            apic_ioapic_enable_irq(0x1);
+        }
 
         return 0;
     }

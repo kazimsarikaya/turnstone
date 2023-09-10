@@ -42,6 +42,14 @@ typedef struct interrupt_frame {
  */
 int8_t interrupt_init(void);
 
+
+/**
+ * @brief interrupt redirector for main interrupts
+ * @param[in] ist interrupt stack table index
+ * @return 0 if succeed
+ */
+int8_t interrupt_redirect_main_interrupts(uint8_t ist);
+
 /**
  * @brief irq method signature
  * @param[in] frame interrupt frame

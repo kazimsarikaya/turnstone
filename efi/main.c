@@ -90,9 +90,13 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     for(int64_t i = 0; i < gop->mode->max_mode; i++) {
         uint64_t gop_mode_size = 0;
         efi_gop_mode_info_t* gop_mi = NULL;
-        if(gop->query_mode(gop, i, &gop_mode_size, &gop_mi) == EFI_SUCCESS && gop_mi->horizontal_resolution == 1280 && gop_mi->vertical_resolution == 1024) {
-            next_mode = i;
-            break;
+
+        if(gop->query_mode(gop, i, &gop_mode_size, &gop_mi) == EFI_SUCCESS) {
+            PRINTLOG(EFI, LOG_DEBUG, "gop mode %lli %ix%i", i, gop_mi->horizontal_resolution, gop_mi->vertical_resolution);
+
+            if(gop_mi->vertical_resolution == 1080 && gop_mi->horizontal_resolution == 1920) {
+                next_mode = i;
+            }
         }
     }
 
@@ -120,7 +124,7 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     vfb->height = gop->mode->information->vertical_resolution;
     vfb->pixels_per_scanline = gop->mode->information->pixels_per_scanline;
 
-    PRINTLOG(EFI, LOG_DEBUG, "frame buffer info %ix%i pps %i at 0x%llx size 0x%llx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
+    PRINTLOG(EFI, LOG_INFO, "frame buffer info %ix%i pps %i at 0x%llx size 0x%llx", vfb->width, vfb->height, vfb->pixels_per_scanline, vfb->physical_base_address, vfb->buffer_size);
     PRINTLOG(EFI, LOG_DEBUG, "vfb address 0x%p", vfb);
 
     *vfb_res = vfb;
@@ -712,12 +716,14 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     kernel_real_size += (kernel_phdr->section_locations[LINKER_SECTION_TYPE_STACK].section_size + 4096 - 1) / 4096 * 4096;
 
     int64_t kernel_page_count = (kernel_real_size + 4096 - 1) / 4096;
+    int64_t original_kernel_page_count = kernel_page_count;
+    kernel_page_count += 0x200;
 
-    PRINTLOG(EFI, LOG_DEBUG, "new kernel page count 0x%llx", kernel_page_count);
+    PRINTLOG(EFI, LOG_INFO, "new kernel page count 0x%llx size 0x%llx", original_kernel_page_count, kernel_real_size);
 
-    uint64_t new_kernel_address = 2 << 20;
+    uint64_t new_kernel_address = 0;
 
-    res = BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address);
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for new kernel");
@@ -727,15 +733,19 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     PRINTLOG(EFI, LOG_DEBUG, "alloc pages for new kernel succed at 0x%llx", new_kernel_address);
 
-    memory_memclean((void*)new_kernel_address, kernel_page_count * 4096);
+    // align to 2mib
+    uint64_t aligned_new_kernel_address = (new_kernel_address + 0x200000 - 1) / 0x200000 * 0x200000;
 
-    if(linker_memcopy_program_and_relink((size_t)kernel_data->data, new_kernel_address)) {
+
+    memory_memclean((void*)aligned_new_kernel_address, original_kernel_page_count * 4096);
+
+    if(linker_memcopy_program_and_relink((size_t)kernel_data->data, aligned_new_kernel_address)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot move and relink kernel");
 
         goto catch_efi_error;
     }
 
-    PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%llx succed", new_kernel_address);
+    PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%llx succed", aligned_new_kernel_address);
     memory_free(kernel_data->data);
     memory_free(kernel_data);
 
@@ -765,7 +775,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     kernel_heap_page_count = (aligned_kernel_heap_size + 4096 - 1) / 4096;
 
 
-    kernel_phdr = (program_header_t*)new_kernel_address;
+    kernel_phdr = (program_header_t*)aligned_new_kernel_address;
     kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_pyhsical_start = aligned_kernel_heap_address;
     kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = aligned_kernel_heap_address;
     kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = aligned_kernel_heap_size;
@@ -822,18 +832,19 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->frame_buffer = vfb;
     sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
-    sysinfo->kernel_start = new_kernel_address;
-    sysinfo->kernel_4k_frame_count = kernel_page_count;
-    sysinfo->kernel_default_heap_start = kernel_heap_address;
+    sysinfo->kernel_start = aligned_new_kernel_address;
+    sysinfo->kernel_physical_start = aligned_new_kernel_address;
+    sysinfo->kernel_4k_frame_count = original_kernel_page_count;
+    sysinfo->kernel_default_heap_start = aligned_kernel_heap_address;
     sysinfo->kernel_default_heap_4k_frame_count = kernel_heap_page_count;
     sysinfo->efi_system_table = system_table;
     sysinfo->page_table_helper_frame = page_table_helper_frame;
 
-    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", new_kernel_address, sysinfo);
+    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", aligned_new_kernel_address, sysinfo);
 
     BS->exit_boot_services(image, map_key);
 
-    kernel_start_t ks = (kernel_start_t)new_kernel_address;
+    kernel_start_t ks = (kernel_start_t)aligned_new_kernel_address;
 
     ks(sysinfo);
 

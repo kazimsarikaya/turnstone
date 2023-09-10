@@ -655,7 +655,7 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     uint32_t segment_start = (pool_start - heap_start) + sizeof(memory_heap_hash_pool_t);
     segment_start += 0x1000 - (segment_start % 0x1000);
 
-    pool->segment_start = segment_start;
+    pool->segment_start = segment_start - (pool_start - heap_start);
     pool->segment_end = segment_start;
 
     metadata->total_size = heap_size;

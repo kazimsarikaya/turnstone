@@ -142,10 +142,16 @@ int8_t task_init_tasking_ext(memory_heap_t* heap);
 #define task_init_tasking() task_init_tasking_ext(NULL)
 
 /**
- * @brief switches current task to a new one.
+ * @brief sets task switch parameters
  * @param[in] need_eoi if task switching needs notify local apic this field should be true
+ * @param[in] need_sti if task switching needs enable interrupts this field should be true
  */
-void task_switch_task(boolean_t need_eoi);
+void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti);
+
+/**
+ * @brief switches current task to a new one.
+ */
+void task_switch_task(void);
 
 /**
  * @brief yields task for waiting other tasks.
@@ -215,5 +221,6 @@ boolean_t task_idle_check_need_yield(void);
  */
 void task_current_task_sleep(uint64_t wake_tick);
 
+void task_print_all(void);
 
 #endif

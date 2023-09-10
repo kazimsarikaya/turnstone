@@ -197,3 +197,31 @@ uint8_t byte_count(const uint64_t num) {
 
     return res;
 }
+
+uint64_t __attribute__((noinline, optimize("O0"))) read_memio(uint64_t va, uint8_t size) {
+    uint64_t res = 0;
+
+    if(size == 8) {
+        res = *(volatile uint8_t*)va;
+    } else if(size == 16) {
+        res = *(volatile uint16_t*)va;
+    } else if(size == 32) {
+        res = *(volatile uint32_t*)va;
+    } else if(size == 64) {
+        res = *(volatile uint64_t*)va;
+    }
+
+    return res;
+}
+
+void __attribute__((noinline, optimize("O0"))) write_memio(uint64_t va, uint64_t val, uint8_t size) {
+    if(size == 8) {
+        *(volatile uint8_t*)va = val;
+    } else if(size == 16) {
+        *(volatile uint16_t*)va = val;
+    } else if(size == 32) {
+        *(volatile uint32_t*)va = val;
+    } else if(size == 64) {
+        *(volatile uint64_t*)va = val;
+    }
+}

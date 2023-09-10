@@ -57,3 +57,15 @@ uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer){
 
     return 0;
 }
+
+boolean_t cpu_is_interrupt_enabled(void) {
+    uint64_t rflags;
+    __asm__ __volatile__ ("pushfq\n"
+                          "popq %0\n"
+                          : "=r" (rflags)
+                          :
+                          : "memory"
+                          );
+
+    return (rflags & 0x200) == 0x200;
+}

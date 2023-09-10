@@ -10,6 +10,7 @@
 #include <cpu.h>
 #include <apic.h>
 #include <device/rtc.h>
+#include <device/hpet.h>
 #include <time.h>
 #include <random.h>
 
@@ -21,6 +22,8 @@ MODULE("turnstone.lib");
 #define TIME_TIMER_PIT_DATA_PORT     0x40
 
 __volatile__ uint64_t time_timer_tick_count = 0;
+__volatile__ uint64_t time_timer_old_tick_count = 0;
+__volatile__ uint64_t time_timer_ap1_tick_count = 0;
 
 __volatile__ uint64_t time_timer_spinsleep_counter_value = 0;
 __volatile__ uint8_t time_timer_start_spinsleep_counter = 0;
@@ -28,6 +31,8 @@ __volatile__ uint8_t time_timer_start_spinsleep_counter = 0;
 void time_timer_reset_tick_count(void) {
     time_timer_tick_count = 0;
 }
+
+void video_text_print(char_t* string);
 
 int8_t time_timer_pit_isr(interrupt_frame_t* frame, uint8_t intnum){
     UNUSED(frame);
@@ -52,11 +57,18 @@ void time_timer_pit_sleep(uint64_t usecs) {
     while(time_timer_tick_count <= usecs);
 }
 
+boolean_t we_sended_nmi_to_bsp = false;
+
 int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
     UNUSED(intnum);
 
-    if(apic_get_local_apic_id() == 0) {
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    if(apic_id == 0) {
+        if(time_timer_tick_count < time_timer_ap1_tick_count) {
+            time_timer_tick_count = time_timer_ap1_tick_count;
+        }
 
         time_timer_tick_count++;
 
@@ -66,11 +78,19 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
         if(TIME_EPOCH == 0 || (time_timer_tick_count % (1000 * 60 * 15)) == 0) {
             TIME_EPOCH = rtc_get_time() * 1000000;
-        } else {
+        } else if(!hpet_enabled) {
             TIME_EPOCH += 1000;
         }
 
         srand(TIME_EPOCH);
+    }
+
+    if(apic_id == 1) {
+        if(time_timer_ap1_tick_count == 0) {
+            time_timer_ap1_tick_count = time_timer_tick_count;
+        }
+
+        time_timer_ap1_tick_count++;
     }
 
     LOGBLOCK(TIMER, LOG_DEBUG) {
@@ -87,13 +107,25 @@ int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
     }
 
 
-    if(apic_get_local_apic_id() == 0) {
+    if(apic_id == 0) {
         if((time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
-            task_switch_task(true);
+            task_task_switch_set_parameters(true, false);
+            task_switch_task();
         } else {
             apic_eoi();
         }
     } else {
+        if(apic_id == 1) {
+            if(time_timer_tick_count > time_timer_old_tick_count) {
+                time_timer_old_tick_count = time_timer_tick_count;
+                we_sended_nmi_to_bsp = false;
+            } else if(!we_sended_nmi_to_bsp && time_timer_ap1_tick_count > time_timer_old_tick_count + 0x5000) {
+                // bsp may be in stuck state, wake it up
+                we_sended_nmi_to_bsp = true;
+                apic_send_nmi(0);
+            }
+        }
+
         apic_eoi();
     }
 
