@@ -455,49 +455,49 @@ int8_t usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t l
         return -1;
     }
 
-    uint64_t buffer_len = ctx->block_size;
+    //uint64_t buffer_len = ctx->block_size;
     uint8_t* tmp_data = data;
 
-    for(uint64_t i = 0; i < count; i++) {
-        uint8_t cbw_buffer[16] = {0};
-        memory_memclean(cbw_buffer, 16);
-        uint8_t cbw_buffer_len = 16;
+    //for(uint64_t i = 0; i < count; i++) {
+    uint8_t cbw_buffer[16] = {0};
+    memory_memclean(cbw_buffer, 16);
+    uint8_t cbw_buffer_len = 16;
 
-        if(ctx->usb_mass_storage->command_size_16_supported) {
-            scsi_command_write_16_t* write_16 = (scsi_command_write_16_t*)cbw_buffer;
-            write_16->opcode = SCSI_COMMAND_OPCODE_WRITE_16;
-            write_16->lba = BYTE_SWAP64(lba);
-            write_16->transfer_length = BYTE_SWAP32(1);
+    if(ctx->usb_mass_storage->command_size_16_supported) {
+        scsi_command_write_16_t* write_16 = (scsi_command_write_16_t*)cbw_buffer;
+        write_16->opcode = SCSI_COMMAND_OPCODE_WRITE_16;
+        write_16->lba = BYTE_SWAP64(lba);
+        write_16->transfer_length = BYTE_SWAP32(count);
 
-        } else {
-            cbw_buffer_len = 10;
-            scsi_command_write_10_t* write_10 = (scsi_command_write_10_t*)cbw_buffer;
-            write_10->opcode = SCSI_COMMAND_OPCODE_WRITE_10;
-            write_10->lba = BYTE_SWAP32(lba);
-            write_10->transfer_length = BYTE_SWAP16(1);
-        }
-
-        if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, ctx->block_size, USB_MASS_STORAGE_CBW_FLAG_DATA_OUT, ctx->lun, cbw_buffer_len, cbw_buffer)) {
-            PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for write command");
-
-            return -1;
-        }
-
-        if(!usb_mass_storage_read_write(ctx->usb_mass_storage, false, ctx->block_size, tmp_data)) {
-            PRINTLOG(USB, LOG_ERROR, "Failed to write data for write command");
-
-            return -1;
-        }
-
-        if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
-            PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for write command");
-
-            return -1;
-        }
-
-        lba++;
-        tmp_data += buffer_len;
+    } else {
+        cbw_buffer_len = 10;
+        scsi_command_write_10_t* write_10 = (scsi_command_write_10_t*)cbw_buffer;
+        write_10->opcode = SCSI_COMMAND_OPCODE_WRITE_10;
+        write_10->lba = BYTE_SWAP32(lba);
+        write_10->transfer_length = BYTE_SWAP16(count);
     }
+
+    if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, ctx->block_size * count, USB_MASS_STORAGE_CBW_FLAG_DATA_OUT, ctx->lun, cbw_buffer_len, cbw_buffer)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for write command");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_read_write(ctx->usb_mass_storage, false, ctx->block_size * count, tmp_data)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to write data for write command");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for write command");
+
+        return -1;
+    }
+
+    //    lba++;
+    //    tmp_data += buffer_len;
+    //}
 
 
     return 0;
@@ -516,47 +516,47 @@ int8_t usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lb
 
     uint8_t* tmp_data = *data;
 
-    for(uint64_t i = 0; i < count; i++) {
-        uint8_t cbw_buffer[16] = {0};
-        memory_memclean(cbw_buffer, 16);
-        uint8_t cbw_buffer_len = 16;
+    //for(uint64_t i = 0; i < count; i++) {
+    uint8_t cbw_buffer[16] = {0};
+    memory_memclean(cbw_buffer, 16);
+    uint8_t cbw_buffer_len = 16;
 
-        if(ctx->usb_mass_storage->command_size_16_supported) {
-            scsi_command_read_16_t* read_16 = (scsi_command_read_16_t*)cbw_buffer;
-            read_16->opcode = SCSI_COMMAND_OPCODE_READ_16;
-            read_16->lba = BYTE_SWAP64(lba);
-            read_16->transfer_length = BYTE_SWAP32(1);
+    if(ctx->usb_mass_storage->command_size_16_supported) {
+        scsi_command_read_16_t* read_16 = (scsi_command_read_16_t*)cbw_buffer;
+        read_16->opcode = SCSI_COMMAND_OPCODE_READ_16;
+        read_16->lba = BYTE_SWAP64(lba);
+        read_16->transfer_length = BYTE_SWAP32(count);
 
-        } else {
-            cbw_buffer_len = 10;
-            scsi_command_read_10_t* read_10 = (scsi_command_read_10_t*)cbw_buffer;
-            read_10->opcode = SCSI_COMMAND_OPCODE_READ_10;
-            read_10->lba = BYTE_SWAP32(lba);
-            read_10->transfer_length = BYTE_SWAP16(1);
-        }
-
-        if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, ctx->block_size, USB_MASS_STORAGE_CBW_FLAG_DATA_IN, ctx->lun, cbw_buffer_len, cbw_buffer)) {
-            PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for read command");
-
-            return -1;
-        }
-
-        if(!usb_mass_storage_read_write(ctx->usb_mass_storage, true, ctx->block_size, tmp_data)) {
-            PRINTLOG(USB, LOG_ERROR, "Failed to read data for read command");
-
-            return -1;
-        }
-
-        if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
-            PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for read command");
-
-            return -1;
-        }
-
-
-        lba++;
-        tmp_data += ctx->block_size;
+    } else {
+        cbw_buffer_len = 10;
+        scsi_command_read_10_t* read_10 = (scsi_command_read_10_t*)cbw_buffer;
+        read_10->opcode = SCSI_COMMAND_OPCODE_READ_10;
+        read_10->lba = BYTE_SWAP32(lba);
+        read_10->transfer_length = BYTE_SWAP16(count);
     }
+
+    if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, ctx->block_size * count, USB_MASS_STORAGE_CBW_FLAG_DATA_IN, ctx->lun, cbw_buffer_len, cbw_buffer)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for read command");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_read_write(ctx->usb_mass_storage, true, ctx->block_size * count, tmp_data)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to read data for read command");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for read command");
+
+        return -1;
+    }
+
+
+    //    lba++;
+    //    tmp_data += ctx->block_size;
+    //}
 
 
 
