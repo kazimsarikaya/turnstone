@@ -9,11 +9,15 @@
 #include <future.h>
 #include <random.h>
 #include <time/timer.h>
+#include <disk.h>
+#include <driver/usb_mass_storage_disk.h>
+#include <hashmap.h>
 
 
 MODULE("turnstone.kernel.hw.usb.mass_storage");
 
 typedef struct usb_driver_t {
+    uint64_t                      id;
     usb_device_t *                device;
     uint8_t                       interface_number;
     uint8_t                       in_endpoint;
@@ -22,6 +26,8 @@ typedef struct usb_driver_t {
     uint32_t                      cbw_tag;
     uint64_t                      lba_count;
     uint32_t                      block_size;
+    lock_t                        lock;
+    boolean_t                     command_size_16_supported;
     scsi_standard_inquiry_data_t* inquiry_data;
 } usb_driver_t;
 
@@ -56,6 +62,8 @@ boolean_t usb_mass_storage_send_cbw(usb_driver_t* usb_driver, uint32_t dtl, uint
 boolean_t usb_mass_storage_get_csw(usb_driver_t* usb_driver);
 boolean_t usb_mass_storage_read_write(usb_driver_t* usb_driver, boolean_t read, uint32_t dtl, uint8_t* data);
 
+hashmap_t* usb_mass_storage_disks = NULL;
+
 boolean_t usb_mass_storage_read_write(usb_driver_t* usb_driver, boolean_t read, uint32_t dtl, uint8_t* data) {
     usb_transfer_t ut = {0};
 
@@ -77,6 +85,7 @@ boolean_t usb_mass_storage_read_write(usb_driver_t* usb_driver, boolean_t read, 
 
     if(res != 0 || ut.transfer_future == NULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot get inquiry data from mass storage device");
+        lock_release(usb_driver->lock);
 
         return false;
     }
@@ -88,6 +97,8 @@ boolean_t usb_mass_storage_read_write(usb_driver_t* usb_driver, boolean_t read, 
 }
 
 boolean_t usb_mass_storage_send_cbw(usb_driver_t* usb_driver, uint32_t dtl, uint8_t flags, uint8_t lun, uint8_t command_length, uint8_t* command) {
+    lock_acquire(usb_driver->lock);
+
     usb_driver->cbw_tag = rand();
 
     usb_mass_storage_cbw_t cbw = {0};
@@ -112,6 +123,7 @@ boolean_t usb_mass_storage_send_cbw(usb_driver_t* usb_driver, uint32_t dtl, uint
 
     if(res != 0 || ut.transfer_future == NULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot send command to mass storage device");
+        lock_release(usb_driver->lock);
 
         return false;
     }
@@ -136,6 +148,7 @@ boolean_t usb_mass_storage_get_csw(usb_driver_t* usb_driver) {
 
     if(res != 0 || ut.transfer_future == NULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device");
+        lock_release(usb_driver->lock);
 
         return false;
     }
@@ -144,29 +157,34 @@ boolean_t usb_mass_storage_get_csw(usb_driver_t* usb_driver) {
 
     if(!ut.complete || !ut.success) {
         PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device");
+        lock_release(usb_driver->lock);
 
         return false;
     }
 
     if(csw.signature != USB_MASS_STORAGE_CSW_SIGNATURE) {
         PRINTLOG(USB, LOG_ERROR, "invalid csw signature: 0x%x != 0x%x", csw.signature, USB_MASS_STORAGE_CSW_SIGNATURE);
+        lock_release(usb_driver->lock);
 
         return false;
     }
 
     if(csw.tag != usb_driver->cbw_tag) {
         PRINTLOG(USB, LOG_ERROR, "invalid csw tag: 0x%x != 0x%x", csw.tag, usb_driver->cbw_tag);
+        lock_release(usb_driver->lock);
 
         return false;
     }
 
     if(csw.status != 0) {
         PRINTLOG(USB, LOG_ERROR, "invalid csw status: 0x%x", csw.status);
+        lock_release(usb_driver->lock);
 
         return false;
     }
 
-    PRINTLOG(USB, LOG_INFO, "csw received. data residue: %d", csw.data_residue);
+    PRINTLOG(USB, LOG_TRACE, "csw received. data residue: %d", csw.data_residue);
+    lock_release(usb_driver->lock);
 
     return true;
 }
@@ -176,6 +194,17 @@ boolean_t usb_mass_storage_get_csw(usb_driver_t* usb_driver) {
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t usb_mass_storage_init(usb_device_t * usb_device)
 {
+    if(usb_mass_storage_disks == NULL) {
+        usb_mass_storage_disks = hashmap_integer(64);
+
+        if(usb_mass_storage_disks == NULL) {
+            PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for mass storage disks");
+
+            return -1;
+        }
+    }
+
+
     usb_driver_t* usb_ms = memory_malloc(sizeof(usb_driver_t));
 
     if (!usb_ms) {
@@ -282,7 +311,6 @@ int8_t usb_mass_storage_init(usb_device_t * usb_device)
              usb_ms->inquiry_data->additional_length,
              usb_ms->inquiry_data->protect);
 
-    boolean_t protect = usb_ms->inquiry_data->protect & 0x01;
 
     scsi_command_test_unit_ready_t test_unit_ready = {0};
     test_unit_ready.opcode = SCSI_COMMAND_OPCODE_TEST_UNIT_READY;
@@ -303,83 +331,319 @@ int8_t usb_mass_storage_init(usb_device_t * usb_device)
         return -1;
     }
 
-    if(protect) {
-        scsi_command_read_capacity_16_t read_capacity_16 = {0};
-        read_capacity_16.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_16;
-        read_capacity_16.allocation_length[3] = sizeof(scsi_capacity_16_t);
+    scsi_command_read_capacity_16_t read_capacity_16 = {0};
+    read_capacity_16.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_16;
+    read_capacity_16.allocation_length[3] = sizeof(scsi_capacity_16_t);
 
-        if (!usb_mass_storage_send_cbw(usb_ms, sizeof(scsi_capacity_16_t), USB_MASS_STORAGE_CBW_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_16_t), (uint8_t*)&read_capacity_16)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot send read capacity command to mass storage device");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
+    if (!usb_mass_storage_send_cbw(usb_ms, sizeof(scsi_capacity_16_t), USB_MASS_STORAGE_CBW_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_16_t), (uint8_t*)&read_capacity_16)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot send read capacity 16 command to mass storage device");
+        memory_free(usb_ms->inquiry_data);
+        memory_free(usb_ms);
 
-            return -1;
-        }
-
-        scsi_capacity_16_t capacity = {0};
-
-        if(!usb_mass_storage_read_write(usb_ms, true, sizeof(scsi_capacity_16_t), (uint8_t*)&capacity)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot read capacity from mass storage device");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return -1;
-        }
-
-        if(!usb_mass_storage_get_csw(usb_ms)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, read capacity failed");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return -1;
-        }
-
-        uint64_t last_lba = BYTE_SWAP64(capacity.last_logical_block_address);
-        uint32_t block_size = BYTE_SWAP32(capacity.logical_block_length);
-
-        PRINTLOG(USB, LOG_DEBUG, "capacity: 0x%llx 0x%x", last_lba, block_size);
-
-        usb_ms->lba_count = last_lba + 1;
-        usb_ms->block_size = block_size;
-    } else {
-        scsi_command_read_capacity_10_t read_capacity_10 = {0};
-        read_capacity_10.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_10;
-
-        if (!usb_mass_storage_send_cbw(usb_ms, sizeof(scsi_capacity_10_t), USB_MASS_STORAGE_CBW_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_10_t), (uint8_t*)&read_capacity_10)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot send read capacity command to mass storage device");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return -1;
-        }
-
-        scsi_capacity_10_t capacity = {0};
-
-        if(!usb_mass_storage_read_write(usb_ms, true, sizeof(scsi_capacity_10_t), (uint8_t*)&capacity)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot read capacity from mass storage device");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return -1;
-        }
-
-        if(!usb_mass_storage_get_csw(usb_ms)) {
-            PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, read capacity failed");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return -1;
-        }
-
-        uint32_t last_lba = BYTE_SWAP32(capacity.last_logical_block_address);
-        uint32_t block_size = BYTE_SWAP32(capacity.logical_block_length);
-
-        PRINTLOG(USB, LOG_DEBUG, "capacity: 0x%x 0x%x", last_lba, block_size);
-
-        usb_ms->lba_count = last_lba + 1;
-        usb_ms->block_size = block_size;
+        return -1;
     }
+
+    scsi_capacity_16_t capacity_16 = {0};
+
+    if(!usb_mass_storage_read_write(usb_ms, true, sizeof(scsi_capacity_16_t), (uint8_t*)&capacity_16)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read capacity 16 from mass storage device");
+        memory_free(usb_ms->inquiry_data);
+        memory_free(usb_ms);
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(usb_ms)) {
+        PRINTLOG(USB, LOG_ERROR, "may be 16 bytes command not supported, try 10 bytes command");
+    } else {
+        usb_ms->command_size_16_supported = true;
+
+        uint64_t last_lba = BYTE_SWAP64(capacity_16.last_logical_block_address);
+        uint32_t block_size = BYTE_SWAP32(capacity_16.logical_block_length);
+
+        PRINTLOG(USB, LOG_DEBUG, "16 bytes command supported")
+
+        usb_ms->lba_count = last_lba + 1;
+        usb_ms->block_size = block_size;
+
+    }
+
+
+
+    scsi_command_read_capacity_10_t read_capacity_10 = {0};
+    read_capacity_10.opcode = SCSI_COMMAND_OPCODE_READ_CAPACITY_10;
+
+    if (!usb_mass_storage_send_cbw(usb_ms, sizeof(scsi_capacity_10_t), USB_MASS_STORAGE_CBW_FLAG_DATA_IN, 0, sizeof(scsi_command_read_capacity_10_t), (uint8_t*)&read_capacity_10)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot send read capacity 10 command to mass storage device");
+        memory_free(usb_ms->inquiry_data);
+        memory_free(usb_ms);
+
+        return -1;
+    }
+
+    scsi_capacity_10_t capacity_10 = {0};
+
+    if(!usb_mass_storage_read_write(usb_ms, true, sizeof(scsi_capacity_10_t), (uint8_t*)&capacity_10)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read capacity 10 from mass storage device");
+        memory_free(usb_ms->inquiry_data);
+        memory_free(usb_ms);
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(usb_ms)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, read capacity 10 failed");
+        memory_free(usb_ms->inquiry_data);
+        memory_free(usb_ms);
+
+        return -1;
+    }
+
+    uint32_t last_lba = BYTE_SWAP32(capacity_10.last_logical_block_address);
+    uint32_t block_size = BYTE_SWAP32(capacity_10.logical_block_length);
+
+    usb_ms->lba_count = last_lba + 1;
+    usb_ms->block_size = block_size;
+
+
+    PRINTLOG(USB, LOG_DEBUG, "capacity: 0x%llx, block size: 0x%x", usb_ms->lba_count, usb_ms->block_size);
+
+    usb_ms->id = hashmap_size(usb_mass_storage_disks);
+
+    hashmap_put(usb_mass_storage_disks, (void*)usb_ms->id, usb_ms);
 
     return 0;
 }
 #pragma GCC diagnostic pop
+
+uint64_t usb_mass_storage_get_disk_count(void) {
+    return hashmap_size(usb_mass_storage_disks);
+}
+
+usb_driver_t* usb_mass_storage_get_disk_by_id(uint64_t id) {
+    return (usb_driver_t*)hashmap_get(usb_mass_storage_disks, (void*)id);
+}
+
+typedef struct usb_mass_storage_disk_impl_context_t {
+    usb_driver_t* usb_mass_storage;
+    uint64_t      block_size;
+    uint8_t       lun;
+} usb_mass_storage_disk_impl_context_t;
+
+uint64_t usb_mass_storage_disk_impl_get_size(const disk_or_partition_t* d);
+uint64_t usb_mass_storage_disk_impl_get_block_size(const disk_or_partition_t* d);
+int8_t   usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t   usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t   usb_mass_storage_disk_impl_flush(const disk_or_partition_t* d);
+int8_t   usb_mass_storage_disk_impl_close(const disk_or_partition_t* d);
+
+
+uint64_t usb_mass_storage_disk_impl_get_size(const disk_or_partition_t* d){
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+    return ctx->usb_mass_storage->lba_count * ctx->block_size;
+}
+
+uint64_t usb_mass_storage_disk_impl_get_block_size(const disk_or_partition_t* d){
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+    return ctx->block_size;
+}
+
+int8_t usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+
+    if(data == NULL) {
+        return -1;
+    }
+
+    uint64_t buffer_len = ctx->block_size;
+    uint8_t* tmp_data = data;
+
+    for(uint64_t i = 0; i < count; i++) {
+        uint8_t cbw_buffer[16] = {0};
+        memory_memclean(cbw_buffer, 16);
+        uint8_t cbw_buffer_len = 16;
+
+        if(ctx->usb_mass_storage->command_size_16_supported) {
+            scsi_command_write_16_t* write_16 = (scsi_command_write_16_t*)cbw_buffer;
+            write_16->opcode = SCSI_COMMAND_OPCODE_WRITE_16;
+            write_16->lba = BYTE_SWAP64(lba);
+            write_16->transfer_length = BYTE_SWAP32(1);
+
+        } else {
+            cbw_buffer_len = 10;
+            scsi_command_write_10_t* write_10 = (scsi_command_write_10_t*)cbw_buffer;
+            write_10->opcode = SCSI_COMMAND_OPCODE_WRITE_10;
+            write_10->lba = BYTE_SWAP32(lba);
+            write_10->transfer_length = BYTE_SWAP16(1);
+        }
+
+        if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, ctx->block_size, USB_MASS_STORAGE_CBW_FLAG_DATA_OUT, ctx->lun, cbw_buffer_len, cbw_buffer)) {
+            PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for write command");
+
+            return -1;
+        }
+
+        if(!usb_mass_storage_read_write(ctx->usb_mass_storage, false, ctx->block_size, tmp_data)) {
+            PRINTLOG(USB, LOG_ERROR, "Failed to write data for write command");
+
+            return -1;
+        }
+
+        if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
+            PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for write command");
+
+            return -1;
+        }
+
+        lba++;
+        tmp_data += buffer_len;
+    }
+
+
+    return 0;
+}
+
+int8_t usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+
+    uint64_t buffer_len = count * ctx->block_size;
+
+    *data = memory_malloc_ext(NULL, buffer_len, 0x1000);
+
+    if(*data == NULL) {
+        return -1;
+    }
+
+    uint8_t* tmp_data = *data;
+
+    for(uint64_t i = 0; i < count; i++) {
+        uint8_t cbw_buffer[16] = {0};
+        memory_memclean(cbw_buffer, 16);
+        uint8_t cbw_buffer_len = 16;
+
+        if(ctx->usb_mass_storage->command_size_16_supported) {
+            scsi_command_read_16_t* read_16 = (scsi_command_read_16_t*)cbw_buffer;
+            read_16->opcode = SCSI_COMMAND_OPCODE_READ_16;
+            read_16->lba = BYTE_SWAP64(lba);
+            read_16->transfer_length = BYTE_SWAP32(1);
+
+        } else {
+            cbw_buffer_len = 10;
+            scsi_command_read_10_t* read_10 = (scsi_command_read_10_t*)cbw_buffer;
+            read_10->opcode = SCSI_COMMAND_OPCODE_READ_10;
+            read_10->lba = BYTE_SWAP32(lba);
+            read_10->transfer_length = BYTE_SWAP16(1);
+        }
+
+        if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, ctx->block_size, USB_MASS_STORAGE_CBW_FLAG_DATA_IN, ctx->lun, cbw_buffer_len, cbw_buffer)) {
+            PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for read command");
+
+            return -1;
+        }
+
+        if(!usb_mass_storage_read_write(ctx->usb_mass_storage, true, ctx->block_size, tmp_data)) {
+            PRINTLOG(USB, LOG_ERROR, "Failed to read data for read command");
+
+            return -1;
+        }
+
+        if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
+            PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for read command");
+
+            return -1;
+        }
+
+
+        lba++;
+        tmp_data += ctx->block_size;
+    }
+
+
+
+    return 0;
+}
+
+int8_t usb_mass_storage_disk_impl_flush(const disk_or_partition_t* d) {
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+
+    uint8_t buffer[16] = {0};
+    memory_memclean(buffer, 16);
+    uint8_t buffer_len = 16;
+
+    if(ctx->usb_mass_storage->command_size_16_supported) {
+        scsi_command_sync_cache_16_t* sync_cache_16 = (scsi_command_sync_cache_16_t*)buffer;
+        sync_cache_16->opcode = SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_16;
+        sync_cache_16->immed = 1;
+        sync_cache_16->lba = 0;
+        sync_cache_16->number_of_blocks = BYTE_SWAP32(ctx->usb_mass_storage->lba_count);
+    } else {
+        buffer_len = 10;
+        scsi_command_sync_cache_10_t* sync_cache = (scsi_command_sync_cache_10_t*)buffer;
+        sync_cache->opcode = SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_10;
+        sync_cache->immed = 1;
+        sync_cache->lba = 0;
+        sync_cache->number_of_blocks = BYTE_SWAP16(ctx->usb_mass_storage->lba_count);
+    }
+
+    if(!usb_mass_storage_send_cbw(ctx->usb_mass_storage, 0, USB_MASS_STORAGE_CBW_FLAG_NO_DATA, ctx->lun, buffer_len, buffer)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to send CBW for sync cache command");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(ctx->usb_mass_storage)) {
+        PRINTLOG(USB, LOG_ERROR, "Failed to receive CSW for sync cache command");
+
+        return -1;
+    }
+
+
+    return 0;
+}
+
+int8_t usb_mass_storage_disk_impl_close(const disk_or_partition_t* d) {
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+
+    d->flush(d);
+
+    memory_free(ctx);
+
+    memory_free((void*)d);
+
+    return 0;
+}
+
+disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_mass_storage, uint8_t lun) {
+
+    if(usb_mass_storage == NULL) {
+        return NULL;
+    }
+
+    usb_mass_storage_disk_impl_context_t* ctx = memory_malloc(sizeof(usb_mass_storage_disk_impl_context_t));
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
+    ctx->usb_mass_storage = usb_mass_storage;
+    ctx->block_size = usb_mass_storage->block_size;
+    ctx->lun = lun;
+
+    disk_t* d = memory_malloc(sizeof(disk_t));
+
+    if(d == NULL) {
+        memory_free(ctx);
+
+        return NULL;
+    }
+
+    d->disk.context = ctx;
+    d->disk.get_size = usb_mass_storage_disk_impl_get_size;
+    d->disk.get_block_size = usb_mass_storage_disk_impl_get_block_size;
+    d->disk.write = usb_mass_storage_disk_impl_write;
+    d->disk.read = usb_mass_storage_disk_impl_read;
+    d->disk.flush = usb_mass_storage_disk_impl_flush;
+    d->disk.close = usb_mass_storage_disk_impl_close;
+
+    return d;
+}

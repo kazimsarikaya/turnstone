@@ -42,7 +42,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-usbstick ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_ehci_guest_bug,trace:usb_uas*,trace:usb_msd*"\
+  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_ehci_guest_bug"\
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \

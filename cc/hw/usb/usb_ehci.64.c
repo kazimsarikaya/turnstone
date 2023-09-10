@@ -307,16 +307,21 @@ int8_t usb_ehci_init_qh(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb
     UNUSED(usb_controller);
 
     uint32_t endpoint_number = 0;
+    uint32_t max_packet_length = 0;
 
     if(transfer->endpoint && transfer->length) {
         endpoint_number = transfer->endpoint->desc->endpoint_address;
+        max_packet_length = transfer->endpoint->desc->max_packet_size;
+    } else {
+        endpoint_number = 0;
+        max_packet_length = transfer->device->max_packet_size;
     }
 
 
     qh->endpoint_characteristics.bits.endpoint_speed = transfer->device->speed;
     qh->endpoint_characteristics.bits.endpoint_number = endpoint_number;
     qh->endpoint_characteristics.bits.device_address = transfer->device->address;
-    qh->endpoint_characteristics.bits.max_packet_length = transfer->device->max_packet_size;
+    qh->endpoint_characteristics.bits.max_packet_length = max_packet_length;
     qh->endpoint_characteristics.bits.data_toggle_control = 1;
 
 
@@ -1582,7 +1587,7 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
             uint64_t next_qh_fa = mem_hi | (qh->horizontal_link_pointer.raw & 0xFFFFFFE0);
 
             if(next_qh_fa == 0) {
-                PRINTLOG(USB, LOG_ERROR, "next qh fa is 0");
+                PRINTLOG(USB, LOG_TRACE, "next qh fa is 0");
                 break;
             }
 

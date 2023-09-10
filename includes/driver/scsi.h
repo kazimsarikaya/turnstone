@@ -16,8 +16,11 @@ typedef enum scsi_command_opcode_t {
     SCSI_COMMAND_OPCODE_READ_CAPACITY_16 = 0x9E,
     SCSI_COMMAND_OPCODE_READ_CAPACITY_10 = 0x25,
     SCSI_COMMAND_OPCODE_READ_16 = 0x88,
+    SCSI_COMMAND_OPCODE_READ_10 = 0x28,
     SCSI_COMMAND_OPCODE_WRITE_16 = 0x8A,
+    SCSI_COMMAND_OPCODE_WRITE_10 = 0x2A,
     SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_16 = 0x91,
+    SCSI_COMMAND_OPCODE_SYNCHRONIZE_CACHE_10 = 0x35,
 } scsi_command_opcode_t;
 
 typedef struct scsi_command_status_t {
@@ -115,5 +118,102 @@ typedef struct scsi_capacity_10_t {
 }__attribute__((packed)) scsi_capacity_10_t;
 
 _Static_assert(sizeof(scsi_capacity_10_t) == 8, "scsi_capacity_10_t size mismatch");
+
+typedef struct scsi_command_read_16_t {
+    uint8_t  opcode;
+    uint8_t  dld2      : 1;
+    uint8_t  reserved1 : 1;
+    uint8_t  rarc      : 1;
+    uint8_t  fua       : 1;
+    uint8_t  dpo       : 1;
+    uint8_t  rdprotect : 3;
+    uint64_t lba;
+    uint32_t transfer_length;
+    uint8_t  group_number : 6;
+    uint8_t  dld0         : 1;
+    uint8_t  dld1         : 1;
+    uint8_t  control;
+}__attribute__((packed)) scsi_command_read_16_t;
+
+_Static_assert(sizeof(scsi_command_read_16_t) == 16, "scsi_command_read_16_t size mismatch");
+
+typedef struct scsi_command_read_10_t {
+    uint8_t  opcode;
+    uint8_t  reserved0 : 2;
+    uint8_t  rarc      : 1;
+    uint8_t  fua       : 1;
+    uint8_t  dpo       : 1;
+    uint8_t  rdprotect : 3;
+    uint32_t lba;
+    uint8_t  group_number : 5;
+    uint8_t  reserved2    : 3;
+    uint16_t transfer_length;
+    uint8_t  control;
+}__attribute__((packed)) scsi_command_read_10_t;
+
+_Static_assert(sizeof(scsi_command_read_10_t) == 10, "scsi_command_read_10_t size mismatch");
+
+typedef struct scsi_command_write_16_t {
+    uint8_t  opcode;
+    uint8_t  dld2      : 1;
+    uint8_t  reserved1 : 1;
+    uint8_t  rarc      : 1;
+    uint8_t  fua       : 1;
+    uint8_t  dpo       : 1;
+    uint8_t  wrprotect : 3;
+    uint64_t lba;
+    uint32_t transfer_length;
+    uint8_t  group_number : 6;
+    uint8_t  dld0         : 1;
+    uint8_t  dld1         : 1;
+    uint8_t  control;
+}__attribute__((packed)) scsi_command_write_16_t;
+
+_Static_assert(sizeof(scsi_command_write_16_t) == 16, "scsi_command_write_16_t size mismatch");
+
+typedef struct scsi_command_write_10_t {
+    uint8_t  opcode;
+    uint8_t  reserved0 : 2;
+    uint8_t  rarc      : 1;
+    uint8_t  fua       : 1;
+    uint8_t  dpo       : 1;
+    uint8_t  rdprotect : 3;
+    uint32_t lba;
+    uint8_t  group_number : 5;
+    uint8_t  reserved2    : 3;
+    uint16_t transfer_length;
+    uint8_t  control;
+}__attribute__((packed)) scsi_command_write_10_t;
+
+_Static_assert(sizeof(scsi_command_write_10_t) == 10, "scsi_command_write_10_t size mismatch");
+
+typedef struct scsi_command_sync_cache_16_t {
+    uint8_t  opcode;
+    uint8_t  reserved0 : 1;
+    uint8_t  immed     : 1;
+    uint8_t  reserved1 : 6;
+    uint64_t lba;
+    uint32_t number_of_blocks;
+    uint8_t  group_number : 5;
+    uint8_t  reserved2    : 3;
+    uint8_t  control;
+}__attribute__((packed)) scsi_command_sync_cache_16_t;
+
+_Static_assert(sizeof(scsi_command_sync_cache_16_t) == 16, "scsi_command_sync_cache_16_t size mismatch");
+
+typedef struct scsi_command_sync_cache_10_t {
+    uint8_t  opcode;
+    uint8_t  reserved0 : 1;
+    uint8_t  immed     : 1;
+    uint8_t  reserved1 : 6;
+    uint32_t lba;
+    uint8_t  group_number : 5;
+    uint8_t  reserved2    : 3;
+    uint16_t number_of_blocks;
+    uint8_t  control;
+}__attribute__((packed)) scsi_command_sync_cache_10_t;
+
+_Static_assert(sizeof(scsi_command_sync_cache_10_t) == 10, "scsi_command_sync_cache_10_t size mismatch");
+
 
 #endif /* ___SCSI_H */
