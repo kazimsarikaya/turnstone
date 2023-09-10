@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#define RAMSIZE (128 << 20)
+#define RAMSIZE (256 << 20)
 #include "setup.h"
 #include <utils.h>
 #include <buffer.h>
