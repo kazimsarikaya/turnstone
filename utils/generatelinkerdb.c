@@ -501,7 +501,6 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
 
     if(!rec_impl) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create record for table 'implementations'");
-
         return false;
     }
 
