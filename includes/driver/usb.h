@@ -349,14 +349,33 @@ typedef enum usb_class_t {
     USB_CLASS_VENDOR_SPECIFIC = 0xFF,
 } usb_interface_class_t;
 
-typedef enum usb_subclass_t {
-    USB_SUBCLASS_BOOT = 0x01,
-} usb_interface_subclass_t;
+typedef enum usb_subclass_hid_t {
+    USB_SUBCLASS_HID_NO_SUBCLASS = 0x00,
+    USB_SUBCLASS_HID_BOOT_INTERFACE_SUBCLASS = 0x01,
+} usb_interface_subclass_hid_t;
 
-typedef enum usb_protocol_t {
-    USB_PROTOCOL_KEYBOARD = 0x01,
-    USB_PROTOCOL_MOUSE = 0x02,
-} usb_interface_protocol_t;
+typedef enum usb_subclass_mass_storage_t {
+    USB_SUBCLASS_MASS_STORAGE_SCSI = 0x06,
+    USB_SUBCLASS_MASS_STORAGE_UFI = 0x04,
+    USB_SUBCLASS_MASS_STORAGE_SFF_8070I = 0x05,
+    USB_SUBCLASS_MASS_STORAGE_SCSI_TRANSPARENT_COMMAND_SET = 0x06,
+    USB_SUBCLASS_MASS_STORAGE_LSDFS = 0x07,
+    USB_SUBCLASS_MASS_STORAGE_IEEE1667 = 0x08,
+    USB_SUBCLASS_MASS_STORAGE_VENDOR_SPECIFIC = 0xFF,
+} usb_interface_subclass_mass_storage_t;
+
+typedef enum usb_protocol_hid_t {
+    USB_PROTOCOL_HID_NO_PROTOCOL = 0x00,
+    USB_PROTOCOL_HID_KEYBOARD = 0x01,
+    USB_PROTOCOL_HID_MOUSE = 0x02,
+} usb_interface_protocol_hid_t;
+
+typedef enum usb_protocol_mass_storage_t {
+    USB_PROTOCOL_MASS_STORAGE_CBI = 0x00,
+    USB_PROTOCOL_MASS_STORAGE_CBI_NO_INTERRUPT = 0x01,
+    USB_PROTOCOL_MASS_STORAGE_BULK_ONLY = 0x50,
+    USB_PROTOCOL_MASS_STORAGE_UAS = 0x62,
+} usb_interface_protocol_mass_storage_t;
 
 int8_t usb_init(void);
 
@@ -365,6 +384,8 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 int8_t usb_probe_all_devices_all_ports(void);
 
 int8_t usb_keyboard_init(usb_device_t* device);
+
+int8_t usb_mass_storage_init(usb_device_t* device);
 
 boolean_t usb_device_request(usb_device_t*           usb_device,
                              usb_request_type_t      request_type,

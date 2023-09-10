@@ -42,7 +42,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-usbstick ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_ehci_guest_bug"\
+  -nodefaults -no-user-config -no-reboot --no-shutdown -d "trace:usb_ehci_guest_bug,trace:usb_uas*,trace:usb_msd*"\
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
@@ -58,7 +58,7 @@ qemu-system-x86_64 \
   -device usb-ehci,id=ehci \
   -device usb-kbd,bus=ehci.0,port=1,id=usbkbd \
   -device qemu-xhci,id=xhci \
-  -device usb-storage,id=usbstorage0,bus=xhci.0,port=2,drive=usbstick,logical_block_size=4096,physical_block_size=4096\
+  -device usb-storage,id=usbstorage0,bus=ehci.0,port=2,drive=usbstick \
   -drive id=usbstick,if=none,format=raw,file=${OUTPUTDIR}/qemu-usbstick,werror=report,rerror=report \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \

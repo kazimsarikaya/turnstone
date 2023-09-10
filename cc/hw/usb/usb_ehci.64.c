@@ -1580,6 +1580,12 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
             }
 
             uint64_t next_qh_fa = mem_hi | (qh->horizontal_link_pointer.raw & 0xFFFFFFE0);
+
+            if(next_qh_fa == 0) {
+                PRINTLOG(USB, LOG_ERROR, "next qh fa is 0");
+                break;
+            }
+
             uint64_t next_qh_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(next_qh_fa);
 
             qh = (usb_ehci_qh_t*)next_qh_va;
