@@ -10,6 +10,7 @@
 #include <data.h>
 #include <sha2.h>
 #include <bplustree.h>
+#include <rbtree.h>
 #include <map.h>
 #include <xxhash.h>
 #include <tosdb/tosdb.h>
@@ -38,17 +39,27 @@ typedef struct linkerdb_t {
     tosdb_t*         tdb;
 } linkerdb_t;
 
+typedef struct linkerdb_ids_and_stats_t {
+    uint64_t sec_id;
+    uint64_t sym_id;
+    uint64_t reloc_id;
+    uint64_t nm_id;
+    uint64_t implementation_id;
+    uint64_t sec_count;
+    uint64_t sym_count;
+    uint64_t reloc_count;
+    uint64_t nm_count;
+    uint64_t implementation_count;
+} linkerdb_ids_and_stats_t;
+
 int32_t     main(int32_t argc, char_t** argv);
 linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity);
 boolean_t   linkerdb_close(linkerdb_t* ldb);
 boolean_t   linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const uint64_t stack_size);
 boolean_t   linkerdb_create_tables(linkerdb_t* ldb);
-boolean_t   linkerdb_parse_object_file(linkerdb_t*   ldb,
-                                       const char_t* filename,
-                                       uint64_t*     sec_id,
-                                       uint64_t*     sym_id,
-                                       uint64_t*     reloc_id,
-                                       uint64_t*     nm_id);
+boolean_t   linkerdb_parse_object_file(linkerdb_t*               ldb,
+                                       const char_t*             filename,
+                                       linkerdb_ids_and_stats_t* is);
 boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb);
 
 
@@ -195,21 +206,21 @@ boolean_t linkerdb_close(linkerdb_t* ldb) {
 boolean_t linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const uint64_t stack_size) {
     tosdb_t* tdb = ldb->tdb;
 
-    tosdb_database_t* db = tosdb_database_create_or_open(tdb, (char_t*)"system");
+    tosdb_database_t* db = tosdb_database_create_or_open(tdb, "system");
 
     if(!db) {
         return false;
     }
 
-    tosdb_table_t* tbl_config = tosdb_table_create_or_open(db, (char_t*)"config", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_config = tosdb_table_create_or_open(db, "config", 1 << 10, 512 << 10, 8);
 
     if(!tbl_config) {
         return false;
     }
 
-    tosdb_table_column_add(tbl_config, (char_t*)"name", DATA_TYPE_STRING);
-    tosdb_table_column_add(tbl_config, (char_t*)"value", DATA_TYPE_INT8_ARRAY);
-    tosdb_table_index_create(tbl_config, (char_t*)"name", TOSDB_INDEX_PRIMARY);
+    tosdb_table_column_add(tbl_config, "name", DATA_TYPE_STRING);
+    tosdb_table_column_add(tbl_config, "value", DATA_TYPE_INT8_ARRAY);
+    tosdb_table_index_create(tbl_config, "name", TOSDB_INDEX_PRIMARY);
 
     tosdb_record_t* rec = tosdb_table_create_record(tbl_config);
     rec->set_string(rec, "name", "entry_point");
@@ -229,189 +240,276 @@ boolean_t linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const 
 boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
     tosdb_t* tdb = ldb->tdb;
 
-    tosdb_database_t* db = tosdb_database_create_or_open(tdb, (char_t*)"system");
+    tosdb_database_t* db = tosdb_database_create_or_open(tdb, "system");
 
     if(!db) {
         return false;
     }
 
-    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db, (char_t*)"modules", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db, "modules", 1 << 10, 512 << 10, 8);
 
     if(!tbl_modules) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_modules, (char_t*)"id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_modules, "id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_modules, (char_t*)"name", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(tbl_modules, "name", DATA_TYPE_STRING)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_modules, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+    if(!tosdb_table_index_create(tbl_modules, "id", TOSDB_INDEX_PRIMARY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_modules, (char_t*)"name", TOSDB_INDEX_UNIQUE)) {
+    if(!tosdb_table_index_create(tbl_modules, "name", TOSDB_INDEX_UNIQUE)) {
         return false;
     }
 
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, (char_t*)"sections", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_implementations = tosdb_table_create_or_open(db, "implementations", 1 << 10, 512 << 10, 8);
+
+    if(!tbl_implementations) {
+        return false;
+    }
+
+    if(!tosdb_table_column_add(tbl_implementations, "id", DATA_TYPE_INT64)) {
+        return false;
+    }
+
+    if(!tosdb_table_column_add(tbl_implementations, "name", DATA_TYPE_STRING)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_implementations, "id", TOSDB_INDEX_PRIMARY)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_implementations, "name", TOSDB_INDEX_UNIQUE)) {
+        return false;
+    }
+
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, "sections", 1 << 10, 512 << 10, 8);
 
     if(!tbl_sections) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_sections, "id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"name", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(tbl_sections, "module_id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"module_id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_sections, "implementation_id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"alignment", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_sections, "name", DATA_TYPE_STRING)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"class", DATA_TYPE_INT8)) {
+    if(!tosdb_table_column_add(tbl_sections, "alignment", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"size", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_sections, "class", DATA_TYPE_INT8)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"type", DATA_TYPE_INT8)) {
+    if(!tosdb_table_column_add(tbl_sections, "size", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_sections, (char_t*)"value", DATA_TYPE_INT8_ARRAY)) {
+    if(!tosdb_table_column_add(tbl_sections, "type", DATA_TYPE_INT8)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_sections, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+    if(!tosdb_table_column_add(tbl_sections, "value", DATA_TYPE_INT8_ARRAY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_sections, (char_t*)"name", TOSDB_INDEX_UNIQUE)) {
+    if(!tosdb_table_index_create(tbl_sections, "id", TOSDB_INDEX_PRIMARY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_sections, (char_t*)"module_id", TOSDB_INDEX_SECONDARY)) {
+    if(!tosdb_table_index_create(tbl_sections, "implementation_id", TOSDB_INDEX_SECONDARY)) {
         return false;
     }
 
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, (char_t*)"symbols", 1 << 10, 512 << 10, 8);
+    if(!tosdb_table_index_create(tbl_sections, "name", TOSDB_INDEX_SECONDARY)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_sections, "module_id", TOSDB_INDEX_SECONDARY)) {
+        return false;
+    }
+
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
 
     if(!tbl_symbols) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_symbols, "id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"section_id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_symbols, "implementation_id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"name", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(tbl_symbols, "section_id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"type", DATA_TYPE_INT8)) {
+    if(!tosdb_table_column_add(tbl_symbols, "name", DATA_TYPE_STRING)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"scope", DATA_TYPE_INT8)) {
+    if(!tosdb_table_column_add(tbl_symbols, "type", DATA_TYPE_INT8)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"value", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_symbols, "scope", DATA_TYPE_INT8)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_symbols, (char_t*)"size", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_symbols, "value", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_symbols, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+    if(!tosdb_table_column_add(tbl_symbols, "size", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_symbols, (char_t*)"name", TOSDB_INDEX_UNIQUE)) {
+    if(!tosdb_table_index_create(tbl_symbols, "id", TOSDB_INDEX_PRIMARY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_symbols, (char_t*)"section_id", TOSDB_INDEX_SECONDARY)) {
+    if(!tosdb_table_index_create(tbl_symbols, "implementation_id", TOSDB_INDEX_SECONDARY)) {
         return false;
     }
 
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, (char_t*)"relocations", 1 << 10, 512 << 10, 8);
+    if(!tosdb_table_index_create(tbl_symbols, "section_id", TOSDB_INDEX_SECONDARY)) {
+        return false;
+    }
+
+    if(!tosdb_table_index_create(tbl_symbols, "name", TOSDB_INDEX_SECONDARY)) {
+        return false;
+    }
+
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, "relocations", 1 << 10, 512 << 10, 8);
 
     if(!tbl_relocations) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_relocations, "id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"section_id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_relocations, "section_id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"symbol_name", DATA_TYPE_STRING)) {
+    if(!tosdb_table_column_add(tbl_relocations, "symbol_name", DATA_TYPE_STRING)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"symbol_section_id", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_relocations, "symbol_section_id", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"type", DATA_TYPE_INT8)) {
+    if(!tosdb_table_column_add(tbl_relocations, "type", DATA_TYPE_INT8)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"offset", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_relocations, "offset", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_column_add(tbl_relocations, (char_t*)"addend", DATA_TYPE_INT64)) {
+    if(!tosdb_table_column_add(tbl_relocations, "addend", DATA_TYPE_INT64)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_relocations, (char_t*)"id", TOSDB_INDEX_PRIMARY)) {
+    if(!tosdb_table_index_create(tbl_relocations, "id", TOSDB_INDEX_PRIMARY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_relocations, (char_t*)"section_id", TOSDB_INDEX_SECONDARY)) {
+    if(!tosdb_table_index_create(tbl_relocations, "section_id", TOSDB_INDEX_SECONDARY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_relocations, (char_t*)"symbol_name", TOSDB_INDEX_SECONDARY)) {
+    if(!tosdb_table_index_create(tbl_relocations, "symbol_name", TOSDB_INDEX_SECONDARY)) {
         return false;
     }
 
-    if(!tosdb_table_index_create(tbl_relocations, (char_t*)"symbol_section_id", TOSDB_INDEX_SECONDARY)) {
+    if(!tosdb_table_index_create(tbl_relocations, "symbol_section_id", TOSDB_INDEX_SECONDARY)) {
         return false;
     }
 
     return true;
 }
 
-boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
-                                     const char_t* filename,
-                                     uint64_t*     sec_id,
-                                     uint64_t*     sym_id,
-                                     uint64_t*     reloc_id,
-                                     uint64_t*     nm_id) {
+boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
+                                     const char_t*             filename,
+                                     linkerdb_ids_and_stats_t* is){
+
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+
+    tosdb_table_t* tbl_implementations = tosdb_table_create_or_open(db_system, "implementations", 1 << 10, 512 << 10, 8);
+
+    if(!tbl_implementations) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot open table 'implementations'\n");
+
+        return false;
+    }
+
+    uint64_t impl_name_end = 0;
+    uint64_t impl_name_start = 0;
+
+    for(uint64_t i = strlen(filename); i > 0; i--) {
+        if(filename[i] == '.') {
+            impl_name_end = i;
+        }
+
+        if(filename[i] == '/') {
+            impl_name_start = i + 1;
+            break;
+        }
+    }
+
+    char_t* impl_name = memory_malloc(impl_name_end - impl_name_start + 1);
+    memory_memcopy(filename + impl_name_start, impl_name, impl_name_end - impl_name_start);
+
+    tosdb_record_t* rec_impl = tosdb_table_create_record(tbl_implementations);
+
+    if(!rec_impl) {
+        return false;
+    }
+
+    uint64_t impl_id = is->implementation_id;
+
+    rec_impl->set_int64(rec_impl, "id", impl_id);
+    rec_impl->set_string(rec_impl, "name", impl_name);
+
+    memory_free(impl_name);
+
+    if(!rec_impl->upsert_record(rec_impl)) {
+        rec_impl->destroy(rec_impl);
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot insert record into table 'implementations'\n");
+
+        return false;
+    }
+
+    rec_impl->destroy(rec_impl);
+
+    is->implementation_id++;
+    is->implementation_count++;
 
     FILE* fp = fopen(filename, "r");
 
@@ -498,9 +596,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
     uint8_t* symbols = NULL;
     uint64_t symbol_count = 0;
 
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, (char_t*)"system");
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, (char_t*)"sections", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, (char_t*)"modules", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
 
 
     boolean_t error = false;
@@ -539,7 +636,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
             if(mn_rec->get_record(mn_rec)) {
                 mn_rec->get_int64(mn_rec, "id", &module_id);
             } else {
-                mn_rec->set_int64(mn_rec, "id", *nm_id);
+                mn_rec->set_int64(mn_rec, "id", is->nm_id);
 
                 if(!mn_rec->upsert_record(mn_rec)) {
                     print_error("cannot insert module into linker db");
@@ -548,8 +645,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
                     break;
                 }
 
-                module_id = *nm_id;
-                (*nm_id)++;
+                module_id = is->nm_id;
+                is->nm_id++;
+                is->nm_count++;
             }
 
             mn_rec->destroy(mn_rec);
@@ -571,8 +669,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
         goto close;
     }
 
-    uint64_t sec_id_base = *sec_id;
-    (*sec_id) += e_shnum;
+    uint64_t sec_id_base = is->sec_id;
+    is->sec_id += e_shnum;
 
     for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
         uint64_t sec_size = ELF_SECTION_SIZE(e_class, sections, sec_idx);
@@ -637,6 +735,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
             }
 
             rec->set_int64(rec, "id", sec_id_base + sec_idx);
+            rec->set_int64(rec, "implementation_id", impl_id);
             rec->set_string(rec, "name", sec_name);
             rec->set_int64(rec, "module_id", module_id);
             rec->set_int64(rec, "alignment", ELF_SECTION_ALIGN(e_class, sections, sec_idx));
@@ -673,6 +772,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
                 break;
             }
 
+            is->sec_count++;
         }
     }
 
@@ -685,10 +785,10 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
         goto close;
     }
 
-    uint64_t sym_id_base = *sym_id;
-    (*sym_id) += symbol_count;
+    uint64_t sym_id_base = is->sym_id;
+    is->sym_id += symbol_count;
 
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, (char_t*)"symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
 
     for(uint16_t sym_idx = 0; sym_idx < symbol_count; sym_idx++) {
         uint8_t sym_type = ELF_SYMBOL_TYPE(e_class, symbols, sym_idx);
@@ -741,6 +841,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
         tosdb_record_t* rec = tosdb_table_create_record(tbl_symbols);
 
         rec->set_int64(rec, "id", sym_id_base + sym_idx);
+        rec->set_int64(rec, "implementation_id", impl_id);
         rec->set_int64(rec, "section_id", sym_sec_id);
         rec->set_string(rec, "name", sym_name);
         rec->set_int8(rec, "type", sym_type);
@@ -762,13 +863,14 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
             break;
         }
 
+        is->sym_count++;
     }
 
     if(error) {
         goto close;
     }
 
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, (char_t*)"relocations", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
 
     for(uint16_t sec_idx = 0; sec_idx < e_shnum; sec_idx++) {
         uint8_t is_rela = 0;
@@ -922,7 +1024,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
                 break;
             }
 
-            rec->set_int64(rec, "id", *reloc_id);
+            rec->set_int64(rec, "id", is->reloc_id);
             rec->set_int64(rec, "section_id", reloc_sec_id);
             rec->set_string(rec, "symbol_name", reloc_sym_name);
             rec->set_int64(rec, "symbol_section_id", reloc_sym_sec_id);
@@ -950,7 +1052,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*   ldb,
                 break;
             }
 
-            (*reloc_id)++;
+            is->reloc_id++;
+            is->reloc_count++;
         }
 
         memory_free(relocs);
@@ -972,9 +1075,9 @@ close:
 }
 
 boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, (char_t*)"system");
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, (char_t*)"relocations", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, (char_t*)"symbols", 1 << 10, 512 << 10, 8);
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
 
     tosdb_record_t* s_recs_need = tosdb_table_create_record(tbl_relocations);
 
@@ -995,6 +1098,8 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
         return false;
     }
 
+    PRINTLOG(LINKER, LOG_INFO, "record need fix count: %lli", linkedlist_size(res_recs));
+
     iterator_t* iter = linkedlist_iterator_create(res_recs);
 
     if(!iter) {
@@ -1009,6 +1114,12 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     set_t* set_nf = set_string();
 
+    uint64_t nf_count = 0;
+
+    set_t* set_dup = set_string();
+
+    uint64_t dup_count = 0;
+
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_record_t* reloc_rec = (tosdb_record_t*)iter->delete_item(iter);
 
@@ -1021,7 +1132,8 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         reloc_rec->get_string(reloc_rec, "symbol_name", &sym_name);
 
-        if(!sym_name) {
+        if(!sym_name || strlen(sym_name) == 0) {
+            print_error("cannot get symbol name of reloc record");
             error = true;
             reloc_rec->destroy(reloc_rec);
 
@@ -1032,6 +1144,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         if(!s_sym_rec) {
             error = true;
+            memory_free(sym_name);
             reloc_rec->destroy(reloc_rec);
 
             break;
@@ -1039,11 +1152,24 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         s_sym_rec->set_string(s_sym_rec, "name", sym_name);
 
-        if(!s_sym_rec->get_record(s_sym_rec)) {
+        linkedlist_t s_sym_recs = s_sym_rec->search_record(s_sym_rec);
+
+        if(!s_sym_recs) {
+            error = true;
+            memory_free(sym_name);
+            reloc_rec->destroy(reloc_rec);
+
+            break;
+        }
+
+        if(linkedlist_size(s_sym_recs) == 0) {
             if(!set_append(set_nf, sym_name)) {
                 memory_free(sym_name);
             }
 
+            nf_count++;
+
+            linkedlist_destroy(s_sym_recs);
             s_sym_rec->destroy(s_sym_rec);
             reloc_rec->destroy(reloc_rec);
             iter = iter->next(iter);
@@ -1051,7 +1177,39 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
             continue;
         }
 
+        if(linkedlist_size(s_sym_recs) > 1) {
+            if(!set_append(set_dup, sym_name)) {
+                memory_free(sym_name);
+            }
+
+            dup_count++;
+
+            iterator_t* iter_dup = linkedlist_iterator_create(s_sym_recs);
+
+            while(iter_dup->end_of_iterator(iter_dup) != 0) {
+                tosdb_record_t* dup_rec = (tosdb_record_t*)iter_dup->get_item(iter_dup);
+
+                dup_rec->destroy(dup_rec);
+
+                iter_dup = iter_dup->next(iter_dup);
+            }
+
+            iter_dup->destroy(iter_dup);
+
+            linkedlist_destroy(s_sym_recs);
+            s_sym_rec->destroy(s_sym_rec);
+            reloc_rec->destroy(reloc_rec);
+
+            continue;
+        }
+
         memory_free(sym_name);
+
+        s_sym_rec->destroy(s_sym_rec);
+
+        s_sym_rec = (tosdb_record_t*)linkedlist_delete_at_tail(s_sym_recs);
+
+        linkedlist_destroy(s_sym_recs);
 
         uint64_t sec_id = 0;
 
@@ -1084,21 +1242,45 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
     linkedlist_destroy(res_recs);
     s_recs_need->destroy(s_recs_need);
 
-    iter = set_create_iterator(set_nf);
+    if(nf_count) {
+        PRINTLOG(LINKER, LOG_WARNING, "not found total symbol count: %lli", nf_count);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        char_t* sym_name = (char_t*)iter->get_item(iter);
+        iter = set_create_iterator(set_nf);
 
-        PRINTLOG(LINKER, LOG_WARNING, "cannot find symbol %s", sym_name);
+        while(iter->end_of_iterator(iter) != 0) {
+            char_t* sym_name = (char_t*)iter->get_item(iter);
 
-        memory_free(sym_name);
+            PRINTLOG(LINKER, LOG_WARNING, "cannot find symbol %s", sym_name);
 
-        iter = iter->next(iter);
+            memory_free(sym_name);
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
     }
 
-    iter->destroy(iter);
-
     set_destroy(set_nf);
+
+    if(dup_count) {
+        PRINTLOG(LINKER, LOG_WARNING, "duplicated symbol count: %lli", dup_count);
+
+        iter = set_create_iterator(set_dup);
+
+        while(iter->end_of_iterator(iter) != 0) {
+            char_t* sym_name = (char_t*)iter->get_item(iter);
+
+            PRINTLOG(LINKER, LOG_WARNING, "duplicated symbol %s", sym_name);
+
+            memory_free(sym_name);
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
+    }
+
+    set_destroy(set_dup);
 
     return !error;
 }
@@ -1204,15 +1386,17 @@ int32_t main(int32_t argc, char_t** argv) {
         goto close;
     }
 
-    uint64_t sec_id = 1;
-    uint64_t sym_id = 1;
-    uint64_t reloc_id = 1;
-    uint64_t nm_id = 1;
+    linkerdb_ids_and_stats_t is = {0};
+    is.sec_id = 1;
+    is.sym_id = 1;
+    is.reloc_id = 1;
+    is.nm_id = 1;
+    is.implementation_id = 1;
 
     printf("%lli\n", time_ns(NULL));
 
     while(argc) {
-        if(!linkerdb_parse_object_file(ldb, *argv, &sec_id, &sym_id, &reloc_id, &nm_id)) {
+        if(!linkerdb_parse_object_file(ldb, *argv, &is)) {
             print_error("cannot parse object file");
 
             exit_code = -1;
@@ -1223,8 +1407,10 @@ int32_t main(int32_t argc, char_t** argv) {
         argv++;
     }
 
-    printf("total\n\tmodules: %lli\n\tsections: %lli\n\tsymbols: %lli\n\trelocations: %lli\n",
-           nm_id - 1, sec_id - 1, sym_id - 1, reloc_id - 1);
+    printf("total\n\tmodules: %lli\n\timplementations: %lli\n\tsections: %lli\n\tsymbols: %lli\n\trelocations: %lli\n",
+           is.nm_count, is.implementation_count, is.sec_count, is.sym_count, is.reloc_count);
+    printf("last ids\n\tmodules: %lli\n\timplementations: %lli\n\tsections: %lli\n\tsymbols: %lli\n\trelocations: %lli\n",
+           is.nm_id - 1, is.implementation_id - 1, is.sec_id - 1, is.sym_id - 1, is.reloc_id - 1);
 
     printf("%lli\n", time_ns(NULL));
 
@@ -1234,6 +1420,18 @@ int32_t main(int32_t argc, char_t** argv) {
     }
 
     printf("%lli\n", time_ns(NULL));
+
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
+
+    tosdb_table_close(tbl_relocations);
+
+    tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
+
+    if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
+        print_error("cannot compact linker db");
+    }
+
 
 close:
     if(!linkerdb_close(ldb)) {

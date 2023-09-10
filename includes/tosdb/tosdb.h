@@ -97,6 +97,18 @@ typedef struct tosdb_cache_config_t {
  */
 boolean_t tosdb_cache_config_set(tosdb_t* tdb, tosdb_cache_config_t* config);
 
+/**
+ * @enum tosdb_compaction_type_t
+ * @brief tosdb compation types.
+ */
+typedef enum tosdb_compaction_type_t {
+    TOSDB_COMPACTION_TYPE_NONE, ///< tosdb compation type none
+    TOSDB_COMPACTION_TYPE_MINOR, ///< tosdb compation type minor, compacts same level, removes duplicates, deleted ones
+    TOSDB_COMPACTION_TYPE_MAJOR, ///< tosdb comaption type major, compacts whole level into a a high level
+} tosdb_compaction_type_t;
+
+boolean_t tosdb_compact(tosdb_t* tdb, tosdb_compaction_type_t type);
+
 /*! tosdb database struct type */
 typedef struct tosdb_database_t tosdb_database_t;
 
