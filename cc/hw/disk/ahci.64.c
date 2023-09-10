@@ -313,6 +313,8 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
         const pci_dev_t* p = iter->get_item(iter);
         pci_generic_device_t* pci_sata = (pci_generic_device_t*)p->pci_header;
 
+        pci_disable_interrupt(pci_sata);
+
 
         pci_capability_msi_t* msi_cap = NULL;
         ahci_pci_capability_sata_t* sata_cap = NULL;

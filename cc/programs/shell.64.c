@@ -9,6 +9,7 @@
 #include <strings.h>
 #include <acpi.h>
 #include <time.h>
+#include <driver/usb.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -39,6 +40,7 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
                "\tcolor\t\t: changes the color first argument foreground second is background in hex\n"
                "\tps\t\t: prints the current processes\n"
                "\tdate\t\t: prints the current date with time alias time\n"
+               "\tusbprobe\t: probes the USB bus\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -85,6 +87,8 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
         printf("\t%04i-%02i-%02i %02i:%02i:%02i\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds);
 
         res = 0;
+    } else if(strcmp(command, "usbprobe") == 0) {
+        res = usb_probe_all_devices_all_ports();
     } else {
         printf("Unknown command: %s\n", command);
         res = -1;

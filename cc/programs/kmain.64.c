@@ -34,6 +34,8 @@
 #include <crc.h>
 #include <device/hpet.h>
 #include <shell.h>
+#include <driver/usb.h>
+#include <driver/usb_mass_storage_disk.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -162,7 +164,7 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
         KERNEL_FRAME_ALLOCATOR = fa;
 
-        frame_t kernel_frames = {SYSTEM_INFO->kernel_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+        frame_t kernel_frames = {SYSTEM_INFO->kernel_physical_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
@@ -304,6 +306,12 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing usb");
+    if(usb_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init usb. Halting...");
+        cpu_hlt();
+    }
+
     PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
     int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
     int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
@@ -381,6 +389,34 @@ int8_t kmain64(size_t entry_point) {
 
     } else {
         PRINTLOG(KERNEL, LOG_WARNING, "nvme disk 0 not found");
+    }
+
+    if(usb_mass_storage_get_disk_count()) {
+        usb_driver_t* usb_ms = usb_mass_storage_get_disk_by_id(0);
+
+        if(usb_ms) {
+            disk_t* usb0 = gpt_get_or_create_gpt_disk(usb_mass_storage_disk_impl_open(usb_ms, 0));
+
+            if(usb0) {
+                PRINTLOG(KERNEL, LOG_INFO, "usb disk size 0x%llx", usb0->disk.get_size((disk_or_partition_t*)usb0));
+
+                disk_partition_context_t* part_ctx;
+
+                part_ctx = usb0->get_partition_context(usb0, 0);
+                PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+                memory_free(part_ctx);
+
+                part_ctx = usb0->get_partition_context(usb0, 1);
+                PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
+                memory_free(part_ctx);
+
+                usb0->disk.flush((disk_or_partition_t*)usb0);
+            } else {
+                PRINTLOG(KERNEL, LOG_INFO, "usb0 is empty");
+            }
+        } else {
+            PRINTLOG(KERNEL, LOG_WARNING, "usb mass storage disk 0 not found");
+        }
     }
 
     if(shell_init() != 0) {

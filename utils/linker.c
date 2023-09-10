@@ -1394,7 +1394,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                 fprintf(map_fp, "%016lx got value %016llx\n", ctx->start + sec->offset + got_offset, 0);
 
-                got_offset += sizeof(uint64_t);
+                got_offset += sizeof(linker_global_offset_table_entry_t);
 
                 while(got_iter->end_of_iterator(got_iter) != 0) {
                     const linker_symbol_t* sym = got_iter->get_item(got_iter);
@@ -1403,7 +1403,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
                         got_iter = got_iter->next(got_iter);
                         fprintf(map_fp, "%016lx got value %llx\n", ctx->start + sec->offset + got_offset, 0);
                         fflush(map_fp);
-                        got_offset += sizeof(uint64_t);
+                        got_offset += sizeof(linker_global_offset_table_entry_t);
 
                         continue;
                     }
@@ -1413,7 +1413,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
                     fprintf(map_fp, "%016lx got value %016llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[sym->id], sym->symbol_name, t_sec->section_name);
                     fflush(map_fp);
 
-                    got_offset += sizeof(uint64_t);
+                    got_offset += sizeof(linker_global_offset_table_entry_t);
 
 
                     got_iter = got_iter->next(got_iter);

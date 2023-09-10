@@ -142,6 +142,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         : : "r" (tss_selector)
         );
 
+    interrupt_redirect_main_interrupts(7);
+
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p", current_task);
 
     return 0;
@@ -404,48 +406,56 @@ task_t* task_find_next_task(void) {
 
     }
 
+    //PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution", tmp_task->task_id);
+
     return tmp_task;
 }
 
-__attribute__((no_stack_protector)) void task_switch_task(boolean_t need_eoi) {
-    if(task_queue == NULL) {
+boolean_t task_switch_paramters_need_eoi = false;
+boolean_t task_switch_paramters_need_sti = false;
+
+void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti) {
+    task_switch_paramters_need_eoi = need_eoi;
+    task_switch_paramters_need_sti = need_sti;
+}
+
+
+static inline void task_switch_task_exit_prep(void) {
+    if(task_switch_paramters_need_eoi) {
+        apic_eoi();
+    }
+
+    if(task_switch_paramters_need_sti) {
+        cpu_sti();
+    }
+}
+
+__attribute__((no_stack_protector)) void task_switch_task(void) {
+    if(current_task == NULL || task_queue == NULL || linkedlist_size(task_queue) == 0) {
+        task_switch_task_exit_prep();
+
         return;
     }
 
-    if(linkedlist_size(task_queue) == 0) {
+    if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting && !current_task->sleeping) {
 
-        if(need_eoi) {
-            apic_eoi();
-        }
+        task_switch_task_exit_prep();
 
         return;
     }
 
-    if(current_task != NULL) {
-        if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting && !current_task->sleeping) {
+    task_save_registers(current_task);
+    linkedlist_queue_push(task_queue, current_task);
 
-            if(need_eoi) {
-                apic_eoi();
-            }
-
-            return;
-        }
-
-        task_save_registers(current_task);
-        linkedlist_queue_push(task_queue, current_task);
-
-        if(current_task->task_id == TASK_KERNEL_TASK_ID) {
-            task_cleanup();
-        }
+    if(current_task->task_id == TASK_KERNEL_TASK_ID) {
+        task_cleanup();
     }
 
     current_task = task_find_next_task();
     current_task->last_tick_count = time_timer_get_tick_count();
     task_load_registers(current_task);
 
-    if(need_eoi) {
-        apic_eoi();
-    }
+    task_switch_task_exit_prep();
 }
 
 void task_end_task(void) {
@@ -465,15 +475,22 @@ void task_end_task(void) {
 
 
 void task_add_message_queue(linkedlist_t queue){
+    cpu_cli();
     if(current_task->message_queues == NULL) {
         current_task->message_queues = linkedlist_create_list();
     }
 
     linkedlist_list_insert(current_task->message_queues, queue);
+
+    cpu_sti();
 }
 
 void task_set_message_waiting(void){
+    cpu_cli();
+
     current_task->message_waiting = 1;
+
+    cpu_sti();
 }
 
 uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
@@ -534,9 +551,15 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     memory_heap_t* task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
 
+    cpu_cli();
+
+    uint64_t new_task_id = task_id++;
+
+    cpu_sti();
+
     new_task->heap = task_heap;
     new_task->heap_size = heap_size;
-    new_task->task_id = task_id++;
+    new_task->task_id = new_task_id;
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = entry_point;
     new_task->page_table = memory_paging_get_table();
@@ -576,8 +599,8 @@ void task_yield(void) {
     if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
         //	__asm__ __volatile__ ("int $0x80\n");
         cpu_cli();
-        task_switch_task(false);
-        cpu_sti();
+        task_task_switch_set_parameters(false, true);
+        task_switch_task();
     }
 }
 
@@ -585,19 +608,25 @@ int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
     UNUSED(frame);
     UNUSED(intnum);
 
-    task_switch_task(true);
+    task_task_switch_set_parameters(true, false);
+    task_switch_task();
 
     return 0;
 }
 
 
 uint64_t task_get_id(void) {
+    uint64_t id = TASK_KERNEL_TASK_ID;
+
+    cpu_cli();
+
     if(current_task) {
-        return current_task->task_id;
-    } else {
-        return TASK_KERNEL_TASK_ID;
+        id = current_task->task_id;
     }
 
+    cpu_sti();
+
+    return id;
 }
 
 void task_current_task_sleep(uint64_t wake_tick) {
@@ -633,9 +662,13 @@ void task_set_interrupt_received(uint64_t tid) {
 }
 
 void task_set_interruptible(void) {
+    cpu_cli();
+
     if(current_task) {
         current_task->interruptible = true;
     }
+
+    cpu_sti();
 }
 
 void task_print_all(void) {

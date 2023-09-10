@@ -79,7 +79,7 @@ uint64_t memory_paging_get_internal_frame(void) {
     }
 
     if(MEMORY_PAGING_INTERNAL_FRAMES_1_COUNT < 16) {
-        PRINTLOG(PAGING, LOG_INFO, "Second internal page frame cache needs refilling");
+        PRINTLOG(PAGING, LOG_DEBUG, "Second internal page frame cache needs refilling");
 
         if(MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE == MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_UNINITIALIZED) {
             MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE = MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING;
@@ -392,7 +392,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
     program_header_t* kernel_header = (program_header_t*)SYSTEM_INFO->kernel_start;
 
     uint64_t kernel_offset = 0;
-    uint64_t kernel_physical_offset = SYSTEM_INFO->kernel_start;
+    uint64_t kernel_physical_offset = SYSTEM_INFO->kernel_physical_start;
 
     if(SYSTEM_INFO->remapped == 0) {
         kernel_offset = SYSTEM_INFO->kernel_start;
@@ -411,6 +411,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
             kernel_header->section_locations[i].section_size = section_size;
         }
 
+        // this never hits
         if(i == LINKER_SECTION_TYPE_HEAP && kernel_header->section_locations[i].section_size == 0) {
             size_t heap_start = SYSTEM_INFO->kernel_start + kernel_header->section_locations[i].section_start;
             size_t heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
@@ -438,20 +439,26 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap){
             fa_addr -= (fa_addr % FRAME_SIZE);
         }
 
-        PRINTLOG(PAGING, LOG_DEBUG, "section %lli start 0x%08llx pyhstart 0x%08llx size 0x%08llx", i, section_start, fa_addr, section_size);
+        PRINTLOG(PAGING, LOG_DEBUG, "section %lli start 0x%llx pyhstart 0x%llx size 0x%llx", i, section_start, fa_addr, section_size);
 
         if(i != LINKER_SECTION_TYPE_TEXT) {
             p_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
         }
 
-        if(i == LINKER_SECTION_TYPE_RODATA ||
-           i == LINKER_SECTION_TYPE_ROREL ||
-           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_RELOCATION_TABLE) ||
-           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_GOT) ||
-           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE) ||
-           (SYSTEM_INFO->remapped && i == LINKER_SECTION_TYPE_TEXT)) {
-            p_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
+        if(SYSTEM_INFO->remapped) {
+            if(i == LINKER_SECTION_TYPE_RODATA ||
+               i == LINKER_SECTION_TYPE_ROREL ||
+               i == LINKER_SECTION_TYPE_RELOCATION_TABLE ||
+               i == LINKER_SECTION_TYPE_GOT ||
+               i == LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE ||
+               i == LINKER_SECTION_TYPE_TEXT) {
+
+                p_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
+                PRINTLOG(PAGING, LOG_DEBUG, "section %lli is readonly", i);
+            }
         }
+
+
 
         frame_t f = {fa_addr, section_size / FRAME_SIZE, 0, 0};
 

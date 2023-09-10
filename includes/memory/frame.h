@@ -45,6 +45,7 @@ typedef enum frame_type_t {
 typedef enum frame_allocation_type_t {
     FRAME_ALLOCATION_TYPE_RELAX = 1 << 1, ///< frames reserved non blockly
     FRAME_ALLOCATION_TYPE_BLOCK = 1 << 2, ///< frames should be continuous
+    FRAME_ALLOCATION_TYPE_UNDER_4G = 1 << 3, ///< frames should be under 4G
     FRAME_ALLOCATION_TYPE_USED = 1 << 7, ///< frames for using
     FRAME_ALLOCATION_TYPE_RESERVED = 1 << 8, ///< frames for reserved area
     FRAME_ALLOCATION_TYPE_OLD_RESERVED = 1 << 15, ///<frames for old reserved area (reserved areas before relinking)

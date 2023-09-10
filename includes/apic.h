@@ -20,6 +20,7 @@
 #define APIC_REGISTER_OFFSET_ID                    0x20
 #define APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT    0xF0
 #define APIC_REGISTER_OFFSET_EOI                   0xB0
+#define APIC_REGISTER_OFFSET_ISR0                  0x100
 #define APIC_REGISTER_OFFSET_TIMER_LVT             0x320
 #define APIC_REGISTER_OFFSET_TIMER_INITIAL_VALUE   0x380
 #define APIC_REGISTER_OFFSET_TIMER_CURRENT_VALUE   0x390
@@ -169,8 +170,11 @@ uint32_t apic_get_local_apic_id(void);
 void     apic_send_ipi(uint8_t destination, uint8_t vector);
 void     apic_send_init(uint8_t destination);
 void     apic_send_sipi(uint8_t destination, uint8_t vector);
+void     apic_send_nmi(uint8_t destination);
 void     apic_enable_lapic(void);
 uint8_t  apic_configure_lapic(void);
 uint64_t apic_get_ap_count(void);
+
+boolean_t apic_is_waiting_timer(void);
 
 #endif

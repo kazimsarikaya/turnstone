@@ -184,4 +184,8 @@ static inline uint64_t bit_most_significant(uint64_t num) {
     return res;
 }
 
+
+uint64_t __attribute__((noinline, optimize("O0"))) read_memio(uint64_t va, uint8_t size);
+void __attribute__((noinline, optimize("O0")))     write_memio(uint64_t va, uint64_t val, uint8_t size);
+
 #endif

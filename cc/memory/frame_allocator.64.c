@@ -229,6 +229,14 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
             frame_t* item = (frame_t*)iter->get_item(iter);
 
             if(item->frame_count >= count) {
+                if(fa_type & FRAME_ALLOCATION_TYPE_UNDER_4G) {
+                    if(item->frame_address + count * FRAME_SIZE >= 0x100000000) {
+                        iter->next(iter);
+
+                        continue;
+                    }
+                }
+
                 if(count % 0x200 == 0) {
                     if(item->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M == 0) {
                         iter->delete_item(iter);
@@ -315,7 +323,7 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
         return 0;
     } else {
         lock_release(ctx->lock);
-        PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "unknown alloctation type for frames");
+        PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "unknown alloctation type for frames 0x%x", fa_type);
 
         return -1;
     }

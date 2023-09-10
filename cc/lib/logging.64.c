@@ -40,6 +40,7 @@ const char_t*const logging_module_names[] = {
     "VIRTIOGPU",
     "HPET",
     "VMWARESVGA",
+    "USB",
 };
 
 
@@ -84,4 +85,5 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_VIRTIOGPU,
     LOG_LEVEL_HPET,
     LOG_LEVEL_VMWARESVGA,
+    LOG_LEVEL_USB,
 };

@@ -13,6 +13,7 @@
 #include <strings.h>
 #include <utils.h>
 #include <systeminfo.h>
+#include <cpu.h>
 #include <cpu/sync.h>
 #include <linkedlist.h>
 #include <pci.h>
@@ -442,8 +443,7 @@ void video_print(char_t* string) {
     lock_release(video_lock);
 }
 
-void video_text_print(char_t* string)
-{
+void video_text_print(char_t* string) {
     if(string == NULL) {
         return;
     }

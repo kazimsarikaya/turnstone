@@ -16,6 +16,7 @@
 #include <ports.h>
 #include <cpu.h>
 #include <cpu/interrupt.h>
+#include <time/timer.h>
 
 MODULE("turnstone.kernel.hw.pci");
 
@@ -212,6 +213,62 @@ int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64
     return 0;
 }
 
+void pci_disable_interrupt(pci_generic_device_t* pci_dev) {
+    if(pci_dev == NULL) {
+        return;
+    }
+
+    uint64_t dest = ((uint64_t)pci_dev) + 4;
+
+    uint32_t value = read_memio(dest, 32);
+    PRINTLOG(PCI, LOG_TRACE, "interrupt disable 0x%p 0x%llx: 0x%x 0x%x", pci_dev, dest, value, value | (1 << 10));
+    value |= (1 << 10);
+    write_memio(dest, 32, value);
+
+    for(int32_t i = 0; i < 1000; i++) {
+        asm volatile ("pause");
+
+        value = read_memio(dest, 32);
+
+        if((value & (1 << 10)) == (1 << 10)) {
+            break;
+        }
+    }
+
+    if((value & (1 << 10)) == 0) {
+        PRINTLOG(PCI, LOG_ERROR, "interrupt disable failed for 0x%p 0x%llx: 0x%x", pci_dev, dest, value);
+    }
+}
+
+void pci_enable_interrupt(pci_generic_device_t* pci_dev) {
+    if(pci_dev == NULL) {
+        return;
+    }
+
+    uint64_t dest = ((uint64_t)pci_dev) + 4;
+
+    // only change bit 10
+    uint32_t value = read_memio(dest, 32);
+    PRINTLOG(PCI, LOG_TRACE, "interrupt enable 0x%p 0x%llx: 0x%x 0x%x", pci_dev, dest, value, value & ~(1 << 10));
+    value &= ~(1 << 10);
+    write_memio(((uint64_t)pci_dev) + 4, 32, value);
+
+    for(int32_t i = 0; i < 1000; i++) {
+        asm volatile ("pause");
+
+        value = read_memio(dest, 32);
+
+        if((value & (1 << 10)) == 0) {
+            break;
+        }
+    }
+
+    if((value & (1 << 10)) != 0) {
+        PRINTLOG(PCI, LOG_ERROR, "interrupt enable failed for 0x%p 0x%llx: 0x%x", pci_dev, dest, value);
+    }
+}
+
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t pci_setup(memory_heap_t* heap) {
@@ -231,6 +288,7 @@ int8_t pci_setup(memory_heap_t* heap) {
     PCI_CONTEXT->nvme_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->network_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->display_controllers = linkedlist_create_list_with_heap(heap);
+    PCI_CONTEXT->usb_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->other_devices = linkedlist_create_list_with_heap(heap);
 
     linkedlist_t old_mcfgs = linkedlist_create_list();
@@ -253,6 +311,8 @@ int8_t pci_setup(memory_heap_t* heap) {
 
                 return -1;
             }
+
+            pci_disable_interrupt((pci_generic_device_t*)p->pci_header);
 
             PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> %04x:%04x -> %02x:%02x",
                      p->group_number, p->bus_number, p->device_number, p->function_number,
@@ -286,8 +346,19 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            }else {
+            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
+                       p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
+
+                linkedlist_list_insert(PCI_CONTEXT->usb_controllers, p);
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
+                         p->group_number, p->bus_number, p->device_number, p->function_number);
+
+            } else {
+                PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x is not supported",
+                         p->group_number, p->bus_number, p->device_number, p->function_number, p->pci_header->class_code, p->pci_header->subclass_code);
+
                 linkedlist_list_insert(PCI_CONTEXT->other_devices, p);
+
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
             }
@@ -329,11 +400,12 @@ int8_t pci_setup(memory_heap_t* heap) {
     linkedlist_destroy(old_mcfgs);
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
-    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli other devices %lli",
+    PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli other devices %lli",
              linkedlist_size(PCI_CONTEXT->sata_controllers),
              linkedlist_size(PCI_CONTEXT->nvme_controllers),
              linkedlist_size(PCI_CONTEXT->network_controllers),
              linkedlist_size(PCI_CONTEXT->display_controllers),
+             linkedlist_size(PCI_CONTEXT->usb_controllers),
              linkedlist_size(PCI_CONTEXT->other_devices)
              );
 

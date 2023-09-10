@@ -101,19 +101,31 @@ int8_t linker_remap_kernel(void) {
         sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
     }
 
-    kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start = 2 << 20;
+    kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start = 2ULL << 20;
     kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_size = sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "text sec 0x%llx  0x%llx", 2ULL << 20, sec_size);
+    f.frame_address = SYSTEM_INFO->kernel_start;
+    f.frame_count = sec_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame(2ULL << 20, &f, MEMORY_PAGING_PAGE_TYPE_4K | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(LINKER, LOG_TRACE, "text sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_TEXT, 2ULL << 20, sec_size);
 
     sec = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE];
     sec_start = sec.section_start;
-    sec_size = sec.section_size + (FRAME_SIZE - (sec.section_size % FRAME_SIZE));
+    sec_size = sec.section_size;
+
+    if(sec_size % FRAME_SIZE) {
+        sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+    }
+
     kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_size = sec_size;
 
 
-    PRINTLOG(LINKER, LOG_TRACE, "reloc sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "reloc sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_RELOCATION_TABLE, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -126,12 +138,17 @@ int8_t linker_remap_kernel(void) {
 
     sec = kernel->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE];
     sec_start = sec.section_start;
-    sec_size = sec.section_size + (FRAME_SIZE - (sec.section_size % FRAME_SIZE));
+    sec_size = sec.section_size;
+
+    if(sec_size % FRAME_SIZE) {
+        sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+    }
+
     kernel->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_size = sec_size;
 
 
-    PRINTLOG(LINKER, LOG_TRACE, "got rel reloc sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "got rel reloc sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -144,12 +161,17 @@ int8_t linker_remap_kernel(void) {
 
     sec = kernel->section_locations[LINKER_SECTION_TYPE_GOT];
     sec_start = sec.section_start;
-    sec_size = sec.section_size + (FRAME_SIZE - (sec.section_size % FRAME_SIZE));
+    sec_size = sec.section_size;
+
+    if(sec_size % FRAME_SIZE) {
+        sec_size = sec_size + (FRAME_SIZE - (sec_size % FRAME_SIZE));
+    }
+
     kernel->section_locations[LINKER_SECTION_TYPE_GOT].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_GOT].section_size = sec_size;
 
 
-    PRINTLOG(LINKER, LOG_TRACE, "got sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "got sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_GOT, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -158,10 +180,12 @@ int8_t linker_remap_kernel(void) {
         return -1;
     }
 
-    for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-        memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
-        data_start += FRAME_SIZE;
-    }
+    //for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+    //    memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
+    //    data_start += FRAME_SIZE;
+    //}
+
+    data_start += sec_size;
 
     sec = kernel->section_locations[LINKER_SECTION_TYPE_RODATA];
     sec_start = sec.section_start;
@@ -174,7 +198,7 @@ int8_t linker_remap_kernel(void) {
     kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_RODATA].section_size = sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "rodata sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "rodata sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_RODATA, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -183,10 +207,12 @@ int8_t linker_remap_kernel(void) {
         return -1;
     }
 
-    for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-        memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
-        data_start += FRAME_SIZE;
-    }
+    //for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+    //    memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
+    //    data_start += FRAME_SIZE;
+    //}
+
+    data_start += sec_size;
 
     sec = kernel->section_locations[LINKER_SECTION_TYPE_ROREL];
     sec_start = sec.section_start;
@@ -199,7 +225,7 @@ int8_t linker_remap_kernel(void) {
     kernel->section_locations[LINKER_SECTION_TYPE_ROREL].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_ROREL].section_size = sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "rorel sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "rorel sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_ROREL, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -208,10 +234,12 @@ int8_t linker_remap_kernel(void) {
         return -1;
     }
 
-    for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
-        memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
-        data_start += FRAME_SIZE;
-    }
+    //for(uint64_t i = 0; i < sec_size; i += FRAME_SIZE) {
+    //    memory_paging_toggle_attributes(SYSTEM_INFO->kernel_start + sec_start + i, MEMORY_PAGING_PAGE_TYPE_READONLY);
+    //    data_start += FRAME_SIZE;
+    //}
+
+    data_start += sec_size;
 
     sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
     sec_start = sec.section_start;
@@ -224,7 +252,7 @@ int8_t linker_remap_kernel(void) {
     kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_BSS].section_size = sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "bss sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "bss sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_BSS, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -246,7 +274,7 @@ int8_t linker_remap_kernel(void) {
     kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_DATA].section_size = sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "data sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "data sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_DATA, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -269,7 +297,7 @@ int8_t linker_remap_kernel(void) {
     kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = data_start;
     kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "heap sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "heap sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_HEAP, data_start, sec_size);
 
     f.frame_address = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_pyhsical_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -295,7 +323,7 @@ int8_t linker_remap_kernel(void) {
 
     data_start = stack_top - sec_size;
 
-    PRINTLOG(LINKER, LOG_TRACE, "stack sec 0x%llx  0x%llx", data_start, sec_size);
+    PRINTLOG(LINKER, LOG_TRACE, "stack sec %x 0x%llx  0x%llx", LINKER_SECTION_TYPE_STACK, data_start, sec_size);
 
     f.frame_address = SYSTEM_INFO->kernel_start + sec_start;
     f.frame_count = sec_size / FRAME_SIZE;
@@ -360,23 +388,37 @@ int8_t linker_remap_kernel(void) {
     new_sysinfo->mmap_data = mmap_data;
     new_sysinfo->reserved_mmap_data = reserved_mmap_data;
     new_sysinfo->frame_buffer = vfb;
+    new_sysinfo->kernel_start = 2ULL << 20; // 2MB
 
 
-    PRINTLOG(LINKER, LOG_DEBUG, "new system info copy created at 0x%p", new_sysinfo);
+    sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
+    sec_start = sec.section_start;
+    sec_size = sec.section_size;
 
     linker_direct_relocation_t* relocs = (linker_direct_relocation_t*)(SYSTEM_INFO->kernel_start + kernel->reloc_start);
     linker_direct_relocation_t* got_rel_relocs = (linker_direct_relocation_t*)(SYSTEM_INFO->kernel_start + kernel->got_rel_reloc_start);
     kernel->reloc_start = kernel->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
     kernel->got_rel_reloc_start = kernel->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start;
 
+
+    uint64_t kernel_diff = kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start - old_section_locations[LINKER_SECTION_TYPE_TEXT].section_start;
+    uint64_t got_diff = kernel->section_locations[LINKER_SECTION_TYPE_GOT].section_start - old_section_locations[LINKER_SECTION_TYPE_GOT].section_start;
+    got_diff += old_section_locations[LINKER_SECTION_TYPE_TEXT].section_start - kernel->section_locations[LINKER_SECTION_TYPE_TEXT].section_start;
+
+    uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
+
+    PRINTLOG(LINKER, LOG_DEBUG, "new system info copy created at 0x%p", new_sysinfo);
+    PRINTLOG(LINKER, LOG_DEBUG, "relocations and relinking started");
+    PRINTLOG(LINKER, LOG_DEBUG, "old got reloc 0x%llx new got reloc 0x%llx", old_section_locations[LINKER_SECTION_TYPE_GOT].section_start, kernel->section_locations[LINKER_SECTION_TYPE_GOT].section_start);
+    PRINTLOG(LINKER, LOG_DEBUG, "got diff is 0x%llx kernel diff 0x%llx", got_diff, kernel_diff);
+    PRINTLOG(LINKER, LOG_DEBUG, "bss boundaries 0x%llx[0x%llx]", sec_start, sec_size);
+
     for(uint64_t i = 0; i < kernel->reloc_count; i++)
     {
         linker_section_type_t addend_section = relocs[i].section_type;
-
+        //relocs[i].addend += kernel_diff;
         relocs[i].addend += kernel->section_locations[addend_section].section_start - old_section_locations[addend_section].section_start;
     }
-
-    uint64_t got_diff = kernel->section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start - old_section_locations[LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE].section_start;
 
     for(uint64_t i = 0; i < kernel->got_rel_reloc_count; i++)
     {
@@ -388,6 +430,7 @@ int8_t linker_remap_kernel(void) {
             got_rel_relocs[i].addend += kernel->section_locations[addend_section].section_start - old_section_locations[addend_section].section_start;
 
             got_rel_relocs[i].addend -= got_diff;
+            got_rel_relocs[i].addend -= kernel_diff;
         }
     }
 
@@ -396,14 +439,12 @@ int8_t linker_remap_kernel(void) {
     for(uint64_t i = 0; i < kernel->got_entry_count; i++) {
         if(got_table[i].entry_value != 0) {
             linker_section_type_t addend_section = got_table[i].section_type;
-
+            //got_table[i].entry_value += kernel_diff;
             got_table[i].entry_value += kernel->section_locations[addend_section].section_start - old_section_locations[addend_section].section_start;
         }
     }
 
-    PRINTLOG(LINKER, LOG_DEBUG, "relocs are computed. linking started");
-
-    uint8_t* dst_bytes = (uint8_t*)SYSTEM_INFO->kernel_start;
+    //PRINTLOG(LINKER, LOG_DEBUG, "relocs are computed. linking started");
 
     for(uint64_t i = 0; i < kernel->reloc_count; i++) {
         //PRINTLOG(LINKER, LOG_INFO, "reloc %lli type %i offset 0x%llx addend 0x%llx", i, relocs[i].relocation_type, relocs[i].offset, relocs[i].addend);
@@ -433,6 +474,22 @@ int8_t linker_remap_kernel(void) {
         *target = target_value;
     }
 
+    uint64_t* bss_start = (uint64_t*)sec_start;
+    uint64_t* bss_end = (uint64_t*)(sec_start + sec_size);
+
+    for(uint64_t* bss = bss_start; bss < bss_end; bss++) {
+        *bss = 0;
+    }
+
+    //while(true) {
+    //    asm volatile ("cli\nhlt\n");
+    //}
+
+    asm volatile (
+        "jmp *%%rax\n"
+        : : "D" (new_sysinfo), "a" (2ULL << 20)
+        );
+
     // we need fresh registers because we changed link values. registers are not valid anymore.
     linker_remap_kernel_cont(new_sysinfo);
 
@@ -440,13 +497,13 @@ int8_t linker_remap_kernel(void) {
 }
 
 void linker_remap_kernel_cont(system_info_t* new_sysinfo) {
-    PRINTLOG(LINKER, LOG_DEBUG, "relocs are finished.");
+    //PRINTLOG(LINKER, LOG_DEBUG, "relocs are finished.");
 
     uint64_t kernel_start = SYSTEM_INFO->kernel_start;
     program_header_t* kernel = (program_header_t*)kernel_start;
 
-    PRINTLOG(LINKER, LOG_DEBUG, "new sysinfo at 0x%p.", new_sysinfo);
-    PRINTLOG(LINKER, LOG_DEBUG, "cleaning bss and try to re-jump kernel at 0x%llx", kernel_start);
+    //PRINTLOG(LINKER, LOG_DEBUG, "new sysinfo at 0x%p.", new_sysinfo);
+    //PRINTLOG(LINKER, LOG_DEBUG, "cleaning bss and try to re-jump kernel at 0x%llx", kernel_start);
 
     linker_section_locations_t sec = kernel->section_locations[LINKER_SECTION_TYPE_BSS];
     uint64_t sec_start = sec.section_start;

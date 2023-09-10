@@ -15,7 +15,7 @@
 #define KBD_SCANCODE_BACKSPACE    0x0E
 
 #define KBD_SCANCODE_LEFTCTRL     0x1D
-#define KBD_SCANCODE_RIGHTTCTRL   0x61
+#define KBD_SCANCODE_RIGHTCTRL    0x61
 
 #define KBD_SCANCODE_LEFTSHIFT    0x2A
 #define KBD_SCANCODE_RIGHTSHIFT   0x36
@@ -73,6 +73,8 @@ typedef struct kbd_state_s {
     boolean_t is_capson;
     boolean_t is_shift_pressed;
     boolean_t is_alt_pressed;
+    boolean_t is_ctrl_pressed;
+    boolean_t is_meta_pressed;
 }kbd_state_t;
 
 wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_printable);

@@ -18,6 +18,8 @@ typedef struct lock_internal_t {
     boolean_t         for_future;
 }lock_internal_t;
 
+extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
+
 static inline int8_t sync_test_set_get(volatile uint64_t* value, uint64_t offset){
     int8_t res = 0;
     __asm__ __volatile__ ("lock bts %[offset], %[value]\n" : "=@ccc" (res), [value] "+m" (*value), [offset] "+r" (offset) : : "memory");
@@ -48,6 +50,10 @@ int8_t lock_destroy(lock_t lock){
 
 void lock_acquire(lock_t lock) {
     if(lock == NULL) {
+        return;
+    }
+
+    if(KERNEL_PANIC_DISABLE_LOCKS) {
         return;
     }
 
