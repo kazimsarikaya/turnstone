@@ -99,6 +99,7 @@ typedef struct linker_context_t {
     uint64_t                    test_func_names_array_str_size;
     uint64_t                    test_func_names_array_str_secid;
     uint64_t                    test_functions_names_array_secid;
+    boolean_t                   init_section_flag;
     boolean_t                   for_efi;
     boolean_t                   need_got;
     linker_section_t*           got;
@@ -143,6 +144,7 @@ int64_t                 linker_get_relocation_symbol_addend(linker_context_t* ct
 void                    linker_destroy_objectctx(linker_context_t* ctx);
 int8_t                  linker_test_function_names_comparator(const void* name1, const void* name2);
 int8_t                  linker_relocate_test_functions(linker_context_t* ctx);
+int8_t                  linker_relocate_init_functions(linker_context_t* ctx);
 int8_t                  linker_build_got(linker_context_t* ctx);
 void                    linker_print_sections(linker_context_t* ctx);
 
@@ -597,6 +599,26 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
             linkedlist_list_insert(ctx->sections, sec);
         }
 
+        if(ctx->init_section_flag &&
+           linker_get_section_size(ctx, sec_idx) &&   (
+               strstarts(secname, ".init_array") == 0 ||
+               strstarts(secname, ".fini_array") == 0)) {
+
+            uint64_t sec_id = linker_get_section_id(ctx, secname, secname);
+            linker_section_t* sec = (linker_section_t*)linker_get_section_by_id(ctx, sec_id);
+
+            uint8_t* old_data = sec->data;
+
+            sec->data = memory_malloc_ext(ctx->heap, sec->size + sec_size, 0x0);
+            memory_memcopy(sec->data, old_data, sec->size);
+            memory_free_ext(ctx->heap, old_data);
+
+            fseek(ctx->objectfile_ctx.file, sec_off, SEEK_SET);
+            fread(sec->data + sec->size, sec_size, 1, ctx->objectfile_ctx.file);
+
+            sec->size += sec_size;
+        }
+
     }
 
     if(req_sec_found != 2) {
@@ -713,6 +735,46 @@ int8_t linker_tag_required_section(linker_context_t* ctx, linker_section_t* sect
         }
 
     }
+
+    return res;
+}
+
+int8_t linker_relocate_init_functions(linker_context_t* ctx) {
+    if(ctx == NULL) {
+        return -1;
+    }
+
+    int8_t res = -1;
+
+    uint64_t ini_sec_id = linker_get_section_id(ctx, ".init_array", ".init_array");
+    uint64_t fini_sec_id = linker_get_section_id(ctx, ".fini_array", ".fini_array");
+
+    if(ini_sec_id == 0 || fini_sec_id == 0) {
+        return res;
+    }
+
+    linker_section_t* ini_sec = (linker_section_t*)linker_get_section_by_id(ctx, ini_sec_id);
+    linker_section_t* fini_sec = (linker_section_t*)linker_get_section_by_id(ctx, fini_sec_id);
+
+    if(ini_sec == NULL || fini_sec == NULL) {
+        return res;
+    }
+
+    printf("init array section found reloc count %lli\n", linkedlist_size(ini_sec->relocations));
+    printf("fini array section found reloc count %lli\n", linkedlist_size(fini_sec->relocations));
+
+    linker_symbol_t* init_func_end_sym = (linker_symbol_t*)linker_lookup_symbol(ctx, "__init_array_end", ini_sec_id);
+    linker_symbol_t* fini_func_end_sym = (linker_symbol_t*)linker_lookup_symbol(ctx, "__fini_array_end", fini_sec_id);
+
+    if(init_func_end_sym == NULL || fini_func_end_sym == NULL) {
+        printf("cannot find init or fini array end symbol\n");
+        return res;
+    }
+
+    init_func_end_sym->value = ini_sec->size;
+    fini_func_end_sym->value = fini_sec->size;
+
+    res = 0;
 
     return res;
 }
@@ -1388,13 +1450,13 @@ int8_t linker_write_output(linker_context_t* ctx) {
                     return -1;
                 }
 
-                uint64_t* got_table = (uint64_t*)ctx->got->data;
+                linker_global_offset_table_entry_t* got_table = (linker_global_offset_table_entry_t*)ctx->got->data;
 
                 uint64_t got_offset = 0;
 
-                fprintf(map_fp, "%016lx got value %016llx\n", ctx->start + sec->offset + got_offset, 0);
+                fprintf(map_fp, "%016lx got value %016llx\n", ctx->start + sec->offset + got_offset, got_table[0].entry_value);
 
-                got_offset += sizeof(uint64_t);
+                got_offset += sizeof(linker_global_offset_table_entry_t);
 
                 while(got_iter->end_of_iterator(got_iter) != 0) {
                     const linker_symbol_t* sym = got_iter->get_item(got_iter);
@@ -1403,17 +1465,17 @@ int8_t linker_write_output(linker_context_t* ctx) {
                         got_iter = got_iter->next(got_iter);
                         fprintf(map_fp, "%016lx got value %llx\n", ctx->start + sec->offset + got_offset, 0);
                         fflush(map_fp);
-                        got_offset += sizeof(uint64_t);
+                        got_offset += sizeof(linker_global_offset_table_entry_t);
 
                         continue;
                     }
 
                     const linker_section_t* t_sec = linker_get_section_by_id(ctx, sym->section_id);
 
-                    fprintf(map_fp, "%016lx got value %016llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[sym->id], sym->symbol_name, t_sec->section_name);
+                    fprintf(map_fp, "%016lx got value %016llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[sym->id].entry_value, sym->symbol_name, t_sec->section_name);
                     fflush(map_fp);
 
-                    got_offset += sizeof(uint64_t);
+                    got_offset += sizeof(linker_global_offset_table_entry_t);
 
 
                     got_iter = got_iter->next(got_iter);
@@ -1665,6 +1727,10 @@ int8_t linker_write_output(linker_context_t* ctx) {
         printf("entry point address 0x%x\n", addr);
 
         fwrite(&addr, 4, 1, fp);
+
+        const char_t* toself_magic = TOS_EXECUTABLE_OR_LIBRARY_MAGIC;
+
+        fwrite(toself_magic, 1, sizeof(TOS_EXECUTABLE_OR_LIBRARY_MAGIC), fp);
 
         file_size = ctx->section_locations[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_start;
 
@@ -1984,13 +2050,17 @@ int8_t linker_build_got(linker_context_t* ctx) {
         const linker_section_t* sec = linker_get_section_by_id(ctx, sym->section_id);
 
         if(sec == NULL) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot find section %lli", sym->section_id);
             print_error("cannot find section");
+            linker_print_symbols(ctx);
             res = -2;
             break;
         }
 
         got_table[sym->id].entry_value = sym->value + sec->offset;
         got_table[sym->id].section_type = sec->type;
+
+        PRINTLOG(LINKER, LOG_TRACE, "got entry %llx: %llx", sym->id, got_table[sym->id].entry_value);
 
         iter = iter->next(iter);
     }
@@ -2026,12 +2096,13 @@ void linker_print_symbols(linker_context_t* ctx) {
 
         const linker_section_t* sec = linker_get_section_by_id(ctx, sym->section_id);
 
-        if(sec == NULL) {
-            print_error("cannot find section");
-            break;
+        uint64_t sec_offset = 0;
+
+        if(sec != NULL) {
+            sec_offset = sec->offset;
         }
 
-        printf("symbol id: %08x type: %i scope %i sectionid: %016llx value: %016llx size: %016llx offset: %016llx name: %s\n", sym->id, sym->type, sym->scope, sym->section_id, sym->value, sym->size, sec->offset, sym->symbol_name);
+        printf("symbol id: %08x type: %i scope %i sectionid: %016llx value: %016llx size: %016llx offset: %016llx name: %s\n", sym->id, sym->type, sym->scope, sym->section_id, sym->value, sym->size, sec_offset, sym->symbol_name);
 
         iter = iter->next(iter);
     }
@@ -2137,6 +2208,7 @@ int32_t main(int32_t argc, char** argv) {
     uint8_t test_section_flag = 0;
     boolean_t for_efi = false;
     boolean_t link = true;
+    boolean_t init_section_flag = false;
 
     while(argc > 0) {
         if(strstarts(*argv, "-") != 0) {
@@ -2265,6 +2337,13 @@ int32_t main(int32_t argc, char** argv) {
             link = false;
         }
 
+        if(strcmp(*argv, "--init-section") == 0) {
+            argc--;
+            argv++;
+
+            init_section_flag = true;
+        }
+
     }
 
     if(output_file == NULL) {
@@ -2305,6 +2384,7 @@ int32_t main(int32_t argc, char** argv) {
     ctx->boot_flag = boot_flag;
     ctx->test_section_flag = test_section_flag;
     ctx->for_efi = for_efi;
+    ctx->init_section_flag = init_section_flag;
 
     if(ctx->test_section_flag) {
         ctx->test_function_names = linkedlist_create_sortedlist_with_heap(ctx->heap, linker_test_function_names_comparator);
@@ -2404,6 +2484,117 @@ int32_t main(int32_t argc, char** argv) {
     kheap_sec->required = 1;
 
     linkedlist_list_insert(ctx->sections, kheap_sec);
+
+    if(ctx->init_section_flag) {
+        linker_section_t* init_func_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+        if(init_func_array == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
+        init_func_array->id = section_id++;
+        init_func_array->file_name = strdup_at_heap(ctx->heap, ".init_array");
+        init_func_array->file_name_hash = xxhash64_hash(init_func_array->file_name, strlen(init_func_array->file_name));
+        init_func_array->section_name = strdup_at_heap(ctx->heap, ".init_array");
+        init_func_array->section_name_hash = xxhash64_hash(init_func_array->section_name, strlen(init_func_array->section_name));
+        init_func_array->align = 0x10;
+        init_func_array->type = LINKER_SECTION_TYPE_RODATA;
+
+        linkedlist_list_insert(ctx->sections, init_func_array);
+
+
+        linker_symbol_t* init_func_start_sym = memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(init_func_start_sym == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
+        init_func_start_sym->id = symbol_id++;
+        init_func_start_sym->symbol_name = strdup_at_heap(ctx->heap, "__init_array_start");
+        init_func_start_sym->symbol_name_hash = xxhash64_hash(init_func_start_sym->symbol_name, strlen(init_func_start_sym->symbol_name));
+        init_func_start_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+        init_func_start_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
+        init_func_start_sym->required = 1;
+        init_func_start_sym->section_id = init_func_array->id;
+
+        linkedlist_list_insert(ctx->symbols, init_func_start_sym);
+
+        linker_symbol_t* init_func_end_sym = memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(init_func_end_sym == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
+        init_func_end_sym->id = symbol_id++;
+        init_func_end_sym->symbol_name = strdup_at_heap(ctx->heap, "__init_array_end");
+        init_func_end_sym->symbol_name_hash = xxhash64_hash(init_func_end_sym->symbol_name, strlen(init_func_end_sym->symbol_name));
+        init_func_end_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+        init_func_end_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
+        init_func_end_sym->required = 1;
+        init_func_end_sym->section_id = init_func_array->id;
+
+        linkedlist_list_insert(ctx->symbols, init_func_end_sym);
+
+        linker_section_t* fini_func_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
+
+        if(fini_func_array == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
+        fini_func_array->id = section_id++;
+        fini_func_array->file_name = strdup_at_heap(ctx->heap, ".fini_array");
+        fini_func_array->file_name_hash = xxhash64_hash(fini_func_array->file_name, strlen(fini_func_array->file_name));
+        fini_func_array->section_name = strdup_at_heap(ctx->heap, ".fini_array");
+        fini_func_array->section_name_hash = xxhash64_hash(fini_func_array->section_name, strlen(fini_func_array->section_name));
+        fini_func_array->align = 0x10;
+        fini_func_array->type = LINKER_SECTION_TYPE_RODATA;
+
+        linkedlist_list_insert(ctx->sections, fini_func_array);
+
+        linker_symbol_t* fini_func_start_sym = memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(fini_func_start_sym == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
+        fini_func_start_sym->id = symbol_id++;
+        fini_func_start_sym->symbol_name = strdup_at_heap(ctx->heap, "__fini_array_start");
+        fini_func_start_sym->symbol_name_hash = xxhash64_hash(fini_func_start_sym->symbol_name, strlen(fini_func_start_sym->symbol_name));
+        fini_func_start_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+        fini_func_start_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
+        fini_func_start_sym->required = 1;
+        fini_func_start_sym->section_id = fini_func_array->id;
+
+        linkedlist_list_insert(ctx->symbols, fini_func_start_sym);
+
+        linker_symbol_t* fini_func_end_sym = memory_malloc_ext(ctx->heap, sizeof(linker_symbol_t), 0x0);
+
+        if(fini_func_end_sym == NULL) {
+            linker_destroy_context(ctx);
+
+            return -1;
+        }
+
+        fini_func_end_sym->id = symbol_id++;
+        fini_func_end_sym->symbol_name = strdup_at_heap(ctx->heap, "__fini_array_end");
+        fini_func_end_sym->symbol_name_hash = xxhash64_hash(fini_func_end_sym->symbol_name, strlen(fini_func_end_sym->symbol_name));
+        fini_func_end_sym->scope = LINKER_SYMBOL_SCOPE_GLOBAL;
+        fini_func_end_sym->type = LINKER_SYMBOL_TYPE_SYMBOL;
+        fini_func_end_sym->required = 1;
+        fini_func_end_sym->section_id = fini_func_array->id;
+
+        linkedlist_list_insert(ctx->symbols, fini_func_end_sym);
+    }
 
     if(ctx->test_section_flag) {
         linker_section_t* test_func_array = memory_malloc_ext(ctx->heap, sizeof(linker_section_t), 0x0);
@@ -2576,6 +2767,7 @@ int32_t main(int32_t argc, char** argv) {
             if(tmp_symbol_name == NULL ||
                strcmp(tmp_symbol_name, ".eh_frame") == 0 ||
                strcmp(tmp_symbol_name, ".comment") == 0 ||
+               strstarts(tmp_symbol_name, ".debug") == 0 ||
                (sym_shndx != 0 && linker_get_section_size(ctx, sym_shndx) == 0)) {
                 continue;
             }
@@ -2629,15 +2821,25 @@ int32_t main(int32_t argc, char** argv) {
 
             const char_t* tmp_section_name = linker_get_section_name(ctx, sec_idx) + strlen(".rel") + is_rela;
 
-            if(strcmp(tmp_section_name, ".eh_frame") == 0) {
+            if(strcmp(tmp_section_name, ".eh_frame") == 0 || strstarts(tmp_section_name, ".debug") == 0) {
                 continue;
             }
 
             uint64_t tmp_section_id = linker_get_section_id(ctx, file_name, tmp_section_name);
 
+            boolean_t is_init_or_fini_array = false;
+
+            if(tmp_section_id == 0 && strcmp(tmp_section_name, ".init_array") == 0) {
+                tmp_section_id = linker_get_section_id(ctx, ".init_array", ".init_array");
+                is_init_or_fini_array = true;
+            } else if(tmp_section_id == 0 && strcmp(tmp_section_name, ".fini_array") == 0) {
+                tmp_section_id = linker_get_section_id(ctx, ".fini_array", ".fini_array");
+                is_init_or_fini_array = true;
+            }
+
             if(tmp_section_id == 0) {
                 print_error("unknown section");
-                printf("%s %s\n", linker_get_section_name(ctx, sec_idx), tmp_section_name);
+                PRINTLOG(LINKER, LOG_ERROR, "current section name: %s target section name: %s", linker_get_section_name(ctx, sec_idx), tmp_section_name);
                 linker_destroy_objectctx(ctx);
                 linker_destroy_context(ctx);
                 print_error("LINKER FAILED");
@@ -2649,7 +2851,7 @@ int32_t main(int32_t argc, char** argv) {
 
             if(sec == NULL) {
                 print_error("unknown section");
-                printf("%s %s\n", linker_get_section_name(ctx, sec_idx), tmp_section_name);
+                PRINTLOG(LINKER, LOG_ERROR, "current section name: %s target section name: %s", linker_get_section_name(ctx, sec_idx), tmp_section_name);
                 linker_destroy_objectctx(ctx);
                 linker_destroy_context(ctx);
                 print_error("LINKER FAILED");
@@ -2657,7 +2859,9 @@ int32_t main(int32_t argc, char** argv) {
                 return -1;
             }
 
-            sec->relocations = linkedlist_create_list_with_heap(ctx->heap);
+            if(sec->relocations == NULL) {
+                sec->relocations = linkedlist_create_list_with_heap(ctx->heap);
+            }
 
             if(sec->relocations == NULL) {
                 print_error("cannot create relocations list");
@@ -2734,6 +2938,10 @@ int32_t main(int32_t argc, char** argv) {
                 reloc->symbol_id = sym->id;
                 reloc->offset = linker_get_relocation_symbol_offset(ctx, reloc_idx, is_rela);
                 reloc->addend = linker_get_relocation_symbol_addend(ctx, reloc_idx, is_rela);
+
+                if(is_init_or_fini_array) {
+                    reloc->offset += sec->size - sizeof(uint64_t);
+                }
 
                 uint64_t reloc_type = linker_get_relocation_symbol_type(ctx, reloc_idx, is_rela);
 
@@ -2825,6 +3033,14 @@ int32_t main(int32_t argc, char** argv) {
 
     if(ctx->test_section_flag && linker_relocate_test_functions(ctx) != 0) {
         print_error("error at relocation test functions");
+        linker_destroy_context(ctx);
+        print_error("LINKER FAILED");
+
+        return -1;
+    }
+
+    if(ctx->init_section_flag && linker_relocate_init_functions(ctx) != 0) {
+        print_error("error at relocation init functions");
         linker_destroy_context(ctx);
         print_error("LINKER FAILED");
 
@@ -2958,7 +3174,7 @@ int32_t main(int32_t argc, char** argv) {
     }
 
     if(ctx->need_got && linker_build_got(ctx) != 0) {
-        printf("cannot build got\n");
+        PRINTLOG(LINKER, LOG_ERROR, "cannot build got\n");
         linker_destroy_context(ctx);
         print_error("LINKER FAILED");
 

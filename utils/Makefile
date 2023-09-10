@@ -10,7 +10,7 @@ CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -std=gnu11 \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes -fpic -fPIC \
+    -Wstrict-prototypes -fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables\
 	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)

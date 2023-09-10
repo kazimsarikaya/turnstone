@@ -10,7 +10,7 @@ CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes -fpic -fPIC \
+    -Wstrict-prototypes -fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables\
 	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
 
 ifeq ($(HOSTOS),Darwin)
@@ -25,6 +25,7 @@ LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-l
 endif
 
 OUTPUT = ../output
+LDSRCDIR = ../lds
 TESTOUTPUT = $(OUTPUT)/cc-local
 NOSTDLIB_DIR = nostdlib
 NOSTDLIB_OUTPUT = $(TESTOUTPUT)/$(NOSTDLIB_DIR)
@@ -39,10 +40,16 @@ PROGS = $(patsubst ./%.c,%,$(SOURCES))
 NOSTDLIB_OBJECTS = $(patsubst $(NOSTDLIB_DIR)/%.c,$(NOSTDLIB_OUTPUT)/%.o,$(NOSTDLIB_SOURCES))
 
 OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
+TOSOUTPUTS := $(patsubst %,$(OUTPUT)/%.tosbin,$(PROGS))
+
+LINKER = $(OUTPUT)/linker.bin
 
 .PHONY: all clean depend
 .PRECIOUS: $(TESTOUTPUT)/%.o $(NOSTDLIB_OBJECTS)
-all: $(OUTPUTS)
+all: $(LINKER) $(OUTPUTS) $(TOSOUTPUTS)
+
+$(LINKER): ../utils/linker.c
+	make -C ../utils $@
 
 gendirs:
 	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
@@ -59,6 +66,10 @@ $(TESTOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.c
 
 $(OUTPUT)/%.bin: $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
 	$(LD) $(LDFLAGS) -o $@ $^
+
+$(OUTPUT)/%.tosbin: $(LINKER) $(LDSRCDIR)/local.ld $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
+	$(LINKER) --init-section --trim -o $@ -M $@.map -T $(filter-out $<,$^) 
+	chmod +x $@
 
 $(NOSTDLIB_OUTPUT)/%.o: $(NOSTDLIB_DIR)/%.c 
 	$(CC) $(CCFLAGS) -o $@ $<

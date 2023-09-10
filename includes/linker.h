@@ -75,6 +75,8 @@ typedef struct linker_global_offset_table_entry_t {
     uint8_t               padding[7]; ///< align padding
 }__attribute__((packed)) linker_global_offset_table_entry_t; ///< shorthand for struct
 
+/*! linker executable or library magic TOSEL */
+#define TOS_EXECUTABLE_OR_LIBRARY_MAGIC "TOSELF"
 /**
  * @struct program_header_t
  * @brief program definition header.
