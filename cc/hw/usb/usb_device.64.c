@@ -1,6 +1,9 @@
 /**
  * @file usb_device.64.c
  * @brief USB device driver
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #include <driver/usb.h>

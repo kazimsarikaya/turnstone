@@ -1,6 +1,9 @@
 /**
  * @file linker-tosdb.c
  * @brief Linker from TOSDB tables
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #define RAMSIZE (256 << 20)

@@ -1,6 +1,9 @@
 /**
  * @file hpet.64.c
  * @brief HPET timer driver for x86_64
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #include <device/hpet.h>

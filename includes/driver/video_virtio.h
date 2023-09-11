@@ -1,6 +1,9 @@
 /**
  * @file video_virtio.h
  * @brief video support for virtio devices
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #ifndef __VIDEO_VIRTIO_H

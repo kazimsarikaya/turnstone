@@ -1,6 +1,9 @@
 /**
  * @file scsi.h
  * @brief SCSI command definitions
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #ifndef ___SCSI_H
