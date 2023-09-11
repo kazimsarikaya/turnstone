@@ -141,6 +141,10 @@ boolean_t   hashmap_destroy(hashmap_t* hm) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static hashmap_segment_t* hashmap_segment_next_new(hashmap_t* hm, hashmap_segment_t* seg) {
+    while(seg->next) {
+        seg = seg->next;
+    }
+
     seg->next = memory_malloc(sizeof(hashmap_segment_t));
 
     if(!seg->next) {
@@ -174,53 +178,56 @@ const void* hashmap_put(hashmap_t* hm, const void* key, const void* item) {
 
     hashmap_segment_t* seg = hm->segments;
 
-    if(seg->items[h_key].exists) {
-        if(hm->hkc(key, seg->items[h_key].key) == 0) {
-            const void* old_item = seg->items[h_key].value;
+    while(true) {
+        if(seg->items[h_key].exists) {
+            if(hm->hkc(key, seg->items[h_key].key) == 0) {
+                const void* old_item = seg->items[h_key].value;
 
-            seg->items[h_key].key = key;
-            seg->items[h_key].value = item;
-            seg->items[h_key].exists = true;
-
-            lock_release(hm->lock);
-
-            return old_item;
-        }
-
-        if(seg->size == hm->segment_capacity) {
-            seg = hashmap_segment_next_new(hm, seg);
-
-            if(!seg) {
-                lock_release(hm->lock);
-
-                return NULL;
-            }
-        }
-
-        uint64_t t_h_key = (h_key + 1) % hm->segment_capacity;
-
-        if(seg->items[t_h_key].exists) {
-            if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
-                const void* old_item = seg->items[t_h_key].value;
-
-                seg->items[t_h_key].key = key;
-                seg->items[t_h_key].value = item;
-                seg->items[t_h_key].exists = true;
+                seg->items[h_key].key = key;
+                seg->items[h_key].value = item;
+                seg->items[h_key].exists = true;
 
                 lock_release(hm->lock);
 
                 return old_item;
             }
 
-            seg = hashmap_segment_next_new(hm, seg);
+            uint64_t t_h_key = (h_key + 1) % hm->segment_capacity;
 
-            if(!seg) {
-                lock_release(hm->lock);
+            if(seg->items[t_h_key].exists) {
+                if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
+                    const void* old_item = seg->items[t_h_key].value;
 
-                return NULL;
+                    seg->items[t_h_key].key = key;
+                    seg->items[t_h_key].value = item;
+                    seg->items[t_h_key].exists = true;
+
+                    lock_release(hm->lock);
+
+                    return old_item;
+                }
+            } else {
+                h_key = t_h_key;
+
+                break;
             }
+
+            if(seg->next) {
+                seg = seg->next;
+            } else {
+                seg = hashmap_segment_next_new(hm, seg);
+
+                if(!seg) {
+                    lock_release(hm->lock);
+
+                    return NULL;
+                }
+
+                break;
+            }
+
         } else {
-            h_key = t_h_key;
+            break;
         }
     }
 
