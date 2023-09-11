@@ -794,6 +794,8 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         return false;
     }
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "persisting table %s open? %i dirty? %i", tbl->name, tbl->is_open, tbl->is_dirty);
+
     if(!tbl->is_dirty) {
         return true;
     }
@@ -829,6 +831,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
 
     if(tbl->memtables && linkedlist_size(tbl->memtables)) {
         need_persist = true;
+        PRINTLOG(TOSDB, LOG_TRACE, "persisting memtables for table %s memtable count %lli", tbl->name, linkedlist_size(tbl->memtables));
 
         if(!tosdb_table_memtable_persist(tbl)) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot persist memtables for table %s", tbl->name);
@@ -1045,6 +1048,11 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
         tosdb_memtable_t* mt = (tosdb_memtable_t*)linkedlist_get_data_at_position(tbl->memtables, idx);
 
         if(!mt->is_dirty) {
+            if(mt->stli) {
+                linkedlist_stack_push(tbl->sstable_list_items, mt->stli);
+                mt->stli = NULL;
+            }
+
             continue;
         }
 
@@ -1063,13 +1071,15 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
         return true;
     }
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "sstable list items count %lli", linkedlist_size(tbl->sstable_list_items));
+
     uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
 
 
     buffer_t buf_stli = buffer_new_with_capacity(NULL, block_size * 2);
 
     if(!buf_stli) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list buffer");
         lock_release(tbl->lock);
 
         return false;
