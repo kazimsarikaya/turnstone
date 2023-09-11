@@ -247,9 +247,15 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
         return true;
     }
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "free memtable %lli for table %s has stli? %i has stlis? %i",
+             mt->id, mt->tbl->name, mt->stli != NULL, mt->tbl->sstable_list_items != NULL);
+
+
     if(mt->stli) {
         linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
+        PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, linkedlist_size(mt->tbl->sstable_list_items));
     }
+
 
     boolean_t error = false;
 
