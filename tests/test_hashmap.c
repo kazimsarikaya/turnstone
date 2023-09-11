@@ -102,6 +102,22 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     hashmap_destroy(hm);
 
+    hm = hashmap_integer(10);
+
+    for(uint64_t i = 0; i < 100; i++) {
+        hashmap_put(hm, (void*)i, (void*)i);
+    }
+
+    pass = true;
+
+    for(uint64_t i = 0; i < 100; i++) {
+        if(hashmap_get(hm, (void*)i) != (void*)i) {
+            pass = false;
+        }
+    }
+
+    hashmap_destroy(hm);
+
     if(!pass) {
         print_error("TESTS FAILED");
     } else {
