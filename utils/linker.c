@@ -13,19 +13,7 @@
 #include <crc.h>
 #include <efi.h>
 #include <xxhash.h>
-
-typedef enum linker_symbol_type_t {
-    LINKER_SYMBOL_TYPE_UNDEF,
-    LINKER_SYMBOL_TYPE_OBJECT,
-    LINKER_SYMBOL_TYPE_FUNCTION,
-    LINKER_SYMBOL_TYPE_SECTION,
-    LINKER_SYMBOL_TYPE_SYMBOL,
-}linker_symbol_type_t;
-
-typedef enum linker_symbol_scope_t {
-    LINKER_SYMBOL_SCOPE_LOCAL,
-    LINKER_SYMBOL_SCOPE_GLOBAL,
-} linker_symbol_scope_t;
+#include <hashmap.h>
 
 typedef struct linker_section_t {
     uint64_t              id;
@@ -103,6 +91,8 @@ typedef struct linker_context_t {
     boolean_t                   for_efi;
     boolean_t                   need_got;
     linker_section_t*           got;
+    uint64_t                    required_symbol_count;
+    hashmap_t*                  got_symbol_index_map;
 } linker_context_t;
 
 typedef struct linker_efi_reloc_block_t {
@@ -124,6 +114,7 @@ int8_t                  linker_parse_script(linker_context_t* ctx, char_t* linke
 void                    linker_destroy_context(linker_context_t* ctx);
 int8_t                  linker_tag_required_sections(linker_context_t* ctx);
 int8_t                  linker_tag_required_section(linker_context_t* ctx, linker_section_t* section);
+int8_t                  linker_get_required_symbol_count(linker_context_t* ctx);
 int8_t                  linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id);
 uint64_t                linker_get_symbol_count(linker_context_t* ctx);
 const char_t*           linker_get_section_name(linker_context_t* ctx, uint16_t sec_idx);
@@ -629,6 +620,41 @@ int8_t linker_parse_elf_header(linker_context_t* ctx, uint64_t* section_id) {
     return 0;
 }
 
+int8_t linker_get_required_symbol_count(linker_context_t* ctx) {
+    if(!ctx) {
+        return -1;
+    }
+
+    if(ctx->enable_removing_disabled_sections == 0) {
+        return linkedlist_size(ctx->symbols);
+    }
+
+    uint64_t symbol_count = 0;
+
+    iterator_t* it = linkedlist_iterator_create(ctx->symbols);
+
+    if(it == NULL) {
+        return -1;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        const linker_symbol_t* sym = it->get_item(it);
+
+        if(sym->required) {
+            symbol_count++;
+        }
+
+        it = it->next(it);
+    }
+
+
+    it->destroy(it);
+
+    ctx->required_symbol_count = symbol_count;
+
+    return 0;
+}
+
 int8_t linker_tag_required_sections(linker_context_t* ctx) {
     if(ctx->enable_removing_disabled_sections == 0) {
         return 0;
@@ -1000,6 +1026,10 @@ void linker_destroy_context(linker_context_t* ctx) {
 
     if(ctx->test_section_flag) {
         linkedlist_destroy(ctx->test_function_names);
+    }
+
+    if(ctx->got_symbol_index_map) {
+        hashmap_destroy(ctx->got_symbol_index_map);
     }
 
     memory_free_ext(ctx->heap, (void*)ctx->entry_point);
@@ -1444,12 +1474,6 @@ int8_t linker_write_output(linker_context_t* ctx) {
             fprintf(map_fp, "%016lx %s secid %llx\n", ctx->start + sec->offset, sec->section_name, sec->id);
 
             if(sec->type == LINKER_SECTION_TYPE_GOT && ctx->need_got) {
-                iterator_t* got_iter = linkedlist_iterator_create(ctx->symbols);
-
-                if(got_iter == NULL) {
-                    return -1;
-                }
-
                 linker_global_offset_table_entry_t* got_table = (linker_global_offset_table_entry_t*)ctx->got->data;
 
                 uint64_t got_offset = 0;
@@ -1458,30 +1482,16 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                 got_offset += sizeof(linker_global_offset_table_entry_t);
 
-                while(got_iter->end_of_iterator(got_iter) != 0) {
-                    const linker_symbol_t* sym = got_iter->get_item(got_iter);
+                uint64_t got_entry_count = sec->size / sizeof(linker_global_offset_table_entry_t);
 
-                    if(sym->required == 0 && ctx->enable_removing_disabled_sections != 0) {
-                        got_iter = got_iter->next(got_iter);
-                        fprintf(map_fp, "%016lx got value %llx\n", ctx->start + sec->offset + got_offset, 0);
-                        fflush(map_fp);
-                        got_offset += sizeof(linker_global_offset_table_entry_t);
-
-                        continue;
-                    }
-
+                for(uint64_t got_idx = 1; got_idx < got_entry_count; got_idx++) {
+                    const linker_symbol_t* sym = linker_get_symbol_by_id(ctx, got_table[got_idx].symbol_id);
                     const linker_section_t* t_sec = linker_get_section_by_id(ctx, sym->section_id);
 
-                    fprintf(map_fp, "%016lx got value %016llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[sym->id].entry_value, sym->symbol_name, t_sec->section_name);
-                    fflush(map_fp);
+                    fprintf(map_fp, "%016lx got value %016llx %s@%s\n", ctx->start + sec->offset + got_offset, got_table[got_idx].entry_value, sym->symbol_name, t_sec->section_name);
 
                     got_offset += sizeof(linker_global_offset_table_entry_t);
-
-
-                    got_iter = got_iter->next(got_iter);
                 }
-
-                got_iter->destroy(got_iter);
             }
 
             fflush(map_fp);
@@ -1529,7 +1539,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
                     }
 
                     if(map_fp) {
-                        fprintf(map_fp, "%016lx     reference symbol %s@", ctx->start + reloc->offset, target_sym->symbol_name);
+                        fprintf(map_fp, "%016lx     reference %s symbol %s@", ctx->start + reloc->offset, target_sym->scope?"global":"local", target_sym->symbol_name);
 
                         switch(reloc->type) {
                         case LINKER_RELOCATION_TYPE_64_GOT64:
@@ -1603,7 +1613,9 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
                         fwrite(&addr, 1, 4, fp);
                     } else if(reloc->type == LINKER_RELOCATION_TYPE_64_GOT64) {
-                        int64_t addr = target_sym->id * sizeof(linker_global_offset_table_entry_t) + reloc->addend;
+                        uint64_t got_idx = (uint64_t)hashmap_get(ctx->got_symbol_index_map, (void*)target_sym->id);
+
+                        int64_t addr = got_idx * sizeof(linker_global_offset_table_entry_t) + reloc->addend;
 
                         if(map_fp) {
                             fprintf(map_fp, "%016llx ", ctx->got->offset +  addr);
@@ -1808,7 +1820,7 @@ int8_t linker_write_output(linker_context_t* ctx) {
 
         fwrite(&ctx->got_relative_relocation_count, 1, sizeof(uint64_t), fp);
 
-        uint64_t got_entry_count = linkedlist_size(ctx->symbols) + 1;
+        uint64_t got_entry_count = ctx->required_symbol_count + 1;
 
         fwrite(&got_entry_count, 1, sizeof(uint64_t), fp);
 
@@ -2024,6 +2036,12 @@ int8_t linker_build_got(linker_context_t* ctx) {
         return res;
     }
 
+    ctx->got_symbol_index_map = hashmap_integer(1024);
+
+    if(!ctx->got_symbol_index_map) {
+        return res;
+    }
+
     ctx->got->data = memory_malloc_ext(ctx->heap, ctx->got->size, 0);
 
     if(ctx->got->data == NULL) {
@@ -2037,6 +2055,7 @@ int8_t linker_build_got(linker_context_t* ctx) {
     }
 
     linker_global_offset_table_entry_t* got_table = (linker_global_offset_table_entry_t*)ctx->got->data;
+    uint64_t idx = 1;
 
     while(iter->end_of_iterator(iter) != 0) {
         const linker_symbol_t* sym = iter->get_item(iter);
@@ -2057,9 +2076,18 @@ int8_t linker_build_got(linker_context_t* ctx) {
             break;
         }
 
-        got_table[sym->id].entry_value = sym->value + sec->offset;
-        got_table[sym->id].section_type = sec->type;
+        hashmap_put(ctx->got_symbol_index_map, (void*)sym->id, (void*)idx);
 
+        got_table[idx].entry_value = sym->value + sec->offset;
+        got_table[idx].section_type = sec->type;
+        got_table[idx].symbol_type = sym->type;
+        got_table[idx].symbol_scope = sym->scope;
+        got_table[idx].symbol_id = sym->id;
+        got_table[idx].symbol_size = sym->size;
+        got_table[idx].symbol_value = sym->value;
+
+
+        idx++;
         PRINTLOG(LINKER, LOG_TRACE, "got entry %llx: %llx", sym->id, got_table[sym->id].entry_value);
 
         iter = iter->next(iter);
@@ -3026,11 +3054,6 @@ int32_t main(int32_t argc, char** argv) {
         argv++;
     }
 
-    if(ctx->need_got) {
-        got_sec->size = sizeof(linker_global_offset_table_entry_t) * (linkedlist_size(ctx->symbols) + 1);
-    }
-
-
     if(ctx->test_section_flag && linker_relocate_test_functions(ctx) != 0) {
         print_error("error at relocation test functions");
         linker_destroy_context(ctx);
@@ -3053,6 +3076,18 @@ int32_t main(int32_t argc, char** argv) {
         print_error("LINKER FAILED");
 
         return -1;
+    }
+
+    if(linker_get_required_symbol_count(ctx) != 0) {
+        print_error("error at getting required symbol count");
+        linker_destroy_context(ctx);
+        print_error("LINKER FAILED");
+
+        return -1;
+    }
+
+    if(ctx->need_got) {
+        got_sec->size = sizeof(linker_global_offset_table_entry_t) * (ctx->required_symbol_count + 1);
     }
 
     uint64_t output_offset_base = 0;
