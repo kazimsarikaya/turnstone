@@ -1,3 +1,11 @@
+/**
+ * @file lib.c
+ * @brief Libc implementation
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
 #include <types.h>
 #include <memory.h>
 #include <strings.h>

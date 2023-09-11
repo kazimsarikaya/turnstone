@@ -1,6 +1,9 @@
 /**
  * @file video_vmwaresvga.64.c
  * @brief VMware SVGA video driver
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 

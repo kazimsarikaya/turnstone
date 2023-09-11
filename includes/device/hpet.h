@@ -1,6 +1,9 @@
 /**
  * @file hpet.h
  * @brief High Precision Event Timer (HPET) support
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #ifndef __HPET_H

@@ -1,6 +1,9 @@
 /**
  * @file shell.h
  * @brief shell
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #ifndef __SHELL_H
