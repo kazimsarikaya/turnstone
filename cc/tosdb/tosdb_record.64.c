@@ -50,9 +50,8 @@ boolean_t tosdb_record_upsert(tosdb_record_t* record);
 boolean_t tosdb_record_delete(tosdb_record_t* record);
 boolean_t tosdb_record_get(tosdb_record_t* record);
 boolean_t tosdb_record_destroy(tosdb_record_t* record);
-
-uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid);
 boolean_t tosdb_record_is_deleted(tosdb_record_t* record);
+uint64_t  tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid);
 
 boolean_t tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value) {
     return tosdb_record_set_data(record, colname, DATA_TYPE_BOOLEAN, sizeof(boolean_t), (void*)(uint64_t)value);
@@ -167,7 +166,7 @@ boolean_t tosdb_record_set_bytearray(tosdb_record_t * record, const char_t* coln
 }
 
 boolean_t tosdb_record_get_bytearray(tosdb_record_t * record, const char_t* colname, uint64_t* len, uint8_t** value) {
-    return tosdb_record_get_data(record, colname, DATA_TYPE_INT8, len, (void**)value);
+    return tosdb_record_get_data(record, colname, DATA_TYPE_INT8_ARRAY, len, (void**)value);
 }
 
 boolean_t tosdb_record_set_data(tosdb_record_t * record, const char_t* colname, data_type_t type, uint64_t len, const void* value) {
@@ -311,6 +310,12 @@ boolean_t tosdb_record_get_data(tosdb_record_t * record, const char_t* colname, 
     tosdb_record_context_t* ctx = record->context;
 
     const tosdb_column_t* col = hashmap_get(ctx->table->columns, colname);
+
+    if(!col) {
+        PRINTLOG(TOSDB, LOG_ERROR, "column %s is not exists at table %s", colname, ctx->table->name);
+
+        return false;
+    }
 
     if(col->type != type) {
         PRINTLOG(TOSDB, LOG_ERROR, "column %s type mismatch for table %s", colname, ctx->table->name);

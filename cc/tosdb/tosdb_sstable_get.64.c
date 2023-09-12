@@ -122,7 +122,9 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             return false;
         }
 
-        tosdb_memtable_index_item_t* t_first = (tosdb_memtable_index_item_t*)st_idx->data;
+        uint8_t* st_idx_data = &st_idx->data[0];
+
+        tosdb_memtable_index_item_t* t_first = (tosdb_memtable_index_item_t*)st_idx_data;
 
         uint64_t first_key_length = t_first->key_length + sizeof(tosdb_memtable_index_item_t);
         first = memory_malloc(first_key_length);
@@ -134,15 +136,19 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             return false;
         }
 
+        PRINTLOG(TOSDB, LOG_TRACE, "first key length 0x%llx", first_key_length);
+
         memory_memcopy(t_first, first, first_key_length);
 
-        tosdb_memtable_index_item_t* t_last = (tosdb_memtable_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_index_item_t) + first->key_length);
+        st_idx_data += first_key_length;
+
+        tosdb_memtable_index_item_t* t_last = (tosdb_memtable_index_item_t*)st_idx_data;
 
         uint64_t last_key_length = t_last->key_length + sizeof(tosdb_memtable_index_item_t);
         last = memory_malloc(last_key_length);
 
         if(!last) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate last item");
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate last item 0x%llx 0x%llx", last_key_length, t_last->key_length);;
             memory_free(first);
             memory_free(st_idx);
 
@@ -151,7 +157,9 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         memory_memcopy(t_last, last, last_key_length);
 
-        buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
+        st_idx_data += last_key_length;
+
+        buffer_t buf_bf_in = buffer_encapsulate(st_idx_data, st_idx->bloomfilter_size);
         buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
@@ -220,6 +228,10 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         memory_free(st_idx);
     }
 
+
+    PRINTLOG(TOSDB, LOG_TRACE, "sstable 0x%llx level 0x%llx first: %llx item %llx last: %llx",
+             sli->sstable_id, sli->level, first->key_hash, item->key_hash, last->key_hash);
+
     int8_t first_limit = tosdb_sstable_index_comparator(&first, &item);
     int8_t last_limit = tosdb_sstable_index_comparator(&last, &item);
 
@@ -229,6 +241,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             memory_free(first);
             memory_free(last);
         }
+
+        PRINTLOG(TOSDB, LOG_TRACE, "not found inside sstable 0x%llx level 0x%llx first_limit: %d last_limit: %d", sli->sstable_id, sli->level, first_limit, last_limit);
 
         return false;
     }
@@ -255,6 +269,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         if(!tdb_cache) {
             bloomfilter_destroy(bf);
         }
+
+        PRINTLOG(TOSDB, LOG_TRACE, "not found inside sstable 0x%llx level 0x%llx bloomfilter", sli->sstable_id, sli->level);
 
         return false;
     }
@@ -333,6 +349,14 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         for(uint64_t i = 0; i < sli->record_count; i++) {
             st_idx_items[i] = (tosdb_memtable_index_item_t*)idx_data;
 
+            if(!st_idx_items[i]) {
+                memory_free(st_idx_items);
+                memory_free(idx_data);
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create index item 0x%llx", i);
+
+                return false;
+            }
+
             idx_data += sizeof(tosdb_memtable_index_item_t) + st_idx_items[i]->key_length;
         }
 
@@ -358,6 +382,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         }
     }
 
+    PRINTLOG(TOSDB, LOG_TRACE, "index data read, record count: 0x%llx 0x%llx", record_count, sli->record_count);
 
     tosdb_memtable_index_item_t** t_found_item = (tosdb_memtable_index_item_t**)binarysearch(st_idx_items,
                                                                                              sli->record_count,
@@ -530,11 +555,15 @@ boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, linkedlist_t st_lis
         tosdb_block_sstable_list_item_t* sli = (tosdb_block_sstable_list_item_t*) iter->get_item(iter);
 
         if(index_id <= sli->index_count) {
+            PRINTLOG(TOSDB, LOG_TRACE, "found sstable 0x%llx list item with index id 0x%llx, searching", sli->sstable_id, index_id);
+
             if(tosdb_sstable_get_on_index(record, sli, item, index_id)) {
                 found = true;
 
                 break;
             }
+        } else {
+            PRINTLOG(TOSDB, LOG_TRACE, "skipping sstable 0x%llx list item with index id 0x%llx max index count 0x%llx", sli->sstable_id, index_id, sli->index_count);
         }
 
         iter = iter->next(iter);
@@ -590,10 +619,14 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
 
 
     if(ctx->table->sstable_levels) {
+        PRINTLOG(TOSDB, LOG_TRACE, "searching on sstable levels");
+
         for(uint64_t i = 1; i <= ctx->table->sstable_max_level; i++) {
             linkedlist_t st_lvl_l = (linkedlist_t)hashmap_get(ctx->table->sstable_levels, (void*)i);
 
             if(st_lvl_l) {
+                PRINTLOG(TOSDB, LOG_TRACE, "searching on sstable level 0x%llx", i);
+
                 if(tosdb_sstable_get_on_list(record, st_lvl_l, item, r_key->index_id)) {
                     memory_free(item);
 
@@ -604,6 +637,8 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
     }
 
     memory_free(item);
+
+    PRINTLOG(TOSDB, LOG_TRACE, "record not found");
 
     return false;
 }
