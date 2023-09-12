@@ -372,6 +372,7 @@ typedef struct tosdb_record_context_t {
     hashmap_t*     keys;
     uint64_t       level;
     uint64_t       sstable_id;
+    boolean_t      is_deleted;
 } tosdb_record_context_t;
 
 typedef struct tosdb_record_key_t {
