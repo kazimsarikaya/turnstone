@@ -852,6 +852,10 @@ int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* posi
         *position = 0;
     }
 
+    if(l->item_count == 0) {
+        return -1;
+    }
+
     if(l->type == LINKEDLIST_TYPE_SORTEDLIST && !l->equality_comparator) {
         linkedlist_item_internal_t* h = l->head;
         linkedlist_item_internal_t* t = l->tail;
