@@ -78,7 +78,7 @@ int32_t main(void){
         }
     }
 
-    print_success("b+ tree builded");
+    print_success("b+ tree builded. size of index: %llx", idx->size(idx));
 
     iterator_t* iter = idx->create_iterator(idx);
 

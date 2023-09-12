@@ -29,8 +29,8 @@ uint64_t mmap_size = RAMSIZE;
 //int                               printf(const char* format, ...);
 int                               vprintf ( const char* format, va_list arg );
 size_t                            video_printf(const char_t* fmt, ...);
-void                              print_success(const char* msg);
-void                              print_error(const char* msg);
+void                              print_success(const char* msg, ...);
+void                              print_error(const char* msg, ...);
 void                              cpu_hlt(void);
 int8_t                            setup_ram2(void);
 void                              remove_ram2(void);
@@ -39,6 +39,24 @@ void __attribute__((destructor))  stop_ram(void);
 
 extern int64_t errno;
 
+void print_success(const char* msg, ...){
+    va_list args;
+    va_start(args, msg);
+    printf("%s", GREENCOLOR);
+    vprintf(msg, args);
+    printf("%s%s", RESETCOLOR, "\r\n");
+    va_end(args);
+}
+
+void print_error(const char* msg, ...){
+    va_list args;
+    va_start(args, msg);
+    printf("%s", REDCOLOR);
+    vprintf(msg, args);
+    printf("%s%s", RESETCOLOR, "\r\n");
+    va_end(args);
+}
+
 size_t video_printf(const char_t* fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -46,14 +64,6 @@ size_t video_printf(const char_t* fmt, ...) {
     va_end(args);
 
     return (size_t)res;
-}
-
-void print_success(const char* msg){
-    printf("%s%s%s%s", GREENCOLOR, msg, RESETCOLOR, "\r\n");
-}
-
-void print_error(const char* msg){
-    printf("%s%s%s%s", REDCOLOR, msg, RESETCOLOR, "\r\n");
 }
 
 void cpu_hlt(void) {
