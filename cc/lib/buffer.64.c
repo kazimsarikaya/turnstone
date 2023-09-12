@@ -353,6 +353,10 @@ boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction
 }
 
 int8_t buffer_destroy(buffer_t buffer) {
+    if(!buffer) {
+        return 0;
+    }
+
     buffer_internal_t* bi = (buffer_internal_t*)buffer;
 
     lock_destroy(bi->lock);
