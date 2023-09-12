@@ -24,16 +24,30 @@ void* binarysearch(void* list, uint64_t size, uint64_t item_size, void* key, bin
         uint64_t middle = (first + last) / 2;
         void* middle_item = tmp_list + (middle * item_size);
 
-        if(cmp(middle_item, key) == -1) {
+        int8_t cmp_result = cmp(middle_item, key);
+
+        if(cmp_result == -1) {
+            if(middle == size - 1) {
+                break;
+            }
+
             first = middle + 1;
             first_item = tmp_list + (first * item_size);
         }
-        else if(cmp(middle_item, key) == 1) {
+        else if(cmp_result == 1) {
+            if(middle == 0) {
+                break;
+            }
+
             last = middle - 1;
             last_item = tmp_list + (last * item_size);
         }
         else {
             return middle_item;
+        }
+
+        if(first > last) {
+            break;
         }
     }
 
