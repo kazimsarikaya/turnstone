@@ -392,7 +392,11 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             memory_free(org_idx_data);
         }
 
-        return false;
+        ctx->is_deleted = true;
+        ctx->level = sli->level;
+        ctx->sstable_id = sli->sstable_id;
+
+        return true;
     }
 
 

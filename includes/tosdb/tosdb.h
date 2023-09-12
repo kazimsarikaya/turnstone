@@ -510,6 +510,13 @@ typedef boolean_t (*tosdb_record_get_f)(tosdb_record_t* record);
 typedef linkedlist_t (*tosdb_record_search_f)(tosdb_record_t* record);
 
 /**
+ * @brief checks if record is deleted
+ * @param[in] record record to check
+ * @return true if record is deleted
+ */
+typedef boolean_t (*tosdb_record_is_deleted_f)(tosdb_record_t* record);
+
+/**
  * @struct tosdb_record_t
  * @brief tosdb record
  */
@@ -550,6 +557,7 @@ struct tosdb_record_t {
     tosdb_record_upsert_f        upsert_record; ///< upsert record to the table
     tosdb_record_delete_f        delete_record; ///< delete record from table
     tosdb_record_destroy_f       destroy; ///< destroy record
+    tosdb_record_is_deleted_f    is_deleted; ///< check if record is deleted
 };
 
 /**

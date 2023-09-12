@@ -52,6 +52,7 @@ boolean_t tosdb_record_get(tosdb_record_t* record);
 boolean_t tosdb_record_destroy(tosdb_record_t* record);
 
 uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid);
+boolean_t tosdb_record_is_deleted(tosdb_record_t* record);
 
 boolean_t tosdb_record_set_boolean(tosdb_record_t * record, const char_t* colname, const boolean_t value) {
     return tosdb_record_set_data(record, colname, DATA_TYPE_BOOLEAN, sizeof(boolean_t), (void*)(uint64_t)value);
@@ -655,6 +656,18 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
     return res;
 }
 
+boolean_t tosdb_record_is_deleted(tosdb_record_t* record) {
+    if(!record || !record->context) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record is null");
+
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    return ctx->is_deleted;
+}
+
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     if(!tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null");
@@ -743,6 +756,7 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec->upsert_record = tosdb_record_upsert;
     rec->delete_record = tosdb_record_delete;
     rec->search_record = tosdb_record_search;
+    rec->is_deleted = tosdb_record_is_deleted;
 
     return rec;
 }
