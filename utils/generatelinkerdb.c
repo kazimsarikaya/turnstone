@@ -416,6 +416,11 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
+
+    if(!tosdb_table_column_add(tbl_relocations, "symbol_id", DATA_TYPE_INT64)) {
+        return false;
+    }
+
     if(!tosdb_table_column_add(tbl_relocations, "symbol_name", DATA_TYPE_STRING)) {
         return false;
     }
@@ -895,7 +900,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
             PRINTLOG(LINKER, LOG_WARNING, "relocation at data section %s at %s", tmp_section_name, filename);
         }
 
-        uint64_t reloc_sec_id = ELF_SECTION_LINK(e_class, sections, sec_idx);
+        uint64_t reloc_sec_id = ELF_SECTION_INFO(e_class, sections, sec_idx);
 
         if(!reloc_sec_id) {
             print_error("cannot find section of relocations");
@@ -957,8 +962,11 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
                 break;
             }
 
+            uint64_t reloc_sym_id = 0;
+
             if(reloc_sym_sec_id) {
                 reloc_sym_sec_id += sec_id_base;
+                reloc_sym_id = reloc_symidx + sym_id_base;
             }
 
             if(e_class == ELFCLASS32) {
@@ -1026,6 +1034,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
 
             rec->set_int64(rec, "id", is->reloc_id);
             rec->set_int64(rec, "section_id", reloc_sec_id);
+            rec->set_int64(rec, "symbol_id", reloc_sym_id);
             rec->set_string(rec, "symbol_name", reloc_sym_name);
             rec->set_int64(rec, "symbol_section_id", reloc_sym_sec_id);
             rec->set_int8(rec, "type", reloc_type);
@@ -1212,8 +1221,17 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
         linkedlist_destroy(s_sym_recs);
 
         uint64_t sec_id = 0;
+        uint64_t sym_id = 0;
 
         if(!s_sym_rec->get_int64(s_sym_rec, "section_id", (int64_t*)&sec_id)) {
+            s_sym_rec->destroy(s_sym_rec);
+            error = true;
+            reloc_rec->destroy(reloc_rec);
+
+            break;
+        }
+
+        if(!s_sym_rec->get_int64(s_sym_rec, "id", (int64_t*)&sym_id)) {
             s_sym_rec->destroy(s_sym_rec);
             error = true;
             reloc_rec->destroy(reloc_rec);
@@ -1224,6 +1242,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
         s_sym_rec->destroy(s_sym_rec);
 
         reloc_rec->set_int64(reloc_rec, "symbol_section_id", sec_id);
+        reloc_rec->set_int64(reloc_rec, "symbol_id", sym_id);
 
         boolean_t res = reloc_rec->upsert_record(reloc_rec);
         reloc_rec->destroy(reloc_rec);
