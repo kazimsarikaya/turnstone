@@ -756,7 +756,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "modules built");
+    PRINTLOG(EFI, LOG_INFO, "modules built");
 
     if(!linker_is_all_symbols_resolved(ctx)) {
         PRINTLOG(EFI, LOG_ERROR, "not all symbols resolved");
@@ -765,7 +765,68 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "all symbols resolved");
+    PRINTLOG(EFI, LOG_INFO, "all symbols resolved");
+
+    if(linker_calculate_program_size(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot calculate program size");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t program_total_size = 0x1000 + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size;
+    uint64_t requested_program_size = (2 << 20) + program_total_size;
+    uint64_t requested_program_pages = requested_program_size / 0x1000;
+
+    if(requested_program_size % 0x1000 != 0) {
+        requested_program_pages++;
+    }
+
+    uint64_t requested_program_base = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_program_pages, &requested_program_base);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate program memory");
+
+        goto catch_efi_error;
+    }
+
+    if(requested_program_base % (2 << 20)) {
+        requested_program_base += (2 << 20) - (requested_program_base % (2 << 20));
+    }
+
+    ctx->program_start_physical = requested_program_base;
+    ctx->program_start_virtual = 2 << 20;
+
+    if(linker_bind_linear_addresses(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot bind addresses");
+
+        goto catch_efi_error;
+    }
+
+    if(linker_bind_got_entry_values(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot bind got entry values");
+
+        goto catch_efi_error;
+    }
+
+    if(linker_link_program(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot link program");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "program linked");
+
+    uint8_t* program_data = (uint8_t*)requested_program_base;
+
+    if(linker_dump_program_to_array(ctx, LINKER_PROGRAM_DUMP_TYPE_ALL, program_data + 0x1000) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot dump program");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "program dumped into memory, page table build started.");
 
 catch_efi_error:
 

@@ -612,8 +612,15 @@ int32_t main(int32_t argc, char_t** argv) {
 
     PRINTLOG(LINKER, LOG_INFO, "modules built");
 
+    if(linker_calculate_program_size(ctx) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot calculate program size");
 
-    if(linker_bind_addresses(ctx) != 0) {
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+
+    if(linker_bind_linear_addresses(ctx) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot bind addresses");
 
         exit_code = -1;
