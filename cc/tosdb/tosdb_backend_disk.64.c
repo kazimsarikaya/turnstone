@@ -55,6 +55,9 @@ tosdb_backend_t* tosdb_backend_disk_new(disk_or_partition_t* dp) {
     backend->write = tosdb_backend_disk_write;
     backend->flush = tosdb_backend_disk_flush;
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "created backend with capacity 0x%llx (0x%llx) block size 0x%llx",
+             backend->capacity, backend->capacity / dp->get_block_size(dp), dp->get_block_size(dp));
+
     return backend;
 }
 
@@ -68,9 +71,12 @@ uint8_t*  tosdb_backend_disk_read(tosdb_backend_t* backend, uint64_t position, u
     uint8_t* res = NULL;
     uint64_t bs = d_ctx->dp->get_block_size(d_ctx->dp);
 
-    d_ctx->dp->read(d_ctx->dp, position / bs, size / bs, &res);
+    PRINTLOG(TOSDB, LOG_TRACE, "read from disk position 0x%llx (0x%llx) size 0x%llx (0x%llx)",
+             position, position / bs, size, size / bs);
 
-    return res;
+    int64_t read_res = d_ctx->dp->read(d_ctx->dp, position / bs, size / bs, &res);
+
+    return read_res == 0?res:NULL;
 }
 
 uint64_t  tosdb_backend_disk_write(tosdb_backend_t* backend, uint64_t position, uint64_t size, uint8_t* data) {
