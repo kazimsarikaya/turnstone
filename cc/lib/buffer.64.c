@@ -29,6 +29,10 @@ buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
         return NULL;
     }
 
+    if(capacity == 0) {
+        capacity = 1;
+    }
+
     bi->heap = heap;
     bi->lock = lock_create_with_heap(bi->heap);
     bi->capacity = capacity;
@@ -131,14 +135,15 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
     }
 
     if(bi->capacity != new_cap) {
-        bi->capacity = new_cap;
-        uint8_t* tmp_data = memory_malloc_ext(bi->heap, bi->capacity, 0);
+        uint8_t* tmp_data = memory_malloc_ext(bi->heap, new_cap, 0);
 
         if(tmp_data == NULL) {
             lock_release(bi->lock);
 
             return NULL;
         }
+
+        bi->capacity = new_cap;
 
         memory_memcopy(bi->data, tmp_data, bi->length);
         memory_free(bi->data);
