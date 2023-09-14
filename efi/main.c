@@ -758,7 +758,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     PRINTLOG(LINKER, LOG_INFO, "modules built");
 
-    if(linker_is_all_symbols_resolved(ctx) != 0) {
+    if(!linker_is_all_symbols_resolved(ctx)) {
         PRINTLOG(EFI, LOG_ERROR, "not all symbols resolved");
         linker_destroy_context(ctx);
 
