@@ -50,6 +50,7 @@ struct disk_t {
     disk_partition_context_t* (* get_partition_context)(const disk_t* d, uint8_t partno);
     iterator_t*               (* get_partition_contexts)(const disk_t* d);
     disk_partition_t*         (* get_partition)(const disk_t* d, uint8_t partno);
+    disk_partition_t*         (* get_partition_by_type_data)(const disk_t* d, const void* data);
 };
 
 #endif
