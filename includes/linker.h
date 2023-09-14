@@ -10,6 +10,9 @@
 #define ___LINKER_H 0
 
 #include <types.h>
+#include <buffer.h>
+#include <hashmap.h>
+#include <tosdb/tosdb.h>
 
 /**
  * @enum linker_section_type_t
@@ -75,13 +78,13 @@ typedef enum linker_symbol_scope_t {
  * @struct linker_direct_relocation_t
  * @brief relocation information
  */
-typedef struct linker_direct_relocation_t {
+typedef struct linker_relocation_entry_t {
     linker_section_type_t    section_type    : 8; ///< relocation's section type
     linker_relocation_type_t relocation_type : 8; ///< relocation type
     uint64_t                 symbol_id; ///< symbol id
     uint64_t                 offset; ///< where relocation value will be placed from start of program
     uint64_t                 addend; ///< destination displacement
-}__attribute__((packed)) linker_direct_relocation_t; ///< shorthand for struct
+}__attribute__((packed)) linker_relocation_entry_t; ///< shorthand for struct
 
 /**
  * @struct linker_section_locations_t
@@ -140,5 +143,53 @@ int8_t linker_memcopy_program_and_relink(uint64_t src_program_addr, uint64_t dst
  * @return 0 if success
  */
 int8_t linker_remap_kernel(void);
+
+
+#define LINKER_GOT_SYMBOL_ID  0x1
+#define LINKER_GOT_SECTION_ID 0x1
+
+typedef struct linker_section_t {
+    uint64_t virtual_start;
+    uint64_t physical_start;
+    uint64_t size;
+    buffer_t section_data;
+} linker_section_t;
+
+typedef struct linker_module_t {
+    uint64_t         id;
+    uint64_t         virtual_start;
+    uint64_t         physical_start;
+    linker_section_t sections[LINKER_SECTION_TYPE_NR_SECTIONS];
+} linker_module_t;
+
+
+typedef struct linker_context_t {
+    uint64_t   program_start_physical;
+    uint64_t   program_start_virtual;
+    uint64_t   program_size;
+    uint64_t   entrypoint_symbol_id;
+    uint64_t   got_address_physical;
+    uint64_t   got_address_virtual;
+    uint64_t   entrypoint_address_virtual;
+    uint64_t   size_of_sections[LINKER_SECTION_TYPE_NR_SECTIONS];
+    hashmap_t* modules;
+    buffer_t   got_table_buffer;
+    hashmap_t* got_symbol_index_map;
+    tosdb_t*   tdb;
+} linker_context_t;
+
+int8_t    linker_destroy_context(linker_context_t* ctx);
+int8_t    linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t recursive);
+int8_t    linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t section_id, uint8_t section_type, uint64_t section_offset);
+int8_t    linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_section_t* section, boolean_t recursive);
+boolean_t linker_is_all_symbols_resolved(linker_context_t* ctx);
+int8_t    linker_bind_addresses(linker_context_t* ctx);
+int8_t    linker_bind_got_entry_values(linker_context_t* ctx);
+int8_t    linker_link_program(linker_context_t* ctx);
+int64_t   linker_get_section_count_without_relocations(linker_context_t* ctx);
+buffer_t  linker_build_efi_image_relocations(linker_context_t* ctx);
+buffer_t  linker_build_efi_image_section_headers_without_relocations(linker_context_t* ctx);
+buffer_t  linker_build_efi(linker_context_t* ctx);
+int8_t    linker_dump_program_to_array(linker_context_t* ctx, uint8_t* array);
 
 #endif

@@ -3,7 +3,7 @@
 # This work is licensed under TURNSTONE OS Public License.
 # Please read and understand latest version of Licence.
 
-APP=$1
+TOSDBIMG=$1 
 
 shift
 
@@ -28,10 +28,16 @@ DEPEND_OBJS=$(echo -e $DEPEND_OBJS|sort|uniq)
 
 for _f in $DEPEND_OBJS; do
   _s=$(basename $_f|sed 's/\..*$//g')
-  echo -e ../output/efi/$_f: $(find ../includes -name "$_s*.h") 
-  echo 
-  echo -e "$APP: ../output/efi/$_f"
-  echo
+  _hs=$(find ../includes -name "$_s*.h")
+
+  if [ -z "$_hs" ]; then
+    echo 
+  else 
+    echo -e ../output/efi/$_f: $(find ../includes -name "$_s*.h") 
+    echo 
+  fi
+ 
+  echo -e "$TOSDBIMG: \$(EFIOUTPUT)/$_f"
   echo -e "EFIOBJS += \$(EFIOUTPUT)/$_f"
   echo
 done
