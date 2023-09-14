@@ -398,3 +398,17 @@ boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, u
 
     return true;
 }
+
+uint8_t* buffer_get_view_at_position(buffer_t buffer, uint64_t position, uint64_t length) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    if(position + length > bi->length) {
+        return NULL;
+    }
+
+    return bi->data + position;
+}

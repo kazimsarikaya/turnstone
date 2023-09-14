@@ -45,5 +45,5 @@ uint64_t  buffer_peek_ints(buffer_t buffer, uint8_t bc);
 boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro);
 boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, uint8_t* dest);
 #define buffer_write_all_into(b, d) buffer_write_slice_into(b, 0, buffer_get_length(b), d)
-
+uint8_t* buffer_get_view_at_position(buffer_t buffer, uint64_t position, uint64_t length);
 #endif
