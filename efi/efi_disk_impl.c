@@ -5,6 +5,8 @@
 
 #include <setup.h>
 
+MODULE("turnstone.efi");
+
 
 typedef struct efi_disk_impl_context_t {
     efi_block_io_t* bio;
@@ -17,7 +19,7 @@ uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d);
 int8_t   efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
 int8_t   efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
 int8_t   efi_disk_impl_close(const disk_or_partition_t* d);
-
+int8_t   efi_disk_impl_flush(const disk_or_partition_t* d);
 
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d){
     efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
@@ -33,6 +35,14 @@ int8_t efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
 
     ctx->bio->write(ctx->bio, ctx->bio->media->media_id, lba, count * ctx->block_size, data);
+    ctx->bio->flush(ctx->bio);
+
+    return 0;
+}
+
+int8_t efi_disk_impl_flush(const disk_or_partition_t* d) {
+    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+
     ctx->bio->flush(ctx->bio);
 
     return 0;
@@ -84,6 +94,7 @@ disk_t* efi_disk_impl_open(efi_block_io_t* bio) {
     d->disk.write = efi_disk_impl_write;
     d->disk.read = efi_disk_impl_read;
     d->disk.close = efi_disk_impl_close;
+    d->disk.flush = efi_disk_impl_flush;
 
     return d;
 }

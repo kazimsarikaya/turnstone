@@ -232,9 +232,9 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "Default page table switched to 0x%p", p4);
     }
 
-    if(SYSTEM_INFO->remapped == 0) {
-        linker_remap_kernel();
-    }
+    //if(SYSTEM_INFO->remapped == 0) {
+    //    linker_remap_kernel();
+    //}
 
     PRINTLOG(KERNEL, LOG_DEBUG, "vfb address 0x%p", SYSTEM_INFO->frame_buffer);
     PRINTLOG(KERNEL, LOG_DEBUG, "Frame buffer at 0x%llx and size 0x%016llx", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);

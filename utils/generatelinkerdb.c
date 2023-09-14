@@ -55,7 +55,7 @@ typedef struct linkerdb_ids_and_stats_t {
 int32_t     main(int32_t argc, char_t** argv);
 linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity);
 boolean_t   linkerdb_close(linkerdb_t* ldb);
-boolean_t   linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const uint64_t stack_size);
+boolean_t   linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const uint64_t stack_size, const uint64_t program_base);
 boolean_t   linkerdb_create_tables(linkerdb_t* ldb);
 boolean_t   linkerdb_parse_object_file(linkerdb_t*               ldb,
                                        const char_t*             filename,
@@ -203,7 +203,7 @@ boolean_t linkerdb_close(linkerdb_t* ldb) {
     return true;
 }
 
-boolean_t linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const uint64_t stack_size) {
+boolean_t linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const uint64_t stack_size, const uint64_t program_base) {
     tosdb_t* tdb = ldb->tdb;
 
     tosdb_database_t* db = tosdb_database_create_or_open(tdb, "system");
@@ -231,6 +231,12 @@ boolean_t linkerdb_gen_config(linkerdb_t* ldb, const char_t* entry_point, const 
     rec = tosdb_table_create_record(tbl_config);
     rec->set_string(rec, "name", "stack_size");
     rec->set_data(rec, "value", DATA_TYPE_INT8_ARRAY, sizeof(uint64_t), &stack_size);
+    rec->upsert_record(rec);
+    rec->destroy(rec);
+
+    rec = tosdb_table_create_record(tbl_config);
+    rec->set_string(rec, "name", "program_base");
+    rec->set_data(rec, "value", DATA_TYPE_INT8_ARRAY, sizeof(uint64_t), &program_base);
     rec->upsert_record(rec);
     rec->destroy(rec);
 
@@ -493,6 +499,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
     tosdb_record_t* rec_impl = tosdb_table_create_record(tbl_implementations);
 
     if(!rec_impl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create record for table 'implementations'");
+
         return false;
     }
 
@@ -518,6 +526,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
     FILE* fp = fopen(filename, "r");
 
     if(!fp) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot open file '%s'", filename);
+
         return false;
     }
 
@@ -553,14 +563,14 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
         e_shsize = sizeof(elf64_shdr_t) * e_shnum;
 
     } else {
-        printf("unknown file class %i\n", e_indent.class );
+        PRINTLOG(TOSDB, LOG_ERROR, "unknown file class %i\n", e_indent.class );
         fclose(fp);
 
         return false;
     }
 
     if(e_shnum == 0) {
-        printf("no section in file %s\n", filename);
+        PRINTLOG(TOSDB, LOG_ERROR, "no section in file %s\n", filename);
         fclose(fp);
 
         return false;
@@ -586,7 +596,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*               ldb,
 
     if(!shstrtab) {
         memory_free(sections);
-        printf("cannot allocate section string table for file %s\n", filename);
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate section string table for file %s\n", filename);
         fclose(fp);
 
         return false;
@@ -1315,7 +1325,9 @@ int32_t main(int32_t argc, char_t** argv) {
 
     char_t* output_file = NULL;
     const char_t* entry_point = "___kstart64";
+    boolean_t need_free_entry_point = false;
     uint64_t stack_size = 0x10000;
+    uint64_t program_base = 0x200000; // 2MB
 
     while(argc > 0) {
         if(strstarts(*argv, "-") != 0) {
@@ -1347,6 +1359,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
             if(argc) {
                 entry_point = strdup(*argv);
+                need_free_entry_point = true;
 
                 argc--;
                 argv++;
@@ -1376,6 +1389,24 @@ int32_t main(int32_t argc, char_t** argv) {
                 return -1;
             }
         }
+
+        if(strcmp(*argv, "-pb") == 0) {
+            argc--;
+            argv++;
+
+            if(argc) {
+                program_base = atoi(*argv);
+
+                argc--;
+                argv++;
+                continue;
+            } else {
+                print_error("argument error");
+                print_error("LINKERDB FAILED");
+
+                return -1;
+            }
+        }
     }
 
     int32_t exit_code = 0;
@@ -1390,7 +1421,7 @@ int32_t main(int32_t argc, char_t** argv) {
         goto close;
     }
 
-    if(!linkerdb_gen_config(ldb, entry_point, stack_size)) {
+    if(!linkerdb_gen_config(ldb, entry_point, stack_size, program_base)) {
         print_error("cannot gen config table");
 
         exit_code = -1;
@@ -1445,6 +1476,10 @@ close:
         print_error("LINKERDB FAILED");
 
         exit_code = -1;
+    }
+
+    if(need_free_entry_point) {
+        memory_free((void*)entry_point);
     }
 
     printf("%lli\n", time_ns(NULL));
