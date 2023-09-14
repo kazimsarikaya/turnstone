@@ -16,9 +16,11 @@
 
 MODULE("turnstone.lib");
 
-int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module);
-int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
-int8_t linker_efi_image_section_header_cmp(const void* a, const void* b);
+int8_t   linker_link_module(linker_context_t* ctx, linker_module_t* module);
+int8_t   linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
+int8_t   linker_efi_image_section_header_cmp(const void* a, const void* b);
+buffer_t linker_build_relocation_table_buffer(linker_context_t* ctx);
+buffer_t linker_build_metadata_buffer(linker_context_t* ctx);
 
 int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     efi_image_relocation_entry_t* entry_a = (efi_image_relocation_entry_t*)a;
@@ -27,12 +29,6 @@ int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     if(entry_a->page_rva < entry_b->page_rva) {
         return -1;
     } else if(entry_a->page_rva > entry_b->page_rva) {
-        return 1;
-    }
-
-    if(entry_a->offset < entry_b->offset) {
-        return -1;
-    } else if(entry_a->offset > entry_b->offset) {
         return 1;
     }
 
@@ -787,7 +783,77 @@ clean_secs_iter:
 }
 #pragma GCC diagnostic pop
 
-int8_t linker_bind_addresses(linker_context_t* ctx) {
+int8_t linker_calculate_program_size(linker_context_t* ctx) {
+    if(!ctx) {
+        return -1;
+    }
+
+    uint64_t relocation_table_size = 0;
+    uint64_t metadata_size = 0;
+
+    iterator_t* it = hashmap_iterator_create(ctx->modules);
+
+    if(!it) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
+
+        return -1;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        linker_module_t* module = (linker_module_t*)it->get_item(it);
+
+        metadata_size += 24; // id, physical_start, virtual_start bytes
+
+        for(int32_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
+            if(module->sections[i].size) {
+                metadata_size += 32; // section id, physical_start, virtual_start, size bytes
+
+                if(module->sections[i].size % 0x1000) {
+                    ctx->program_size += module->sections[i].size + (0x1000 - (module->sections[i].size % 0x1000));
+                } else {
+                    ctx->program_size += module->sections[i].size;
+                }
+            }
+        }
+
+        if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size) {
+            relocation_table_size += 16 +  module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size;
+        }
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+
+    if(ctx->program_size % 0x1000) {
+        ctx->program_size += 0x1000 - (ctx->program_size % 0x1000);
+    }
+
+    ctx->global_offset_table_size = buffer_get_length(ctx->got_table_buffer);
+
+    if(ctx->global_offset_table_size % 0x1000) {
+        ctx->global_offset_table_size += 0x1000 - (ctx->global_offset_table_size % 0x1000);
+    }
+
+    ctx->relocation_table_size = relocation_table_size;
+
+    if(ctx->relocation_table_size % 0x1000) {
+        ctx->relocation_table_size += 0x1000 - (ctx->relocation_table_size % 0x1000);
+    }
+
+    ctx->metadata_size = metadata_size;
+
+    if(ctx->metadata_size % 0x1000) {
+        ctx->metadata_size += 0x1000 - (ctx->metadata_size % 0x1000);
+    }
+
+    PRINTLOG(LINKER, LOG_INFO, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx",
+             ctx->program_size, ctx->global_offset_table_size, ctx->relocation_table_size, ctx->metadata_size);
+
+    return 0;
+}
+
+int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
     if(!ctx) {
         return -1;
     }
@@ -828,12 +894,6 @@ int8_t linker_bind_addresses(linker_context_t* ctx) {
     }
 
     it->destroy(it);
-
-    ctx->program_size = offset_pyhsical - ctx->program_start_physical;
-
-    if(ctx->program_size % 0x1000) {
-        ctx->program_size += 0x1000 - (ctx->program_size % 0x1000);
-    }
 
     ctx->got_address_physical = offset_pyhsical;
     ctx->got_address_virtual = offset_virtual;
@@ -984,11 +1044,20 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
     for(uint64_t reloc_id = 0; reloc_id < reloc_entry_count; reloc_id++) {
         uint64_t got_idx = (uint64_t)hashmap_get(ctx->got_symbol_index_map, (void*)reloc_entries[reloc_id].symbol_id);
 
-        if(got_idx < 2) {
-            PRINTLOG(LINKER, LOG_ERROR, "invalid GOT index");
+        if(got_idx == 0) {
+            if(reloc_entries[reloc_id].symbol_id != 1) {
+                PRINTLOG(LINKER, LOG_ERROR, "invalid GOT index symbol id 0x%llx got index 0x%llx", reloc_entries[reloc_id].symbol_id, got_idx);
 
-            return -1;
+                return -1;
+            } else {
+                if(reloc_entries[reloc_id].relocation_type != LINKER_RELOCATION_TYPE_64_GOTPC64) {
+                    PRINTLOG(LINKER, LOG_ERROR, "invalid relocation for got itself. relocation type 0x%x", reloc_entries[reloc_id].relocation_type);
+
+                    return -1;
+                }
+            }
         }
+
 
         uint8_t* section_data = (uint8_t*)buffer_get_view_at_position(module->sections[reloc_entries[reloc_id].section_type].section_data, 0, module->sections[reloc_entries[reloc_id].section_type].size);
 
@@ -1098,31 +1167,62 @@ buffer_t linker_build_efi_image_relocations(linker_context_t* ctx) {
 
         linker_relocation_entry_t* reloc_entries = (linker_relocation_entry_t*)buffer_get_view_at_position(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data, 0, reloc_entries_size);
 
+        efi_image_relocation_entry_t* efi_reloc_entry = NULL;
+        uint64_t efi_reloc_entry_count = 0;
 
         for(uint64_t i = 0; i < reloc_entries_count; i++) {
-            if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32 || reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32S || reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
-                efi_image_relocation_entry_t* efi_reloc_entry = memory_malloc(sizeof(efi_image_relocation_entry_t));
-
-                if(!efi_reloc_entry) {
-                    PRINTLOG(LINKER, LOG_ERROR, "cannot allocate memory");
-
-                    goto error;
-                }
+            if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32 ||
+               reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32S ||
+               reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
 
                 uint64_t reloc_offset = module->sections[reloc_entries[i].section_type].virtual_start + reloc_entries[i].offset;
+                uint64_t er_page = reloc_offset & ~(0x1000 - 1);
+                uint64_t er_offset = reloc_offset & (0x1000 - 1);
 
-                efi_reloc_entry->page_rva = reloc_offset & ~(0x1000 - 1);
-                efi_reloc_entry->block_size = sizeof(efi_image_relocation_entry_t);
-                efi_reloc_entry->offset = reloc_offset & (0x1000 - 1);
+                if(!efi_reloc_entry) {
+                    efi_reloc_entry = memory_malloc(sizeof(efi_image_relocation_entry_t) + sizeof(uint16_t) * EFI_IMAGE_MAX_RELOCATION_ENTRIES);
 
-                linkedlist_sortedlist_insert(relocations_list, efi_reloc_entry);
+                    if(!efi_reloc_entry) {
+                        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate memory");
+
+                        goto error;
+                    }
+
+                    efi_reloc_entry->page_rva = er_page;
+                    efi_reloc_entry_count = 0;
+                } else {
+                    if(efi_reloc_entry->page_rva != er_page) {
+                        efi_reloc_entry->block_size = sizeof(efi_image_relocation_entry_t) + efi_reloc_entry_count * sizeof(uint16_t);
+                        linkedlist_sortedlist_insert(relocations_list, efi_reloc_entry);
+
+                        efi_reloc_entry = memory_malloc(sizeof(efi_image_relocation_entry_t) + sizeof(uint16_t) * EFI_IMAGE_MAX_RELOCATION_ENTRIES);
+
+                        if(!efi_reloc_entry) {
+                            PRINTLOG(LINKER, LOG_ERROR, "cannot allocate memory");
+
+                            goto error;
+                        }
+
+                        efi_reloc_entry->page_rva = er_page;
+                        efi_reloc_entry_count = 0;
+                    }
+                }
+
+                efi_reloc_entry->entries[efi_reloc_entry_count].offset = er_offset;
 
                 if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32 || reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32S) {
-                    efi_reloc_entry->type = 0x3;
+                    efi_reloc_entry->entries[efi_reloc_entry_count].type = EFI_IMAGE_REL_BASED_HIGHLOW;
                 } else if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
-                    efi_reloc_entry->type = 0xA;
+                    efi_reloc_entry->entries[efi_reloc_entry_count].type = EFI_IMAGE_REL_BASED_DIR64;
                 }
+
+                efi_reloc_entry_count++;
             }
+        }
+
+        if(efi_reloc_entry_count && efi_reloc_entry) {
+            efi_reloc_entry->block_size = sizeof(efi_image_relocation_entry_t) + efi_reloc_entry_count * sizeof(uint16_t);
+            linkedlist_sortedlist_insert(relocations_list, efi_reloc_entry);
         }
 
         it = it->next(it);
@@ -1145,7 +1245,9 @@ buffer_t linker_build_efi_image_relocations(linker_context_t* ctx) {
     while(it->end_of_iterator(it) != 0) {
         efi_image_relocation_entry_t* efi_reloc_entry = (efi_image_relocation_entry_t*)it->get_item(it);
 
-        if(!buffer_append_bytes(relocations_buffer, (uint8_t*)efi_reloc_entry, sizeof(efi_image_relocation_entry_t))) {
+        PRINTLOG(LINKER, LOG_DEBUG, "relocation entry: page_rva: 0x%x, block_size: 0x%x", efi_reloc_entry->page_rva, efi_reloc_entry->block_size);
+
+        if(!buffer_append_bytes(relocations_buffer, (uint8_t*)efi_reloc_entry, efi_reloc_entry->block_size)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot append to buffer");
 
             goto error;
@@ -1222,16 +1324,16 @@ buffer_t linker_build_efi_image_section_headers_without_relocations(linker_conte
 
             if(i == LINKER_SECTION_TYPE_TEXT) {
                 strcpy(".text", efi_section_header->name);
-                efi_section_header->characteristics =  0x68000020;
+                efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_TEXT;
             } else if(i == LINKER_SECTION_TYPE_DATA) {
                 strcpy(".data", efi_section_header->name);
-                efi_section_header->characteristics =  0xC8000040;
+                efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_DATA;
             } else if(i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_ROREL) {
-                strcpy(".rodata", efi_section_header->name);
-                efi_section_header->characteristics =  0x48000040;
+                strcpy(".rdata", efi_section_header->name);
+                efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_RODATA;
             } else if(i == LINKER_SECTION_TYPE_BSS) {
                 strcpy(".bss", efi_section_header->name);
-                efi_section_header->characteristics =  0xC8000080;
+                efi_section_header->characteristics = EFI_IMAGE_SECTION_FLAGS_BSS;
             }
 
             linkedlist_sortedlist_insert(sections_list, efi_section_header);
@@ -1329,7 +1431,7 @@ buffer_t  linker_build_efi(linker_context_t* ctx) {
         .virtual_address = ctx->program_size + ctx->program_start_virtual,
         .size_of_raw_data = relocation_size,
         .pointer_to_raw_data = ctx->program_size + ctx->program_start_physical,
-        .characteristics = 0x48000040
+        .characteristics = EFI_IMAGE_SECTION_FLAGS_RELOC,
     };
 
 
@@ -1362,7 +1464,7 @@ buffer_t  linker_build_efi(linker_context_t* ctx) {
         .base_of_code = 0x1000,
         .section_alignment = 0x1000,
         .file_alignment = 0x20,
-        .subsystem = 10,
+        .subsystem = EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION,
         .number_of_rva_nd_sizes = 16,
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
         .base_relocation_table.size = reloc_section.size_of_raw_data,
@@ -1382,7 +1484,7 @@ buffer_t  linker_build_efi(linker_context_t* ctx) {
         goto error_destroy_from_relocation_buffer;
     }
 
-    if(linker_dump_program_to_array(ctx, program_data)) {
+    if(linker_dump_program_to_array(ctx, LINKER_PROGRAM_DUMP_TYPE_CODE, program_data)) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot dump program to array");
 
         goto error_destroy_from_program_data;
@@ -1517,41 +1619,260 @@ error:
     return NULL;
 }
 
-int8_t linker_dump_program_to_array(linker_context_t* ctx, uint8_t* array) {
+int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array) {
     if(!ctx || !array) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context or array");
 
         return -1;
     }
 
+    if(dump_type == LINKER_PROGRAM_DUMP_TYPE_NONE) {
+        return 0;
+    }
+
+    uint64_t program_target_offset = 0;
+
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_CODE) {
+
+        iterator_t* it = hashmap_iterator_create(ctx->modules);
+
+        if(!it) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
+
+            return -1;
+        }
+
+        while(it->end_of_iterator(it) != 0) {
+            linker_module_t* module = (linker_module_t*)it->get_item(it);
+
+            for(uint64_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
+                if(module->sections[i].size == 0) {
+                    continue;
+                }
+
+                uint64_t section_data_size = buffer_get_length(module->sections[i].section_data);
+
+                uint8_t* section_data = buffer_get_view_at_position(module->sections[i].section_data, 0, section_data_size);
+
+                PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx section type %lli to 0x%llx with size 0x%llx", module->id, i, module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+                memory_memcopy(section_data, array + program_target_offset + module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+            }
+
+            it = it->next(it);
+        }
+
+        it->destroy(it);
+
+        program_target_offset += ctx->program_size;
+    }
+
+
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_GOT) {
+
+        uint64_t got_size = buffer_get_length(ctx->got_table_buffer);
+
+        uint8_t* got = buffer_get_view_at_position(ctx->got_table_buffer, 0, got_size);
+
+        PRINTLOG(LINKER, LOG_DEBUG, "copying got to 0x%llx with size 0x%llx", program_target_offset, got_size);
+        memory_memcopy(got, array + program_target_offset, got_size);
+
+        program_target_offset += ctx->global_offset_table_size;
+    }
+
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_RELOCATIONS) {
+        buffer_t relocs_buf = linker_build_relocation_table_buffer(ctx);
+
+        uint64_t relocs_size = buffer_get_length(relocs_buf);
+
+        uint8_t* relocs = buffer_get_view_at_position(relocs_buf, 0, relocs_size);
+
+        PRINTLOG(LINKER, LOG_DEBUG, "copying relocations to 0x%llx with size 0x%llx", program_target_offset, relocs_size);
+        memory_memcopy(relocs, array + program_target_offset, relocs_size);
+
+        buffer_destroy(relocs_buf);
+
+        program_target_offset += ctx->relocation_table_size;
+    }
+
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_METADATA) {
+        buffer_t metadata_buf = linker_build_metadata_buffer(ctx);
+
+        uint64_t metadata_size = buffer_get_length(metadata_buf);
+
+        uint8_t* metadata = buffer_get_view_at_position(metadata_buf, 0, metadata_size);
+
+        PRINTLOG(LINKER, LOG_DEBUG, "copying relocations to 0x%llx with size 0x%llx", program_target_offset, metadata_size);
+        memory_memcopy(metadata, array + program_target_offset, metadata_size);
+
+        buffer_destroy(metadata_buf);
+
+        program_target_offset += ctx->metadata_size;
+    }
+
+    return 0;
+}
+
+buffer_t linker_build_relocation_table_buffer(linker_context_t* ctx) {
+    if(!ctx) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid context");
+
+        return NULL;
+    }
+
+    buffer_t relocation_buffer = buffer_new_with_capacity(NULL, ctx->relocation_table_size);
+
+    if(!relocation_buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
+
+        return NULL;
+    }
+
+
     iterator_t* it = hashmap_iterator_create(ctx->modules);
 
     if(!it) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
 
-        return -1;
+        goto error_destroy_buffer;
     }
 
     while(it->end_of_iterator(it) != 0) {
         linker_module_t* module = (linker_module_t*)it->get_item(it);
+
+
+        if(module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size == 0) {
+            it = it->next(it);
+
+            continue;
+        }
+
+        if(!buffer_append_bytes(relocation_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(relocation_buffer, (uint8_t*)&module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].size, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append relocation table size to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_buffer(relocation_buffer, module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE].section_data)) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append relocation table to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        it = it->next(it);
+    }
+
+
+    it->destroy(it);
+
+    return relocation_buffer;
+
+error_destroy_buffer:
+    buffer_destroy(relocation_buffer);
+
+    return NULL;
+}
+
+buffer_t linker_build_metadata_buffer(linker_context_t* ctx) {
+    if(!ctx) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid context");
+
+        return NULL;
+    }
+
+    buffer_t metadata_buffer = buffer_new_with_capacity(NULL, ctx->metadata_size);
+
+    if(!metadata_buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
+
+        return NULL;
+    }
+
+
+    iterator_t* it = hashmap_iterator_create(ctx->modules);
+
+    if(!it) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator");
+
+        goto error_destroy_buffer;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        linker_module_t* module = (linker_module_t*)it->get_item(it);
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->physical_start, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append physical start to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->virtual_start, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append virtual start to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
 
         for(uint64_t i = 0; i < LINKER_SECTION_TYPE_RELOCATION_TABLE; i++) {
             if(module->sections[i].size == 0) {
                 continue;
             }
 
-            uint64_t section_data_size = buffer_get_length(module->sections[i].section_data);
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&i, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section type to buffer");
+                it->destroy(it);
 
-            uint8_t* section_data = buffer_get_view_at_position(module->sections[i].section_data, 0, section_data_size);
+                goto error_destroy_buffer;
+            }
 
-            PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx section type %lli to 0x%llx with size 0x%llx", module->id, i, module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
-            memory_memcopy(section_data, array + module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].physical_start, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section physical start to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
+
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].virtual_start, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section virtual start to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
+
+            if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->sections[i].size, sizeof(uint64_t))) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot append section size to buffer");
+                it->destroy(it);
+
+                goto error_destroy_buffer;
+            }
         }
 
         it = it->next(it);
     }
 
+
     it->destroy(it);
 
-    return 0;
+    return metadata_buffer;
+
+error_destroy_buffer:
+    buffer_destroy(metadata_buffer);
+
+    return NULL;
 }

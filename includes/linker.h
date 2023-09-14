@@ -167,6 +167,9 @@ typedef struct linker_context_t {
     uint64_t   program_start_physical;
     uint64_t   program_start_virtual;
     uint64_t   program_size;
+    uint64_t   global_offset_table_size;
+    uint64_t   relocation_table_size;
+    uint64_t   metadata_size;
     uint64_t   entrypoint_symbol_id;
     uint64_t   got_address_physical;
     uint64_t   got_address_virtual;
@@ -178,18 +181,29 @@ typedef struct linker_context_t {
     tosdb_t*   tdb;
 } linker_context_t;
 
+typedef enum linker_program_dump_type_t {
+    LINKER_PROGRAM_DUMP_TYPE_NONE = 0,
+    LINKER_PROGRAM_DUMP_TYPE_CODE = 1,
+    LINKER_PROGRAM_DUMP_TYPE_GOT = 2,
+    LINKER_PROGRAM_DUMP_TYPE_RELOCATIONS = 4,
+    LINKER_PROGRAM_DUMP_TYPE_METADATA = 8,
+    LINKER_PROGRAM_DUMP_TYPE_ALL = 0xF,
+} linker_program_dump_type_t;
+
+
 int8_t    linker_destroy_context(linker_context_t* ctx);
 int8_t    linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t recursive);
 int8_t    linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t section_id, uint8_t section_type, uint64_t section_offset);
 int8_t    linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_section_t* section, boolean_t recursive);
 boolean_t linker_is_all_symbols_resolved(linker_context_t* ctx);
-int8_t    linker_bind_addresses(linker_context_t* ctx);
+int8_t    linker_calculate_program_size(linker_context_t* ctx);
+int8_t    linker_bind_linear_addresses(linker_context_t* ctx);
 int8_t    linker_bind_got_entry_values(linker_context_t* ctx);
 int8_t    linker_link_program(linker_context_t* ctx);
 int64_t   linker_get_section_count_without_relocations(linker_context_t* ctx);
 buffer_t  linker_build_efi_image_relocations(linker_context_t* ctx);
 buffer_t  linker_build_efi_image_section_headers_without_relocations(linker_context_t* ctx);
 buffer_t  linker_build_efi(linker_context_t* ctx);
-int8_t    linker_dump_program_to_array(linker_context_t* ctx, uint8_t* array);
+int8_t    linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array);
 
 #endif
