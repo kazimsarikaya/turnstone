@@ -155,10 +155,10 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
+$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
-$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
+$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
 $(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)

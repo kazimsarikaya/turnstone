@@ -42,14 +42,10 @@ NOSTDLIB_OBJECTS = $(patsubst $(NOSTDLIB_DIR)/%.c,$(NOSTDLIB_OUTPUT)/%.o,$(NOSTD
 OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 TOSOUTPUTS := $(patsubst %,$(OUTPUT)/%.tosbin,$(PROGS))
 
-LINKER = $(OUTPUT)/linker.bin
-
 .PHONY: all clean depend
 .PRECIOUS: $(TESTOUTPUT)/%.o $(NOSTDLIB_OBJECTS)
-all: $(LINKER) $(OUTPUTS) $(TOSOUTPUTS)
+all: $(OUTPUTS) 
 
-$(LINKER): ../utils/linker.c
-	make -C ../utils $@
 
 gendirs:
 	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
@@ -66,10 +62,6 @@ $(TESTOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.c
 
 $(OUTPUT)/%.bin: $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
 	$(LD) $(LDFLAGS) -o $@ $^
-
-$(OUTPUT)/%.tosbin: $(LINKER) $(LDSRCDIR)/local.ld $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
-	$(LINKER) --init-section --trim -o $@ -M $@.map -T $(filter-out $<,$^) 
-	chmod +x $@
 
 $(NOSTDLIB_OUTPUT)/%.o: $(NOSTDLIB_DIR)/%.c 
 	$(CC) $(CCFLAGS) -o $@ $<
