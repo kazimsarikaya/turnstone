@@ -101,13 +101,6 @@ typedef int8_t (* fa_release_frame_f)(struct frame_allocator_t* self, frame_t* f
 typedef frame_t * (* fa_get_reserved_frames_of_address_f)(struct frame_allocator_t* self, void* address);
 
 /**
- * @brief rebuilds reserved memory mappings
- * @param[in] self frame allocator
- * @return 0 if succeed.
- */
-typedef int8_t (* fa_rebuild_reserved_mmap_f)(struct frame_allocator_t* self);
-
-/**
  * @brief cleans old reserved frames
  * @param[in] self frame allocator
  * @return 0 if succeed.
@@ -140,7 +133,6 @@ typedef struct frame_allocator_t {
     fa_allocate_frame_f                 allocate_frame; ///< allocate frame with given reference frame, ref frame not used in anywhere as is. it is only for reference.
     fa_release_frame_f                  release_frame; ///< release frame with given reference frame, ref frame not used in anywhere as is. it is only for reference.
     fa_get_reserved_frames_of_address_f get_reserved_frames_of_address; ///< returns the frame that address resides or null
-    fa_rebuild_reserved_mmap_f          rebuild_reserved_mmap; ///< rebuilds reserved memory mappings
     fa_cleanup_f                        cleanup; ///< cleans old reserved frames
     fa_reserve_system_frames_f          reserve_system_frames; ///< reserve frames for mmio
     fa_release_acpi_reclaim_memory_f    release_acpi_reclaim_memory; ///< release frames with attribute @ref FRAME_TYPE_ACPI_RECLAIM_MEMORY

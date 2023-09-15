@@ -334,6 +334,7 @@ typedef struct {
 #define ELF_SECTION_TYPE(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_type):(((elf32_shdr_t*)s)[idx].sh_type)))
 #define ELF_SECTION_ALIGN(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_addralign):(((elf32_shdr_t*)s)[idx].sh_addralign)))
 #define ELF_SECTION_LINK(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_link):(((elf32_shdr_t*)s)[idx].sh_link)))
+#define ELF_SECTION_INFO(c, s, idx) (((c) == ELFCLASS64?(((elf64_shdr_t*)s)[idx].sh_info):(((elf32_shdr_t*)s)[idx].sh_info)))
 
 #define ELF_SYMBOL_COUNT(c, s) ((c) == ELFCLASS64?(s / sizeof(elf64_sym_t)):(s / sizeof(elf32_sym_t)))
 

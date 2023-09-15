@@ -121,9 +121,9 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
 
 int32_t main(int32_t argc, char** argv) {
 
-    if (argc < 5) {
+    if (argc < 4) {
         printf("Error: not enough arguments\n");
-        printf("%s <diskpath> <efiimage> <kernel> <tosdbimg>\n", argv[0]);
+        printf("%s <diskpath> <efiimage> <tosdbimg>\n", argv[0]);
 
         return -1;
     }
@@ -140,7 +140,7 @@ int32_t main(int32_t argc, char** argv) {
     int item = 1;
     char_t* disk_name = argv[item++];
     char_t* efi_boot_file_name = argv[item++];
-    char_t* kernel_name = argv[item++];
+    // char_t* kernel_name = argv[item++];
     char_t* tosdbimg_name = argv[item++];
 
 
@@ -148,67 +148,81 @@ int32_t main(int32_t argc, char** argv) {
     disk_t* d = NULL;
 
     if(1) {
-        FILE* fp_kernel = fopen(kernel_name, "r");
-        fseek(fp_kernel, 0, SEEK_END);
-        int64_t kernel_size = ftell(fp_kernel);
-        fseek(fp_kernel, 0, SEEK_SET);
+        uint8_t* buf = NULL;
 
-        int64_t kernel_sec_count = kernel_size / 512;
-        if(kernel_size % 512) {
+        /*
+           FILE* fp_kernel = fopen(kernel_name, "r");
+           fseek(fp_kernel, 0, SEEK_END);
+           int64_t kernel_size = ftell(fp_kernel);
+           fseek(fp_kernel, 0, SEEK_SET);
+
+           int64_t kernel_sec_count = kernel_size / 512;
+           if(kernel_size % 512) {
             kernel_sec_count++;
-        }
+           }
+         */
 
         FILE* fp_tosdbimg = fopen(tosdbimg_name, "r");
         fseek(fp_tosdbimg, 0, SEEK_END);
         int64_t tosdbimg_size = ftell(fp_tosdbimg);
         fseek(fp_tosdbimg, 0, SEEK_SET);
 
-        int64_t tosdbimg_sec_count = tosdbimg_size / 512;
-        if(tosdbimg_size % 512) {
-            tosdbimg_sec_count++;
-        }
-
         d = disk_file_open(disk_name, 1 << 30);
 
 
         d = gpt_get_or_create_gpt_disk(d);
 
+        uint64_t bs = d->disk.get_block_size(&d->disk);
+
+        uint64_t part_start = 2048;
+
+        uint64_t part_end = part_start + (100 << 20) / bs - 1;
+
 
         disk_partition_context_t* part_ctx;
 
         efi_guid_t esp_guid = EFI_PART_TYPE_EFI_SYSTEM_PART_GUID;
-        part_ctx = gpt_create_partition_context(&esp_guid, "efi", 2048, 206847);
+        part_ctx = gpt_create_partition_context(&esp_guid, "efi", part_start, part_end);
         d->add_partition(d, part_ctx);
         memory_free(part_ctx->internal_context);
         memory_free(part_ctx);
 
+        /*
+           efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
+           part_ctx = gpt_create_partition_context(&kernel_guid, "kernel", 206848, 206848 + kernel_sec_count - 1);
+           d->add_partition(d, part_ctx);
+           memory_free(part_ctx->internal_context);
+           memory_free(part_ctx);
 
-        efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
-        part_ctx = gpt_create_partition_context(&kernel_guid, "kernel", 206848, 206848 + kernel_sec_count - 1);
-        d->add_partition(d, part_ctx);
-        memory_free(part_ctx->internal_context);
-        memory_free(part_ctx);
+           uint8_t* buf = memory_malloc(kernel_size);
+           fread(buf, 1, kernel_size, fp_kernel);
 
-        uint8_t* buf = memory_malloc(kernel_size);
-        fread(buf, 1, kernel_size, fp_kernel);
+           d->disk.write((disk_or_partition_t*)d, 206848, kernel_size / 512, buf);
 
-        d->disk.write((disk_or_partition_t*)d, 206848, kernel_size / 512, buf);
+           memory_free(buf);
+           fclose(fp_kernel);
+         */
 
-        memory_free(buf);
-        fclose(fp_kernel);
+        part_start = part_end + 1;
+
+        int64_t tosdbimg_sec_count = tosdbimg_size / 512;
+        if(tosdbimg_size % 512) {
+            tosdbimg_sec_count++;
+        }
+
+        part_end = part_start + tosdbimg_sec_count - 1;
 
 
         efi_guid_t tosdb_guid = EFI_PART_TYPE_TURNSTONE_TOSDB_PART_GUID;
-        uint64_t tosdb_start = 206848 + kernel_sec_count;
-        part_ctx = gpt_create_partition_context(&tosdb_guid, "tosdb_sys", tosdb_start, tosdb_start + tosdbimg_sec_count - 1);
+        part_ctx = gpt_create_partition_context(&tosdb_guid, "tosdb_sys", part_start, part_end);
         d->add_partition(d, part_ctx);
         memory_free(part_ctx->internal_context);
         memory_free(part_ctx);
 
         buf = memory_malloc(tosdbimg_size);
-        fread(buf, 1, kernel_size, fp_tosdbimg);
+        fread(buf, 1, tosdbimg_size, fp_tosdbimg);
 
-        d->disk.write((disk_or_partition_t*)d, tosdb_start, tosdbimg_size / 512, buf);
+        d->disk.write((disk_or_partition_t*)d, part_start, tosdbimg_sec_count, buf);
 
         memory_free(buf);
         fclose(fp_tosdbimg);

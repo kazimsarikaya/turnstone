@@ -61,9 +61,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
 
 
-    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
-    uint64_t stack_size = kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_size;
-    uint64_t stack_top = kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_start;
+    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+    uint64_t stack_size = kernel->program_stack_size;
+    uint64_t stack_top = kernel->program_stack_virtual_address;
 
 
     uint64_t stack_bottom = stack_top - 9 * stack_size;

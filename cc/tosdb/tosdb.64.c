@@ -100,7 +100,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
 
         backup_sb->header.checksum = csum_bak;
     } else {
-        PRINTLOG(TOSDB, LOG_WARNING, "backup block signature mismatch");
+        PRINTLOG(TOSDB, LOG_WARNING, "backup block signature mismatch %s", backup_sb->header.signature);
     }
 
 

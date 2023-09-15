@@ -1,6 +1,9 @@
 /**
  * @file shell.64.c
  * @brief Shell
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #include <shell.h>
@@ -173,14 +176,6 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
     return 0;
 }
-
-
-
-
-
-
-
-
 
 int8_t shell_init(void) {
     return task_create_task(NULL, 2 << 20, 64 << 10, shell_main, 0, NULL, "shell") == -1ULL ? -1 : 0;

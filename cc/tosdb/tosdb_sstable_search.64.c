@@ -220,17 +220,24 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         memory_free(st_idx);
     }
 
+    PRINTLOG(TOSDB, LOG_TRACE, "sstable 0x%llx level 0x%llx first: %llx item %llx last: %llx",
+             sli->sstable_id, sli->level, first->secondary_key_hash, item->secondary_key_hash, last->secondary_key_hash);
+
     int8_t first_limit = tosdb_sstable_secondary_index_comparator(&first, &item);
     int8_t last_limit = tosdb_sstable_secondary_index_comparator(&last, &item);
 
     if(first_limit == 1 || last_limit == -1) {
+
+        PRINTLOG(TOSDB, LOG_TRACE, "not found inside sstable 0x%llx level 0x%llx first_limit: %d last_limit: %d",
+                 sli->sstable_id, sli->level, first_limit, last_limit);
+
         if(!tdb_cache) {
             bloomfilter_destroy(bf);
             memory_free(first);
             memory_free(last);
         }
 
-        return false;
+        return true;
     }
 
     if(!tdb_cache) {
@@ -256,7 +263,9 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             bloomfilter_destroy(bf);
         }
 
-        return false;
+        PRINTLOG(TOSDB, LOG_TRACE, "sstable 0x%llx level 0x%llx not found at bloom filter", sli->sstable_id, sli->level);
+
+        return true;
     }
 
     if(!tdb_cache) {
@@ -280,6 +289,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     if(c_id) {
         st_idx_items = c_id->index_items;
         record_count = c_id->record_count;
+
     } else {
         record_count = sli->record_count;
 
@@ -327,6 +337,15 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         for(uint64_t i = 0; i < sli->record_count; i++) {
             st_idx_items[i] = (tosdb_memtable_secondary_index_item_t*)idx_data;
 
+            if(!st_idx_items[i]) {
+                memory_free(st_idx_items);
+                memory_free(idx_data);
+
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create index item 0x%llx", i);
+
+                return false;
+            }
+
             idx_data += sizeof(tosdb_memtable_secondary_index_item_t) + st_idx_items[i]->secondary_key_length + st_idx_items[i]->primary_key_length;
         }
 
@@ -350,6 +369,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         }
     }
 
+    PRINTLOG(TOSDB, LOG_TRACE, "index data read, record count: 0x%llx", record_count);
 
     tosdb_memtable_secondary_index_item_t** found_item = (tosdb_memtable_secondary_index_item_t**)binarysearch(st_idx_items,
                                                                                                                sli->record_count,
@@ -361,7 +381,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
     boolean_t error = false;
 
-    while(found_item) {
+    while(found_item && found_item < st_idx_items + record_count) {
         if(tosdb_sstable_secondary_index_comparator(&item, found_item)) {
             break;
         }

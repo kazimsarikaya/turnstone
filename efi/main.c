@@ -13,6 +13,11 @@
 #include <data.h>
 #include <zpack.h>
 #include <xxhash.h>
+#include <tosdb/tosdb.h>
+#include <memory/paging.h>
+#include <memory/frame.h>
+
+MODULE("turnstone.efi");
 
 efi_system_table_t* ST;
 efi_boot_services_t* BS;
@@ -20,25 +25,70 @@ efi_runtime_services_t* RS;
 
 typedef int8_t (*kernel_start_t)(system_info_t* sysinfo);
 
-typedef struct efi_kernel_data_t {
-    uint8_t* data;
-    uint64_t size;
-} efi_kernel_data_t;
+typedef struct efi_tosdb_context_t {
+    efi_block_io_t*  bio;
+    tosdb_backend_t* backend;
+    tosdb_t*         tosdb;
+} efi_tosdb_context_t;
 
 efi_status_t        efi_setup_heap(void);
 efi_status_t        efi_setup_graphics(video_frame_buffer_t** vfb_res);
-efi_status_t        efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data);
-efi_status_t        efi_load_local_kernel(efi_kernel_data_t** kernel_data);
 efi_status_t        efi_print_variable_names(void);
 efi_status_t        efi_is_pxe_boot(boolean_t* result);
-efi_status_t        efi_load_pxe_kernel(efi_kernel_data_t** kernel_data);
 EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
+efi_status_t        efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
+efi_status_t        efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
+efi_status_t        efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
+
+
+efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value) {
+    efi_status_t status = EFI_OUT_OF_RESOURCES;
+
+    tosdb_database_t* db_system = tosdb_database_create_or_open(tdb_ctx->tosdb, "system");
+    tosdb_table_t* tbl_config = tosdb_table_create_or_open(db_system, "config", 1 << 10, 512 << 10, 8);
+
+    tosdb_record_t* rec_config = tosdb_table_create_record(tbl_config);
+
+    if(rec_config == NULL) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot create entry point record");
+
+        goto catch_efi_error;
+    }
+
+    if(!rec_config->set_string(rec_config, "name", config_key)) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot set program base");
+        rec_config->destroy(rec_config);
+
+        goto catch_efi_error;
+    }
+
+    if(!rec_config->get_record(rec_config)) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot get program base record");
+        rec_config->destroy(rec_config);
+
+        goto catch_efi_error;
+    }
+
+    if(!rec_config->get_data(rec_config, "value", DATA_TYPE_INT8_ARRAY, NULL, config_value)) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot get program base");
+        rec_config->destroy(rec_config);
+
+        goto catch_efi_error;
+    }
+
+    rec_config->destroy(rec_config);
+
+    status = EFI_SUCCESS;
+
+catch_efi_error:
+    return status;
+}
 
 efi_status_t efi_setup_heap(void){
     efi_status_t res;
 
     void* heap_area = NULL;
-    int64_t heap_size = 1024 * 1024 * 4; // 4 MiB
+    int64_t heap_size = 1024 * 1024 * 64; // 64 MiB
 
     res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
 
@@ -108,7 +158,13 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
         goto catch_efi_error;
     }
 
-    vfb = memory_malloc(sizeof(video_frame_buffer_t));
+    uint64_t vfb_struct_size = sizeof(video_frame_buffer_t);
+
+    if(vfb_struct_size % FRAME_SIZE) {
+        vfb_struct_size += FRAME_SIZE - (vfb_struct_size % FRAME_SIZE);
+    }
+
+    vfb = memory_malloc_ext(NULL, vfb_struct_size, FRAME_SIZE);
 
     if(vfb == NULL) {
         PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb");
@@ -135,7 +191,7 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t** kernel_data) {
+efi_status_t efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res;
 
     disk_t* sys_disk = efi_disk_impl_open(bio);
@@ -153,74 +209,80 @@ efi_status_t efi_lookup_kernel_partition(efi_block_io_t* bio, efi_kernel_data_t*
 
     PRINTLOG(EFI, LOG_DEBUG, "gpt disk getted");
 
-    efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_KERNEL_PART_GUID;
-    const disk_partition_context_t* part_ctx = NULL;
+    efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_TOSDB_PART_GUID;
 
-    iterator_t* iter = sys_disk->get_partition_contexts(sys_disk);
+    disk_or_partition_t* tosdb_part = (disk_or_partition_t*)sys_disk->get_partition_by_type_data(sys_disk, &kernel_guid);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        const disk_partition_context_t* tmp_part_ctx = iter->get_item(iter);
-
-        if(tmp_part_ctx == NULL) {
-            res = EFI_OUT_OF_RESOURCES;
-
-            break;
-        }
-
-        efi_partition_entry_t* efi_pe = (efi_partition_entry_t*)tmp_part_ctx->internal_context;
-
-        if(efi_guid_equal(kernel_guid, efi_pe->partition_type_guid) == 0) {
-            part_ctx = tmp_part_ctx;
-
-            break;
-        }
-
-        memory_free((void*)tmp_part_ctx);
-
-        iter = iter->next(iter);
-    }
-
-    iter->destroy(iter);
-
-
-    if(part_ctx == NULL) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot find turnstone kernel partition");
+    if(tosdb_part == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot find turnstone tosdb partition");
         res = EFI_NOT_FOUND;
 
         goto catch_efi_error;
     }
 
-    PRINTLOG(EFI, LOG_DEBUG, "kernel start lba %llx end lba %llx", part_ctx->start_lba, part_ctx->end_lba);
+    PRINTLOG(EFI, LOG_DEBUG, "turnstone tosdb partition found");
 
-    *kernel_data = memory_malloc(sizeof(efi_kernel_data_t));
+    tosdb_backend_t* tosdb_backend = tosdb_backend_disk_new(tosdb_part);
 
-    if(*kernel_data == NULL) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data");
+    if(tosdb_backend == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create tosdb backend");
         res = EFI_OUT_OF_RESOURCES;
 
         goto catch_efi_error;
     }
 
-    (*kernel_data)->size = (part_ctx->end_lba - part_ctx->start_lba  + 1) * bio->media->block_size;
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb backend created");
 
-    PRINTLOG(EFI, LOG_DEBUG, "kernel size %lli", (*kernel_data)->size);
+    tosdb_t* tdb = tosdb_new(tosdb_backend);
 
-    res = sys_disk->disk.read((disk_or_partition_t*)sys_disk, part_ctx->start_lba, part_ctx->end_lba - part_ctx->start_lba  + 1, &(*kernel_data)->data);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "kernel load failed");
+    if(tdb == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create tosdb");
+        res = EFI_OUT_OF_RESOURCES;
 
         goto catch_efi_error;
     }
 
-    PRINTLOG(EFI, LOG_DEBUG, "kernel loaded at 0x%p", (*kernel_data)->data);
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb created");
 
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tdb, &cc)) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot set tosdb cache config");
+        tosdb_close(tdb);
+        tosdb_backend_close(tosdb_backend);
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb cache config setted");
+
+    *tdb_ctx = memory_malloc(sizeof(efi_tosdb_context_t));
+
+    if(*tdb_ctx == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate tosdb context");
+        tosdb_close(tdb);
+        tosdb_backend_close(tosdb_backend);
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    (*tdb_ctx)->bio = bio;
+    (*tdb_ctx)->tosdb = tdb;
+    (*tdb_ctx)->backend = tosdb_backend;
+
+    res = EFI_SUCCESS;
 
 catch_efi_error:
     return res;
 }
 
-efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
+efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res = EFI_NOT_FOUND;
 
     efi_guid_t bio_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
@@ -282,7 +344,7 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
 
                         PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", i);
 
-                        res = efi_lookup_kernel_partition(blk_dev->bio, kernel_data);
+                        res = efi_open_tosdb(blk_dev->bio, tdb_ctx);
 
                         if(res == EFI_SUCCESS) {
                             memory_free(buffer);
@@ -297,11 +359,11 @@ efi_status_t efi_load_local_kernel(efi_kernel_data_t** kernel_data) {
             }
 
 
-        }   // end of checking disk existence
+        } // end of checking disk existence
 
         memory_free(blk_dev);
 
-    }     // end of iter over all disks
+    } // end of iter over all disks
 
 catch_efi_error:
     return res;
@@ -435,141 +497,6 @@ catch_efi_error:
     return res;
 }
 
-
-efi_status_t efi_load_pxe_kernel(efi_kernel_data_t** kernel_data) {
-    efi_status_t res = EFI_NOT_FOUND;
-
-    efi_pxe_base_code_protocol_t* pxe_prot;
-    efi_guid_t pxe_prot_guid = EFI_PXE_BASE_CODE_PROTOCOL_GUID;
-
-    res = BS->locate_protocol(&pxe_prot_guid, NULL, (void**)&pxe_prot);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot find pxe protocol: 0x%llx", res);
-
-        goto catch_efi_error;
-    }
-
-    PRINTLOG(EFI, LOG_DEBUG, "pxe started: %i", pxe_prot->mode->started);
-    PRINTLOG(EFI, LOG_DEBUG, "pxe discover: %i.%i.%i.%i",
-             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[0],
-             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[1],
-             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[2],
-             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3]);
-
-
-    efi_ip_address_t eipa;
-    eipa.v4.addr[0] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[0];
-    eipa.v4.addr[1] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[1];
-    eipa.v4.addr[2] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[2];
-    eipa.v4.addr[3] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3];
-
-    uint64_t buffer_size;
-    char_t* pxeconfig = (char_t*)"pxeconf.json";
-    boolean_t pxeconfig_is_json = true;
-
-    res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot get config size as json: 0x%llx", res);
-
-        pxeconfig = (char_t*)"pxeconf.bson";
-        pxeconfig_is_json = false;
-
-        res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
-
-        if(res != EFI_SUCCESS) {
-            PRINTLOG(EFI, LOG_ERROR, "cannot get config size as bson: 0x%llx", res);
-
-            goto catch_efi_error;
-        }
-
-    }
-
-    PRINTLOG(EFI, LOG_DEBUG, "config size 0x%llx", buffer_size);
-
-    uint8_t* buffer = memory_malloc(buffer_size);
-
-    if(buffer == NULL) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot allocate config buffer");
-        res = EFI_OUT_OF_RESOURCES;
-
-        goto catch_efi_error;
-    }
-
-    res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 0);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot get config %s: 0x%llx", pxeconfig, res);
-
-        goto catch_efi_error;
-    }
-
-    data_t pxeconf_deser_data = {DATA_TYPE_INT8_ARRAY, buffer_size, NULL, buffer};
-
-    data_t* pxeconfig_data = NULL;
-
-    if(pxeconfig_is_json) {
-        pxeconfig_data = data_json_deserialize(&pxeconf_deser_data);
-    } else {
-        pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data, DATA_SERIALIZE_WITH_FLAGS);
-    }
-
-    memory_free(buffer);
-
-    if(pxeconfig_data == NULL) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot deserialize pxe config");
-        res = EFI_INVALID_PARAMETER;
-
-        goto catch_efi_error;
-    }
-
-    if(pxeconfig_data->name == NULL || strcmp(pxeconfig_data->name->value, "pxe-config") != 0 || pxeconfig_data->length != 2) {
-        PRINTLOG(EFI, LOG_ERROR, "malformed pxe config");
-        res = EFI_INVALID_PARAMETER;
-
-        goto catch_efi_error;
-    }
-
-    data_t* kerd = &((data_t*)pxeconfig_data->value)[0];
-    data_t* kerd_s = &((data_t*)pxeconfig_data->value)[1];
-
-    if(kerd->name == NULL || strcmp(kerd->name->value, "kernel") != 0 || kerd_s->name == NULL || strcmp(kerd_s->name->value, "kernel-size") != 0) {
-        PRINTLOG(EFI, LOG_ERROR, "malformed pxe config");
-        res = EFI_INVALID_PARAMETER;
-
-        goto catch_efi_error;
-    }
-
-    buffer_size = (uint64_t)kerd_s->value;
-    buffer = memory_malloc(buffer_size);
-
-    res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, kerd->value, NULL, 0);
-
-    if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot get kernel: 0x%llx", res);
-
-        goto catch_efi_error;
-    }
-
-    *kernel_data = memory_malloc(sizeof(efi_kernel_data_t));
-
-    if(*kernel_data == NULL) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot allocate kernel data");
-        res = EFI_OUT_OF_RESOURCES;
-
-        goto catch_efi_error;
-    }
-
-    (*kernel_data)->size = buffer_size;
-    (*kernel_data)->data = buffer;
-
-    res = EFI_SUCCESS;
-
-catch_efi_error:
-    return res;
-}
-
 EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
     ST = system_table;
     BS = system_table->boot_services;
@@ -579,12 +506,20 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     video_clear_screen();
 
-    PRINTLOG(EFI, LOG_INFO, "%s", "TURNSTONE EFI Loader Starting...");
+    PRINTLOG(EFI, LOG_INFO, "TURNSTONE EFI Loader Starting...");
 
     res = efi_setup_heap();
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup heap %llx", res);
+
+        goto catch_efi_error;
+    }
+
+    res = efi_frame_allocator_init();
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot setup frame allocator %llx", res);
 
         goto catch_efi_error;
     }
@@ -621,174 +556,349 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    efi_kernel_data_t* kernel_data = NULL;
+    efi_tosdb_context_t* tdb_ctx = NULL;
+
+    //logging_module_levels[TOSDB] = LOG_TRACE;
 
     if(is_pxe) {
-        res = efi_load_pxe_kernel(&kernel_data);
+        //res = efi_load_pxe_tosdb(&tdb);
     } else {
-        res = efi_load_local_kernel(&kernel_data);
+        res = efi_load_local_tosdb(&tdb_ctx);
     }
 
-    if(res != EFI_SUCCESS || kernel_data == NULL) {
-        PRINTLOG(EFI, LOG_FATAL, "cannot load kernel 0x%llx", res);
+    if(res != EFI_SUCCESS || tdb_ctx == NULL) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot load tosdb 0x%llx", res);
 
         goto catch_efi_error;
     }
 
-    zpack_format_t* zf = (zpack_format_t*)kernel_data->data;
+    PRINTLOG(EFI, LOG_INFO, "tosdb loaded");
 
-    if(zf == NULL) {
-        PRINTLOG(EFI, LOG_FATAL, "no packed kernel data");
 
-        goto catch_efi_error;
-    }
+    tosdb_database_t* db = tosdb_database_create_or_open(tdb_ctx->tosdb, "system");
 
-    if(zf->magic != ZPACK_FORMAT_MAGIC) {
-        PRINTLOG(EFI, LOG_FATAL, "zpack magic mismatch");
+    if(db == NULL) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot create or open database");
 
         goto catch_efi_error;
     }
 
-    if(zf->packed_size + sizeof(zpack_format_t) > kernel_data->size) {
-        PRINTLOG(EFI, LOG_FATAL, "loaded kernel data size deficit");
+    char_t* entry_point = NULL;
 
-        goto catch_efi_error;
-    }
-
-    PRINTLOG(EFI, LOG_DEBUG, "packed kernel size %lli", zf->packed_size);
-
-    uint64_t packed_hash = xxhash64_hash(kernel_data->data + sizeof(zpack_format_t), zf->packed_size);
-
-    if(packed_hash != zf->packed_hash) {
-        PRINTLOG(EFI, LOG_FATAL, "kernel packed hash mismatch 0x%llx 0x%llx", zf->packed_hash, packed_hash);
-
-        goto catch_efi_error;
-    }
-
-    buffer_t packed_kernel_buf = buffer_encapsulate(kernel_data->data + sizeof(zpack_format_t), zf->packed_size);
-    buffer_t unpacked_kernel_buf = buffer_new_with_capacity(NULL, kernel_data->size * 2 + 4096);
-
-    kernel_data->size = zpack_unpack(packed_kernel_buf, unpacked_kernel_buf);
-
-    PRINTLOG(EFI, LOG_DEBUG, "unpacked kernel size %lli", kernel_data->size);
-
-    if(kernel_data->size != zf->unpacked_size) {
-        PRINTLOG(EFI, LOG_FATAL, "kernel unpacked size mismatch");
-
-        goto catch_efi_error;
-    }
-
-    uint64_t zf_unpacked_hash = zf->unpacked_hash;
-
-    buffer_destroy(packed_kernel_buf);
-
-    memory_free(kernel_data->data);
-
-
-    kernel_data->data = buffer_get_all_bytes(unpacked_kernel_buf, NULL);
-
-    buffer_destroy(unpacked_kernel_buf);
-
-    uint64_t unpacked_hash = xxhash64_hash(kernel_data->data, kernel_data->size);
-
-    if(unpacked_hash != zf_unpacked_hash) {
-        PRINTLOG(EFI, LOG_FATAL, "kernel unpacked hash mismatch 0x%llx 0x%llx", zf_unpacked_hash, unpacked_hash);
-
-        goto catch_efi_error;
-    }
-
-    uint64_t frm_start_1mib = 1 << 20;
-
-    res = BS->allocate_pages(EFI_ALLOCATE_ADDRESS, EFI_LOADER_DATA, 0x100, &frm_start_1mib);
+    res = efi_tosdb_read_config(tdb_ctx, "entry_point", (void**)&entry_point);
 
     if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame for kernel usage at 1mib to 2mib");
+        PRINTLOG(EFI, LOG_FATAL, "cannot read entry point");
 
         goto catch_efi_error;
     }
 
-    memory_memclean((void*)frm_start_1mib, 0x100 * 4096);
+    PRINTLOG(EFI, LOG_INFO, "entry point %s", entry_point);
 
-    program_header_t* kernel_phdr = (program_header_t*)kernel_data->data;
+    uint64_t* stack_size_ptr = 0;
 
-    uint64_t kernel_real_size = (kernel_data->size + 4096 - 1) / 4096 * 4096;
-    kernel_real_size += (kernel_phdr->section_locations[LINKER_SECTION_TYPE_BSS].section_size + 4096 - 1) / 4096 * 4096;
-    kernel_real_size += (kernel_phdr->section_locations[LINKER_SECTION_TYPE_STACK].section_size + 4096 - 1) / 4096 * 4096;
-
-    int64_t kernel_page_count = (kernel_real_size + 4096 - 1) / 4096;
-    int64_t original_kernel_page_count = kernel_page_count;
-    kernel_page_count += 0x200;
-
-    PRINTLOG(EFI, LOG_INFO, "new kernel page count 0x%llx size 0x%llx", original_kernel_page_count, kernel_real_size);
-
-    uint64_t new_kernel_address = 0;
-
-    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, kernel_page_count, &new_kernel_address);
+    res = efi_tosdb_read_config(tdb_ctx, "stack_size", (void**)&stack_size_ptr);
 
     if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for new kernel");
+        PRINTLOG(EFI, LOG_FATAL, "cannot read stack size");
 
         goto catch_efi_error;
     }
 
-    PRINTLOG(EFI, LOG_DEBUG, "alloc pages for new kernel succed at 0x%llx", new_kernel_address);
+    uint64_t stack_size = *stack_size_ptr;
 
-    // align to 2mib
-    uint64_t aligned_new_kernel_address = (new_kernel_address + 0x200000 - 1) / 0x200000 * 0x200000;
+    memory_free(stack_size_ptr);
 
+    PRINTLOG(EFI, LOG_INFO, "stack size 0x%llx", stack_size);
 
-    memory_memclean((void*)aligned_new_kernel_address, original_kernel_page_count * 4096);
+    uint64_t* program_base_ptr = 0;
 
-    if(linker_memcopy_program_and_relink((size_t)kernel_data->data, aligned_new_kernel_address)) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot move and relink kernel");
-
-        goto catch_efi_error;
-    }
-
-    PRINTLOG(EFI, LOG_DEBUG, "moving kernel at 0x%llx succed", aligned_new_kernel_address);
-    memory_free(kernel_data->data);
-    memory_free(kernel_data);
-
-    uint64_t kernel_heap_address = 0;
-    uint64_t kernel_heap_size = 10 << 20;
-    uint64_t kernel_heap_page_count = (kernel_heap_size + 4096 - 1) / 4096;
-
-    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, kernel_heap_page_count, &kernel_heap_address);
+    res = efi_tosdb_read_config(tdb_ctx, "program_base", (void**)&program_base_ptr);
 
     if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for kernel heap. res 0x%llx", res);
+        PRINTLOG(EFI, LOG_FATAL, "cannot read program base");
 
         goto catch_efi_error;
     }
 
-    // align to 2mib
-    uint64_t aligned_kernel_heap_address = (kernel_heap_address + 0x200000 - 1) / 0x200000 * 0x200000;
-    uint64_t aligned_kernel_heap_size = kernel_heap_size - (aligned_kernel_heap_address - kernel_heap_address);
+    uint64_t program_base = *program_base_ptr;
 
-    if(aligned_kernel_heap_size < 8 << 20) {
-        PRINTLOG(EFI, LOG_ERROR, "kernel heap size mismatch: 0x%llx", aligned_kernel_heap_size);
+    memory_free(program_base_ptr);
+
+    PRINTLOG(EFI, LOG_INFO, "program base 0x%llx", program_base);
+
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, "sections", 1 << 10, 512 << 10, 8);
+
+    tosdb_record_t* s_sym_rec = tosdb_table_create_record(tbl_symbols);
+
+    if(!s_sym_rec) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create record for search");
+        tosdb_table_close(tbl_symbols);
+        tosdb_database_close(db);
 
         goto catch_efi_error;
     }
 
-    aligned_kernel_heap_size = 8 << 20;
-    kernel_heap_page_count = (aligned_kernel_heap_size + 4096 - 1) / 4096;
+    s_sym_rec->set_string(s_sym_rec, "name", entry_point);
+
+    linkedlist_t found_symbols = s_sym_rec->search_record(s_sym_rec);
+
+    if(!found_symbols) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot search for entrypoint symbol");
+        tosdb_table_close(tbl_symbols);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    s_sym_rec->destroy(s_sym_rec);
+
+    if(linkedlist_size(found_symbols) == 0) {
+        PRINTLOG(EFI, LOG_ERROR, "entrypoint symbol not found");
+        linkedlist_destroy(found_symbols);
+        tosdb_table_close(tbl_symbols);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    s_sym_rec = (tosdb_record_t*)linkedlist_queue_pop(found_symbols);
+    linkedlist_destroy(found_symbols);
+
+    if(!s_sym_rec) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get record for entrypoint symbol");
+        tosdb_table_close(tbl_symbols);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    uint64_t sec_id = 0;
+
+    if(!s_sym_rec->get_int64(s_sym_rec, "section_id", (int64_t*)&sec_id)) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get section id for entrypoint symbol");
+
+        s_sym_rec->destroy(s_sym_rec);
+        tosdb_table_close(tbl_symbols);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    uint64_t sym_id = 0;
+
+    if(!s_sym_rec->get_int64(s_sym_rec, "id", (int64_t*)&sym_id)) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get symbol id for entrypoint symbol");
+
+        s_sym_rec->destroy(s_sym_rec);
+        tosdb_table_close(tbl_symbols);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    s_sym_rec->destroy(s_sym_rec);
 
 
-    kernel_phdr = (program_header_t*)aligned_new_kernel_address;
-    kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_pyhsical_start = aligned_kernel_heap_address;
-    kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_start = aligned_kernel_heap_address;
-    kernel_phdr->section_locations[LINKER_SECTION_TYPE_HEAP].section_size = aligned_kernel_heap_size;
+    PRINTLOG(EFI, LOG_INFO, "entry point symbol %s id 0x%llx section id: 0x%llx", entry_point, sym_id, sec_id);
 
-    uint64_t page_table_helper_frame = 0;
 
-    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 4, &page_table_helper_frame);
+    tosdb_record_t* s_sec_rec = tosdb_table_create_record(tbl_sections);
+
+    if(!s_sec_rec) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create record for search");
+        tosdb_table_close(tbl_sections);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    s_sec_rec->set_int64(s_sec_rec, "id", sec_id);
+
+    if(!s_sec_rec->get_record(s_sec_rec)) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get record for search");
+        tosdb_table_close(tbl_sections);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    uint64_t mod_id = 0;
+
+    if(!s_sec_rec->get_int64(s_sec_rec, "module_id", (int64_t*)&mod_id)) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get module id for entrypoint symbol");
+
+        s_sec_rec->destroy(s_sec_rec);
+        tosdb_table_close(tbl_sections);
+        tosdb_database_close(db);
+
+        goto catch_efi_error;
+    }
+
+    s_sec_rec->destroy(s_sec_rec);
+
+    PRINTLOG(EFI, LOG_INFO, "entroy point module id: 0x%llx", mod_id);
+
+    linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
+
+    if(!ctx) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate linker context");
+
+        goto catch_efi_error;
+    }
+
+    ctx->entrypoint_symbol_id = sym_id;
+    ctx->program_start_virtual = program_base;
+    ctx->program_start_physical = program_base;
+    ctx->tdb = tdb_ctx->tosdb;
+    ctx->modules = hashmap_integer(16);
+    ctx->got_table_buffer = buffer_new();
+    ctx->got_symbol_index_map = hashmap_integer(1024);
+
+    linker_global_offset_table_entry_t empty_got_entry = {0};
+
+    buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // null entry
+    buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // got itself
+
+    if(linker_build_module(ctx, mod_id, true) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot build module");
+        linker_destroy_context(ctx);
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "modules built");
+
+    if(!linker_is_all_symbols_resolved(ctx)) {
+        PRINTLOG(EFI, LOG_ERROR, "not all symbols resolved");
+        linker_destroy_context(ctx);
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "all symbols resolved");
+
+    if(linker_calculate_program_size(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot calculate program size");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size;
+    uint64_t requested_program_size = (2 << 20) + program_total_size;
+    uint64_t requested_program_pages = requested_program_size / FRAME_SIZE;
+
+    if(requested_program_size % FRAME_SIZE != 0) {
+        requested_program_pages++;
+    }
+
+    uint64_t requested_program_base = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_program_pages, &requested_program_base);
 
     if(res != EFI_SUCCESS) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot alloc pages for page table helper frame. res 0x%llx", res);
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate program memory");
 
         goto catch_efi_error;
     }
+
+    if(requested_program_base % (2 << 20)) {
+        requested_program_base += (2 << 20) - (requested_program_base % (2 << 20));
+    }
+
+    memory_memclean((void*)requested_program_base, program_total_size);
+
+    uint64_t heap_size = 64 << 20;
+    uint64_t requested_heap_size = (2 << 20) + heap_size;
+    uint64_t requested_heap_pages = requested_heap_size / FRAME_SIZE;
+    uint64_t requested_heap_base = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_heap_pages, &requested_heap_base);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate heap memory");
+
+        goto catch_efi_error;
+    }
+
+    if(requested_heap_base % (2 << 20)) {
+        requested_heap_base += (2 << 20) - (requested_heap_base % (2 << 20));
+    }
+
+    memory_memclean((void*)requested_heap_base, heap_size);
+
+    uint64_t stack_address = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, stack_size / FRAME_SIZE, &stack_address);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate stack memory");
+
+        goto catch_efi_error;
+    }
+
+    memory_memclean((void*)stack_address, stack_size);
+
+    uint64_t page_table_helper_frames = 0;
+    uint64_t page_frame_helper_size = 4 * FRAME_SIZE;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, page_frame_helper_size / FRAME_SIZE, &page_table_helper_frames);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate page_frame_helper memory");
+
+        goto catch_efi_error;
+    }
+
+    memory_memclean((void*)page_table_helper_frames, page_frame_helper_size);
+
+    ctx->program_start_physical = requested_program_base + FRAME_SIZE;
+    ctx->program_start_virtual = (2 << 20) + FRAME_SIZE;
+
+    if(linker_bind_linear_addresses(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot bind addresses");
+
+        goto catch_efi_error;
+    }
+
+    if(linker_bind_got_entry_values(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot bind got entry values");
+
+        goto catch_efi_error;
+    }
+
+    if(linker_link_program(ctx) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot link program");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "program linked");
+
+    uint8_t* program_data = (uint8_t*)requested_program_base;
+
+    program_header_t* program_header = (program_header_t*)requested_program_base;
+
+    program_header->program_heap_physical_address = requested_heap_base;
+    program_header->program_heap_virtual_address = (1 << 30);
+    program_header->program_heap_size = heap_size;
+
+    program_header->program_stack_physical_address = stack_address;
+    program_header->program_stack_virtual_address = (1 << 30) - stack_size;
+    program_header->program_stack_size = stack_size;
+
+    ctx->page_table_helper_frames = page_table_helper_frames;
+
+    PRINTLOG(EFI, LOG_INFO, "program will be dumped into memory at %p", program_data);
+
+    if(linker_dump_program_to_array(ctx, LINKER_PROGRAM_DUMP_TYPE_ALL, program_data) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot dump program");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "program dumped into memory, building system info");
 
 
     PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
@@ -813,9 +923,17 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
     PRINTLOG(EFI, LOG_DEBUG, "mmap size %lli desc size %lli ver %i", map_size, descriptor_size, descriptor_version);
 
-    mmap = memory_malloc(map_size);
+    uint64_t old_map_size = map_size;
 
-    res = BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
+    if(map_size % FRAME_SIZE != 0) {
+        map_size += FRAME_SIZE - (map_size % FRAME_SIZE);
+    }
+
+    mmap = memory_malloc_ext(NULL, map_size, FRAME_SIZE);
+
+    PRINTLOG(EFI, LOG_DEBUG, "mmap %p size 0x%llx", mmap, old_map_size);
+
+    res = BS->get_memory_map(&old_map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot fill memory map.");
@@ -823,32 +941,118 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    system_info_t* sysinfo = memory_malloc(sizeof(system_info_t));
-    sysinfo->boot_type = SYSTEM_INFO_BOOT_TYPE_DISK;
+    uint64_t si_struct_size = sizeof(system_info_t);
+
+    if(si_struct_size % FRAME_SIZE != 0) {
+        si_struct_size += FRAME_SIZE - (si_struct_size % FRAME_SIZE);
+    }
+
+
+    system_info_t* sysinfo = memory_malloc_ext(NULL, si_struct_size, FRAME_SIZE);
+
+    if(!sysinfo) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate system info");
+
+        goto catch_efi_error;
+    }
+
+    sysinfo->boot_type = is_pxe?SYSTEM_INFO_BOOT_TYPE_PXE:SYSTEM_INFO_BOOT_TYPE_DISK;
     sysinfo->mmap_data = mmap;
-    sysinfo->mmap_size = map_size;
+    sysinfo->mmap_size = old_map_size;
     sysinfo->mmap_descriptor_size = descriptor_size;
     sysinfo->mmap_descriptor_version = descriptor_version;
     sysinfo->frame_buffer = vfb;
     sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
-    sysinfo->kernel_start = aligned_new_kernel_address;
-    sysinfo->kernel_physical_start = aligned_new_kernel_address;
-    sysinfo->kernel_4k_frame_count = original_kernel_page_count;
-    sysinfo->kernel_default_heap_start = aligned_kernel_heap_address;
-    sysinfo->kernel_default_heap_4k_frame_count = kernel_heap_page_count;
     sysinfo->efi_system_table = system_table;
-    sysinfo->page_table_helper_frame = page_table_helper_frame;
+    sysinfo->program_header_physical_start = requested_program_base;
+    sysinfo->program_header_virtual_start = (2 << 20);
 
-    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p", aligned_new_kernel_address, sysinfo);
+    memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
+
+    frame_t frm = {0};
+
+    frm.frame_address = (uint64_t)sysinfo;
+    frm.frame_count = si_struct_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add system info to page table");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t vfb_struct_size = sizeof(video_frame_buffer_t);
+
+    if(vfb_struct_size % FRAME_SIZE != 0) {
+        vfb_struct_size += FRAME_SIZE - (vfb_struct_size % FRAME_SIZE);
+    }
+
+    frm.frame_address = (uint64_t)vfb;
+    frm.frame_count = vfb_struct_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
+
+        goto catch_efi_error;
+    }
+
+    frm.frame_address = (uint64_t)vfb->physical_base_address;
+    frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+    vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "vfb virtual base address 0x%llx physical base address 0x%llx size 0x%llx", vfb->virtual_base_address, vfb->physical_base_address, vfb->buffer_size);
+
+    frm.frame_address = (uint64_t)mmap;
+    frm.frame_count = map_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add memory map to page table");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t tc_size = sizeof(memory_page_table_context_t);
+
+    if(tc_size % FRAME_SIZE) {
+        tc_size += FRAME_SIZE - (tc_size % FRAME_SIZE);
+    }
+
+    frm.frame_address = (uint64_t)program_header->page_table_context_address;
+    frm.frame_count = tc_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add page table context to page table");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "page table context virtual address 0x%llx", frm.frame_address);
+
+    kernel_start_t kernel_start = (kernel_start_t)requested_program_base;
+
+    tosdb_close(tdb_ctx->tosdb);
+    tosdb_backend_close(tdb_ctx->backend);
+
+    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
 
     BS->exit_boot_services(image, map_key);
 
-    kernel_start_t ks = (kernel_start_t)aligned_new_kernel_address;
+    cpu_cli();
 
-    ks(sysinfo);
+    kernel_start(sysinfo);
 
 catch_efi_error:
+
+    tosdb_close(tdb_ctx->tosdb);
+    tosdb_backend_close(tdb_ctx->backend);
+
     PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
 
     cpu_hlt();

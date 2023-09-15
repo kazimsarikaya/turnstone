@@ -33,7 +33,8 @@ CCXXFLAGS += -std=gnu11 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
     -Wstrict-prototypes \
-	-fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS}
+	-fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
+	-D___KERNELBUILD=1
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
@@ -99,6 +100,7 @@ MKDIRSDONE = .mkdirsdone
 
 EFIDISKTOOL = $(OBJDIR)/efi_disk.bin
 EFIBOOTFILE = $(OBJDIR)/BOOTX64.EFI
+TOSDBIMG_BUILDER = $(OBJDIR)/generatelinkerdb.bin
 
 PROGS = $(OBJDIR)/stage3.bin.pack
 
@@ -154,29 +156,20 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	touch $(OBJDIR)/docs
 
 $(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
-	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin $(TOSDBIMG)
+	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
 $(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(PROGS) $(TOSDBIMG)
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.bin.pack $(TOSDBIMG)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
 $(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)
-	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(OBJDIR)/stage3.test.bin $(TOSDBIMG)
+	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
 $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(OBJDIR)/stage3.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
-	$(OBJDIR)/linker.bin --trim -o $@ -M $@.map -T $(filter-out $<,$^)
-
-$(TOSDBIMG): $(OBJDIR)/generatelinkerdb.bin $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
-	$(OBJDIR)/generatelinkerdb.bin -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
-
-$(OBJDIR)/stage3.bin.pack: $(OBJDIR)/stage3.bin
-	$(OBJDIR)/zpack.bin c $^ $@
-
-$(OBJDIR)/stage3.test.bin: $(OBJDIR)/linker.bin $(LDSRCDIR)/stage3.ld $(CC64OBJS) $(CC64GENOBJS) $(CC64TESTOBJS) $(FONTOBJ)
-	$(OBJDIR)/linker.bin --test-section --trim -o $@ -M $@.map -T $(filter-out $<,$^)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
+	$(TOSDBIMG_BUILDER) -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<

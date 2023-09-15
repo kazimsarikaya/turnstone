@@ -42,7 +42,7 @@ void    video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint3
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
 uint32_t VIDEO_PIXELS_PER_SCANLINE = 0;
-video_display_flush_f VIDEO_DISPLAY_FLUSH = video_display_flush_dummy;
+video_display_flush_f VIDEO_DISPLAY_FLUSH = NULL;
 
 uint8_t* FONT_ADDRESS = NULL;
 int32_t FONT_WIDTH = 0;
@@ -96,6 +96,8 @@ void video_init(void) {
     VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
     VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
     VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;
+
+    VIDEO_DISPLAY_FLUSH = video_display_flush_dummy;
 
     video_psf2_font_t* font2 = (video_psf2_font_t*)&font_data_start;
 

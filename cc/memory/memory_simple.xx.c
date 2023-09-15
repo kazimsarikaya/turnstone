@@ -56,8 +56,8 @@ typedef struct heapinfo_t {
  * @brief heap info struct
  */
 typedef struct heapmetainfo_t {
-    uint16_t    magic;        ///< magic value of heap for protection
-    uint16_t    flags;        ///< flags of hi
+    uint16_t    magic; ///< magic value of heap for protection
+    uint16_t    flags; ///< flags of hi
     heapinfo_t* first; ///< next hi node
     heapinfo_t* last; ///< previous hi node
     heapinfo_t* first_empty; ///< next hi node
@@ -98,15 +98,10 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     size_t heap_start = 0, heap_end = 0;
 
     if(start == 0 || end == 0) {
-        program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
+        program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
-        if(kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size) {
-            heap_start = kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
-            heap_end = heap_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_size;
-        } else {
-            heap_start = SYSTEM_INFO->kernel_start + kernel->section_locations[LINKER_SECTION_TYPE_HEAP].section_start;
-            heap_end = SYSTEM_INFO->kernel_start + SYSTEM_INFO->kernel_4k_frame_count * 0x1000;
-        }
+        heap_start = kernel->program_heap_virtual_address;
+        heap_end = heap_start + kernel->program_heap_size;
     } else {
         heap_start = start;
         heap_end = end;
@@ -537,7 +532,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     }
 
 
-    heapinfo_t* hi_a = (heapinfo_t*)hi_aligned_addr;                   // our rel addr
+    heapinfo_t* hi_a = (heapinfo_t*)hi_aligned_addr; // our rel addr
 
 #if ___TESTMODE == 1
     VALGRIND_MAKE_MEM_DEFINED(hi_a, sizeof(heapinfo_t));

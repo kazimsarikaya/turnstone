@@ -29,6 +29,10 @@ buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
         return NULL;
     }
 
+    if(capacity == 0) {
+        capacity = 1;
+    }
+
     bi->heap = heap;
     bi->lock = lock_create_with_heap(bi->heap);
     bi->capacity = capacity;
@@ -131,14 +135,15 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
     }
 
     if(bi->capacity != new_cap) {
-        bi->capacity = new_cap;
-        uint8_t* tmp_data = memory_malloc_ext(bi->heap, bi->capacity, 0);
+        uint8_t* tmp_data = memory_malloc_ext(bi->heap, new_cap, 0);
 
         if(tmp_data == NULL) {
             lock_release(bi->lock);
 
             return NULL;
         }
+
+        bi->capacity = new_cap;
 
         memory_memcopy(bi->data, tmp_data, bi->length);
         memory_free(bi->data);
@@ -353,6 +358,10 @@ boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction
 }
 
 int8_t buffer_destroy(buffer_t buffer) {
+    if(!buffer) {
+        return 0;
+    }
+
     buffer_internal_t* bi = (buffer_internal_t*)buffer;
 
     lock_destroy(bi->lock);
@@ -388,4 +397,18 @@ boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, u
     memory_memcopy(bi->data + pos, dest, len);
 
     return true;
+}
+
+uint8_t* buffer_get_view_at_position(buffer_t buffer, uint64_t position, uint64_t length) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+
+    if(position + length > bi->length) {
+        return NULL;
+    }
+
+    return bi->data + position;
 }

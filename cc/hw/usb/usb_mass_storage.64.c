@@ -1,6 +1,9 @@
 /**
  * @file usb_mass_storage.64.c
  * @brief USB Mass Storage Device Class (MSC) driver
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #include <driver/usb.h>

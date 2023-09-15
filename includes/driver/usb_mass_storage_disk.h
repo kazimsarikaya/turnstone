@@ -1,6 +1,9 @@
 /**
  * @file usb_mass_storage_disk.h
  * @brief USB Mass Storage Disk
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
  */
 
 #ifndef ___USB_MASS_STORAGE_DISK_H

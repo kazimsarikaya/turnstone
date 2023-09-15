@@ -30,59 +30,73 @@ int32_t main(void){
 
 
     index_t* idx = bplustree_create_index(max_key_count, int_comparator);
+
     if(idx == NULL) {
         print_error("b+ tree can not created");
         return -1;
     }
+
     printf("item count: %i\n", sizeof(test_data) / sizeof(int));
 
     for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
         printf("try to insert: %i\n", test_data[i]);
         int res = idx->insert(idx, &test_data[i], &test_data[i], NULL);
+
         if(res == -1) {
             printf("failed item: %i\n", test_data[i]);
             print_error("insert failed");
+
             return -1;
         } else if(res == -2) {
             print_error("tree mallformed");
+
             return -1;
         } else {
             printf("item inserted: %i\n", test_data[i]);
         }
     }
+
     print_success("b+ tree builded");
 
     iterator_t* iter = idx->create_iterator(idx);
     printf("iterator created: %p\n", iter);
+
     while(iter->end_of_iterator(iter) != 0) {
         int* k = (int*)iter->get_extra_data(iter);
         int* d = (int*)iter->get_item(iter);
+
         if(k != NULL) {
             printf("k: %i -> ", *k);
         } else {
             printf("wtf key ->");
         }
+
         if(d != NULL) {
             printf("d: %i , ", *d);
         } else {
             printf("wtf data , ");
         }
+
         iter = iter->next(iter);
     }
+
     printf("\niteration ended\n");
     iter->destroy(iter);
     printf("iterator destroyed\n");
     bplustree_destroy_index(idx);
 
     idx = bplustree_create_index(max_key_count, int_comparator);
+
     for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
         idx->insert(idx, &test_data[i], &test_data[i], NULL);
     }
+
     print_success("b+ tree builded for deletion test");
 
     int d_key = 101;
     int* deleted_data;
     printf("try to delete not existed key: %i\n", d_key );
+
     if(idx->delete(idx, &d_key, (void**)&deleted_data) != -1) {
         print_error("error at deletion");
     } else {
@@ -93,32 +107,41 @@ int32_t main(void){
         d_key = test_data[i];
         printf("try to delete existed key: %i\n", d_key );
         int result = idx->delete(idx, &d_key, (void**)&deleted_data);
+
         if( result != 0) {
             printf("result: %i\n", result);
             print_error("error at deletion, key not found");
+
             break;
         } else if (*deleted_data != d_key) {
             print_error("error at deletion, returned data is different");
+
             break;
         } else {
             print_success("existed key deletion passed");
         }
+
         iter = idx->create_iterator(idx);
+
         while(iter->end_of_iterator(iter) != 0) {
             int* k = (int*)iter->get_extra_data(iter);
             int* d = (int*)iter->get_item(iter);
+
             if(k != NULL) {
                 printf("k: %i -> ", *k);
             } else {
                 printf("wtf key ->");
             }
+
             if(d != NULL) {
                 printf("d: %i , ", *d);
             } else {
                 printf("wtf data , ");
             }
+
             iter = iter->next(iter);
         }
+
         iter->destroy(iter);
         printf("\n");
     }

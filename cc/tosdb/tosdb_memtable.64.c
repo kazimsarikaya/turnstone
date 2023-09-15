@@ -1,4 +1,5 @@
 /**
+ *
  * @file tosdb_memtable.64.c
  * @brief tosdb memtable interface implementation
  *
@@ -247,9 +248,15 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
         return true;
     }
 
+    PRINTLOG(TOSDB, LOG_DEBUG, "free memtable %lli for table %s has stli? %i has stlis? %i",
+             mt->id, mt->tbl->name, mt->stli != NULL, mt->tbl->sstable_list_items != NULL);
+
+
     if(mt->stli) {
         linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
+        PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, linkedlist_size(mt->tbl->sstable_list_items));
     }
+
 
     boolean_t error = false;
 
@@ -277,9 +284,9 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
                 error = true;
             } else {
                 while(iter->end_of_iterator(iter) != 0) {
-                    tosdb_memtable_index_item_t* idx = (tosdb_memtable_index_item_t*)iter->get_item(iter);
+                    void* item = (void*)iter->get_item(iter);
 
-                    memory_free(idx);
+                    memory_free(item);
 
                     iter = iter->next(iter);
                 }
@@ -454,6 +461,8 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             if(old_item) {
                 memory_free(old_item);
                 need_rc_inc = false;
+                PRINTLOG(TOSDB, LOG_ERROR, "duplicate primary/unique key for table %s mt id 0x%llx idx 0x%llx new key_hash 0x%llx old key_hash 0x%llx new data %s",
+                         tbl->name, tbl->current_memtable->id, mt_idx->ti->id, idx_item->key_hash, old_item->key_hash, idx_item->key);
             }
 
         } else {
@@ -592,6 +601,8 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
         return false;
     }
+
+    PRINTLOG(TOSDB, LOG_TRACE, "sstable list item for memtable %lli of table %s withc record count 0x%llx created", mt->id, mt->tbl->name, mt->record_count);
 
     stli->record_count = mt->record_count;
     stli->sstable_id = mt->id;

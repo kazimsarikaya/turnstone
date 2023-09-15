@@ -19,7 +19,7 @@ MODULE("turnstone.lib");
 static inline stackframe_t* backtrace_validate_stackframe(stackframe_t* frame) {
     task_t* task = task_get_current_task();
 
-    program_header_t* ph = (program_header_t*)SYSTEM_INFO->kernel_start;
+    program_header_t* ph = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
     uint64_t stack_start = 0;
     uint64_t stack_end = 0;
@@ -31,9 +31,9 @@ static inline stackframe_t* backtrace_validate_stackframe(stackframe_t* frame) {
         stack_start = stack_end - task->stack_size;
         stack_size = task->stack_size;
     } else {
-        stack_start = ph->section_locations[LINKER_SECTION_TYPE_STACK].section_start;
-        stack_end = stack_start + ph->section_locations[LINKER_SECTION_TYPE_STACK].section_size;
-        stack_size = ph->section_locations[LINKER_SECTION_TYPE_STACK].section_size;
+        stack_start = ph->program_stack_virtual_address;
+        stack_end = stack_start + ph->program_stack_size;
+        stack_size = ph->program_stack_size;
     }
 
     PRINTLOG(KERNEL, LOG_ERROR, "Stack start: 0x%llx end: 0x%llx size: 0x%llx", stack_start, stack_end, stack_size);

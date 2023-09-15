@@ -9,6 +9,8 @@
 #include <strings.h>
 #include <utils.h>
 
+MODULE("turnstone.efi");
+
 extern efi_system_table_t* ST;
 
 void   video_print(char_t* string);
@@ -47,29 +49,48 @@ void video_print(char_t* string)
     }
 }
 
-size_t video_printf(const char_t* fmt, ...) {
+#define VIDEO_PRINTF_BUFFER_SIZE 2048
+
+size_t video_printf(const char_t* fmt, ...){
 
     va_list args;
     va_start(args, fmt);
 
+
     size_t cnt = 0;
 
+    if(!fmt) {
+        return 0;
+    }
+
+    char_t video_printf_buffer[VIDEO_PRINTF_BUFFER_SIZE + 128] = {0};
+    uint64_t video_printf_buffer_idx = 0;
+
     while (*fmt) {
+        if(video_printf_buffer_idx >= VIDEO_PRINTF_BUFFER_SIZE - 1) {
+            video_print(video_printf_buffer);
+            video_printf_buffer_idx = 0;
+        }
+
         char_t data = *fmt;
 
         if(data == '%') {
             fmt++;
             int8_t wfmtb = 1;
-            char_t buf[257];
-            char_t ito_buf[64];
+            char_t buf[257] = {0};
+            char_t ito_buf[64] = {0};
             int32_t val = 0;
-            char_t* str;
+            char_t* str = NULL;
             int32_t slen = 0;
             number_t ival = 0;
             unumber_t uval = 0;
             int32_t idx = 0;
             int8_t l_flag = 0;
             int8_t sign = 0;
+            char_t fto_buf[128];
+            // float128_t fval = 0; // TODO: float128_t ops
+            float64_t fval = 0;
+            number_t prec = 6;
 
             while(1) {
                 wfmtb = 1;
@@ -79,30 +100,43 @@ size_t video_printf(const char_t* fmt, ...) {
                     fmt++;
                     val = *fmt - 0x30;
                     fmt++;
+                    if(*fmt >= '0' && *fmt <= '9') {
+                        val = val * 10 + *fmt - 0x30;
+                        fmt++;
+                    }
+                    wfmtb = 0;
+                    break;
+                case '.':
+                    fmt++;
+                    prec = *fmt - 0x30;
+                    fmt++;
                     wfmtb = 0;
                     break;
                 case 'c':
                     val = va_arg(args, int32_t);
-                    buf[0] = (char_t)val;
-                    video_print(buf);
+                    video_printf_buffer[video_printf_buffer_idx++] = (char_t)val;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
                     cnt++;
                     fmt++;
                     break;
                 case 's':
                     str = va_arg(args, char_t*);
-                    video_print(str);
-                    cnt += strlen(str);
+                    slen = strlen(str);
+
+                    strcpy(str, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
                     fmt++;
                     break;
                 case 'i':
                 case 'd':
-#if ___BITS == 64
                     if(l_flag == 2) {
                         ival = va_arg(args, int64_t);
                     } else if(l_flag == 1) {
                         ival = va_arg(args, int64_t);
                     }
-#endif
                     if(l_flag == 0) {
                         ival = va_arg(args, int32_t);
                     }
@@ -117,6 +151,7 @@ size_t video_printf(const char_t* fmt, ...) {
 
                     for(idx = 0; idx < val - slen; idx++) {
                         buf[idx] = '0';
+                        buf[idx + 1] = '\0';
                         cnt++;
                     }
 
@@ -124,23 +159,24 @@ size_t video_printf(const char_t* fmt, ...) {
                         buf[0] = '-';
                     }
 
-                    video_print(buf);
-                    memory_memclean(buf, 257);
-                    video_print(ito_buf + sign);
-                    memory_memclean(ito_buf, 64);
+                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += idx;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
                     l_flag = 0;
                     break;
                 case 'u':
-#if ___BITS == 64
                     if(l_flag == 2) {
                         uval = va_arg(args, uint64_t);
                     } else if(l_flag == 1) {
                         uval = va_arg(args, uint64_t);
                     }
-#endif
                     if(l_flag == 0) {
                         uval = va_arg(args, uint32_t);
                     }
@@ -150,13 +186,17 @@ size_t video_printf(const char_t* fmt, ...) {
 
                     for(idx = 0; idx < val - slen; idx++) {
                         buf[idx] = '0';
+                        buf[idx + 1] = '\0';
                         cnt++;
                     }
 
-                    video_print(buf);
-                    memory_memclean(buf, 257);
-                    video_print(ito_buf);
-                    memory_memclean(ito_buf, 64);
+                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += idx;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
@@ -167,15 +207,15 @@ size_t video_printf(const char_t* fmt, ...) {
                     l_flag++;
                     break;
                 case 'p':
+                    l_flag = 1;
+                    nobreak;
                 case 'x':
                 case 'h':
-#if ___BITS == 64
                     if(l_flag == 2) {
                         uval = va_arg(args, uint64_t);
                     } else if(l_flag == 1) {
                         uval = va_arg(args, uint64_t);
                     }
-#endif
                     if(l_flag == 0) {
                         uval = va_arg(args, uint32_t);
                     }
@@ -185,15 +225,21 @@ size_t video_printf(const char_t* fmt, ...) {
 
                     for(idx = 0; idx < val - slen; idx++) {
                         buf[idx] = '0';
+                        buf[idx + 1] = '\0';
                         cnt++;
                     }
 
-                    video_print(buf);
-                    memory_memclean(buf, 257);
-                    video_print(ito_buf);
-                    memory_memclean(ito_buf, 64);
+                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += idx;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
                     cnt += slen;
                     fmt++;
+                    l_flag = 0;
                     break;
                 case '%':
                     buf[0] = '%';
@@ -201,6 +247,23 @@ size_t video_printf(const char_t* fmt, ...) {
                     memory_memclean(buf, 257);
                     fmt++;
                     cnt++;
+                    break;
+                case 'f':
+                    if(l_flag == 2) {
+                        // fval = va_arg(args, float128_t); // TODO: float128_t ops
+                    } else  {
+                        fval = va_arg(args, float64_t);
+                    }
+
+                    ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
+                    slen = strlen(fto_buf);
+
+                    strcpy(fto_buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
+                    fmt++;
                     break;
                 default:
                     break;
@@ -212,31 +275,30 @@ size_t video_printf(const char_t* fmt, ...) {
             }
 
         } else {
-            size_t idx = 0;
-            char_t buf[17];
-            memory_memclean(buf, 17);
 
             while(*fmt) {
-                if(idx == 16) {
-                    video_printf(buf);
-                    idx = 0;
-                    memory_memclean(buf, 17);
+                if(video_printf_buffer_idx >= VIDEO_PRINTF_BUFFER_SIZE - 1) {
+                    video_print(video_printf_buffer);
+                    video_printf_buffer_idx = 0;
                 }
                 if(*fmt == '%') {
-                    video_print(buf);
-                    memory_memclean(buf, 17);
-
                     break;
                 }
-                buf[idx++] = *fmt;
+
+                video_printf_buffer[video_printf_buffer_idx++] = *fmt;
+                video_printf_buffer[video_printf_buffer_idx] = 0;
                 fmt++;
                 cnt++;
             }
-            video_print(buf);
         }
+    }
+
+    if(video_printf_buffer_idx) {
+        video_print(video_printf_buffer);
     }
 
     va_end(args);
 
     return cnt;
 }
+
