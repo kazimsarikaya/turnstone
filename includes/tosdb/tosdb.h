@@ -97,6 +97,18 @@ typedef struct tosdb_cache_config_t {
  */
 boolean_t tosdb_cache_config_set(tosdb_t* tdb, tosdb_cache_config_t* config);
 
+/**
+ * @enum tosdb_compaction_type_t
+ * @brief tosdb compation types.
+ */
+typedef enum tosdb_compaction_type_t {
+    TOSDB_COMPACTION_TYPE_NONE, ///< tosdb compation type none
+    TOSDB_COMPACTION_TYPE_MINOR, ///< tosdb compation type minor, compacts same level, removes duplicates, deleted ones
+    TOSDB_COMPACTION_TYPE_MAJOR, ///< tosdb comaption type major, compacts whole level into a a high level
+} tosdb_compaction_type_t;
+
+boolean_t tosdb_compact(tosdb_t* tdb, tosdb_compaction_type_t type);
+
 /*! tosdb database struct type */
 typedef struct tosdb_database_t tosdb_database_t;
 
@@ -509,35 +521,35 @@ typedef boolean_t (*tosdb_record_is_deleted_f)(tosdb_record_t* record);
  * @brief tosdb record
  */
 struct tosdb_record_t {
-    void*                        context;              ///< record context
-    tosdb_record_set_boolean_f   set_boolean;      ///< set boolean
-    tosdb_record_get_boolean_f   get_boolean;      ///< get boolean
-    tosdb_record_set_char_f      set_char;      ///< set char
-    tosdb_record_get_char_f      get_char;      ///< get char
-    tosdb_record_set_int8_f      set_int8;      ///< set int8
-    tosdb_record_get_int8_f      get_int8;      ///< get int8
-    tosdb_record_set_uint8_f     set_uint8;      ///< set uint8
-    tosdb_record_get_uint8_f     get_uint8;      ///< get uint8
-    tosdb_record_set_int16_f     set_int16;      ///< set int16
-    tosdb_record_get_int16_f     get_int16;      ///< get int16
-    tosdb_record_set_uint16_f    set_uint16;      ///< set uint16
-    tosdb_record_get_uint16_f    get_uint16;      ///< get uint16
-    tosdb_record_set_int32_f     set_int32;      ///< set int32
-    tosdb_record_get_int32_f     get_int32;      ///< get int32
-    tosdb_record_set_uint32_f    set_uint32;      ///< set uint32
-    tosdb_record_get_uint32_f    get_uint32;      ///< get uint32
-    tosdb_record_set_int64_f     set_int64;      ///< set int64
-    tosdb_record_get_int64_f     get_int64;      ///< get int64
-    tosdb_record_set_uint64_f    set_uint64;      ///< set uint64
-    tosdb_record_get_uint64_f    get_uint64;      ///< get uint64
-    tosdb_record_set_string_f    set_string;      ///< set string
-    tosdb_record_get_string_f    get_string;      ///< get string
-    tosdb_record_set_float32_f   set_float32;      ///< set float32
-    tosdb_record_get_float32_f   get_float32;      ///< get float32
-    tosdb_record_set_float64_f   set_float64;      ///< set float64
-    tosdb_record_get_float64_f   get_float64;      ///< get float64
-    tosdb_record_set_bytearray_f set_bytearray;      ///< set bytearray
-    tosdb_record_get_bytearray_f get_bytearray;      ///< set bytearray
+    void*                        context; ///< record context
+    tosdb_record_set_boolean_f   set_boolean; ///< set boolean
+    tosdb_record_get_boolean_f   get_boolean; ///< get boolean
+    tosdb_record_set_char_f      set_char; ///< set char
+    tosdb_record_get_char_f      get_char; ///< get char
+    tosdb_record_set_int8_f      set_int8; ///< set int8
+    tosdb_record_get_int8_f      get_int8; ///< get int8
+    tosdb_record_set_uint8_f     set_uint8; ///< set uint8
+    tosdb_record_get_uint8_f     get_uint8; ///< get uint8
+    tosdb_record_set_int16_f     set_int16; ///< set int16
+    tosdb_record_get_int16_f     get_int16; ///< get int16
+    tosdb_record_set_uint16_f    set_uint16; ///< set uint16
+    tosdb_record_get_uint16_f    get_uint16; ///< get uint16
+    tosdb_record_set_int32_f     set_int32; ///< set int32
+    tosdb_record_get_int32_f     get_int32; ///< get int32
+    tosdb_record_set_uint32_f    set_uint32; ///< set uint32
+    tosdb_record_get_uint32_f    get_uint32; ///< get uint32
+    tosdb_record_set_int64_f     set_int64; ///< set int64
+    tosdb_record_get_int64_f     get_int64; ///< get int64
+    tosdb_record_set_uint64_f    set_uint64; ///< set uint64
+    tosdb_record_get_uint64_f    get_uint64; ///< get uint64
+    tosdb_record_set_string_f    set_string; ///< set string
+    tosdb_record_get_string_f    get_string; ///< get string
+    tosdb_record_set_float32_f   set_float32; ///< set float32
+    tosdb_record_get_float32_f   get_float32; ///< get float32
+    tosdb_record_set_float64_f   set_float64; ///< set float64
+    tosdb_record_get_float64_f   get_float64; ///< get float64
+    tosdb_record_set_bytearray_f set_bytearray; ///< set bytearray
+    tosdb_record_get_bytearray_f get_bytearray; ///< set bytearray
     tosdb_record_set_data_f      set_data; ///< set data
     tosdb_record_get_data_f      get_data; ///< get data
     tosdb_record_get_f           get_record; ///< gets record from table

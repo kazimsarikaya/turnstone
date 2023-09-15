@@ -1470,6 +1470,18 @@ int32_t main(int32_t argc, char_t** argv) {
 
     printf("%lli\n", time_ns(NULL));
 
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
+
+    tosdb_table_close(tbl_relocations);
+
+    tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
+
+    if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
+        print_error("cannot compact linker db");
+    }
+
+
 close:
     if(!linkerdb_close(ldb)) {
         print_error("cannot close linkerdb");

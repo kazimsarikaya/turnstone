@@ -566,6 +566,9 @@ rec_destroy:
     tosdb_table_close(table2);
     table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
+
+    tosdb_compact(tosdb, TOSDB_COMPACTION_TYPE_MAJOR);
+
 tdb_close:
     if(!tosdb_close(tosdb)) {
         print_error("cannot close tosdb");

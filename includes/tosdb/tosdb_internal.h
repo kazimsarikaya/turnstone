@@ -394,6 +394,12 @@ boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
 
 linkedlist_t tosdb_record_search(tosdb_record_t* record);
 boolean_t    tosdb_record_search_set_destroy_cb(void * item);
-int8_t       tosdb_record_primary_key_comparator(const void* item1, const void* item2);
-boolean_t    tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t old_pks);
+
+boolean_t tosdb_database_compact(const tosdb_database_t* db, tosdb_compaction_type_t type);
+boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t type);
+boolean_t tosdb_sstable_level_minor_compact(const tosdb_table_t* tbl, uint64_t level);
+boolean_t tosdb_sstable_level_major_compact(const tosdb_table_t* tbl, uint64_t level);
+int8_t    tosdb_record_primary_key_comparator(const void* item1, const void* item2);
+boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t old_pks);
+
 #endif
