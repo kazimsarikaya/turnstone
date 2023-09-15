@@ -16,4 +16,8 @@
 
 disk_t* efi_disk_impl_open(efi_block_io_t* bio);
 
+typedef struct frame_allocator_t frame_allocator_t;
+
+efi_status_t efi_frame_allocator_init(void);
+
 #endif

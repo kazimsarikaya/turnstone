@@ -87,7 +87,7 @@ typedef struct tss_s {
  * @brief task states
  */
 typedef enum task_state_e {
-    TASK_STATE_NULL,  ///< task state not known
+    TASK_STATE_NULL, ///< task state not known
     TASK_STATE_CREATED, ///< task created but never runned
     TASK_STATE_RUNNING, ///< task is running
     TASK_STATE_SUSPENDED, ///< task is at wait queue
@@ -95,41 +95,41 @@ typedef enum task_state_e {
 } task_state_t; ///< short hand for enum
 
 typedef struct {
-    memory_heap_t*       creator_heap; ///< the heap which task struct is at
-    memory_heap_t*       heap; ///< task's heap
-    uint64_t             heap_size; ///< task's heap size
-    uint64_t             task_id; ///< task's id
-    uint64_t             last_tick_count; ///< tick count when task removes from executing, used for scheduling
-    task_state_t         state; ///< task state
-    void*                entry_point; ///< entry point address
-    void*                stack; ///< stack pointer
-    uint64_t             stack_size; ///< stack size of task
-    linkedlist_t         message_queues; ///< task's listining queues.
-    boolean_t            message_waiting; ///< task state for sleeping should move @ref task_state_s
-    boolean_t            sleeping; ///< task state for sleeping should move @ref task_state_s
-    boolean_t            interruptible; ///< task state for interruptible should move @ref task_state_s
-    boolean_t            interrupt_received; ///< task state for interrupt received should move @ref task_state_s
-    uint64_t             wake_tick; ///< tick value when task wakes up
-    const char*          task_name; ///< task name
-    memory_page_table_t* page_table; ///< page table
-    uint64_t             rax; ///< register
-    uint64_t             rbx; ///< register
-    uint64_t             rcx; ///< register
-    uint64_t             rdx; ///< register
-    uint64_t             r8; ///< register
-    uint64_t             r9; ///< register
-    uint64_t             r10; ///< register
-    uint64_t             r11; ///< register
-    uint64_t             r12; ///< register
-    uint64_t             r13; ///< register
-    uint64_t             r14; ///< register
-    uint64_t             r15; ///< register
-    uint64_t             rsi; ///< register
-    uint64_t             rdi; ///< register
-    uint64_t             rsp; ///< register
-    uint64_t             rbp; ///< register
-    uint8_t*             fx_registers; ///< register
-    uint64_t             rflags; ///< register
+    memory_heap_t*               creator_heap; ///< the heap which task struct is at
+    memory_heap_t*               heap; ///< task's heap
+    uint64_t                     heap_size; ///< task's heap size
+    uint64_t                     task_id; ///< task's id
+    uint64_t                     last_tick_count; ///< tick count when task removes from executing, used for scheduling
+    task_state_t                 state; ///< task state
+    void*                        entry_point; ///< entry point address
+    void*                        stack; ///< stack pointer
+    uint64_t                     stack_size; ///< stack size of task
+    linkedlist_t                 message_queues; ///< task's listining queues.
+    boolean_t                    message_waiting; ///< task state for sleeping should move @ref task_state_s
+    boolean_t                    sleeping; ///< task state for sleeping should move @ref task_state_s
+    boolean_t                    interruptible; ///< task state for interruptible should move @ref task_state_s
+    boolean_t                    interrupt_received; ///< task state for interrupt received should move @ref task_state_s
+    uint64_t                     wake_tick; ///< tick value when task wakes up
+    const char*                  task_name; ///< task name
+    memory_page_table_context_t* page_table; ///< page table
+    uint64_t                     rax; ///< register
+    uint64_t                     rbx; ///< register
+    uint64_t                     rcx; ///< register
+    uint64_t                     rdx; ///< register
+    uint64_t                     r8; ///< register
+    uint64_t                     r9; ///< register
+    uint64_t                     r10; ///< register
+    uint64_t                     r11; ///< register
+    uint64_t                     r12; ///< register
+    uint64_t                     r13; ///< register
+    uint64_t                     r14; ///< register
+    uint64_t                     r15; ///< register
+    uint64_t                     rsi; ///< register
+    uint64_t                     rdi; ///< register
+    uint64_t                     rsp; ///< register
+    uint64_t                     rbp; ///< register
+    uint8_t*                     fx_registers; ///< register
+    uint64_t                     rflags; ///< register
 } task_t; ///< short hand for struct
 
 /**

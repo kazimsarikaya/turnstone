@@ -28,7 +28,6 @@ typedef enum system_info_boot_type_t {
  * @brief  system information struct
  */
 typedef struct system_info_t {
-    memory_heap_t*        heap; ///< kernel heap
     uint8_t*              mmap_data; ///< uefi mmap data
     uint64_t              mmap_size; ///< uefi mmap size
     uint64_t              mmap_descriptor_size; ///< uefi mmap descriptor size
@@ -37,16 +36,8 @@ typedef struct system_info_t {
     video_frame_buffer_t* frame_buffer; ///< video frame buffer address, delivered from uefi
     uint64_t              acpi_version; ///< acpi table version
     void*                 acpi_table; ///< acpi table address
-    uint64_t              kernel_start; ///< kernel start address
-    uint64_t              kernel_physical_start; ///< kernel physical start address
-    uint64_t              kernel_4k_frame_count; ///< kernel frame count in 4k bytes
-    uint64_t              kernel_default_heap_start; ///< kernel default heap start address
-    uint64_t              kernel_default_heap_4k_frame_count; ///< kernel default heap frame count in 4k bytes
-    uint64_t              remapped; ///< is kernel remapped?
-    uint64_t              my_page_table; ///< kernel's page table, for uefi's pt diff
-    uint64_t              page_table_helper_frame; ///< page table helper frame hold 4 frame
-    uint8_t*              reserved_mmap_data; ///< reserved mmap data for remapping
-    uint64_t              reserved_mmap_size; ///< size of reserved mmap data for remapping
+    uint64_t              program_header_virtual_start; ///< program virtual start address
+    uint64_t              program_header_physical_start; ///< program physical start address
     efi_system_table_t*   efi_system_table; ///< accessing efi tables from kernel
 } system_info_t; ///< struct short hand for system_info_s
 

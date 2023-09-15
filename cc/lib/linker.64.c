@@ -373,18 +373,20 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             goto clean_relocs_iter;
         }
 
-        memory_free(symbol_name);
-
         if(symbol_section_id == 0) {
             if(!is_got_symbol) {
                 PRINTLOG(LINKER, LOG_ERROR, "symbol section id is missing for symbol %s, relocation at section 0x%llx relocation id 0x%llx", symbol_name, section_id, reloc_id);
                 reloc_rec->destroy(reloc_rec);
+
+                memory_free(symbol_name);
 
                 goto clean_relocs_iter;
             } else {
                 symbol_section_id = LINKER_GOT_SECTION_ID;
             }
         }
+
+        memory_free(symbol_name);
 
         if(!reloc_rec->get_int8(reloc_rec, "type", &reloc_type)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation type for relocation id 0x%llx", reloc_id);
@@ -1619,6 +1621,20 @@ error:
     return NULL;
 }
 
+const uint8_t linker_program_header_trampoline_code[] = {
+    0x48, 0x8b, 0x57, 0x48, //                   mov 0x48(%rdi),%rdx
+    0x48, 0x8b, 0x42, 0x40, //                   mov 0x40(%rdx),%rax
+    0x48, 0x03, 0x42, 0x48, //                   add 0x48(%rdx),%rax
+    0x48, 0x83, 0xe8, 0x10, //                   sub $0x10,%rax
+    0x48, 0x89, 0xc4, //                         mov %rax,%rsp
+    0x48, 0x31, 0xed, //                         xor %rbp,%rbp
+    0x48, 0x8b, 0x82, 0xd0, 0x00, 0x00, 0x00, // mov 0xd0(%rdx),%rax
+    0x48, 0x8b, 0x00, //                         mov (%rax),%rax
+    0x0f, 0x22, 0xd8, //                         mov %rax,%cr3
+    0x48, 0x8b, 0x42, 0x38, //                   mov 0x38(%rdx),%rax
+    0xff, 0xd0, //                               call *%rax
+};
+
 int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array) {
     if(!ctx || !array) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context or array");
@@ -1630,7 +1646,87 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         return 0;
     }
 
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+        if(!(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER)) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot build page table without header");
+
+            return -1;
+        }
+    }
+
+#ifndef ___TESTMODE
+    memory_page_table_context_t* page_table_ctx = NULL;
+#endif
+
     uint64_t program_target_offset = 0;
+
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
+        program_header_t* program_header = (program_header_t*)array;
+
+        program_header->jmp_code = 0xe9;
+        program_header->trampoline_address_pc_relative = offsetof_field(program_header_t, trampoline_code) - 5;
+        memory_memcopy(linker_program_header_trampoline_code, program_header->trampoline_code, sizeof(linker_program_header_trampoline_code));
+
+        strcpy(TOS_EXECUTABLE_OR_LIBRARY_MAGIC, (char_t*)program_header->magic);
+
+        program_header->header_physical_address = ctx->program_start_physical - 0x1000;
+        program_header->header_virtual_address = ctx->program_start_virtual - 0x1000;
+        program_header->program_offset = 0x1000;
+        program_header->total_size += 0x1000 + ctx->program_size;
+        program_header->program_size = ctx->program_size;
+        program_header->program_entry = ctx->entrypoint_address_virtual;
+
+        program_target_offset += 0x1000;
+
+        if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+#ifndef ___TESTMODE
+            PRINTLOG(LINKER, LOG_TRACE, "building page table");
+
+            page_table_ctx = memory_paging_build_empty_table(ctx->page_table_helper_frames);
+
+            if(!page_table_ctx) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot build page table");
+
+                return -1;
+            }
+
+            PRINTLOG(LINKER, LOG_TRACE, "page table built");
+
+            program_header->page_table_context_address = (uint64_t)page_table_ctx;
+
+            frame_t frame = {
+                .frame_address = program_header->header_physical_address,
+                .frame_count = 1,
+            };
+
+            if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                  program_header->header_virtual_address,
+                                                  &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot add header page to page table");
+
+                return -1;
+            }
+
+            if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                  program_header->header_physical_address,
+                                                  &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot add header page to page table");
+
+                return -1;
+            }
+
+            PRINTLOG(LINKER, LOG_TRACE, "program header added to page table");
+#else
+            PRINTLOG(LINKER, LOG_ERROR, "page table not supported on host");
+
+            return -1;
+#endif
+        }
+
+    }
+
 
     if(dump_type & LINKER_PROGRAM_DUMP_TYPE_CODE) {
 
@@ -1656,6 +1752,46 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
                 PRINTLOG(LINKER, LOG_DEBUG, "copying module id 0x%llx section type %lli to 0x%llx with size 0x%llx", module->id, i, module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
                 memory_memcopy(section_data, array + program_target_offset + module->sections[i].physical_start - ctx->program_start_physical, section_data_size);
+
+#ifndef ___TESTMODE
+                if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+                    uint64_t section_size = module->sections[i].size;
+
+                    if(section_size % FRAME_SIZE != 0) {
+                        section_size += FRAME_SIZE - (section_size % FRAME_SIZE);
+                    }
+
+
+                    frame_t frame = {
+                        .frame_address = module->sections[i].physical_start,
+                        .frame_count = section_size / FRAME_SIZE,
+                    };
+
+                    memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_UNKNOWN;
+
+                    if(i == LINKER_SECTION_TYPE_TEXT) {
+                        page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
+                    } else {
+                        page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
+                    }
+
+                    if(i == LINKER_SECTION_TYPE_ROREL || i == LINKER_SECTION_TYPE_RODATA) {
+                        page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
+                    }
+
+                    if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                          module->sections[i].virtual_start,
+                                                          &frame,
+                                                          page_type) != 0) {
+                        PRINTLOG(LINKER, LOG_ERROR, "cannot add section to page table");
+
+                        return -1;
+                    }
+
+                    PRINTLOG(LINKER, LOG_TRACE, "section added to page table");
+
+                }
+#endif
             }
 
             it = it->next(it);
@@ -1676,6 +1812,38 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         PRINTLOG(LINKER, LOG_DEBUG, "copying got to 0x%llx with size 0x%llx", program_target_offset, got_size);
         memory_memcopy(got, array + program_target_offset, got_size);
 
+        if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
+            program_header_t* program_header = (program_header_t*)array;
+
+            program_header->got_offset = program_target_offset;
+            program_header->got_size = ctx->global_offset_table_size;
+            program_header->got_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->got_physical_address = program_header->header_physical_address + program_target_offset;
+
+            program_header->total_size += ctx->global_offset_table_size;
+
+#ifndef ___TESTMODE
+            if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+                frame_t frame = {
+                    .frame_address = program_header->got_physical_address,
+                    .frame_count = program_header->got_size / FRAME_SIZE,
+                };
+
+                if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                      program_header->got_virtual_address,
+                                                      &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot add got to page table");
+
+                    return -1;
+                }
+
+                PRINTLOG(LINKER, LOG_INFO, "got added to page table at 0x%llx", program_header->got_virtual_address);
+
+            }
+#endif
+        }
+
         program_target_offset += ctx->global_offset_table_size;
     }
 
@@ -1691,6 +1859,38 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
         buffer_destroy(relocs_buf);
 
+        if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
+            program_header_t* program_header = (program_header_t*)array;
+
+            program_header->relocation_table_offset = program_target_offset;
+            program_header->relocation_table_size = ctx->relocation_table_size;
+            program_header->relocation_table_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->relocation_table_physical_address = program_header->header_physical_address + program_target_offset;
+
+            program_header->total_size += ctx->relocation_table_size;
+
+#ifndef ___TESTMODE
+            if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+                frame_t frame = {
+                    .frame_address = program_header->relocation_table_physical_address,
+                    .frame_count = program_header->relocation_table_size / FRAME_SIZE,
+                };
+
+                if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                      program_header->relocation_table_virtual_address,
+                                                      &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot add relocation table to page table");
+
+                    return -1;
+                }
+
+                PRINTLOG(LINKER, LOG_INFO, "relocation table added to page table at 0x%llx", program_header->relocation_table_virtual_address);
+
+            }
+#endif
+        }
+
         program_target_offset += ctx->relocation_table_size;
     }
 
@@ -1701,13 +1901,89 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
         uint8_t* metadata = buffer_get_view_at_position(metadata_buf, 0, metadata_size);
 
-        PRINTLOG(LINKER, LOG_DEBUG, "copying relocations to 0x%llx with size 0x%llx", program_target_offset, metadata_size);
+        PRINTLOG(LINKER, LOG_DEBUG, "copying metadata to 0x%llx with size 0x%llx", program_target_offset, metadata_size);
         memory_memcopy(metadata, array + program_target_offset, metadata_size);
 
         buffer_destroy(metadata_buf);
 
+        if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
+            program_header_t* program_header = (program_header_t*)array;
+
+            program_header->metadata_offset = program_target_offset;
+            program_header->metadata_size = ctx->metadata_size;
+            program_header->metadata_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->metadata_physical_address = program_header->header_physical_address + program_target_offset;
+
+            program_header->total_size += ctx->metadata_size;
+
+#ifndef ___TESTMODE
+            if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+                frame_t frame = {
+                    .frame_address = program_header->metadata_physical_address,
+                    .frame_count = program_header->metadata_size / FRAME_SIZE,
+                };
+
+                if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                      program_header->metadata_virtual_address,
+                                                      &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot add metadata to page table");
+
+                    return -1;
+                }
+
+                PRINTLOG(LINKER, LOG_INFO, "metadata added to page table at 0x%llx", program_header->metadata_virtual_address);
+
+            }
+#endif
+        }
+
         program_target_offset += ctx->metadata_size;
     }
+
+#ifndef ___TESTMODE
+    if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+        program_header_t* program_header = (program_header_t*)array;
+
+        if(program_header->program_heap_size > 0) {
+            frame_t frame = {
+                .frame_address = program_header->program_heap_physical_address,
+                .frame_count = program_header->program_heap_size / FRAME_SIZE,
+            };
+
+            if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                  program_header->program_heap_virtual_address,
+                                                  &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot add heap to page table");
+
+                return -1;
+            }
+
+            PRINTLOG(LINKER, LOG_TRACE, "heap added to page table");
+
+        }
+
+        if(program_header->program_stack_size > 0) {
+            frame_t frame = {
+                .frame_address = program_header->program_stack_physical_address,
+                .frame_count = program_header->program_stack_size / FRAME_SIZE,
+            };
+
+            if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                  program_header->program_stack_virtual_address,
+                                                  &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot add stack to page table");
+
+                return -1;
+            }
+
+            PRINTLOG(LINKER, LOG_TRACE, "stack added to page table");
+
+        }
+    }
+#endif
 
     return 0;
 }

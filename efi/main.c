@@ -14,6 +14,8 @@
 #include <zpack.h>
 #include <xxhash.h>
 #include <tosdb/tosdb.h>
+#include <memory/paging.h>
+#include <memory/frame.h>
 
 MODULE("turnstone.efi");
 
@@ -156,7 +158,13 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
         goto catch_efi_error;
     }
 
-    vfb = memory_malloc(sizeof(video_frame_buffer_t));
+    uint64_t vfb_struct_size = sizeof(video_frame_buffer_t);
+
+    if(vfb_struct_size % FRAME_SIZE) {
+        vfb_struct_size += FRAME_SIZE - (vfb_struct_size % FRAME_SIZE);
+    }
+
+    vfb = memory_malloc_ext(NULL, vfb_struct_size, FRAME_SIZE);
 
     if(vfb == NULL) {
         PRINTLOG(EFI, LOG_FATAL, "cannot allocate vfb");
@@ -351,11 +359,11 @@ efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
             }
 
 
-        }   // end of checking disk existence
+        } // end of checking disk existence
 
         memory_free(blk_dev);
 
-    }     // end of iter over all disks
+    } // end of iter over all disks
 
 catch_efi_error:
     return res;
@@ -494,8 +502,6 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     BS = system_table->boot_services;
     RS = system_table->runtime_services;
 
-    logging_module_levels[EFI] = LOG_TRACE;
-
     efi_status_t res;
 
     video_clear_screen();
@@ -506,6 +512,14 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup heap %llx", res);
+
+        goto catch_efi_error;
+    }
+
+    res = efi_frame_allocator_init();
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot setup frame allocator %llx", res);
 
         goto catch_efi_error;
     }
@@ -744,8 +758,6 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     linker_global_offset_table_entry_t empty_got_entry = {0};
 
-    logging_module_levels[LINKER] = LOG_INFO;
-
     buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // null entry
     buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // got itself
 
@@ -773,11 +785,11 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    uint64_t program_total_size = 0x1000 + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size;
+    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size;
     uint64_t requested_program_size = (2 << 20) + program_total_size;
-    uint64_t requested_program_pages = requested_program_size / 0x1000;
+    uint64_t requested_program_pages = requested_program_size / FRAME_SIZE;
 
-    if(requested_program_size % 0x1000 != 0) {
+    if(requested_program_size % FRAME_SIZE != 0) {
         requested_program_pages++;
     }
 
@@ -795,8 +807,54 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         requested_program_base += (2 << 20) - (requested_program_base % (2 << 20));
     }
 
-    ctx->program_start_physical = requested_program_base;
-    ctx->program_start_virtual = 2 << 20;
+    memory_memclean((void*)requested_program_base, program_total_size);
+
+    uint64_t heap_size = 64 << 20;
+    uint64_t requested_heap_size = (2 << 20) + heap_size;
+    uint64_t requested_heap_pages = requested_heap_size / FRAME_SIZE;
+    uint64_t requested_heap_base = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_heap_pages, &requested_heap_base);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate heap memory");
+
+        goto catch_efi_error;
+    }
+
+    if(requested_heap_base % (2 << 20)) {
+        requested_heap_base += (2 << 20) - (requested_heap_base % (2 << 20));
+    }
+
+    memory_memclean((void*)requested_heap_base, heap_size);
+
+    uint64_t stack_address = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, stack_size / FRAME_SIZE, &stack_address);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate stack memory");
+
+        goto catch_efi_error;
+    }
+
+    memory_memclean((void*)stack_address, stack_size);
+
+    uint64_t page_table_helper_frames = 0;
+    uint64_t page_frame_helper_size = 4 * FRAME_SIZE;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, page_frame_helper_size / FRAME_SIZE, &page_table_helper_frames);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate page_frame_helper memory");
+
+        goto catch_efi_error;
+    }
+
+    memory_memclean((void*)page_table_helper_frames, page_frame_helper_size);
+
+    ctx->program_start_physical = requested_program_base + FRAME_SIZE;
+    ctx->program_start_virtual = (2 << 20) + FRAME_SIZE;
 
     if(linker_bind_linear_addresses(ctx) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot bind addresses");
@@ -820,13 +878,175 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     uint8_t* program_data = (uint8_t*)requested_program_base;
 
-    if(linker_dump_program_to_array(ctx, LINKER_PROGRAM_DUMP_TYPE_ALL, program_data + 0x1000) != 0) {
+    program_header_t* program_header = (program_header_t*)requested_program_base;
+
+    program_header->program_heap_physical_address = requested_heap_base;
+    program_header->program_heap_virtual_address = (1 << 30);
+    program_header->program_heap_size = heap_size;
+
+    program_header->program_stack_physical_address = stack_address;
+    program_header->program_stack_virtual_address = (1 << 30) - stack_size;
+    program_header->program_stack_size = stack_size;
+
+    ctx->page_table_helper_frames = page_table_helper_frames;
+
+    PRINTLOG(EFI, LOG_INFO, "program will be dumped into memory at %p", program_data);
+
+    if(linker_dump_program_to_array(ctx, LINKER_PROGRAM_DUMP_TYPE_ALL, program_data) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot dump program");
 
         goto catch_efi_error;
     }
 
-    PRINTLOG(EFI, LOG_INFO, "program dumped into memory, page table build started.");
+    PRINTLOG(EFI, LOG_INFO, "program dumped into memory, building system info");
+
+
+    PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
+    efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
+    efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
+
+    void* acpi_rsdp = NULL;
+    void* acpi_xrsdp = NULL;
+
+    for (uint64_t i = 0; i <  system_table->configuration_table_entry_count; i++ ) {
+        if(efi_guid_equal(acpi_table_v2_guid, system_table->configuration_table[i].vendor_guid) == 0) {
+            acpi_xrsdp = system_table->configuration_table[i].vendor_table;
+        } else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
+            acpi_rsdp = system_table->configuration_table[i].vendor_table;
+        }
+    }
+
+    uint8_t* mmap = NULL;
+    uint64_t map_size, map_key, descriptor_size;
+    uint32_t descriptor_version;
+
+    BS->get_memory_map(&map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
+    PRINTLOG(EFI, LOG_DEBUG, "mmap size %lli desc size %lli ver %i", map_size, descriptor_size, descriptor_version);
+
+    uint64_t old_map_size = map_size;
+
+    if(map_size % FRAME_SIZE != 0) {
+        map_size += FRAME_SIZE - (map_size % FRAME_SIZE);
+    }
+
+    mmap = memory_malloc_ext(NULL, map_size, FRAME_SIZE);
+
+    PRINTLOG(EFI, LOG_DEBUG, "mmap %p size 0x%llx", mmap, old_map_size);
+
+    res = BS->get_memory_map(&old_map_size, (efi_memory_descriptor_t*)mmap, &map_key, &descriptor_size, &descriptor_version);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot fill memory map.");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t si_struct_size = sizeof(system_info_t);
+
+    if(si_struct_size % FRAME_SIZE != 0) {
+        si_struct_size += FRAME_SIZE - (si_struct_size % FRAME_SIZE);
+    }
+
+
+    system_info_t* sysinfo = memory_malloc_ext(NULL, si_struct_size, FRAME_SIZE);
+
+    if(!sysinfo) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate system info");
+
+        goto catch_efi_error;
+    }
+
+    sysinfo->boot_type = is_pxe?SYSTEM_INFO_BOOT_TYPE_PXE:SYSTEM_INFO_BOOT_TYPE_DISK;
+    sysinfo->mmap_data = mmap;
+    sysinfo->mmap_size = old_map_size;
+    sysinfo->mmap_descriptor_size = descriptor_size;
+    sysinfo->mmap_descriptor_version = descriptor_version;
+    sysinfo->frame_buffer = vfb;
+    sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
+    sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
+    sysinfo->efi_system_table = system_table;
+    sysinfo->program_header_physical_start = requested_program_base;
+    sysinfo->program_header_virtual_start = (2 << 20);
+
+    memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
+
+    frame_t frm = {0};
+
+    frm.frame_address = (uint64_t)sysinfo;
+    frm.frame_count = si_struct_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add system info to page table");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t vfb_struct_size = sizeof(video_frame_buffer_t);
+
+    if(vfb_struct_size % FRAME_SIZE != 0) {
+        vfb_struct_size += FRAME_SIZE - (vfb_struct_size % FRAME_SIZE);
+    }
+
+    frm.frame_address = (uint64_t)vfb;
+    frm.frame_count = vfb_struct_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
+
+        goto catch_efi_error;
+    }
+
+    frm.frame_address = (uint64_t)vfb->physical_base_address;
+    frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+    vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "vfb virtual base address 0x%llx physical base address 0x%llx size 0x%llx", vfb->virtual_base_address, vfb->physical_base_address, vfb->buffer_size);
+
+    frm.frame_address = (uint64_t)mmap;
+    frm.frame_count = map_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add memory map to page table");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t tc_size = sizeof(memory_page_table_context_t);
+
+    if(tc_size % FRAME_SIZE) {
+        tc_size += FRAME_SIZE - (tc_size % FRAME_SIZE);
+    }
+
+    frm.frame_address = (uint64_t)program_header->page_table_context_address;
+    frm.frame_count = tc_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add page table context to page table");
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "page table context virtual address 0x%llx", frm.frame_address);
+
+    kernel_start_t kernel_start = (kernel_start_t)requested_program_base;
+
+    tosdb_close(tdb_ctx->tosdb);
+    tosdb_backend_close(tdb_ctx->backend);
+
+    PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
+
+    BS->exit_boot_services(image, map_key);
+
+    cpu_cli();
+
+    kernel_start(sysinfo);
 
 catch_efi_error:
 

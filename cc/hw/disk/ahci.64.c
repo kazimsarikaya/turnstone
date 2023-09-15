@@ -295,7 +295,7 @@ int8_t ahci_disk_id_comparator(const void* disk1, const void* disk2) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
-    PRINTLOG(AHCI, LOG_INFO, "disk searching started");
+    PRINTLOG(AHCI, LOG_INFO, "ahci controller init started");
 
     if(linkedlist_size(sata_pci_devices) == 0) {
         PRINTLOG(AHCI, LOG_WARNING, "no SATA devices");
@@ -591,15 +591,20 @@ int8_t ahci_identify(uint64_t disk_id) {
         return -1;
     }
 
-    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
+    ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)port->command_list_base_address);
     cmd_hdr += slot;
+
+    PRINTLOG(AHCI, LOG_TRACE, "identify port 0x%p slot %i cmd hdr 0x%p", port, slot, cmd_hdr);
 
     cmd_hdr->command_fis_length = sizeof(ahci_fis_reg_h2d_t) / sizeof(uint32_t);
     cmd_hdr->write_direction = 0;
     cmd_hdr->prdt_length = 1;
     cmd_hdr->clear_busy = 1;
 
-    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(cmd_hdr->prdt_base_address);
+    ahci_hba_prdt_t* cmd_table = (ahci_hba_prdt_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)cmd_hdr->prdt_base_address);
+
+    PRINTLOG(AHCI, LOG_TRACE, "cmd table 0x%p", cmd_table);
+
     memory_memclean(cmd_table, sizeof(ahci_hba_prdt_t) + (sizeof(ahci_hba_prdt_entry_t) * (  cmd_hdr->prdt_length - 1)));
 
     uint64_t id_phy_addr = 0;
@@ -611,10 +616,15 @@ int8_t ahci_identify(uint64_t disk_id) {
         return -1;
     }
 
+    PRINTLOG(AHCI, LOG_TRACE, "id 0x%p phy addr 0x%llx", &identify_data, id_phy_addr);
+
     cmd_table->prdt_entry[0].data_base_address = id_phy_addr;
     cmd_table->prdt_entry[0].data_byte_count = sizeof(ahci_ata_identify_data_t) - 1;
 
     ahci_fis_reg_h2d_t* fis = (ahci_fis_reg_h2d_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(&cmd_table->command_fis);
+
+    PRINTLOG(AHCI, LOG_TRACE, "fis 0x%p", fis);
+
     memory_memclean(fis, sizeof(ahci_fis_reg_h2d_t));
 
     fis->fis_type = AHCI_FIS_TYPE_REG_H2D;
@@ -982,7 +992,7 @@ void ahci_port_start_cmd(ahci_hba_port_t* port) {
 
     PRINTLOG(AHCI, LOG_TRACE, "sending identify 0x%x 0x%x 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
     // Wait until CR (bit15) is cleared
-    while (port->command_and_status & AHCI_HBA_PxCMD_CR); // check command running
+    while (port->command_and_status & AHCI_HBA_PxCMD_CR);  // check command running
 
     // Set FRE (bit4) and ST (bit0)
     port->command_and_status |= AHCI_HBA_PxCMD_FRE; // set fis receive enable

@@ -23,7 +23,7 @@
  *
  * each entry is 64bit long
  */
-typedef struct memory_page_entry_s {
+typedef struct memory_page_entry_t {
     uint8_t  present               : 1; ///< bit 0 page present?
     uint8_t  writable              : 1; ///< bit 1 page can be writen?
     uint8_t  user_accessible       : 1; ///< bit 2 page can be accessable by user space
@@ -58,9 +58,29 @@ typedef struct memory_page_entry_s {
  * in long mode a page table is consist of 512 page entries.
  * a page table is 4K page aligned.
  */
-typedef struct memory_page_table_s {
+typedef struct memory_page_table_t {
     memory_page_entry_t pages[MEMORY_PAGING_INDEX_COUNT]; ///< page table entries
 } __attribute__((packed)) memory_page_table_t; ///< short hand for struct
+
+#define MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT 0x200
+
+typedef enum memory_paging_internal_frame_init_state_t {
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_UNINITIALIZED = 0,
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZING = 1,
+    MEMORY_PAGING_INTERNAL_FRAME_INIT_STATE_INITIALIZED = 2,
+} memory_paging_internal_frame_init_state_t;
+
+typedef struct memory_page_table_context_t {
+    memory_page_table_t *                     page_table; ///< page table
+    memory_paging_internal_frame_init_state_t internal_frame_init_state; ///< internal frame init state
+    uint64_t                                  internal_frames_1_current; ///< internal frames type 1 current
+    uint64_t                                  internal_frames_1_start; ///< internal frames type 1
+    uint64_t                                  internal_frames_1_count; ///< internal frames type 1 count
+    uint64_t                                  internal_frames_2_start; ///< internal frames type 2
+    uint64_t                                  internal_frames_2_count; ///< internal frames type 2 count
+    uint64_t                                  internal_frames_helper_frame; ///< internal frames helper frame
+} memory_page_table_context_t; ///< short hand for struct
+
 
 /**
  * @enum memory_paging_page_type_e
@@ -88,20 +108,6 @@ typedef enum memory_paging_page_type_e {
 /*! page length for 1G */
 #define MEMORY_PAGING_PAGE_LENGTH_1G (1 << 30)
 
-#define memory_paging_malloc_page_with_heap(h) memory_malloc_ext(h, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
-#define memory_paging_malloc_page() memory_malloc_ext(NULL, sizeof(memory_page_table_t), MEMORY_PAGING_PAGE_ALIGN)
-
-/**
- * @brief build default page table
- * @param[in]  heap the heap where pages are to be in.
- * @return      p4 page table
- *
- * if heap is NULL page tables will be created at default heap
- */
-memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap);
-/*! creates page table at default heap (mallocs are at default heap) */
-#define memory_paging_build_table() memory_paging_build_table_ext(NULL)
-
 /**
  * @brief switches p4 page table
  * @param[in]  new_table new p4 table
@@ -110,7 +116,7 @@ memory_page_table_t* memory_paging_build_table_ext(memory_heap_t* heap);
  * change value of cr3 register.
  * if new_table is NULL returns only current table
  */
-memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_table);
+memory_page_table_context_t* memory_paging_switch_table(const memory_page_table_context_t* new_table);
 /*! return p4 table */
 #define memory_paging_get_table() memory_paging_switch_table(NULL)
 
@@ -125,38 +131,38 @@ memory_page_table_t* memory_paging_switch_table(const memory_page_table_t* new_t
  *
  * if heap is NULL, the pages created in default heap
  */
-int8_t memory_paging_add_page_ext(memory_heap_t* heap, memory_page_table_t* p4,
+int8_t memory_paging_add_page_ext(memory_page_table_context_t* p4,
                                   uint64_t virtual_address, uint64_t frame_address,
                                   memory_paging_page_type_t type);
 /*! add virtual address va to pt page table with frame address fa and page type t uses default heap for mallocs */
-#define memory_paging_add_page_with_p4(pt, va, fa, t)  memory_paging_add_page_ext(NULL, pt, va, fa, t)
+#define memory_paging_add_page_with_p4(pt, va, fa, t)  memory_paging_add_page_ext(pt, va, fa, t)
 /*! add va and fa to defeault p4 table*/
-#define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, NULL, va, fa, t)
+#define memory_paging_add_page(va, fa, t)  memory_paging_add_page_ext(NULL, va, fa, t)
 
-int8_t memory_paging_delete_page_ext_with_heap(memory_heap_t* heap, memory_page_table_t* p4, uint64_t virtual_address, uint64_t* frame_address);
-#define memory_paging_delete_page_ext(p4, va, faptr) memory_paging_delete_page_ext_with_heap(NULL, p4, va, faptr)
-#define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext_with_heap(NULL, NULL, va, faptr)
+int8_t memory_paging_delete_page_ext_with_heap(memory_page_table_context_t* p4, uint64_t virtual_address, uint64_t* frame_address);
+#define memory_paging_delete_page_ext(p4, va, faptr) memory_paging_delete_page_ext_with_heap(p4, va, faptr)
+#define memory_paging_delete_page(va, faptr) memory_paging_delete_page_ext_with_heap(NULL, va, faptr)
 
-memory_page_table_t* memory_paging_clone_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4);
-#define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL, NULL)
-#define memory_paging_move_pagetable(h) memory_paging_clone_pagetable_ext(h, NULL)
+memory_page_table_t* memory_paging_clone_pagetable_ext(memory_page_table_context_t* table_context);
+#define memory_paging_clone_pagetable() memory_paging_clone_pagetable_ext(NULL)
+#define memory_paging_move_pagetable(h) memory_paging_clone_pagetable_ext(NULL)
 
-memory_page_table_t* memory_paging_clone_pagetable_to_frames_ext(memory_heap_t* heap, memory_page_table_t* p4, uint64_t fa);
-#define memory_paging_clone_current_pagetable_to_frames_ext(h, fa) memory_paging_clone_pagetable_to_frames_ext(h, NULL, fa)
-#define memory_paging_clone_current_pagetable_to_frames(fa) memory_paging_clone_pagetable_to_frames_ext(NULL, NULL, fa)
+memory_page_table_t* memory_paging_clone_pagetable_to_frames_ext(memory_page_table_context_t* table_context, uint64_t fa);
+#define memory_paging_clone_current_pagetable_to_frames_ext(h, fa) memory_paging_clone_pagetable_to_frames_ext(NULL, fa)
+#define memory_paging_clone_current_pagetable_to_frames(fa) memory_paging_clone_pagetable_to_frames_ext(NULL, fa)
 
-int8_t memory_paging_destroy_pagetable_ext(memory_heap_t* heap, memory_page_table_t* p4);
-#define memory_paging_destroy_pagetable(p) memory_paging_destroy_pagetable_ext(NULL, p)
+int8_t memory_paging_destroy_pagetable_ext(memory_page_table_context_t* table_context);
+#define memory_paging_destroy_pagetable(p) memory_paging_destroy_pagetable_ext(p)
 
-int8_t memory_paging_get_physical_address_ext(memory_page_table_t* p4, uint64_t virtual_address, uint64_t* physical_address);
+int8_t memory_paging_get_physical_address_ext(memory_page_table_context_t* table_context, uint64_t virtual_address, uint64_t* physical_address);
 #define memory_paging_get_physical_address(va, paptr) memory_paging_get_frame_address_ext(NULL, va, paptr)
 #define memory_paging_get_frame_address_ext(p4, va, fa) ((memory_paging_get_physical_address_ext(p4, va, fa) >> 12) << 12)
 #define memory_paging_get_frame_address(va, faptr) memory_paging_get_frame_address_ext(NULL, va, faptr)
 
 
-int8_t memory_paging_toggle_attributes_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_page_type_t type);
+int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_context, uint64_t virtual_address, memory_paging_page_type_t type);
 #define memory_paging_toggle_attributes(va, t) memory_paging_toggle_attributes_ext(NULL, va, t)
-int8_t memory_paging_set_user_accessible_ext(memory_page_table_t* p4, uint64_t virtual_address);
+int8_t memory_paging_set_user_accessible_ext(memory_page_table_context_t* table_context, uint64_t virtual_address);
 #define memory_paging_set_user_accessible(va) memory_paging_set_user_accessible_ext(NULL, va)
 
 typedef enum memory_paging_clear_type_t {
@@ -164,7 +170,7 @@ typedef enum memory_paging_clear_type_t {
     MEMORY_PAGING_CLEAR_TYPE_ACCESSED=2,
 } memory_paging_clear_type_t;
 
-int8_t memory_paging_clear_page_ext(memory_page_table_t* p4, uint64_t virtual_address, memory_paging_clear_type_t type);
+int8_t memory_paging_clear_page_ext(memory_page_table_context_t* table_context, uint64_t virtual_address, memory_paging_clear_type_t type);
 #define memory_paging_clear_page(va, t) memory_paging_clear_page_ext(NULL, va, t)
 
 /*! gets p4 index of virtual address at long mode */
@@ -176,15 +182,22 @@ int8_t memory_paging_clear_page_ext(memory_page_table_t* p4, uint64_t virtual_ad
 /*! gets p1 index of virtual address at long mode */
 #define MEMORY_PT_GET_P1_INDEX(u64) ((u64 >> 12) & 0x1FF)
 
-/*! computes reserved virtual address of frame adddress */
-#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((64ULL << 40) | (uint64_t)(fa)))
+#if ___KERNELBUILD == 1
 /*! returns frame address of reserved virtual address */
 #define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(va)  ((typeof(va))(((64ULL << 40 ) - 1) & (uint64_t)(va)))
+/*! computes reserved virtual address of frame adddress */
+#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((64ULL << 40) | (uint64_t)(fa)))
+#else
+#define MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(va)  ((typeof(va))((uint64_t)(va)))
+#define MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa)  ((typeof(fa))((uint64_t)(fa)))
+#endif
 
-int8_t memory_paging_add_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
+int8_t memory_paging_add_va_for_frame_ext(memory_page_table_context_t* table_context, uint64_t va_start, frame_t* frm, memory_paging_page_type_t type);
 #define memory_paging_add_va_for_frame(vas, f, t) memory_paging_add_va_for_frame_ext(NULL, vas, f, t)
 
-int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_t* p4, uint64_t va_start, frame_t* frm);
+int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_context, uint64_t va_start, frame_t* frm);
 #define memory_paging_delete_va_for_frame(vas, f) memory_paging_add_va_for_frame_ext(NULL, vas, f)
 
+memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_frame_address);
+int8_t                       memory_paging_reserve_current_page_table_frames(void);
 #endif
