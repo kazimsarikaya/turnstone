@@ -9,6 +9,7 @@
 #include <cpu/task.h>
 #include <memory.h>
 #include <memory/frame.h>
+#include <memory/paging.h>
 #include <systeminfo.h>
 #include <linker.h>
 #include <systeminfo.h>
@@ -20,7 +21,7 @@ descriptor_register_t* IDT_REGISTER = NULL;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-uint8_t descriptor_build_gdt_register(){
+uint8_t descriptor_build_gdt_register(void){
     uint16_t gdt_size = sizeof(descriptor_gdt_t) * 7;
     descriptor_gdt_t* gdts = memory_malloc(gdt_size);
     if(gdts == NULL) {
@@ -98,8 +99,8 @@ uint8_t descriptor_build_ap_descriptors_register(void){
                           : : "a" (gdtr));
 
 
-    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->kernel_start;
-    uint64_t stack_size = kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_size;
+    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+    uint64_t stack_size = kernel->program_stack_size;
 
 
     uint64_t frame_count = 9 * stack_size / FRAME_SIZE;
@@ -158,7 +159,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
 }
 #pragma GCC diagnostic pop
 
-uint8_t descriptor_build_idt_register(){
+uint8_t descriptor_build_idt_register(void){
     uint16_t idt_size = sizeof(descriptor_idt_t) * 256;
 
     if(IDT_REGISTER) {
@@ -166,13 +167,21 @@ uint8_t descriptor_build_idt_register(){
     }
 
     IDT_REGISTER = memory_malloc(sizeof(descriptor_register_t));
+
     if(IDT_REGISTER == NULL) {
         return -1;
     }
 
-    if(SYSTEM_INFO->remapped == 0) {
-        frame_t idt_frame = {IDT_BASE_ADDRESS, 1, FRAME_TYPE_RESERVED, 0};
-        KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &idt_frame);
+    frame_t idt_frame = {IDT_BASE_ADDRESS, (idt_size + FRAME_SIZE - 1) / FRAME_SIZE, FRAME_TYPE_RESERVED, 0};
+
+    PRINTLOG(KERNEL, LOG_DEBUG, "idt frame address: 0x%llx count 0x%llx", idt_frame.frame_address, idt_frame.frame_count);
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &idt_frame) != 0) {
+        return -1;
+    }
+
+    if(memory_paging_add_va_for_frame(idt_frame.frame_address, &idt_frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        return -1;
     }
 
     IDT_REGISTER->limit = idt_size - 1;

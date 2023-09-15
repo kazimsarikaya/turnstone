@@ -38,7 +38,6 @@ int8_t       fa_release_frame(frame_allocator_t* self, frame_t* f);
 int8_t       fa_release_acpi_reclaim_memory(frame_allocator_t* self);
 int8_t       fa_cleanup(frame_allocator_t* self);
 frame_t*     fa_get_reserved_frames_of_address(frame_allocator_t* self, void* address);
-int8_t       fa_rebuild_reserved_mmap(frame_allocator_t* self);
 frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type);
 
 int8_t frame_allocator_cmp_by_size(const void* data1, const void* data2){
@@ -790,69 +789,6 @@ frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void* addres
     return res;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t fa_rebuild_reserved_mmap(frame_allocator_t* self) {
-    if(self == NULL || SYSTEM_INFO == NULL) {
-        return -1;
-    }
-
-    frame_allocator_context_t* ctx = self->context;
-
-    lock_acquire(ctx->lock);
-
-    uint64_t mmap_entry_cnt = 0;
-
-    iterator_t* iter;
-
-    iter = ctx->reserved_frames_by_address->create_iterator(ctx->reserved_frames_by_address);
-
-    while(iter->end_of_iterator(iter) != 0) {
-        mmap_entry_cnt++;
-
-        iter = iter->next(iter);
-    }
-
-    iter->destroy(iter);
-
-    memory_free_ext(SYSTEM_INFO->heap, SYSTEM_INFO->reserved_mmap_data);
-
-    SYSTEM_INFO->reserved_mmap_size = SYSTEM_INFO->mmap_descriptor_size * mmap_entry_cnt;
-    SYSTEM_INFO->reserved_mmap_data = memory_malloc_ext(SYSTEM_INFO->heap, SYSTEM_INFO->reserved_mmap_size, 0);
-
-    if(SYSTEM_INFO->reserved_mmap_data == NULL) {
-        PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "Cannot create reserved mmap data. Halting...");
-        cpu_hlt();
-    }
-
-    PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "reserved map ent count 0x%llx size 0x%llx", mmap_entry_cnt, SYSTEM_INFO->reserved_mmap_size);
-
-    uint64_t i = 0;
-
-    iter = ctx->reserved_frames_by_address->create_iterator(ctx->reserved_frames_by_address);
-
-    while(iter->end_of_iterator(iter) != 0) {
-        frame_t* f = (frame_t*)iter->get_item(iter);
-        efi_memory_descriptor_t* mem_desc = (efi_memory_descriptor_t*)(SYSTEM_INFO->reserved_mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
-
-        mem_desc->type = EFI_RESERVED_MEMORY_TYPE;
-        mem_desc->physical_start = f->frame_address;
-        mem_desc->virtual_start = f->frame_address;
-        mem_desc->page_count = f->frame_count;
-        mem_desc->attribute = f->frame_attributes | FRAME_ATTRIBUTE_OLD_RESERVED;
-
-        PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "reserved mmap start 0x%016llx count 0x%llx", mem_desc->physical_start, mem_desc->page_count);
-
-        iter = iter->next(iter);
-        i++;
-    }
-
-    lock_release(ctx->lock);
-
-    return 0;
-}
-#pragma GCC diagnostic pop
-
 frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
     if(efi_m_type == EFI_LOADER_CODE || efi_m_type == EFI_LOADER_DATA) {
         return FRAME_TYPE_FREE;
@@ -971,46 +907,10 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     fa->allocate_frame_by_count = fa_allocate_frame_by_count;
     fa->allocate_frame = fa_allocate_frame;
     fa->release_frame = fa_release_frame;
-    fa->rebuild_reserved_mmap = fa_rebuild_reserved_mmap;
     fa->cleanup = fa_cleanup;
     fa->get_reserved_frames_of_address = fa_get_reserved_frames_of_address;
     fa->reserve_system_frames = fa_reserve_system_frames;
     fa->release_acpi_reclaim_memory = fa_release_acpi_reclaim_memory;
-
-    if(SYSTEM_INFO->reserved_mmap_size && SYSTEM_INFO->reserved_mmap_data) {
-        uint64_t resv_mmap_ent_cnt = SYSTEM_INFO->reserved_mmap_size / SYSTEM_INFO->mmap_descriptor_size;
-        for(size_t i = 1; i < resv_mmap_ent_cnt; i++) {
-            mem_desc = (efi_memory_descriptor_t*)(SYSTEM_INFO->reserved_mmap_data + (i * SYSTEM_INFO->mmap_descriptor_size));
-
-
-
-            frame_t f = {mem_desc->physical_start, mem_desc->page_count, FRAME_TYPE_USED, mem_desc->attribute};
-
-            iterator_t* iter = ctx->reserved_frames_by_address->search(ctx->reserved_frames_by_address, &f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-            if(iter->end_of_iterator(iter) != 0) {
-                iter->destroy(iter);
-
-                continue;
-            }
-
-            iter->destroy(iter);
-
-            if(f.frame_address == IDT_BASE_ADDRESS && f.frame_count == 1) {
-                f.type = FRAME_TYPE_RESERVED;
-                f.frame_attributes &= ~FRAME_ATTRIBUTE_OLD_RESERVED;
-            }
-
-            if(fa->allocate_frame(fa, &f) != 0) {
-                PRINTLOG(FRAMEALLOCATOR, LOG_WARNING, "failed to allocate frame 0x%016llx count 0x%llx", f.frame_address, f.frame_count);
-            } else {
-                PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "old reserved frame start 0x%016llx count 0x%llx", mem_desc->physical_start, mem_desc->page_count);
-            }
-
-        }
-    }else {
-        PRINTLOG(FRAMEALLOCATOR, LOG_DEBUG, "no old reserved mmap data (size: 0x%llx)", SYSTEM_INFO->reserved_mmap_size);
-    }
 
     return fa;
 }

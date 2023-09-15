@@ -42,6 +42,21 @@ MODULE("turnstone.kernel.programs.kmain");
 int8_t                         kmain64(size_t entry_point);
 __attribute__((noreturn)) void ___kstart64(system_info_t* sysinfo);
 
+#if 0
+// code for generating linker trampoline. not neccecery for now.
+void trampoline_code(system_info_t* sysinfo);
+void trampoline_code(system_info_t* sysinfo) {
+    program_header_t* kernel = (program_header_t*)sysinfo->program_header_physical_start;
+    memory_page_table_context_t* kernel_page_table = (memory_page_table_context_t*)kernel->page_table_context_address;
+
+    uint64_t stack_top = kernel->program_stack_virtual_address + kernel->program_stack_size;
+    cpu_set_and_clear_stack(stack_top);
+
+    asm volatile ("mov %0, %%cr3" : : "r" (kernel_page_table->page_table) : "memory");
+    asm volatile ("call *%0" : : "r" (kernel->program_entry) : "memory");
+}
+#endif
+
 __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     cpu_cli();
 
@@ -53,19 +68,6 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     cpu_nop();
 
     cpu_clear_segments();
-
-    uint64_t kernel_start = SYSTEM_INFO->kernel_start;
-
-    program_header_t* kernel = (program_header_t*)kernel_start;
-
-    uint64_t stack_base = 0;
-
-    if(!SYSTEM_INFO->remapped) {
-        stack_base = kernel_start;
-    }
-
-    uint64_t stack_top = stack_base + kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_start + kernel->section_locations[LINKER_SECTION_TYPE_STACK].section_size;
-    cpu_set_and_clear_stack(stack_top);
 
     cpu_enable_sse();
 
@@ -110,7 +112,7 @@ int8_t kmain64(size_t entry_point) {
     video_init();
     video_clear_screen();
 
-    PRINTLOG(KERNEL, LOG_INFO, "Initializing stage 3 with remapped kernel? %lli", SYSTEM_INFO->remapped);
+    PRINTLOG(KERNEL, LOG_INFO, "Initializing TURNSTONE OS");
     PRINTLOG(KERNEL, LOG_INFO, "new heap created at 0x%p", heap);
     PRINTLOG(KERNEL, LOG_INFO, "Entry point of kernel is 0x%llx", entry_point);
 
@@ -130,19 +132,6 @@ int8_t kmain64(size_t entry_point) {
 
     memory_memcopy(SYSTEM_INFO->mmap_data, new_mmap_data, SYSTEM_INFO->mmap_size);
 
-    uint8_t* new_reserved_mmap_data = NULL;
-
-    if(SYSTEM_INFO->reserved_mmap_size) {
-        PRINTLOG(KERNEL, LOG_DEBUG, "reserved mmap size is %lli", SYSTEM_INFO->reserved_mmap_size);
-        new_reserved_mmap_data = memory_malloc(SYSTEM_INFO->reserved_mmap_size);
-
-        if(new_reserved_mmap_data == NULL) {
-            return -1;
-        }
-
-        memory_memcopy(SYSTEM_INFO->reserved_mmap_data, new_reserved_mmap_data, SYSTEM_INFO->reserved_mmap_size);
-    }
-
     system_info_t* new_system_info = memory_malloc(sizeof(system_info_t));
 
     if(new_system_info == NULL) {
@@ -153,8 +142,6 @@ int8_t kmain64(size_t entry_point) {
 
     new_system_info->frame_buffer = new_vfb;
     new_system_info->mmap_data = new_mmap_data;
-    new_system_info->reserved_mmap_data = new_reserved_mmap_data;
-    new_system_info->heap = heap;
 
     SYSTEM_INFO = new_system_info;
 
@@ -164,31 +151,41 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
         KERNEL_FRAME_ALLOCATOR = fa;
 
-        frame_t kernel_frames = {SYSTEM_INFO->kernel_physical_start, SYSTEM_INFO->kernel_4k_frame_count, FRAME_TYPE_USED, 0};
+        program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+
+        frame_t kernel_frames = {SYSTEM_INFO->program_header_physical_start, kernel->total_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &kernel_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel frames");
             cpu_hlt();
         }
 
-        frame_t kernel_default_heap_frames = {SYSTEM_INFO->kernel_default_heap_start, SYSTEM_INFO->kernel_default_heap_4k_frame_count, FRAME_TYPE_USED, 0};
+        PRINTLOG(KERNEL, LOG_DEBUG, "kernel frames allocated");
 
-        if(fa->allocate_frame(fa, &kernel_default_heap_frames) != 0) {
+        frame_t kernel_heap_frames = {kernel->program_heap_physical_address, kernel->program_heap_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &kernel_heap_frames) != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default heap frames");
             cpu_hlt();
         }
 
-        if(!SYSTEM_INFO->remapped) {
+        PRINTLOG(KERNEL, LOG_DEBUG, "kernel heap frames allocated");
 
-            frame_t page_table_helper_frame = {SYSTEM_INFO->page_table_helper_frame, 4, FRAME_TYPE_RESERVED, 0};
+        frame_t kernel_stack_frames = {kernel->program_stack_physical_address, kernel->program_stack_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
-            if(fa->allocate_frame(fa, &page_table_helper_frame) != 0) {
-                PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate page table helper frame");
-                frame_allocator_print(fa);
-                cpu_hlt();
-            }
+        if(fa->allocate_frame(fa, &kernel_stack_frames) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default stack frames");
+            cpu_hlt();
         }
 
+        PRINTLOG(KERNEL, LOG_DEBUG, "kernel stack frames allocated");
+
+        if(memory_paging_reserve_current_page_table_frames() != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot reserve current page table frames");
+            cpu_hlt();
+        }
+
+        PRINTLOG(KERNEL, LOG_DEBUG, "system used frames allocated");
     } else {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...");
         cpu_hlt();
@@ -217,24 +214,6 @@ int8_t kmain64(size_t entry_point) {
     } else {
         PRINTLOG(KERNEL, LOG_DEBUG, "Default gdt builded");
     }
-
-    memory_page_table_t* p4 = memory_paging_build_table();
-    if( p4 == NULL) {
-        PRINTLOG(KERNEL, LOG_PANIC, "Can not build default page table. Halting");
-        cpu_hlt();
-    } else {
-        PRINTLOG(KERNEL, LOG_DEBUG, "Default page table builded at 0x%p", p4);
-        memory_paging_switch_table(p4);
-
-        SYSTEM_INFO->my_page_table = 1;
-
-        video_refresh_frame_buffer_address();
-        PRINTLOG(KERNEL, LOG_DEBUG, "Default page table switched to 0x%p", p4);
-    }
-
-    //if(SYSTEM_INFO->remapped == 0) {
-    //    linker_remap_kernel();
-    //}
 
     PRINTLOG(KERNEL, LOG_DEBUG, "vfb address 0x%p", SYSTEM_INFO->frame_buffer);
     PRINTLOG(KERNEL, LOG_DEBUG, "Frame buffer at 0x%llx and size 0x%016llx", SYSTEM_INFO->frame_buffer->virtual_base_address, SYSTEM_INFO->frame_buffer->buffer_size);

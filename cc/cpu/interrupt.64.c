@@ -187,7 +187,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         return -1;
     }
 
-    PRINTLOG(KERNEL, LOG_DEBUG, "Setting IRQ handler for IRQ 0x%x func at 0x%p", irqnum, irq);
+    PRINTLOG(KERNEL, LOG_TRACE, "Setting IRQ handler for IRQ 0x%x func at 0x%p", irqnum, irq);
 
     cpu_cli();
 
@@ -217,6 +217,8 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
     }
 
     cpu_sti();
+
+    PRINTLOG(KERNEL, LOG_TRACE, "IRQ handler set for IRQ 0x%x func at 0x%p", irqnum, irq);
 
     return 0;
 }
@@ -256,7 +258,7 @@ void interrupt_dummy_noerrcode(interrupt_frame_t* frame, uint8_t intnum){
             if(!found) {
                 PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
             } else {
-                PRINTLOG(KERNEL, LOG_DEBUG, "found shared irq for 0x%02x", intnum);
+                PRINTLOG(KERNEL, LOG_TRACE, "found shared irq for 0x%02x", intnum);
 
                 return;
             }
