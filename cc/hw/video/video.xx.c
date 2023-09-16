@@ -35,9 +35,9 @@ extern video_psf2_font_t font_data_end;
  */
 void    video_graphics_scroll(void);
 wchar_t video_get_wc(char_t* string, int64_t * idx);
-void    video_text_print(char_t* string);
+void    video_text_print(const char_t* string);
 void    video_graphics_print(char_t* string);
-void    video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+void    video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
@@ -69,7 +69,8 @@ void video_set_color(uint32_t foreground, uint32_t background) {
     VIDEO_GRAPHICS_BACKGROUND = background;
 }
 
-void  video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+void video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+    UNUSED(scanout);
     UNUSED(offset);
     UNUSED(x);
     UNUSED(y);
@@ -92,10 +93,19 @@ void video_refresh_frame_buffer_address(void) {
 }
 
 void video_init(void) {
+    video_text_print("video init\n");
+    GRAPHICS_MODE = false;
+
     VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
     VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
     VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
     VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;
+
+    char_t buffer[100] = {0};
+    utoh_with_buffer(buffer, (uint64_t)VIDEO_BASE_ADDRESS);
+    video_text_print("frame buffer address: 0x");
+    video_text_print(buffer);
+    video_text_print("\n");
 
     VIDEO_DISPLAY_FLUSH = video_display_flush_dummy;
 
@@ -154,7 +164,7 @@ void video_init(void) {
             FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
 
 
-            GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
+            GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL;
         } else {
 
             video_psf1_font_t* font1 = (video_psf1_font_t*)&font_data_start;
@@ -210,7 +220,7 @@ void video_init(void) {
 
                 FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
 
-                GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
+                GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL;
             } else {
                 PRINTLOG(VIDEO, LOG_ERROR, "font magic err");
             }
@@ -218,6 +228,10 @@ void video_init(void) {
         }
     } else {
         PRINTLOG(VIDEO, LOG_ERROR, "font err");
+    }
+
+    if(!GRAPHICS_MODE) {
+        video_text_print("graphics mode not active");
     }
 }
 
@@ -391,7 +405,7 @@ void video_graphics_print(char_t* string) {
     }
 
     if(full_flush) {
-        VIDEO_DISPLAY_FLUSH(0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+        VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
     } else {
         flush_offset = (old_cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (old_cursor_graphics_x * FONT_WIDTH);
 
@@ -406,7 +420,7 @@ void video_graphics_print(char_t* string) {
             min_y = old_cursor_graphics_y * FONT_HEIGHT;
             max_y = min_y + FONT_HEIGHT;
 
-            VIDEO_DISPLAY_FLUSH(flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
+            VIDEO_DISPLAY_FLUSH(0, flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
 
             min_x = 0;
             max_x = max_cursor_graphics_x * FONT_WIDTH;
@@ -416,7 +430,7 @@ void video_graphics_print(char_t* string) {
             flush_offset = min_y * VIDEO_PIXELS_PER_SCANLINE;
         }
 
-        VIDEO_DISPLAY_FLUSH(flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
+        VIDEO_DISPLAY_FLUSH(0, flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
     }
 }
 
@@ -429,7 +443,7 @@ void video_clear_screen(void){
         cursor_graphics_x = 0;
         cursor_graphics_y = 0;
 
-        VIDEO_DISPLAY_FLUSH(0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+        VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
     }
 }
 
@@ -445,7 +459,7 @@ void video_print(char_t* string) {
     lock_release(video_lock);
 }
 
-void video_text_print(char_t* string) {
+void video_text_print(const char_t* string) {
     if(string == NULL) {
         return;
     }

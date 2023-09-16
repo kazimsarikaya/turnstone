@@ -23,7 +23,7 @@ MODULE("turnstone.kernel.hw.video.vmwaresvga2");
 vmware_svga2_t* vmware_svga2_active = NULL;
 
 int8_t vmware_svga2_isr(interrupt_frame_t* frame, uint8_t irq);
-void   vmware_svga2_display_flush(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+void   vmware_svga2_display_flush(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 int8_t vmware_svga2_isr(interrupt_frame_t* frame, uint8_t irq) {
     UNUSED(frame);
@@ -48,7 +48,8 @@ static inline uint32_t vmware_svga2_read_reg(vmware_svga2_t* vmware_svga2, uint3
 
 uint32_t fill_color = 0x00000000;
 
-void vmware_svga2_display_flush(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+void vmware_svga2_display_flush(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+    UNUSED(scanout);
     UNUSED(offset);
 
     volatile uint32_t* fifo = (volatile uint32_t*) vmware_svga2_active->fifo_bar_addr_va;
@@ -245,7 +246,7 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
     cpu_cli();
     VIDEO_DISPLAY_FLUSH = vmware_svga2_display_flush;
     cpu_sti();
-    VIDEO_DISPLAY_FLUSH(0, 0, 0, vmware_svga2->screen_width, vmware_svga2->screen_height);
+    VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, vmware_svga2->screen_width, vmware_svga2->screen_height);
 
     PRINTLOG(VMWARESVGA, LOG_DEBUG, "vmware svga2 initialized");
 

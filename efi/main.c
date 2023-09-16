@@ -996,15 +996,17 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    frm.frame_address = (uint64_t)vfb->physical_base_address;
-    frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    if(vfb->virtual_base_address) {
+        frm.frame_address = (uint64_t)vfb->physical_base_address;
+        frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
-    vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
+        vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
 
-    if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
+        if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
 
-        goto catch_efi_error;
+            goto catch_efi_error;
+        }
     }
 
     PRINTLOG(EFI, LOG_DEBUG, "vfb virtual base address 0x%llx physical base address 0x%llx size 0x%llx", vfb->virtual_base_address, vfb->physical_base_address, vfb->buffer_size);

@@ -27,18 +27,16 @@ MODULE("turnstone.kernel.hw.video.virtiogpu");
 uint64_t virtio_gpu_select_features(virtio_dev_t* dev, uint64_t selected_features);
 int8_t   virtio_gpu_create_queues(virtio_dev_t* dev);
 int8_t   virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno);
-void     virtio_gpu_get_display_info(void);
-void     virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+void     virtio_gpu_get_display_info(uint32_t scanout);
+void     virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 uint32_t resource_id = 0;
 uint32_t screen_width = 0;
 uint32_t screen_height = 0;
 
-virtio_dev_t* virtio_gpu_dev = NULL;
+virtio_gpu_wrapper_t* virtio_gpu_wrapper = NULL;
 lock_t virtio_gpu_lock = NULL;
 lock_t virtio_gpu_flush_lock = NULL;
-
-uint64_t virtio_gpu_fence_id = 0;
 
 void video_text_print(char_t* string);
 
@@ -47,6 +45,8 @@ int8_t   virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
     UNUSED(irqno);
 
     //video_text_print((char_t*)"virtio gpu control queue isr\n");
+
+    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     volatile virtio_gpu_config_t* cfg = (volatile virtio_gpu_config_t*)virtio_gpu_dev->device_config;
 
@@ -66,7 +66,7 @@ int8_t   virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
     return 0;
 }
 
-void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     if(width == 0 || height == 0) {
         return;
     }
@@ -77,6 +77,8 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     volatile virtio_gpu_ctrl_hdr_t* hdr;
 
     //video_text_print((char_t*)"virtio gpu display flush\n");
+
+    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[0];
     virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
@@ -89,12 +91,19 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     virtio_gpu_transfer_to_host_2d_t* transfer_hdr = (virtio_gpu_transfer_to_host_2d_t*)offset;
 
     transfer_hdr->hdr.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D;
-    transfer_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
-    transfer_hdr->hdr.fence_id = virtio_gpu_fence_id++;
+
+    if(virtio_gpu_wrapper->num_scanouts == 1) { // the fucking bug
+        transfer_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
+        transfer_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[scanout]++;
+    } else {
+        transfer_hdr->hdr.flags = 0;
+        transfer_hdr->hdr.fence_id = 0;
+    }
+
     transfer_hdr->hdr.ctx_id = 0;
     //transfer_hdr->hdr.padding = 0;
 
-    transfer_hdr->resource_id = 1;
+    transfer_hdr->resource_id = virtio_gpu_wrapper->resource_ids[scanout];
     transfer_hdr->rec.x = x;
     transfer_hdr->rec.y = y;
     transfer_hdr->rec.width = width;
@@ -137,8 +146,15 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     virtio_gpu_resource_flush_t* flush_hdr = (virtio_gpu_resource_flush_t*)offset;
 
     flush_hdr->hdr.type = VIRTIO_GPU_CMD_RESOURCE_FLUSH;
-    flush_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
-    flush_hdr->hdr.fence_id = virtio_gpu_fence_id++;
+
+    if(virtio_gpu_wrapper->num_scanouts == 1) { // the fucking bug
+        transfer_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
+        transfer_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[scanout]++;
+    } else {
+        transfer_hdr->hdr.flags = 0;
+        transfer_hdr->hdr.fence_id = 0;
+    }
+
     flush_hdr->hdr.ctx_id = 0;
     //flush_hdr->hdr.padding = 0;
 
@@ -147,7 +163,7 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     flush_hdr->rec.width = width;
     flush_hdr->rec.height = height;
 
-    flush_hdr->resource_id = 1;
+    flush_hdr->resource_id = virtio_gpu_wrapper->resource_ids[scanout];
     flush_hdr->padding = 0;
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_flush_t);
@@ -186,8 +202,10 @@ void virtio_gpu_display_flush(uint64_t buf_offset, uint32_t x, uint32_t y, uint3
     lock_release(virtio_gpu_flush_lock);
 }
 
-void virtio_gpu_get_display_info(void) {
+void virtio_gpu_get_display_info(uint32_t scanout) {
     virtio_gpu_flush_lock = lock_create();
+
+    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[0];
     virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
@@ -209,7 +227,7 @@ void virtio_gpu_get_display_info(void) {
     edid_get_hdr->hdr.flags = 0;
     edid_get_hdr->hdr.fence_id = 0;
     edid_get_hdr->hdr.ctx_id = 0;
-    edid_get_hdr->scanout = 0;
+    edid_get_hdr->scanout = scanout;
     edid_get_hdr->padding = 0;
 
     descs[desc_index].length = sizeof(virtio_gpu_get_edid_t);
@@ -279,13 +297,6 @@ void virtio_gpu_get_display_info(void) {
         return;
     }
 
-    virtio_gpu_config_t* config = (virtio_gpu_config_t*)virtio_gpu_dev->device_config;
-
-    for(uint32_t i = 0; i < config->num_scanouts; i++) {
-        PRINTLOG(VIRTIOGPU, LOG_TRACE, "virtio gpu display info mode %i: enabled? %i %dx%d",
-                 i, info->pmodes[i].enabled, info->pmodes[i].rect.width, info->pmodes[i].rect.height);
-    }
-
     memory_memclean(offset, sizeof(virtio_gpu_resp_display_info_t));
 
     resource_id = 1;
@@ -301,6 +312,8 @@ void virtio_gpu_get_display_info(void) {
     //create_hdr->hdr.padding = 0;
 
     uint32_t screen_resource_id = resource_id++;
+    virtio_gpu_wrapper->resource_ids[scanout] = screen_resource_id;
+    virtio_gpu_wrapper->fence_ids[scanout] = 1;
 
     create_hdr->resource_id = screen_resource_id;
     create_hdr->format = VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM;
@@ -447,7 +460,7 @@ void virtio_gpu_get_display_info(void) {
     scanout_hdr->rec.width = screen_width;
     scanout_hdr->rec.height = screen_height;
 
-    scanout_hdr->scanout_id = 0;
+    scanout_hdr->scanout_id = scanout;
     scanout_hdr->resource_id = screen_resource_id;
 
     descs[desc_index].length = sizeof(virtio_gpu_set_scanout_t);
@@ -473,22 +486,22 @@ void virtio_gpu_get_display_info(void) {
 
     memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
-    virtio_gpu_fence_id = 1;
+    if(scanout == 0) {
+        SYSTEM_INFO->frame_buffer->width = screen_width;
+        SYSTEM_INFO->frame_buffer->height = screen_height;
+        SYSTEM_INFO->frame_buffer->buffer_size = screen_size;
+        SYSTEM_INFO->frame_buffer->pixels_per_scanline = screen_width;
+        SYSTEM_INFO->frame_buffer->physical_base_address = screen_fa;
+        SYSTEM_INFO->frame_buffer->virtual_base_address = screen_va;
 
-    SYSTEM_INFO->frame_buffer->width = screen_width;
-    SYSTEM_INFO->frame_buffer->height = screen_height;
-    SYSTEM_INFO->frame_buffer->buffer_size = screen_size;
-    SYSTEM_INFO->frame_buffer->pixels_per_scanline = screen_width;
-    SYSTEM_INFO->frame_buffer->physical_base_address = screen_fa;
-    SYSTEM_INFO->frame_buffer->virtual_base_address = screen_va;
+        video_copy_contents_to_frame_buffer((uint8_t*)screen_va, screen_width, screen_height, screen_width);
+        video_refresh_frame_buffer_address();
+        cpu_cli();
+        VIDEO_DISPLAY_FLUSH = virtio_gpu_display_flush;
+        cpu_sti();
+    }
 
-    video_copy_contents_to_frame_buffer((uint8_t*)screen_va, screen_width, screen_height, screen_width);
-    video_refresh_frame_buffer_address();
-    cpu_cli();
-    VIDEO_DISPLAY_FLUSH = virtio_gpu_display_flush;
-    cpu_sti();
-    VIDEO_DISPLAY_FLUSH(0, 0, 0, screen_width, screen_height);
-
+    VIDEO_DISPLAY_FLUSH(scanout, 0, 0, 0, screen_width, screen_height);
 }
 
 uint64_t virtio_gpu_select_features(virtio_dev_t* dev, uint64_t avail_features) {
@@ -529,6 +542,8 @@ int8_t virtio_gpu_create_queues(virtio_dev_t* vdev) {
 }
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
     UNUSED(heap);
 
@@ -548,11 +563,36 @@ int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
         return -1;
     }
 
-    virtio_gpu_dev = vgpu;
+    virtio_gpu_wrapper = memory_malloc(sizeof(virtio_gpu_wrapper_t));
 
-    virtio_gpu_get_display_info();
+    if(virtio_gpu_wrapper == NULL) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
+
+        return -1;
+    }
+
+    virtio_gpu_wrapper->vgpu = vgpu;
+
+    virtio_gpu_config_t* vgpu_conf =  vgpu->device_config;
+
+    virtio_gpu_wrapper->num_scanouts = vgpu_conf->num_scanouts;
+
+    virtio_gpu_wrapper->fence_ids = memory_malloc(sizeof(uint64_t) * vgpu_conf->num_scanouts);
+    virtio_gpu_wrapper->resource_ids = memory_malloc(sizeof(uint32_t) * vgpu_conf->num_scanouts);
+
+    if(virtio_gpu_wrapper->fence_ids == NULL || virtio_gpu_wrapper->resource_ids == NULL) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
+
+        return -1;
+    }
+
+    for(uint32_t i = 0; i < vgpu_conf->num_scanouts; i++) {
+        virtio_gpu_get_display_info(i);
+    }
+
 
     PRINTLOG(VIRTIOGPU, LOG_INFO, "virtio gpu init success");
 
     return 0;
 }
+#pragma GCC diagnostic pop

@@ -126,7 +126,7 @@ size_t video_printf(const char_t* fmt, ...) __attribute__ ((format (printf, 1, 2
 int8_t video_display_init(memory_heap_t* heap, linkedlist_t display_controllers);
 int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline);
 
-typedef void (*video_display_flush_f)(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+typedef void (*video_display_flush_f)(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 extern video_display_flush_f VIDEO_DISPLAY_FLUSH;
 
