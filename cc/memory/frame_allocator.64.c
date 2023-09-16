@@ -273,12 +273,44 @@ int8_t fa_allocate_frame_by_count(frame_allocator_t* self, uint64_t count, frame
                 }
 
                 if(count % 0x200 == 0) {
-                    if(item->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M == 0) {
+                    if(item->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M == 0) { // fast hit
                         iter->delete_item(iter);
                         ctx->free_frames_by_address->delete(ctx->free_frames_by_address, item, NULL);
                         tmp_frm = item;
 
                         break;
+                    } else {
+                        // we need check fit with alignment
+                        uint64_t begin_rem = item->frame_address % MEMORY_PAGING_PAGE_LENGTH_2M;
+                        uint64_t begin_rem_f_cnt = begin_rem / FRAME_SIZE;
+
+                        if(item->frame_count >= count + begin_rem_f_cnt) {
+                            iter->delete_item(iter);
+                            ctx->free_frames_by_address->delete(ctx->free_frames_by_address, item, NULL);
+
+                            // we found, but we need to re-insert begining to free frames
+                            frame_t* new_begin_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
+
+                            if(new_begin_frm == NULL) {
+                                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
+                                cpu_hlt();
+                            }
+
+                            new_begin_frm->frame_address = item->frame_address;
+                            new_begin_frm->frame_count = begin_rem_f_cnt;
+
+                            linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_begin_frm);
+                            ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_begin_frm, new_begin_frm, NULL);
+
+                            item->frame_address += begin_rem_f_cnt * FRAME_SIZE;
+                            item->frame_count -= begin_rem_f_cnt;
+
+                            tmp_frm = item;
+
+                            break;
+                        }
+
+
                     }
 
                 } else {
