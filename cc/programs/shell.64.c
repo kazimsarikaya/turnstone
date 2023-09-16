@@ -13,6 +13,7 @@
 #include <acpi.h>
 #include <time.h>
 #include <driver/usb.h>
+#include <memory/frame.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -44,6 +45,7 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
                "\tps\t\t: prints the current processes\n"
                "\tdate\t\t: prints the current date with time alias time\n"
                "\tusbprobe\t: probes the USB bus\n"
+               "\tfree\t\t: prints the frame usage\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -92,6 +94,12 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
         res = 0;
     } else if(strcmp(command, "usbprobe") == 0) {
         res = usb_probe_all_devices_all_ports();
+    } else if(strcmp(command, "free") == 0) {
+        printf("\tfree frames: 0x%llx\n\tallocated frames: 0x%llx\n\ttotal frames: 0x%llx\n",
+               KERNEL_FRAME_ALLOCATOR->get_free_frame_count(KERNEL_FRAME_ALLOCATOR),
+               KERNEL_FRAME_ALLOCATOR->get_allocated_frame_count(KERNEL_FRAME_ALLOCATOR),
+               KERNEL_FRAME_ALLOCATOR->get_total_frame_count(KERNEL_FRAME_ALLOCATOR));
+        res = 0;
     } else {
         printf("Unknown command: %s\n", command);
         res = -1;
