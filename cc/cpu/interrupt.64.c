@@ -407,7 +407,45 @@ void __attribute__ ((interrupt)) interrupt_int12_machine_check_exception(interru
 }
 
 void __attribute__ ((interrupt)) interrupt_int13_simd_floating_point_exception(interrupt_frame_t* frame) {
-    interrupt_dummy_noerrcode(frame, 0x13);
+    KERNEL_PANIC_DISABLE_LOCKS = true;
+    uint64_t rsp = 0;
+    asm volatile ("mov %%rsp, %0\n" : "=r" (rsp));
+
+    uint32_t mxcsr = 0;
+
+    asm volatile ("stmxcsr %0" : "=m" (mxcsr));
+
+    stackframe_t* s_frame =  backtrace_print_interrupt_registers(rsp);
+
+    if(mxcsr & 0x1) {
+        PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: invalid operation");
+    }
+
+    if(mxcsr & 0x2) {
+        PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: denormalized operand");
+    }
+
+    if(mxcsr & 0x4) {
+        PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: divide by zero");
+    }
+
+    if(mxcsr & 0x8) {
+        PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: overflow");
+    }
+
+    if(mxcsr & 0x10) {
+        PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: underflow");
+    }
+
+    if(mxcsr & 0x20) {
+        PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: precision");
+    }
+
+    PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
+
+    backtrace_print(s_frame);
+
+    cpu_hlt();
 }
 
 void __attribute__ ((interrupt)) interrupt_int14_virtualization_exception(interrupt_frame_t* frame) {
