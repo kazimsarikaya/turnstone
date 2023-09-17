@@ -236,8 +236,12 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
     for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
         virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
 
-        task_set_interrupt_received(vdev->rx_task_id);
-        PRINTLOG(VIRTIONET, LOG_TRACE, "cleared message waiting for rx task 0x%llx", vdev->rx_task_id);
+        if(vdev->rx_task_id) {
+            task_set_interrupt_received(vdev->rx_task_id);
+            PRINTLOG(VIRTIONET, LOG_TRACE, "cleared message waiting for rx task 0x%llx", vdev->rx_task_id);
+        } else {
+            pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+        }
     }
 
     apic_eoi();
