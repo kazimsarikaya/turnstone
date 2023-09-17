@@ -84,6 +84,8 @@ void cpu_enable_sse(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
     cr0.monitor_coprocessor = 1;
     cr0.emulation = 0;
+    cr0.task_switched = 0;
+    cr0.numeric_error = 1;
     cr0.write_protect = 1;
     cpu_write_cr0(cr0);
 

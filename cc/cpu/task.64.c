@@ -28,6 +28,7 @@ task_t* current_task = NULL;
 linkedlist_t task_queue = NULL;
 linkedlist_t task_cleaner_queue = NULL;
 map_t task_map = NULL;
+uint32_t task_mxcsr_mask = 0;
 
 extern int8_t kmain64(void);
 
@@ -117,6 +118,13 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_task->stack = (void*)(stack_top + stack_size);
     current_task->stack_size = stack_size;
     current_task->task_name = "kernel";
+
+    //get mxcsr by fxsave
+    asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (current_task->fx_registers) : : "rax", "memory");
+
+    task_mxcsr_mask = *(uint32_t*)&current_task->fx_registers[28];
+
+    PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
     task_id = current_task->task_id + 1;
 
@@ -568,6 +576,9 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
     new_task->task_name = task_name;
+
+    *(uint16_t*)&new_task->fx_registers[0] = 0x37F;
+    *(uint32_t*)&new_task->fx_registers[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
