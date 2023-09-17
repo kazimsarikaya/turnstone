@@ -28,6 +28,8 @@ kbd_state_t kbd_state = {0, 0, 0, 0, 0};
 
 int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev);
+int8_t dev_kbd_cleanup_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
 
 int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
     if(key == KBD_SCANCODE_CAPSLOCK && pressed == 0) {
@@ -90,6 +92,19 @@ int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
 
         kbd_ps2_tmp = NULL;
     }
+
+    apic_eoi();
+
+    return 0;
+}
+
+int8_t dev_kbd_cleanup_isr(interrupt_frame_t* frame, uint8_t intnum){
+    UNUSED(frame);
+    UNUSED(intnum);
+
+    kbd_ps2_tmp = NULL;
+
+    inb(KBD_DATA_PORT);
 
     apic_eoi();
 
@@ -199,19 +214,37 @@ int8_t dev_virtio_kbd_init(void) {
 }
 
 int8_t kbd_init(void){
+    boolean_t virtual_kbd = false;
     if(dev_virtio_kbd_init() == 0) {
-        return 0;
+        virtual_kbd = true;
     }
 
     if(ACPI_CONTEXT->fadt->boot_architecture_flags & 2) {
-        if(kbd_is_usb) {
-            outb(KBD_CMD_PORT, KBD_CMD_DISABLE_KBD_PORT);
-            outb(KBD_CMD_PORT, KBD_CMD_DISABLE_MOUSE_PORT);
-        } else {
+        if(!virtual_kbd && !kbd_is_usb) {
             PRINTLOG(KERNEL, LOG_INFO, "PS/2 keyboard found");
             interrupt_irq_set_handler(0x1, &dev_kbd_isr);
+            apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
             apic_ioapic_enable_irq(0x1);
+
+            return 0;
         }
+
+        kbd_ps2_tmp = 0xFFFF;
+
+        interrupt_irq_set_handler(0x1, &dev_kbd_cleanup_isr);
+        apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
+        apic_ioapic_enable_irq(0x1);
+
+        outb(KBD_CMD_PORT, KBD_CMD_DISABLE_KBD_PORT);
+        outb(KBD_CMD_PORT, KBD_CMD_DISABLE_MOUSE_PORT);
+
+        while(kbd_ps2_tmp != 0) {
+            asm volatile ("pause" : : : "memory");
+        }
+
+        apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_EDGE);
+        apic_ioapic_disable_irq(0x1);
+        interrupt_irq_remove_handler(0x1, &dev_kbd_cleanup_isr);
 
         return 0;
     }

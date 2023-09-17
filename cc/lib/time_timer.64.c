@@ -18,7 +18,8 @@ MODULE("turnstone.lib");
 
 #define TIME_TIMER_PIT_BASE_HZ       1193181
 #define TIME_TIMER_PIT_COMMAND_PORT  0x43
-#define TIME_TIMER_PIT_COMMAND_WRITE 0x34
+#define TIME_TIMER_PIT_COMMAND_PERIODIC 0x36
+#define TIME_TIMER_PIT_COMMAND_ONE_SHOT 0x32
 #define TIME_TIMER_PIT_DATA_PORT     0x40
 
 __volatile__ uint64_t time_timer_tick_count = 0;
@@ -46,10 +47,25 @@ int8_t time_timer_pit_isr(interrupt_frame_t* frame, uint8_t intnum){
 }
 
 void time_timer_pit_set_hz(uint16_t hz) {
-    uint16_t divisor = TIME_TIMER_PIT_BASE_HZ / hz;       /* Calculate our divisor */
-    outb(TIME_TIMER_PIT_COMMAND_PORT, TIME_TIMER_PIT_COMMAND_WRITE);             /* Set our command byte 0x36 */
-    outb(TIME_TIMER_PIT_DATA_PORT, divisor & 0xFF);   /* Set low byte of divisor */
-    outb(TIME_TIMER_PIT_DATA_PORT, divisor >> 8);     /* Set high byte of divisor */
+    uint16_t divisor = TIME_TIMER_PIT_BASE_HZ / hz; /* Calculate our divisor */
+    outb(TIME_TIMER_PIT_COMMAND_PORT, TIME_TIMER_PIT_COMMAND_PERIODIC); /* Set our command byte 0x36 */
+    outb(TIME_TIMER_PIT_DATA_PORT, divisor & 0xFF); /* Set low byte of divisor */
+    outb(TIME_TIMER_PIT_DATA_PORT, divisor >> 8); /* Set high byte of divisor */
+}
+
+void time_timer_pit_disable(void) {
+    uint16_t divisor = TIME_TIMER_PIT_BASE_HZ / TIME_TIMER_PIT_HZ_FOR_1MS; /* Calculate our divisor */
+    outb(TIME_TIMER_PIT_COMMAND_PORT, TIME_TIMER_PIT_COMMAND_ONE_SHOT); /* Set our command byte 0x36 */
+    outb(TIME_TIMER_PIT_DATA_PORT, divisor & 0xFF); /* Set low byte of divisor */
+    outb(TIME_TIMER_PIT_DATA_PORT, divisor >> 8); /* Set high byte of divisor */
+
+    int32_t tries = 10;
+    uint64_t old_tick_count = time_timer_tick_count;
+
+    while(time_timer_tick_count <= old_tick_count && tries-- > 0) {
+        asm volatile ("pause" ::: "memory");
+        old_tick_count = time_timer_tick_count;
+    }
 }
 
 void time_timer_pit_sleep(uint64_t usecs) {

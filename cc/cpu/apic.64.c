@@ -289,6 +289,8 @@ int8_t apic_init_timer(void) {
         return -1;
     }
 
+    time_timer_pit_disable();
+
     apic_write_timer_lvt(APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
 
     PRINTLOG(APIC, LOG_DEBUG, "apic timer initialized");
