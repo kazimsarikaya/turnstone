@@ -149,6 +149,9 @@ int8_t kmain64(size_t entry_point) {
 
     SYSTEM_INFO = new_system_info;
 
+    PRINTLOG(KERNEL, LOG_DEBUG, "new system info created at 0x%p", SYSTEM_INFO);
+    PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator is initializing");
+
     frame_allocator_t* fa = frame_allocator_new_ext(heap);
 
     if(fa) {
@@ -156,6 +159,8 @@ int8_t kmain64(size_t entry_point) {
         KERNEL_FRAME_ALLOCATOR = fa;
 
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
+
+        PRINTLOG(KERNEL, LOG_DEBUG, "kernel program header is at 0x%p", kernel);
 
         frame_t kernel_frames = {SYSTEM_INFO->program_header_physical_start, kernel->total_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
@@ -189,11 +194,24 @@ int8_t kmain64(size_t entry_point) {
             cpu_hlt();
         }
 
+        if(SYSTEM_INFO->boot_type == SYSTEM_INFO_BOOT_TYPE_PXE) {
+            PRINTLOG(KERNEL, LOG_DEBUG, "boot type is pxe, need to allocate system used frames");
+
+            frame_t tosdb_frames = {SYSTEM_INFO->pxe_tosdb_address, SYSTEM_INFO->pxe_tosdb_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+
+            if(fa->allocate_frame(fa, &tosdb_frames) != 0) {
+                PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate tosdb frames");
+                cpu_hlt();
+            }
+        }
+
         PRINTLOG(KERNEL, LOG_DEBUG, "system used frames allocated");
     } else {
         PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate frame allocator. Halting...");
         cpu_hlt();
     }
+
+    PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator initialized");
 
     if(descriptor_build_idt_register() != 0) {
         PRINTLOG(KERNEL, LOG_PANIC, "Can not build idt. Halting...");
@@ -238,6 +256,8 @@ int8_t kmain64(size_t entry_point) {
         frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
     }
 
+    PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initializing");
+
     frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
 
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
@@ -246,6 +266,8 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_FATAL, "acpi header not found or incorrect checksum. Halting...");
         cpu_hlt();
     }
+
+    PRINTLOG(KERNEL, LOG_DEBUG, "acpi header found at 0x%p, acpi data will initialized", desc);
 
     if(acpi_setup(desc) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "acpi setup failed. Halting");
@@ -266,6 +288,10 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot setup acpi events");
         cpu_hlt();
     }
+
+    PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initialized");
+
+    PRINTLOG(KERNEL, LOG_DEBUG, "tasking is initializing");
 
     if(task_init_tasking_ext(heap) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init tasking. Halting...");

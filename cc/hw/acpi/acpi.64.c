@@ -189,6 +189,7 @@ int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t ad
 #pragma GCC diagnostic pop
 
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void){
+    PRINTLOG(ACPI, LOG_DEBUG, "searching for rsdp");
 
     frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, SYSTEM_INFO->acpi_table);
 
@@ -341,10 +342,15 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t old_tables) {
     if(xrsdp_desc->rsdp.revision == 0) {
         uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
+
+        PRINTLOG(ACPI, LOG_TRACE, "rsdt address 0x%016x", addr);
+
         acpi_sdt_header_t* rsdt = (acpi_sdt_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA((uint64_t)(addr));
         uint8_t* table_addrs = (uint8_t*)(rsdt + 1);
         size_t table_count = (rsdt->length - sizeof(acpi_sdt_header_t)) / sizeof(uint32_t);
         acpi_sdt_header_t* res;
+
+        PRINTLOG(ACPI, LOG_TRACE, "looking for table %s", signature);
 
         for(size_t i = 0; i < table_count; i++) {
             uint32_t table_addr = *((uint32_t*)(table_addrs + (i * sizeof(uint32_t))));
@@ -368,6 +374,8 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
         }
     } else if (xrsdp_desc->rsdp.revision == 2) {
         acpi_xrsdt_t* xrsdt = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(xrsdp_desc->xrsdt);
+        PRINTLOG(ACPI, LOG_TRACE, "xrsdp address 0x%p", xrsdp_desc);
+        PRINTLOG(ACPI, LOG_TRACE, "xrsdt address 0x%p", xrsdp_desc->xrsdt);
 
         size_t table_count = (xrsdt->header.length - sizeof(acpi_sdt_header_t)) / sizeof(void*);
         acpi_sdt_header_t* res;

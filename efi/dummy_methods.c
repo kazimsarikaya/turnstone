@@ -17,6 +17,7 @@
 #include <rbtree.h>
 #include <binarysearch.h>
 #include <memory/frame.h>
+#include <memory/paging.h>
 #include <efi.h>
 #include <video.h>
 
@@ -92,12 +93,30 @@ int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_
     UNUSED(alloc_list_size);
 
     uint64_t frame_address = 0;
+    uint64_t old_count = count;
+
+    if(count % 0x200) {
+        count += 0x200;
+    }
+
     efi_status_t res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, count, &frame_address);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame");
 
         return -1;
+    }
+
+    if(old_count % 0x200) {
+        uint64_t old_frame_address = frame_address;
+
+        if(frame_address % MEMORY_PAGING_PAGE_LENGTH_2M) {
+            uint64_t diff = MEMORY_PAGING_PAGE_LENGTH_2M - (frame_address % MEMORY_PAGING_PAGE_LENGTH_2M);
+            frame_address += diff;
+
+            BS->free_pages(old_frame_address, diff / FRAME_SIZE);
+        }
+
     }
 
     *fs = memory_malloc(sizeof(frame_t));

@@ -56,7 +56,8 @@ TMPDIR = tmp
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
 TESTQEMUDISK  = $(OBJDIR)/qemu-test-hda
-TOSDBIMG = $(OBJDIR)/tosdb.img
+TOSDBIMGNAME = tosdb.img
+TOSDBIMG = $(OBJDIR)/$(TOSDBIMGNAME)
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.S)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
@@ -101,6 +102,7 @@ MKDIRSDONE = .mkdirsdone
 EFIDISKTOOL = $(OBJDIR)/efi_disk.bin
 EFIBOOTFILE = $(OBJDIR)/BOOTX64.EFI
 TOSDBIMG_BUILDER = $(OBJDIR)/generatelinkerdb.bin
+PXECONFGEN = $(OBJDIR)/pxeconfgen.bin
 
 PROGS = $(OBJDIR)/stage3.bin.pack
 
@@ -123,8 +125,14 @@ qemu:
 
 qemu-internal: $(QEMUDISK)
 
-qemu-pxe: $(PROGS)
-	output/pxeconfgen.bin -k stage3.bin.pack -kp $(OBJDIR)/stage3.bin.pack -o $(OBJDIR)/pxeconf.bson
+$(PXECONFGEN): utils/pxeconfgen.c
+	make -C utils ../$@
+
+$(EFIBOOTFILE): efi/main.c
+	make -C efi ../$@
+
+qemu-pxe: $(TOSDBIMG) $(PXECONFGEN) $(EFIBOOTFILE)
+	$(PXECONFGEN) -dbn $(TOSDBIMGNAME) -dbp $(TOSDBIMG) -o $(OBJDIR)/pxeconf.bson
 
 qemu-test: $(TESTQEMUDISK)
 
