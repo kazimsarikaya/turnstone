@@ -147,9 +147,7 @@ void __attribute__((constructor)) start_ram(void) {
 }
 
 void __attribute__((destructor)) stop_ram(void) {
-    char_t* extra_logs = (char_t*)buffer_get_all_bytes_and_destroy(default_buffer, NULL);
-    printf("extra logs: %s", extra_logs);
-    memory_free(extra_logs);
+    buffer_destroy(default_buffer);
 
     remove_ram2();
 }
