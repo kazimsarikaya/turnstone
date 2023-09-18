@@ -40,6 +40,9 @@ void                                            task_cleanup(void);
 task_t*                                         task_find_next_task(void);
 void                                            task_end_task(void);
 
+extern buffer_t* stdbufs_default_input_buffer;
+extern buffer_t* stdbufs_default_output_buffer;
+extern buffer_t* stdbufs_default_error_buffer;
 
 task_t* task_get_current_task(void){
     return current_task;
@@ -119,6 +122,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_task->stack = (void*)(stack_top + stack_size);
     current_task->stack_size = stack_size;
     current_task->task_name = "kernel";
+    current_task->input_buffer = stdbufs_default_input_buffer;
+    current_task->output_buffer = stdbufs_default_output_buffer;
+    current_task->error_buffer = stdbufs_default_error_buffer;
 
     //get mxcsr by fxsave
     asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (current_task->fx_registers) : : "rax", "memory");
@@ -696,4 +702,103 @@ void task_print_all(void) {
     }
 
     it->destroy(it);
+}
+
+buffer_t* task_get_input_buffer(void) {
+    buffer_t* buffer = NULL;
+
+    cpu_cli();
+
+    if(current_task) {
+        buffer = current_task->input_buffer;
+    }
+
+    cpu_sti();
+
+    return buffer;
+}
+
+buffer_t* task_get_output_buffer(void) {
+    buffer_t* buffer = NULL;
+
+    cpu_cli();
+
+    if(current_task) {
+        buffer = current_task->output_buffer;
+    }
+
+    cpu_sti();
+
+    return buffer;
+}
+
+buffer_t* task_get_error_buffer(void) {
+    buffer_t* buffer = NULL;
+
+    cpu_cli();
+
+    if(current_task) {
+        buffer = current_task->error_buffer;
+    }
+
+    cpu_sti();
+
+    return buffer;
+}
+
+int8_t task_set_input_buffer(buffer_t* buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    cpu_cli();
+
+    if(!current_task) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    current_task->input_buffer = buffer;
+    cpu_sti();
+
+    return 0;
+}
+
+int8_t task_set_output_buffer(buffer_t * buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    cpu_cli();
+
+    if(!current_task) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    current_task->output_buffer = buffer;
+    cpu_sti();
+
+    return 0;
+}
+
+int8_t task_set_error_buffer(buffer_t * buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    cpu_cli();
+
+    if(!current_task) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    current_task->error_buffer = buffer;
+    cpu_sti();
+
+    return 0;
 }

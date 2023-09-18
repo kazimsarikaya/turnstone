@@ -43,6 +43,10 @@ int8_t   apic_get_local_apic_id(void);
 future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
 void*    future_get_data_and_destroy(future_t fut);
 
+buffer_t* task_get_input_buffer(void);
+buffer_t* task_get_output_buffer(void);
+buffer_t* task_get_error_buffer(void);
+
 uint64_t task_get_id(void){
     return 0;
 }
@@ -52,6 +56,18 @@ void* task_get_current_task(void){
 }
 
 void task_yield(void) {
+}
+
+buffer_t* task_get_input_buffer(void) {
+    return NULL;
+}
+
+buffer_t* task_get_output_buffer(void) {
+    return NULL;
+}
+
+buffer_t* task_get_error_buffer(void) {
+    return NULL;
 }
 
 void backtrace(void) {

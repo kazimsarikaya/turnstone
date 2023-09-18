@@ -56,13 +56,22 @@ buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id) {
     buffer_t* buffer = NULL;
     switch (buffer_io_id) {
     case BUFFER_IO_INPUT:
-        buffer = stdbufs_default_input_buffer;
+        buffer = task_get_input_buffer();
+        if(!buffer) {
+            buffer = stdbufs_default_input_buffer;
+        }
         break;
     case BUFFER_IO_OUTPUT:
         buffer = stdbufs_default_output_buffer;
+        if(!buffer) {
+            buffer = stdbufs_default_output_buffer;
+        }
         break;
     case BUFFER_IO_ERROR:
         buffer = stdbufs_default_error_buffer;
+        if(!buffer) {
+            buffer = stdbufs_default_error_buffer;
+        }
         break;
     default:
         break;
