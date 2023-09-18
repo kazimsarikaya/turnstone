@@ -1466,10 +1466,13 @@ int32_t main(int32_t argc, char_t** argv) {
     if(!linkerdb_fix_reloc_symbol_section_ids(ldb)) {
         print_error("cannot fix relocations missing symbol sections");
         exit_code = -1;
+
+        goto close;
     }
 
     printf("%lli\n", time_ns(NULL));
 
+#if 0
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
 
@@ -1480,7 +1483,7 @@ int32_t main(int32_t argc, char_t** argv) {
     if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
         print_error("cannot compact linker db");
     }
-
+#endif
 
 close:
     if(!linkerdb_close(ldb)) {
