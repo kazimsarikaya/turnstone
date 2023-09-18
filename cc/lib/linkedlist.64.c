@@ -10,7 +10,7 @@
 #include <indexer.h>
 #include <cpu/sync.h>
 #include <strings.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.lib");
 
@@ -21,7 +21,7 @@ MODULE("turnstone.lib");
  * double linked list item
  */
 typedef struct linkedlist_item_internal_t {
-    const void*                        data;       ///< the data inside list item
+    const void*                        data; ///< the data inside list item
     struct linkedlist_item_internal_t* next; ///< next list item
     struct linkedlist_item_internal_t* previous; ///< previous list item
 }linkedlist_item_internal_t; ///<short hand for struct
