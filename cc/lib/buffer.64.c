@@ -15,6 +15,8 @@ MODULE("turnstone.lib");
 
 #define BUFFER_PRINTF_BUFFER_SIZE 2048
 
+uint8_t buffer_tmp_buffer_area_for_printf[BUFFER_PRINTF_BUFFER_SIZE];
+
 typedef struct buffer_t {
     memory_heap_t* heap;
     lock_t         lock;
@@ -24,6 +26,26 @@ typedef struct buffer_t {
     boolean_t      readonly;
     uint8_t*       data;
 }buffer_t;
+
+buffer_t buffer_tmp_buffer_for_printf = {
+    .heap = NULL,
+    .lock = NULL,
+    .capacity = BUFFER_PRINTF_BUFFER_SIZE,
+    .length = 0,
+    .position = 0,
+    .readonly = false,
+    .data = buffer_tmp_buffer_area_for_printf
+};
+
+buffer_t* buffer_get_tmp_buffer_for_printf(void) {
+    return &buffer_tmp_buffer_for_printf;
+}
+
+void buffer_reset_tmp_buffer_for_printf(void) {
+    buffer_tmp_buffer_for_printf.length = 0;
+    buffer_tmp_buffer_for_printf.position = 0;
+    memory_memclean(buffer_tmp_buffer_for_printf.data, buffer_tmp_buffer_for_printf.capacity);
+}
 
 buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
     buffer_t* buffer = memory_malloc_ext(heap, sizeof(buffer_t), 0);

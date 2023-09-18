@@ -54,7 +54,9 @@ uint8_t* buffer_get_view_at_position(buffer_t* buffer, uint64_t position, uint64
 
 buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id);
 
-int64_t buffer_printf(buffer_t* buffer, const char* format, ...) __attribute__((format(printf, 2, 3)));
-int64_t buffer_vprintf(buffer_t* buffer, const char* format, va_list args);
+int64_t   buffer_printf(buffer_t* buffer, const char* format, ...) __attribute__((format(printf, 2, 3)));
+int64_t   buffer_vprintf(buffer_t* buffer, const char* format, va_list args);
+buffer_t* buffer_get_tmp_buffer_for_printf(void);
+void      buffer_reset_tmp_buffer_for_printf(void);
 
 #endif

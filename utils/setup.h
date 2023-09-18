@@ -25,12 +25,10 @@ FILE* mem_backend = NULL;
 int32_t mem_backend_fd = 0;
 uint64_t mmmap_address = 4ULL << 30;
 uint64_t mmap_size = RAMSIZE;
+boolean_t windowmanager_initialized = false;
 
-int64_t printf(const char* format, ...) __attribute__((format(printf, 1, 2)));
-
-
-int                               vprintf ( const char* format, va_list arg );
 size_t                            video_printf(const char_t* fmt, ...);
+void                              video_print(const char_t* fmt);
 void                              print_success(const char* msg, ...);
 void                              print_error(const char* msg, ...);
 void                              cpu_hlt(void);
@@ -55,6 +53,10 @@ void print_error(const char* msg, ...){
     vprintf(msg, args);
     printf("%s%s", RESETCOLOR, "\r\n");
     va_end(args);
+}
+
+void video_print(const char_t* msg) {
+    printf("%s", msg);
 }
 
 buffer_t* default_buffer = NULL;

@@ -114,6 +114,8 @@ int8_t kmain64(size_t entry_point) {
 
     memory_set_default_heap(heap);
 
+    stdbufs_init_buffers();
+
     video_init();
     video_clear_screen();
 
