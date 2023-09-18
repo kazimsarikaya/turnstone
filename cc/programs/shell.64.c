@@ -7,23 +7,25 @@
  */
 
 #include <shell.h>
-#include <cpu/task.h>
 #include <video.h>
+#include <cpu/task.h>
+#include <logging.h>
 #include <strings.h>
 #include <acpi.h>
 #include <time.h>
 #include <driver/usb.h>
 #include <memory/frame.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.user.programs.shell");
 
 int32_t shell_main(int32_t argc, char* argv[]);
-int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer);
+int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer);
 
-buffer_t shell_buffer = NULL;
+buffer_t* shell_buffer = NULL;
 
 
-int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer) {
+int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer) {
     char_t* command = (char_t*)buffer_get_all_bytes_and_reset(command_buffer, NULL);
 
     if(command == NULL) {
@@ -117,8 +119,8 @@ int32_t shell_main(int32_t argc, char* argv[]) {
     UNUSED(argv);
 
     shell_buffer = buffer_new_with_capacity(NULL, 4096);
-    buffer_t command_buffer = buffer_new_with_capacity(NULL, 4096);
-    buffer_t argument_buffer = buffer_new_with_capacity(NULL, 4096);
+    buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
+    buffer_t* argument_buffer = buffer_new_with_capacity(NULL, 4096);
     boolean_t first_space = false;
 
     while(true) {

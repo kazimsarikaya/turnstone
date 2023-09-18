@@ -7,12 +7,13 @@
  */
 #include <acpi/aml_internal.h>
 #include <strings.h>
-#include <video.h>
+#include <logging.h>
 #include <utils.h>
 #include <memory/paging.h>
 #include <pci.h>
 #include <ports.h>
 #include <bplustree.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 

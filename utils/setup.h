@@ -11,6 +11,7 @@
 #include <memory.h>
 #include "os_io.h"
 #include <time.h>
+#include <utils.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -25,9 +26,8 @@ int32_t mem_backend_fd = 0;
 uint64_t mmmap_address = 4ULL << 30;
 uint64_t mmap_size = RAMSIZE;
 
-#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
-            if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
-            else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
+int64_t printf(const char* format, ...) __attribute__((format(printf, 1, 2)));
+
 
 int                               vprintf ( const char* format, va_list arg );
 size_t                            video_printf(const char_t* fmt, ...);
@@ -55,6 +55,18 @@ void print_error(const char* msg, ...){
     vprintf(msg, args);
     printf("%s%s", RESETCOLOR, "\r\n");
     va_end(args);
+}
+
+buffer_t* default_buffer = NULL;
+
+buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id) {
+    UNUSED(buffer_io_id);
+
+    if(default_buffer == NULL) {
+        default_buffer = buffer_new();
+    }
+
+    return default_buffer;
 }
 
 memory_heap_t* d_heap = NULL;
@@ -109,7 +121,7 @@ void remove_ram2(void) {
     if(d_heap) {
         memory_heap_stat_t stat;
         memory_get_heap_stat(&stat);
-        printf("mem stats:\n\tmalloc count: 0x%lx\n\tfree count: 0x%lx\n\ttotal space: 0x%lx\n\tfree space: 0x%lx\n\tdiff: 0x%lx\n\tfast hit: 0x%lx\n\theader count: 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit, stat.header_count);
+        printf("mem stats:\n\tmalloc count: 0x%llx\n\tfree count: 0x%llx\n\ttotal space: 0x%llx\n\tfree space: 0x%llx\n\tdiff: 0x%llx\n\tfast hit: 0x%llx\n\theader count: 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size, stat.fast_hit, stat.header_count);
 
         if(stat.malloc_count != stat.free_count) {
             print_error("memory leak detected");
@@ -133,6 +145,10 @@ void __attribute__((constructor)) start_ram(void) {
 }
 
 void __attribute__((destructor)) stop_ram(void) {
+    char_t* extra_logs = (char_t*)buffer_get_all_bytes_and_destroy(default_buffer, NULL);
+    printf("extra logs: %s", extra_logs);
+    memory_free(extra_logs);
+
     remove_ram2();
 }
 

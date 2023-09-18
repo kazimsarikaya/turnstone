@@ -12,7 +12,7 @@
 #include <strings.h>
 #include <utils.h>
 #include <logging.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.disk.fs");
 

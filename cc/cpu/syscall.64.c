@@ -10,7 +10,7 @@
 #include <cpu.h>
 #include <cpu/syscall.h>
 #include <cpu/smp.h>
-#include <video.h>
+#include <logging.h>
 #include <memory.h>
 
 MODULE("turnstone.kernel.cpu");

@@ -10,7 +10,6 @@
 #define ___VIDEO_H 0
 
 #include <types.h>
-#include <logging.h>
 #include <memory.h>
 #include <linkedlist.h>
 
@@ -77,45 +76,9 @@ void video_init(void);
 void video_refresh_frame_buffer_address(void);
 
 /**
- * @brief writes string to video buffer
- * @param[in] string string will be writen
- *
- * string will be writen at current cursor position and cursor will be updated.
- */
-void video_print(char_t* string);
-
-/**
  * @brief clears screen aka write space to all buffer
  */
 void video_clear_screen(void);
-
-/**
- * @brief writes string to video buffer
- * @param[in] fmt string will be writen. this string can be a format
- * @param[in] ... variable length args
- * @return writen data chars
- *
- * format will be writen at current cursor position and cursor will be updated. also
- * variable args will be converted and written with help of format
- */
-size_t video_printf(const char_t* fmt, ...) __attribute__ ((format (printf, 1, 2)));
-
-/*! printf macro that calls video_printf */
-#define printf(...) video_printf(__VA_ARGS__)
-
-/**
- * @brief kernel logging macro
- * @param[in] M module name @sa logging_modules_e
- * @param[in] L log level @sa logging_level_e
- * @param[in] msg log message, also if it contains after this there should be a variable arg list
- * @param[in] ... arguments for format in msg
- */
-#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
-            if(LOG_LOCATION) { video_printf("%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
-            else {video_printf("%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } }
-
-
-#define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
 
 /**
  * @brief video diplay pci devices init
@@ -132,4 +95,5 @@ extern video_display_flush_f VIDEO_DISPLAY_FLUSH;
 
 void video_set_color(uint32_t foreground, uint32_t background);
 
+void video_print(const char_t* string);
 #endif

@@ -16,6 +16,7 @@
 #include <tosdb/tosdb.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.efi");
 
@@ -332,7 +333,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
     PRINTLOG(EFI, LOG_DEBUG, "turnstone tosdb loaded from pxe");
 
-    buffer_t tosdb_buffer = buffer_encapsulate(buffer, buffer_size);
+    buffer_t* tosdb_buffer = buffer_encapsulate(buffer, buffer_size);
 
     if(tosdb_buffer == NULL) {
         PRINTLOG(EFI, LOG_ERROR, "cannot encapsulate tosdb buffer");
@@ -727,6 +728,12 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup heap %llx", res);
+
+        goto catch_efi_error;
+    }
+
+    if(stdbufs_init_buffers() != 0) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot setup stdbufs");
 
         goto catch_efi_error;
     }
@@ -1273,6 +1280,11 @@ catch_efi_error:
     tosdb_backend_close(tdb_ctx->backend);
 
     PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
+
+    buffer_t* err_buffer = buffer_get_io_buffer(BUFFER_IO_ERROR);
+    char_t* err_msgs = (char_t*)buffer_get_all_bytes_and_destroy(err_buffer, NULL);
+
+    video_print(err_msgs);
 
     cpu_hlt();
 

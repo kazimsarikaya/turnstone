@@ -9,7 +9,7 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
 #include <bplustree.h>
 #include <zpack.h>
 
@@ -544,7 +544,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     boolean_t error = false;
 
     uint64_t valuelog_unpacked_size = buffer_get_length(mt->values);
-    buffer_t valuelog_out = buffer_new_with_capacity(NULL, valuelog_unpacked_size);
+    buffer_t* valuelog_out = buffer_new_with_capacity(NULL, valuelog_unpacked_size);
 
     buffer_seek(mt->values, 0, BUFFER_SEEK_DIRECTION_START);
     uint64_t len = (uint64_t)zpack_pack(mt->values, valuelog_out);
@@ -677,7 +677,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
-    buffer_t buf_bf_in = buffer_encapsulate(bf_d->value, bf_d->length);
+    buffer_t* buf_bf_in = buffer_encapsulate(bf_d->value, bf_d->length);
 
     if(!buf_bf_in) {
         memory_free(bf_d->value);
@@ -686,7 +686,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
-    buffer_t buf_bf_out = buffer_new_with_capacity(NULL, bf_d->length);
+    buffer_t* buf_bf_out = buffer_new_with_capacity(NULL, bf_d->length);
 
     if(!buf_bf_out) {
         buffer_destroy(buf_bf_in);
@@ -726,7 +726,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     void* last_key = NULL;
     uint64_t last_key_length = 0;
 
-    buffer_t buf_id_in = buffer_new();
+    buffer_t* buf_id_in = buffer_new();
 
     iterator_t* iter = mt_idx->index->create_iterator(mt_idx->index);
 
@@ -778,7 +778,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     uint64_t index_data_unpacked_size = buffer_get_length(buf_id_in);
 
-    buffer_t buf_id_out = buffer_new_with_capacity(NULL, index_data_unpacked_size);
+    buffer_t* buf_id_out = buffer_new_with_capacity(NULL, index_data_unpacked_size);
 
     if(!buf_id_out) {
         memory_free(bf_data);

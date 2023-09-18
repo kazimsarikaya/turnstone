@@ -13,6 +13,7 @@
 #include <systeminfo.h>
 #include <linker.h>
 #include <systeminfo.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.cpu.descriptor");
 

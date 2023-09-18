@@ -12,7 +12,7 @@
 #include <memory/paging.h>
 #include <acpi.h>
 #include <acpi/aml.h>
-#include <video.h>
+#include <logging.h>
 #include <time/timer.h>
 #include <ports.h>
 #include <apic.h>

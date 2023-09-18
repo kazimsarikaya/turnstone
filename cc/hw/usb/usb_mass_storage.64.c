@@ -7,7 +7,7 @@
  */
 
 #include <driver/usb.h>
-#include <video.h>
+#include <logging.h>
 #include <driver/scsi.h>
 #include <future.h>
 #include <random.h>

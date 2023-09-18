@@ -4,7 +4,7 @@
  */
 
 #include <time/timer.h>
-#include <video.h>
+#include <logging.h>
 #include <ports.h>
 #include <cpu/task.h>
 #include <cpu.h>

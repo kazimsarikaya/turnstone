@@ -4,7 +4,7 @@
  */
 
 #include <tests.h>
-#include <video.h>
+#include <logging.h>
 
 extern size_t __test_functions_array_start;
 extern size_t __test_functions_array_end;

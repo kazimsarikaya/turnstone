@@ -37,7 +37,7 @@ static inline void zpack_hash_insert(int64_t pos, uint32_t h, zpack_hashtable_t*
     ht->head[h] = pos;
 }
 
-static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t in_p, zpack_hashtable_t* ht) {
+static zpack_match_t zpack_find_bestmatch (buffer_t* in, int64_t in_len, int64_t in_p, zpack_hashtable_t* ht) {
     int64_t max_match = MIN(in_len - in_p, ZPACK_MAX_MATCH);
     int64_t start = in_p - ZPACK_WINDOW_SIZE;
 
@@ -110,7 +110,7 @@ static zpack_match_t zpack_find_bestmatch (buffer_t in, int64_t in_len, int64_t 
     return (zpack_match_t){.best_size = best_size, .best_pos = best_pos};
 }
 
-int64_t zpack_pack (buffer_t in, buffer_t out) {
+int64_t zpack_pack (buffer_t* in, buffer_t* out) {
     zpack_hashtable_t* ht = memory_malloc(sizeof(zpack_hashtable_t));
 
     if(!ht) {
@@ -119,7 +119,7 @@ int64_t zpack_pack (buffer_t in, buffer_t out) {
 
     memory_memset(ht->head, 0xFF, sizeof(ht->head));
 
-    buffer_t individuals = buffer_new_with_capacity(NULL, 257);
+    buffer_t* individuals = buffer_new_with_capacity(NULL, 257);
     int64_t in_len = buffer_get_length(in);
 
     while (buffer_remaining(in)) {
@@ -185,7 +185,7 @@ int64_t zpack_pack (buffer_t in, buffer_t out) {
     return buffer_get_length(out);
 }
 
-int64_t zpack_unpack(buffer_t in, buffer_t out) {
+int64_t zpack_unpack(buffer_t* in, buffer_t* out) {
     while (buffer_remaining(in)) {
 
         int32_t size = buffer_get_byte(in);

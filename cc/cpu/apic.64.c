@@ -12,7 +12,7 @@
 #include <acpi.h>
 #include <iterator.h>
 #include <cpu/interrupt.h>
-#include <video.h>
+#include <logging.h>
 #include <time/timer.h>
 #include <linkedlist.h>
 

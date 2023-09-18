@@ -8,11 +8,14 @@
 
 #include <buffer.h>
 #include <cpu/sync.h>
+#include <utils.h>
+#include <strings.h>
 
 MODULE("turnstone.lib");
 
+#define BUFFER_PRINTF_BUFFER_SIZE 2048
 
-typedef struct buffer_internal_t {
+typedef struct buffer_t {
     memory_heap_t* heap;
     lock_t         lock;
     uint64_t       capacity;
@@ -20,12 +23,12 @@ typedef struct buffer_internal_t {
     uint64_t       position;
     boolean_t      readonly;
     uint8_t*       data;
-}buffer_internal_t;
+}buffer_t;
 
-buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
-    buffer_internal_t* bi = memory_malloc_ext(heap, sizeof(buffer_internal_t), 0);
+buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
+    buffer_t* buffer = memory_malloc_ext(heap, sizeof(buffer_t), 0);
 
-    if(bi == NULL) {
+    if(buffer == NULL) {
         return NULL;
     }
 
@@ -33,100 +36,96 @@ buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
         capacity = 1;
     }
 
-    bi->heap = heap;
-    bi->lock = lock_create_with_heap(bi->heap);
-    bi->capacity = capacity;
-    bi->data = memory_malloc_ext(bi->heap, bi->capacity, 0);
+    buffer->heap = heap;
+    buffer->lock = lock_create_with_heap(buffer->heap);
+    buffer->capacity = capacity;
+    buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
 
-    return (buffer_t)bi;
+    return buffer;
 }
 
-buffer_t buffer_encapsulate(uint8_t* data, uint64_t length) {
-    buffer_internal_t* bi = memory_malloc_ext(NULL, sizeof(buffer_internal_t), 0);
+buffer_t* buffer_encapsulate(uint8_t* data, uint64_t length) {
+    buffer_t* buffer = memory_malloc_ext(NULL, sizeof(buffer_t), 0);
 
-    if(bi == NULL) {
+    if(buffer == NULL) {
         return NULL;
     }
 
-    bi->lock = lock_create_with_heap(bi->heap);
-    bi->capacity = length;
-    bi->length = length;
-    bi->readonly = true;
-    bi->data = data;
+    buffer->lock = lock_create_with_heap(buffer->heap);
+    buffer->capacity = length;
+    buffer->length = length;
+    buffer->readonly = true;
+    buffer->data = data;
 
-    return (buffer_t)bi;
+    return buffer;
 }
 
-boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro) {
+boolean_t buffer_set_readonly(buffer_t* buffer, boolean_t ro) {
     if(!buffer) {
         return false;
     }
 
-    ((buffer_internal_t*)buffer)->readonly = ro;
+    buffer->readonly = ro;
 
     return true;
 }
 
-uint64_t buffer_get_length(buffer_t buffer) {
+uint64_t buffer_get_length(buffer_t* buffer) {
     if(!buffer) {
         return 0;
     }
 
-    return ((buffer_internal_t*)buffer)->length;
+    return buffer->length;
 };
 
-boolean_t buffer_reset(buffer_t buffer) {
+boolean_t buffer_reset(buffer_t* buffer) {
     if(!buffer) {
         return false;
     }
 
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+    lock_acquire(buffer->lock);
 
-    lock_acquire(bi->lock);
+    memory_memclean(buffer->data, buffer->length);
 
-    memory_memclean(bi->data, bi->length);
+    buffer->length = 0;
+    buffer->position = 0;
 
-    bi->length = 0;
-    bi->position = 0;
-
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
     return true;
 };
 
-uint64_t buffer_get_capacity(buffer_t buffer) {
+uint64_t buffer_get_capacity(buffer_t* buffer) {
     if(!buffer) {
         return 0;
     }
 
-    return ((buffer_internal_t*)buffer)->capacity;
+    return buffer->capacity;
 };
 
-buffer_t buffer_append_byte(buffer_t buffer, uint8_t data) {
+buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data) {
     uint8_t tmp[] = {data};
     return buffer_append_bytes(buffer, tmp, 1);
 }
 
-uint64_t buffer_get_position(buffer_t buffer) {
+uint64_t buffer_get_position(buffer_t* buffer) {
     if(!buffer) {
         return 0;
     }
 
-    return ((buffer_internal_t*)buffer)->position;
+    return buffer->position;
 };
 
-buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    if(bi->readonly) {
+buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) {
+    if(buffer->readonly) {
         return NULL;
     }
 
-    lock_acquire(bi->lock);
+    lock_acquire(buffer->lock);
 
-    uint64_t new_cap = bi->capacity;
+    uint64_t new_cap = buffer->capacity;
 
-    while(bi->position + length > new_cap) {
+    while(buffer->position + length > new_cap) {
         if(new_cap > (1 << 20)) {
             new_cap += 1 << 20;
         } else {
@@ -134,70 +133,64 @@ buffer_t buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length) {
         }
     }
 
-    if(bi->capacity != new_cap) {
-        uint8_t* tmp_data = memory_malloc_ext(bi->heap, new_cap, 0);
+    if(buffer->capacity != new_cap) {
+        uint8_t* tmp_data = memory_malloc_ext(buffer->heap, new_cap, 0);
 
         if(tmp_data == NULL) {
-            lock_release(bi->lock);
+            lock_release(buffer->lock);
 
             return NULL;
         }
 
-        bi->capacity = new_cap;
+        buffer->capacity = new_cap;
 
-        memory_memcopy(bi->data, tmp_data, bi->length);
-        memory_free(bi->data);
-        bi->data = tmp_data;
+        memory_memcopy(buffer->data, tmp_data, buffer->length);
+        memory_free(buffer->data);
+        buffer->data = tmp_data;
     }
 
-    memory_memcopy(data, bi->data + bi->position, length);
+    memory_memcopy(data, buffer->data + buffer->position, length);
 
-    bi->position += length;
+    buffer->position += length;
 
-    if(bi->length < bi->position) {
-        bi->length = bi->position;
+    if(buffer->length < buffer->position) {
+        buffer->length = buffer->position;
     }
 
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
-    return (buffer_t)bi;
+    return buffer;
 }
 
-buffer_t buffer_append_buffer(buffer_t buffer, buffer_t appenden) {
-    buffer_internal_t* bi = (buffer_internal_t*)appenden;
-
-    return buffer_append_bytes(buffer, bi->data, bi->length);
+buffer_t* buffer_append_buffer(buffer_t* buffer, buffer_t* appenden) {
+    return buffer_append_bytes(buffer, appenden->data, appenden->length);
 }
 
-uint8_t* buffer_get_bytes(buffer_t buffer, uint64_t length) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
+uint8_t* buffer_get_bytes(buffer_t* buffer, uint64_t length) {
     if(length == 0) {
         return NULL;
     }
 
-    lock_acquire(bi->lock);
+    lock_acquire(buffer->lock);
 
-    if(bi->position >= bi->length) {
-        lock_release(bi->lock);
+    if(buffer->position >= buffer->length) {
+        lock_release(buffer->lock);
 
         return NULL;
     }
 
-    uint8_t* res = memory_malloc_ext(bi->heap, length, 0);
-    memory_memcopy(bi->data + bi->position, res, length);
+    uint8_t* res = memory_malloc_ext(buffer->heap, length, 0);
+    memory_memcopy(buffer->data + buffer->position, res, length);
 
-    bi->position += length;
+    buffer->position += length;
 
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
     return res;
 }
 
-uint8_t* buffer_get_all_bytes(buffer_t buffer, uint64_t* length) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    uint8_t* res = memory_malloc_ext(bi->heap, bi->length, 0);
+uint8_t* buffer_get_all_bytes(buffer_t* buffer, uint64_t* length) {
+    uint8_t* res = memory_malloc_ext(buffer->heap, buffer->length, 0);
 
     if(!res) {
         if(length) {
@@ -207,84 +200,92 @@ uint8_t* buffer_get_all_bytes(buffer_t buffer, uint64_t* length) {
         return NULL;
     }
 
-    memory_memcopy(bi->data, res, bi->length);
+    memory_memcopy(buffer->data, res, buffer->length);
 
     if(length) {
-        *length = bi->length;
+        *length = buffer->length;
     }
 
     return res;
 }
 
-uint8_t* buffer_get_all_bytes_and_reset(buffer_t buffer, uint64_t* length) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+uint8_t* buffer_get_all_bytes_and_reset(buffer_t* buffer, uint64_t* length) {
+    lock_acquire(buffer->lock);
 
-    lock_acquire(bi->lock);
-
-    uint8_t* res = bi->data;
+    uint8_t* res = buffer->data;
 
     if(length) {
-        *length = bi->length;
+        *length = buffer->length;
     }
 
-    bi->data = memory_malloc_ext(bi->heap, bi->capacity, 0);
-    bi->length = 0;
-    bi->position = 0;
+    buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
+    buffer->length = 0;
+    buffer->position = 0;
 
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
     return res;
 }
 
+uint8_t* buffer_get_all_bytes_and_destroy(buffer_t* buffer, uint64_t* length) {
+    if(!buffer) {
+        return NULL;
+    }
 
-uint8_t  buffer_get_byte(buffer_t buffer) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+    uint8_t* res = buffer->data;
 
-    lock_acquire(bi->lock);
+    if(length) {
+        *length = buffer->length;
+    }
 
-    if(bi->position >= bi->length) {
-        lock_release(bi->lock);
+    lock_destroy(buffer->lock);
+    memory_free_ext(buffer->heap, buffer);
+
+    return res;
+}
+
+uint8_t  buffer_get_byte(buffer_t* buffer) {
+    lock_acquire(buffer->lock);
+
+    if(buffer->position >= buffer->length) {
+        lock_release(buffer->lock);
 
         return NULL;
     }
-    uint8_t res = bi->data[bi->position];
-    bi->position++;
+    uint8_t res = buffer->data[buffer->position];
+    buffer->position++;
 
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
     return res;
 }
 
-uint8_t buffer_peek_byte(buffer_t buffer) {
+uint8_t buffer_peek_byte(buffer_t* buffer) {
     if(!buffer) {
         return 0;
     }
 
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    return buffer_peek_ints_at_position(buffer, bi->position, 1);
+    return buffer_peek_ints_at_position(buffer, buffer->position, 1);
 }
 
-uint8_t buffer_peek_byte_at_position(buffer_t buffer, uint64_t position) {
+uint8_t buffer_peek_byte_at_position(buffer_t* buffer, uint64_t position) {
     return buffer_peek_ints_at_position(buffer, position, 1);
 }
 
-uint64_t buffer_peek_ints_at_position(buffer_t buffer, uint64_t position, uint8_t bc) {
+uint64_t buffer_peek_ints_at_position(buffer_t* buffer, uint64_t position, uint8_t bc) {
     if(!buffer) {
         return 0;
     }
-
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
 
     if(bc <= 0 || bc > 8) {
         return 0;
     }
 
-    if(position + bc  > bi->length) {
+    if(position + bc  > buffer->length) {
         return 0;
     }
 
-    uint64_t* res_p = (uint64_t*)&bi->data[position];
+    uint64_t* res_p = (uint64_t*)&buffer->data[position];
     uint64_t res = *res_p;
 
     res = res & ((1ULL << (bc * 8)) - 1);
@@ -292,123 +293,372 @@ uint64_t buffer_peek_ints_at_position(buffer_t buffer, uint64_t position, uint8_
     return res;
 }
 
-uint64_t buffer_peek_ints(buffer_t buffer, uint8_t bc) {
+uint64_t buffer_peek_ints(buffer_t* buffer, uint8_t bc) {
     if(!buffer) {
         return 0;
     }
 
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    return buffer_peek_ints_at_position(buffer, bi->position, bc);
+    return buffer_peek_ints_at_position(buffer, buffer->position, bc);
 }
 
-uint64_t buffer_remaining(buffer_t buffer) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+uint64_t buffer_remaining(buffer_t* buffer) {
+    lock_acquire(buffer->lock);
 
-    lock_acquire(bi->lock);
+    uint64_t res = buffer->length - buffer->position;
 
-    uint64_t res = bi->length - bi->position;
-
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
     return res;
 }
 
 
-boolean_t   buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction_t direction) {
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    lock_acquire(bi->lock);
+boolean_t   buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_direction_t direction) {
+    lock_acquire(buffer->lock);
 
     if(direction == BUFFER_SEEK_DIRECTION_START) {
-        if(position < 0 || (uint64_t)position >= bi->capacity) {
-            lock_release(bi->lock);
+        if(position < 0 || (uint64_t)position >= buffer->capacity) {
+            lock_release(buffer->lock);
 
             return false;
         }
 
-        bi->position = 0;
+        buffer->position = 0;
     }
 
     if(direction == BUFFER_SEEK_DIRECTION_END) {
-        if (position > 0 || position + ((int64_t)bi->capacity) < 0) {
-            lock_release(bi->lock);
+        if (position > 0 || position + ((int64_t)buffer->capacity) < 0) {
+            lock_release(buffer->lock);
 
             return false;
         }
 
-        bi->position = bi->capacity;
+        buffer->position = buffer->capacity;
     }
 
-    if(direction == BUFFER_SEEK_DIRECTION_CURRENT && (bi->position + position > bi->capacity || ((int64_t)bi->position) + position < 0)) {
-        lock_release(bi->lock);
+    if(direction == BUFFER_SEEK_DIRECTION_CURRENT && (buffer->position + position > buffer->capacity || ((int64_t)buffer->position) + position < 0)) {
+        lock_release(buffer->lock);
 
         return false;
     }
 
-    bi->position += position;
+    buffer->position += position;
 
-    if(bi->position > bi->length) {
-        bi->length = bi->position;
+    if(buffer->position > buffer->length) {
+        buffer->length = buffer->position;
     }
 
-    lock_release(bi->lock);
+    lock_release(buffer->lock);
 
     return true;
 }
 
-int8_t buffer_destroy(buffer_t buffer) {
+int8_t buffer_destroy(buffer_t* buffer) {
     if(!buffer) {
         return 0;
     }
 
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
+    lock_destroy(buffer->lock);
 
-    lock_destroy(bi->lock);
-
-    if(!bi->readonly) {
-        memory_free_ext(bi->heap, bi->data);
+    if(!buffer->readonly) {
+        memory_free_ext(buffer->heap, buffer->data);
     }
 
-    memory_free_ext(bi->heap, bi);
+    memory_free_ext(buffer->heap, buffer);
 
     return 0;
 }
 
-boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, uint8_t* dest) {
+boolean_t buffer_write_slice_into(buffer_t* buffer, uint64_t pos, uint64_t len, uint8_t* dest) {
     if(!buffer || !dest) {
         return false;
     }
 
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    if(pos > bi->length) {
+    if(pos > buffer->length) {
         return false;
     }
 
-    if(len > bi->length - pos) {
-        len = bi->length - pos;
+    if(len > buffer->length - pos) {
+        len = buffer->length - pos;
     }
 
     if(!len) {
         return false;
     }
 
-    memory_memcopy(bi->data + pos, dest, len);
+    memory_memcopy(buffer->data + pos, dest, len);
 
     return true;
 }
 
-uint8_t* buffer_get_view_at_position(buffer_t buffer, uint64_t position, uint64_t length) {
+uint8_t* buffer_get_view_at_position(buffer_t* buffer, uint64_t position, uint64_t length) {
     if(!buffer) {
         return NULL;
     }
 
-    buffer_internal_t* bi = (buffer_internal_t*)buffer;
-
-    if(position + length > bi->length) {
+    if(position + length > buffer->length) {
         return NULL;
     }
 
-    return bi->data + position;
+    return buffer->data + position;
 }
+
+
+int64_t buffer_printf(buffer_t* buffer, const char_t* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    int64_t res = buffer_vprintf(buffer, fmt, args);
+
+    va_end(args);
+
+    return res;
+}
+
+int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
+    if(!buffer) {
+        return 0;
+    }
+
+    size_t cnt = 0;
+
+    if(!fmt) {
+        return 0;
+    }
+
+    char_t video_printf_buffer[BUFFER_PRINTF_BUFFER_SIZE + 128] = {0};
+    uint64_t video_printf_buffer_idx = 0;
+
+    while (*fmt) {
+        if(video_printf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+            buffer_append_bytes(buffer, (uint8_t*)video_printf_buffer, video_printf_buffer_idx);
+            video_printf_buffer_idx = 0;
+        }
+
+        char_t data = *fmt;
+
+        if(data == '%') {
+            fmt++;
+            int8_t wfmtb = 1;
+            char_t buf[257] = {0};
+            char_t ito_buf[64] = {0};
+            int32_t val = 0;
+            char_t* str = NULL;
+            int32_t slen = 0;
+            number_t ival = 0;
+            unumber_t uval = 0;
+            int32_t idx = 0;
+            int8_t l_flag = 0;
+            int8_t sign = 0;
+            char_t fto_buf[128];
+            // float128_t fval = 0; // TODO: float128_t ops
+            float64_t fval = 0;
+            number_t prec = 6;
+
+            while(1) {
+                wfmtb = 1;
+
+                switch (*fmt) {
+                case '0':
+                    fmt++;
+                    val = *fmt - 0x30;
+                    fmt++;
+                    if(*fmt >= '0' && *fmt <= '9') {
+                        val = val * 10 + *fmt - 0x30;
+                        fmt++;
+                    }
+                    wfmtb = 0;
+                    break;
+                case '.':
+                    fmt++;
+                    prec = *fmt - 0x30;
+                    fmt++;
+                    wfmtb = 0;
+                    break;
+                case 'c':
+                    val = va_arg(args, int32_t);
+                    video_printf_buffer[video_printf_buffer_idx++] = (char_t)val;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    cnt++;
+                    fmt++;
+                    break;
+                case 's':
+                    str = va_arg(args, char_t*);
+                    slen = strlen(str);
+
+                    strcpy(str, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
+                    fmt++;
+                    break;
+                case 'i':
+                case 'd':
+                    if(l_flag == 2) {
+                        ival = va_arg(args, int64_t);
+                    } else if(l_flag == 1) {
+                        ival = va_arg(args, int64_t);
+                    }
+                    if(l_flag == 0) {
+                        ival = va_arg(args, int32_t);
+                    }
+
+                    itoa_with_buffer(ito_buf, ival);
+                    slen = strlen(ito_buf);
+
+                    if(ival < 0) {
+                        sign = 1;
+                        slen -= 2;
+                    }
+
+                    for(idx = 0; idx < val - slen; idx++) {
+                        buf[idx] = '0';
+                        buf[idx + 1] = '\0';
+                        cnt++;
+                    }
+
+                    if(ival < 0) {
+                        buf[0] = '-';
+                    }
+
+                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += idx;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
+                    fmt++;
+                    l_flag = 0;
+                    break;
+                case 'u':
+                    if(l_flag == 2) {
+                        uval = va_arg(args, uint64_t);
+                    } else if(l_flag == 1) {
+                        uval = va_arg(args, uint64_t);
+                    }
+                    if(l_flag == 0) {
+                        uval = va_arg(args, uint32_t);
+                    }
+
+                    utoa_with_buffer(ito_buf, uval);
+                    slen = strlen(ito_buf);
+
+                    for(idx = 0; idx < val - slen; idx++) {
+                        buf[idx] = '0';
+                        buf[idx + 1] = '\0';
+                        cnt++;
+                    }
+
+                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += idx;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
+                    fmt++;
+                    break;
+                case 'l':
+                    fmt++;
+                    wfmtb = 0;
+                    l_flag++;
+                    break;
+                case 'p':
+                    l_flag = 1;
+                    nobreak;
+                case 'x':
+                case 'h':
+                    if(l_flag == 2) {
+                        uval = va_arg(args, uint64_t);
+                    } else if(l_flag == 1) {
+                        uval = va_arg(args, uint64_t);
+                    }
+                    if(l_flag == 0) {
+                        uval = va_arg(args, uint32_t);
+                    }
+
+                    utoh_with_buffer(ito_buf, uval);
+                    slen = strlen(ito_buf);
+
+                    for(idx = 0; idx < val - slen; idx++) {
+                        buf[idx] = '0';
+                        buf[idx + 1] = '\0';
+                        cnt++;
+                    }
+
+                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += idx;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
+                    fmt++;
+                    l_flag = 0;
+                    break;
+                case '%':
+                    video_printf_buffer[video_printf_buffer_idx++] = (char_t)'%';
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    fmt++;
+                    cnt++;
+                    break;
+                case 'f':
+                    if(l_flag == 2) {
+                        // fval = va_arg(args, float128_t); // TODO: float128_t ops
+                    } else  {
+                        fval = va_arg(args, float64_t);
+                    }
+
+                    ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
+                    slen = strlen(fto_buf);
+
+                    strcpy(fto_buf, video_printf_buffer + video_printf_buffer_idx);
+                    video_printf_buffer_idx += slen;
+                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+
+                    cnt += slen;
+                    fmt++;
+                    break;
+                default:
+                    break;
+                }
+
+                if(wfmtb) {
+                    break;
+                }
+            }
+
+        } else {
+
+            while(*fmt) {
+                if(video_printf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                    buffer_append_bytes(buffer, (uint8_t*)video_printf_buffer, video_printf_buffer_idx);
+                    video_printf_buffer_idx = 0;
+                }
+                if(*fmt == '%') {
+                    break;
+                }
+
+                video_printf_buffer[video_printf_buffer_idx++] = *fmt;
+                video_printf_buffer[video_printf_buffer_idx] = 0;
+                fmt++;
+                cnt++;
+            }
+        }
+    }
+
+    if(video_printf_buffer_idx) {
+        buffer_append_bytes(buffer, (uint8_t*)video_printf_buffer, video_printf_buffer_idx);
+    }
+
+    return cnt;
+}
+
+

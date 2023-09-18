@@ -9,18 +9,18 @@
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <systeminfo.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <efi.h>
 #include <linkedlist.h>
 
 MODULE("turnstone.lib");
 
-int8_t   linker_link_module(linker_context_t* ctx, linker_module_t* module);
-int8_t   linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
-int8_t   linker_efi_image_section_header_cmp(const void* a, const void* b);
-buffer_t linker_build_relocation_table_buffer(linker_context_t* ctx);
-buffer_t linker_build_metadata_buffer(linker_context_t* ctx);
+int8_t    linker_link_module(linker_context_t* ctx, linker_module_t* module);
+int8_t    linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
+int8_t    linker_efi_image_section_header_cmp(const void* a, const void* b);
+buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
+buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
 
 int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     efi_image_relocation_entry_t* entry_a = (efi_image_relocation_entry_t*)a;
@@ -1132,11 +1132,11 @@ int8_t linker_link_program(linker_context_t* ctx) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-buffer_t linker_build_efi_image_relocations(linker_context_t* ctx) {
+buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
 
-        return (buffer_t){0};
+        return NULL;
     }
 
     linkedlist_t relocations_list = linkedlist_create_sortedlist(linker_efi_image_relocation_entry_cmp);
@@ -1233,7 +1233,7 @@ buffer_t linker_build_efi_image_relocations(linker_context_t* ctx) {
     it->destroy(it);
 
 
-    buffer_t relocations_buffer = buffer_new();
+    buffer_t* relocations_buffer = buffer_new();
 
     if(!relocations_buffer) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
@@ -1271,11 +1271,11 @@ error:
     return NULL;
 }
 
-buffer_t linker_build_efi_image_section_headers_without_relocations(linker_context_t* ctx) {
+buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
 
-        return (buffer_t){0};
+        return NULL;
     }
 
     linkedlist_t sections_list = linkedlist_create_sortedlist(linker_efi_image_section_header_cmp);
@@ -1348,7 +1348,7 @@ buffer_t linker_build_efi_image_section_headers_without_relocations(linker_conte
     it->destroy(it);
 
 
-    buffer_t sections_buffer = buffer_new();
+    buffer_t* sections_buffer = buffer_new();
 
     if(!sections_buffer) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
@@ -1385,20 +1385,20 @@ error:
 }
 #pragma GCC diagnostic pop
 
-buffer_t  linker_build_efi(linker_context_t* ctx) {
+buffer_t*  linker_build_efi(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
 
         return NULL;
     }
 
-    buffer_t program_buffer = NULL;
+    buffer_t* program_buffer = NULL;
 
     uint64_t section_count = linker_get_section_count_without_relocations(ctx) + 1;
 
     PRINTLOG(LINKER, LOG_INFO, "section count: 0x%llx", section_count);
 
-    buffer_t section_headers_buffer = linker_build_efi_image_section_headers_without_relocations(ctx);
+    buffer_t* section_headers_buffer = linker_build_efi_image_section_headers_without_relocations(ctx);
 
     if(!section_headers_buffer) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot build section headers");
@@ -1411,7 +1411,7 @@ buffer_t  linker_build_efi(linker_context_t* ctx) {
 
     PRINTLOG(LINKER, LOG_INFO, "section headers size: 0x%llx", section_headers_size);
 
-    buffer_t relocation_buffer = linker_build_efi_image_relocations(ctx);
+    buffer_t* relocation_buffer = linker_build_efi_image_relocations(ctx);
 
     if(!relocation_buffer) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot build relocations");
@@ -1848,7 +1848,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
     }
 
     if(dump_type & LINKER_PROGRAM_DUMP_TYPE_RELOCATIONS) {
-        buffer_t relocs_buf = linker_build_relocation_table_buffer(ctx);
+        buffer_t* relocs_buf = linker_build_relocation_table_buffer(ctx);
 
         uint64_t relocs_size = buffer_get_length(relocs_buf);
 
@@ -1895,7 +1895,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
     }
 
     if(dump_type & LINKER_PROGRAM_DUMP_TYPE_METADATA) {
-        buffer_t metadata_buf = linker_build_metadata_buffer(ctx);
+        buffer_t* metadata_buf = linker_build_metadata_buffer(ctx);
 
         uint64_t metadata_size = buffer_get_length(metadata_buf);
 
@@ -1988,14 +1988,14 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
     return 0;
 }
 
-buffer_t linker_build_relocation_table_buffer(linker_context_t* ctx) {
+buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
 
         return NULL;
     }
 
-    buffer_t relocation_buffer = buffer_new_with_capacity(NULL, ctx->relocation_table_size);
+    buffer_t* relocation_buffer = buffer_new_with_capacity(NULL, ctx->relocation_table_size);
 
     if(!relocation_buffer) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");
@@ -2057,14 +2057,14 @@ error_destroy_buffer:
     return NULL;
 }
 
-buffer_t linker_build_metadata_buffer(linker_context_t* ctx) {
+buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
 
         return NULL;
     }
 
-    buffer_t metadata_buffer = buffer_new_with_capacity(NULL, ctx->metadata_size);
+    buffer_t* metadata_buffer = buffer_new_with_capacity(NULL, ctx->metadata_size);
 
     if(!metadata_buffer) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create buffer");

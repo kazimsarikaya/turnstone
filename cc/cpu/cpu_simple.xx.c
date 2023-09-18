@@ -6,7 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 #include <cpu.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.cpu");
 
@@ -50,7 +50,7 @@ uint8_t cpu_cpuid(cpu_cpuid_regs_t query, cpu_cpuid_regs_t* answer){
                           : "a" (query.eax), "b" (query.ebx), "c" (query.ecx), "d" (query.edx)
                           );
     if(answer->eax == 0 && answer->ebx == 0 && answer->ecx == 0 && answer->edx == 0) {
-        printf("CPU: Fatal cpuid failed\n");
+        PRINTLOG(KERNEL, LOG_FATAL, "CPU: Fatal cpuid failed");
 
         return -1;
     }

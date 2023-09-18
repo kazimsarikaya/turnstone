@@ -82,7 +82,7 @@ int32_t main(int32_t argc, char_t** argv) {
     data_t pxeconf_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"pxe-config"};
     data_t pxeconf_data = {DATA_TYPE_DATA, 2, &pxeconf_name, pxeconf};
 
-    printf("tosdb %s path %s size: 0x%lx\n", tosdb, tosdbp, tosdb_size);
+    printf("tosdb %s path %s size: 0x%llx\n", tosdb, tosdbp, tosdb_size);
 
     data_t* ser_data = data_bson_serialize(&pxeconf_data, DATA_SERIALIZE_WITH_ALL);
 

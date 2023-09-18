@@ -9,7 +9,7 @@
 #include <pci.h>
 #include <linkedlist.h>
 #include <memory.h>
-#include <video.h>
+#include <logging.h>
 #include <cpu/task.h>
 #include <cpu.h>
 #include <time/timer.h>

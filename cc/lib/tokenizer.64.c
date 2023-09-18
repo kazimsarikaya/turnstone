@@ -18,7 +18,7 @@ const uint8_t token_delimeter_chars[] = {
 
 
 typedef struct tokenizer_iterator_ctx_t {
-    buffer_t                      buf;
+    buffer_t*                     buf;
     const token_delimiter_type_t* delimeters;
     const token_delimiter_type_t* whitespaces;
     token_position_t              position;
@@ -108,7 +108,7 @@ iterator_t* tokenizer_next(iterator_t* iter) {
         return iter;
     }
 
-    buffer_t buf = ctx->buf;
+    buffer_t* buf = ctx->buf;
 
     uint64_t pos = buffer_get_position(buf);
     uint64_t len = buffer_get_length(buf);
@@ -182,7 +182,7 @@ iterator_t* tokenizer_next(iterator_t* iter) {
     }
 
 
-    buffer_t res_buf = buffer_new();
+    buffer_t* res_buf = buffer_new();
 
     if(!res_buf) {
         ctx->item = NULL;
@@ -272,7 +272,7 @@ const void* tokenizer_get_extra_data(iterator_t* iter) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-iterator_t* tokenizer_new(buffer_t buf, const token_delimiter_type_t* delimeters, const token_delimiter_type_t* whitespaces) {
+iterator_t* tokenizer_new(buffer_t* buf, const token_delimiter_type_t* delimeters, const token_delimiter_type_t* whitespaces) {
     tokenizer_iterator_ctx_t* ctx = memory_malloc(sizeof(tokenizer_iterator_ctx_t));
 
     if(!ctx) {

@@ -9,7 +9,7 @@
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
 #include <tosdb/tosdb_cache.h>
-#include <video.h>
+#include <logging.h>
 #include <zpack.h>
 #include <binarysearch.h>
 
@@ -159,8 +159,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         st_idx_data += last_key_length;
 
-        buffer_t buf_bf_in = buffer_encapsulate(st_idx_data, st_idx->bloomfilter_size);
-        buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
+        buffer_t* buf_bf_in = buffer_encapsulate(st_idx_data, st_idx->bloomfilter_size);
+        buffer_t* buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
 
@@ -314,8 +314,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         }
 
-        buffer_t buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
-        buffer_t buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
+        buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
 
@@ -433,7 +433,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         memory_free(org_idx_data);
     }
 
-    buffer_t buf_vl_out = NULL;
+    buffer_t* buf_vl_out = NULL;
     tosdb_cached_valuelog_t* c_vl = NULL;
 
     cache_key.type = TOSDB_CACHE_ITEM_TYPE_VALUELOG;
@@ -453,7 +453,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             return false;
         }
 
-        buffer_t buf_vl_in = buffer_encapsulate(b_vl->data, b_vl->data_size);
+        buffer_t* buf_vl_in = buffer_encapsulate(b_vl->data, b_vl->data_size);
         buf_vl_out = buffer_new_with_capacity(NULL, b_vl->valuelog_unpacked_size);
         uint64_t buf_vl_unpacked_size = b_vl->valuelog_unpacked_size;
 

@@ -31,7 +31,7 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity);
  * @param[in] buffer memory backend buffer
  * @return memory backend
  */
-tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer);
+tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t* buffer);
 
 /**
  * @brief get memory backend contents

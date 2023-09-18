@@ -9,7 +9,7 @@
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
 #include <tosdb/tosdb_cache.h>
-#include <video.h>
+#include <logging.h>
 #include <zpack.h>
 #include <binarysearch.h>
 
@@ -151,8 +151,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
         memory_memcopy(t_last, last, last_key_length);
 
-        buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
-        buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
+        buffer_t* buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
+        buffer_t* buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
 
@@ -302,8 +302,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
         }
 
-        buffer_t buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
-        buffer_t buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
+        buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
 

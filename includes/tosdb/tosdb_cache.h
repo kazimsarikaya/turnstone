@@ -63,7 +63,7 @@ typedef struct tosdb_cached_secondary_index_data_t {
 typedef struct tosdb_cached_valuelog_t {
     tosdb_cache_key_t cache_key;
     uint64_t          record_count;
-    buffer_t          values;
+    buffer_t*         values;
 } tosdb_cached_valuelog_t;
 
 typedef struct tosdb_cache_t tosdb_cache_t;

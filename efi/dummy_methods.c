@@ -20,6 +20,7 @@
 #include <memory/paging.h>
 #include <efi.h>
 #include <video.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.efi");
 
@@ -32,6 +33,7 @@ size_t __kheap_bottom;
 lock_t video_lock = NULL;
 boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
 typedef void * future_t;
+boolean_t windowmanager_initialized = false;
 
 void*    task_get_current_task(void);
 void     task_yield(void);

@@ -12,7 +12,7 @@
 #include <memory/frame.h>
 #include <acpi.h>
 #include <utils.h>
-#include <video.h>
+#include <logging.h>
 #include <ports.h>
 #include <cpu.h>
 #include <cpu/interrupt.h>

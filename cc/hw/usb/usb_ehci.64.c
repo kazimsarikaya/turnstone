@@ -9,7 +9,7 @@
 #include <driver/usb.h>
 #include <driver/usb_ehci.h>
 #include <pci.h>
-#include <video.h>
+#include <logging.h>
 #include <memory/paging.h>
 #include <apic.h>
 #include <time/timer.h>

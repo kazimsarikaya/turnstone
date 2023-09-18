@@ -10,7 +10,7 @@
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <systeminfo.h>
-#include <video.h>
+#include <logging.h>
 #include <linker.h>
 #include <cpu/descriptor.h>
 #include <hashmap.h>
@@ -21,7 +21,7 @@ hashmap_t* memory_paging_page_tables = NULL;
 
 uint64_t memory_paging_get_internal_frame(memory_page_table_context_t* table_context);
 
-static inline void memory_paging_internal_frame_build(memory_page_table_context_t* table_context) {
+static void memory_paging_internal_frame_build(memory_page_table_context_t* table_context) {
     frame_t* internal_frms;
 
     if(!KERNEL_FRAME_ALLOCATOR || KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count == NULL) {

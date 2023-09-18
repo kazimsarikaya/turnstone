@@ -8,7 +8,7 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <iterator.h>
 #include <xxhash.h>

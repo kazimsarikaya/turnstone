@@ -17,6 +17,7 @@
 #include <systeminfo.h>
 #include <driver/video_edid.h>
 #include <cpu.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.video.vmwaresvga2");
 

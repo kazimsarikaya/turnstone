@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <memory.h>
 #include <utils.h>
+#include <buffer.h>
 
 MODULE("turnstone.lib");
 
@@ -605,5 +606,20 @@ uint64_t strhash(const char_t* input) {
         tmp++;
     }
 
+    return res;
+}
+
+char_t* sprintf(const char_t* format, ...) {
+    va_list args;
+    va_start(args, format);
+    char_t* res = vsprintf(format, args);
+    va_end(args);
+    return res;
+}
+
+char_t* vsprintf(const char_t* format, va_list args) {
+    buffer_t* buffer = buffer_new_with_capacity(NULL, 1024);
+    buffer_vprintf(buffer, format, args);
+    char_t* res = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
     return res;
 }

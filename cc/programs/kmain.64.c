@@ -5,7 +5,7 @@
 
 #include <types.h>
 #include <helloworld.h>
-#include <video.h>
+#include <logging.h>
 #include <memory.h>
 #include <memory/paging.h>
 #include <systeminfo.h>
@@ -36,6 +36,7 @@
 #include <shell.h>
 #include <driver/usb.h>
 #include <driver/usb_mass_storage_disk.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 

@@ -7,7 +7,7 @@
 #include <network/network_ipv4.h>
 #include <network/network_udpv4.h>
 #include <network/network_ethernet.h>
-#include <video.h>
+#include <logging.h>
 #include <random.h>
 #include <memory.h>
 #include <utils.h>

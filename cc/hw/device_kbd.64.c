@@ -4,7 +4,7 @@
  */
 
 #include <device/kbd.h>
-#include <video.h>
+#include <logging.h>
 #include <cpu.h>
 #include <apic.h>
 #include <ports.h>

@@ -5,7 +5,7 @@
 
 #include <driver/network_virtio.h>
 #include <driver/virtio.h>
-#include <video.h>
+#include <logging.h>
 #include <linkedlist.h>
 #include <pci.h>
 #include <ports.h>

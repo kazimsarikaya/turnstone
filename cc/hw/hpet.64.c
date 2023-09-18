@@ -7,7 +7,7 @@
  */
 
 #include <device/hpet.h>
-#include <video.h>
+#include <logging.h>
 #include <memory/paging.h>
 #include <apic.h>
 #include <cpu/interrupt.h>

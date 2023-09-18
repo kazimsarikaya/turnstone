@@ -8,7 +8,6 @@
 
 #include <driver/video_edid.h>
 #include <memory.h>
-#include <video.h>
 
 
 MODULE("turnstone.kernel.hw.video");

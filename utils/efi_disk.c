@@ -133,7 +133,7 @@ int32_t main(int32_t argc, char** argv) {
 
     timeparsed_t tp;
     timeparsed(&tp);
-    printf("%i %i %i %i %i %i %li\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds, timeparsed_to_time(&tp));
+    printf("%i %i %i %i %i %i %lli\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds, timeparsed_to_time(&tp));
 
     crc32_init_table();
 
@@ -244,7 +244,7 @@ int32_t main(int32_t argc, char** argv) {
 
     filesystem_t* fs = fat32_get_or_create_fs(dp, FAT32_ESP_VOLUME_LABEL);
 
-    printf("disk size: %i\n", fs->get_total_size(fs));
+    printf("disk size: %lli\n", fs->get_total_size(fs));
 
 
 

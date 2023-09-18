@@ -9,7 +9,7 @@
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
 #include <tosdb/tosdb_cache.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <iterator.h>
 #include <xxhash.h>
@@ -213,8 +213,8 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
 
         }
 
-        buffer_t buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
-        buffer_t buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
+        buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
 

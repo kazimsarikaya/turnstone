@@ -8,7 +8,7 @@
 #include <cpu/interrupt.h>
 #include <cpu/descriptor.h>
 #include <cpu/crx.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <memory/paging.h>
 #include <memory.h>
@@ -416,6 +416,9 @@ void __attribute__ ((interrupt)) interrupt_int13_simd_floating_point_exception(i
     asm volatile ("stmxcsr %0" : "=m" (mxcsr));
 
     stackframe_t* s_frame =  backtrace_print_interrupt_registers(rsp);
+
+    PRINTLOG(KERNEL, LOG_FATAL, "SIMD exception occured at 0x%x:0x%llx task 0x%llx", frame->return_cs, frame->return_rip, task_get_id());
+    PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     if(mxcsr & 0x1) {
         PRINTLOG(KERNEL, LOG_ERROR, "SIMD floating point exception: invalid operation");

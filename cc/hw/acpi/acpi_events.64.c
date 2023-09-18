@@ -8,7 +8,7 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 #include <ports.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 

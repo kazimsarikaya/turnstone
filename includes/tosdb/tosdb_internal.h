@@ -354,7 +354,7 @@ struct tosdb_memtable_t {
     boolean_t                        is_full;
     boolean_t                        is_dirty;
     hashmap_t*                       indexes;
-    buffer_t                         values;
+    buffer_t*                        values;
     uint64_t                         record_count;
     tosdb_block_sstable_list_item_t* stli;
 };

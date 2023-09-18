@@ -12,6 +12,8 @@
 #include <cpu/sync.h>
 #include <cpu/descriptor.h>
 #include <memory/paging.h>
+#include <stdbufs.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.memory.frame");
 

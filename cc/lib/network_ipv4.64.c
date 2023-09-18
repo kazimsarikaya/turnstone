@@ -9,9 +9,9 @@
 #include <network/network_info.h>
 #include <utils.h>
 #include <memory.h>
-#include <video.h>
+#include <logging.h>
 #include <time.h>
-#include <video.h>
+#include <logging.h>
 #include <linkedlist.h>
 #include <map.h>
 

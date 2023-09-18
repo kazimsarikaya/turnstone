@@ -13,11 +13,12 @@
 #include <memory/frame.h>
 #include <linkedlist.h>
 #include <time/timer.h>
-#include <video.h>
+#include <logging.h>
 #include <systeminfo.h>
 #include <linker.h>
 #include <utils.h>
 #include <map.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.cpu.task");
 

@@ -37,7 +37,7 @@ typedef struct linkerdb_t {
     FILE*            db_file;
     int32_t          fd;
     uint8_t*         mmap_res;
-    buffer_t         backend_buffer;
+    buffer_t*        backend_buffer;
     tosdb_backend_t* backend;
     tosdb_t*         tdb;
 } linkerdb_t;
@@ -170,7 +170,7 @@ linkerdb_t* linkerdb_open(const char_t* file) {
         return NULL;
     }
 
-    buffer_t buf = buffer_encapsulate(mmap_res, capacity);
+    buffer_t* buf = buffer_encapsulate(mmap_res, capacity);
 
     if(!buf) {
         munmap(mmap_res, capacity);
@@ -643,7 +643,7 @@ int32_t main(int32_t argc, char_t** argv) {
     }
 
     if(for_efi) {
-        buffer_t efi_program = linker_build_efi(ctx);
+        buffer_t* efi_program = linker_build_efi(ctx);
 
         if(!efi_program) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot build efi program");

@@ -8,7 +8,8 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.db");
 

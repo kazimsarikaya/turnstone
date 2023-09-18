@@ -33,7 +33,7 @@ typedef struct zpack_format_t {
  * @param[in] out output buffer
  * @return size of output buffer
  */
-int64_t zpack_pack(buffer_t in, buffer_t out);
+int64_t zpack_pack(buffer_t* in, buffer_t* out);
 
 /**
  * @brief unpacks data at input buffer to output buffer with z77 algorithm
@@ -41,6 +41,6 @@ int64_t zpack_pack(buffer_t in, buffer_t out);
  * @param[in] out output buffer
  * @return size of output buffer
  */
-int64_t zpack_unpack(buffer_t in, buffer_t out);
+int64_t zpack_unpack(buffer_t* in, buffer_t* out);
 
 #endif

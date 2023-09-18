@@ -21,6 +21,7 @@
 #include <cpu/task.h>
 #include <driver/video_edid.h>
 #include <cpu.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.video.virtiogpu");
 

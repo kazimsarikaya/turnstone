@@ -13,7 +13,7 @@
 #include <buffer.h>
 
 
-extern buffer_t shell_buffer;
+extern buffer_t* shell_buffer;
 
 int8_t shell_init(void);
 

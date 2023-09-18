@@ -34,7 +34,7 @@ typedef struct linkerdb_t {
     FILE*            db_file;
     int32_t          fd;
     uint8_t*         mmap_res;
-    buffer_t         backend_buffer;
+    buffer_t*        backend_buffer;
     tosdb_backend_t* backend;
     tosdb_t*         tdb;
 } linkerdb_t;
@@ -90,7 +90,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
 
     memory_memclean(mmap_res, capacity);
 
-    buffer_t buf = buffer_encapsulate(mmap_res, capacity);
+    buffer_t* buf = buffer_encapsulate(mmap_res, capacity);
 
     if(!buf) {
         munmap(mmap_res, capacity);

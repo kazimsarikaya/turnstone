@@ -9,7 +9,7 @@
 #include <driver/usb.h>
 #include <driver/usb_xhci.h>
 #include <pci.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.usb");
 

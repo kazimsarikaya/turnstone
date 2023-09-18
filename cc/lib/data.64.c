@@ -32,7 +32,7 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
 
     data_serialize_with_t org_sw = sw;
 
-    buffer_t buf = buffer_new();
+    buffer_t* buf = buffer_new();
 
     if(buf == NULL) {
         return NULL;

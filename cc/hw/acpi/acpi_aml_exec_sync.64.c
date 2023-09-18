@@ -7,7 +7,7 @@
  */
 
 #include <acpi/aml_internal.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 

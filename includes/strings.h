@@ -215,4 +215,9 @@ char_t*  lchar_to_char(lchar_t* src);
 lchar_t* char_to_lchar(char_t* str);
 
 uint64_t strhash(const char_t* input);
+
+char_t* sprintf(const char_t* format, ...);
+char_t* vsprintf(const char_t* format, va_list args);
+
+
 #endif

@@ -7,7 +7,7 @@
  */
 #include <acpi.h>
 #include <memory.h>
-#include <video.h>
+#include <logging.h>
 #include <ports.h>
 #include <acpi/aml.h>
 #include <memory/paging.h>

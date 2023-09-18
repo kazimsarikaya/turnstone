@@ -6,7 +6,7 @@
 #include <driver/network_e1000.h>
 #include <memory.h>
 #include <utils.h>
-#include <video.h>
+#include <logging.h>
 #include <time/timer.h>
 #include <network.h>
 #include <network/network_ethernet.h>
@@ -114,7 +114,7 @@ uint16_t network_e1000_phy_read(network_e1000_dev_t* dev, int regaddr) {
     }
 
     if( dev->mmio->mdic & NETWORK_E1000_MDIC_E ) {
-        printf("i825xx: MDI READ ERROR\n");
+        PRINTLOG(E1000, LOG_ERROR, "i825xx: MDI READ ERROR\n");
 
         return -1;
     }
@@ -133,7 +133,7 @@ void network_e1000_phy_write(network_e1000_dev_t* dev, int regaddr, uint16_t dat
     }
 
     if( dev->mmio->mdic & NETWORK_E1000_MDIC_E ) {
-        printf("i825xx: MDI WRITE ERROR\n");
+        PRINTLOG(E1000, LOG_ERROR, "i825xx: MDI WRITE ERROR\n");
         return;
     }
 }

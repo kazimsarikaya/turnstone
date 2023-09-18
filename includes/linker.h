@@ -157,10 +157,10 @@ _Static_assert(offsetof_field(program_header_t, trampoline_code) == 256, "progra
 #define LINKER_GOT_SECTION_ID 0x1
 
 typedef struct linker_section_t {
-    uint64_t virtual_start;
-    uint64_t physical_start;
-    uint64_t size;
-    buffer_t section_data;
+    uint64_t  virtual_start;
+    uint64_t  physical_start;
+    uint64_t  size;
+    buffer_t* section_data;
 } linker_section_t;
 
 typedef struct linker_module_t {
@@ -184,7 +184,7 @@ typedef struct linker_context_t {
     uint64_t   entrypoint_address_virtual;
     uint64_t   size_of_sections[LINKER_SECTION_TYPE_NR_SECTIONS];
     hashmap_t* modules;
-    buffer_t   got_table_buffer;
+    buffer_t*  got_table_buffer;
     hashmap_t* got_symbol_index_map;
     tosdb_t*   tdb;
     uint64_t   page_table_helper_frames;
@@ -213,9 +213,9 @@ int8_t    linker_bind_linear_addresses(linker_context_t* ctx);
 int8_t    linker_bind_got_entry_values(linker_context_t* ctx);
 int8_t    linker_link_program(linker_context_t* ctx);
 int64_t   linker_get_section_count_without_relocations(linker_context_t* ctx);
-buffer_t  linker_build_efi_image_relocations(linker_context_t* ctx);
-buffer_t  linker_build_efi_image_section_headers_without_relocations(linker_context_t* ctx);
-buffer_t  linker_build_efi(linker_context_t* ctx);
+buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx);
+buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_context_t* ctx);
+buffer_t* linker_build_efi(linker_context_t* ctx);
 int8_t    linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array);
 
 #endif

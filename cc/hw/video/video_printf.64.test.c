@@ -4,7 +4,7 @@
  */
 
 #include <tests.h>
-#include <video.h>
+#include <logging.h>
 
 TEST_FUNC(video, printf1, printf) {
     UNUSED(test_no);

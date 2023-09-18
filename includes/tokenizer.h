@@ -61,6 +61,6 @@ typedef struct token_t {
     uint8_t                value[];
 } token_t;
 
-iterator_t* tokenizer_new(buffer_t buf, const token_delimiter_type_t* delimeters, const token_delimiter_type_t* whitespaces);
+iterator_t* tokenizer_new(buffer_t* buf, const token_delimiter_type_t* delimeters, const token_delimiter_type_t* whitespaces);
 
 

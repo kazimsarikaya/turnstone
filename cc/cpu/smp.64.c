@@ -10,7 +10,7 @@
 
 #include <apic.h>
 #include <acpi.h>
-#include <video.h>
+#include <logging.h>
 #include <memory.h>
 #include <memory/paging.h>
 #include <memory/frame.h>

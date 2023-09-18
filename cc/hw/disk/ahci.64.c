@@ -7,7 +7,7 @@
  */
 
 #include <driver/ahci.h>
-#include <video.h>
+#include <logging.h>
 #include <pci.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
