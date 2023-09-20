@@ -469,7 +469,7 @@ void video_text_print(const char_t* string) {
     }
 }
 
-int8_t video_display_init(memory_heap_t* heap, linkedlist_t display_controllers) {
+int8_t video_display_init(memory_heap_t* heap, linkedlist_t* display_controllers) {
     iterator_t* iter = linkedlist_iterator_create(display_controllers);
 
     if(iter == NULL) {

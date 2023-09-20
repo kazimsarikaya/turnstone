@@ -92,7 +92,7 @@ int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
+int8_t nvme_init(memory_heap_t* heap, linkedlist_t* nvme_pci_devices) {
     PRINTLOG(NVME, LOG_INFO, "disk searching started");
 
     if(linkedlist_size(nvme_pci_devices) == 0) {

@@ -12,7 +12,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    printf("%i %i %i\n", sizeof(float128_t), sizeof(float64_t), sizeof(float32_t));
+    printf("%li %li %li\n", sizeof(float128_t), sizeof(float64_t), sizeof(float32_t));
 
     printf("%024.020f\n", math_exp(2));
     float64_t val = math_log(123456789);

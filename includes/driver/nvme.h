@@ -24,7 +24,7 @@
  * @param[in] nvme_pci_devices pci device list contains nvmes
  * @return nvme disk count
  */
-int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices);
+int8_t nvme_init(memory_heap_t* heap, linkedlist_t* nvme_pci_devices);
 
 /**
  * @union nvme_controller_cap_t
@@ -43,7 +43,7 @@ typedef union nvme_controller_cap_t {
         uint64_t bps       : 1; ///< boot partition support
         uint64_t reserved1 : 2; ///< reserved
         uint64_t mpsmin    : 4; ///< memory page size minimum
-        uint64_t mpsmax    : 4;  ///< memory page size maximum
+        uint64_t mpsmax    : 4; ///< memory page size maximum
         uint64_t pmrs      : 1; ///< persistent memory region supported
         uint64_t cmbs      : 1; ///< controller memory buffer supported
         uint64_t reserved2 : 6; ///< reserved
@@ -265,8 +265,8 @@ typedef struct nvme_completion_queue_entry_t {
 typedef struct nvme_identify_t {
     uint16_t vid; ///< PCI vendor ID
     uint16_t ssvid; ///< PCI subsystem vendor ID
-    char_t   sn[20];  ///< Serial number
-    char_t   mn[40];   ///< model number
+    char_t   sn[20]; ///< Serial number
+    char_t   mn[40]; ///< model number
     uint64_t fr; ///< Firmware revision
     uint8_t  rab; ///< Recommended arbitration burst
     uint8_t  ieee[3]; ///< ieee data
@@ -300,7 +300,7 @@ typedef struct nvme_identify_t {
     uint32_t rpmbs; ///< Replay protected memory block support
     uint32_t reserved1; ///< reserved
     uint16_t kas; ///< Keepalive support
-    uint8_t  reserved2[190];    ///< reserved
+    uint8_t  reserved2[190]; ///< reserved
     uint8_t  sqes; ///< Submission queue entry size
     uint8_t  cqes; ///< Completion queue entry size
     uint16_t maxcmd; ///< Maximum outstanding commands
@@ -327,7 +327,7 @@ typedef struct nvme_lba_format_t {
     uint32_t ms       : 16; ///< Metadata size
     uint32_t lbads    : 8; ///< LBA data size
     uint32_t rp       : 2; ///< Relative performance
-    uint32_t reserved : 6;  ///< reserved
+    uint32_t reserved : 6; ///< reserved
 }__attribute__((packed)) nvme_lba_format_t;
 
 
@@ -361,7 +361,7 @@ typedef struct nvme_ns_identify_t {
     uint8_t           reserved2[104 - 64];
     uint8_t           nguid[16]; ///< namespace globally unique identifier
     uint64_t          eui64; ///< ieee extended unique identifier
-    nvme_lba_format_t lbaf[16];  ///< LBA formats
+    nvme_lba_format_t lbaf[16]; ///< LBA formats
     uint8_t           reserved3[4096 - 192]; ///< reserved
 } __attribute__((packed)) nvme_ns_identify_t; ///< shorthand for struct
 
@@ -459,10 +459,10 @@ typedef enum nvme_cmd_status_t {
 typedef struct nvme_disk_t {
     memory_heap_t*                 heap; ///< heap to allocate memory from
     uint64_t                       disk_id; ///< disk id
-    pci_generic_device_t*          pci_device;         ///< pci device
-    nvme_controller_registers_t*   nvme_registers;                ///< nvme registers
+    pci_generic_device_t*          pci_device; ///< pci device
+    nvme_controller_registers_t*   nvme_registers; ///< nvme registers
     pci_capability_msix_t*         msix_capability; ///< msix capability
-    uint64_t                       admin_queue_size;  ///< admin queue size
+    uint64_t                       admin_queue_size; ///< admin queue size
     uint64_t                       admin_s_queue_tail; ///< admin submission queue tail
     uint64_t                       admin_c_queue_head; ///< admin completion queue head
     uint32_t*                      admin_submission_queue_tail_doorbell; ///< admin submission queue tail doorbell
@@ -487,7 +487,7 @@ typedef struct nvme_disk_t {
     boolean_t                      flush_supported; ///< flush supported
     uint16_t                       io_sq_count; ///< io submission queue count
     uint16_t                       io_cq_count; ///< io completion queue count
-    uint64_t                       io_queue_isr;  ///< io queue isr
+    uint64_t                       io_queue_isr; ///< io queue isr
     hashmap_t*                     command_lock_map; ///< command lock map
     uint64_t                       prp_frame_fa; ///< prp frame fa
     uint64_t                       prp_frame_va; ///< prp frame va

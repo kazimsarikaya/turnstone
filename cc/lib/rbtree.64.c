@@ -155,19 +155,19 @@ struct rbtree_t {
     rbtree_node_t* root;
 };
 
-void         rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
-void         rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
-void         rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn);
-void         rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn);
-void         rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v);
-boolean_t    rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res);
-uint64_t     rbtree_size(index_t* idx);
-int8_t       rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data);
-int8_t       rbtree_delete(index_t* idx, const void* key, void** removed_data);
-iterator_t*  rbtree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
-iterator_t*  rbtree_create_iterator(index_t* idx);
-boolean_t    rbtree_contains(index_t* idx, const void* key);
-linkedlist_t rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria);
+void          rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
+void          rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
+void          rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn);
+void          rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn);
+void          rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v);
+boolean_t     rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res);
+uint64_t      rbtree_size(index_t* idx);
+int8_t        rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data);
+int8_t        rbtree_delete(index_t* idx, const void* key, void** removed_data);
+iterator_t*   rbtree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
+iterator_t*   rbtree_create_iterator(index_t* idx);
+boolean_t     rbtree_contains(index_t* idx, const void* key);
+linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria);
 
 void rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
     rbtree_node_t* new_parent = rbn->right;
@@ -543,7 +543,7 @@ boolean_t rbtree_contains(index_t* idx, const void* key) {
     return res;
 }
 
-linkedlist_t rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
+linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
     if(!idx) {
         return NULL;
     }
@@ -551,13 +551,13 @@ linkedlist_t rbtree_inorder(index_t* idx, const void* key1, const void* key2, in
 
     rbtree_t* rbt = idx->metadata;
 
-    linkedlist_t stack = linkedlist_create_stack_with_heap(idx->heap);
+    linkedlist_t* stack = linkedlist_create_stack_with_heap(idx->heap);
 
     if(!stack) {
         return NULL;
     }
 
-    linkedlist_t results = linkedlist_create_list_with_heap(idx->heap);
+    linkedlist_t* results = linkedlist_create_list_with_heap(idx->heap);
 
     if(!results) {
         linkedlist_destroy(stack);
@@ -755,7 +755,7 @@ typedef struct rbtree_iterator_t {
     memory_heap_t* heap;
     uint64_t       size;
     size_t         current_index;
-    linkedlist_t   items;
+    linkedlist_t*  items;
 } rbtree_iterator_t;
 
 int8_t      rbtree_iterator_destroy(iterator_t * iterator);

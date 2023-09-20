@@ -339,7 +339,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
     return 0;
 }
 
-acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t old_tables) {
+acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t* old_tables) {
     if(xrsdp_desc->rsdp.revision == 0) {
         uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
 
@@ -405,12 +405,12 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
+linkedlist_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
     if(memory_memcompare(sdt_header->signature, "APIC", 4) != 0) {
         return NULL;
     }
 
-    linkedlist_t entries = linkedlist_create_list_with_heap(heap);
+    linkedlist_t* entries = linkedlist_create_list_with_heap(heap);
     acpi_table_madt_entry_t* e;
     uint8_t* data = (uint8_t*)sdt_header;
     uint8_t* data_end = data + sdt_header->length;
@@ -546,7 +546,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     uint32_t ssdt_cnt = 0;
 
-    linkedlist_t old_ssdts = linkedlist_create_list();
+    linkedlist_t* old_ssdts = linkedlist_create_list();
 
     while(ssdt) {
         if(acpi_aml_parser_parse_table(pctx, ssdt) == 0) {

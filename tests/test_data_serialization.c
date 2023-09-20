@@ -46,13 +46,13 @@ int8_t test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, 
         return -1;
     }
 
-    printf("name %s len %i\n", dser_data->name->value, dser_data->name->length);
+    printf("name %s len %lli\n", (char_t*)dser_data->name->value, dser_data->name->length);
 
     uint64_t ohash = xxhash64_hash((void*)&dser_data->value, dser_data->length);
 
     if(dser_data->type != dt  || ihash != ohash) {
         print_error("TESTS FAILED dt/hash");
-        printf("ds type %i val 0x%lx\n", dser_data->type, (uint64_t)dser_data->value);
+        printf("ds type %i val 0x%llx\n", dser_data->type, (uint64_t)dser_data->value);
 
         return -1;
     }
@@ -109,7 +109,7 @@ int8_t test_ser_deser_datalist(void) {
 
     if(res_tmp_data_lvl1->type != DATA_TYPE_DATA || res_tmp_data_lvl1->length != 1 || res_tmp_data_lvl1->value == NULL) {
         print_error("TESTS FAILED lvl1 dt/length/value mismatch");
-        printf("lvl1 %i %li\n", res_tmp_data_lvl1->type, res_tmp_data_lvl1->length);
+        printf("lvl1 %i %lli\n", res_tmp_data_lvl1->type, res_tmp_data_lvl1->length);
 
         return -1;
     }
@@ -118,7 +118,7 @@ int8_t test_ser_deser_datalist(void) {
 
     if(res_tmp_data_lvl2->type != DATA_TYPE_INT32 || res_tmp_data_lvl2->value != (void*)0x12345ULL) {
         print_error("TESTS FAILED lvl2 dt/value mismatch");
-        printf("lvl2 %i %li 0x%lx\n", res_tmp_data_lvl2->type, res_tmp_data_lvl2->length, res_tmp_data_lvl2->value);
+        printf("lvl2 %i %lli 0x%llx\n", res_tmp_data_lvl2->type, res_tmp_data_lvl2->length, (uint64_t)res_tmp_data_lvl2->value);
 
         return -1;
     }
@@ -227,11 +227,6 @@ uint32_t main(uint32_t argc, char_t** argv) {
     if(res == 0) {
         print_success("TESTS PASSED");
     }
-
-    memory_heap_stat_t stat;
-
-    memory_get_heap_stat(&stat);
-    printf("mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     return 0;
 }

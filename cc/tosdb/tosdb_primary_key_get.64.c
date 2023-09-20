@@ -19,8 +19,8 @@
 MODULE("turnstone.kernel.db");
 
 boolean_t tosdb_primary_key_memtable_get(const tosdb_table_t* tbl, uint64_t mt_id, const tosdb_memtable_index_t* idx, set_t* pks);
-boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, linkedlist_t st_list, set_t* pks, linkedlist_t old_pks);
-boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_block_sstable_list_item_t* sli, set_t* pks, linkedlist_t old_pks);
+boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, linkedlist_t* st_list, set_t* pks, linkedlist_t* old_pks);
+boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_block_sstable_list_item_t* sli, set_t* pks, linkedlist_t* old_pks);
 
 int8_t tosdb_record_primary_key_comparator(const void* item1, const void* item2) {
     tosdb_record_t* rec1 = (tosdb_record_t*)item1;
@@ -145,7 +145,7 @@ boolean_t tosdb_primary_key_memtable_get(const tosdb_table_t* tbl, uint64_t mt_i
     return !error;
 }
 
-boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_block_sstable_list_item_t* sli, set_t* pks, linkedlist_t old_pks) {
+boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_block_sstable_list_item_t* sli, set_t* pks, linkedlist_t* old_pks) {
 
     uint64_t idx_loc = 0;
     uint64_t idx_size = 0;
@@ -345,7 +345,7 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
     return !error;
 }
 
-boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, linkedlist_t st_list, set_t* pks, linkedlist_t old_pks) {
+boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, linkedlist_t* st_list, set_t* pks, linkedlist_t* old_pks) {
     boolean_t error = false;
 
     iterator_t* iter = linkedlist_iterator_create(st_list);
@@ -376,7 +376,7 @@ boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, linked
     return !error;
 }
 
-boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t old_pks) {
+boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t* old_pks) {
     if(!tbl || !pks) {
         return false;
     }
@@ -428,7 +428,7 @@ boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t*
 
     if(!error && tbl->sstable_levels) {
         for(uint64_t i = 1; i <= tbl->sstable_max_level; i++) {
-            linkedlist_t st_lvl_l = (linkedlist_t)hashmap_get(tbl->sstable_levels, (void*)i);
+            linkedlist_t* st_lvl_l = (linkedlist_t*)hashmap_get(tbl->sstable_levels, (void*)i);
 
             if(st_lvl_l) {
                 if(!tosdb_primary_key_sstable_get_on_list(tbl, st_lvl_l, pks, old_pks)) {

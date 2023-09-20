@@ -149,7 +149,7 @@ int8_t smp_init(void) {
 
     *trampoline_call_addr = (uint32_t)((uint64_t)smp_ap_boot);
 
-    linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+    linkedlist_t* apic_entries = acpi_get_apic_table_entries(madt);
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = 16 * ap_cpu_count;

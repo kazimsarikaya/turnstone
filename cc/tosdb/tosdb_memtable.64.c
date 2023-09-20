@@ -938,7 +938,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    linkedlist_t mts = ctx->table->memtables;
+    linkedlist_t* mts = ctx->table->memtables;
 
     if(!mts) {
         memory_free(item);
@@ -1028,7 +1028,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    linkedlist_t mts = ctx->table->memtables;
+    linkedlist_t* mts = ctx->table->memtables;
 
     if(linkedlist_size(mts) == 0) {
         memory_free(item);
@@ -1161,7 +1161,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     item->secondary_key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->data, item->secondary_key_length);
 
-    linkedlist_t mts = ctx->table->memtables;
+    linkedlist_t* mts = ctx->table->memtables;
 
     if(linkedlist_size(mts) == 0) {
         memory_free(item);

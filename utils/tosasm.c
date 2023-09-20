@@ -18,7 +18,7 @@ typedef struct asm_token_t {
     char_t*          token_text;
 } asm_token_t;
 
-linkedlist_t asm_parser_parse(buffer_t* buf);
+linkedlist_t* asm_parser_parse(buffer_t* buf);
 
 boolean_t asm_parser_emit_whitespace(buffer_t* buf);
 
@@ -32,7 +32,7 @@ boolean_t asm_parser_emit_whitespace(buffer_t* buf) {
     return true;
 }
 
-linkedlist_t asm_parser_parse(buffer_t* buf) {
+linkedlist_t* asm_parser_parse(buffer_t* buf) {
 
     while(buffer_remaining(buf) > 0 ) {
         asm_parser_emit_whitespace(buf);

@@ -154,7 +154,7 @@ typedef struct apic_lintv_t {
 
 int8_t apic_setup(acpi_xrsdp_descriptor_t* desc);
 
-int8_t apic_init_apic(linkedlist_t apic_entries);
+int8_t apic_init_apic(linkedlist_t* apic_entries);
 
 int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props);
 

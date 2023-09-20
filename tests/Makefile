@@ -5,7 +5,7 @@ HOSTOS=$(shell uname -s)
 
 CC = gcc
 CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
-	-O2 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
+	-O0 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
 	-fdata-sections -ffunction-sections \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \

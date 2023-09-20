@@ -27,8 +27,8 @@ typedef struct network_ipv4_fragment_t {
 } network_ipv4_fragment_t;
 
 typedef struct network_ipv4_fragment_item_t {
-    uint32_t     total_length;
-    linkedlist_t fragments;
+    uint32_t      total_length;
+    linkedlist_t* fragments;
 } network_ipv4_fragment_item_t;
 
 typedef union network_ipv4_fragment_key_t {

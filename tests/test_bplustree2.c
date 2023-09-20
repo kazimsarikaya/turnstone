@@ -45,7 +45,7 @@ int32_t main(void){
 
     size_t item_count = sizeof(test_data) / sizeof(size_t);
 
-    printf("item count: %lx\n", item_count);
+    printf("item count: %llx\n", item_count);
 
     for(size_t i = 0; i < item_count; i++) {
         item_t* item = memory_malloc(sizeof(item));
@@ -60,12 +60,12 @@ int32_t main(void){
         item->key = test_data[i];
         item->data = (i << 32) | test_data[i];
 
-        printf("try to insert item: %lx %lx\n", item->key, item->data);
+        printf("try to insert item: %llx %llx\n", item->key, item->data);
 
         int res = idx->insert(idx, (void*)test_data[i], item, NULL);
 
         if(res == -1) {
-            printf("failed item: %lx %lx\n", item->key, item->data);
+            printf("failed item: %llx %llx\n", item->key, item->data);
             print_error("insert failed");
 
             return -1;
@@ -74,7 +74,7 @@ int32_t main(void){
 
             return -1;
         } else {
-            printf("item inserted: %lx %lx\n", item->key, item->data);
+            printf("item inserted: %llx %llx\n", item->key, item->data);
         }
     }
 
@@ -91,13 +91,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
             size_t order = d->data >> 32;
             size_t value = d->data & 0xFFFFFFFF;
 
@@ -135,13 +135,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -162,13 +162,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -189,13 +189,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -216,13 +216,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -243,13 +243,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -270,13 +270,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -297,13 +297,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -324,13 +324,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }
@@ -351,13 +351,13 @@ int32_t main(void){
         item_t* d = (item_t*)iter->get_item(iter);
 
         if(k != NULL) {
-            printf("k: %lx -> ", k);
+            printf("k: %llx -> ", k);
         } else {
             printf("wtf key ->");
         }
 
         if(d != NULL) {
-            printf("d: %lx , ", d->data);
+            printf("d: %llx , ", d->data);
         } else {
             printf("wtf data , ");
         }

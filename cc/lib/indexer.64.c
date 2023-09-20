@@ -21,7 +21,7 @@ typedef struct indexer_idx_kc_internal_t {
 
 typedef struct indexer_internal_t {
     memory_heap_t* heap;
-    linkedlist_t   indexes;
+    linkedlist_t*  indexes;
 } indexer_internal_t;
 
 indexer_t indexer_create_with_heap(memory_heap_t* heap){

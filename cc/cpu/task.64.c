@@ -26,8 +26,8 @@ uint64_t task_id = 0;
 
 task_t* current_task = NULL;
 
-linkedlist_t task_queue = NULL;
-linkedlist_t task_cleaner_queue = NULL;
+linkedlist_t* task_queue = NULL;
+linkedlist_t* task_cleaner_queue = NULL;
 map_t task_map = NULL;
 uint32_t task_mxcsr_mask = 0;
 
@@ -342,7 +342,7 @@ boolean_t task_idle_check_need_yield(void) {
         if(t) {
             if(t->message_waiting && t->message_queues) {
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(t->message_queues); q_idx++) {
-                    linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(t->message_queues, q_idx);
+                    linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(t->message_queues, q_idx);
 
                     if(linkedlist_size(q)) {
                         t->message_waiting = false;
@@ -390,7 +390,7 @@ task_t* task_find_next_task(void) {
             } else if(tmp_task->message_queues) {
 
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
-                    const linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
+                    const linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
 
                     if(q) {
                         if(linkedlist_size(q)) {
@@ -489,7 +489,7 @@ void task_end_task(void) {
 }
 
 
-void task_add_message_queue(linkedlist_t queue){
+void task_add_message_queue(linkedlist_t* queue){
     cpu_cli();
     if(current_task->message_queues == NULL) {
         current_task->message_queues = linkedlist_create_list();

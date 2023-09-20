@@ -864,7 +864,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     s_sym_rec->set_string(s_sym_rec, "name", entry_point);
 
-    linkedlist_t found_symbols = s_sym_rec->search_record(s_sym_rec);
+    linkedlist_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
 
     if(!found_symbols) {
         PRINTLOG(EFI, LOG_ERROR, "cannot search for entrypoint symbol");

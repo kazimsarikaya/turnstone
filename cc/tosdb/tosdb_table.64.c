@@ -74,7 +74,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
 
 
-            linkedlist_t st_l = (linkedlist_t)hashmap_get(tbl->sstable_levels, (void*)level);
+            linkedlist_t* st_l = (linkedlist_t*)hashmap_get(tbl->sstable_levels, (void*)level);
 
             if(!st_l) {
                 st_l = linkedlist_create_queue();

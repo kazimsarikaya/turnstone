@@ -56,7 +56,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     set_destroy_with_callback(s, str_free);
 
     for(int64_t i = 0; i < 17; i++) {
-        printf("count of %i %lli\n", i, counts[i]);
+        printf("count of %lli %lli\n", i, counts[i]);
     }
 
     print_success("TESTS PASSED");

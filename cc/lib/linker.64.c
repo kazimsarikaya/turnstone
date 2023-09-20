@@ -1139,7 +1139,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
         return NULL;
     }
 
-    linkedlist_t relocations_list = linkedlist_create_sortedlist(linker_efi_image_relocation_entry_cmp);
+    linkedlist_t* relocations_list = linkedlist_create_sortedlist(linker_efi_image_relocation_entry_cmp);
 
     if(!relocations_list) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create list");
@@ -1278,7 +1278,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
         return NULL;
     }
 
-    linkedlist_t sections_list = linkedlist_create_sortedlist(linker_efi_image_section_header_cmp);
+    linkedlist_t* sections_list = linkedlist_create_sortedlist(linker_efi_image_section_header_cmp);
 
     if(!sections_list) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create list");

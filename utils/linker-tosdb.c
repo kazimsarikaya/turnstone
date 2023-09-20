@@ -489,7 +489,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     s_sym_rec->set_string(s_sym_rec, "name", entrypoint_symbol);
 
-    linkedlist_t found_symbols = s_sym_rec->search_record(s_sym_rec);
+    linkedlist_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
 
     if(!found_symbols) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot search for entrypoint symbol");

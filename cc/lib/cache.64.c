@@ -7,28 +7,120 @@
  */
 
 #include <cache.h>
-#include <linkedlist.h>
 #include <cpu/sync.h>
 #include <memory.h>
+#include <logging.h>
 
 MODULE("turnstone.lib");
 
+typedef struct cache_item_t cache_item_t;
+
+struct cache_item_t {
+    const void*   key;
+    const void*   item;
+    uint64_t      size;
+    cache_item_t* previous;
+    cache_item_t* next;
+};
+
 struct cache_t {
     cache_config_t config;
-    linkedlist_t   mru_list;
+    cache_item_t*  mru_list_head;
+    cache_item_t*  mru_list_tail;
     hashmap_t*     mru_map;
     uint64_t       mru_size;
-    linkedlist_t   lru_list;
+    cache_item_t*  lru_list_head;
+    cache_item_t*  lru_list_tail;
     hashmap_t*     lru_map;
     uint64_t       lru_size;
     lock_t         lock;
 };
 
-typedef struct cache_item_t {
-    const void* key;
-    const void* item;
-    uint64_t    size;
-} cache_item_t;
+int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci);
+int8_t cache_delete_item(cache_t* cache, boolean_t mru, cache_item_t* ci);
+int8_t cache_move_to_head(cache_t* cache, boolean_t mru, cache_item_t* ci);
+
+int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
+    if(!cache || !ci) {
+        return -1;
+    }
+
+    if(mru) {
+        if(cache->mru_list_head) {
+            cache->mru_list_head->previous = ci;
+        }
+
+        ci->next = cache->mru_list_head;
+        ci->previous = NULL;
+        cache->mru_list_head = ci;
+
+        if(!cache->mru_list_tail) {
+            cache->mru_list_tail = ci;
+        }
+    } else {
+        if(cache->lru_list_head) {
+            cache->lru_list_head->previous = ci;
+        }
+
+        ci->next = cache->lru_list_head;
+        ci->previous = NULL;
+        cache->lru_list_head = ci;
+
+        if(!cache->lru_list_tail) {
+            cache->lru_list_tail = ci;
+        }
+    }
+
+    return 0;
+}
+
+int8_t cache_delete_item(cache_t* cache, boolean_t mru, cache_item_t* ci) {
+    if(!cache || !ci) {
+        return -1;
+    }
+
+    if(mru) {
+        if(ci->previous) {
+            ci->previous->next = ci->next;
+        } else {
+            cache->mru_list_head = ci->next;
+        }
+
+        if(ci->next) {
+            ci->next->previous = ci->previous;
+        } else {
+            cache->mru_list_tail = ci->previous;
+        }
+    } else {
+        if(ci->previous) {
+            ci->previous->next = ci->next;
+        } else {
+            cache->lru_list_head = ci->next;
+        }
+
+        if(ci->next) {
+            ci->next->previous = ci->previous;
+        } else {
+            cache->lru_list_tail = ci->previous;
+        }
+    }
+
+    ci->previous = NULL;
+    ci->next = NULL;
+
+    return 0;
+}
+
+int8_t cache_move_to_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
+    if(!cache || !ci) {
+        return -1;
+    }
+
+    cache_delete_item(cache, mru, ci);
+    cache_insert_head(cache, mru, ci);
+
+    return 0;
+}
 
 cache_t* cache_new (cache_config_t * config) {
     if(!config) {
@@ -43,18 +135,12 @@ cache_t* cache_new (cache_config_t * config) {
 
     memory_memcopy(config, cache, sizeof(cache_config_t));
 
-    cache->mru_list = linkedlist_create_list();
     cache->mru_map = hashmap_new_with_hkg_with_hkc(128, cache->config.key_generator, cache->config.key_comparator);
-
-    cache->lru_list = linkedlist_create_list();
     cache->lru_map = hashmap_new_with_hkg_with_hkc(128, cache->config.key_generator, cache->config.key_comparator);
 
-
-    if(!cache->mru_list || !cache->mru_map || !cache->lru_list || !cache->lru_map) {
-        linkedlist_destroy(cache->mru_list);
+    if(!cache->mru_map || !cache->lru_map) {
         hashmap_destroy(cache->mru_map);
-        linkedlist_destroy(cache->mru_list);
-        hashmap_destroy(cache->mru_map);
+        hashmap_destroy(cache->lru_map);
         memory_free(cache);
 
         return NULL;
@@ -70,36 +156,34 @@ boolean_t cache_destroy (cache_t * cache) {
         return true;
     }
 
+    cache_item_t* ci;
 
-    iterator_t* iter = linkedlist_iterator_create(cache->mru_list);
+    ci = cache->mru_list_head;
 
-    while(iter->end_of_iterator(iter) != 0) {
-        const cache_item_t* ci = iter->get_item(iter);
+    while(ci) {
+        cache_item_t* next = ci->next;
 
         cache->config.item_key_destroyer(ci->key, ci->item);
 
-        iter = iter->next(iter);
+        memory_free(ci);
+
+        ci = next;
     }
 
-    iter->destroy(iter);
-
-    linkedlist_destroy_with_data(cache->mru_list);
     hashmap_destroy(cache->mru_map);
 
-    iter = linkedlist_iterator_create(cache->lru_list);
+    ci = cache->lru_list_head;
 
-    while(iter->end_of_iterator(iter) != 0) {
-        const cache_item_t* ci = iter->get_item(iter);
+    while(ci) {
+        cache_item_t* next = ci->next;
 
         cache->config.item_key_destroyer(ci->key, ci->item);
 
+        memory_free(ci);
 
-        iter = iter->next(iter);
+        ci = next;
     }
 
-    iter->destroy(iter);
-
-    linkedlist_destroy_with_data(cache->lru_list);
     hashmap_destroy(cache->lru_map);
 
     lock_destroy(cache->lock);
@@ -126,25 +210,27 @@ boolean_t cache_put(cache_t * cache, const void* key, const void* item, uint64_t
     ci->key = key;
     ci->size = size;
 
-    linkedlist_item_t* li = linkedlist_insert_at_head_and_get_linkedlist_item(cache->mru_list, ci);
+    cache_insert_head(cache, true, ci);
 
-    hashmap_put(cache->mru_map, key, li);
+    hashmap_put(cache->mru_map, key, ci);
 
     cache->mru_size += size;
 
     if(cache->mru_size > cache->config.soft_limit) {
-        const cache_item_t* old_ci = linkedlist_delete_at_tail(cache->mru_list);
+        cache_item_t* old_ci = cache->mru_list_tail;
+        cache_delete_item(cache, true, old_ci);
         hashmap_delete(cache->mru_map, old_ci->key);
         cache->mru_size -= old_ci->size;
 
-        li = linkedlist_insert_at_head_and_get_linkedlist_item(cache->lru_list, old_ci);
+        cache_insert_head(cache, false, old_ci);
 
-        hashmap_put(cache->lru_map, old_ci->key, li);
+        hashmap_put(cache->lru_map, old_ci->key, old_ci);
 
         cache->lru_size += size;
 
         if(cache->mru_size + cache->lru_size > cache->config.hard_limit) {
-            old_ci = linkedlist_delete_at_tail(cache->lru_list);
+            old_ci = cache->lru_list_tail;
+            cache_delete_item(cache, false, old_ci);
             hashmap_delete(cache->lru_map, old_ci->key);
             cache->lru_size -= old_ci->size;
 
@@ -163,22 +249,18 @@ const void* cache_get(cache_t* cache, const void* key) {
         return NULL;
     }
 
-    linkedlist_item_t li = (linkedlist_item_t)hashmap_get(cache->mru_map, key);
+    cache_item_t* ci = (cache_item_t*)hashmap_get(cache->mru_map, key);
 
-    if(li) {
-        linkedlist_move_item_to_head(cache->mru_list, li);
-
-        const cache_item_t* ci = linkedlist_get_data_from_listitem(li);
+    if(ci) {
+        cache_move_to_head(cache, true, ci);
 
         return ci->item;
     }
 
-    li = (linkedlist_item_t)hashmap_get(cache->lru_map, key);
+    ci = (cache_item_t*)hashmap_get(cache->lru_map, key);
 
-    if(li) {
-        const cache_item_t* ci = linkedlist_get_data_from_listitem(li);
-
-        linkedlist_delete_linkedlist_item(cache->lru_list, li);
+    if(ci) {
+        cache_delete_item(cache, false, ci);
         cache->lru_size -= ci->size;
 
         cache_put(cache, ci->key, ci->item, ci->size);

@@ -56,7 +56,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     size_t item_count = sizeof(test_data) / sizeof(size_t);
 
-    printf("item count: %lx\n", item_count);
+    printf("item count: %llx\n", item_count);
 
     for(size_t i = 0; i < item_count; i++) {
         item_t* item = memory_malloc(sizeof(item));
@@ -76,7 +76,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         int res = idx->insert(idx, (void*)test_key[i], item, (void**)&removed_item);
 
         if(res == -1) {
-            printf("failed item: %lx %lx\n", item->key, item->data);
+            printf("failed item: %llx %llx\n", item->key, item->data);
             print_error("insert failed");
 
             return -1;
@@ -86,7 +86,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
             return -1;
         } else {
             if(removed_item) {
-                printf("---> old item removed: %lx %lx\n", removed_item->key, removed_item->data);
+                printf("---> old item removed: %llx %llx\n", removed_item->key, removed_item->data);
                 memory_free(removed_item);
             }
         }

@@ -31,7 +31,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    linkedlist_t list = linkedlist_create_sortedlist(integer_cmp);
+    linkedlist_t* list = linkedlist_create_sortedlist(integer_cmp);
 
     int64_t sign = 1;
 

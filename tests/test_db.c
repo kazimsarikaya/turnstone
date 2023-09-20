@@ -285,7 +285,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    buffer_t db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
+    buffer_t* db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
 
     if(!db_buffer) {
         fclose(in);
@@ -610,7 +610,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    buffer_t db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
+    buffer_t* db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
 
     if(!db_buffer) {
         fclose(in);
@@ -759,7 +759,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
     uint64_t csv_cap = ftell(in);
     fseek(in, 0, SEEK_SET);
 
-    buffer_t csv_buffer = buffer_new_with_capacity(NULL, csv_cap);
+    buffer_t* csv_buffer = buffer_new_with_capacity(NULL, csv_cap);
 
     if(!csv_buffer) {
         fclose(in);
@@ -903,7 +903,7 @@ token_error:
         goto rec_destroy;
     }
 
-    linkedlist_t s_recs = s_rec->search_record(s_rec);
+    linkedlist_t* s_recs = s_rec->search_record(s_rec);
 
     iterator_t* iter = linkedlist_iterator_create(s_recs);
 
@@ -1050,7 +1050,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    buffer_t db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
+    buffer_t* db_buffer = buffer_new_with_capacity(NULL, TOSDB_CAP);
 
     if(!db_buffer) {
         fclose(in);
@@ -1160,7 +1160,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto rec_destroy;
     }
 
-    linkedlist_t s_recs = s_rec->search_record(s_rec);
+    linkedlist_t* s_recs = s_rec->search_record(s_rec);
 
     iterator_t* iter = linkedlist_iterator_create(s_recs);
 

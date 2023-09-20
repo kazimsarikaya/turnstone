@@ -338,6 +338,8 @@ boolean_t hashmap_delete(hashmap_t* hm, const void* key) {
         return false;
     }
 
+    lock_acquire(hm->lock);
+
     const uint64_t h_key = hm->hkg(key) % hm->segment_capacity;
 
     hashmap_segment_t* seg = hm->segments;
@@ -362,7 +364,7 @@ boolean_t hashmap_delete(hashmap_t* hm, const void* key) {
                 if(hm->hkc(key, seg->items[t_h_key].key) == 0) {
                     seg->items[t_h_key].key = NULL;
                     seg->items[t_h_key].value = NULL;
-                    seg->items[h_key].exists = false;
+                    seg->items[t_h_key].exists = false;
                     seg->size--;
                     hm->total_size--;
 

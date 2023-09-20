@@ -23,7 +23,7 @@
 
 MODULE("turnstone.kernel.hw.network.virtnet");
 
-linkedlist_t virtio_net_devs = NULL;
+linkedlist_t* virtio_net_devs = NULL;
 
 int8_t   network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t   network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum);

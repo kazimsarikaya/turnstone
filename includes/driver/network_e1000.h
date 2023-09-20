@@ -86,20 +86,20 @@
 #define NETWORK_E1000_TCTL_PSP      (1 << 3)
 
 typedef struct {
-    volatile uint32_t ctrl;      ///< NETWORK_E1000_REG_CTRL
+    volatile uint32_t ctrl; ///< NETWORK_E1000_REG_CTRL
 
     uint8_t pad0[(NETWORK_E1000_REG_STATUS - NETWORK_E1000_REG_CTRL - sizeof(uint32_t))];
 
-    volatile uint32_t status;    ///< NETWORK_E1000_REG_STATUS
+    volatile uint32_t status; ///< NETWORK_E1000_REG_STATUS
 
     uint8_t pad1[(NETWORK_E1000_REG_EECD - NETWORK_E1000_REG_STATUS - sizeof(uint32_t))];
 
-    volatile uint32_t eecd;      ///< NETWORK_E1000_REG_EECD
-    volatile uint32_t eerd;      ///< NETWORK_E1000_REG_EERD
+    volatile uint32_t eecd; ///< NETWORK_E1000_REG_EECD
+    volatile uint32_t eerd; ///< NETWORK_E1000_REG_EERD
 
     uint8_t pad2[(NETWORK_E1000_REG_MDIC - NETWORK_E1000_REG_EERD - sizeof(uint32_t))];
 
-    volatile uint32_t mdic;      ///< NETWORK_E1000_REG_MDIC
+    volatile uint32_t mdic; ///< NETWORK_E1000_REG_MDIC
 
     uint8_t pad3[(E100_REG_ISR_STATUS - NETWORK_E1000_REG_MDIC - sizeof(uint32_t))];
 
@@ -107,43 +107,43 @@ typedef struct {
 
     uint8_t pad4[(NETWORK_E1000_REG_IMS - E100_REG_ISR_STATUS - sizeof(uint32_t))];
 
-    volatile uint32_t ims;       ///< NETWORK_E1000_REG_IMS
+    volatile uint32_t ims; ///< NETWORK_E1000_REG_IMS
 
     uint8_t pad5[(NETWORK_E1000_REG_RCTL - NETWORK_E1000_REG_IMS - sizeof(uint32_t))];
 
-    volatile uint32_t rctl;     ///< NETWORK_E1000_REG_RCTL
+    volatile uint32_t rctl; ///< NETWORK_E1000_REG_RCTL
 
     uint8_t pad6[(NETWORK_E1000_REG_TCTL - NETWORK_E1000_REG_RCTL - sizeof(uint32_t))];
 
-    volatile uint32_t tctl;     ///< NETWORK_E1000_REG_TCTL
+    volatile uint32_t tctl; ///< NETWORK_E1000_REG_TCTL
 
     uint8_t pad7[(NETWORK_E1000_REG_RDBAL - NETWORK_E1000_REG_TCTL - sizeof(uint32_t))];
 
-    volatile uint32_t rdbal;   ///< NETWORK_E1000_REG_RDBAL
-    volatile uint32_t rdbah;   ///< NETWORK_E1000_REG_RDBAH
-    volatile uint32_t rdlen;   ///< NETWORK_E1000_REG_RDLEN
+    volatile uint32_t rdbal; ///< NETWORK_E1000_REG_RDBAL
+    volatile uint32_t rdbah; ///< NETWORK_E1000_REG_RDBAH
+    volatile uint32_t rdlen; ///< NETWORK_E1000_REG_RDLEN
 
     uint8_t pad8[(NETWORK_E1000_REG_RDH - NETWORK_E1000_REG_RDLEN - sizeof(uint32_t))];
 
-    volatile uint32_t rdh;      ///< NETWORK_E1000_REG_RDH
+    volatile uint32_t rdh; ///< NETWORK_E1000_REG_RDH
 
     uint8_t pad9[(NETWORK_E1000_REG_RDT - NETWORK_E1000_REG_RDH - sizeof(uint32_t))];
 
-    volatile uint32_t rdt;      ///< NETWORK_E1000_REG_RDT
+    volatile uint32_t rdt; ///< NETWORK_E1000_REG_RDT
 
     uint8_t pad10[(NETWORK_E1000_REG_TDBAL - NETWORK_E1000_REG_RDT - sizeof(uint32_t))];
 
-    volatile uint32_t tdbal;  ///< NETWORK_E1000_REG_TDBAL
-    volatile uint32_t tdbah;  ///< NETWORK_E1000_REG_TDBAH
-    volatile uint32_t tdlen;   ///< NETWORK_E1000_REG_TDLEN
+    volatile uint32_t tdbal; ///< NETWORK_E1000_REG_TDBAL
+    volatile uint32_t tdbah; ///< NETWORK_E1000_REG_TDBAH
+    volatile uint32_t tdlen; ///< NETWORK_E1000_REG_TDLEN
 
     uint8_t pad11[(NETWORK_E1000_REG_TDH - NETWORK_E1000_REG_TDLEN - sizeof(uint32_t))];
 
-    volatile uint32_t tdh;     ///< NETWORK_E1000_REG_TDH
+    volatile uint32_t tdh; ///< NETWORK_E1000_REG_TDH
 
     uint8_t pad12[(NETWORK_E1000_REG_TDT - NETWORK_E1000_REG_TDH - sizeof(uint32_t))];
 
-    volatile uint32_t tdt;     ///< NETWORK_E1000_REG_TDT
+    volatile uint32_t tdt; ///< NETWORK_E1000_REG_TDT
 
     uint8_t pad13[(NETWORK_E1000_REG_MTA - NETWORK_E1000_REG_TDT - sizeof(uint32_t))];
 
@@ -151,8 +151,8 @@ typedef struct {
 
     uint8_t pad14[(NETWORK_E1000_REG_RAL - NETWORK_E1000_REG_MTA - sizeof(uint32_t) * 128)];
 
-    volatile uint32_t ral;     ///< NETWORK_E1000_REG_RAL
-    volatile uint32_t rah;     ///< NETWORK_E1000_REG_RAH
+    volatile uint32_t ral; ///< NETWORK_E1000_REG_RAL
+    volatile uint32_t rah; ///< NETWORK_E1000_REG_RAH
 }__attribute__((packed)) network_e1000_mmio_t;
 
 typedef struct network_e1000_rx_desc_s {
@@ -179,7 +179,7 @@ typedef struct network_e1000_tx_desc_s {
 typedef struct {
     const pci_dev_t*      pci_netdev;
     network_mac_address_t mac;
-    linkedlist_t          transmit_queue;
+    linkedlist_t*         transmit_queue;
     uint8_t               irq_base;
 
     uint64_t rx_count;

@@ -11,12 +11,12 @@ int main(void){
     memory_heap_stat_t stat;
 
     memory_get_heap_stat(&stat);
-    printf("before malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     char* data1 = memory_malloc(sizeof(char) * 31);
 
     memory_get_heap_stat(&stat);
-    printf("after malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     if(data1 == NULL) {
         print_error("Cannot malloc");
@@ -29,12 +29,12 @@ int main(void){
 
 
     memory_get_heap_stat(&stat);
-    printf("before malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     char* data2 = memory_malloc(sizeof(char) * 117);
 
     memory_get_heap_stat(&stat);
-    printf("after malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     if(data2 == NULL) {
         print_error("Cannot malloc");
@@ -47,12 +47,12 @@ int main(void){
 
 
     memory_get_heap_stat(&stat);
-    printf("before malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     char* data3 = memory_malloc(sizeof(char) * 87);
 
     memory_get_heap_stat(&stat);
-    printf("after malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     if(data3 == NULL) {
         print_error("Cannot malloc");
@@ -64,21 +64,21 @@ int main(void){
     print_success("data3 ok");
 
     memory_get_heap_stat(&stat);
-    printf("before free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     memory_free(data2);
 
     memory_get_heap_stat(&stat);
-    printf("after free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
 
     memory_get_heap_stat(&stat);
-    printf("before malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     char* data4 = memory_malloc(sizeof(char) * 29);
 
     memory_get_heap_stat(&stat);
-    printf("after malloc mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after malloc mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     if(data4 == NULL) {
         print_error("Cannot malloc");
@@ -91,35 +91,35 @@ int main(void){
 
 
     memory_get_heap_stat(&stat);
-    printf("before free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     memory_free(data1);
 
     memory_get_heap_stat(&stat);
-    printf("after free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
 
     memory_get_heap_stat(&stat);
-    printf("before free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     memory_free(data3);
 
     memory_get_heap_stat(&stat);
-    printf("after free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
 
     memory_get_heap_stat(&stat);
-    printf("before free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("before free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     memory_free(data4);
 
     memory_get_heap_stat(&stat);
-    printf("after free mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("after free mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
 
 
     memory_get_heap_stat(&stat);
-    printf("mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     print_success("OK");
 
@@ -157,7 +157,7 @@ int main(void){
     memory_free(items);
 
     memory_get_heap_stat(&stat);
-    printf("mc 0x%lx fc 0x%lx ts 0x%lx fs 0x%lx 0x%lx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
+    printf("mc 0x%llx fc 0x%llx ts 0x%llx fs 0x%llx 0x%llx\n", stat.malloc_count, stat.free_count, stat.total_size, stat.free_size, stat.total_size - stat.free_size);
 
     return 0;
 }

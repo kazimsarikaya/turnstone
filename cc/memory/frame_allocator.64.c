@@ -22,8 +22,8 @@ frame_allocator_t* KERNEL_FRAME_ALLOCATOR = NULL;
 
 typedef struct frame_allocator_context_t {
     memory_heap_t* heap;
-    linkedlist_t   free_frames_sorted_by_size;
-    linkedlist_t   acpi_frames;
+    linkedlist_t*  free_frames_sorted_by_size;
+    linkedlist_t*  acpi_frames;
     index_t*       free_frames_by_address;
     index_t*       allocated_frames_by_address;
     index_t*       reserved_frames_by_address;
@@ -695,7 +695,7 @@ int8_t fa_release_acpi_reclaim_memory(frame_allocator_t* self) {
     lock_acquire(ctx->lock);
 
     iterator_t* iter;
-    linkedlist_t frms;
+    linkedlist_t* frms;
 
 
     frms = linkedlist_create_sortedlist_with_heap(ctx->heap, frame_allocator_cmp_by_size);
@@ -758,7 +758,7 @@ int8_t fa_cleanup(frame_allocator_t* self) {
     lock_acquire(ctx->lock);
 
     iterator_t* iter;
-    linkedlist_t frms;
+    linkedlist_t* frms;
 
 
     frms = linkedlist_create_sortedlist_with_heap(ctx->heap, frame_allocator_cmp_by_size);

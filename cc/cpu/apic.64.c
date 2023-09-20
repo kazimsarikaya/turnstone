@@ -29,7 +29,7 @@ uint32_t lapic_initial_timer_count = 0;
 uint64_t apic_ap_count = 0;
 boolean_t apic_x2apic = false;
 
-linkedlist_t irq_remappings = NULL;
+linkedlist_t* irq_remappings = NULL;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -108,7 +108,7 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
 
     PRINTLOG(APIC, LOG_DEBUG, "madt is found");
 
-    linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+    linkedlist_t* apic_entries = acpi_get_apic_table_entries(madt);
 
     if(apic_init_apic(apic_entries) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "cannot enable apic");
@@ -121,7 +121,7 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
     return 0;
 }
 
-int8_t apic_init_apic(linkedlist_t apic_entries){
+int8_t apic_init_apic(linkedlist_t* apic_entries){
     cpu_cpuid_regs_t query = {0x1, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 
@@ -606,7 +606,7 @@ uint64_t apic_get_ap_count(void) {
 
     acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
 
-    linkedlist_t apic_entries = acpi_get_apic_table_entries(madt);
+    linkedlist_t* apic_entries = acpi_get_apic_table_entries(madt);
 
     iterator_t* iter = linkedlist_iterator_create(apic_entries);
 

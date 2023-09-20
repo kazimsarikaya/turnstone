@@ -12,7 +12,7 @@
 
 typedef struct network_info_t {
     network_mac_address_t  mac;
-    linkedlist_t           return_queue;
+    linkedlist_t*          return_queue;
     network_ipv4_address_t ipv4_address;
     network_ipv4_address_t ipv4_subnetmask;
     network_ipv4_address_t ipv4_broadcast;

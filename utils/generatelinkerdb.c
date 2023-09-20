@@ -1107,7 +1107,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     s_recs_need->set_int64(s_recs_need, "symbol_section_id", 0);
 
-    linkedlist_t res_recs = s_recs_need->search_record(s_recs_need);
+    linkedlist_t* res_recs = s_recs_need->search_record(s_recs_need);
 
     if(!res_recs) {
         s_recs_need->destroy(s_recs_need);
@@ -1122,7 +1122,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     if(!iter) {
         s_recs_need->destroy(s_recs_need);
-        linkedlist_destroy_with_data(s_recs_need);
+        linkedlist_destroy_with_data(res_recs);
         print_error("cannot create iterator");
 
         return false;
@@ -1170,7 +1170,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         s_sym_rec->set_string(s_sym_rec, "name", sym_name);
 
-        linkedlist_t s_sym_recs = s_sym_rec->search_record(s_sym_rec);
+        linkedlist_t* s_sym_recs = s_sym_rec->search_record(s_sym_rec);
 
         if(!s_sym_recs) {
             error = true;
