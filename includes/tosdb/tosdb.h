@@ -31,7 +31,7 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity);
  * @param[in] buffer memory backend buffer
  * @return memory backend
  */
-tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer);
+tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t* buffer);
 
 /**
  * @brief get memory backend contents
@@ -507,7 +507,7 @@ typedef boolean_t (*tosdb_record_get_f)(tosdb_record_t* record);
  * @param[in] record secondary key of record for retrive
  * @return the record list
  */
-typedef linkedlist_t (*tosdb_record_search_f)(tosdb_record_t* record);
+typedef linkedlist_t * (*tosdb_record_search_f)(tosdb_record_t* record);
 
 /**
  * @brief checks if record is deleted

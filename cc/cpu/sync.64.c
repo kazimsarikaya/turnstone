@@ -6,7 +6,7 @@
 #include <cpu/sync.h>
 #include <cpu/task.h>
 #include <apic.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.cpu.sync");
 

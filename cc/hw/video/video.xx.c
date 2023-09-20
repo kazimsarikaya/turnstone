@@ -19,6 +19,7 @@
 #include <pci.h>
 #include <driver/video_virtio.h>
 #include <driver/video_vmwaresvga.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.video");
 
@@ -34,15 +35,16 @@ extern video_psf2_font_t font_data_end;
  * @brief scrolls video up for one line
  */
 void    video_graphics_scroll(void);
-wchar_t video_get_wc(char_t* string, int64_t * idx);
-void    video_text_print(char_t* string);
-void    video_graphics_print(char_t* string);
-void    video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+wchar_t video_get_wc(const char_t* string, int64_t * idx);
+void    video_text_print(const char_t* string);
+void    video_graphics_print(const char_t* string);
+void    video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
 uint32_t VIDEO_PIXELS_PER_SCANLINE = 0;
 video_display_flush_f VIDEO_DISPLAY_FLUSH = NULL;
+video_move_cursor_f VIDEO_MOVE_CURSOR = NULL;
 
 uint8_t* FONT_ADDRESS = NULL;
 int32_t FONT_WIDTH = 0;
@@ -62,14 +64,13 @@ lock_t video_lock = NULL;
 
 wchar_t* video_font_unicode_table = NULL;
 
-#define VIDEO_PRINTF_BUFFER_SIZE 2048
-
 void video_set_color(uint32_t foreground, uint32_t background) {
     VIDEO_GRAPHICS_FOREGROUND = foreground;
     VIDEO_GRAPHICS_BACKGROUND = background;
 }
 
-void  video_display_flush_dummy(uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+void video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+    UNUSED(scanout);
     UNUSED(offset);
     UNUSED(x);
     UNUSED(y);
@@ -92,10 +93,19 @@ void video_refresh_frame_buffer_address(void) {
 }
 
 void video_init(void) {
+    video_text_print("video init\n");
+    GRAPHICS_MODE = false;
+
     VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
     VIDEO_PIXELS_PER_SCANLINE = SYSTEM_INFO->frame_buffer->pixels_per_scanline;
     VIDEO_GRAPHICS_WIDTH = SYSTEM_INFO->frame_buffer->width;
     VIDEO_GRAPHICS_HEIGHT = SYSTEM_INFO->frame_buffer->height;
+
+    char_t buffer[100] = {0};
+    utoh_with_buffer(buffer, (uint64_t)VIDEO_BASE_ADDRESS);
+    video_text_print("frame buffer address: 0x");
+    video_text_print(buffer);
+    video_text_print("\n");
 
     VIDEO_DISPLAY_FLUSH = video_display_flush_dummy;
 
@@ -154,7 +164,7 @@ void video_init(void) {
             FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
 
 
-            GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
+            GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL;
         } else {
 
             video_psf1_font_t* font1 = (video_psf1_font_t*)&font_data_start;
@@ -210,7 +220,7 @@ void video_init(void) {
 
                 FONT_MASK = 1 << (FONT_BYTES_PERLINE * 8 - 1);
 
-                GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL?1:0;
+                GRAPHICS_MODE = VIDEO_BASE_ADDRESS != NULL;
             } else {
                 PRINTLOG(VIDEO, LOG_ERROR, "font magic err");
             }
@@ -218,6 +228,10 @@ void video_init(void) {
         }
     } else {
         PRINTLOG(VIDEO, LOG_ERROR, "font err");
+    }
+
+    if(!GRAPHICS_MODE) {
+        video_text_print("graphics mode not active");
     }
 }
 
@@ -260,7 +274,7 @@ void video_graphics_scroll(void){
     }
 }
 
-wchar_t video_get_wc(char_t* string, int64_t * idx) {
+wchar_t video_get_wc(const char_t* string, int64_t * idx) {
     if(string == NULL || idx == NULL) {
         return NULL;
     }
@@ -285,7 +299,7 @@ wchar_t video_get_wc(char_t* string, int64_t * idx) {
     return wc;
 }
 
-void video_graphics_print(char_t* string) {
+void video_graphics_print(const char_t* string) {
     int64_t i = 0;
     uint64_t flush_offset = 0;
     uint32_t min_x = 0;
@@ -391,7 +405,7 @@ void video_graphics_print(char_t* string) {
     }
 
     if(full_flush) {
-        VIDEO_DISPLAY_FLUSH(0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+        VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
     } else {
         flush_offset = (old_cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (old_cursor_graphics_x * FONT_WIDTH);
 
@@ -406,7 +420,7 @@ void video_graphics_print(char_t* string) {
             min_y = old_cursor_graphics_y * FONT_HEIGHT;
             max_y = min_y + FONT_HEIGHT;
 
-            VIDEO_DISPLAY_FLUSH(flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
+            VIDEO_DISPLAY_FLUSH(0, flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
 
             min_x = 0;
             max_x = max_cursor_graphics_x * FONT_WIDTH;
@@ -416,7 +430,7 @@ void video_graphics_print(char_t* string) {
             flush_offset = min_y * VIDEO_PIXELS_PER_SCANLINE;
         }
 
-        VIDEO_DISPLAY_FLUSH(flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
+        VIDEO_DISPLAY_FLUSH(0, flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
     }
 }
 
@@ -429,11 +443,11 @@ void video_clear_screen(void){
         cursor_graphics_x = 0;
         cursor_graphics_y = 0;
 
-        VIDEO_DISPLAY_FLUSH(0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+        VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
     }
 }
 
-void video_print(char_t* string) {
+void video_print(const char_t* string) {
     lock_acquire(video_lock);
 
     video_text_print(string);
@@ -445,7 +459,7 @@ void video_print(char_t* string) {
     lock_release(video_lock);
 }
 
-void video_text_print(char_t* string) {
+void video_text_print(const char_t* string) {
     if(string == NULL) {
         return;
     }
@@ -456,258 +470,7 @@ void video_text_print(char_t* string) {
     }
 }
 
-size_t video_printf(const char_t* fmt, ...){
-
-    va_list args;
-    va_start(args, fmt);
-
-
-    size_t cnt = 0;
-
-    if(!fmt) {
-        return 0;
-    }
-
-    char_t video_printf_buffer[VIDEO_PRINTF_BUFFER_SIZE + 128] = {0};
-    uint64_t video_printf_buffer_idx = 0;
-
-    while (*fmt) {
-        if(video_printf_buffer_idx >= VIDEO_PRINTF_BUFFER_SIZE - 1) {
-            video_print(video_printf_buffer);
-            video_printf_buffer_idx = 0;
-        }
-
-        char_t data = *fmt;
-
-        if(data == '%') {
-            fmt++;
-            int8_t wfmtb = 1;
-            char_t buf[257] = {0};
-            char_t ito_buf[64] = {0};
-            int32_t val = 0;
-            char_t* str = NULL;
-            int32_t slen = 0;
-            number_t ival = 0;
-            unumber_t uval = 0;
-            int32_t idx = 0;
-            int8_t l_flag = 0;
-            int8_t sign = 0;
-            char_t fto_buf[128];
-            // float128_t fval = 0; // TODO: float128_t ops
-            float64_t fval = 0;
-            number_t prec = 6;
-
-            while(1) {
-                wfmtb = 1;
-
-                switch (*fmt) {
-                case '0':
-                    fmt++;
-                    val = *fmt - 0x30;
-                    fmt++;
-                    if(*fmt >= '0' && *fmt <= '9') {
-                        val = val * 10 + *fmt - 0x30;
-                        fmt++;
-                    }
-                    wfmtb = 0;
-                    break;
-                case '.':
-                    fmt++;
-                    prec = *fmt - 0x30;
-                    fmt++;
-                    wfmtb = 0;
-                    break;
-                case 'c':
-                    val = va_arg(args, int32_t);
-                    video_printf_buffer[video_printf_buffer_idx++] = (char_t)val;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-                    cnt++;
-                    fmt++;
-                    break;
-                case 's':
-                    str = va_arg(args, char_t*);
-                    slen = strlen(str);
-
-                    strcpy(str, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    cnt += slen;
-                    fmt++;
-                    break;
-                case 'i':
-                case 'd':
-                    if(l_flag == 2) {
-                        ival = va_arg(args, int64_t);
-                    } else if(l_flag == 1) {
-                        ival = va_arg(args, int64_t);
-                    }
-                    if(l_flag == 0) {
-                        ival = va_arg(args, int32_t);
-                    }
-
-                    itoa_with_buffer(ito_buf, ival);
-                    slen = strlen(ito_buf);
-
-                    if(ival < 0) {
-                        sign = 1;
-                        slen -= 2;
-                    }
-
-                    for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = '0';
-                        buf[idx + 1] = '\0';
-                        cnt++;
-                    }
-
-                    if(ival < 0) {
-                        buf[0] = '-';
-                    }
-
-                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += idx;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    cnt += slen;
-                    fmt++;
-                    l_flag = 0;
-                    break;
-                case 'u':
-                    if(l_flag == 2) {
-                        uval = va_arg(args, uint64_t);
-                    } else if(l_flag == 1) {
-                        uval = va_arg(args, uint64_t);
-                    }
-                    if(l_flag == 0) {
-                        uval = va_arg(args, uint32_t);
-                    }
-
-                    utoa_with_buffer(ito_buf, uval);
-                    slen = strlen(ito_buf);
-
-                    for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = '0';
-                        buf[idx + 1] = '\0';
-                        cnt++;
-                    }
-
-                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += idx;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    cnt += slen;
-                    fmt++;
-                    break;
-                case 'l':
-                    fmt++;
-                    wfmtb = 0;
-                    l_flag++;
-                    break;
-                case 'p':
-                    l_flag = 1;
-                    nobreak;
-                case 'x':
-                case 'h':
-                    if(l_flag == 2) {
-                        uval = va_arg(args, uint64_t);
-                    } else if(l_flag == 1) {
-                        uval = va_arg(args, uint64_t);
-                    }
-                    if(l_flag == 0) {
-                        uval = va_arg(args, uint32_t);
-                    }
-
-                    utoh_with_buffer(ito_buf, uval);
-                    slen = strlen(ito_buf);
-
-                    for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = '0';
-                        buf[idx + 1] = '\0';
-                        cnt++;
-                    }
-
-                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += idx;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    cnt += slen;
-                    fmt++;
-                    l_flag = 0;
-                    break;
-                case '%':
-                    buf[0] = '%';
-                    video_print(buf);
-                    memory_memclean(buf, 257);
-                    fmt++;
-                    cnt++;
-                    break;
-                case 'f':
-                    if(l_flag == 2) {
-                        // fval = va_arg(args, float128_t); // TODO: float128_t ops
-                    } else  {
-                        fval = va_arg(args, float64_t);
-                    }
-
-                    ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
-                    slen = strlen(fto_buf);
-
-                    strcpy(fto_buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
-
-                    cnt += slen;
-                    fmt++;
-                    break;
-                default:
-                    break;
-                }
-
-                if(wfmtb) {
-                    break;
-                }
-            }
-
-        } else {
-
-            while(*fmt) {
-                if(video_printf_buffer_idx >= VIDEO_PRINTF_BUFFER_SIZE - 1) {
-                    video_print(video_printf_buffer);
-                    video_printf_buffer_idx = 0;
-                }
-                if(*fmt == '%') {
-                    break;
-                }
-
-                video_printf_buffer[video_printf_buffer_idx++] = *fmt;
-                video_printf_buffer[video_printf_buffer_idx] = 0;
-                fmt++;
-                cnt++;
-            }
-        }
-    }
-
-    if(video_printf_buffer_idx) {
-        video_print(video_printf_buffer);
-    }
-
-    va_end(args);
-
-    return cnt;
-}
-
-int8_t video_display_init(memory_heap_t* heap, linkedlist_t display_controllers) {
+int8_t video_display_init(memory_heap_t* heap, linkedlist_t* display_controllers) {
     iterator_t* iter = linkedlist_iterator_create(display_controllers);
 
     if(iter == NULL) {
@@ -721,6 +484,8 @@ int8_t video_display_init(memory_heap_t* heap, linkedlist_t display_controllers)
             virtio_video_init(heap, device);
         } else if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
             vmware_svga2_init(heap, device);
+        } else {
+            PRINTLOG(KERNEL, LOG_WARNING, "Unknown video device: %x:%x", device->pci_header->vendor_id, device->pci_header->device_id);
         }
 
         iter->next(iter);

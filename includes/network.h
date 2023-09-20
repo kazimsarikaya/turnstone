@@ -23,7 +23,7 @@ typedef enum network_type_t {
 typedef struct network_received_packet_t {
     uint64_t       packet_len;
     uint8_t*       packet_data;
-    linkedlist_t   return_queue;
+    linkedlist_t*  return_queue;
     network_type_t network_type;
     void*          network_info;
 } network_received_packet_t;
@@ -33,7 +33,7 @@ typedef struct network_transmit_packet_t {
     uint8_t* packet_data;
 } network_transmit_packet_t;
 
-extern linkedlist_t network_received_packets;
+extern linkedlist_t* network_received_packets;
 
 int8_t network_init(void);
 

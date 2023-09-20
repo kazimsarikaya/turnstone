@@ -8,7 +8,7 @@
 
 #include <driver/usb.h>
 #include <memory.h>
-#include <video.h>
+#include <logging.h>
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
 

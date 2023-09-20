@@ -6,7 +6,7 @@
 #include <driver/network_e1000.h>
 #include <memory.h>
 #include <utils.h>
-#include <video.h>
+#include <logging.h>
 #include <time/timer.h>
 #include <network.h>
 #include <network/network_ethernet.h>
@@ -22,7 +22,7 @@
 
 MODULE("turnstone.kernel.hw.network.e1000");
 
-linkedlist_t e1000_net_devs = NULL;
+linkedlist_t* e1000_net_devs = NULL;
 
 uint16_t network_e1000_eeprom_read(network_e1000_dev_t* dev, uint8_t addr);
 uint16_t network_e1000_phy_read(network_e1000_dev_t* dev, int regaddr);
@@ -114,7 +114,7 @@ uint16_t network_e1000_phy_read(network_e1000_dev_t* dev, int regaddr) {
     }
 
     if( dev->mmio->mdic & NETWORK_E1000_MDIC_E ) {
-        printf("i825xx: MDI READ ERROR\n");
+        PRINTLOG(E1000, LOG_ERROR, "i825xx: MDI READ ERROR\n");
 
         return -1;
     }
@@ -133,7 +133,7 @@ void network_e1000_phy_write(network_e1000_dev_t* dev, int regaddr, uint16_t dat
     }
 
     if( dev->mmio->mdic & NETWORK_E1000_MDIC_E ) {
-        printf("i825xx: MDI WRITE ERROR\n");
+        PRINTLOG(E1000, LOG_ERROR, "i825xx: MDI WRITE ERROR\n");
         return;
     }
 }
@@ -390,7 +390,7 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
     e1000_net_devs = linkedlist_create_list_with_heap(NULL);
 
     if(e1000_net_devs == NULL) {
-        PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create e1000 network devices list");
+        PRINTLOG(E1000, LOG_ERROR, "cannot create e1000 network devices list");
 
         return -1;
     }
@@ -398,12 +398,12 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
     network_e1000_dev_t* dev = memory_malloc(sizeof(network_e1000_dev_t));
 
     if(dev == NULL) {
-        PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create e1000 network device");
+        PRINTLOG(E1000, LOG_ERROR, "cannot create e1000 network device");
 
         return -1;
     }
 
-    dev->pci_netdev = pci_netdev;   // pci structure
+    dev->pci_netdev = pci_netdev; // pci structure
 
     dev->rx_count = 0;
     dev->tx_count = 0;
@@ -418,44 +418,30 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
     uint64_t bar_va = 0;
 
     if(bar->bar_type.type == 0) {
-        uint64_t bar_fa = (uint64_t)(bar->memory_space_bar.base_address);
-        bar_fa <<= 4;
-
-        if(bar->memory_space_bar.type == 2) {
-            bar++;
-            uint64_t tmp = (uint64_t)(*((uint32_t*)bar));
-            bar_fa = tmp << 32 | bar_fa;
-        }
+        uint64_t bar_fa = pci_get_bar_address(pci_dev, 0);
 
         PRINTLOG(E1000, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
         frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+        uint64_t size = pci_get_bar_size(pci_dev, 0);
+        PRINTLOG(E1000, LOG_TRACE, "bar size 0x%llx", size);
+        uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
+        frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
         bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
         if(bar_frames == NULL) {
             PRINTLOG(E1000, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
 
-            uint64_t bar_frm_cnt = (sizeof(network_e1000_mmio_t) + FRAME_SIZE - 1) / FRAME_SIZE;
-
-            frame_t tmp_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
-
-            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &tmp_frm) != 0) {
+            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
                 PRINTLOG(E1000, LOG_ERROR, "cannot allocate frame");
                 memory_free(dev);
 
-                return -1;
-            } else {
-                PRINTLOG(E1000, LOG_TRACE, "reserved frames start from 0x%llx (0x%llx) with count 0x%llx", bar_fa, bar_va, tmp_frm.frame_count);
+                return NULL;
             }
-
-            bar_frames = &tmp_frm;
         }
 
-        if((bar_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
-            memory_paging_add_va_for_frame(MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_frames->frame_address), bar_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-            bar_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
-        }
+        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
     }
 
     if(bar_va == 0) {

@@ -104,7 +104,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
 
     uint64_t key = 0x870;
     printf("key = 0x%llx\n", key);
-    printf("NUM_ELEMENTS = 0x%llx\n", NUM_ELEMENTS);
+    printf("NUM_ELEMENTS = 0x%lx\n", NUM_ELEMENTS);
 
     uint64_t res = *(uint64_t*)binarysearch(datas, NUM_ELEMENTS, sizeof(uint64_t), (void*)&key, uint64_comparator);
 

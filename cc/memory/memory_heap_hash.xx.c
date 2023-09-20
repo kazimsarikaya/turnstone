@@ -9,7 +9,7 @@
 #include <memory.h>
 #include <systeminfo.h>
 #include <cpu.h>
-#include <video.h>
+#include <logging.h>
 #include <cpu/sync.h>
 #include <linker.h>
 #include <utils.h>

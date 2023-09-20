@@ -12,6 +12,8 @@
 #define ___LOGGING_H 0
 
 #include <types.h>
+#include <buffer.h>
+#include <stdbufs.h>
 
 /**
  * @enum logging_modules_t
@@ -225,5 +227,32 @@ extern uint8_t logging_module_levels[];
 
 /*! logs fellowing block */
 #define LOGBLOCK(M, L) if(LOG_NEED_LOG(M, L))
+
+extern boolean_t windowmanager_initialized;
+
+/**
+ * @brief kernel logging macro
+ * @param[in] M module name @sa logging_modules_e
+ * @param[in] L log level @sa logging_level_e
+ * @param[in] msg log message, also if it contains after this there should be a variable arg list
+ * @param[in] ... arguments for format in msg
+ */
+#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
+            buffer_t* buffer_error = buffer_get_io_buffer(BUFFER_IO_ERROR); \
+            boolean_t using_tmp_printf_buffer = false; \
+            if(buffer_error == NULL) { \
+                buffer_error = buffer_get_tmp_buffer_for_printf(); \
+                using_tmp_printf_buffer = true; \
+            } \
+            uint64_t buffer_old_position = buffer_get_length(buffer_error); \
+            if(LOG_LOCATION) { buffer_printf(buffer_error, "%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
+            else {buffer_printf(buffer_error, "%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
+            if(!windowmanager_initialized) {stdbufs_flush_buffer(buffer_error, buffer_old_position);} \
+            if(using_tmp_printf_buffer) { buffer_reset_tmp_buffer_for_printf(); } \
+}
+
+
+#define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
+
 
 #endif

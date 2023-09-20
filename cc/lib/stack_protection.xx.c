@@ -7,7 +7,7 @@
  */
 
 #include <types.h>
-#include <video.h>
+#include <logging.h>
 #include <cpu.h>
 
 MODULE("turnstone.lib");

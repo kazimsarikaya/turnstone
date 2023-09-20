@@ -16,6 +16,7 @@
 #include <tosdb/tosdb.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.efi");
 
@@ -26,9 +27,12 @@ efi_runtime_services_t* RS;
 typedef int8_t (*kernel_start_t)(system_info_t* sysinfo);
 
 typedef struct efi_tosdb_context_t {
+    boolean_t        is_pxe;
     efi_block_io_t*  bio;
     tosdb_backend_t* backend;
     tosdb_t*         tosdb;
+    uint64_t         pxe_data_size;
+    uint64_t         pxe_data_base;
 } efi_tosdb_context_t;
 
 efi_status_t        efi_setup_heap(void);
@@ -38,6 +42,7 @@ efi_status_t        efi_is_pxe_boot(boolean_t* result);
 EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
 efi_status_t        efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
 efi_status_t        efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
+efi_status_t        efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx);
 efi_status_t        efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
 
 
@@ -186,6 +191,217 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     *vfb_res = vfb;
 
     res = EFI_SUCCESS;
+
+catch_efi_error:
+    return res;
+}
+
+efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
+    efi_status_t res = EFI_NOT_FOUND;
+
+
+    efi_pxe_base_code_protocol_t* pxe_prot;
+    efi_guid_t pxe_prot_guid = EFI_PXE_BASE_CODE_PROTOCOL_GUID;
+
+    res = BS->locate_protocol(&pxe_prot_guid, NULL, (void**)&pxe_prot);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot find pxe protocol: 0x%llx", res);
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "pxe started: %i", pxe_prot->mode->started);
+    PRINTLOG(EFI, LOG_DEBUG, "pxe discover: %i.%i.%i.%i",
+             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[0],
+             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[1],
+             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[2],
+             pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3]);
+
+
+    efi_ip_address_t eipa;
+    eipa.v4.addr[0] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[0];
+    eipa.v4.addr[1] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[1];
+    eipa.v4.addr[2] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[2];
+    eipa.v4.addr[3] = pxe_prot->mode->dhcp_ack.dhcpv4.bootp_si_addr[3];
+
+    uint64_t buffer_size;
+    char_t* pxeconfig = (char_t*)"pxeconf.json";
+    boolean_t pxeconfig_is_json = true;
+
+    res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_WARNING, "cannot get config size as json: 0x%llx, trying bson", res);
+
+        pxeconfig = (char_t*)"pxeconf.bson";
+        pxeconfig_is_json = false;
+
+        res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_GET_FILE_SIZE, NULL, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 1);
+
+        if(res != EFI_SUCCESS) {
+            PRINTLOG(EFI, LOG_ERROR, "cannot get config size as bson: 0x%llx", res);
+
+            goto catch_efi_error;
+        }
+
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "config size 0x%llx", buffer_size);
+
+    uint8_t* buffer = memory_malloc(buffer_size);
+
+    if(buffer == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate config buffer");
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, pxeconfig, NULL, 0);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get config %s: 0x%llx", pxeconfig, res);
+
+        goto catch_efi_error;
+    }
+
+    data_t pxeconf_deser_data = {DATA_TYPE_INT8_ARRAY, buffer_size, NULL, buffer};
+
+    data_t* pxeconfig_data = NULL;
+
+    if(pxeconfig_is_json) {
+        pxeconfig_data = data_json_deserialize(&pxeconf_deser_data);
+    } else {
+        pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data, DATA_SERIALIZE_WITH_FLAGS);
+    }
+
+    memory_free(buffer);
+
+    if(pxeconfig_data == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot deserialize pxe config");
+        res = EFI_INVALID_PARAMETER;
+
+        goto catch_efi_error;
+    }
+
+    if(pxeconfig_data->name == NULL || strcmp(pxeconfig_data->name->value, "pxe-config") != 0 || pxeconfig_data->length != 2) {
+        PRINTLOG(EFI, LOG_ERROR, "malformed pxe config");
+        res = EFI_INVALID_PARAMETER;
+
+        goto catch_efi_error;
+    }
+
+    data_t* tdbd = &((data_t*)pxeconfig_data->value)[0];
+    data_t* tdbd_s = &((data_t*)pxeconfig_data->value)[1];
+
+    if(tdbd->name == NULL || strcmp(tdbd->name->value, "tosdb") != 0 || tdbd_s->name == NULL || strcmp(tdbd_s->name->value, "tosdb-size") != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "malformed pxe config");
+        res = EFI_INVALID_PARAMETER;
+
+        goto catch_efi_error;
+    }
+
+    buffer_size = (uint64_t)tdbd_s->value;
+    uint64_t requested_buffer_size = (2 << 20) + buffer_size;
+    uint64_t requested_buffer_pages = requested_buffer_size / FRAME_SIZE;
+    uint64_t requested_buffer_base = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, requested_buffer_pages, &requested_buffer_base);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate buffer memory");
+
+        goto catch_efi_error;
+    }
+
+    if(requested_buffer_base % (2 << 20)) {
+        requested_buffer_base += (2 << 20) - (requested_buffer_base % (2 << 20));
+    }
+
+    memory_memclean((void*)requested_buffer_base, buffer_size);
+
+    buffer = (uint8_t*)requested_buffer_base;
+
+    res = pxe_prot->mtftp(pxe_prot, EFI_PXE_BASE_CODE_TFTP_READ_FILE, buffer, 0, &buffer_size, NULL, &eipa, tdbd->value, NULL, 0);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot get tosdb: 0x%llx", res);
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "turnstone tosdb loaded from pxe");
+
+    buffer_t* tosdb_buffer = buffer_encapsulate(buffer, buffer_size);
+
+    if(tosdb_buffer == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot encapsulate tosdb buffer");
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    buffer_set_readonly(tosdb_buffer, false);
+
+    tosdb_backend_t* tosdb_backend = tosdb_backend_memory_from_buffer(tosdb_buffer);
+
+    if(tosdb_backend == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create tosdb backend");
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb backend created");
+
+    tosdb_t* tdb = tosdb_new(tosdb_backend);
+
+    if(tdb == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create tosdb");
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb created");
+
+    tosdb_cache_config_t cc = {0};
+    cc.bloomfilter_size = 2 << 20;
+    cc.index_data_size = 4 << 20;
+    cc.secondary_index_data_size = 4 << 20;
+    cc.valuelog_size = 16 << 20;
+
+    if(!tosdb_cache_config_set(tdb, &cc)) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot set tosdb cache config");
+        tosdb_close(tdb);
+        tosdb_backend_close(tosdb_backend);
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb cache config setted");
+
+    *tdb_ctx = memory_malloc(sizeof(efi_tosdb_context_t));
+
+    if(*tdb_ctx == NULL) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate tosdb context");
+        tosdb_close(tdb);
+        tosdb_backend_close(tosdb_backend);
+        res = EFI_OUT_OF_RESOURCES;
+
+        goto catch_efi_error;
+    }
+
+    (*tdb_ctx)->is_pxe = true;
+    (*tdb_ctx)->pxe_data_size = buffer_size;
+    (*tdb_ctx)->pxe_data_base = requested_buffer_base;
+    (*tdb_ctx)->tosdb = tdb;
+    (*tdb_ctx)->backend = tosdb_backend;
+
+    res = EFI_SUCCESS;
+
 
 catch_efi_error:
     return res;
@@ -516,6 +732,12 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
+    if(stdbufs_init_buffers() != 0) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot setup stdbufs");
+
+        goto catch_efi_error;
+    }
+
     res = efi_frame_allocator_init();
 
     if(res != EFI_SUCCESS) {
@@ -561,7 +783,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     //logging_module_levels[TOSDB] = LOG_TRACE;
 
     if(is_pxe) {
-        //res = efi_load_pxe_tosdb(&tdb);
+        res = efi_load_pxe_tosdb(&tdb_ctx);
     } else {
         res = efi_load_local_tosdb(&tdb_ctx);
     }
@@ -642,7 +864,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     s_sym_rec->set_string(s_sym_rec, "name", entry_point);
 
-    linkedlist_t found_symbols = s_sym_rec->search_record(s_sym_rec);
+    linkedlist_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
 
     if(!found_symbols) {
         PRINTLOG(EFI, LOG_ERROR, "cannot search for entrypoint symbol");
@@ -967,6 +1189,8 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->efi_system_table = system_table;
     sysinfo->program_header_physical_start = requested_program_base;
     sysinfo->program_header_virtual_start = (2 << 20);
+    sysinfo->pxe_tosdb_size = tdb_ctx->pxe_data_size;
+    sysinfo->pxe_tosdb_address = tdb_ctx->pxe_data_base;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
@@ -996,15 +1220,17 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    frm.frame_address = (uint64_t)vfb->physical_base_address;
-    frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    if(vfb->virtual_base_address) {
+        frm.frame_address = (uint64_t)vfb->physical_base_address;
+        frm.frame_count = (vfb->buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
-    vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
+        vfb->virtual_base_address = (64ULL << 40) | (uint64_t)vfb->virtual_base_address;
 
-    if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-        PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
+        if(memory_paging_add_va_for_frame_ext(page_table_ctx, vfb->virtual_base_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(EFI, LOG_ERROR, "cannot add video frame buffer to page table");
 
-        goto catch_efi_error;
+            goto catch_efi_error;
+        }
     }
 
     PRINTLOG(EFI, LOG_DEBUG, "vfb virtual base address 0x%llx physical base address 0x%llx size 0x%llx", vfb->virtual_base_address, vfb->physical_base_address, vfb->buffer_size);
@@ -1054,6 +1280,11 @@ catch_efi_error:
     tosdb_backend_close(tdb_ctx->backend);
 
     PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
+
+    buffer_t* err_buffer = buffer_get_io_buffer(BUFFER_IO_ERROR);
+    char_t* err_msgs = (char_t*)buffer_get_all_bytes_and_destroy(err_buffer, NULL);
+
+    video_print(err_msgs);
 
     cpu_hlt();
 

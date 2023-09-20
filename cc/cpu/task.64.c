@@ -13,11 +13,12 @@
 #include <memory/frame.h>
 #include <linkedlist.h>
 #include <time/timer.h>
-#include <video.h>
+#include <logging.h>
 #include <systeminfo.h>
 #include <linker.h>
 #include <utils.h>
 #include <map.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -25,9 +26,10 @@ uint64_t task_id = 0;
 
 task_t* current_task = NULL;
 
-linkedlist_t task_queue = NULL;
-linkedlist_t task_cleaner_queue = NULL;
+linkedlist_t* task_queue = NULL;
+linkedlist_t* task_cleaner_queue = NULL;
 map_t task_map = NULL;
+uint32_t task_mxcsr_mask = 0;
 
 extern int8_t kmain64(void);
 
@@ -38,6 +40,9 @@ void                                            task_cleanup(void);
 task_t*                                         task_find_next_task(void);
 void                                            task_end_task(void);
 
+extern buffer_t* stdbufs_default_input_buffer;
+extern buffer_t* stdbufs_default_output_buffer;
+extern buffer_t* stdbufs_default_error_buffer;
 
 task_t* task_get_current_task(void){
     return current_task;
@@ -117,6 +122,16 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_task->stack = (void*)(stack_top + stack_size);
     current_task->stack_size = stack_size;
     current_task->task_name = "kernel";
+    current_task->input_buffer = stdbufs_default_input_buffer;
+    current_task->output_buffer = stdbufs_default_output_buffer;
+    current_task->error_buffer = stdbufs_default_error_buffer;
+
+    //get mxcsr by fxsave
+    asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (current_task->fx_registers) : : "rax", "memory");
+
+    task_mxcsr_mask = *(uint32_t*)&current_task->fx_registers[28];
+
+    PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
     task_id = current_task->task_id + 1;
 
@@ -327,7 +342,7 @@ boolean_t task_idle_check_need_yield(void) {
         if(t) {
             if(t->message_waiting && t->message_queues) {
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(t->message_queues); q_idx++) {
-                    linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(t->message_queues, q_idx);
+                    linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(t->message_queues, q_idx);
 
                     if(linkedlist_size(q)) {
                         t->message_waiting = false;
@@ -375,7 +390,7 @@ task_t* task_find_next_task(void) {
             } else if(tmp_task->message_queues) {
 
                 for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
-                    const linkedlist_t q = (linkedlist_t)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
+                    const linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
 
                     if(q) {
                         if(linkedlist_size(q)) {
@@ -474,7 +489,7 @@ void task_end_task(void) {
 }
 
 
-void task_add_message_queue(linkedlist_t queue){
+void task_add_message_queue(linkedlist_t* queue){
     cpu_cli();
     if(current_task->message_queues == NULL) {
         current_task->message_queues = linkedlist_create_list();
@@ -568,6 +583,9 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
     new_task->task_name = task_name;
+
+    *(uint16_t*)&new_task->fx_registers[0] = 0x37F;
+    *(uint32_t*)&new_task->fx_registers[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
@@ -684,4 +702,103 @@ void task_print_all(void) {
     }
 
     it->destroy(it);
+}
+
+buffer_t* task_get_input_buffer(void) {
+    buffer_t* buffer = NULL;
+
+    cpu_cli();
+
+    if(current_task) {
+        buffer = current_task->input_buffer;
+    }
+
+    cpu_sti();
+
+    return buffer;
+}
+
+buffer_t* task_get_output_buffer(void) {
+    buffer_t* buffer = NULL;
+
+    cpu_cli();
+
+    if(current_task) {
+        buffer = current_task->output_buffer;
+    }
+
+    cpu_sti();
+
+    return buffer;
+}
+
+buffer_t* task_get_error_buffer(void) {
+    buffer_t* buffer = NULL;
+
+    cpu_cli();
+
+    if(current_task) {
+        buffer = current_task->error_buffer;
+    }
+
+    cpu_sti();
+
+    return buffer;
+}
+
+int8_t task_set_input_buffer(buffer_t* buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    cpu_cli();
+
+    if(!current_task) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    current_task->input_buffer = buffer;
+    cpu_sti();
+
+    return 0;
+}
+
+int8_t task_set_output_buffer(buffer_t * buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    cpu_cli();
+
+    if(!current_task) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    current_task->output_buffer = buffer;
+    cpu_sti();
+
+    return 0;
+}
+
+int8_t task_set_error_buffer(buffer_t * buffer) {
+    if(!buffer) {
+        return -1;
+    }
+
+    cpu_cli();
+
+    if(!current_task) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    current_task->error_buffer = buffer;
+    cpu_sti();
+
+    return 0;
 }

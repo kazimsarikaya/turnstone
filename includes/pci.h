@@ -292,12 +292,12 @@ typedef struct pci_capability_msix_table_t {
 }__attribute__((packed)) pci_capability_msix_table_t;
 
 typedef struct pci_context_t {
-    linkedlist_t sata_controllers;
-    linkedlist_t nvme_controllers;
-    linkedlist_t network_controllers;
-    linkedlist_t display_controllers;
-    linkedlist_t usb_controllers;
-    linkedlist_t other_devices;
+    linkedlist_t* sata_controllers;
+    linkedlist_t* nvme_controllers;
+    linkedlist_t* network_controllers;
+    linkedlist_t* display_controllers;
+    linkedlist_t* usb_controllers;
+    linkedlist_t* other_devices;
 } pci_context_t;
 
 extern pci_context_t* PCI_CONTEXT;

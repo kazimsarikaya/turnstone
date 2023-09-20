@@ -12,7 +12,7 @@
 #include <future.h>
 #include <buffer.h>
 #include <cpu/sync.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <xxhash.h>
 
@@ -20,7 +20,7 @@ MODULE("turnstone.kernel.db");
 
 
 typedef struct tosdb_backend_memory_ctx_t {
-    buffer_t buffer;
+    buffer_t* buffer;
 } tosdb_backend_memory_ctx_t;
 
 uint8_t*  tosdb_backend_memory_read(tosdb_backend_t* backend, uint64_t position, uint64_t size);
@@ -153,7 +153,7 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity) {
     return backend;
 }
 
-tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t buffer) {
+tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t* buffer) {
     if(!buffer) {
         PRINTLOG(TOSDB, LOG_ERROR, "buffer is null");
 

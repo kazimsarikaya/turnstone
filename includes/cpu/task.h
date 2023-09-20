@@ -14,6 +14,7 @@
 #include <memory.h>
 #include <memory/paging.h>
 #include <linkedlist.h>
+#include <buffer.h>
 
 /*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 50
@@ -104,7 +105,7 @@ typedef struct {
     void*                        entry_point; ///< entry point address
     void*                        stack; ///< stack pointer
     uint64_t                     stack_size; ///< stack size of task
-    linkedlist_t                 message_queues; ///< task's listining queues.
+    linkedlist_t*                message_queues; ///< task's listining queues.
     boolean_t                    message_waiting; ///< task state for sleeping should move @ref task_state_s
     boolean_t                    sleeping; ///< task state for sleeping should move @ref task_state_s
     boolean_t                    interruptible; ///< task state for interruptible should move @ref task_state_s
@@ -112,6 +113,9 @@ typedef struct {
     uint64_t                     wake_tick; ///< tick value when task wakes up
     const char*                  task_name; ///< task name
     memory_page_table_context_t* page_table; ///< page table
+    buffer_t*                    input_buffer; ///< input buffer
+    buffer_t*                    output_buffer; ///< output buffer
+    buffer_t*                    error_buffer; ///< error buffer
     uint64_t                     rax; ///< register
     uint64_t                     rbx; ///< register
     uint64_t                     rcx; ///< register
@@ -196,7 +200,7 @@ void task_set_interrupt_received(uint64_t task_id);
  * @brief adds a queue to task
  * @param[in] queue queue which task will have. tasks consumes these queues
  */
-void task_add_message_queue(linkedlist_t queue);
+void task_add_message_queue(linkedlist_t* queue);
 
 /**
  * @brief creates a task and apends it to wait queue
@@ -222,5 +226,12 @@ boolean_t task_idle_check_need_yield(void);
 void task_current_task_sleep(uint64_t wake_tick);
 
 void task_print_all(void);
+
+buffer_t* task_get_input_buffer(void);
+buffer_t* task_get_output_buffer(void);
+buffer_t* task_get_error_buffer(void);
+int8_t    task_set_input_buffer(buffer_t* buffer);
+int8_t    task_set_output_buffer(buffer_t * buffer);
+int8_t    task_set_error_buffer(buffer_t * buffer);
 
 #endif

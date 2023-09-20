@@ -27,7 +27,6 @@
 
 int8_t kbd_init(void);
 
-int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
 int8_t dev_virtio_kbd_init(void);
 int8_t kbd_handle_key(wchar_t key, boolean_t pressed);
 #endif

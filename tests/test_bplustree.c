@@ -36,7 +36,7 @@ int32_t main(void){
         return -1;
     }
 
-    printf("item count: %i\n", sizeof(test_data) / sizeof(int));
+    printf("item count: %li\n", sizeof(test_data) / sizeof(int));
 
     for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
         printf("try to insert: %i\n", test_data[i]);

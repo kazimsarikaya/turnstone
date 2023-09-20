@@ -57,7 +57,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
     future_t fut = NULL;
 
-    linkedlist_t futs = linkedlist_create_list_with_heap(NULL);
+    linkedlist_t* futs = linkedlist_create_list_with_heap(NULL);
 
     while(rem_lba) {
         uint16_t iter_read_size = MIN(rem_lba, max_lba);
@@ -113,7 +113,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
     future_t fut = NULL;
 
-    linkedlist_t futs = linkedlist_create_list_with_heap(NULL);
+    linkedlist_t* futs = linkedlist_create_list_with_heap(NULL);
 
     while(rem_lba) {
         uint16_t iter_read_size = MIN(rem_lba, max_lba);

@@ -59,7 +59,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    linkedlist_t list = linkedlist_create_sortedlist(key_cmp);
+    linkedlist_t* list = linkedlist_create_sortedlist(key_cmp);
 
     for(int64_t i = 1; i < 100; i++) {
         char_t* s_i = itoa(i % 17);
@@ -87,7 +87,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     iterator_t* iter = linkedlist_iterator_create(list);
 
-    printf("!!! ls %i\n", linkedlist_size(list));
+    printf("!!! ls %lli\n", linkedlist_size(list));
 
     uint64_t prev_hash = 0;
 
@@ -100,7 +100,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
         prev_hash = ii->secondary_key_hash;
 
-        printf("!!! %03i 0x%llx %lli ", ii->id, ii->secondary_key_hash, ii->secondary_key_length);
+        printf("!!! %03lli 0x%llx %lli ", ii->id, ii->secondary_key_hash, ii->secondary_key_length);
 
         for(uint64_t i = 0; i < ii->secondary_key_length; i++) {
             printf("%c", ii->data[i]);

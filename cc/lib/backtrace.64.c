@@ -7,7 +7,7 @@
  */
 
 #include <backtrace.h>
-#include <video.h>
+#include <logging.h>
 #include <logging.h>
 #include <systeminfo.h>
 #include <linker.h>

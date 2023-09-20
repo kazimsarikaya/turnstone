@@ -88,7 +88,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     iterator_t* iter = idx->create_iterator(idx);
 
-    printf("!!! ls %i\n", idx->size(idx));
+    printf("!!! ls %lli\n", idx->size(idx));
 
     uint64_t prev_hash = 0;
 
@@ -101,7 +101,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
         prev_hash = ii->secondary_key_hash;
 
-        printf("!!! %03i 0x%llx %lli ", ii->id, ii->secondary_key_hash, ii->secondary_key_length);
+        printf("!!! %03lli 0x%llx %lli ", ii->id, ii->secondary_key_hash, ii->secondary_key_length);
 
         for(uint64_t i = 0; i < ii->secondary_key_length; i++) {
             printf("%c", ii->data[i]);

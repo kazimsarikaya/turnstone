@@ -8,7 +8,7 @@
 
 #include <driver/nvme.h>
 #include <pci.h>
-#include <video.h>
+#include <logging.h>
 #include <logging.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
@@ -92,7 +92,7 @@ int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
+int8_t nvme_init(memory_heap_t* heap, linkedlist_t* nvme_pci_devices) {
     PRINTLOG(NVME, LOG_INFO, "disk searching started");
 
     if(linkedlist_size(nvme_pci_devices) == 0) {
@@ -406,19 +406,19 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         hashmap_put(nvme_disk_isr_map, (void*)nvme_disk->io_queue_isr, nvme_disk);
 
         if(nvme_send_admin_command(nvme_disk,
-                                   NVME_ADMIN_CMD_CREATE_CQ,  // opcode
+                                   NVME_ADMIN_CMD_CREATE_CQ, // opcode
                                    0x0, // fuse
                                    0x0, // nsid
                                    0x0, // mptr
                                    queue_frames->frame_address + 3 * FRAME_SIZE, // prp1
                                    0x0, // prp2
                                    ((nvme_disk->io_queue_size) << 16) | 1, // cdw10
-                                   (1 << 16) | (1 << 1) | 1,  // cdw11
-                                   0x0,  // cdw12
+                                   (1 << 16) | (1 << 1) | 1, // cdw11
+                                   0x0, // cdw12
                                    0x0, // cdw13
                                    0x0, // cdw14
-                                   0x0,  // cdw15
-                                   0x0  // sdw0
+                                   0x0, // cdw15
+                                   0x0 // sdw0
                                    ) != 0) {
             PRINTLOG(NVME, LOG_ERROR, "cannot create io cq");
             memory_free_ext(heap, nvme_disk);
@@ -433,19 +433,19 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t nvme_pci_devices) {
         PRINTLOG(NVME, LOG_TRACE, "creating io sq");
 
         if(nvme_send_admin_command(nvme_disk,
-                                   NVME_ADMIN_CMD_CREATE_SQ,  // opcode
+                                   NVME_ADMIN_CMD_CREATE_SQ, // opcode
                                    0x0, // fuse
                                    0x0, // nsid
                                    0x0, // mptr
                                    queue_frames->frame_address + 2 * FRAME_SIZE, // prp1
                                    0x0, // prp2
                                    ((nvme_disk->io_queue_size) << 16) | 1, // cdw10
-                                   (1 << 16) | 1,  // cdw11
-                                   0x0,  // cdw12
+                                   (1 << 16) | 1, // cdw11
+                                   0x0, // cdw12
                                    0x0, // cdw13
                                    0x0, // cdw14
-                                   0x0,  // cdw15
-                                   0x0  // sdw0
+                                   0x0, // cdw15
+                                   0x0 // sdw0
                                    ) != 0) {
             PRINTLOG(NVME, LOG_ERROR, "cannot create io sq");
             memory_free_ext(heap, nvme_disk);

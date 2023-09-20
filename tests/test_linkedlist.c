@@ -28,13 +28,13 @@ int32_t main(void){
 
     printf("%p %p %p %p\n", &t, &x, &y, &z);
 
-    linkedlist_t list = linkedlist_create_list();
+    linkedlist_t* list = linkedlist_create_list();
     print_success("Create list: OK");
     linkedlist_list_insert(list, &t);
     linkedlist_list_insert(list, &y);
     linkedlist_list_insert(list, &z);
     linkedlist_insert_at_position(list, &x, 1);
-    printf("list size: %i\n", linkedlist_size(list));
+    printf("list size: %lli\n", linkedlist_size(list));
     iterator_t* iter = linkedlist_iterator_create(list);
     while(iter->end_of_iterator(iter) != 0) {
         i = (int*)iter->get_item(iter);
@@ -44,7 +44,7 @@ int32_t main(void){
     iter->destroy(iter);
     size_t pos;
     if(linkedlist_get_position(list, &y, &pos) == 0 ) {
-        printf("position of y (%i) is: %i\n", y, pos );
+        printf("position of y (%i) is: %lli\n", y, pos );
     } else {
         print_error("y not found");
     }
@@ -70,7 +70,7 @@ int32_t main(void){
     linkedlist_destroy(list);
     print_success("Destroy list: OK");
 
-    linkedlist_t queue = linkedlist_create_queue();
+    linkedlist_t* queue = linkedlist_create_queue();
     print_success("Create queue: OK");
     linkedlist_queue_push(queue, &x);
     printf("item inserted: %i\n", x);
@@ -96,7 +96,7 @@ int32_t main(void){
     linkedlist_destroy(queue);
     print_success("Destroy queue: OK");
 
-    linkedlist_t stack = linkedlist_create_stack();
+    linkedlist_t* stack = linkedlist_create_stack();
     print_success("Create stack: OK");
     linkedlist_stack_push(stack, &x);
     printf("item inserted: %i\n", x);
@@ -122,11 +122,11 @@ int32_t main(void){
     linkedlist_destroy(stack);
     print_success("Destroy stack: OK");
 
-    linkedlist_t sortedlist = linkedlist_create_sortedlist(int_comparator);
+    linkedlist_t* sortedlist = linkedlist_create_sortedlist(int_comparator);
     print_success("Create sortedlist: OK");
     pos = 0;
     pos = linkedlist_sortedlist_insert(sortedlist, &t);
-    printf("%i inserted at %i\n", t, pos);
+    printf("%i inserted at %lli\n", t, pos);
     iter = linkedlist_iterator_create(sortedlist);
     while(iter->end_of_iterator(iter) != 0) {
         i = (int*)iter->get_item(iter);
@@ -135,7 +135,7 @@ int32_t main(void){
     }
     iter->destroy(iter);
     pos = linkedlist_sortedlist_insert(sortedlist, &y);
-    printf("%i inserted at %i\n", y, pos);
+    printf("%i inserted at %lli\n", y, pos);
     iter = linkedlist_iterator_create(sortedlist);
     while(iter->end_of_iterator(iter) != 0) {
         i = (int*)iter->get_item(iter);
@@ -144,7 +144,7 @@ int32_t main(void){
     }
     iter->destroy(iter);
     pos = linkedlist_sortedlist_insert(sortedlist, &z);
-    printf("%i inserted at %i\n", z, pos);
+    printf("%i inserted at %lli\n", z, pos);
     iter = linkedlist_iterator_create(sortedlist);
     while(iter->end_of_iterator(iter) != 0) {
         i = (int*)iter->get_item(iter);
@@ -153,9 +153,9 @@ int32_t main(void){
     }
     iter->destroy(iter);
     pos = linkedlist_sortedlist_insert(sortedlist, &x);
-    printf("%i inserted at %i\n", x, pos);
+    printf("%i inserted at %lli\n", x, pos);
     print_success("Populate sortedlist: OK");
-    printf("list size: %i\n", linkedlist_size(sortedlist));
+    printf("list size: %lli\n", linkedlist_size(sortedlist));
     iter = linkedlist_iterator_create(sortedlist);
     while(iter->end_of_iterator(iter) != 0) {
         i = (int*)iter->get_item(iter);
@@ -167,7 +167,7 @@ int32_t main(void){
     printf("Test deletion\n");
     int* j = (int*)linkedlist_sortedlist_delete(sortedlist, &y);
     printf("%i deleted, deleted value: %i\n", y, *j);
-    printf("list size: %i\n", linkedlist_size(sortedlist));
+    printf("list size: %lli\n", linkedlist_size(sortedlist));
     iter = linkedlist_iterator_create(sortedlist);
     while(iter->end_of_iterator(iter) != 0) {
         i = (int*)iter->get_item(iter);
@@ -181,7 +181,7 @@ int32_t main(void){
     print_success("Destroy sortedlist: OK");
 
     printf("integer list test\n");
-    linkedlist_t int_list = linkedlist_create_list();
+    linkedlist_t* int_list = linkedlist_create_list();
     linkedlist_list_insert(int_list, (void*)3);
     linkedlist_list_insert(int_list, (void*)13);
     linkedlist_list_insert(int_list, (void*)5);
@@ -190,21 +190,21 @@ int32_t main(void){
     iter = linkedlist_iterator_create(int_list);
     while(iter->end_of_iterator(iter) != 0) {
         int64_t item = (int64_t)iter->get_item(iter);
-        printf("item: %i\n", item);
+        printf("item: %lli\n", item);
         iter = iter->next(iter);
     }
     iter->destroy(iter);
     print_success("interger list succeed");
     printf("list duplicate test\n");
-    linkedlist_t dup_int_list = linkedlist_duplicate_list(int_list);
+    linkedlist_t* dup_int_list = linkedlist_duplicate_list(int_list);
     iter = linkedlist_iterator_create(dup_int_list);
     while(iter->end_of_iterator(iter) != 0) {
         int64_t item = (int64_t)iter->get_item(iter);
-        printf("item: %i\n", item);
+        printf("item: %lli\n", item);
         iter = iter->next(iter);
     }
     iter->destroy(iter);
-    printf("list size %i\n", linkedlist_size(dup_int_list));
+    printf("list size %lli\n", linkedlist_size(dup_int_list));
     print_success("dup list list succeed");
     linkedlist_destroy(int_list);
     linkedlist_destroy(dup_int_list);

@@ -23,16 +23,16 @@ int32_t main(int32_t argc, char_t** argv) {
     argc--;
     argv++;
 
-    char_t* kernel = NULL;
-    char_t* kernelp = NULL;
+    char_t* tosdb = NULL;
+    char_t* tosdbp = NULL;
     char_t* output = NULL;
 
     while(argc) {
-        if(strcmp(*argv, "-k") == 0) {
+        if(strcmp(*argv, "-dbn") == 0 || strcmp(*argv, "--tosdb-file-name") == 0) {
             argc--;
             argv++;
 
-            kernel = *argv;
+            tosdb = *argv;
 
             argc--;
             argv++;
@@ -44,11 +44,11 @@ int32_t main(int32_t argc, char_t** argv) {
 
             argc--;
             argv++;
-        } else if(strcmp(*argv, "-kp") == 0) {
+        } else if(strcmp(*argv, "-dbp") == 0 || strcmp(*argv, "--tosdb-file-path") == 0) {
             argc--;
             argv++;
 
-            kernelp = *argv;
+            tosdbp = *argv;
 
             argc--;
             argv++;
@@ -59,30 +59,30 @@ int32_t main(int32_t argc, char_t** argv) {
         }
     }
 
-    FILE* kin = fopen(kernelp, "r");
+    FILE* in = fopen(tosdbp, "r");
 
-    if(kin == NULL) {
-        print_error("cannot open kernel");
+    if(in == NULL) {
+        print_error("cannot open tosdb");
 
         return -1;
     }
 
-    fseek(kin, 0, SEEK_END);
-    int64_t kernel_size   = ftell(kin);
-    fclose(kin);
+    fseek(in, 0, SEEK_END);
+    int64_t tosdb_size   = ftell(in);
+    fclose(in);
 
-    data_t kernel_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"kernel"};
-    data_t kernel_data = {DATA_TYPE_STRING, 0, &kernel_name, kernel};
+    data_t tosdb_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"tosdb"};
+    data_t tosdb_data = {DATA_TYPE_STRING, 0, &tosdb_name, tosdb};
 
-    data_t kernel_size_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"kernel-size"};
-    data_t kernel_size_data = {DATA_TYPE_INT64, 0, &kernel_size_name, (void*)kernel_size};
+    data_t tosdb_size_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"tosdb-size"};
+    data_t tosdb_size_data = {DATA_TYPE_INT64, 0, &tosdb_size_name, (void*)tosdb_size};
 
-    data_t pxeconf[] = {kernel_data, kernel_size_data};
+    data_t pxeconf[] = {tosdb_data, tosdb_size_data};
 
     data_t pxeconf_name = {DATA_TYPE_STRING, 0, NULL, (char_t*)"pxe-config"};
     data_t pxeconf_data = {DATA_TYPE_DATA, 2, &pxeconf_name, pxeconf};
 
-    printf("kernel %s path %s size: 0x%lx\n", kernel, kernelp, kernel_size);
+    printf("tosdb %s path %s size: 0x%llx\n", tosdb, tosdbp, tosdb_size);
 
     data_t* ser_data = data_bson_serialize(&pxeconf_data, DATA_SERIALIZE_WITH_ALL);
 
@@ -96,6 +96,8 @@ int32_t main(int32_t argc, char_t** argv) {
 
     fwrite(ser_data->value, ser_data->length, 1, pco);
     fclose(pco);
+
+    data_free(ser_data);
 
     return 0;
 }

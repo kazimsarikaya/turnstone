@@ -8,7 +8,7 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <iterator.h>
 #include <xxhash.h>
@@ -411,7 +411,7 @@ boolean_t tosdb_record_search_set_destroy_cb(void * item) {
     return rec->destroy(rec);
 }
 
-linkedlist_t tosdb_record_search(tosdb_record_t* record) {
+linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
 
     set_t* results = set_create(tosdb_memtable_index_comparator);
 
@@ -443,7 +443,7 @@ linkedlist_t tosdb_record_search(tosdb_record_t* record) {
 
     tosdb_record_context_t* r_ctx = record->context;
 
-    linkedlist_t recs = linkedlist_create_list();
+    linkedlist_t* recs = linkedlist_create_list();
 
     boolean_t dont_add = false;
 

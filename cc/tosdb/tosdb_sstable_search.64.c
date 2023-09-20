@@ -9,13 +9,13 @@
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
 #include <tosdb/tosdb_cache.h>
-#include <video.h>
+#include <logging.h>
 #include <zpack.h>
 #include <binarysearch.h>
 
 MODULE("turnstone.kernel.db");
 
-boolean_t tosdb_sstable_search_on_list(tosdb_record_t * record, set_t* results, linkedlist_t st_list, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id);
+boolean_t tosdb_sstable_search_on_list(tosdb_record_t * record, set_t* results, linkedlist_t* st_list, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id);
 boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id);
 int8_t    tosdb_sstable_secondary_index_comparator(const void* i1, const void* i2);
 
@@ -151,8 +151,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
         memory_memcopy(t_last, last, last_key_length);
 
-        buffer_t buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
-        buffer_t buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
+        buffer_t* buf_bf_in = buffer_encapsulate(st_idx->data + st_idx->minmax_key_size, st_idx->bloomfilter_size);
+        buffer_t* buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
 
@@ -302,8 +302,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
         }
 
-        buffer_t buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
-        buffer_t buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
+        buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
+        buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
         uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
 
@@ -454,7 +454,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 }
 #pragma GCC diagnostic pop
 
-boolean_t tosdb_sstable_search_on_list(tosdb_record_t * record, set_t* results, linkedlist_t st_list, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id) {
+boolean_t tosdb_sstable_search_on_list(tosdb_record_t * record, set_t* results, linkedlist_t* st_list, tosdb_memtable_secondary_index_item_t* item, uint64_t index_id) {
     boolean_t error = false;
 
     iterator_t* iter = linkedlist_iterator_create(st_list);
@@ -526,7 +526,7 @@ boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results) {
 
     if(ctx->table->sstable_levels) {
         for(uint64_t i = 1; i <= ctx->table->sstable_max_level; i++) {
-            linkedlist_t st_lvl_l = (linkedlist_t)hashmap_get(ctx->table->sstable_levels, (void*)i);
+            linkedlist_t* st_lvl_l = (linkedlist_t*)hashmap_get(ctx->table->sstable_levels, (void*)i);
 
             if(st_lvl_l) {
                 if(!tosdb_sstable_search_on_list(record, results, st_lvl_l, item, r_key->index_id)) {

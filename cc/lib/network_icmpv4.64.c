@@ -6,9 +6,9 @@
 #include <network/network_icmpv4.h>
 #include <utils.h>
 #include <memory.h>
-#include <video.h>
+#include <logging.h>
 #include <time.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.lib");
 

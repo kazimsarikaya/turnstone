@@ -17,8 +17,10 @@
 #include <rbtree.h>
 #include <binarysearch.h>
 #include <memory/frame.h>
+#include <memory/paging.h>
 #include <efi.h>
 #include <video.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.efi");
 
@@ -31,6 +33,7 @@ size_t __kheap_bottom;
 lock_t video_lock = NULL;
 boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
 typedef void * future_t;
+boolean_t windowmanager_initialized = false;
 
 void*    task_get_current_task(void);
 void     task_yield(void);
@@ -39,6 +42,10 @@ uint64_t task_get_id(void);
 int8_t   apic_get_local_apic_id(void);
 future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
 void*    future_get_data_and_destroy(future_t fut);
+
+buffer_t* task_get_input_buffer(void);
+buffer_t* task_get_output_buffer(void);
+buffer_t* task_get_error_buffer(void);
 
 uint64_t task_get_id(void){
     return 0;
@@ -49,6 +56,18 @@ void* task_get_current_task(void){
 }
 
 void task_yield(void) {
+}
+
+buffer_t* task_get_input_buffer(void) {
+    return NULL;
+}
+
+buffer_t* task_get_output_buffer(void) {
+    return NULL;
+}
+
+buffer_t* task_get_error_buffer(void) {
+    return NULL;
 }
 
 void backtrace(void) {
@@ -92,12 +111,30 @@ int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_
     UNUSED(alloc_list_size);
 
     uint64_t frame_address = 0;
+    uint64_t old_count = count;
+
+    if(count % 0x200) {
+        count += 0x200;
+    }
+
     efi_status_t res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, count, &frame_address);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "cannot allocate frame");
 
         return -1;
+    }
+
+    if(old_count % 0x200) {
+        uint64_t old_frame_address = frame_address;
+
+        if(frame_address % MEMORY_PAGING_PAGE_LENGTH_2M) {
+            uint64_t diff = MEMORY_PAGING_PAGE_LENGTH_2M - (frame_address % MEMORY_PAGING_PAGE_LENGTH_2M);
+            frame_address += diff;
+
+            BS->free_pages(old_frame_address, diff / FRAME_SIZE);
+        }
+
     }
 
     *fs = memory_malloc(sizeof(frame_t));

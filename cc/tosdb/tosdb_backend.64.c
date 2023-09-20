@@ -9,7 +9,7 @@
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_backend.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
 #include <logging.h>
 #include <strings.h>
 #include <xxhash.h>

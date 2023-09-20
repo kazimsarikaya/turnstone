@@ -21,7 +21,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     hashmap_put(hm, (void*)21, "ayva");
 
     if(strcmp("elma", hashmap_get(hm, (void*)1)) != 0) {
-        printf("!! %s\n", hashmap_get(hm, (void*)1));
+        printf("!! %s\n", (char_t*)hashmap_get(hm, (void*)1));
         print_error("cannot get key 1");
         hashmap_destroy(hm);
 

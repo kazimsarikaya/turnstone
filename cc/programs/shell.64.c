@@ -7,22 +7,28 @@
  */
 
 #include <shell.h>
-#include <cpu/task.h>
 #include <video.h>
+#include <cpu/task.h>
+#include <logging.h>
 #include <strings.h>
 #include <acpi.h>
 #include <time.h>
 #include <driver/usb.h>
+#include <memory/frame.h>
+#include <windowmanager.h>
+#include <stdbufs.h>
+#include <device/mouse.h>
 
 MODULE("turnstone.user.programs.shell");
 
 int32_t shell_main(int32_t argc, char* argv[]);
-int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer);
+int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer);
 
-buffer_t shell_buffer = NULL;
+buffer_t* shell_buffer = NULL;
+buffer_t* mouse_buffer = NULL;
 
 
-int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer) {
+int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer) {
     char_t* command = (char_t*)buffer_get_all_bytes_and_reset(command_buffer, NULL);
 
     if(command == NULL) {
@@ -44,6 +50,8 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
                "\tps\t\t: prints the current processes\n"
                "\tdate\t\t: prints the current date with time alias time\n"
                "\tusbprobe\t: probes the USB bus\n"
+               "\tfree\t\t: prints the frame usage\n"
+               "\twm\t\t: prints the frame usage\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -92,6 +100,14 @@ int8_t  shell_process_command(buffer_t command_buffer, buffer_t argument_buffer)
         res = 0;
     } else if(strcmp(command, "usbprobe") == 0) {
         res = usb_probe_all_devices_all_ports();
+    } else if(strcmp(command, "free") == 0) {
+        printf("\tfree frames: 0x%llx\n\tallocated frames: 0x%llx\n\ttotal frames: 0x%llx\n",
+               KERNEL_FRAME_ALLOCATOR->get_free_frame_count(KERNEL_FRAME_ALLOCATOR),
+               KERNEL_FRAME_ALLOCATOR->get_allocated_frame_count(KERNEL_FRAME_ALLOCATOR),
+               KERNEL_FRAME_ALLOCATOR->get_total_frame_count(KERNEL_FRAME_ALLOCATOR));
+        res = 0;
+    } else if(strcmp(command, "wm") == 0) {
+        res = windowmanager_init();
     } else {
         printf("Unknown command: %s\n", command);
         res = -1;
@@ -109,16 +125,37 @@ int32_t shell_main(int32_t argc, char* argv[]) {
     UNUSED(argv);
 
     shell_buffer = buffer_new_with_capacity(NULL, 4096);
-    buffer_t command_buffer = buffer_new_with_capacity(NULL, 4096);
-    buffer_t argument_buffer = buffer_new_with_capacity(NULL, 4096);
+    mouse_buffer = buffer_new_with_capacity(NULL, 4096);
+    buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
+    buffer_t* argument_buffer = buffer_new_with_capacity(NULL, 4096);
     boolean_t first_space = false;
 
     while(true) {
-        uint64_t length = 0;
+        uint64_t kbd_length = 0;
+        uint64_t mouse_length = 0;
 
-        uint8_t* data = buffer_get_all_bytes_and_reset(shell_buffer, &length);
+        uint8_t* data = buffer_get_all_bytes_and_reset(shell_buffer, &kbd_length);
+        mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
-        if(length == 0) {
+        if(kbd_length == 0 && mouse_length == 0) {
+            memory_free(data);
+            memory_free(mouse_data);
+            task_yield();
+
+            continue;
+        }
+
+        if(mouse_length) {
+            uint32_t mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
+
+            if(VIDEO_MOVE_CURSOR) {
+                VIDEO_MOVE_CURSOR(mouse_data[mouse_ev_cnt - 1].x, mouse_data[mouse_ev_cnt - 1].y);
+            }
+        }
+
+        memory_free(mouse_data);
+
+        if(kbd_length == 0) {
             memory_free(data);
             task_yield();
 
@@ -141,9 +178,9 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         uint64_t idx = 0;
 
-        while(length > 0) {
+        while(kbd_length > 0) {
             char_t c = data[idx++];
-            length--;
+            kbd_length--;
 
             if(c == '\n') {
                 first_space = false;
@@ -178,5 +215,5 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 }
 
 int8_t shell_init(void) {
-    return task_create_task(NULL, 2 << 20, 64 << 10, shell_main, 0, NULL, "shell") == -1ULL ? -1 : 0;
+    return task_create_task(NULL, 32 << 20, 64 << 10, shell_main, 0, NULL, "shell") == -1ULL ? -1 : 0;
 }

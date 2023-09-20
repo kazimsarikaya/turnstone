@@ -8,7 +8,7 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 
 MODULE("turnstone.kernel.db");
@@ -74,7 +74,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
 
 
-            linkedlist_t st_l = (linkedlist_t)hashmap_get(tbl->sstable_levels, (void*)level);
+            linkedlist_t* st_l = (linkedlist_t*)hashmap_get(tbl->sstable_levels, (void*)level);
 
             if(!st_l) {
                 st_l = linkedlist_create_queue();
@@ -1076,7 +1076,7 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
 
 
-    buffer_t buf_stli = buffer_new_with_capacity(NULL, block_size * 2);
+    buffer_t* buf_stli = buffer_new_with_capacity(NULL, block_size * 2);
 
     if(!buf_stli) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list buffer");

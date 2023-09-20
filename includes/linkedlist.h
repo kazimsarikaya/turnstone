@@ -59,13 +59,13 @@ typedef enum linkedlist_destroy_type_t {
  * @typedef linkedlist_t
  * @brief linked list implicit type
  */
-typedef void * linkedlist_t;
+typedef struct linkedlist_t linkedlist_t;
 
 /**
  * @typedef linkedlist_item_t
  * @brief linked list item implicit type
  */
-typedef void * linkedlist_item_t;
+typedef struct linkedlist_item_t linkedlist_item_t;
 
 /**
  * @brief comparing given to data
@@ -94,10 +94,10 @@ int8_t linkedlist_string_comprator(const void* data1, const void* data2);
  *
  * if heap  is null then linked list created at default heap.
  */
-linkedlist_t linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t type,
-                                         linkedlist_data_comparator_f comparator, indexer_t indexer);
+linkedlist_t* linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t type,
+                                          linkedlist_data_comparator_f comparator, indexer_t indexer);
 
-memory_heap_t* linkedlist_get_heap(linkedlist_t list);
+memory_heap_t* linkedlist_get_heap(linkedlist_t* list);
 
 /**
  * @brief updates list's comparator and returns the old one.
@@ -105,7 +105,7 @@ memory_heap_t* linkedlist_get_heap(linkedlist_t list);
  * @param  comparator new comparator
  * @return old comparator
  */
-linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linkedlist_data_comparator_f comparator);
+linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t* list, linkedlist_data_comparator_f comparator);
 
 /**
  * @brief creates a normal linked list at heap
@@ -173,7 +173,7 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linked
 
 /**
  * @brief destroys linked list
- * @param[in] list @ref linkedlist_t the list to be destoyed
+ * @param[in] list @ref linkedlist_t* the list to be destoyed
  * @param[in] type @ref linkedlist_destroy_type_t the type with
  * @return 0 on success.
  *
@@ -181,7 +181,7 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t list, linked
  * if you do not destroy the data a memory leak will be happened if without data
  * destroying
  */
-uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_t type);
+uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type);
 
 /*! destroy without data macro */
 #define linkedlist_destroy(l) linkedlist_destroy_with_type(l, LINKEDLIST_DESTROY_WITHOUT_DATA)
@@ -190,17 +190,17 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t list, linkedlist_destroy_type_
 
 /**
  * @brief returns item count at linked list
- * @param[in]  list @ref linkedlist_t the list whose size will be returned
+ * @param[in]  list @ref linkedlist_t* the list whose size will be returned
  * @return @ref size_t linked list size
  */
-size_t linkedlist_size(linkedlist_t list);
+size_t linkedlist_size(const linkedlist_t* list);
 
 /**
  * @brief return data inside implicit list item type
  * @param[in] list_item list item
  * @return data inside the list.
  */
-const void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item);
+const void* linkedlist_get_data_from_listitem(linkedlist_item_t* list_item);
 
 /**
  * @brief general method for inserting or deleting data from list types.
@@ -210,7 +210,7 @@ const void* linkedlist_get_data_from_listitem(linkedlist_item_t list_item);
  * @param[in] position if data will be added by position
  * @return insertation location
  */
-size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
+size_t linkedlist_insert_at(linkedlist_t* list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
 
 /**
  * @brief general method for inserting or deleting data from list types.
@@ -220,11 +220,11 @@ size_t linkedlist_insert_at(linkedlist_t list, const void* data, linkedlist_inse
  * @param[in] position if data will be deleted by position
  * @return the deleted data
  */
-const void* linkedlist_delete_at(linkedlist_t list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
+const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlist_insert_delete_at_t where, size_t position);
 
-linkedlist_item_t linkedlist_insert_at_head_and_get_linkedlist_item(linkedlist_t list, const void* data);
-boolean_t         linkedlist_move_item_to_head(linkedlist_t list, linkedlist_item_t item);
-boolean_t         linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlist_item_t item);
+linkedlist_item_t* linkedlist_insert_at_head_and_get_linkedlist_item(linkedlist_t* list, const void* data);
+boolean_t          linkedlist_move_item_to_head(linkedlist_t* list, linkedlist_item_t* item);
+boolean_t          linkedlist_delete_linkedlist_item(linkedlist_t* list, linkedlist_item_t* item);
 
 /*! insert data with position into list */
 #define linkedlist_insert_at_position(l, d, p ) linkedlist_insert_at(l, d, LINKEDLIST_INSERT_AT_POSITION, p)
@@ -269,7 +269,7 @@ boolean_t         linkedlist_delete_linkedlist_item(linkedlist_t list, linkedlis
  * @param[position]  position the position of data if found
  * @return  0 if data found, else -1.
  */
-int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* position);
+int8_t linkedlist_get_position(linkedlist_t* list, const void* data, size_t* position);
 
 #define linkedlist_contains(l, d)  linkedlist_get_position(l, d, NULL)
 /**
@@ -278,7 +278,7 @@ int8_t linkedlist_get_position(linkedlist_t list, const void* data, size_t* posi
  * @param  position position of data
  * @return data if found or null
  */
-const void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
+const void* linkedlist_get_data_at_position(linkedlist_t* list, size_t position);
 
 #define linkedlist_queue_peek(l) linkedlist_get_data_at_position(l, 0);
 #define linkedlist_stack_peek(l) linkedlist_get_data_at_position(l, 0);
@@ -291,7 +291,7 @@ const void* linkedlist_get_data_at_position(linkedlist_t list, size_t position);
  *
  * if heap is NULL then the new heap is same as source list's heap.
  */
-linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist_t list);
+linkedlist_t* linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist_t* list);
 /*! duplicate linked list with same as heap at source list */
 #define linkedlist_duplicate_list(l) linkedlist_duplicate_list_with_heap(NULL, l);
 
@@ -303,8 +303,8 @@ linkedlist_t linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlist
  * the returned type is implicit. see also linkedlist_iterator_internal_t
  * iterator is created at the heap of list.
  */
-iterator_t* linkedlist_iterator_create(linkedlist_t list);
+iterator_t* linkedlist_iterator_create(linkedlist_t* list);
 
-int8_t linkedlist_set_equality_comparator(linkedlist_t list, linkedlist_data_comparator_f comparator);
+int8_t linkedlist_set_equality_comparator(linkedlist_t* list, linkedlist_data_comparator_f comparator);
 
 #endif

@@ -12,7 +12,7 @@
 #include <memory/frame.h>
 #include <acpi.h>
 #include <utils.h>
-#include <video.h>
+#include <logging.h>
 #include <ports.h>
 #include <cpu.h>
 #include <cpu/interrupt.h>
@@ -291,7 +291,7 @@ int8_t pci_setup(memory_heap_t* heap) {
     PCI_CONTEXT->usb_controllers = linkedlist_create_list_with_heap(heap);
     PCI_CONTEXT->other_devices = linkedlist_create_list_with_heap(heap);
 
-    linkedlist_t old_mcfgs = linkedlist_create_list();
+    linkedlist_t* old_mcfgs = linkedlist_create_list();
 
     while(mcfg) {
         PRINTLOG(PCI, LOG_TRACE, "mcfg is found at 0x%p", mcfg);

@@ -34,7 +34,7 @@ typedef struct linkerdb_t {
     FILE*            db_file;
     int32_t          fd;
     uint8_t*         mmap_res;
-    buffer_t         backend_buffer;
+    buffer_t*        backend_buffer;
     tosdb_backend_t* backend;
     tosdb_t*         tdb;
 } linkerdb_t;
@@ -90,7 +90,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
 
     memory_memclean(mmap_res, capacity);
 
-    buffer_t buf = buffer_encapsulate(mmap_res, capacity);
+    buffer_t* buf = buffer_encapsulate(mmap_res, capacity);
 
     if(!buf) {
         munmap(mmap_res, capacity);
@@ -1107,7 +1107,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     s_recs_need->set_int64(s_recs_need, "symbol_section_id", 0);
 
-    linkedlist_t res_recs = s_recs_need->search_record(s_recs_need);
+    linkedlist_t* res_recs = s_recs_need->search_record(s_recs_need);
 
     if(!res_recs) {
         s_recs_need->destroy(s_recs_need);
@@ -1122,7 +1122,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     if(!iter) {
         s_recs_need->destroy(s_recs_need);
-        linkedlist_destroy_with_data(s_recs_need);
+        linkedlist_destroy_with_data(res_recs);
         print_error("cannot create iterator");
 
         return false;
@@ -1170,7 +1170,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         s_sym_rec->set_string(s_sym_rec, "name", sym_name);
 
-        linkedlist_t s_sym_recs = s_sym_rec->search_record(s_sym_rec);
+        linkedlist_t* s_sym_recs = s_sym_rec->search_record(s_sym_rec);
 
         if(!s_sym_recs) {
             error = true;
@@ -1466,10 +1466,13 @@ int32_t main(int32_t argc, char_t** argv) {
     if(!linkerdb_fix_reloc_symbol_section_ids(ldb)) {
         print_error("cannot fix relocations missing symbol sections");
         exit_code = -1;
+
+        goto close;
     }
 
     printf("%lli\n", time_ns(NULL));
 
+#if 0
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
 
@@ -1480,7 +1483,7 @@ int32_t main(int32_t argc, char_t** argv) {
     if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
         print_error("cannot compact linker db");
     }
-
+#endif
 
 close:
     if(!linkerdb_close(ldb)) {

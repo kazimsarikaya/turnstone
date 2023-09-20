@@ -8,7 +8,7 @@
 
 #include <driver/usb.h>
 #include <hashmap.h>
-#include <video.h>
+#include <logging.h>
 #include <time/timer.h>
 #include <strings.h>
 

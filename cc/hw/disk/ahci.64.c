@@ -7,7 +7,7 @@
  */
 
 #include <driver/ahci.h>
-#include <video.h>
+#include <logging.h>
 #include <pci.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
@@ -19,8 +19,8 @@
 
 MODULE("turnstone.kernel.hw.disk.ahci");
 
-linkedlist_t sata_ports = NULL;
-linkedlist_t sata_hbas = NULL;
+linkedlist_t* sata_ports = NULL;
+linkedlist_t* sata_hbas = NULL;
 
 ahci_device_type_t ahci_check_type(ahci_hba_port_t* port);
 int8_t             ahci_find_command_slot(ahci_sata_disk_t* disk);
@@ -294,7 +294,7 @@ int8_t ahci_disk_id_comparator(const void* disk1, const void* disk2) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t ahci_init(memory_heap_t* heap, linkedlist_t sata_pci_devices) {
+int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
     PRINTLOG(AHCI, LOG_INFO, "ahci controller init started");
 
     if(linkedlist_size(sata_pci_devices) == 0) {

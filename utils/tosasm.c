@@ -18,11 +18,11 @@ typedef struct asm_token_t {
     char_t*          token_text;
 } asm_token_t;
 
-linkedlist_t asm_parser_parse(buffer_t buf);
+linkedlist_t* asm_parser_parse(buffer_t* buf);
 
-boolean_t asm_parser_emit_whitespace(buffer_t buf);
+boolean_t asm_parser_emit_whitespace(buffer_t* buf);
 
-boolean_t asm_parser_emit_whitespace(buffer_t buf) {
+boolean_t asm_parser_emit_whitespace(buffer_t* buf) {
 
     while(buffer_remaining(buf) > 0 &&
           (buffer_peek_byte(buf) == ' ' || buffer_peek_byte(buf) == '\t' || buffer_peek_byte(buf) == '\r')) {
@@ -32,7 +32,7 @@ boolean_t asm_parser_emit_whitespace(buffer_t buf) {
     return true;
 }
 
-linkedlist_t asm_parser_parse(buffer_t buf) {
+linkedlist_t* asm_parser_parse(buffer_t* buf) {
 
     while(buffer_remaining(buf) > 0 ) {
         asm_parser_emit_whitespace(buf);
@@ -79,7 +79,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     fread(in_data, 1, in_size, fd);
     fclose(fd);
 
-    buffer_t inbuf  = buffer_encapsulate(in_data, in_size);
+    buffer_t* inbuf  = buffer_encapsulate(in_data, in_size);
 
 
     asm_parser_parse(inbuf);

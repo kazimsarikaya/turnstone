@@ -124,6 +124,27 @@ typedef int8_t (* fa_reserve_system_frames_f)(struct frame_allocator_t* self, fr
 typedef int8_t (* fa_release_acpi_reclaim_memory_f)(struct frame_allocator_t* self);
 
 /**
+ * @brief returns total frame count
+ * @param[in] self frame allocator
+ * @return total frame count
+ */
+typedef uint64_t (* fa_get_total_frame_count_f)(struct frame_allocator_t* self);
+
+/**
+ * @brief returns used frame count
+ * @param[in] self frame allocator
+ * @return used frame count
+ */
+typedef uint64_t (* fa_get_allocated_frame_count_f)(struct frame_allocator_t* self);
+
+/**
+ * @brief returns free frame count
+ * @param[in] self frame allocator
+ * @return free frame count
+ */
+typedef uint64_t (* fa_get_free_frame_count_f)(struct frame_allocator_t* self);
+
+/**
  * @struct frame_allocator_t
  * @brief frame allocator class
  **/
@@ -136,6 +157,9 @@ typedef struct frame_allocator_t {
     fa_cleanup_f                        cleanup; ///< cleans old reserved frames
     fa_reserve_system_frames_f          reserve_system_frames; ///< reserve frames for mmio
     fa_release_acpi_reclaim_memory_f    release_acpi_reclaim_memory; ///< release frames with attribute @ref FRAME_TYPE_ACPI_RECLAIM_MEMORY
+    fa_get_total_frame_count_f          get_total_frame_count; ///< returns total frame count
+    fa_get_allocated_frame_count_f      get_allocated_frame_count; ///< returns used frame count
+    fa_get_free_frame_count_f           get_free_frame_count; ///< returns free frame count
 } frame_allocator_t; ///< short hand for struct frame_allocator_t
 
 /**

@@ -8,11 +8,12 @@
 #include <acpi/aml_internal.h>
 #include <acpi/aml_resource.h>
 #include <strings.h>
-#include <video.h>
+#include <logging.h>
 #include <utils.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <linkedlist.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.hw.acpi");
 

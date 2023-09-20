@@ -12,7 +12,7 @@
 #include <tosdb/tosdb_cache.h>
 #include <buffer.h>
 #include <cpu/sync.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <xxhash.h>
 

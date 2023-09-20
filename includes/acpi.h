@@ -203,10 +203,10 @@ extern acpi_contex_t* ACPI_CONTEXT;
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void);
 uint8_t                  acpi_validate_checksum(acpi_sdt_header_t* sdt_header);
 
-acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t old_tables);
+acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t* old_tables);
 #define acpi_get_table(d, s) acpi_get_next_table(d, s, NULL)
 
-linkedlist_t acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header);
+linkedlist_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header);
 #define acpi_get_apic_table_entries(sdt_hdr) acpi_get_apic_table_entries_with_heap(NULL, sdt_hdr)
 
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);

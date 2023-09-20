@@ -7,7 +7,7 @@
  */
 
 #include <acpi/aml_internal.h>
-#include <video.h>
+#include <logging.h>
 #include <strings.h>
 #include <bplustree.h>
 
@@ -20,21 +20,21 @@ typedef int8_t (* acpi_aml_parse_f)(acpi_aml_parser_context_t* ctx, void**, uint
 const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(const_data),
     PARSER_F_NAME(const_data),
-    NULL,                       // empty
-    NULL,                       // empty
-    NULL,                       // empty
-    NULL,                       // empty
+    NULL, // empty
+    NULL, // empty
+    NULL, // empty
+    NULL, // empty
     PARSER_F_NAME(alias),
-    NULL,                       // empty
-    PARSER_F_NAME(name),        // 0x08
-    NULL,                       // empty
+    NULL, // empty
+    PARSER_F_NAME(name), // 0x08
+    NULL, // empty
     PARSER_F_NAME(const_data),
     PARSER_F_NAME(const_data),
     PARSER_F_NAME(const_data),
-    PARSER_F_NAME(const_data),  // 0x0D
+    PARSER_F_NAME(const_data), // 0x0D
     PARSER_F_NAME(const_data),
-    NULL,                       // empty
-    PARSER_F_NAME(scope),       // 0x10
+    NULL, // empty
+    PARSER_F_NAME(scope), // 0x10
     PARSER_F_NAME(buffer),
     PARSER_F_NAME(package),
     PARSER_F_NAME(varpackage),
@@ -51,7 +51,7 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x58*/ NULL, NULL,//empty
     PARSER_F_NAME(op_extended),
     NULL, NULL, NULL, NULL,//empty
-    PARSER_F_NAME(opcnt_0),     // 0x60
+    PARSER_F_NAME(opcnt_0), // 0x60
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
@@ -59,15 +59,15 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
-    PARSER_F_NAME(opcnt_0),     /*0x68*/
+    PARSER_F_NAME(opcnt_0), /*0x68*/
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
-    NULL,                       // empty
-    PARSER_F_NAME(opcnt_2),     // 0x70
+    NULL, // empty
+    PARSER_F_NAME(opcnt_2), // 0x70
     PARSER_F_NAME(opcnt_1),
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_3),
@@ -75,7 +75,7 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_1),
     PARSER_F_NAME(opcnt_1),
     PARSER_F_NAME(opcnt_3),
-    PARSER_F_NAME(opcnt_4),     /*0x78*/
+    PARSER_F_NAME(opcnt_4), /*0x78*/
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_3),
@@ -83,7 +83,7 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_3),
-    PARSER_F_NAME(opcnt_2),     // 0x80
+    PARSER_F_NAME(opcnt_2), // 0x80
     PARSER_F_NAME(opcnt_2),
     PARSER_F_NAME(opcnt_2),
     PARSER_F_NAME(opcnt_1),
@@ -91,7 +91,7 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_2),
     PARSER_F_NAME(opcnt_1),
-    PARSER_F_NAME(opcnt_3),     /*0x88*/
+    PARSER_F_NAME(opcnt_3), /*0x88*/
     PARSER_F_NAME(op_match),
     PARSER_F_NAME(create_field),
     PARSER_F_NAME(create_field),
@@ -99,7 +99,7 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(create_field),
     PARSER_F_NAME(opcnt_1),
     PARSER_F_NAME(create_field),
-    PARSER_F_NAME(opcnt_2),     // 0x90
+    PARSER_F_NAME(opcnt_2), // 0x90
     PARSER_F_NAME(opcnt_2),
     PARSER_F_NAME(logic_ext),
     PARSER_F_NAME(opcnt_2),
@@ -107,14 +107,14 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_2),
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_2),
-    PARSER_F_NAME(opcnt_2),     /*0x98*/
+    PARSER_F_NAME(opcnt_2), /*0x98*/
     PARSER_F_NAME(opcnt_2),
-    NULL,                       NULL,                        // empty opts
+    NULL,                       NULL, // empty opts
     PARSER_F_NAME(opcnt_3),
     PARSER_F_NAME(opcnt_2),
     PARSER_F_NAME(opcnt_4),
     PARSER_F_NAME(opcnt_0),
-    PARSER_F_NAME(op_if),       // 0xA0
+    PARSER_F_NAME(op_if), // 0xA0
     PARSER_F_NAME(op_else),
     PARSER_F_NAME(op_while),
     PARSER_F_NAME(opcnt_0),

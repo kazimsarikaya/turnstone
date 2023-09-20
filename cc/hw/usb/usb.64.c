@@ -10,7 +10,7 @@
 #include <driver/usb_ehci.h>
 #include <driver/usb_xhci.h>
 #include <pci.h>
-#include <video.h>
+#include <logging.h>
 #include <memory.h>
 #include <memory/frame.h>
 #include <memory/paging.h>

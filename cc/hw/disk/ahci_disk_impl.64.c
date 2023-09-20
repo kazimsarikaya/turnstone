@@ -44,7 +44,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint32_t max_len = 65536 * ctx->block_size;
     future_t fut = NULL;
 
-    linkedlist_t futs = linkedlist_create_list_with_heap(NULL);
+    linkedlist_t* futs = linkedlist_create_list_with_heap(NULL);
 
     while(offset < buffer_len) {
         uint16_t iter_write_size = MIN(buffer_len, max_len);
@@ -90,7 +90,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint32_t max_len = 65536 * ctx->block_size;
     future_t fut = NULL;
 
-    linkedlist_t futs = linkedlist_create_list_with_heap(NULL);
+    linkedlist_t* futs = linkedlist_create_list_with_heap(NULL);
 
     while(offset < buffer_len) {
         uint16_t iter_read_size = MIN(buffer_len, max_len);

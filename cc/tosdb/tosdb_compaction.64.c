@@ -8,7 +8,8 @@
 
 #include <tosdb/tosdb.h>
 #include <tosdb/tosdb_internal.h>
-#include <video.h>
+#include <logging.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.kernel.db");
 
@@ -106,7 +107,7 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
     boolean_t error = false;
 
     set_t* pks = set_create(tosdb_record_primary_key_comparator);
-    linkedlist_t old_pks = linkedlist_create_list();
+    linkedlist_t* old_pks = linkedlist_create_list();
     tosdb_table_get_primary_keys_internal(tbl, pks, old_pks);
 
     printf("!!! ss %s %lli\n", tbl->name, set_size(pks));

@@ -58,8 +58,8 @@ int32_t main(int32_t argc, char_t** argv) {
         return -1;
     }
 
-    buffer_t inbuf  = NULL;
-    buffer_t outbuf = NULL;
+    buffer_t* inbuf  = NULL;
+    buffer_t* outbuf = NULL;
     int64_t ps = 0;
 
     uint64_t unpacked_hash = 0;
@@ -153,7 +153,7 @@ int32_t main(int32_t argc, char_t** argv) {
         uint64_t pad_len = (((ps + sizeof(zpack_format_t) + 511) / 512) * 512) - ps - sizeof(zpack_format_t);
 
         if(pad_len) {
-            printf("padding required with len %i\n", pad_len);
+            printf("padding required with len %lli\n", pad_len);
 
             uint8_t* pad = memory_malloc(pad_len);
 

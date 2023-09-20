@@ -290,7 +290,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     uint64_t csv_cap = ftell(in);
     fseek(in, 0, SEEK_SET);
 
-    buffer_t csv_buffer = buffer_new_with_capacity(NULL, csv_cap);
+    buffer_t* csv_buffer = buffer_new_with_capacity(NULL, csv_cap);
 
     if(!csv_buffer) {
         fclose(in);
@@ -438,7 +438,7 @@ token_error:
         goto rec_destroy;
     }
 
-    linkedlist_t s_recs = s_rec->search_record(s_rec);
+    linkedlist_t* s_recs = s_rec->search_record(s_rec);
 
     iterator_t* iter = linkedlist_iterator_create(s_recs);
 

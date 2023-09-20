@@ -63,7 +63,7 @@ typedef struct _acpi_aml_object_t {
         } buffer;
         struct {
             struct _acpi_aml_object_t* pkglen;
-            linkedlist_t               elements;
+            linkedlist_t*              elements;
         }                          package;
         struct _acpi_aml_object_t* opcode_exec_return;
         struct _acpi_aml_object_t* alias_target;
@@ -171,11 +171,11 @@ typedef struct acpi_aml_device {
     acpi_aml_object_t*      sta;
     acpi_aml_object_t*      uid;
     boolean_t               disabled;
-    linkedlist_t            buses;
-    linkedlist_t            ioports;
-    linkedlist_t            dmas;
-    linkedlist_t            memory_ranges;
-    linkedlist_t            interrupts;
+    linkedlist_t*           buses;
+    linkedlist_t*           ioports;
+    linkedlist_t*           dmas;
+    linkedlist_t*           memory_ranges;
+    linkedlist_t*           interrupts;
 }acpi_aml_device_t;
 
 typedef struct {
@@ -191,8 +191,8 @@ typedef struct {
     char_t*            scope_prefix;
     index_t*           symbols;
     index_t*           local_symbols;
-    linkedlist_t       devices;
-    linkedlist_t       interrupt_map;
+    linkedlist_t*      devices;
+    linkedlist_t*      interrupt_map;
     acpi_aml_object_t* pic;
     struct {
         uint8_t  type;

@@ -9,7 +9,7 @@
 #include <pci.h>
 #include <linkedlist.h>
 #include <memory.h>
-#include <video.h>
+#include <logging.h>
 #include <cpu/task.h>
 #include <cpu.h>
 #include <time/timer.h>
@@ -21,7 +21,7 @@ MODULE("turnstone.lib");
 int8_t   network_process_rx(void);
 uint64_t network_info_mke(const void* key);
 
-linkedlist_t network_received_packets = NULL;
+linkedlist_t* network_received_packets = NULL;
 
 map_t network_info_map = NULL;
 
@@ -71,7 +71,7 @@ int8_t network_process_rx(void){
                     return_data = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info, &return_data_len);
                 }
 
-                linkedlist_t return_queue = packet->return_queue;
+                linkedlist_t* return_queue = packet->return_queue;
 
                 memory_free(packet->packet_data);
                 memory_free((void*)packet);

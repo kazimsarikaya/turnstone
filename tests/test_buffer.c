@@ -13,7 +13,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    buffer_t buf = buffer_new_with_capacity(NULL, 5);
+    buffer_t* buf = buffer_new_with_capacity(NULL, 5);
 
     buffer_append_byte(buf, 'H');
 

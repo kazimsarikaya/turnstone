@@ -12,7 +12,7 @@
 #include <types.h>
 #include <memory.h>
 
-typedef void * buffer_t;
+typedef struct buffer_t buffer_t;
 
 typedef enum buffer_seek_direction_t {
     BUFFER_SEEK_DIRECTION_START,
@@ -20,30 +20,43 @@ typedef enum buffer_seek_direction_t {
     BUFFER_SEEK_DIRECTION_END,
 } buffer_seek_direction_t;
 
-buffer_t buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity);
+buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity);
 #define buffer_new() buffer_new_with_capacity(NULL, 128)
 
-buffer_t  buffer_append_byte(buffer_t buffer, uint8_t data);
-uint64_t  buffer_get_length(buffer_t buffer);
-boolean_t buffer_reset(buffer_t buffer);
-uint64_t  buffer_get_capacity(buffer_t buffer);
-uint64_t  buffer_get_position(buffer_t buffer);
-buffer_t  buffer_append_bytes(buffer_t buffer, uint8_t* data, uint64_t length);
-buffer_t  buffer_append_buffer(buffer_t buffer, buffer_t appenden);
-uint8_t*  buffer_get_bytes(buffer_t buffer, uint64_t length);
-uint8_t   buffer_get_byte(buffer_t buffer);
-uint8_t*  buffer_get_all_bytes(buffer_t buffer, uint64_t* length);
-uint8_t*  buffer_get_all_bytes_and_reset(buffer_t buffer, uint64_t* length);
-boolean_t buffer_seek(buffer_t buffer, int64_t position, buffer_seek_direction_t direction);
-int8_t    buffer_destroy(buffer_t buffer);
-buffer_t  buffer_encapsulate(uint8_t* data, uint64_t length);
-uint64_t  buffer_remaining(buffer_t buffer);
-uint8_t   buffer_peek_byte_at_position(buffer_t buffer, uint64_t position);
-uint8_t   buffer_peek_byte(buffer_t buffer);
-uint64_t  buffer_peek_ints_at_position(buffer_t buffer, uint64_t position, uint8_t bc);
-uint64_t  buffer_peek_ints(buffer_t buffer, uint8_t bc);
-boolean_t buffer_set_readonly(buffer_t buffer, boolean_t ro);
-boolean_t buffer_write_slice_into(buffer_t buffer, uint64_t pos, uint64_t len, uint8_t* dest);
+buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data);
+uint64_t  buffer_get_length(buffer_t* buffer);
+boolean_t buffer_reset(buffer_t* buffer);
+uint64_t  buffer_get_capacity(buffer_t* buffer);
+uint64_t  buffer_get_position(buffer_t* buffer);
+buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length);
+buffer_t* buffer_append_buffer(buffer_t* buffer, buffer_t* appenden);
+uint8_t*  buffer_get_bytes(buffer_t* buffer, uint64_t length);
+uint8_t   buffer_get_byte(buffer_t* buffer);
+uint8_t*  buffer_get_all_bytes(buffer_t* buffer, uint64_t* length);
+uint8_t*  buffer_get_all_bytes_and_reset(buffer_t* buffer, uint64_t* length);
+uint8_t*  buffer_get_all_bytes_and_destroy(buffer_t* buffer, uint64_t* length);
+boolean_t buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_direction_t direction);
+int8_t    buffer_destroy(buffer_t* buffer);
+buffer_t* buffer_encapsulate(uint8_t* data, uint64_t length);
+uint64_t  buffer_remaining(buffer_t* buffer);
+uint8_t   buffer_peek_byte_at_position(buffer_t* buffer, uint64_t position);
+uint8_t   buffer_peek_byte(buffer_t* buffer);
+uint64_t  buffer_peek_ints_at_position(buffer_t* buffer, uint64_t position, uint8_t bc);
+uint64_t  buffer_peek_ints(buffer_t* buffer, uint8_t bc);
+boolean_t buffer_set_readonly(buffer_t* buffer, boolean_t ro);
+boolean_t buffer_write_slice_into(buffer_t* buffer, uint64_t pos, uint64_t len, uint8_t* dest);
 #define buffer_write_all_into(b, d) buffer_write_slice_into(b, 0, buffer_get_length(b), d)
-uint8_t* buffer_get_view_at_position(buffer_t buffer, uint64_t position, uint64_t length);
+uint8_t* buffer_get_view_at_position(buffer_t* buffer, uint64_t position, uint64_t length);
+
+#define BUFFER_IO_INPUT 0
+#define BUFFER_IO_OUTPUT 1
+#define BUFFER_IO_ERROR 2
+
+buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id);
+
+int64_t   buffer_printf(buffer_t* buffer, const char* format, ...) __attribute__((format(printf, 2, 3)));
+int64_t   buffer_vprintf(buffer_t* buffer, const char* format, va_list args);
+buffer_t* buffer_get_tmp_buffer_for_printf(void);
+void      buffer_reset_tmp_buffer_for_printf(void);
+
 #endif

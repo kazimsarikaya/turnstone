@@ -46,6 +46,11 @@ typedef int32_t clockid_t;
 int32_t  gettimeofday(timeval_t* tv, timezone_t* tz);
 uint32_t time(time_t* t);
 int32_t  clock_gettime(clockid_t clk_id, timespec_t* tp);
+char_t*  tolower(char_t* s);
+
+char_t* tolower(char_t* s) {
+    return strlower(s);
+}
 
 int32_t clock_gettime(clockid_t clk_id, timespec_t* tp) {
     if(tp) {
@@ -161,7 +166,7 @@ __attribute__((noreturn)) void exit(int64_t status);
 int32_t                        unlink(const char_t * pathname);
 
 
-//int32_t printf(const char_t* format, ...);
+int32_t printf(const char_t* format, ...);
 int32_t fprintf(uint32_t fd, const char_t* format, ...);
 int32_t fvprintf(uint32_t fd, const char_t* format, va_list arg );
 int32_t vprintf(const char_t* format, va_list arg );
@@ -809,6 +814,8 @@ extern void (*__fini_array_start []) (void) __attribute__((weak));
 extern void (*__fini_array_end []) (void) __attribute__((weak));
 
 void __premain(void) {
+    char_t test_data[] = "A";
+    tolower(test_data); // Force tolower to be linked
     uint64_t if_start = (uint64_t)__init_array_start;
     uint64_t if_end = (uint64_t)__init_array_end;
 

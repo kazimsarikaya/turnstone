@@ -23,12 +23,12 @@ MODULE("turnstone.lib");
  * TODO: make datas and childs as union an insert node type enum
  */
 typedef struct bplustree_node_internal_t {
-    linkedlist_t*                     keys;       ///< keys at node (it is a sorted list)
+    linkedlist_t*                     keys; ///< keys at node (it is a sorted list)
     struct bplustree_node_internal_t* next; ///< next node at tree same tree depth
-    struct bplustree_node_internal_t* previous;       ///< previous node at tree same tree depth
-    struct bplustree_node_internal_t* parent;       ///< parent node
-    linkedlist_t*                     datas;       ///< data values if it is leaf node
-    linkedlist_t*                     childs;       ///< child nodes if it is internal node
+    struct bplustree_node_internal_t* previous; ///< previous node at tree same tree depth
+    struct bplustree_node_internal_t* parent; ///< parent node
+    linkedlist_t*                     datas; ///< data values if it is leaf node
+    linkedlist_t*                     childs; ///< child nodes if it is internal node
     boolean_t                         data_as_bucket; ///< if true data is bucket
 }bplustree_node_internal_t; ///< short hand for struct
 
@@ -38,8 +38,8 @@ typedef struct bplustree_node_internal_t {
  */
 typedef struct bplustree_internal_t {
     bplustree_node_internal_t* root; ///< root node
-    uint64_t                   max_key_count;       ///< maximum key count for each node
-    boolean_t                  unique;       ///< if key present replace data
+    uint64_t                   max_key_count; ///< maximum key count for each node
+    boolean_t                  unique; ///< if key present replace data
     uint64_t                   size; ///< element count
 } bplustree_internal_t; ///< short hand for struct
 
@@ -48,15 +48,15 @@ typedef struct bplustree_internal_t {
  * @brief internal iterator struct
  */
 typedef struct bplustree_iterator_internal_t {
-    memory_heap_t*                   heap;  ///< the heap used at iteration
-    const bplustree_node_internal_t* current_node;  ///< the current leaf node
-    size_t                           current_index;  ///< index at first leaf node
+    memory_heap_t*                   heap; ///< the heap used at iteration
+    const bplustree_node_internal_t* current_node; ///< the current leaf node
+    size_t                           current_index; ///< index at first leaf node
     size_t                           current_bucket_index; ///< index at bucket
-    int8_t                           end_of_iter;  ///< end of iter flag
+    int8_t                           end_of_iter; ///< end of iter flag
     index_key_search_criteria_t      criteria; ///< search criteria
-    const void*                      key1;  ///< search key for all type
-    const void*                      key2;  ///< search key for between
-    index_key_comparator_f           comparator;  ///< key comparator
+    const void*                      key1; ///< search key for all type
+    const void*                      key2; ///< search key for between
+    index_key_comparator_f           comparator; ///< key comparator
 } bplustree_iterator_internal_t; ///< short hand for struct
 
 /*! b+ tree insert implementation. see also index_t insert method*/
@@ -201,7 +201,7 @@ int8_t bplustree_destroy_index(index_t* idx){
                     iterator_t* iterator = linkedlist_iterator_create(node->datas);
 
                     while(iterator->end_of_iterator(iterator) != 0) {
-                        linkedlist_t bucket = (linkedlist_t)iterator->get_item(iterator);
+                        linkedlist_t* bucket = (linkedlist_t*)iterator->get_item(iterator);
 
                         linkedlist_destroy(bucket);
 
@@ -357,7 +357,7 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
         if(tree->unique) {
             linkedlist_insert_at_position(tree->root->datas, data, 0);
         } else {
-            linkedlist_t bucket = linkedlist_create_list_with_heap(idx->heap);
+            linkedlist_t* bucket = linkedlist_create_list_with_heap(idx->heap);
 
             if(!bucket) {
                 memory_free_ext(idx->heap, tree->root->keys);
@@ -409,10 +409,10 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
                     linkedlist_insert_at_position(node->datas, data, key_pos);
                 } else {
                     if(key_found) {
-                        linkedlist_t bucket = (linkedlist_t)linkedlist_get_data_at_position(node->datas, key_pos);
+                        linkedlist_t* bucket = (linkedlist_t*)linkedlist_get_data_at_position(node->datas, key_pos);
                         linkedlist_list_insert(bucket, data);
                     } else {
-                        linkedlist_t bucket = linkedlist_create_list_with_heap(idx->heap);
+                        linkedlist_t* bucket = linkedlist_create_list_with_heap(idx->heap);
                         linkedlist_list_insert(bucket, data);
                         linkedlist_insert_at_position(node->datas, bucket, key_pos);
                     }
@@ -613,7 +613,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
     min_keys--;
     bplustree_node_internal_t* node = tree->root;
-    linkedlist_t path = linkedlist_create_stack_with_heap(idx->heap);
+    linkedlist_t* path = linkedlist_create_stack_with_heap(idx->heap);
 
     if(path == NULL) {
         return -1;
@@ -685,8 +685,8 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
         size_t parent_key_position;
         const void* tmp_key = NULL;
         position_at_node = (size_t*)linkedlist_get_data_at_position(path, 0);
-        linkedlist_delete_at_position(node->datas, *position_at_node);   // remove data
-                                                                         //
+        linkedlist_delete_at_position(node->datas, *position_at_node); // remove data
+                                                                       //
         while (linkedlist_size(path) > 0) {
             position_at_node = (size_t*)linkedlist_stack_pop(path);
 
@@ -722,8 +722,8 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
             }
 
             if(node->parent != NULL && // not at parent
-               (linkedlist_size(node->keys) < min_keys      // not satisfies key count
-                || (node->childs != NULL && linkedlist_size(node->childs) < (min_keys + 1))      // not satisfies children count
+               (linkedlist_size(node->keys) < min_keys // not satisfies key count
+                || (node->childs != NULL && linkedlist_size(node->childs) < (min_keys + 1)) // not satisfies children count
                )) {
 
                 linkedlist_insert_delete_at_t delete_from = LINKEDLIST_DELETE_AT_FINDBY, insert_at = LINKEDLIST_INSERT_AT_ANYWHERE;
@@ -1141,7 +1141,7 @@ iterator_t* bplustree_iterator_next(iterator_t* iterator){
     if(iter->current_node->data_as_bucket) {
         iter->current_bucket_index++;
 
-        linkedlist_t bucket = (linkedlist_t)linkedlist_get_data_at_position(iter->current_node->datas, iter->current_index);
+        linkedlist_t* bucket = (linkedlist_t*)linkedlist_get_data_at_position(iter->current_node->datas, iter->current_index);
 
         if(linkedlist_size(bucket) > iter->current_bucket_index) {
             return iterator;
@@ -1199,7 +1199,7 @@ const void* bplustree_iterator_get_data(iterator_t* iterator) {
     }
 
     if(iter->current_node->data_as_bucket) {
-        linkedlist_t bucket = (linkedlist_t)linkedlist_get_data_at_position(iter->current_node->datas, iter->current_index);
+        linkedlist_t* bucket = (linkedlist_t*)linkedlist_get_data_at_position(iter->current_node->datas, iter->current_index);
 
         return linkedlist_get_data_at_position(bucket, iter->current_bucket_index);
     }

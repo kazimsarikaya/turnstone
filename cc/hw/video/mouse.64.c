@@ -1,0 +1,43 @@
+/**
+ * @file mouse.64.c
+ * @brief mouse mask
+ *
+ * This work is licensed under TURNSTONE OS Public License.
+ * Please read and understand latest version of Licence.
+ */
+
+
+#include <types.h>
+#include <utils.h>
+#include <video.h>
+#include <graphics/image.h>
+#include <device/mouse.h>
+#include <buffer.h>
+
+
+MODULE("turnstone.kernel.hw.video");
+
+extern uint8_t mouse_data_start;
+extern uint8_t mouse_data_end;
+extern buffer_t* mouse_buffer;
+
+graphics_raw_image_t* video_get_mouse_image(void) {
+    graphics_tga_image_t* tga_image = (graphics_tga_image_t*)&mouse_data_start;
+    uint64_t mouse_data_size = &mouse_data_end - &mouse_data_start;
+
+    uint32_t size = mouse_data_size;
+
+    return graphics_load_tga_image(tga_image, size);
+}
+
+int8_t mouse_report(mouse_report_t * report) {
+    if(!report) {
+        return -1;
+    }
+
+    if(mouse_buffer) {
+        buffer_append_bytes(mouse_buffer, (uint8_t*)report, sizeof(mouse_report_t));
+    }
+
+    return 0;
+}
