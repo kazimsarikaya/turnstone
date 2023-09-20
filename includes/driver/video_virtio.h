@@ -362,6 +362,7 @@ typedef struct virtio_gpu_wrapper_t {
     uint32_t      num_scanouts;
     uint64_t*     fence_ids;
     uint32_t*     resource_ids;
+    uint32_t      mouse_resource_id;
 } virtio_gpu_wrapper_t;
 
 int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* device);

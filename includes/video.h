@@ -12,6 +12,7 @@
 #include <types.h>
 #include <memory.h>
 #include <linkedlist.h>
+#include <graphics/image.h>
 
 /*! magic for psf2 fonts*/
 #define VIDEO_PSF2_FONT_MAGIC 0x864ab572
@@ -93,7 +94,13 @@ typedef void (*video_display_flush_f)(uint32_t scanout, uint64_t offset, uint32_
 
 extern video_display_flush_f VIDEO_DISPLAY_FLUSH;
 
+typedef void (*video_move_cursor_f)(uint32_t x, uint32_t y);
+
+extern video_move_cursor_f VIDEO_MOVE_CURSOR;
+
 void video_set_color(uint32_t foreground, uint32_t background);
 
 void video_print(const char_t* string);
+
+graphics_raw_image_t* video_get_mouse_image(void);
 #endif

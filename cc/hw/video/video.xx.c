@@ -44,6 +44,7 @@ void    video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x,
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
 uint32_t VIDEO_PIXELS_PER_SCANLINE = 0;
 video_display_flush_f VIDEO_DISPLAY_FLUSH = NULL;
+video_move_cursor_f VIDEO_MOVE_CURSOR = NULL;
 
 uint8_t* FONT_ADDRESS = NULL;
 int32_t FONT_WIDTH = 0;

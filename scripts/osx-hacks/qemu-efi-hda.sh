@@ -53,6 +53,8 @@ qemu-system-x86_64 \
   -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \
   -netdev $NETDEV \
   -device virtio-keyboard,id=kbd \
+  -device virtio-mouse,id=mouse \
+  -device virtio-tablet,id=tablet \
   -serial file:${BASEDIR}/tmp/qemu-video.log \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
-  -display sdl,gl=on 
+  -display sdl,gl=on,show-cursor=on 

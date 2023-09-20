@@ -52,6 +52,7 @@ CCGENDIR = cc-gen
 INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
+ASSETSDIR = assets
 
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
@@ -93,6 +94,7 @@ DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 
 FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus24x12.psf
 FONTOBJ = $(OBJDIR)/font.o
+MOUSEOBJ = $(OBJDIR)/mouse_data.o
 
 OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ) $(CC64ASMOUTS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
@@ -176,8 +178,8 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
-	$(TOSDBIMG_BUILDER) -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)
+	$(TOSDBIMG_BUILDER) -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)	
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
@@ -220,6 +222,11 @@ $(FONTOBJ):
 	echo -n turnstone.kernel.hw.video > $(OBJDIR)/font.module_name.txt
 	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(OBJDIR)/font.psf $@
 	rm -f $(OBJDIR)/font.module_name.txt
+
+$(MOUSEOBJ):
+	echo -n turnstone.kernel.hw.video > $(OBJDIR)/mouse.module_name.txt
+	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.mouse --redefine-sym _binary_assets_mouse_tga_start=mouse_data_start --redefine-sym _binary_assets_mouse_tga_end=mouse_data_end --redefine-sym _binary_assets_mouse_tga_size=mouse_data_size --add-section .___module___=$(OBJDIR)/mouse.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.mouse $(ASSETSDIR)/mouse.tga $@
+	rm -f $(OBJDIR)/mouse.module_name.txt
 
 clean:
 	rm -fr $(DOCSOBJDIR)/*
