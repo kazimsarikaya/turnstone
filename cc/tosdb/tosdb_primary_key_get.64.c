@@ -231,9 +231,7 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
             return false;
         }
 
-        idx_data = buffer_get_all_bytes(buf_idx_out, NULL);
-
-        buffer_destroy(buf_idx_out);
+        idx_data = buffer_get_all_bytes_and_destroy(buf_idx_out, NULL);
 
         st_idx_items = memory_malloc(sizeof(tosdb_memtable_index_item_t*) * record_count);
 

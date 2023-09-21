@@ -169,9 +169,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         }
 
         uint64_t bf_data_len = 0;
-        uint8_t* bf_data = buffer_get_all_bytes(buf_bf_out, &bf_data_len);
-
-        buffer_destroy(buf_bf_out);
+        uint8_t* bf_data = buffer_get_all_bytes_and_destroy(buf_bf_out, &bf_data_len);
 
         data_t bf_tmp_d = {0};
         bf_tmp_d.type = DATA_TYPE_INT8_ARRAY;
@@ -320,10 +318,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             return false;
         }
 
-        idx_data = buffer_get_all_bytes(buf_idx_out, NULL);
+        idx_data = buffer_get_all_bytes_and_destroy(buf_idx_out, NULL);
         org_idx_data = idx_data;
-
-        buffer_destroy(buf_idx_out);
 
         st_idx_items = memory_malloc(sizeof(tosdb_memtable_secondary_index_item_t*) * record_count);
 

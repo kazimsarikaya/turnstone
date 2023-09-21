@@ -19,7 +19,6 @@
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <efi.h>
-#include <video.h>
 #include <stdbufs.h>
 
 MODULE("turnstone.efi");

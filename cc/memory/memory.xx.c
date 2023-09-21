@@ -298,3 +298,85 @@ int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
 
     return 0;
 }
+
+int8_t memory_memclean(void* address, size_t size) {
+    if(!address || !size) {
+        return 0;
+    }
+
+    uint64_t addr = (uint64_t)address;
+    uint8_t* t_addr = (uint8_t*)address;
+
+    if(addr % 16) {
+
+        size_t rem = addr % 16;
+        size -= rem;
+
+        if(rem >= 8) {
+            uint64_t* t2_addr = (uint64_t*)t_addr;
+            *t2_addr++ = 0;
+            t_addr = (uint8_t*)t2_addr;
+            rem -= 8;
+        }
+
+        if(rem >= 4) {
+            uint32_t* t2_addr = (uint32_t*)t_addr;
+            *t2_addr++ = 0;
+            t_addr = (uint8_t*)t2_addr;
+            rem -= 4;
+        }
+
+        if(rem >= 2) {
+            uint16_t* t2_addr = (uint16_t*)t_addr;
+            *t2_addr++ = 0;
+            t_addr = (uint8_t*)t2_addr;
+            rem -= 2;
+        }
+
+        if(rem) {
+            *t_addr++ = 0;
+        }
+    }
+
+    uint128_t* t128_addr = (uint128_t*)t_addr;
+
+    size_t q_size = size / sizeof(uint128_t);
+
+    for(size_t i = 0; i < q_size; i++) {
+        *t128_addr++ = 0;
+    }
+
+    size_t rem = size % sizeof(uint128_t);
+
+    if(rem) {
+        t_addr = (uint8_t*)t128_addr;
+
+        if(rem >= 8) {
+            uint64_t* t2_addr = (uint64_t*)t_addr;
+            *t2_addr++ = 0;
+            t_addr = (uint8_t*)t2_addr;
+            rem -= 8;
+        }
+
+        if(rem >= 4) {
+            uint32_t* t2_addr = (uint32_t*)t_addr;
+            *t2_addr++ = 0;
+            t_addr = (uint8_t*)t2_addr;
+            rem -= 4;
+        }
+
+        if(rem >= 2) {
+            uint16_t* t2_addr = (uint16_t*)t_addr;
+            *t2_addr++ = 0;
+            t_addr = (uint8_t*)t2_addr;
+            rem -= 2;
+        }
+
+        if(rem) {
+            *t_addr++ = 0;
+        }
+    }
+
+    return 0;
+}
+

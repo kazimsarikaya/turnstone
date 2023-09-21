@@ -557,8 +557,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     }
 
     uint64_t ol = 0;
-    uint8_t* b_vl_data = buffer_get_all_bytes(valuelog_out, &ol);
-    buffer_destroy(valuelog_out);
+    uint8_t* b_vl_data = buffer_get_all_bytes_and_destroy(valuelog_out, &ol);
 
     uint64_t b_vl_size = sizeof(tosdb_block_valuelog_t) + ol;
     b_vl_size += TOSDB_PAGE_SIZE - (b_vl_size % TOSDB_PAGE_SIZE);
@@ -713,9 +712,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     }
 
     uint64_t bf_size = 0;
-    uint8_t* bf_data = buffer_get_all_bytes(buf_bf_out, &bf_size);
-
-    buffer_destroy(buf_bf_out);
+    uint8_t* bf_data = buffer_get_all_bytes_and_destroy(buf_bf_out, &bf_size);
 
     if(!bf_data) {
         return false;
@@ -800,9 +797,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     }
 
     uint64_t index_size = 0;
-    uint8_t* index_data = buffer_get_all_bytes(buf_id_out, &index_size);
-
-    buffer_destroy(buf_id_out);
+    uint8_t* index_data = buffer_get_all_bytes_and_destroy(buf_id_out, &index_size);
 
     if(!index_data) {
         memory_free(bf_data);

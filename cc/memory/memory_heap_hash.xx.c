@@ -31,8 +31,8 @@ typedef struct memory_heap_hash_block_t {
 
 _Static_assert(sizeof(memory_heap_hash_block_t) == 16, "memory_heap_hash_block_t size is not 16 bytes");
 
-#define MEMORY_HEAP_HASH_FAST_CLASSES_COUNT 257
-#define MEMORY_HEAP_HASH_MAX_POOLS           16
+#define MEMORY_HEAP_HASH_FAST_CLASSES_COUNT 1025
+#define MEMORY_HEAP_HASH_MAX_POOLS            16
 
 typedef struct memory_heap_hash_fast_class_t {
     uint32_t head;
