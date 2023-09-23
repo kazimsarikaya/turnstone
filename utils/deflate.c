@@ -12,9 +12,7 @@
 #include <deflate.h>
 #include <buffer.h>
 #include <utils.h>
-
-
-
+#include <strings.h>
 
 int32_t main(int32_t argc, char_t** argv);
 

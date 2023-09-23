@@ -35,7 +35,6 @@ typedef struct bit_buffer_t {
     buffer_t* buffer;
     uint8_t   byte;
     uint8_t   bit_count;
-    uint64_t  total_bits;
 } bit_buffer_t;
 
 typedef struct huffman_decode_table_t {
@@ -47,6 +46,12 @@ typedef struct huffman_encode_table_t {
     uint16_t codes[288];
     uint8_t  lengths[288];
 } huffman_encode_table_t;
+
+typedef struct huffman_encode_freq_t {
+    uint64_t literal_freqs[288];
+    uint64_t distance_freqs[30];
+    uint64_t extra_bits_count;
+} huffman_encode_freq_t;
 
 const huffman_encode_table_t huffman_encode_fixed = {
     {
@@ -158,6 +163,10 @@ static inline int16_t huffman_find_length_index(uint16_t length) {
         return -1;
     }
 
+    if (length == 258) {
+        return 28;
+    }
+
     uint16_t i = 0;
     while (huffman_length_base[i] <= length) {
         i++;
@@ -185,6 +194,10 @@ static inline int16_t huffman_find_distance_index(uint16_t distance) {
 
     if (distance > 32768) {
         return -1;
+    }
+
+    if (distance >= 24577) {
+        return 29;
     }
 
     uint16_t i = 0;
@@ -323,7 +336,7 @@ int8_t deflate_inflate_block(bit_buffer_t* bit_buffer, buffer_t* out, huffman_de
 static inline void huffman_decode_table_build(uint8_t* lengths, size_t size, struct huffman_decode_table_t* out) {
 
     uint16_t offsets[16];
-    unsigned int count = 0;
+    uint32_t count = 0;
 
     for(uint32_t i = 0; i < 16; i++) {
         out->counts[i] = 0;
@@ -372,7 +385,8 @@ void huffman_decode_table_decode(bit_buffer_t* bit_buffer, huffman_decode_table_
         if (symbol < 16) {
             lengths[count++] = symbol;
         } else if (symbol < 19) {
-            int rep = 0, length;
+            int32_t rep = 0, length;
+
             if (symbol == 16) {
                 rep = lengths[count - 1];
                 length = bit_buffer_get(bit_buffer, 2) + 3;
@@ -381,10 +395,12 @@ void huffman_decode_table_decode(bit_buffer_t* bit_buffer, huffman_decode_table_
             } else if (symbol == 18) {
                 length = bit_buffer_get(bit_buffer, 7) + 11;
             }
+
             do {
                 lengths[count++] = rep;
                 length--;
             } while (length);
+
         } else {
             break;
         }
@@ -476,7 +492,7 @@ static deflate_match_t deflate_find_bestmatch (buffer_t* in, int64_t in_len, int
     return (deflate_match_t){.best_size = best_size, .best_pos = best_pos};
 }
 
-static buffer_t* deflate_deflate_lz77(buffer_t* in_block) {
+static buffer_t* deflate_deflate_lz77(buffer_t* in_block, huffman_encode_freq_t* freqs) {
     deflate_hashtable_t* ht = memory_malloc(sizeof(deflate_hashtable_t));
 
     if(ht == NULL) {
@@ -501,13 +517,27 @@ static buffer_t* deflate_deflate_lz77(buffer_t* in_block) {
         deflate_match_t dpm = deflate_find_bestmatch(in_block, in_len, in_p, ht);
 
         if(dpm.best_pos != DEFLATE_NO_POS && dpm.best_size >= DEFLATE_MIN_MATCH) {
-            int16_t marker = -1;
+            uint16_t marker = 0xFFFF;
 
             int64_t distance = in_p - dpm.best_pos;
 
             buffer_append_bytes(out_block, (uint8_t*)&marker, 2);
             buffer_append_bytes(out_block, (uint8_t*)&dpm.best_size, 2);
             buffer_append_bytes(out_block, (uint8_t*)&distance, 2);
+
+            int16_t length_idx = huffman_find_length_index(dpm.best_size);
+            int16_t dist_idx = huffman_find_distance_index(distance);
+
+            if(length_idx == -1 || dist_idx == -1) {
+                memory_free(ht);
+                buffer_destroy(out_block);
+
+                return NULL;
+            }
+
+            freqs->distance_freqs[dist_idx]++;
+
+            freqs->extra_bits_count += huffman_length_extra_bits[length_idx] + huffman_distance_extra_bits[dist_idx];
 
             if(!buffer_seek(in_block, dpm.best_size, BUFFER_SEEK_DIRECTION_CURRENT)) {
                 memory_free(ht);
@@ -517,6 +547,9 @@ static buffer_t* deflate_deflate_lz77(buffer_t* in_block) {
             }
         } else {
             int16_t symbol = buffer_get_byte(in_block);
+
+            freqs->literal_freqs[symbol]++;
+
             buffer_append_bytes(out_block, (uint8_t*)&symbol, 2); // deflate needs 16 bit symbols
         }
     }
@@ -525,55 +558,56 @@ static buffer_t* deflate_deflate_lz77(buffer_t* in_block) {
 
     buffer_seek(in_block, 0, BUFFER_SEEK_DIRECTION_START);
 
+    freqs->literal_freqs[256] = 1;
+
     return out_block;
 }
 
-static buffer_t* deflate_deflate_no_compress(buffer_t* in_block) {
+static int8_t deflate_deflate_no_compress(buffer_t* in_block, bit_buffer_t* bit_buffer, boolean_t is_last_block) {
     int64_t in_len = buffer_get_length(in_block);
 
     if(in_len > DEFLATE_MAX_BLOCK_SIZE) {
-        return NULL;
+        return -1;
     }
 
-    buffer_t* out_block = buffer_new();
-
-    if(out_block == NULL) {
-        return NULL;
+    if(is_last_block) {
+        bit_buffer_put(bit_buffer, 1, 1);
+    } else {
+        bit_buffer_put(bit_buffer, 1, 0);
     }
 
-    buffer_append_bytes(out_block, (uint8_t*)&in_len, 2);
+    bit_buffer_put(bit_buffer, 2, 0);
+
+    bit_buffer_push(bit_buffer);
+
+    buffer_append_bytes(bit_buffer->buffer, (uint8_t*)&in_len, 2);
 
     in_len = ~in_len & 0xFFFF;
 
-    buffer_append_bytes(out_block, (uint8_t*)&in_len, 2);
+    buffer_append_bytes(bit_buffer->buffer, (uint8_t*)&in_len, 2);
 
-    buffer_append_buffer(out_block, in_block);
+    buffer_append_buffer(bit_buffer->buffer, in_block);
 
-    buffer_seek(out_block, 0, BUFFER_SEEK_DIRECTION_START);
-    buffer_seek(in_block, 0, BUFFER_SEEK_DIRECTION_START);
-
-    return out_block;
+    return 0;
 }
 
-static bit_buffer_t* deflate_deflate_block(buffer_t* lz77_block, const huffman_encode_table_t* symbols, const huffman_encode_table_t* distances) {
-    buffer_t* out_block = buffer_new();
+static int64_t deflate_deflate_calculate_out_size(huffman_encode_freq_t* freqs, const huffman_encode_table_t* symbols, const huffman_encode_table_t* distances) {
+    int64_t out_size = 0;
 
-    if(out_block == NULL) {
-        return NULL;
+    for(int64_t i = 0; i < 288; i++) {
+        out_size += freqs->literal_freqs[i] * symbols->lengths[i];
     }
 
-    bit_buffer_t* bit_buffer = memory_malloc(sizeof(bit_buffer_t));
-
-    if(bit_buffer == NULL) {
-        buffer_destroy(out_block);
-
-        return NULL;
+    for(int64_t i = 0; i < 30; i++) {
+        out_size += freqs->distance_freqs[i] * distances->lengths[i];
     }
 
-    bit_buffer->buffer = out_block;
+    out_size += freqs->extra_bits_count;
 
-    bit_buffer_put(bit_buffer, 3, 0); // algin to byte for remainder of block
+    return out_size;
+}
 
+static int8_t deflate_deflate_block(buffer_t* lz77_block, bit_buffer_t* bit_buffer, const huffman_encode_table_t* symbols, const huffman_encode_table_t* distances) {
     int64_t lz77_block_len = buffer_get_length(lz77_block);
     uint16_t* lz77_block_data = (uint16_t*)buffer_get_view_at_position(lz77_block, 0, lz77_block_len);
 
@@ -583,13 +617,10 @@ static bit_buffer_t* deflate_deflate_block(buffer_t* lz77_block, const huffman_e
             // length + distance data
             uint16_t length = lz77_block_data[i++];
 
-            uint16_t length_idx = huffman_find_length_index(length);
+            int16_t length_idx = huffman_find_length_index(length);
 
-            if(length_idx == 0xFFFF) {
-                memory_free(bit_buffer);
-                buffer_destroy(out_block);
-
-                return NULL;
+            if(length_idx == -1 || length_idx > 28) {
+                return -1;
             }
 
             uint16_t length_base = huffman_length_base[length_idx];
@@ -603,13 +634,10 @@ static bit_buffer_t* deflate_deflate_block(buffer_t* lz77_block, const huffman_e
 
             uint16_t distance = lz77_block_data[i];
 
-            uint16_t distance_idx = huffman_find_distance_index(distance);
+            int16_t distance_idx = huffman_find_distance_index(distance);
 
-            if(distance_idx == 0xFFFF) {
-                memory_free(bit_buffer);
-                buffer_destroy(out_block);
-
-                return NULL;
+            if(distance_idx == -1 || distance_idx > 29) {
+                return -1;
             }
 
             uint16_t distance_base = huffman_distance_base[distance_idx];
@@ -626,7 +654,6 @@ static bit_buffer_t* deflate_deflate_block(buffer_t* lz77_block, const huffman_e
 
             uint16_t symbol_code = symbols->codes[symbol];
             uint8_t symbol_len = symbols->lengths[symbol];
-
             bit_buffer_put(bit_buffer, symbol_len, symbol_code);
 
         }
@@ -634,13 +661,7 @@ static bit_buffer_t* deflate_deflate_block(buffer_t* lz77_block, const huffman_e
 
     bit_buffer_put(bit_buffer, symbols->lengths[256], symbols->codes[256]); // end of block
 
-    bit_buffer->total_bits = buffer_get_length(out_block) * 8 + bit_buffer->bit_count;
-
-    bit_buffer_push(bit_buffer);
-
-    buffer_seek(out_block, 0, BUFFER_SEEK_DIRECTION_START);
-
-    return bit_buffer;
+    return 0;
 }
 
 int8_t deflate_deflate(buffer_t* in, buffer_t* out) {
@@ -650,83 +671,61 @@ int8_t deflate_deflate(buffer_t* in, buffer_t* out) {
         .bit_count = 0
     };
 
-
     while(buffer_remaining(in)) {
-        int64_t in_len = buffer_remaining(in);
+        int64_t in_rem = buffer_remaining(in);
         int64_t in_pos = buffer_get_position(in);
 
-        int64_t block_len = MIN(in_len, DEFLATE_MAX_BLOCK_SIZE);
+        int64_t block_len = MIN(in_rem, DEFLATE_MAX_BLOCK_SIZE);
 
         uint8_t* block = buffer_get_view_at_position(in, in_pos, block_len);
 
-        buffer_seek(in, in_pos + block_len, BUFFER_SEEK_DIRECTION_CURRENT);
+        if(!buffer_seek(in, block_len, BUFFER_SEEK_DIRECTION_CURRENT)) {
+            return -1;
+        }
+
+        boolean_t is_last_block = buffer_remaining(in) == 0;
 
         buffer_t* in_block = buffer_encapsulate(block, block_len);
 
-        buffer_t* lz77_block = deflate_deflate_lz77(in_block);
+        if(!in_block) {
+            return -1;
+        }
 
-        buffer_t* no_compress_block = deflate_deflate_no_compress(in_block);
+        huffman_encode_freq_t* freqs = memory_malloc(sizeof(huffman_encode_freq_t));
 
-        if(!no_compress_block) {
+        if(!freqs) {
             buffer_destroy(in_block);
-            buffer_destroy(lz77_block);
 
             return -1;
         }
 
-        bit_buffer_t* fixed_compressed_block = deflate_deflate_block(lz77_block, &huffman_encode_fixed, &huffman_encode_distance_fixed);
+        buffer_t* lz77_block = deflate_deflate_lz77(in_block, freqs);
 
-        if(!fixed_compressed_block) {
+        if(!lz77_block) {
             buffer_destroy(in_block);
-            buffer_destroy(lz77_block);
-            buffer_destroy(no_compress_block);
+            memory_free(freqs);
 
             return -1;
         }
 
+        uint64_t nocompress_len = 0;
 
-        // dynamic huffman
-
-
-        buffer_destroy(in_block);
-        buffer_destroy(lz77_block);
-
-        uint64_t no_compress_len = buffer_get_length(no_compress_block) * 8;
-
-
-        boolean_t use_no_compress = no_compress_len < fixed_compressed_block->total_bits;
-        boolean_t use_fixed = fixed_compressed_block->total_bits < no_compress_len;
-
-        if(!use_no_compress) {
-            buffer_destroy(no_compress_block);
+        if(bit_buffer.bit_count <= 5) {
+            nocompress_len = 8 - bit_buffer.bit_count;
+        } else {
+            nocompress_len = 16 - bit_buffer.bit_count;
         }
 
-        if(!use_fixed) {
-            buffer_destroy(fixed_compressed_block->buffer);
-            memory_free(fixed_compressed_block);
-        }
+        nocompress_len += 16 + 16 + buffer_get_length(in_block) * 8;
 
+        uint64_t fixedcompress_len = deflate_deflate_calculate_out_size(freqs, &huffman_encode_fixed, &huffman_encode_distance_fixed);
 
-        if(use_no_compress) {
-            if(!buffer_remaining(in)) {
-                bit_buffer_put(&bit_buffer, 1, 1);
-                bit_buffer_put(&bit_buffer, 2, 0);
-                bit_buffer_push(&bit_buffer);
-                buffer_append_buffer(out, no_compress_block);
-                buffer_destroy(no_compress_block);
-            } else {
-                bit_buffer_put(&bit_buffer, 1, 0);
-                bit_buffer_put(&bit_buffer, 2, 0);
-                bit_buffer_push(&bit_buffer);
-                buffer_append_buffer(out, no_compress_block);
-                buffer_destroy(no_compress_block);
-            }
-        }
+        int8_t ret = 0;
 
-        if(use_fixed) {
-            bit_buffer_get(fixed_compressed_block, 3);
-
-            if(!buffer_remaining(in)) {
+        if(nocompress_len < fixedcompress_len) {
+            ret = deflate_deflate_no_compress(in_block, &bit_buffer, is_last_block);
+        } else {
+            if(is_last_block) {
                 bit_buffer_put(&bit_buffer, 1, 1);
             } else {
                 bit_buffer_put(&bit_buffer, 1, 0);
@@ -734,51 +733,18 @@ int8_t deflate_deflate(buffer_t* in, buffer_t* out) {
 
             bit_buffer_put(&bit_buffer, 2, 1);
 
-            int64_t bits = bit_buffer_get(fixed_compressed_block, 5);
-
-            bit_buffer_put(&bit_buffer, 5, bits);
-
-            bit_buffer_push(&bit_buffer);
-
-            if(fixed_compressed_block->bit_count) {
-                buffer_destroy(fixed_compressed_block->buffer);
-                memory_free(fixed_compressed_block);
-
-                return -1;
-            }
-
-            fixed_compressed_block->total_bits -= 8;
-
-            uint64_t rem_bytes = fixed_compressed_block->total_bits / 8;
-            uint64_t rem_bits = fixed_compressed_block->total_bits % 8;
-
-            uint8_t* rem_data = buffer_get_view_at_position(fixed_compressed_block->buffer, 1, rem_bytes);
-
-            if(!rem_data) {
-                buffer_destroy(fixed_compressed_block->buffer);
-                memory_free(fixed_compressed_block);
-
-                return -1;
-            }
-
-            buffer_append_bytes(out, rem_data, rem_bytes);
-
-            if(rem_bits) {
-                buffer_seek(fixed_compressed_block->buffer, rem_bytes, BUFFER_SEEK_DIRECTION_CURRENT);
-                uint8_t rem_byte = buffer_get_byte(fixed_compressed_block->buffer);
-
-                bit_buffer_put(&bit_buffer, rem_bits, rem_byte);
-            }
-
-            buffer_destroy(fixed_compressed_block->buffer);
-            memory_free(fixed_compressed_block);
-
-            if(!buffer_remaining(in)) {
-                bit_buffer_push(&bit_buffer);
-            }
+            ret = deflate_deflate_block(lz77_block, &bit_buffer, &huffman_encode_fixed, &huffman_encode_distance_fixed);
         }
 
+        memory_free(freqs);
+        buffer_destroy(in_block);
+        buffer_destroy(lz77_block);
+
+        if(ret != 0) {
+            return ret;
+        }
     }
+
     return 0;
 }
 
