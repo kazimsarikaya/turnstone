@@ -12,7 +12,7 @@
 #include <types.h>
 
 
-typedef int8_t (*quicksort_comparator_f)(void* a, void* b);
+typedef int8_t (*quicksort_comparator_f)(const void* a, const void* b);
 typedef void   (*quicksort_swap_f)(void* a, void* b, uint64_t item_size);
 
 void quicksort_partial(void* array, uint64_t start, uint64_t end, uint64_t item_size, quicksort_comparator_f comparator, quicksort_swap_f swap);
