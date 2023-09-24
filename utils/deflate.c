@@ -13,6 +13,7 @@
 #include <buffer.h>
 #include <utils.h>
 #include <strings.h>
+#include <quicksort.h>
 
 int32_t main(int32_t argc, char_t** argv);
 
