@@ -63,6 +63,12 @@ buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
     buffer->capacity = capacity;
     buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
 
+    if(buffer->data == NULL) {
+        memory_free(buffer);
+
+        return NULL;
+    }
+
     return buffer;
 }
 
@@ -139,6 +145,10 @@ uint64_t buffer_get_position(buffer_t* buffer) {
 };
 
 buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) {
+    if(!buffer) {
+        return NULL;
+    }
+
     if(buffer->readonly) {
         return NULL;
     }
