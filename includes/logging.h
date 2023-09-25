@@ -48,6 +48,7 @@ typedef enum logging_modules_t {
     HPET,
     VMWARESVGA,
     USB,
+    COMPRESSION,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -215,6 +216,11 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_USB
 /*! default log level for usb module */
 #define LOG_LEVEL_USB LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_COMPRESSION
+/*! default log level for compression module */
+#define LOG_LEVEL_COMPRESSION LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

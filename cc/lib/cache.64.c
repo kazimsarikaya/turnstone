@@ -36,11 +36,7 @@ struct cache_t {
     lock_t         lock;
 };
 
-int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci);
-int8_t cache_delete_item(cache_t* cache, boolean_t mru, cache_item_t* ci);
-int8_t cache_move_to_head(cache_t* cache, boolean_t mru, cache_item_t* ci);
-
-int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
+static inline int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
     if(!cache || !ci) {
         return -1;
     }
@@ -74,7 +70,7 @@ int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
     return 0;
 }
 
-int8_t cache_delete_item(cache_t* cache, boolean_t mru, cache_item_t* ci) {
+static inline int8_t cache_delete_item(cache_t* cache, boolean_t mru, cache_item_t* ci) {
     if(!cache || !ci) {
         return -1;
     }
@@ -111,7 +107,7 @@ int8_t cache_delete_item(cache_t* cache, boolean_t mru, cache_item_t* ci) {
     return 0;
 }
 
-int8_t cache_move_to_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
+static inline int8_t cache_move_to_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {
     if(!cache || !ci) {
         return -1;
     }

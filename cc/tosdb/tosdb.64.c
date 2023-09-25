@@ -15,10 +15,12 @@
 #include <logging.h>
 #include <strings.h>
 #include <xxhash.h>
+#include <zpack.h>
+#include <deflate.h>
 
 MODULE("turnstone.kernel.db");
 
-tosdb_t* tosdb_new(tosdb_backend_t* backend) {
+tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type_if_not_exists) {
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "backend is null");
 
@@ -133,7 +135,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
     if(need_format) {
         PRINTLOG(TOSDB, LOG_WARNING, "backend needs format");
 
-        main_sb = tosdb_backend_format(backend);
+        main_sb = tosdb_backend_format(backend, compression_type_if_not_exists);
 
         if(!main_sb) {
             return NULL;
@@ -151,6 +153,28 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend) {
 
     res->backend = backend;
     res->superblock = main_sb;
+
+    if(main_sb->compression_type == COMPRESSION_TYPE_NONE) {
+        res->compression = compression_get(compression_type_if_not_exists);
+
+        if(!res->compression) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot get compression type %d", compression_type_if_not_exists);
+            memory_free(main_sb);
+            memory_free(res);
+
+            return NULL;
+        }
+    } else {
+        res->compression = compression_get(main_sb->compression_type);
+
+        if(!res->compression) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot get compression type %d", compression_type_if_not_exists);
+            memory_free(main_sb);
+            memory_free(res);
+
+            return NULL;
+        }
+    }
 
     if(!tosdb_load_databases(res)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot load databases");
@@ -331,6 +355,7 @@ boolean_t tosdb_free(tosdb_t * tdb) {
     memory_free(tdb->superblock);
     lock_destroy(tdb->lock);
     hashmap_destroy(tdb->databases);
+    hashmap_destroy(tdb->database_new);
     tosdb_cache_close(tdb->cache);
     memory_free(tdb);
 
@@ -429,7 +454,10 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
     boolean_t error = false;
 
     uint64_t metadata_size = sizeof(tosdb_block_database_list_t) + sizeof(tosdb_block_database_list_item_t) * hashmap_size(tdb->database_new);
-    metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+
+    if(metadata_size % TOSDB_PAGE_SIZE) {
+        metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+    }
 
     tosdb_block_database_list_t * block = memory_malloc(metadata_size);
 

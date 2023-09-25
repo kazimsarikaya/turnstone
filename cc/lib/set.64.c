@@ -132,7 +132,7 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb) {
 
     boolean_t error = false;
 
-    if(cb) {
+    if(cb && set_size(s) > 0) {
         iterator_t* iter = set_create_iterator(s);
 
         if(iter) {

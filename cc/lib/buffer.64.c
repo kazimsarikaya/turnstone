@@ -63,6 +63,12 @@ buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
     buffer->capacity = capacity;
     buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
 
+    if(buffer->data == NULL) {
+        memory_free(buffer);
+
+        return NULL;
+    }
+
     return buffer;
 }
 
@@ -139,6 +145,10 @@ uint64_t buffer_get_position(buffer_t* buffer) {
 };
 
 buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) {
+    if(!buffer) {
+        return NULL;
+    }
+
     if(buffer->readonly) {
         return NULL;
     }
@@ -287,11 +297,23 @@ uint8_t buffer_peek_byte(buffer_t* buffer) {
         return 0;
     }
 
-    return buffer_peek_ints_at_position(buffer, buffer->position, 1);
+    if(buffer->position + 1  > buffer->length) {
+        return 0;
+    }
+
+    return buffer->data[buffer->position];
 }
 
 uint8_t buffer_peek_byte_at_position(buffer_t* buffer, uint64_t position) {
-    return buffer_peek_ints_at_position(buffer, position, 1);
+    if(!buffer) {
+        return 0;
+    }
+
+    if(position + 1  > buffer->length) {
+        return 0;
+    }
+
+    return buffer->data[position];
 }
 
 uint64_t buffer_peek_ints_at_position(buffer_t* buffer, uint64_t position, uint8_t bc) {
@@ -310,7 +332,31 @@ uint64_t buffer_peek_ints_at_position(buffer_t* buffer, uint64_t position, uint8
     uint64_t* res_p = (uint64_t*)&buffer->data[position];
     uint64_t res = *res_p;
 
-    res = res & ((1ULL << (bc * 8)) - 1);
+    switch(bc) {
+    case 1:
+        res &= 0xFF;
+        break;
+    case 2:
+        res &= 0xFFFF;
+        break;
+    case 3:
+        res &= 0xFFFFFF;
+        break;
+    case 4:
+        res &= 0xFFFFFFFF;
+        break;
+    case 5:
+        res &= 0xFFFFFFFFFF;
+        break;
+    case 6:
+        res &= 0xFFFFFFFFFFFF;
+        break;
+    case 7:
+        res &= 0xFFFFFFFFFFFFFF;
+        break;
+    case 8:
+        break;
+    }
 
     return res;
 }

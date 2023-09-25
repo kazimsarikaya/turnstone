@@ -188,4 +188,15 @@ static inline uint64_t bit_most_significant(uint64_t num) {
 uint64_t __attribute__((noinline, optimize("O0"))) read_memio(uint64_t va, uint8_t size);
 void __attribute__((noinline, optimize("O0")))     write_memio(uint64_t va, uint64_t val, uint8_t size);
 
+static inline uint64_t reverse_bits(uint64_t bits, uint8_t bit_count) {
+    int16_t result = 0;
+
+    for (uint8_t i = 0; i < bit_count; i++) {
+        result <<= 1;
+        result |= bits & 1;
+        bits >>= 1;
+    }
+
+    return result;
+}
 #endif

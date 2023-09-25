@@ -542,6 +542,8 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         return false;
     }
 
+    boolean_t error = false;
+
     PRINTLOG(TOSDB, LOG_DEBUG, "table %s will be freed", tbl->name);
 
     if(tbl->columns) {
@@ -549,21 +551,20 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create column iterator");
+            error = true;
+        } else {
+            while(iter->end_of_iterator(iter) != 0) {
+                tosdb_column_t* col = (tosdb_column_t*)iter->get_item(iter);
 
-            return false;
+                memory_free(col->name);
+
+                memory_free(col);
+
+                iter = iter->next(iter);
+            }
+
+            iter->destroy(iter);
         }
-
-        while(iter->end_of_iterator(iter) != 0) {
-            tosdb_column_t* col = (tosdb_column_t*)iter->get_item(iter);
-
-            memory_free(col->name);
-
-            memory_free(col);
-
-            iter = iter->next(iter);
-        }
-
-        iter->destroy(iter);
 
         hashmap_destroy(tbl->columns);
     }
@@ -574,18 +575,19 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
 
-            return false;
+            error = true;
+        } else {
+            while(iter->end_of_iterator(iter) != 0) {
+                tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
+
+                memory_free(idx);
+
+                iter = iter->next(iter);
+            }
+
+            iter->destroy(iter);
+
         }
-
-        while(iter->end_of_iterator(iter) != 0) {
-            tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
-
-            memory_free(idx);
-
-            iter = iter->next(iter);
-        }
-
-        iter->destroy(iter);
 
         hashmap_destroy(tbl->indexes);
     }
@@ -596,20 +598,23 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable iterator");
 
-            return false;
-        }
+            error = true;
+        } else {
+            while(iter->end_of_iterator(iter) != 0) {
+                tosdb_memtable_t* mt = (tosdb_memtable_t*)iter->get_item(iter);
 
-        while(iter->end_of_iterator(iter) != 0) {
-            tosdb_memtable_t* mt = (tosdb_memtable_t*)iter->get_item(iter);
+                if(!tosdb_memtable_free(mt)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot free memtable for table %s", tbl->name);
 
-            if(!tosdb_memtable_free(mt)) {
-                PRINTLOG(TOSDB, LOG_ERROR, "cannot free memtable for table %s", tbl->name);
+                    error = true;
+                }
+
+                iter = iter->next(iter);
             }
 
-            iter = iter->next(iter);
-        }
+            iter->destroy(iter);
 
-        iter->destroy(iter);
+        }
 
         linkedlist_destroy(tbl->memtables);
     }
@@ -624,18 +629,19 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         if(!stl_iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable levels iterator");
 
-            return false;
+            error = true;
+        } else {
+            while(stl_iter->end_of_iterator(stl_iter) != 0) {
+                linkedlist_t* st_list = (linkedlist_t*)stl_iter->get_item(stl_iter);
+
+                linkedlist_destroy_with_data(st_list);
+
+                stl_iter = stl_iter->next(stl_iter);
+            }
+
+            stl_iter->destroy(stl_iter);
+
         }
-
-        while(stl_iter->end_of_iterator(stl_iter) != 0) {
-            linkedlist_t* st_list = (linkedlist_t*)stl_iter->get_item(stl_iter);
-
-            linkedlist_destroy_with_data(st_list);
-
-            stl_iter = stl_iter->next(stl_iter);
-        }
-
-        stl_iter->destroy(stl_iter);
 
         hashmap_destroy(tbl->sstable_levels);
         tbl->sstable_levels = NULL;
@@ -646,12 +652,15 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
     memory_free(tbl);
     PRINTLOG(TOSDB, LOG_DEBUG, "table freed");
 
-    return true;
+    return !error;
 }
 
 boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
     uint64_t metadata_size = sizeof(tosdb_block_index_list_t) + sizeof(tosdb_block_index_list_item_t) * tbl->index_new_count;
-    metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+
+    if (metadata_size % TOSDB_PAGE_SIZE) {
+        metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+    }
 
     tosdb_block_index_list_t* block = memory_malloc(metadata_size);
 
@@ -720,7 +729,10 @@ boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
 
 boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
     uint64_t metadata_size = sizeof(tosdb_block_column_list_t) + sizeof(tosdb_block_column_list_item_t) * tbl->column_new_count;
-    metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+
+    if (metadata_size % TOSDB_PAGE_SIZE) {
+        metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+    }
 
     tosdb_block_column_list_t* block = memory_malloc(metadata_size);
 
@@ -1111,7 +1123,11 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
     iter->destroy(iter);
 
     block_size = buffer_get_length(buf_stli);
-    block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
+
+    if(block_size % TOSDB_PAGE_SIZE) {
+        block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
+    }
+
     tosdb_block_sstable_list_t* block = memory_malloc(block_size);
 
     if(!block) {

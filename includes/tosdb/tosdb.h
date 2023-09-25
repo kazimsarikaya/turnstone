@@ -15,6 +15,7 @@
 #include <linkedlist.h>
 #include <disk.h>
 #include <set.h>
+#include <compression.h>
 
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
@@ -62,7 +63,7 @@ typedef struct tosdb_t tosdb_t;
  * @param[in] backend storage backend
  * @return new tosdb
  */
-tosdb_t* tosdb_new(tosdb_backend_t* backend);
+tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type_if_not_exists);
 
 /**
  * @brief closes a tosdb

@@ -110,7 +110,7 @@ static zpack_match_t zpack_find_bestmatch (buffer_t* in, int64_t in_len, int64_t
     return (zpack_match_t){.best_size = best_size, .best_pos = best_pos};
 }
 
-int64_t zpack_pack (buffer_t* in, buffer_t* out) {
+int8_t zpack_pack (buffer_t* in, buffer_t* out) {
     zpack_hashtable_t* ht = memory_malloc(sizeof(zpack_hashtable_t));
 
     if(!ht) {
@@ -182,10 +182,10 @@ int64_t zpack_pack (buffer_t* in, buffer_t* out) {
     buffer_destroy(individuals);
     memory_free(ht);
 
-    return buffer_get_length(out);
+    return 0;
 }
 
-int64_t zpack_unpack(buffer_t* in, buffer_t* out) {
+int8_t zpack_unpack(buffer_t* in, buffer_t* out) {
     while (buffer_remaining(in)) {
 
         int32_t size = buffer_get_byte(in);
@@ -218,5 +218,5 @@ int64_t zpack_unpack(buffer_t* in, buffer_t* out) {
         }
     }
 
-    return buffer_get_length(out);
+    return 0;
 }
