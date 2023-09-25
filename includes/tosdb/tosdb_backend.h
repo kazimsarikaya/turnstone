@@ -37,7 +37,7 @@ boolean_t tosdb_backend_disk_close(tosdb_backend_t* backend);
 typedef struct tosdb_superblock_t tosdb_superblock_t;
 
 tosdb_superblock_t* tosdb_backend_repair(tosdb_backend_t* backend);
-tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend);
+tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend, compression_type_t compression_type_if_not_exists);
 
 
 #endif

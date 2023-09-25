@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#define RAMSIZE (256 << 20)
+#define RAMSIZE (512 << 20)
 #include "setup.h"
 #include <utils.h>
 #include <buffer.h>
@@ -17,6 +17,8 @@
 #include <strings.h>
 #include <bloomfilter.h>
 #include <math.h>
+#include <compression.h>
+#include <deflate.h>
 #include <zpack.h>
 #include <binarysearch.h>
 #include <tokenizer.h>
@@ -26,6 +28,7 @@
 #include <time.h>
 #include <cache.h>
 #include <crc.h>
+#include <quicksort.h>
 
 #define LINKERDB_CAP (32 << 20)
 
@@ -114,7 +117,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
         return NULL;
     }
 
-    tosdb_t* tdb = tosdb_new(bend);
+    tosdb_t* tdb = tosdb_new(bend, COMPRESSION_TYPE_DEFLATE);
 
     if(!tdb) {
         buffer_set_readonly(buf, true);
@@ -175,17 +178,17 @@ boolean_t linkerdb_close(linkerdb_t* ldb) {
     }
 
     if(!tosdb_close(ldb->tdb)) {
-        return false;
+        print_error("cannot close db");
     }
 
     if(!tosdb_free(ldb->tdb)) {
-        return false;
+        print_error("cannot free db");
     }
 
     buffer_set_readonly(ldb->backend_buffer, true);
 
     if(!tosdb_backend_close(ldb->backend)) {
-        return false;
+        print_error("cannot close backend");
     }
 
     int32_t mss = msync(ldb->mmap_res, ldb->capacity, MS_SYNC);
@@ -408,7 +411,7 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, "relocations", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, "relocations", 8 << 10, 1 << 20, 8);
 
     if(!tbl_relocations) {
         return false;

@@ -18,6 +18,7 @@
 #include <indexer.h>
 #include <bloomfilter.h>
 #include <set.h>
+#include <compression.h>
 
 
 #define TOSDB_PAGE_SIZE 4096
@@ -65,6 +66,7 @@ typedef struct tosdb_superblock_t {
     uint64_t             database_list_location;
     uint64_t             database_list_size;
     uint64_t             database_next_id;
+    compression_type_t   compression_type;
     uint8_t              reservedN[2048] __attribute__((aligned(2048)));
 }__attribute__((packed, aligned(8))) tosdb_superblock_t;
 
@@ -226,6 +228,7 @@ struct tosdb_t {
     hashmap_t*          database_new;
     lock_t              lock;
     tosdb_cache_t*      cache;
+    compression_t*      compression;
 };
 
 boolean_t             tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);

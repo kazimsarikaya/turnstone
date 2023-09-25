@@ -20,6 +20,9 @@
 #include <memory/paging.h>
 #include <efi.h>
 #include <stdbufs.h>
+#include <deflate.h>
+#include <compression.h>
+#include <quicksort.h>
 
 MODULE("turnstone.efi");
 

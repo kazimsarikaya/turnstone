@@ -41,6 +41,7 @@ const char_t*const logging_module_names[] = {
     "HPET",
     "VMWARESVGA",
     "USB",
+    "COMPRESSION",
 };
 
 
@@ -86,4 +87,5 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_HPET,
     LOG_LEVEL_VMWARESVGA,
     LOG_LEVEL_USB,
+    LOG_LEVEL_COMPRESSION,
 };

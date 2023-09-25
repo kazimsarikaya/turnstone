@@ -9,7 +9,9 @@
 
 #define RAMSIZE 0x8000000
 #include "setup.h"
+#include <compression.h>
 #include <deflate.h>
+#include <zpack.h>
 #include <buffer.h>
 #include <utils.h>
 #include <strings.h>
@@ -56,10 +58,12 @@ int32_t main(int32_t argc, char_t** argv) {
 
     int8_t ret = 0;
 
+    compression_t* compression = compression_get(COMPRESSION_TYPE_DEFLATE);
+
     if(compress) {
-        ret = deflate_deflate(in_buf, out_buf);
+        ret = compression->pack(in_buf, out_buf);
     } else {
-        ret = deflate_inflate(in_buf, out_buf);
+        ret = compression->unpack(in_buf, out_buf);
     }
 
     buffer_destroy(in_buf);

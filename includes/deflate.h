@@ -12,8 +12,7 @@
 /*! prevent duplicate header error macro */
 #define ___DEFLATE_H 0
 
-#include <types.h>
-#include <buffer.h>
+#include <compression.h>
 
 int8_t deflate_deflate(buffer_t* in, buffer_t* out);
 int8_t deflate_inflate(buffer_t* in, buffer_t* out);

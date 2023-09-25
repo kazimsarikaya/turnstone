@@ -411,6 +411,16 @@ boolean_t tosdb_record_search_set_destroy_cb(void * item) {
     return rec->destroy(rec);
 }
 
+static boolean_t tosdb_record_search_set_destroy_mii_cb(void * item) {
+    if(!item) {
+        return true;
+    }
+
+    memory_free(item);
+
+    return true;
+}
+
 linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
 
     set_t* results = set_create(tosdb_memtable_index_comparator);
@@ -421,14 +431,14 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
 
     if(!tosdb_memtable_search(record, results)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot search at memtable");
-        set_destroy_with_callback(results, tosdb_record_search_set_destroy_cb);
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
 
         return NULL;
     }
 
     if(!tosdb_sstable_search(record, results)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot search at sstables");
-        set_destroy_with_callback(results, tosdb_record_search_set_destroy_cb);
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
 
         return NULL;
     }
@@ -436,7 +446,7 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
     iterator_t* f_iter = set_create_iterator(results);
 
     if(!f_iter) {
-        set_destroy_with_callback(results, tosdb_record_search_set_destroy_cb);
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
 
         return NULL;
     }

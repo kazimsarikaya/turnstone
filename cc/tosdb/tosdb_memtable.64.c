@@ -11,7 +11,8 @@
 #include <tosdb/tosdb_internal.h>
 #include <logging.h>
 #include <bplustree.h>
-#include <zpack.h>
+#include <compression.h>
+#include <strings.h>
 
 MODULE("turnstone.kernel.db");
 
@@ -547,10 +548,20 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     buffer_t* valuelog_out = buffer_new_with_capacity(NULL, valuelog_unpacked_size);
 
     buffer_seek(mt->values, 0, BUFFER_SEEK_DIRECTION_START);
-    uint64_t len = (uint64_t)zpack_pack(mt->values, valuelog_out);
+
+    compression_t* compression = mt->tbl->db->tdb->compression;
+
+    if(compression->pack(mt->values, valuelog_out) != 0) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot pack valuelog");
+        buffer_destroy(valuelog_out);
+
+        return false;
+    }
+
+    uint64_t len = buffer_get_length(valuelog_out);
 
     if(valuelog_unpacked_size && !len) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot zpack valuelog");
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot pack valuelog");
         buffer_destroy(valuelog_out);
 
         return false;
@@ -560,7 +571,11 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     uint8_t* b_vl_data = buffer_get_all_bytes_and_destroy(valuelog_out, &ol);
 
     uint64_t b_vl_size = sizeof(tosdb_block_valuelog_t) + ol;
-    b_vl_size += TOSDB_PAGE_SIZE - (b_vl_size % TOSDB_PAGE_SIZE);
+
+    if(b_vl_size % TOSDB_PAGE_SIZE) {
+        b_vl_size += TOSDB_PAGE_SIZE - (b_vl_size % TOSDB_PAGE_SIZE);
+    }
+
     tosdb_block_valuelog_t * b_vl = memory_malloc(b_vl_size);
 
     if(!b_vl) {
@@ -697,15 +712,18 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     uint64_t bloomfilter_unpacked_size = bf_d->length;
 
-    uint64_t zc = zpack_pack(buf_bf_in, buf_bf_out);
+    compression_t* compression = mt->tbl->db->tdb->compression;
 
-    memory_free(bf_d->value);
-    memory_free(bf_d);
+    int8_t zc_res = compression->pack(buf_bf_in, buf_bf_out);
+
+    uint64_t zc = buffer_get_length(buf_bf_out);
+
+    data_free(bf_d);
 
     buffer_destroy(buf_bf_in);
 
-    if(!zc) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot zpack bloom filter");
+    if(zc_res != 0 || !zc) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot pack bloom filter");
         buffer_destroy(buf_bf_out);
 
         return false;
@@ -784,12 +802,14 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
         return false;
     }
 
-    zc = zpack_pack(buf_id_in, buf_id_out);
+    zc_res = compression->pack(buf_id_in, buf_id_out);
+
+    zc = buffer_get_length(buf_id_out);
 
     buffer_destroy(buf_id_in);
 
-    if(!zc) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot zpack index data");
+    if(zc_res != 0 || !zc) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot pack index data");
         buffer_destroy(buf_id_out);
         memory_free(bf_data);
 
@@ -806,7 +826,10 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     }
 
     uint64_t idx_data_block_size = sizeof(tosdb_block_sstable_index_data_t) + index_size;
-    idx_data_block_size += TOSDB_PAGE_SIZE - (idx_data_block_size % TOSDB_PAGE_SIZE);
+
+    if(idx_data_block_size % TOSDB_PAGE_SIZE) {
+        idx_data_block_size += TOSDB_PAGE_SIZE - (idx_data_block_size % TOSDB_PAGE_SIZE);
+    }
 
     tosdb_block_sstable_index_data_t* b_sid = memory_malloc(idx_data_block_size);
 
@@ -846,7 +869,10 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     uint64_t minmax_key_size = first_key_length + last_key_length;
     uint64_t block_size = sizeof(tosdb_block_sstable_index_t) + minmax_key_size + bf_size;
-    block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
+
+    if(block_size % TOSDB_PAGE_SIZE) {
+        block_size += TOSDB_PAGE_SIZE - (block_size % TOSDB_PAGE_SIZE);
+    }
 
     tosdb_block_sstable_index_t* b_si = memory_malloc(block_size);
 

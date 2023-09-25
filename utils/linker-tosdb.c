@@ -15,6 +15,7 @@
 #include <buffer.h>
 #include <linker.h>
 #include <linkedlist.h>
+#include <compression.h>
 
 //utils programs need dep headers for linking
 #include <utils.h>
@@ -27,6 +28,8 @@
 #include <bplustree.h>
 #include <zpack.h>
 #include <math.h>
+#include <deflate.h>
+#include <quicksort.h>
 // end of dep headers
 
 
@@ -194,7 +197,7 @@ linkerdb_t* linkerdb_open(const char_t* file) {
         return NULL;
     }
 
-    tosdb_t* tdb = tosdb_new(bend);
+    tosdb_t* tdb = tosdb_new(bend, COMPRESSION_TYPE_NONE); // tosdb already has compression type. passing none here is just a placeholder
 
     if(!tdb) {
         buffer_set_readonly(buf, true);
@@ -468,7 +471,7 @@ int32_t main(int32_t argc, char_t** argv) {
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
 
 
     if(!tbl_sections || !tbl_modules || !tbl_symbols || !tbl_relocations) {

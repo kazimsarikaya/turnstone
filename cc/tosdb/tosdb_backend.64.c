@@ -63,7 +63,7 @@ tosdb_superblock_t* tosdb_backend_repair(tosdb_backend_t* backend) {
     return NULL;
 }
 
-tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend) {
+tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend, compression_type_t compression_type_if_not_exists) {
 
     tosdb_superblock_t* sb = memory_malloc(sizeof(tosdb_superblock_t));
 
@@ -82,6 +82,7 @@ tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend) {
     sb->page_size = TOSDB_PAGE_SIZE;
     sb->free_next_location = sizeof(tosdb_superblock_t);
     sb->database_next_id = 1;
+    sb->compression_type = compression_type_if_not_exists;
 
     if(!tosdb_write_and_flush_superblock(backend, sb)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot write and flush super block");

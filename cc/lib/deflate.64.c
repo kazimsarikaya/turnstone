@@ -9,6 +9,7 @@
 #include <deflate.h>
 #include <utils.h>
 #include <quicksort.h>
+#include <logging.h>
 
 MODULE("turnstone.lib");
 
@@ -223,6 +224,8 @@ static inline int64_t bit_buffer_get(bit_buffer_t* bit_buffer, uint8_t bit_count
     for (uint8_t i = 0; i < bit_count; i++) {
         if(bit_buffer->bit_count == 0) {
             if(buffer_remaining(bit_buffer->buffer) == 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "unexpected end of input stream");
+
                 return -1;
             }
 
@@ -242,10 +245,15 @@ static inline int64_t bit_buffer_get(bit_buffer_t* bit_buffer, uint8_t bit_count
     return result;
 }
 
-static inline void bit_buffer_put(bit_buffer_t* bit_buffer, uint8_t bit_count, uint64_t bits) {
+static inline int8_t bit_buffer_put(bit_buffer_t* bit_buffer, uint8_t bit_count, uint64_t bits) {
     for (uint8_t i = 0; i < bit_count; i++) {
         if(bit_buffer->bit_count == 8) {
-            buffer_append_byte(bit_buffer->buffer, bit_buffer->byte);
+            if(!buffer_append_byte(bit_buffer->buffer, bit_buffer->byte)) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "failed to append byte to buffer");
+
+                return -1;
+            }
+
             bit_buffer->bit_count = 0;
             bit_buffer->byte = 0;
         }
@@ -254,14 +262,23 @@ static inline void bit_buffer_put(bit_buffer_t* bit_buffer, uint8_t bit_count, u
         bits >>= 1;
         bit_buffer->bit_count++;
     }
+
+    return 0;
 }
 
-static inline void bit_buffer_push(bit_buffer_t* bit_buffer) {
+static inline int8_t bit_buffer_push(bit_buffer_t* bit_buffer) {
     if(bit_buffer->bit_count != 0) {
-        buffer_append_byte(bit_buffer->buffer, bit_buffer->byte);
+        if(!buffer_append_byte(bit_buffer->buffer, bit_buffer->byte)) {
+            PRINTLOG(COMPRESSION, LOG_ERROR, "failed to append byte to buffer");
+
+            return -1;
+        }
+
         bit_buffer->bit_count = 0;
         bit_buffer->byte = 0;
     }
+
+    return 0;
 }
 
 static inline void bitbuffer_discard(bit_buffer_t* bit_buffer) {
@@ -312,6 +329,8 @@ static int32_t huffman_decode(bit_buffer_t* bit_buffer, huffman_decode_table_t* 
     }
 
     if (count + cur < 0 || count + cur > max_symbol) {
+        PRINTLOG(COMPRESSION, LOG_ERROR, "invalid huffman symbol index %i %i", count, cur);
+
         return -1;
     }
 
@@ -323,6 +342,8 @@ int8_t deflate_inflate_block(bit_buffer_t* bit_buffer, buffer_t* out, huffman_de
         int32_t symbol = huffman_decode(bit_buffer, lengths, 288);
 
         if(symbol < 0) {
+            PRINTLOG(COMPRESSION, LOG_ERROR, "corruption before %lli %i", buffer_get_position(bit_buffer->buffer), bit_buffer->bit_count);
+
             return -1;
         }
 
@@ -336,18 +357,24 @@ int8_t deflate_inflate_block(bit_buffer_t* bit_buffer, buffer_t* out, huffman_de
             int32_t length = bit_buffer_get(bit_buffer, huffman_length_extra_bits[symbol]) + huffman_length_base[symbol];
 
             if(length < 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "corruption before %lli %i", buffer_get_position(bit_buffer->buffer), bit_buffer->bit_count);
+
                 return -1;
             }
 
             int32_t distance_symbol = huffman_decode(bit_buffer, distances, 30);
 
             if(distance_symbol < 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "corruption before %lli %i", buffer_get_position(bit_buffer->buffer), bit_buffer->bit_count);
+
                 return -1;
             }
 
             int32_t distance = bit_buffer_get(bit_buffer, huffman_distance_extra_bits[distance_symbol]) + huffman_distance_base[distance_symbol];
 
             if(distance < 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "corruption before %lli %i", buffer_get_position(bit_buffer->buffer), bit_buffer->bit_count);
+
                 return -1;
             }
 
@@ -447,6 +474,7 @@ int8_t huffman_decode_table_decode(bit_buffer_t* bit_buffer, huffman_decode_tabl
     }
 
     uint32_t count = 0;
+
     while (count < literals + distances) {
         int32_t symbol = huffman_decode(bit_buffer, &codes, 19);
 
@@ -601,7 +629,7 @@ static buffer_t* deflate_deflate_lz77(buffer_t* in_block, huffman_encode_freq_t*
 
     memory_memset(ht->head, DEFLATE_NO_POS, sizeof(ht->head));
 
-    buffer_t* out_block = buffer_new();
+    buffer_t* out_block = buffer_new_with_capacity(NULL, buffer_get_length(in_block) * 2);
 
     if(out_block == NULL) {
         memory_free(ht);
@@ -672,23 +700,43 @@ static int8_t deflate_deflate_no_compress(buffer_t* in_block, bit_buffer_t* bit_
         return -1;
     }
 
+    int8_t ret = 0;
+
     if(is_last_block) {
-        bit_buffer_put(bit_buffer, 1, 1);
+        ret = bit_buffer_put(bit_buffer, 1, 1);
     } else {
-        bit_buffer_put(bit_buffer, 1, 0);
+        ret = bit_buffer_put(bit_buffer, 1, 0);
     }
 
-    bit_buffer_put(bit_buffer, 2, 0);
+    if(ret != 0) {
+        return ret;
+    }
 
-    bit_buffer_push(bit_buffer);
+    ret = bit_buffer_put(bit_buffer, 2, 0);
 
-    buffer_append_bytes(bit_buffer->buffer, (uint8_t*)&in_len, 2);
+    if(ret != 0) {
+        return ret;
+    }
+
+    ret = bit_buffer_push(bit_buffer);
+
+    if(ret != 0) {
+        return ret;
+    }
+
+    if(!buffer_append_bytes(bit_buffer->buffer, (uint8_t*)&in_len, 2)) {
+        return -1;
+    }
 
     in_len = ~in_len & 0xFFFF;
 
-    buffer_append_bytes(bit_buffer->buffer, (uint8_t*)&in_len, 2);
+    if(!buffer_append_bytes(bit_buffer->buffer, (uint8_t*)&in_len, 2)) {
+        return -1;
+    }
 
-    buffer_append_buffer(bit_buffer->buffer, in_block);
+    if(!buffer_append_buffer(bit_buffer->buffer, in_block)) {
+        return -1;
+    }
 
     return 0;
 }
@@ -713,6 +761,8 @@ static int8_t deflate_deflate_block(buffer_t* lz77_block, bit_buffer_t* bit_buff
     int64_t lz77_block_len = buffer_get_length(lz77_block);
     uint16_t* lz77_block_data = (uint16_t*)buffer_get_view_at_position(lz77_block, 0, lz77_block_len);
 
+    int8_t ret = 0;
+
     for(uint32_t i = 0; i < lz77_block_len / 2; i++) {
         if(lz77_block_data[i] == 0xFFFF) {
             i++;
@@ -731,8 +781,17 @@ static int8_t deflate_deflate_block(buffer_t* lz77_block, bit_buffer_t* bit_buff
 
             uint16_t length_code = 257 + length_idx;
 
-            bit_buffer_put(bit_buffer, symbols->lengths[length_code], symbols->codes[length_code]);
-            bit_buffer_put(bit_buffer, length_extra_bits, length);
+            ret = bit_buffer_put(bit_buffer, symbols->lengths[length_code], symbols->codes[length_code]);
+
+            if(ret != 0) {
+                return ret;
+            }
+
+            ret = bit_buffer_put(bit_buffer, length_extra_bits, length);
+
+            if(ret != 0) {
+                return ret;
+            }
 
             uint16_t distance = lz77_block_data[i];
 
@@ -747,21 +806,37 @@ static int8_t deflate_deflate_block(buffer_t* lz77_block, bit_buffer_t* bit_buff
 
             distance -= distance_base;
 
-            bit_buffer_put(bit_buffer, distances->lengths[distance_idx], distances->codes[distance_idx]);
-            bit_buffer_put(bit_buffer, distance_extra_bits, distance);
+            ret = bit_buffer_put(bit_buffer, distances->lengths[distance_idx], distances->codes[distance_idx]);
 
+            if(ret != 0) {
+                return ret;
+            }
+
+            ret = bit_buffer_put(bit_buffer, distance_extra_bits, distance);
+
+            if(ret != 0) {
+                return ret;
+            }
         } else {
             // symbol data
             uint16_t symbol = lz77_block_data[i];
 
             uint16_t symbol_code = symbols->codes[symbol];
             uint8_t symbol_len = symbols->lengths[symbol];
-            bit_buffer_put(bit_buffer, symbol_len, symbol_code);
+            ret = bit_buffer_put(bit_buffer, symbol_len, symbol_code);
+
+            if(ret != 0) {
+                return ret;
+            }
 
         }
     }
 
-    bit_buffer_put(bit_buffer, symbols->lengths[256], symbols->codes[256]); // end of block
+    ret = bit_buffer_put(bit_buffer, symbols->lengths[256], symbols->codes[256]); // end of block
+
+    if(ret != 0) {
+        return ret;
+    }
 
     return 0;
 }
@@ -818,6 +893,8 @@ int8_t huffman_sort_by_symbol(const void * a, const void* b) {
 
 #define HUFFMAN_LEAF_COUNT(x, y) leaf_counts[(x) * DEFLATE_MAX_BITS_LIMIT + (y)]
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static boolean_t huffman_encode_build_table_internal(huffman_symbol_freq_t** symbol_freqs, int32_t count, int32_t max_bits, huffman_encode_table_t* huffman_table) {
     if(max_bits > count - 1) {
         max_bits = count - 1;
@@ -1026,6 +1103,7 @@ exit:
 
     return res;
 }
+#pragma GCC diagnostic pop
 
 /**
  * @brief Builds a huffman tree from the given frequencies and also returns the header for the tree
@@ -1092,6 +1170,8 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
     int32_t count = 1;
     int32_t out_idx = 0;
 
+    int32_t tmp_out_len_bits = 0;
+
     for(int32_t in_idx = 1; size != 255; in_idx++) {
         int32_t next_size = code_lengths[in_idx];
 
@@ -1101,9 +1181,11 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
             continue;
         }
 
-        if(size > 0) {
+        if(size != 0) {
             code_lengths[out_idx] = size;
             out_idx++;
+
+            tmp_out_len_bits += 7;
 
             code_lengths_freqs.literal_freqs[size]++;
 
@@ -1122,6 +1204,8 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
                 code_lengths[out_idx] = n - 3;
                 out_idx++;
 
+                tmp_out_len_bits += 9;
+
                 code_lengths_freqs.literal_freqs[16]++;
 
                 count -= n;
@@ -1138,8 +1222,10 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
                 code_lengths[out_idx] = 18;
                 out_idx++;
 
-                code_lengths[out_idx] = n - 3;
+                code_lengths[out_idx] = n - 11;
                 out_idx++;
+
+                tmp_out_len_bits += 18;
 
                 code_lengths_freqs.literal_freqs[18]++;
 
@@ -1153,6 +1239,8 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
                 code_lengths[out_idx] = count - 3;
                 out_idx++;
 
+                tmp_out_len_bits += 9;
+
                 code_lengths_freqs.literal_freqs[17]++;
 
                 count = 0;
@@ -1165,6 +1253,9 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
         while(count >= 0) {
             code_lengths[out_idx] = size;
             out_idx++;
+
+            tmp_out_len_bits += 7;
+
             code_lengths_freqs.literal_freqs[size]++;
             count--;
         }
@@ -1172,6 +1263,8 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
         size = next_size;
         count = 1;
     }
+
+    tmp_out_len_bits += 14 + 32;
 
     code_lengths[out_idx] = 255;
 
@@ -1183,7 +1276,7 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
 
     int32_t bit_count = 0;
 
-    buffer_t* header_buffer = buffer_new();
+    buffer_t* header_buffer = buffer_new_with_capacity(NULL, tmp_out_len_bits / 8 + 1);
 
     if(!header_buffer) {
         goto exit;
@@ -1201,14 +1294,35 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
 
     max_used_code_length = 18;
 
-    bit_buffer_put(header, 5, max_used_symbol + 1 - 257);
-    bit_buffer_put(header, 5, max_used_distance + 1 - 1);
-    bit_buffer_put(header, 4, max_used_code_length + 1 - 4);
+    int8_t ret = 0;
+
+    ret = bit_buffer_put(header, 5, max_used_symbol + 1 - 257);
+
+    if(ret < 0) {
+        goto exit_error;
+    }
+
+    ret = bit_buffer_put(header, 5, max_used_distance + 1 - 1);
+
+    if(ret < 0) {
+        goto exit_error;
+    }
+
+    ret = bit_buffer_put(header, 4, max_used_code_length + 1 - 4);
+
+    if(ret < 0) {
+        goto exit_error;
+    }
 
     bit_count += 5 + 5 + 4;
 
     for(int32_t i = 0; i <= max_used_code_length; i++) {
-        bit_buffer_put(header, 3, code_lengths_table.lengths[huffman_code_lengths[i]]);
+        ret = bit_buffer_put(header, 3, code_lengths_table.lengths[huffman_code_lengths[i]]);
+
+        if(ret < 0) {
+            goto exit_error;
+        }
+
         bit_count += 3;
     }
 
@@ -1223,31 +1337,55 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
             break;
         }
 
-        bit_buffer_put(header, code_lengths_table.lengths[code_length], code_lengths_table.codes[code_length]);
+        ret = bit_buffer_put(header, code_lengths_table.lengths[code_length], code_lengths_table.codes[code_length]);
+
+        if(ret < 0) {
+            goto exit_error;
+        }
+
         bit_count += code_lengths_table.lengths[code_length];
 
         switch(code_length) {
         case 16:
-            bit_buffer_put(header, 2, code_lengths[i]);
+            ret = bit_buffer_put(header, 2, code_lengths[i]);
+
+            if(ret < 0) {
+                goto exit_error;
+            }
+
             bit_count += 2;
             i++;
             break;
 
         case 17:
-            bit_buffer_put(header, 3, code_lengths[i]);
+            ret = bit_buffer_put(header, 3, code_lengths[i]);
+
+            if(ret < 0) {
+                goto exit_error;
+            }
+
             bit_count += 3;
             i++;
             break;
 
         case 18:
-            bit_buffer_put(header, 7, code_lengths[i]);
+            ret = bit_buffer_put(header, 7, code_lengths[i]);
+
+            if(ret < 0) {
+                goto exit_error;
+            }
+
             bit_count += 7;
             i++;
             break;
         }
     }
 
-    bit_buffer_push(header);
+    ret = bit_buffer_push(header);
+
+    if(ret < 0) {
+        goto exit_error;
+    }
 
     buffer_seek(header_buffer, 0, BUFFER_SEEK_DIRECTION_START);
 
@@ -1257,6 +1395,12 @@ exit:
     memory_free(code_lengths);
 
     return header;
+
+exit_error:
+    memory_free(header_buffer);
+    memory_free(code_lengths);
+
+    return NULL;
 }
 
 
@@ -1345,26 +1489,46 @@ int8_t deflate_deflate (buffer_t * in, buffer_t* out) {
             ret = deflate_deflate_no_compress(in_block, &bit_buffer, is_last_block);
         } else if(fixedcompress_len < dyncompress_len) {
             if(is_last_block) {
-                bit_buffer_put(&bit_buffer, 1, 1);
+                ret = bit_buffer_put(&bit_buffer, 1, 1);
             } else {
-                bit_buffer_put(&bit_buffer, 1, 0);
+                ret = bit_buffer_put(&bit_buffer, 1, 0);
             }
 
-            bit_buffer_put(&bit_buffer, 2, 1);
+            if(ret < 0) {
+                goto end_block_op;
+            }
+
+            ret = bit_buffer_put(&bit_buffer, 2, 1);
+
+            if(ret < 0) {
+                goto end_block_op;
+            }
 
             ret = deflate_deflate_block(lz77_block, &bit_buffer, &huffman_encode_fixed, &huffman_encode_distance_fixed);
         } else {
             if(is_last_block) {
-                bit_buffer_put(&bit_buffer, 1, 1);
+                ret = bit_buffer_put(&bit_buffer, 1, 1);
             } else {
-                bit_buffer_put(&bit_buffer, 1, 0);
+                ret = bit_buffer_put(&bit_buffer, 1, 0);
             }
 
-            bit_buffer_put(&bit_buffer, 2, 2);
+            if(ret < 0) {
+                goto end_block_op;
+            }
+
+            ret = bit_buffer_put(&bit_buffer, 2, 2);
+
+            if(ret < 0) {
+                goto end_block_op;
+            }
 
             for(int32_t i = 0; i < dyn_header_len; i++) {
                 int8_t dyn_header_bit = bit_buffer_get(dyn_header, 1);
-                bit_buffer_put(&bit_buffer, 1, dyn_header_bit);
+                ret = bit_buffer_put(&bit_buffer, 1, dyn_header_bit);
+
+                if(ret < 0) {
+                    goto end_block_op;
+                }
             }
 
             ret = deflate_deflate_block(lz77_block, &bit_buffer, dyn_symbols, dyn_distances);
@@ -1374,6 +1538,7 @@ int8_t deflate_deflate (buffer_t * in, buffer_t* out) {
             bit_buffer_push(&bit_buffer);
         }
 
+end_block_op:
         memory_free(freqs);
         buffer_destroy(in_block);
         buffer_destroy(lz77_block);
@@ -1383,6 +1548,8 @@ int8_t deflate_deflate (buffer_t * in, buffer_t* out) {
         memory_free(dyn_distances);
 
         if(ret != 0) {
+            PRINTLOG(COMPRESSION, LOG_ERROR, "Failed to deflate block");
+
             return ret;
         }
     }
@@ -1412,6 +1579,8 @@ int8_t deflate_inflate(buffer_t* in, buffer_t* out) {
         bit = bit_buffer_get(&bit_buffer, 2);
 
         if(bit == -1) {
+            PRINTLOG(COMPRESSION, LOG_ERROR, "Failed to read block type");
+
             return -1;
         }
 
@@ -1425,17 +1594,31 @@ int8_t deflate_inflate(buffer_t* in, buffer_t* out) {
         switch(type) {
         case 0:
             ret = deflate_inflate_uncompressed_block(&bit_buffer, out);
+
+            if(ret != 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "Failed to decode uncompressed block");
+            }
+
             break;
         case 2:
             if(huffman_decode_table_decode(&bit_buffer, &lengths, &distances) != 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "Failed to decode huffman table");
+
                 return -1;
             }
 
             nobreak;
         case 1:
             ret = deflate_inflate_block(&bit_buffer, out, &lengths, &distances);
+
+            if(ret != 0) {
+                PRINTLOG(COMPRESSION, LOG_ERROR, "Failed to decode block");
+            }
+
             break;
         case 3:
+            PRINTLOG(COMPRESSION, LOG_ERROR, "Reserved block type");
+
             return -1;
         }
 

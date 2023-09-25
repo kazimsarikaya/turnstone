@@ -14,7 +14,7 @@
 #include <iterator.h>
 #include <xxhash.h>
 #include <set.h>
-#include <zpack.h>
+#include <compression.h>
 
 MODULE("turnstone.kernel.db");
 
@@ -216,7 +216,11 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
         buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
-        uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
+        compression_t* compression = tbl->db->tdb->compression;
+
+        int8_t zc_res = compression->unpack(buf_idx_in, buf_idx_out);
+
+        uint64_t zc = buffer_get_length(buf_idx_out);
 
         uint64_t index_data_unpacked_size = b_sid->index_data_unpacked_size;
 
@@ -224,7 +228,7 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
 
         buffer_destroy(buf_idx_in);
 
-        if(zc != index_data_unpacked_size) {
+        if(zc_res != 0 || zc != index_data_unpacked_size) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack idx");
             buffer_destroy(buf_idx_out);
 

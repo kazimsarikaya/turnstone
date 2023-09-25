@@ -355,7 +355,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
     PRINTLOG(EFI, LOG_DEBUG, "tosdb backend created");
 
-    tosdb_t* tdb = tosdb_new(tosdb_backend);
+    tosdb_t* tdb = tosdb_new(tosdb_backend, COMPRESSION_TYPE_NONE); // tosdb already has compression type. passing none here is just a placeholder
 
     if(tdb == NULL) {
         PRINTLOG(EFI, LOG_ERROR, "cannot create tosdb");
@@ -449,7 +449,7 @@ efi_status_t efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) 
 
     PRINTLOG(EFI, LOG_DEBUG, "tosdb backend created");
 
-    tosdb_t* tdb = tosdb_new(tosdb_backend);
+    tosdb_t* tdb = tosdb_new(tosdb_backend, COMPRESSION_TYPE_NONE); // tosdb already has compression type. passing none here is just a placeholder
 
     if(tdb == NULL) {
         PRINTLOG(EFI, LOG_ERROR, "cannot create tosdb");

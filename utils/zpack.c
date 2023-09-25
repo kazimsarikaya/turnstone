@@ -68,9 +68,9 @@ int32_t main(int32_t argc, char_t** argv) {
     if(comp) {
         inbuf  = buffer_encapsulate(in_data, in_size);
     } else {
-        zpack_format_t* zf = (zpack_format_t*)in_data;
+        compression_header_t* zf = (compression_header_t*)in_data;
 
-        uint64_t packed_hash = xxhash64_hash(in_data + sizeof(zpack_format_t), zf->packed_size);
+        uint64_t packed_hash = xxhash64_hash(in_data + sizeof(compression_header_t), zf->packed_size);
         unpacked_hash = zf->unpacked_hash;
         unpacked_size = zf->unpacked_size;
 
@@ -79,7 +79,7 @@ int32_t main(int32_t argc, char_t** argv) {
             return -1;
         }
 
-        inbuf  = buffer_encapsulate(in_data + sizeof(zpack_format_t), zf->packed_size);
+        inbuf  = buffer_encapsulate(in_data + sizeof(compression_header_t), zf->packed_size);
     }
 
 
@@ -87,8 +87,17 @@ int32_t main(int32_t argc, char_t** argv) {
 
     if(*argv[1] == 'c') {
         outbuf = buffer_new_with_capacity(NULL, in_size);
-        ps = zpack_pack(inbuf, outbuf);
-        printf("packed size %lli\n", ps);
+        if(zpack_pack(inbuf, outbuf) != 0) {
+            print_error("pack failed");
+
+            buffer_destroy(inbuf);
+            memory_free(in_data);
+            buffer_destroy(outbuf);
+
+            return -1;
+        }
+
+        ps = buffer_get_length(outbuf);
     } else if(*argv[1] == 'd') {
         printf("expected unpacked size %lli\n", unpacked_size);
 
@@ -103,7 +112,17 @@ int32_t main(int32_t argc, char_t** argv) {
             return -1;
         }
 
-        ps = zpack_unpack(inbuf, outbuf);
+        if(zpack_unpack(inbuf, outbuf) != 0) {
+            print_error("unpack failed");
+
+            buffer_destroy(inbuf);
+            memory_free(in_data);
+            buffer_destroy(outbuf);
+
+            return -1;
+        }
+
+        ps = buffer_get_length(outbuf);
 
         if(unpacked_size != (uint64_t)ps ) {
             print_error("unpack failed, size mismatch");
@@ -127,7 +146,7 @@ int32_t main(int32_t argc, char_t** argv) {
     if(comp) {
         fd = fopen(argv[3], "w");
 
-        zpack_format_t zf = {ZPACK_FORMAT_MAGIC, in_size, ps, xxhash64_hash(in_data, in_size), xxhash64_hash(outdata, ps)};
+        compression_header_t zf = {COMPRESSION_HEADER_MAGIC, COMPRESSION_TYPE_ZPACK, in_size, ps, xxhash64_hash(in_data, in_size), xxhash64_hash(outdata, ps)};
 
         memory_free(in_data);
 
@@ -150,7 +169,7 @@ int32_t main(int32_t argc, char_t** argv) {
     memory_free(outdata);
 
     if(comp) {
-        uint64_t pad_len = (((ps + sizeof(zpack_format_t) + 511) / 512) * 512) - ps - sizeof(zpack_format_t);
+        uint64_t pad_len = (((ps + sizeof(compression_header_t) + 511) / 512) * 512) - ps - sizeof(compression_header_t);
 
         if(pad_len) {
             printf("padding required with len %lli\n", pad_len);

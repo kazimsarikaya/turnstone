@@ -280,33 +280,30 @@ boolean_t tosdb_database_free(tosdb_database_t* db) {
 
     PRINTLOG(TOSDB, LOG_DEBUG, "database %s will be freed.", db->name);
 
+    boolean_t error = false;
 
     iterator_t* iter = hashmap_iterator_create(db->tables);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
+        error = true;
+    } else {
+        while(iter->end_of_iterator(iter) != 0) {
+            tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
 
-        return false;
-    }
+            if(!tosdb_table_free(tbl)) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot free table %s", tbl->name);
+                error = true;
+            }
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
-
-        if(!tosdb_table_free(tbl)) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot free table %s", tbl->name);
-
-            iter->destroy(iter);
-
-            return false;
+            iter = iter->next(iter);
         }
 
-        iter = iter->next(iter);
+        iter->destroy(iter);
     }
 
-
-    iter->destroy(iter);
-
     hashmap_destroy(db->tables);
+    hashmap_destroy(db->table_new);
 
     memory_free(db->name);
     lock_destroy(db->lock);
@@ -314,7 +311,7 @@ boolean_t tosdb_database_free(tosdb_database_t* db) {
     memory_free(db);
     PRINTLOG(TOSDB, LOG_DEBUG, "database freed");
 
-    return true;
+    return !error;
 }
 
 boolean_t tosdb_database_persist(tosdb_database_t* db) {
@@ -343,7 +340,10 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         boolean_t error = false;
 
         uint64_t metadata_size = sizeof(tosdb_block_table_list_t) + sizeof(tosdb_block_table_list_item_t) * hashmap_size(db->table_new);
-        metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+
+        if(metadata_size % TOSDB_PAGE_SIZE) {
+            metadata_size += (TOSDB_PAGE_SIZE - (metadata_size % TOSDB_PAGE_SIZE));
+        }
 
         tosdb_block_table_list_t* block = memory_malloc(metadata_size);
 

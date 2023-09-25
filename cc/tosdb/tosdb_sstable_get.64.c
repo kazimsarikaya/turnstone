@@ -10,7 +10,7 @@
 #include <tosdb/tosdb_internal.h>
 #include <tosdb/tosdb_cache.h>
 #include <logging.h>
-#include <zpack.h>
+#include <compression.h>
 #include <binarysearch.h>
 
 MODULE("turnstone.kernel.db");
@@ -66,6 +66,8 @@ int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id){
     tosdb_record_context_t* ctx = record->context;
+
+    compression_t* compression = ctx->table->db->tdb->compression;
 
     uint64_t idx_loc = 0;
     uint64_t idx_size = 0;
@@ -162,12 +164,14 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         buffer_t* buf_bf_in = buffer_encapsulate(st_idx_data, st_idx->bloomfilter_size);
         buffer_t* buf_bf_out = buffer_new_with_capacity(NULL, st_idx->bloomfilter_unpacked_size);
 
-        uint64_t zc = zpack_unpack(buf_bf_in, buf_bf_out);
+        int8_t zc_res = compression->unpack(buf_bf_in, buf_bf_out);
+
+        uint64_t zc = buffer_get_length(buf_bf_out);
 
         buffer_destroy(buf_bf_in);
 
-        if(zc != st_idx->bloomfilter_unpacked_size) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack bf");
+        if(zc_res != 0 || zc != st_idx->bloomfilter_unpacked_size) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot unpack bf");
             memory_free(first);
             memory_free(last);
             memory_free(st_idx);
@@ -315,7 +319,9 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
-        uint64_t zc = zpack_unpack(buf_idx_in, buf_idx_out);
+        int8_t zc_res = compression->unpack(buf_idx_in, buf_idx_out);
+
+        uint64_t zc = buffer_get_length(buf_idx_out);
 
         uint64_t index_data_unpacked_size = b_sid->index_data_unpacked_size;
 
@@ -323,8 +329,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         buffer_destroy(buf_idx_in);
 
-        if(zc != index_data_unpacked_size) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack idx");
+        if(zc_res != 0 || zc != index_data_unpacked_size) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot unpack idx");
             buffer_destroy(buf_idx_out);
 
             return false;
@@ -467,13 +473,15 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
         uint64_t buf_vl_unpacked_size = b_vl->valuelog_unpacked_size;
 
-        uint64_t zc = zpack_unpack(buf_vl_in, buf_vl_out);
+        int8_t zc_res = compression->unpack(buf_vl_in, buf_vl_out);
+
+        uint64_t zc = buffer_get_length(buf_vl_out);
 
         memory_free(b_vl);
         buffer_destroy(buf_vl_in);
 
-        if(zc != buf_vl_unpacked_size) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot zunpack valuelog");
+        if(zc_res != 0 || zc != buf_vl_unpacked_size) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannotunpack valuelog");
             buffer_destroy(buf_vl_out);
 
             return false;
