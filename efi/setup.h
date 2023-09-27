@@ -20,4 +20,8 @@ typedef struct frame_allocator_t frame_allocator_t;
 
 efi_status_t efi_frame_allocator_init(void);
 
+typedef uint64_t time_t;
+
+time_t time_ns(time_t* time);
+
 #endif

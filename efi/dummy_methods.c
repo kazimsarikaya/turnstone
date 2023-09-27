@@ -171,4 +171,69 @@ efi_status_t efi_frame_allocator_init(void) {
     return EFI_SUCCESS;
 }
 
+extern efi_runtime_services_t* RS;
+
+const int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+
+static inline boolean_t time_is_leap(int64_t year) {
+    return year % 400 == 0 || (year % 4 == 0  && year % 100 != 0);
+}
+
+time_t time_ns(time_t* tloc) {
+    UNUSED(tloc);
+#define TIME_TIMESTAMP_START_YEAR  1970
+#define TIME_SECONDS_OF_MINUTE       60
+#define TIME_SECONDS_OF_HOUR       3600
+#define TIME_SECONDS_OF_DAY       86400
+#define TIME_SECONDS_OF_MONTH   2629743
+#define TIME_SECONDS_OF_YEAR   31556926
+#define TIME_DAYS_AT_YEAR           365
+#define TIME_DAYS_AT_LEAP_YEAR      366
+
+    efi_time_t time = {0};
+    efi_time_capabilities_t time_caps = {0};
+
+    if(RS->get_time(&time, &time_caps) != EFI_SUCCESS) {
+        return 0;
+    }
+
+    time_t t = 0;
+
+    t = time.second;
+    t += time.minute * TIME_SECONDS_OF_MINUTE;
+    t += time.hour * TIME_SECONDS_OF_HOUR;
+
+    int64_t days = time.day - 1;
+
+    for(int16_t i = 0; i < time.month - 1; i++) {
+        days += time_days_of_month[i];
+    }
+
+    int64_t year = time.year;
+
+    if(time_is_leap(year)) {
+        days++;
+    }
+
+    year--;
+
+    while(year >= TIME_TIMESTAMP_START_YEAR) {
+        if(time_is_leap(year)) {
+            days += TIME_DAYS_AT_LEAP_YEAR;
+        } else {
+            days += TIME_DAYS_AT_YEAR;
+        }
+
+        year--;
+    }
+
+    t += days * TIME_SECONDS_OF_DAY;
+
+    t *= 1000000000ULL; // ns
+
+    t += time.nano_second;
+
+    return t;
+}
+
 #endif
