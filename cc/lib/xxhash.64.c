@@ -134,7 +134,7 @@ int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t lengt
 
     const unsigned char* data = (const unsigned char*)input;
 
-    if (ictx->buffer_size + ictx->total_length < XXHASH64_MAXBUFFERSIZE) {
+    if (ictx->buffer_size + length < XXHASH64_MAXBUFFERSIZE) {
         while (length-- > 0) {
             ictx->buffer[ictx->buffer_size++] = *data++;
         }
@@ -142,20 +142,23 @@ int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t lengt
         return 0;
     }
 
-    const unsigned char* stop      = data + length;
-    const unsigned char* stop_block = stop - XXHASH64_MAXBUFFERSIZE;
-
     if (ictx->buffer_size > 0) {
+        uint64_t to_fill = XXHASH64_MAXBUFFERSIZE - ictx->buffer_size;
+
         while (ictx->buffer_size < XXHASH64_MAXBUFFERSIZE) {
             ictx->buffer[ictx->buffer_size++] = *data++;
         }
+
+        length -= to_fill;
 
         xxhash64_process(ictx->buffer, &ictx->state[0], &ictx->state[1], &ictx->state[2], &ictx->state[3]);
     }
 
     uint64_t s0 = ictx->state[0], s1 = ictx->state[1], s2 = ictx->state[2], s3 = ictx->state[3];
 
-    while (data <= stop_block)
+    int64_t nb_blocks = length / 32;
+
+    while (nb_blocks-- > 0)
     {
         xxhash64_process(data, &s0, &s1, &s2, &s3);
         data += 32;
@@ -163,7 +166,8 @@ int8_t xxhash64_update(xxhash64_context_t ctx, const void* input, uint64_t lengt
 
     ictx->state[0] = s0; ictx->state[1] = s1; ictx->state[2] = s2; ictx->state[3] = s3;
 
-    ictx->buffer_size = stop - data;
+    ictx->buffer_size = length % 32;
+
     for (int64_t i = 0; i < ictx->buffer_size; i++) {
         ictx->buffer[i] = data[i];
     }
