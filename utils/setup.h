@@ -12,6 +12,7 @@
 #include "os_io.h"
 #include <time.h>
 #include <utils.h>
+#include <random.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -144,6 +145,10 @@ void __attribute__((constructor)) start_ram(void) {
     if(res) {
         exit(res);
     }
+
+    uint64_t seed = time_ns(NULL);
+
+    srand(seed);
 }
 
 void __attribute__((destructor)) stop_ram(void) {
@@ -260,7 +265,7 @@ struct timespec clock_gettime(int, struct timespec* ts);
 time_t time_ns(time_t* t) {
     UNUSED(t);
     clock_gettime(1, &ts);
-    return 1000000000L * ts.tv_sec + ts.tv_nsec;
+    return 1000000000ULL * ts.tv_sec + ts.tv_nsec;
 }
 
 #endif
