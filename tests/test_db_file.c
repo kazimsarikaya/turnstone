@@ -24,6 +24,8 @@
 #include <strings.h>
 #include <bloomfilter.h>
 #include <math.h>
+#include <compression.h>
+#include <deflate.h>
 #include <zpack.h>
 #include <binarysearch.h>
 #include <tokenizer.h>
@@ -32,6 +34,7 @@
 #include <cache.h>
 #include <hashmap.h>
 #include <rbtree.h>
+#include <quicksort.h>
 
 #define TOSDB_CAP (32 << 20)
 
@@ -195,7 +198,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
-    tosdb_t* tosdb = tosdb_new(backend);
+    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_DEFLATE);
 
     if(!tosdb) {
         print_error("cannot create tosdb");

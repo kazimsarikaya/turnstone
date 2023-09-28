@@ -16,12 +16,15 @@
 #include <strings.h>
 #include <bloomfilter.h>
 #include <math.h>
+#include <compression.h>
 #include <zpack.h>
+#include <deflate.h>
 #include <binarysearch.h>
 #include <tokenizer.h>
 #include <set.h>
 #include <cache.h>
 #include <rbtree.h>
+#include <quicksort.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int32_t test_step1(uint32_t argc, char_t** argv);
@@ -50,7 +53,7 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
-    tosdb_t* tosdb = tosdb_new(backend);
+    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_DEFLATE);
 
     if(!tosdb) {
         print_error("cannot create tosdb");
@@ -339,7 +342,7 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
-    tosdb_t* tosdb = tosdb_new(backend);
+    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_DEFLATE);
 
     if(!tosdb) {
         print_error("cannot create tosdb");
@@ -664,7 +667,7 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
-    tosdb_t* tosdb = tosdb_new(backend);
+    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_DEFLATE);
 
     if(!tosdb) {
         print_error("cannot create tosdb");
@@ -1104,7 +1107,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
-    tosdb_t* tosdb = tosdb_new(backend);
+    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_DEFLATE);
 
     if(!tosdb) {
         print_error("cannot create tosdb");
