@@ -92,7 +92,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     tosdb_memtable_secondary_index_item_t* last = NULL;
     bloomfilter_t* bf = NULL;
     uint64_t index_data_size = 0;
-    uint64_t index_data_location;
+    uint64_t index_data_location = 0;
+    uint64_t record_count = 0;
 
     tosdb_cached_bloomfilter_t* c_bf = NULL;
 
@@ -123,6 +124,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
             return false;
         }
+
+        record_count = st_idx->record_count;
 
         tosdb_memtable_secondary_index_item_t* t_first = (tosdb_memtable_secondary_index_item_t*)st_idx->data;
 
@@ -277,7 +280,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     }
 
     tosdb_memtable_secondary_index_item_t** st_idx_items = NULL;
-    uint64_t record_count = 0;
+
     uint8_t* idx_data = NULL;
     uint8_t* org_idx_data = NULL;
 
@@ -295,8 +298,6 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         record_count = c_id->record_count;
 
     } else {
-        record_count = sli->record_count;
-
         tosdb_block_sstable_index_data_t* b_sid = (tosdb_block_sstable_index_data_t*)tosdb_block_read(ctx->table->db->tdb, index_data_location, index_data_size);
 
         if(!b_sid) {
@@ -305,6 +306,8 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             return false;
 
         }
+
+        record_count = b_sid->record_count;
 
         buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
@@ -339,7 +342,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             return false;
         }
 
-        for(uint64_t i = 0; i < sli->record_count; i++) {
+        for(uint64_t i = 0; i < record_count; i++) {
             st_idx_items[i] = (tosdb_memtable_secondary_index_item_t*)idx_data;
 
             if(!st_idx_items[i]) {
@@ -377,7 +380,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     PRINTLOG(TOSDB, LOG_TRACE, "index data read, record count: 0x%llx", record_count);
 
     tosdb_memtable_secondary_index_item_t** found_item = (tosdb_memtable_secondary_index_item_t**)binarysearch(st_idx_items,
-                                                                                                               sli->record_count,
+                                                                                                               record_count,
                                                                                                                sizeof(tosdb_memtable_secondary_index_item_t*),
                                                                                                                &item,
                                                                                                                tosdb_sstable_secondary_index_comparator);
@@ -403,10 +406,15 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             break;
         }
 
+        res->record_id = s_idx_item->record_id;
         res->is_deleted = s_idx_item->is_primary_key_deleted;
         res->key_hash = s_idx_item->primary_key_hash;
         res->key_length = s_idx_item->primary_key_length;
         memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
+
+        if(res->key_hash == 7083) {
+            PRINTLOG(TOSDB, LOG_TRACE, "found item: %s deleted? %i", res->key, res->is_deleted);
+        }
 
         if(!set_append(results, res)) {
             memory_free(res);
@@ -436,10 +444,17 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
                 break;
             }
 
+            res->record_id = s_idx_item->record_id;
             res->is_deleted = s_idx_item->is_primary_key_deleted;
             res->key_hash = s_idx_item->primary_key_hash;
             res->key_length = s_idx_item->primary_key_length;
             memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
+
+            if(res->key_hash == 7083) {
+                PRINTLOG(TOSDB, LOG_TRACE, "found item: %s deleted? %i", res->key, res->is_deleted);
+            }
+
+
 
             if(!set_append(results, res)) {
                 memory_free(res);
@@ -493,7 +508,7 @@ boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results) {
     tosdb_record_context_t* ctx = record->context;
 
     if(hashmap_size(ctx->keys) != 1) {
-        PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
+        PRINTLOG(TOSDB, LOG_ERROR, "record search supports only one key");
 
         return false;
     }

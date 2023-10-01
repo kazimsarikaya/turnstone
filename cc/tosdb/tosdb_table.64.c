@@ -13,6 +13,49 @@
 
 MODULE("turnstone.kernel.db");
 
+
+const tosdb_column_t* tosdb_table_get_column_by_index_id(tosdb_table_t* tbl, uint64_t id) {
+    if(!tbl || !tbl->columns || !tbl->indexes) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table/coumns/indexes is null");
+
+        return NULL;
+    }
+
+    tosdb_index_t* idx = (tosdb_index_t*)hashmap_get(tbl->indexes, (void*)id);
+
+    if(!idx) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot find index with id %lli", id);
+
+        return NULL;
+    }
+
+    iterator_t* it = hashmap_iterator_create(tbl->columns);
+
+    if(!it) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator for columns");
+
+        return NULL;
+    }
+
+    const tosdb_column_t* col = NULL;
+
+    while(it->end_of_iterator(it) != 0) {
+        const tosdb_column_t* t_col = (const tosdb_column_t*)it->get_item(it);
+
+        if(idx->column_id == t_col->id) {
+            col = t_col;
+
+            break;
+        }
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+
+    return col;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
@@ -430,6 +473,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             if(!tosdb_table_persist(tbl)) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot persist table %s", tbl->name);
                 error = true;
+            } else {
+                PRINTLOG(TOSDB, LOG_DEBUG, "table %s persisted", tbl->name);
             }
         }
 
@@ -456,6 +501,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         hashmap_destroy(tbl->columns);
         tbl->columns = NULL;
 
+        PRINTLOG(TOSDB, LOG_TRACE, "columns of table %s destroyed", tbl->name);
+
         iter = hashmap_iterator_create(tbl->indexes);
 
         if(!iter) {
@@ -476,6 +523,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
         hashmap_destroy(tbl->indexes);
         tbl->indexes = NULL;
+
+        PRINTLOG(TOSDB, LOG_TRACE, "indexes of table %s destroyed", tbl->name);
 
         if(tbl->memtables) {
             iter = linkedlist_iterator_create(tbl->memtables);
@@ -503,6 +552,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             tbl->current_memtable = NULL;
         }
 
+        PRINTLOG(TOSDB, LOG_TRACE, "memtables of table %s destroyed", tbl->name);
+
         if(tbl->sstable_levels) {
             iterator_t* stl_iter = hashmap_iterator_create(tbl->sstable_levels);
 
@@ -525,6 +576,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             hashmap_destroy(tbl->sstable_levels);
             tbl->sstable_levels = NULL;
 
+            PRINTLOG(TOSDB, LOG_TRACE, "sstable levels of table %s destroyed", tbl->name);
         }
 
         tbl->is_open = false;

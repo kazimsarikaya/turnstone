@@ -199,6 +199,7 @@ typedef struct tosdb_block_sstable_index_t {
     uint64_t             table_id;
     uint64_t             sstable_id;
     uint64_t             index_id;
+    uint64_t             record_count;
     uint64_t             minmax_key_size;
     uint64_t             bloomfilter_size;
     uint64_t             bloomfilter_unpacked_size;
@@ -213,6 +214,7 @@ typedef struct tosdb_block_sstable_index_data_t {
     uint64_t             table_id;
     uint64_t             sstable_id;
     uint64_t             index_id;
+    uint64_t             record_count;
     uint64_t             index_data_size;
     uint64_t             index_data_unpacked_size;
     uint8_t              data[];
@@ -252,6 +254,7 @@ struct tosdb_database_t {
     uint64_t   metadata_size;
     uint64_t   table_list_location;
     uint64_t   table_list_size;
+    hashmap_t* sequences;
 };
 
 boolean_t         tosdb_database_persist(tosdb_database_t* db);
@@ -320,10 +323,12 @@ typedef struct tosdb_index_t {
     uint64_t           column_id;
 } tosdb_index_t;
 
-boolean_t tosdb_table_index_persist(tosdb_table_t* tbl);
-boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl);
+boolean_t             tosdb_table_index_persist(tosdb_table_t* tbl);
+boolean_t             tosdb_table_memtable_persist(tosdb_table_t* tbl);
+const tosdb_column_t* tosdb_table_get_column_by_index_id(tosdb_table_t* tbl, uint64_t id);
 
 typedef struct tosdb_memtable_index_item_t {
+    uint128_t record_id;
     uint64_t  key_hash;
     boolean_t is_deleted;
     uint64_t  offset;
@@ -333,6 +338,7 @@ typedef struct tosdb_memtable_index_item_t {
 }__attribute__((packed, aligned(8))) tosdb_memtable_index_item_t;
 
 typedef struct tosdb_memtable_secondary_index_item_t {
+    uint128_t record_id;
     uint64_t  secondary_key_hash;
     uint64_t  secondary_key_length;
     boolean_t is_primary_key_deleted;
@@ -342,7 +348,9 @@ typedef struct tosdb_memtable_secondary_index_item_t {
 }__attribute__((packed, aligned(8))) tosdb_memtable_secondary_index_item_t;
 
 int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2);
+int8_t tosdb_memtable_record_id_comparator(const void* i1, const void* i2);
 int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2);
+int8_t tosdb_memtable_secondary_index_record_id_comparator(const void* i1, const void* i2);
 
 typedef struct tosdb_memtable_index_t {
     tosdb_index_t* ti;
@@ -371,6 +379,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record);
 
 typedef struct tosdb_record_context_t {
     tosdb_table_t* table;
+    uint128_t      record_id;
     hashmap_t*     columns;
     hashmap_t*     keys;
     uint64_t       level;

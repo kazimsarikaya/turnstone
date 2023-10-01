@@ -13,6 +13,8 @@
 #include <iterator.h>
 #include <xxhash.h>
 #include <set.h>
+#include <random.h>
+#include <time.h>
 
 MODULE("turnstone.kernel.db");
 
@@ -382,6 +384,10 @@ boolean_t tosdb_record_upsert(tosdb_record_t* record) {
 }
 
 boolean_t tosdb_record_delete(tosdb_record_t* record) {
+    if(!record) {
+        return false;
+    }
+
     if(tosdb_memtable_is_deleted(record)) {
         return true;
     }
@@ -395,10 +401,22 @@ boolean_t tosdb_record_get(tosdb_record_t* record) {
     }
 
     if(tosdb_memtable_get(record)) {
+        if(tosdb_record_is_deleted(record)) {
+            return false;
+        }
+
         return true;
     }
 
-    return tosdb_sstable_get(record);
+    if(tosdb_sstable_get(record)) {
+        if(tosdb_record_is_deleted(record)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 boolean_t tosdb_record_search_set_destroy_cb(void * item) {
@@ -421,17 +439,104 @@ static boolean_t tosdb_record_search_set_destroy_mii_cb(void * item) {
     return true;
 }
 
-linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
+static boolean_t tosdb_record_compare_values(data_type_t type, uint64_t item1_len, void* item1, uint64_t item2_len, void* item2) {
+    if(type < DATA_TYPE_STRING) {
+        uint64_t tmp1 = (uint64_t)item1;
+        uint64_t tmp2 = (uint64_t)item2;
 
-    set_t* results = set_create(tosdb_memtable_index_comparator);
+        if(tmp1 != tmp2) {
+            return false;
+        }
+    } else if(type == DATA_TYPE_STRING || type == DATA_TYPE_INT8_ARRAY) {
+        if(item1_len != item2_len) {
+            return false;
+        }
+
+        if(memory_memcompare(item1, item2, item1_len)) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
+    if(!record || !record->context) {
+        return NULL;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    if(hashmap_size(ctx->keys) != 1) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record search supports only one key");
+
+        return NULL;
+    }
+
+    iterator_t* iter = hashmap_iterator_create(ctx->keys);
+
+    if(!iter) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+
+        return NULL;
+    }
+
+    const tosdb_record_key_t* r_key = iter->get_item(iter);
+
+    iter->destroy(iter);
+
+    if(!r_key) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+
+        return NULL;
+    }
+
+    const tosdb_index_t* index = hashmap_get(ctx->table->indexes, (void*)r_key->index_id);
+
+    if(!index) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get index");
+
+        return NULL;
+    }
+
+    const tosdb_column_t* col = tosdb_table_get_column_by_index_id(ctx->table, r_key->index_id);
+
+    if(!col) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get column");
+
+        return NULL;
+    }
+
+    uint8_t* search_key = NULL;
+    uint64_t search_key_len = 0;
+
+    if(!tosdb_record_get_data_with_colid(record, col->id, col->type, &search_key_len, (void**)&search_key)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot get data");
+
+        return NULL;
+    }
+
+    if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+        PRINTLOG(TOSDB, LOG_TRACE, "search key %s will be searched on table %s", search_key, ctx->table->name);
+    } else {
+        PRINTLOG(TOSDB, LOG_TRACE, "search key %lli will be searched on table %s", (int64_t)search_key, ctx->table->name);
+    }
+
+
+    set_t* results = set_create(tosdb_memtable_record_id_comparator);
 
     if(!results) {
+        memory_free(search_key);
+
         return NULL;
     }
 
     if(!tosdb_memtable_search(record, results)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot search at memtable");
         set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
+        memory_free(search_key);
 
         return NULL;
     }
@@ -439,14 +544,22 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
     if(!tosdb_sstable_search(record, results)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot search at sstables");
         set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
+        memory_free(search_key);
 
         return NULL;
+    }
+
+    if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+        PRINTLOG(TOSDB, LOG_TRACE, "search key %s searched, prob res size %lli", search_key, set_size(results));
+    } else {
+        PRINTLOG(TOSDB, LOG_TRACE, "search key %lli searched prob res size %lli", (int64_t)search_key, set_size(results));
     }
 
     iterator_t* f_iter = set_create_iterator(results);
 
     if(!f_iter) {
         set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
+        memory_free(search_key);
 
         return NULL;
     }
@@ -503,15 +616,74 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
                     PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
                     dont_add = true;
                     rec->destroy(rec);
-                }
+                } else if(rec->get_record(rec)) {
+                    uint8_t* res_key_data = NULL;
+                    uint64_t res_key_len = 0;
 
-                if(rec->get_record(rec)) {
-                    linkedlist_list_insert(recs, rec);
+                    if(item->is_deleted) {
+                        PRINTLOG(TOSDB, LOG_INFO, "record is deleted rec id %llx", (uint64_t)item->record_id);
+                    }
+
+                    if(!tosdb_record_get_data_with_colid(rec, col->id, col->type, &res_key_len, (void**)&res_key_data)) {
+                        PRINTLOG(TOSDB, LOG_ERROR, "cannot get result key data");
+                        dont_add = true;
+                        rec->destroy(rec);
+                    } else {
+                        if(res_key_len != search_key_len) {
+                            PRINTLOG(TOSDB, LOG_TRACE, "search key len %lli != result key len %lli", search_key_len, res_key_len);
+
+                            if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+                                PRINTLOG(TOSDB, LOG_TRACE, "search key %s != result key %s", search_key, res_key_data);
+                            } else {
+                                PRINTLOG(TOSDB, LOG_TRACE, "search key %lli != result key %lli", (int64_t)search_key, (int64_t)res_key_data);
+                            }
+
+                            rec->destroy(rec);
+                        } else {
+                            if(!tosdb_record_compare_values(col->type, search_key_len, search_key, res_key_len, res_key_data)) {
+                                if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+                                    PRINTLOG(TOSDB, LOG_TRACE, "search key %s != result key %s", search_key, res_key_data);
+                                } else {
+                                    PRINTLOG(TOSDB, LOG_TRACE, "search key %lli != result key %lli", (int64_t)search_key, (int64_t)res_key_data);
+                                }
+
+                                rec->destroy(rec);
+                            } else {
+                                if(linkedlist_list_insert(recs, rec) == -1ULL) {
+                                    PRINTLOG(TOSDB, LOG_ERROR, "cannot insert record to list");
+                                    dont_add = true;
+                                    rec->destroy(rec);
+                                }
+                            }
+                        }
+
+                        if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+                            memory_free(res_key_data);
+                        }
+                    }
+
+                } else if(tosdb_record_is_deleted(rec)) {
+                    if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+                        PRINTLOG(TOSDB, LOG_TRACE, "searced key %s record key: %s is already deleted", search_key, item->key);
+                    } else {
+                        PRINTLOG(TOSDB, LOG_TRACE, "searched key %lli record key: %lli is already deleted", (int64_t)search_key, item->key_hash);
+                    }
+
+                    rec->destroy(rec);
                 } else {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot get record");
+                    dont_add = true;
+
+                    if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+                        PRINTLOG(TOSDB, LOG_ERROR, "searced key %s record key: %s", search_key, item->key);
+                    } else {
+                        PRINTLOG(TOSDB, LOG_ERROR, "searched key %lli record key: %lli", (int64_t)search_key, item->key_hash);
+                    }
+
                     rec->destroy(rec);
                 }
-
             } else {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create record");
                 dont_add = true;
             }
         }
@@ -524,6 +696,13 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
     f_iter->destroy(f_iter);
 
     set_destroy(results);
+
+    if(col->type == DATA_TYPE_STRING || col->type == DATA_TYPE_INT8_ARRAY) {
+        PRINTLOG(TOSDB, LOG_TRACE, "search key %s ended", search_key);
+        memory_free(search_key);
+    } else {
+        PRINTLOG(TOSDB, LOG_TRACE, "search key %lli ended", (int64_t)search_key);
+    }
 
     return recs;
 }
@@ -734,6 +913,20 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
 
         return NULL;
     }
+
+    uint128_t rec_id = time_ns(NULL);
+    rec_id <<= 64;
+    rec_id |= rand64();
+
+    xxhash64_context_t hash_ctx = xxhash64_init(0);
+    xxhash64_update(hash_ctx, ctx->table->db->name, strlen(ctx->table->db->name));
+    xxhash64_update(hash_ctx, ctx->table->name, strlen(ctx->table->name));
+    xxhash64_update(hash_ctx, &rec_id, sizeof(uint128_t));
+    uint64_t hash = xxhash64_final(hash_ctx);
+
+    rec_id |= hash;
+
+    ctx->record_id = rec_id;
 
     rec->context = ctx;
     rec->set_boolean = tosdb_record_set_boolean;

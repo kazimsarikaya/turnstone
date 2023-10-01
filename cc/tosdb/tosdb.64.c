@@ -61,7 +61,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
 
         main_sb->header.checksum = csum_bak;
     } else {
-        PRINTLOG(TOSDB, LOG_WARNING, "main block signature mismatch");
+        PRINTLOG(TOSDB, LOG_WARNING, "main block signature mismatch: %s", main_sb->header.signature);
     }
 
     if(main_superblock_failed) {
@@ -102,7 +102,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
 
         backup_sb->header.checksum = csum_bak;
     } else {
-        PRINTLOG(TOSDB, LOG_WARNING, "backup block signature mismatch %s", backup_sb->header.signature);
+        PRINTLOG(TOSDB, LOG_WARNING, "backup block signature mismatch: %s", backup_sb->header.signature);
     }
 
 

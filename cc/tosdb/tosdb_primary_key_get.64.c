@@ -189,8 +189,6 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
         st_idx_items = c_id->index_items;
         record_count = c_id->record_count;
     } else {
-        record_count = sli->record_count;
-
         tosdb_block_sstable_index_t* st_idx = (tosdb_block_sstable_index_t*)tosdb_block_read(tbl->db->tdb, idx_loc, idx_size);
 
         if(!st_idx) {
@@ -198,6 +196,8 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
 
             return false;
         }
+
+        record_count = st_idx->record_count;
 
         idx_loc = st_idx->index_data_location;
         idx_size = st_idx->index_data_size;
@@ -247,7 +247,7 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
         }
 
 
-        for(uint64_t i = 0; i < sli->record_count; i++) {
+        for(uint64_t i = 0; i < record_count; i++) {
             st_idx_items[i] = (tosdb_memtable_index_item_t*)idx_data;
 
             idx_data += sizeof(tosdb_memtable_index_item_t) + st_idx_items[i]->key_length;

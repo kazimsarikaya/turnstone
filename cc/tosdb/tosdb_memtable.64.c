@@ -51,6 +51,46 @@ int8_t tosdb_memtable_index_comparator(const void* i1, const void* i2) {
     return 0;
 }
 
+int8_t tosdb_memtable_record_id_comparator(const void* i1, const void* i2) {
+    const tosdb_memtable_index_item_t* ti1 = (tosdb_memtable_index_item_t*)i1;
+    const tosdb_memtable_index_item_t* ti2 = (tosdb_memtable_index_item_t*)i2;
+
+    if(ti1->record_id < ti2->record_id) {
+        return 1;
+    }
+
+    if(ti1->record_id > ti2->record_id) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t tosdb_memtable_index_key_destroyer(void* key) {
+    memory_free(key);
+    return 0;
+}
+
+static int8_t tosdb_memtable_index_key_cloner(const void* key, void** cloned_key) {
+    if(!key || !cloned_key) {
+        return -1;
+    }
+
+    tosdb_memtable_index_item_t* src = (tosdb_memtable_index_item_t*)key;
+
+    uint64_t key_size = sizeof(tosdb_memtable_index_item_t) + src->key_length;
+
+    *cloned_key = memory_malloc(key_size);
+
+    if(!*cloned_key) {
+        return -1;
+    }
+
+    memory_memcopy(key, *cloned_key, key_size);
+
+    return 0;
+}
+
 int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2) {
     const tosdb_memtable_secondary_index_item_t* ti1 = (tosdb_memtable_secondary_index_item_t*)i1;
     const tosdb_memtable_secondary_index_item_t* ti2 = (tosdb_memtable_secondary_index_item_t*)i2;
@@ -82,6 +122,46 @@ int8_t tosdb_memtable_secondary_index_comparator(const void* i1, const void* i2)
     if(ti1->secondary_key_length > ti2->secondary_key_length) {
         return 1;
     }
+
+    return 0;
+}
+
+int8_t tosdb_memtable_secondary_index_record_id_comparator(const void* i1, const void* i2) {
+    const tosdb_memtable_secondary_index_item_t* ti1 = (tosdb_memtable_secondary_index_item_t*)i1;
+    const tosdb_memtable_secondary_index_item_t* ti2 = (tosdb_memtable_secondary_index_item_t*)i2;
+
+    if(ti1->record_id < ti2->record_id) {
+        return 1;
+    }
+
+    if(ti1->record_id > ti2->record_id) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t tosdb_memtable_secondary_index_key_destroyer(void* key) {
+    memory_free(key);
+    return 0;
+}
+
+static int8_t tosdb_memtable_secondary_index_key_cloner(const void* key, void** cloned_key) {
+    if(!key || !cloned_key) {
+        return -1;
+    }
+
+    tosdb_memtable_secondary_index_item_t* src = (tosdb_memtable_secondary_index_item_t*)key;
+
+    uint64_t key_size = sizeof(tosdb_memtable_index_item_t) + src->secondary_key_length + src->primary_key_length;
+
+    *cloned_key = memory_malloc(key_size);
+
+    if(!*cloned_key) {
+        return -1;
+    }
+
+    memory_memcopy(key, *cloned_key, key_size);
 
     return 0;
 }
@@ -158,17 +238,27 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
 
         boolean_t idx_unique = true;
         index_key_comparator_f cmp = tosdb_memtable_index_comparator;
+        bplustree_key_destroyer_f key_destroyer = tosdb_memtable_index_key_destroyer;
+        bplustree_key_cloner_f key_cloner = tosdb_memtable_index_key_cloner;
 
         if(index->type == TOSDB_INDEX_SECONDARY) {
             idx_unique = false;
             cmp = tosdb_memtable_secondary_index_comparator;
+            key_destroyer = tosdb_memtable_secondary_index_key_destroyer;
+            key_cloner = tosdb_memtable_secondary_index_key_cloner;
         }
 
         mt_idx->index = bplustree_create_index_with_unique(32, cmp, idx_unique);
+        bplustree_set_key_destroyer(mt_idx->index, key_destroyer);
+        bplustree_set_key_cloner(mt_idx->index, key_cloner);
 
         if(!mt_idx->index) {
             error = true;
             break;
+        }
+
+        if(index->type == TOSDB_INDEX_SECONDARY) {
+            bplustree_set_comparator_for_unique_subpart_for_non_unique_index(mt_idx->index, tosdb_memtable_secondary_index_record_id_comparator);
         }
 
         hashmap_put(mt->indexes, (void*)index->id, (void*)mt_idx);
@@ -371,7 +461,8 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             return false;
         }
 
-        if(buffer_get_length(tbl->current_memtable->values) > tbl->max_valuelog_size || tbl->current_memtable->record_count == tbl->max_record_count) {
+        if(buffer_get_length(tbl->current_memtable->values) > tbl->max_valuelog_size ||
+           tbl->current_memtable->record_count == tbl->max_record_count) {
             if(!tosdb_memtable_new(tbl)) {
                 lock_release(tbl->lock);
                 memory_free(sd->value);
@@ -394,6 +485,9 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     boolean_t need_rc_inc = true;
 
     iterator_t* iter = hashmap_iterator_create(tbl->indexes);
+
+    int64_t pri_uniq_idx_count = 0, pri_uniq_idx_remove_count = 0;
+    boolean_t pri_uniq_idx_removed = false;
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_index_t* index = (tosdb_index_t*)iter->get_item(iter);
@@ -418,6 +512,8 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
 
         if(index->type != TOSDB_INDEX_SECONDARY) {
+            pri_uniq_idx_count++;
+
             tosdb_memtable_index_item_t* idx_item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
 
             if(!idx_item) {
@@ -433,6 +529,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             idx_item->key_hash = r_key->key_hash;
             idx_item->length = length;
             idx_item->offset = offset;
+            idx_item->record_id = r_ctx->record_id;
 
             uint8_t* u8_key = r_key->key;
             uint64_t u8_key_length = r_key->key_length;
@@ -460,10 +557,19 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             mt_idx->index->insert(mt_idx->index, idx_item, idx_item, (void**)&old_item);
 
             if(old_item) {
-                memory_free(old_item);
                 need_rc_inc = false;
-                PRINTLOG(TOSDB, LOG_ERROR, "duplicate primary/unique key for table %s mt id 0x%llx idx 0x%llx new key_hash 0x%llx old key_hash 0x%llx new data %s",
-                         tbl->name, tbl->current_memtable->id, mt_idx->ti->id, idx_item->key_hash, old_item->key_hash, idx_item->key);
+                pri_uniq_idx_removed = true;
+                pri_uniq_idx_remove_count++;
+
+                if(idx_item->record_id != old_item->record_id) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli %s %lli", index->id, tbl->name, tbl->current_memtable->id);
+                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new rec id: %llx old rec id: %llx", index->id, (uint64_t)idx_item->record_id,  (uint64_t)old_item->record_id);
+                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new key hash: %llx old key hash: %llx", index->id, (uint64_t)idx_item->key_hash,  (uint64_t)old_item->key_hash);
+                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new deleted: %s old deleted: %s", index->id, idx_item->is_deleted ? "true" : "false", old_item->is_deleted ? "true" : "false");
+                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new offset: %llx old offset: %llx", index->id, idx_item->offset, old_item->offset);
+                }
+
+                memory_free(old_item);
             }
 
         } else {
@@ -484,6 +590,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             sec_idx_item->primary_key_hash = pri_r_key->key_hash;
             sec_idx_item->primary_key_length = pri_r_key->key_length;
             sec_idx_item->is_primary_key_deleted = del;
+            sec_idx_item->record_id = r_ctx->record_id;
 
             memory_memcopy(r_key->key, sec_idx_item->data, r_key->key_length);
             memory_memcopy(pri_r_key->key, sec_idx_item->data + r_key->key_length, pri_r_key->key_length);
@@ -509,13 +616,31 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
                 return false;
             }
 
-            mt_idx->index->insert(mt_idx->index, sec_idx_item, sec_idx_item, NULL);
+            tosdb_memtable_secondary_index_item_t* old_item = NULL;
+
+            mt_idx->index->insert(mt_idx->index, sec_idx_item, sec_idx_item, (void**)&old_item);
+
+            if(old_item) {
+
+                if(sec_idx_item->record_id != old_item->record_id) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli %s %lli", index->id, tbl->name, tbl->current_memtable->id);
+                    PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli new rec id: %llx old rec id: %llx", index->id, (uint64_t)sec_idx_item->record_id,  (uint64_t)old_item->record_id);
+                    PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli new key hash: %llx old key hash: %llx", index->id, (uint64_t)sec_idx_item->secondary_key_hash,  (uint64_t)old_item->secondary_key_hash);
+                    PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli new deleted: %s old deleted: %s", index->id, sec_idx_item->is_primary_key_deleted ? "true" : "false", old_item->is_primary_key_deleted ? "true" : "false");
+                }
+
+                memory_free(old_item);
+            }
         }
 
         iter = iter->next(iter);
     }
 
     iter->destroy(iter);
+
+    if(pri_uniq_idx_removed && pri_uniq_idx_count != pri_uniq_idx_remove_count) {
+        PRINTLOG(TOSDB, LOG_ERROR, "primary/unique index count %lli is not equal to removed count %lli for table %s", pri_uniq_idx_count, pri_uniq_idx_remove_count, tbl->name);
+    }
 
     if(need_rc_inc) {
         tbl->current_memtable->record_count++;
@@ -682,6 +807,11 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
         return false;
     }
+
+    PRINTLOG(TOSDB, LOG_TRACE, "persisting index id %lli for table %s mt id %lli, index size %lli",
+             mt_idx->ti->id, mt->tbl->name, mt->id, mt_idx->index->size(mt_idx->index));
+
+    uint64_t record_count = mt_idx->index->size(mt_idx->index);
 
     data_t* bf_d = bloomfilter_serialize(mt_idx->bloomfilter);
 
@@ -850,6 +980,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_sid->index_id = mt_idx->ti->id;
     b_sid->index_data_size = index_size;
     b_sid->index_data_unpacked_size = index_data_unpacked_size;
+    b_sid->record_count = record_count;
 
     memory_memcopy(index_data, b_sid->data, index_size);
     memory_free(index_data);
@@ -895,6 +1026,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
     b_si->bloomfilter_unpacked_size = bloomfilter_unpacked_size;
     b_si->index_data_size = idx_data_block_size;
     b_si->index_data_location = idx_data_block_loc;
+    b_si->record_count = record_count;
 
     uint8_t* tmp = &b_si->data[0];
 
@@ -1100,7 +1232,10 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     }
 
     if(found_item->is_deleted) {
-        return false;
+        ctx->is_deleted = true;
+        ctx->record_id = found_item->record_id;
+
+        return true;
     }
 
     lock_acquire(mt->tbl->lock);
@@ -1125,6 +1260,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
         return false;
     }
 
+    ctx->record_id = found_item->record_id;
 
     data_t* tmp = r_d->value;
 
@@ -1153,7 +1289,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     tosdb_record_context_t* ctx = record->context;
 
     if(hashmap_size(ctx->keys) != 1) {
-        PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
+        PRINTLOG(TOSDB, LOG_ERROR, "record search supports only one key");
 
         return false;
     }
@@ -1216,6 +1352,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
                 break;
             }
 
+            res->record_id = s_idx_item->record_id;
             res->is_deleted = s_idx_item->is_primary_key_deleted;
             res->key_hash = s_idx_item->primary_key_hash;
             res->key_length = s_idx_item->primary_key_length;
