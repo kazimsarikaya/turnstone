@@ -66,12 +66,12 @@ int8_t tosdb_memtable_record_id_comparator(const void* i1, const void* i2) {
     return 0;
 }
 
-static int8_t tosdb_memtable_index_key_destroyer(void* key) {
-    memory_free(key);
+static int8_t tosdb_memtable_index_key_destroyer(memory_heap_t* heap, void* key) {
+    memory_free_ext(heap, key);
     return 0;
 }
 
-static int8_t tosdb_memtable_index_key_cloner(const void* key, void** cloned_key) {
+static int8_t tosdb_memtable_index_key_cloner(memory_heap_t* heap, const void* key, void** cloned_key) {
     if(!key || !cloned_key) {
         return -1;
     }
@@ -80,7 +80,7 @@ static int8_t tosdb_memtable_index_key_cloner(const void* key, void** cloned_key
 
     uint64_t key_size = sizeof(tosdb_memtable_index_item_t) + src->key_length;
 
-    *cloned_key = memory_malloc(key_size);
+    *cloned_key = memory_malloc_ext(heap, key_size, 0);
 
     if(!*cloned_key) {
         return -1;
@@ -141,12 +141,12 @@ int8_t tosdb_memtable_secondary_index_record_id_comparator(const void* i1, const
     return 0;
 }
 
-static int8_t tosdb_memtable_secondary_index_key_destroyer(void* key) {
-    memory_free(key);
+static int8_t tosdb_memtable_secondary_index_key_destroyer(memory_heap_t* heap, void* key) {
+    memory_free_ext(heap, key);
     return 0;
 }
 
-static int8_t tosdb_memtable_secondary_index_key_cloner(const void* key, void** cloned_key) {
+static int8_t tosdb_memtable_secondary_index_key_cloner(memory_heap_t* heap, const void* key, void** cloned_key) {
     if(!key || !cloned_key) {
         return -1;
     }
@@ -155,7 +155,7 @@ static int8_t tosdb_memtable_secondary_index_key_cloner(const void* key, void** 
 
     uint64_t key_size = sizeof(tosdb_memtable_index_item_t) + src->secondary_key_length + src->primary_key_length;
 
-    *cloned_key = memory_malloc(key_size);
+    *cloned_key = memory_malloc_ext(heap, key_size, 0);
 
     if(!*cloned_key) {
         return -1;

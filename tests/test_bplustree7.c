@@ -8,10 +8,11 @@
 #include <utils.h>
 #include <set.h>
 #include <rbtree.h>
+#include <strings.h>
 
-int32_t main(void);
+int32_t main(int32_t argc, char_t** argv);
 
-int test_data[] = {
+int32_t test_data[] = {
     0x816, 0x814, 0x811, 0x80B, 0x3EFF, 0x3EE7, 0x3ED2, 0x3EC8, 0x3EBF, 0x3EB6, 0x3EAD, 0x3EA3, 0x3E9A, 0x3E8B, 0x3E6A, 0x3E61,
     0x3E43, 0x3E39, 0x3E2F, 0x3E26, 0x3E1B, 0x3E0A, 0x3E00, 0x3DF7, 0x3DCE, 0x3DC5, 0x3DB6, 0x3DAB, 0x3D95, 0x3D8D, 0x3D84, 0x3D7A,
     0x3D4E, 0x3D44, 0x3D3B, 0x3D32, 0x3D1C, 0x3D11, 0x3D08, 0x3CFA, 0x3CE3, 0x3CD9, 0x3CC9, 0x3CC0, 0x3CB1, 0x3CA6, 0x3C9D, 0x3C8D, 0x3C81,
@@ -208,16 +209,16 @@ static int8_t int_comparator(const void* i1, const void* i2) {
     return 0;
 }
 
-int8_t key_destroyer(void* key);
+int32_t key_clone_destroy_count = 0;
 
-int8_t key_destroyer(void* key) {
-    memory_free(key);
+static int8_t key_destroyer(memory_heap_t* heap, void* key) {
+    printf("destroying key %p\n", key);
+    memory_free_ext(heap, key);
+    key_clone_destroy_count--;
     return 0;
 }
 
-int8_t key_cloner(const void* key, void** cloned_key);
-
-int8_t key_cloner(const void* key, void** cloned_key) {
+static int8_t key_cloner(memory_heap_t* heap, const void* key, void** cloned_key) {
     if(!key || !cloned_key) {
         return -1;
     }
@@ -226,23 +227,31 @@ int8_t key_cloner(const void* key, void** cloned_key) {
 
     uint64_t key_size = sizeof(tosdb_memtable_index_item_t) + src->key_length;
 
-    *cloned_key = memory_malloc(key_size);
+    *cloned_key = memory_malloc_ext(heap, key_size, 0);
 
     if(!*cloned_key) {
         return -1;
     }
 
     memory_memcopy(key, *cloned_key, key_size);
-
+    key_clone_destroy_count++;
     return 0;
 }
 
-int32_t main(void){
-    int max_key_count = 32;
+int32_t main(int32_t argc, char_t** argv){
+    argc--;
+    argv++;
+
+    int32_t max_key_count = 32;
+    int32_t item_count = sizeof(test_data) / sizeof(int32_t);
+
+    if(argc == 1) {
+        item_count = atoi(argv[0]);
+    }
 
     set_t* set = set_create(int_comparator);
 
-    for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
+    for(int32_t i = 0; i < item_count; i++) {
         set_append(set, &test_data[i]);
     }
 
@@ -259,24 +268,21 @@ int32_t main(void){
         return -1;
     }
 
-    printf("item count: %li\n", sizeof(test_data) / sizeof(int));
+    printf("item count: %i\n", item_count);
 
-    for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
+    for(int32_t i = 0; i < item_count; i++) {
         tosdb_memtable_index_item_t* deleted = NULL;
 
         tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t));
         item->key_hash = test_data[i];
-        tosdb_memtable_index_item_t* key = memory_malloc(sizeof(tosdb_memtable_index_item_t));
-        key->key_hash = test_data[i];
 
-        idx->insert(idx, key, item, (void**)&deleted);
+        idx->insert(idx, item, item, (void**)&deleted);
 
         printf("inserted: 0x%x ", test_data[i]);
 
         if(deleted != NULL) {
             printf("deleted: 0x%llx", deleted->key_hash);
             memory_free(deleted);
-            memory_free(key);
         }
 
         printf("\n");
@@ -326,6 +332,8 @@ int32_t main(void){
     bplustree_destroy_index(idx);
 
     printf("unique item count: %i\n", uniq_item_count);
+
+    printf("key clone destroy count: %i\n", key_clone_destroy_count);
 
     print_success("all tests are passed");
 

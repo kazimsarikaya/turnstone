@@ -171,7 +171,7 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t* list, linke
  */
 #define linkedlist_create_stack() linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_STACK, NULL, NULL)
 
-typedef int8_t (*linkedlist_item_destroyer_callback_f)(void* data);
+typedef int8_t (*linkedlist_item_destroyer_callback_f)(memory_heap_t* heap, void* data);
 
 /**
  * @brief destroys linked list

@@ -181,7 +181,7 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type
     while(item) {
         if(type == LINKEDLIST_DESTROY_WITH_DATA) {
             if(destroyer) {
-                destroyer((void*)item->data);
+                destroyer(heap, (void*)item->data);
             } else {
                 memory_free_ext(heap, (void*)item->data);
             }

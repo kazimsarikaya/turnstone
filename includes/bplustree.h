@@ -68,7 +68,7 @@ int8_t bplustree_destroy_index(index_t* idx);
  */
 int8_t bplustree_set_comparator_for_unique_subpart_for_non_unique_index(index_t* idx, index_key_comparator_f comparator);
 
-typedef int8_t (*bplustree_key_destroyer_f)(void* key);
+typedef int8_t (*bplustree_key_destroyer_f)(memory_heap_t* heap, void* key);
 
 /**
  * @brief sets a key destroyer for index
@@ -78,7 +78,7 @@ typedef int8_t (*bplustree_key_destroyer_f)(void* key);
  */
 int8_t bplustree_set_key_destroyer(index_t* idx, bplustree_key_destroyer_f destroyer);
 
-typedef int8_t (*bplustree_key_cloner_f)(const void* key, void** cloned_key);
+typedef int8_t (*bplustree_key_cloner_f)(memory_heap_t* heap, const void* key, void** cloned_key);
 
 /**
  * @brief sets a key cloner for index

@@ -10,7 +10,6 @@
 #include <indexer.h>
 #include <linkedlist.h>
 #include <utils.h>
-#include <stdbufs.h>
 
 MODULE("turnstone.lib");
 
@@ -313,17 +312,21 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
         if(div_pos == 0) {
             const void* cur = iter->delete_item(iter);
 
-            if(par_key == NULL) {
-                if(tree->key_cloner) {
-                    void* cloned_key = NULL;
+            if(par_key == NULL) { // if we dont have partition key, we may need to clone it
+                if(tree->key_cloner) { // if we have key cloner, we may need to clone it
+                    if(node->childs == NULL) { // if we are at leaf node, we need to clone it
+                        void* cloned_key = NULL;
 
-                    if(tree->key_cloner(cur, &cloned_key) != 0) {
-                        memory_free_ext(idx->heap, new_node);
+                        if(tree->key_cloner(idx->heap, cur, &cloned_key) != 0) {
+                            memory_free_ext(idx->heap, new_node);
 
-                        return NULL;
+                            return NULL;
+                        }
+
+                        par_key = cloned_key;
+                    } else { // if we are at internal node, we dont need to clone it
+                        par_key = cur;
                     }
-
-                    par_key = cloned_key;
                 } else {
                     par_key = cur;
                 }
@@ -403,7 +406,7 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
         if(tree->key_cloner) {
             void* cloned_key = NULL;
 
-            if(tree->key_cloner(key, &cloned_key) != 0) {
+            if(tree->key_cloner(idx->heap, key, &cloned_key) != 0) {
                 memory_free_ext(idx->heap, tree->root->keys);
                 memory_free_ext(idx->heap, tree->root);
 
@@ -473,7 +476,7 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
                     if(tree->key_cloner) {
                         void* cloned_key = NULL;
 
-                        if(tree->key_cloner(key, &cloned_key) != 0) {
+                        if(tree->key_cloner(idx->heap, key, &cloned_key) != 0) {
                             return -1;
                         }
 
@@ -554,7 +557,7 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
                             return -1;
                         }
 
-                        linkedlist_sortedlist_insert(node->parent->keys, par_key);
+                        key_pos = linkedlist_sortedlist_insert(node->parent->keys, par_key);
                         node->parent->childs = linkedlist_create_list_with_heap(idx->heap);
 
                         if(node->parent->keys == NULL) {
@@ -862,7 +865,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                 void * old_key = (void*)linkedlist_delete_at_position(node->keys, key_position);
 
                 if(tree->key_destroyer) {
-                    tree->key_destroyer(old_key);
+                    tree->key_destroyer(idx->heap, old_key);
                 }
 
                 if(node->childs != NULL) {
@@ -952,7 +955,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                             void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, (*position_at_parent) - 1);
 
                             if(tree->key_destroyer) {
-                                tree->key_destroyer(old_key);
+                                tree->key_destroyer(idx->heap, old_key);
                             }
 
                             linkedlist_delete_at_position(node->parent->childs, (*position_at_parent) - 1);
@@ -969,7 +972,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                             void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, *position_at_parent);
 
                             if(tree->key_destroyer) {
-                                tree->key_destroyer(old_key);
+                                tree->key_destroyer(idx->heap, old_key);
                             }
 
                             linkedlist_delete_at_position(node->parent->childs, (*position_at_parent) + 1);
@@ -1083,7 +1086,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         void* old_key = (void*)linkedlist_delete_at(src->keys, NULL, delete_from, 0);
 
                         if(tree->key_destroyer) {
-                            tree->key_destroyer(old_key);
+                            tree->key_destroyer(idx->heap, old_key);
                         }
 
                         tmp_etc = linkedlist_delete_at(src->childs, NULL, delete_from, 0);
@@ -1107,7 +1110,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, parent_key_position);
 
                         if(tree->key_destroyer) {
-                            tree->key_destroyer(old_key);
+                            tree->key_destroyer(idx->heap, old_key);
                         }
 
                         linkedlist_insert_at_position(node->parent->keys, tmp_key, parent_key_position);
@@ -1117,7 +1120,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, tmp_pos);
 
                         if(tree->key_destroyer) {
-                            tree->key_destroyer(old_key);
+                            tree->key_destroyer(idx->heap, old_key);
                         }
 
                         linkedlist_insert_at_position(node->parent->keys, tmp_key, tmp_pos);
