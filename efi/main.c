@@ -92,10 +92,10 @@ catch_efi_error:
 efi_status_t efi_setup_heap(void){
     efi_status_t res;
 
-    void* heap_area = NULL;
+    efi_physical_address_t heap_area = NULL;
     int64_t heap_size = 1024 * 1024 * 64; // 64 MiB
 
-    res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, heap_size / FRAME_SIZE, &heap_area);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%llx", res);
@@ -110,7 +110,7 @@ efi_status_t efi_setup_heap(void){
     memory_heap_t* heap = memory_create_heap_simple(start, start + heap_size);
 
     if(heap) {
-        PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%p with size 0x%llx", heap_area, heap_size);
+        PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%p with size 0x%llx", (void*)heap_area, heap_size);
     } else {
         PRINTLOG(EFI, LOG_DEBUG, "heap creation failed");
         res = EFI_OUT_OF_RESOURCES;
@@ -1264,7 +1264,10 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     kernel_start_t kernel_start = (kernel_start_t)requested_program_base;
 
     tosdb_close(tdb_ctx->tosdb);
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb closed");
+
     tosdb_backend_close(tdb_ctx->backend);
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb backend closed");
 
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
 
