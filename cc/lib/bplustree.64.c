@@ -10,6 +10,7 @@
 #include <indexer.h>
 #include <linkedlist.h>
 #include <utils.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.lib");
 
@@ -41,6 +42,9 @@ typedef struct bplustree_internal_t {
     uint64_t                   max_key_count; ///< maximum key count for each node
     boolean_t                  unique; ///< if key present replace data
     uint64_t                   size; ///< element count
+    index_key_comparator_f     comparator_for_identify_unique_subpart; ///< key comparator
+    bplustree_key_destroyer_f  key_destroyer; ///< key destroyer
+    bplustree_key_cloner_f     key_cloner; ///< key cloner
 } bplustree_internal_t; ///< short hand for struct
 
 /**
@@ -136,6 +140,42 @@ const void* bplustree_iterator_get_key(iterator_t* iterator);
  */
 const void* bplustree_iterator_get_data(iterator_t* iterator);
 
+int8_t bplustree_set_comparator_for_unique_subpart_for_non_unique_index(index_t* idx, index_key_comparator_f comparator) {
+    if(idx == NULL || idx->metadata == NULL || comparator == NULL) {
+        return -1;
+    }
+
+    bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
+
+    tree->comparator_for_identify_unique_subpart = comparator;
+
+    return 0;
+}
+
+int8_t bplustree_set_key_destroyer(index_t* idx, bplustree_key_destroyer_f destroyer) {
+    if(idx == NULL || idx->metadata == NULL || destroyer == NULL) {
+        return -1;
+    }
+
+    bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
+
+    tree->key_destroyer = destroyer;
+
+    return 0;
+}
+
+int8_t bplustree_set_key_cloner(index_t* idx, bplustree_key_cloner_f cloner) {
+    if(idx == NULL || idx->metadata == NULL || cloner == NULL) {
+        return -1;
+    }
+
+    bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
+
+    tree->key_cloner = cloner;
+
+    return 0;
+}
+
 index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64_t max_key_count,
                                                      index_key_comparator_f comparator, boolean_t unique){
     if(max_key_count < 2) {
@@ -172,7 +212,13 @@ index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64
 }
 
 int8_t bplustree_destroy_index(index_t* idx){
+    if(idx == NULL || idx->metadata == NULL) {
+        return -1;
+    }
+
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
+
+    linkedlist_destroy_type_t destroy_type = tree->key_destroyer == NULL ? LINKEDLIST_DESTROY_WITHOUT_DATA : LINKEDLIST_DESTROY_WITH_DATA;
 
     if(tree->root != NULL) {
         const bplustree_node_internal_t* node = tree->root;
@@ -183,7 +229,7 @@ int8_t bplustree_destroy_index(index_t* idx){
                 if(linkedlist_size(node->childs) > 0) {
                     node = linkedlist_get_data_at_position(node->childs, 0);
                 } else {
-                    linkedlist_destroy(node->keys);
+                    linkedlist_destroy_with_type(node->keys, destroy_type, tree->key_destroyer);
                     linkedlist_destroy(node->childs);
                     tmp_node = node->parent;
 
@@ -195,7 +241,7 @@ int8_t bplustree_destroy_index(index_t* idx){
                     node = tmp_node;
                 }
             } else {
-                linkedlist_destroy(node->keys);
+                linkedlist_destroy_with_type(node->keys, destroy_type, tree->key_destroyer);
 
                 if(!tree->unique) {
                     iterator_t* iterator = linkedlist_iterator_create(node->datas);
@@ -268,7 +314,19 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
             const void* cur = iter->delete_item(iter);
 
             if(par_key == NULL) {
-                par_key = cur;
+                if(tree->key_cloner) {
+                    void* cloned_key = NULL;
+
+                    if(tree->key_cloner(cur, &cloned_key) != 0) {
+                        memory_free_ext(idx->heap, new_node);
+
+                        return NULL;
+                    }
+
+                    par_key = cloned_key;
+                } else {
+                    par_key = cur;
+                }
 
                 if(node->childs == NULL) {
                     linkedlist_sortedlist_insert(new_node->keys, cur); // par key is only inserted at leaf nodes
@@ -342,7 +400,22 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
             return -1;
         }
 
+        if(tree->key_cloner) {
+            void* cloned_key = NULL;
+
+            if(tree->key_cloner(key, &cloned_key) != 0) {
+                memory_free_ext(idx->heap, tree->root->keys);
+                memory_free_ext(idx->heap, tree->root);
+
+                return -1;
+            }
+
+            key = cloned_key;
+        }
+
         linkedlist_sortedlist_insert(tree->root->keys, key);
+
+
         tree->root->datas = linkedlist_create_list_with_heap(idx->heap);
 
         if(tree->root->datas == NULL) {
@@ -357,7 +430,7 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
         if(tree->unique) {
             linkedlist_insert_at_position(tree->root->datas, data, 0);
         } else {
-            linkedlist_t* bucket = linkedlist_create_list_with_heap(idx->heap);
+            linkedlist_t* bucket = linkedlist_create_sortedlist_with_heap(idx->heap, tree->comparator_for_identify_unique_subpart);
 
             if(!bucket) {
                 memory_free_ext(idx->heap, tree->root->keys);
@@ -390,9 +463,6 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
                         *removed_data = (void*)linkedlist_get_data_at_position(node->datas, position);
                     }
 
-                    key_found = false;
-
-                    linkedlist_delete_at_position(node->keys, position);
                     linkedlist_delete_at_position(node->datas, position);
                     tree->size--;
                 }
@@ -400,6 +470,16 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
                 size_t key_pos = 0;
 
                 if(!key_found) {
+                    if(tree->key_cloner) {
+                        void* cloned_key = NULL;
+
+                        if(tree->key_cloner(key, &cloned_key) != 0) {
+                            return -1;
+                        }
+
+                        key = cloned_key;
+                    }
+
                     key_pos = linkedlist_sortedlist_insert(node->keys, key);
                 } else {
                     key_pos = position;
@@ -410,10 +490,32 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
                 } else {
                     if(key_found) {
                         linkedlist_t* bucket = (linkedlist_t*)linkedlist_get_data_at_position(node->datas, key_pos);
-                        linkedlist_list_insert(bucket, data);
+
+                        if(bucket == NULL) {
+                            return -1;
+                        }
+
+                        if(tree->comparator_for_identify_unique_subpart) {
+                            size_t bucket_key_pos;
+
+                            if(linkedlist_get_position(bucket, data, &bucket_key_pos) == 0) {
+                                void* local_removed_data = (void*)linkedlist_get_data_at_position(bucket, bucket_key_pos);
+
+                                if(removed_data) {
+                                    *removed_data = local_removed_data;
+                                }
+
+                                linkedlist_delete_at_position(bucket, bucket_key_pos);
+
+                                tree->size--;
+                            }
+                        }
+
+                        linkedlist_sortedlist_insert(bucket, data);
                     } else {
-                        linkedlist_t* bucket = linkedlist_create_list_with_heap(idx->heap);
-                        linkedlist_list_insert(bucket, data);
+                        linkedlist_t* bucket = linkedlist_create_sortedlist_with_heap(idx->heap, tree->comparator_for_identify_unique_subpart);
+
+                        linkedlist_insert_at_position(bucket, data, 0);
                         linkedlist_insert_at_position(node->datas, bucket, key_pos);
                     }
 
@@ -487,11 +589,13 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
 
                 while(iter->end_of_iterator(iter) != 0) {
                     const void* cur = iter->get_item(iter);
-                    if(idx->comparator(cur, key) < 0) {
+
+                    if(idx->comparator(cur, key) <= 0) {
                         pos++;
                     } else {
                         break;
                     }
+
                     iter = iter->next(iter);
                 }
 
@@ -513,15 +617,19 @@ const void* bplustree_get_min_key(const bplustree_node_internal_t* node) {
     if(node == NULL) {
         return NULL;
     }
+
     while(node->childs != NULL) {
         node = linkedlist_get_data_at_position(node->childs, 0);
     }
+
     return linkedlist_get_data_at_position(node->keys, 0);
 }
 
 int8_t bplustree_toss_root(index_t* idx) {
     bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
     const bplustree_node_internal_t* root = tree->root;
+
+    linkedlist_destroy_type_t destroy_type = tree->key_destroyer == NULL?LINKEDLIST_DESTROY_WITHOUT_DATA:LINKEDLIST_DESTROY_WITH_DATA;
 
     if(root->childs != NULL) {
         if(linkedlist_size(root->keys) <= 1) {
@@ -569,17 +677,19 @@ int8_t bplustree_toss_root(index_t* idx) {
                     }
                 }
 
-                linkedlist_destroy(right_child->keys);
+                linkedlist_destroy_with_type(right_child->keys, destroy_type, tree->key_destroyer);
+
                 if(left_child->childs == NULL) {
                     linkedlist_destroy(right_child->datas);
                 } else {
                     linkedlist_destroy(right_child->childs);
                 }
+
                 memory_free_ext(idx->heap, (void*)right_child);
 
             }
 
-            linkedlist_destroy(root->keys);
+            linkedlist_destroy_with_type(root->keys, destroy_type, tree->key_destroyer);
             linkedlist_destroy(root->childs);
             memory_free_ext(idx->heap, (void*)root);
 
@@ -604,6 +714,8 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
     if(tree->root == NULL) {
         return NULL;
     }
+
+    linkedlist_destroy_type_t destroy_type = tree->key_destroyer == NULL ? LINKEDLIST_DESTROY_WITHOUT_DATA : LINKEDLIST_DESTROY_WITH_DATA;
 
     size_t min_keys = (tree->max_key_count + 1) / 2;
 
@@ -660,19 +772,63 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
             } else {
                 linkedlist_stack_push(path, position);
 
-                if(deleted_data) {
-                    *deleted_data = (void*)linkedlist_get_data_at_position(node->datas, *position);
-                }
+                if(tree->unique) {
+                    if(deleted_data) {
+                        *deleted_data = (void*)linkedlist_get_data_at_position(node->datas, *position);
+                    }
 
-                if(node->data_as_bucket) {
-                    delete_item_count = linkedlist_size(*deleted_data);
-                } else {
                     delete_item_count = 1;
+
+                    found = 0;
+
+                    break;
+                } else {
+                    if(tree->comparator_for_identify_unique_subpart) {
+                        size_t position_at_bucket = 0;
+
+                        if(linkedlist_get_position(node->datas, key, &position_at_bucket) != 0) {
+                            memory_free_ext(idx->heap, position);
+
+                            found = -1;
+
+                            break;
+                        } else {
+                            void* tmp = (void*)linkedlist_get_data_at_position(node->datas, position_at_bucket);
+
+                            if(deleted_data) {
+                                *deleted_data = tmp;
+                            }
+
+                            linkedlist_delete_at_position(node->datas, position_at_bucket);
+
+                            if(linkedlist_size(node->datas) == 0) {
+                                found = 0;
+                                delete_item_count = 1;
+
+                                break;
+                            }
+
+                            tree->size--;
+
+                            linkedlist_destroy_with_data(path);
+
+                            return 0;
+                        }
+
+                    } else {
+                        void* tmp = (void*)linkedlist_get_data_at_position(node->datas, *position);
+
+                        if(deleted_data) {
+                            *deleted_data = tmp;
+                        }
+
+                        delete_item_count = linkedlist_size(tmp);
+
+                        found = 0;
+
+                        break;
+                    }
                 }
-
-                found = 0;
-
-                break;
             }
         }
     }
@@ -703,7 +859,11 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
             tmp_key = linkedlist_get_data_at_position(node->keys, key_position);
 
             if(tmp_key != NULL && idx->comparator(key, tmp_key) == 0) {
-                linkedlist_delete_at_position(node->keys, key_position);
+                void * old_key = (void*)linkedlist_delete_at_position(node->keys, key_position);
+
+                if(tree->key_destroyer) {
+                    tree->key_destroyer(old_key);
+                }
 
                 if(node->childs != NULL) {
                     tmp_key = bplustree_get_min_key(linkedlist_get_data_at_position(node->childs, *position_at_node));
@@ -789,7 +949,12 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         }
 
                         if(merge_with == -1) {
-                            linkedlist_delete_at_position(node->parent->keys, (*position_at_parent) - 1);
+                            void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, (*position_at_parent) - 1);
+
+                            if(tree->key_destroyer) {
+                                tree->key_destroyer(old_key);
+                            }
+
                             linkedlist_delete_at_position(node->parent->childs, (*position_at_parent) - 1);
 
                             if(src->previous != NULL) {
@@ -801,7 +966,12 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                             (*position_at_parent)--;
                             linkedlist_stack_push(path, position_at_parent);
                         } else {
-                            linkedlist_delete_at_position(node->parent->keys, *position_at_parent);
+                            void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, *position_at_parent);
+
+                            if(tree->key_destroyer) {
+                                tree->key_destroyer(old_key);
+                            }
+
                             linkedlist_delete_at_position(node->parent->childs, (*position_at_parent) + 1);
                             node->next = src->next;
 
@@ -882,7 +1052,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         }
                     }
 
-                    linkedlist_destroy(src->keys);
+                    linkedlist_destroy_with_type(src->keys, destroy_type, tree->key_destroyer);
 
                     if(src->childs == NULL) {
                         linkedlist_destroy(src->datas);
@@ -910,7 +1080,12 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         tmp_etc = linkedlist_delete_at(src->datas, NULL, delete_from, 0);
                         linkedlist_insert_at(node->datas, tmp_etc, insert_at, 0);
                     } else {
-                        linkedlist_delete_at(src->keys, NULL, delete_from, 0);
+                        void* old_key = (void*)linkedlist_delete_at(src->keys, NULL, delete_from, 0);
+
+                        if(tree->key_destroyer) {
+                            tree->key_destroyer(old_key);
+                        }
+
                         tmp_etc = linkedlist_delete_at(src->childs, NULL, delete_from, 0);
                         linkedlist_insert_at(node->childs, tmp_etc, insert_at, 0);
                         ((bplustree_node_internal_t*)tmp_etc)->parent = node;
@@ -929,12 +1104,22 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
                     if(left_ok == 0) {
                         tmp_key = bplustree_get_min_key(node);
-                        linkedlist_delete_at_position(node->parent->keys, parent_key_position);
+                        void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, parent_key_position);
+
+                        if(tree->key_destroyer) {
+                            tree->key_destroyer(old_key);
+                        }
+
                         linkedlist_insert_at_position(node->parent->keys, tmp_key, parent_key_position);
                     } else {
                         tmp_key = bplustree_get_min_key(right_node);
                         size_t tmp_pos = (*position_at_parent) == 0 ? 0 : parent_key_position + 1;
-                        linkedlist_delete_at_position(node->parent->keys, tmp_pos);
+                        void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, tmp_pos);
+
+                        if(tree->key_destroyer) {
+                            tree->key_destroyer(old_key);
+                        }
+
                         linkedlist_insert_at_position(node->parent->keys, tmp_key, tmp_pos);
                     }
                 }
@@ -947,7 +1132,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
         bplustree_toss_root(idx);
 
         if(linkedlist_size(tree->root->keys) == 0) {
-            linkedlist_destroy(tree->root->keys);
+            linkedlist_destroy_with_type(tree->root->keys, destroy_type, tree->key_destroyer);
             linkedlist_destroy(tree->root->datas);
             memory_free_ext(idx->heap, (void*)tree->root);
             tree->root = NULL;
