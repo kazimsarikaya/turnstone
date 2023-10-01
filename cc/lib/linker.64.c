@@ -375,7 +375,9 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
         if(symbol_section_id == 0) {
             if(!is_got_symbol) {
-                PRINTLOG(LINKER, LOG_ERROR, "symbol section id is missing for symbol %s, relocation at section 0x%llx relocation id 0x%llx", symbol_name, section_id, reloc_id);
+                PRINTLOG(LINKER, LOG_ERROR, "symbol section id is missing for symbol %s(%lli), relocation at section 0x%llx relocation id 0x%llx", symbol_name, symbol_id, section_id, reloc_id);
+                PRINTLOG(LINKER, LOG_ERROR, "relocation record deleted? %s", reloc_rec->is_deleted(reloc_rec) ? "yes" : "no");
+
                 reloc_rec->destroy(reloc_rec);
 
                 memory_free(symbol_name);
@@ -436,7 +438,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             }
 
             if(!s_sec_rec->get_int64(s_sec_rec, "module_id", &module_id)) {
-                PRINTLOG(LINKER, LOG_ERROR, "cannot get section module id");
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get section module id, is deleted? %d", s_sec_rec->is_deleted(s_sec_rec));
                 reloc_rec->destroy(reloc_rec);
                 s_sec_rec->destroy(s_sec_rec);
 
