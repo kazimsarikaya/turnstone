@@ -151,6 +151,26 @@ typedef struct tosdb_table_t tosdb_table_t;
  */
 tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* name, uint64_t max_record_count, uint64_t max_valuelog_size, uint64_t max_memtable_count);
 
+typedef struct tosdb_sequence_t tosdb_sequence_t;
+
+/**
+ * @brief creates new sequence
+ * @param[in] db database interface
+ * @param[in] name sequence name
+ * @param[in] start sequence start
+ * @param[in] cache_size sequence cache size
+ * @return a new sequence or existing one
+ */
+tosdb_sequence_t* tosdb_sequence_create_or_open(tosdb_database_t* db, const char_t* name, int64_t start, int64_t cache_size);
+
+/**
+ * @brief get next sequence value
+ * @param[in] seq the sequence to operate
+ * @return next sequence value
+ *
+ */
+int64_t tosdb_sequence_next(tosdb_sequence_t* seq);
+
 /**
  * @brief adds a cloumn to given table
  * @param[in] tbl table interface

@@ -405,4 +405,15 @@ boolean_t tosdb_sstable_level_major_compact(const tosdb_table_t* tbl, uint64_t l
 int8_t    tosdb_record_primary_key_comparator(const void* item1, const void* item2);
 boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t* old_pks);
 
+#define TOSDB_SEQUENCE_TABLE_NAME ".sequences"
+
+typedef struct tosdb_sequence_t {
+    tosdb_record_t* this_record;
+    int64_t         id;
+    int64_t         next_value;
+    int64_t         cache_size;
+    int64_t         cache_current_size;
+    lock_t          lock;
+} tosdb_sequence_t;
+
 #endif
