@@ -313,8 +313,8 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
             const void* cur = iter->delete_item(iter);
 
             if(par_key == NULL) { // if we dont have partition key, we may need to clone it
-                if(tree->key_cloner) { // if we have key cloner, we may need to clone it
-                    if(node->childs == NULL) { // if we are at leaf node, we need to clone it
+                if(node->childs == NULL) { // if we are at leaf node, we may need to clone it
+                    if(tree->key_cloner != NULL) { // if we have cloner, we need to clone it
                         void* cloned_key = NULL;
 
                         if(tree->key_cloner(idx->heap, cur, &cloned_key) != 0) {
