@@ -171,22 +171,25 @@ linkedlist_data_comparator_f linkedlist_set_comparator(linkedlist_t* list, linke
  */
 #define linkedlist_create_stack() linkedlist_create_with_type(memory_get_heap(NULL), LINKEDLIST_TYPE_STACK, NULL, NULL)
 
+typedef int8_t (*linkedlist_item_destroyer_callback_f)(void* data);
+
 /**
  * @brief destroys linked list
  * @param[in] list @ref linkedlist_t* the list to be destoyed
  * @param[in] type @ref linkedlist_destroy_type_t the type with
+ * @param[in] destroyer @ref linkedlist_item_destroyer_callback_f destroyer callback, it frees list item
  * @return 0 on success.
  *
  * this method destroys only the linked list with choice of preserving data.
  * if you do not destroy the data a memory leak will be happened if without data
  * destroying
  */
-uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type);
+uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type, linkedlist_item_destroyer_callback_f destroyer);
 
 /*! destroy without data macro */
-#define linkedlist_destroy(l) linkedlist_destroy_with_type(l, LINKEDLIST_DESTROY_WITHOUT_DATA)
+#define linkedlist_destroy(l) linkedlist_destroy_with_type(l, LINKEDLIST_DESTROY_WITHOUT_DATA, NULL)
 /*! destroy with data macro */
-#define linkedlist_destroy_with_data(l) linkedlist_destroy_with_type(l, LINKEDLIST_DESTROY_WITH_DATA)
+#define linkedlist_destroy_with_data(l) linkedlist_destroy_with_type(l, LINKEDLIST_DESTROY_WITH_DATA, NULL)
 
 /**
  * @brief returns item count at linked list

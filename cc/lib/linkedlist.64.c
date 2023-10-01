@@ -168,7 +168,7 @@ size_t linkedlist_size(const linkedlist_t* list){
     return list->item_count;
 }
 
-uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type){
+uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type, linkedlist_item_destroyer_callback_f destroyer){
     if(list == NULL) {
         return 0;
     }
@@ -180,7 +180,11 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type
 
     while(item) {
         if(type == LINKEDLIST_DESTROY_WITH_DATA) {
-            memory_free_ext(heap, (void*)item->data);
+            if(destroyer) {
+                destroyer((void*)item->data);
+            } else {
+                memory_free_ext(heap, (void*)item->data);
+            }
         }
 
         linkedlist_item_t* n_li = item->next;
