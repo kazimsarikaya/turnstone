@@ -87,7 +87,7 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
  * @param[in] node node to start search
  * @return min key.
  */
-const void* bplustree_get_min_key(const bplustree_node_internal_t* node);
+const void* bplustree_get_min_key(index_t* idx, const bplustree_node_internal_t* node);
 /**
  * @brief toss root, so level of tree become smaller.
  * @param[in]  idx b+ tree index
@@ -616,16 +616,31 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
 }
 #pragma GCC diagnostic pop
 
-const void* bplustree_get_min_key(const bplustree_node_internal_t* node) {
+const void* bplustree_get_min_key(index_t* idx, const bplustree_node_internal_t* node) {
     if(node == NULL) {
         return NULL;
     }
+
+    bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
 
     while(node->childs != NULL) {
         node = linkedlist_get_data_at_position(node->childs, 0);
     }
 
-    return linkedlist_get_data_at_position(node->keys, 0);
+    const void* key = linkedlist_get_data_at_position(node->keys, 0);
+
+    if(tree->key_cloner) {
+        void* cloned_key = NULL;
+
+        if(tree->key_cloner(idx->heap, key, &cloned_key) != 0) {
+
+            return NULL;
+        }
+
+        key = cloned_key;
+    }
+
+    return key;
 }
 
 int8_t bplustree_toss_root(index_t* idx) {
@@ -734,7 +749,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
         return -1;
     }
 
-    int8_t found = -1;
+    boolean_t found = false;
     size_t delete_item_count = 0;
 
     while(node != NULL) {
@@ -782,7 +797,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
                     delete_item_count = 1;
 
-                    found = 0;
+                    found = true;
 
                     break;
                 } else {
@@ -792,7 +807,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                         if(linkedlist_get_position(node->datas, key, &position_at_bucket) != 0) {
                             memory_free_ext(idx->heap, position);
 
-                            found = -1;
+                            found = false;
 
                             break;
                         } else {
@@ -805,7 +820,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                             linkedlist_delete_at_position(node->datas, position_at_bucket);
 
                             if(linkedlist_size(node->datas) == 0) {
-                                found = 0;
+                                found = true;
                                 delete_item_count = 1;
 
                                 break;
@@ -838,14 +853,14 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
     int8_t deleted = 0;
 
-    if(found == 0) {
+    if(found) {
         size_t* position_at_node;
         size_t key_position;
         size_t parent_key_position;
         const void* tmp_key = NULL;
         position_at_node = (size_t*)linkedlist_get_data_at_position(path, 0);
         linkedlist_delete_at_position(node->datas, *position_at_node); // remove data
-                                                                       //
+
         while (linkedlist_size(path) > 0) {
             position_at_node = (size_t*)linkedlist_stack_pop(path);
 
@@ -869,7 +884,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                 }
 
                 if(node->childs != NULL) {
-                    tmp_key = bplustree_get_min_key(linkedlist_get_data_at_position(node->childs, *position_at_node));
+                    tmp_key = bplustree_get_min_key(idx, linkedlist_get_data_at_position(node->childs, *position_at_node));
 
                     if(tmp_key != NULL) {
                         linkedlist_insert_at_position(node->keys, tmp_key, key_position);
@@ -1018,7 +1033,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                                 tmp_key_search_node = linkedlist_get_data_at_position(node->childs, 0);
                             }
 
-                            tmp_key = bplustree_get_min_key(tmp_key_search_node);
+                            tmp_key = bplustree_get_min_key(idx, tmp_key_search_node);
                             linkedlist_insert_at(node->keys, tmp_key, insert_at, 0);
                         }
 
@@ -1096,17 +1111,17 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
                         if(left_ok == 0) {
                             tmp_key_child = linkedlist_get_data_at_position(node->childs, 1);
-                            tmp_key =  bplustree_get_min_key(tmp_key_child);
+                            tmp_key =  bplustree_get_min_key(idx, tmp_key_child);
                             linkedlist_insert_at(node->keys, tmp_key, LINKEDLIST_INSERT_AT_HEAD, 0);
                         } else {
                             tmp_key_child = tmp_etc;
-                            tmp_key =  bplustree_get_min_key(tmp_key_child);
+                            tmp_key =  bplustree_get_min_key(idx, tmp_key_child);
                             linkedlist_insert_at(node->keys, tmp_key, LINKEDLIST_INSERT_AT_TAIL, 0);
                         }
                     }
 
                     if(left_ok == 0) {
-                        tmp_key = bplustree_get_min_key(node);
+                        tmp_key = bplustree_get_min_key(idx, node);
                         void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, parent_key_position);
 
                         if(tree->key_destroyer) {
@@ -1115,7 +1130,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
                         linkedlist_insert_at_position(node->parent->keys, tmp_key, parent_key_position);
                     } else {
-                        tmp_key = bplustree_get_min_key(right_node);
+                        tmp_key = bplustree_get_min_key(idx, right_node);
                         size_t tmp_pos = (*position_at_parent) == 0 ? 0 : parent_key_position + 1;
                         void* old_key = (void*)linkedlist_delete_at_position(node->parent->keys, tmp_pos);
 

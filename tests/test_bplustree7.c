@@ -298,6 +298,26 @@ int32_t main(int32_t argc, char_t** argv){
         print_success("tree size %i == uniq item count %i", tree_size, uniq_item_count);
     }
 
+    for(int32_t i = 0; i < item_count / 8; i++) {
+        tosdb_memtable_index_item_t key = {.key_hash = test_data[i]};
+        tosdb_memtable_index_item_t* item = NULL;
+
+        idx->delete(idx, &key, (void**)&item);
+
+        if(item == NULL) {
+            print_error("item not found: 0x%x", test_data[i]);
+        } else {
+            if(item->key_hash != (uint64_t)test_data[i]) {
+                print_error("item key hash 0x%llx != 0x%x", item->key_hash, test_data[i]);
+            } else {
+                print_success("item found: 0x%x", test_data[i]);
+            }
+
+            memory_free(item);
+        }
+
+    }
+
     iterator_t* iter = idx->create_iterator(idx);
     printf("iterator created: %p\n", iter);
 
