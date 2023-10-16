@@ -1,4 +1,7 @@
-/*
+/**
+ * @file network_arp.64.c
+ * @brief ARP protocol implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

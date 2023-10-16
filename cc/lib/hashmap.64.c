@@ -12,34 +12,72 @@
 #include <xxhash.h>
 #include <strings.h>
 
+/*! module name */
 MODULE("turnstone.lib");
 
+/**
+ * @struct hashmap_item_t
+ * @brief hashmap item
+ */
 typedef struct hashmap_item_t {
-    boolean_t   exists;
-    const void* key;
-    const void* value;
-} hashmap_item_t;
+    boolean_t   exists; ///< item exists
+    const void* key; ///< item key
+    const void* value; ///< item value
+} hashmap_item_t; ///< hashmap item
 
+/**
+ * @struct hashmap_segment_t
+ * @brief hashmap segment
+ */
 typedef struct hashmap_segment_t {
-    uint64_t                  size;
-    struct hashmap_segment_t* next;
-    hashmap_item_t*           items;
-} hashmap_segment_t;
+    uint64_t                  size; ///< segment size
+    struct hashmap_segment_t* next; ///< next segment
+    hashmap_item_t*           items; ///< items at segment
+} hashmap_segment_t; ///< hashmap segment
 
+/**
+ * @struct hashmap_t
+ * @brief hashmap
+ */
 struct hashmap_t {
-    uint64_t                 segment_capacity;
-    uint64_t                 total_capacity;
-    uint64_t                 total_size;
-    hashmap_key_generator_f  hkg;
-    hashmap_key_comparator_f hkc;
-    hashmap_segment_t*       segments;
-    lock_t                   lock;
-};
+    uint64_t                 segment_capacity; ///< segment capacity
+    uint64_t                 total_capacity; ///< total capacity
+    uint64_t                 total_size; ///< total size
+    hashmap_key_generator_f  hkg; ///< key generator
+    hashmap_key_comparator_f hkc; ///< key comparator
+    hashmap_segment_t*       segments; ///< segments
+    lock_t                   lock; ///< lock
+}; ///< hashmap
 
+/**
+ * @brief default key generator
+ * @param[in] key key
+ * @return key hash xxhash64
+ */
 uint64_t hashmap_default_kg(const void* key);
-int8_t   hashmap_default_kc(const void* item1, const void* item2);
+
+/**
+ * @brief default key comparator
+ * @param[in] item1 item1
+ * @param[in] item2 item2
+ * @return -1 if item1 < item2, 0 if item1 == item2, 1 if item1 > item2
+ */
+int8_t hashmap_default_kc(const void* item1, const void* item2);
+
+/**
+ * @brief string key generator
+ * @param[in] key key
+ * @return key hash xxhash64
+ */
 uint64_t hashmap_string_kg(const void * key);
-int8_t   hashmap_string_kc(const void* item1, const void* item2);
+
+/**
+ * @brief string key comparator
+ * @param[in] item1 item1
+ * @param[in] item2 item2
+ * @return -1 if item1 < item2, 0 if item1 == item2, 1 if item1 > item2
+ */
+int8_t hashmap_string_kc(const void* item1, const void* item2);
 
 uint64_t hashmap_default_kg(const void* key) {
     return (uint64_t)key;
@@ -48,7 +86,7 @@ uint64_t hashmap_default_kg(const void* key) {
 uint64_t hashmap_string_kg(const void * key) {
     char_t* str_key = (char_t*)key;
 
-    return xxhash32_hash(str_key, strlen(str_key));
+    return xxhash64_hash(str_key, strlen(str_key));
 }
 
 int8_t hashmap_default_kc(const void* item1, const void* item2) {
@@ -140,6 +178,12 @@ boolean_t   hashmap_destroy(hashmap_t* hm) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+/**
+ * @brief get next new segment
+ * @param[in] hm hashmap
+ * @param[in] seg segment
+ * @return next new segment
+ */
 static hashmap_segment_t* hashmap_segment_next_new(hashmap_t* hm, hashmap_segment_t* seg) {
     while(seg->next) {
         seg = seg->next;
@@ -392,17 +436,50 @@ uint64_t hashmap_size(hashmap_t* hm) {
     return hm->total_size;
 }
 
+/**
+ * @struct hashmap_iterator_metadata_t
+ * @brief  Metadata for the hashmap iterator
+ */
 typedef struct hashmap_iterator_metadata_t {
-    hashmap_segment_t* current_segment;
-    uint64_t           segment_capacity;
-    uint64_t           current_index;
-} hashmap_iterator_metadata_t;
+    hashmap_segment_t* current_segment; ///< Current segment
+    uint64_t           segment_capacity; ///< Segment capacity
+    uint64_t           current_index; ///< Current index
+} hashmap_iterator_metadata_t; ///< Typedef for hashmap iterator metadata
 
+/**
+ * @brief returns current item at iterator
+ * @param[in] iter iterator
+ * @return current item at iterator
+ */
 const void* hashmap_iterator_get_item(iterator_t* iter);
+
+/**
+ * @brief returns current key at iterator
+ * @param[in] iter iterator
+ * @return current key at iterator
+ */
 const void* hashmap_iterator_get_extra_data(iterator_t* iter);
+
+/**
+ * @brief advances iterator to next item
+ * @param[in] iter iterator
+ * @return iterator itself
+ */
 iterator_t* hashmap_iterator_next(iterator_t* iter);
-int8_t      hashmap_iterator_destroy(iterator_t* iter);
-int8_t      hashmap_iterator_end_of_iterator(iterator_t* iter);
+
+/**
+ * @brief destroys iterator
+ * @param[in] iter iterator
+ * @return 0 on success, -1 on failure
+ */
+int8_t hashmap_iterator_destroy(iterator_t* iter);
+
+/**
+ * @brief checks if iterator is at end
+ * @param[in] iter iterator
+ * @return 0 if iterator is at end, 1 otherwise
+ */
+int8_t hashmap_iterator_end_of_iterator(iterator_t* iter);
 
 const void* hashmap_iterator_get_item(iterator_t* iter) {
     if(!iter) {

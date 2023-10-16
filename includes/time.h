@@ -1,4 +1,7 @@
-/*
+/**
+ * @file time.h
+ * @brief date and time functions header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

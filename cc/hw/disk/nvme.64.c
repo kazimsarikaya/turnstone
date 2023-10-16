@@ -1,6 +1,6 @@
 /**
- * @file nvme.h
- * @brief nvme interface
+ * @file nvme.64.c
+ * @brief nvme driver.
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.

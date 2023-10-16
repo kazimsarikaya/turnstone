@@ -1,4 +1,7 @@
-/*
+/**
+ * @file strings.xx.c
+ * @brief Strings library.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

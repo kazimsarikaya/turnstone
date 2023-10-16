@@ -1,4 +1,7 @@
-/*
+/**
+ * @file sha2_256.64.c
+ * @brief SHA-256 implementation based on FIPS 180-4 (Federal Information Processing Standards Publication 180-4).
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

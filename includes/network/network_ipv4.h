@@ -1,4 +1,7 @@
-/*
+/**
+ * @file network_ipv4.h
+ * @brief IPv4 header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

@@ -41,6 +41,7 @@ typedef struct system_info_t {
     efi_system_table_t*   efi_system_table; ///< accessing efi tables from kernel
     uint64_t              pxe_tosdb_size; ///< pxe tosdb size
     uint64_t              pxe_tosdb_address; ///< pxe tosdb address
+    uint64_t              random_seed; ///< random seed
 } system_info_t; ///< struct short hand for system_info_s
 
 /*! static location of system information */

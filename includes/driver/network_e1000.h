@@ -1,4 +1,7 @@
-/*
+/**
+ * @file network_e1000.h
+ * @brief Network e1000 header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

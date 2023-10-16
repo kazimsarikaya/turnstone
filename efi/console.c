@@ -1,4 +1,7 @@
-/*
+/**
+ * @file    console.c
+ * @brief   EFI console driver
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -9,13 +12,22 @@
 #include <strings.h>
 #include <utils.h>
 
+/*! module name */
 MODULE("turnstone.efi");
 
+/*! EFI system table  global variable */
 extern efi_system_table_t* ST;
 
-void   video_print(const char_t* string);
-void   video_clear_screen(void);
-size_t video_printf(const char_t* fmt, ...);
+/**
+ * @brief prints string to console with efi system table's console output protocol.
+ * @param[in] string string to print.
+ */
+void video_print(const char_t* string);
+
+/**
+ * @brief clears screen with efi system table's console output protocol.
+ */
+void video_clear_screen(void);
 
 void video_clear_screen(void) {
     ST->console_output->clear_screen(ST->console_output);

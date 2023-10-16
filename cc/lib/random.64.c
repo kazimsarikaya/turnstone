@@ -1,9 +1,13 @@
-/*
+/**
+ * @file random.64.c
+ * @brief Random number generator using xoroshiro algorithms.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
 #include <random.h>
+#include <xxhash.h>
 
 MODULE("turnstone.lib");
 
@@ -42,7 +46,8 @@ uint64_t random_xoroshiro_next(void) {
 }
 
 void srand(uint64_t seed) {
-    random_xoroshiro_seed = seed;
+    random_xoroshiro_seed ^= seed;
+    random_xoroshiro_seed = xxhash64_hash(&random_xoroshiro_seed, sizeof(random_xoroshiro_seed));
     random_xoroshiro_state[0] = random_xoroshiro_state_next();
     random_xoroshiro_state[1] = random_xoroshiro_state_next();
     random_xoroshiro_state[2] = random_xoroshiro_state_next();

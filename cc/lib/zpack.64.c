@@ -1,4 +1,7 @@
-/*
+/**
+ * @file zpack.64.c
+ * @brief LZ77 compression algorithm implementation with simple encoding.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -6,37 +9,76 @@
 #include <zpack.h>
 #include <utils.h>
 
+/*! module name */
 MODULE("turnstone.lib");
 
+/*! maximum match length */
 #define ZPACK_MAX_MATCH (0x3f + 0x40 + 4)
+
+/*! minimum match length */
 #define ZPACK_MIN_MATCH (4)
+
+/*! window size */
 #define ZPACK_WINDOW_SIZE 16383
+
+/*! hashtable size 2^15 */
 #define ZPACK_HASHTABLE_SIZE 15
+
+/*! hash4 multiplier */
 #define ZPACK_HASHTABLE_MUL 2654435761U
+
+/*! hashtable previous size, backward item count */
 #define ZPACK_HASHTABLE_PREV_SIZE 16384
+
+/*! no position */
 #define ZPACK_NO_POS (-1)
 
-
+/**
+ * @struct zpack_match_t
+ * @brief match structure
+ */
 typedef struct zpack_match_t {
-    int32_t best_size;
-    int64_t best_pos;
-} zpack_match_t;
+    int32_t best_size; ///< best match size
+    int64_t best_pos; ///< best match position
+} zpack_match_t; ///< match structure
 
+/**
+ * @struct zpack_hashtable_t
+ * @brief hashtable structure
+ */
 typedef struct zpack_hashtable_t {
-    int64_t prev[ZPACK_HASHTABLE_PREV_SIZE];
-    int64_t head[1ULL << ZPACK_HASHTABLE_SIZE];
-} zpack_hashtable_t;
+    int64_t prev[ZPACK_HASHTABLE_PREV_SIZE]; ///< previous positions
+    int64_t head[1ULL << ZPACK_HASHTABLE_SIZE]; ///< hashtable heads
+} zpack_hashtable_t; ///< hashtable structure
 
-
+/**
+ * @brief hash function
+ * @param[in] data data to hash
+ * @return hash value
+ */
 static inline uint32_t zpack_hash4(uint32_t data) {
     return (data * ZPACK_HASHTABLE_MUL) >> (32 - ZPACK_HASHTABLE_SIZE);
 }
 
+/**
+ * @brief insert position to hashtable
+ * @param[in] pos position
+ * @param[in] h hash value
+ * @param[in] ht hashtable
+ */
 static inline void zpack_hash_insert(int64_t pos, uint32_t h, zpack_hashtable_t* ht) {
     ht->prev[pos % ZPACK_WINDOW_SIZE] = ht->head[h];
     ht->head[h] = pos;
 }
 
+/**
+ * @brief find best match
+ * @param[in] in input buffer
+ * @param[in] in_len input buffer length
+ * @param[in] in_p input buffer position
+ * @param[in] ht hashtable
+ * @return best match
+ */
 static zpack_match_t zpack_find_bestmatch (buffer_t* in, int64_t in_len, int64_t in_p, zpack_hashtable_t* ht) {
     int64_t max_match = MIN(in_len - in_p, ZPACK_MAX_MATCH);
     int64_t start = in_p - ZPACK_WINDOW_SIZE;

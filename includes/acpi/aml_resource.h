@@ -1,4 +1,7 @@
-/*
+/**
+ * @file aml_resource.h
+ * @brief ACPI AML Resource header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

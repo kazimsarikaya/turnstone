@@ -1,4 +1,7 @@
-/*
+/**
+ * @file kmain.64.c
+ * @brief kernel main functions.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -30,6 +33,7 @@
 #include <random.h>
 #include <memory/frame.h>
 #include <time/timer.h>
+#include <time.h>
 #include <network.h>
 #include <crc.h>
 #include <device/hpet.h>
@@ -102,7 +106,6 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t kmain64(size_t entry_point) {
-    srand(0x123456789);
     crc32_init_table();
 
     memory_heap_t* heap = memory_create_heap_hash(0, 0);
@@ -113,6 +116,8 @@ int8_t kmain64(size_t entry_point) {
     }
 
     memory_set_default_heap(heap);
+
+    srand(SYSTEM_INFO->random_seed);
 
     stdbufs_init_buffers();
 

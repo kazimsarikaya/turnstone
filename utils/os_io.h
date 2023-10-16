@@ -1,4 +1,8 @@
-/*
+/**
+ * @file os_io.h
+ * @brief Host OS IO header.
+ * @details This file contains declarations of functions that are used to on host OS.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

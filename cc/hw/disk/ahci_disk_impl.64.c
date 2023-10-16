@@ -1,4 +1,7 @@
-/*
+/**
+ * @file ahci_disk_impl.64.c
+ * @brief AHCI Disk Implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

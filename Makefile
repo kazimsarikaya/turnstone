@@ -53,6 +53,8 @@ INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 ASSETSDIR = assets
+EFISRCDIR = efi
+UTILSSRCDIR = utils
 
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
@@ -91,6 +93,10 @@ CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(
 
 DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
+DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.c)
+DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.h)
+DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.c)
+DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.h)
 
 #FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus24x12.psf
 FONTOBJ = $(CCOBJDIR)/font.o

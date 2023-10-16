@@ -1,7 +1,11 @@
-/*
+/**
+ * @file acpi_events.64.c
+ * @brief ACPI events.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
+
 #include <acpi.h>
 #include <acpi/aml_resource.h>
 #include <apic.h>

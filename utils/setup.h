@@ -1,4 +1,7 @@
-/*
+/**
+ * @file setup.h
+ * @brief handles required signatures for the host OS utilities.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -13,6 +16,7 @@
 #include <time.h>
 #include <utils.h>
 #include <random.h>
+#include <xxhash.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -29,7 +33,7 @@ uint64_t mmap_size = RAMSIZE;
 boolean_t windowmanager_initialized = false;
 
 size_t                            video_printf(const char_t* fmt, ...);
-void                              video_print(const char_t* fmt);
+void                              video_print(const char_t* string);
 void                              print_success(const char* msg, ...);
 void                              print_error(const char* msg, ...);
 void                              cpu_hlt(void);
@@ -56,8 +60,8 @@ void print_error(const char* msg, ...){
     va_end(args);
 }
 
-void video_print(const char_t* msg) {
-    printf("%s", msg);
+void video_print(const char_t* string) {
+    printf("%s", string);
 }
 
 buffer_t* default_buffer = NULL;

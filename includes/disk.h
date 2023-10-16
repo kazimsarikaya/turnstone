@@ -1,4 +1,7 @@
-/*
+/**
+ * @file disk.h
+ * @brief Disk header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

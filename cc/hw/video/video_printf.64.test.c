@@ -1,4 +1,7 @@
-/*
+/**
+ * @file video_printf.64.test.c
+ * @brief Test for printf function.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

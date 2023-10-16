@@ -1,4 +1,7 @@
-/*
+/**
+ * @file linker.64.c
+ * @brief Linker implementation for both efi and turnstone executables.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

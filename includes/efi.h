@@ -35,7 +35,7 @@ typedef struct efi_pmbr_chs_s {
     uint8_t head; ///< disk head
     uint8_t sector; ///< disk sector
     uint8_t cylinder; ///< disk cylinder
-}__attribute__((packed))  efi_pmbr_chs_t;  ///< short hand for struct
+}__attribute__((packed))  efi_pmbr_chs_t; ///< short hand for struct
 
 /*! special efi part named as protected efi part and its type is 0xEE */
 #define EFI_PMBR_PART_TYPE 0xEE
@@ -378,7 +378,7 @@ typedef struct {
     int16_t  time_zone;
     uint8_t  day_light;
     uint8_t  padding2;
-} efi_time_t;
+}__attribute__((packed)) efi_time_t;
 
 typedef struct {
     uint32_t  resolution;

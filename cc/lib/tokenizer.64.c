@@ -1,6 +1,7 @@
 /**
  * @file tokenizer.64.c
- * @brief tokenizer interface implementation
+ * @brief tokenizer interface implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

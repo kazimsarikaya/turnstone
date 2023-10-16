@@ -1,5 +1,5 @@
 /**
- * @file binarsearch.64.h
+ * @file binarysearch.64.c
  * @brief binarysearch interface implementation
  *
  * This work is licensed under TURNSTONE OS Public License.

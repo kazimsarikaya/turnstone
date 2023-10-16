@@ -1,4 +1,7 @@
-/*
+/**
+ * @file varint.64.c
+ * @brief variable length integer encoding/decoding implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

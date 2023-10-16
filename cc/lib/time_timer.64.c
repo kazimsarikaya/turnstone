@@ -1,4 +1,7 @@
-/*
+/**
+ * @file time_timer.64.c
+ * @brief Timer driver.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

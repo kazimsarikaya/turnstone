@@ -1,4 +1,4 @@
-/*
+/**
  * @file memory_heap_hash.xx.c
  * @brief Turnstone OS memory heap with hash table implementation.
  *

@@ -816,7 +816,7 @@ CITE_BIB_FILES         =
 # messages are off.
 # The default value is: NO.
 
-QUIET                  = NO
+QUIET                  = YES
 
 # The WARNINGS tag can be used to turn on/off the warning messages that are
 # generated to standard error (stderr) by doxygen. If WARNINGS is set to YES
@@ -857,7 +857,7 @@ WARN_IF_INCOMPLETE_DOC = YES
 # WARN_IF_INCOMPLETE_DOC
 # The default value is: NO.
 
-WARN_NO_PARAMDOC       = NO
+WARN_NO_PARAMDOC       = YES
 
 # If the WARN_AS_ERROR tag is set to YES then doxygen will immediately stop when
 # a warning is encountered. If the WARN_AS_ERROR tag is set to FAIL_ON_WARNINGS
@@ -1221,7 +1221,7 @@ USE_HTAGS              = NO
 # See also: Section \class.
 # The default value is: YES.
 
-VERBATIM_HEADERS       = YES
+VERBATIM_HEADERS       = NO
 
 #---------------------------------------------------------------------------
 # Configuration options related to the alphabetical class index
@@ -1394,7 +1394,7 @@ HTML_COLORSTYLE_GAMMA  = 80
 # The default value is: NO.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_TIMESTAMP         = NO
+HTML_TIMESTAMP         = YES
 
 # If the HTML_DYNAMIC_MENUS tag is set to YES then the generated HTML
 # documentation will contain a main index with vertical navigation menus that

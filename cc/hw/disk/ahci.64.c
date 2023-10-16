@@ -1,4 +1,4 @@
-/*
+/**
  * @file ahci.64.c
  * @brief ahci interface implentation.
  *

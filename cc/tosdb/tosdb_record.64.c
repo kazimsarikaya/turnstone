@@ -918,7 +918,7 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec_id <<= 64;
     rec_id |= rand64();
 
-    xxhash64_context_t hash_ctx = xxhash64_init(0);
+    xxhash64_context_t* hash_ctx = xxhash64_init(0);
     xxhash64_update(hash_ctx, ctx->table->db->name, strlen(ctx->table->db->name));
     xxhash64_update(hash_ctx, ctx->table->name, strlen(ctx->table->name));
     xxhash64_update(hash_ctx, &rec_id, sizeof(uint128_t));

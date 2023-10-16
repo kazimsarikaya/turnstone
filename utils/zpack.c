@@ -1,4 +1,7 @@
-/*
+/**
+ * @file zpack.c
+ * @brief ZPACK compression tool on host.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

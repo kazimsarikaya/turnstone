@@ -1,4 +1,7 @@
-/*
+/**
+ * @file fat32.64.c
+ * @brief FAT32 filesystem implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

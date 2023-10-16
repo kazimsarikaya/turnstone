@@ -1,25 +1,75 @@
-/*
+/**
+ * @file efi_disk_impl.c
+ * @brief efi disk implementation.
+ * @details uses efi block io protocol to implement disk methods.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
 #include <setup.h>
 
+/*! module name */
 MODULE("turnstone.efi");
 
-
+/**
+ * @struct efi_disk_impl_context_t
+ * @brief efi disk implementation context.
+ * @details this structure contains context for efi disk implementation.
+ */
 typedef struct efi_disk_impl_context_t {
-    efi_block_io_t* bio;
-    uint64_t        disk_size;
-    uint64_t        block_size;
-} efi_disk_impl_context_t;
+    efi_block_io_t* bio; ///< efi block io protocol.
+    uint64_t        disk_size; ///< disk size.
+    uint64_t        block_size; ///< block size.
+} efi_disk_impl_context_t; ///< typedef for efi_disk_impl_context_t.
 
+/**
+ * @brief returns disk size.
+ * @param[in] d disk or partition.
+ * @return disk size.
+ */
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d);
+
+/**
+ * @brief returns block size.
+ * @param[in] d disk or partition.
+ * @return block size.
+ */
 uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d);
-int8_t   efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   efi_disk_impl_close(const disk_or_partition_t* d);
-int8_t   efi_disk_impl_flush(const disk_or_partition_t* d);
+
+/**
+ * @brief writes data to disk.
+ * @param[in] d disk or partition.
+ * @param[in] lba logical block address.
+ * @param[in] count number of blocks to write.
+ * @param[in] data data to write.
+ * @return 0 on success.
+ */
+int8_t efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+
+/**
+ * @brief reads data from disk.
+ * @param[in] d disk or partition.
+ * @param[in] lba logical block address.
+ * @param[in] count number of blocks to read.
+ * @param[out] data data to read.
+ * @return 0 on success.
+ */
+int8_t efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+
+/**
+ * @brief closes and frees disk.
+ * @param[in] d disk or partition.
+ * @return 0 on success.
+ */
+int8_t efi_disk_impl_close(const disk_or_partition_t* d);
+
+/**
+ * @brief flushes disk.
+ * @param[in] d disk or partition.
+ * @return 0 on success.
+ */
+int8_t efi_disk_impl_flush(const disk_or_partition_t* d);
 
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d){
     efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;

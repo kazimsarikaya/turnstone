@@ -14,24 +14,25 @@
 #include <cpu.h>
 #include <time.h>
 
+/*! module name */
 MODULE("turnstone.kernel.hw.hpet");
 
-
-extern int32_t VIDEO_GRAPHICS_WIDTH;
-extern int32_t VIDEO_GRAPHICS_HEIGHT;
-
+/**
+ * @brief stores if hpet is enabled
+ */
 boolean_t hpet_enabled = false;
 
+/**
+ * @brief hpet interrupt service routine
+ * @param frame interrupt frame
+ * @param irqno irq number
+ * @return 0 if interrupt was handled, -1 otherwise
+ */
 int8_t hpet_isr(interrupt_frame_t* frame, uint8_t irqno);
 
 int8_t hpet_isr(interrupt_frame_t* frame, uint8_t irqno) {
     UNUSED(frame);
     UNUSED(irqno);
-
-    //VIDEO_DISPLAY_FLUSH(0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
-
-    TIME_EPOCH++;
-
 
     apic_eoi();
     return 0;

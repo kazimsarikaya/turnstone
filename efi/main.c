@@ -1,4 +1,8 @@
-/*
+/**
+ * @file main.c
+ * @brief EFI entry point
+ * @details This file contains EFI entry point and other EFI related methods.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -17,33 +21,109 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <stdbufs.h>
+#include <random.h>
 
+/*! module name */
 MODULE("turnstone.efi");
 
+/*! EFI system table global variable */
 efi_system_table_t* ST;
+
+/*! EFI boot services global variable */
 efi_boot_services_t* BS;
+
+/*! EFI runtime services global variable */
 efi_runtime_services_t* RS;
 
+/**
+ * @typedef kernel_start_t
+ * @brief kernel start function type
+ * @details this function is called by EFI entry point to start kernel.
+ * @param[in] sysinfo system information
+ * @return 0 on success, -1 on failure (return means kernel is not started)
+ */
 typedef int8_t (*kernel_start_t)(system_info_t* sysinfo);
 
+/**
+ * @struct efi_tosdb_context_t
+ * @brief EFI tosdb context
+ */
 typedef struct efi_tosdb_context_t {
-    boolean_t        is_pxe;
-    efi_block_io_t*  bio;
-    tosdb_backend_t* backend;
-    tosdb_t*         tosdb;
-    uint64_t         pxe_data_size;
-    uint64_t         pxe_data_base;
-} efi_tosdb_context_t;
+    boolean_t        is_pxe; ///< true if tosdb is loaded from PXE, false if tosdb is loaded from local disk
+    efi_block_io_t*  bio; ///< block io interface if tosdb is loaded from local disk
+    tosdb_backend_t* backend; ///< tosdb backend
+    tosdb_t*         tosdb; ///< tosdb instance
+    uint64_t         pxe_data_size; ///< PXE data size
+    uint64_t         pxe_data_base; ///< PXE data base
+} efi_tosdb_context_t; ///< typedef for efi_tosdb_context_t
 
-efi_status_t        efi_setup_heap(void);
-efi_status_t        efi_setup_graphics(video_frame_buffer_t** vfb_res);
-efi_status_t        efi_print_variable_names(void);
-efi_status_t        efi_is_pxe_boot(boolean_t* result);
+/**
+ * @brief setup EFI heap
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_setup_heap(void);
+
+/**
+ * @brief setup EFI graphics
+ * @details this method sets up graphics mode and returns video frame buffer. Min resolution is 1092x1080.
+ * @param[out] vfb_res video frame buffer
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res);
+
+/**
+ * @brief prints efi variable names.
+ * @return EFI_SUCCESS if all goes well.
+ */
+efi_status_t efi_print_variable_names(void);
+
+/**
+ * @brief check is current boot is PXE boot.
+ * @details for checking PXE boot, this method checks if EFI variable "BootCurrent" contains mac address.
+ * @param[out] result true if current boot is PXE boot, false otherwise.
+ * @return EFI_SUCCESS if all goes well.
+ */
+efi_status_t efi_is_pxe_boot(boolean_t* result);
+
+/**
+ * @brief EFI main function
+ * @details this function is called by EFI entry point. Also this function should be EFIAPI because of EFI calling convention.
+ * @param[in] image image handle
+ * @param[in] system_table system table
+ * @return EFI_SUCCESS if all goes well
+ */
 EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
-efi_status_t        efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
-efi_status_t        efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
-efi_status_t        efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx);
-efi_status_t        efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
+
+/**
+ * @brief helper function for local tosdb loading
+ * @param[in] bio block io interface
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
+
+/**
+ * @brief loads tosdb from disk if current boot is not PXE boot.
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
+
+/**
+ * @brief loads tosdb from PXE if current boot is PXE boot.
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx);
+
+/**
+ * @brief reads config value for system from tosdb.
+ * @param[in] tdb_ctx tosdb context
+ * @param[in] config_key config key
+ * @param[out] config_value config value
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
 
 
 efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value) {
@@ -407,7 +487,7 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
+efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res;
 
     disk_t* sys_disk = efi_disk_impl_open(bio);
@@ -560,7 +640,7 @@ efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
                         PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", i);
 
-                        res = efi_open_tosdb(blk_dev->bio, tdb_ctx);
+                        res = efi_open_local_tosdb(blk_dev->bio, tdb_ctx);
 
                         if(res == EFI_SUCCESS) {
                             memory_free(buffer);
@@ -731,6 +811,8 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
         goto catch_efi_error;
     }
+
+    srand(time_ns(NULL));
 
     if(stdbufs_init_buffers() != 0) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup stdbufs");
@@ -1191,6 +1273,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->program_header_virtual_start = (2 << 20);
     sysinfo->pxe_tosdb_size = tdb_ctx->pxe_data_size;
     sysinfo->pxe_tosdb_address = tdb_ctx->pxe_data_base;
+    sysinfo->random_seed = rand64();
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
