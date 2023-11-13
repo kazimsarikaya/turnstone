@@ -717,31 +717,13 @@ uint64_t tosdb_record_get_index_id(tosdb_record_t* record, uint64_t colid) {
 
     tosdb_record_context_t* ctx = record->context;
 
-    uint64_t idx_id = 0;
+    const tosdb_index_t* idx = hashmap_get(ctx->table->index_column_map, (void*)colid);
 
-    iterator_t* iter = hashmap_iterator_create(ctx->table->indexes);
-
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
-
+    if(!idx) {
         return 0;
     }
 
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_index_t* idx = (tosdb_index_t*)iter->get_item(iter);
-
-
-        if(idx->column_id == colid) {
-            idx_id = idx->id;
-            break;
-        }
-
-        iter = iter->next(iter);
-    }
-
-    iter->destroy(iter);
-
-    return idx_id;
+    return idx->id;
 }
 
 boolean_t tosdb_record_destroy(tosdb_record_t * record){

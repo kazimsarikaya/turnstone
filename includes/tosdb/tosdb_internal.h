@@ -369,6 +369,7 @@ struct tosdb_table_t {
     lock_t            lock;
     hashmap_t*        columns;
     hashmap_t*        indexes;
+    hashmap_t*        index_column_map;
     uint64_t          primary_index_id;
     uint64_t          primary_column_id;
     data_type_t       primary_column_type;
