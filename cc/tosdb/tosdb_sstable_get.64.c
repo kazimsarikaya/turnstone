@@ -67,7 +67,7 @@ int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id){
     tosdb_record_context_t* ctx = record->context;
 
-    compression_t* compression = ctx->table->db->tdb->compression;
+    const compression_t* compression = ctx->table->db->tdb->compression;
 
     uint64_t idx_loc = 0;
     uint64_t idx_size = 0;
@@ -222,7 +222,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             c_bf->first_key = first;
             c_bf->last_key = last;
 
-            c_bf->cache_key.data_size = sizeof(tosdb_cached_bloomfilter_t) + st_idx->bloomfilter_unpacked_size + first_key_length + last_key_length + 64; //near size
+            c_bf->cache_key.data_size = sizeof(tosdb_cached_bloomfilter_t) + st_idx->bloomfilter_unpacked_size + first_key_length + last_key_length + 64; // near size
 
             tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_bf);
         }

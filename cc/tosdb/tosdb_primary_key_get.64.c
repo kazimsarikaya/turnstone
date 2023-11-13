@@ -216,7 +216,7 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
         buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
 
-        compression_t* compression = tbl->db->tdb->compression;
+        const compression_t* compression = tbl->db->tdb->compression;
 
         int8_t zc_res = compression->unpack(buf_idx_in, buf_idx_out);
 

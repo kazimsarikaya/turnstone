@@ -46,7 +46,7 @@ typedef struct compression_t {
 int8_t compression_null_pack(buffer_t* in, buffer_t* out);
 int8_t compression_null_unpack(buffer_t* in, buffer_t* out);
 
-compression_t* compression_get(compression_type_t type);
+const compression_t* compression_get(compression_type_t type);
 
 
 #endif

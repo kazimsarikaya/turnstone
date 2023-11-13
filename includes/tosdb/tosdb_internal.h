@@ -320,14 +320,14 @@ typedef struct tosdb_cache_t tosdb_cache_t; ///< tosdb cache
  * @brief tosdb instance
  */
 struct tosdb_t {
-    tosdb_backend_t*    backend; ///< backend
-    tosdb_superblock_t* superblock; ///< superblock
-    boolean_t           is_dirty; ///< is dirty
-    hashmap_t*          databases; ///< databases
-    hashmap_t*          database_new; ///< new databases
-    lock_t              lock; ///< lock
-    tosdb_cache_t*      cache; ///< cache
-    compression_t*      compression; ///< compression
+    tosdb_backend_t*     backend; ///< backend
+    tosdb_superblock_t*  superblock; ///< superblock
+    boolean_t            is_dirty; ///< is dirty
+    hashmap_t*           databases; ///< databases
+    hashmap_t*           database_new; ///< new databases
+    lock_t               lock; ///< lock
+    tosdb_cache_t*       cache; ///< cache
+    const compression_t* compression; ///< compression
 };
 
 boolean_t             tosdb_write_and_flush_superblock(tosdb_backend_t* backend, tosdb_superblock_t* sb);

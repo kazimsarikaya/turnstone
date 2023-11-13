@@ -58,7 +58,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     int8_t ret = 0;
 
-    compression_t* compression = compression_get(COMPRESSION_TYPE_DEFLATE);
+    const compression_t* compression = compression_get(COMPRESSION_TYPE_DEFLATE);
 
     if(compress) {
         ret = compression->pack(in_buf, out_buf);

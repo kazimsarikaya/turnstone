@@ -674,7 +674,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     buffer_seek(mt->values, 0, BUFFER_SEEK_DIRECTION_START);
 
-    compression_t* compression = mt->tbl->db->tdb->compression;
+    const compression_t* compression = mt->tbl->db->tdb->compression;
 
     if(compression->pack(mt->values, valuelog_out) != 0) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot pack valuelog");
@@ -842,7 +842,7 @@ boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable
 
     uint64_t bloomfilter_unpacked_size = bf_d->length;
 
-    compression_t* compression = mt->tbl->db->tdb->compression;
+    const compression_t* compression = mt->tbl->db->tdb->compression;
 
     int8_t zc_res = compression->pack(buf_bf_in, buf_bf_out);
 
