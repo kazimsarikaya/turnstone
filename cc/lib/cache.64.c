@@ -189,6 +189,45 @@ boolean_t cache_destroy (cache_t * cache) {
     return true;
 }
 
+static boolean_t cache_put_ci(cache_t * cache, cache_item_t* ci) {
+    if(!cache) {
+        return false;
+    }
+
+    cache_insert_head(cache, true, ci);
+
+    hashmap_put(cache->mru_map, ci->key, ci);
+
+    cache->mru_size += ci->size;
+
+    if(cache->mru_size > cache->config.soft_limit) {
+        cache_item_t* old_ci = cache->mru_list_tail;
+
+        cache_delete_item(cache, true, old_ci);
+        hashmap_delete(cache->mru_map, old_ci->key);
+        cache->mru_size -= old_ci->size;
+
+        cache_insert_head(cache, false, old_ci);
+
+        hashmap_put(cache->lru_map, old_ci->key, old_ci);
+
+        cache->lru_size += old_ci->size;
+
+        if(cache->mru_size + cache->lru_size > cache->config.hard_limit) {
+            old_ci = cache->lru_list_tail;
+            cache_delete_item(cache, false, old_ci);
+            hashmap_delete(cache->lru_map, old_ci->key);
+            cache->lru_size -= old_ci->size;
+
+            cache->config.item_key_destroyer(old_ci->key, old_ci->item);
+
+            memory_free(old_ci);
+        }
+    }
+
+    return true;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t cache_put(cache_t * cache, const void* key, const void* item, uint64_t size) {
@@ -206,37 +245,7 @@ boolean_t cache_put(cache_t * cache, const void* key, const void* item, uint64_t
     ci->key = key;
     ci->size = size;
 
-    cache_insert_head(cache, true, ci);
-
-    hashmap_put(cache->mru_map, key, ci);
-
-    cache->mru_size += size;
-
-    if(cache->mru_size > cache->config.soft_limit) {
-        cache_item_t* old_ci = cache->mru_list_tail;
-        cache_delete_item(cache, true, old_ci);
-        hashmap_delete(cache->mru_map, old_ci->key);
-        cache->mru_size -= old_ci->size;
-
-        cache_insert_head(cache, false, old_ci);
-
-        hashmap_put(cache->lru_map, old_ci->key, old_ci);
-
-        cache->lru_size += size;
-
-        if(cache->mru_size + cache->lru_size > cache->config.hard_limit) {
-            old_ci = cache->lru_list_tail;
-            cache_delete_item(cache, false, old_ci);
-            hashmap_delete(cache->lru_map, old_ci->key);
-            cache->lru_size -= old_ci->size;
-
-            cache->config.item_key_destroyer(old_ci->key, old_ci->item);
-
-            memory_free((void*)old_ci);
-        }
-    }
-
-    return true;
+    return cache_put_ci(cache, ci);
 }
 #pragma GCC diagnostic pop
 
@@ -257,15 +266,12 @@ const void* cache_get(cache_t* cache, const void* key) {
 
     if(ci) {
         cache_delete_item(cache, false, ci);
+        hashmap_delete(cache->lru_map, ci->key);
         cache->lru_size -= ci->size;
 
-        cache_put(cache, ci->key, ci->item, ci->size);
+        cache_put_ci(cache, ci);
 
-        const void* item = ci->item;
-
-        memory_free((void*)ci);
-
-        return item;
+        return ci->item;
     }
 
     return NULL;
