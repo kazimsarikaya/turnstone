@@ -93,24 +93,28 @@ tosdb_sequence_t* tosdb_sequence_create_or_open(tosdb_database_t* db, const char
 
         if(!record->set_int64(record, "id", 1)) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot set id column for sequence table");
+            record->destroy(record);
 
             return NULL;
         }
 
         if(!record->set_string(record, "name", "default")) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot set name column for sequence table");
+            record->destroy(record);
 
             return NULL;
         }
 
         if(!record->set_int64(record, "next_value", 2)) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot set next_value column for sequence table");
+            record->destroy(record);
 
             return NULL;
         }
 
         if(!record->upsert_record(record)) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot insert record for sequence table");
+            record->destroy(record);
 
             return NULL;
         }
@@ -130,6 +134,7 @@ tosdb_sequence_t* tosdb_sequence_create_or_open(tosdb_database_t* db, const char
 
     if(!record->set_string(record, "name", name)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot set name column for sequence table");
+        record->destroy(record);
 
         return NULL;
     }
