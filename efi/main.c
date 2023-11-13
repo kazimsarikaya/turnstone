@@ -760,7 +760,6 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     memory_free(var_val_boot_current);
 
-    //uint32_t lo_attr = *((uint32_t*)var_val_boot);
     uint16_t lo_len = *((uint16_t*)(var_val_boot + sizeof(uint32_t)));
     wchar_t* lo_desc = (wchar_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
     char_t* boot_desc = wchar_to_char(lo_desc);
@@ -861,8 +860,6 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     }
 
     efi_tosdb_context_t* tdb_ctx = NULL;
-
-    //logging_module_levels[TOSDB] = LOG_TRACE;
 
     if(is_pxe) {
         res = efi_load_pxe_tosdb(&tdb_ctx);
@@ -1208,6 +1205,10 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
     efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
     efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
+    efi_guid_t smbios_table_v2_guild = EFI_SMBIOS_2_TABLE_GUID;
+    efi_guid_t smbios_table_v3_guild = EFI_SMBIOS_3_TABLE_GUID;
+    uint64_t smbios_version = 0;
+    void* smbios_table = NULL;
 
     void* acpi_rsdp = NULL;
     void* acpi_xrsdp = NULL;
@@ -1217,6 +1218,14 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
             acpi_xrsdp = system_table->configuration_table[i].vendor_table;
         } else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
             acpi_rsdp = system_table->configuration_table[i].vendor_table;
+        } else if(efi_guid_equal(smbios_table_v2_guild, system_table->configuration_table[i].vendor_guid) == 0) {
+            smbios_version = 2;
+            smbios_table = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v2 table 0x%p", smbios_table);
+        } else if(efi_guid_equal(smbios_table_v3_guild, system_table->configuration_table[i].vendor_guid) == 0) {
+            smbios_version = 3;
+            smbios_table = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v3 table 0x%p", smbios_table);
         }
     }
 
@@ -1268,6 +1277,8 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->frame_buffer = vfb;
     sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
+    sysinfo->smbios_version = smbios_version;
+    sysinfo->smbios_table = smbios_table;
     sysinfo->efi_system_table = system_table;
     sysinfo->program_header_physical_start = requested_program_base;
     sysinfo->program_header_virtual_start = (2 << 20);
