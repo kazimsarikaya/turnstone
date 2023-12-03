@@ -18,6 +18,7 @@
 #include <apic.h>
 #include <cpu/task.h>
 #include <backtrace.h>
+#include <debug.h>
 
 MODULE("turnstone.kernel.cpu.interrupt");
 
@@ -36,6 +37,7 @@ uint8_t next_empty_interrupt = 0;
 void interrupt_generic_handler(interrupt_frame_ext_t* frame);
 
 int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t*);
+int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t*);
@@ -64,6 +66,14 @@ int8_t interrupt_init(void) {
     }
 
     interrupt_irqs[0x02]->irq = interrupt_int02_nmi_interrupt;
+
+    interrupt_irqs[0x03] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x03] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x03]->irq = interrupt_int03_breakpoint_exception;
 
     interrupt_irqs[0x0D] = memory_malloc(sizeof(interrupt_irq_list_item_t));
 
@@ -278,7 +288,7 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-    backtrace_print(s_frame);
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
 
@@ -315,13 +325,28 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-    backtrace_print(s_frame);
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
 
     cpu_hlt();
 
     return -1;
+}
+
+int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
+    KERNEL_PANIC_DISABLE_LOCKS = true;
+
+    stackframe_t* s_frame = (stackframe_t*)frame->rbp;
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
+
+    interrupt_print_frame_ext(frame);
+
+    frame->return_rip--;
+
+    debug_revert_original_byte_at_address(frame->return_rip);
+
+    return 0;
 }
 
 
@@ -335,7 +360,7 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-    backtrace_print(s_frame);
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
 
@@ -361,7 +386,7 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-    backtrace_print(s_frame);
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
 
@@ -409,7 +434,7 @@ int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t* fram
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
     stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-    backtrace_print(s_frame);
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
 

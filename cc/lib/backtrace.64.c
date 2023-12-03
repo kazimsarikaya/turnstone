@@ -138,6 +138,23 @@ const char_t* backtrace_get_symbol_name_by_rip(uint64_t rip) {
     return symbol_name;
 }
 
+void backtrace_print_location_by_rip(uint64_t rip) {
+    const linker_global_offset_table_entry_t* got_entry = backtrace_get_symbol_entry(rip);
+
+    if(!got_entry) {
+        return;
+    }
+
+    const char_t* symbol_name = backtrace_get_symbol_name_by_symbol_name_offset(got_entry->symbol_name_offset);
+
+    PRINTLOG(KERNEL, LOG_ERROR, "RIP: 0x%llx %s <0x%llx+0x%llx>", rip, symbol_name, got_entry->entry_value, rip - got_entry->entry_value);
+}
+
+void backtrace_print_location_and_stackframe_by_rip(uint64_t rip, stackframe_t* frame) {
+    backtrace_print_location_by_rip(rip);
+    backtrace_print(frame);
+}
+
 static inline stackframe_t* backtrace_validate_stackframe(stackframe_t* frame) {
     task_t* task = task_get_current_task();
 
@@ -210,7 +227,7 @@ void backtrace_print(stackframe_t* frame) {
         if(got_entry) {
             const char_t* symbol_name = backtrace_get_symbol_name_by_symbol_name_offset(got_entry->symbol_name_offset);
 
-            PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx RBP: 0x%p %s", frame->rip, frame, symbol_name);
+            PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx RBP: 0x%p %s <0x%llx+0x%llx>", frame->rip, frame, symbol_name, got_entry->entry_value, frame->rip - got_entry->entry_value);
         } else {
             PRINTLOG(KERNEL, LOG_ERROR, "\tRIP: 0x%llx RBP: 0x%p", frame->rip, frame);
         }

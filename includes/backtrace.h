@@ -21,4 +21,6 @@ void          backtrace_print(stackframe_t* frame);
 void          backtrace(void);
 stackframe_t* backtrace_print_interrupt_registers(uint64_t rsp);
 const char_t* backtrace_get_symbol_name_by_rip(uint64_t rip);
+void          backtrace_print_location_by_rip(uint64_t rip);
+void          backtrace_print_location_and_stackframe_by_rip(uint64_t rip, stackframe_t* frame);
 #endif

@@ -42,6 +42,7 @@
 #include <driver/usb_mass_storage_disk.h>
 #include <stdbufs.h>
 #include <backtrace.h>
+#include <debug.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -164,6 +165,13 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init backtrace. Halting...");
         cpu_hlt();
     }
+
+    if(debug_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init debug. Halting...");
+        cpu_hlt();
+    }
+
+    backtrace();
 
     PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator is initializing");
 
@@ -349,6 +357,8 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init nvme. Halting...");
         cpu_hlt();
     }
+
+    debug_put_breakpoint_at_symbol("network_virtio_init");
 
     if(network_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init network. Halting...");
