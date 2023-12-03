@@ -367,11 +367,15 @@ int8_t acpi_aml_parse_op_if(acpi_aml_parser_context_t* ctx, void** data, uint64_
         return -1;
     }
 
-    if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
+    /*
+       PRINTLOG(ACPIAML, LOG_INFO, "--- %p %p", predic, predic->opcode_exec_return);
+
+       if(predic->type == ACPI_AML_OT_OPCODE_EXEC_RETURN) {
         if(predic->opcode_exec_return->name == NULL) {
             acpi_aml_destroy_object(ctx, predic->opcode_exec_return);
         }
-    }
+       }
+     */
 
     if(predic->name == NULL) {
         acpi_aml_destroy_object(ctx, predic);
