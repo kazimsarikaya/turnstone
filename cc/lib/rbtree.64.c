@@ -164,6 +164,7 @@ boolean_t     rbtree_search_node(rbtree_t* rbt, const void* key, index_key_compa
 uint64_t      rbtree_size(index_t* idx);
 int8_t        rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data);
 int8_t        rbtree_delete(index_t* idx, const void* key, void** removed_data);
+const void*   rbtree_find(index_t* idx, const void* key);
 iterator_t*   rbtree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
 iterator_t*   rbtree_create_iterator(index_t* idx);
 boolean_t     rbtree_contains(index_t* idx, const void* key);
@@ -543,6 +544,28 @@ boolean_t rbtree_contains(index_t* idx, const void* key) {
     return res;
 }
 
+const void* rbtree_find(index_t* idx, const void* key) {
+    if(!idx) {
+        return false;
+    }
+
+    rbtree_t* rbt = idx->metadata;
+
+    lock_acquire(rbt->lock);
+
+    rbtree_node_t* res = NULL;
+
+    if(!rbtree_search_node(rbt, key, idx->comparator, &res)) {
+        lock_release(rbt->lock);
+
+        return NULL;
+    }
+
+    lock_release(rbt->lock);
+
+    return res->data;
+}
+
 linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
     if(!idx) {
         return NULL;
@@ -688,6 +711,7 @@ index_t* rbtree_create_index_with_heap(memory_heap_t* heap, index_key_comparator
     idx->size = rbtree_size;
     idx->insert = rbtree_insert;
     idx->delete = rbtree_delete;
+    idx->find = rbtree_find;
     idx->search = rbtree_search;
     idx->create_iterator = rbtree_create_iterator;
     idx->contains = rbtree_contains;

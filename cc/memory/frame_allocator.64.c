@@ -129,25 +129,11 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 
         frame_t search_frm = {rem_frm_start, 1, 0, 0};
 
-        iterator_t* iter = ctx->reserved_frames_by_address->search(ctx->reserved_frames_by_address, &search_frm, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-        if(iter == NULL) {
-            break;
-        }
-
-        if(iter->end_of_iterator(iter) == 0) {
-            iter->destroy(iter);
-
-            break;
-        }
-
-        frame_t* frm = (frame_t*)iter->get_item(iter);
-        iter->destroy(iter);
+        frame_t* frm = (frame_t*)ctx->reserved_frames_by_address->find(ctx->reserved_frames_by_address, &search_frm);
 
         if(frm == NULL) {
             break;
         }
-
 
         if(frm->frame_address <= rem_frm_start && rem_frm_cnt <= frm->frame_count) {
             lock_release(ctx->lock);
@@ -169,29 +155,9 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
 
         frame_t search_frm = {rem_frm_start, 1, 0, 0};
 
-        iterator_t* iter = ctx->free_frames_by_address->search(ctx->free_frames_by_address, &search_frm, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+        frame_t* frm = (frame_t*)ctx->free_frames_by_address->find(ctx->free_frames_by_address, &search_frm);
 
-        if(iter == NULL) {
-            frame_t* new_r_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
-
-            if(new_r_frm == NULL) {
-                PRINTLOG(FRAMEALLOCATOR, LOG_FATAL, "no free memory. Halting...");
-                cpu_hlt();
-            }
-
-            new_r_frm->frame_address = rem_frm_start;
-            new_r_frm->frame_count = rem_frm_cnt;
-            new_r_frm->type = FRAME_TYPE_RESERVED;
-            ctx->reserved_frames_by_address->insert(ctx->reserved_frames_by_address, new_r_frm, new_r_frm, NULL);
-
-            PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "no used frame found, inserted into reserveds, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
-
-            break;
-        }
-
-        if(iter->end_of_iterator(iter) == 0) {
-            iter->destroy(iter);
-
+        if(frm == NULL) {
             frame_t* new_r_frm = memory_malloc_ext(ctx->heap, sizeof(frame_t), 0);
 
             if(new_r_frm == NULL) {
@@ -210,16 +176,6 @@ int8_t fa_reserve_system_frames(frame_allocator_t* self, frame_t* f){
         }
 
         PRINTLOG(FRAMEALLOCATOR, LOG_TRACE, "area inside free frames, frame start 0x%llx count 0x%llx", rem_frm_start, rem_frm_cnt);
-
-        frame_t* frm = (frame_t*)iter->get_item(iter);
-        iter->destroy(iter);
-
-        if(frm == NULL) {
-            frame_t new_frm = {rem_frm_start, rem_frm_cnt, FRAME_TYPE_RESERVED, 0};
-            self->allocate_frame(self, &new_frm);
-
-            break;
-        }
 
         uint64_t frm_alloc_cnt = (rem_frm_start - frm->frame_address) / FRAME_SIZE;
         frm_alloc_cnt = frm->frame_count - frm_alloc_cnt;
@@ -419,25 +375,7 @@ int8_t fa_allocate_frame(frame_allocator_t* self, frame_t* f) {
 
     lock_acquire(ctx->lock);
 
-    iterator_t* iter = ctx->free_frames_by_address->search(ctx->free_frames_by_address, f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(iter == NULL) {
-        lock_release(ctx->lock);
-        PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%llx 0x%llx", f->frame_address, f->frame_count);
-
-        return -1;
-    }
-
-    if(iter->end_of_iterator(iter) == 0) {
-        iter->destroy(iter);
-        lock_release(ctx->lock);
-        PRINTLOG(FRAMEALLOCATOR, LOG_ERROR, "frame not found 0x%llx 0x%llx", f->frame_address, f->frame_count);
-
-        return -1;
-    }
-
-    frame_t* frm = (frame_t*)iter->get_item(iter);
-    iter->destroy(iter);
+    frame_t* frm = (frame_t*)ctx->free_frames_by_address->find(ctx->free_frames_by_address, f);
 
     if(frm == NULL) {
         lock_release(ctx->lock);
@@ -527,12 +465,9 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 
     lock_acquire(ctx->lock);
 
-    iterator_t* iter;
+    const frame_t* tmp_frame = ctx->allocated_frames_by_address->find(ctx->allocated_frames_by_address, f);
 
-    iter = ctx->allocated_frames_by_address->search(ctx->allocated_frames_by_address, f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(iter->end_of_iterator(iter) != 0) {
-        const frame_t* tmp_frame = iter->get_item(iter);
+    if(tmp_frame) {
 
         ctx->allocated_frames_by_address->delete(ctx->allocated_frames_by_address, tmp_frame, NULL);
 
@@ -596,8 +531,6 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         ctx->free_frames_by_address->insert(ctx->free_frames_by_address, new_frm, new_frm, NULL);
         linkedlist_sortedlist_insert(ctx->free_frames_sorted_by_size, new_frm);
 
-        iter->destroy(iter);
-
         memory_free_ext(ctx->heap, (void*)tmp_frame);
 
         lock_release(ctx->lock);
@@ -605,14 +538,9 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
         return 0;
     }
 
-    iter->destroy(iter);
+    tmp_frame = ctx->reserved_frames_by_address->find(ctx->reserved_frames_by_address, f);
 
-
-    iter = ctx->reserved_frames_by_address->search(ctx->reserved_frames_by_address, f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(iter->end_of_iterator(iter) != 0) {
-        const frame_t* tmp_frame = iter->get_item(iter);
-
+    if(tmp_frame) {
         ctx->reserved_frames_by_address->delete(ctx->reserved_frames_by_address, tmp_frame, NULL);
 
         uint64_t rem_frms = tmp_frame->frame_count - f->frame_count;
@@ -679,8 +607,6 @@ int8_t fa_release_frame(frame_allocator_t* self, frame_t* f) {
 
         memory_free_ext(ctx->heap, (void*)tmp_frame);
     }
-
-    iter->destroy(iter);
 
     lock_release(ctx->lock);
 
@@ -870,15 +796,7 @@ frame_t* fa_get_reserved_frames_of_address(frame_allocator_t* self, void* addres
 
     frame_t f = {((((uint64_t)address) >> 12) << 12), 1, 0, 0};
 
-    frame_t* res = NULL;
-
-    iterator_t* iter = ctx->reserved_frames_by_address->search(ctx->reserved_frames_by_address, &f, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(iter->end_of_iterator(iter) != 0) {
-        res = (frame_t*)iter->get_item(iter);
-    }
-
-    iter->destroy(iter);
+    frame_t* res = (frame_t*)ctx->reserved_frames_by_address->find(ctx->reserved_frames_by_address, &f);
 
     return res;
 }

@@ -68,6 +68,8 @@ int8_t bplustree_insert(index_t* idx, const void* key, const void* data, void** 
 int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data);
 /*! b+ tree contains implementation. see also index_t contains method*/
 boolean_t bplustree_contains(index_t* idx, const void* key);
+/*! b+ tree find implementation. see also index_t find method*/
+const void* bplustree_find(index_t* idx, const void* key);
 /*! b+ tree search implementation. see also index_t search method*/
 iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
 /*! b+ tree size implementation.*/
@@ -204,6 +206,7 @@ index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64
     idx->insert = &bplustree_insert;
     idx->delete = &bplustree_delete;
     idx->contains = &bplustree_contains;
+    idx->find = &bplustree_find;
     idx->search = &bplustree_search;
     idx->create_iterator = &bplustree_iterator_create;
     idx->size = &bplustree_size;
@@ -338,7 +341,7 @@ bplustree_node_internal_t* bplustree_split_node(index_t* idx, bplustree_node_int
                 linkedlist_sortedlist_insert(new_node->keys, cur);
             }
 
-            if(node->childs != NULL) { //split childs too
+            if(node->childs != NULL) { // split childs too
                 bplustree_node_internal_t* tmp_child = (bplustree_node_internal_t*)linkedlist_delete_at_position(node->childs, child_pos);
 
                 if(tmp_child != NULL) {
@@ -763,7 +766,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
         *position = 0;
 
-        if(node->childs != NULL) { //internal node
+        if(node->childs != NULL) { // internal node
             const void* cur = NULL;
             iterator_t* iter = linkedlist_iterator_create(node->keys);
 
@@ -782,7 +785,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
             iter->destroy(iter);
             node = (bplustree_node_internal_t*)linkedlist_get_data_at_position(node->childs, *position);
             linkedlist_stack_push(path, position);
-        } else { //leaf node
+        } else { // leaf node
             if(linkedlist_get_position(node->keys, key, position) != 0) {
                 memory_free_ext(idx->heap, position);
 
@@ -939,7 +942,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
                 }
 
                 if( left_ok != 0 && right_ok != 0) {
-                    //merge
+                    // merge
 
                     bplustree_node_internal_t* src;
                     if(merge_with == -1 ) {
@@ -958,7 +961,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
                     const void* tmp_etc;
 
-                    if(node->childs == NULL) { //leaf merge
+                    if(node->childs == NULL) { // leaf merge
                         while(linkedlist_size(src->keys) > 0) {
                             tmp_etc = linkedlist_delete_at(src->keys, NULL, delete_from, 0);
                             linkedlist_insert_at(node->keys, tmp_etc, insert_at, 0);
@@ -1080,7 +1083,7 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
 
                     memory_free_ext(idx->heap, (void*)src);
                 } else {
-                    //borrow
+                    // borrow
 
                     bplustree_node_internal_t* src;
 
@@ -1167,6 +1170,56 @@ int8_t bplustree_delete(index_t* idx, const void* key, void** deleted_data){
     return deleted;
 }
 #pragma GCC diagnostic pop
+
+const void* bplustree_find(index_t* idx, const void* key) {
+    if(idx == NULL) {
+        return NULL;
+    }
+
+    bplustree_internal_t* tree = (bplustree_internal_t*)idx->metadata;
+
+    if(tree == NULL) {
+        return NULL;
+    }
+
+    const bplustree_node_internal_t* node = tree->root;
+
+    if(node == NULL) {
+        return NULL;
+    }
+
+    while(node != NULL) {
+        if(node->childs != NULL) { // internal node
+            const void* cur = NULL;
+            uint64_t position = 0;
+
+            size_t key_count = linkedlist_size(node->keys);
+
+            for(size_t i = 0; i < key_count; i++) {
+                cur = linkedlist_get_data_at_position(node->keys, i);
+
+                if(idx->comparator(cur, key) <= 0) {
+                    position++;
+                } else {
+                    break;
+                }
+
+            }
+
+            node = (bplustree_node_internal_t*)linkedlist_get_data_at_position(node->childs, position);
+        } else { // leaf node
+            uint64_t position = 0;
+
+            if(linkedlist_get_position(node->keys, key, &position) != 0) {
+                return NULL;
+            }
+
+            return linkedlist_get_data_at_position(node->datas, position);
+        }
+    }
+
+    return NULL;
+}
 
 iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
     if(idx == NULL) {
@@ -1265,7 +1318,7 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
                     iterator_t* k_iter = linkedlist_iterator_create(node->keys);
                     size_t i = 0;
 
-                    while(k_iter->end_of_iterator(k_iter) != 0) { //search at leaf keys
+                    while(k_iter->end_of_iterator(k_iter) != 0) { // search at leaf keys
                         const void* key_at_pos = k_iter->get_item(k_iter);
 
                         int8_t c_res = iter->comparator(key1, key_at_pos);
@@ -1294,7 +1347,7 @@ iterator_t* bplustree_search(index_t* idx, const void* key1, const void* key2, c
 
                     k_iter->destroy(k_iter);
                 }
-            } //end of internal node
+            } // end of internal node
         }
 
     } else {
@@ -1434,14 +1487,14 @@ boolean_t bplustree_contains(index_t* idx, const void* key){
     bplustree_node_internal_t* node = tree->root;
 
     while(node != NULL) {
-        if(node->childs != NULL) { //internal node
+        if(node->childs != NULL) { // internal node
             const void* cur = NULL;
             uint64_t position = 0;
 
-            iterator_t* iter = linkedlist_iterator_create(node->keys);
+            size_t key_count = linkedlist_size(node->keys);
 
-            while(iter->end_of_iterator(iter) != 0) {
-                cur = iter->get_item(iter);
+            for(size_t i = 0; i < key_count; i++) {
+                cur = linkedlist_get_data_at_position(node->keys, i);
 
                 if(idx->comparator(cur, key) <= 0) {
                     position++;
@@ -1449,12 +1502,10 @@ boolean_t bplustree_contains(index_t* idx, const void* key){
                     break;
                 }
 
-                iter = iter->next(iter);
             }
 
-            iter->destroy(iter);
             node = (bplustree_node_internal_t*)linkedlist_get_data_at_position(node->childs, position);
-        } else { //leaf node
+        } else { // leaf node
             if(linkedlist_contains(node->keys, key) != 0) {
                 return false;
             }

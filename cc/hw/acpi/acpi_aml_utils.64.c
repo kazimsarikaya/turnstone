@@ -1232,21 +1232,15 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
 
         PRINTLOG(ACPIAML, LOG_TRACE, "normalized name %s", nomname);
 
-        iterator_t* iter = table->search(table, nomname, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+        acpi_aml_object_t* obj = (acpi_aml_object_t*)table->find(table, nomname);
 
-        if(iter != NULL && iter->end_of_iterator(iter) != 0) {
-            acpi_aml_object_t* obj = (acpi_aml_object_t*)iter->get_item(iter);
-            iter->destroy(iter);
+        if(obj) {
             memory_free_ext(ctx->heap, nomname);
             memory_free_ext(ctx->heap, tmp_prefix);
 
             PRINTLOG(ACPIAML, LOG_TRACE, "symbol found");
 
             return obj;
-        }
-
-        if(iter) {
-            iter->destroy(iter);
         }
 
         if(strlen(tmp_prefix) == 1) {
@@ -1427,7 +1421,7 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
     case ACPI_AML_OT_RUNTIMEREF:
         break;
     default:
-        //printf("ACPIAML: Warning object destroy may be required %li\n", obj->type);
+        // printf("ACPIAML: Warning object destroy may be required %li\n", obj->type);
         break;
     }
 

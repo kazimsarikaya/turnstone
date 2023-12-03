@@ -88,6 +88,27 @@ int8_t backtrace_init(void) {
         }
     }
 
+/*
+    iterator_t* iter = backtrace_symbol_table->create_iterator(backtrace_symbol_table);
+
+    if(!iter) {
+        return -1;
+    }
+
+    while(iter->end_of_iterator(iter) != 0) {
+        const linker_global_offset_table_entry_t* got_entry = iter->get_item(iter);
+
+        const char_t* symbol_name = backtrace_get_symbol_name_by_symbol_name_offset(got_entry->symbol_name_offset);
+
+        PRINTLOG(KERNEL, LOG_INFO, "Symbol: 0x%llx 0x%llx 0x%llx 0x%llx %s",
+                 got_entry->entry_value, got_entry->symbol_value, got_entry->symbol_size, got_entry->symbol_name_offset, symbol_name);
+
+        iter->next(iter);
+    }
+
+    iter->destroy(iter);
+ */
+
     return 0;
 }
 
@@ -100,23 +121,7 @@ static const linker_global_offset_table_entry_t* backtrace_get_symbol_entry(uint
     entry.entry_value = rip;
     entry.symbol_size = 1;
 
-
-
-    iterator_t* iter = backtrace_symbol_table->search(backtrace_symbol_table, &entry, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(!iter) {
-        return NULL;
-    }
-
-    if(iter->end_of_iterator(iter) == 0) {
-        iter->destroy(iter);
-
-        return NULL;
-    }
-
-    const linker_global_offset_table_entry_t* got_entry = iter->get_item(iter);
-
-    iter->destroy(iter);
+    const linker_global_offset_table_entry_t * got_entry = backtrace_symbol_table->find(backtrace_symbol_table, &entry);
 
     return got_entry;
 }

@@ -106,19 +106,7 @@ const void* map_get_with_default(map_t map, const void* key, void* def) {
 
     uint64_t ckey = mi->mke(key);
 
-    iterator_t* iter = mi->store->search(mi->store, (void*)ckey, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
-
-    if(iter == NULL) {
-        return def;
-    }
-
-    const void* res = NULL;
-
-    if(iter->end_of_iterator(iter) != 0) {
-        res = iter->get_item(iter);
-    }
-
-    iter->destroy(iter);
+    const void* res = mi->store->find(mi->store, (void*)ckey);
 
     if(res == NULL) {
         res = def;
