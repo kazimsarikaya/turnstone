@@ -28,11 +28,10 @@ boolean_t hpet_enabled = false;
  * @param irqno irq number
  * @return 0 if interrupt was handled, -1 otherwise
  */
-int8_t hpet_isr(interrupt_frame_t* frame, uint8_t irqno);
+int8_t hpet_isr(interrupt_frame_ext_t* frame);
 
-int8_t hpet_isr(interrupt_frame_t* frame, uint8_t irqno) {
+int8_t hpet_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(irqno);
 
     apic_eoi();
     return 0;
@@ -97,7 +96,7 @@ int8_t hpet_init(void) {
 
     cpu_cli();
 
-    //hpet->configuration = 1;
+    // hpet->configuration = 1;
 
     tmr0_config.fields.interrupt_type = 0;
     tmr0_config.fields.interrupt_enable = 1;
@@ -110,7 +109,7 @@ int8_t hpet_init(void) {
     hpet->timer0_comparator_value = comparator_value + hpet->main_counter;
     hpet->timer0_comparator_value = comparator_value;
 
-    //hpet_enabled = true;
+    // hpet_enabled = true;
 
     cpu_sti();
 

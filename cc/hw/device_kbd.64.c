@@ -32,14 +32,14 @@ wchar_t kbd_ps2_tmp = NULL;
 
 kbd_state_t kbd_state = {0, 0, 0, 0, 0};
 
-int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t dev_virtio_kbd_isr(interrupt_frame_ext_t* frame);
 int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev);
-int8_t dev_virtio_mouse_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame);
 int8_t dev_virtio_mouse_create_queues(virtio_dev_t* vdev);
-int8_t dev_virtio_tablet_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame);
 int8_t dev_virtio_tablet_create_queues(virtio_dev_t* vdev);
-int8_t dev_kbd_cleanup_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t dev_kbd_cleanup_isr(interrupt_frame_ext_t* frame);
+int8_t dev_kbd_isr(interrupt_frame_ext_t* frame);
 
 int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
     if(key == KBD_SCANCODE_CAPSLOCK && pressed == 0) {
@@ -83,9 +83,8 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
     return 0;
 }
 
-int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t dev_kbd_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     wchar_t tmp_key = inb(KBD_DATA_PORT);
 
@@ -108,9 +107,8 @@ int8_t dev_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
     return 0;
 }
 
-int8_t dev_kbd_cleanup_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t dev_kbd_cleanup_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     kbd_ps2_tmp = NULL;
 
@@ -121,9 +119,8 @@ int8_t dev_kbd_cleanup_isr(interrupt_frame_t* frame, uint8_t intnum){
     return 0;
 }
 
-int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t dev_virtio_kbd_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     virtio_queue_ext_t* vq_ev = &virtio_kbd->queues[0];
     virtio_queue_used_t* used = virtio_queue_get_used(virtio_kbd, vq_ev->vq);
@@ -158,9 +155,8 @@ int8_t dev_virtio_kbd_isr(interrupt_frame_t* frame, uint8_t intnum){
 
 void video_text_print(const char_t* string);
 #include <utils.h>
-int8_t dev_virtio_mouse_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     virtio_queue_ext_t* vq_ev = &virtio_mouse->queues[0];
     virtio_queue_used_t* used = virtio_queue_get_used(virtio_mouse, vq_ev->vq);
@@ -204,9 +200,8 @@ int8_t dev_virtio_mouse_isr(interrupt_frame_t* frame, uint8_t intnum){
 extern int32_t VIDEO_GRAPHICS_WIDTH;
 extern int32_t VIDEO_GRAPHICS_HEIGHT;
 
-int8_t dev_virtio_tablet_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     virtio_queue_ext_t* vq_ev = &virtio_tablet->queues[0];
     virtio_queue_used_t* used = virtio_queue_get_used(virtio_tablet, vq_ev->vq);

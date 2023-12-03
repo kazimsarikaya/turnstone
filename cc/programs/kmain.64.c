@@ -41,6 +41,7 @@
 #include <driver/usb.h>
 #include <driver/usb_mass_storage_disk.h>
 #include <stdbufs.h>
+#include <backtrace.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -158,6 +159,12 @@ int8_t kmain64(size_t entry_point) {
     SYSTEM_INFO = new_system_info;
 
     PRINTLOG(KERNEL, LOG_DEBUG, "new system info created at 0x%p", SYSTEM_INFO);
+
+    if(backtrace_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init backtrace. Halting...");
+        cpu_hlt();
+    }
+
     PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator is initializing");
 
     frame_allocator_t* fa = frame_allocator_new_ext(heap);

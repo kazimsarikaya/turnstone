@@ -16,11 +16,10 @@
 
 MODULE("turnstone.kernel.hw.acpi");
 
-int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t acpi_events_isr(interrupt_frame_ext_t* frame);
 
-int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     boolean_t os_poweroff = 0;
     boolean_t os_reset = 0;

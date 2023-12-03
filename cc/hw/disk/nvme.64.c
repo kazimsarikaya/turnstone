@@ -22,7 +22,7 @@ MODULE("turnstone.kernel.hw.drivers");
 hashmap_t* nvme_disks = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
 
-int8_t   nvme_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   nvme_isr(interrupt_frame_ext_t* frame);
 int8_t   nvme_format(nvme_disk_t* nvme_disk);
 int8_t   nvme_identify(nvme_disk_t* nvme_disk, uint32_t cns, uint32_t nsid, uint64_t data_address);
 int8_t   nvme_enable_cache(nvme_disk_t* nvme_disk);
@@ -49,8 +49,10 @@ const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id) {
     return hashmap_get(nvme_disks, (void*)disk_id);
 }
 
-int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t nvme_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
+    intnum -= 0x20;
+
     PRINTLOG(NVME, LOG_TRACE, "nvme isr %i", intnum);
     nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disk_isr_map, (void*)(uint64_t)intnum);
 

@@ -17,6 +17,9 @@
 #include <valgrind.h>
 #include <memcheck.h>
 #endif
+#if ___KERNELBUILD == 1
+#include <backtrace.h>
+#endif
 
 MODULE("turnstone.lib.memory");
 
@@ -510,6 +513,10 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     if(!pool) {
         PRINTLOG(HEAP_HASH, LOG_WARNING, "address out of heap range");
 
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
+
         return -1;
     }
 
@@ -527,6 +534,10 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
 
     if(hash_block->is_free) {
         PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed", ptr);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }

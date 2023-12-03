@@ -15,9 +15,10 @@ typedef struct stackframe_t {
     uint64_t             rip;
 } stackframe_t;
 
+int8_t        backtrace_init(void);
 stackframe_t* backtrace_get_stackframe(void);
 void          backtrace_print(stackframe_t* frame);
 void          backtrace(void);
 stackframe_t* backtrace_print_interrupt_registers(uint64_t rsp);
-
+const char_t* backtrace_get_symbol_name_by_rip(uint64_t rip);
 #endif

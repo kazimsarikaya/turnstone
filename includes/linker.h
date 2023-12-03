@@ -107,6 +107,7 @@ typedef struct linker_global_offset_table_entry_t {
     uint64_t              symbol_id; ///< symbol id
     uint64_t              symbol_size; ///< symbol size
     uint64_t              symbol_value; ///< symbol value
+    uint64_t              symbol_name_offset; ///< symbol name offset
     uint8_t               padding[4]; ///< align padding
 }__attribute__((packed)) linker_global_offset_table_entry_t; ///< shorthand for struct
 
@@ -146,6 +147,11 @@ typedef struct program_header_t {
     uint64_t metadata_size; ///< metadata size
     uint64_t metadata_virtual_address; ///< metadata virtual address
     uint64_t metadata_physical_address; ///< metadata physical address
+    uint64_t symbol_table_offset; ///< symbol table offset
+    uint64_t symbol_table_size; ///< symbol table size
+    uint64_t symbol_table_virtual_address; ///< symbol table virtual address
+    uint64_t symbol_table_physical_address; ///< symbol table physical address
+
     uint64_t page_table_context_address; ///< page table address
 
     uint8_t trampoline_code[] __attribute__((aligned(256))); ///< trampoline code
@@ -178,6 +184,7 @@ typedef struct linker_context_t {
     uint64_t   global_offset_table_size;
     uint64_t   relocation_table_size;
     uint64_t   metadata_size;
+    uint64_t   symbol_table_size;
     uint64_t   entrypoint_symbol_id;
     uint64_t   got_address_physical;
     uint64_t   got_address_virtual;
@@ -185,6 +192,7 @@ typedef struct linker_context_t {
     uint64_t   size_of_sections[LINKER_SECTION_TYPE_NR_SECTIONS];
     hashmap_t* modules;
     buffer_t*  got_table_buffer;
+    buffer_t*  symbol_table_buffer;
     hashmap_t* got_symbol_index_map;
     tosdb_t*   tdb;
     uint64_t   page_table_helper_frames;
@@ -199,7 +207,8 @@ typedef enum linker_program_dump_type_t {
     LINKER_PROGRAM_DUMP_TYPE_HEADER = 0x10,
     LINKER_PROGRAM_DUMP_TYPE_ALL_WITHOUT_PAGE_TABLE = 0x1f,
     LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE = 0x20,
-    LINKER_PROGRAM_DUMP_TYPE_ALL = 0x3f,
+    LINKER_PROGRAM_DUMP_TYPE_SYMBOLS = 0x40,
+    LINKER_PROGRAM_DUMP_TYPE_ALL = 0x7f,
 } linker_program_dump_type_t;
 
 

@@ -33,7 +33,7 @@ uint32_t task_mxcsr_mask = 0;
 
 extern int8_t kmain64(void);
 
-int8_t                                          task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t                                          task_task_switch_isr(interrupt_frame_ext_t* frame);
 __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task);
 __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task);
 void                                            task_cleanup(void);
@@ -126,7 +126,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_task->output_buffer = stdbufs_default_output_buffer;
     current_task->error_buffer = stdbufs_default_error_buffer;
 
-    //get mxcsr by fxsave
+    // get mxcsr by fxsave
     asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (current_task->fx_registers) : : "rax", "memory");
 
     task_mxcsr_mask = *(uint32_t*)&current_task->fx_registers[28];
@@ -421,7 +421,7 @@ task_t* task_find_next_task(void) {
 
     }
 
-    //PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution", tmp_task->task_id);
+    // PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution", tmp_task->task_id);
 
     return tmp_task;
 }
@@ -518,6 +518,14 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     new_task->creator_heap = heap;
 
+    uint8_t* fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+
+    if(fx_registers == NULL) {
+        memory_free_ext(heap, new_task);
+
+        return -1;
+    }
+
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
@@ -526,6 +534,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
+        memory_free_ext(heap, fx_registers);
 
         return -1;
     }
@@ -544,6 +553,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         }
 
         memory_free_ext(heap, new_task);
+        memory_free_ext(heap, fx_registers);
 
         return -1;
     }
@@ -578,7 +588,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = entry_point;
     new_task->page_table = memory_paging_get_table();
-    new_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+    new_task->fx_registers = fx_registers;
     new_task->rflags = 0x202;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
@@ -615,16 +625,15 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
 void task_yield(void) {
     if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
-        //	__asm__ __volatile__ ("int $0x80\n");
+        // __asm__ __volatile__ ("int $0x80\n");
         cpu_cli();
         task_task_switch_set_parameters(false, true);
         task_switch_task();
     }
 }
 
-int8_t task_task_switch_isr(interrupt_frame_t* frame, uint8_t intnum) {
+int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(intnum);
 
     task_task_switch_set_parameters(true, false);
     task_switch_task();

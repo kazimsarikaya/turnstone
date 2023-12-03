@@ -25,7 +25,7 @@
  * @struct interrupt_frame
  * @brief  interrupt frame for interrupt function
  */
-typedef struct interrupt_frame {
+typedef struct interrupt_frame_t {
     uint64_t return_rip; ///< the ip value after interrupt
     uint64_t return_cs : 16; ///< the cs value after intterupt
     uint64_t empty1    : 48; ///< unused value
@@ -34,6 +34,38 @@ typedef struct interrupt_frame {
     uint64_t return_ss : 16; ///< the ss value aka stack segment after interrupt
     uint64_t empty2    : 48; ///< unused value
 } __attribute__((packed)) interrupt_frame_t; ///< struct short hand
+
+/**
+ * @struct interrupt_frame_ext
+ * @brief  interrupt frame for interrupt function
+ */
+typedef struct interrupt_frame_ext_t {
+    uint64_t rsp; ///< rsp register value
+    uint64_t rax; ///< rax register value
+    uint64_t rbx; ///< rbx register value
+    uint64_t rcx; ///< rcx register value
+    uint64_t rdx; ///< rdx register value
+    uint64_t rsi; ///< rsi register value
+    uint64_t rdi; ///< rdi register value
+    uint64_t rbp; ///< rbp register value
+    uint64_t r8; ///< r8 register value
+    uint64_t r9; ///< r9 register value
+    uint64_t r10; ///< r10 register value
+    uint64_t r11; ///< r11 register value
+    uint64_t r12; ///< r12 register value
+    uint64_t r13; ///< r13 register value
+    uint64_t r14; ///< r14 register value
+    uint64_t r15; ///< r15 register value
+    uint64_t interrupt_number; ///< interrupt number
+    uint64_t error_code; ///< error code
+    uint64_t return_rip; ///< the ip value after interrupt
+    uint64_t return_cs : 16; ///< the cs value after intterupt
+    uint64_t empty1    : 48; ///< unused value
+    uint64_t return_rflags; ///< the rflags after interrupt
+    uint64_t return_rsp; ///< the rsp value aka stack after interrupt
+    uint64_t return_ss : 16; ///< the ss value aka stack segment after interrupt
+    uint64_t empty2    : 48; ///< unused value
+} __attribute__((packed)) interrupt_frame_ext_t; ///< struct short hand
 
 /**
  * @brief interrupt table builder functions
@@ -56,7 +88,7 @@ int8_t interrupt_redirect_main_interrupts(uint8_t ist);
  * @param[in] intnum interrupt/irq number
  * @return 0 if irq handled success fully.
  */
-typedef int8_t (* interrupt_irq)(interrupt_frame_t* frame, uint8_t intnum);
+typedef int8_t (* interrupt_irq)(interrupt_frame_ext_t* frame);
 
 /**
  * @brief registers irq for irq number, for an irq there can be more irq handlers, loops with return of @ref interrupt_irq

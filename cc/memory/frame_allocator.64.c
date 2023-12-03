@@ -907,6 +907,28 @@ frame_type_t fa_get_fa_type(efi_memory_type_t efi_m_type){
     return FRAME_TYPE_RESERVED;
 }
 
+static int8_t frame_allocator_clone_key(memory_heap_t* heap, const void* key, void** out) {
+    frame_t* f = (frame_t*)key;
+
+    frame_t* new_frm = memory_malloc_ext(heap, sizeof(frame_t), 0);
+
+    if(new_frm == NULL) {
+        return -1;
+    }
+
+    memory_memcopy(f, new_frm, sizeof(frame_t));
+
+    *out = new_frm;
+
+    return 0;
+}
+
+static int8_t frame_allocator_destroy_key(memory_heap_t* heap, void* key) {
+    memory_free_ext(heap, key);
+
+    return 0;
+}
+
 frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     frame_allocator_context_t* ctx = memory_malloc_ext(heap, sizeof(frame_allocator_context_t), 0);
 
@@ -921,8 +943,17 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     ctx->acpi_frames = linkedlist_create_sortedlist_with_heap(heap, frame_allocator_cmp_by_address);
 
     ctx->free_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
+    bplustree_set_key_cloner(ctx->free_frames_by_address, frame_allocator_clone_key);
+    bplustree_set_key_destroyer(ctx->free_frames_by_address, frame_allocator_destroy_key);
+
     ctx->allocated_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
+    bplustree_set_key_cloner(ctx->allocated_frames_by_address, frame_allocator_clone_key);
+    bplustree_set_key_destroyer(ctx->allocated_frames_by_address, frame_allocator_destroy_key);
+
     ctx->reserved_frames_by_address = bplustree_create_index_with_heap_and_unique(heap, 64, frame_allocator_cmp_by_address, true);
+    bplustree_set_key_cloner(ctx->reserved_frames_by_address, frame_allocator_clone_key);
+    bplustree_set_key_destroyer(ctx->reserved_frames_by_address, frame_allocator_destroy_key);
+
     ctx->lock = lock_create_with_heap(heap);
 
     efi_memory_descriptor_t* mem_desc;

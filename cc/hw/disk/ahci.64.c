@@ -33,7 +33,7 @@ int8_t             ahci_read_log_ncq(ahci_sata_disk_t* disk);
 int8_t             ahci_port_comreset(ahci_hba_port_t* port);
 int8_t             ahci_disk_id_comparator(const void* disk1, const void* disk2);
 
-int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t ahci_isr(interrupt_frame_ext_t* frame);
 
 const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
     ahci_sata_disk_t tmp_disk;
@@ -47,10 +47,13 @@ const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
     return linkedlist_get_data_at_position(sata_ports, pos);
 }
 
+void video_text_print(const char_t* string);
 
 
-int8_t ahci_isr(interrupt_frame_t* frame, uint8_t intnum){
-    UNUSED(frame);
+
+int8_t ahci_isr(interrupt_frame_ext_t* frame){
+    uint8_t intnum = frame->interrupt_number;
+    intnum -= 0x20;
 
     boolean_t irq_handled = 0;
 
@@ -377,11 +380,11 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
         ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)abar_va;
 
         hba_mem->bios_os_handoff_control_and_status = 2;
-        PRINTLOG(AHCI, LOG_TRACE, "hba glovbal host control value 0x%x bohc 0x%x", hba_mem->global_host_control, hba_mem->bios_os_handoff_control_and_status );
+        PRINTLOG(AHCI, LOG_TRACE, "hba global host control value 0x%x bohc 0x%x", hba_mem->global_host_control, hba_mem->bios_os_handoff_control_and_status );
 
         hba_mem->global_host_control = (1U << 31);
 
-        PRINTLOG(AHCI, LOG_TRACE, "hba glovbal host control value 0x%x", hba_mem->global_host_control );
+        PRINTLOG(AHCI, LOG_TRACE, "hba global host control value 0x%x", hba_mem->global_host_control );
 
         uint8_t nr_cmd_slots = ( (hba_mem->host_capability >> 8) & 0x1F) + 1;
         uint8_t nr_port = (hba_mem->host_capability & 0x1F) + 1;
@@ -422,10 +425,10 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
             hba->intnum_count = msg_count;
 
             if(msi_cap->ma64_support) {
-                msi_cap->ma64.message_address = 0xFEE00000; //| (1 << 3) | (0 << 2);
+                msi_cap->ma64.message_address = 0xFEE00000; // | (1 << 3) | (0 << 2);
                 msi_cap->ma64.message_data = intnum;
             } else {
-                msi_cap->ma32.message_address = 0xFEE00000;// | (1 << 3) | (0 << 2);
+                msi_cap->ma32.message_address = 0xFEE00000; // | (1 << 3) | (0 << 2);
                 msi_cap->ma32.message_data = intnum;
             }
 
@@ -462,6 +465,8 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
             ahci_sata_disk_t* disk = memory_malloc_ext(heap, sizeof(ahci_sata_disk_t), 0x0);
 
             if(disk == NULL) {
+                PRINTLOG(AHCI, LOG_ERROR, "cannot allocate memory for disk %lli at 0x%llx", disk_id, port_address);
+
                 continue;
             }
 
@@ -998,7 +1003,7 @@ void ahci_port_start_cmd(ahci_hba_port_t* port) {
     port->command_and_status |= AHCI_HBA_PxCMD_FRE; // set fis receive enable
     port->command_and_status |= AHCI_HBA_PxCMD_ST; // set command start
 
-    //port->sata_control = 1;
+    // port->sata_control = 1;
     PRINTLOG(AHCI, LOG_TRACE, "sending identify 0x%x 0x%x 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
 
     PRINTLOG(AHCI, LOG_TRACE, "port 0x%p started", port);

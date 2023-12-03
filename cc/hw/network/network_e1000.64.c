@@ -33,7 +33,7 @@ void     network_e1000_rx_enable(network_e1000_dev_t* dev);
 int8_t   network_e1000_rx_init(network_e1000_dev_t* dev);
 int8_t   network_e1000_tx_init(network_e1000_dev_t* dev);
 void     network_e1000_rx_poll(const network_e1000_dev_t* netdev);
-int8_t   network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_e1000_rx_isr(interrupt_frame_ext_t* frame);
 int8_t   network_e1000_process_tx(void);
 void     network_e1000_phy_write(network_e1000_dev_t* dev, int regaddr, uint16_t data);
 
@@ -325,9 +325,8 @@ void network_e1000_rx_poll(const network_e1000_dev_t* dev) {
 }
 #pragma GCC diagnostic pop
 
-int8_t network_e1000_rx_isr(interrupt_frame_t* frame, uint8_t intnum)  {
-    UNUSED(frame);
-    UNUSED(intnum);
+int8_t network_e1000_rx_isr(interrupt_frame_ext_t* frame)  {
+    uint8_t intnum = frame->interrupt_number;
 
     const network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, 0);
 
@@ -514,7 +513,7 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
 
     uint8_t isrnum = dev->irq_base;
     interrupt_irq_set_handler(isrnum, &network_e1000_rx_isr);
-    //apic_ioapic_setup_irq(isrnum, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
+    // apic_ioapic_setup_irq(isrnum, APIC_IOAPIC_TRIGGER_MODE_LEVEL);
     apic_ioapic_enable_irq(isrnum);
 
     // enable all interrupts (and clear existing pending ones)

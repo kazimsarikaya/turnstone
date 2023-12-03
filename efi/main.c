@@ -1039,7 +1039,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     s_sec_rec->destroy(s_sec_rec);
 
-    PRINTLOG(EFI, LOG_INFO, "entroy point module id: 0x%llx", mod_id);
+    PRINTLOG(EFI, LOG_INFO, "entry point module id: 0x%llx", mod_id);
 
     linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
 
@@ -1055,6 +1055,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     ctx->tdb = tdb_ctx->tosdb;
     ctx->modules = hashmap_integer(16);
     ctx->got_table_buffer = buffer_new();
+    ctx->symbol_table_buffer = buffer_new();
     ctx->got_symbol_index_map = hashmap_integer(1024);
 
     linker_global_offset_table_entry_t empty_got_entry = {0};
@@ -1086,7 +1087,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size;
+    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size + ctx->symbol_table_size;
     uint64_t requested_program_size = (2 << 20) + program_total_size;
     uint64_t requested_program_pages = requested_program_size / FRAME_SIZE;
 

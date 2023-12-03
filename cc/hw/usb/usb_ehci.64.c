@@ -80,7 +80,7 @@ usb_ehci_itd_t* usb_ehci_find_itd(usb_controller_t* usb_controller);
 int8_t          usb_ehci_free_itd(usb_controller_t* usb_controller, usb_ehci_itd_t* itd);
 
 
-int8_t usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq);
+int8_t usb_ehci_isr(interrupt_frame_ext_t* frame);
 
 int8_t usb_ehci_probe_all_ports(usb_controller_t* usb_controller);
 int8_t usb_ehci_probe_port(usb_controller_t* usb_controller, uint8_t port);
@@ -99,11 +99,10 @@ void usb_ehci_poll(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_tran
 
 void video_text_print(char_t* string);
 
-int8_t usb_ehci_isr(interrupt_frame_t* frame, uint8_t irq) {
+int8_t usb_ehci_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(irq);
 
-    //PRINTLOG(USB, LOG_DEBUG, "EHCI ISR %x", irq);
+    // PRINTLOG(USB, LOG_DEBUG, "EHCI ISR %x", irq);
 
     boolean_t handled = false;
 
@@ -690,7 +689,7 @@ int8_t usb_ehci_isochronous_transfer(usb_controller_t* usb_controller, usb_trans
 
     itd->transactions[itd->last_transaction].bits.ioc = 1;
 
-    //TODO: remaining length for testing keyboard it is enough
+    // TODO: remaining length for testing keyboard it is enough
 
     PRINTLOG(USB, LOG_TRACE, "EHCI itd %x buffer filled, frame linking...", itd->id);
 
@@ -1035,7 +1034,7 @@ int8_t usb_ehci_reset_port(usb_controller_t* usb_controller, uint8_t port) {
 
 
 int8_t usb_ehci_probe_port(usb_controller_t* usb_controller, uint8_t port) {
-    //usb_controller_metadata_t* metadata = usb_controller->metadata;
+    // usb_controller_metadata_t* metadata = usb_controller->metadata;
 
     int8_t res = usb_ehci_reset_port(usb_controller, port);
 
@@ -1189,7 +1188,7 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     metadata->op_regs = op_regs;
 
     usb_ehci_cmd_reg_t cmd_reg = (usb_ehci_cmd_reg_t)op_regs->usb_cmd;
-    //cmd_reg.bits.host_controller_reset = 1;
+    // cmd_reg.bits.host_controller_reset = 1;
     cmd_reg.bits.run_stop = 0;
     op_regs->usb_cmd = cmd_reg.raw;
     usb_ehci_sts_reg_t sts_reg;
@@ -1443,7 +1442,7 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     int_enable_reg.bits.usb_interrupt_enable = 1;
     int_enable_reg.bits.usb_error_enable = 1;
     int_enable_reg.bits.port_change_enable = 1;
-    //int_enable_reg.bits.frame_list_rollover_enable = 1;
+    // int_enable_reg.bits.frame_list_rollover_enable = 1;
     int_enable_reg.bits.host_system_error_enable = 1;
     int_enable_reg.bits.interrupt_on_async_advance_enable = 1;
 

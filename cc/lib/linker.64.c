@@ -187,8 +187,6 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
 
         PRINTLOG(LINKER, LOG_DEBUG, "found symbol %s with id 0x%llx size 0x%llx, at section 0x%llx", symbol_name, symbol_id, symbol_size, section_id);
 
-        memory_free(symbol_name);
-
         uint64_t got_entry_index = (uint64_t)hashmap_get(ctx->got_symbol_index_map, (void*)symbol_id);
 
         if(got_entry_index) {
@@ -196,12 +194,14 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
 
             if(!existing_got_entry) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot get existing got entry");
+                memory_free(symbol_name);
 
                 goto clean_symbols_iter;
             }
 
             if(existing_got_entry->symbol_id != symbol_id || existing_got_entry->module_id != module_id) {
                 PRINTLOG(LINKER, LOG_ERROR, "got entry symbol/module id mismatch");
+                memory_free(symbol_name);
 
                 goto clean_symbols_iter;
             }
@@ -225,6 +225,14 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
             got_entry.symbol_size = symbol_size;
             got_entry.section_type = section_type;
 
+            if(ctx->symbol_table_buffer) {
+                uint64_t symbol_table_index = buffer_get_length(ctx->symbol_table_buffer);
+
+                buffer_append_bytes(ctx->symbol_table_buffer, (uint8_t*)symbol_name, strlen(symbol_name) + 1);
+
+                got_entry.symbol_name_offset = symbol_table_index;
+            }
+
             got_entry_index = buffer_get_length(ctx->got_table_buffer) / sizeof(linker_global_offset_table_entry_t);
 
             buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&got_entry, sizeof(linker_global_offset_table_entry_t));
@@ -233,6 +241,8 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
         }
 
         PRINTLOG(LINKER, LOG_DEBUG, "added symbol %s with id 0x%llx, at section 0x%llx, to got table at index 0x%llx", symbol_name, symbol_id, section_id, got_entry_index);
+
+        memory_free(symbol_name);
 
         sym_rec->destroy(sym_rec);
 
@@ -854,8 +864,16 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
         ctx->metadata_size += 0x1000 - (ctx->metadata_size % 0x1000);
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx",
-             ctx->program_size, ctx->global_offset_table_size, ctx->relocation_table_size, ctx->metadata_size);
+    if(ctx->symbol_table_buffer) {
+        ctx->symbol_table_size = buffer_get_length(ctx->symbol_table_buffer);
+
+        if(ctx->symbol_table_size % 0x1000) {
+            ctx->symbol_table_size += 0x1000 - (ctx->symbol_table_size % 0x1000);
+        }
+    }
+
+    PRINTLOG(LINKER, LOG_INFO, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx symbol table size 0x%llx",
+             ctx->program_size, ctx->global_offset_table_size, ctx->relocation_table_size, ctx->metadata_size, ctx->symbol_table_size);
 
     return 0;
 }
@@ -1627,17 +1645,17 @@ error:
 }
 
 const uint8_t linker_program_header_trampoline_code[] = {
-    0x48, 0x8b, 0x57, 0x48, //                   mov 0x48(%rdi),%rdx
-    0x48, 0x8b, 0x42, 0x40, //                   mov 0x40(%rdx),%rax
-    0x48, 0x03, 0x42, 0x48, //                   add 0x48(%rdx),%rax
-    0x48, 0x83, 0xe8, 0x10, //                   sub $0x10,%rax
-    0x48, 0x89, 0xc4, //                         mov %rax,%rsp
-    0x48, 0x31, 0xed, //                         xor %rbp,%rbp
-    0x48, 0x8b, 0x82, 0xd0, 0x00, 0x00, 0x00, // mov 0xd0(%rdx),%rax
-    0x48, 0x8b, 0x00, //                         mov (%rax),%rax
-    0x0f, 0x22, 0xd8, //                         mov %rax,%cr3
-    0x48, 0x8b, 0x42, 0x38, //                   mov 0x38(%rdx),%rax
-    0xff, 0xd0, //                               call *%rax
+    0x48, 0x8b, 0x57, 0x48, // mov 0x48(%rdi),%rdx
+    0x48, 0x8b, 0x42, 0x40, // mov 0x40(%rdx),%rax
+    0x48, 0x03, 0x42, 0x48, // add 0x48(%rdx),%rax
+    0x48, 0x83, 0xe8, 0x10, // sub $0x10,%rax
+    0x48, 0x89, 0xc4, // mov %rax,%rsp
+    0x48, 0x31, 0xed, // xor %rbp,%rbp
+    0x48, 0x8b, 0x82, 0xf0, 0x00, 0x00, 0x00, // mov 0xf0(%rdx),%rax
+    0x48, 0x8b, 0x00, // mov (%rax),%rax
+    0x0f, 0x22, 0xd8, // mov %rax,%cr3
+    0x48, 0x8b, 0x42, 0x38, // mov 0x38(%rdx),%rax
+    0xff, 0xd0, // call *%rax
 };
 
 int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array) {
@@ -1944,6 +1962,52 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         }
 
         program_target_offset += ctx->metadata_size;
+    }
+
+    if(ctx->symbol_table_buffer && (dump_type & LINKER_PROGRAM_DUMP_TYPE_SYMBOLS)) {
+        buffer_t* symbol_table_buf = ctx->symbol_table_buffer;
+        uint64_t symbol_table_size = buffer_get_length(symbol_table_buf);
+
+        uint8_t* symbol_table = buffer_get_view_at_position(symbol_table_buf, 0, symbol_table_size);
+
+        PRINTLOG(LINKER, LOG_DEBUG, "copying symbol table to 0x%llx with size 0x%llx", program_target_offset, symbol_table_size);
+        memory_memcopy(symbol_table, array + program_target_offset, symbol_table_size);
+
+        buffer_destroy(symbol_table_buf);
+
+        if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
+            program_header_t* program_header = (program_header_t*)array;
+
+            program_header->symbol_table_offset = program_target_offset;
+            program_header->symbol_table_size = ctx->symbol_table_size;
+            program_header->symbol_table_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->symbol_table_physical_address = program_header->header_physical_address + program_target_offset;
+
+            program_header->total_size += ctx->symbol_table_size;
+
+#ifndef ___TESTMODE
+            if(dump_type & LINKER_PROGRAM_DUMP_TYPE_BUILD_PAGE_TABLE) {
+                frame_t frame = {
+                    .frame_address = program_header->symbol_table_physical_address,
+                    .frame_count = program_header->symbol_table_size / FRAME_SIZE,
+                };
+
+                if(memory_paging_add_va_for_frame_ext(page_table_ctx,
+                                                      program_header->symbol_table_virtual_address,
+                                                      &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot add symbol table to page table");
+
+                    return -1;
+                }
+
+                PRINTLOG(LINKER, LOG_INFO, "symbol table added to page table at 0x%llx", program_header->symbol_table_virtual_address);
+
+            }
+#endif
+        }
+
+        program_target_offset += ctx->symbol_table_size;
     }
 
 #ifndef ___TESTMODE
