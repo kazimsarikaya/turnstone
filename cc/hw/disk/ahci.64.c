@@ -47,9 +47,25 @@ const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
     return linkedlist_get_data_at_position(sata_ports, pos);
 }
 
-void video_text_print(const char_t* string);
+const ahci_sata_disk_t* ahci_get_first_inserted_disk(void) {
+    iterator_t* iter = linkedlist_iterator_create(sata_ports);
 
+    while(iter->end_of_iterator(iter) != 0) {
+        const ahci_sata_disk_t* disk = iter->get_item(iter);
 
+        if(disk->inserted) {
+            iter->destroy(iter);
+
+            return disk;
+        }
+
+        iter = iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    return NULL;
+}
 
 int8_t ahci_isr(interrupt_frame_ext_t* frame){
     uint8_t intnum = frame->interrupt_number;

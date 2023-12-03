@@ -357,7 +357,7 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
 
-    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
+    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_first_inserted_disk();
 
     if(sd) {
         PRINTLOG(KERNEL, LOG_DEBUG, "try to read sata disk 0x%p", sd);
