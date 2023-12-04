@@ -46,6 +46,22 @@ buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity);
 #define buffer_new() buffer_new_with_capacity(NULL, 128)
 
 /**
+ * @fn buffer_t* buffer_create_with_capacity(uint64_t capacity)
+ * @brief buffer_create_with_capacity creates a new buffer with capacity
+ * @param capacity capacity of buffer
+ * @return buffer_t* pointer to buffer
+ */
+#define buffer_create_with_heap(h, c) buffer_new_with_capacity(h, c)
+
+/**
+ * @fn memory_heap_t* buffer_get_heap(buffer_t* buffer)
+ * @brief buffer_get_heap returns heap of buffer
+ * @param[in] buffer buffer to get heap
+ * @return memory_heap_t* pointer to heap
+ */
+memory_heap_t* buffer_get_heap(buffer_t* buffer);
+
+/**
  * @brief buffer_append_byte appends a byte to buffer
  * @param[in] buffer buffer to append
  * @param[in] data byte to append

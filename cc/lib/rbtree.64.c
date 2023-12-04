@@ -688,6 +688,8 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
 
 
 index_t* rbtree_create_index_with_heap(memory_heap_t* heap, index_key_comparator_f comparator) {
+    heap = memory_get_heap(heap);
+
     rbtree_t* rbt = memory_malloc_ext(heap, sizeof(rbtree_t), 0);
 
     if(!rbt) {

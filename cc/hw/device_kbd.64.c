@@ -167,7 +167,7 @@ int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame){
         uint16_t packet_desc_id = used->ring[vq_ev->last_used_index % virtio_mouse->queue_size].id;
 
         virtio_input_event_t* ev = (virtio_input_event_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
-
+/*
         video_text_print("mouse type: ");
         char_t buffer[64] = {0};
         itoa_with_buffer(buffer, ev->type);
@@ -179,7 +179,7 @@ int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame){
         itoa_with_buffer(buffer, ev->value);
         video_text_print(buffer);
         video_text_print("\n");
-
+ */
         memory_memclean(ev, sizeof(virtio_input_event_t));
 
         descs[packet_desc_id].flags = VIRTIO_QUEUE_DESC_F_WRITE;

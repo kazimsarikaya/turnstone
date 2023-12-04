@@ -56,6 +56,8 @@ int8_t map_key_comparator(const void* data1, const void* data2){
 }
 
 map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key_extractor_f mke) {
+    heap = memory_get_heap(heap);
+
     map_internal_t * mi = memory_malloc_ext(heap, sizeof(map_internal_t), 0);
 
     if(mi == NULL) {

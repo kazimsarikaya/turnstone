@@ -40,6 +40,7 @@ typedef struct hashmap_segment_t {
  * @brief hashmap
  */
 struct hashmap_t {
+    memory_heap_t*           heap; ///< heap
     uint64_t                 segment_capacity; ///< segment capacity
     uint64_t                 total_capacity; ///< total capacity
     uint64_t                 total_size; ///< total size
@@ -116,13 +117,17 @@ hashmap_t*  hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generat
         return NULL;
     }
 
-    hashmap_t* hm = memory_malloc(sizeof(hashmap_t));
+    memory_heap_t* heap = memory_get_heap(NULL);
+
+    hashmap_t* hm = memory_malloc_ext(heap, sizeof(hashmap_t), 0);
 
     if(!hm) {
         return NULL;
     }
 
-    hm->lock = lock_create();
+    hm->heap = heap;
+
+    hm->lock = lock_create_with_heap(heap);
 
     hm->total_capacity = capacity;
     hm->segment_capacity = capacity;
@@ -130,19 +135,19 @@ hashmap_t*  hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generat
     hm->hkg = hkg?hkg:hashmap_default_kg;
     hm->hkc = hkc?hkc:hashmap_default_kc;
 
-    hm->segments = memory_malloc(sizeof(hashmap_segment_t));
+    hm->segments = memory_malloc_ext(heap, sizeof(hashmap_segment_t), 0);
 
     if(!hm->segments) {
-        memory_free(hm);
+        memory_free_ext(heap, hm);
 
         return NULL;
     }
 
-    hm->segments->items = memory_malloc(sizeof(hashmap_item_t) * hm->segment_capacity);
+    hm->segments->items = memory_malloc_ext(heap, sizeof(hashmap_item_t) * hm->segment_capacity, 0);
 
     if(!hm->segments->items) {
-        memory_free(hm->segments);
-        memory_free(hm);
+        memory_free_ext(heap, hm->segments);
+        memory_free_ext(heap, hm);
 
         return NULL;
     }
@@ -159,19 +164,21 @@ boolean_t   hashmap_destroy(hashmap_t* hm) {
         return false;
     }
 
+    memory_heap_t* heap = hm->heap;
+
     hashmap_segment_t* seg = hm->segments;
 
     while(seg) {
         hashmap_segment_t* t_seg = seg->next;
 
-        memory_free(seg->items);
-        memory_free(seg);
+        memory_free_ext(heap, seg->items);
+        memory_free_ext(heap, seg);
 
         seg = t_seg;
     }
 
     lock_destroy(hm->lock);
-    memory_free(hm);
+    memory_free_ext(heap, hm);
 
     return NULL;
 }
@@ -189,16 +196,16 @@ static hashmap_segment_t* hashmap_segment_next_new(hashmap_t* hm, hashmap_segmen
         seg = seg->next;
     }
 
-    seg->next = memory_malloc(sizeof(hashmap_segment_t));
+    seg->next = memory_malloc_ext(hm->heap, sizeof(hashmap_segment_t), 0);
 
     if(!seg->next) {
         return NULL;
     }
 
-    seg->next->items = memory_malloc(sizeof(hashmap_item_t) * hm->segment_capacity);
+    seg->next->items = memory_malloc_ext(hm->heap, sizeof(hashmap_item_t) * hm->segment_capacity, 0);
 
     if(!seg->next->items) {
-        memory_free(seg->next);
+        memory_free_ext(hm->heap, seg->next);
 
         return NULL;
     }
@@ -441,6 +448,7 @@ uint64_t hashmap_size(hashmap_t* hm) {
  * @brief  Metadata for the hashmap iterator
  */
 typedef struct hashmap_iterator_metadata_t {
+    memory_heap_t*     heap; ///< Heap
     hashmap_segment_t* current_segment; ///< Current segment
     uint64_t           segment_capacity; ///< Segment capacity
     uint64_t           current_index; ///< Current index
@@ -534,8 +542,14 @@ iterator_t* hashmap_iterator_next(iterator_t* iter) {
 }
 
 int8_t hashmap_iterator_destroy(iterator_t* iter) {
-    memory_free(iter->metadata);
-    memory_free(iter);
+    if(!iter) {
+        return -1;
+    }
+
+    memory_heap_t* heap = ((hashmap_iterator_metadata_t*)iter->metadata)->heap;
+
+    memory_free_ext(heap, iter->metadata);
+    memory_free_ext(heap, iter);
 
     return 0;
 }
@@ -555,19 +569,20 @@ iterator_t* hashmap_iterator_create(hashmap_t* hm) {
         return NULL;
     }
 
-    hashmap_iterator_metadata_t* iter_md = memory_malloc(sizeof(hashmap_iterator_metadata_t));
+    hashmap_iterator_metadata_t* iter_md = memory_malloc_ext(hm->heap, sizeof(hashmap_iterator_metadata_t), 0);
 
     if(!iter_md) {
         return NULL;
     }
 
+    iter_md->heap = hm->heap;
     iter_md->current_segment = hm->segments;
     iter_md->segment_capacity = hm->segment_capacity;
 
-    iterator_t* iter = memory_malloc(sizeof(iterator_t));
+    iterator_t* iter = memory_malloc_ext(hm->heap, sizeof(iterator_t), 0);
 
     if(!iter) {
-        memory_free(iter_md);
+        memory_free_ext(hm->heap, iter_md);
 
         return NULL;
     }

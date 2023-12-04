@@ -62,13 +62,13 @@ buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id) {
         }
         break;
     case BUFFER_IO_OUTPUT:
-        buffer = stdbufs_default_output_buffer;
+        buffer = task_get_output_buffer();
         if(!buffer) {
             buffer = stdbufs_default_output_buffer;
         }
         break;
     case BUFFER_IO_ERROR:
-        buffer = stdbufs_default_error_buffer;
+        buffer = task_get_error_buffer();
         if(!buffer) {
             buffer = stdbufs_default_error_buffer;
         }

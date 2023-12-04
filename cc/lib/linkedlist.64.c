@@ -123,6 +123,8 @@ linkedlist_t* linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t
                                           linkedlist_data_comparator_f comparator, indexer_t indexer){
     linkedlist_t* list;
 
+    heap = memory_get_heap(heap);
+
     list = memory_malloc_ext(heap, sizeof(linkedlist_t), 0x0);
 
     if(list == NULL) {

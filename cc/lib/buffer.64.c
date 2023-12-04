@@ -48,6 +48,8 @@ void buffer_reset_tmp_buffer_for_printf(void) {
 }
 
 buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
+    heap = memory_get_heap(heap);
+
     buffer_t* buffer = memory_malloc_ext(heap, sizeof(buffer_t), 0);
 
     if(buffer == NULL) {
@@ -64,12 +66,20 @@ buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
     buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
 
     if(buffer->data == NULL) {
-        memory_free(buffer);
+        memory_free_ext(heap, buffer);
 
         return NULL;
     }
 
     return buffer;
+}
+
+memory_heap_t* buffer_get_heap(buffer_t* buffer) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    return buffer->heap;
 }
 
 buffer_t* buffer_encapsulate(uint8_t* data, uint64_t length) {
@@ -160,7 +170,7 @@ static boolean_t buffer_resize_if_need(buffer_t* buffer, uint64_t length) {
         buffer->capacity = new_cap;
 
         memory_memcopy(buffer->data, tmp_data, buffer->length);
-        memory_free(buffer->data);
+        memory_free_ext(buffer->heap, buffer->data);
         buffer->data = tmp_data;
     }
 

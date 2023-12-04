@@ -349,19 +349,21 @@ int8_t kmain64(size_t entry_point) {
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
         cpu_hlt();
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
     }
 
     if(nvme_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init nvme. Halting...");
         cpu_hlt();
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
     }
 
     if(network_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init network. Halting...");
         cpu_hlt();
     }
-
-    PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
 
     ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_first_inserted_disk();
 
@@ -390,8 +392,6 @@ int8_t kmain64(size_t entry_point) {
     } else {
         PRINTLOG(KERNEL, LOG_WARNING, "sata disk 0 not found");
     }
-
-    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
 
     nvme_disk_t* nd = (nvme_disk_t*)nvme_get_disk_by_id(0);
 

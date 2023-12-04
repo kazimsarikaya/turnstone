@@ -582,6 +582,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     cpu_sti();
 
+    task_heap->task_id = new_task_id;
+
     new_task->heap = task_heap;
     new_task->heap_size = heap_size;
     new_task->task_id = new_task_id;
@@ -609,6 +611,11 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     stack[-1] = (uint64_t)task_end_task;
     stack[-2] = (uint64_t)entry_point;
     stack[-3] = (uint64_t)apic_eoi;
+
+
+    new_task->input_buffer = buffer_create_with_heap(task_heap, 0x1000);
+    new_task->output_buffer = buffer_create_with_heap(task_heap, 0x1000);
+    new_task->error_buffer = buffer_create_with_heap(task_heap, 0x1000);
 
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, new_task->rsp, new_task->rbp, new_task->heap, new_task->heap_size);

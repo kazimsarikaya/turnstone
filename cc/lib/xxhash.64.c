@@ -66,20 +66,7 @@ static inline void xxhash64_process(const void* data, uint64_t* state0, uint64_t
     *state3 = xxhash64_process_single(*state3, block[3]);
 }
 
-uint64_t xxhash64_hash_with_seed(const void* input, uint64_t length, uint64_t seed) {
-    xxhash64_context_t* ctx = xxhash64_init(seed);
-    xxhash64_update(ctx, input, length);
-
-    return xxhash64_final(ctx);
-}
-
-xxhash64_context_t* xxhash64_init(uint64_t seed) {
-    xxhash64_context_t* ctx = memory_malloc(sizeof(xxhash64_context_t));
-
-    if(ctx == NULL) {
-        return NULL;
-    }
-
+static inline xxhash64_context_t* xxhhash64_init_without_malloc(xxhash64_context_t* ctx, uint64_t seed) {
     ctx->state[0] = seed + XXHASH64_PRIME1 + XXHASH64_PRIME2;
     ctx->state[1] = seed + XXHASH64_PRIME2;
     ctx->state[2] = seed;
@@ -90,7 +77,7 @@ xxhash64_context_t* xxhash64_init(uint64_t seed) {
     return ctx;
 }
 
-uint64_t xxhash64_final(xxhash64_context_t* ctx) {
+static uint64_t xxhash64_final_without_free(xxhash64_context_t* ctx) {
 
     if(ctx == NULL) {
         return 0;
@@ -136,6 +123,36 @@ uint64_t xxhash64_final(xxhash64_context_t* ctx) {
     result ^= result >> 29;
     result *= XXHASH64_PRIME3;
     result ^= result >> 32;
+
+    return result;
+}
+
+uint64_t xxhash64_hash_with_seed(const void* input, uint64_t length, uint64_t seed) {
+    xxhash64_context_t ctx = {0};
+
+    xxhhash64_init_without_malloc(&ctx, seed);
+    xxhash64_update(&ctx, input, length);
+
+    return xxhash64_final_without_free(&ctx);
+}
+
+xxhash64_context_t* xxhash64_init(uint64_t seed) {
+    xxhash64_context_t* ctx = memory_malloc(sizeof(xxhash64_context_t));
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
+    return xxhhash64_init_without_malloc(ctx, seed);
+}
+
+uint64_t xxhash64_final(xxhash64_context_t* ctx) {
+
+    if(ctx == NULL) {
+        return 0;
+    }
+
+    uint64_t result = xxhash64_final_without_free(ctx);
 
     memory_free(ctx);
 

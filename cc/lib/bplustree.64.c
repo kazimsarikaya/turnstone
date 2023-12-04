@@ -182,6 +182,9 @@ index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64
     if(max_key_count < 2) {
         return NULL;
     }
+
+    heap = memory_get_heap(heap);
+
     bplustree_internal_t* tree = memory_malloc_ext(heap, sizeof(bplustree_internal_t), 0x0);
 
     if(tree == NULL) {

@@ -511,7 +511,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     memory_heap_hash_pool_t* pool = memory_heap_hash_find_pool_by_address(metadata, req_address);
 
     if(!pool) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address out of heap range");
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p out of heap range. heap task 0x%llx", ptr, heap->task_id);
 
 #if ___KERNELBUILD == 1
         backtrace();
@@ -527,13 +527,17 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     memory_heap_hash_block_t* hash_block = memory_heap_hash_pool_search_hash_block(metadata, pool, rel_address);
 
     if(!hash_block) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address not found");
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p not found. heap task 0x%llx", ptr, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }
 
     if(hash_block->is_free) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed", ptr);
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed. heap task 0x%llx", ptr, heap->task_id);
 
 #if ___KERNELBUILD == 1
         backtrace();
@@ -629,20 +633,29 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     heap->header = 0xaa55aa55;
 
     uint64_t lock_start = heap_start + sizeof(memory_heap_t);
-    lock_start += 0x20 - (lock_start % 0x20);
+
+    if(lock_start % 0x20) {
+        lock_start += 0x20 - (lock_start % 0x20);
+    }
 
     memory_heap_t** lock_heap = (memory_heap_t**)lock_start;
     *lock_heap = heap;
     heap->lock = (lock_t)lock_heap;
 
     uint64_t metadata_start = lock_start + SYNC_LOCK_SIZE;
-    metadata_start += 0x20 - (metadata_start % 0x20);
+
+    if(metadata_start % 0x20) {
+        metadata_start += 0x20 - (metadata_start % 0x20);
+    }
 
     memory_heap_hash_metadata_t* metadata = (memory_heap_hash_metadata_t*)metadata_start;
     metadata->pool_count = 1;
 
     uint64_t pool_start = metadata_start + sizeof(memory_heap_hash_metadata_t);
-    pool_start += 0x20 - (pool_start % 0x20);
+
+    if(pool_start % 0x20) {
+        pool_start += 0x20 - (pool_start % 0x20);
+    }
 
     metadata->pools[0] = pool_start;
 
@@ -667,7 +680,10 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     metadata->segment_hash_mask = metadata->segment_block_count - 1;
 
     uint32_t segment_start = (pool_start - heap_start) + sizeof(memory_heap_hash_pool_t);
-    segment_start += 0x1000 - (segment_start % 0x1000);
+
+    if(segment_start % 0x1000) {
+        segment_start += 0x1000 - (segment_start % 0x1000);
+    }
 
     pool->segment_start = segment_start - (pool_start - heap_start);
     pool->segment_end = segment_start;
