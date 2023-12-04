@@ -171,8 +171,6 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    backtrace();
-
     PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator is initializing");
 
     frame_allocator_t* fa = frame_allocator_new_ext(heap);

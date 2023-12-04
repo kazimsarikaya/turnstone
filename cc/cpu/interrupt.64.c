@@ -346,6 +346,8 @@ int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
 
     debug_revert_original_byte_at_address(frame->return_rip);
 
+    KERNEL_PANIC_DISABLE_LOCKS = false;
+
     return 0;
 }
 
