@@ -356,8 +356,6 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    debug_put_breakpoint_at_symbol("network_virtio_init");
-
     if(network_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init network. Halting...");
         cpu_hlt();

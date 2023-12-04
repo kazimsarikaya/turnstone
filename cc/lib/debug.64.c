@@ -162,3 +162,49 @@ void debug_revert_original_byte_at_address(uint64_t address) {
     *((uint8_t*)address) = breakpoint->original_instruction;
     memory_paging_toggle_attributes(address, MEMORY_PAGING_PAGE_TYPE_READONLY);
 }
+
+void debug_put_debug_for_address(uint64_t address) {
+    PRINTLOG(KERNEL, LOG_INFO, "Debugging address 0x%016llx", address);
+
+    asm volatile ("mov %0, %%dr0" : : "r" (address));
+
+    debug_register_dr7_t dr7 = {0};
+
+    asm volatile ("mov %%dr7, %0" : "=r" (dr7));
+
+    dr7.g0 = 1;
+    dr7.le = 1;
+    dr7.ge = 1;
+
+    asm volatile ("mov %0, %%dr7" : : "r" (dr7));
+
+}
+
+void debug_put_debug_for_symbol(const char_t* symbol_name) {
+    uint64_t address = debug_get_symbol_address(symbol_name);
+
+    if(!address) {
+        PRINTLOG(KERNEL, LOG_ERROR, "Symbol %s not found", symbol_name);
+        return;
+    }
+
+    debug_put_debug_for_address(address);
+}
+
+void debug_remove_debug_for_address(uint64_t address) {
+    UNUSED(address);
+
+    asm volatile ("mov $0, %%rax\n\t"
+                  "mov %%rax, %%dr0\n\t"
+                  : : : "rax");
+
+    debug_register_dr7_t dr7 = {0};
+
+    asm volatile ("mov %%dr7, %0" : "=r" (dr7));
+
+    dr7.g0 = 0;
+    dr7.le = 0;
+    dr7.ge = 0;
+
+    asm volatile ("mov %0, %%dr7" : : "r" (dr7));
+}

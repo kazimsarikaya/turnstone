@@ -36,6 +36,7 @@ uint8_t next_empty_interrupt = 0;
 
 void interrupt_generic_handler(interrupt_frame_ext_t* frame);
 
+int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t*);
 int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t*);
@@ -58,6 +59,14 @@ int8_t interrupt_init(void) {
     }
 
     memory_memclean(interrupt_irqs, sizeof(interrupt_irq_list_item_t*) * (256));
+
+    interrupt_irqs[0x01] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+
+    if(interrupt_irqs[0x01] == NULL) {
+        return -1;
+    }
+
+    interrupt_irqs[0x01]->irq = interrupt_int01_debug_exception;
 
     interrupt_irqs[0x02] = memory_malloc(sizeof(interrupt_irq_list_item_t));
 
@@ -293,6 +302,21 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
     interrupt_print_frame_ext(frame);
 
     cpu_hlt();
+}
+
+int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t* frame) {
+    KERNEL_PANIC_DISABLE_LOCKS = true;
+
+    stackframe_t* s_frame = (stackframe_t*)frame->rbp;
+    backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
+
+    interrupt_print_frame_ext(frame);
+
+    debug_remove_debug_for_address(frame->return_rip);
+
+    KERNEL_PANIC_DISABLE_LOCKS = false;
+
+    return 0;
 }
 
 extern boolean_t we_sended_nmi_to_bsp;
