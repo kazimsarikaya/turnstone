@@ -39,8 +39,11 @@ typedef struct system_info_t {
     uint64_t              program_header_virtual_start; ///< program virtual start address
     uint64_t              program_header_physical_start; ///< program physical start address
     efi_system_table_t*   efi_system_table; ///< accessing efi tables from kernel
+    uint64_t              smbios_version; ///< smbios table version
+    void*                 smbios_table; ///< smbios table address
     uint64_t              pxe_tosdb_size; ///< pxe tosdb size
     uint64_t              pxe_tosdb_address; ///< pxe tosdb address
+    uint64_t              random_seed; ///< random seed
 } system_info_t; ///< struct short hand for system_info_s
 
 /*! static location of system information */

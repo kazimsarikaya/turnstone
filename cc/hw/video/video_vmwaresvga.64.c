@@ -23,12 +23,11 @@ MODULE("turnstone.kernel.hw.video.vmwaresvga2");
 
 vmware_svga2_t* vmware_svga2_active = NULL;
 
-int8_t vmware_svga2_isr(interrupt_frame_t* frame, uint8_t irq);
+int8_t vmware_svga2_isr(interrupt_frame_ext_t* frame);
 void   vmware_svga2_display_flush(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
-int8_t vmware_svga2_isr(interrupt_frame_t* frame, uint8_t irq) {
+int8_t vmware_svga2_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(irq);
 
     PRINTLOG(VMWARESVGA, LOG_DEBUG, "ISR");
 
@@ -93,7 +92,7 @@ void vmware_svga2_display_flush(uint32_t scanout, uint64_t offset, uint32_t x, u
 int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
     UNUSED(heap);
 
-    //logging_module_levels[VMWARESVGA] = LOG_TRACE;
+    // logging_module_levels[VMWARESVGA] = LOG_TRACE;
 
     PRINTLOG(VMWARESVGA, LOG_DEBUG, "vmware svga2 initializing");
 
@@ -233,14 +232,14 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
     if(vmware_svga2->capabilities & VMWARE_SVGA2_CAPABILITY_IRQMASK) {
         vmware_svga2_write_reg(vmware_svga2, VMWARE_SVGA2_REG_IRQMASK, VMWARE_SVGA2_IRQFLAG_ANY_FENCE);
 
-        //send fence
+        // send fence
 
         vmware_svga2_write_reg(vmware_svga2, VMWARE_SVGA2_REG_SYNC, true);
         while(vmware_svga2_read_reg(vmware_svga2, VMWARE_SVGA2_REG_BUSY));
 
         vmware_svga2_write_reg(vmware_svga2, VMWARE_SVGA2_REG_IRQMASK, 0);
 
-        //test irq for fence completion
+        // test irq for fence completion
     }
 
     video_refresh_frame_buffer_address();

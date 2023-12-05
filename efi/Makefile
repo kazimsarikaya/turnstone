@@ -43,6 +43,12 @@ TOSDB_BUILDER_FLAGS = -e efi_main
 LD = $(OUTPUT)/linker-tosdb.bin
 LDFLAGS = -e efi_main -r  -psp 4096 -psv 4096 --for-efi
 
+ifeq (,$(wildcard $(TOSDB_IMAGE)))
+LASTCCOBJS = $(EFIOBJS)
+else
+LASTCCOBJS = $(shell find $(EFIOUTPUT) -type f -name \*.o -newer $(TOSDB_IMAGE))
+endif
+
 .PHONY: all clean depend
 .PRECIOUS: $(EFIOUTPUT)/%.o
 
@@ -61,7 +67,7 @@ $(EFIOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(TOSDB_IMAGE): $(EFIOBJS) $(TOSDB_BUILDER)
-	$(TOSDB_BUILDER) $(TOSDB_BUILDER_FLAGS) -o $@ $(EFIOBJS)
+	$(TOSDB_BUILDER) $(TOSDB_BUILDER_FLAGS) -o $@ $(LASTCCOBJS)
 
 $(EFIAPP): $(TOSDB_IMAGE) $(LD)
 	$(LD) $(LDFLAGS) -o $@ -db $(TOSDB_IMAGE)

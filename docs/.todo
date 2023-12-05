@@ -1,11 +1,11 @@
 Turnstone OS:
   Issues:
-
+    ☐ double free at acpi aml execution during executing opcode.
   Tasks:
     Documentation:
-      ☐ Write bootloader documentation.
-        ☐ Write EFI documentation.
-        ☐ Write PXE-EFI documentation.
+      ✔ Write bootloader documentation. @done (2023-10-09 03:43)
+        ✔ Write EFI documentation. @done (2023-10-09 03:43)
+        ✔ Write PXE-EFI documentation. @done (2023-10-09 03:43)
       ☐ Write linker documentation.
       ☐ Write memory allocation documentation.
         ☐ Write paging documentation.
@@ -26,22 +26,21 @@ Turnstone OS:
       ☐ Write filesystem documentation.
         ☐ Write fat32 documentation.
         ☐ Write gpt documentation.
-      ☐ Write library documentation.
       ☐ Write tasking documentation.
       ☐ Write mq system documentation.
       ☐ Write source files documentation.
     Scheduler:
-      ☐ Activate Cores
-        ☐ Implement trampoline code
+      ✔ Activate Cores @done (2023-10-09 03:42)
+        ✔ Implement trampoline code @done (2023-10-09 03:42)
       ☐ Move kernel threads to the kernel cores
       ☐ Implement user space task scheduling
       ✔ task sleep @done(2022-12-17 20:01:01)
     Disk:
-      ☐ Implement NVMe driver
+      ✔ Implement NVMe driver @done (2023-10-09 03:44)
       ☐ Implement raid1
     Database:
       ✔  @high Implement disk layout with lsm @done (2023-04-09 22:52)
-      ☐ Implement memory cache.
+      ✔ Implement memory cache. @done (2023-10-09 03:42)
       ☐ Implement backend cache.
       ☐ Implement wal.
       ☐ Implement compaction.

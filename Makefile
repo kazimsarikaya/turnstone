@@ -53,6 +53,8 @@ INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 ASSETSDIR = assets
+EFISRCDIR = efi
+UTILSSRCDIR = utils
 
 VBBOXDISK = /Volumes/DATA/VirtualBox\ VMs/osdev-vms/osdev/rawdisk0.raw
 QEMUDISK  = $(OBJDIR)/qemu-hda
@@ -91,13 +93,23 @@ CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(
 
 DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
+DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.c)
+DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.h)
+DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.c)
+DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.h)
 
-FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus24x12.psf
-FONTOBJ = $(OBJDIR)/font.o
-MOUSEOBJ = $(OBJDIR)/mouse_data.o
+#FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus24x12.psf
+FONTOBJ = $(CCOBJDIR)/font.o
+MOUSEOBJ = $(CCOBJDIR)/mouse_data.o
 
-OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ) $(CC64ASMOUTS)
+OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ) $(MOUSEOBJ) $(CC64ASMOUTS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
+
+ifeq (,$(wildcard $(TOSDBIMG)))
+LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)
+else
+LASTCCOBJS = $(shell find $(CCOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
+endif
 
 MKDIRSDONE = .mkdirsdone
 
@@ -148,7 +160,7 @@ asm-internal: $(CC64ASMOUTS)
 
 bear:
 	bear --append -- make qemu
-	bear --append -- make -C tests
+	bear --append -- make -j $(shell nproc) -C tests
 
 test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
@@ -179,7 +191,7 @@ $(MKDIRSDONE):
 	touch $(MKDIRSDONE)
 
 $(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)
-	$(TOSDBIMG_BUILDER) -o $@ $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)	
+	$(TOSDBIMG_BUILDER) -o $@ $(LASTCCOBJS)
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
@@ -218,9 +230,8 @@ $(SUBDIRS):
 	$(MAKE) -j $(nproc) -C $@
 
 $(FONTOBJ):
-	curl -sL -o $(OBJDIR)/font.psf $(FONTSRC)
 	echo -n turnstone.kernel.hw.video > $(OBJDIR)/font.module_name.txt
-	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.font --redefine-sym _binary_output_font_psf_start=font_data_start --redefine-sym _binary_output_font_psf_end=font_data_end --redefine-sym _binary_output_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(OBJDIR)/font.psf $@
+	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.font --redefine-sym _binary_assets_font_psf_start=font_data_start --redefine-sym _binary_assets_font_psf_end=font_data_end --redefine-sym _binary_assets_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(ASSETSDIR)/font.psf $@
 	rm -f $(OBJDIR)/font.module_name.txt
 
 $(MOUSEOBJ):

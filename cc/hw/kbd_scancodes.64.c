@@ -1,4 +1,7 @@
-/*
+/**
+ * @file kbd_scancodes.64.c
+ * @brief Keyboard scancodes.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

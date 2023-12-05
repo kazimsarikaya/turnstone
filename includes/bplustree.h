@@ -60,4 +60,32 @@ index_t* bplustree_create_index_with_heap_and_unique(memory_heap_t* heap, uint64
  */
 int8_t bplustree_destroy_index(index_t* idx);
 
+/**
+ * @brief sets a comparator for unique subpart for non unique index
+ * @param[in]  idx        index
+ * @param[in]  comparator comparator
+ * @return     0 if successed.
+ */
+int8_t bplustree_set_comparator_for_unique_subpart_for_non_unique_index(index_t* idx, index_key_comparator_f comparator);
+
+typedef int8_t (*bplustree_key_destroyer_f)(memory_heap_t* heap, void* key);
+
+/**
+ * @brief sets a key destroyer for index
+ * @param[in]  idx       index
+ * @param[in]  destroyer destroyer
+ * @return     0 if successed.
+ */
+int8_t bplustree_set_key_destroyer(index_t* idx, bplustree_key_destroyer_f destroyer);
+
+typedef int8_t (*bplustree_key_cloner_f)(memory_heap_t* heap, const void* key, void** cloned_key);
+
+/**
+ * @brief sets a key cloner for index
+ * @param[in]  idx    index
+ * @param[in]  cloner cloner
+ * @return     0 if successed.
+ */
+int8_t bplustree_set_key_cloner(index_t* idx, bplustree_key_cloner_f cloner);
+
 #endif

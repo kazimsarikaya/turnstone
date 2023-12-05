@@ -1,4 +1,0 @@
-Segments {#segments}
-========
-
-[TOC]

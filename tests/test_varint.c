@@ -14,7 +14,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argv);
 
 
-    const uint64_t num1 = 0x123FC67ULL;
+    const int64_t num1 = 0x123FC67ULL;
     int8_t s1 = 0, s2 = 0;
 
     uint8_t* res1 = varint_encode(num1, &s1);

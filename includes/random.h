@@ -1,4 +1,7 @@
-/*
+/**
+ * @file random.h
+ * @brief Random header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -19,5 +22,11 @@ void srand(uint64_t seed);
  * @return 32 bit random number
  */
 uint32_t rand(void);
+
+/**
+ * @brief generates random
+ * @return 64 bit random number
+ */
+uint64_t rand64(void);
 
 #endif

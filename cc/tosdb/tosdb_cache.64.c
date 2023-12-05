@@ -1,5 +1,5 @@
 /**
- * @file tosdb_cache_t.64.c
+ * @file tosdb_cache.64.c
  * @brief tosdb cache interface implementation
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -13,18 +13,42 @@
 #include <logging.h>
 #include <xxhash.h>
 
+/*! module name */
 MODULE("turnstone.kernel.db");
 
+/**
+ * @struct tosdb_cache_t
+ * @brief tosdb cache structure
+ */
 struct tosdb_cache_t {
-    tosdb_cache_config_t config;
-    cache_t*             bloomfilter_cache;
-    cache_t*             index_data_cache;
-    cache_t*             secondary_index_data_cache;
-    cache_t*             valuelog_cache;
+    tosdb_cache_config_t config; ///< cache configuration
+    cache_t*             bloomfilter_cache; ///< bloomfilter cache
+    cache_t*             index_data_cache; ///< index data cache
+    cache_t*             secondary_index_data_cache; ///< secondary index data cache
+    cache_t*             valuelog_cache; ///< valuelog cache
 };
 
-uint64_t  tosdb_cache_key_generator(const void* item);
-int8_t    tosdb_cache_key_comparator(const void* item1, const void* item2);
+/**
+ * @brief tosdb cache key generator
+ * @param item item to create key
+ * @return key which is generated from item with xxhash64 algorithm
+ */
+uint64_t tosdb_cache_key_generator(const void* item);
+
+/**
+ * @brief tosdb cache key comparator
+ * @param item1 item1 to compare
+ * @param item2 item2 to compare
+ * @return 0 if item1 == item2, -1 if item1 < item2, 1 if item1 > item2
+ */
+int8_t tosdb_cache_key_comparator(const void* item1, const void* item2);
+
+/**
+ * @brief tosdb cache item key destroyer
+ * @param key key of item
+ * @param item item to destroy
+ * @return true if item is destroyed, false otherwise
+ */
 boolean_t tosdb_cache_item_key_destroyer(const void* key, const void* item);
 
 

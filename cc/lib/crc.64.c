@@ -1,4 +1,7 @@
-/*
+/**
+ * @file crc.64.c
+ * @brief CRC32 implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

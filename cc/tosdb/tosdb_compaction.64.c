@@ -85,7 +85,7 @@ boolean_t tosdb_database_compact(const tosdb_database_t* db, tosdb_compaction_ty
     while(tbl_iter->end_of_iterator(tbl_iter)) {
         const tosdb_table_t* tbl = tbl_iter->get_item(tbl_iter);
 
-        error = !tosdb_table_compact(tbl, type);
+        error |= !tosdb_table_compact(tbl, type);
 
         tbl_iter = tbl_iter->next(tbl_iter);
     }

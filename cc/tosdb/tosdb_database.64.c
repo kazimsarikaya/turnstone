@@ -211,6 +211,8 @@ tosdb_database_t* tosdb_database_create_or_open(tosdb_t* tdb, const char_t* name
     db->table_next_id = 1;
     db->tables = hashmap_string(128);
 
+    db->sequences = hashmap_string(128);
+
     hashmap_put(tdb->databases, name, db);
 
     hashmap_put(tdb->database_new, (void*)db->id, db);
@@ -233,6 +235,45 @@ boolean_t tosdb_database_close(tosdb_database_t* db) {
 
     if(db->is_open) {
         PRINTLOG(TOSDB, LOG_DEBUG, "database %s will be closed", db->name);
+
+        if(db->sequences) {
+            PRINTLOG(TOSDB, LOG_TRACE, "database %s sequences will be closed", db->name);
+            iterator_t* iter = hashmap_iterator_create(db->sequences);
+
+            if(!iter) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create sequence iterator");
+                error = true;
+            } else {
+                while(iter->end_of_iterator(iter) != 0) {
+                    tosdb_sequence_t* seq = (tosdb_sequence_t*)iter->get_item(iter);
+
+                    if(!seq->this_record->set_int64(seq->this_record, "next_value", seq->next_value)) {
+                        PRINTLOG(TOSDB, LOG_ERROR, "cannot set sequence %lli next value", seq->id);
+                        error = true;
+                    }
+
+                    if(!seq->this_record->upsert_record(seq->this_record)) {
+                        PRINTLOG(TOSDB, LOG_ERROR, "cannot upsert sequence %lli next value", seq->id);
+                        error = true;
+                    }
+
+                    seq->this_record->destroy(seq->this_record);
+
+
+                    lock_destroy(seq->lock);
+
+                    memory_free(seq);
+
+                    iter = iter->next(iter);
+                }
+
+                iter->destroy(iter);
+            }
+
+            hashmap_destroy(db->sequences);
+        } else {
+            PRINTLOG(TOSDB, LOG_TRACE, "database %s has no sequences", db->name);
+        }
 
         iterator_t* iter = hashmap_iterator_create(db->tables);
 

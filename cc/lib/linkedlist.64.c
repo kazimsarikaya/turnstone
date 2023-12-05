@@ -123,6 +123,8 @@ linkedlist_t* linkedlist_create_with_type(memory_heap_t* heap, linkedlist_type_t
                                           linkedlist_data_comparator_f comparator, indexer_t indexer){
     linkedlist_t* list;
 
+    heap = memory_get_heap(heap);
+
     list = memory_malloc_ext(heap, sizeof(linkedlist_t), 0x0);
 
     if(list == NULL) {
@@ -168,7 +170,7 @@ size_t linkedlist_size(const linkedlist_t* list){
     return list->item_count;
 }
 
-uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type){
+uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type_t type, linkedlist_item_destroyer_callback_f destroyer){
     if(list == NULL) {
         return 0;
     }
@@ -180,7 +182,11 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type
 
     while(item) {
         if(type == LINKEDLIST_DESTROY_WITH_DATA) {
-            memory_free_ext(heap, (void*)item->data);
+            if(destroyer) {
+                destroyer(heap, (void*)item->data);
+            } else {
+                memory_free_ext(heap, (void*)item->data);
+            }
         }
 
         linkedlist_item_t* n_li = item->next;

@@ -35,7 +35,7 @@ typedef struct efi_pmbr_chs_s {
     uint8_t head; ///< disk head
     uint8_t sector; ///< disk sector
     uint8_t cylinder; ///< disk cylinder
-}__attribute__((packed))  efi_pmbr_chs_t;  ///< short hand for struct
+}__attribute__((packed))  efi_pmbr_chs_t; ///< short hand for struct
 
 /*! special efi part named as protected efi part and its type is 0xEE */
 #define EFI_PMBR_PART_TYPE 0xEE
@@ -99,6 +99,8 @@ typedef struct efi_partition_entry_s {
 
 #define EFI_ACPI_TABLE_GUID                 { 0xeb9d2d30, 0x2d88, 0x11d3, {0x9a, 0x16, 0x0, 0x90, 0x27, 0x3f, 0xc1, 0x4d} }
 #define EFI_ACPI_20_TABLE_GUID              { 0x8868e871, 0xe4f1, 0x11d3, {0xbc, 0x22, 0x0, 0x80, 0xc7, 0x3c, 0x88, 0x81} }
+#define EFI_SMBIOS_2_TABLE_GUID             { 0xeb9d2d31, 0x2d88, 0x11d3, {0x9a, 0x16, 0x0, 0x90, 0x27, 0x3f, 0xc1, 0x4d} }
+#define EFI_SMBIOS_3_TABLE_GUID             { 0xf2fd1544, 0x9794, 0x4a2c, {0x99, 0x2e, 0xe5, 0xbb, 0xcf, 0x20, 0xe3, 0x94} }
 
 int8_t efi_create_guid(efi_guid_t* guid);
 int8_t efi_guid_equal(efi_guid_t guid1, efi_guid_t guid2);
@@ -378,7 +380,7 @@ typedef struct {
     int16_t  time_zone;
     uint8_t  day_light;
     uint8_t  padding2;
-} efi_time_t;
+}__attribute__((packed)) efi_time_t;
 
 typedef struct {
     uint32_t  resolution;

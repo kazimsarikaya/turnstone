@@ -12,6 +12,9 @@
 
 #include <types.h>
 
+/**
+ * @brief syscall handler.
+ */
 void syscall_handler(void);
 
 #endif /* !___CPU_SYSCALL_H */

@@ -1,4 +1,7 @@
-/*
+/**
+ * @file efi_disk.c
+ * @brief EFI disk image creator.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -22,12 +25,18 @@ typedef struct disk_file_context_t {
     uint64_t block_size;
 } disk_file_context_t;
 
-uint64_t disk_file_get_disk_size(const disk_or_partition_t* d);
-uint64_t disk_file_get_block_size(const disk_or_partition_t* d);
-int8_t   disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   disk_file_close(const disk_or_partition_t* d);
-disk_t*  disk_file_open(char_t* file_name, int64_t size);
+memory_heap_t* disk_file_get_heap(const disk_or_partition_t* d);
+uint64_t       disk_file_get_disk_size(const disk_or_partition_t* d);
+uint64_t       disk_file_get_block_size(const disk_or_partition_t* d);
+int8_t         disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t         disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t         disk_file_close(const disk_or_partition_t* d);
+disk_t*        disk_file_open(char_t* file_name, int64_t size);
+
+memory_heap_t* disk_file_get_heap(const disk_or_partition_t* d) {
+    UNUSED(d);
+    return memory_get_heap(NULL);
+}
 
 uint64_t disk_file_get_disk_size(const disk_or_partition_t* d){
     disk_file_context_t* ctx = (disk_file_context_t*)d->context;
@@ -110,6 +119,7 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
     }
 
     d->disk.context = ctx;
+    d->disk.get_heap = disk_file_get_heap;
     d->disk.get_size = disk_file_get_disk_size;
     d->disk.get_block_size = disk_file_get_block_size;
     d->disk.write = disk_file_write;

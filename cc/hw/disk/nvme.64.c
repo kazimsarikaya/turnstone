@@ -1,6 +1,6 @@
 /**
- * @file nvme.h
- * @brief nvme interface
+ * @file nvme.64.c
+ * @brief nvme driver.
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
@@ -22,7 +22,7 @@ MODULE("turnstone.kernel.hw.drivers");
 hashmap_t* nvme_disks = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
 
-int8_t   nvme_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   nvme_isr(interrupt_frame_ext_t* frame);
 int8_t   nvme_format(nvme_disk_t* nvme_disk);
 int8_t   nvme_identify(nvme_disk_t* nvme_disk, uint32_t cns, uint32_t nsid, uint64_t data_address);
 int8_t   nvme_enable_cache(nvme_disk_t* nvme_disk);
@@ -49,8 +49,10 @@ const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id) {
     return hashmap_get(nvme_disks, (void*)disk_id);
 }
 
-int8_t nvme_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t nvme_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
+    intnum -= 0x20;
+
     PRINTLOG(NVME, LOG_TRACE, "nvme isr %i", intnum);
     nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disk_isr_map, (void*)(uint64_t)intnum);
 
@@ -716,7 +718,7 @@ future_t nvme_flush(uint64_t disk_id) {
 
     lock_t lock = lock_create_with_heap_for_future(nvme_disk->heap, true);
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
-    future_t fut = future_create(lock);
+    future_t fut = future_create_with_heap_and_data(nvme_disk->heap, lock, NULL);
 
     nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;

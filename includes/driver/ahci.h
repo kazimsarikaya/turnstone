@@ -449,14 +449,14 @@ typedef struct ahci_ata_ncq_error_log_s {
 }__attribute__((packed)) ahci_ata_ncq_error_log_t;
 
 typedef enum ahci_fis_type_e {
-    AHCI_FIS_TYPE_REG_H2D    = 0x27,///< Register FIS - host to device
-    AHCI_FIS_TYPE_REG_D2H    = 0x34,///< Register FIS - device to host
-    AHCI_FIS_TYPE_DMA_ACT    = 0x39,///< DMA activate FIS - device to host
-    AHCI_FIS_TYPE_DMA_SETUP  = 0x41,///< DMA setup FIS - bidirectional
-    AHCI_FIS_TYPE_DATA       = 0x46,///< Data FIS - bidirectional
-    AHCI_FIS_TYPE_BIST       = 0x58,///< BIST activate FIS - bidirectional
-    AHCI_FIS_TYPE_PIO_SETUP  = 0x5F,///< PIO setup FIS - device to host
-    AHCI_FIS_TYPE_DEV_BITS   = 0xA1,///< Set device bits FIS - device to host
+    AHCI_FIS_TYPE_REG_H2D    = 0x27, ///< Register FIS - host to device
+    AHCI_FIS_TYPE_REG_D2H    = 0x34, ///< Register FIS - device to host
+    AHCI_FIS_TYPE_DMA_ACT    = 0x39, ///< DMA activate FIS - device to host
+    AHCI_FIS_TYPE_DMA_SETUP  = 0x41, ///< DMA setup FIS - bidirectional
+    AHCI_FIS_TYPE_DATA       = 0x46, ///< Data FIS - bidirectional
+    AHCI_FIS_TYPE_BIST       = 0x58, ///< BIST activate FIS - bidirectional
+    AHCI_FIS_TYPE_PIO_SETUP  = 0x5F, ///< PIO setup FIS - device to host
+    AHCI_FIS_TYPE_DEV_BITS   = 0xA1, ///< Set device bits FIS - device to host
 } ahci_fis_type_t;
 
 typedef enum ahci_device_type_e {
@@ -661,6 +661,7 @@ typedef union ahci_ata_smart_u {
 } ahci_ata_smart_t;
 
 typedef struct ahci_sata_disk_s {
+    memory_heap_t*     heap;
     uint64_t           disk_id;
     ahci_device_type_t type;
     uint64_t           port_address;
@@ -705,6 +706,7 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 future_t ahci_flush(uint64_t disk_id);
 
 const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id);
+const ahci_sata_disk_t* ahci_get_first_inserted_disk(void);
 disk_t*                 ahci_disk_impl_open(ahci_sata_disk_t* sata_disk);
 
 #endif

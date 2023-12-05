@@ -6,13 +6,13 @@ Boot Loader  {#bootloader}
 
 The system can be booted from disk or over network (**PXE**). The booting process will be managed by UEFI BIOS. Disk or network boot has a small difference how to load **Turnstone OS** kernel into memory and execute it. 
 
-If system is booted from disk, disk should have a **GPT** partition map, and a minimum 2 partitions. First partitiion is **ESP** partition which is a **FAT32** formattted. Second partition is a raw partition and its content is only Turnstone OS kernel. For simplicity Turnstone OS has an utility which creates a sparse file with size 1GiB and create gpt partition map and required partitions. Formats first partition as FAT32 and creates required directories and puts **EFI Application** inside it. And also create kernel partition and puts kernel contents into that partition. 
+If system is booted from disk, disk should have a **GPT** partition map, and a minimum 2 partitions. First partitiion is **ESP** partition which is a **FAT32** formattted. Second partition is a **TOSDB** partition. For simplicity Turnstone OS has an utility which creates a sparse file with size 1GiB and create gpt partition map and required partitions. Formats first partition as FAT32 and creates required directories and puts **EFI Application** inside it. And also create a partition for TOSDB. TOSDB contains all system and extra databases. Turnstone os don't have a classic file system. All data is inside a database.
 
 If system is booted from network with pxe, the EFI application is loaded by PXE firmaware. It's the same EFI application as disk boot. 
 
 The EFI application detects how itself loaded into the memory, such as disk or network. Then it loads kernel from disk partition or network via tftp client.
 
-Kernel is compressed with @ref zpack. EFI application decompress kernel and puts kenrel at physical address starting with 2mib. Then relinks kernel for that positition with identity mapping.
+For detailed information about TOSDB, please read related documentation at @ref tosdb.
 
 
 ## Deep Dive
@@ -37,5 +37,10 @@ Now, we are at out Tunstone OS EFI application. What will we do? Load kernel and
 efi_status_t efi_is_pxe_boot(boolean_t* result);
 ```
 
-handles this. This function looks EFI global variable BootCurrent. This variables gives the current boot order with format BootXXXX. Then we look for that variable's content. This variable's content is a EFI path. Traverse path and search messaging path type and mac messaging sub type. If we found MAC in the path, that means EFI application booted over network with PXE, otherwise from disk. 
+handles this. This function looks EFI global variable BootCurrent. This variables gives the current boot order with format BootXXXX. Then we look for that variable's content. This variable's content is a EFI path. Traverse path and search messaging path type and mac messaging sub type. If we found MAC in the path, that means EFI application booted over network with PXE, otherwise from disk.
 
+If boot is over PXE, then we gather tosdb from network, otherwise we seek disks for tosdb partition. Then we open our database. Database contains kernel parameters for linking such as entry point, stack and heap sizes. Then we start linking process. Linker uses tosdb to find required modules for kernel and links them. 
+
+After linking done, bootloader prepares several information for kernel. They are video frame buffer, memory map, kernel default heap and stack locations. These process also generates a page table for kernel. Hence we never uses EFI provided page table. 
+
+Then bootloader exists EFI system, and jumps into kernel.

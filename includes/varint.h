@@ -1,6 +1,6 @@
 /**
- * @file utils.h
- * @brief util functions and macros
+ * @file varint.h
+ * @brief Variable length integer encoding/decoding header.
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.

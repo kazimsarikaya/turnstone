@@ -1,4 +1,7 @@
-/*
+/**
+ * @file time.64.c
+ * @brief Date and time library.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -36,7 +39,7 @@ time_t time_ns(time_t* t) {
 boolean_t     time_is_leap(int64_t year);
 timeparsed_t* parse_time(timeparsed_t* tp, time_t t);
 
-int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+const int32_t time_days_of_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 boolean_t time_is_leap(int64_t year) {
     return year % 400 == 0 || (year % 4 == 0  && year % 100 != 0);
@@ -135,7 +138,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
 }
 
 time_t timeparsed_to_time(timeparsed_t* tp) {
-    time_t t;
+    time_t t = 0;
 
     t = tp->seconds;
     t += tp->minutes * TIME_SECONDS_OF_MINUTE;

@@ -1,5 +1,5 @@
 /**
- * @file tosdb_sstable.64.c
+ * @file tosdb_sstable_get.64.c
  * @brief tosdb sstable interface implementation
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -67,7 +67,7 @@ int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id){
     tosdb_record_context_t* ctx = record->context;
 
-    compression_t* compression = ctx->table->db->tdb->compression;
+    const compression_t* compression = ctx->table->db->tdb->compression;
 
     uint64_t idx_loc = 0;
     uint64_t idx_size = 0;
@@ -93,6 +93,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     bloomfilter_t* bf = NULL;
     uint64_t index_data_size = 0;
     uint64_t index_data_location = 0;
+    uint64_t record_count = 0;
 
     tosdb_cached_bloomfilter_t* c_bf = NULL;
 
@@ -123,6 +124,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
             return false;
         }
+
+        record_count = st_idx->record_count;
 
         uint8_t* st_idx_data = &st_idx->data[0];
 
@@ -219,7 +222,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             c_bf->first_key = first;
             c_bf->last_key = last;
 
-            c_bf->cache_key.data_size = sizeof(tosdb_cached_bloomfilter_t) + st_idx->bloomfilter_unpacked_size + first_key_length + last_key_length + 64; //near size
+            c_bf->cache_key.data_size = sizeof(tosdb_cached_bloomfilter_t) + st_idx->bloomfilter_unpacked_size + first_key_length + last_key_length + 64; // near size
 
             tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_bf);
         }
@@ -282,7 +285,6 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     }
 
     tosdb_memtable_index_item_t** st_idx_items = NULL;
-    uint64_t record_count = 0;
     uint64_t valuelog_location = 0;
     uint64_t valuelog_size = 0;
     uint8_t* idx_data = NULL;
@@ -303,7 +305,6 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         valuelog_location = c_id->valuelog_location;
         valuelog_size = c_id->valuelog_size;
     } else {
-        record_count = sli->record_count;
         valuelog_location = sli->valuelog_location;
         valuelog_size = sli->valuelog_size;
 
@@ -315,6 +316,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             return false;
 
         }
+
+        record_count = b_sid->record_count;
 
         buffer_t* buf_idx_in = buffer_encapsulate(b_sid->data, b_sid->index_data_size);
         buffer_t* buf_idx_out = buffer_new_with_capacity(NULL, b_sid->index_data_unpacked_size);
@@ -348,7 +351,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
             return false;
         }
 
-        for(uint64_t i = 0; i < sli->record_count; i++) {
+        for(uint64_t i = 0; i < record_count; i++) {
             st_idx_items[i] = (tosdb_memtable_index_item_t*)idx_data;
 
             if(!st_idx_items[i]) {
@@ -384,10 +387,10 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         }
     }
 
-    PRINTLOG(TOSDB, LOG_TRACE, "index data read, record count: 0x%llx 0x%llx", record_count, sli->record_count);
+    PRINTLOG(TOSDB, LOG_TRACE, "index data read, record count: 0x%llx 0x%llx", record_count, record_count);
 
     tosdb_memtable_index_item_t** t_found_item = (tosdb_memtable_index_item_t**)binarysearch(st_idx_items,
-                                                                                             sli->record_count,
+                                                                                             record_count,
                                                                                              sizeof(tosdb_memtable_index_item_t*),
                                                                                              &item,
                                                                                              tosdb_sstable_index_comparator);
@@ -413,6 +416,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         return false;
     }
 
+    ctx->record_id = found_item->record_id;
+
     if(found_item->is_deleted) {
         if(!tdb_cache) {
             memory_free(st_idx_items);
@@ -422,6 +427,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         ctx->is_deleted = true;
         ctx->level = sli->level;
         ctx->sstable_id = sli->sstable_id;
+        ctx->record_id = found_item->record_id;
 
         return true;
     }
@@ -551,6 +557,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 
     ctx->level = sli->level;
     ctx->sstable_id = sli->sstable_id;
+    ctx->record_id = found_item->record_id;
 
     data_free(r_d);
 

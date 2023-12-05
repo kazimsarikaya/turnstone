@@ -1,4 +1,7 @@
-/*
+/**
+ * @file future.64.c
+ * @brief Future implementation for 64-bit systems.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

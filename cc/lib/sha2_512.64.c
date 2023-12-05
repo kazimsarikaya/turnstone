@@ -1,4 +1,7 @@
-/*
+/**
+ * @file sha2_512.64.c
+ * @brief SHA-512 hash implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

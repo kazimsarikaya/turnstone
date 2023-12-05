@@ -1,4 +1,7 @@
-/*
+/**
+ * @file pxeconfgen.c
+ * @brief PXE configuration generator
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

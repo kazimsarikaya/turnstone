@@ -89,3 +89,45 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_USB,
     LOG_LEVEL_COMPRESSION,
 };
+
+extern boolean_t windowmanager_initialized;
+
+void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, uint64_t line_no, const char_t* format, ...) {
+    if(!LOG_NEED_LOG(module, level)) {
+        return;
+    }
+
+    buffer_t* buffer_error = buffer_get_io_buffer(BUFFER_IO_ERROR);
+    boolean_t using_tmp_printf_buffer = false;
+
+    if(!buffer_error) {
+        buffer_error = buffer_get_tmp_buffer_for_printf();
+
+        using_tmp_printf_buffer = true;
+    }
+
+    uint64_t buffer_old_position = buffer_get_length(buffer_error);
+
+    if(LOG_LOCATION) {
+        buffer_printf(buffer_error, "%s:%lli:", file_name, line_no);
+    }
+
+    buffer_printf(buffer_error, "%s:%s:", logging_module_names[module], logging_level_names[level]);
+
+    va_list args;
+    va_start(args, format);
+
+    buffer_vprintf(buffer_error, format, args);
+
+    va_end(args);
+
+    buffer_printf(buffer_error, "\n");
+
+    if(!windowmanager_initialized) {
+        stdbufs_flush_buffer(buffer_error, buffer_old_position);
+    }
+
+    if(using_tmp_printf_buffer) {
+        buffer_reset_tmp_buffer_for_printf();
+    }
+}

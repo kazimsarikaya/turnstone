@@ -48,6 +48,8 @@ void buffer_reset_tmp_buffer_for_printf(void) {
 }
 
 buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
+    heap = memory_get_heap(heap);
+
     buffer_t* buffer = memory_malloc_ext(heap, sizeof(buffer_t), 0);
 
     if(buffer == NULL) {
@@ -64,12 +66,20 @@ buffer_t* buffer_new_with_capacity(memory_heap_t* heap, uint64_t capacity) {
     buffer->data = memory_malloc_ext(buffer->heap, buffer->capacity, 0);
 
     if(buffer->data == NULL) {
-        memory_free(buffer);
+        memory_free_ext(heap, buffer);
 
         return NULL;
     }
 
     return buffer;
+}
+
+memory_heap_t* buffer_get_heap(buffer_t* buffer) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    return buffer->heap;
 }
 
 buffer_t* buffer_encapsulate(uint8_t* data, uint64_t length) {
@@ -131,11 +141,6 @@ uint64_t buffer_get_capacity(buffer_t* buffer) {
     return buffer->capacity;
 };
 
-buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data) {
-    uint8_t tmp[] = {data};
-    return buffer_append_bytes(buffer, tmp, 1);
-}
-
 uint64_t buffer_get_position(buffer_t* buffer) {
     if(!buffer) {
         return 0;
@@ -144,17 +149,7 @@ uint64_t buffer_get_position(buffer_t* buffer) {
     return buffer->position;
 };
 
-buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) {
-    if(!buffer) {
-        return NULL;
-    }
-
-    if(buffer->readonly) {
-        return NULL;
-    }
-
-    lock_acquire(buffer->lock);
-
+static boolean_t buffer_resize_if_need(buffer_t* buffer, uint64_t length) {
     uint64_t new_cap = buffer->capacity;
 
     while(buffer->position + length > new_cap) {
@@ -169,16 +164,63 @@ buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) 
         uint8_t* tmp_data = memory_malloc_ext(buffer->heap, new_cap, 0);
 
         if(tmp_data == NULL) {
-            lock_release(buffer->lock);
-
-            return NULL;
+            return false;
         }
 
         buffer->capacity = new_cap;
 
         memory_memcopy(buffer->data, tmp_data, buffer->length);
-        memory_free(buffer->data);
+        memory_free_ext(buffer->heap, buffer->data);
         buffer->data = tmp_data;
+    }
+
+    return true;
+}
+
+buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    if(buffer->readonly) {
+        return NULL;
+    }
+
+    lock_acquire(buffer->lock);
+
+    if(!buffer_resize_if_need(buffer, 1)) {
+        lock_release(buffer->lock);
+
+        return NULL;
+    }
+
+    buffer->data[buffer->position] = data;
+    buffer->position++;
+
+    if(buffer->length < buffer->position) {
+        buffer->length = buffer->position;
+    }
+
+    lock_release(buffer->lock);
+
+    return buffer;
+}
+
+buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    if(buffer->readonly) {
+        return NULL;
+    }
+
+    lock_acquire(buffer->lock);
+
+    if(!buffer_resize_if_need(buffer, length)) {
+        lock_release(buffer->lock);
+
+        return NULL;
     }
 
     memory_memcopy(data, buffer->data + buffer->position, length);

@@ -234,7 +234,16 @@ extern uint8_t logging_module_levels[];
 /*! logs fellowing block */
 #define LOGBLOCK(M, L) if(LOG_NEED_LOG(M, L))
 
-extern boolean_t windowmanager_initialized;
+/**
+ * @brief kernel logging function
+ * @param[in] module module name @sa logging_modules_e
+ * @param[in] level log level @sa logging_level_e
+ * @param[in] line_no line number
+ * @param[in] file_name file name
+ * @param[in] format format string
+ * @param[in] ... arguments for format in msg
+ */
+void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, uint64_t line_no, const char_t* format, ...) __attribute__((format(printf, 5, 6)));
 
 /**
  * @brief kernel logging macro
@@ -244,17 +253,7 @@ extern boolean_t windowmanager_initialized;
  * @param[in] ... arguments for format in msg
  */
 #define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
-            buffer_t* buffer_error = buffer_get_io_buffer(BUFFER_IO_ERROR); \
-            boolean_t using_tmp_printf_buffer = false; \
-            if(buffer_error == NULL) { \
-                buffer_error = buffer_get_tmp_buffer_for_printf(); \
-                using_tmp_printf_buffer = true; \
-            } \
-            uint64_t buffer_old_position = buffer_get_length(buffer_error); \
-            if(LOG_LOCATION) { buffer_printf(buffer_error, "%s:%i:%s:%s: " msg "\n", __FILE__, __LINE__, logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
-            else {buffer_printf(buffer_error, "%s:%s: " msg "\n", logging_module_names[M], logging_level_names[L], ## __VA_ARGS__); } \
-            if(!windowmanager_initialized) {stdbufs_flush_buffer(buffer_error, buffer_old_position);} \
-            if(using_tmp_printf_buffer) { buffer_reset_tmp_buffer_for_printf(); } \
+            logging_printlog(M, L, __FILE__, __LINE__, msg, ## __VA_ARGS__); \
 }
 
 

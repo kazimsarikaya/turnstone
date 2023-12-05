@@ -1,5 +1,5 @@
 /**
- * @file binarsearch.h
+ * @file binarysearch.h
  * @brief binarysearch interface
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -7,6 +7,7 @@
  */
 
 #ifndef ___BINARYSEARCH_H
+/*! macro for avoiding multiple inclusion */
 #define ___BINARYSEARCH_H 0
 
 #include <types.h>
@@ -25,7 +26,7 @@ typedef int8_t (*binarysearch_comparator_f)(const void* item1, const void* item2
  * @param[in] size list size
  * @param[in] item_size each item size in list
  * @param[in] key to search
- * @param[in] cmp binarsearch comparator \ref binarsearch_comparator_f
+ * @param[in] cmp binarsearch comparator @ref binarysearch_comparator_f
  * @return found item or null
  */
 void* binarysearch(void* list, uint64_t size, uint64_t item_size, void* key, binarysearch_comparator_f cmp);

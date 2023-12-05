@@ -1,4 +1,7 @@
-/*
+/**
+ * @file network_virtio.64.c
+ * @brief Virtio network driver.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -25,11 +28,11 @@ MODULE("turnstone.kernel.hw.network.virtnet");
 
 linkedlist_t* virtio_net_devs = NULL;
 
-int8_t   network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t   network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t   network_virtio_ctrl_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t   network_virtio_config_isr(interrupt_frame_t* frame, uint8_t intnum);
-int8_t   network_virtio_combined_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t   network_virtio_rx_isr(interrupt_frame_ext_t* frame);
+int8_t   network_virtio_tx_isr(interrupt_frame_ext_t* frame);
+int8_t   network_virtio_ctrl_isr(interrupt_frame_ext_t* frame);
+int8_t   network_virtio_config_isr(interrupt_frame_ext_t* frame);
+int8_t   network_virtio_combined_isr(interrupt_frame_ext_t* frame);
 int8_t   network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_t* vdev, virtio_queue_ext_t* vq_tx, virtio_queue_avail_t* avail, virtio_queue_descriptor_t* descs);
 int8_t   network_virtio_process_tx(void);
 int32_t  network_virtio_process_rx(uint64_t args_cnt, void** args);
@@ -228,8 +231,8 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
     return 0;
 }
 
-int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t network_virtio_rx_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet received int 0x%02x", intnum);
 
@@ -249,8 +252,8 @@ int8_t network_virtio_rx_isr(interrupt_frame_t* frame, uint8_t intnum) {
     return 0;
 }
 
-int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t network_virtio_tx_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet sended int 0x%02x", intnum);
 
@@ -262,8 +265,8 @@ int8_t network_virtio_tx_isr(interrupt_frame_t* frame, uint8_t intnum) {
     return 0;
 }
 
-int8_t network_virtio_ctrl_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t network_virtio_ctrl_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "control int 0x%02x", intnum);
 
@@ -272,16 +275,16 @@ int8_t network_virtio_ctrl_isr(interrupt_frame_t* frame, uint8_t intnum) {
     return 0;
 }
 
-int8_t network_virtio_config_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t network_virtio_config_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "config int 0x%02x", intnum);
 
     return -1;
 }
 
-int8_t network_virtio_combined_isr(interrupt_frame_t* frame, uint8_t intnum) {
-    UNUSED(frame);
+int8_t network_virtio_combined_isr(interrupt_frame_ext_t* frame) {
+    uint8_t intnum = frame->interrupt_number;
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "combined int 0x%02x", intnum);
 
@@ -466,7 +469,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 
     vdev->queues = memory_malloc(sizeof(virtio_queue_ext_t) * vdev->max_vq_count);
 
-    //TODO create only one rx,tx queue
+    // TODO create only one rx,tx queue
 
     if(virtio_create_queue(vdev, 0, VIRTIO_NETWORK_QUEUE_ITEM_LENGTH, 1, 0, &network_rx_tx_queue_item_builder, &network_virtio_rx_isr, &network_virtio_combined_isr) != 0) {
         PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create rx queue");

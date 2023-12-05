@@ -1,4 +1,7 @@
-/*
+/**
+ * @file disk.h
+ * @brief Disk header.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -8,6 +11,8 @@
 
 #include <types.h>
 #include <iterator.h>
+
+typedef struct memory_heap_t memory_heap_t;
 
 typedef void * disk_context_t;
 typedef struct disk_partition_context_t {
@@ -20,15 +25,17 @@ typedef struct disk_t              disk_t;
 typedef struct disk_partition_t    disk_partition_t;
 typedef struct disk_or_partition_t disk_or_partition_t;
 
-typedef uint64_t (*disk_or_partition_get_size_f)(const disk_or_partition_t* dp);
-typedef uint64_t (*disk_or_partition_get_block_size_f)(const disk_or_partition_t* dp);
-typedef int8_t   (*disk_or_partition_write_f)(const disk_or_partition_t* dp, uint64_t lba, uint64_t count, uint8_t* data);
-typedef int8_t   (*disk_or_partition_read_f)(const disk_or_partition_t* dp, uint64_t lba, uint64_t count, uint8_t** data);
-typedef int8_t   (*disk_or_partition_flush_f)(const disk_or_partition_t* dp);
-typedef int8_t   (*disk_or_partition_close_f)(const disk_or_partition_t* dp);
+typedef memory_heap_t * (*disk_get_heap_f)(const disk_or_partition_t* dp);
+typedef uint64_t      (*disk_or_partition_get_size_f)(const disk_or_partition_t* dp);
+typedef uint64_t      (*disk_or_partition_get_block_size_f)(const disk_or_partition_t* dp);
+typedef int8_t        (*disk_or_partition_write_f)(const disk_or_partition_t* dp, uint64_t lba, uint64_t count, uint8_t* data);
+typedef int8_t        (*disk_or_partition_read_f)(const disk_or_partition_t* dp, uint64_t lba, uint64_t count, uint8_t** data);
+typedef int8_t        (*disk_or_partition_flush_f)(const disk_or_partition_t* dp);
+typedef int8_t        (*disk_or_partition_close_f)(const disk_or_partition_t* dp);
 
 struct disk_or_partition_t {
     disk_context_t                     context;
+    disk_get_heap_f                    get_heap;
     disk_or_partition_get_size_f       get_size;
     disk_or_partition_get_block_size_f get_block_size;
     disk_or_partition_write_f          write;

@@ -13,6 +13,49 @@
 
 MODULE("turnstone.kernel.db");
 
+
+const tosdb_column_t* tosdb_table_get_column_by_index_id(tosdb_table_t* tbl, uint64_t id) {
+    if(!tbl || !tbl->columns || !tbl->indexes) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table/coumns/indexes is null");
+
+        return NULL;
+    }
+
+    tosdb_index_t* idx = (tosdb_index_t*)hashmap_get(tbl->indexes, (void*)id);
+
+    if(!idx) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot find index with id %lli", id);
+
+        return NULL;
+    }
+
+    iterator_t* it = hashmap_iterator_create(tbl->columns);
+
+    if(!it) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator for columns");
+
+        return NULL;
+    }
+
+    const tosdb_column_t* col = NULL;
+
+    while(it->end_of_iterator(it) != 0) {
+        const tosdb_column_t* t_col = (const tosdb_column_t*)it->get_item(it);
+
+        if(idx->column_id == t_col->id) {
+            col = t_col;
+
+            break;
+        }
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+
+    return col;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
@@ -121,6 +164,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
     }
 
     tbl->indexes = hashmap_integer(128);
+    tbl->index_column_map = hashmap_integer(128);
 
     if(!tbl->indexes) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create index map for table %s", tbl->name);
@@ -161,6 +205,7 @@ boolean_t tosdb_table_load_indexes(tosdb_table_t* tbl) {
             idx->column_id = idx_list->indexes[i].column_id;
 
             hashmap_put(tbl->indexes, (void*)idx->id, idx);
+            hashmap_put(tbl->index_column_map, (void*)idx->column_id, idx);
         }
 
 
@@ -395,6 +440,7 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
 
     tbl->index_next_id = 1;
     tbl->indexes = hashmap_integer(128);
+    tbl->index_column_map = hashmap_integer(128);
 
     tbl->memtable_next_id = 1;
 
@@ -430,6 +476,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             if(!tosdb_table_persist(tbl)) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot persist table %s", tbl->name);
                 error = true;
+            } else {
+                PRINTLOG(TOSDB, LOG_DEBUG, "table %s persisted", tbl->name);
             }
         }
 
@@ -456,6 +504,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         hashmap_destroy(tbl->columns);
         tbl->columns = NULL;
 
+        PRINTLOG(TOSDB, LOG_TRACE, "columns of table %s destroyed", tbl->name);
+
         iter = hashmap_iterator_create(tbl->indexes);
 
         if(!iter) {
@@ -475,7 +525,11 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         iter->destroy(iter);
 
         hashmap_destroy(tbl->indexes);
+        hashmap_destroy(tbl->index_column_map);
         tbl->indexes = NULL;
+        tbl->index_column_map = NULL;
+
+        PRINTLOG(TOSDB, LOG_TRACE, "indexes of table %s destroyed", tbl->name);
 
         if(tbl->memtables) {
             iter = linkedlist_iterator_create(tbl->memtables);
@@ -503,6 +557,8 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             tbl->current_memtable = NULL;
         }
 
+        PRINTLOG(TOSDB, LOG_TRACE, "memtables of table %s destroyed", tbl->name);
+
         if(tbl->sstable_levels) {
             iterator_t* stl_iter = hashmap_iterator_create(tbl->sstable_levels);
 
@@ -525,6 +581,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             hashmap_destroy(tbl->sstable_levels);
             tbl->sstable_levels = NULL;
 
+            PRINTLOG(TOSDB, LOG_TRACE, "sstable levels of table %s destroyed", tbl->name);
         }
 
         tbl->is_open = false;
@@ -590,6 +647,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
         }
 
         hashmap_destroy(tbl->indexes);
+        hashmap_destroy(tbl->index_column_map);
     }
 
     if(tbl->memtables) {
@@ -1029,6 +1087,7 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, to
     tbl->index_new_count++;
 
     hashmap_put(tbl->indexes, (void*)idx->id, idx);
+    hashmap_put(tbl->index_column_map, (void*)idx->column_id, idx);
     linkedlist_list_insert(tbl->index_new, idx);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "index %lli for column %s is added to table %s", idx->id, colname, tbl->name);

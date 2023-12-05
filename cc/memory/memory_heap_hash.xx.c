@@ -1,4 +1,4 @@
-/*
+/**
  * @file memory_heap_hash.xx.c
  * @brief Turnstone OS memory heap with hash table implementation.
  *
@@ -16,6 +16,9 @@
 #if ___TESTMODE == 1
 #include <valgrind.h>
 #include <memcheck.h>
+#endif
+#if ___KERNELBUILD == 1
+#include <backtrace.h>
 #endif
 
 MODULE("turnstone.lib.memory");
@@ -82,6 +85,11 @@ static inline memory_heap_hash_pool_t* memory_heap_hash_pool_get(memory_heap_has
 static inline memory_heap_hash_pool_t* memory_heap_hash_find_pool_by_address(memory_heap_hash_metadata_t * metadata, uint64_t address) {
     for(uint16_t i = 0; i < metadata->pool_count; i++) {
         memory_heap_hash_pool_t* pool = memory_heap_hash_pool_get(metadata, i);
+
+        if(!pool) {
+            continue;
+        }
+
         uint32_t relative_address = address - pool->pool_base;
 
         if(pool->last_address <= relative_address && relative_address < pool->pool_base + pool->pool_size) {
@@ -153,13 +161,17 @@ static inline void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_m
     for(uint16_t pool_id = 0; pool_id < metadata->pool_count; pool_id++) {
         memory_heap_hash_pool_t* pool = memory_heap_hash_pool_get(metadata, pool_id);
 
+        if(!pool) {
+            continue;
+        }
+
         uint32_t free_list = pool->free_list;
         memory_heap_hash_block_t* prev_free_list_node = NULL;
 
-        //PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from free list");
+        // PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from free list");
 
         while(free_list) {
-            //PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from free list 0x%x", free_list);
+            // PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from free list 0x%x", free_list);
             memory_heap_hash_block_t* free_node = memory_heap_hash_pool_get_hash_block(pool, free_list);
 
             /*if(!free_node) {
@@ -167,10 +179,10 @@ static inline void* memory_heap_hash_try_alloc_from_free_list(memory_heap_hash_m
                 continue;
                }*/
 
-            //PRINTLOG(HEAP_HASH, LOG_TRACE, "found free node 0x%x address 0x%x size 0x%x", free_list, free_node->address, free_node->size);
+            // PRINTLOG(HEAP_HASH, LOG_TRACE, "found free node 0x%x address 0x%x size 0x%x", free_list, free_node->address, free_node->size);
 
             if(free_node->size == size && !(free_node->address % alignment)) {
-                //PRINTLOG(HEAP_HASH, LOG_TRACE, "found free node 0x%x address 0x%x size 0x%x", free_list, free_node->address, free_node->size);
+                // PRINTLOG(HEAP_HASH, LOG_TRACE, "found free node 0x%x address 0x%x size 0x%x", free_list, free_node->address, free_node->size);
 
                 uint32_t next_free_list = free_node->next;
 
@@ -284,7 +296,7 @@ static inline void memory_heap_hash_pool_insert_sorted_at_free_list(memory_heap_
         return;
     }
 
-    //PRINTLOG(HEAP_HASH, LOG_TRACE, "free list start %x hash_block_address %x", pool->free_list, hash_block_address);
+    // PRINTLOG(HEAP_HASH, LOG_TRACE, "free list start %x hash_block_address %x", pool->free_list, hash_block_address);
 
     memory_heap_hash_block_t* free_list_node = memory_heap_hash_pool_get_hash_block(pool, pool->free_list);
 
@@ -303,7 +315,7 @@ static inline void memory_heap_hash_pool_insert_sorted_at_free_list(memory_heap_
         }
 
         prev_free_list_node = free_list_node;
-        //PRINTLOG(HEAP_HASH, LOG_TRACE, "next free list node %x", free_list_node->next);
+        // PRINTLOG(HEAP_HASH, LOG_TRACE, "next free list node %x", free_list_node->next);
 
         if(!free_list_node->next) {
             free_list_node = NULL;
@@ -315,7 +327,7 @@ static inline void memory_heap_hash_pool_insert_sorted_at_free_list(memory_heap_
     }
 
     hash_block->next = free_list_node ? (uint32_t)((uint64_t)free_list_node - pool->pool_base) : 0;
-    //PRINTLOG(HEAP_HASH, LOG_TRACE, "hash block next %x", hash_block->next);
+    // PRINTLOG(HEAP_HASH, LOG_TRACE, "hash block next %x", hash_block->next);
 
     if(prev_free_list_node) {
         prev_free_list_node->next = hash_block_address;
@@ -323,7 +335,7 @@ static inline void memory_heap_hash_pool_insert_sorted_at_free_list(memory_heap_
         pool->free_list = hash_block_address;
     }
 
-    //PRINTLOG(HEAP_HASH, LOG_TRACE, "inserted hash block 0x%x at free list 0x%x", hash_block_address, pool->free_list);
+    // PRINTLOG(HEAP_HASH, LOG_TRACE, "inserted hash block 0x%x at free list 0x%x", hash_block_address, pool->free_list);
 }
 
 void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t alignment) {
@@ -345,7 +357,7 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
         alignment = 16;
     }
 
-    //PRINTLOG(HEAP_HASH, LOG_TRACE, "fixed malloc size 0x%llx alignment 0x%llx", size, alignment);
+    // PRINTLOG(HEAP_HASH, LOG_TRACE, "fixed malloc size 0x%llx alignment 0x%llx", size, alignment);
 
     // look at fast classes if alignment is 16
     if(alignment == 16) {
@@ -369,7 +381,7 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
         memory_heap_hash_pool_t* pool = memory_heap_hash_pool_get(metadata, pool_id);
 
         if(pool->last_address < size) {
-            //PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than size 0x%llx", pool_id, pool->last_address, size);
+            // PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than size 0x%llx", pool_id, pool->last_address, size);
 
             continue;
         }
@@ -377,7 +389,7 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
         uint32_t last_address = pool->last_address - size;
 
         if(last_address <= pool->segment_end) {
-            //PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than segment end 0x%x", pool_id, last_address, pool->segment_end);
+            // PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than segment end 0x%x", pool_id, last_address, pool->segment_end);
 
             continue;
         }
@@ -386,7 +398,7 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
             uint32_t back = last_address % alignment + pool->pool_base % alignment;
 
             if(back > last_address) {
-                //PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than alignment 0x%llx", pool_id, last_address, alignment);
+                // PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than alignment 0x%llx", pool_id, last_address, alignment);
 
                 continue;
             }
@@ -395,19 +407,19 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
         }
 
         if(last_address <= pool->segment_end) {
-            //PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than segment end 0x%x", pool_id, last_address, pool->segment_end);
+            // PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than segment end 0x%x", pool_id, last_address, pool->segment_end);
 
             continue;
         }
 
-        //PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from end of heap with address 0x%x", last_address);
+        // PRINTLOG(HEAP_HASH, LOG_TRACE, "try to allocate from end of heap with address 0x%x", last_address);
 
         uint32_t remaining_size = pool->last_address - (last_address + size);
 
         if(remaining_size) {
             uint32_t remaining_address = last_address + size;
 
-            //PRINTLOG(HEAP_HASH, LOG_TRACE, "remaining found. splitting address 0x%x remaining 0x%x", remaining_address, remaining_size);
+            // PRINTLOG(HEAP_HASH, LOG_TRACE, "remaining found. splitting address 0x%x remaining 0x%x", remaining_address, remaining_size);
 
             uint64_t real_remaining_address = pool->pool_base + remaining_address;
 
@@ -499,7 +511,11 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     memory_heap_hash_pool_t* pool = memory_heap_hash_find_pool_by_address(metadata, req_address);
 
     if(!pool) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address out of heap range");
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p out of heap range. heap task 0x%llx", ptr, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }
@@ -511,23 +527,31 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
     memory_heap_hash_block_t* hash_block = memory_heap_hash_pool_search_hash_block(metadata, pool, rel_address);
 
     if(!hash_block) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address not found");
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p not found. heap task 0x%llx", ptr, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }
 
     if(hash_block->is_free) {
-        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed", ptr);
+        PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed. heap task 0x%llx", ptr, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }
 
-    //PRINTLOG(HEAP_HASH, LOG_TRACE, "found block with address 0x%x(0x%llx) size 0x%x", hash_block->address, pool->pool_base + hash_block->address, hash_block->size);
+    // PRINTLOG(HEAP_HASH, LOG_TRACE, "found block with address 0x%x(0x%llx) size 0x%x", hash_block->address, pool->pool_base + hash_block->address, hash_block->size);
 
     uint64_t real_address = req_address;
     uint32_t real_size = hash_block->size;
 
-    //PRINTLOG(HEAP_HASH, LOG_TRACE, "real address 0x%llx size 0x%x end 0x%llx", real_address, real_size, real_address + real_size);
+    // PRINTLOG(HEAP_HASH, LOG_TRACE, "real address 0x%llx size 0x%x end 0x%llx", real_address, real_size, real_address + real_size);
 
 
     memory_memclean((void*)real_address, real_size);
@@ -551,11 +575,11 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
             }
         }
 
-        //PRINTLOG(HEAP_HASH, LOG_TRACE, "0x%x inserted into to fast class %d", rel_address, fast_class);
+        // PRINTLOG(HEAP_HASH, LOG_TRACE, "0x%x inserted into to fast class %d", rel_address, fast_class);
     } else {
         memory_heap_hash_pool_insert_sorted_at_free_list(pool, hash_block);
 
-        //PRINTLOG(HEAP_HASH, LOG_TRACE, "0x%x inserted into to free list", rel_address);
+        // PRINTLOG(HEAP_HASH, LOG_TRACE, "0x%x inserted into to free list", rel_address);
     }
 
     metadata->free_size += real_size;
@@ -609,20 +633,29 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     heap->header = 0xaa55aa55;
 
     uint64_t lock_start = heap_start + sizeof(memory_heap_t);
-    lock_start += 0x20 - (lock_start % 0x20);
+
+    if(lock_start % 0x20) {
+        lock_start += 0x20 - (lock_start % 0x20);
+    }
 
     memory_heap_t** lock_heap = (memory_heap_t**)lock_start;
     *lock_heap = heap;
     heap->lock = (lock_t)lock_heap;
 
     uint64_t metadata_start = lock_start + SYNC_LOCK_SIZE;
-    metadata_start += 0x20 - (metadata_start % 0x20);
+
+    if(metadata_start % 0x20) {
+        metadata_start += 0x20 - (metadata_start % 0x20);
+    }
 
     memory_heap_hash_metadata_t* metadata = (memory_heap_hash_metadata_t*)metadata_start;
     metadata->pool_count = 1;
 
     uint64_t pool_start = metadata_start + sizeof(memory_heap_hash_metadata_t);
-    pool_start += 0x20 - (pool_start % 0x20);
+
+    if(pool_start % 0x20) {
+        pool_start += 0x20 - (pool_start % 0x20);
+    }
 
     metadata->pools[0] = pool_start;
 
@@ -647,7 +680,10 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
     metadata->segment_hash_mask = metadata->segment_block_count - 1;
 
     uint32_t segment_start = (pool_start - heap_start) + sizeof(memory_heap_hash_pool_t);
-    segment_start += 0x1000 - (segment_start % 0x1000);
+
+    if(segment_start % 0x1000) {
+        segment_start += 0x1000 - (segment_start % 0x1000);
+    }
 
     pool->segment_start = segment_start - (pool_start - heap_start);
     pool->segment_end = segment_start;

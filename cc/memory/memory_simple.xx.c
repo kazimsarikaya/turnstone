@@ -17,6 +17,9 @@
 #include <valgrind.h>
 #include <memcheck.h>
 #endif
+#if ___KERNELBUILD == 1
+#include <backtrace.h>
+#endif
 
 MODULE("turnstone.lib.memory");
 
@@ -115,12 +118,17 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     memory_heap_t* heap = (memory_heap_t*)(heap_start);
 
     size_t lock_start = heap_start + sizeof(memory_heap_t);
+
+    if(lock_start % 0x20) { // align 0x20
+        lock_start += 0x20 - (lock_start % 0x20);
+    }
+
     heap->lock = (lock_t)lock_start;
     memory_heap_t** lock_heap = (memory_heap_t**)(lock_start); // black magic first element of lock is heap
     *lock_heap = heap;
     size_t metadata_start = lock_start + SYNC_LOCK_SIZE;
 
-    if(metadata_start % 0x20) { //align 0x20
+    if(metadata_start % 0x20) { // align 0x20
         metadata_start += 0x20 - (metadata_start % 0x20);
     }
 
@@ -171,7 +179,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
     hitop->padding = HEAP_INFO_PADDING;
     hitop->next = NULL;
     hitop->previous =  NULL;
-    hitop->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_USED; //heaptop, full;
+    hitop->flags = HEAP_INFO_FLAG_STARTEND | HEAP_INFO_FLAG_USED; // heaptop, full;
     hitop->size = 1;
 
 
@@ -328,7 +336,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         return NULL;
     }
 
-    //find first empty and enough slot
+    // find first empty and enough slot
     while(1) { // size enough?
 #if ___TESTMODE == 1
         VALGRIND_MAKE_MEM_DEFINED(empty_hi, sizeof(heapinfo_t));
@@ -385,7 +393,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             a_size = size + align; // this time at align to the dize
             t_size =  (a_size + sizeof(heapinfo_t) - 1) / sizeof(heapinfo_t);
 
-            //find first empty and enough slot
+            // find first empty and enough slot
             while(1) { // size enough?
                 if(empty_hi->size >= (t_size + 1)) {
                     break;
@@ -403,7 +411,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             if(empty_hi->previous) { // if we have previous
                 empty_hi->previous->next = empty_hi->next; // set that's next to the empty_hi' next
             } else {
-                simple_heap->first_empty = empty_hi->next; //update first_empty because we are removing first_empty
+                simple_heap->first_empty = empty_hi->next; // update first_empty because we are removing first_empty
             }
 
             if(empty_hi->next) {
@@ -415,7 +423,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             empty_hi->next = NULL;
             empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
-            //memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
+            // memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
             PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t));
 
             simple_heap->free_size -= (empty_hi->size - 1) * sizeof(heapinfo_t);
@@ -487,7 +495,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
             VALGRIND_MAKE_MEM_NOACCESS(empty_hi->previous, sizeof(heapinfo_t));
 #endif
         } else {
-            simple_heap->first_empty = empty_hi->next; //update first_empty because we are removing first_empty
+            simple_heap->first_empty = empty_hi->next; // update first_empty because we are removing first_empty
         }
 
         if(empty_hi->next) {
@@ -505,7 +513,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         empty_hi->next = NULL;
         empty_hi->flags |= HEAP_INFO_FLAG_USED;
 
-        //memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
+        // memory_simple_insert_sorted(simple_heap, 1, empty_hi); // add to full slot's list
 
         PRINTLOG(SIMPLEHEAP, LOG_TRACE, "memory 0x%p allocated with size 0x%llx 0x%llx", empty_hi + 1, t_size * sizeof(heapinfo_t), (empty_hi->size - 1) * sizeof(heapinfo_t));
 
@@ -652,7 +660,11 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
     void* hitop = simple_heap->last; // need as void*
 
     if(address < hibottom || address >= hitop) {
-        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p not inside heap", address);
+        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p not inside heap heap task 0x%llx", address, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }
@@ -664,21 +676,34 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
 #endif
 
     if(hi->magic != HEAP_INFO_MAGIC && hi->padding != HEAP_INFO_PADDING) {
-        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p broken", address);
+        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p broken heap task 0x%llx", address, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }
 
     if((hi->flags & HEAP_INFO_FLAG_USED) != HEAP_INFO_FLAG_USED) {
-        PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed.", address);
+        PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed. heap task 0x%llx", address, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
+
         return 0;
     }
 
-    //clean data
+    // clean data
     size_t size = (hi->size - 1) * sizeof(heapinfo_t); // get real exclusive size
 
     if((((uint8_t*)(address)) + size) >= (uint8_t*)hitop) {
-        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p with size 0x%llx not inside heap", address, size);
+        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p with size 0x%llx not inside heap. heap task 0x%llx", address, size, heap->task_id);
+
+#if ___KERNELBUILD == 1
+        backtrace();
+#endif
 
         return -1;
     }

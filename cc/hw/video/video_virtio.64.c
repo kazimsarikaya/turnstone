@@ -28,8 +28,8 @@ MODULE("turnstone.kernel.hw.video.virtiogpu");
 
 uint64_t virtio_gpu_select_features(virtio_dev_t* dev, uint64_t selected_features);
 int8_t   virtio_gpu_create_queues(virtio_dev_t* dev);
-int8_t   virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno);
-int8_t   virtio_gpu_cursorq_isr(interrupt_frame_t* frame, uint8_t irqno);
+int8_t   virtio_gpu_controlq_isr(interrupt_frame_ext_t* frame);
+int8_t   virtio_gpu_cursorq_isr(interrupt_frame_ext_t* frame);
 void     virtio_gpu_display_init(uint32_t scanout);
 void     virtio_gpu_mouse_init(void);
 void     virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
@@ -48,11 +48,10 @@ lock_t virtio_gpu_flush_lock = NULL;
 
 void video_text_print(char_t* string);
 
-int8_t virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
+int8_t virtio_gpu_controlq_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(irqno);
 
-    //video_text_print((char_t*)"virtio gpu control queue isr\n");
+    // video_text_print((char_t*)"virtio gpu control queue isr\n");
 
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
@@ -66,7 +65,7 @@ int8_t virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
         lock_release(virtio_gpu_lock);
     }
 
-//video_text_print((char_t*)".");
+// video_text_print((char_t*)".");
 
     pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_gpu_dev->pci_dev->pci_header, virtio_gpu_dev->msix_cap, 0);
     apic_eoi();
@@ -74,11 +73,10 @@ int8_t virtio_gpu_controlq_isr(interrupt_frame_t* frame, uint8_t irqno) {
     return 0;
 }
 
-int8_t virtio_gpu_cursorq_isr(interrupt_frame_t* frame, uint8_t irqno) {
+int8_t virtio_gpu_cursorq_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(irqno);
 
-    //video_text_print((char_t*)"virtio gpu control queue isr\n");
+    // video_text_print((char_t*)"virtio gpu control queue isr\n");
 
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
@@ -92,7 +90,7 @@ int8_t virtio_gpu_cursorq_isr(interrupt_frame_t* frame, uint8_t irqno) {
         lock_release(virtio_gpu_cursor_lock);
     }
 
-//video_text_print((char_t*)".");
+// video_text_print((char_t*)".");
 
     pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_gpu_dev->pci_dev->pci_header, virtio_gpu_dev->msix_cap, 1);
     apic_eoi();
@@ -110,7 +108,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     char_t buffer[100] = {0};
     volatile virtio_gpu_ctrl_hdr_t* hdr;
 
-    //video_text_print((char_t*)"virtio gpu display flush\n");
+    // video_text_print((char_t*)"virtio gpu display flush\n");
 
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
@@ -135,7 +133,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     }
 
     transfer_hdr->hdr.ctx_id = 0;
-    //transfer_hdr->hdr.padding = 0;
+    // transfer_hdr->hdr.padding = 0;
 
     transfer_hdr->resource_id = virtio_gpu_wrapper->resource_ids[scanout];
     transfer_hdr->rec.x = x;
@@ -190,7 +188,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     }
 
     flush_hdr->hdr.ctx_id = 0;
-    //flush_hdr->hdr.padding = 0;
+    // flush_hdr->hdr.padding = 0;
 
     flush_hdr->rec.x = x;
     flush_hdr->rec.y = y;
@@ -231,7 +229,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
 
 
-    //video_text_print((char_t*)"virtio gpu display flush done\n");
+    // video_text_print((char_t*)"virtio gpu display flush done\n");
 
     lock_release(virtio_gpu_flush_lock);
 }
@@ -305,7 +303,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     hdr->flags = 0;
     hdr->fence_id = 0;
     hdr->ctx_id = 0;
-    //hdr->padding = 0;
+    // hdr->padding = 0;
 
     descs[desc_index].length = sizeof(virtio_gpu_ctrl_hdr_t);
 
@@ -343,7 +341,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     create_hdr->hdr.flags = 0;
     create_hdr->hdr.fence_id = 0;
     create_hdr->hdr.ctx_id = 0;
-    //create_hdr->hdr.padding = 0;
+    // create_hdr->hdr.padding = 0;
 
     uint32_t screen_resource_id = resource_id++;
     virtio_gpu_wrapper->resource_ids[scanout] = screen_resource_id;
@@ -406,7 +404,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     attach_hdr->hdr.flags = 0;
     attach_hdr->hdr.fence_id = 0;
     attach_hdr->hdr.ctx_id = 0;
-    //attach_hdr->hdr.padding = 0;
+    // attach_hdr->hdr.padding = 0;
 
     attach_hdr->resource_id = screen_resource_id;
     attach_hdr->nr_entries = 1;
@@ -446,7 +444,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     transfer_hdr->hdr.flags = 0;
     transfer_hdr->hdr.fence_id = 0;
     transfer_hdr->hdr.ctx_id = 0;
-    //transfer_hdr->hdr.padding = 0;
+    // transfer_hdr->hdr.padding = 0;
 
     transfer_hdr->resource_id = screen_resource_id;
     transfer_hdr->rec.x = 0;
@@ -487,7 +485,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     scanout_hdr->hdr.flags = 0;
     scanout_hdr->hdr.fence_id = 0;
     scanout_hdr->hdr.ctx_id = 0;
-    //scanout_hdr->hdr.padding = 0;
+    // scanout_hdr->hdr.padding = 0;
 
     scanout_hdr->rec.x = 0;
     scanout_hdr->rec.y = 0;
@@ -574,7 +572,7 @@ void virtio_gpu_mouse_init(void) {
     create_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     create_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[0]++;
     create_hdr->hdr.ctx_id = 0;
-    //create_hdr->hdr.padding = 0;
+    // create_hdr->hdr.padding = 0;
 
     uint32_t mouse_resource_id = resource_id++;
     virtio_gpu_wrapper->mouse_resource_id = mouse_resource_id;
@@ -639,7 +637,7 @@ void virtio_gpu_mouse_init(void) {
     attach_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     attach_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[0]++;
     attach_hdr->hdr.ctx_id = 0;
-    //attach_hdr->hdr.padding = 0;
+    // attach_hdr->hdr.padding = 0;
 
     attach_hdr->resource_id = mouse_resource_id;
     attach_hdr->nr_entries = 1;
@@ -679,7 +677,7 @@ void virtio_gpu_mouse_init(void) {
     transfer_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     transfer_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[0]++;
     transfer_hdr->hdr.ctx_id = 0;
-    //transfer_hdr->hdr.padding = 0;
+    // transfer_hdr->hdr.padding = 0;
 
     transfer_hdr->resource_id = mouse_resource_id;
     transfer_hdr->rec.x = 0;
@@ -724,7 +722,7 @@ void virtio_gpu_mouse_init(void) {
     update_cursor_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     update_cursor_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[0]++;
     update_cursor_hdr->hdr.ctx_id = 0;
-    //update_cursor_hdr->hdr.padding = 0;
+    // update_cursor_hdr->hdr.padding = 0;
 
     update_cursor_hdr->resource_id = mouse_resource_id;
     update_cursor_hdr->pos.x = 0;
@@ -777,7 +775,7 @@ void virtio_gpu_mouse_move(uint32_t x, uint32_t y) {
     update_cursor_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
     update_cursor_hdr->hdr.fence_id = virtio_gpu_wrapper->fence_ids[0]++;
     update_cursor_hdr->hdr.ctx_id = 0;
-    //update_cursor_hdr->hdr.padding = 0;
+    // update_cursor_hdr->hdr.padding = 0;
 
     update_cursor_hdr->resource_id = virtio_gpu_wrapper->mouse_resource_id;
     update_cursor_hdr->pos.x = x;

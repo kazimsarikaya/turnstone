@@ -1,4 +1,7 @@
-/*
+/**
+ * @file sha2.h
+ * @brief SHA-2 (Secure Hash Algorithm 2) family of cryptographic hash functions.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

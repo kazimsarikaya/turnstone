@@ -1,4 +1,7 @@
-/*
+/**
+ * @file descriptor.xx.c
+ * @brief CPU descriptor implementations such as GDT, IDT.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

@@ -1,4 +1,7 @@
-/*
+/**
+ * @file fat32.64.c
+ * @brief FAT32 filesystem implementation.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -38,7 +41,7 @@ fat32_dirent_shortname_t* fat32_gen_dirents(const path_t* p, fs_stat_type_t type
 uint32_t fat32_get_empty_cluster(filesystem_t* fs);
 int8_t   fat32_directory_write(directory_t* self, time_t mt);
 
-typedef struct fat32_fs_file_context_t {
+typedef struct file_context_t {
     filesystem_t* fs;
     uint32_t      clusterno;
     const path_t* file_path;
@@ -49,9 +52,9 @@ typedef struct fat32_fs_file_context_t {
     uint32_t      dirent_idx;
     int64_t       current_position;
     int64_t       size;
-} fat32_fs_file_context_t;
+} file_context_t;
 
-typedef struct fat32_fs_directory_context_t {
+typedef struct directory_context_t {
     filesystem_t*             fs;
     uint32_t                  clusterno;
     const path_t*             directory_path;
@@ -60,17 +63,17 @@ typedef struct fat32_fs_directory_context_t {
     time_t                    last_modification_time;
     fat32_dirent_shortname_t* dirents;
     int64_t                   dirent_count;
-} fat32_fs_directory_context_t;
+} directory_context_t;
 
 
-typedef struct fat32_fs_context_t {
+typedef struct filesystem_context_t {
     disk_or_partition_t* disk;
     uint8_t              partno;
     uint64_t             data_start_lba;
     fat32_bpb_t*         bpb;
     fat32_fsinfo_t*      fsinfo;
     uint32_t*            table;
-} fat32_fs_context_t;
+} filesystem_context_t;
 
 typedef struct fat32_dir_list_iter_extradata_t {
     uint32_t clusterno;
@@ -123,7 +126,7 @@ directory_t*   fat32_get_root_directory(filesystem_t* self);
 
 
 uint32_t fat32_cluster_count(filesystem_t* fs, uint32_t clusterno) {
-    fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)fs->context;
+    filesystem_context_t* fs_ctx = fs->context;
 
     uint64_t res = 0;
 
@@ -252,13 +255,13 @@ fat32_dirent_shortname_t* fat32_gen_dirents(const path_t* p, fs_stat_type_t type
 }
 
 const path_t* fat32_file_get_path(const file_t* self) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
     return ctx->file_path;
 }
 
 int8_t fat32_file_close(file_t* self) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
     ctx->file_path->close(ctx->file_path);
 
@@ -269,8 +272,8 @@ int8_t fat32_file_close(file_t* self) {
 }
 
 int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
-    fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)ctx->fs->context;
+    file_context_t* ctx = self->context;
+    filesystem_context_t* fs_ctx = ctx->fs->context;
 
     int64_t w_cnt = 0;
     int64_t w_cnt_iter;
@@ -291,7 +294,7 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
             fs_ctx->fsinfo->last_allocated_cluster = clusterno;
             fs_ctx->fsinfo->free_cluster_count--;
             fs_ctx->table[clusterno] = FAT32_CLUSTER_END2;
-            fat32_fs_directory_context_t* dir_ctx = (fat32_fs_directory_context_t*)ctx->dir->context;
+            directory_context_t* dir_ctx = ctx->dir->context;
             dir_ctx->dirents[ctx->dirent_idx].fat_number_high = clusterno >> 16;
             dir_ctx->dirents[ctx->dirent_idx].fat_number_low = clusterno;
 
@@ -325,8 +328,11 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
 
         w_cnt_iter = MIN(w_cnt_iter, cluster_data_size - cluster_data_offset);
 
+        boolean_t data_from_disk = false;
+
         if(cluster_data_offset) {
             fs_ctx->disk->read(fs_ctx->disk, fs_ctx->data_start_lba + clusterno, fs_ctx->bpb->sectors_per_cluster, &tmp_data);
+            data_from_disk = true;
         } else {
             tmp_data = memory_malloc(cluster_data_size);
         }
@@ -336,7 +342,11 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
 
         fs_ctx->disk->write(fs_ctx->disk, fs_ctx->data_start_lba + clusterno, fs_ctx->bpb->sectors_per_cluster, tmp_data);
 
-        memory_free(tmp_data);
+        if(!data_from_disk) {
+            memory_free(tmp_data);
+        } else {
+            memory_free_ext(fs_ctx->disk->get_heap(fs_ctx->disk), tmp_data);
+        }
 
         cluster_data_offset = 0;
 
@@ -363,7 +373,7 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
 
     if(ctx->current_position > ctx->size) {
         ctx->size = ctx->current_position;
-        fat32_fs_directory_context_t* dir_ctx = (fat32_fs_directory_context_t*)ctx->dir->context;
+        directory_context_t* dir_ctx = ctx->dir->context;
         dir_ctx->dirents[ctx->dirent_idx].file_size = ctx->size;
 
         fat32_directory_write(ctx->dir, 0);
@@ -376,8 +386,8 @@ int64_t fat32_file_write(file_t* self, uint8_t* buf, int64_t buflen) {
 }
 
 int64_t fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
-    fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)ctx->fs->context;
+    file_context_t* ctx = self->context;
+    filesystem_context_t* fs_ctx = ctx->fs->context;
 
     int64_t r_cnt = 0;
     int64_t r_cnt_iter;
@@ -419,7 +429,7 @@ int64_t fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen) {
 
         memory_memcopy(tmp_data, buf + buf_offset, r_cnt_iter);
 
-        memory_free(tmp_data);
+        memory_free_ext(fs_ctx->disk->get_heap(fs_ctx->disk), tmp_data);
 
         r_cnt += r_cnt_iter;
         rem -= r_cnt_iter;
@@ -440,7 +450,7 @@ int64_t fat32_file_read(file_t* self, uint8_t* buf, int64_t buflen) {
 }
 
 int64_t fat32_file_seek(file_t* self, int64_t pos, file_seek_type_t st) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
 
     if(st == FILE_SEEK_TYPE_SET) {
@@ -472,7 +482,7 @@ int64_t fat32_file_seek(file_t* self, int64_t pos, file_seek_type_t st) {
 }
 
 int64_t fat32_file_tell(file_t* self) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
     return ctx->current_position;
 }
@@ -490,25 +500,25 @@ fs_stat_type_t fat32_file_get_type(file_t* self){
 
 
 time_t fat32_file_get_create_time(file_t* self) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
     return ctx->create_time;
 }
 
 time_t fat32_file_get_last_access_time(file_t* self) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
     return ctx->last_accessed_time;
 }
 
 time_t fat32_file_get_last_modification_time(file_t* self) {
-    fat32_fs_file_context_t* ctx = (fat32_fs_file_context_t*)self->context;
+    file_context_t* ctx = self->context;
 
     return ctx->last_modification_time;
 }
 
 file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, uint32_t clusterno, int64_t size, const path_t* p, time_t ct, time_t lat, time_t lmt) {
-    fat32_fs_file_context_t* ctx = memory_malloc(sizeof(fat32_fs_file_context_t));
+    file_context_t* ctx = memory_malloc(sizeof(file_context_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -550,13 +560,13 @@ file_t* fat32_new_file(filesystem_t* fs, directory_t* dir, uint32_t dirent_idx, 
 
 
 const path_t* fat32_directory_get_path(const directory_t* self) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
+    directory_context_t* ctx = self->context;
 
     return ctx->directory_path;
 }
 
 int8_t fat32_directory_close(directory_t* self) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
+    directory_context_t* ctx = self->context;
 
     ctx->directory_path->close(ctx->directory_path);
 
@@ -590,7 +600,7 @@ iterator_t* fat32_dir_list_iter_next(iterator_t* iter){
 
 int8_t fat32_dir_list_iter_end_of_iterator(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)metadata->dir->context;
+    directory_context_t* ctx = metadata->dir->context;
 
     return metadata->current_idx >= ctx->dirent_count?0:1;
 }
@@ -598,7 +608,7 @@ int8_t fat32_dir_list_iter_end_of_iterator(iterator_t* iter){
 
 const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     fat32_dir_list_iter_metadata_t* metadata = (fat32_dir_list_iter_metadata_t*)iter->metadata;
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)metadata->dir->context;
+    directory_context_t* ctx = metadata->dir->context;
 
 
     uint32_t cur_idx = metadata->current_idx;
@@ -738,17 +748,17 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     int64_t size = ctx->dirents[cur_idx].file_size;
 
     timeparsed_t ct = {ctx->dirents[cur_idx].create_date.year + FAT32_YEAR_START, ctx->dirents[cur_idx].create_date.month,
-                       ctx->dirents[cur_idx].create_date.day,                     ctx->dirents[cur_idx].create_time.hours,
-                       ctx->dirents[cur_idx].create_time.minutes,                 ctx->dirents[cur_idx].create_time.seconds * 2};
+                       ctx->dirents[cur_idx].create_date.day, ctx->dirents[cur_idx].create_time.hours,
+                       ctx->dirents[cur_idx].create_time.minutes, ctx->dirents[cur_idx].create_time.seconds * 2};
     metadata->extra_data.ct = timeparsed_to_time(&ct);
 
     timeparsed_t lat = {ctx->dirents[cur_idx].last_accessed_date.year + FAT32_YEAR_START, ctx->dirents[cur_idx].last_accessed_date.month,
-                        ctx->dirents[cur_idx].last_accessed_date.day,                     0,                                             0, 0};
+                        ctx->dirents[cur_idx].last_accessed_date.day, 0, 0, 0};
     metadata->extra_data.lat = timeparsed_to_time(&lat);
 
     timeparsed_t lmt = {ctx->dirents[cur_idx].last_modification_date.year + FAT32_YEAR_START, ctx->dirents[cur_idx].last_modification_date.month,
-                        ctx->dirents[cur_idx].last_modification_date.day,                     ctx->dirents[cur_idx].last_modification_time.hours,
-                        ctx->dirents[cur_idx].last_modification_time.minutes,                 ctx->dirents[cur_idx].last_modification_time.seconds * 2};
+                        ctx->dirents[cur_idx].last_modification_date.day, ctx->dirents[cur_idx].last_modification_time.hours,
+                        ctx->dirents[cur_idx].last_modification_time.minutes, ctx->dirents[cur_idx].last_modification_time.seconds * 2};
     metadata->extra_data.lmt = timeparsed_to_time(&lmt);
 
     metadata->extra_data.clusterno = clusterno;
@@ -790,7 +800,7 @@ iterator_t* fat32_directory_list(directory_t* self) {
 }
 
 path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, const path_t* p, fs_stat_type_t type) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
+    directory_context_t* ctx = self->context;
 
     char_t* f_path_str = p->get_name_and_ext(p);
 
@@ -856,7 +866,7 @@ path_interface_t* fat32_create_or_open_directory_or_file(directory_t* self, cons
 }
 
 uint32_t fat32_get_empty_cluster(filesystem_t* fs) {
-    fat32_fs_context_t* ctx = fs->context;
+    filesystem_context_t* ctx = fs->context;
     uint32_t lac = ctx->fsinfo->last_allocated_cluster + 1;
     uint32_t cluster_count = ctx->bpb->sectors_per_fat * ctx->bpb->bytes_per_sector / sizeof(uint32_t);
 
@@ -873,8 +883,8 @@ uint32_t fat32_get_empty_cluster(filesystem_t* fs) {
 
 
 int8_t  fat32_directory_write(directory_t* self, time_t mt) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
-    fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)ctx->fs->context;
+    directory_context_t* ctx = self->context;
+    filesystem_context_t* fs_ctx = ctx->fs->context;
 
     if(mt != 0) {
         timeparsed_t* tp = time_to_timeparsed(mt);
@@ -922,7 +932,7 @@ int8_t  fat32_directory_write(directory_t* self, time_t mt) {
 }
 
 directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno, uint32_t clusterno, const path_t* p, time_t ct) {
-    fat32_fs_context_t* fs_ctx = fs->context;
+    filesystem_context_t* fs_ctx = fs->context;
 
     uint32_t dir_dirent_cnt = fs_ctx->bpb->sectors_per_cluster * fs_ctx->bpb->bytes_per_sector / sizeof(uint32_t);
 
@@ -1004,7 +1014,7 @@ directory_t* fat32_directory_create(filesystem_t* fs, uint32_t parent_clusterno,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path_t* child, fs_stat_type_t type) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)parent->context;
+    directory_context_t* ctx = parent->context;
 
     timeparsed_t tp;
     timeparsed(&tp);
@@ -1034,7 +1044,7 @@ path_interface_t* fat32_directory_or_file_create(directory_t* parent, const path
     }
 
     if(idx + dirent_cnt >= ctx->dirent_count) {
-        fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)ctx->fs->context;
+        filesystem_context_t* fs_ctx = ctx->fs->context;
         uint32_t inc = fs_ctx->bpb->bytes_per_sector * fs_ctx->bpb->sectors_per_cluster / sizeof(fat32_dirent_shortname_t);
 
         uint8_t* data = (uint8_t*)ctx->dirents;
@@ -1098,32 +1108,32 @@ fs_stat_type_t fat32_directory_get_type(directory_t* self){
 }
 
 time_t fat32_directory_get_create_time(directory_t* self) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
+    directory_context_t* ctx = self->context;
 
     return ctx->create_time;
 }
 
 time_t fat32_directory_get_last_access_time(directory_t* self) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
+    directory_context_t* ctx = self->context;
 
     return ctx->last_accessed_time;
 }
 
 time_t fat32_directory_get_last_modification_time(directory_t* self) {
-    fat32_fs_directory_context_t* ctx = (fat32_fs_directory_context_t*)self->context;
+    directory_context_t* ctx = self->context;
 
     return ctx->last_modification_time;
 }
 
 
 directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const path_t* p, time_t ct, time_t lat, time_t lmt) {
-    fat32_fs_context_t* fs_ctx = (fat32_fs_context_t*)fs->context;
+    filesystem_context_t* fs_ctx = fs->context;
 
     uint32_t cluster_count = fat32_cluster_count(fs, clusterno);
     uint32_t cluster_size = fs_ctx->bpb->sectors_per_cluster;
     uint32_t sector_size = fs_ctx->bpb->bytes_per_sector;
 
-    fat32_fs_directory_context_t* ctx = memory_malloc(sizeof(fat32_fs_directory_context_t));
+    directory_context_t* ctx = memory_malloc(sizeof(directory_context_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -1156,7 +1166,7 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const pat
 
         memory_memcopy(tmp_data, data + offset, cluster_size * sector_size);
 
-        memory_free(tmp_data);
+        memory_free_ext(fs_ctx->disk->get_heap(fs_ctx->disk), tmp_data);
 
         clusterno = fs_ctx->table[clusterno];
 
@@ -1216,7 +1226,7 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const pat
 }
 
 uint64_t fat32_get_total_size(filesystem_t* self) {
-    fat32_fs_context_t* ctx = self->context;
+    filesystem_context_t* ctx = self->context;
 
     uint64_t fat32_table_size = ctx->bpb->bytes_per_sector *  ctx->bpb->sectors_per_fat;
     fat32_table_size /= sizeof(int32_t);
@@ -1226,13 +1236,13 @@ uint64_t fat32_get_total_size(filesystem_t* self) {
 }
 
 uint64_t fat32_get_free_size(filesystem_t* self) {
-    fat32_fs_context_t* ctx = self->context;
+    filesystem_context_t* ctx = self->context;
 
     return ctx->fsinfo->free_cluster_count * 512;
 }
 
 int8_t fat32_close(filesystem_t* self) {
-    fat32_fs_context_t* ctx = self->context;
+    filesystem_context_t* ctx = self->context;
 
     memory_free(ctx->bpb);
     memory_free(ctx->fsinfo);
@@ -1258,7 +1268,7 @@ int8_t fat32_remove(filesystem_t* self, const path_t* p) {
 }
 
 directory_t* fat32_get_root_directory(filesystem_t* self) {
-    fat32_fs_context_t* fs_ctx = self->context;
+    filesystem_context_t* fs_ctx = self->context;
 
     path_t* root_path = filesystem_new_path(self, "/");
     uint32_t root_dir_cluster_number = fs_ctx->bpb->root_dir_cluster_number;
@@ -1267,7 +1277,7 @@ directory_t* fat32_get_root_directory(filesystem_t* self) {
 }
 
 int8_t fat32_write_cluster_data(filesystem_t* fs){
-    fat32_fs_context_t* ctx = fs->context;
+    filesystem_context_t* ctx = fs->context;
 
     ctx->disk->write(ctx->disk, ctx->bpb->fsinfo_sector, sizeof(fat32_fsinfo_t) / 512, (uint8_t*)ctx->fsinfo);
     ctx->disk->write(ctx->disk, ctx->bpb->backup_bpb + ctx->bpb->fsinfo_sector, sizeof(fat32_fsinfo_t) / 512, (uint8_t*)ctx->fsinfo);
@@ -1309,7 +1319,7 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
 
         d->read(d, fat32_bpb->reserved_sectors, fat32_bpb->sectors_per_fat, (uint8_t**)&fat32_table);
 
-        fat32_fs_context_t* ctx = memory_malloc(sizeof(fat32_fs_context_t));
+        filesystem_context_t* ctx = memory_malloc(sizeof(filesystem_context_t));
 
         if(ctx == NULL) {
             PRINTLOG(FAT, LOG_ERROR, "cannot create fs context");
@@ -1453,7 +1463,7 @@ filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volna
     memory_free(data);
     memory_free(volid);
 
-    fat32_fs_context_t* ctx = memory_malloc(sizeof(fat32_fs_context_t));
+    filesystem_context_t* ctx = memory_malloc(sizeof(filesystem_context_t));
 
     if(ctx == NULL) {
         memory_free(fat32_bpb);

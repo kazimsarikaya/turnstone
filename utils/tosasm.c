@@ -1,4 +1,7 @@
-/*
+/**
+ * @file tosasm.c
+ * @brief TOS assembler userland tool.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */

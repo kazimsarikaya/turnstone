@@ -1,7 +1,11 @@
-/*
+/**
+ * @file acpi_events.64.c
+ * @brief ACPI events.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
+
 #include <acpi.h>
 #include <acpi/aml_resource.h>
 #include <apic.h>
@@ -12,11 +16,10 @@
 
 MODULE("turnstone.kernel.hw.acpi");
 
-int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum);
+int8_t acpi_events_isr(interrupt_frame_ext_t* frame);
 
-int8_t acpi_events_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t acpi_events_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     boolean_t os_poweroff = 0;
     boolean_t os_reset = 0;

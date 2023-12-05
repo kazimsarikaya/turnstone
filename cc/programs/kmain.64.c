@@ -1,4 +1,7 @@
-/*
+/**
+ * @file kmain.64.c
+ * @brief kernel main functions.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -30,6 +33,7 @@
 #include <random.h>
 #include <memory/frame.h>
 #include <time/timer.h>
+#include <time.h>
 #include <network.h>
 #include <crc.h>
 #include <device/hpet.h>
@@ -37,6 +41,8 @@
 #include <driver/usb.h>
 #include <driver/usb_mass_storage_disk.h>
 #include <stdbufs.h>
+#include <backtrace.h>
+#include <debug.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -102,7 +108,6 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t kmain64(size_t entry_point) {
-    srand(0x123456789);
     crc32_init_table();
 
     memory_heap_t* heap = memory_create_heap_hash(0, 0);
@@ -113,6 +118,8 @@ int8_t kmain64(size_t entry_point) {
     }
 
     memory_set_default_heap(heap);
+
+    srand(SYSTEM_INFO->random_seed);
 
     stdbufs_init_buffers();
 
@@ -153,6 +160,17 @@ int8_t kmain64(size_t entry_point) {
     SYSTEM_INFO = new_system_info;
 
     PRINTLOG(KERNEL, LOG_DEBUG, "new system info created at 0x%p", SYSTEM_INFO);
+
+    if(backtrace_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init backtrace. Halting...");
+        cpu_hlt();
+    }
+
+    if(debug_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init debug. Halting...");
+        cpu_hlt();
+    }
+
     PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator is initializing");
 
     frame_allocator_t* fa = frame_allocator_new_ext(heap);
@@ -331,11 +349,15 @@ int8_t kmain64(size_t entry_point) {
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
         cpu_hlt();
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
     }
 
     if(nvme_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init nvme. Halting...");
         cpu_hlt();
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
     }
 
     if(network_init() != 0) {
@@ -343,9 +365,7 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
-
-    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_disk_by_id(0);
+    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_first_inserted_disk();
 
     if(sd) {
         PRINTLOG(KERNEL, LOG_DEBUG, "try to read sata disk 0x%p", sd);
@@ -372,8 +392,6 @@ int8_t kmain64(size_t entry_point) {
     } else {
         PRINTLOG(KERNEL, LOG_WARNING, "sata disk 0 not found");
     }
-
-    PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
 
     nvme_disk_t* nd = (nvme_disk_t*)nvme_get_disk_by_id(0);
 
@@ -460,6 +478,8 @@ int8_t kmain64(size_t entry_point) {
     } else {
         PRINTLOG(KERNEL, LOG_INFO, "BootCurrent %i", boot_order_idx);
     }
+
+    PRINTLOG(KERNEL, LOG_INFO, "smbios version 0x%llx smbios data address 0x%p", SYSTEM_INFO->smbios_version, SYSTEM_INFO->smbios_table);
 
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 

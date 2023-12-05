@@ -1,4 +1,7 @@
-/*
+/**
+ * @file time_timer.64.c
+ * @brief Timer driver.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -35,9 +38,8 @@ void time_timer_reset_tick_count(void) {
 
 void video_text_print(char_t* string);
 
-int8_t time_timer_pit_isr(interrupt_frame_t* frame, uint8_t intnum){
+int8_t time_timer_pit_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
-    UNUSED(intnum);
 
     time_timer_tick_count++;
 
@@ -75,9 +77,8 @@ void time_timer_pit_sleep(uint64_t usecs) {
 
 boolean_t we_sended_nmi_to_bsp = false;
 
-int8_t time_timer_apic_isr(interrupt_frame_t* frame, uint8_t intnum) {
+int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-    UNUSED(intnum);
 
     uint32_t apic_id = apic_get_local_apic_id();
 

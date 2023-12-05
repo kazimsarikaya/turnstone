@@ -1,4 +1,8 @@
-/*
+/**
+ * @file main.c
+ * @brief EFI entry point
+ * @details This file contains EFI entry point and other EFI related methods.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -17,33 +21,109 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <stdbufs.h>
+#include <random.h>
 
+/*! module name */
 MODULE("turnstone.efi");
 
+/*! EFI system table global variable */
 efi_system_table_t* ST;
+
+/*! EFI boot services global variable */
 efi_boot_services_t* BS;
+
+/*! EFI runtime services global variable */
 efi_runtime_services_t* RS;
 
+/**
+ * @typedef kernel_start_t
+ * @brief kernel start function type
+ * @details this function is called by EFI entry point to start kernel.
+ * @param[in] sysinfo system information
+ * @return 0 on success, -1 on failure (return means kernel is not started)
+ */
 typedef int8_t (*kernel_start_t)(system_info_t* sysinfo);
 
+/**
+ * @struct efi_tosdb_context_t
+ * @brief EFI tosdb context
+ */
 typedef struct efi_tosdb_context_t {
-    boolean_t        is_pxe;
-    efi_block_io_t*  bio;
-    tosdb_backend_t* backend;
-    tosdb_t*         tosdb;
-    uint64_t         pxe_data_size;
-    uint64_t         pxe_data_base;
-} efi_tosdb_context_t;
+    boolean_t        is_pxe; ///< true if tosdb is loaded from PXE, false if tosdb is loaded from local disk
+    efi_block_io_t*  bio; ///< block io interface if tosdb is loaded from local disk
+    tosdb_backend_t* backend; ///< tosdb backend
+    tosdb_t*         tosdb; ///< tosdb instance
+    uint64_t         pxe_data_size; ///< PXE data size
+    uint64_t         pxe_data_base; ///< PXE data base
+} efi_tosdb_context_t; ///< typedef for efi_tosdb_context_t
 
-efi_status_t        efi_setup_heap(void);
-efi_status_t        efi_setup_graphics(video_frame_buffer_t** vfb_res);
-efi_status_t        efi_print_variable_names(void);
-efi_status_t        efi_is_pxe_boot(boolean_t* result);
+/**
+ * @brief setup EFI heap
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_setup_heap(void);
+
+/**
+ * @brief setup EFI graphics
+ * @details this method sets up graphics mode and returns video frame buffer. Min resolution is 1092x1080.
+ * @param[out] vfb_res video frame buffer
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res);
+
+/**
+ * @brief prints efi variable names.
+ * @return EFI_SUCCESS if all goes well.
+ */
+efi_status_t efi_print_variable_names(void);
+
+/**
+ * @brief check is current boot is PXE boot.
+ * @details for checking PXE boot, this method checks if EFI variable "BootCurrent" contains mac address.
+ * @param[out] result true if current boot is PXE boot, false otherwise.
+ * @return EFI_SUCCESS if all goes well.
+ */
+efi_status_t efi_is_pxe_boot(boolean_t* result);
+
+/**
+ * @brief EFI main function
+ * @details this function is called by EFI entry point. Also this function should be EFIAPI because of EFI calling convention.
+ * @param[in] image image handle
+ * @param[in] system_table system table
+ * @return EFI_SUCCESS if all goes well
+ */
 EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table);
-efi_status_t        efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
-efi_status_t        efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
-efi_status_t        efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx);
-efi_status_t        efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
+
+/**
+ * @brief helper function for local tosdb loading
+ * @param[in] bio block io interface
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx);
+
+/**
+ * @brief loads tosdb from disk if current boot is not PXE boot.
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx);
+
+/**
+ * @brief loads tosdb from PXE if current boot is PXE boot.
+ * @param[out] tdb_ctx tosdb context
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx);
+
+/**
+ * @brief reads config value for system from tosdb.
+ * @param[in] tdb_ctx tosdb context
+ * @param[in] config_key config key
+ * @param[out] config_value config value
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value);
 
 
 efi_status_t efi_tosdb_read_config(efi_tosdb_context_t* tdb_ctx, const char_t* config_key, void** config_value) {
@@ -92,10 +172,10 @@ catch_efi_error:
 efi_status_t efi_setup_heap(void){
     efi_status_t res;
 
-    void* heap_area = NULL;
+    efi_physical_address_t heap_area = NULL;
     int64_t heap_size = 1024 * 1024 * 64; // 64 MiB
 
-    res = BS->allocate_pool(EFI_LOADER_DATA, heap_size, &heap_area);
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, heap_size / FRAME_SIZE, &heap_area);
 
     if(res != EFI_SUCCESS) {
         PRINTLOG(EFI, LOG_ERROR, "memory pool creation failed. err code 0x%llx", res);
@@ -110,7 +190,7 @@ efi_status_t efi_setup_heap(void){
     memory_heap_t* heap = memory_create_heap_simple(start, start + heap_size);
 
     if(heap) {
-        PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%p with size 0x%llx", heap_area, heap_size);
+        PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%p with size 0x%llx", (void*)heap_area, heap_size);
     } else {
         PRINTLOG(EFI, LOG_DEBUG, "heap creation failed");
         res = EFI_OUT_OF_RESOURCES;
@@ -407,7 +487,7 @@ catch_efi_error:
     return res;
 }
 
-efi_status_t efi_open_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
+efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb_ctx) {
     efi_status_t res;
 
     disk_t* sys_disk = efi_disk_impl_open(bio);
@@ -560,7 +640,7 @@ efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
                         PRINTLOG(EFI, LOG_DEBUG, "trying sys disk %lli", i);
 
-                        res = efi_open_tosdb(blk_dev->bio, tdb_ctx);
+                        res = efi_open_local_tosdb(blk_dev->bio, tdb_ctx);
 
                         if(res == EFI_SUCCESS) {
                             memory_free(buffer);
@@ -680,7 +760,6 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     memory_free(var_val_boot_current);
 
-    //uint32_t lo_attr = *((uint32_t*)var_val_boot);
     uint16_t lo_len = *((uint16_t*)(var_val_boot + sizeof(uint32_t)));
     wchar_t* lo_desc = (wchar_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
     char_t* boot_desc = wchar_to_char(lo_desc);
@@ -732,6 +811,8 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
+    srand(time_ns(NULL));
+
     if(stdbufs_init_buffers() != 0) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup stdbufs");
 
@@ -779,8 +860,6 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     }
 
     efi_tosdb_context_t* tdb_ctx = NULL;
-
-    //logging_module_levels[TOSDB] = LOG_TRACE;
 
     if(is_pxe) {
         res = efi_load_pxe_tosdb(&tdb_ctx);
@@ -960,7 +1039,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     s_sec_rec->destroy(s_sec_rec);
 
-    PRINTLOG(EFI, LOG_INFO, "entroy point module id: 0x%llx", mod_id);
+    PRINTLOG(EFI, LOG_INFO, "entry point module id: 0x%llx", mod_id);
 
     linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
 
@@ -976,6 +1055,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     ctx->tdb = tdb_ctx->tosdb;
     ctx->modules = hashmap_integer(16);
     ctx->got_table_buffer = buffer_new();
+    ctx->symbol_table_buffer = buffer_new();
     ctx->got_symbol_index_map = hashmap_integer(1024);
 
     linker_global_offset_table_entry_t empty_got_entry = {0};
@@ -1007,7 +1087,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
         goto catch_efi_error;
     }
 
-    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size;
+    uint64_t program_total_size = FRAME_SIZE + ctx->program_size + ctx->global_offset_table_size + ctx->relocation_table_size + ctx->metadata_size + ctx->symbol_table_size;
     uint64_t requested_program_size = (2 << 20) + program_total_size;
     uint64_t requested_program_pages = requested_program_size / FRAME_SIZE;
 
@@ -1126,6 +1206,10 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     PRINTLOG(EFI, LOG_DEBUG, "conf table count %lli", system_table->configuration_table_entry_count);
     efi_guid_t acpi_table_v2_guid = EFI_ACPI_20_TABLE_GUID;
     efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
+    efi_guid_t smbios_table_v2_guild = EFI_SMBIOS_2_TABLE_GUID;
+    efi_guid_t smbios_table_v3_guild = EFI_SMBIOS_3_TABLE_GUID;
+    uint64_t smbios_version = 0;
+    void* smbios_table = NULL;
 
     void* acpi_rsdp = NULL;
     void* acpi_xrsdp = NULL;
@@ -1135,6 +1219,14 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
             acpi_xrsdp = system_table->configuration_table[i].vendor_table;
         } else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
             acpi_rsdp = system_table->configuration_table[i].vendor_table;
+        } else if(efi_guid_equal(smbios_table_v2_guild, system_table->configuration_table[i].vendor_guid) == 0) {
+            smbios_version = 2;
+            smbios_table = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v2 table 0x%p", smbios_table);
+        } else if(efi_guid_equal(smbios_table_v3_guild, system_table->configuration_table[i].vendor_guid) == 0) {
+            smbios_version = 3;
+            smbios_table = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v3 table 0x%p", smbios_table);
         }
     }
 
@@ -1186,11 +1278,14 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->frame_buffer = vfb;
     sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
+    sysinfo->smbios_version = smbios_version;
+    sysinfo->smbios_table = smbios_table;
     sysinfo->efi_system_table = system_table;
     sysinfo->program_header_physical_start = requested_program_base;
     sysinfo->program_header_virtual_start = (2 << 20);
     sysinfo->pxe_tosdb_size = tdb_ctx->pxe_data_size;
     sysinfo->pxe_tosdb_address = tdb_ctx->pxe_data_base;
+    sysinfo->random_seed = rand64();
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
@@ -1264,7 +1359,10 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     kernel_start_t kernel_start = (kernel_start_t)requested_program_base;
 
     tosdb_close(tdb_ctx->tosdb);
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb closed");
+
     tosdb_backend_close(tdb_ctx->backend);
+    PRINTLOG(EFI, LOG_DEBUG, "tosdb backend closed");
 
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
 

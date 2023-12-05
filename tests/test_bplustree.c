@@ -29,7 +29,7 @@ int32_t main(void){
     int max_key_count = 8;
 
 
-    index_t* idx = bplustree_create_index(max_key_count, int_comparator);
+    index_t* idx = bplustree_create_index_with_unique(max_key_count, int_comparator, true);
 
     if(idx == NULL) {
         print_error("b+ tree can not created");
@@ -85,7 +85,7 @@ int32_t main(void){
     printf("iterator destroyed\n");
     bplustree_destroy_index(idx);
 
-    idx = bplustree_create_index(max_key_count, int_comparator);
+    idx = bplustree_create_index_with_unique(max_key_count, int_comparator, true);
 
     for(size_t i = 0; i < sizeof(test_data) / sizeof(int); i++) {
         idx->insert(idx, &test_data[i], &test_data[i], NULL);
@@ -94,7 +94,7 @@ int32_t main(void){
     print_success("b+ tree builded for deletion test");
 
     int d_key = 101;
-    int* deleted_data;
+    int* deleted_data = 0;
     printf("try to delete not existed key: %i\n", d_key );
 
     if(idx->delete(idx, &d_key, (void**)&deleted_data) != -1) {
@@ -114,7 +114,7 @@ int32_t main(void){
 
             break;
         } else if (*deleted_data != d_key) {
-            print_error("error at deletion, returned data is different");
+            print_error("error at deletion, returned data is different, %i != %i", *deleted_data, d_key);
 
             break;
         } else {

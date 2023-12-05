@@ -1,4 +1,7 @@
-/*
+/**
+ * @file paging.64.c
+ * @brief Paging implementation for x86_64 architecture.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
@@ -689,6 +692,7 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
             }
 
             cpu_tlb_invalidate(t_p3);
+            cpu_tlb_invalidate((void*)virtual_address);
 
         } else {
             if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
@@ -723,6 +727,7 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                 }
 
                 cpu_tlb_invalidate(t_p2);
+                cpu_tlb_invalidate((void*)virtual_address);
 
 
             } else {
@@ -756,6 +761,7 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                 }
 
                 cpu_tlb_invalidate(t_p1);
+                cpu_tlb_invalidate((void*)virtual_address);
 
 
             }

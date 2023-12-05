@@ -13,22 +13,77 @@
 #include <logging.h>
 #include <memory.h>
 
+/*! module name */
 MODULE("turnstone.kernel.cpu");
 
-typedef int64_t (*syscall_f)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+/**
+ * @typedef syscall_f
+ * @brief System call function type.
+ * @param[in] arg1 Argument 1.
+ * @param[in] arg2 Argument 2.
+ * @param[in] arg3 Argument 3.
+ * @param[in] arg4 Argument 4.
+ * @param[in] arg5 Argument 5.
+ * @param[in] arg6 Argument 6.
+ * @return Return value.
+ */
+typedef int64_t (*syscall_f)(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
+/**
+ * @brief creates stack for system call handler.
+ * @param[in] old_stack Old stack pointer.
+ * @return New stack pointer.
+ */
 uint64_t syscall_handler_create_stack(uint64_t old_stack);
-int64_t  syscall_handler_null_handler_error(uint64_t handler_no, uint64_t syscall_handler_offset);
-int64_t  syscall_handler_notfound_error(uint64_t syscall_no);
 
+/**
+ * @brief null handler error. when system call handler is null, this function is called. prints error message about null handler and returns -1.
+ * @param[in] handler_no Handler number.
+ * @param[in] syscall_handler_offset System call handler offset.
+ * @return always -1.
+ */
+int64_t syscall_handler_null_handler_error(uint64_t handler_no, uint64_t syscall_handler_offset);
+
+/**
+ * @brief not found error. when system call handler is not found, this function is called. prints error message about not found handler and returns -1.
+ * @param[in] syscall_no System call number.
+ * @return always -1.
+ */
+int64_t syscall_handler_notfound_error(uint64_t syscall_no);
+
+/**
+ * @brief cpu halt system call handler.
+ * @param[in] arg1 Argument 1. (not used)
+ * @param[in] arg2 Argument 2. (not used)
+ * @param[in] arg3 Argument 3. (not used)
+ * @param[in] arg4 Argument 4. (not used)
+ * @param[in] arg5 Argument 5. (not used)
+ * @param[in] arg6 Argument 6. (not used)
+ * @return always 0.
+ */
 int64_t syscall_function_hlt(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
+
+/**
+ * @brief cpu cli and hlt system call handler. after this system call, cpu is halted forever.
+ * @param[in] arg1 Argument 1. (not used)
+ * @param[in] arg2 Argument 2. (not used)
+ * @param[in] arg3 Argument 3. (not used)
+ * @param[in] arg4 Argument 4. (not used)
+ * @param[in] arg5 Argument 5. (not used)
+ * @param[in] arg6 Argument 6. (not used)
+ * @return always 0.
+ */
 int64_t syscall_function_cli_and_hlt(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
+/**
+ * @brief system call table.
+ */
 const syscall_f SYSCALL_TABLE[] = {
     syscall_function_hlt,
     syscall_function_cli_and_hlt,
 };
 
+/*! system call table size */
 #define SYSCALL_TABLE_SIZE (sizeof(SYSCALL_TABLE) / sizeof(SYSCALL_TABLE[0]))
 
 uint64_t syscall_handler_create_stack(uint64_t old_stack) {

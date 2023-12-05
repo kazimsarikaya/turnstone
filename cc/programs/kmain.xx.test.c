@@ -1,4 +1,7 @@
-/*
+/**
+ * @file kmain.xx.test.c
+ * @brief kmain test.
+ *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
