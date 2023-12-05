@@ -32,22 +32,24 @@ typedef enum asm_register_type_t {
     ASM_REGISTER_TYPE_INDEX,
 } asm_register_type_t;
 
+typedef struct asm_register_t {
+    uint8_t   register_index;
+    uint8_t   register_size;
+    boolean_t force_rex;
+    boolean_t is_control;
+} asm_register_t;
+
 typedef struct asm_instruction_param_t {
     asm_instruction_param_type_t type;
-    struct {
-        uint8_t   register_index;
-        uint8_t   register_size;
-        boolean_t force_rex;
-        boolean_t is_control;
-    }        registers[3];
-    uint64_t immediate;
-    uint8_t  immediate_size;
-    uint8_t  signed_immediate_size;
-    uint64_t displacement;
-    uint8_t  displacement_size;
-    uint8_t  signed_displacement_size;
-    uint64_t scale;
-    char_t*  label;
+    asm_register_t               registers[3];
+    uint64_t                     immediate;
+    uint8_t                      immediate_size;
+    uint8_t                      signed_immediate_size;
+    uint64_t                     displacement;
+    uint8_t                      displacement_size;
+    uint8_t                      signed_displacement_size;
+    uint64_t                     scale;
+    char_t*                      label;
 } asm_instruction_param_t;
 
 typedef struct asm_relocation_t {

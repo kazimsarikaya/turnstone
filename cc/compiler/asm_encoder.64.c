@@ -12,6 +12,122 @@
 
 MODULE("turnstone.compiler.assembler");
 
+typedef struct asm_register_map_t {
+    const char_t*        name;
+    const asm_register_t reg;
+} asm_register_map_t;
+
+const asm_register_map_t asm_register_map[] = {
+    {.name = "al", .reg = { .register_index = 0, .register_size  = 8, .force_rex = false, .is_control = false } },
+    {.name = "ax", .reg = { .register_index = 0, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "eax", .reg = { .register_index = 0, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rax", .reg = { .register_index = 0, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm0", .reg = { .register_index = 0, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "es", .reg = { .register_index = 0, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "cr0", .reg = { .register_index = 0, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "cl", .reg = { .register_index = 1, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "cx", .reg = { .register_index = 1, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "ecx", .reg = { .register_index = 1, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rcx", .reg = { .register_index = 1, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm1", .reg = { .register_index = 1, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cs", .reg = { .register_index = 1, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "cr1", .reg = { .register_index = 1, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "dl", .reg = { .register_index = 2, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "dx", .reg = { .register_index = 2, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "edx", .reg = { .register_index = 2, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rdx", .reg = { .register_index = 2, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm2", .reg = { .register_index = 2, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "ss", .reg = { .register_index = 2, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "cr2", .reg = { .register_index = 2, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "bl", .reg = { .register_index = 3, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "bx", .reg = { .register_index = 3, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "ebx", .reg = { .register_index = 3, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rbx", .reg = { .register_index = 3, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm3", .reg = { .register_index = 3, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "ds", .reg = { .register_index = 3, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "cr3", .reg = { .register_index = 3, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "ah", .reg = { .register_index = 4, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "spl", .reg = { .register_index = 4, .register_size = 8, .force_rex = true, .is_control = false } },
+    {.name = "sp", .reg = { .register_index = 4, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "esp", .reg = { .register_index = 4, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rsp", .reg = { .register_index = 4, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm4", .reg = { .register_index = 4, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "fs", .reg = { .register_index = 4, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "cr4", .reg = { .register_index = 4, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "ch", .reg = { .register_index = 5, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "bpl", .reg = { .register_index = 5, .register_size = 8, .force_rex = true, .is_control = false } },
+    {.name = "bp", .reg = { .register_index = 5, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "ebp", .reg = { .register_index = 5, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rbp", .reg = { .register_index = 5, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm5", .reg = { .register_index = 5, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "gs", .reg = { .register_index = 5, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "cr5", .reg = { .register_index = 5, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "dh", .reg = { .register_index = 6, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "sil", .reg = { .register_index = 6, .register_size = 8, .force_rex = true, .is_control = false } },
+    {.name = "si", .reg = { .register_index = 6, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "esi", .reg = { .register_index = 6, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rsi", .reg = { .register_index = 6, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm6", .reg = { .register_index = 6, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr6", .reg = { .register_index = 6, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "bh", .reg = { .register_index = 7, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "dil", .reg = { .register_index = 7, .register_size = 8, .force_rex = true, .is_control = false } },
+    {.name = "di", .reg = { .register_index = 7, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "edi", .reg = { .register_index = 7, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "rdi", .reg = { .register_index = 7, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm7", .reg = { .register_index = 7, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr7", .reg = { .register_index = 7, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r8b", .reg = { .register_index = 8, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r8w", .reg = { .register_index = 8, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r8d", .reg = { .register_index = 8, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r8", .reg = { .register_index = 8, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm8", .reg = { .register_index = 8, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr8", .reg = { .register_index = 8, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r9b", .reg = { .register_index = 9, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r9w", .reg = { .register_index = 9, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r9d", .reg = { .register_index = 9, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r9", .reg = { .register_index = 9, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm9", .reg = { .register_index = 9, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr9", .reg = { .register_index = 9, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r10b", .reg = { .register_index = 10, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r10w", .reg = { .register_index = 10, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r10d", .reg = { .register_index = 10, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r10", .reg = { .register_index = 10, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm10", .reg = { .register_index = 10, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr10", .reg = { .register_index = 10, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r11b", .reg = { .register_index = 11, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r11w", .reg = { .register_index = 11, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r11d", .reg = { .register_index = 11, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r11", .reg = { .register_index = 11, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm11", .reg = { .register_index = 11, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr11", .reg = { .register_index = 11, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r12b", .reg = { .register_index = 12, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r12w", .reg = { .register_index = 12, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r12d", .reg = { .register_index = 12, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r12", .reg = { .register_index = 12, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm12", .reg = { .register_index = 12, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr12", .reg = { .register_index = 12, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r13b", .reg = { .register_index = 13, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r13w", .reg = { .register_index = 13, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r13d", .reg = { .register_index = 13, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r13", .reg = { .register_index = 13, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm13", .reg = { .register_index = 13, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr13", .reg = { .register_index = 13, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r14b", .reg = { .register_index = 14, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r14w", .reg = { .register_index = 14, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r14d", .reg = { .register_index = 14, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r14", .reg = { .register_index = 14, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm14", .reg = { .register_index = 14, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr14", .reg = { .register_index = 14, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "r15b", .reg = { .register_index = 15, .register_size = 8, .force_rex = false, .is_control = false } },
+    {.name = "r15w", .reg = { .register_index = 15, .register_size = 16, .force_rex = false, .is_control = false } },
+    {.name = "r15d", .reg = { .register_index = 15, .register_size = 32, .force_rex = false, .is_control = false } },
+    {.name = "r15", .reg = { .register_index = 15, .register_size = 64, .force_rex = false, .is_control = false } },
+    {.name = "xmm15", .reg = { .register_index = 15, .register_size = 128, .force_rex = false, .is_control = false } },
+    {.name = "cr15", .reg = { .register_index = 15, .register_size = 32, .force_rex = false, .is_control = true } },
+};
+
+#define ASM_REGISTER_COUNT (sizeof(asm_register_map) / sizeof(asm_register_map_t))
+
 boolean_t asm_parse_number(char_t* data, uint64_t* result);
 boolean_t asm_parse_instruction_param(const asm_token_t* tok, asm_instruction_param_t* param);
 boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruction_param_t* param);
@@ -246,354 +362,19 @@ boolean_t asm_parse_immediate_param(char_t* data, asm_instruction_param_t* param
 }
 
 boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruction_param_t* param) {
-    boolean_t result = true;
 
     reg_str = strtrim_right(reg_str);
 
-    if(strcmp("al", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("ax", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("eax", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rax", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm0", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("es", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("cr0", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 0;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("cl", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("cx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("ecx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rcx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm1", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cs", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("cr1", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 1;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("dl", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("dx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("edx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rdx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm2", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("ss", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("cr2", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 2;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("bl", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("bx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("ebx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rbx", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm3", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("ds", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("cr3", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 3;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("ah", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("spl", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 8;
-        param->registers[reg_idx].force_rex = true;
-    } else if(strcmp("sp", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("esp", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rsp", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm4", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("fs", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("cr4", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 4;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("ch", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("bpl", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 8;
-        param->registers[reg_idx].force_rex = true;
-    } else if(strcmp("bp", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("ebp", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rbp", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm5", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("gs", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 16;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("cr5", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 5;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("dh", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("sil", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 8;
-        param->registers[reg_idx].force_rex = true;
-    } else if(strcmp("si", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("esi", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rsi", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm6", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr6", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 6;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("bh", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("dil", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 8;
-        param->registers[reg_idx].force_rex = true;
-    } else if(strcmp("di", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("edi", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("rdi", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm7", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr7", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 7;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r8b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 8;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r8w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 8;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r8d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 8;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r8", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 8;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm8", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 8;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr8", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 8;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r9b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 9;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r9w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 9;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r9d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 9;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r9", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 9;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm9", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 9;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr9", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 9;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r10b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 10;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r10w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 10;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r10d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 10;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r10", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 10;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm10", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 10;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr10", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 10;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r11b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 11;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r11w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 11;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r11d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 11;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r11", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 11;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm11", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 11;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr11", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 11;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r12b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 12;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r12w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 12;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r12d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 12;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r12", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 12;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm12", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 12;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr12", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 12;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r13b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 13;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r13w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 13;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r13d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 13;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r13", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 13;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm13", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 13;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr13", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 13;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r14b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 14;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r14w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 14;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r14d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 14;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r14", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 14;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm14", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 14;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr14", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 14;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else if(strcmp("r15b", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 15;
-        param->registers[reg_idx].register_size  = 8;
-    } else if(strcmp("r15w", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 15;
-        param->registers[reg_idx].register_size  = 16;
-    } else if(strcmp("r15d", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 15;
-        param->registers[reg_idx].register_size  = 32;
-    } else if(strcmp("r15", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 15;
-        param->registers[reg_idx].register_size  = 64;
-    } else if(strcmp("xmm15", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 15;
-        param->registers[reg_idx].register_size  = 128;
-    } else if(strcmp("cr15", reg_str) == 0) {
-        param->registers[reg_idx].register_index = 15;
-        param->registers[reg_idx].register_size  = 32;
-        param->registers[reg_idx].is_control = true;
-    } else {
-        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unknown register: -%s-", reg_str);
-        result = false;
+    for(uint8_t i = 0; i < ASM_REGISTER_COUNT; i++) {
+        if(strcmp(reg_str, asm_register_map[i].name) == 0) {
+            param->registers[reg_idx] = asm_register_map[i].reg;
+            return true;
+        }
     }
 
-    return result;
+    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unknown register: -%s-", reg_str);
+
+    return false;
 }
 
 boolean_t asm_parse_instruction_param(const asm_token_t* tok, asm_instruction_param_t* param) {
