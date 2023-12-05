@@ -8,7 +8,7 @@
 #include <compiler/asm_instructions.h>
 #include <strings.h>
 #include <int_limits.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.compiler.assembler");
 
@@ -20,7 +20,7 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param);
 boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, uint8_t* modrm, uint8_t* sib,
                                boolean_t* need_rex, uint8_t* rex,
                                boolean_t* has_displacement, uint8_t* disp_size);
-boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t relocs);
+boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, linkedlist_t* relocs);
 
 boolean_t asm_parse_number(char_t* data, uint64_t* result) {
     boolean_t is_hex = false;
@@ -47,7 +47,7 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
 
     if(data[0] != '(') {
         // we have a displacement may be label or number
-        buffer_t disp = buffer_new_with_capacity(NULL, 1024);
+        buffer_t* disp = buffer_new_with_capacity(NULL, 1024);
 
         while(*data && *data != '(') {
             buffer_append_byte(disp, *data);
@@ -147,7 +147,7 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
 
         if(*data == '%') {
             data++;
-            //we have index register
+            // we have index register
 
             char_t* index_reg_str = data;
 
@@ -690,7 +690,7 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
             } else {
                 if(*has_displacement) {
                     *need_sib = false;
-                    //*sib |= 0x20;
+                    // *sib |= 0x20;
 
                     *modrm |= op.registers[ASM_REGISTER_TYPE_BASE].register_index & 0x07;
 
@@ -745,7 +745,7 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
 
 
 
-boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_t relocs) {
+boolean_t asm_encode_instructions(linkedlist_t* tokens, buffer_t* out, linkedlist_t* relocs) {
     iterator_t* it = linkedlist_iterator_create(tokens);
 
     boolean_t result = true;
@@ -790,7 +790,7 @@ boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_
             break;
         }
 
-        //it = it->next(it);
+        // it = it->next(it);
     }
 
     it->destroy(it);
@@ -798,7 +798,7 @@ boolean_t asm_encode_instructions(linkedlist_t tokens, buffer_t out, linkedlist_
     return result;
 }
 
-void asm_encoder_print_relocs(linkedlist_t relocs) {
+void asm_encoder_print_relocs(linkedlist_t* relocs) {
     iterator_t* iter = linkedlist_iterator_create(relocs);
 
     while(iter->end_of_iterator(iter) != 0) {
@@ -812,7 +812,7 @@ void asm_encoder_print_relocs(linkedlist_t relocs) {
     iter->destroy(iter);
 }
 
-void asm_encoder_destroy_relocs(linkedlist_t relocs) {
+void asm_encoder_destroy_relocs(linkedlist_t* relocs) {
     iterator_t* iter = linkedlist_iterator_create(relocs);
 
     while(iter->end_of_iterator(iter) != 0) {
@@ -828,7 +828,7 @@ void asm_encoder_destroy_relocs(linkedlist_t relocs) {
     linkedlist_destroy_with_data(relocs);
 }
 
-boolean_t asm_encode_instruction(iterator_t* it, buffer_t outbuf, linkedlist_t relocs) {
+boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, linkedlist_t* relocs) {
     boolean_t result = true;
 
     const asm_token_t* tok_operand = it->get_item(it);

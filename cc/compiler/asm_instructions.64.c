@@ -6,6 +6,8 @@
 #include <compiler/asm_instructions.h>
 #include <strings.h>
 
+MODULE("turnstone.compiler.assembler");
+
 const asm_instruction_mnemonic_map_t asm_instruction_mnemonic_map[] = {
     {"adc", ASM_INSTRUCTION_MNEMONIC_ADC, 3, 3, 32, 32, 0},
     {"add", ASM_INSTRUCTION_MNEMONIC_ADD, 3, 3, 32, 32, 0},

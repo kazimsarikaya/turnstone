@@ -5,22 +5,22 @@
 
 #include <compiler/asm_parser.h>
 #include <strings.h>
-#include <video.h>
+#include <logging.h>
 
 MODULE("turnstone.compiler.assembler");
 
-boolean_t            asm_parser_emit_whitespace(buffer_t buf);
-boolean_t            asm_parser_emit_comment(buffer_t buf);
-boolean_t            asm_parser_emit_line(buffer_t buf, buffer_t line);
+boolean_t            asm_parser_emit_whitespace(buffer_t* buf);
+boolean_t            asm_parser_emit_comment(buffer_t* buf);
+boolean_t            asm_parser_emit_line(buffer_t* buf, buffer_t* line);
 boolean_t            asm_parser_is_whitespace(uint8_t c);
 asm_directive_type_t asm_parser_get_directive_type(const char_t* str);
-boolean_t            asm_parser_parse_line(buffer_t line, linkedlist_t tokens);
+boolean_t            asm_parser_parse_line(buffer_t* line, linkedlist_t* tokens);
 
 boolean_t asm_parser_is_whitespace(uint8_t c) {
     return c == ' ' || c == '\t' || c == '\r';
 }
 
-boolean_t asm_parser_emit_comment(buffer_t buf) {
+boolean_t asm_parser_emit_comment(buffer_t* buf) {
     if(buffer_remaining(buf) < 2) {
         return false;
     }
@@ -46,7 +46,7 @@ boolean_t asm_parser_emit_comment(buffer_t buf) {
     return true;
 }
 
-boolean_t asm_parser_emit_whitespace(buffer_t buf) {
+boolean_t asm_parser_emit_whitespace(buffer_t* buf) {
 
     while(buffer_remaining(buf) > 0) {
         uint8_t c = buffer_peek_byte(buf);
@@ -61,7 +61,7 @@ boolean_t asm_parser_emit_whitespace(buffer_t buf) {
     return true;
 }
 
-boolean_t asm_parser_emit_line(buffer_t buf, buffer_t line) {
+boolean_t asm_parser_emit_line(buffer_t* buf, buffer_t* line) {
     buffer_reset(line);
 
     while(buffer_remaining(buf) > 0) {
@@ -120,12 +120,12 @@ asm_directive_type_t asm_parser_get_directive_type(const char_t* str) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-boolean_t asm_parser_parse_line(buffer_t line, linkedlist_t tokens) {
+boolean_t asm_parser_parse_line(buffer_t* line, linkedlist_t* tokens) {
     if(buffer_remaining(line) == 0) {
         return true;
     }
 
-    buffer_t part = buffer_new_with_capacity(NULL, 1024);
+    buffer_t* part = buffer_new_with_capacity(NULL, 1024);
 
     // the first part is delimetered one of : or whitespace
     // if it is : then it is a label
@@ -252,7 +252,7 @@ boolean_t asm_parser_parse_line(buffer_t line, linkedlist_t tokens) {
 }
 #pragma GCC diagnostic pop
 
-void asm_parser_print_tokens(linkedlist_t tokens) {
+void asm_parser_print_tokens(linkedlist_t* tokens) {
     iterator_t* it = linkedlist_iterator_create(tokens);
 
     while(it->end_of_iterator(it) != 0) {
@@ -266,7 +266,7 @@ void asm_parser_print_tokens(linkedlist_t tokens) {
     it->destroy(it);
 }
 
-boolean_t asm_parser_destroy_tokens(linkedlist_t tokens) {
+boolean_t asm_parser_destroy_tokens(linkedlist_t* tokens) {
     iterator_t* it = linkedlist_iterator_create(tokens);
 
     while(it->end_of_iterator(it) != 0) {
@@ -285,10 +285,10 @@ boolean_t asm_parser_destroy_tokens(linkedlist_t tokens) {
     return true;
 }
 
-linkedlist_t asm_parser_parse(buffer_t buf) {
-    linkedlist_t tokens = linkedlist_create_list();
+linkedlist_t* asm_parser_parse(buffer_t* buf) {
+    linkedlist_t* tokens = linkedlist_create_list();
 
-    buffer_t line = buffer_new_with_capacity(NULL, 1024);
+    buffer_t* line = buffer_new_with_capacity(NULL, 1024);
 
     while(buffer_remaining(buf) > 0 ) {
         buffer_reset(line);

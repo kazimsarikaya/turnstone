@@ -45,8 +45,8 @@ typedef struct asm_token_t {
 } asm_token_t;
 
 
-linkedlist_t asm_parser_parse(buffer_t buf);
-void         asm_parser_print_tokens(linkedlist_t tokens);
-boolean_t    asm_parser_destroy_tokens(linkedlist_t tokens);
+linkedlist_t* asm_parser_parse(buffer_t* buf);
+void          asm_parser_print_tokens(linkedlist_t* tokens);
+boolean_t     asm_parser_destroy_tokens(linkedlist_t* tokens);
 
 #endif /* __COMPILER_ASM_PARSER_H */
