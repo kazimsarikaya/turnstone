@@ -661,6 +661,7 @@ typedef union ahci_ata_smart_u {
 } ahci_ata_smart_t;
 
 typedef struct ahci_sata_disk_s {
+    memory_heap_t*     heap;
     uint64_t           disk_id;
     ahci_device_type_t type;
     uint64_t           port_address;

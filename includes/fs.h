@@ -27,10 +27,10 @@ typedef struct fs_stat_t {
 #define PATH_DELIMETER_STR "/"
 #define PATH_DELIMETER_CHR '/'
 
-typedef void * path_context_t;
+typedef struct path_context_t path_context_t;
 
 typedef struct path_t {
-    path_context_t context;
+    path_context_t* context;
     char_t* (* get_fullpath)(const struct path_t* self);
     char_t* (* get_name)(const struct path_t* self);
     char_t* (* get_extension)(const struct path_t* self);
@@ -48,10 +48,10 @@ typedef enum file_seek_type_t {
     FILE_SEEK_TYPE_END,
 } file_seek_type_t;
 
-typedef void * file_context_t;
+typedef struct file_context_t file_context_t;
 
 typedef struct file_t {
-    file_context_t context;
+    file_context_t* context;
     const path_t* (* get_path)(const struct file_t* self);
     fs_stat_type_t (* get_type)(struct file_t* self);
     time_t (* get_create_time)(struct file_t* self);
@@ -68,10 +68,10 @@ typedef struct file_t {
 #define DIRECTORY_CURRENT_DIR  "."
 #define DIRECTORY_PARENT_DIR   ".."
 
-typedef void * directory_context_t;
+typedef struct directory_context_t directory_context_t;
 
 typedef struct directory_t {
-    directory_context_t context;
+    directory_context_t* context;
     const path_t* (* get_path)(const struct directory_t* self);
     fs_stat_type_t (* get_type)(struct directory_t* self);
     time_t (* get_create_time)(struct directory_t* self);
@@ -83,8 +83,10 @@ typedef struct directory_t {
     file_t* (* create_or_open_file)(struct directory_t* self, const path_t* p);
 } directory_t;
 
+typedef void * path_interface_context_t;
+
 typedef struct path_interface_t {
-    void* context;
+    path_interface_context_t* context;
     const path_t* (* get_path)(const struct path_interface_t* self);
     fs_stat_type_t (* get_type)(const struct path_interface_t* self);
     time_t (* get_create_time)(const struct path_interface_t* self);
@@ -93,10 +95,10 @@ typedef struct path_interface_t {
     int8_t (* close)(const struct path_interface_t* self);
 }path_interface_t;
 
-typedef void * filesystem_context_t;
+typedef struct filesystem_context_t filesystem_context_t;
 
 typedef struct filesystem_t {
-    filesystem_context_t context;
+    filesystem_context_t* context;
     directory_t* (* get_root_directory)(struct filesystem_t* self);
     uint64_t (* get_total_size)(struct filesystem_t* self);
     uint64_t (* get_free_size)(struct filesystem_t* self);

@@ -67,12 +67,14 @@ int8_t gpt_disk_close(const disk_or_partition_t* d) {
 
     gpt_disk_t* gd = (gpt_disk_t*)d;
 
+    memory_heap_t* heap = d->get_heap(d);
+
     gd->underlaying_disk_pointer->close((disk_or_partition_t*)gd->underlaying_disk_pointer);
 
-    memory_free(gd->gpt_header);
-    memory_free(gd->partitions);
+    memory_free_ext(heap, gd->gpt_header);
+    memory_free_ext(heap, gd->partitions);
 
-    memory_free(gd);
+    memory_free_ext(heap, gd);
 
     return 0;
 }
@@ -119,7 +121,7 @@ int8_t gpt_write_gpt_metadata(const disk_t* d) {
 
     dp->write(dp, max_lba, 1, (uint8_t*)gd->gpt_header);
 
-    memory_free(gd->gpt_header);
+    memory_free_ext(dp->get_heap(dp), gd->gpt_header);
 
     dp->read(dp, 1, 1, (uint8_t**)&gd->gpt_header);
 
@@ -129,6 +131,8 @@ int8_t gpt_write_gpt_metadata(const disk_t* d) {
 int8_t gpt_check_and_format_if_need(const disk_t* d) {
     gpt_disk_t* gd = (gpt_disk_t*)d;
     disk_or_partition_t* dp = (disk_or_partition_t*)d;
+
+    memory_heap_t* heap = dp->get_heap(dp);
 
     uint64_t block_size = dp->get_block_size(dp);
 
@@ -146,14 +150,14 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
     efi_pmbr_partition_t* pmbr_part = (efi_pmbr_partition_t*)(data + 0x1be);
 
     if(pmbr_part->part_type == EFI_PMBR_PART_TYPE) {
-        memory_free(data);
+        memory_free_ext(heap, data);
 
         dp->read(dp, 1, 1, &data);
 
         efi_partition_table_header_t* gpt_table = (efi_partition_table_header_t*)data;
 
         if(gpt_table->header.signature == EFI_PART_TABLE_HEADER_SIGNATURE) {
-            memory_free(data);
+            memory_free_ext(heap, data);
 
             dp->read(dp, 1, 1, (uint8_t**)&gd->gpt_header);
 
@@ -162,13 +166,13 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
             return 0;
         }
 
-        memory_free(data);
+        memory_free_ext(heap, data);
     } else {
-        memory_free(data);
+        memory_free_ext(heap, data);
     }
 
 
-    data = memory_malloc_ext(0, block_size, 0x1000);
+    data = memory_malloc_ext(heap, block_size, 0x1000);
 
     pmbr_part = (efi_pmbr_partition_t*)(data + 0x1be);
     pmbr_part->first_chs.sector = 2;
@@ -189,10 +193,10 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
 
     dp->write(dp, 0, 1, data);
 
-    memory_free(data);
+    memory_free_ext(heap, data);
 
-    gd->gpt_header = memory_malloc_ext(0, block_size, 0x1000);
-    gd->partitions = memory_malloc_ext(0, gpt_parts_block_count * block_size, 0x1000);
+    gd->gpt_header = memory_malloc_ext(heap, block_size, 0x1000);
+    gd->partitions = memory_malloc_ext(heap, gpt_parts_block_count * block_size, 0x1000);
 
     efi_partition_table_header_t* gpt = (efi_partition_table_header_t*)gd->gpt_header;
 
@@ -256,7 +260,7 @@ disk_partition_context_t*  gpt_get_partition_context(const disk_t* d, uint8_t pa
 
     gpt_disk_t* gd = (gpt_disk_t*)d;
 
-    disk_partition_context_t* res = memory_malloc(sizeof(disk_partition_context_t));
+    disk_partition_context_t* res = memory_malloc_ext(d->disk.get_heap(&d->disk), sizeof(disk_partition_context_t), 0);
 
     if(res == NULL) {
         return NULL;
@@ -274,8 +278,16 @@ int8_t gpt_part_iter_destroy(iterator_t* iter){
         return -1;
     }
 
-    memory_free(iter->metadata);
-    memory_free(iter);
+    gpt_parts_iter_metadata_t* md = iter->metadata;
+
+    if(md == NULL) {
+        return NULL;
+    }
+
+    memory_heap_t* heap = md->disk->underlaying_disk_pointer->get_heap(md->disk->underlaying_disk_pointer);
+
+    memory_free_ext(heap, iter->metadata);
+    memory_free_ext(heap, iter);
 
     return 0;
 }
@@ -350,16 +362,18 @@ iterator_t* gpt_get_partition_contexts(const disk_t* d){
         return NULL;
     }
 
-    iterator_t* iter = memory_malloc(sizeof(iterator_t));
+    memory_heap_t* heap = d->disk.get_heap(&d->disk);
+
+    iterator_t* iter = memory_malloc_ext(heap, sizeof(iterator_t), 0);
 
     if(iter == NULL) {
         return NULL;
     }
 
-    gpt_parts_iter_metadata_t* md = memory_malloc(sizeof(gpt_parts_iter_metadata_t));
+    gpt_parts_iter_metadata_t* md = memory_malloc_ext(heap, sizeof(gpt_parts_iter_metadata_t), 0);
 
     if(md == NULL) {
-        memory_free(iter);
+        memory_free_ext(heap, iter);
 
         return NULL;
     }
@@ -404,8 +418,9 @@ disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk){
     if(underlaying_disk == NULL) {
         return NULL;
     }
+    memory_heap_t* heap = underlaying_disk->disk.get_heap(&underlaying_disk->disk);
 
-    gpt_disk_t* gd = memory_malloc(sizeof(gpt_disk_t));
+    gpt_disk_t* gd = memory_malloc_ext(heap, sizeof(gpt_disk_t), 0);
 
     if(gd == NULL) {
         return NULL;
@@ -434,6 +449,7 @@ typedef struct disk_partition_ctx_t {
     const disk_partition_context_t* ctx;
 } disk_partition_ctx_t;
 
+memory_heap_t*                  disk_partition_get_heap(const disk_or_partition_t* d);
 uint64_t                        disk_partition_get_size(const disk_or_partition_t* d);
 uint64_t                        disk_partition_get_block_size(const disk_or_partition_t* d);
 int8_t                          disk_partition_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
@@ -446,16 +462,18 @@ const disk_t*                   disk_partition_get_disk(const disk_partition_t* 
 disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
     gpt_disk_t* gd = (gpt_disk_t*) d;
 
+    memory_heap_t* heap = d->disk.get_heap(&d->disk);
+
     disk_partition_context_t* ctx = gd->underlaying_disk.get_partition_context(d, partno);
 
     if(!ctx) {
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = memory_malloc(sizeof(disk_partition_ctx_t));
+    disk_partition_ctx_t* dctx = memory_malloc_ext(heap, sizeof(disk_partition_ctx_t), 0);
 
     if(!dctx) {
-        memory_free(ctx);
+        memory_free_ext(heap, ctx);
 
         return NULL;
     }
@@ -463,11 +481,11 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
     dctx->ctx = ctx;
     dctx->disk = d;
 
-    disk_partition_t* res = memory_malloc(sizeof(disk_partition_t));
+    disk_partition_t* res = memory_malloc_ext(heap, sizeof(disk_partition_t), 0);
 
     if(!res) {
-        memory_free(ctx);
-        memory_free(dctx);
+        memory_free_ext(heap, ctx);
+        memory_free_ext(heap, dctx);
 
         return NULL;
     }
@@ -477,6 +495,7 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
     res->partition.read = disk_partition_read;
     res->partition.write = disk_partition_write;
     res->partition.flush = disk_partition_flush;
+    res->partition.get_heap = disk_partition_get_heap;
     res->partition.get_size = disk_partition_get_size;
     res->partition.get_block_size = disk_partition_get_block_size;
     res->get_disk = disk_partition_get_disk;
@@ -488,6 +507,8 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
 
 disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* data) {
     gpt_disk_t* gd = (gpt_disk_t*) d;
+
+    memory_heap_t* heap = d->disk.get_heap(&d->disk);
 
     efi_guid_t* guid = (efi_guid_t*)data;
 
@@ -512,7 +533,7 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
         }
 
 
-        memory_free(tmp_ctx);
+        memory_free_ext(heap, tmp_ctx);
 
         it = it->next(it);
     }
@@ -524,10 +545,10 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = memory_malloc(sizeof(disk_partition_ctx_t));
+    disk_partition_ctx_t* dctx = memory_malloc_ext(heap, sizeof(disk_partition_ctx_t), 0);
 
     if(!dctx) {
-        memory_free(ctx);
+        memory_free_ext(heap, ctx);
 
         return NULL;
     }
@@ -535,11 +556,11 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
     dctx->ctx = ctx;
     dctx->disk = d;
 
-    disk_partition_t* res = memory_malloc(sizeof(disk_partition_t));
+    disk_partition_t* res = memory_malloc_ext(heap, sizeof(disk_partition_t), 0);
 
     if(!res) {
-        memory_free(ctx);
-        memory_free(dctx);
+        memory_free_ext(heap, ctx);
+        memory_free_ext(heap, dctx);
 
         return NULL;
     }
@@ -549,6 +570,7 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
     res->partition.read = disk_partition_read;
     res->partition.write = disk_partition_write;
     res->partition.flush = disk_partition_flush;
+    res->partition.get_heap = disk_partition_get_heap;
     res->partition.get_size = disk_partition_get_size;
     res->partition.get_block_size = disk_partition_get_block_size;
     res->get_disk = disk_partition_get_disk;
@@ -575,6 +597,21 @@ const disk_t* disk_partition_get_disk(const disk_partition_t* p) {
     disk_partition_ctx_t* dctx = p->partition.context;
 
     return dctx->disk;
+}
+
+
+memory_heap_t* disk_partition_get_heap(const disk_or_partition_t* d) {
+    if(!d) {
+        return NULL;
+    }
+
+    disk_partition_ctx_t* dctx = d->context;
+
+    if(!dctx) {
+        return NULL;
+    }
+
+    return dctx->disk->disk.get_heap(&dctx->disk->disk);
 }
 
 uint64_t disk_partition_get_size(const disk_or_partition_t* d) {
@@ -636,11 +673,13 @@ int8_t disk_partition_close(const disk_or_partition_t* d) {
         return 0;
     }
 
+    memory_heap_t* heap = d->get_heap(d);
+
     disk_partition_ctx_t* dctx = d->context;
 
-    memory_free((void*)dctx->ctx);
-    memory_free(dctx);
-    memory_free((void*)d);
+    memory_free_ext(heap, (void*)dctx->ctx);
+    memory_free_ext(heap, dctx);
+    memory_free_ext(heap, (void*)d);
 
     return 0;
 }

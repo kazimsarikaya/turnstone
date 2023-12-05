@@ -13,7 +13,7 @@
 MODULE("turnstone.kernel.hw.disk.fs");
 
 
-typedef struct fs_path_ctx_t {
+typedef struct path_context_t {
     char_t*       path_string;
     char_t**      parts;
     int64_t       part_count;
@@ -21,13 +21,13 @@ typedef struct fs_path_ctx_t {
     char_t*       name;
     char_t*       ext;
     filesystem_t* fs;
-} fs_path_ctx_t;
+} path_context_t;
 
-typedef struct fs_empty_path_interface_ctx_t {
+typedef struct empty_path_context_t {
     filesystem_t*  fs;
     path_t*        path;
     fs_stat_type_t type;
-} fs_empty_path_interface_ctx_t;
+} empty_path_context_t;
 
 char_t*        fs_path_get_fullpath(const path_t* self);
 char_t*        fs_path_get_name(const path_t* self);
@@ -46,25 +46,25 @@ int8_t         fs_epi_close(const path_interface_t* self);
 
 
 char_t* fs_path_get_fullpath(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     return ctx->path_string;
 }
 
 char_t* fs_path_get_name(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     return ctx->name;
 }
 
 char_t* fs_path_get_extension(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     return ctx->ext;
 }
 
 char_t* fs_path_get_name_and_ext(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     if(self->is_root(self) == 0) {
         return ctx->path_string;
@@ -76,7 +76,7 @@ char_t* fs_path_get_name_and_ext(const path_t* self) {
 }
 
 path_t* fs_path_get_basepath(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     if(self->is_root(self) == 0) {
         return NULL;
@@ -112,13 +112,13 @@ path_t* fs_path_get_basepath(const path_t* self) {
 }
 
 int8_t fs_path_is_root(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     return strcmp(PATH_DELIMETER_STR, ctx->path_string) == 0?0:-1;
 }
 
 int8_t fs_path_is_directory(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     fs_stat_t* stat = ctx->fs->stat(ctx->fs, self);
 
@@ -130,7 +130,7 @@ int8_t fs_path_is_directory(const path_t* self) {
 }
 
 int8_t fs_path_close(const path_t* self) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     memory_free(ctx->path_string);
     memory_free(ctx->parts);
@@ -145,7 +145,7 @@ int8_t fs_path_close(const path_t* self) {
 
 
 path_t* fs_path_append(const path_t* self, const path_t* child) {
-    fs_path_ctx_t* ctx = (fs_path_ctx_t*)self->context;
+    path_context_t* ctx = (path_context_t*)self->context;
 
     char_t* tmp = NULL;
 
@@ -167,7 +167,7 @@ path_t* fs_path_append(const path_t* self, const path_t* child) {
 }
 
 path_t* filesystem_new_path(filesystem_t* fs, const char_t* path_string) {
-    fs_path_ctx_t* ctx = memory_malloc(sizeof(fs_path_ctx_t));
+    path_context_t* ctx = memory_malloc(sizeof(path_context_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -249,19 +249,19 @@ file_t* fs_create_or_open_file(filesystem_t* self, const path_t* p) {
 }
 
 const path_t* fs_epi_get_path(const path_interface_t* self) {
-    fs_empty_path_interface_ctx_t* ctx = (fs_empty_path_interface_ctx_t*)self->context;
+    empty_path_context_t* ctx = (empty_path_context_t*)self->context;
 
     return ctx->path;
 }
 
 fs_stat_type_t fs_epi_get_type(const path_interface_t* self) {
-    fs_empty_path_interface_ctx_t* ctx = (fs_empty_path_interface_ctx_t*)self->context;
+    empty_path_context_t* ctx = (empty_path_context_t*)self->context;
 
     return ctx->type;
 }
 
 int8_t fs_epi_close(const path_interface_t* self) {
-    fs_empty_path_interface_ctx_t* ctx = (fs_empty_path_interface_ctx_t*)self->context;
+    empty_path_context_t* ctx = (empty_path_context_t*)self->context;
     ctx->path->close(ctx->path);
     memory_free(self->context);
     memory_free((void*)self);
@@ -270,7 +270,7 @@ int8_t fs_epi_close(const path_interface_t* self) {
 }
 
 path_interface_t* filesystem_empty_path_interface(filesystem_t* fs, path_t* p, fs_stat_type_t type) {
-    fs_empty_path_interface_ctx_t* ctx = memory_malloc(sizeof(fs_empty_path_interface_ctx_t));
+    empty_path_context_t* ctx = memory_malloc(sizeof(empty_path_context_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -288,7 +288,7 @@ path_interface_t* filesystem_empty_path_interface(filesystem_t* fs, path_t* p, f
         return NULL;
     }
 
-    pi->context = ctx;
+    pi->context = (path_interface_context_t*)ctx;
     pi->get_path = fs_epi_get_path;
     pi->get_type = fs_epi_get_type;
     pi->close = fs_epi_close;

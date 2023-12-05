@@ -486,6 +486,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
                 continue;
             }
 
+            disk->heap = heap;
             disk->disk_id = disk_id++;
             disk->port_address = port_address;
             disk->type = dt;
@@ -585,9 +586,9 @@ future_t ahci_flush(uint64_t disk_id) {
     fis->control_or_command = 1;
     fis->command = AHCI_ATA_CMD_FLUSH_EXT;
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_for_future();
+    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
 
-    future_t fut = future_create(disk->future_locks[(1 << slot) - 1]);
+    future_t fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], NULL);
 
     disk->current_commands |= 1 << slot;
     port->command_issue = 1 << slot;
@@ -840,9 +841,9 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffe
         port->sata_active = 1 << slot;
     }
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_for_future();
+    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
 
-    future_t fut = future_create_with_data(disk->future_locks[(1 << slot) - 1], buffer);
+    future_t fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
 
     disk->current_commands |= 1 << slot;
     port->command_issue = 1 << slot;
@@ -941,9 +942,9 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         port->sata_active = 1 << slot;
     }
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_for_future();
+    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
 
-    future_t fut = future_create_with_data(disk->future_locks[(1 << slot) - 1], buffer);
+    future_t fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
 
     disk->current_commands |= 1 << slot;
     port->command_issue = 1 << slot;

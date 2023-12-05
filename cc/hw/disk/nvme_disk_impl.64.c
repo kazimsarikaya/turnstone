@@ -17,13 +17,20 @@ typedef struct nvme_disk_impl_context_t {
     uint64_t     block_size;
 } nvme_disk_impl_context_t;
 
-uint64_t nvme_disk_impl_get_size(const disk_or_partition_t* d);
-uint64_t nvme_disk_impl_get_block_size(const disk_or_partition_t* d);
-int8_t   nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   nvme_disk_impl_flush(const disk_or_partition_t* d);
-int8_t   nvme_disk_impl_close(const disk_or_partition_t* d);
+memory_heap_t* nvme_disk_impl_get_heap(const disk_or_partition_t* d);
+uint64_t       nvme_disk_impl_get_size(const disk_or_partition_t* d);
+uint64_t       nvme_disk_impl_get_block_size(const disk_or_partition_t* d);
+int8_t         nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t         nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t         nvme_disk_impl_flush(const disk_or_partition_t* d);
+int8_t         nvme_disk_impl_close(const disk_or_partition_t* d);
 
+
+memory_heap_t* nvme_disk_impl_get_heap(const disk_or_partition_t* d) {
+    nvme_disk_impl_context_t* ctx = (nvme_disk_impl_context_t*)d->context;
+
+    return ctx->nvme_disk->heap;
+}
 
 uint64_t nvme_disk_impl_get_size(const disk_or_partition_t* d){
     nvme_disk_impl_context_t* ctx = (nvme_disk_impl_context_t*)d->context;
@@ -49,7 +56,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
 
     if(real_buffer_len % 0x1000 || (uint64_t)write_buf % 0x1000) {
         real_buffer_len += 0x1000 - (real_buffer_len % 0x1000);
-        write_buf = memory_malloc_ext(NULL, real_buffer_len, 0x1000);
+        write_buf = memory_malloc_ext(ctx->nvme_disk->heap, real_buffer_len, 0x1000);
         memory_memcopy(data, write_buf, buffer_len);
         need_to_free = true;
     }
@@ -60,7 +67,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
     future_t fut = NULL;
 
-    linkedlist_t* futs = linkedlist_create_list_with_heap(NULL);
+    linkedlist_t* futs = linkedlist_create_list_with_heap(ctx->nvme_disk->heap);
 
     while(rem_lba) {
         uint16_t iter_read_size = MIN(rem_lba, max_lba);
@@ -77,7 +84,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     }
 
     if(need_to_free) {
-        memory_free(write_buf);
+        memory_free_ext(ctx->nvme_disk->heap, write_buf);
     }
 
     iterator_t* iter = linkedlist_iterator_create(futs);
@@ -104,7 +111,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
         buffer_len += 0x1000 - (buffer_len % 0x1000);
     }
 
-    *data = memory_malloc_ext(NULL, buffer_len, 0x1000);
+    *data = memory_malloc_ext(ctx->nvme_disk->heap, buffer_len, 0x1000);
 
     if(*data == NULL) {
         return -1;
@@ -116,7 +123,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
     future_t fut = NULL;
 
-    linkedlist_t* futs = linkedlist_create_list_with_heap(NULL);
+    linkedlist_t* futs = linkedlist_create_list_with_heap(ctx->nvme_disk->heap);
 
     while(rem_lba) {
         uint16_t iter_read_size = MIN(rem_lba, max_lba);
@@ -162,9 +169,11 @@ int8_t nvme_disk_impl_close(const disk_or_partition_t* d) {
 
     d->flush(d);
 
-    memory_free(ctx);
+    memory_heap_t* heap = ctx->nvme_disk->heap;
 
-    memory_free((void*)d);
+    memory_free_ext(heap, ctx);
+
+    memory_free_ext(heap, (void*)d);
 
     return 0;
 }
@@ -175,7 +184,7 @@ disk_t* nvme_disk_impl_open(nvme_disk_t* nvme_disk) {
         return NULL;
     }
 
-    nvme_disk_impl_context_t* ctx = memory_malloc(sizeof(nvme_disk_impl_context_t));
+    nvme_disk_impl_context_t* ctx = memory_malloc_ext(nvme_disk->heap, sizeof(nvme_disk_impl_context_t), 0);
 
     if(ctx == NULL) {
         return NULL;
@@ -184,15 +193,16 @@ disk_t* nvme_disk_impl_open(nvme_disk_t* nvme_disk) {
     ctx->nvme_disk = nvme_disk;
     ctx->block_size = nvme_disk->lba_size;
 
-    disk_t* d = memory_malloc(sizeof(disk_t));
+    disk_t* d = memory_malloc_ext(nvme_disk->heap, sizeof(disk_t), 0);
 
     if(d == NULL) {
-        memory_free(ctx);
+        memory_free_ext(nvme_disk->heap, ctx);
 
         return NULL;
     }
 
     d->disk.context = ctx;
+    d->disk.get_heap = nvme_disk_impl_get_heap;
     d->disk.get_size = nvme_disk_impl_get_size;
     d->disk.get_block_size = nvme_disk_impl_get_block_size;
     d->disk.write = nvme_disk_impl_write;

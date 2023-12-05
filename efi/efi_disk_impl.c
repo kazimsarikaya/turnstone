@@ -24,6 +24,13 @@ typedef struct efi_disk_impl_context_t {
 } efi_disk_impl_context_t; ///< typedef for efi_disk_impl_context_t.
 
 /**
+ * @brief returns heap.
+ * @param[in] d disk or partition.
+ * @return heap.
+ */
+memory_heap_t* efi_disk_impl_get_heap(const disk_or_partition_t* d);
+
+/**
  * @brief returns disk size.
  * @param[in] d disk or partition.
  * @return disk size.
@@ -70,6 +77,11 @@ int8_t efi_disk_impl_close(const disk_or_partition_t* d);
  * @return 0 on success.
  */
 int8_t efi_disk_impl_flush(const disk_or_partition_t* d);
+
+memory_heap_t* efi_disk_impl_get_heap(const disk_or_partition_t* d) {
+    UNUSED(d);
+    return memory_get_heap(NULL);
+}
 
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d){
     efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
@@ -139,6 +151,7 @@ disk_t* efi_disk_impl_open(efi_block_io_t* bio) {
     }
 
     d->disk.context = ctx;
+    d->disk.get_heap = efi_disk_impl_get_heap;
     d->disk.get_size = efi_disk_impl_get_disk_size;
     d->disk.get_block_size = efi_disk_impl_get_block_size;
     d->disk.write = efi_disk_impl_write;
