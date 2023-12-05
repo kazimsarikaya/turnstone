@@ -718,7 +718,7 @@ future_t nvme_flush(uint64_t disk_id) {
 
     lock_t lock = lock_create_with_heap_for_future(nvme_disk->heap, true);
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
-    future_t fut = future_create(lock);
+    future_t fut = future_create_with_heap_and_data(nvme_disk->heap, lock, NULL);
 
     nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
