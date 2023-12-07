@@ -1572,6 +1572,7 @@ int32_t main(int32_t argc, char * argv[]) {
     }
 
     pascal_vm_print_symbol_table(&vm);
+    PRINTLOG(COMPILER_PASCAL, LOG_INFO, "Result: %d", result);
 
     FILE* out = fopen(argv[2], "w");
 
