@@ -199,4 +199,22 @@ static inline uint64_t reverse_bits(uint64_t bits, uint8_t bit_count) {
 
     return result;
 }
+
+boolean_t isalpha(char_t c);
+boolean_t isdigit(char_t c);
+boolean_t isalnum(char_t c);
+boolean_t isxdigit(char_t c);
+boolean_t islower(char_t c);
+boolean_t isupper(char_t c);
+boolean_t isspace(char_t c);
+boolean_t ispunct(char_t c);
+boolean_t isprint(char_t c);
+boolean_t isgraph(char_t c);
+boolean_t iscntrl(char_t c);
+boolean_t isblank(char_t c);
+boolean_t isascii(char_t c);
+boolean_t isalnumw(char_t c);
+
+
+
 #endif
