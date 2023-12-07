@@ -1222,7 +1222,7 @@ int8_t pascal_vm_build_stack(pascal_vm_t* vm);
 int8_t pascal_vm_find_free_reg(pascal_vm_t* vm);
 
 int8_t pascal_vm_find_free_reg(pascal_vm_t* vm) {
-    for(size_t i = 0; i < PASCAL_VM_REG_COUNT; i++) {
+    for(int32_t i = PASCAL_VM_REG_COUNT - 1; i >= 0; i--) {
         if(vm->busy_regs[i] == false) {
             vm->busy_regs[i] = true;
             return i;
@@ -1663,18 +1663,46 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
     if(vm->is_at_reg) {
         buffer_printf(vm->asm_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[node->right->used_register], symbol->stack_offset);
         vm->is_at_reg = false;
+        vm->busy_regs[node->right->used_register] = false;
     } else if(vm->is_const) {
         buffer_printf(vm->asm_buffer, "\tmov $%d, -%d(%%rbp)\n", *result, symbol->stack_offset);
         vm->is_const = false;
     } else if(vm->is_at_stack) {
-        buffer_printf(vm->asm_buffer, "\tmov -%d(%%rbp), %%rax\n", vm->at_stack_offset);
-        buffer_printf(vm->asm_buffer, "\tmov %%rax, -%d(%%rbp)\n", symbol->stack_offset);
+        int16_t swap_reg = pascal_vm_find_free_reg(vm);
+
+        if(swap_reg == -1) {
+            swap_reg = 8;
+            buffer_printf(vm->asm_buffer, "\tpush %%%s\n", pascal_vm_regs[swap_reg]);
+        }
+
+        buffer_printf(vm->asm_buffer, "\tmov -%d(%%rbp), %%%s\n", vm->at_stack_offset, pascal_vm_regs[swap_reg]);
+        buffer_printf(vm->asm_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[swap_reg], symbol->stack_offset);
+
+        if(swap_reg == -1) {
+            buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[swap_reg]);
+        } else {
+            vm->busy_regs[swap_reg] = false;
+        }
+
+
         vm->is_at_stack = false;
     } else {
-        int16_t reg = pascal_vm_find_free_reg(vm);
-        buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[reg]);
-        buffer_printf(vm->asm_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[reg], symbol->stack_offset);
-        vm->busy_regs[reg] = false;
+        int16_t swap_reg = pascal_vm_find_free_reg(vm);
+
+        if(swap_reg == -1) {
+            swap_reg = 8;
+            buffer_printf(vm->asm_buffer, "\tpush %%%s\n", pascal_vm_regs[swap_reg]);
+        }
+
+        buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[swap_reg]);
+        buffer_printf(vm->asm_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[swap_reg], symbol->stack_offset);
+
+        if(swap_reg == -1) {
+            buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[swap_reg]);
+        } else {
+            vm->busy_regs[swap_reg] = false;
+        }
+
     }
 
     return 0;
