@@ -408,6 +408,7 @@ typedef struct pascal_symol_t {
     pascal_symbol_type_t type;
     uint32_t             size;
     int64_t              int_value;
+    uint16_t             stack_offset;
 } pascal_symbol_t;
 
 int8_t pascal_symbol_destroyer(memory_heap_t* heap, void* symbol);
@@ -436,6 +437,7 @@ typedef struct pascal_ast_node_t {
     struct pascal_ast_node_t * left;
     struct pascal_ast_node_t * right;
     linkedlist_t*              children;
+    int16_t                    used_register;
 } pascal_ast_node_t;
 
 typedef struct pascal_ast_t {
@@ -1170,6 +1172,25 @@ int8_t pascal_parser_parse(pascal_parser_t * parser, pascal_ast_t * ast) {
     return pascal_parser_program(parser, &ast->root);
 }
 
+const char_t* pascal_vm_regs[] = {
+    "rax",
+    "rbx",
+    "rcx",
+    "rdx",
+    "rsi",
+    "rdi",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15"
+};
+
+#define PASCAL_VM_REG_COUNT (sizeof(pascal_vm_regs) / sizeof(pascal_vm_regs[0]))
+
 
 typedef struct pascal_vm_t {
     pascal_ast_t *   ast;
@@ -1178,6 +1199,13 @@ typedef struct pascal_vm_t {
     buffer_t*        asm_buffer;
     buffer_t*        data_buffer;
     hashmap_t*       symbol_table;
+    uint16_t         stack_size;
+    uint16_t         next_stack_offset;
+    boolean_t        is_const;
+    boolean_t        is_at_reg;
+    boolean_t        is_at_stack;
+    uint16_t         at_stack_offset;
+    boolean_t        busy_regs[PASCAL_VM_REG_COUNT];
 } pascal_vm_t;
 
 int8_t pascal_vm_init(pascal_vm_t * vm, pascal_ast_t * ast);
@@ -1190,6 +1218,19 @@ int8_t pascal_vm_execute_compound(pascal_vm_t* vm, pascal_ast_node_t* node, int3
 int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result);
 int8_t pascal_vm_execute(pascal_vm_t * vm, int32_t * result);
 int8_t pascal_vm_print_symbol_table(pascal_vm_t * vm);
+int8_t pascal_vm_build_stack(pascal_vm_t* vm);
+int8_t pascal_vm_find_free_reg(pascal_vm_t* vm);
+
+int8_t pascal_vm_find_free_reg(pascal_vm_t* vm) {
+    for(size_t i = 0; i < PASCAL_VM_REG_COUNT; i++) {
+        if(vm->busy_regs[i] == false) {
+            vm->busy_regs[i] = true;
+            return i;
+        }
+    }
+
+    return -1;
+}
 
 int8_t pascal_vm_init(pascal_vm_t * vm, pascal_ast_t * ast) {
     if (ast == NULL) {
@@ -1218,6 +1259,10 @@ int8_t pascal_vm_init(pascal_vm_t * vm, pascal_ast_t * ast) {
     }
 
     vm->ast = ast;
+
+    vm->next_stack_offset = 16;
+    vm->stack_size = 8;
+
     return 0;
 }
 
@@ -1269,6 +1314,38 @@ int8_t pascal_vm_destroy(pascal_vm_t * vm) {
     return 0;
 }
 
+int8_t pascal_vm_build_stack(pascal_vm_t* vm) {
+    if (vm->symbol_table == NULL) {
+        return -1;
+    }
+
+    iterator_t* iter = hashmap_iterator_create(vm->symbol_table);
+
+    if (iter == NULL) {
+        return -1;
+    }
+
+    while (iter->end_of_iterator(iter) != 0) {
+        const pascal_symbol_t* symbol = iter->get_item(iter);
+
+        if (symbol == NULL) {
+            iter->destroy(iter);
+            return -1;
+        }
+
+        if(symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
+            buffer_printf(vm->asm_buffer, "\tmovq $%lli, -%d(%%rbp)\n", symbol->int_value, symbol->stack_offset);
+        }
+
+        iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    return 0;
+}
+
+
 int8_t pascal_vm_execute_block(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result) {
     if(node->left) {
         if(node->left->type == PASCAL_AST_NODE_TYPE_DECLS) {
@@ -1285,14 +1362,19 @@ int8_t pascal_vm_execute_block(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t
                     }
 
                     if(tmp_symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
-                        buffer_printf(vm->data_buffer, ".align 8\n");
-                        buffer_printf(vm->data_buffer, ".type %s,@object\n", tmp_symbol->name);
-                        buffer_printf(vm->data_buffer, ".size %s,8\n", tmp_symbol->name);
-                        buffer_printf(vm->data_buffer, "%s: .quad %lli\n", tmp_symbol->name, tmp_symbol->int_value);
+                        tmp_symbol->stack_offset = vm->next_stack_offset;
+                        vm->next_stack_offset += 8;
+                        vm->stack_size += 8;
                     }
 
                     hashmap_put(vm->symbol_table, tmp_symbol->name, tmp_symbol);
                 }
+            }
+
+            buffer_printf(vm->asm_buffer, "\tenter $%d, $0\n", vm->stack_size);
+            if(pascal_vm_build_stack(vm) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot build stack");
+                return -1;
             }
         } else {
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected decls");
@@ -1316,9 +1398,27 @@ int8_t pascal_vm_execure_unary_op(pascal_vm_t* vm, pascal_ast_node_t* node, int3
         *result = +right;
     } else if (node->token->type == PASCAL_TOKEN_TYPE_MINUS) {
         *result = -right;
-        buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tneg %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tpush %%rax\n");
+
+        if(vm->is_at_reg) {
+            buffer_printf(vm->asm_buffer, "\tneg %%%s\n", pascal_vm_regs[node->right->used_register]);
+            node->used_register = node->right->used_register;
+        } else if(vm->is_const) {
+            *result = -*result;
+        } else if(vm->is_at_stack) {
+            int16_t reg = pascal_vm_find_free_reg(vm);
+            buffer_printf(vm->asm_buffer, "\tmov -%d(%%rbp), %%%s\n", vm->at_stack_offset, pascal_vm_regs[reg]);
+            buffer_printf(vm->asm_buffer, "\tneg %%%s\n", pascal_vm_regs[reg]);
+            vm->is_at_stack = false;
+            vm->is_at_reg = true;
+            node->used_register = reg;
+        } else {
+            int16_t reg = pascal_vm_find_free_reg(vm);
+            buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[reg]);
+            buffer_printf(vm->asm_buffer, "\tneg %%%s\n", pascal_vm_regs[reg]);
+            vm->is_at_reg = true;
+            node->used_register = reg;
+        }
+
     } else {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown unary op");
         return -1;
@@ -1335,39 +1435,193 @@ int8_t pascal_vm_execure_binary_op(pascal_vm_t* vm, pascal_ast_node_t* node, int
         return -1;
     }
 
+    boolean_t left_is_const = vm->is_const;
+    vm->is_const = false;
+    boolean_t left_is_at_reg = vm->is_at_reg;
+    int16_t left_at_reg = node->left->used_register;
+    vm->is_at_reg = false;
+    boolean_t left_is_at_stack = vm->is_at_stack;
+    vm->is_at_stack = false;
+    uint16_t left_at_stack_offset = vm->at_stack_offset;
+
+
+    if(!left_is_const) {
+        if(!left_is_at_reg) {
+            left_at_reg = pascal_vm_find_free_reg(vm);
+
+            if(left_at_reg == -1) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "no free registers");
+                return -1;
+            }
+
+            if(left_is_at_stack) {
+                buffer_printf(vm->asm_buffer, "\tmov -%d(%%rbp), %%%s\n", left_at_stack_offset, pascal_vm_regs[left_at_reg]);
+            } else {
+                buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[left_at_reg]);
+            }
+        }
+    }
+
     if(pascal_vm_execute_ast_node(vm, node->right, &right) != 0) {
         return -1;
     }
 
+    boolean_t right_is_const = vm->is_const;
+    vm->is_const = false;
+    boolean_t right_is_at_reg = vm->is_at_reg;
+    vm->is_at_reg = false;
+    int16_t right_at_reg = node->right->used_register;
+    boolean_t right_is_at_stack = vm->is_at_stack;
+    vm->is_at_stack = false;
+    uint16_t right_at_stack_offset = vm->at_stack_offset;
+
+    if(!right_is_const) {
+        if(!right_is_at_reg) {
+            right_at_reg = pascal_vm_find_free_reg(vm);
+
+            if(right_at_reg == -1) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "no free registers");
+                return -1;
+            }
+
+            if(right_is_at_stack) {
+                buffer_printf(vm->asm_buffer, "\tmov -%d(%%rbp), %%%s\n", right_at_stack_offset, pascal_vm_regs[right_at_reg]);
+            } else {
+                buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[right_at_reg]);
+            }
+        }
+    }
+
+    if(left_is_const && right_is_const) {
+        vm->is_const = true;
+    }
+
     if (node->token->type == PASCAL_TOKEN_TYPE_PLUS) {
         *result = left + right;
-
-        buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tpop %%rbx\n");
-        buffer_printf(vm->asm_buffer, "\tadd %%rbx, %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tpush %%rax\n");
+        if(!vm->is_const) {
+            if(left_is_const) {
+                buffer_printf(vm->asm_buffer, "\tadd $%d, %%%s\n", left, pascal_vm_regs[right_at_reg]);
+                node->used_register = right_at_reg;
+            } else if(right_is_const) {
+                buffer_printf(vm->asm_buffer, "\tadd $%d, %%%s\n", right, pascal_vm_regs[left_at_reg]);
+                node->used_register = left_at_reg;
+            } else {
+                buffer_printf(vm->asm_buffer, "\tadd %%%s, %%%s\n", pascal_vm_regs[left_at_reg], pascal_vm_regs[right_at_reg]);
+                node->used_register = right_at_reg;
+                vm->busy_regs[left_at_reg] = false;
+            }
+            vm->is_at_reg = true;
+        }
     } else if (node->token->type == PASCAL_TOKEN_TYPE_MINUS) {
         *result = left - right;
 
-        buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tpop %%rbx\n");
-        buffer_printf(vm->asm_buffer, "\tsub %%rax, %%rbx\n");
-        buffer_printf(vm->asm_buffer, "\tpush %%rbx\n");
+        if(!vm->is_const) {
+            if(left_is_const) {
+                buffer_printf(vm->asm_buffer, "\tsub $%d, %%%s\n", left, pascal_vm_regs[right_at_reg]);
+                node->used_register = right_at_reg;
+            } else if(right_is_const) {
+                buffer_printf(vm->asm_buffer, "\tsub $%d, %%%s\n", right, pascal_vm_regs[left_at_reg]);
+                node->used_register = left_at_reg;
+            } else {
+                buffer_printf(vm->asm_buffer, "\tsub %%%s, %%%s\n", pascal_vm_regs[right_at_reg], pascal_vm_regs[left_at_reg]);
+                node->used_register = left_at_reg;
+                vm->busy_regs[right_at_reg] = false;
+            }
+            vm->is_at_reg = true;
+        }
     } else if (node->token->type == PASCAL_TOKEN_TYPE_MULTIPLY) {
         *result = left * right;
 
-        buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tpop %%rbx\n");
-        buffer_printf(vm->asm_buffer, "\timul %%rbx, %%rax\n");
-        buffer_printf(vm->asm_buffer, "\tpush %%rax\n");
+        if(!vm->is_const) {
+            if(left_is_const) {
+                buffer_printf(vm->asm_buffer, "\timul $%d, %%%s\n", left, pascal_vm_regs[right_at_reg]);
+                node->used_register = right_at_reg;
+            } else if(right_is_const) {
+                buffer_printf(vm->asm_buffer, "\timul $%d, %%%s\n", right, pascal_vm_regs[left_at_reg]);
+                node->used_register = left_at_reg;
+            } else {
+                buffer_printf(vm->asm_buffer, "\timul %%%s, %%%s\n", pascal_vm_regs[left_at_reg], pascal_vm_regs[right_at_reg]);
+                node->used_register = right_at_reg;
+                vm->busy_regs[left_at_reg] = false;
+            }
+            vm->is_at_reg = true;
+        }
     } else if (node->token->type == PASCAL_TOKEN_TYPE_DIVIDE) {
         *result = left / right;
 
-        buffer_printf(vm->asm_buffer, "\tpop %%rbx\n");
-        buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
-        buffer_printf(vm->asm_buffer, "\txor %%rdx, %%rdx\n");
-        buffer_printf(vm->asm_buffer, "\tidiv %%rbx\n");
-        buffer_printf(vm->asm_buffer, "\tpush %%rax\n");
+        if(!vm->is_const) {
+            boolean_t need_swap = false;
+            int16_t swap_reg = -1;
+
+            if(left_at_reg != 0) {
+                if(vm->busy_regs[0]) {
+                    need_swap = true;
+                    swap_reg = pascal_vm_find_free_reg(vm);
+
+                    if(swap_reg == -1) {
+                        buffer_printf(vm->asm_buffer, "\tpush %%rax\n");
+                    } else {
+                        buffer_printf(vm->asm_buffer, "\tmov %%rax, %%%s\n", pascal_vm_regs[swap_reg]);
+                    }
+                }
+            }
+
+            if(left_is_const) {
+                buffer_printf(vm->asm_buffer, "\tmov $%d, %%rax\n", left);
+                buffer_printf(vm->asm_buffer, "\tcqo\n");
+                buffer_printf(vm->asm_buffer, "\tidiv %%%s\n", pascal_vm_regs[right_at_reg]);
+                node->used_register = 0;
+            } else if(right_is_const) {
+                boolean_t old_rdx_busy = vm->busy_regs[3];
+                vm->busy_regs[3] = true;
+                int16_t const_swap_reg = pascal_vm_find_free_reg(vm);
+                vm->busy_regs[3] = old_rdx_busy;
+
+                if(const_swap_reg == -1) {
+                    const_swap_reg = 8;
+                    buffer_printf(vm->asm_buffer, "\tpush %%%s\n", pascal_vm_regs[right_at_reg]);
+                }
+
+                buffer_printf(vm->asm_buffer, "\tmov $%d, %%%s\n", right, pascal_vm_regs[const_swap_reg]);
+
+
+                buffer_printf(vm->asm_buffer, "\tmov %%%s, %%rax\n", pascal_vm_regs[left_at_reg]);
+                buffer_printf(vm->asm_buffer, "\tcqo\n");
+                buffer_printf(vm->asm_buffer, "\tidiv %%%s\n", pascal_vm_regs[const_swap_reg]);
+                vm->busy_regs[left_at_reg] = false;
+                node->used_register = 0;
+
+                if(const_swap_reg == -1) {
+                    buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[const_swap_reg]);
+                } else {
+                    vm->busy_regs[const_swap_reg] = false;
+                }
+            } else {
+                buffer_printf(vm->asm_buffer, "\tmov %%%s, %%rax\n", pascal_vm_regs[left_at_reg]);
+                buffer_printf(vm->asm_buffer, "\tcqo\n");
+                buffer_printf(vm->asm_buffer, "\tidiv %%%s\n", pascal_vm_regs[right_at_reg]);
+                node->used_register = 0;
+                vm->busy_regs[left_at_reg] = false;
+                vm->busy_regs[right_at_reg] = false;
+            }
+
+            vm->busy_regs[0] = true;
+            vm->is_at_reg = true;
+
+            if(need_swap) {
+                if(swap_reg == -1) {
+                    buffer_printf(vm->asm_buffer, "\txchg %%rax, (%%rsp)\n");
+                    buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
+                    vm->is_at_reg = false;
+                } else {
+                    buffer_printf(vm->asm_buffer, "\txchg %%%s, %%rax\n", pascal_vm_regs[swap_reg]);
+                    node->used_register = swap_reg;
+                    vm->is_at_reg = true;
+                }
+            }
+
+
+        }
     } else {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown binary op");
         return -1;
@@ -1406,11 +1660,27 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
 
     ((pascal_symbol_t*)symbol)->int_value = *result;
 
-    buffer_printf(vm->asm_buffer, "\tpop %%rax\n");
-    buffer_printf(vm->asm_buffer, "\tmov %%rax, %s\n", symbol->name);
+    if(vm->is_at_reg) {
+        buffer_printf(vm->asm_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[node->right->used_register], symbol->stack_offset);
+        vm->is_at_reg = false;
+    } else if(vm->is_const) {
+        buffer_printf(vm->asm_buffer, "\tmov $%d, -%d(%%rbp)\n", *result, symbol->stack_offset);
+        vm->is_const = false;
+    } else if(vm->is_at_stack) {
+        buffer_printf(vm->asm_buffer, "\tmov -%d(%%rbp), %%rax\n", vm->at_stack_offset);
+        buffer_printf(vm->asm_buffer, "\tmov %%rax, -%d(%%rbp)\n", symbol->stack_offset);
+        vm->is_at_stack = false;
+    } else {
+        int16_t reg = pascal_vm_find_free_reg(vm);
+        buffer_printf(vm->asm_buffer, "\tpop %%%s\n", pascal_vm_regs[reg]);
+        buffer_printf(vm->asm_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[reg], symbol->stack_offset);
+        vm->busy_regs[reg] = false;
+    }
 
     return 0;
 }
+
+#define SYS_exit 60UL
 
 int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result) {
     if (node == NULL) {
@@ -1430,13 +1700,37 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
         symbol->type = PASCAL_SYMBOL_TYPE_INTEGER;
         symbol->size = 8;
         symbol->int_value = 0;
+        symbol->stack_offset = 8;
 
         hashmap_put(vm->symbol_table, symbol->name, symbol);
 
         vm->program_name = symbol->name;
         vm->program_name_symbol = symbol;
 
-        return pascal_vm_execute_ast_node(vm, node->left, result);
+        buffer_printf(vm->asm_buffer, "\tcall %s\n", symbol->name);
+        buffer_printf(vm->asm_buffer, "\tmov %%rax, %%rdi\n");
+        buffer_printf(vm->asm_buffer, "\tmov $0x%lx, %%rax\n", SYS_exit);
+        buffer_printf(vm->asm_buffer, "\tsyscall\n");
+        buffer_printf(vm->asm_buffer, ".size _start, .-_start\n");
+
+        buffer_printf(vm->asm_buffer, "\n\n\n");
+        buffer_printf(vm->asm_buffer, ".section .text.%s\n", symbol->name);
+        buffer_printf(vm->asm_buffer, ".local %s\n", symbol->name);
+        buffer_printf(vm->asm_buffer, ".type %s, @function\n", symbol->name);
+        buffer_printf(vm->asm_buffer, "%s:\n", symbol->name);
+
+        if(pascal_vm_execute_ast_node(vm, node->left, result) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot execute program %s", symbol->name);
+            return -1;
+        }
+
+        buffer_printf(vm->asm_buffer, "\tmov -8(%%rbp), %%rax\n");
+        buffer_printf(vm->asm_buffer, "\tleave\n");
+        buffer_printf(vm->asm_buffer, "\tret\n");
+        buffer_printf(vm->asm_buffer, ".size %s, .-%s\n", symbol->name, symbol->name);
+
+
+        return 0;
     } else if(node->type == PASCAL_AST_NODE_TYPE_BLOCK) {
         return pascal_vm_execute_block(vm, node, result);
     } else if(node->type == PASCAL_AST_NODE_TYPE_COMPOUND) {
@@ -1453,10 +1747,15 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
 
         *result = symbol->int_value;
 
-        buffer_printf(vm->asm_buffer, "\tpush %s\n", symbol->name);
+        if(symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
+            vm->is_at_stack = true;
+            vm->at_stack_offset = symbol->stack_offset;
+        } else { // do we need this?
+            vm->is_at_reg = true;
+        }
     } else if (node->type == PASCAL_AST_NODE_TYPE_INTEGER_CONST) {
         *result = node->token->value;
-        buffer_printf(vm->asm_buffer, "\tpush $%d\n", *result);
+        vm->is_const = true;
     } else if(node->type == PASCAL_AST_NODE_TYPE_UNARY_OP) {
         return pascal_vm_execure_unary_op(vm, node, result);
     } else if (node->type == PASCAL_AST_NODE_TYPE_BINARY_OP) {
@@ -1468,8 +1767,6 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
 
     return 0;
 }
-
-#define SYS_exit 60UL
 
 int8_t pascal_vm_execute(pascal_vm_t * vm, int32_t * result) {
     pascal_ast_node_t * node = vm->ast->root;
@@ -1484,23 +1781,14 @@ int8_t pascal_vm_execute(pascal_vm_t * vm, int32_t * result) {
     buffer_printf(vm->asm_buffer, ".globl _start\n");
     buffer_printf(vm->asm_buffer, ".type _start, @function\n");
     buffer_printf(vm->asm_buffer, "_start:\n");
+    buffer_printf(vm->asm_buffer, "\tpush %%rbp\n");
+    buffer_printf(vm->asm_buffer, "\tmov %%rsp, %%rbp\n");
+    buffer_printf(vm->asm_buffer, "\txor %%rax, %%rax\n");
+
 
     if(pascal_vm_execute_ast_node(vm, node, result) != 0) {
         return -1;
     }
-
-    buffer_printf(vm->data_buffer, ".align 8\n");
-    buffer_printf(vm->data_buffer, ".type %s,@object\n", vm->program_name_symbol->name);
-    buffer_printf(vm->data_buffer, ".size %s,8\n", vm->program_name_symbol->name);
-    buffer_printf(vm->data_buffer, "%s: .quad %d\n", vm->program_name_symbol->name, 0);
-
-
-    buffer_printf(vm->asm_buffer, "\tmov %s, %%rax\n", vm->program_name);
-    buffer_printf(vm->asm_buffer, "\tmov %%rax, %%rdi\n");
-    buffer_printf(vm->asm_buffer, "\tmov $0x%lx, %%rax\n", SYS_exit);
-    buffer_printf(vm->asm_buffer, "\tsyscall\n");
-
-    buffer_printf(vm->asm_buffer, ".size _start, .-_start\n");
 
     buffer_printf(vm->asm_buffer, "%s", buffer_get_view_at_position(vm->data_buffer, 0, buffer_get_length(vm->data_buffer)));
 
