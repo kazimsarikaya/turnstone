@@ -129,6 +129,9 @@ int8_t network_virtio_process_tx(void){
     return 0;
 }
 
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
     UNUSED(args_cnt);
 
@@ -230,6 +233,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 int8_t network_virtio_rx_isr(interrupt_frame_ext_t* frame) {
     uint8_t intnum = frame->interrupt_number;

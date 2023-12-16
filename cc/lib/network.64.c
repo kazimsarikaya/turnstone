@@ -35,6 +35,29 @@ uint64_t network_info_mke(const void* key) {
     return x;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+static int8_t network_set_return_queue(const network_mac_address_t* mac, linkedlist_t* return_queue) {
+    network_info_t* ni = (network_info_t*)map_get(network_info_map, mac);
+
+    if(!ni) {
+        ni = memory_malloc(sizeof(network_info_t));
+
+        if(!ni) {
+            return -1;
+        }
+
+        memory_memcopy(mac, ni->mac, sizeof(network_mac_address_t));
+        map_insert(network_info_map, ni->mac, ni);
+    }
+
+    if(!ni->return_queue) {
+        ni->return_queue = return_queue;
+    }
+
+    return 0;
+}
+#pragma GCC diagnostic pop
 
 int8_t network_process_rx(void){
     network_received_packets = linkedlist_create_queue_with_heap(NULL);
@@ -59,17 +82,7 @@ int8_t network_process_rx(void){
 
                 if(packet->network_type == NETWORK_TYPE_ETHERNET) {
 
-                    network_info_t* ni = (network_info_t*)map_get(network_info_map, packet->network_info);
-
-                    if(!ni) {
-                        ni = memory_malloc(sizeof(network_info_t));
-                        memory_memcopy(packet->network_info, ni->mac, sizeof(network_mac_address_t));
-                        map_insert(network_info_map, ni->mac, ni);
-                    } else {
-                        if(!ni->return_queue) {
-                            ni->return_queue = packet->return_queue;
-                        }
-                    }
+                    network_set_return_queue(packet->network_info, packet->return_queue);
 
                     return_data = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info, &return_data_len);
                 }

@@ -1207,6 +1207,7 @@ directory_t* fat32_new_directory(filesystem_t* fs, uint32_t clusterno, const pat
 
     if(d == NULL) {
         memory_free(ctx);
+        memory_free(data);
 
         return NULL;
     }

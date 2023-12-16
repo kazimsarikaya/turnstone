@@ -174,6 +174,10 @@ int8_t gpt_check_and_format_if_need(const disk_t* d) {
 
     data = memory_malloc_ext(heap, block_size, 0x1000);
 
+    if(data == NULL) {
+        return -1;
+    }
+
     pmbr_part = (efi_pmbr_partition_t*)(data + 0x1be);
     pmbr_part->first_chs.sector = 2;
     pmbr_part->part_type = EFI_PMBR_PART_TYPE;
@@ -395,6 +399,13 @@ disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, const c
     disk_partition_context_t* res = memory_malloc(sizeof(disk_partition_context_t));
 
     efi_partition_entry_t* ic = memory_malloc(sizeof(efi_partition_entry_t));
+
+    if(res == NULL || ic == NULL) {
+        memory_free(res);
+        memory_free(ic);
+
+        return NULL;
+    }
 
     memory_memcopy(type, &ic->partition_type_guid, sizeof(efi_guid_t));
 

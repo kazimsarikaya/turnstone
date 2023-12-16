@@ -847,10 +847,19 @@ static int8_t frame_allocator_destroy_key(memory_heap_t* heap, void* key) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
     frame_allocator_context_t* ctx = memory_malloc_ext(heap, sizeof(frame_allocator_context_t), 0);
 
     if(ctx == NULL) {
+        return NULL;
+    }
+
+    frame_allocator_t* fa = memory_malloc_ext(heap, sizeof(frame_allocator_t), 0);
+
+    if(fa == NULL) {
+        memory_free_ext(ctx->heap, ctx);
         return NULL;
     }
 
@@ -895,7 +904,9 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
             frame_t* f = memory_malloc_ext(heap, sizeof(frame_t), 0);
 
             if(f == NULL) {
+                memory_free_ext(ctx->heap, fa);
                 memory_free_ext(ctx->heap, ctx);
+
                 return NULL;
             }
 
@@ -946,13 +957,6 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
     }
 
-    frame_allocator_t* fa = memory_malloc_ext(heap, sizeof(frame_allocator_t), 0);
-
-    if(fa == NULL) {
-        memory_free_ext(ctx->heap, ctx);
-        return NULL;
-    }
-
     fa->context = ctx;
     fa->allocate_frame_by_count = fa_allocate_frame_by_count;
     fa->allocate_frame = fa_allocate_frame;
@@ -967,6 +971,7 @@ frame_allocator_t* frame_allocator_new_ext(memory_heap_t* heap) {
 
     return fa;
 }
+#pragma GCC diagnostic pop
 
 // TODO: delete me
 void frame_allocator_print(frame_allocator_t* fa) {

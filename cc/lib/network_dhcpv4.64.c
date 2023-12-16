@@ -102,6 +102,8 @@ network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint3
     return dhcp_discover;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
     UNUSED(args_cnt);
 
@@ -241,8 +243,6 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
     return 0;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, void* network_info, uint16_t* return_packet_len) {
     UNUSED(return_packet_len);
 
