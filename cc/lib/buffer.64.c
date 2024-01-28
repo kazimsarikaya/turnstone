@@ -771,4 +771,44 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
     return cnt;
 }
 
+char_t* buffer_read_line_ext(buffer_t* buffer, char_t line_continuation_char, char_t delimiter_char, uint64_t* length) {
+    if(!buffer) {
+        return NULL;
+    }
 
+    if(buffer->position >= buffer->length) {
+        return NULL;
+    }
+
+    buffer_t* res_buffer = buffer_new_with_capacity(buffer->heap, 128);
+
+    if(!res_buffer) {
+        if(length) {
+            *length = -1;
+        }
+
+        return NULL;
+    }
+
+    while(buffer->position < buffer->length) {
+        if(buffer->data[buffer->position] == delimiter_char) {
+            buffer->position++;
+            break;
+        }
+
+        if(buffer->position + 1 < buffer->length && buffer->data[buffer->position] == line_continuation_char && buffer->data[buffer->position + 1] == '\n') {
+            buffer->position += 2;
+            continue;
+        }
+
+        buffer_append_byte(res_buffer, buffer->data[buffer->position]);
+
+        buffer->position++;
+    }
+
+    buffer_append_byte(res_buffer, '\0');
+
+    char_t* res = (char_t*)buffer_get_all_bytes_and_destroy(res_buffer, length);
+
+    return res;
+}
