@@ -1099,6 +1099,9 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PC32) {
             uint32_t* value = (uint32_t*)(section_data + reloc_entries[reloc_id].offset);
             *value = (uint32_t)got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend - (uint32_t)(module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
+        } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PC64) {
+            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            *value = got_entries[got_idx].entry_value + reloc_entries[reloc_id].addend - (module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOT64) {
             uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
             *value = got_idx * sizeof(linker_global_offset_table_entry_t) + reloc_entries[reloc_id].addend;
