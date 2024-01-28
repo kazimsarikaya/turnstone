@@ -52,9 +52,7 @@ int8_t strcpy(const char_t* source, char_t* destination){
         return -1;
     }
 
-    for(size_t i = 0; i < strlen(source); i++) {
-        destination[i] = source[i];
-    }
+    memory_memcopy(source, destination, strlen(source) + 1);
 
     return 0;
 }
@@ -211,6 +209,43 @@ int8_t strends(const char_t* str, const char_t* suffix) {
     }
 
     return -1;
+}
+
+char_t* strchr(const char_t* s, int32_t c) {
+    while (*s != '\0') {
+        if (*s == c) {
+            return (char_t*)s;
+        }
+
+        s++;
+    }
+
+    return NULL;
+}
+
+char_t* strrchr(const char_t* s, int32_t c) {
+    char_t* last = NULL;
+    while (*s != '\0') {
+        if (*s == c) {
+            last = (char_t*)s;
+        }
+
+        s++;
+    }
+
+    return last;
+}
+
+char_t* strstr(const char_t* haystack, const char_t* needle) {
+    size_t needle_length = strlen(needle);
+
+    for (size_t i = 0; haystack[i] != '\0'; i++) {
+        if (strncmp(haystack + i, needle, needle_length) == 0) {
+            return (char_t*)(haystack + i);
+        }
+    }
+
+    return NULL;
 }
 
 char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t* string2) {

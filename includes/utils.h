@@ -11,6 +11,8 @@
 
 #include <types.h>
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 /**
  * find min of two numbers
  * @param[in]  x first number
