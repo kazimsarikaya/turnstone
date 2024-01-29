@@ -170,7 +170,7 @@ typedef struct pascal_parser_t {
     pascal_token_t * current_token;
 } pascal_parser_t;
 
-#define PASCAL_VM_REG_COUNT 14
+#define PASCAL_VM_REG_COUNT 13
 
 typedef struct symbol_table_t symbol_table_t;
 

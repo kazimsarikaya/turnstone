@@ -29,7 +29,6 @@ const char_t* pascal_vm_regs[] = {
     "r12",
     "r13",
     "r14",
-    "r15"
 };
 
 _Static_assert(sizeof(pascal_vm_regs) / sizeof(pascal_vm_regs[0]) == PASCAL_VM_REG_COUNT, "invalid register count");
@@ -48,6 +47,8 @@ int8_t                 pascal_vm_destroy_symbol_table(pascal_vm_t * vm);
 int8_t                 pascal_vm_build_stack(pascal_vm_t* vm);
 int8_t                 pascal_vm_find_free_reg(pascal_vm_t* vm);
 const pascal_symbol_t* pascal_vm_find_symbol(pascal_vm_t* vm, const char_t* name);
+int8_t                 pascal_vm_save_to_mem(pascal_vm_t* vm, const char_t* reg, const char_t* mem);
+int8_t                 pascal_vm_save_const_int_to_mem(pascal_vm_t* vm, int32_t value, const char_t* mem);
 
 const pascal_symbol_t* pascal_vm_find_symbol(pascal_vm_t* vm, const char_t* name) {
     symbol_table_t* symbol_table = vm->current_symbol_table;
@@ -644,6 +645,52 @@ int8_t pascal_vm_execute_compound(pascal_vm_t* vm, pascal_ast_node_t* node, int3
     return 0;
 }
 
+int8_t pascal_vm_save_to_mem(pascal_vm_t* vm, const char_t* reg, const char_t* mem) {
+    int16_t swap_reg = pascal_vm_find_free_reg(vm);
+    boolean_t need_swap = false;
+
+    if(swap_reg == -1) {
+        need_swap = true;
+        swap_reg = 8;
+        buffer_printf(vm->text_buffer, "\tpush %%%s\n", pascal_vm_regs[swap_reg]);
+    }
+
+    buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%%s\n", mem, pascal_vm_regs[swap_reg]);
+    buffer_printf(vm->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", pascal_vm_regs[swap_reg], pascal_vm_regs[swap_reg]);
+    buffer_printf(vm->text_buffer, "\tmov %%%s, (%%%s)\n", reg, pascal_vm_regs[swap_reg]);
+
+    if(need_swap) {
+        buffer_printf(vm->text_buffer, "\tpop %%%s\n", pascal_vm_regs[swap_reg]);
+    } else {
+        vm->busy_regs[swap_reg] = false;
+    }
+
+    return 0;
+}
+
+int8_t pascal_vm_save_const_int_to_mem(pascal_vm_t* vm, int32_t value, const char_t* mem) {
+    int16_t swap_reg = pascal_vm_find_free_reg(vm);
+    boolean_t need_swap = false;
+
+    if(swap_reg == -1) {
+        need_swap = true;
+        swap_reg = 8;
+        buffer_printf(vm->text_buffer, "\tpush %%%s\n", pascal_vm_regs[swap_reg]);
+    }
+
+    buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%%s\n", mem, pascal_vm_regs[swap_reg]);
+    buffer_printf(vm->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", pascal_vm_regs[swap_reg], pascal_vm_regs[swap_reg]);
+    buffer_printf(vm->text_buffer, "\tmov $%d, (%%%s)\n", value, pascal_vm_regs[swap_reg]);
+
+    if(need_swap) {
+        buffer_printf(vm->text_buffer, "\tpop %%%s\n", pascal_vm_regs[swap_reg]);
+    } else {
+        vm->busy_regs[swap_reg] = false;
+    }
+
+    return 0;
+}
+
 int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result) {
     const pascal_symbol_t * symbol = pascal_vm_find_symbol(vm, node->left->token->text);
 
@@ -675,7 +722,7 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
 
             buffer_printf(vm->text_buffer, "\tmov %s, %%%s\n", node->right->token->text, pascal_vm_regs[swap_reg]);
 
-            buffer_printf(vm->text_buffer, "\tmov %%%s, %s\n", pascal_vm_regs[swap_reg], symbol->name);
+            pascal_vm_save_to_mem(vm, pascal_vm_regs[swap_reg], symbol->name);
 
             if(need_swap) {
                 buffer_printf(vm->text_buffer, "\tpop %%%s\n", pascal_vm_regs[swap_reg]);
@@ -688,7 +735,7 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
         if(symbol->is_local) {
             buffer_printf(vm->text_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[node->right->used_register], symbol->stack_offset);
         } else {
-            buffer_printf(vm->text_buffer, "\tmov %%%s, %s\n", pascal_vm_regs[node->right->used_register], symbol->name);
+            pascal_vm_save_to_mem(vm, pascal_vm_regs[node->right->used_register], symbol->name);
         }
 
         vm->is_at_reg = false;
@@ -697,7 +744,7 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
         if(symbol->is_local) {
             buffer_printf(vm->text_buffer, "\tmov $%d, -%d(%%rbp)\n", *result, symbol->stack_offset);
         } else {
-            buffer_printf(vm->text_buffer, "\tmov $%d, %s\n", *result, symbol->name);
+            pascal_vm_save_const_int_to_mem(vm, *result, symbol->name);
         }
 
         vm->is_const = false;
@@ -716,7 +763,7 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
         if(symbol->is_local) {
             buffer_printf(vm->text_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[swap_reg], symbol->stack_offset);
         } else {
-            buffer_printf(vm->text_buffer, "\tmov %%%s, %s\n", pascal_vm_regs[swap_reg], symbol->name);
+            pascal_vm_save_to_mem(vm, pascal_vm_regs[swap_reg], symbol->name);
         }
 
         if(need_swap) {
@@ -742,7 +789,7 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
         if(symbol->is_local) {
             buffer_printf(vm->text_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_vm_regs[swap_reg], symbol->stack_offset);
         } else {
-            buffer_printf(vm->text_buffer, "\tmov %%%s, %s\n", pascal_vm_regs[swap_reg], symbol->name);
+            pascal_vm_save_to_mem(vm, pascal_vm_regs[swap_reg], symbol->name);
         }
 
         if(need_swap) {
@@ -784,7 +831,8 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
         vm->program_name = symbol->name;
         vm->program_name_symbol = symbol;
 
-        buffer_printf(vm->text_buffer, "\tcall %s\n", symbol->name);
+        buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%rax\n", symbol->name);
+        buffer_printf(vm->text_buffer, "\tcall *(%%r15,%%rax)\n");
         buffer_printf(vm->text_buffer, "\tmov %%rax, %%rdi\n");
         buffer_printf(vm->text_buffer, "\tmov $0x%lx, %%rax\n", SYS_exit);
         buffer_printf(vm->text_buffer, "\tsyscall\n");
@@ -849,7 +897,9 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
                 } else {
                     vm->is_at_reg = true;
                     node->used_register = reg;
-                    buffer_printf(vm->text_buffer, "\tmov %s, %%%s\n", symbol->name, pascal_vm_regs[reg]);
+                    buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, pascal_vm_regs[reg]);
+                    buffer_printf(vm->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", pascal_vm_regs[reg], pascal_vm_regs[reg]);
+                    buffer_printf(vm->text_buffer, "\tmov (%%%s), %%%s\n", pascal_vm_regs[reg], pascal_vm_regs[reg]);
                 }
             }
         } else { // do we need this?
@@ -888,6 +938,10 @@ int8_t pascal_vm_execute(pascal_vm_t * vm, int32_t * result) {
     buffer_printf(vm->text_buffer, "_start:\n");
     buffer_printf(vm->text_buffer, "\tpush %%rbp\n");
     buffer_printf(vm->text_buffer, "\tmov %%rsp, %%rbp\n");
+    buffer_printf(vm->text_buffer, "\tlea 0x0(%%rip), %%r14\n");
+    buffer_printf(vm->text_buffer, ".LGOT_BASE:\n");
+    buffer_printf(vm->text_buffer, "\tmov $_GLOBAL_OFFSET_TABLE_-.LGOT_BASE, %%r15\n");
+    buffer_printf(vm->text_buffer, "\tadd %%r14, %%r15\n");
     buffer_printf(vm->text_buffer, "\txor %%rax, %%rax\n");
 
 
