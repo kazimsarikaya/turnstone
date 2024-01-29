@@ -133,7 +133,10 @@ int8_t pascal_parser_term(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     }
 
     while (parser->current_token->type == PASCAL_TOKEN_TYPE_MULTIPLY ||
-           parser->current_token->type == PASCAL_TOKEN_TYPE_DIVIDE) {
+           parser->current_token->type == PASCAL_TOKEN_TYPE_INTEGER_DIVIDE ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_REAL_DIVIDE ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_MOD ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_AND) {
         pascal_token_t * token = parser->current_token;
 
         if (token->type == PASCAL_TOKEN_TYPE_MULTIPLY) {
@@ -142,8 +145,26 @@ int8_t pascal_parser_term(pascal_parser_t * parser, pascal_ast_node_t ** node) {
 
                 return -1;
             }
-        } else if (token->type == PASCAL_TOKEN_TYPE_DIVIDE) {
-            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_DIVIDE, false) != 0) {
+        } else if (token->type == PASCAL_TOKEN_TYPE_INTEGER_DIVIDE) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_INTEGER_DIVIDE, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_REAL_DIVIDE) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_REAL_DIVIDE, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_MOD) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_MOD, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_AND) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_AND, false) != 0) {
                 pascal_ast_node_destroy(left);
 
                 return -1;
@@ -202,6 +223,12 @@ int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
 
                 return -1;
             }
+        } else if (token->type == PASCAL_TOKEN_TYPE_OR) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_OR, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
         }
 
         if(pascal_parser_term(parser, &right) != 0) {
@@ -234,7 +261,7 @@ int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** node, boolean_t is_const, boolean_t is_local) {
     if(parser->current_token->type != PASCAL_TOKEN_TYPE_ID) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
         return -1;
@@ -258,6 +285,8 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** nod
             return -1;
         }
 
+        symbol->is_local = is_local;
+        symbol->is_const = is_const;
         symbol->name = strdup(token->text);
 
         linkedlist_queue_push(symbol_list, symbol);
@@ -346,7 +375,7 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** nod
         }
     }
 
-    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_SEMI, true) != 0) {
+    if(!is_local && pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_SEMI, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ;");
         pascal_destroy_symbol_list(symbol_list);
         return -1;
@@ -370,10 +399,17 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** nod
 }
 #pragma GCC diagnostic pop
 
-int8_t pascal_parser_variables(pascal_parser_t* parser, pascal_ast_node_t** node) {
-    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_VAR, true) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected var");
-        return -1;
+int8_t pascal_parser_variables(pascal_parser_t* parser, pascal_ast_node_t** node, boolean_t is_const, boolean_t is_local) {
+    if(!is_const) {
+        if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_VAR, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected var");
+            return -1;
+        }
+    } else {
+        if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_CONST, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected var");
+            return -1;
+        }
     }
 
     linkedlist_t* variables_list = linkedlist_create_list();
@@ -381,7 +417,7 @@ int8_t pascal_parser_variables(pascal_parser_t* parser, pascal_ast_node_t** node
     while (parser->current_token->type == PASCAL_TOKEN_TYPE_ID) {
         pascal_ast_node_t * new_node = NULL;
 
-        if(pascal_parser_variable(parser, &new_node) != 0) {
+        if(pascal_parser_variable(parser, &new_node, is_const, is_local) != 0) {
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected variable");
             return -1;
         }
@@ -389,6 +425,32 @@ int8_t pascal_parser_variables(pascal_parser_t* parser, pascal_ast_node_t** node
         linkedlist_queue_push(variables_list, new_node);
     }
 
+    pascal_ast_node_t * new_node = *node;
+
+    if(linkedlist_size(variables_list) > 0) {
+        if(new_node->children != NULL) {
+            int8_t merge_res = linkedlist_merge(new_node->children, variables_list);
+
+            linkedlist_destroy(variables_list);
+
+            if(merge_res != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot merge lists");
+                linkedlist_destroy_with_type(new_node->children, LINKEDLIST_DESTROY_WITH_DATA, pascal_ast_node_destroyer);
+                return -1;
+            }
+        } else {
+            new_node->children = variables_list;
+        }
+
+        new_node->type = PASCAL_AST_NODE_TYPE_DECLS;
+    } else {
+        linkedlist_destroy(variables_list);
+    }
+
+    return 0;
+}
+
+int8_t pascal_parser_decls(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     pascal_ast_node_t* new_node = memory_malloc(sizeof(pascal_ast_node_t));
 
     if (new_node == NULL) {
@@ -398,35 +460,22 @@ int8_t pascal_parser_variables(pascal_parser_t* parser, pascal_ast_node_t** node
 
     new_node->type = PASCAL_AST_NODE_TYPE_NO_OP;
 
-    if(linkedlist_size(variables_list) > 0) {
-        new_node->children = variables_list;
-        new_node->type = PASCAL_AST_NODE_TYPE_DECLS;
-    } else {
-        linkedlist_destroy(variables_list);
-    }
-
-    *node = new_node;
-
-    return 0;
-}
-
-int8_t pascal_parser_decls(pascal_parser_t * parser, pascal_ast_node_t ** node) {
-    pascal_ast_node_t * new_node = NULL;
-
-    if(parser->current_token->type == PASCAL_TOKEN_TYPE_VAR) {
-        if(pascal_parser_variables(parser, &new_node) != 0) {
-            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected variables");
-            pascal_ast_node_destroy(new_node);
-            return -1;
+    while(true) {
+        if(parser->current_token->type == PASCAL_TOKEN_TYPE_VAR) {
+            if(pascal_parser_variables(parser, &new_node, false, false) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected variables");
+                pascal_ast_node_destroy(new_node);
+                return -1;
+            }
+        } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_CONST) {
+            if(pascal_parser_variables(parser, &new_node, true, false) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected constants");
+                pascal_ast_node_destroy(new_node);
+                return -1;
+            }
+        } else {
+            break;
         }
-    } else {
-        memory_malloc(sizeof(pascal_ast_node_t));
-
-        if (new_node == NULL) {
-            return -1;
-        }
-
-        new_node->type = PASCAL_AST_NODE_TYPE_NO_OP;
     }
 
     *node = new_node;
@@ -506,6 +555,26 @@ int8_t pascal_parser_statement(pascal_parser_t * parser, pascal_ast_node_t ** no
         return pascal_parser_compound_statement(parser, node);
     } else if (parser->current_token->type == PASCAL_TOKEN_TYPE_ID) {
         return pascal_parser_assignment_statement(parser, node);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_VAR) {
+        *node = memory_malloc(sizeof(pascal_ast_node_t));
+
+        if (*node == NULL) {
+            return -1;
+        }
+
+        (*node)->type = PASCAL_AST_NODE_TYPE_DECLS;
+
+        return pascal_parser_variables(parser, node, false, true);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_CONST) {
+        *node = memory_malloc(sizeof(pascal_ast_node_t));
+
+        if (*node == NULL) {
+            return -1;
+        }
+
+        (*node)->type = PASCAL_AST_NODE_TYPE_DECLS;
+
+        return pascal_parser_variables(parser, node, true, true);
     }
 
     PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unexpected token parser_statement. found %d", parser->current_token->type);

@@ -14,18 +14,26 @@
 #include <linkedlist.h>
 #include <hashmap.h>
 
+/**
+ * @enum pascal_token_type_t **/
 typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_EOF = 0,
     PASCAL_TOKEN_TYPE_UNKNOWN,
     PASCAL_TOKEN_TYPE_INTEGER_CONST,
+    PASCAL_TOKEN_TYPE_REAL_CONST,
     PASCAL_TOKEN_TYPE_PLUS,
     PASCAL_TOKEN_TYPE_MINUS,
+    PASCAL_TOKEN_TYPE_OR,
     PASCAL_TOKEN_TYPE_MULTIPLY,
-    PASCAL_TOKEN_TYPE_DIVIDE,
+    PASCAL_TOKEN_TYPE_REAL_DIVIDE,
+    PASCAL_TOKEN_TYPE_INTEGER_DIVIDE,
+    PASCAL_TOKEN_TYPE_MOD,
+    PASCAL_TOKEN_TYPE_AND,
+    PASCAL_TOKEN_TYPE_NOT,
     PASCAL_TOKEN_TYPE_LPAREN,
     PASCAL_TOKEN_TYPE_RPAREN,
     PASCAL_TOKEN_TYPE_ID,
-    PASCAL_TOKEN_TYPE_ASSIGN, // 10
+    PASCAL_TOKEN_TYPE_ASSIGN,
     PASCAL_TOKEN_TYPE_SEMI,
     PASCAL_TOKEN_TYPE_DOT,
     PASCAL_TOKEN_TYPE_COMMA,
@@ -34,15 +42,81 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_BEGIN,
     PASCAL_TOKEN_TYPE_END,
     PASCAL_TOKEN_TYPE_PROGRAM,
+    PASCAL_TOKEN_TYPE_PROCEDURE,
+    PASCAL_TOKEN_TYPE_FUNCTION,
     PASCAL_TOKEN_TYPE_VAR,
+    PASCAL_TOKEN_TYPE_CONST,
     PASCAL_TOKEN_TYPE_INTEGER,
+    PASCAL_TOKEN_TYPE_REAL,
 } pascal_token_type_t;
+
+const char_t* pascal_keywords[] = {
+    "program",
+    "type",
+    "const",
+    "var",
+    "bit",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "float32",
+    "float64",
+    "begin",
+    "end",
+    "procedure",
+    "function",
+    "div",
+    "mod",
+    "and",
+    "or",
+    "xor",
+    "not",
+    "in",
+    "nil",
+    "true",
+    "false",
+    "if",
+    "then",
+    "else",
+    "with",
+    "while",
+    "do",
+    "repeat",
+    "until",
+    "for",
+    "to",
+    "downto",
+    "case",
+    "of",
+    "otherwise",
+    "break",
+    "continue",
+    "exit",
+    "return",
+    "sizeof",
+    "typeof",
+    "offsetof",
+    "sizeof_field",
+    "typeof_field",
+    "offsetof_field",
+
+};
 
 typedef struct pascal_token_t {
     pascal_token_type_t type;
     boolean_t           not_free;
-    int32_t             value;
+    int64_t             value;
+    float64_t           real_value;
     const char_t*       text;
+    boolean_t           is_const;
+    uint64_t            size;
+    boolean_t           is_unsigned;
+    boolean_t           is_array;
 } pascal_token_t;
 
 typedef struct pascal_lexer_t {
@@ -74,6 +148,8 @@ typedef struct pascal_symol_t {
     uint32_t             size;
     int64_t              int_value;
     uint16_t             stack_offset;
+    boolean_t            is_const;
+    boolean_t            is_local;
 } pascal_symbol_t;
 
 typedef struct pascal_ast_node_t {
@@ -96,17 +172,28 @@ typedef struct pascal_parser_t {
 
 #define PASCAL_VM_REG_COUNT 14
 
+typedef struct symbol_table_t symbol_table_t;
+
+struct symbol_table_t {
+    symbol_table_t* parent;
+    hashmap_t*      symbols;
+};
+
 typedef struct pascal_vm_t {
     pascal_ast_t *   ast;
     const char_t*    program_name;
     pascal_symbol_t* program_name_symbol;
-    buffer_t*        asm_buffer;
+    buffer_t*        text_buffer;
     buffer_t*        data_buffer;
-    hashmap_t*       symbol_table;
+    buffer_t*        rodata_buffer;
+    buffer_t*        bss_buffer;
+    symbol_table_t*  main_symbol_table;
+    symbol_table_t*  current_symbol_table;
     uint16_t         stack_size;
     uint16_t         next_stack_offset;
     boolean_t        is_const;
     boolean_t        is_at_reg;
+    boolean_t        is_at_mem;
     boolean_t        is_at_stack;
     uint16_t         at_stack_offset;
     boolean_t        busy_regs[PASCAL_VM_REG_COUNT];
@@ -121,7 +208,7 @@ int8_t pascal_token_destroy(pascal_token_t * token);
 int8_t pascal_lexer_advance(pascal_lexer_t * lexer);
 char_t pascal_lexer_peek(pascal_lexer_t * lexer);
 int8_t pascal_lexer_skip_whitespace(pascal_lexer_t * lexer);
-int8_t pascal_lexer_get_integer(pascal_lexer_t * lexer, int32_t * value);
+int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t ** token);
 int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** token);
 int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, pascal_token_t ** token);
 
@@ -142,8 +229,8 @@ int8_t pascal_parser_decls(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_compound_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
-int8_t pascal_parser_variables(pascal_parser_t * parser, pascal_ast_node_t ** node);
-int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** node);
+int8_t pascal_parser_variables(pascal_parser_t * parser, pascal_ast_node_t ** node, boolean_t is_const, boolean_t is_local);
+int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** node, boolean_t is_const, boolean_t is_local);
 int8_t pascal_parser_var(pascal_parser_t * parser, pascal_ast_node_t ** node);
 
 #endif
