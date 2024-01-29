@@ -1200,6 +1200,34 @@ linkedlist_t* linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlis
     return new_list;
 }
 
+int8_t linkedlist_merge(linkedlist_t* self, linkedlist_t* list){
+    if(self == NULL || list == NULL) {
+        return -1;
+    }
+
+    if(self->type != list->type) {
+        return -1;
+    }
+
+    if(self->type == LINKEDLIST_TYPE_INDEXEDLIST) {
+        return -1;
+    }
+
+    for(size_t i = 0; i < list->item_count; i++) {
+        const void* item = linkedlist_get_data_at_position(list, i);
+
+        if(item == NULL) {
+            return -1;
+        }
+
+        if(linkedlist_insert_at(self, item, LINKEDLIST_INSERT_AT_TAIL, 0) == -1ULL) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 #if 0
 linkedlist_item_t* linkedlist_insert_at_head_and_get_linkedlist_item(linkedlist_t* list, const void* data) {
     if(!list) {

@@ -308,6 +308,20 @@ linkedlist_t* linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlis
  */
 iterator_t* linkedlist_iterator_create(linkedlist_t* list);
 
+/**
+ * @brief sets equality comparator for list
+ * @param[in]  list source list
+ * @param[in]  comparator comparator function
+ * @return      0 on success
+ **/
 int8_t linkedlist_set_equality_comparator(linkedlist_t* list, linkedlist_data_comparator_f comparator);
+
+/**
+ * @brief merge given list into self list
+ * @param[in]  self source list
+ * @param[in]  list destination list
+ * @return      0 on success
+ **/
+int8_t linkedlist_merge(linkedlist_t* self, linkedlist_t* list);
 
 #endif
