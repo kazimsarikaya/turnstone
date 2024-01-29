@@ -117,7 +117,19 @@ int8_t pascal_parser_factor(pascal_parser_t * parser, pascal_ast_node_t ** node)
         return pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_RPAREN, true);
     } else if (parser->current_token->type == PASCAL_TOKEN_TYPE_ID) {
         return pascal_parser_var(parser, node);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_STRING_CONST) {
+        *node = memory_malloc(sizeof(pascal_ast_node_t));
+
+        if (*node == NULL) {
+            return -1;
+        }
+
+        (*node)->type = PASCAL_AST_NODE_TYPE_STRING_CONST;
+        (*node)->token = parser->current_token;
+
+        return pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_STRING_CONST, false);
     }
+
 
     PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unexpected token parser_factor. found %d", parser->current_token->type);
 
@@ -510,12 +522,71 @@ int8_t pascal_parser_var(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     return 0;
 }
 
+int8_t pascal_parser_function_call(pascal_parser_t* parser, pascal_ast_node_t** node) {
+    if(parser->current_token->type != PASCAL_TOKEN_TYPE_LPAREN) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected (");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_LPAREN, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected (");
+        return -1;
+    }
+
+    linkedlist_t* children_list = linkedlist_create_list();
+
+    if (children_list == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create children list");
+        return -1;
+    }
+
+    printf("parser->current_token->type %d\n", parser->current_token->type);
+
+    while (parser->current_token->type != PASCAL_TOKEN_TYPE_RPAREN) {
+        pascal_ast_node_t * new_node = NULL;
+
+        if(pascal_parser_expr(parser, &new_node) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
+            linkedlist_destroy_with_type(children_list, LINKEDLIST_DESTROY_WITH_DATA, pascal_ast_node_destroyer);
+            return -1;
+        }
+
+        linkedlist_queue_push(children_list, new_node);
+
+        if(parser->current_token->type != PASCAL_TOKEN_TYPE_RPAREN) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_COMMA, true) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ,");
+                linkedlist_destroy_with_type(children_list, LINKEDLIST_DESTROY_WITH_DATA, pascal_ast_node_destroyer);
+                return -1;
+            }
+        }
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_RPAREN, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected )");
+        return -1;
+    }
+
+    pascal_ast_node_t* new_node = *node;
+
+    new_node->type = PASCAL_AST_NODE_TYPE_FUNCTION_CALL;
+    new_node->children = children_list;
+    new_node->token = (*node)->token;
+
+    return 0;
+}
+
 int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     pascal_ast_node_t * left = NULL;
 
     if(pascal_parser_var(parser, &left) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected lvar");
         return -1;
+    }
+
+    if(parser->current_token->type == PASCAL_TOKEN_TYPE_LPAREN) {
+        *node = left;
+        return pascal_parser_function_call(parser, node);
     }
 
     if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ASSIGN, true) != 0) {

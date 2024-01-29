@@ -68,7 +68,16 @@ int8_t pascal_ast_node_destroy(pascal_ast_node_t * node) {
         pascal_destroy_symbol_list(node->children);
     }
 
-    if(node->type == PASCAL_AST_NODE_TYPE_DECLS || node->type == PASCAL_AST_NODE_TYPE_COMPOUND) {
+    if(node->type == PASCAL_AST_NODE_TYPE_STRING_CONST) {
+        if(node->symbol) {
+            memory_free((void*)node->symbol->name);
+            memory_free(node->symbol);
+        }
+    }
+
+    if(node->type == PASCAL_AST_NODE_TYPE_DECLS ||
+       node->type == PASCAL_AST_NODE_TYPE_COMPOUND ||
+       node->type == PASCAL_AST_NODE_TYPE_FUNCTION_CALL) {
         linkedlist_destroy_with_type(node->children, LINKEDLIST_DESTROY_WITH_DATA, pascal_ast_node_destroyer);
     }
 

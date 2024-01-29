@@ -31,6 +31,31 @@ const char_t* pascal_vm_regs[] = {
     "r14",
 };
 
+typedef enum pascal_vm_reg_ids_t {
+    PASCAL_VM_REG_RAX = 0,
+    PASCAL_VM_REG_RBX,
+    PASCAL_VM_REG_RCX,
+    PASCAL_VM_REG_RDX,
+    PASCAL_VM_REG_RSI,
+    PASCAL_VM_REG_RDI,
+    PASCAL_VM_REG_R8,
+    PASCAL_VM_REG_R9,
+    PASCAL_VM_REG_R10,
+    PASCAL_VM_REG_R11,
+    PASCAL_VM_REG_R12,
+    PASCAL_VM_REG_R13,
+    PASCAL_VM_REG_R14,
+} pascal_vm_reg_ids_t;
+
+const int16_t pascal_vm_fcall_reg_order[] = {
+    PASCAL_VM_REG_RDI,
+    PASCAL_VM_REG_RSI,
+    PASCAL_VM_REG_RDX,
+    PASCAL_VM_REG_R10,
+    PASCAL_VM_REG_R8,
+    PASCAL_VM_REG_R9,
+};
+
 _Static_assert(sizeof(pascal_vm_regs) / sizeof(pascal_vm_regs[0]) == PASCAL_VM_REG_COUNT, "invalid register count");
 
 int8_t                 pascal_vm_init(pascal_vm_t * vm, pascal_ast_t * ast);
@@ -49,6 +74,8 @@ int8_t                 pascal_vm_find_free_reg(pascal_vm_t* vm);
 const pascal_symbol_t* pascal_vm_find_symbol(pascal_vm_t* vm, const char_t* name);
 int8_t                 pascal_vm_save_to_mem(pascal_vm_t* vm, const char_t* reg, const char_t* mem);
 int8_t                 pascal_vm_save_const_int_to_mem(pascal_vm_t* vm, int32_t value, const char_t* mem);
+int8_t                 pascal_vm_execute_function_call(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result);
+int8_t                 pascal_vm_execute_string_const(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result);
 
 const pascal_symbol_t* pascal_vm_find_symbol(pascal_vm_t* vm, const char_t* name) {
     symbol_table_t* symbol_table = vm->current_symbol_table;
@@ -803,7 +830,169 @@ int8_t pascal_vm_execute_assign(pascal_vm_t* vm, pascal_ast_node_t* node, int32_
     return 0;
 }
 
-#define SYS_exit 60UL
+int8_t pascal_vm_execute_string_const(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result) {
+    UNUSED(result);
+
+    pascal_symbol_t * symbol = memory_malloc(sizeof(pascal_symbol_t));
+
+    if (symbol == NULL) {
+        return -1;
+    }
+
+    symbol->name = sprintf(".L%i", vm->next_label_id++);
+    symbol->type = PASCAL_SYMBOL_TYPE_STRING;
+    symbol->size = strlen(node->token->text) + 1;
+    symbol->is_const = true;
+    symbol->string_value = node->token->text;
+
+    node->symbol = symbol;
+
+    buffer_printf(vm->rodata_buffer, ".section .rodata.%s\n", symbol->name);
+    buffer_printf(vm->rodata_buffer, ".align 8\n");
+    buffer_printf(vm->rodata_buffer, ".local %s\n", symbol->name);
+    buffer_printf(vm->rodata_buffer, ".type %s, @object\n", symbol->name);
+    buffer_printf(vm->rodata_buffer, ".size %s, %d\n", symbol->name, symbol->size);
+    buffer_printf(vm->rodata_buffer, "%s:\n", symbol->name);
+    buffer_printf(vm->rodata_buffer, "\t.string \"%s\"\n", symbol->string_value);
+    buffer_printf(vm->rodata_buffer, "\n\n\n");
+
+    hashmap_put(vm->main_symbol_table->symbols, symbol->name, symbol);
+
+    return 0;
+}
+
+#define SYS_exit 60ULL
+#define SYS_write 1ULL
+
+int8_t pascal_vm_execute_function_call(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result) {
+    buffer_printf(vm->text_buffer, "# function call %s\n", node->token->text);
+
+    if(strcmp(node->token->text, "write") == 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_INFO, "write");
+
+        if(linkedlist_size(node->children) != 1) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "write expects 1 argument");
+            return -1;
+        }
+
+        uint64_t stack_push_size = 0;
+
+        boolean_t rdi_pushed = false;
+        boolean_t rsi_pushed = false;
+        boolean_t rdx_pushed = false;
+        boolean_t rcx_pushed = false;
+
+        boolean_t stack_need_align = false;
+
+
+
+        if(vm->busy_regs[PASCAL_VM_REG_RCX]) {
+            buffer_printf(vm->text_buffer, "\tpush %%rcx\n");
+            rcx_pushed = true;
+            stack_push_size += 8;
+        }
+
+        if(vm->busy_regs[PASCAL_VM_REG_RDI]) {
+            buffer_printf(vm->text_buffer, "\tpush %%rdi\n");
+            rdi_pushed = true;
+            stack_push_size += 8;
+        }
+
+        if(vm->busy_regs[PASCAL_VM_REG_RSI]) {
+            buffer_printf(vm->text_buffer, "\tpush %%rsi\n");
+            rsi_pushed = true;
+            stack_push_size += 8;
+        }
+
+        if(vm->busy_regs[PASCAL_VM_REG_RDX]) {
+            buffer_printf(vm->text_buffer, "\tpush %%rdx\n");
+            rdx_pushed = true;
+            stack_push_size += 8;
+        }
+
+        if(stack_push_size % 16) {
+            stack_need_align = true;
+        }
+
+        buffer_printf(vm->text_buffer, "\tmov $1, %%rdi\n");
+
+        pascal_ast_node_t* tmp_node = (pascal_ast_node_t*)linkedlist_get_data_at_position(node->children, 0);
+
+        if(pascal_vm_execute_ast_node(vm, tmp_node, result) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot execute write");
+            return -1;
+        }
+
+        if(tmp_node->type == PASCAL_AST_NODE_TYPE_STRING_CONST) {
+            buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%rsi\n", tmp_node->symbol->name);
+            buffer_printf(vm->text_buffer, "\tmov (%%r15, %%rsi), %%rsi\n");
+
+            buffer_printf(vm->text_buffer, "\tmov $%d, %%rdx\n", tmp_node->symbol->size);
+        } else if(tmp_node->type == PASCAL_AST_NODE_TYPE_VAR) {
+            const pascal_symbol_t * symbol = pascal_vm_find_symbol(vm, tmp_node->token->text);
+
+            if(symbol == NULL) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "symbol %s not found", tmp_node->token->text);
+                return -1;
+            }
+
+
+            // TODO: check type -> integer probably pointer to string
+            if(symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
+                if(symbol->is_local) {
+                    buffer_printf(vm->text_buffer, "\tmov -%d(%%rbp), %%rsi\n", symbol->stack_offset);
+                } else {
+                    buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%rsi\n", symbol->name);
+                    buffer_printf(vm->text_buffer, "\tmov (%%r15, %%rsi), %%rsi\n");
+                    buffer_printf(vm->text_buffer, "\tmov (%%rsi), %%rsi\n");
+                }
+            } else {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot write symbol %s type %d", symbol->name, symbol->type);
+                return -1;
+            }
+        } else {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot write node type %d", tmp_node->type);
+            return -1;
+        }
+
+        if(stack_need_align) {
+            buffer_printf(vm->text_buffer, "\tsub $8, %%rsp\n");
+        }
+
+        buffer_printf(vm->text_buffer, "\tmov $0x%llx, %%rax\n", SYS_write);
+        buffer_printf(vm->text_buffer, "\tsyscall\n");
+
+        if(stack_need_align) {
+            buffer_printf(vm->text_buffer, "\tadd $8, %%rsp\n");
+        }
+
+        if(rdx_pushed) {
+            buffer_printf(vm->text_buffer, "\tpop %%rdx\n");
+        }
+
+        if(rsi_pushed) {
+            buffer_printf(vm->text_buffer, "\tpop %%rsi\n");
+        }
+
+        if(rdi_pushed) {
+            buffer_printf(vm->text_buffer, "\tpop %%rdi\n");
+        }
+
+        if(rcx_pushed) {
+            buffer_printf(vm->text_buffer, "\tpop %%rcx\n");
+        }
+
+        vm->is_at_reg = true;
+        node->used_register = PASCAL_VM_REG_RAX;
+        vm->busy_regs[PASCAL_VM_REG_RAX] = true;
+
+
+        return 0;
+    }
+
+    return -1;
+}
+
 
 int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int32_t* result) {
     if (node == NULL) {
@@ -834,7 +1023,7 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
         buffer_printf(vm->text_buffer, "\tmov $%s@GOT, %%rax\n", symbol->name);
         buffer_printf(vm->text_buffer, "\tcall *(%%r15,%%rax)\n");
         buffer_printf(vm->text_buffer, "\tmov %%rax, %%rdi\n");
-        buffer_printf(vm->text_buffer, "\tmov $0x%lx, %%rax\n", SYS_exit);
+        buffer_printf(vm->text_buffer, "\tmov $0x%llx, %%rax\n", SYS_exit);
         buffer_printf(vm->text_buffer, "\tsyscall\n");
         buffer_printf(vm->text_buffer, ".size _start, .-_start\n");
 
@@ -912,7 +1101,11 @@ int8_t pascal_vm_execute_ast_node(pascal_vm_t* vm, pascal_ast_node_t* node, int3
         return pascal_vm_execure_unary_op(vm, node, result);
     } else if (node->type == PASCAL_AST_NODE_TYPE_BINARY_OP) {
         return pascal_vm_execure_binary_op(vm, node, result);
-    } else {
+    } else if(node->type == PASCAL_AST_NODE_TYPE_FUNCTION_CALL) {
+        return pascal_vm_execute_function_call(vm, node, result);
+    } else if(node->type == PASCAL_AST_NODE_TYPE_STRING_CONST) {
+        return pascal_vm_execute_string_const(vm, node, result);
+    }else {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown node type %d", node->type);
         return -1;
     }

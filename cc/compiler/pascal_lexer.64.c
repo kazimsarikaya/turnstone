@@ -386,6 +386,10 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
             return 0;
         }
 
+        if(lexer->current_char == '\'') {
+            return pascal_lexer_get_string(lexer, token);
+        }
+
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown token");
 
         return -1;
@@ -400,6 +404,61 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
     }
 
     (*token)->type = PASCAL_TOKEN_TYPE_EOF;
+
+    return 0;
+}
+
+int8_t pascal_lexer_get_string(pascal_lexer_t * lexer, pascal_token_t ** token) {
+    buffer_t * buffer = buffer_new();
+
+    if (buffer == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create string buffer");
+
+        return -1;
+    }
+
+    pascal_lexer_advance(lexer);
+
+    while (lexer->current_char != '\0' && lexer->current_char != '\'') {
+        buffer_append_byte(buffer, lexer->current_char);
+        pascal_lexer_advance(lexer);
+    }
+
+    if (lexer->current_char == '\0') {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "string not closed");
+
+        buffer_destroy(buffer);
+        return -1;
+    }
+
+    pascal_lexer_advance(lexer);
+
+    buffer_append_byte(buffer, '\0');
+
+    char_t* token_text = (char_t*)buffer_get_all_bytes(buffer, NULL);
+
+    buffer_destroy(buffer);
+
+    if (token_text == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot get token text");
+
+        return -1;
+    }
+
+    pascal_token_t * new_token = memory_malloc(sizeof(pascal_token_t));
+
+    if (new_token == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+
+        memory_free((void*)token_text);
+        return -1;
+    }
+
+    new_token->type = PASCAL_TOKEN_TYPE_STRING_CONST;
+    new_token->text = token_text;
+    new_token->not_free = false;
+
+    *token = new_token;
 
     return 0;
 }
