@@ -128,6 +128,16 @@ int8_t pascal_parser_factor(pascal_parser_t * parser, pascal_ast_node_t ** node)
         (*node)->token = parser->current_token;
 
         return pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_STRING_CONST, false);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_NOT) {
+        *node = memory_malloc(sizeof(pascal_ast_node_t));
+
+        if (*node == NULL) {
+            return -1;
+        }
+
+        (*node)->type = PASCAL_AST_NODE_TYPE_UNARY_OP;
+        (*node)->token = parser->current_token;
+        (*node)->token = parser->current_token;
     }
 
 
@@ -148,7 +158,9 @@ int8_t pascal_parser_term(pascal_parser_t * parser, pascal_ast_node_t ** node) {
            parser->current_token->type == PASCAL_TOKEN_TYPE_INTEGER_DIVIDE ||
            parser->current_token->type == PASCAL_TOKEN_TYPE_REAL_DIVIDE ||
            parser->current_token->type == PASCAL_TOKEN_TYPE_MOD ||
-           parser->current_token->type == PASCAL_TOKEN_TYPE_AND) {
+           parser->current_token->type == PASCAL_TOKEN_TYPE_AND ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_SHL ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_SHR) {
         pascal_token_t * token = parser->current_token;
 
         if (token->type == PASCAL_TOKEN_TYPE_MULTIPLY) {
@@ -177,6 +189,18 @@ int8_t pascal_parser_term(pascal_parser_t * parser, pascal_ast_node_t ** node) {
             }
         } else if (token->type == PASCAL_TOKEN_TYPE_AND) {
             if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_AND, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_SHL) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_SHL, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_SHR) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_SHR, false) != 0) {
                 pascal_ast_node_destroy(left);
 
                 return -1;
@@ -221,7 +245,8 @@ int8_t pascal_parser_simple_expr(pascal_parser_t * parser, pascal_ast_node_t ** 
 
     while (parser->current_token->type == PASCAL_TOKEN_TYPE_PLUS ||
            parser->current_token->type == PASCAL_TOKEN_TYPE_MINUS ||
-           parser->current_token->type == PASCAL_TOKEN_TYPE_OR) {
+           parser->current_token->type == PASCAL_TOKEN_TYPE_OR ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_XOR) {
         pascal_token_t * token = parser->current_token;
 
         if (token->type == PASCAL_TOKEN_TYPE_PLUS) {
@@ -423,6 +448,8 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** nod
 
     if(parser->current_token->type == PASCAL_TOKEN_TYPE_INTEGER) {
 
+        int64_t symbol_size = parser->current_token->size;
+
         if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_INTEGER, true) != 0) {
             pascal_destroy_symbol_list(symbol_list);
             return -1;
@@ -432,7 +459,7 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** nod
             pascal_symbol_t * tmp_symbol = (pascal_symbol_t*)linkedlist_get_data_at_position(symbol_list, i);
 
             tmp_symbol->type = PASCAL_SYMBOL_TYPE_INTEGER;
-            tmp_symbol->size = 4;
+            tmp_symbol->size = symbol_size;
         }
 
         need_token_type = PASCAL_TOKEN_TYPE_INTEGER_CONST;

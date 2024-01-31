@@ -60,24 +60,26 @@ _Static_assert(sizeof(pascal_compiler_regs) / sizeof(pascal_compiler_regs[0]) ==
 
 int8_t                 pascal_compiler_init(pascal_compiler_t * compiler, pascal_ast_t * ast);
 int8_t                 pascal_compiler_destroy(pascal_compiler_t * compiler);
-int8_t                 pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execure_unary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute_compound(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute(pascal_compiler_t * compiler, int32_t * result);
+int8_t                 pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execure_unary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute_compound(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute(pascal_compiler_t * compiler, int64_t* result);
 int8_t                 pascal_compiler_print_symbol_table(pascal_compiler_t * compiler);
 int8_t                 pascal_compiler_destroy_symbol_table(pascal_compiler_t * compiler);
 int8_t                 pascal_compiler_build_stack(pascal_compiler_t* compiler);
 int8_t                 pascal_compiler_find_free_reg(pascal_compiler_t* compiler);
 const pascal_symbol_t* pascal_compiler_find_symbol(pascal_compiler_t* compiler, const char_t* name);
-int8_t                 pascal_compiler_save_to_mem(pascal_compiler_t* compiler, const char_t* reg, const char_t* mem);
-int8_t                 pascal_compiler_save_const_int_to_mem(pascal_compiler_t* compiler, int32_t value, const char_t* mem);
-int8_t                 pascal_compiler_execute_function_call(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute_string_const(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
-int8_t                 pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result);
+int8_t                 pascal_compiler_save_to_mem(pascal_compiler_t* compiler, const char_t* reg, const pascal_symbol_t* symbol);
+int8_t                 pascal_compiler_save_const_int_to_mem(pascal_compiler_t* compiler, int64_t value, const pascal_symbol_t* symbol);
+int8_t                 pascal_compiler_execute_function_call(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute_string_const(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+int8_t                 pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
+const char_t*          pascal_compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
+char_t                 pascal_compiler_get_reg_suffix(uint8_t size);
 
 const pascal_symbol_t* pascal_compiler_find_symbol(pascal_compiler_t* compiler, const char_t* name) {
     symbol_table_t* symbol_table = compiler->current_symbol_table;
@@ -104,6 +106,166 @@ int8_t pascal_compiler_find_free_reg(pascal_compiler_t* compiler) {
     }
 
     return -1;
+}
+
+char_t pascal_compiler_get_reg_suffix(uint8_t size) {
+    if(size == 1 || size == 8) {
+        return 'b';
+    } else if(size == 16) {
+        return 'w';
+    } else if(size == 32) {
+        return 'l';
+    } else if(size == 64) {
+        return 'q';
+    }
+
+    return '\0';
+}
+
+const char_t* pascal_compiler_cast_reg_to_size(const char_t* reg, uint8_t size) {
+    if(strcmp(reg, "rax") == 0) {
+        if(size == 1 || size == 64) {
+            return "al";
+        } else if(size == 16) {
+            return "ax";
+        } else if(size == 32) {
+            return "eax";
+        } else if(size == 64) {
+            return "rax";
+        }
+    } else if(strcmp(reg, "rbx") == 0) {
+        if(size == 1 || size == 8) {
+            return "bl";
+        } else if(size == 16) {
+            return "bx";
+        } else if(size == 32) {
+            return "ebx";
+        } else if(size == 64) {
+            return "rbx";
+        }
+    } else if(strcmp(reg, "rcx") == 0) {
+        if(size == 1 || size == 8) {
+            return "cl";
+        } else if(size == 16) {
+            return "cx";
+        } else if(size == 32) {
+            return "ecx";
+        } else if(size == 64) {
+            return "rcx";
+        }
+    } else if(strcmp(reg, "rdx") == 0) {
+        if(size == 1 || size == 8) {
+            return "dl";
+        } else if(size == 16) {
+            return "dx";
+        } else if(size == 32) {
+            return "edx";
+        } else if(size == 64) {
+            return "rdx";
+        }
+    } else if(strcmp(reg, "rsi") == 0) {
+        if(size == 1 || size == 8) {
+            return "sil";
+        } else if(size == 16) {
+            return "si";
+        } else if(size == 32) {
+            return "esi";
+        } else if(size == 64) {
+            return "rsi";
+        }
+    } else if(strcmp(reg, "rdi") == 0) {
+        if(size == 1 || size == 8) {
+            return "dil";
+        } else if(size == 16) {
+            return "di";
+        } else if(size == 32) {
+            return "edi";
+        } else if(size == 64) {
+            return "rdi";
+        }
+    } else if(strcmp(reg, "r8") == 0) {
+        if(size == 1 || size == 8) {
+            return "r8b";
+        } else if(size == 16) {
+            return "r8w";
+        } else if(size == 32) {
+            return "r8d";
+        } else if(size == 64) {
+            return "r8";
+        }
+    } else if(strcmp(reg, "r9") == 0) {
+        if(size == 1 || size == 8) {
+            return "r9b";
+        } else if(size == 16) {
+            return "r9w";
+        } else if(size == 32) {
+            return "r9d";
+        } else if(size == 64) {
+            return "r9";
+        }
+    } else if(strcmp(reg, "r10") == 0) {
+        if(size == 1 || size == 8) {
+            return "r10b";
+        } else if(size == 16) {
+            return "r10w";
+        } else if(size == 32) {
+            return "r10d";
+        } else if(size == 64) {
+            return "r10";
+        }
+    } else if(strcmp(reg, "r11") == 0) {
+        if(size == 1 || size == 8) {
+            return "r11b";
+        } else if(size == 16) {
+            return "r11w";
+        } else if(size == 32) {
+            return "r11d";
+        } else if(size == 64) {
+            return "r11";
+        }
+    } else if(strcmp(reg, "r12") == 0) {
+        if(size == 1 || size == 8) {
+            return "r12b";
+        } else if(size == 16) {
+            return "r12w";
+        } else if(size == 32) {
+            return "r12d";
+        } else if(size == 64) {
+            return "r12";
+        }
+    } else if(strcmp(reg, "r13") == 0) {
+        if(size == 1 || size == 8) {
+            return "r13b";
+        } else if(size == 16) {
+            return "r13w";
+        } else if(size == 32) {
+            return "r13d";
+        } else if(size == 64) {
+            return "r13";
+        }
+    } else if(strcmp(reg, "r14") == 0) {
+        if(size == 1 || size == 8) {
+            return "r14b";
+        } else if(size == 16) {
+            return "r14w";
+        } else if(size == 32) {
+            return "r14d";
+        } else if(size == 64) {
+            return "r14";
+        }
+    } else if(strcmp(reg, "r15") == 0) {
+        if(size == 1 || size == 8) {
+            return "r15b";
+        } else if(size == 16) {
+            return "r15w";
+        } else if(size == 32) {
+            return "r15d";
+        } else if(size == 64) {
+            return "r15";
+        }
+    }
+
+    return NULL;
 }
 
 int8_t pascal_compiler_init(pascal_compiler_t * compiler, pascal_ast_t * ast) {
@@ -203,7 +365,7 @@ int8_t pascal_compiler_print_symbol_table(pascal_compiler_t * compiler) {
                 return -1;
             }
 
-            PRINTLOG(COMPILER_PASCAL, LOG_INFO, "symbol %s type %d size %d value %lli", symbol->name, symbol->type, symbol->size, symbol->int_value);
+            PRINTLOG(COMPILER_PASCAL, LOG_INFO, "symbol %s type %d size %lli value %lli", symbol->name, symbol->type, symbol->size, symbol->int_value);
 
             iter->next(iter);
         }
@@ -291,7 +453,7 @@ int8_t pascal_compiler_build_stack(pascal_compiler_t* compiler) {
 }
 
 
-int8_t pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
+int8_t pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
     if(node->left) {
         if(node->left->type == PASCAL_AST_NODE_TYPE_DECLS) {
 
@@ -309,7 +471,7 @@ int8_t pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_nod
                     if(tmp_symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
 
                         if(tmp_symbol->is_local){
-                            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "local symbol %s type %d size %d value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
+                            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "local symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
                             // tmp_symbol->stack_offset = compiler->next_stack_offset;
                             // compiler->next_stack_offset += tmp_symbol->size;
                             // compiler->stack_size += tmp_symbol->size;
@@ -317,35 +479,35 @@ int8_t pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_nod
                             tmp_symbol->stack_offset = 0;
 
                             if(tmp_symbol->is_const){
-                                PRINTLOG(COMPILER_PASCAL, LOG_INFO, "rodata symbol %s type %d size %d value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
+                                PRINTLOG(COMPILER_PASCAL, LOG_INFO, "rodata symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
                                 buffer_printf(compiler->rodata_buffer, ".section .rodata.%s\n", tmp_symbol->name);
                                 buffer_printf(compiler->rodata_buffer, ".align 8\n");
                                 buffer_printf(compiler->rodata_buffer, ".local %s\n", tmp_symbol->name);
                                 buffer_printf(compiler->rodata_buffer, ".type %s, @object\n", tmp_symbol->name);
-                                buffer_printf(compiler->rodata_buffer, ".size %s, %d\n", tmp_symbol->name, tmp_symbol->size);
+                                buffer_printf(compiler->rodata_buffer, ".size %s, %lli\n", tmp_symbol->name, tmp_symbol->size);
                                 buffer_printf(compiler->rodata_buffer, "%s:\n", tmp_symbol->name);
                                 buffer_printf(compiler->rodata_buffer, "\t.long %lli\n", tmp_symbol->int_value);
                                 // buffer_printf(compiler->rodata_buffer, ".size %s, .-%s\n", tmp_symbol->name, tmp_symbol->name);
                                 buffer_printf(compiler->rodata_buffer, "\n\n\n");
                             } else {
                                 if(tmp_symbol->int_value == 0) {
-                                    PRINTLOG(COMPILER_PASCAL, LOG_INFO, "bss symbol %s type %d size %d value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
+                                    PRINTLOG(COMPILER_PASCAL, LOG_INFO, "bss symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
                                     buffer_printf(compiler->bss_buffer, ".section .bss.%s\n", tmp_symbol->name);
                                     buffer_printf(compiler->bss_buffer, ".align 8\n");
                                     buffer_printf(compiler->bss_buffer, ".local %s\n", tmp_symbol->name);
                                     buffer_printf(compiler->bss_buffer, ".type %s, @object\n", tmp_symbol->name);
-                                    buffer_printf(compiler->bss_buffer, ".size %s, %d\n", tmp_symbol->name, tmp_symbol->size);
+                                    buffer_printf(compiler->bss_buffer, ".size %s, %lli\n", tmp_symbol->name, tmp_symbol->size);
                                     buffer_printf(compiler->bss_buffer, "%s:\n", tmp_symbol->name);
-                                    buffer_printf(compiler->bss_buffer, "\t.zero %d\n", tmp_symbol->size);
+                                    buffer_printf(compiler->bss_buffer, "\t.zero %lli\n", tmp_symbol->size / 8);
                                     // buffer_printf(compiler->bss_buffer, ".size %s, .-%s\n", tmp_symbol->name, tmp_symbol->name);
                                     buffer_printf(compiler->bss_buffer, "\n\n\n");
                                 } else {
-                                    PRINTLOG(COMPILER_PASCAL, LOG_INFO, "data symbol %s type %d size %d value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
+                                    PRINTLOG(COMPILER_PASCAL, LOG_INFO, "data symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
                                     buffer_printf(compiler->data_buffer, ".section .data.%s\n", tmp_symbol->name);
                                     buffer_printf(compiler->data_buffer, ".align 8\n");
                                     buffer_printf(compiler->data_buffer, ".local %s\n", tmp_symbol->name);
                                     buffer_printf(compiler->data_buffer, ".type %s, @object\n", tmp_symbol->name);
-                                    buffer_printf(compiler->data_buffer, ".size %s, %d\n", tmp_symbol->name, tmp_symbol->size);
+                                    buffer_printf(compiler->data_buffer, ".size %s, %lli\n", tmp_symbol->name, tmp_symbol->size);
                                     buffer_printf(compiler->data_buffer, "%s:\n", tmp_symbol->name);
                                     buffer_printf(compiler->data_buffer, "\t.long %lli\n", tmp_symbol->int_value);
                                     // buffer_printf(compiler->data_buffer, ".size %s, .-%s\n", tmp_symbol->name, tmp_symbol->name);
@@ -369,8 +531,8 @@ int8_t pascal_compiler_execute_block(pascal_compiler_t* compiler, pascal_ast_nod
     return pascal_compiler_execute_ast_node(compiler, node->right, result);
 }
 
-int8_t pascal_compiler_execure_unary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
-    int32_t right = 0;
+int8_t pascal_compiler_execure_unary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
+    int64_t right = 0;
 
     if(pascal_compiler_execute_ast_node(compiler, node->right, &right) != 0) {
         return -1;
@@ -386,25 +548,50 @@ int8_t pascal_compiler_execure_unary_op(pascal_compiler_t* compiler, pascal_ast_
         if(compiler->is_at_mem) {
             buffer_printf(compiler->text_buffer, "\tneg %s\n", node->right->token->text);
         } else if(compiler->is_at_reg) {
-            buffer_printf(compiler->text_buffer, "\tneg %%%s\n", pascal_compiler_regs[node->right->used_register]);
+            buffer_printf(compiler->text_buffer, "\tneg%c %%%s\n",
+                          pascal_compiler_get_reg_suffix(compiler->computed_size),
+                          pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->right->used_register], compiler->computed_size));
             node->used_register = node->right->used_register;
         } else if(compiler->is_const) {
             *result = -*result;
         } else if(compiler->is_at_stack) {
-            int16_t reg = pascal_compiler_find_free_reg(compiler);
-            buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", compiler->at_stack_offset, pascal_compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tneg %%%s\n", pascal_compiler_regs[reg]);
-            compiler->is_at_stack = false;
-            compiler->is_at_reg = true;
-            node->used_register = reg;
+            buffer_printf(compiler->text_buffer, "\tneg%c -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(compiler->computed_size),
+                          compiler->at_stack_offset);
         } else {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "need inspect");
             int16_t reg = pascal_compiler_find_free_reg(compiler);
             buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[reg]);
             buffer_printf(compiler->text_buffer, "\tneg %%%s\n", pascal_compiler_regs[reg]);
             compiler->is_at_reg = true;
             node->used_register = reg;
+            return -1;
         }
 
+    } else if(node->token->type == PASCAL_TOKEN_TYPE_NOT) {
+        *result = !right;
+
+        if(compiler->is_at_reg) {
+            buffer_printf(compiler->text_buffer, "\tnot%c %%%s\n",
+                          pascal_compiler_get_reg_suffix(compiler->computed_size),
+                          pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->right->used_register], compiler->computed_size));
+            node->used_register = node->right->used_register;
+        } else if(compiler->is_const) {
+            *result = !*result;
+        } else if(compiler->is_at_stack) {
+            buffer_printf(compiler->text_buffer, "\tnot%c -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(compiler->computed_size),
+                          compiler->at_stack_offset);
+        } else {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "need inspect");
+            int16_t reg = pascal_compiler_find_free_reg(compiler);
+            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[reg]);
+            buffer_printf(compiler->text_buffer, "\tnot %%%s\n", pascal_compiler_regs[reg]);
+            compiler->is_at_reg = true;
+            node->used_register = reg;
+
+            return -1;
+        }
     } else {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown unary op");
         return -1;
@@ -413,8 +600,8 @@ int8_t pascal_compiler_execure_unary_op(pascal_compiler_t* compiler, pascal_ast_
     return 0;
 }
 
-int8_t pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
-    int32_t condition = 0;
+int8_t pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
+    int64_t condition = 0;
 
     compiler->cond_depth++;
 
@@ -440,45 +627,27 @@ int8_t pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t
                 buffer_printf(compiler->text_buffer, "\tjmp %s\n", label);
             }
         } else if(compiler->is_at_reg) {
-            buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", pascal_compiler_regs[node->condition->used_register]);
-            buffer_printf(compiler->text_buffer, "\tje %s\n", label);
+            if(compiler->computed_type == PASCAL_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tjz %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", pascal_compiler_regs[node->condition->used_register]);
+                buffer_printf(compiler->text_buffer, "\tje %s\n", label);
+            }
+
             compiler->busy_regs[node->condition->used_register] = false;
             compiler->is_at_reg = false;
         } else if(compiler->is_at_stack) {
-            int16_t reg = pascal_compiler_find_free_reg(compiler);
-            boolean_t need_swap = false;
-
-            if(reg == -1) {
-                reg = 0;
-                buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[reg]);
-                need_swap = true;
-            }
-
-            buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", compiler->at_stack_offset, pascal_compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", pascal_compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tje %s\n", label);
-            compiler->is_at_stack = false;
-
-            if(need_swap) {
-                buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[reg]);
+            if(compiler->computed_type == PASCAL_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tjz %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tcmp%c $0, -%d(%%rbp)\n",
+                              pascal_compiler_get_reg_suffix(compiler->computed_size),
+                              compiler->at_stack_offset);
+                buffer_printf(compiler->text_buffer, "\tje %s\n", label);
             }
         } else {
-            int16_t reg = pascal_compiler_find_free_reg(compiler);
-            boolean_t need_swap = false;
-
-            if(reg == -1) {
-                reg = 0;
-                buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[reg]);
-                need_swap = true;
-            }
-
-            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", pascal_compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tje %s\n", label);
-
-            if(need_swap) {
-                buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[reg]);
-            }
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "need inspect");
+            return -1;
         }
     }
 
@@ -526,9 +695,9 @@ int8_t pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t
     return 0;
 }
 
-int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
-    int32_t left = 0;
-    int32_t right = 0;
+int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
+    int64_t left = 0;
+    int64_t right = 0;
 
     buffer_printf(compiler->text_buffer, "# begin relational op\n");
 
@@ -544,6 +713,7 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
     boolean_t left_is_at_stack = compiler->is_at_stack;
     compiler->is_at_stack = false;
     uint16_t left_at_stack_offset = compiler->at_stack_offset;
+    int64_t left_size = compiler->computed_size;
 
 
     if(!left_is_const) {
@@ -575,6 +745,7 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
     boolean_t right_is_at_stack = compiler->is_at_stack;
     compiler->is_at_stack = false;
     uint16_t right_at_stack_offset = compiler->at_stack_offset;
+    int64_t right_size = compiler->computed_size;
 
     if(!right_is_const) {
         if(!right_is_at_reg) {
@@ -597,21 +768,36 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
         compiler->is_const = true;
     }
 
+    int64_t max_size = MAX(left_size, right_size);
+
+    char_t reg_suffix = pascal_compiler_get_reg_suffix(max_size);
+
+    const char_t* left_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], max_size);
+    const char_t* right_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[right_at_reg], max_size);
+
+    if(!left_is_const && left_size < max_size) {
+        buffer_printf(compiler->text_buffer, "# cast left %lli to %lli\n", left_size, max_size);
+        buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
+                      pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], left_size),
+                      left_reg);
+    }
+
+    if(!right_is_const && right_size < max_size) {
+        buffer_printf(compiler->text_buffer, "# cast right %lli to %lli\n", right_size, max_size);
+        buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
+                      pascal_compiler_cast_reg_to_size(pascal_compiler_regs[right_at_reg], right_size),
+                      right_reg);
+    }
+
     if(!compiler->is_const) {
         if(left_is_const) {
-            buffer_printf(compiler->text_buffer, "\tcmp $%d, %%%s\n", left, pascal_compiler_regs[right_at_reg]);
-            buffer_printf(compiler->text_buffer, "\tseteb %%%sb\n", pascal_compiler_regs[right_at_reg]);
-            buffer_printf(compiler->text_buffer, "\tmovzbq %%%sb, %%%s\n", pascal_compiler_regs[right_at_reg], pascal_compiler_regs[right_at_reg]);
+            buffer_printf(compiler->text_buffer, "\tcmp%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
             node->used_register = right_at_reg;
         } else if(right_is_const) {
-            buffer_printf(compiler->text_buffer, "\tcmp $%d, %%%s\n", right, pascal_compiler_regs[left_at_reg]);
-            buffer_printf(compiler->text_buffer, "\tseteb %%%sb\n", pascal_compiler_regs[left_at_reg]);
-            buffer_printf(compiler->text_buffer, "\tmovzbq %%%sb, %%%s\n", pascal_compiler_regs[left_at_reg], pascal_compiler_regs[left_at_reg]);
+            buffer_printf(compiler->text_buffer, "\tcmp%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
             node->used_register = left_at_reg;
         } else {
-            buffer_printf(compiler->text_buffer, "\tcmp %%%s, %%%s\n", pascal_compiler_regs[left_at_reg], pascal_compiler_regs[right_at_reg]);
-            buffer_printf(compiler->text_buffer, "\tseteb %%%sb\n", pascal_compiler_regs[right_at_reg]);
-            buffer_printf(compiler->text_buffer, "\tmovzbq %%%sb, %%%s\n", pascal_compiler_regs[right_at_reg], pascal_compiler_regs[right_at_reg]);
+            buffer_printf(compiler->text_buffer, "\tcmp%c %%%s, %%%s\n", reg_suffix, left_reg, right_reg);
             node->used_register = right_at_reg;
             compiler->busy_regs[left_at_reg] = false;
         }
@@ -619,14 +805,22 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
         compiler->is_at_reg = true;
     }
 
+    compiler->computed_size = 8;
+    compiler->computed_type = PASCAL_SYMBOL_TYPE_BOOLEAN;
+
+    const char_t* used_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->used_register], compiler->computed_size);
+
     if (node->token->type == PASCAL_TOKEN_TYPE_EQUAL) {
         *result = left == right;
 
         if(!compiler->is_const) {
+
             if(compiler->is_cond_eval) {
                 const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
 
                 buffer_printf(compiler->text_buffer, "\tjne %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tseteb %%%s\n", used_reg);
             }
         }
 
@@ -638,6 +832,8 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
                 const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
 
                 buffer_printf(compiler->text_buffer, "\tje %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", used_reg);
             }
         }
 
@@ -649,6 +845,8 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
                 const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
 
                 buffer_printf(compiler->text_buffer, "\tjge %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tsetl %%%s\n", used_reg);
             }
         }
 
@@ -660,6 +858,8 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
                 const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
 
                 buffer_printf(compiler->text_buffer, "\tjg %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tsetle %%%s\n", used_reg);
             }
         }
 
@@ -671,6 +871,8 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
                 const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
 
                 buffer_printf(compiler->text_buffer, "\tjle %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tsetg %%%s\n", used_reg);
             }
         }
 
@@ -682,6 +884,8 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
                 const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
 
                 buffer_printf(compiler->text_buffer, "\tjl %s\n", label);
+            } else {
+                buffer_printf(compiler->text_buffer, "\tsetge %%%s\n", used_reg);
             }
         }
 
@@ -705,9 +909,9 @@ int8_t pascal_compiler_execute_relational_op(pascal_compiler_t* compiler, pascal
     return 0;
 }
 
-int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
-    int32_t left = 0;
-    int32_t right = 0;
+int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
+    int64_t left = 0;
+    int64_t right = 0;
 
     if(pascal_compiler_execute_ast_node(compiler, node->left, &left) != 0) {
         return -1;
@@ -721,6 +925,8 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
     boolean_t left_is_at_stack = compiler->is_at_stack;
     compiler->is_at_stack = false;
     uint16_t left_at_stack_offset = compiler->at_stack_offset;
+    int64_t left_size = compiler->computed_size;
+    pascal_symbol_type_t left_type = compiler->computed_type;
 
 
     if(!left_is_const) {
@@ -752,6 +958,8 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
     boolean_t right_is_at_stack = compiler->is_at_stack;
     compiler->is_at_stack = false;
     uint16_t right_at_stack_offset = compiler->at_stack_offset;
+    int64_t right_size = compiler->computed_size;
+    pascal_symbol_type_t right_type = compiler->computed_type;
 
     if(!right_is_const) {
         if(!right_is_at_reg) {
@@ -774,17 +982,40 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
         compiler->is_const = true;
     }
 
+    int64_t max_size = MAX(left_size, right_size);
+
+    compiler->computed_size = max_size;
+
+    char_t reg_suffix = pascal_compiler_get_reg_suffix(max_size);
+
+    const char_t* left_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], max_size);
+    const char_t* right_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[right_at_reg], max_size);
+
+    if(!left_is_const && left_size < max_size) {
+        buffer_printf(compiler->text_buffer, "# cast left %lli to %lli\n", left_size, max_size);
+        buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
+                      pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], left_size),
+                      left_reg);
+    }
+
+    if(!right_is_const && right_size < max_size) {
+        buffer_printf(compiler->text_buffer, "# cast right %lli to %lli\n", right_size, max_size);
+        buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
+                      pascal_compiler_cast_reg_to_size(pascal_compiler_regs[right_at_reg], right_size),
+                      right_reg);
+    }
+
     if (node->token->type == PASCAL_TOKEN_TYPE_PLUS) {
         *result = left + right;
         if(!compiler->is_const) {
             if(left_is_const) {
-                buffer_printf(compiler->text_buffer, "\tadd $%d, %%%s\n", left, pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tadd%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
                 node->used_register = right_at_reg;
             } else if(right_is_const) {
-                buffer_printf(compiler->text_buffer, "\tadd $%d, %%%s\n", right, pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tadd%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
                 node->used_register = left_at_reg;
             } else {
-                buffer_printf(compiler->text_buffer, "\tadd %%%s, %%%s\n", pascal_compiler_regs[left_at_reg], pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tadd%c %%%s, %%%s\n", reg_suffix, left_reg, right_reg);
                 node->used_register = right_at_reg;
                 compiler->busy_regs[left_at_reg] = false;
             }
@@ -795,13 +1026,13 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
 
         if(!compiler->is_const) {
             if(left_is_const) {
-                buffer_printf(compiler->text_buffer, "\tsub $%d, %%%s\n", left, pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tsub%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
                 node->used_register = right_at_reg;
             } else if(right_is_const) {
-                buffer_printf(compiler->text_buffer, "\tsub $%d, %%%s\n", right, pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tsub%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
                 node->used_register = left_at_reg;
             } else {
-                buffer_printf(compiler->text_buffer, "\tsub %%%s, %%%s\n", pascal_compiler_regs[right_at_reg], pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tsub%c %%%s, %%%s\n", reg_suffix, right_reg, left_reg);
                 node->used_register = left_at_reg;
                 compiler->busy_regs[right_at_reg] = false;
             }
@@ -812,13 +1043,13 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
 
         if(!compiler->is_const) {
             if(left_is_const) {
-                buffer_printf(compiler->text_buffer, "\timul $%d, %%%s\n", left, pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\timul%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
                 node->used_register = right_at_reg;
             } else if(right_is_const) {
-                buffer_printf(compiler->text_buffer, "\timul $%d, %%%s\n", right, pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\timul%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
                 node->used_register = left_at_reg;
             } else {
-                buffer_printf(compiler->text_buffer, "\timul %%%s, %%%s\n", pascal_compiler_regs[left_at_reg], pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\timul%c %%%s, %%%s\n", reg_suffix, left_reg, right_reg);
                 node->used_register = right_at_reg;
                 compiler->busy_regs[left_at_reg] = false;
             }
@@ -845,9 +1076,9 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
             }
 
             if(left_is_const) {
-                buffer_printf(compiler->text_buffer, "\tmov $%d, %%rax\n", left);
+                buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %%%s\n", reg_suffix, left, pascal_compiler_cast_reg_to_size("rax", max_size));
                 buffer_printf(compiler->text_buffer, "\tcqo\n");
-                buffer_printf(compiler->text_buffer, "\tidiv %%%s\n", pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tidiv%c %%%s\n", reg_suffix, right_reg);
                 node->used_register = 0;
             } else if(right_is_const) {
                 boolean_t old_rdx_busy = compiler->busy_regs[3];
@@ -860,12 +1091,15 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
                     buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[right_at_reg]);
                 }
 
-                buffer_printf(compiler->text_buffer, "\tmov $%d, %%%s\n", right, pascal_compiler_regs[const_swap_reg]);
+                buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %%%s\n", reg_suffix, right, pascal_compiler_cast_reg_to_size(pascal_compiler_regs[const_swap_reg], max_size));
 
 
-                buffer_printf(compiler->text_buffer, "\tmov %%%s, %%rax\n", pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %%%s\n",
+                              reg_suffix,
+                              pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], max_size),
+                              pascal_compiler_cast_reg_to_size("rax", max_size));
                 buffer_printf(compiler->text_buffer, "\tcqo\n");
-                buffer_printf(compiler->text_buffer, "\tidiv %%%s\n", pascal_compiler_regs[const_swap_reg]);
+                buffer_printf(compiler->text_buffer, "\tidiv%c %%%s\n", reg_suffix, pascal_compiler_cast_reg_to_size(pascal_compiler_regs[const_swap_reg], max_size));
                 compiler->busy_regs[left_at_reg] = false;
                 node->used_register = 0;
 
@@ -875,9 +1109,9 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
                     compiler->busy_regs[const_swap_reg] = false;
                 }
             } else {
-                buffer_printf(compiler->text_buffer, "\tmov %%%s, %%rax\n", pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %%rax\n", reg_suffix, pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], max_size));
                 buffer_printf(compiler->text_buffer, "\tcqo\n");
-                buffer_printf(compiler->text_buffer, "\tidiv %%%s\n", pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tidiv%c %%%s\n", reg_suffix, pascal_compiler_cast_reg_to_size(pascal_compiler_regs[right_at_reg], max_size));
                 node->used_register = 0;
                 compiler->busy_regs[left_at_reg] = false;
                 compiler->busy_regs[right_at_reg] = false;
@@ -901,44 +1135,150 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
 
         }
     } else if(node->token->type == PASCAL_TOKEN_TYPE_AND) {
-        *result = left && right;
+        if(left_type != PASCAL_SYMBOL_TYPE_BOOLEAN || right_type != PASCAL_SYMBOL_TYPE_BOOLEAN) {
+            compiler->computed_type = PASCAL_SYMBOL_TYPE_INTEGER;
+            *result = left & right;
+        } else {
+            compiler->computed_type = PASCAL_SYMBOL_TYPE_BOOLEAN;
+            *result = left && right;
+        }
 
-        buffer_printf(compiler->text_buffer, "# and left is %d right is %d\n", left, right);
+        buffer_printf(compiler->text_buffer, "# and left is 0x%llx right is 0x%llx\n", left, right);
 
         if(!compiler->is_const) {
             if(left_is_const) {
-                buffer_printf(compiler->text_buffer, "\tand $%d, %%%s\n", left, pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tand%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
                 node->used_register = right_at_reg;
             } else if(right_is_const) {
-                buffer_printf(compiler->text_buffer, "\tand $%d, %%%s\n", right, pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tand%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
                 node->used_register = left_at_reg;
             } else {
-                buffer_printf(compiler->text_buffer, "\tand %%%s, %%%s\n", pascal_compiler_regs[left_at_reg], pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tand%c %%%s, %%%s\n", reg_suffix, left_reg, right_reg);
                 node->used_register = right_at_reg;
                 compiler->busy_regs[left_at_reg] = false;
             }
+
+            if(!compiler->is_cond_eval && compiler->computed_type == PASCAL_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->used_register], compiler->computed_size));
+            }
+
             compiler->is_at_reg = true;
         }
-        buffer_printf(compiler->text_buffer, "# and result is %d\n", *result);
+        buffer_printf(compiler->text_buffer, "# and result is 0x%llx\n", *result);
 
     } else if(node->token->type == PASCAL_TOKEN_TYPE_OR) {
-        *result = left || right;
+        if(left_type != PASCAL_SYMBOL_TYPE_BOOLEAN || right_type != PASCAL_SYMBOL_TYPE_BOOLEAN) {
+            compiler->computed_type = PASCAL_SYMBOL_TYPE_INTEGER;
+            *result = left | right;
+        } else {
+            compiler->computed_type = PASCAL_SYMBOL_TYPE_BOOLEAN;
+            *result = left || right;
+        }
 
         if(!compiler->is_const) {
             if(left_is_const) {
-                buffer_printf(compiler->text_buffer, "\tor $%d, %%%s\n", left, pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tor%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
                 node->used_register = right_at_reg;
             } else if(right_is_const) {
-                buffer_printf(compiler->text_buffer, "\tor $%d, %%%s\n", right, pascal_compiler_regs[left_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tor%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
                 node->used_register = left_at_reg;
             } else {
-                buffer_printf(compiler->text_buffer, "\tor %%%s, %%%s\n", pascal_compiler_regs[left_at_reg], pascal_compiler_regs[right_at_reg]);
+                buffer_printf(compiler->text_buffer, "\tor%c %%%s, %%%s\n", reg_suffix, left_reg, right_reg);
                 node->used_register = right_at_reg;
                 compiler->busy_regs[left_at_reg] = false;
             }
+
+            if(!compiler->is_cond_eval && compiler->computed_type == PASCAL_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->used_register], compiler->computed_size));
+            }
+
             compiler->is_at_reg = true;
         }
-    } else {
+    } else if(node->token->type == PASCAL_TOKEN_TYPE_XOR) {
+        if(left_type != PASCAL_SYMBOL_TYPE_BOOLEAN || right_type != PASCAL_SYMBOL_TYPE_BOOLEAN) {
+            compiler->computed_type = PASCAL_SYMBOL_TYPE_INTEGER;
+            *result = left ^ right;
+        } else {
+            compiler->computed_type = PASCAL_SYMBOL_TYPE_BOOLEAN;
+            *result = !left != !right;
+        }
+
+        if(!compiler->is_const) {
+            if(left_is_const) {
+                buffer_printf(compiler->text_buffer, "\txor%c $0x%llx, %%%s\n", reg_suffix, left, right_reg);
+                node->used_register = right_at_reg;
+            } else if(right_is_const) {
+                buffer_printf(compiler->text_buffer, "\txor%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
+                node->used_register = left_at_reg;
+            } else {
+                buffer_printf(compiler->text_buffer, "\txor%c %%%s, %%%s\n", reg_suffix, left_reg, right_reg);
+                node->used_register = right_at_reg;
+                compiler->busy_regs[left_at_reg] = false;
+            }
+
+            if(!compiler->is_cond_eval && compiler->computed_type == PASCAL_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->used_register], compiler->computed_size));
+            }
+
+            compiler->is_at_reg = true;
+        }
+    } else if(node->token->type == PASCAL_TOKEN_TYPE_SHL) {
+        *result = left << right;
+
+        if(!compiler->is_const) {
+            if(left_is_const) {
+                left_at_reg = pascal_compiler_find_free_reg(compiler);
+
+                if(left_at_reg == -1) {
+                    PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "no free registers");
+                    return -1;
+                }
+
+                left_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], max_size);
+
+                buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %%%s\n", reg_suffix, left, left_reg);
+                buffer_printf(compiler->text_buffer, "\tshl%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
+                node->used_register = left_at_reg;
+            } else if(right_is_const) {
+                buffer_printf(compiler->text_buffer, "\tshl%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
+                node->used_register = left_at_reg;
+            } else {
+                buffer_printf(compiler->text_buffer, "\tshl%c %%%s, %%%s\n", reg_suffix, right_reg, left_reg);
+                node->used_register = left_at_reg;
+                compiler->busy_regs[right_at_reg] = false;
+            }
+
+            compiler->is_at_reg = true;
+        }
+    }  else if(node->token->type == PASCAL_TOKEN_TYPE_SHR) {
+        *result = left >> right;
+
+        if(!compiler->is_const) {
+            if(left_is_const) {
+                left_at_reg = pascal_compiler_find_free_reg(compiler);
+
+                if(left_at_reg == -1) {
+                    PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "no free registers");
+                    return -1;
+                }
+
+                left_reg = pascal_compiler_cast_reg_to_size(pascal_compiler_regs[left_at_reg], max_size);
+
+                buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %%%s\n", reg_suffix, left, left_reg);
+                buffer_printf(compiler->text_buffer, "\tshr%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
+                node->used_register = left_at_reg;
+            } else if(right_is_const) {
+                buffer_printf(compiler->text_buffer, "\tshr%c $0x%llx, %%%s\n", reg_suffix, right, left_reg);
+                node->used_register = left_at_reg;
+            } else {
+                buffer_printf(compiler->text_buffer, "\tshr%c %%%s, %%%s\n", reg_suffix, right_reg, left_reg);
+                node->used_register = left_at_reg;
+                compiler->busy_regs[right_at_reg] = false;
+            }
+
+            compiler->is_at_reg = true;
+        }
+    }else {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown binary op: %d", node->token->type);
         return -1;
     }
@@ -946,7 +1286,7 @@ int8_t pascal_compiler_execure_binary_op(pascal_compiler_t* compiler, pascal_ast
     return 0;
 }
 
-int8_t pascal_compiler_execute_compound(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
+int8_t pascal_compiler_execute_compound(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
     if(node->children == NULL) {
         return 0;
     }
@@ -983,7 +1323,7 @@ int8_t pascal_compiler_execute_compound(pascal_compiler_t* compiler, pascal_ast_
                     }
 
                     if(tmp_symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
-                        PRINTLOG(COMPILER_PASCAL, LOG_INFO, "local symbol %s type %d size %d value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
+                        PRINTLOG(COMPILER_PASCAL, LOG_INFO, "local symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
 
                         tmp_symbol->stack_offset = compiler->next_stack_offset;
                         compiler->next_stack_offset += 8; // tmp_symbol->size;
@@ -1018,7 +1358,7 @@ int8_t pascal_compiler_execute_compound(pascal_compiler_t* compiler, pascal_ast_
     return 0;
 }
 
-int8_t pascal_compiler_save_to_mem(pascal_compiler_t* compiler, const char_t* reg, const char_t* mem) {
+int8_t pascal_compiler_save_to_mem(pascal_compiler_t* compiler, const char_t* reg, const pascal_symbol_t* symbol) {
     int16_t swap_reg = pascal_compiler_find_free_reg(compiler);
     boolean_t need_swap = false;
 
@@ -1028,9 +1368,20 @@ int8_t pascal_compiler_save_to_mem(pascal_compiler_t* compiler, const char_t* re
         buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[swap_reg]);
     }
 
-    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", mem, pascal_compiler_regs[swap_reg]);
+    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, pascal_compiler_regs[swap_reg]);
     buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", pascal_compiler_regs[swap_reg], pascal_compiler_regs[swap_reg]);
-    buffer_printf(compiler->text_buffer, "\tmov %%%s, (%%%s)\n", reg, pascal_compiler_regs[swap_reg]);
+
+    if(compiler->computed_size != symbol->size) {
+        buffer_printf(compiler->text_buffer, "# cast %s to %lli\n", reg, symbol->size);
+        buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
+                      pascal_compiler_cast_reg_to_size(reg, compiler->computed_size),
+                      pascal_compiler_cast_reg_to_size(reg, symbol->size));
+    }
+
+    buffer_printf(compiler->text_buffer, "\tmov%c %%%s, (%%%s)\n",
+                  pascal_compiler_get_reg_suffix(symbol->size),
+                  pascal_compiler_cast_reg_to_size(reg, symbol->size),
+                  pascal_compiler_regs[swap_reg]);
 
     if(need_swap) {
         buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[swap_reg]);
@@ -1041,7 +1392,7 @@ int8_t pascal_compiler_save_to_mem(pascal_compiler_t* compiler, const char_t* re
     return 0;
 }
 
-int8_t pascal_compiler_save_const_int_to_mem(pascal_compiler_t* compiler, int32_t value, const char_t* mem) {
+int8_t pascal_compiler_save_const_int_to_mem(pascal_compiler_t* compiler, int64_t value, const pascal_symbol_t* symbol) {
     int16_t swap_reg = pascal_compiler_find_free_reg(compiler);
     boolean_t need_swap = false;
 
@@ -1051,9 +1402,12 @@ int8_t pascal_compiler_save_const_int_to_mem(pascal_compiler_t* compiler, int32_
         buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[swap_reg]);
     }
 
-    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", mem, pascal_compiler_regs[swap_reg]);
+    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, pascal_compiler_regs[swap_reg]);
     buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", pascal_compiler_regs[swap_reg], pascal_compiler_regs[swap_reg]);
-    buffer_printf(compiler->text_buffer, "\tmov $%d, (%%%s)\n", value, pascal_compiler_regs[swap_reg]);
+    buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, (%%%s)\n",
+                  pascal_compiler_get_reg_suffix(symbol->size),
+                  value,
+                  pascal_compiler_regs[swap_reg]);
 
     if(need_swap) {
         buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[swap_reg]);
@@ -1064,7 +1418,7 @@ int8_t pascal_compiler_save_const_int_to_mem(pascal_compiler_t* compiler, int32_
     return 0;
 }
 
-int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
+int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
     const pascal_symbol_t * symbol = pascal_compiler_find_symbol(compiler, node->left->token->text);
 
     if(symbol == NULL) {
@@ -1082,7 +1436,10 @@ int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_no
 
     if(compiler->is_at_mem) {
         if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov %s, -%d(%%rbp)\n", node->right->token->text, symbol->stack_offset);
+            buffer_printf(compiler->text_buffer, "\tmov%c %s, -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(symbol->size),
+                          node->right->token->text,
+                          symbol->stack_offset);
         } else {
             int16_t swap_reg = pascal_compiler_find_free_reg(compiler);
             boolean_t need_swap = false;
@@ -1093,9 +1450,12 @@ int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_no
                 buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[swap_reg]);
             }
 
-            buffer_printf(compiler->text_buffer, "\tmov %s, %%%s\n", node->right->token->text, pascal_compiler_regs[swap_reg]);
+            buffer_printf(compiler->text_buffer, "\tmov%c %s, %%%s\n",
+                          pascal_compiler_get_reg_suffix(symbol->size),
+                          node->right->token->text,
+                          pascal_compiler_cast_reg_to_size(pascal_compiler_regs[swap_reg], symbol->size));
 
-            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[swap_reg], symbol->name);
+            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[swap_reg], symbol);
 
             if(need_swap) {
                 buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[swap_reg]);
@@ -1106,18 +1466,24 @@ int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_no
 
     } else if(compiler->is_at_reg) {
         if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_compiler_regs[node->right->used_register], symbol->stack_offset);
+            buffer_printf(compiler->text_buffer, "\tmov%c %%%s, -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(symbol->size),
+                          pascal_compiler_cast_reg_to_size(pascal_compiler_regs[node->right->used_register], symbol->size),
+                          symbol->stack_offset);
         } else {
-            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[node->right->used_register], symbol->name);
+            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[node->right->used_register], symbol);
         }
 
         compiler->is_at_reg = false;
         compiler->busy_regs[node->right->used_register] = false;
     } else if(compiler->is_const) {
         if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov $%d, -%d(%%rbp)\n", *result, symbol->stack_offset);
+            buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(symbol->size),
+                          *result,
+                          symbol->stack_offset);
         } else {
-            pascal_compiler_save_const_int_to_mem(compiler, *result, symbol->name);
+            pascal_compiler_save_const_int_to_mem(compiler, *result, symbol);
         }
 
         compiler->is_const = false;
@@ -1131,12 +1497,18 @@ int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_no
             buffer_printf(compiler->text_buffer, "\tpush %%%s\n", pascal_compiler_regs[swap_reg]);
         }
 
-        buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", compiler->at_stack_offset, pascal_compiler_regs[swap_reg]);
+        buffer_printf(compiler->text_buffer, "\tmov%c -%d(%%rbp), %%%s\n",
+                      pascal_compiler_get_reg_suffix(symbol->size),
+                      compiler->at_stack_offset,
+                      pascal_compiler_cast_reg_to_size(pascal_compiler_regs[swap_reg], symbol->size));
 
         if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_compiler_regs[swap_reg], symbol->stack_offset);
+            buffer_printf(compiler->text_buffer, "\tmov%c %%%s, -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(symbol->size),
+                          pascal_compiler_cast_reg_to_size(pascal_compiler_regs[swap_reg], symbol->size),
+                          symbol->stack_offset);
         } else {
-            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[swap_reg], symbol->name);
+            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[swap_reg], symbol);
         }
 
         if(need_swap) {
@@ -1160,9 +1532,12 @@ int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_no
         buffer_printf(compiler->text_buffer, "\tpop %%%s\n", pascal_compiler_regs[swap_reg]);
 
         if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov %%%s, -%d(%%rbp)\n", pascal_compiler_regs[swap_reg], symbol->stack_offset);
+            buffer_printf(compiler->text_buffer, "\tmov%c %%%s, -%d(%%rbp)\n",
+                          pascal_compiler_get_reg_suffix(symbol->size),
+                          pascal_compiler_cast_reg_to_size(pascal_compiler_regs[swap_reg], symbol->size),
+                          symbol->stack_offset);
         } else {
-            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[swap_reg], symbol->name);
+            pascal_compiler_save_to_mem(compiler, pascal_compiler_regs[swap_reg], symbol);
         }
 
         if(need_swap) {
@@ -1176,7 +1551,7 @@ int8_t pascal_compiler_execute_assign(pascal_compiler_t* compiler, pascal_ast_no
     return 0;
 }
 
-int8_t pascal_compiler_execute_string_const(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
+int8_t pascal_compiler_execute_string_const(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
     UNUSED(result);
 
     pascal_symbol_t * symbol = memory_malloc(sizeof(pascal_symbol_t));
@@ -1197,7 +1572,7 @@ int8_t pascal_compiler_execute_string_const(pascal_compiler_t* compiler, pascal_
     buffer_printf(compiler->rodata_buffer, ".align 8\n");
     buffer_printf(compiler->rodata_buffer, ".local %s\n", symbol->name);
     buffer_printf(compiler->rodata_buffer, ".type %s, @object\n", symbol->name);
-    buffer_printf(compiler->rodata_buffer, ".size %s, %d\n", symbol->name, symbol->size);
+    buffer_printf(compiler->rodata_buffer, ".size %s, %lli\n", symbol->name, symbol->size);
     buffer_printf(compiler->rodata_buffer, "%s:\n", symbol->name);
     buffer_printf(compiler->rodata_buffer, "\t.string \"%s\"\n", symbol->string_value);
     buffer_printf(compiler->rodata_buffer, "\n\n\n");
@@ -1210,7 +1585,7 @@ int8_t pascal_compiler_execute_string_const(pascal_compiler_t* compiler, pascal_
 #define SYS_exit 60ULL
 #define SYS_write 1ULL
 
-int8_t pascal_compiler_execute_function_call(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
+int8_t pascal_compiler_execute_function_call(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
     buffer_printf(compiler->text_buffer, "# function call %s\n", node->token->text);
 
     if(strcmp(node->token->text, "write") == 0) {
@@ -1271,7 +1646,7 @@ int8_t pascal_compiler_execute_function_call(pascal_compiler_t* compiler, pascal
             buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%rsi\n", tmp_node->symbol->name);
             buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%rsi), %%rsi\n");
 
-            buffer_printf(compiler->text_buffer, "\tmov $%d, %%rdx\n", tmp_node->symbol->size);
+            buffer_printf(compiler->text_buffer, "\tmov $%lli, %%rdx\n", tmp_node->symbol->size);
         } else if(tmp_node->type == PASCAL_AST_NODE_TYPE_VAR) {
             const pascal_symbol_t * symbol = pascal_compiler_find_symbol(compiler, tmp_node->token->text);
 
@@ -1338,7 +1713,7 @@ int8_t pascal_compiler_execute_function_call(pascal_compiler_t* compiler, pascal
 }
 
 
-int8_t pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_node_t* node, int32_t* result) {
+int8_t pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
     if (node == NULL) {
         return -1;
     }
@@ -1422,6 +1797,9 @@ int8_t pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_
         *result = symbol->int_value;
 
         if(symbol->type == PASCAL_SYMBOL_TYPE_INTEGER) {
+            compiler->computed_size = symbol->size;
+            compiler->computed_type = symbol->type;
+
             if(symbol->is_local) {
                 compiler->is_at_stack = true;
                 compiler->at_stack_offset = symbol->stack_offset;
@@ -1429,13 +1807,17 @@ int8_t pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_
                 int16_t reg = pascal_compiler_find_free_reg(compiler);
 
                 if(reg == -1) {
+                    PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "no free register");
                     compiler->is_at_mem = true;
                 } else {
                     compiler->is_at_reg = true;
                     node->used_register = reg;
                     buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, pascal_compiler_regs[reg]);
                     buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", pascal_compiler_regs[reg], pascal_compiler_regs[reg]);
-                    buffer_printf(compiler->text_buffer, "\tmov (%%%s), %%%s\n", pascal_compiler_regs[reg], pascal_compiler_regs[reg]);
+                    buffer_printf(compiler->text_buffer, "\tmov%c (%%%s), %%%s\n",
+                                  pascal_compiler_get_reg_suffix(symbol->size),
+                                  pascal_compiler_regs[reg],
+                                  pascal_compiler_cast_reg_to_size(pascal_compiler_regs[reg], symbol->size));
                 }
             }
         } else { // do we need this?
@@ -1464,7 +1846,7 @@ int8_t pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_
     return 0;
 }
 
-int8_t pascal_compiler_execute(pascal_compiler_t * compiler, int32_t * result) {
+int8_t pascal_compiler_execute(pascal_compiler_t * compiler, int64_t* result) {
     pascal_ast_node_t * node = compiler->ast->root;
 
     if (node == NULL) {
@@ -1552,7 +1934,7 @@ int32_t main(int32_t argc, char * argv[]) {
         return -1;
     }
 
-    int32_t result = 0;
+    int64_t result = 0;
 
     if(pascal_compiler_execute(&compiler, &result) != 0) {
         print_error("Error: Failed to execute compiler\n");
@@ -1563,9 +1945,6 @@ int32_t main(int32_t argc, char * argv[]) {
 
         return -1;
     }
-
-    pascal_compiler_print_symbol_table(&compiler);
-    PRINTLOG(COMPILER_PASCAL, LOG_INFO, "Result: %d", result);
 
     FILE* out = fopen(argv[2], "w");
 

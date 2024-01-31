@@ -25,6 +25,7 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_PLUS,
     PASCAL_TOKEN_TYPE_MINUS,
     PASCAL_TOKEN_TYPE_OR,
+    PASCAL_TOKEN_TYPE_XOR,
     PASCAL_TOKEN_TYPE_MULTIPLY,
     PASCAL_TOKEN_TYPE_REAL_DIVIDE,
     PASCAL_TOKEN_TYPE_INTEGER_DIVIDE,
@@ -46,6 +47,8 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_GREATER_THAN,
     PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL,
     PASCAL_TOKEN_TYPE_IN,
+    PASCAL_TOKEN_TYPE_SHL,
+    PASCAL_TOKEN_TYPE_SHR,
     PASCAL_TOKEN_TYPE_BEGIN,
     PASCAL_TOKEN_TYPE_END,
     PASCAL_TOKEN_TYPE_PROGRAM,
@@ -55,6 +58,7 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_CONST,
     PASCAL_TOKEN_TYPE_INTEGER,
     PASCAL_TOKEN_TYPE_REAL,
+    PASCAL_TOKEN_TYPE_STRING,
     PASCAL_TOKEN_TYPE_IF,
     PASCAL_TOKEN_TYPE_THEN,
     PASCAL_TOKEN_TYPE_ELSE,
@@ -154,7 +158,10 @@ typedef enum pascal_ast_node_type_t {
 } pascal_ast_node_type_t;
 
 typedef enum pascal_symbol_type_t {
-    PASCAL_SYMBOL_TYPE_INTEGER = 0,
+    PASCAL_SYMBOL_TYPE_UNKNOWN = -1,
+    PASCAL_SYMBOL_TYPE_VOID = 0,
+    PASCAL_SYMBOL_TYPE_BOOLEAN,
+    PASCAL_SYMBOL_TYPE_INTEGER,
     PASCAL_SYMBOL_TYPE_REAL,
     PASCAL_SYMBOL_TYPE_STRING,
 } pascal_symbol_type_t;
@@ -162,7 +169,7 @@ typedef enum pascal_symbol_type_t {
 typedef struct pascal_symol_t {
     const char_t*        name;
     pascal_symbol_type_t type;
-    uint32_t             size;
+    int64_t              size;
     int64_t              int_value;
     float64_t            real_value;
     const char_t*        string_value;
@@ -203,27 +210,29 @@ struct symbol_table_t {
 };
 
 typedef struct pascal_compiler_t {
-    pascal_ast_t *   ast;
-    const char_t*    program_name;
-    pascal_symbol_t* program_name_symbol;
-    buffer_t*        text_buffer;
-    buffer_t*        data_buffer;
-    buffer_t*        rodata_buffer;
-    buffer_t*        bss_buffer;
-    symbol_table_t*  main_symbol_table;
-    symbol_table_t*  current_symbol_table;
-    uint16_t         stack_size;
-    uint16_t         next_stack_offset;
-    boolean_t        is_const;
-    boolean_t        is_at_reg;
-    boolean_t        is_at_mem;
-    boolean_t        is_at_stack;
-    uint16_t         at_stack_offset;
-    boolean_t        busy_regs[PASCAL_VM_REG_COUNT];
-    int32_t          next_label_id;
-    linkedlist_t*    cond_label_stack;
-    int64_t          cond_depth;
-    boolean_t        is_cond_eval;
+    pascal_ast_t *       ast;
+    const char_t*        program_name;
+    pascal_symbol_t*     program_name_symbol;
+    buffer_t*            text_buffer;
+    buffer_t*            data_buffer;
+    buffer_t*            rodata_buffer;
+    buffer_t*            bss_buffer;
+    symbol_table_t*      main_symbol_table;
+    symbol_table_t*      current_symbol_table;
+    uint16_t             stack_size;
+    uint16_t             next_stack_offset;
+    boolean_t            is_const;
+    boolean_t            is_at_reg;
+    boolean_t            is_at_mem;
+    boolean_t            is_at_stack;
+    uint16_t             at_stack_offset;
+    boolean_t            busy_regs[PASCAL_VM_REG_COUNT];
+    int32_t              next_label_id;
+    linkedlist_t*        cond_label_stack;
+    int64_t              cond_depth;
+    boolean_t            is_cond_eval;
+    int64_t              computed_size;
+    pascal_symbol_type_t computed_type;
 } pascal_compiler_t;
 
 
