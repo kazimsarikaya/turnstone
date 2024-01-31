@@ -36,6 +36,10 @@ const pascal_token_t reserved_tokens[] = {
     {PASCAL_TOKEN_TYPE_AND, true, 0, 0, "and", false, 0, false, false},
     {PASCAL_TOKEN_TYPE_NOT, true, 0, 0, "not", false, 0, false, false},
     {PASCAL_TOKEN_TYPE_MOD, true, 0, 0, "mod", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_IN, true, 0, 0, "in", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_IF, true, 0, 0, "if", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_THEN, true, 0, 0, "then", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_ELSE, true, 0, 0, "else", false, 0, false, false},
 };
 
 int8_t pascal_token_destroy(pascal_token_t * token) {
@@ -285,6 +289,54 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
             }
 
             (*token)->type = PASCAL_TOKEN_TYPE_EQUAL;
+            pascal_lexer_advance(lexer);
+            return 0;
+        }
+
+        if(lexer->current_char == '<') {
+            (*token) = memory_malloc(sizeof(pascal_token_t));
+
+            if (*token == NULL) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+
+                return -1;
+            }
+
+            if(pascal_lexer_peek(lexer) == '=') {
+                (*token)->type = PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL;
+                pascal_lexer_advance(lexer);
+                pascal_lexer_advance(lexer);
+                return 0;
+            } else if(pascal_lexer_peek(lexer) == '>') {
+                (*token)->type = PASCAL_TOKEN_TYPE_NOT_EQUAL;
+                pascal_lexer_advance(lexer);
+                pascal_lexer_advance(lexer);
+                return 0;
+            }
+
+            (*token)->type = PASCAL_TOKEN_TYPE_LESS_THAN;
+            pascal_lexer_advance(lexer);
+            return 0;
+
+        }
+
+        if(lexer->current_char == '>') {
+            (*token) = memory_malloc(sizeof(pascal_token_t));
+
+            if (*token == NULL) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+
+                return -1;
+            }
+
+            if(pascal_lexer_peek(lexer) == '=') {
+                (*token)->type = PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL;
+                pascal_lexer_advance(lexer);
+                pascal_lexer_advance(lexer);
+                return 0;
+            }
+
+            (*token)->type = PASCAL_TOKEN_TYPE_GREATER_THAN;
             pascal_lexer_advance(lexer);
             return 0;
         }

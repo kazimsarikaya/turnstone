@@ -211,7 +211,7 @@ int8_t pascal_parser_term(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     return 0;
 }
 
-int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+int8_t pascal_parser_simple_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     pascal_ast_node_t * left = NULL;
     pascal_ast_node_t * right = NULL;
 
@@ -220,7 +220,8 @@ int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
     }
 
     while (parser->current_token->type == PASCAL_TOKEN_TYPE_PLUS ||
-           parser->current_token->type == PASCAL_TOKEN_TYPE_MINUS) {
+           parser->current_token->type == PASCAL_TOKEN_TYPE_MINUS ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_OR) {
         pascal_token_t * token = parser->current_token;
 
         if (token->type == PASCAL_TOKEN_TYPE_PLUS) {
@@ -259,6 +260,97 @@ int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
         }
 
         new_node->type = PASCAL_AST_NODE_TYPE_BINARY_OP;
+        new_node->token = token;
+        new_node->left = left;
+        new_node->right = right;
+
+        left = new_node;
+    }
+
+    *node = left;
+
+    return 0;
+}
+
+
+
+int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+    pascal_ast_node_t * left = NULL;
+    pascal_ast_node_t * right = NULL;
+
+    if(pascal_parser_simple_expr(parser, &left) != 0) {
+        return -1;
+    }
+
+    while (parser->current_token->type == PASCAL_TOKEN_TYPE_EQUAL ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_NOT_EQUAL ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_LESS_THAN ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_GREATER_THAN ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL ||
+           parser->current_token->type == PASCAL_TOKEN_TYPE_IN) {
+        pascal_token_t * token = parser->current_token;
+
+        if (token->type == PASCAL_TOKEN_TYPE_EQUAL) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_EQUAL, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_NOT_EQUAL) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_NOT_EQUAL, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_LESS_THAN) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_LESS_THAN, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_GREATER_THAN) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_GREATER_THAN, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        } else if (token->type == PASCAL_TOKEN_TYPE_IN) {
+            if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_IN, false) != 0) {
+                pascal_ast_node_destroy(left);
+
+                return -1;
+            }
+        }
+
+        if(pascal_parser_simple_expr(parser, &right) != 0) {
+            pascal_ast_node_destroy(left);
+
+            return -1;
+        }
+
+        pascal_ast_node_t * new_node = memory_malloc(sizeof(pascal_ast_node_t));
+
+        if (new_node == NULL) {
+            pascal_ast_node_destroy(left);
+            pascal_ast_node_destroy(right);
+
+            return -1;
+        }
+
+        new_node->type = PASCAL_AST_NODE_TYPE_RELATIONAL_OP;
         new_node->token = token;
         new_node->left = left;
         new_node->right = right;
@@ -540,8 +632,6 @@ int8_t pascal_parser_function_call(pascal_parser_t* parser, pascal_ast_node_t** 
         return -1;
     }
 
-    printf("parser->current_token->type %d\n", parser->current_token->type);
-
     while (parser->current_token->type != PASCAL_TOKEN_TYPE_RPAREN) {
         pascal_ast_node_t * new_node = NULL;
 
@@ -646,11 +736,69 @@ int8_t pascal_parser_statement(pascal_parser_t * parser, pascal_ast_node_t ** no
         (*node)->type = PASCAL_AST_NODE_TYPE_DECLS;
 
         return pascal_parser_variables(parser, node, true, true);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_IF) {
+        return pascal_parser_if_statement(parser, node);
     }
 
     PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unexpected token parser_statement. found %d", parser->current_token->type);
 
     return -1;
+}
+
+int8_t pascal_parser_if_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_IF, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected if");
+        return -1;
+    }
+
+    pascal_ast_node_t * condition = NULL;
+
+    if(pascal_parser_expr(parser, &condition) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_THEN, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected then");
+        return -1;
+    }
+
+    pascal_ast_node_t * if_statement = NULL;
+
+    if(pascal_parser_statement(parser, &if_statement) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+        return -1;
+    }
+
+    pascal_ast_node_t * else_statement = NULL;
+
+    if(parser->current_token->type == PASCAL_TOKEN_TYPE_ELSE) {
+        if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ELSE, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected else");
+            return -1;
+        }
+
+        if(pascal_parser_statement(parser, &else_statement) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+            return -1;
+        }
+    }
+
+    pascal_ast_node_t * new_node = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (new_node == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    new_node->type = PASCAL_AST_NODE_TYPE_IF;
+    new_node->condition = condition;
+    new_node->left = if_statement;
+    new_node->right = else_statement;
+
+    *node = new_node;
+
+    return 0;
 }
 
 int8_t pascal_parser_compound_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {

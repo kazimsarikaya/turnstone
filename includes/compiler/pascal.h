@@ -40,6 +40,12 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_COMMA,
     PASCAL_TOKEN_TYPE_COLON,
     PASCAL_TOKEN_TYPE_EQUAL,
+    PASCAL_TOKEN_TYPE_NOT_EQUAL,
+    PASCAL_TOKEN_TYPE_LESS_THAN,
+    PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL,
+    PASCAL_TOKEN_TYPE_GREATER_THAN,
+    PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL,
+    PASCAL_TOKEN_TYPE_IN,
     PASCAL_TOKEN_TYPE_BEGIN,
     PASCAL_TOKEN_TYPE_END,
     PASCAL_TOKEN_TYPE_PROGRAM,
@@ -49,6 +55,9 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_CONST,
     PASCAL_TOKEN_TYPE_INTEGER,
     PASCAL_TOKEN_TYPE_REAL,
+    PASCAL_TOKEN_TYPE_IF,
+    PASCAL_TOKEN_TYPE_THEN,
+    PASCAL_TOKEN_TYPE_ELSE,
 } pascal_token_type_t;
 
 const char_t* pascal_keywords[] = {
@@ -129,6 +138,7 @@ typedef enum pascal_ast_node_type_t {
     PASCAL_AST_NODE_TYPE_INTEGER_CONST = 0,
     PASCAL_AST_NODE_TYPE_REAL_CONST,
     PASCAL_AST_NODE_TYPE_STRING_CONST,
+    PASCAL_AST_NODE_TYPE_RELATIONAL_OP,
     PASCAL_AST_NODE_TYPE_BINARY_OP,
     PASCAL_AST_NODE_TYPE_UNARY_OP,
     PASCAL_AST_NODE_TYPE_NO_OP,
@@ -140,6 +150,7 @@ typedef enum pascal_ast_node_type_t {
     PASCAL_AST_NODE_TYPE_BLOCK,
     PASCAL_AST_NODE_TYPE_COMPOUND,
     PASCAL_AST_NODE_TYPE_FUNCTION_CALL,
+    PASCAL_AST_NODE_TYPE_IF,
 } pascal_ast_node_type_t;
 
 typedef enum pascal_symbol_type_t {
@@ -160,15 +171,18 @@ typedef struct pascal_symol_t {
     boolean_t            is_local;
 } pascal_symbol_t;
 
-typedef struct pascal_ast_node_t {
-    pascal_ast_node_type_t     type;
-    pascal_token_t*            token;
-    struct pascal_ast_node_t * left;
-    struct pascal_ast_node_t * right;
-    linkedlist_t*              children;
-    int16_t                    used_register;
-    pascal_symbol_t*           symbol;
-} pascal_ast_node_t;
+typedef struct pascal_ast_node_t pascal_ast_node_t;
+
+struct pascal_ast_node_t {
+    pascal_ast_node_type_t type;
+    pascal_token_t*        token;
+    pascal_ast_node_t*     left;
+    pascal_ast_node_t*     right;
+    pascal_ast_node_t*     condition;
+    linkedlist_t*          children;
+    int16_t                used_register;
+    pascal_symbol_t*       symbol;
+};
 
 typedef struct pascal_ast_t {
     pascal_ast_node_t * root;
@@ -188,7 +202,7 @@ struct symbol_table_t {
     hashmap_t*      symbols;
 };
 
-typedef struct pascal_vm_t {
+typedef struct pascal_compiler_t {
     pascal_ast_t *   ast;
     const char_t*    program_name;
     pascal_symbol_t* program_name_symbol;
@@ -207,7 +221,10 @@ typedef struct pascal_vm_t {
     uint16_t         at_stack_offset;
     boolean_t        busy_regs[PASCAL_VM_REG_COUNT];
     int32_t          next_label_id;
-} pascal_vm_t;
+    linkedlist_t*    cond_label_stack;
+    int64_t          cond_depth;
+    boolean_t        is_cond_eval;
+} pascal_compiler_t;
 
 
 
@@ -234,6 +251,7 @@ int8_t pascal_parser_eat(pascal_parser_t * parser, pascal_token_type_t type, boo
 int8_t pascal_parser_factor(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_term(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_expr(pascal_parser_t * parser, pascal_ast_node_t ** node);
+int8_t pascal_parser_simple_expr(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_program(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_block(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_decls(pascal_parser_t * parser, pascal_ast_node_t ** node);
@@ -244,6 +262,7 @@ int8_t pascal_parser_variables(pascal_parser_t * parser, pascal_ast_node_t ** no
 int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** node, boolean_t is_const, boolean_t is_local);
 int8_t pascal_parser_var(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_function_call(pascal_parser_t* parser, pascal_ast_node_t** node);
+int8_t pascal_parser_if_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
 
 #endif
 

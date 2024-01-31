@@ -64,6 +64,10 @@ int8_t pascal_ast_node_destroy(pascal_ast_node_t * node) {
         pascal_ast_node_destroy(node->right);
     }
 
+    if(node->condition) {
+        pascal_ast_node_destroy(node->condition);
+    }
+
     if(node->type == PASCAL_AST_NODE_TYPE_VAR) {
         pascal_destroy_symbol_list(node->children);
     }
