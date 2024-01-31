@@ -535,13 +535,13 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
         return 0;
     }
 
-    char_t video_printf_buffer[BUFFER_PRINTF_BUFFER_SIZE + 128] = {0};
-    uint64_t video_printf_buffer_idx = 0;
+    char_t buffer_vprintf_buffer[BUFFER_PRINTF_BUFFER_SIZE + 128] = {0};
+    uint64_t buffer_vprintf_buffer_idx = 0;
 
     while (*fmt) {
-        if(video_printf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
-            buffer_append_bytes(buffer, (uint8_t*)video_printf_buffer, video_printf_buffer_idx);
-            video_printf_buffer_idx = 0;
+        if(buffer_vprintf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+            buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+            buffer_vprintf_buffer_idx = 0;
         }
 
         char_t data = *fmt;
@@ -586,8 +586,8 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     break;
                 case 'c':
                     val = va_arg(args, int32_t);
-                    video_printf_buffer[video_printf_buffer_idx++] = (char_t)val;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)val;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
                     cnt++;
                     fmt++;
                     break;
@@ -595,9 +595,15 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     str = va_arg(args, char_t*);
                     slen = strlen(str);
 
-                    strcpy(str, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    while(slen > BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                        buffer_append_bytes(buffer, (uint8_t*)str, BUFFER_PRINTF_BUFFER_SIZE - 1);
+                        str += BUFFER_PRINTF_BUFFER_SIZE - 1;
+                        slen -= BUFFER_PRINTF_BUFFER_SIZE - 1;
+                    }
+
+                    strcpy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
@@ -631,13 +637,13 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         buf[0] = '-';
                     }
 
-                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += idx;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += idx;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
-                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
@@ -662,13 +668,13 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         cnt++;
                     }
 
-                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += idx;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += idx;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
-                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
@@ -701,21 +707,21 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         cnt++;
                     }
 
-                    strcpy(buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += idx;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += idx;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
-                    strcpy(ito_buf + sign, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
                     l_flag = 0;
                     break;
                 case '%':
-                    video_printf_buffer[video_printf_buffer_idx++] = (char_t)'%';
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)'%';
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
                     fmt++;
                     cnt++;
                     break;
@@ -729,9 +735,9 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
                     slen = strlen(fto_buf);
 
-                    strcpy(fto_buf, video_printf_buffer + video_printf_buffer_idx);
-                    video_printf_buffer_idx += slen;
-                    video_printf_buffer[video_printf_buffer_idx] = '\0';
+                    strcpy(fto_buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx += slen;
+                    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
                     cnt += slen;
                     fmt++;
@@ -748,24 +754,24 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
         } else {
 
             while(*fmt) {
-                if(video_printf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
-                    buffer_append_bytes(buffer, (uint8_t*)video_printf_buffer, video_printf_buffer_idx);
-                    video_printf_buffer_idx = 0;
+                if(buffer_vprintf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                    buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+                    buffer_vprintf_buffer_idx = 0;
                 }
                 if(*fmt == '%') {
                     break;
                 }
 
-                video_printf_buffer[video_printf_buffer_idx++] = *fmt;
-                video_printf_buffer[video_printf_buffer_idx] = 0;
+                buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = *fmt;
+                buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = 0;
                 fmt++;
                 cnt++;
             }
         }
     }
 
-    if(video_printf_buffer_idx) {
-        buffer_append_bytes(buffer, (uint8_t*)video_printf_buffer, video_printf_buffer_idx);
+    if(buffer_vprintf_buffer_idx) {
+        buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
     }
 
     return cnt;
