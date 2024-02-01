@@ -80,7 +80,6 @@ int8_t                 pascal_compiler_execute_string_const(pascal_compiler_t* c
 int8_t                 pascal_compiler_execute_if(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
 int8_t                 pascal_compiler_execute_while(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
 int8_t                 pascal_compiler_execute_repeat(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
-int8_t                 pascal_compiler_execute_for(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result);
 const char_t*          pascal_compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
 char_t                 pascal_compiler_get_reg_suffix(uint8_t size);
 
@@ -873,16 +872,6 @@ int8_t pascal_compiler_execute_repeat(pascal_compiler_t* compiler, pascal_ast_no
     memory_free(repeat_label);
 
     compiler->loop_depth--;
-
-    return 0;
-}
-
-int8_t pascal_compiler_execute_for(pascal_compiler_t* compiler, pascal_ast_node_t* node, int64_t* result) {
-    UNUSED(compiler);
-    UNUSED(node);
-    UNUSED(result);
-
-    NOTIMPLEMENTEDLOG(COMPILER_PASCAL);
 
     return 0;
 }
@@ -2094,8 +2083,6 @@ int8_t pascal_compiler_execute_ast_node(pascal_compiler_t* compiler, pascal_ast_
         return pascal_compiler_execute_while(compiler, node, result);
     } else if(node->type == PASCAL_AST_NODE_TYPE_REPEAT) {
         return pascal_compiler_execute_repeat(compiler, node, result);
-    } else if(node->type == PASCAL_AST_NODE_TYPE_FOR) {
-        return pascal_compiler_execute_for(compiler, node, result);
     } else {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown node type %d", node->type);
         return -1;

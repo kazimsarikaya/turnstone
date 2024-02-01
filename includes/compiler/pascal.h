@@ -168,7 +168,6 @@ typedef enum pascal_ast_node_type_t {
     PASCAL_AST_NODE_TYPE_IF,
     PASCAL_AST_NODE_TYPE_WHILE,
     PASCAL_AST_NODE_TYPE_REPEAT,
-    PASCAL_AST_NODE_TYPE_FOR,
 } pascal_ast_node_type_t;
 
 typedef enum pascal_symbol_type_t {
@@ -194,24 +193,15 @@ typedef struct pascal_symol_t {
 
 typedef struct pascal_ast_node_t pascal_ast_node_t;
 
-typedef struct pascal_ast_node_for_condition_t {
-    pascal_token_t*    var_token;
-    pascal_ast_node_t* init_expr;
-    pascal_ast_node_t* final_expr;
-    pascal_ast_node_t* step_expr;
-    boolean_t          is_to;
-} pascal_ast_node_for_condition_t;
-
 struct pascal_ast_node_t {
-    pascal_ast_node_type_t           type;
-    pascal_token_t*                  token;
-    pascal_ast_node_t*               left;
-    pascal_ast_node_t*               right;
-    pascal_ast_node_t*               condition;
-    pascal_ast_node_for_condition_t* for_condition;
-    linkedlist_t*                    children;
-    int16_t                          used_register;
-    pascal_symbol_t*                 symbol;
+    pascal_ast_node_type_t type;
+    pascal_token_t*        token;
+    pascal_ast_node_t*     left;
+    pascal_ast_node_t*     right;
+    pascal_ast_node_t*     condition;
+    linkedlist_t*          children;
+    int16_t                used_register;
+    pascal_symbol_t*       symbol;
 };
 
 typedef struct pascal_ast_t {

@@ -867,29 +867,78 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t *
         return -1;
     }
 
-    if(parser->current_token->type != PASCAL_TOKEN_TYPE_ID) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+    pascal_ast_node_t* for_assignment = NULL;
+
+    if(pascal_parser_assignment_statement(parser, &for_assignment) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected var");
         return -1;
     }
 
-    pascal_token_t* for_var_token = parser->current_token;
+    pascal_ast_node_t* for_init_var = memory_malloc(sizeof(pascal_ast_node_t));
 
-    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ID, false) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+    if (for_init_var == NULL) {
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
         return -1;
     }
 
-    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ASSIGN, true) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected :=");
+    for_init_var->type = PASCAL_AST_NODE_TYPE_VAR;
+    for_init_var->token = memory_malloc(sizeof(pascal_token_t));
+
+    if (for_init_var->token == NULL) {
+        memory_free(for_init_var);
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
         return -1;
     }
 
-    pascal_ast_node_t* for_init_expr = NULL;
+    for_init_var->token->type = PASCAL_TOKEN_TYPE_ID;
+    for_init_var->token->text = strdup(for_assignment->left->token->text);
 
-    if(pascal_parser_expr(parser, &for_init_expr) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected init expression");
+    pascal_ast_node_t* for_step_var_left = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_step_var_left == NULL) {
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
         return -1;
     }
+
+    for_step_var_left->type = PASCAL_AST_NODE_TYPE_VAR;
+    for_step_var_left->token = memory_malloc(sizeof(pascal_token_t));
+
+    if (for_step_var_left->token == NULL) {
+        memory_free(for_step_var_left);
+        pascal_ast_node_destroy(for_init_var);
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+        return -1;
+    }
+
+    for_step_var_left->token->type = PASCAL_TOKEN_TYPE_ID;
+    for_step_var_left->token->text = strdup(for_assignment->left->token->text);
+
+    pascal_ast_node_t* for_step_var_right = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_step_var_right == NULL) {
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    for_step_var_right->type = PASCAL_AST_NODE_TYPE_VAR;
+    for_step_var_right->token = memory_malloc(sizeof(pascal_token_t));
+
+    if (for_step_var_right->token == NULL) {
+        memory_free(for_step_var_right);
+        pascal_ast_node_destroy(for_step_var_left);
+        pascal_ast_node_destroy(for_init_var);
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+        return -1;
+    }
+
+    for_step_var_right->token->type = PASCAL_TOKEN_TYPE_ID;
+    for_step_var_right->token->text = strdup(for_assignment->left->token->text);
 
     boolean_t is_to = false;
 
@@ -897,6 +946,7 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t *
         is_to = true;
 
         if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_TO, true) != 0) {
+            pascal_ast_node_destroy(for_assignment);
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected to");
             return -1;
         }
@@ -904,10 +954,12 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t *
         is_to = false;
 
         if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_DOWNTO, true) != 0) {
+            pascal_ast_node_destroy(for_assignment);
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected downto");
             return -1;
         }
     } else {
+        pascal_ast_node_destroy(for_assignment);
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected to or downto");
         return -1;
     }
@@ -915,9 +967,34 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t *
     pascal_ast_node_t* for_final_expr = NULL;
 
     if(pascal_parser_expr(parser, &for_final_expr) != 0) {
+        pascal_ast_node_destroy(for_assignment);
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected final expression");
         return -1;
     }
+
+    pascal_ast_node_t* for_condition = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_condition == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    for_condition->type = PASCAL_AST_NODE_TYPE_RELATIONAL_OP;
+    for_condition->token = memory_malloc(sizeof(pascal_token_t));
+
+    if (for_condition->token == NULL) {
+        memory_free(for_condition);
+        pascal_ast_node_destroy(for_final_expr);
+        pascal_ast_node_destroy(for_assignment);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+        return -1;
+    }
+
+    for_condition->token->type = is_to ? PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL : PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL;
+
+    for_condition->left = for_init_var;
+    for_condition->right = for_final_expr;
+
 
     pascal_ast_node_t* for_step_expr = NULL;
 
@@ -931,7 +1008,67 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t *
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected step expression");
             return -1;
         }
+    } else {
+        for_step_expr = memory_malloc(sizeof(pascal_ast_node_t));
+
+        if (for_step_expr == NULL) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+            return -1;
+        }
+
+        for_step_expr->type = PASCAL_AST_NODE_TYPE_INTEGER_CONST;
+        for_step_expr->token = memory_malloc(sizeof(pascal_token_t));
+
+        if (for_step_expr->token == NULL) {
+            memory_free(for_step_expr);
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+            return -1;
+        }
+
+        for_step_expr->token->type = PASCAL_TOKEN_TYPE_INTEGER_CONST;
+        for_step_expr->token->value = 1;
     }
+
+
+    pascal_ast_node_t* for_step_binary_op = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_step_binary_op == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    for_step_binary_op->type = PASCAL_AST_NODE_TYPE_BINARY_OP;
+    for_step_binary_op->token = memory_malloc(sizeof(pascal_token_t));
+
+    if (for_step_binary_op->token == NULL) {
+        memory_free(for_step_binary_op);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+        return -1;
+    }
+
+    for_step_binary_op->token->type = is_to ? PASCAL_TOKEN_TYPE_PLUS : PASCAL_TOKEN_TYPE_MINUS;
+    for_step_binary_op->left = for_step_var_right;
+    for_step_binary_op->right = for_step_expr;
+
+    pascal_ast_node_t * for_step_assign = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_step_assign == NULL) {
+        pascal_ast_node_destroy(for_step_expr);
+        pascal_ast_node_destroy(for_condition);
+        pascal_ast_node_destroy(for_final_expr);
+        pascal_ast_node_destroy(for_assignment);
+        pascal_ast_node_destroy(for_step_var_right);
+        pascal_ast_node_destroy(for_step_var_left);
+        pascal_ast_node_destroy(for_init_var);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    for_step_assign->type = PASCAL_AST_NODE_TYPE_ASSIGN;
+    for_step_assign->left = for_step_var_left;
+    for_step_assign->right = for_step_binary_op;
+
+    printf("for_step_assign: %s\n", for_step_assign->left->token->text);
 
     if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_DO, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected do");
@@ -945,41 +1082,61 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t *
         return -1;
     }
 
-    pascal_ast_node_t * new_node = memory_malloc(sizeof(pascal_ast_node_t));
+    linkedlist_t* for_body_list = linkedlist_create_list();
 
-    if (new_node == NULL) {
+    if (for_body_list == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create list");
+        return -1;
+    }
+
+    linkedlist_queue_push(for_body_list, for_body_statement);
+    linkedlist_queue_push(for_body_list, for_step_assign);
+
+    pascal_ast_node_t* for_body_compound = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_body_compound == NULL) {
+        linkedlist_destroy(for_body_list);
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
         return -1;
     }
 
-    pascal_ast_node_for_condition_t* for_condition = memory_malloc(sizeof(pascal_ast_node_for_condition_t));
+    for_body_compound->type = PASCAL_AST_NODE_TYPE_COMPOUND;
+    for_body_compound->children = for_body_list;
 
-    if (for_condition == NULL) {
-        memory_free(new_node);
-        pascal_ast_node_destroy(for_body_statement);
+    pascal_ast_node_t * while_wrapper = memory_malloc(sizeof(pascal_ast_node_t));
 
-        pascal_ast_node_destroy(for_step_expr);
-        pascal_ast_node_destroy(for_final_expr);
-        pascal_ast_node_destroy(for_init_expr);
-        pascal_token_destroy(for_var_token);
-
+    if (while_wrapper == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
-
         return -1;
     }
 
-    for_condition->is_to = is_to;
-    for_condition->step_expr = for_step_expr;
-    for_condition->final_expr = for_final_expr;
-    for_condition->init_expr = for_init_expr;
-    for_condition->var_token = for_var_token;
+    while_wrapper->type = PASCAL_AST_NODE_TYPE_WHILE;
+    while_wrapper->condition = for_condition;
+    while_wrapper->left = for_body_compound;
 
 
-    new_node->type = PASCAL_AST_NODE_TYPE_FOR;
-    new_node->for_condition = for_condition;
-    new_node->left = for_body_statement;
+    linkedlist_t* for_wrapper_list = linkedlist_create_list();
 
-    *node = new_node;
+    if (for_wrapper_list == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create list");
+        return -1;
+    }
+
+    linkedlist_queue_push(for_wrapper_list, for_assignment);
+    linkedlist_queue_push(for_wrapper_list, while_wrapper);
+
+    pascal_ast_node_t* for_wrapper_compound = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (for_wrapper_compound == NULL) {
+        linkedlist_destroy(for_wrapper_list);
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    for_wrapper_compound->type = PASCAL_AST_NODE_TYPE_COMPOUND;
+    for_wrapper_compound->children = for_wrapper_list;
+
+    *node = for_wrapper_compound;
 
     return 0;
 }

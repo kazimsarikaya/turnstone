@@ -79,14 +79,6 @@ int8_t pascal_ast_node_destroy(pascal_ast_node_t * node) {
         }
     }
 
-    if(node->type == PASCAL_AST_NODE_TYPE_FOR) {
-        pascal_ast_node_destroy(node->for_condition->step_expr);
-        pascal_ast_node_destroy(node->for_condition->final_expr);
-        pascal_ast_node_destroy(node->for_condition->init_expr);
-        pascal_token_destroy(node->for_condition->var_token);
-        memory_free(node->for_condition);
-    }
-
     if(node->type == PASCAL_AST_NODE_TYPE_DECLS ||
        node->type == PASCAL_AST_NODE_TYPE_COMPOUND ||
        node->type == PASCAL_AST_NODE_TYPE_FUNCTION_CALL) {
