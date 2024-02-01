@@ -43,6 +43,16 @@ const pascal_token_t reserved_tokens[] = {
     {PASCAL_TOKEN_TYPE_IF, true, 0, 0, "if", false, 0, false, false},
     {PASCAL_TOKEN_TYPE_THEN, true, 0, 0, "then", false, 0, false, false},
     {PASCAL_TOKEN_TYPE_ELSE, true, 0, 0, "else", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_WHILE, true, 0, 0, "while", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_DO, true, 0, 0, "do", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_REPEAT, true, 0, 0, "repeat", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_UNTIL, true, 0, 0, "until", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_FOR, true, 0, 0, "for", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_TO, true, 0, 0, "to", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_DOWNTO, true, 0, 0, "downto", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_STEP, true, 0, 0, "step", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_CONTINUE, true, 0, 0, "continue", false, 0, false, false},
+    {PASCAL_TOKEN_TYPE_BREAK, true, 0, 0, "break", false, 0, false, false},
 };
 
 int8_t pascal_token_destroy(pascal_token_t * token) {

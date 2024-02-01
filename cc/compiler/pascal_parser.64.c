@@ -708,6 +708,7 @@ int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, pascal_ast_n
 
     if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ASSIGN, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected :=");
+        pascal_token_destroy(parser->current_token);
         pascal_ast_node_destroy(left);
         return -1;
     }
@@ -765,11 +766,222 @@ int8_t pascal_parser_statement(pascal_parser_t * parser, pascal_ast_node_t ** no
         return pascal_parser_variables(parser, node, true, true);
     } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_IF) {
         return pascal_parser_if_statement(parser, node);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_WHILE) {
+        return pascal_parser_while_statement(parser, node);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_REPEAT) {
+        return pascal_parser_repeat_statement(parser, node);
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_FOR) {
+        return pascal_parser_for_statement(parser, node);
     }
 
     PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unexpected token parser_statement. found %d", parser->current_token->type);
 
     return -1;
+}
+
+int8_t pascal_parser_while_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_WHILE, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected while");
+        return -1;
+    }
+
+    pascal_ast_node_t * condition = NULL;
+
+    if(pascal_parser_expr(parser, &condition) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected condition expression");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_DO, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected do");
+        return -1;
+    }
+
+    pascal_ast_node_t * while_body_statement = NULL;
+
+    if(pascal_parser_statement(parser, &while_body_statement) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+        return -1;
+    }
+
+    pascal_ast_node_t * new_node = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (new_node == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    new_node->type = PASCAL_AST_NODE_TYPE_WHILE;
+    new_node->condition = condition;
+    new_node->left = while_body_statement;
+
+    *node = new_node;
+
+    return 0;
+}
+
+int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_REPEAT, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected repeat");
+        return -1;
+    }
+
+    pascal_ast_node_t * repeat_body_statement = NULL;
+
+    if(pascal_parser_statement(parser, &repeat_body_statement) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_UNTIL, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected until");
+        return -1;
+    }
+
+    pascal_ast_node_t * condition = NULL;
+
+    if(pascal_parser_expr(parser, &condition) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected condition expression");
+        return -1;
+    }
+
+    pascal_ast_node_t * new_node = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (new_node == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    new_node->type = PASCAL_AST_NODE_TYPE_REPEAT;
+    new_node->condition = condition;
+    new_node->left = repeat_body_statement;
+
+    *node = new_node;
+
+    return 0;
+}
+
+int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_FOR, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected for");
+        return -1;
+    }
+
+    if(parser->current_token->type != PASCAL_TOKEN_TYPE_ID) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+        return -1;
+    }
+
+    pascal_token_t* for_var_token = parser->current_token;
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ID, false) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_ASSIGN, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected :=");
+        return -1;
+    }
+
+    pascal_ast_node_t* for_init_expr = NULL;
+
+    if(pascal_parser_expr(parser, &for_init_expr) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected init expression");
+        return -1;
+    }
+
+    boolean_t is_to = false;
+
+    if(parser->current_token->type == PASCAL_TOKEN_TYPE_TO) {
+        is_to = true;
+
+        if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_TO, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected to");
+            return -1;
+        }
+    } else if(parser->current_token->type == PASCAL_TOKEN_TYPE_DOWNTO) {
+        is_to = false;
+
+        if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_DOWNTO, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected downto");
+            return -1;
+        }
+    } else {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected to or downto");
+        return -1;
+    }
+
+    pascal_ast_node_t* for_final_expr = NULL;
+
+    if(pascal_parser_expr(parser, &for_final_expr) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected final expression");
+        return -1;
+    }
+
+    pascal_ast_node_t* for_step_expr = NULL;
+
+    if(parser->current_token->type == PASCAL_TOKEN_TYPE_STEP) {
+        if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_STEP, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected step");
+            return -1;
+        }
+
+        if(pascal_parser_expr(parser, &for_step_expr) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected step expression");
+            return -1;
+        }
+    }
+
+    if(pascal_parser_eat(parser, PASCAL_TOKEN_TYPE_DO, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected do");
+        return -1;
+    }
+
+    pascal_ast_node_t * for_body_statement = NULL;
+
+    if(pascal_parser_statement(parser, &for_body_statement) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+        return -1;
+    }
+
+    pascal_ast_node_t * new_node = memory_malloc(sizeof(pascal_ast_node_t));
+
+    if (new_node == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    pascal_ast_node_for_condition_t* for_condition = memory_malloc(sizeof(pascal_ast_node_for_condition_t));
+
+    if (for_condition == NULL) {
+        memory_free(new_node);
+        pascal_ast_node_destroy(for_body_statement);
+
+        pascal_ast_node_destroy(for_step_expr);
+        pascal_ast_node_destroy(for_final_expr);
+        pascal_ast_node_destroy(for_init_expr);
+        pascal_token_destroy(for_var_token);
+
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+
+        return -1;
+    }
+
+    for_condition->is_to = is_to;
+    for_condition->step_expr = for_step_expr;
+    for_condition->final_expr = for_final_expr;
+    for_condition->init_expr = for_init_expr;
+    for_condition->var_token = for_var_token;
+
+
+    new_node->type = PASCAL_AST_NODE_TYPE_FOR;
+    new_node->for_condition = for_condition;
+    new_node->left = for_body_statement;
+
+    *node = new_node;
+
+    return 0;
 }
 
 int8_t pascal_parser_if_statement(pascal_parser_t * parser, pascal_ast_node_t ** node) {
@@ -781,7 +993,7 @@ int8_t pascal_parser_if_statement(pascal_parser_t * parser, pascal_ast_node_t **
     pascal_ast_node_t * condition = NULL;
 
     if(pascal_parser_expr(parser, &condition) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected condition expression");
         return -1;
     }
 

@@ -62,6 +62,16 @@ typedef enum pascal_token_type_t {
     PASCAL_TOKEN_TYPE_IF,
     PASCAL_TOKEN_TYPE_THEN,
     PASCAL_TOKEN_TYPE_ELSE,
+    PASCAL_TOKEN_TYPE_WHILE,
+    PASCAL_TOKEN_TYPE_DO,
+    PASCAL_TOKEN_TYPE_REPEAT,
+    PASCAL_TOKEN_TYPE_UNTIL,
+    PASCAL_TOKEN_TYPE_FOR,
+    PASCAL_TOKEN_TYPE_TO,
+    PASCAL_TOKEN_TYPE_DOWNTO,
+    PASCAL_TOKEN_TYPE_STEP,
+    PASCAL_TOKEN_TYPE_CONTINUE,
+    PASCAL_TOKEN_TYPE_BREAK,
 } pascal_token_type_t;
 
 const char_t* pascal_keywords[] = {
@@ -105,6 +115,7 @@ const char_t* pascal_keywords[] = {
     "for",
     "to",
     "downto",
+    "step",
     "case",
     "of",
     "otherwise",
@@ -155,6 +166,9 @@ typedef enum pascal_ast_node_type_t {
     PASCAL_AST_NODE_TYPE_COMPOUND,
     PASCAL_AST_NODE_TYPE_FUNCTION_CALL,
     PASCAL_AST_NODE_TYPE_IF,
+    PASCAL_AST_NODE_TYPE_WHILE,
+    PASCAL_AST_NODE_TYPE_REPEAT,
+    PASCAL_AST_NODE_TYPE_FOR,
 } pascal_ast_node_type_t;
 
 typedef enum pascal_symbol_type_t {
@@ -180,15 +194,24 @@ typedef struct pascal_symol_t {
 
 typedef struct pascal_ast_node_t pascal_ast_node_t;
 
+typedef struct pascal_ast_node_for_condition_t {
+    pascal_token_t*    var_token;
+    pascal_ast_node_t* init_expr;
+    pascal_ast_node_t* final_expr;
+    pascal_ast_node_t* step_expr;
+    boolean_t          is_to;
+} pascal_ast_node_for_condition_t;
+
 struct pascal_ast_node_t {
-    pascal_ast_node_type_t type;
-    pascal_token_t*        token;
-    pascal_ast_node_t*     left;
-    pascal_ast_node_t*     right;
-    pascal_ast_node_t*     condition;
-    linkedlist_t*          children;
-    int16_t                used_register;
-    pascal_symbol_t*       symbol;
+    pascal_ast_node_type_t           type;
+    pascal_token_t*                  token;
+    pascal_ast_node_t*               left;
+    pascal_ast_node_t*               right;
+    pascal_ast_node_t*               condition;
+    pascal_ast_node_for_condition_t* for_condition;
+    linkedlist_t*                    children;
+    int16_t                          used_register;
+    pascal_symbol_t*                 symbol;
 };
 
 typedef struct pascal_ast_t {
@@ -272,6 +295,9 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, pascal_ast_node_t ** nod
 int8_t pascal_parser_var(pascal_parser_t * parser, pascal_ast_node_t ** node);
 int8_t pascal_parser_function_call(pascal_parser_t* parser, pascal_ast_node_t** node);
 int8_t pascal_parser_if_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
+int8_t pascal_parser_while_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
+int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
+int8_t pascal_parser_for_statement(pascal_parser_t * parser, pascal_ast_node_t ** node);
 
 #endif
 
