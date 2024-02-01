@@ -119,6 +119,12 @@ int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t** token) {
 
         (*token)->type = PASCAL_TOKEN_TYPE_INTEGER_CONST;
         (*token)->value = value;
+        (*token)->size = 32;
+
+        if (lexer->current_char == 'L' || lexer->current_char == 'l') {
+            (*token)->size = 64;
+            pascal_lexer_advance(lexer);
+        }
 
         return 0;
     }
@@ -156,6 +162,12 @@ int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t** token) {
 
     (*token)->type = PASCAL_TOKEN_TYPE_INTEGER_CONST;
     (*token)->value = value;
+    (*token)->size = 32;
+
+    if (lexer->current_char == 'L' || lexer->current_char == 'l') {
+        (*token)->size = 64;
+        pascal_lexer_advance(lexer);
+    }
 
     return 0;
 }

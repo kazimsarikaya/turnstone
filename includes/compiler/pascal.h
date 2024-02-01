@@ -253,7 +253,10 @@ typedef struct pascal_compiler_t {
     int32_t              next_label_id;
     linkedlist_t*        cond_label_stack;
     int64_t              cond_depth;
+    linkedlist_t*        loop_label_stack;
+    int64_t              loop_depth;
     boolean_t            is_cond_eval;
+    boolean_t            is_cond_reverse;
     int64_t              computed_size;
     pascal_symbol_type_t computed_type;
 } pascal_compiler_t;
