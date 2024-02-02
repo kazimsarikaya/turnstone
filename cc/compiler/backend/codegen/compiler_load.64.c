@@ -10,3 +10,5 @@
 #include <logging.h>
 #include <strings.h>
 #include <utils.h>
+
+MODULE("turnstone.compiler.codegen");
