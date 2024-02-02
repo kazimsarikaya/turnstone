@@ -98,7 +98,7 @@ int8_t compiler_execute_assign(compiler_t* compiler, compiler_ast_node_t* node, 
         }
 
         if(compiler->is_at_reg) {
-            subscript_reg = node->array_subscript->used_register;
+            subscript_reg = node->left->array_subscript->used_register;
 
             if(compiler->computed_size != 64) {
                 buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",

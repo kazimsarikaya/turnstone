@@ -252,6 +252,7 @@ int8_t                   compiler_execute_string_const(compiler_t* compiler, com
 int8_t                   compiler_execute_if(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_repeat(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
+int8_t                   compiler_execute_load(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 const char_t*            compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
 char_t                   compiler_get_reg_suffix(uint8_t size);
 

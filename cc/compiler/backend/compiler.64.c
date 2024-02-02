@@ -84,78 +84,16 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
         return compiler_execute_compound(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_ASSIGN) {
         return compiler_execute_assign(compiler, node, result);
-    } else if(node->type == COMPILER_AST_NODE_TYPE_VAR) {
-        const compiler_symbol_t * symbol = compiler_find_symbol(compiler, node->token->text);
-
-        if(symbol == NULL) {
-            PRINTLOG(COMPILER, LOG_ERROR, "symbol %s not found", node->token->text);
-            return -1;
-        }
-
-        buffer_printf(compiler->text_buffer, "# begin load var %s\n", symbol->name);
-
-        *result = symbol->int_value;
-
-        compiler->is_at_reg = false;
-        compiler->is_at_mem = false;
-        compiler->is_at_stack = false;
-        compiler->is_const = false;
-
-        if(symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
-            compiler->computed_size = symbol->size;
-            compiler->computed_type = symbol->type;
-
-            if(symbol->is_local) {
-                compiler->is_at_stack = true;
-                compiler->at_stack_offset = symbol->stack_offset;
-            } else {
-                int16_t reg = compiler_find_free_reg(compiler);
-
-                if(reg == -1) {
-                    PRINTLOG(COMPILER, LOG_ERROR, "no free register");
-                    compiler->is_at_mem = true;
-                } else {
-                    compiler->is_at_reg = true;
-                    node->used_register = reg;
-                    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg]);
-                    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg], compiler_regs[reg]);
-                    buffer_printf(compiler->text_buffer, "\tmov%c (%%%s), %%%s\n",
-                                  compiler_get_reg_suffix(symbol->size),
-                                  compiler_regs[reg],
-                                  compiler_cast_reg_to_size(compiler_regs[reg], symbol->size));
-                }
-            }
-        } else { // do we need this?
-            compiler->is_at_reg = true;
-        }
-
-        buffer_printf(compiler->text_buffer, "# end load var %s\n", symbol->name);
-    } else if (node->type == COMPILER_AST_NODE_TYPE_INTEGER_CONST) {
-        *result = node->token->value;
-
-        buffer_printf(compiler->text_buffer, "# begin load const %lli\n", *result);
-
-        compiler->is_at_reg = false;
-        compiler->is_at_mem = false;
-        compiler->is_at_stack = false;
-        compiler->is_const = true;
-
-        compiler->computed_size = node->token->size;
-
-        buffer_printf(compiler->text_buffer, "# const size %lli\n", compiler->computed_size);
-
-        compiler->computed_type = COMPILER_SYMBOL_TYPE_INTEGER;
-
-        buffer_printf(compiler->text_buffer, "# end load const %lli\n", *result);
-
+    } else if(node->type == COMPILER_AST_NODE_TYPE_VAR ||
+              node->type == COMPILER_AST_NODE_TYPE_INTEGER_CONST ||
+              node->type == COMPILER_AST_NODE_TYPE_STRING_CONST) {
+        return compiler_execute_load(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_UNARY_OP) {
         return compiler_execute_unary_op(compiler, node, result);
     } else if (node->type == COMPILER_AST_NODE_TYPE_BINARY_OP) {
         return compiler_execute_binary_op(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_FUNCTION_CALL) {
         return compiler_execute_function_call(compiler, node, result);
-    } else if(node->type == COMPILER_AST_NODE_TYPE_STRING_CONST) {
-        return compiler_execute_string_const(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_IF) {
         return compiler_execute_if(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_RELATIONAL_OP) {
