@@ -16,46 +16,46 @@
 MODULE("turnstone.compiler.pascal");
 
 
-const pascal_token_t reserved_tokens[] = {
-    {PASCAL_TOKEN_TYPE_BEGIN, true, 0, 0, "begin", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_END, true, 0, 0, "end", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_PROGRAM, true, 0, 0, "program", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_VAR, true, 0, 0, "var", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_CONST, true, 0, 0, "const", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_INTEGER, true, 0, 0, "bit", false, 1, false, false},
-    {PASCAL_TOKEN_TYPE_INTEGER, true, 0, 0, "int8", false, 8, false, false},
-    {PASCAL_TOKEN_TYPE_INTEGER, true, 0, 0, "int16", false, 16, false, false},
-    {PASCAL_TOKEN_TYPE_INTEGER, true, 0, 0, "int32", false, 32, false, false},
-    {PASCAL_TOKEN_TYPE_INTEGER, true, 0, 0, "int64", false, 64, false, false},
-    {PASCAL_TOKEN_TYPE_REAL, true, 0, 0, "float32", false, 32, false, false},
-    {PASCAL_TOKEN_TYPE_REAL, true, 0, 0, "float64", false, 64, false, false},
-    {PASCAL_TOKEN_TYPE_INTEGER_DIVIDE, true, 0, 0, "div", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_PROCEDURE, true, 0, 0, "procedure", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_FUNCTION, true, 0, 0, "function", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_OR, true, 0, 0, "or", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_XOR, true, 0, 0, "xor", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_AND, true, 0, 0, "and", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_NOT, true, 0, 0, "not", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_MOD, true, 0, 0, "mod", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_SHL, true, 0, 0, "shl", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_SHR, true, 0, 0, "shr", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_IN, true, 0, 0, "in", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_IF, true, 0, 0, "if", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_THEN, true, 0, 0, "then", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_ELSE, true, 0, 0, "else", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_WHILE, true, 0, 0, "while", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_DO, true, 0, 0, "do", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_REPEAT, true, 0, 0, "repeat", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_UNTIL, true, 0, 0, "until", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_FOR, true, 0, 0, "for", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_TO, true, 0, 0, "to", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_DOWNTO, true, 0, 0, "downto", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_STEP, true, 0, 0, "step", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_CONTINUE, true, 0, 0, "continue", false, 0, false, false},
-    {PASCAL_TOKEN_TYPE_BREAK, true, 0, 0, "break", false, 0, false, false},
+const compiler_token_t reserved_tokens[] = {
+    {COMPILER_TOKEN_TYPE_BEGIN, true, 0, 0, "begin", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_END, true, 0, 0, "end", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_PROGRAM, true, 0, 0, "program", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_VAR, true, 0, 0, "var", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_CONST, true, 0, 0, "const", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_INTEGER, true, 0, 0, "bit", false, 1, false, false},
+    {COMPILER_TOKEN_TYPE_INTEGER, true, 0, 0, "int8", false, 8, false, false},
+    {COMPILER_TOKEN_TYPE_INTEGER, true, 0, 0, "int16", false, 16, false, false},
+    {COMPILER_TOKEN_TYPE_INTEGER, true, 0, 0, "int32", false, 32, false, false},
+    {COMPILER_TOKEN_TYPE_INTEGER, true, 0, 0, "int64", false, 64, false, false},
+    {COMPILER_TOKEN_TYPE_REAL, true, 0, 0, "float32", false, 32, false, false},
+    {COMPILER_TOKEN_TYPE_REAL, true, 0, 0, "float64", false, 64, false, false},
+    {COMPILER_TOKEN_TYPE_INTEGER_DIVIDE, true, 0, 0, "div", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_PROCEDURE, true, 0, 0, "procedure", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_FUNCTION, true, 0, 0, "function", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_OR, true, 0, 0, "or", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_XOR, true, 0, 0, "xor", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_AND, true, 0, 0, "and", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_NOT, true, 0, 0, "not", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_MOD, true, 0, 0, "mod", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_SHL, true, 0, 0, "shl", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_SHR, true, 0, 0, "shr", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_IN, true, 0, 0, "in", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_IF, true, 0, 0, "if", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_THEN, true, 0, 0, "then", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_ELSE, true, 0, 0, "else", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_WHILE, true, 0, 0, "while", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_DO, true, 0, 0, "do", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_REPEAT, true, 0, 0, "repeat", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_UNTIL, true, 0, 0, "until", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_FOR, true, 0, 0, "for", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_TO, true, 0, 0, "to", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_DOWNTO, true, 0, 0, "downto", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_STEP, true, 0, 0, "step", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_CONTINUE, true, 0, 0, "continue", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_BREAK, true, 0, 0, "break", false, 0, false, false},
 };
 
-int8_t pascal_token_destroy(pascal_token_t * token) {
+int8_t compiler_token_destroy(compiler_token_t * token) {
     if (token == NULL) {
         return -1;
     }
@@ -104,7 +104,7 @@ int8_t pascal_lexer_skip_whitespace(pascal_lexer_t * lexer) {
     return 0;
 }
 
-int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t** token) {
+int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, compiler_token_t** token) {
     // first check it is hex number starts with 0x then it is hex number
     if (lexer->current_char == '0' && pascal_lexer_peek(lexer) == 'x') {
         pascal_lexer_advance(lexer);
@@ -117,7 +117,7 @@ int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t** token) {
             pascal_lexer_advance(lexer);
         }
 
-        (*token)->type = PASCAL_TOKEN_TYPE_INTEGER_CONST;
+        (*token)->type = COMPILER_TOKEN_TYPE_INTEGER_CONST;
         (*token)->value = value;
         (*token)->size = 32;
 
@@ -154,13 +154,13 @@ int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t** token) {
             pascal_lexer_advance(lexer);
         }
 
-        (*token)->type = PASCAL_TOKEN_TYPE_REAL;
+        (*token)->type = COMPILER_TOKEN_TYPE_REAL;
         (*token)->real_value = real_value;
 
         return 0;
     }
 
-    (*token)->type = PASCAL_TOKEN_TYPE_INTEGER_CONST;
+    (*token)->type = COMPILER_TOKEN_TYPE_INTEGER_CONST;
     (*token)->value = value;
     (*token)->size = 32;
 
@@ -172,7 +172,7 @@ int8_t pascal_lexer_get_number(pascal_lexer_t * lexer, pascal_token_t** token) {
     return 0;
 }
 
-int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, pascal_token_t ** token) {
+int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, compiler_token_t ** token) {
     buffer_t * buffer = buffer_new();
 
     if (buffer == NULL) {
@@ -200,9 +200,9 @@ int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, pascal_token_t ** token) {
 
     token_text = strlower(token_text);
 
-    for (size_t i = 0; i < sizeof(reserved_tokens) / sizeof(pascal_token_t); i++) {
+    for (size_t i = 0; i < sizeof(reserved_tokens) / sizeof(compiler_token_t); i++) {
         if (strcmp(reserved_tokens[i].text, token_text) == 0) {
-            *token = (pascal_token_t*)&reserved_tokens[i];
+            *token = (compiler_token_t*)&reserved_tokens[i];
 
             memory_free((void*)token_text);
 
@@ -211,7 +211,7 @@ int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, pascal_token_t ** token) {
     }
 
 
-    pascal_token_t * new_token = memory_malloc(sizeof(pascal_token_t));
+    compiler_token_t * new_token = memory_malloc(sizeof(compiler_token_t));
 
     if (new_token == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -220,7 +220,7 @@ int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, pascal_token_t ** token) {
         return -1;
     }
 
-    new_token->type = PASCAL_TOKEN_TYPE_ID;
+    new_token->type = COMPILER_TOKEN_TYPE_ID;
     new_token->text = token_text;
     new_token->not_free = false;
 
@@ -230,7 +230,7 @@ int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, pascal_token_t ** token) {
     return 0;
 }
 
-int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** token) {
+int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, compiler_token_t ** token) {
     while (lexer->current_char != '\0') {
         if (isspace(lexer->current_char)) {
             pascal_lexer_skip_whitespace(lexer);
@@ -242,7 +242,7 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
         }
 
         if(lexer->current_char == ':') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -251,19 +251,19 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
             }
 
             if(pascal_lexer_peek(lexer) == '=') {
-                (*token)->type = PASCAL_TOKEN_TYPE_ASSIGN;
+                (*token)->type = COMPILER_TOKEN_TYPE_ASSIGN;
                 pascal_lexer_advance(lexer);
                 pascal_lexer_advance(lexer);
                 return 0;
             } else {
-                (*token)->type = PASCAL_TOKEN_TYPE_COLON;
+                (*token)->type = COMPILER_TOKEN_TYPE_COLON;
                 pascal_lexer_advance(lexer);
                 return 0;
             }
         }
 
         if(lexer->current_char == ';') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -271,13 +271,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_SEMI;
+            (*token)->type = COMPILER_TOKEN_TYPE_SEMI;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if(lexer->current_char == '.') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -285,13 +285,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_DOT;
+            (*token)->type = COMPILER_TOKEN_TYPE_DOT;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if(lexer->current_char == ',') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -299,13 +299,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_COMMA;
+            (*token)->type = COMPILER_TOKEN_TYPE_COMMA;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if(lexer->current_char == '=') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -313,13 +313,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_EQUAL;
+            (*token)->type = COMPILER_TOKEN_TYPE_EQUAL;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if(lexer->current_char == '<') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -328,25 +328,25 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
             }
 
             if(pascal_lexer_peek(lexer) == '=') {
-                (*token)->type = PASCAL_TOKEN_TYPE_LESS_THAN_OR_EQUAL;
+                (*token)->type = COMPILER_TOKEN_TYPE_LESS_THAN_OR_EQUAL;
                 pascal_lexer_advance(lexer);
                 pascal_lexer_advance(lexer);
                 return 0;
             } else if(pascal_lexer_peek(lexer) == '>') {
-                (*token)->type = PASCAL_TOKEN_TYPE_NOT_EQUAL;
+                (*token)->type = COMPILER_TOKEN_TYPE_NOT_EQUAL;
                 pascal_lexer_advance(lexer);
                 pascal_lexer_advance(lexer);
                 return 0;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_LESS_THAN;
+            (*token)->type = COMPILER_TOKEN_TYPE_LESS_THAN;
             pascal_lexer_advance(lexer);
             return 0;
 
         }
 
         if(lexer->current_char == '>') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -355,19 +355,19 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
             }
 
             if(pascal_lexer_peek(lexer) == '=') {
-                (*token)->type = PASCAL_TOKEN_TYPE_GREATER_THAN_OR_EQUAL;
+                (*token)->type = COMPILER_TOKEN_TYPE_GREATER_THAN_OR_EQUAL;
                 pascal_lexer_advance(lexer);
                 pascal_lexer_advance(lexer);
                 return 0;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_GREATER_THAN;
+            (*token)->type = COMPILER_TOKEN_TYPE_GREATER_THAN;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if (isdigit(lexer->current_char)) {
-            *token = memory_malloc(sizeof(pascal_token_t));
+            *token = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -380,7 +380,7 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
         }
 
         if (lexer->current_char == '+') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -388,13 +388,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_PLUS;
+            (*token)->type = COMPILER_TOKEN_TYPE_PLUS;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if (lexer->current_char == '-') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -402,13 +402,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_MINUS;
+            (*token)->type = COMPILER_TOKEN_TYPE_MINUS;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if (lexer->current_char == '*') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -416,13 +416,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_MULTIPLY;
+            (*token)->type = COMPILER_TOKEN_TYPE_MULTIPLY;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if (lexer->current_char == '/') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -430,13 +430,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_REAL_DIVIDE;
+            (*token)->type = COMPILER_TOKEN_TYPE_REAL_DIVIDE;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if (lexer->current_char == '(') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -444,13 +444,13 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_LPAREN;
+            (*token)->type = COMPILER_TOKEN_TYPE_LPAREN;
             pascal_lexer_advance(lexer);
             return 0;
         }
 
         if (lexer->current_char == ')') {
-            (*token) = memory_malloc(sizeof(pascal_token_t));
+            (*token) = memory_malloc(sizeof(compiler_token_t));
 
             if (*token == NULL) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -458,7 +458,7 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
                 return -1;
             }
 
-            (*token)->type = PASCAL_TOKEN_TYPE_RPAREN;
+            (*token)->type = COMPILER_TOKEN_TYPE_RPAREN;
             pascal_lexer_advance(lexer);
             return 0;
         }
@@ -467,12 +467,37 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
             return pascal_lexer_get_string(lexer, token);
         }
 
+        if(lexer->current_char == '[') {
+            (*token) = memory_malloc(sizeof(compiler_token_t));
+
+            if (*token == NULL) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+
+                return -1;
+            }
+            (*token)->type = COMPILER_TOKEN_TYPE_LBRACKET;
+            pascal_lexer_advance(lexer);
+            return 0;
+        }
+
+        if(lexer->current_char == ']') {
+            (*token) = memory_malloc(sizeof(compiler_token_t));
+
+            if (*token == NULL) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
+                return -1;
+            }
+            (*token)->type = COMPILER_TOKEN_TYPE_RBRACKET;
+            pascal_lexer_advance(lexer);
+            return 0;
+        }
+
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown token");
 
         return -1;
     }
 
-    (*token) = memory_malloc(sizeof(pascal_token_t));
+    (*token) = memory_malloc(sizeof(compiler_token_t));
 
     if (*token == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -480,12 +505,12 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, pascal_token_t ** tok
         return -1;
     }
 
-    (*token)->type = PASCAL_TOKEN_TYPE_EOF;
+    (*token)->type = COMPILER_TOKEN_TYPE_EOF;
 
     return 0;
 }
 
-int8_t pascal_lexer_get_string(pascal_lexer_t * lexer, pascal_token_t ** token) {
+int8_t pascal_lexer_get_string(pascal_lexer_t * lexer, compiler_token_t ** token) {
     buffer_t * buffer = buffer_new();
 
     if (buffer == NULL) {
@@ -522,7 +547,7 @@ int8_t pascal_lexer_get_string(pascal_lexer_t * lexer, pascal_token_t ** token) 
         return -1;
     }
 
-    pascal_token_t * new_token = memory_malloc(sizeof(pascal_token_t));
+    compiler_token_t * new_token = memory_malloc(sizeof(compiler_token_t));
 
     if (new_token == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create token");
@@ -531,7 +556,7 @@ int8_t pascal_lexer_get_string(pascal_lexer_t * lexer, pascal_token_t ** token) 
         return -1;
     }
 
-    new_token->type = PASCAL_TOKEN_TYPE_STRING_CONST;
+    new_token->type = COMPILER_TOKEN_TYPE_STRING_CONST;
     new_token->text = token_text;
     new_token->not_free = false;
 
