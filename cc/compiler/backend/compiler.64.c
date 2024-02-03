@@ -83,7 +83,7 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
     } else if(node->type == COMPILER_AST_NODE_TYPE_COMPOUND) {
         return compiler_execute_compound(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_ASSIGN) {
-        return compiler_execute_assign(compiler, node, result);
+        return compiler_execute_save(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_VAR ||
               node->type == COMPILER_AST_NODE_TYPE_INTEGER_CONST ||
               node->type == COMPILER_AST_NODE_TYPE_STRING_CONST) {

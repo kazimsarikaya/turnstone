@@ -12,133 +12,13 @@
 
 MODULE("turnstone.compiler.codegen");
 
-int8_t compiler_save_to_mem(compiler_t* compiler, const char_t* reg, const compiler_symbol_t* symbol) {
-    int16_t swap_reg = compiler_find_free_reg(compiler);
-    boolean_t need_swap = false;
+int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
 
-    if(swap_reg == -1) {
-        need_swap = true;
-        swap_reg = 8;
-        buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[swap_reg]);
-    }
-
-    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[swap_reg]);
-    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[swap_reg], compiler_regs[swap_reg]);
-
-    buffer_printf(compiler->text_buffer, "# save %s to %s cs %lli ss %lli\n", reg, symbol->name, compiler->computed_size, symbol->size);
-
-    if(compiler->computed_size != symbol->size) {
-        buffer_printf(compiler->text_buffer, "# cast %s to %lli\n", reg, symbol->size);
-        buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
-                      compiler_cast_reg_to_size(reg, compiler->computed_size),
-                      compiler_cast_reg_to_size(reg, symbol->size));
-    }
-
-    buffer_printf(compiler->text_buffer, "\tmov%c %%%s, (%%%s)\n",
-                  compiler_get_reg_suffix(symbol->size),
-                  compiler_cast_reg_to_size(reg, symbol->size),
-                  compiler_regs[swap_reg]);
-
-    if(need_swap) {
-        buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[swap_reg]);
-    } else {
-        compiler->busy_regs[swap_reg] = false;
-    }
-
-    return 0;
-}
-
-int8_t compiler_save_const_int_to_mem(compiler_t* compiler, int64_t value, const compiler_symbol_t* symbol) {
-    int16_t swap_reg = compiler_find_free_reg(compiler);
-    boolean_t need_swap = false;
-
-    if(swap_reg == -1) {
-        need_swap = true;
-        swap_reg = 8;
-        buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[swap_reg]);
-    }
-
-    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[swap_reg]);
-    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[swap_reg], compiler_regs[swap_reg]);
-    buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, (%%%s)\n",
-                  compiler_get_reg_suffix(symbol->size),
-                  value,
-                  compiler_regs[swap_reg]);
-
-    if(need_swap) {
-        buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[swap_reg]);
-    } else {
-        compiler->busy_regs[swap_reg] = false;
-    }
-
-    return 0;
-}
-
-int8_t compiler_execute_assign(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
     const compiler_symbol_t * symbol = compiler_find_symbol(compiler, node->left->token->text);
 
     if(symbol == NULL) {
         PRINTLOG(COMPILER, LOG_ERROR, "symbol %s not found", node->left->token->text);
         return -1;
-    }
-
-    buffer_printf(compiler->text_buffer, "# begin assign %s\n", symbol->name);
-
-    const char_t* dest = NULL;
-    int16_t subscript_reg = -1;
-
-    if(node->left->is_array_subscript) {
-        buffer_printf(compiler->text_buffer, "# begin get subscript\n");
-
-        int64_t subscript = 0;
-
-        if(compiler_execute_ast_node(compiler, node->left->array_subscript, &subscript) != 0) {
-            PRINTLOG(COMPILER, LOG_ERROR, "cannot get subscript");
-            return -1;
-        }
-
-        if(compiler->is_at_reg) {
-            subscript_reg = node->left->array_subscript->used_register;
-
-            if(compiler->computed_size != 64) {
-                buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
-                              compiler_cast_reg_to_size(compiler_regs[subscript_reg], compiler->computed_size),
-                              compiler_regs[subscript_reg]);
-            }
-
-            dest = sprintf("-%lli(%%rbp, %%%s, %lli)", symbol->stack_offset, compiler_regs[subscript_reg], symbol->size / 8);
-
-        } else if(compiler->is_const) {
-            dest = sprintf("-%lli(%%rbp)", symbol->stack_offset - subscript * symbol->size / 8);
-        } else if(compiler->is_at_stack) {
-            subscript_reg = compiler_find_free_reg(compiler);
-
-            if(subscript_reg == -1) {
-                PRINTLOG(COMPILER, LOG_ERROR, "no free registers");
-                return -1;
-            }
-
-            buffer_printf(compiler->text_buffer, "\tmov%c -%lli(%%rbp), %%%s\n",
-                          compiler_get_reg_suffix(compiler->computed_size),
-                          compiler->at_stack_offset,
-                          compiler_cast_reg_to_size(compiler_regs[subscript_reg], compiler->computed_size));
-
-            if(compiler->computed_size != 64) {
-                buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
-                              compiler_cast_reg_to_size(compiler_regs[subscript_reg], compiler->computed_size),
-                              compiler_regs[subscript_reg]);
-            }
-
-            dest = sprintf("-%lli(%%rbp, %%%s, %lli)", symbol->stack_offset, compiler_regs[subscript_reg], symbol->size / 8);
-        } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "subscript is not at reg or const");
-            return -1;
-        }
-
-        buffer_printf(compiler->text_buffer, "# end get subscript\n");
-
-    } else {
-        dest = sprintf("-%lli(%%rbp)", symbol->stack_offset);
     }
 
     buffer_printf(compiler->text_buffer, "# begin get right\n");
@@ -147,133 +27,99 @@ int8_t compiler_execute_assign(compiler_t* compiler, compiler_ast_node_t* node, 
         return -1;
     }
 
+    boolean_t src_is_const = compiler->is_const;
+    boolean_t src_is_at_reg = compiler->is_at_reg;
+    int16_t src_reg = node->right->used_register;
+    compiler_symbol_type_t src_type = compiler->computed_type;
+    int64_t src_size = compiler->computed_size;
+    int64_t src_const_value = *result;
+
     buffer_printf(compiler->text_buffer, "# end get right\n");
 
-    ((compiler_symbol_t*)symbol)->int_value = *result;
+    int64_t array_index = 0;
+    int64_t array_index_reg = -1;
 
-    if(compiler->is_at_mem) {
-        if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov%c %s, %s\n",
-                          compiler_get_reg_suffix(symbol->size),
-                          node->right->token->text,
-                          dest);
-        } else {
-            int16_t swap_reg = compiler_find_free_reg(compiler);
-            boolean_t need_swap = false;
+    if(node->left->is_array_subscript) {
 
-            if(swap_reg == -1) {
-                need_swap = true;
-                swap_reg = 8;
-                buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[swap_reg]);
-            }
-
-            buffer_printf(compiler->text_buffer, "\tmov%c %s, %%%s\n",
-                          compiler_get_reg_suffix(symbol->size),
-                          node->right->token->text,
-                          compiler_cast_reg_to_size(compiler_regs[swap_reg], symbol->size));
-
-            compiler_save_to_mem(compiler, compiler_regs[swap_reg], symbol);
-
-            if(need_swap) {
-                buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[swap_reg]);
-            } else {
-                compiler->busy_regs[swap_reg] = false;
-            }
+        if(compiler_execute_ast_node(compiler, node->left->array_subscript, &array_index) != 0) {
+            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute array index");
+            return -1;
         }
 
-    } else if(compiler->is_at_reg) {
-        if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %s\n",
-                          compiler_get_reg_suffix(symbol->size),
-                          compiler_cast_reg_to_size(compiler_regs[node->right->used_register], symbol->size),
-                          dest);
-        } else {
-            compiler_save_to_mem(compiler, compiler_regs[node->right->used_register], symbol);
+        if(compiler->is_at_reg) {
+            array_index_reg = node->left->array_subscript->used_register;
+            buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
+                          compiler_cast_reg_to_size(compiler_regs[array_index_reg], compiler->computed_size),
+                          compiler_regs[array_index_reg]);
         }
+    }
 
-        compiler->is_at_reg = false;
-        compiler->busy_regs[node->right->used_register] = false;
-    } else if(compiler->is_const) {
-        if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %s\n",
-                          compiler_get_reg_suffix(symbol->size),
-                          *result,
-                          dest);
-        } else {
-            compiler_save_const_int_to_mem(compiler, *result, symbol);
-        }
+    int16_t reg = compiler_find_free_reg(compiler);
 
-        compiler->is_const = false;
-    } else if(compiler->is_at_stack) {
-        int16_t swap_reg = compiler_find_free_reg(compiler);
-        boolean_t need_swap = false;
+    if(reg == -1) {
+        PRINTLOG(COMPILER, LOG_ERROR, "no free register");
+        return -1;
+    }
 
-        if(swap_reg == -1) {
-            need_swap = true;
-            swap_reg = 8;
-            buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[swap_reg]);
-        }
-
-        buffer_printf(compiler->text_buffer, "\tmov%c -%lli(%%rbp), %%%s\n",
-                      compiler_get_reg_suffix(symbol->size),
-                      compiler->at_stack_offset,
-                      compiler_cast_reg_to_size(compiler_regs[swap_reg], symbol->size));
-
-        if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %s\n",
-                          compiler_get_reg_suffix(symbol->size),
-                          compiler_cast_reg_to_size(compiler_regs[swap_reg], symbol->size),
-                          dest);
-        } else {
-            compiler_save_to_mem(compiler, compiler_regs[swap_reg], symbol);
-        }
-
-        if(need_swap) {
-            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[swap_reg]);
-        } else {
-            compiler->busy_regs[swap_reg] = false;
-        }
-
-
-        compiler->is_at_stack = false;
+    if(!symbol->is_local) {
+        buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg]);
+        buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg], compiler_regs[reg]);
     } else {
-        int16_t swap_reg = compiler_find_free_reg(compiler);
-        boolean_t need_swap = false;
+        buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+    }
 
-        if(swap_reg == -1) {
-            need_swap = true;
-            swap_reg = 8;
-            buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[swap_reg]);
+    const char_t* dest = NULL;
+
+    if(node->left->is_array_subscript) {
+        if(array_index_reg != -1) {
+            int8_t scale = 1;
+
+            if(symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
+                scale = symbol->size / 8;
+            } else if(symbol->type == COMPILER_SYMBOL_TYPE_STRING) {
+                scale = 1;
+            }
+
+            dest = sprintf("%lli(%%%s, %%%s, %d)", array_index, compiler_regs[reg], compiler_regs[array_index_reg], scale);
+        } else {
+            dest = sprintf("%lli(%%%s)", array_index, compiler_regs[reg]);
         }
+    } else {
+        dest = sprintf("(%%%s)", compiler_regs[reg]);
+    }
 
-        buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[swap_reg]);
-
-        if(symbol->is_local) {
-            buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %s\n",
-                          compiler_get_reg_suffix(symbol->size),
-                          compiler_cast_reg_to_size(compiler_regs[swap_reg], symbol->size),
+    if(src_is_const) {
+        if(src_type == COMPILER_SYMBOL_TYPE_INTEGER) {
+            buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %s\n",
+                          compiler_get_reg_suffix(src_size),
+                          src_const_value,
                           dest);
         } else {
-            compiler_save_to_mem(compiler, compiler_regs[swap_reg], symbol);
+            PRINTLOG(COMPILER, LOG_ERROR, "type %d not supported", src_type);
+            return -1;
         }
-
-        if(need_swap) {
-            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[swap_reg]);
-        } else {
-            compiler->busy_regs[swap_reg] = false;
-        }
-
+    } else if(src_is_at_reg) {
+        buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %s\n",
+                      compiler_get_reg_suffix(src_size),
+                      compiler_cast_reg_to_size(compiler_regs[src_reg], src_size),
+                      dest);
+        compiler->busy_regs[src_reg] = false; // free register
+    } else {
+        PRINTLOG(COMPILER, LOG_ERROR, "source is not at reg or const");
+        return -1;
     }
 
-    if(subscript_reg != -1) {
-        compiler->busy_regs[subscript_reg] = false;
-    }
+
 
     memory_free((void*)dest);
 
-    buffer_printf(compiler->text_buffer, "# end assign %s\n", symbol->name);
+    if(node->is_array_subscript) {
+        if(array_index_reg != -1) {
+            compiler->busy_regs[array_index_reg] = false; // free register
+        }
+    }
+
+    compiler->busy_regs[reg] = false; // free register
 
     return 0;
 }
-
-
