@@ -97,6 +97,8 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
 
     const char_t* src = NULL;
 
+    boolean_t deref = true;
+
     if(node->is_array_subscript) {
         if(array_index_reg != -1) {
             int8_t scale = 1;
@@ -113,12 +115,18 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
         }
     } else {
         src = sprintf("(%%%s)", compiler_regs[reg]);
+
+        if(symbol->is_array) {
+            deref = false;
+        }
     }
 
-    buffer_printf(compiler->text_buffer, "\tmov%c %s, %%%s\n",
-                  compiler_get_reg_suffix(symbol->size),
-                  src,
-                  compiler_cast_reg_to_size(compiler_regs[reg], symbol->size));
+    if(deref) {
+        buffer_printf(compiler->text_buffer, "\tmov%c %s, %%%s\n",
+                      compiler_get_reg_suffix(symbol->size),
+                      src,
+                      compiler_cast_reg_to_size(compiler_regs[reg], symbol->size));
+    }
 
     memory_free((void*)src);
 

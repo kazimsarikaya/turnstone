@@ -92,6 +92,11 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
         if(tmp_node->type != COMPILER_AST_NODE_TYPE_DECLS && compiler_execute_ast_node(compiler, tmp_node, result) != 0) {
             return -1;
         }
+
+        if(compiler->is_at_reg) {
+            buffer_printf(compiler->text_buffer, "# free register %s\n", compiler_regs[tmp_node->used_register]);
+            compiler->busy_regs[tmp_node->used_register] = false;
+        }
     }
 
     compiler->current_symbol_table = compiler->current_symbol_table->parent;

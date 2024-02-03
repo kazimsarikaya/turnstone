@@ -14,138 +14,108 @@
 int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
     buffer_printf(compiler->text_buffer, "# function call %s\n", node->token->text);
 
-    if(strcmp(node->token->text, "write") == 0) {
-        if(linkedlist_size(node->children) != 1) {
-            PRINTLOG(COMPILER, LOG_ERROR, "write expects 1 argument");
-            return -1;
-        }
+    int64_t stack_push_size = 0;
+    boolean_t pushed_registers[7] = {false}; // rax, rdi, rsi, rdx, rcx, r8, r9
+    int16_t pushed_reg_ids[] = {COMPILER_VM_REG_RAX, COMPILER_VM_REG_RDI, COMPILER_VM_REG_RSI, COMPILER_VM_REG_RDX, COMPILER_VM_REG_RCX, COMPILER_VM_REG_R8, COMPILER_VM_REG_R9};
 
-        uint64_t stack_push_size = 0;
+    size_t children_size = linkedlist_size(node->children);
 
-        boolean_t rdi_pushed = false;
-        boolean_t rsi_pushed = false;
-        boolean_t rdx_pushed = false;
-        boolean_t rcx_pushed = false;
-
-        boolean_t stack_need_align = false;
-
-
-
-        if(compiler->busy_regs[COMPILER_VM_REG_RCX]) {
-            buffer_printf(compiler->text_buffer, "\tpush %%rcx\n");
-            rcx_pushed = true;
-            stack_push_size += 8;
-        }
-
-        if(compiler->busy_regs[COMPILER_VM_REG_RDI]) {
-            buffer_printf(compiler->text_buffer, "\tpush %%rdi\n");
-            rdi_pushed = true;
-            stack_push_size += 8;
-        }
-
-        if(compiler->busy_regs[COMPILER_VM_REG_RSI]) {
-            buffer_printf(compiler->text_buffer, "\tpush %%rsi\n");
-            rsi_pushed = true;
-            stack_push_size += 8;
-        }
-
-        if(compiler->busy_regs[COMPILER_VM_REG_RDX]) {
-            buffer_printf(compiler->text_buffer, "\tpush %%rdx\n");
-            rdx_pushed = true;
-            stack_push_size += 8;
-        }
-
-        if(stack_push_size % 16) {
-            stack_need_align = true;
-        }
-
-        buffer_printf(compiler->text_buffer, "\tmov $1, %%rdi\n");
-
-        compiler_ast_node_t* tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->children, 0);
-
-        if(compiler_execute_ast_node(compiler, tmp_node, result) != 0) {
-            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute write");
-            return -1;
-        }
-
-        if(tmp_node->type == COMPILER_AST_NODE_TYPE_STRING_CONST) {
-            buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%rsi\n", tmp_node->symbol->name);
-            buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%rsi), %%rsi\n");
-
-            buffer_printf(compiler->text_buffer, "\tmov $%lli, %%rdx\n", tmp_node->symbol->size);
-        } else if(tmp_node->type == COMPILER_AST_NODE_TYPE_VAR) {
-            const compiler_symbol_t * symbol = compiler_find_symbol(compiler, tmp_node->token->text);
-
-            if(symbol == NULL) {
-                PRINTLOG(COMPILER, LOG_ERROR, "symbol %s not found", tmp_node->token->text);
-                return -1;
-            }
-
-
-            // TODO: check type -> integer probably pointer to string
-            if(symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
-                if(symbol->is_local) {
-                    if(symbol->is_array) {
-                        buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%rsi\n", symbol->stack_offset);
-                    } else {
-                        buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%rsi\n", symbol->stack_offset);
-                    }
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%rsi\n", symbol->name);
-                    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%rsi), %%rsi\n");
-                    buffer_printf(compiler->text_buffer, "\tmov (%%rsi), %%rsi\n");
-                }
-
-                if(symbol->is_array) {
-                    buffer_printf(compiler->text_buffer, "\tmov $%lli, %%rdx\n", symbol->array_size * symbol->size / 8);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tmov $1, %%rdx\n");
-                }
-            } else {
-                PRINTLOG(COMPILER, LOG_ERROR, "cannot write symbol %s type %d", symbol->name, symbol->type);
-                return -1;
-            }
-        } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "cannot write node type %d", tmp_node->type);
-            return -1;
-        }
-
-        if(stack_need_align) {
-            buffer_printf(compiler->text_buffer, "\tsub $8, %%rsp\n");
-        }
-
-        buffer_printf(compiler->text_buffer, "\tmov $0x%llx, %%rax\n", SYS_write);
-        buffer_printf(compiler->text_buffer, "\tsyscall\n");
-
-        if(stack_need_align) {
-            buffer_printf(compiler->text_buffer, "\tadd $8, %%rsp\n");
-        }
-
-        if(rdx_pushed) {
-            buffer_printf(compiler->text_buffer, "\tpop %%rdx\n");
-        }
-
-        if(rsi_pushed) {
-            buffer_printf(compiler->text_buffer, "\tpop %%rsi\n");
-        }
-
-        if(rdi_pushed) {
-            buffer_printf(compiler->text_buffer, "\tpop %%rdi\n");
-        }
-
-        if(rcx_pushed) {
-            buffer_printf(compiler->text_buffer, "\tpop %%rcx\n");
-        }
-
-        compiler->is_at_reg = true;
-        node->used_register = COMPILER_VM_REG_RAX;
-        compiler->busy_regs[COMPILER_VM_REG_RAX] = true;
-
-
-        return 0;
+    if(children_size > 6) {
+        PRINTLOG(COMPILER, LOG_ERROR, "function call %s expects 6 arguments", node->token->text);
+        return -1;
     }
 
-    return -1;
+    buffer_printf(compiler->text_buffer, "# function call %s argument count %lli\n", node->token->text, children_size);
+
+    if(compiler->busy_regs[pushed_reg_ids[0]]) {
+        buffer_printf(compiler->text_buffer, "\tpush %%rax\n");
+        pushed_registers[0] = true;
+        stack_push_size += 8;
+    }
+
+    for(size_t i = 1; i <= children_size; i++) {
+        compiler_ast_node_t* tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->children, i - 1);
+
+        buffer_printf(compiler->text_buffer, "# function call %s argument %lli\n", node->token->text, i - 1);
+
+        if(compiler_execute_ast_node(compiler, tmp_node, result) != 0) {
+            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute function call %s", node->token->text);
+            return -1;
+        }
+
+        if(compiler->is_at_reg && tmp_node->used_register != pushed_reg_ids[i] && compiler->busy_regs[pushed_reg_ids[i]]) {
+            buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[pushed_reg_ids[i]]);
+            pushed_registers[i] = true;
+            stack_push_size += 8;
+        }
+
+        if(compiler->is_const) {
+            buffer_printf(compiler->text_buffer, "\tmov $%lli, %%%s\n", *result, compiler_regs[pushed_reg_ids[i]]);
+        } else if(compiler->is_at_reg) {
+            if(tmp_node->used_register != pushed_reg_ids[i]) {
+                buffer_printf(compiler->text_buffer, "\tmov %%%s, %%%s\n", compiler_regs[tmp_node->used_register], compiler_regs[pushed_reg_ids[i]]);
+                compiler->busy_regs[node->used_register] = false;
+            }
+
+            compiler->busy_regs[pushed_reg_ids[i]] = true;
+        } else {
+            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute function call %s", node->token->text);
+            return -1;
+        }
+    }
+
+    if(compiler->busy_regs[COMPILER_VM_REG_RBX]) {
+        buffer_printf(compiler->text_buffer, "\tpush %%rbx\n");
+        stack_push_size += 8;
+    }
+
+    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%rbx\n", node->token->text);
+    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%rbx), %%rbx\n");
+
+    if(stack_push_size % 16) {
+        buffer_printf(compiler->text_buffer, "\tsub $8, %%rsp\n");
+    }
+
+    buffer_printf(compiler->text_buffer, "\txor %%rax, %%rax\n");
+    buffer_printf(compiler->text_buffer, "\tcall *%%rbx\n");
+
+    if(stack_push_size % 16) {
+        buffer_printf(compiler->text_buffer, "\tadd $8, %%rsp\n");
+    }
+
+    if(compiler->busy_regs[COMPILER_VM_REG_RBX]) {
+        buffer_printf(compiler->text_buffer, "\tpop %%rbx\n");
+    }
+
+    // restore registers reversed
+    for(size_t i = children_size; i > 0; i--) {
+        if(pushed_registers[i]) {
+            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[pushed_reg_ids[i]]);
+        }
+
+        compiler->busy_regs[pushed_reg_ids[i]] = false;
+    }
+
+    int16_t reg_id = compiler_find_free_reg(compiler);
+
+    if(reg_id < 0) {
+        PRINTLOG(COMPILER, LOG_ERROR, "cannot find free register");
+        return -1;
+    }
+
+    buffer_printf(compiler->text_buffer, "\tmov %%rax, %%%s\n", compiler_regs[reg_id]);
+
+    compiler->is_at_mem = false;
+    compiler->is_const = false;
+    compiler->is_at_stack = false;
+    compiler->is_at_reg = true;
+    node->used_register = reg_id;
+
+    if(pushed_registers[0]) {
+        buffer_printf(compiler->text_buffer, "\tpop %%rax\n");
+    }
+
+    return 0;
 }
 
 
