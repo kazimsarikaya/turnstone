@@ -17,8 +17,6 @@ int8_t compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* 
     UNUSED(result);
 
     compiler->is_at_reg = true;
-    compiler->is_at_mem = false;
-    compiler->is_at_stack = false;
     compiler->is_const = false;
 
     compiler_symbol_t * symbol = memory_malloc(sizeof(compiler_symbol_t));

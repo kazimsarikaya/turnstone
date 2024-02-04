@@ -176,9 +176,6 @@ typedef struct compiler_t {
     uint16_t               next_stack_offset;
     boolean_t              is_const;
     boolean_t              is_at_reg;
-    boolean_t              is_at_mem;
-    boolean_t              is_at_stack;
-    int64_t                at_stack_offset;
     boolean_t              busy_regs[COMPILER_VM_REG_COUNT];
     int32_t                next_label_id;
     linkedlist_t*          cond_label_stack;

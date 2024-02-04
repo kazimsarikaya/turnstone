@@ -26,26 +26,15 @@ int8_t compiler_execute_unary_op(compiler_t* compiler, compiler_ast_node_t* node
 
         *result = -right;
 
-        if(compiler->is_at_mem) {
-            buffer_printf(compiler->text_buffer, "\tneg %s\n", node->right->token->text);
-        } else if(compiler->is_at_reg) {
+        if(compiler->is_at_reg) {
             buffer_printf(compiler->text_buffer, "\tneg%c %%%s\n",
                           compiler_get_reg_suffix(compiler->computed_size),
                           compiler_cast_reg_to_size(compiler_regs[node->right->used_register], compiler->computed_size));
             node->used_register = node->right->used_register;
         } else if(compiler->is_const) {
             *result = -*result;
-        } else if(compiler->is_at_stack) {
-            buffer_printf(compiler->text_buffer, "\tneg%c -%lli(%%rbp)\n",
-                          compiler_get_reg_suffix(compiler->computed_size),
-                          compiler->at_stack_offset);
         } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "need inspect");
-            int16_t reg = compiler_find_free_reg(compiler);
-            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tneg %%%s\n", compiler_regs[reg]);
-            compiler->is_at_reg = true;
-            node->used_register = reg;
+            PRINTLOG(COMPILER, LOG_ERROR, "unsupported");
             return -1;
         }
 
@@ -59,17 +48,8 @@ int8_t compiler_execute_unary_op(compiler_t* compiler, compiler_ast_node_t* node
             node->used_register = node->right->used_register;
         } else if(compiler->is_const) {
             *result = !*result;
-        } else if(compiler->is_at_stack) {
-            buffer_printf(compiler->text_buffer, "\tnot%c -%lli(%%rbp)\n",
-                          compiler_get_reg_suffix(compiler->computed_size),
-                          compiler->at_stack_offset);
         } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "need inspect");
-            int16_t reg = compiler_find_free_reg(compiler);
-            buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[reg]);
-            buffer_printf(compiler->text_buffer, "\tnot %%%s\n", compiler_regs[reg]);
-            compiler->is_at_reg = true;
-            node->used_register = reg;
+            PRINTLOG(COMPILER, LOG_ERROR, "unsupported");
 
             return -1;
         }

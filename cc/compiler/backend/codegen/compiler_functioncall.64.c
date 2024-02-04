@@ -105,9 +105,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
     buffer_printf(compiler->text_buffer, "\tmov %%rax, %%%s\n", compiler_regs[reg_id]);
 
-    compiler->is_at_mem = false;
     compiler->is_const = false;
-    compiler->is_at_stack = false;
     compiler->is_at_reg = true;
     node->used_register = reg_id;
 

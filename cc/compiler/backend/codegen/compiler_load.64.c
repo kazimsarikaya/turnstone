@@ -23,8 +23,6 @@ int8_t compiler_execute_load_int(compiler_t* compiler, compiler_ast_node_t* node
     buffer_printf(compiler->text_buffer, "# begin load const %lli\n", *result);
 
     compiler->is_at_reg = false;
-    compiler->is_at_mem = false;
-    compiler->is_at_stack = false;
     compiler->is_const = true;
 
     compiler->computed_size = node->token->size;
@@ -41,8 +39,6 @@ int8_t compiler_execute_load_int(compiler_t* compiler, compiler_ast_node_t* node
 int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
 
     compiler->is_at_reg = false;
-    compiler->is_at_mem = false;
-    compiler->is_at_stack = false;
     compiler->is_const = false;
 
     const compiler_symbol_t * symbol = compiler_find_symbol(compiler, node->token->text);

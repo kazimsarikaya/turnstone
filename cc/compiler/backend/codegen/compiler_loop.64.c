@@ -55,17 +55,8 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
 
             compiler->busy_regs[node->condition->used_register] = false;
             compiler->is_at_reg = false;
-        } else if(compiler->is_at_stack) {
-            if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-                buffer_printf(compiler->text_buffer, "\tjz %s\n", end_label);
-            } else {
-                buffer_printf(compiler->text_buffer, "\tcmp%c $0, -%lli(%%rbp)\n",
-                              compiler_get_reg_suffix(compiler->computed_size),
-                              compiler->at_stack_offset);
-                buffer_printf(compiler->text_buffer, "\tje %s\n", end_label);
-            }
         } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "need inspect");
+            PRINTLOG(COMPILER, LOG_ERROR, "unsupported");
             return -1;
         }
     }
@@ -159,17 +150,8 @@ int8_t compiler_execute_repeat(compiler_t* compiler, compiler_ast_node_t* node, 
 
             compiler->busy_regs[node->condition->used_register] = false;
             compiler->is_at_reg = false;
-        } else if(compiler->is_at_stack) {
-            if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-                buffer_printf(compiler->text_buffer, "\tjz %s\n", end_label);
-            } else {
-                buffer_printf(compiler->text_buffer, "\tcmp%c $0, -%lli(%%rbp)\n",
-                              compiler_get_reg_suffix(compiler->computed_size),
-                              compiler->at_stack_offset);
-                buffer_printf(compiler->text_buffer, "\tje %s\n", end_label);
-            }
         } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "need inspect");
+            PRINTLOG(COMPILER, LOG_ERROR, "unsupported");
             return -1;
         }
     }

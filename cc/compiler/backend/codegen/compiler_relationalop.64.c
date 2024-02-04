@@ -26,31 +26,9 @@ int8_t compiler_execute_relational_op(compiler_t* compiler, compiler_ast_node_t*
 
     boolean_t left_is_const = compiler->is_const;
     compiler->is_const = false;
-    boolean_t left_is_at_reg = compiler->is_at_reg;
     int16_t left_at_reg = node->left->used_register;
     compiler->is_at_reg = false;
-    boolean_t left_is_at_stack = compiler->is_at_stack;
-    compiler->is_at_stack = false;
-    int64_t left_at_stack_offset = compiler->at_stack_offset;
     int64_t left_size = compiler->computed_size;
-
-
-    if(!left_is_const) {
-        if(!left_is_at_reg) {
-            left_at_reg = compiler_find_free_reg(compiler);
-
-            if(left_at_reg == -1) {
-                PRINTLOG(COMPILER, LOG_ERROR, "no free registers");
-                return -1;
-            }
-
-            if(left_is_at_stack) {
-                buffer_printf(compiler->text_buffer, "\tmov -%lli(%%rbp), %%%s\n", left_at_stack_offset, compiler_regs[left_at_reg]);
-            } else {
-                buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[left_at_reg]);
-            }
-        }
-    }
 
     if(compiler_execute_ast_node(compiler, node->right, &right) != 0) {
         return -1;
@@ -58,30 +36,9 @@ int8_t compiler_execute_relational_op(compiler_t* compiler, compiler_ast_node_t*
 
     boolean_t right_is_const = compiler->is_const;
     compiler->is_const = false;
-    boolean_t right_is_at_reg = compiler->is_at_reg;
     compiler->is_at_reg = false;
     int16_t right_at_reg = node->right->used_register;
-    boolean_t right_is_at_stack = compiler->is_at_stack;
-    compiler->is_at_stack = false;
-    int64_t right_at_stack_offset = compiler->at_stack_offset;
     int64_t right_size = compiler->computed_size;
-
-    if(!right_is_const) {
-        if(!right_is_at_reg) {
-            right_at_reg = compiler_find_free_reg(compiler);
-
-            if(right_at_reg == -1) {
-                PRINTLOG(COMPILER, LOG_ERROR, "no free registers");
-                return -1;
-            }
-
-            if(right_is_at_stack) {
-                buffer_printf(compiler->text_buffer, "\tmov -%lli(%%rbp), %%%s\n", right_at_stack_offset, compiler_regs[right_at_reg]);
-            } else {
-                buffer_printf(compiler->text_buffer, "\tpop %%%s\n", compiler_regs[right_at_reg]);
-            }
-        }
-    }
 
     if(left_is_const && right_is_const) {
         compiler->is_const = true;
