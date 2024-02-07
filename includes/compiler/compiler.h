@@ -225,7 +225,7 @@ const int16_t compiler_fcall_reg_order[] = {
     COMPILER_VM_REG_R9,
 };
 
-extern const char_t* compiler_regs[];
+extern const char_t*const compiler_regs[];
 
 int8_t                   compiler_init(compiler_t * compiler, compiler_ast_t * ast);
 int8_t                   compiler_destroy(compiler_t * compiler);

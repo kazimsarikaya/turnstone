@@ -12,7 +12,7 @@
 
 MODULE("turnstone.compiler");
 
-const char_t* compiler_regs[] = {
+const char_t*const compiler_regs[] = {
     "rax",
     "rbx",
     "rcx",
