@@ -42,6 +42,8 @@ int8_t compiler_execute_relational_op(compiler_t* compiler, compiler_ast_node_t*
 
     if(left_is_const && right_is_const) {
         compiler->is_const = true;
+    } else {
+        compiler->is_const = false;
     }
 
     int64_t max_size = MAX(left_size, right_size);
@@ -81,7 +83,7 @@ int8_t compiler_execute_relational_op(compiler_t* compiler, compiler_ast_node_t*
         compiler->is_at_reg = true;
     }
 
-    compiler->computed_size = 8;
+    compiler->computed_size = 1;
     compiler->computed_type = COMPILER_SYMBOL_TYPE_BOOLEAN;
 
     const char_t* used_reg = compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size);
@@ -90,103 +92,42 @@ int8_t compiler_execute_relational_op(compiler_t* compiler, compiler_ast_node_t*
         *result = left == right;
 
         if(!compiler->is_const) {
-
-            if(compiler->is_cond_eval) {
-                const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-                if(compiler->is_cond_reverse) {
-                    buffer_printf(compiler->text_buffer, "\tje %s\n", label);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tjne %s\n", label);
-                }
-            } else {
-                buffer_printf(compiler->text_buffer, "\tseteb %%%s\n", used_reg);
-            }
+            buffer_printf(compiler->text_buffer, "\tseteb %%%s\n", used_reg);
         }
 
     } else if (node->token->type == COMPILER_TOKEN_TYPE_NOT_EQUAL) {
         *result = left != right;
 
         if(!compiler->is_const) {
-            if(compiler->is_cond_eval) {
-                const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-                if(compiler->is_cond_reverse) {
-                    buffer_printf(compiler->text_buffer, "\tjne %s\n", label);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tje %s\n", label);
-                }
-            } else {
-                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", used_reg);
-            }
+            buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", used_reg);
         }
 
     } else if (node->token->type == COMPILER_TOKEN_TYPE_LESS_THAN) {
         *result = left < right;
 
         if(!compiler->is_const) {
-            if(compiler->is_cond_eval) {
-                const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-                if(compiler->is_cond_reverse) {
-                    buffer_printf(compiler->text_buffer, "\tjl %s\n", label);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tjge %s\n", label);
-                }
-            } else {
-                buffer_printf(compiler->text_buffer, "\tsetl %%%s\n", used_reg);
-            }
+            buffer_printf(compiler->text_buffer, "\tsetl %%%s\n", used_reg);
         }
 
     } else if (node->token->type == COMPILER_TOKEN_TYPE_LESS_THAN_OR_EQUAL) {
         *result = left <= right;
 
         if(!compiler->is_const) {
-            if(compiler->is_cond_eval) {
-                const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-                if(compiler->is_cond_reverse) {
-                    buffer_printf(compiler->text_buffer, "\tjle %s\n", label);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tjg %s\n", label);
-                }
-            } else {
-                buffer_printf(compiler->text_buffer, "\tsetle %%%s\n", used_reg);
-            }
+            buffer_printf(compiler->text_buffer, "\tsetle %%%s\n", used_reg);
         }
 
     } else if (node->token->type == COMPILER_TOKEN_TYPE_GREATER_THAN) {
         *result = left > right;
 
         if(!compiler->is_const) {
-            if(compiler->is_cond_eval) {
-                const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-                if(compiler->is_cond_reverse) {
-                    buffer_printf(compiler->text_buffer, "\tjg %s\n", label);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tjle %s\n", label);
-                }
-            } else {
-                buffer_printf(compiler->text_buffer, "\tsetg %%%s\n", used_reg);
-            }
+            buffer_printf(compiler->text_buffer, "\tsetg %%%s\n", used_reg);
         }
 
     } else if (node->token->type == COMPILER_TOKEN_TYPE_GREATER_THAN_OR_EQUAL) {
         *result = left >= right;
 
         if(!compiler->is_const) {
-            if(compiler->is_cond_eval) {
-                const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-                if(compiler->is_cond_reverse) {
-                    buffer_printf(compiler->text_buffer, "\tjge %s\n", label);
-                } else {
-                    buffer_printf(compiler->text_buffer, "\tjl %s\n", label);
-                }
-            } else {
-                buffer_printf(compiler->text_buffer, "\tsetge %%%s\n", used_reg);
-            }
+            buffer_printf(compiler->text_buffer, "\tsetge %%%s\n", used_reg);
         }
 
     } else {
@@ -195,12 +136,9 @@ int8_t compiler_execute_relational_op(compiler_t* compiler, compiler_ast_node_t*
     }
 
     if(compiler->is_const) {
-        if(compiler->is_cond_eval) {
-            const char_t* label = linkedlist_stack_peek(compiler->cond_label_stack);
-
-            if(!*result) {
-                buffer_printf(compiler->text_buffer, "\tjmp %s\n", label);
-            }
+        // if not zero then set to 1
+        if(*result) {
+            *result = 1;
         }
     }
 

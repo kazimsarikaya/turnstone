@@ -34,25 +34,27 @@ int8_t compiler_execute_if(compiler_t* compiler, compiler_ast_node_t* node, int6
 
     compiler->is_cond_eval = false;
 
-    if(node->condition->type != COMPILER_AST_NODE_TYPE_RELATIONAL_OP) {
-        if(compiler->is_const) {
-            if(!condition) {
-                buffer_printf(compiler->text_buffer, "\tjmp %s\n", label);
-            }
-        } else if(compiler->is_at_reg) {
-            if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-                buffer_printf(compiler->text_buffer, "\tjz %s\n", label);
-            } else {
-                buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", compiler_regs[node->condition->used_register]);
-                buffer_printf(compiler->text_buffer, "\tje %s\n", label);
-            }
-
-            compiler->busy_regs[node->condition->used_register] = false;
-            compiler->is_at_reg = false;
-        } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "unsupported condition type\n");
-            return -1;
+    if(compiler->is_const) {
+        if(!condition) {
+            buffer_printf(compiler->text_buffer, "\tjmp %s\n", label);
         }
+    } else if(compiler->is_at_reg) {
+        const char_t* res_reg = compiler_cast_reg_to_size(compiler_regs[node->condition->used_register], compiler->computed_size);
+
+        if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
+            buffer_printf(compiler->text_buffer, "\ttest%c %%%s, %%%s\n", compiler_get_reg_suffix(compiler->computed_size),
+                          res_reg, res_reg);
+            buffer_printf(compiler->text_buffer, "\tjz %s\n", label);
+        } else {
+            buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", res_reg);
+            buffer_printf(compiler->text_buffer, "\tjz %s\n", label);
+        }
+
+        compiler->busy_regs[node->condition->used_register] = false;
+        compiler->is_at_reg = false;
+    } else {
+        PRINTLOG(COMPILER, LOG_ERROR, "unsupported condition type\n");
+        return -1;
     }
 
     buffer_printf(compiler->text_buffer, "# end if cond %lli\n", compiler->cond_depth);

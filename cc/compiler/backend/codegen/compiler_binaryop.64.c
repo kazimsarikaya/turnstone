@@ -204,6 +204,7 @@ int8_t compiler_execute_binary_op(compiler_t* compiler, compiler_ast_node_t* nod
             *result = left & right;
         } else {
             compiler->computed_type = COMPILER_SYMBOL_TYPE_BOOLEAN;
+            compiler->computed_size = 1;
             *result = left && right;
         }
 
@@ -222,8 +223,8 @@ int8_t compiler_execute_binary_op(compiler_t* compiler, compiler_ast_node_t* nod
                 compiler->busy_regs[left_at_reg] = false;
             }
 
-            if(!compiler->is_cond_eval && compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size));
+            if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tsetnz %%%s\n", compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size));
             }
 
             compiler->is_at_reg = true;
@@ -236,6 +237,7 @@ int8_t compiler_execute_binary_op(compiler_t* compiler, compiler_ast_node_t* nod
             *result = left | right;
         } else {
             compiler->computed_type = COMPILER_SYMBOL_TYPE_BOOLEAN;
+            compiler->computed_size = 1;
             *result = left || right;
         }
 
@@ -252,8 +254,8 @@ int8_t compiler_execute_binary_op(compiler_t* compiler, compiler_ast_node_t* nod
                 compiler->busy_regs[left_at_reg] = false;
             }
 
-            if(!compiler->is_cond_eval && compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size));
+            if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tsetnz %%%s\n", compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size));
             }
 
             compiler->is_at_reg = true;
@@ -264,6 +266,7 @@ int8_t compiler_execute_binary_op(compiler_t* compiler, compiler_ast_node_t* nod
             *result = left ^ right;
         } else {
             compiler->computed_type = COMPILER_SYMBOL_TYPE_BOOLEAN;
+            compiler->computed_size = 1;
             *result = !left != !right;
         }
 
@@ -280,8 +283,8 @@ int8_t compiler_execute_binary_op(compiler_t* compiler, compiler_ast_node_t* nod
                 compiler->busy_regs[left_at_reg] = false;
             }
 
-            if(!compiler->is_cond_eval && compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-                buffer_printf(compiler->text_buffer, "\tsetne %%%s\n", compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size));
+            if(compiler->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
+                buffer_printf(compiler->text_buffer, "\tsetnz %%%s\n", compiler_cast_reg_to_size(compiler_regs[node->used_register], compiler->computed_size));
             }
 
             compiler->is_at_reg = true;
