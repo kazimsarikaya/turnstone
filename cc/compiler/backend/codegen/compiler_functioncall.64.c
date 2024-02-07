@@ -11,6 +11,8 @@
 #include <strings.h>
 #include <utils.h>
 
+MODULE("turnstone.compiler.codegen");
+
 int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
     buffer_printf(compiler->text_buffer, "# function call %s\n", node->token->text);
 
