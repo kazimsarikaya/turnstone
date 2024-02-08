@@ -30,14 +30,22 @@ int8_t compiler_execute_block(compiler_t* compiler, compiler_ast_node_t* node, i
                     if(tmp_symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
 
                         int64_t symbol_size = tmp_symbol->size / 8;
+                        size_t array_size = tmp_symbol->array_size;
+                        int64_t symbol_type_size = symbol_size;
 
                         if(tmp_symbol->is_array) {
-                            symbol_size = tmp_symbol->array_size * symbol_size;
+                            symbol_size = array_size * symbol_size;
+
+                            if(tmp_symbol->string_value) {
+                                symbol_size = strlen(tmp_symbol->string_value) + 1;
+                                symbol_type_size = 1;
+                                array_size++;
+                            }
                         }
 
                         const char_t* symbol_type = "int";
 
-                        switch(symbol_size) {
+                        switch(symbol_type_size) {
                         case 1:
                             symbol_type = "byte";
                             break;
@@ -64,34 +72,29 @@ int8_t compiler_execute_block(compiler_t* compiler, compiler_ast_node_t* node, i
 
                             if(tmp_symbol->is_const){
                                 PRINTLOG(COMPILER, LOG_INFO, "rodata symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
-                                buffer_printf(compiler->rodata_buffer, ".section .rodata.%s\n", tmp_symbol->name);
-                                buffer_printf(compiler->rodata_buffer, ".align 8\n");
-                                buffer_printf(compiler->rodata_buffer, ".local %s\n", tmp_symbol->name);
-                                buffer_printf(compiler->rodata_buffer, ".type %s, @object\n", tmp_symbol->name);
-                                buffer_printf(compiler->rodata_buffer, ".size %s, %lli\n", tmp_symbol->name, symbol_size);
-                                buffer_printf(compiler->rodata_buffer, "%s:\n", tmp_symbol->name);
+                                compiler_define_symbol(compiler, tmp_symbol, symbol_size);
 
                                 if(tmp_symbol->is_array) {
-                                    for(size_t item = 0; item < tmp_symbol->array_size; item++) {
-                                        buffer_printf(compiler->rodata_buffer, "\t.%s %lli\n", symbol_type, tmp_symbol->int_array_value[item]);
+                                    if(tmp_symbol->string_value) {
+                                        buffer_printf(compiler->rodata_buffer, "\t.string \"%s\"\n", tmp_symbol->string_value);
+                                    } else {
+                                        for(size_t item = 0; item < array_size; item++) {
+                                            buffer_printf(compiler->rodata_buffer, "\t.%s %lli\n", symbol_type, tmp_symbol->int_array_value[item]);
+                                        }
                                     }
                                 } else {
                                     buffer_printf(compiler->rodata_buffer, "\t.%s %lli\n", symbol_type, tmp_symbol->int_value);
                                 }
 
-                                buffer_printf(compiler->rodata_buffer, "\n\n\n");
+                                buffer_printf(compiler->rodata_buffer, "\n\n");
                             } else {
                                 if(!tmp_symbol->initilized) {
                                     PRINTLOG(COMPILER, LOG_INFO, "bss symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
-                                    buffer_printf(compiler->bss_buffer, ".section .bss.%s\n", tmp_symbol->name);
-                                    buffer_printf(compiler->bss_buffer, ".align 8\n");
-                                    buffer_printf(compiler->bss_buffer, ".local %s\n", tmp_symbol->name);
-                                    buffer_printf(compiler->bss_buffer, ".type %s, @object\n", tmp_symbol->name);
-                                    buffer_printf(compiler->bss_buffer, ".size %s, %lli\n", tmp_symbol->name, symbol_size);
-                                    buffer_printf(compiler->bss_buffer, "%s:\n", tmp_symbol->name);
+
+                                    compiler_define_symbol(compiler, tmp_symbol, symbol_size);
 
                                     if(tmp_symbol->is_array) {
-                                        for(size_t item = 0; item < tmp_symbol->array_size; item++) {
+                                        for(size_t item = 0; item < array_size; item++) {
                                             UNUSED(item);
                                             buffer_printf(compiler->bss_buffer, "\t.%s 0\n", symbol_type);
                                         }
@@ -99,25 +102,24 @@ int8_t compiler_execute_block(compiler_t* compiler, compiler_ast_node_t* node, i
                                         buffer_printf(compiler->bss_buffer, "\t.%s 0\n", symbol_type);
                                     }
 
-                                    buffer_printf(compiler->bss_buffer, "\n\n\n");
+                                    buffer_printf(compiler->bss_buffer, "\n\n");
                                 } else {
                                     PRINTLOG(COMPILER, LOG_INFO, "data symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
-                                    buffer_printf(compiler->data_buffer, ".section .data.%s\n", tmp_symbol->name);
-                                    buffer_printf(compiler->data_buffer, ".align 8\n");
-                                    buffer_printf(compiler->data_buffer, ".local %s\n", tmp_symbol->name);
-                                    buffer_printf(compiler->data_buffer, ".type %s, @object\n", tmp_symbol->name);
-                                    buffer_printf(compiler->data_buffer, ".size %s, %lli\n", tmp_symbol->name, symbol_size);
-                                    buffer_printf(compiler->data_buffer, "%s:\n", tmp_symbol->name);
+                                    compiler_define_symbol(compiler, tmp_symbol, symbol_size);
 
                                     if(tmp_symbol->is_array) {
-                                        for(size_t item = 0; item < tmp_symbol->array_size; item++) {
-                                            buffer_printf(compiler->data_buffer, "\t.%s %lli\n", symbol_type, tmp_symbol->int_array_value[item]);
+                                        if(tmp_symbol->string_value) {
+                                            buffer_printf(compiler->data_buffer, "\t.string \"%s\"\n", tmp_symbol->string_value);
+                                        } else {
+                                            for(size_t item = 0; item < array_size; item++) {
+                                                buffer_printf(compiler->data_buffer, "\t.%s %lli\n", symbol_type, tmp_symbol->int_array_value[item]);
+                                            }
                                         }
                                     } else {
                                         buffer_printf(compiler->data_buffer, "\t.%s %lli\n", symbol_type, tmp_symbol->int_value);
                                     }
 
-                                    buffer_printf(compiler->data_buffer, "\n\n\n");
+                                    buffer_printf(compiler->data_buffer, "\n\n");
                                 }
                             }
                         }

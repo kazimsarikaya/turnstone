@@ -13,27 +13,6 @@
 
 MODULE("turnstone.compiler");
 
-
-int8_t compiler_symbol_destroyer(memory_heap_t* heap, void* symbol) {
-    if (symbol == NULL) {
-        return -1;
-    }
-
-    compiler_symbol_t * l_symbol = (compiler_symbol_t*)symbol;
-
-    if (l_symbol->name != NULL) {
-        memory_free_ext(heap, (void*)l_symbol->name);
-    }
-
-    if(l_symbol->int_array_value != NULL) {
-        memory_free_ext(heap, l_symbol->int_array_value);
-    }
-
-    memory_free_ext(heap, symbol);
-
-    return 0;
-}
-
 int8_t compiler_ast_init(compiler_ast_t * ast) {
     ast->root = NULL;
     return 0;

@@ -58,7 +58,10 @@ typedef enum compiler_token_type_t {
     COMPILER_TOKEN_TYPE_CONST,
     COMPILER_TOKEN_TYPE_INTEGER,
     COMPILER_TOKEN_TYPE_REAL,
+    COMPILER_TOKEN_TYPE_CHAR,
     COMPILER_TOKEN_TYPE_STRING,
+    COMPILER_TOKEN_TYPE_BOOLEAN,
+    COMPILER_TOKEN_TYPE_NULL,
     COMPILER_TOKEN_TYPE_IF,
     COMPILER_TOKEN_TYPE_THEN,
     COMPILER_TOKEN_TYPE_ELSE,
@@ -121,6 +124,7 @@ typedef enum compiler_symbol_type_t {
 typedef struct compiler_symol_t {
     const char_t*          name;
     compiler_symbol_type_t type;
+    compiler_symbol_type_t hidden_type;
     int64_t                size;
     boolean_t              initilized;
     int64_t                int_value;
@@ -250,6 +254,7 @@ int8_t                   compiler_execute_save(compiler_t* compiler, compiler_as
 int8_t                   compiler_execute_load(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 const char_t*            compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
 char_t                   compiler_get_reg_suffix(uint8_t size);
+int8_t                   compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, size_t symbol_size);
 
 
 #define SYS_exit 60ULL

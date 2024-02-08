@@ -8,6 +8,7 @@
 
 #include <compiler/compiler.h>
 #include <logging.h>
+#include <strings.h>
 
 MODULE("turnstone.compiler");
 
@@ -97,12 +98,18 @@ int8_t compiler_build_stack(compiler_t* compiler) {
             char_t reg_suffix = compiler_get_reg_suffix(symbol->size);
 
             if(symbol->is_array) {
-                buffer_printf(compiler->text_buffer, "\tpush %%rdi\n");
-                buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%rdi\n", symbol->stack_offset);
-                buffer_printf(compiler->text_buffer, "\tmov $%lli, %%rcx\n", symbol->array_size);
-                buffer_printf(compiler->text_buffer, "\tmov $0, %%rax\n");
-                buffer_printf(compiler->text_buffer, "\trep stos%c\n", reg_suffix);
-                buffer_printf(compiler->text_buffer, "\tpop %%rdi\n");
+                if(symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+                    buffer_printf(compiler->text_buffer, "\tmov $%s_string@GOT, %%rax\n", symbol->name);
+                    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%rax), %%rax\n");
+                    buffer_printf(compiler->text_buffer, "\tmov %%rax, -%d(%%rbp)\n", symbol->stack_offset);
+                } else {
+                    buffer_printf(compiler->text_buffer, "\tpush %%rdi\n");
+                    buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%rdi\n", symbol->stack_offset);
+                    buffer_printf(compiler->text_buffer, "\tmov $%lli, %%rcx\n", symbol->array_size);
+                    buffer_printf(compiler->text_buffer, "\tmov $0, %%rax\n");
+                    buffer_printf(compiler->text_buffer, "\trep stos%c\n", reg_suffix);
+                    buffer_printf(compiler->text_buffer, "\tpop %%rdi\n");
+                }
             } else {
                 buffer_printf(compiler->text_buffer, "\tmov%c $%lli, -%d(%%rbp)\n", reg_suffix, symbol->int_value, symbol->stack_offset);
             }
@@ -112,6 +119,65 @@ int8_t compiler_build_stack(compiler_t* compiler) {
     }
 
     iter->destroy(iter);
+
+    return 0;
+}
+
+int8_t compiler_symbol_destroyer(memory_heap_t* heap, void* symbol) {
+    if (symbol == NULL) {
+        return -1;
+    }
+
+    compiler_symbol_t * l_symbol = (compiler_symbol_t*)symbol;
+
+    if (l_symbol->name != NULL) {
+        memory_free_ext(heap, (void*)l_symbol->name);
+    }
+
+    if(l_symbol->int_array_value != NULL) {
+        memory_free_ext(heap, l_symbol->int_array_value);
+    }
+
+    if(l_symbol->string_value != NULL) {
+        memory_free_ext(heap, (void*)l_symbol->string_value);
+    }
+
+    memory_free_ext(heap, symbol);
+
+    return 0;
+}
+
+int8_t compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, size_t symbol_size) {
+    const char_t* sec_name_prefix = "data";
+    buffer_t* buffer = compiler->data_buffer;
+
+    if(symbol->is_const) {
+        sec_name_prefix = "rodata";
+        buffer = compiler->rodata_buffer;
+    } else if(symbol->initilized) {
+        sec_name_prefix = "data";
+        buffer = compiler->data_buffer;
+    } else {
+        sec_name_prefix = "bss";
+        buffer = compiler->bss_buffer;
+    }
+
+    const char_t* symbol_name = symbol->name;
+
+    if(symbol->is_local && symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+        symbol_name = sprintf("%s_string", symbol->name);
+    }
+
+    buffer_printf(buffer, ".section .%s.%s\n", sec_name_prefix, symbol_name);
+    buffer_printf(buffer, ".align 8\n");
+    buffer_printf(buffer, ".local %s\n", symbol_name);
+    buffer_printf(buffer, ".type %s, @object\n", symbol_name);
+    buffer_printf(buffer, ".size %s, %lli\n", symbol_name, symbol_size);
+    buffer_printf(buffer, "%s:\n", symbol_name);
+
+    if(symbol->is_local && symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+        memory_free((void*)symbol_name);
+    }
 
     return 0;
 }

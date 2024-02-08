@@ -88,7 +88,11 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
         buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg]);
         buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg], compiler_regs[reg]);
     } else {
-        buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+        if(symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+            buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+        } else {
+            buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+        }
     }
 
     const char_t* src = NULL;

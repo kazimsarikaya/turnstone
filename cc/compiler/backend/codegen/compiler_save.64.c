@@ -21,6 +21,7 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
         return -1;
     }
 
+    buffer_printf(compiler->text_buffer, "# begin save\n");
     buffer_printf(compiler->text_buffer, "# begin get right\n");
 
     if(compiler_execute_ast_node(compiler, node->right, result) != 0) {
@@ -40,6 +41,7 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
     int64_t array_index_reg = -1;
 
     if(node->left->is_array_subscript) {
+        buffer_printf(compiler->text_buffer, "# begin array subscript\n");
 
         if(compiler_execute_ast_node(compiler, node->left->array_subscript, &array_index) != 0) {
             PRINTLOG(COMPILER, LOG_ERROR, "cannot execute array index");
@@ -52,7 +54,11 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
                           compiler_cast_reg_to_size(compiler_regs[array_index_reg], compiler->computed_size),
                           compiler_regs[array_index_reg]);
         }
+
+        buffer_printf(compiler->text_buffer, "# end array subscript\n");
     }
+
+    buffer_printf(compiler->text_buffer, "# begin left\n");
 
     int16_t reg = compiler_find_free_reg(compiler);
 
@@ -61,11 +67,16 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
         return -1;
     }
 
+    buffer_printf(compiler->text_buffer, "# begin load address\n");
     if(!symbol->is_local) {
         buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg]);
         buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg], compiler_regs[reg]);
     } else {
-        buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+        if(symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+            buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+        } else {
+            buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
+        }
     }
 
     const char_t* dest = NULL;
@@ -87,6 +98,10 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
     } else {
         dest = sprintf("(%%%s)", compiler_regs[reg]);
     }
+
+    buffer_printf(compiler->text_buffer, "# end load address %s\n", dest);
+
+    buffer_printf(compiler->text_buffer, "# src_size: %lli\n", src_size);
 
     if(src_is_const) {
         if(src_type == COMPILER_SYMBOL_TYPE_INTEGER) {
@@ -120,6 +135,9 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
     }
 
     compiler->busy_regs[reg] = false; // free register
+
+    buffer_printf(compiler->text_buffer, "# end left\n");
+    buffer_printf(compiler->text_buffer, "# end save\n");
 
     return 0;
 }

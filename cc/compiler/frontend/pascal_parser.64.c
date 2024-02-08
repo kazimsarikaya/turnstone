@@ -124,8 +124,23 @@ int8_t pascal_parser_factor(pascal_parser_t * parser, compiler_ast_node_t ** nod
             return -1;
         }
 
-        (*node)->type = COMPILER_AST_NODE_TYPE_STRING_CONST;
-        (*node)->token = parser->current_token;
+        size_t string_size = strlen(parser->current_token->text);
+
+        if(string_size == 0) {
+            memory_free((void*)parser->current_token->text);
+            memory_free((void*)parser->current_token);
+            memory_free((void*)*node);
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "string size is 0");
+            return -1;
+        } else if(string_size == 1) { // char
+            (*node)->type = COMPILER_AST_NODE_TYPE_INTEGER_CONST;
+            (*node)->token = parser->current_token;
+            (*node)->token->value = parser->current_token->text[0];
+            (*node)->token->size = 8;
+        } else { // string
+            (*node)->type = COMPILER_AST_NODE_TYPE_STRING_CONST;
+            (*node)->token = parser->current_token;
+        }
 
         return pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_STRING_CONST, false);
     } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_NOT) {
@@ -449,10 +464,11 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
     boolean_t is_array = false;
 
     size_t array_size = 0;
+    int64_t symbol_size = 0;
 
     if(parser->current_token->type == COMPILER_TOKEN_TYPE_INTEGER) {
 
-        int64_t symbol_size = parser->current_token->size;
+        symbol_size = parser->current_token->size;
 
         if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_INTEGER, true) != 0) {
             compiler_destroy_symbol_list(symbol_list);
@@ -487,16 +503,35 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
             }
         }
 
-        for(size_t i = 0; i < linkedlist_size(symbol_list); i++) {
-            compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(symbol_list, i);
+        need_token_type = COMPILER_TOKEN_TYPE_INTEGER_CONST;
+    } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_STRING) {
+        need_token_type = COMPILER_TOKEN_TYPE_STRING_CONST;
 
-            tmp_symbol->type = COMPILER_SYMBOL_TYPE_INTEGER;
-            tmp_symbol->size = symbol_size;
-            tmp_symbol->is_array = is_array;
-            tmp_symbol->array_size = array_size;
+        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_STRING, true) != 0) {
+            compiler_destroy_symbol_list(symbol_list);
+            return -1;
         }
 
-        need_token_type = COMPILER_TOKEN_TYPE_INTEGER_CONST;
+        is_array = true;
+        symbol_size = parser->current_token->size;
+    }
+
+    for(size_t i = 0; i < linkedlist_size(symbol_list); i++) {
+        compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(symbol_list, i);
+
+        if(need_token_type == COMPILER_TOKEN_TYPE_INTEGER_CONST) {
+            tmp_symbol->type = COMPILER_SYMBOL_TYPE_INTEGER;
+        } else if(need_token_type == COMPILER_TOKEN_TYPE_STRING_CONST) {
+            tmp_symbol->type = COMPILER_SYMBOL_TYPE_STRING;
+        } else {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type");
+            compiler_destroy_symbol_list(symbol_list);
+            return -1;
+        }
+
+        tmp_symbol->size = symbol_size;
+        tmp_symbol->is_array = is_array;
+        tmp_symbol->array_size = array_size;
     }
 
     if(parser->current_token->type == COMPILER_TOKEN_TYPE_EQUAL) {
@@ -519,7 +554,33 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
 
             tmp_symbol->initilized = true;
 
-            if(is_array) {
+            if(need_token_type == COMPILER_TOKEN_TYPE_STRING_CONST) {
+                if(parser->current_token->type != need_token_type) {
+                    PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected %d found %d", need_token_type, parser->current_token->type);
+                    compiler_destroy_symbol_list(symbol_list);
+                    return -1;
+                }
+
+                tmp_symbol->type = COMPILER_SYMBOL_TYPE_INTEGER;
+                tmp_symbol->hidden_type = COMPILER_SYMBOL_TYPE_STRING;
+                tmp_symbol->size = 8;
+
+                size_t string_size = strlen(parser->current_token->text);
+
+                if(string_size == 1) {
+                    tmp_symbol->int_value = parser->current_token->text[0];
+                    tmp_symbol->is_array = false;
+                    tmp_symbol->array_size = 0;
+                } else {
+                    tmp_symbol->string_value = strdup(parser->current_token->text);
+                    tmp_symbol->array_size = strlen(parser->current_token->text) + 1;
+                }
+
+                if(pascal_parser_eat(parser, need_token_type, true) != 0) {
+                    compiler_destroy_symbol_list(symbol_list);
+                    return -1;
+                }
+            } else if(is_array) {
                 if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_LPAREN, true) != 0) {
                     PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected (");
                     compiler_destroy_symbol_list(symbol_list);

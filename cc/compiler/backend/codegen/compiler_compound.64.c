@@ -53,8 +53,28 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
                         PRINTLOG(COMPILER, LOG_INFO, "local symbol %s type %d size %lli value %lli", tmp_symbol->name, tmp_symbol->type, tmp_symbol->size, tmp_symbol->int_value);
 
                         if(tmp_symbol->is_array) {
-                            compiler->next_stack_offset += tmp_symbol->size / 8 * tmp_symbol->array_size;
-                            compiler->stack_size += tmp_symbol->size / 8 * tmp_symbol->array_size;
+                            if(tmp_symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+                                compiler->next_stack_offset += sizeof(char_t*);
+                                compiler->stack_size += sizeof(char_t*);
+
+                                size_t array_size = tmp_symbol->array_size;
+
+                                compiler_define_symbol(compiler, tmp_symbol, array_size);
+
+                                if(tmp_symbol->initilized) {
+                                    if(tmp_symbol->is_const) {
+                                        buffer_printf(compiler->rodata_buffer, "\t.string \"%s\"\n\n\n", tmp_symbol->string_value);
+                                    } else {
+                                        buffer_printf(compiler->data_buffer, "\t.string \"%s\"\n\n\n", tmp_symbol->string_value);
+                                    }
+                                } else {
+                                    buffer_printf(compiler->bss_buffer, "\t.zero %lli\n\n\n", array_size + 1);
+                                }
+
+                            } else {
+                                compiler->next_stack_offset += tmp_symbol->size / 8 * tmp_symbol->array_size;
+                                compiler->stack_size += tmp_symbol->size / 8 * tmp_symbol->array_size;
+                            }
 
                             if(compiler->next_stack_offset % 8) {
                                 compiler->next_stack_offset += 8 - compiler->next_stack_offset % 8;

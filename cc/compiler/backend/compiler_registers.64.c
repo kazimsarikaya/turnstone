@@ -52,7 +52,7 @@ char_t compiler_get_reg_suffix(uint8_t size) {
         return 'q';
     }
 
-    return '\0';
+    return 'X'; // force error
 }
 
 const char_t* compiler_cast_reg_to_size(const char_t* reg, uint8_t size) {
