@@ -178,37 +178,37 @@ typedef struct compiler_ast_t {
 
 #define COMPILER_VM_REG_COUNT 13
 
-typedef struct symbol_table_t symbol_table_t;
+typedef struct compiler_symbol_table_t compiler_symbol_table_t;
 
-struct symbol_table_t {
-    symbol_table_t* parent;
-    hashmap_t*      symbols;
+struct compiler_symbol_table_t {
+    compiler_symbol_table_t* parent;
+    hashmap_t*               symbols;
 };
 
 typedef struct compiler_t {
-    compiler_ast_t *       ast;
-    const char_t*          program_name;
-    compiler_symbol_t*     program_name_symbol;
-    buffer_t*              text_buffer;
-    buffer_t*              data_buffer;
-    buffer_t*              rodata_buffer;
-    buffer_t*              bss_buffer;
-    symbol_table_t*        main_symbol_table;
-    symbol_table_t*        current_symbol_table;
-    uint16_t               stack_size;
-    uint16_t               next_stack_offset;
-    boolean_t              is_const;
-    boolean_t              is_at_reg;
-    boolean_t              busy_regs[COMPILER_VM_REG_COUNT];
-    int32_t                next_label_id;
-    linkedlist_t*          cond_label_stack;
-    int64_t                cond_depth;
-    linkedlist_t*          loop_label_stack;
-    int64_t                loop_depth;
-    boolean_t              is_cond_eval;
-    boolean_t              is_cond_reverse;
-    int64_t                computed_size;
-    compiler_symbol_type_t computed_type;
+    compiler_ast_t *         ast;
+    const char_t*            program_name;
+    compiler_symbol_t*       program_name_symbol;
+    buffer_t*                text_buffer;
+    buffer_t*                data_buffer;
+    buffer_t*                rodata_buffer;
+    buffer_t*                bss_buffer;
+    compiler_symbol_table_t* main_symbol_table;
+    compiler_symbol_table_t* current_symbol_table;
+    uint16_t                 stack_size;
+    uint16_t                 next_stack_offset;
+    boolean_t                is_const;
+    boolean_t                is_at_reg;
+    boolean_t                busy_regs[COMPILER_VM_REG_COUNT];
+    int32_t                  next_label_id;
+    linkedlist_t*            cond_label_stack;
+    int64_t                  cond_depth;
+    linkedlist_t*            loop_label_stack;
+    int64_t                  loop_depth;
+    boolean_t                is_cond_eval;
+    boolean_t                is_cond_reverse;
+    int64_t                  computed_size;
+    compiler_symbol_type_t   computed_type;
 } compiler_t;
 
 

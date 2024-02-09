@@ -182,7 +182,7 @@ int8_t compiler_init(compiler_t * compiler, compiler_ast_t * ast) {
         return -1;
     }
 
-    symbol_table_t* symbol_table = memory_malloc(sizeof(symbol_table_t));
+    compiler_symbol_table_t* symbol_table = memory_malloc(sizeof(compiler_symbol_table_t));
 
     if (symbol_table == NULL) {
         buffer_destroy(compiler->text_buffer);

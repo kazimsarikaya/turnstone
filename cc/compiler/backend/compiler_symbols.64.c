@@ -13,7 +13,7 @@
 MODULE("turnstone.compiler");
 
 const compiler_symbol_t* compiler_find_symbol(compiler_t* compiler, const char_t* name) {
-    symbol_table_t* symbol_table = compiler->current_symbol_table;
+    compiler_symbol_table_t* symbol_table = compiler->current_symbol_table;
 
     while(symbol_table) {
         const compiler_symbol_t* symbol = hashmap_get(symbol_table->symbols, name);
@@ -29,7 +29,7 @@ const compiler_symbol_t* compiler_find_symbol(compiler_t* compiler, const char_t
 }
 
 int8_t compiler_print_symbol_table(compiler_t * compiler) {
-    symbol_table_t* symbol_table = compiler->current_symbol_table;
+    compiler_symbol_table_t* symbol_table = compiler->current_symbol_table;
 
     while(symbol_table) {
         iterator_t* iter = hashmap_iterator_create(symbol_table->symbols);
@@ -60,12 +60,12 @@ int8_t compiler_print_symbol_table(compiler_t * compiler) {
 }
 
 int8_t compiler_destroy_symbol_table(compiler_t * compiler) {
-    symbol_table_t* symbol_table = compiler->current_symbol_table;
+    compiler_symbol_table_t* symbol_table = compiler->current_symbol_table;
 
     while(symbol_table) {
         hashmap_destroy(symbol_table->symbols);
 
-        symbol_table_t* parent = symbol_table->parent;
+        compiler_symbol_table_t* parent = symbol_table->parent;
 
         memory_free(symbol_table);
 

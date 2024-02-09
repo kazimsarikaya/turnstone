@@ -18,7 +18,7 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
         return 0;
     }
 
-    symbol_table_t* symbol_table = memory_malloc(sizeof(symbol_table_t));
+    compiler_symbol_table_t* symbol_table = memory_malloc(sizeof(compiler_symbol_table_t));
 
     if (symbol_table == NULL) {
         return -1;
