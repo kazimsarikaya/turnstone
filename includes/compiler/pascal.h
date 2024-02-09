@@ -24,6 +24,8 @@ typedef struct pascal_lexer_t {
 typedef struct pascal_parser_t {
     pascal_lexer_t *   lexer;
     compiler_token_t * current_token;
+    int64_t            next_custom_type_id;
+    hashmap_t *        custom_types;
 } pascal_parser_t;
 
 
@@ -52,13 +54,16 @@ int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, compiler_ast
 int8_t pascal_parser_variables(pascal_parser_t * parser, compiler_ast_node_t ** node, boolean_t is_const, boolean_t is_local);
 int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** node, boolean_t is_const, boolean_t is_local);
 int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node);
+int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node);
 int8_t pascal_parser_function_call(pascal_parser_t* parser, compiler_ast_node_t** node);
 int8_t pascal_parser_if_statement(pascal_parser_t * parser, compiler_ast_node_t ** node);
 int8_t pascal_parser_while_statement(pascal_parser_t * parser, compiler_ast_node_t ** node);
 int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, compiler_ast_node_t ** node);
 int8_t pascal_parser_for_statement(pascal_parser_t * parser, compiler_ast_node_t ** node);
+int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_t ** node);
 
 int8_t pascal_parser_init(pascal_parser_t * parser, pascal_lexer_t * lexer);
+int8_t pascal_parser_destroy(pascal_parser_t * parser);
 int8_t pascal_parser_parse(pascal_parser_t * parser, compiler_ast_t * ast);
 
 

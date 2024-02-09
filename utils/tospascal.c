@@ -50,19 +50,30 @@ int32_t main(int32_t argc, char * argv[]) {
     compiler_ast_init(&ast);
 
     pascal_parser_t parser = {0};
-    pascal_parser_init(&parser, &lexer);
+    if(pascal_parser_init(&parser, &lexer) != 0) {
+        print_error("Error: Failed to initialize parser\n");
+    }
 
     if(pascal_parser_parse(&parser, &ast) != 0) {
         print_error("Error: Parsing failed\n");
+
+        pascal_parser_destroy(&parser);
+        compiler_ast_destroy(&ast);
+        buffer_destroy(buffer);
+        memory_free(source);
+
+        return -1;
     }
 
     memory_free(source);
     buffer_destroy(buffer);
+    pascal_parser_destroy(&parser);
 
     compiler_t compiler = {0};
 
     if(compiler_init(&compiler, &ast) != 0) {
         print_error("Error: Failed to initialize compiler\n");
+        compiler_ast_destroy(&ast);
 
         return -1;
     }

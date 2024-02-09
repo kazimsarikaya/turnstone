@@ -24,8 +24,31 @@ int8_t pascal_parser_init(pascal_parser_t * parser, pascal_lexer_t * lexer) {
 
     parser->lexer = lexer;
     parser->current_token = NULL;
+    parser->next_custom_type_id = 1000;
+    parser->custom_types = hashmap_string(128);
+
+    if(parser->custom_types == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create custom types hashmap");
+        return -1;
+    }
 
     return pascal_lexer_get_next_token(parser->lexer, &parser->current_token);
+}
+
+int8_t pascal_parser_destroy(pascal_parser_t * parser) {
+    if (parser == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "parser is null");
+
+        return -1;
+    }
+
+    if (parser->current_token != NULL) {
+        compiler_token_destroy(parser->current_token);
+    }
+
+    hashmap_destroy(parser->custom_types);
+
+    return 0;
 }
 
 int8_t pascal_parser_eat(pascal_parser_t * parser, compiler_token_type_t type, boolean_t need_free) {
@@ -460,6 +483,7 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
     }
 
     compiler_token_type_t need_token_type = COMPILER_TOKEN_TYPE_UNKNOWN;
+    int64_t custom_type_id = -1;
 
     boolean_t is_array = false;
 
@@ -514,6 +538,25 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
 
         is_array = true;
         symbol_size = parser->current_token->size;
+    } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_ID) {
+        const compiler_type_t * type = hashmap_get(parser->custom_types, parser->current_token->text);
+
+        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ID, true) != 0) {
+            compiler_destroy_symbol_list(symbol_list);
+            return -1;
+        }
+
+        if(type == NULL) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown type %s", parser->current_token->text);
+            compiler_destroy_symbol_list(symbol_list);
+            return -1;
+        }
+
+        custom_type_id = type->id;
+    } else {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type");
+        compiler_destroy_symbol_list(symbol_list);
+        return -1;
     }
 
     for(size_t i = 0; i < linkedlist_size(symbol_list); i++) {
@@ -523,8 +566,11 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
             tmp_symbol->type = COMPILER_SYMBOL_TYPE_INTEGER;
         } else if(need_token_type == COMPILER_TOKEN_TYPE_STRING_CONST) {
             tmp_symbol->type = COMPILER_SYMBOL_TYPE_STRING;
+        } else if(custom_type_id != -1) {
+            tmp_symbol->type = COMPILER_SYMBOL_TYPE_CUSTOM;
+            tmp_symbol->custom_type_id = custom_type_id;
         } else {
-            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type");
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type got %d", need_token_type);
             compiler_destroy_symbol_list(symbol_list);
             return -1;
         }
@@ -730,6 +776,127 @@ int8_t pascal_parser_variables(pascal_parser_t* parser, compiler_ast_node_t** no
 
     return 0;
 }
+int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node) {
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_TYPE, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type");
+        return -1;
+    }
+
+    if(parser->current_token->type != COMPILER_TOKEN_TYPE_ID) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+        return -1;
+    }
+
+    const char_t * type_name = strdup(parser->current_token->text);
+
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ID, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_EQUAL, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected =");
+        memory_free((void*)type_name);
+        return -1;
+    }
+
+    boolean_t is_packed = false;
+
+    if(parser->current_token->type == COMPILER_TOKEN_TYPE_PACKED) {
+        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_PACKED, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected packed");
+            return -1;
+        }
+
+        is_packed = true;
+    }
+
+    compiler_token_type_t type_token_type = parser->current_token->type;
+
+    if(type_token_type != COMPILER_TOKEN_TYPE_RECORD &&
+       type_token_type != COMPILER_TOKEN_TYPE_STRING &&
+       type_token_type != COMPILER_TOKEN_TYPE_INTEGER &&
+       type_token_type != COMPILER_TOKEN_TYPE_REAL &&
+       type_token_type != COMPILER_TOKEN_TYPE_BOOLEAN &&
+       type_token_type != COMPILER_TOKEN_TYPE_CHAR) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type got %d", type_token_type);
+
+        memory_free((void*)type_name);
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, type_token_type, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type");
+        memory_free((void*)type_name);
+        return -1;
+    }
+
+    linkedlist_t* variables_list = linkedlist_create_list();
+
+    if(type_token_type == COMPILER_TOKEN_TYPE_RECORD) {
+
+        while (parser->current_token->type == COMPILER_TOKEN_TYPE_ID) {
+            compiler_ast_node_t * new_node = NULL;
+
+            if(pascal_parser_variable(parser, &new_node, false, false) != 0) {
+                linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected variable");
+                return -1;
+            }
+
+            linkedlist_queue_push(variables_list, new_node);
+        }
+
+
+        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_END, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected end");
+            memory_free((void*)type_name);
+            linkedlist_destroy(variables_list);
+            return -1;
+        }
+    }
+
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_SEMI, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ;");
+        memory_free((void*)type_name);
+        linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+        return -1;
+    }
+
+    compiler_type_t * type = memory_malloc(sizeof(compiler_type_t));
+
+    if (type == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create type");
+        memory_free((void*)type_name);
+        linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+        return -1;
+    }
+
+    type->name = type_name;
+    type->id = parser->next_custom_type_id++;
+    type->is_packed = is_packed;
+    type->type = type_token_type;
+    type->fields = variables_list;
+
+    hashmap_put(parser->custom_types, type->name, type);
+
+    compiler_ast_node_t * type_node = memory_malloc(sizeof(compiler_ast_node_t));
+
+    type_node->type = COMPILER_AST_NODE_TYPE_TYPE;
+    type_node->type_data = type;
+
+    compiler_ast_node_t * new_node = *node;
+
+    if(new_node->children == NULL) {
+        new_node->children = linkedlist_create_list();
+    }
+
+    linkedlist_queue_push(new_node->children, type_node);
+
+    new_node->type = COMPILER_AST_NODE_TYPE_DECLS;
+
+    return 0;
+}
 
 int8_t pascal_parser_decls(pascal_parser_t * parser, compiler_ast_node_t ** node) {
     compiler_ast_node_t* new_node = memory_malloc(sizeof(compiler_ast_node_t));
@@ -754,6 +921,12 @@ int8_t pascal_parser_decls(pascal_parser_t * parser, compiler_ast_node_t ** node
                 compiler_ast_node_destroy(new_node);
                 return -1;
             }
+        } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_TYPE) {
+            if(pascal_parser_type(parser, &new_node) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected type definition");
+                compiler_ast_node_destroy(new_node);
+                return -1;
+            }
         } else {
             break;
         }
@@ -765,11 +938,6 @@ int8_t pascal_parser_decls(pascal_parser_t * parser, compiler_ast_node_t ** node
 }
 
 int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) {
-    if(parser->current_token->type != COMPILER_TOKEN_TYPE_ID) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
-        return -1;
-    }
-
     compiler_ast_node_t * new_node = memory_malloc(sizeof(compiler_ast_node_t));
 
     if (new_node == NULL) {
@@ -777,38 +945,74 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
         return -1;
     }
 
-    new_node->type = COMPILER_AST_NODE_TYPE_VAR;
-    new_node->token = parser->current_token;
+    *node = new_node;
 
-    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ID, false) != 0) {
+
+    if(parser->current_token->type != COMPILER_TOKEN_TYPE_ID) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
-        compiler_ast_node_destroy(new_node);
         return -1;
     }
 
-    if(parser->current_token->type == COMPILER_TOKEN_TYPE_LBRACKET) {
-        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_LBRACKET, true) != 0) {
-            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected [");
+    boolean_t end_of_var = false;
+
+    do {
+        new_node->type = COMPILER_AST_NODE_TYPE_VAR;
+        new_node->token = parser->current_token;
+
+        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ID, false) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
             compiler_ast_node_destroy(new_node);
             return -1;
         }
 
-        if(pascal_parser_expr(parser, &new_node->array_subscript) != 0) {
-            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
-            compiler_ast_node_destroy(new_node);
-            return -1;
+        if(parser->current_token->type == COMPILER_TOKEN_TYPE_LBRACKET) {
+            if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_LBRACKET, true) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected [");
+                compiler_ast_node_destroy(new_node);
+                return -1;
+            }
+
+            if(pascal_parser_expr(parser, &new_node->array_subscript) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
+                compiler_ast_node_destroy(new_node);
+                return -1;
+            }
+
+            if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_RBRACKET, true) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ]");
+                compiler_ast_node_destroy(new_node);
+                return -1;
+            }
+
+            new_node->is_array_subscript = true;
         }
 
-        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_RBRACKET, true) != 0) {
-            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ]");
-            compiler_ast_node_destroy(new_node);
-            return -1;
+        if(parser->current_token->type != COMPILER_TOKEN_TYPE_DOT) {
+            end_of_var = true;
+        } else {
+            if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_DOT, true) != 0) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected .");
+                compiler_ast_node_destroy(new_node);
+                return -1;
+            }
+
+            if(parser->current_token->type != COMPILER_TOKEN_TYPE_ID) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+                compiler_ast_node_destroy(new_node);
+                return -1;
+            }
+
+            new_node->next = memory_malloc(sizeof(compiler_ast_node_t));
+
+            if (new_node->next == NULL) {
+                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+                return -1;
+            }
+
+            new_node = new_node->next;
         }
 
-        new_node->is_array_subscript = true;
-    }
-
-    *node = new_node;
+    } while(!end_of_var);
 
     return 0;
 }
@@ -880,7 +1084,6 @@ int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, compiler_ast
 
     if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ASSIGN, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected :=");
-        compiler_token_destroy(parser->current_token);
         compiler_ast_node_destroy(left);
         return -1;
     }
@@ -905,6 +1108,52 @@ int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, compiler_ast
     new_node->type = COMPILER_AST_NODE_TYPE_ASSIGN;
     new_node->left = left;
     new_node->right = right;
+
+    *node = new_node;
+
+    return 0;
+}
+
+int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_t ** node) {
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_WITH, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected with");
+        return -1;
+    }
+
+    if(parser->current_token->type != COMPILER_TOKEN_TYPE_ID) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+        return -1;
+    }
+
+    compiler_token_t * token = parser->current_token;
+
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ID, false) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
+        return -1;
+    }
+
+    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_DO, true) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected do");
+        return -1;
+    }
+
+    compiler_ast_node_t * statement = NULL;
+
+    if(pascal_parser_statement(parser, &statement) != 0) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+        return -1;
+    }
+
+    compiler_ast_node_t * new_node = memory_malloc(sizeof(compiler_ast_node_t));
+
+    if (new_node == NULL) {
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        return -1;
+    }
+
+    new_node->type = COMPILER_AST_NODE_TYPE_WITH;
+    new_node->left = statement;
+    new_node->token = token;
 
     *node = new_node;
 
@@ -944,6 +1193,8 @@ int8_t pascal_parser_statement(pascal_parser_t * parser, compiler_ast_node_t ** 
         return pascal_parser_repeat_statement(parser, node);
     } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_FOR) {
         return pascal_parser_for_statement(parser, node);
+    } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_WITH) {
+        return pascal_parser_with_statement(parser, node);
     }
 
     PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unexpected token parser_statement. found %d", parser->current_token->type);
@@ -1458,7 +1709,6 @@ int8_t pascal_parser_block(pascal_parser_t * parser, compiler_ast_node_t ** node
 int8_t pascal_parser_program(pascal_parser_t * parser, compiler_ast_node_t ** node) {
     if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_PROGRAM, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected program");
-        compiler_token_destroy(parser->current_token);
         return -1;
     }
 
@@ -1501,6 +1751,8 @@ int8_t pascal_parser_program(pascal_parser_t * parser, compiler_ast_node_t ** no
         compiler_ast_node_destroy(new_node);
         return -1;
     }
+
+    parser->current_token = NULL;
 
     *node = new_node;
 

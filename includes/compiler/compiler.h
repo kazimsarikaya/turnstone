@@ -77,6 +77,10 @@ typedef enum compiler_token_type_t {
     COMPILER_TOKEN_TYPE_BREAK,
     COMPILER_TOKEN_TYPE_LBRACKET,
     COMPILER_TOKEN_TYPE_RBRACKET,
+    COMPILER_TOKEN_TYPE_TYPE,
+    COMPILER_TOKEN_TYPE_RECORD,
+    COMPILER_TOKEN_TYPE_WITH,
+    COMPILER_TOKEN_TYPE_PACKED,
 } compiler_token_type_t;
 
 typedef struct compiler_token_t {
@@ -103,13 +107,14 @@ typedef enum compiler_ast_node_type_t {
     COMPILER_AST_NODE_TYPE_PROGRAM,
     COMPILER_AST_NODE_TYPE_DECLS,
     COMPILER_AST_NODE_TYPE_VAR,
-    COMPILER_AST_NODE_TYPE_LVAR,
+    COMPILER_AST_NODE_TYPE_TYPE,
     COMPILER_AST_NODE_TYPE_BLOCK,
     COMPILER_AST_NODE_TYPE_COMPOUND,
     COMPILER_AST_NODE_TYPE_FUNCTION_CALL,
     COMPILER_AST_NODE_TYPE_IF,
     COMPILER_AST_NODE_TYPE_WHILE,
     COMPILER_AST_NODE_TYPE_REPEAT,
+    COMPILER_AST_NODE_TYPE_WITH,
 } compiler_ast_node_type_t;
 
 typedef enum compiler_symbol_type_t {
@@ -119,12 +124,14 @@ typedef enum compiler_symbol_type_t {
     COMPILER_SYMBOL_TYPE_INTEGER,
     COMPILER_SYMBOL_TYPE_REAL,
     COMPILER_SYMBOL_TYPE_STRING,
+    COMPILER_SYMBOL_TYPE_CUSTOM,
 } compiler_symbol_type_t;
 
-typedef struct compiler_symol_t {
+typedef struct compiler_symbol_t {
     const char_t*          name;
     compiler_symbol_type_t type;
     compiler_symbol_type_t hidden_type;
+    int64_t                custom_type_id;
     int64_t                size;
     boolean_t              initilized;
     int64_t                int_value;
@@ -138,6 +145,16 @@ typedef struct compiler_symol_t {
     uint64_t               array_size;
 } compiler_symbol_t;
 
+typedef struct compiler_type_t compiler_type_t;
+
+struct compiler_type_t {
+    const char_t*         name;
+    int64_t               id;
+    compiler_token_type_t type;
+    boolean_t             is_packed;
+    linkedlist_t*         fields;
+};
+
 typedef struct compiler_ast_node_t compiler_ast_node_t;
 
 struct compiler_ast_node_t {
@@ -145,8 +162,10 @@ struct compiler_ast_node_t {
     compiler_token_t*        token;
     compiler_ast_node_t*     left;
     compiler_ast_node_t*     right;
+    compiler_ast_node_t*     next;
     compiler_ast_node_t*     condition;
     linkedlist_t*            children;
+    compiler_type_t*         type_data;
     int16_t                  used_register;
     compiler_symbol_t*       symbol;
     boolean_t                is_array_subscript;

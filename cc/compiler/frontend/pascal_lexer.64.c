@@ -115,6 +115,10 @@ const compiler_token_t reserved_tokens[] = {
     {COMPILER_TOKEN_TYPE_STEP, true, 0, 0, "step", false, 0, false, false},
     {COMPILER_TOKEN_TYPE_CONTINUE, true, 0, 0, "continue", false, 0, false, false},
     {COMPILER_TOKEN_TYPE_BREAK, true, 0, 0, "break", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_TYPE, true, 0, 0, "type", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_WITH, true, 0, 0, "with", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_RECORD, true, 0, 0, "record", false, 0, false, false},
+    {COMPILER_TOKEN_TYPE_PACKED, true, 0, 0, "packed", false, 0, false, false},
 };
 
 int8_t compiler_token_destroy(compiler_token_t * token) {
@@ -243,7 +247,7 @@ int8_t pascal_lexer_get_id(pascal_lexer_t * lexer, compiler_token_t ** token) {
         return -1;
     }
 
-    while (isalnum(lexer->current_char)) {
+    while (isalnumw(lexer->current_char)) {
         buffer_append_byte(buffer, lexer->current_char);
         pascal_lexer_advance(lexer);
     }
@@ -554,7 +558,7 @@ int8_t pascal_lexer_get_next_token(pascal_lexer_t * lexer, compiler_token_t ** t
             return 0;
         }
 
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown token");
+        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "unknown token %c", lexer->current_char);
 
         return -1;
     }
