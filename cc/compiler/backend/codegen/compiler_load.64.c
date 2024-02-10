@@ -48,8 +48,41 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
         return -1;
     }
 
-    compiler->computed_size = symbol->size;
-    compiler->computed_type = symbol->type;
+
+    int64_t src_size = symbol->size;
+    compiler_symbol_type_t src_type = symbol->type;
+    compiler_symbol_type_t src_hidden_type = symbol->hidden_type;
+
+    int64_t extra_offset = 0;
+
+    if(symbol->type == COMPILER_SYMBOL_TYPE_CUSTOM) {
+        if(node->next == NULL) {
+            PRINTLOG(COMPILER, LOG_ERROR, "struct field not found");
+            return -1;
+        }
+
+        const compiler_type_t* type = hashmap_get(compiler->types_by_id, (void*)symbol->custom_type_id);
+
+        if(type == NULL) {
+            PRINTLOG(COMPILER, LOG_ERROR, "type by id %lli not found", symbol->custom_type_id);
+            return -1;
+        }
+
+        const compiler_type_field_t* field = hashmap_get(type->field_map, node->next->token->text);
+
+        if(field == NULL) {
+            PRINTLOG(COMPILER, LOG_ERROR, "field %s not found in type %s", node->left->token->text, type->name);
+            return -1;
+        }
+
+        extra_offset = field->offset;
+        src_size = field->symbol_size;
+        src_type = field->symbol_type;
+        src_hidden_type = field->symbol_hidden_type;
+    }
+
+    compiler->computed_size = src_size;
+    compiler->computed_type = src_type;
 
     buffer_printf(compiler->text_buffer, "# begin load var %s\n", symbol->name);
 
@@ -88,11 +121,15 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
         buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg]);
         buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg], compiler_regs[reg]);
     } else {
-        if(symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+        if(src_hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
             buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
         } else {
             buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
         }
+    }
+
+    if(extra_offset != 0) {
+        buffer_printf(compiler->text_buffer, "\tadd $%lli, %%%s\n", extra_offset, compiler_regs[reg]);
     }
 
     const char_t* src = NULL;
@@ -103,9 +140,9 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
         if(array_index_reg != -1) {
             int8_t scale = 1;
 
-            if(symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
+            if(src_type == COMPILER_SYMBOL_TYPE_INTEGER) {
                 scale = symbol->size / 8;
-            } else if(symbol->type == COMPILER_SYMBOL_TYPE_STRING) {
+            } else if(src_type == COMPILER_SYMBOL_TYPE_STRING) {
                 scale = 1;
             }
 
@@ -123,9 +160,9 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
 
     if(deref) {
         buffer_printf(compiler->text_buffer, "\tmov%c %s, %%%s\n",
-                      compiler_get_reg_suffix(symbol->size),
+                      compiler_get_reg_suffix(src_size),
                       src,
-                      compiler_cast_reg_to_size(compiler_regs[reg], symbol->size));
+                      compiler_cast_reg_to_size(compiler_regs[reg], src_size));
     }
 
     memory_free((void*)src);

@@ -62,6 +62,10 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
             return -1;
         }
 
+        if(compiler->stack_size % 16) {
+            compiler->stack_size += 16 - (compiler->stack_size % 16);
+        }
+
         buffer_printf(tmp_buffer, "\tenter $%d, $0\n", compiler->stack_size);
 
         buffer_printf(tmp_buffer, "%s", buffer_get_view_at_position(compiler->text_buffer, 0, buffer_get_length(compiler->text_buffer)));
@@ -102,6 +106,8 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
         return compiler_execute_while(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_REPEAT) {
         return compiler_execute_repeat(compiler, node, result);
+    } else if(node->type == COMPILER_AST_NODE_TYPE_WITH) {
+        return compiler_execute_with(compiler, node, result);
     } else {
         PRINTLOG(COMPILER, LOG_ERROR, "unknown node type %d", node->type);
         return -1;
@@ -242,6 +248,14 @@ int8_t compiler_destroy(compiler_t * compiler) {
 
     if (compiler->bss_buffer != NULL) {
         buffer_destroy(compiler->bss_buffer);
+    }
+
+    if(compiler->types_by_id != NULL) {
+        hashmap_destroy(compiler->types_by_id);
+    }
+
+    if(compiler->types_by_name != NULL) {
+        hashmap_destroy(compiler->types_by_name);
     }
 
     linkedlist_destroy(compiler->cond_label_stack);

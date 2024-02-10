@@ -75,6 +75,23 @@ int8_t compiler_ast_node_destroy(compiler_ast_node_t * node) {
                 linkedlist_destroy_with_type(node->type_data->fields, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
             }
 
+            if(node->type_data->field_map) {
+                iterator_t * it = hashmap_iterator_create(node->type_data->field_map);
+
+                while(it->end_of_iterator(it) != 0) {
+                    compiler_type_field_t * field = (compiler_type_field_t*)it->get_item(it);
+
+                    memory_free((void*)field->name);
+                    memory_free((void*)field);
+
+                    it = it->next(it);
+                }
+
+                it->destroy(it);
+
+                hashmap_destroy(node->type_data->field_map);
+            }
+
             memory_free(node->type_data);
         }
     }

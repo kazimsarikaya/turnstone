@@ -42,6 +42,8 @@ int8_t compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* 
 
     node->used_register = reg_id;
 
+    compiler->computed_type = COMPILER_SYMBOL_TYPE_STRING;
+
     buffer_printf(compiler->text_buffer, "# string constant %s\n", symbol->name);
     buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg_id]);
     buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg_id], compiler_regs[reg_id]);

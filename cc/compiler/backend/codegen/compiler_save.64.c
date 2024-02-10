@@ -14,11 +14,69 @@ MODULE("turnstone.compiler.codegen");
 
 int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
 
-    const compiler_symbol_t * symbol = compiler_find_symbol(compiler, node->left->token->text);
+    const compiler_symbol_t * symbol = NULL;
+
+    boolean_t need_type_field = false;
+
+    if(compiler->with_prefix) {
+        symbol = compiler_find_symbol(compiler, compiler->with_prefix->text);
+        need_type_field = true;
+    } else if(node->left->next) {
+        if(node->left->next->next) {
+            PRINTLOG(COMPILER, LOG_ERROR, "too many levels");
+            return -1;
+        }
+
+        need_type_field = true;
+        symbol = compiler_find_symbol(compiler, node->left->token->text);
+    } else {
+        symbol = compiler_find_symbol(compiler, node->left->token->text);
+    }
 
     if(symbol == NULL) {
         PRINTLOG(COMPILER, LOG_ERROR, "symbol %s not found", node->left->token->text);
         return -1;
+    }
+
+    int64_t dst_size = symbol->size;
+    compiler_symbol_type_t dst_type = symbol->type;
+    compiler_symbol_type_t dst_hidden_type = symbol->hidden_type;
+
+    int64_t extra_offset = 0;
+
+    if(need_type_field) {
+        if(symbol->type != COMPILER_SYMBOL_TYPE_CUSTOM) {
+            PRINTLOG(COMPILER, LOG_ERROR, "symbol %s is not a struct", node->left->token->text);
+            return -1;
+        }
+
+        const compiler_type_t* type = hashmap_get(compiler->types_by_id, (void*)symbol->custom_type_id);
+
+        if(type == NULL) {
+            PRINTLOG(COMPILER, LOG_ERROR, "type by id %lli not found", symbol->custom_type_id);
+            return -1;
+        }
+
+        const compiler_type_field_t* field = NULL;
+
+        if(compiler->with_prefix) {
+            field = hashmap_get(type->field_map, node->left->token->text);
+        } else if(node->left->next) {
+            field = hashmap_get(type->field_map, node->left->next->token->text);
+        } else {
+            PRINTLOG(COMPILER, LOG_ERROR, "field error");
+            return -1;
+        }
+
+        if(field == NULL) {
+            PRINTLOG(COMPILER, LOG_ERROR, "field %s not found in type %s", node->left->token->text, type->name);
+            return -1;
+        }
+
+        extra_offset = field->offset;
+        dst_size = field->symbol_size;
+        dst_type = field->symbol_type;
+        dst_hidden_type = field->symbol_hidden_type;
     }
 
     buffer_printf(compiler->text_buffer, "# begin save\n");
@@ -32,7 +90,6 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
     boolean_t src_is_at_reg = compiler->is_at_reg;
     int16_t src_reg = node->right->used_register;
     compiler_symbol_type_t src_type = compiler->computed_type;
-    int64_t src_size = compiler->computed_size;
     int64_t src_const_value = *result;
 
     buffer_printf(compiler->text_buffer, "# end get right\n");
@@ -72,11 +129,15 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
         buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg]);
         buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%%s), %%%s\n", compiler_regs[reg], compiler_regs[reg]);
     } else {
-        if(symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
+        if(dst_hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
             buffer_printf(compiler->text_buffer, "\tmov -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
         } else {
             buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%%s\n", symbol->stack_offset, compiler_regs[reg]);
         }
+    }
+
+    if(extra_offset != 0) {
+        buffer_printf(compiler->text_buffer, "\tadd $%lli, %%%s\n", extra_offset, compiler_regs[reg]);
     }
 
     const char_t* dest = NULL;
@@ -85,9 +146,9 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
         if(array_index_reg != -1) {
             int8_t scale = 1;
 
-            if(symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
-                scale = symbol->size / 8;
-            } else if(symbol->type == COMPILER_SYMBOL_TYPE_STRING) {
+            if(dst_type == COMPILER_SYMBOL_TYPE_INTEGER) {
+                scale = dst_size / 8;
+            } else if(dst_type == COMPILER_SYMBOL_TYPE_STRING) {
                 scale = 1;
             }
 
@@ -101,12 +162,12 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
 
     buffer_printf(compiler->text_buffer, "# end load address %s\n", dest);
 
-    buffer_printf(compiler->text_buffer, "# src_size: %lli\n", src_size);
+    buffer_printf(compiler->text_buffer, "# dst_size: %lli\n", dst_size);
 
     if(src_is_const) {
         if(src_type == COMPILER_SYMBOL_TYPE_INTEGER) {
             buffer_printf(compiler->text_buffer, "\tmov%c $0x%llx, %s\n",
-                          compiler_get_reg_suffix(src_size),
+                          compiler_get_reg_suffix(dst_size),
                           src_const_value,
                           dest);
         } else {
@@ -115,8 +176,8 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
         }
     } else if(src_is_at_reg) {
         buffer_printf(compiler->text_buffer, "\tmov%c %%%s, %s\n",
-                      compiler_get_reg_suffix(src_size),
-                      compiler_cast_reg_to_size(compiler_regs[src_reg], src_size),
+                      compiler_get_reg_suffix(dst_size),
+                      compiler_cast_reg_to_size(compiler_regs[src_reg], dst_size),
                       dest);
         compiler->busy_regs[src_reg] = false; // free register
     } else {

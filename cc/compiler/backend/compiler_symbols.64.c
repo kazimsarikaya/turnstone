@@ -94,7 +94,12 @@ int8_t compiler_build_stack(compiler_t* compiler) {
             return -1;
         }
 
-        if(symbol->is_local &&  symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
+        if(!symbol->is_local) {
+            iter->next(iter);
+            continue;
+        }
+
+        if(symbol->type == COMPILER_SYMBOL_TYPE_INTEGER) {
             char_t reg_suffix = compiler_get_reg_suffix(symbol->size);
 
             if(symbol->is_array) {
@@ -113,6 +118,23 @@ int8_t compiler_build_stack(compiler_t* compiler) {
             } else {
                 buffer_printf(compiler->text_buffer, "\tmov%c $%lli, -%d(%%rbp)\n", reg_suffix, symbol->int_value, symbol->stack_offset);
             }
+        } else if(symbol->type == COMPILER_SYMBOL_TYPE_CUSTOM) {
+            int64_t symbol_size = symbol->size;
+
+            if(symbol->is_array) {
+                symbol_size = symbol->array_size * symbol_size;
+            }
+
+            buffer_printf(compiler->text_buffer, "\tpush %%rdi\n");
+            buffer_printf(compiler->text_buffer, "\tlea -%d(%%rbp), %%rdi\n", symbol->stack_offset);
+            buffer_printf(compiler->text_buffer, "\tmov $%lli, %%rcx\n", symbol_size);
+            buffer_printf(compiler->text_buffer, "\tmov $0, %%rax\n");
+            buffer_printf(compiler->text_buffer, "\trep stosb\n");
+            buffer_printf(compiler->text_buffer, "\tpop %%rdi\n");
+
+        } else {
+            PRINTLOG(COMPILER, LOG_ERROR, "unknown symbol type %d", symbol->type);
+            return -1;
         }
 
         iter->next(iter);

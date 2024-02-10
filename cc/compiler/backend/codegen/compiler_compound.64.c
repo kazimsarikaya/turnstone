@@ -88,6 +88,37 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
                             compiler->stack_size += 8; // tmp_symbol->size;
 
                         }
+                    } else if(tmp_symbol->type == COMPILER_SYMBOL_TYPE_CUSTOM) {
+                        int64_t symbol_custom_type_id = tmp_symbol->custom_type_id;
+
+                        const compiler_type_t* custom_type = hashmap_get(compiler->types_by_id, (void*)symbol_custom_type_id);
+
+                        if(custom_type == NULL) {
+                            PRINTLOG(COMPILER, LOG_ERROR, "custom type %lli not found", symbol_custom_type_id);
+                            return -1;
+                        }
+
+                        tmp_symbol->size = custom_type->size;
+
+                        int64_t symbol_size = tmp_symbol->size;
+
+                        if(tmp_symbol->is_array) {
+                            symbol_size = tmp_symbol->array_size * symbol_size;
+                        }
+
+                        tmp_symbol->stack_offset = compiler->next_stack_offset + symbol_size - 8;
+
+                        compiler->next_stack_offset += symbol_size;
+                        compiler->stack_size += symbol_size;
+
+                        if(compiler->next_stack_offset % 8) {
+                            compiler->next_stack_offset += 8 - compiler->next_stack_offset % 8;
+                            compiler->stack_size += 8 - compiler->stack_size % 8;
+                        }
+
+                    } else {
+                        PRINTLOG(COMPILER, LOG_ERROR, "unknown symbol type %d", tmp_symbol->type);
+                        return -1;
                     }
 
                     hashmap_put(compiler->current_symbol_table->symbols, tmp_symbol->name, tmp_symbol);

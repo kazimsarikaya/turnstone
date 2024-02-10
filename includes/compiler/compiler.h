@@ -145,6 +145,17 @@ typedef struct compiler_symbol_t {
     uint64_t               array_size;
 } compiler_symbol_t;
 
+typedef struct compiler_type_field_t compiler_type_field_t;
+
+struct compiler_type_field_t {
+    const char_t*          name;
+    int64_t                symbol_size;
+    compiler_symbol_type_t symbol_type;
+    compiler_symbol_type_t symbol_hidden_type;
+    int64_t                size;
+    int64_t                offset;
+};
+
 typedef struct compiler_type_t compiler_type_t;
 
 struct compiler_type_t {
@@ -153,6 +164,8 @@ struct compiler_type_t {
     compiler_token_type_t type;
     boolean_t             is_packed;
     linkedlist_t*         fields;
+    int64_t               size;
+    hashmap_t*            field_map;
 };
 
 typedef struct compiler_ast_node_t compiler_ast_node_t;
@@ -193,6 +206,8 @@ typedef struct compiler_t {
     buffer_t*                data_buffer;
     buffer_t*                rodata_buffer;
     buffer_t*                bss_buffer;
+    hashmap_t*               types_by_name;
+    hashmap_t*               types_by_id;
     compiler_symbol_table_t* main_symbol_table;
     compiler_symbol_table_t* current_symbol_table;
     uint16_t                 stack_size;
@@ -209,6 +224,7 @@ typedef struct compiler_t {
     boolean_t                is_cond_reverse;
     int64_t                  computed_size;
     compiler_symbol_type_t   computed_type;
+    compiler_token_t*        with_prefix;
 } compiler_t;
 
 
@@ -271,6 +287,7 @@ int8_t                   compiler_execute_while(compiler_t* compiler, compiler_a
 int8_t                   compiler_execute_repeat(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_load(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
+int8_t                   compiler_execute_with(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 const char_t*            compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
 char_t                   compiler_get_reg_suffix(uint8_t size);
 int8_t                   compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, size_t symbol_size);

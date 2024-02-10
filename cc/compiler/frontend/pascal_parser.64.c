@@ -1134,6 +1134,7 @@ int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_
 
     if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_DO, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected do");
+        compiler_token_destroy(token);
         return -1;
     }
 
@@ -1141,6 +1142,7 @@ int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_
 
     if(pascal_parser_statement(parser, &statement) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
+        compiler_token_destroy(token);
         return -1;
     }
 
@@ -1148,6 +1150,8 @@ int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_
 
     if (new_node == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+        compiler_token_destroy(token);
+        compiler_ast_node_destroy(statement);
         return -1;
     }
 
