@@ -52,6 +52,9 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
     int64_t src_size = symbol->size;
     compiler_symbol_type_t src_type = symbol->type;
     compiler_symbol_type_t src_hidden_type = symbol->hidden_type;
+    boolean_t is_array = symbol->is_array;
+    boolean_t is_array_subscript = node->is_array_subscript;
+    compiler_ast_node_t* array_subscript = node->array_subscript;
 
     int64_t extra_offset = 0;
 
@@ -75,6 +78,10 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
             return -1;
         }
 
+        is_array = field->symbol_is_array;
+        is_array_subscript = node->next->is_array_subscript;
+        array_subscript = node->next->array_subscript;
+
         extra_offset = field->offset;
         src_size = field->symbol_size;
         src_type = field->symbol_type;
@@ -89,15 +96,15 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
     int64_t array_index = 0;
     int64_t array_index_reg = -1;
 
-    if(node->is_array_subscript) {
+    if(is_array_subscript) {
 
-        if(compiler_execute_ast_node(compiler, node->array_subscript, &array_index) != 0) {
+        if(compiler_execute_ast_node(compiler, array_subscript, &array_index) != 0) {
             PRINTLOG(COMPILER, LOG_ERROR, "cannot execute array index");
             return -1;
         }
 
         if(compiler->is_at_reg) {
-            array_index_reg = node->array_subscript->used_register;
+            array_index_reg = array_subscript->used_register;
             buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
                           compiler_cast_reg_to_size(compiler_regs[array_index_reg], compiler->computed_size),
                           compiler_regs[array_index_reg]);
@@ -136,7 +143,7 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
 
     boolean_t deref = true;
 
-    if(node->is_array_subscript) {
+    if(is_array_subscript) {
         if(array_index_reg != -1) {
             int8_t scale = 1;
 
@@ -153,8 +160,9 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
     } else {
         src = sprintf("(%%%s)", compiler_regs[reg]);
 
-        if(symbol->is_array) {
+        if(is_array) {
             deref = false;
+            compiler->computed_size = 64; // pointer size
         }
     }
 
@@ -169,7 +177,7 @@ int8_t compiler_execute_load_var(compiler_t* compiler, compiler_ast_node_t* node
 
     buffer_printf(compiler->text_buffer, "# end load var %s\n", symbol->name);
 
-    if(node->is_array_subscript) {
+    if(is_array_subscript) {
         if(array_index_reg != -1) {
             compiler->busy_regs[array_index_reg] = false; // free register
         }

@@ -41,6 +41,8 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
     int64_t dst_size = symbol->size;
     compiler_symbol_type_t dst_type = symbol->type;
     compiler_symbol_type_t dst_hidden_type = symbol->hidden_type;
+    boolean_t is_array_subscript = node->left->is_array_subscript;
+    compiler_ast_node_t* array_subscript = node->left->array_subscript;
 
     int64_t extra_offset = 0;
 
@@ -63,6 +65,8 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
             field = hashmap_get(type->field_map, node->left->token->text);
         } else if(node->left->next) {
             field = hashmap_get(type->field_map, node->left->next->token->text);
+            is_array_subscript = node->left->next->is_array_subscript;
+            array_subscript = node->left->next->array_subscript;
         } else {
             PRINTLOG(COMPILER, LOG_ERROR, "field error");
             return -1;
@@ -97,16 +101,16 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
     int64_t array_index = 0;
     int64_t array_index_reg = -1;
 
-    if(node->left->is_array_subscript) {
+    if(is_array_subscript) {
         buffer_printf(compiler->text_buffer, "# begin array subscript\n");
 
-        if(compiler_execute_ast_node(compiler, node->left->array_subscript, &array_index) != 0) {
+        if(compiler_execute_ast_node(compiler, array_subscript, &array_index) != 0) {
             PRINTLOG(COMPILER, LOG_ERROR, "cannot execute array index");
             return -1;
         }
 
         if(compiler->is_at_reg) {
-            array_index_reg = node->left->array_subscript->used_register;
+            array_index_reg = array_subscript->used_register;
             buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
                           compiler_cast_reg_to_size(compiler_regs[array_index_reg], compiler->computed_size),
                           compiler_regs[array_index_reg]);
@@ -142,7 +146,7 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
 
     const char_t* dest = NULL;
 
-    if(node->left->is_array_subscript) {
+    if(is_array_subscript) {
         if(array_index_reg != -1) {
             int8_t scale = 1;
 
@@ -189,7 +193,7 @@ int8_t compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, in
 
     memory_free((void*)dest);
 
-    if(node->is_array_subscript) {
+    if(is_array_subscript) {
         if(array_index_reg != -1) {
             compiler->busy_regs[array_index_reg] = false; // free register
         }

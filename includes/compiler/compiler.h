@@ -152,6 +152,7 @@ struct compiler_type_field_t {
     int64_t                symbol_size;
     compiler_symbol_type_t symbol_type;
     compiler_symbol_type_t symbol_hidden_type;
+    boolean_t              symbol_is_array;
     int64_t                size;
     int64_t                offset;
 };

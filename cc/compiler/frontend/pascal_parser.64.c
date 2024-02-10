@@ -947,12 +947,6 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
 
     *node = new_node;
 
-
-    if(parser->current_token->type != COMPILER_TOKEN_TYPE_ID) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
-        return -1;
-    }
-
     boolean_t end_of_var = false;
 
     do {

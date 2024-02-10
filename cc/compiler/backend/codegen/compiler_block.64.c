@@ -85,6 +85,7 @@ int8_t compiler_execute_block_type(compiler_t* compiler, compiler_ast_node_t* no
 
             field->name = strdup(tmp_symbol->name);
             field->symbol_size = tmp_symbol->size;
+            field->symbol_is_array = tmp_symbol->is_array;
             field->symbol_type = tmp_symbol->type;
             field->symbol_hidden_type = tmp_symbol->hidden_type;
             field->offset = total_size;

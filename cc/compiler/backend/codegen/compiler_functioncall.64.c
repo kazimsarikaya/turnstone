@@ -55,7 +55,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
             buffer_printf(compiler->text_buffer, "\tmov $%lli, %%%s\n", *result, compiler_regs[pushed_reg_ids[i]]);
         } else if(compiler->is_at_reg) {
             if(tmp_node->used_register != pushed_reg_ids[i]) {
-                if(compiler->computed_type == COMPILER_SYMBOL_TYPE_INTEGER) {
+                if(compiler->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && compiler->computed_size != 64) {
                     buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
                                   compiler_cast_reg_to_size(compiler_regs[tmp_node->used_register], compiler->computed_size),
                                   compiler_regs[pushed_reg_ids[i]]);
@@ -67,7 +67,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
                 compiler->busy_regs[node->used_register] = false;
             } else {
-                if(compiler->computed_type == COMPILER_SYMBOL_TYPE_INTEGER) {
+                if(compiler->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && compiler->computed_size != 64) {
                     buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
                                   compiler_cast_reg_to_size(compiler_regs[pushed_reg_ids[i]], compiler->computed_size),
                                   compiler_regs[pushed_reg_ids[i]]);
