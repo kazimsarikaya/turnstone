@@ -48,14 +48,6 @@ int8_t compiler_ast_node_destroy(compiler_ast_node_t * node) {
         compiler_ast_node_destroy(node->condition);
     }
 
-    if(node->array_subscript) {
-        compiler_ast_node_destroy(node->array_subscript);
-    }
-
-    if(node->next) {
-        compiler_ast_node_destroy(node->next);
-    }
-
     if(node->type == COMPILER_AST_NODE_TYPE_VAR) {
         compiler_destroy_symbol_list(node->children);
     }
@@ -98,8 +90,7 @@ int8_t compiler_ast_node_destroy(compiler_ast_node_t * node) {
 
     if(node->type == COMPILER_AST_NODE_TYPE_DECLS ||
        node->type == COMPILER_AST_NODE_TYPE_COMPOUND ||
-       node->type == COMPILER_AST_NODE_TYPE_FUNCTION_CALL ||
-       node->type == COMPILER_AST_NODE_TYPE_WITH) {
+       node->type == COMPILER_AST_NODE_TYPE_FUNCTION_CALL) {
         linkedlist_destroy_with_type(node->children, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
     }
 

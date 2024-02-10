@@ -104,10 +104,6 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
         return compiler_execute_relational_op(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_WHILE) {
         return compiler_execute_while(compiler, node, result);
-    } else if(node->type == COMPILER_AST_NODE_TYPE_REPEAT) {
-        return compiler_execute_repeat(compiler, node, result);
-    } else if(node->type == COMPILER_AST_NODE_TYPE_WITH) {
-        return compiler_execute_with(compiler, node, result);
     } else {
         PRINTLOG(COMPILER, LOG_ERROR, "unknown node type %d", node->type);
         return -1;

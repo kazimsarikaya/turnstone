@@ -107,14 +107,15 @@ typedef enum compiler_ast_node_type_t {
     COMPILER_AST_NODE_TYPE_PROGRAM,
     COMPILER_AST_NODE_TYPE_DECLS,
     COMPILER_AST_NODE_TYPE_VAR,
+    COMPILER_AST_NODE_TYPE_ARRAY_SUBSCRIPT,
+    COMPILER_AST_NODE_TYPE_FUNCTION_CALL,
     COMPILER_AST_NODE_TYPE_TYPE,
     COMPILER_AST_NODE_TYPE_BLOCK,
     COMPILER_AST_NODE_TYPE_COMPOUND,
-    COMPILER_AST_NODE_TYPE_FUNCTION_CALL,
     COMPILER_AST_NODE_TYPE_IF,
     COMPILER_AST_NODE_TYPE_WHILE,
-    COMPILER_AST_NODE_TYPE_REPEAT,
-    COMPILER_AST_NODE_TYPE_WITH,
+    COMPILER_AST_NODE_TYPE_GOTO,
+    COMPILER_AST_NODE_TYPE_LABEL,
 } compiler_ast_node_type_t;
 
 typedef enum compiler_symbol_type_t {
@@ -176,14 +177,11 @@ struct compiler_ast_node_t {
     compiler_token_t*        token;
     compiler_ast_node_t*     left;
     compiler_ast_node_t*     right;
-    compiler_ast_node_t*     next;
     compiler_ast_node_t*     condition;
     linkedlist_t*            children;
     compiler_type_t*         type_data;
     int16_t                  used_register;
     compiler_symbol_t*       symbol;
-    boolean_t                is_array_subscript;
-    compiler_ast_node_t*     array_subscript;
 };
 
 typedef struct compiler_ast_t {
@@ -225,7 +223,6 @@ typedef struct compiler_t {
     boolean_t                is_cond_reverse;
     int64_t                  computed_size;
     compiler_symbol_type_t   computed_type;
-    compiler_token_t*        with_prefix;
 } compiler_t;
 
 
@@ -285,10 +282,8 @@ int8_t                   compiler_execute_function_call(compiler_t* compiler, co
 int8_t                   compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_if(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
-int8_t                   compiler_execute_repeat(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_load(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
-int8_t                   compiler_execute_with(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 const char_t*            compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
 char_t                   compiler_get_reg_suffix(uint8_t size);
 int8_t                   compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, size_t symbol_size);
