@@ -217,6 +217,6 @@ boolean_t isblank(char_t c);
 boolean_t isascii(char_t c);
 boolean_t isalnumw(char_t c);
 
-
+const char_t* randstr(uint32_t len);
 
 #endif

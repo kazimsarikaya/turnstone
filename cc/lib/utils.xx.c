@@ -9,6 +9,7 @@
 #include <utils.h>
 #include <memory.h>
 #include <strings.h>
+#include <random.h>
 
 MODULE("turnstone.lib");
 
@@ -283,4 +284,23 @@ boolean_t isalnumw(char_t c) {
     return isalnum(c) || c == '_';
 }
 
+const char_t* randstr(uint32_t len) {
+    static const char_t charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    char_t* str = memory_malloc(len + 1);
 
+    if(len > 255) {
+        return NULL;
+    }
+
+    if(len == 0) {
+        return "";
+    }
+
+    for(uint32_t i = 0; i < len; i++) {
+        str[i] = charset[rand() % (sizeof(charset) - 1)];
+    }
+
+    str[len] = '\0';
+
+    return str;
+}
