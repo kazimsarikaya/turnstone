@@ -96,8 +96,6 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
         return compiler_execute_unary_op(compiler, node, result);
     } else if (node->type == COMPILER_AST_NODE_TYPE_BINARY_OP) {
         return compiler_execute_binary_op(compiler, node, result);
-    } else if(node->type == COMPILER_AST_NODE_TYPE_FUNCTION_CALL) {
-        return compiler_execute_function_call(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_IF) {
         return compiler_execute_if(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_RELATIONAL_OP) {
