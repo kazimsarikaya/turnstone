@@ -536,6 +536,10 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
         backtrace();
 #endif
 
+#if ___TESTMODE == 1
+        VALGRIND_FREELIKE_BLOCK(req_address, 1); // trick to valgrind reports stack trace
+#endif
+
         return -1;
     }
 
@@ -544,6 +548,10 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
 
 #if ___KERNELBUILD == 1
         backtrace();
+#endif
+
+#if ___TESTMODE == 1
+        VALGRIND_FREELIKE_BLOCK(req_address, 1); // trick to valgrind reports stack trace
 #endif
 
         return -1;
