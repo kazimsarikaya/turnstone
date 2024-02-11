@@ -182,6 +182,12 @@ struct compiler_ast_node_t {
     compiler_type_t*         type_data;
     int16_t                  used_register;
     compiler_symbol_t*       symbol;
+    int64_t                  computed_size;
+    compiler_symbol_type_t   computed_type;
+    compiler_symbol_type_t   computed_hidden_type;
+    int64_t                  computed_custom_type_id;
+    boolean_t                is_const;
+    boolean_t                is_at_reg;
 };
 
 typedef struct compiler_ast_t {
@@ -211,8 +217,6 @@ typedef struct compiler_t {
     compiler_symbol_table_t* current_symbol_table;
     uint16_t                 stack_size;
     uint16_t                 next_stack_offset;
-    boolean_t                is_const;
-    boolean_t                is_at_reg;
     boolean_t                busy_regs[COMPILER_VM_REG_COUNT];
     int32_t                  next_label_id;
     linkedlist_t*            cond_label_stack;
@@ -220,9 +224,6 @@ typedef struct compiler_t {
     linkedlist_t*            loop_label_stack;
     int64_t                  loop_depth;
     boolean_t                is_cond_eval;
-    boolean_t                is_cond_reverse;
-    int64_t                  computed_size;
-    compiler_symbol_type_t   computed_type;
 } compiler_t;
 
 

@@ -45,19 +45,19 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
             return -1;
         }
 
-        if(compiler->is_at_reg && tmp_node->used_register != pushed_reg_ids[i] && compiler->busy_regs[pushed_reg_ids[i]]) {
+        if(tmp_node->is_at_reg && tmp_node->used_register != pushed_reg_ids[i] && compiler->busy_regs[pushed_reg_ids[i]]) {
             buffer_printf(compiler->text_buffer, "\tpush %%%s\n", compiler_regs[pushed_reg_ids[i]]);
             pushed_registers[i] = true;
             stack_push_size += 8;
         }
 
-        if(compiler->is_const) {
+        if(tmp_node->is_const) {
             buffer_printf(compiler->text_buffer, "\tmov $%lli, %%%s\n", *result, compiler_regs[pushed_reg_ids[i]]);
-        } else if(compiler->is_at_reg) {
+        } else if(tmp_node->is_at_reg) {
             if(tmp_node->used_register != pushed_reg_ids[i]) {
-                if(compiler->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && compiler->computed_size != 64) {
+                if(tmp_node->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && tmp_node->computed_size != 64) {
                     buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
-                                  compiler_cast_reg_to_size(compiler_regs[tmp_node->used_register], compiler->computed_size),
+                                  compiler_cast_reg_to_size(compiler_regs[tmp_node->used_register], tmp_node->computed_size),
                                   compiler_regs[pushed_reg_ids[i]]);
                 } else {
                     buffer_printf(compiler->text_buffer, "\tmov %%%s, %%%s\n",
@@ -67,9 +67,9 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
                 compiler->busy_regs[node->used_register] = false;
             } else {
-                if(compiler->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && compiler->computed_size != 64) {
+                if(tmp_node->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && tmp_node->computed_size != 64) {
                     buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
-                                  compiler_cast_reg_to_size(compiler_regs[pushed_reg_ids[i]], compiler->computed_size),
+                                  compiler_cast_reg_to_size(compiler_regs[pushed_reg_ids[i]], tmp_node->computed_size),
                                   compiler_regs[pushed_reg_ids[i]]);
                 }
             }
@@ -122,8 +122,8 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
     buffer_printf(compiler->text_buffer, "\tmov %%rax, %%%s\n", compiler_regs[reg_id]);
 
-    compiler->is_const = false;
-    compiler->is_at_reg = true;
+    node->is_const = false;
+    node->is_at_reg = true;
     node->used_register = reg_id;
 
     if(pushed_registers[0]) {

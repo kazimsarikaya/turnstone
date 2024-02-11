@@ -16,8 +16,8 @@ MODULE("turnstone.compiler.codegen");
 int8_t compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
     UNUSED(result);
 
-    compiler->is_at_reg = true;
-    compiler->is_const = false;
+    node->is_at_reg = true;
+    node->is_const = false;
 
     compiler_symbol_t * symbol = memory_malloc(sizeof(compiler_symbol_t));
 
@@ -42,7 +42,9 @@ int8_t compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* 
 
     node->used_register = reg_id;
 
-    compiler->computed_type = COMPILER_SYMBOL_TYPE_STRING;
+    node->computed_type = COMPILER_SYMBOL_TYPE_INTEGER;
+    node->computed_hidden_type = COMPILER_SYMBOL_TYPE_STRING;
+    node->computed_size = 8;
 
     buffer_printf(compiler->text_buffer, "# string constant %s\n", symbol->name);
     buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg_id]);

@@ -144,7 +144,7 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
             return -1;
         }
 
-        if(compiler->is_at_reg) {
+        if(tmp_node->is_at_reg) {
             buffer_printf(compiler->text_buffer, "# free register %s\n", compiler_regs[tmp_node->used_register]);
             compiler->busy_regs[tmp_node->used_register] = false;
         }

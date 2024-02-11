@@ -19,6 +19,12 @@ int8_t compiler_execute_unary_op(compiler_t* compiler, compiler_ast_node_t* node
         return -1;
     }
 
+    node->computed_size = node->right->computed_size;
+    node->computed_type = node->right->computed_type;
+    node->is_const = node->right->is_const;
+    node->is_at_reg = node->right->is_at_reg;
+    node->used_register = node->right->used_register;
+
     if (node->token->type == COMPILER_TOKEN_TYPE_PLUS) {
         *result = +right;
     } else if (node->token->type == COMPILER_TOKEN_TYPE_MINUS) {
@@ -26,12 +32,11 @@ int8_t compiler_execute_unary_op(compiler_t* compiler, compiler_ast_node_t* node
 
         *result = -right;
 
-        if(compiler->is_at_reg) {
+        if(node->right->is_at_reg) {
             buffer_printf(compiler->text_buffer, "\tneg%c %%%s\n",
-                          compiler_get_reg_suffix(compiler->computed_size),
-                          compiler_cast_reg_to_size(compiler_regs[node->right->used_register], compiler->computed_size));
-            node->used_register = node->right->used_register;
-        } else if(compiler->is_const) {
+                          compiler_get_reg_suffix(node->right->computed_size),
+                          compiler_cast_reg_to_size(compiler_regs[node->right->used_register], node->right->computed_size));
+        } else if(node->right->is_const) {
             *result = -*result;
         } else {
             PRINTLOG(COMPILER, LOG_ERROR, "unsupported");
@@ -41,12 +46,11 @@ int8_t compiler_execute_unary_op(compiler_t* compiler, compiler_ast_node_t* node
     } else if(node->token->type == COMPILER_TOKEN_TYPE_NOT) {
         *result = !right;
 
-        if(compiler->is_at_reg) {
+        if(node->right->is_at_reg) {
             buffer_printf(compiler->text_buffer, "\tnot%c %%%s\n",
-                          compiler_get_reg_suffix(compiler->computed_size),
-                          compiler_cast_reg_to_size(compiler_regs[node->right->used_register], compiler->computed_size));
-            node->used_register = node->right->used_register;
-        } else if(compiler->is_const) {
+                          compiler_get_reg_suffix(node->right->computed_size),
+                          compiler_cast_reg_to_size(compiler_regs[node->right->used_register], node->right->computed_size));
+        } else if(node->right->is_const) {
             *result = !*result;
         } else {
             PRINTLOG(COMPILER, LOG_ERROR, "unsupported");
