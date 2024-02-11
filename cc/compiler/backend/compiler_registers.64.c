@@ -52,12 +52,14 @@ char_t compiler_get_reg_suffix(uint8_t size) {
         return 'q';
     }
 
+    PRINTLOG(COMPILER, LOG_ERROR, "invalid size: %d", size);
+
     return 'X'; // force error
 }
 
 const char_t* compiler_cast_reg_to_size(const char_t* reg, uint8_t size) {
     if(strcmp(reg, "rax") == 0) {
-        if(size == 1 || size == 64) {
+        if(size == 1 || size == 8) {
             return "al";
         } else if(size == 16) {
             return "ax";
@@ -197,6 +199,8 @@ const char_t* compiler_cast_reg_to_size(const char_t* reg, uint8_t size) {
             return "r15";
         }
     }
+
+    PRINTLOG(COMPILER, LOG_ERROR, "invalid register: %s size %i", reg, size);
 
     return NULL;
 }

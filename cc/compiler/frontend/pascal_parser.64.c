@@ -953,7 +953,6 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
 
     *node = new_node;
 
-
     while(true) {
         if(parser->current_token->type == COMPILER_TOKEN_TYPE_ID) { // var
             new_node->type = COMPILER_AST_NODE_TYPE_VAR;
@@ -982,6 +981,8 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
                 compiler_ast_node_destroy(*node);
                 return -1;
             }
+
+            continue;
         } else if(parser->current_token->type == COMPILER_TOKEN_TYPE_LBRACKET) { // array subscript
             if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_LBRACKET, true) != 0) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected [");
@@ -989,13 +990,7 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
                 return -1;
             }
 
-            compiler_ast_node_t * array_subscript = memory_malloc(sizeof(compiler_ast_node_t));
-
-            if (array_subscript == NULL) {
-                PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
-                compiler_ast_node_destroy(*node);
-                return -1;
-            }
+            compiler_ast_node_t * array_subscript = NULL;
 
             if(pascal_parser_expr(parser, &array_subscript) != 0) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
@@ -1031,6 +1026,9 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
                 compiler_ast_node_destroy(*node);
                 return -1;
             }
+        } else {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected field/array subscript/function call");
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "got %d", parser->current_token->type);
         }
 
         if(parser->current_token->type == COMPILER_TOKEN_TYPE_ID ||
@@ -1045,6 +1043,8 @@ int8_t pascal_parser_var(pascal_parser_t * parser, compiler_ast_node_t ** node) 
             }
 
             new_node = new_node->right;
+
+            new_node->type = COMPILER_AST_NODE_TYPE_NO_OP;
         } else {
             break;
         }
@@ -1113,18 +1113,32 @@ int8_t pascal_parser_assignment_statement(pascal_parser_t * parser, compiler_ast
         return -1;
     }
 
-    if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ASSIGN, true) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected :=");
-        compiler_ast_node_destroy(left);
-        return -1;
-    }
-
     compiler_ast_node_t * right = NULL;
 
-    if(pascal_parser_expr(parser, &right) != 0) {
-        PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
-        compiler_ast_node_destroy(left);
-        return -1;
+    if(parser->current_token->type == COMPILER_TOKEN_TYPE_ASSIGN) {
+        if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ASSIGN, true) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected :=");
+            compiler_ast_node_destroy(left);
+            return -1;
+        }
+
+
+        if(pascal_parser_expr(parser, &right) != 0) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
+            compiler_ast_node_destroy(left);
+            return -1;
+        }
+
+    } else {
+        right = memory_malloc(sizeof(compiler_ast_node_t));
+
+        if (right == NULL) {
+            PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
+            compiler_ast_node_destroy(left);
+            return -1;
+        }
+
+        right->type = COMPILER_AST_NODE_TYPE_NO_OP;
     }
 
     compiler_ast_node_t * new_node = memory_malloc(sizeof(compiler_ast_node_t));
@@ -1200,6 +1214,7 @@ int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_
                     return -1;
                 }
 
+                prefix->token->type = COMPILER_TOKEN_TYPE_ID;
                 prefix->token->text = strdup(prefix_symbol);
 
                 prefix->right = child->left;

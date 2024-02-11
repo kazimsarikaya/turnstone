@@ -14,7 +14,7 @@
 MODULE("turnstone.compiler.codegen");
 
 int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
-    buffer_printf(compiler->text_buffer, "# function call %s\n", node->token->text);
+    buffer_printf(compiler->text_buffer, "# function call\n");
 
     int64_t stack_push_size = 0;
     boolean_t pushed_registers[7] = {false}; // rax, rdi, rsi, rdx, rcx, r8, r9
@@ -23,11 +23,11 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
     size_t children_size = linkedlist_size(node->children);
 
     if(children_size > 6) {
-        PRINTLOG(COMPILER, LOG_ERROR, "function call %s expects 6 arguments", node->token->text);
+        PRINTLOG(COMPILER, LOG_ERROR, "function call expects 6 arguments");
         return -1;
     }
 
-    buffer_printf(compiler->text_buffer, "# function call %s argument count %lli\n", node->token->text, children_size);
+    buffer_printf(compiler->text_buffer, "# function call argument count %lli\n", children_size);
 
     if(compiler->busy_regs[pushed_reg_ids[0]]) {
         buffer_printf(compiler->text_buffer, "\tpush %%rax\n");
@@ -38,10 +38,10 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
     for(size_t i = 1; i <= children_size; i++) {
         compiler_ast_node_t* tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->children, i - 1);
 
-        buffer_printf(compiler->text_buffer, "# function call %s argument %lli\n", node->token->text, i - 1);
+        buffer_printf(compiler->text_buffer, "# function call argument %lli\n", i - 1);
 
         if(compiler_execute_ast_node(compiler, tmp_node, result) != 0) {
-            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute function call %s", node->token->text);
+            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute function call");
             return -1;
         }
 
@@ -55,7 +55,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
             buffer_printf(compiler->text_buffer, "\tmov $%lli, %%%s\n", *result, compiler_regs[pushed_reg_ids[i]]);
         } else if(tmp_node->is_at_reg) {
             if(tmp_node->used_register != pushed_reg_ids[i]) {
-                if(tmp_node->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && tmp_node->computed_size != 64) {
+                if(!tmp_node->computed_is_array && tmp_node->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && tmp_node->computed_size != 64) {
                     buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
                                   compiler_cast_reg_to_size(compiler_regs[tmp_node->used_register], tmp_node->computed_size),
                                   compiler_regs[pushed_reg_ids[i]]);
@@ -67,7 +67,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
                 compiler->busy_regs[node->used_register] = false;
             } else {
-                if(tmp_node->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && tmp_node->computed_size != 64) {
+                if(!tmp_node->computed_is_array && tmp_node->computed_type == COMPILER_SYMBOL_TYPE_INTEGER && tmp_node->computed_size != 64) {
                     buffer_printf(compiler->text_buffer, "\tmovsx %%%s, %%%s\n",
                                   compiler_cast_reg_to_size(compiler_regs[pushed_reg_ids[i]], tmp_node->computed_size),
                                   compiler_regs[pushed_reg_ids[i]]);
@@ -76,18 +76,10 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
             compiler->busy_regs[pushed_reg_ids[i]] = true;
         } else {
-            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute function call %s", node->token->text);
+            PRINTLOG(COMPILER, LOG_ERROR, "cannot execute function call");
             return -1;
         }
     }
-
-    if(compiler->busy_regs[COMPILER_VM_REG_RBX]) {
-        buffer_printf(compiler->text_buffer, "\tpush %%rbx\n");
-        stack_push_size += 8;
-    }
-
-    buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%rbx\n", node->token->text);
-    buffer_printf(compiler->text_buffer, "\tmov (%%r15, %%rbx), %%rbx\n");
 
     if(stack_push_size % 16) {
         buffer_printf(compiler->text_buffer, "\tsub $8, %%rsp\n");
@@ -98,10 +90,6 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
 
     if(stack_push_size % 16) {
         buffer_printf(compiler->text_buffer, "\tadd $8, %%rsp\n");
-    }
-
-    if(compiler->busy_regs[COMPILER_VM_REG_RBX]) {
-        buffer_printf(compiler->text_buffer, "\tpop %%rbx\n");
     }
 
     // restore registers reversed

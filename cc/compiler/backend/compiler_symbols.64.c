@@ -25,7 +25,9 @@ const compiler_symbol_t* compiler_find_symbol(compiler_t* compiler, const char_t
         symbol_table = symbol_table->parent;
     }
 
-    return NULL;
+    const compiler_symbol_t* symbol = hashmap_get(compiler->external_symbols, name);
+
+    return symbol;
 }
 
 int8_t compiler_print_symbol_table(compiler_t * compiler) {
@@ -199,6 +201,53 @@ int8_t compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, s
 
     if(symbol->is_local && symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
         memory_free((void*)symbol_name);
+    }
+
+    return 0;
+}
+
+int8_t compiler_destroy_external_symbols(compiler_t* compiler) {
+    iterator_t* iter = hashmap_iterator_create(compiler->external_symbols);
+
+    if (iter == NULL) {
+        return -1;
+    }
+
+    while (iter->end_of_iterator(iter) != 0) {
+        compiler_symbol_t* symbol = (compiler_symbol_t*)iter->get_item(iter);
+
+        if (symbol == NULL) {
+            iter->destroy(iter);
+            return -1;
+        }
+
+        compiler_symbol_destroyer(NULL, symbol);
+
+        iter->next(iter);
+    }
+
+    iter->destroy(iter);
+
+    hashmap_destroy(compiler->external_symbols);
+
+    return 0;
+}
+
+int8_t compiler_add_external_symbol(compiler_t* compiler, const char_t* name, compiler_symbol_type_t type, int64_t size, boolean_t is_const) {
+    compiler_symbol_t* symbol = memory_malloc(sizeof(compiler_symbol_t));
+
+    if (symbol == NULL) {
+        return -1;
+    }
+
+    symbol->name = name;
+    symbol->type = type;
+    symbol->size = size;
+    symbol->is_const = is_const;
+
+    if (hashmap_put(compiler->external_symbols, (void*)name, symbol) != 0) {
+        memory_free(symbol);
+        return -1;
     }
 
     return 0;

@@ -45,6 +45,7 @@ int8_t compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* 
     node->computed_type = COMPILER_SYMBOL_TYPE_INTEGER;
     node->computed_hidden_type = COMPILER_SYMBOL_TYPE_STRING;
     node->computed_size = 8;
+    node->computed_is_array = true;
 
     buffer_printf(compiler->text_buffer, "# string constant %s\n", symbol->name);
     buffer_printf(compiler->text_buffer, "\tmov $%s@GOT, %%%s\n", symbol->name, compiler_regs[reg_id]);

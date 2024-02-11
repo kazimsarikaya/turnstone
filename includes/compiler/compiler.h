@@ -130,6 +130,7 @@ typedef enum compiler_symbol_type_t {
 
 typedef struct compiler_symbol_t {
     const char_t*          name;
+    boolean_t              is_external;
     compiler_symbol_type_t type;
     compiler_symbol_type_t hidden_type;
     int64_t                custom_type_id;
@@ -154,6 +155,7 @@ struct compiler_type_field_t {
     compiler_symbol_type_t symbol_type;
     compiler_symbol_type_t symbol_hidden_type;
     boolean_t              symbol_is_array;
+    int64_t                symbol_custom_type_id;
     int64_t                size;
     int64_t                offset;
 };
@@ -186,6 +188,8 @@ struct compiler_ast_node_t {
     compiler_symbol_type_t   computed_type;
     compiler_symbol_type_t   computed_hidden_type;
     int64_t                  computed_custom_type_id;
+    boolean_t                computed_is_array;
+    boolean_t                computed_is_scalar;
     boolean_t                is_const;
     boolean_t                is_at_reg;
 };
@@ -215,6 +219,7 @@ typedef struct compiler_t {
     hashmap_t*               types_by_id;
     compiler_symbol_table_t* main_symbol_table;
     compiler_symbol_table_t* current_symbol_table;
+    hashmap_t*               external_symbols;
     uint16_t                 stack_size;
     uint16_t                 next_stack_offset;
     boolean_t                busy_regs[COMPILER_VM_REG_COUNT];
@@ -283,11 +288,16 @@ int8_t                   compiler_execute_function_call(compiler_t* compiler, co
 int8_t                   compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_if(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
+int8_t                   compiler_execute_goto(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
+int8_t                   compiler_execute_label(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
+int8_t                   compiler_var_resolver(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_save(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 int8_t                   compiler_execute_load(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result);
 const char_t*            compiler_cast_reg_to_size(const char_t* reg, uint8_t size);
 char_t                   compiler_get_reg_suffix(uint8_t size);
 int8_t                   compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, size_t symbol_size);
+int8_t                   compiler_destroy_external_symbols(compiler_t* compiler);
+int8_t                   compiler_add_external_symbol(compiler_t* compiler, const char_t* name, compiler_symbol_type_t type, int64_t size, boolean_t is_const);
 
 
 #define SYS_exit 60ULL

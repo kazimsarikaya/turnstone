@@ -8,6 +8,7 @@
 
 #include <compiler/compiler.h>
 #include <logging.h>
+#include <strings.h>
 
 MODULE("turnstone.compiler");
 
@@ -102,6 +103,10 @@ int8_t compiler_execute_ast_node(compiler_t* compiler, compiler_ast_node_t* node
         return compiler_execute_relational_op(compiler, node, result);
     } else if(node->type == COMPILER_AST_NODE_TYPE_WHILE) {
         return compiler_execute_while(compiler, node, result);
+    } else if(node->type == COMPILER_AST_NODE_TYPE_GOTO) {
+        return compiler_execute_goto(compiler, node, result);
+    } else if(node->type == COMPILER_AST_NODE_TYPE_LABEL) {
+        return compiler_execute_label(compiler, node, result);
     } else {
         PRINTLOG(COMPILER, LOG_ERROR, "unknown node type %d", node->type);
         return -1;
@@ -206,6 +211,18 @@ int8_t compiler_init(compiler_t * compiler, compiler_ast_t * ast) {
     compiler->main_symbol_table = symbol_table;
     compiler->current_symbol_table = symbol_table;
 
+    compiler->external_symbols = hashmap_string(128);
+
+    if (compiler->external_symbols == NULL) {
+        buffer_destroy(compiler->text_buffer);
+        buffer_destroy(compiler->data_buffer);
+        buffer_destroy(compiler->rodata_buffer);
+        buffer_destroy(compiler->bss_buffer);
+        hashmap_destroy(symbol_table->symbols);
+        memory_free(symbol_table);
+        return -1;
+    }
+
     compiler->ast = ast;
 
     compiler->next_stack_offset = 16;
@@ -220,9 +237,12 @@ int8_t compiler_init(compiler_t * compiler, compiler_ast_t * ast) {
         buffer_destroy(compiler->rodata_buffer);
         buffer_destroy(compiler->bss_buffer);
         hashmap_destroy(symbol_table->symbols);
+        hashmap_destroy(compiler->external_symbols);
         memory_free(symbol_table);
         return -1;
     }
+
+    compiler_add_external_symbol(compiler, strdup("printf"), COMPILER_SYMBOL_TYPE_INTEGER, 64, false);
 
     return 0;
 }
@@ -256,6 +276,7 @@ int8_t compiler_destroy(compiler_t * compiler) {
     linkedlist_destroy(compiler->loop_label_stack);
 
     compiler_destroy_symbol_table(compiler);
+    compiler_destroy_external_symbols(compiler);
 
     memory_free(compiler->program_name_symbol);
 

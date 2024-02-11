@@ -48,13 +48,12 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
         const char_t* res_reg = compiler_cast_reg_to_size(compiler_regs[node->condition->used_register], node->condition->computed_size);
 
         if(node->condition->computed_type == COMPILER_SYMBOL_TYPE_BOOLEAN) {
-            buffer_printf(compiler->text_buffer, "\ttest%c %%%s, %%%s\n", compiler_get_reg_suffix(node->condition->computed_size),
-                          res_reg, res_reg);
+            buffer_printf(compiler->text_buffer, "\tbt $0, %%%s\n", compiler_regs[node->condition->used_register]);
+            buffer_printf(compiler->text_buffer, "\tjnc %s\n", end_label);
         } else {
             buffer_printf(compiler->text_buffer, "\tcmp $0, %%%s\n", res_reg);
+            buffer_printf(compiler->text_buffer, "\tjz %s\n", end_label);
         }
-
-        buffer_printf(compiler->text_buffer, "\tjz %s\n", end_label);
 
         compiler->busy_regs[node->condition->used_register] = false;
         node->is_at_reg = false;
