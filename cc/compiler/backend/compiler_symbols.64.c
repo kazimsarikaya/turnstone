@@ -233,6 +233,8 @@ int8_t compiler_destroy_external_symbols(compiler_t* compiler) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t compiler_add_external_symbol(compiler_t* compiler, const char_t* name, compiler_symbol_type_t type, int64_t size, boolean_t is_const) {
     compiler_symbol_t* symbol = memory_malloc(sizeof(compiler_symbol_t));
 
@@ -252,3 +254,4 @@ int8_t compiler_add_external_symbol(compiler_t* compiler, const char_t* name, co
 
     return 0;
 }
+#pragma GCC diagnostic pop

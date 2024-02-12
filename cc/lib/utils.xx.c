@@ -286,14 +286,19 @@ boolean_t isalnumw(char_t c) {
 
 const char_t* randstr(uint32_t len) {
     static const char_t charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    char_t* str = memory_malloc(len + 1);
 
     if(len > 255) {
         return NULL;
     }
 
     if(len == 0) {
-        return "";
+        return strdup("");
+    }
+
+    char_t* str = memory_malloc(len + 1);
+
+    if(str == NULL) {
+        return NULL;
     }
 
     for(uint32_t i = 0; i < len; i++) {

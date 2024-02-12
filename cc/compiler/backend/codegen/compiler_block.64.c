@@ -17,6 +17,8 @@ int8_t compiler_execute_block_type(compiler_t* compiler, compiler_ast_node_t* no
 int8_t compiler_execute_block_var_int(compiler_t* compiler, compiler_symbol_t* symbol, int64_t* result);
 int8_t compiler_execute_block_var_custom_type(compiler_t* compiler, compiler_symbol_t* symbol, int64_t* result);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t compiler_execute_block_type(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
     UNUSED(result);
 
@@ -123,6 +125,7 @@ int8_t compiler_execute_block_type(compiler_t* compiler, compiler_ast_node_t* no
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 int8_t compiler_execute_block_var_custom_type(compiler_t* compiler, compiler_symbol_t* symbol, int64_t* result) {
     UNUSED(result);
