@@ -906,9 +906,7 @@ int8_t acpi_aml_parse_region(acpi_aml_parser_context_t* ctx, void** data, uint64
             return -1;
         }
 
-        if(tmp_obj->name == NULL) {
-            acpi_aml_destroy_object(ctx, tmp_obj);
-        }
+        memory_free_ext(ctx->heap, tmp_obj);
 
         obj->opregion.region_space = ival;
 

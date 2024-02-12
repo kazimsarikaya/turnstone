@@ -14,8 +14,11 @@
 #include <linker.h>
 #include <utils.h>
 #if ___TESTMODE == 1
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-va-list-leak"
 #include <valgrind.h>
 #include <memcheck.h>
+#pragma GCC diagnostic pop
 #endif
 #if ___KERNELBUILD == 1
 #include <backtrace.h>
@@ -533,6 +536,10 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
         backtrace();
 #endif
 
+#if ___TESTMODE == 1
+        VALGRIND_FREELIKE_BLOCK(req_address, 1); // trick to valgrind reports stack trace
+#endif
+
         return -1;
     }
 
@@ -541,6 +548,10 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
 
 #if ___KERNELBUILD == 1
         backtrace();
+#endif
+
+#if ___TESTMODE == 1
+        VALGRIND_FREELIKE_BLOCK(req_address, 1); // trick to valgrind reports stack trace
 #endif
 
         return -1;

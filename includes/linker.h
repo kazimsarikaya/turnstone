@@ -43,10 +43,13 @@ typedef enum linker_relocation_type_t {
     LINKER_RELOCATION_TYPE_32_32, ///< 32 bit width 32 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_32_PC16, ///< 32 bit width 16 bit addend program counter relative relocation
     LINKER_RELOCATION_TYPE_32_PC32, ///< 32 bit width 32 bit addend program counter relative relocation
+    LINKER_RELOCATION_TYPE_64_8, ///< 64 bit width 8 bit addend section relative relocation
+    LINKER_RELOCATION_TYPE_64_16, ///< 64 bit width 16 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_64_32, ///< 64 bit width 32 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_64_32S, ///< 64 bit width signed 32 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_64_64, ///< 64 bit width 64 bit addend section relative relocation
     LINKER_RELOCATION_TYPE_64_PC32, ///< 64 bit width 32 bit addend program counter relative relocation
+    LINKER_RELOCATION_TYPE_64_PC64, ///< 64 bit width 64 bit addend program counter relative relocation
     LINKER_RELOCATION_TYPE_64_GOT64, ///< 64 bit width 64 bit got direct
     LINKER_RELOCATION_TYPE_64_GOTOFF64, ///< 64 bit width 64 bit got offset relocation
     LINKER_RELOCATION_TYPE_64_GOTPC64, ///< 64 bit width 64 bit got pc relative relocation

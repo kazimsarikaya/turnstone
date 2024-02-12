@@ -9,6 +9,7 @@
 #include <utils.h>
 #include <memory.h>
 #include <strings.h>
+#include <random.h>
 
 MODULE("turnstone.lib");
 
@@ -225,4 +226,86 @@ void __attribute__((noinline, optimize("O0"))) write_memio(uint64_t va, uint64_t
     } else if(size == 64) {
         *(volatile uint64_t*)va = val;
     }
+}
+
+boolean_t isalpha(char_t c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+boolean_t isdigit(char_t c) {
+    return c >= '0' && c <= '9';
+}
+
+boolean_t isalnum(char_t c) {
+    return isalpha(c) || isdigit(c);
+}
+
+boolean_t isxdigit(char_t c) {
+    return isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+boolean_t islower(char_t c) {
+    return c >= 'a' && c <= 'z';
+}
+
+boolean_t isupper(char_t c) {
+    return c >= 'A' && c <= 'Z';
+}
+
+boolean_t isspace(char_t c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
+}
+
+boolean_t isprint(char_t c) {
+    return c >= 0x20 && c <= 0x7E;
+}
+
+boolean_t isgraph(char_t c) {
+    return c >= 0x21 && c <= 0x7E;
+}
+
+boolean_t iscntrl(char_t c) {
+    return c <= 0x1F || c == 0x7F;
+}
+
+boolean_t ispunct(char_t c) {
+    return (c >= 0x21 && c <= 0x2F) || (c >= 0x3A && c <= 0x40) || (c >= 0x5B && c <= 0x60) || (c >= 0x7B && c <= 0x7E);
+}
+
+boolean_t isblank(char_t c) {
+    return c == ' ' || c == '\t';
+}
+
+boolean_t isascii(char_t c) {
+    return c >= 0 && ((uint8_t)c) <= 0x7F;
+}
+
+boolean_t isalnumw(char_t c) {
+    return isalnum(c) || c == '_';
+}
+
+const char_t* randstr(uint32_t len) {
+    static const char_t charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    if(len > 255) {
+        return NULL;
+    }
+
+    if(len == 0) {
+        return strdup("");
+    }
+
+    char_t* str = memory_malloc(len + 1);
+
+    if(str == NULL) {
+        return NULL;
+    }
+
+    for(uint32_t i = 0; i < len; i++) {
+        str[i] = charset[rand() % (sizeof(charset) - 1)];
+    }
+
+    str[len] = '\0';
+
+    return str;
 }

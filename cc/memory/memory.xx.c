@@ -119,6 +119,37 @@ void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat){
     }
 }
 
+#if 0
+int8_t memory_memset(void* address, uint8_t value, size_t size) {
+    if(address == NULL) {
+        return -1;
+    }
+
+    uint8_t* t_addr = (uint8_t*)address;
+
+    for(size_t i = 0; i < size; i++) {
+        t_addr[i] = value;
+    }
+
+    return 0;
+}
+#elif 0
+int8_t __attribute__((naked)) memory_memset(register void* address, register uint8_t value, register size_t size) {
+    // loop with rep stosq and rep stosb
+    // move sil to al and move it %rdi until %rcx is zero
+    asm volatile (
+        "test %2, %2\n"
+        "jz .Lexit%=\n"
+        "rep stosb\n"
+        ".Lexit%=:\n"
+        "xor %%rax, %%rax\n"
+        "ret\n"
+        :
+        : "a" (value), "c" (size), "D" (address)
+        : "memory"
+        );
+}
+#else
 int8_t memory_memset(void* address, uint8_t value, size_t size){
     if(address == NULL) {
         return -1;
@@ -179,8 +210,29 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 
     return 0;
 }
+#endif
 
-int8_t memory_memcopy(const void* source, const void* destination, size_t size){
+#if 0
+int8_t memory_memcopy(const void* source, void* destination, size_t size) {
+    if((!source && !destination) || !size) {
+        return 0;
+    }
+
+    if(source == NULL || destination == NULL) {
+        return -1;
+    }
+
+    uint8_t* s_addr = (uint8_t*)source;
+    uint8_t* t_addr = (uint8_t*)destination;
+
+    for(size_t i = 0; i < size; i++) {
+        t_addr[i] = s_addr[i];
+    }
+
+    return 0;
+}
+#else
+int8_t memory_memcopy(const void* source, void* destination, size_t size){
     if((!source && !destination) || !size) {
         return 0;
     }
@@ -244,7 +296,37 @@ int8_t memory_memcopy(const void* source, const void* destination, size_t size){
 
     return 0;
 }
+#endif
 
+#if 0
+int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
+    if(!size && ((!mem1 && !mem2) || (mem1 && mem2))) {
+        return 0;
+    }
+
+    if(!mem1 && mem2) {
+        return -1;
+    }
+
+    if(mem1 && !mem2) {
+        return 1;
+    }
+
+    if(size && !mem1 && !mem2) {
+        return 0;
+    }
+
+    for(size_t i = 0; i < size; i++) {
+        if(((uint8_t*)mem1)[i] < ((uint8_t*)mem2)[i]) {
+            return -1;
+        } else if(((uint8_t*)mem1)[i] > ((uint8_t*)mem2)[i]) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+#else
 int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
     if(!size && ((!mem1 && !mem2) || (mem1 && mem2))) {
         return 0;
@@ -299,6 +381,46 @@ int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size) {
     return 0;
 }
 
+#endif
+
+#if 0
+int8_t memory_memclean(void* address, size_t size) {
+    if(!address || !size) {
+        return 0;
+    }
+
+    uint8_t* t_addr = (uint8_t*)address;
+
+    for(size_t i = 0; i < size; i++) {
+        t_addr[i] = 0;
+    }
+
+    return 0;
+}
+#elif 0
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-use-of-uninitialized-value"
+int8_t memory_memclean(void* address, size_t size) {
+    return memory_memset(address, 0, size);
+}
+#pragma GCC diagnostic pop
+#elif 0
+int8_t __attribute__((naked)) memory_memclean(register void* address, register size_t size) {
+    // loop with rep stosq and rep stosb
+    // move sil to al and move it %rdi until %rcx is zero
+    asm volatile (
+        "test %1, %1\n"
+        "jz .Lexit%=\n"
+        "xor %%rax, %%rax\n"
+        "rep stosb\n"
+        ".Lexit%=:\n"
+        "ret\n"
+        :
+        : "c" (size), "D" (address)
+        : "memory"
+        );
+}
+#else
 int8_t memory_memclean(void* address, size_t size) {
     if(!address || !size) {
         return 0;
@@ -379,4 +501,5 @@ int8_t memory_memclean(void* address, size_t size) {
 
     return 0;
 }
+#endif
 

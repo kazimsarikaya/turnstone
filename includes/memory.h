@@ -134,7 +134,7 @@ int8_t memory_memclean(void* address, size_t size);
  *
  * if destination is smaller then length a memory corruption will be happend
  */
-int8_t memory_memcopy(const void* source, const void* destination, size_t size);
+int8_t memory_memcopy(const void* source, void* destination, size_t size);
 
 /**
  * @brief compares first length bytes of mem1 with mem2

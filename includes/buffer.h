@@ -289,4 +289,17 @@ buffer_t* buffer_get_tmp_buffer_for_printf(void);
  */
 void buffer_reset_tmp_buffer_for_printf(void);
 
+/**
+ * @brief reads a line from buffer, line is null terminated, position is advanced
+ * @param[in] buffer buffer to read line
+ * @param[in] line_continuation_char line continuation char
+ * @param[in] delimiter_char delimiter char
+ * @param[out] length length of line optional parameter
+ * @return char_t* pointer to line
+ */
+char_t* buffer_read_line_ext(buffer_t* buffer, char_t line_continuation_char, char_t delimiter_char, uint64_t* length);
+
+/*! macro to read a line from buffer, line is null terminated, position is advanced */
+#define buffer_read_line(b) buffer_read_line_ext(b, '\\', '\n', NULL)
+
 #endif

@@ -54,12 +54,36 @@ int8_t strstarts(const char_t* str, const char_t* prefix);
 int8_t strends(const char_t* str, const char_t* suffix);
 
 /**
+ * @brief finds first occurance of char in string
+ * @param  s string for look
+ * @param  c char to find
+ * @return pointer to first occurance of char in string
+ */
+char_t* strchr(const char_t* s, int32_t c);
+
+/**
+ * @brief finds first occurance of char in string
+ * @param  s string for look
+ * @param  c char to find
+ * @return pointer to first occurance of char in string
+ */
+char_t* strrchr(const char_t* s, int32_t c);
+
+/**
+ * @brief finds first occurance of char in string
+ * @param  s string for look
+ * @param  c char to find
+ * @return pointer to first occurance of char in string
+ */
+char_t* strstr(const char_t* haystack, const char_t* needle);
+
+/**
  * @brief checks str contains pattern
  * @param  str string for look
  * @param  pattern to check
  * @return -1 if str does not contain pattern, else position
  */
-#define strcontains(str, pattern) sunday_match((uint8_t*)str, strlen(str), (uint8_t*)pattern, strlen(pattern))
+#define strcontains(str, pattern) (strstr(str, pattern) != NULL)
 
 /**
  * @brief concanates two string and returns new one

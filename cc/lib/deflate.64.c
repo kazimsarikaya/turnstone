@@ -1397,8 +1397,9 @@ exit:
     return header;
 
 exit_error:
-    memory_free(header_buffer);
+    buffer_destroy(header_buffer);
     memory_free(code_lengths);
+    memory_free(header);
 
     return NULL;
 }

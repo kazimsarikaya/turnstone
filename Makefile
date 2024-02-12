@@ -26,14 +26,14 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-CCXXFLAGS += -std=gnu11 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+CCXXFLAGS += -std=gnu11 -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
     -Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
     -Wstrict-prototypes \
-	-fpic -fPIC -fno-plt -mcmodel=large -fno-jump-tables -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
+	-fpic -fPIC -fno-plt -mcmodel=large -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
 	-D___KERNELBUILD=1
 
 CXXTESTFLAGS= -D___TESTMODE=1

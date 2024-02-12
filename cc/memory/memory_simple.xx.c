@@ -14,8 +14,11 @@
 #include <linker.h>
 #include <utils.h>
 #if ___TESTMODE == 1
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-va-list-leak"
 #include <valgrind.h>
 #include <memcheck.h>
+#pragma GCC diagnostic pop
 #endif
 #if ___KERNELBUILD == 1
 #include <backtrace.h>

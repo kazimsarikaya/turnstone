@@ -1374,8 +1374,13 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
 catch_efi_error:
 
-    tosdb_close(tdb_ctx->tosdb);
-    tosdb_backend_close(tdb_ctx->backend);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-use-of-uninitialized-value"
+    if(tdb_ctx != NULL) {
+        tosdb_close(tdb_ctx->tosdb);
+        tosdb_backend_close(tdb_ctx->backend);
+    }
+#pragma GCC diagnostic pop
 
     PRINTLOG(EFI, LOG_FATAL, "efi app could not have finished correctly, infinite loop started. Halting...");
 

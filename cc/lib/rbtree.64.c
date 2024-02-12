@@ -260,6 +260,10 @@ void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
             break;
         }
 
+        if(rbn == NULL) {
+            break;
+        }
+
         rbtree_node_t* sibling = rbtree_node_sibling(rbn);
         rbtree_node_t* parent = rbn->parent;
 

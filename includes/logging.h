@@ -49,6 +49,9 @@ typedef enum logging_modules_t {
     VMWARESVGA,
     USB,
     COMPRESSION,
+    COMPILER,
+    COMPILER_ASSEMBLER,
+    COMPILER_PASCAL,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -221,6 +224,21 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_COMPRESSION
 /*! default log level for compression module */
 #define LOG_LEVEL_COMPRESSION LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_COMPILER
+/*! default log level for compiler module */
+#define LOG_LEVEL_COMPILER LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_COMPILER_ASSEMBLER
+/*! default log level for compiler assembler module */
+#define LOG_LEVEL_COMPILER_ASSEMBLER LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_COMPILER_PASCAL
+/*! default log level for compiler pascal module */
+#define LOG_LEVEL_COMPILER_PASCAL LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION
