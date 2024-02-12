@@ -23,6 +23,7 @@ typedef uint64_t  (*tosdb_backend_write_f)(tosdb_backend_t* backend, uint64_t po
 typedef boolean_t (*tosdb_backend_flush_f)(tosdb_backend_t* backend);
 
 struct tosdb_backend_t {
+    memory_heap_t*        heap;
     void*                 context;
     tosdb_backend_type_t  type;
     uint64_t              capacity;

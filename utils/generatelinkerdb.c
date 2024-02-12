@@ -910,6 +910,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
     if(!linkerdb_create_clean_implementation(ldb, filename, is, &implementation_id)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create clean implementation");
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -918,6 +920,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
     if(!fp) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot open file '%s'", filename);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -956,6 +960,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     } else {
         PRINTLOG(TOSDB, LOG_ERROR, "unknown file class %i", e_indent.class );
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -963,6 +969,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     if(e_shnum == 0) {
         PRINTLOG(TOSDB, LOG_ERROR, "no section in file %s", filename);
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -972,6 +980,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     if(!sections) {
         printf("cannot allocate sections for file %s", filename);
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -989,6 +999,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         memory_free(sections);
         PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate section string table for file %s", filename);
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }

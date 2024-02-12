@@ -113,7 +113,9 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity) {
         return NULL;
     }
 
-    tosdb_backend_memory_ctx_t* ctx = memory_malloc(sizeof(tosdb_backend_memory_ctx_t));
+    memory_heap_t* heap = memory_get_heap(NULL);
+
+    tosdb_backend_memory_ctx_t* ctx = memory_malloc_ext(heap, sizeof(tosdb_backend_memory_ctx_t), 0);
 
     if(!ctx) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend context");
@@ -121,11 +123,11 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity) {
         return NULL;
     }
 
-    ctx->buffer = buffer_new_with_capacity(NULL, capacity);
+    ctx->buffer = buffer_new_with_capacity(heap, capacity);
 
     if(!ctx->buffer) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend buffer");
-        memory_free(ctx);
+        memory_free_ext(heap, ctx);
 
         return NULL;
     }
@@ -133,16 +135,17 @@ tosdb_backend_t* tosdb_backend_memory_new(uint64_t capacity) {
     buffer_seek(ctx->buffer, capacity - 1, BUFFER_SEEK_DIRECTION_START);
     buffer_append_byte(ctx->buffer, 0);
 
-    tosdb_backend_t* backend = memory_malloc(sizeof(tosdb_backend_t));
+    tosdb_backend_t* backend = memory_malloc_ext(heap, sizeof(tosdb_backend_t), 0);
 
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend");
         buffer_destroy(ctx->buffer);
-        memory_free(ctx);
+        memory_free_ext(heap, ctx);
 
         return NULL;
     }
 
+    backend->heap = heap;
     backend->context = ctx;
     backend->type = TOSDB_BACKEND_TYPE_MEMORY;
     backend->capacity = capacity;
@@ -160,6 +163,8 @@ tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t* buffer) {
         return NULL;
     }
 
+    memory_heap_t* heap = buffer_get_heap(buffer);
+
     uint64_t capacity = buffer_get_capacity(buffer);
 
     if(capacity == 0) {
@@ -168,7 +173,7 @@ tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t* buffer) {
         return NULL;
     }
 
-    tosdb_backend_memory_ctx_t* ctx = memory_malloc(sizeof(tosdb_backend_memory_ctx_t));
+    tosdb_backend_memory_ctx_t* ctx = memory_malloc_ext(heap, sizeof(tosdb_backend_memory_ctx_t), 0);
 
     if(!ctx) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend context");
@@ -179,16 +184,17 @@ tosdb_backend_t* tosdb_backend_memory_from_buffer(buffer_t* buffer) {
 
     ctx->buffer = buffer;
 
-    tosdb_backend_t* backend = memory_malloc(sizeof(tosdb_backend_t));
+    tosdb_backend_t* backend = memory_malloc_ext(heap, sizeof(tosdb_backend_t), 0);
 
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend");
         buffer_destroy(ctx->buffer);
-        memory_free(ctx);
+        memory_free_ext(heap, ctx);
 
         return NULL;
     }
 
+    backend->heap = heap;
     backend->context = ctx;
     backend->type = TOSDB_BACKEND_TYPE_MEMORY;
     backend->capacity = capacity;
@@ -240,8 +246,8 @@ boolean_t tosdb_backend_memory_close(tosdb_backend_t* backend) {
     }
 
     buffer_destroy(ctx->buffer);
-    memory_free(ctx);
-    memory_free(backend);
+    memory_free_ext(backend->heap, ctx);
+    memory_free_ext(backend->heap, backend);
 
     return true;
 }
