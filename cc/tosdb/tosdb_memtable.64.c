@@ -1250,7 +1250,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     s_d.type = DATA_TYPE_INT8_ARRAY;
     s_d.value = f_d;
 
-    data_t* r_d = data_bson_deserialize(&s_d, DATA_SERIALIZE_WITH_ALL);
+    data_t* r_d = data_bson_deserialize(&s_d);
 
     memory_free(f_d);
 

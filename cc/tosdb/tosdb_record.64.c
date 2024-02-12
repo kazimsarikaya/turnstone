@@ -825,7 +825,7 @@ data_t* tosdb_record_serialize(tosdb_record_t* record) {
 
     iter->destroy(iter);
 
-    data_t* res = data_bson_serialize(&s_data, DATA_SERIALIZE_WITH_ALL);
+    data_t* res = data_bson_serialize(&s_data);
 
     memory_free(s_items);
 

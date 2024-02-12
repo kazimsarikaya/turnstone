@@ -40,17 +40,8 @@ typedef struct data_t {
     void*          value;
 }data_t;
 
-typedef enum data_serialize_with_t {
-    DATA_SERIALIZE_WITH_NONE=0,
-    DATA_SERIALIZE_WITH_TYPE=1,
-    DATA_SERIALIZE_WITH_LENGTH=2,
-    DATA_SERIALIZE_WITH_NAME=4,
-    DATA_SERIALIZE_WITH_FLAGS=8,
-    DATA_SERIALIZE_WITH_ALL=DATA_SERIALIZE_WITH_TYPE | DATA_SERIALIZE_WITH_LENGTH | DATA_SERIALIZE_WITH_NAME | DATA_SERIALIZE_WITH_FLAGS,
-} data_serialize_with_t;
-
-data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw);
-data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw);
+data_t* data_bson_serialize(data_t* data);
+data_t* data_bson_deserialize(data_t* data);
 data_t* data_json_serialize(data_t* data);
 data_t* data_json_deserialize(data_t* data);
 

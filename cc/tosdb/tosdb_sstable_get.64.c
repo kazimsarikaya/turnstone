@@ -529,7 +529,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     s_d.type = DATA_TYPE_INT8_ARRAY;
     s_d.value = value_data;
 
-    data_t* r_d = data_bson_deserialize(&s_d, DATA_SERIALIZE_WITH_ALL);
+    data_t* r_d = data_bson_deserialize(&s_d);
 
     memory_free(value_data);
 

@@ -353,7 +353,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     if(pxeconfig_is_json) {
         pxeconfig_data = data_json_deserialize(&pxeconf_deser_data);
     } else {
-        pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data, DATA_SERIALIZE_WITH_FLAGS);
+        pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data);
     }
 
     memory_free(buffer);

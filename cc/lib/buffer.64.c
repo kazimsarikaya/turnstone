@@ -426,7 +426,7 @@ boolean_t   buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_directio
     lock_acquire(buffer->lock);
 
     if(direction == BUFFER_SEEK_DIRECTION_START) {
-        if(position < 0 || (uint64_t)position >= buffer->capacity) {
+        if(position < 0 || (uint64_t)position > buffer->capacity) {
             lock_release(buffer->lock);
 
             return false;
