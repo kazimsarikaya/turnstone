@@ -166,32 +166,15 @@ static int8_t tosdb_memtable_secondary_index_key_cloner(memory_heap_t* heap, con
     return 0;
 }
 
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
-    if(!tbl) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
-
-        return false;
-    }
-
-    if(!tbl->memtables) {
-        tbl->memtables = linkedlist_create_stack();
-
-        if(!tbl->memtables) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable stack for table %s", tbl->name);
-
-            return false;
-        }
-    }
-
+tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
     tosdb_memtable_t* mt = memory_malloc(sizeof(tosdb_memtable_t));
 
     if(!mt) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable for table %s at memory", tbl->name);
 
-        return false;
+        return NULL;
     }
 
     mt->is_dirty = true;
@@ -201,7 +184,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create valuelog for table %s at memory", tbl->name);
         memory_free(mt);
 
-        return false;
+        return NULL;
     }
 
     mt->indexes = hashmap_integer(128);
@@ -211,7 +194,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         buffer_destroy(mt->values);
         memory_free(mt);
 
-        return false;
+        return NULL;
     }
 
     boolean_t error = false;
@@ -279,7 +262,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
             buffer_destroy(mt->values);
             memory_free(mt);
 
-            return false;
+            return NULL;
         }
 
         while(mt_idx_iter->end_of_iterator(mt_idx_iter) != 0) {
@@ -301,9 +284,38 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         hashmap_destroy(mt->indexes);
         memory_free(mt);
 
+        return NULL;
+    }
+
+    return mt;
+}
+
+boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
         return false;
     }
 
+    if(!tbl->memtables) {
+        tbl->memtables = linkedlist_create_stack();
+
+        if(!tbl->memtables) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable stack for table %s", tbl->name);
+
+            return false;
+        }
+    }
+
+    tosdb_memtable_t* mt = tosdb_memtable_new_internal(tbl);
+
+    if(!mt) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable for table %s", tbl->name);
+
+        return false;
+    }
+
+    boolean_t error = false;
 
     mt->tbl = tbl;
     mt->id = tbl->memtable_next_id;

@@ -468,12 +468,13 @@ struct tosdb_memtable_t {
     tosdb_block_sstable_list_item_t* stli;
 };
 
-boolean_t tosdb_memtable_new(tosdb_table_t * tbl);
-boolean_t tosdb_memtable_free(tosdb_memtable_t* mt);
-boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del);
-boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt);
-boolean_t tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable_list_item_t* stli, uint64_t idx, tosdb_memtable_index_t* mt_idx);
-boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record);
+tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl);
+boolean_t         tosdb_memtable_new(tosdb_table_t * tbl);
+boolean_t         tosdb_memtable_free(tosdb_memtable_t* mt);
+boolean_t         tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del);
+boolean_t         tosdb_memtable_persist(tosdb_memtable_t* mt);
+boolean_t         tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable_list_item_t* stli, uint64_t idx, tosdb_memtable_index_t* mt_idx);
+boolean_t         tosdb_memtable_is_deleted(tosdb_record_t* record);
 
 typedef struct tosdb_record_context_t {
     tosdb_table_t* table;
