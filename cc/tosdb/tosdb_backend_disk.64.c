@@ -90,6 +90,9 @@ uint64_t  tosdb_backend_disk_write(tosdb_backend_t* backend, uint64_t position, 
     tosdb_backend_disk_ctx_t* d_ctx = backend->context;
     uint64_t bs = d_ctx->dp->get_block_size(d_ctx->dp);
 
+    PRINTLOG(TOSDB, LOG_TRACE, "write to disk position 0x%llx (0x%llx) size 0x%llx (0x%llx)",
+             position, position / bs, size, size / bs);
+
     uint64_t res = d_ctx->dp->write(d_ctx->dp, position / bs, size / bs, data);
 
     return res == 0?size:0;
