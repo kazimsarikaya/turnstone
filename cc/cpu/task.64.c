@@ -48,10 +48,12 @@ task_t* task_get_current_task(void){
     return current_task;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started");
 
-    uint64_t rsp;
+    uint64_t rsp = 0;
 
     __asm__ __volatile__ ("mov %%rsp, %0\n" : : "m" (rsp));
 
@@ -112,6 +114,13 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     interrupt_irq_set_handler(0x60, &task_task_switch_isr);
 
     current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+
+    if(current_task == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task");
+
+        return -1;
+    }
+
     current_task->creator_heap = heap;
     current_task->heap = heap;
     current_task->task_id = TASK_KERNEL_TASK_ID;
@@ -163,6 +172,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task) {
     __asm__ __volatile__ (
@@ -468,6 +478,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
     current_task = task_find_next_task();
     current_task->last_tick_count = time_timer_get_tick_count();
+    current_task->task_switch_count++;
     task_load_registers(current_task);
 
     task_switch_task_exit_prep();
@@ -602,7 +613,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
     new_task->rbp = rbp;
-    new_task->rsp = rbp - 24;
+    new_task->rsp = rbp - 16;
 
     new_task->rdi = args_cnt;
     new_task->rsi = (uint64_t)args;
@@ -610,7 +621,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
     stack[-2] = (uint64_t)entry_point;
-    stack[-3] = (uint64_t)apic_eoi;
+    // stack[-3] = (uint64_t)cpu_sti;
+    // stack[-4] = (uint64_t)apic_eoi;
 
 
     new_task->input_buffer = buffer_create_with_heap(task_heap, 0x1000);
@@ -711,8 +723,14 @@ void task_print_all(void) {
     while(it->end_of_iterator(it) != 0) {
         const task_t* task = it->get_item(it);
 
-        printf("\ttask %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
-               task->task_name, task->task_id, task, task->rsp, task->rbp, task->heap, task->heap_size);
+        printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
+               task->task_name, task->task_id, task, task->task_switch_count,
+               task->rsp, task->rbp, task->heap, task->heap_size);
+
+        memory_heap_stat_t stat = {0};
+        memory_get_heap_stat_ext(task->heap, &stat);
+
+        printf("\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n", stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
 
         it = it->next(it);
     }
