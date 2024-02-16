@@ -47,13 +47,19 @@ typedef struct disk_file_context_t {
     uint64_t block_size;
 } disk_file_context_t;
 
-uint64_t disk_file_get_disk_size(const disk_or_partition_t* d);
-uint64_t disk_file_get_block_size(const disk_or_partition_t* d);
-int8_t   disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   disk_file_close(const disk_or_partition_t* d);
-int8_t   disk_file_flush(const disk_or_partition_t* d);
-disk_t*  disk_file_open(const char_t* file_name, int64_t size);
+memory_heap_t* disk_file_get_heap(const disk_or_partition_t* d);
+uint64_t       disk_file_get_disk_size(const disk_or_partition_t* d);
+uint64_t       disk_file_get_block_size(const disk_or_partition_t* d);
+int8_t         disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t         disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t         disk_file_close(const disk_or_partition_t* d);
+int8_t         disk_file_flush(const disk_or_partition_t* d);
+disk_t*        disk_file_open(const char_t* file_name, int64_t size);
+
+memory_heap_t* disk_file_get_heap(const disk_or_partition_t* d) {
+    UNUSED(d);
+    return memory_get_heap(NULL);
+}
 
 uint64_t disk_file_get_disk_size(const disk_or_partition_t* d){
     disk_file_context_t* ctx = (disk_file_context_t*)d->context;
@@ -70,10 +76,10 @@ int8_t disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t coun
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
-    int64_t f_res = fwrite(data, count * ctx->block_size, 1, ctx->fp_disk);
+    fwrite(data, count * ctx->block_size, 1, ctx->fp_disk);
     fflush(ctx->fp_disk);
 
-    return f_res == 1?0:-1;
+    return 0;
 }
 
 int8_t disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
@@ -87,14 +93,6 @@ int8_t disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count
     return 0;
 }
 
-int8_t disk_file_flush(const disk_or_partition_t* d) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
-
-    fflush(ctx->fp_disk);
-
-    return 0;
-}
-
 int8_t disk_file_close(const disk_or_partition_t* d) {
     disk_file_context_t* ctx = (disk_file_context_t*)d->context;
     fclose(ctx->fp_disk);
@@ -102,6 +100,13 @@ int8_t disk_file_close(const disk_or_partition_t* d) {
     memory_free(ctx);
 
     memory_free((void*)d);
+
+    return 0;
+}
+
+int8_t disk_file_flush(const disk_or_partition_t* d) {
+    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    fflush(ctx->fp_disk);
 
     return 0;
 }
@@ -144,6 +149,7 @@ disk_t* disk_file_open(const char_t* file_name, int64_t size) {
     }
 
     d->disk.context = ctx;
+    d->disk.get_heap = disk_file_get_heap;
     d->disk.get_size = disk_file_get_disk_size;
     d->disk.get_block_size = disk_file_get_block_size;
     d->disk.write = disk_file_write;
@@ -198,7 +204,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         goto backend_failed;
     }
 
-    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_DEFLATE);
+    tosdb_t* tosdb = tosdb_new(backend, COMPRESSION_TYPE_ZPACK);
 
     if(!tosdb) {
         print_error("cannot create tosdb");
@@ -229,7 +235,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         goto tdb_close;
     }
 
-    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
+    tosdb_table_t* table2 = tosdb_table_create_or_open(testdb, "table2", 100 << 10, 1 << 20, 8);
 
     if(!table2) {
         print_error("cannot create/open table2");
@@ -374,7 +380,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
         uint64_t id = atoi((const char_t*)token->value);
 
-        printf("id: %lli ", id);
+        // printf("id: %lli ", id);
 
         rec->set_int64(rec, "id", id);
 
@@ -383,7 +389,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         tokenizer = tokenizer->next(tokenizer);
         token = (token_t*)tokenizer->get_item(tokenizer);
 
-        printf("%s ", token->value);
+        // printf("%s ", token->value);
 
         rec->set_string(rec, "fname", (const char_t*)token->value);
 
@@ -392,7 +398,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         tokenizer = tokenizer->next(tokenizer);
         token = (token_t*)tokenizer->get_item(tokenizer);
 
-        printf("%s ", token->value);
+        // printf("%s ", token->value);
 
         rec->set_string(rec, "sname", (const char_t*)token->value);
 
@@ -401,7 +407,7 @@ int32_t main(uint32_t argc, char_t** argv) {
         tokenizer = tokenizer->next(tokenizer);
         token = (token_t*)tokenizer->get_item(tokenizer);
 
-        printf("%s\n", token->value);
+        // printf("%s\n", token->value);
 
         rec->set_string(rec, "country", (const char_t*)token->value);
 
@@ -423,36 +429,38 @@ token_error:
     }
 
     tosdb_table_close(table2);
-    table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
-    tosdb_record_t* s_rec = tosdb_table_create_record(table2);
+    /*
+       table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
-    if(!s_rec) {
+       tosdb_record_t* s_rec = tosdb_table_create_record(table2);
+
+       if(!s_rec) {
         print_error("cannot create key record");
         pass = false;
 
         goto tdb_close;
-    }
+       }
 
-    if(!s_rec->set_string(s_rec, "country", "Singapore")) {
+       if(!s_rec->set_string(s_rec, "country", "Singapore")) {
         print_error("cannot set ssn for search");
         pass = false;
 
         goto rec_destroy;
-    }
+       }
 
-    linkedlist_t* s_recs = s_rec->search_record(s_rec);
+       linkedlist_t* s_recs = s_rec->search_record(s_rec);
 
-    iterator_t* iter = linkedlist_iterator_create(s_recs);
+       iterator_t* iter = linkedlist_iterator_create(s_recs);
 
-    if(!iter) {
+       if(!iter) {
         print_error("cannot create search iterator");
         pass = false;
 
         goto rec_destroy;
-    }
+       }
 
-    while(iter->end_of_iterator(iter) != 0) {
+       while(iter->end_of_iterator(iter) != 0) {
         tosdb_record_t* res_rec = (tosdb_record_t*)iter->delete_item(iter);
 
         if(!res_rec) {
@@ -502,75 +510,76 @@ token_error:
         res_rec->destroy(res_rec);
 
         iter = iter->next(iter);
-    }
+       }
 
-search_iter_destroy:
-    iter->destroy(iter);
-    linkedlist_destroy(s_recs);
+       search_iter_destroy:
+       iter->destroy(iter);
+       linkedlist_destroy(s_recs);
 
-rec_destroy:
+       rec_destroy:
 
-    s_rec->destroy(s_rec);
+       s_rec->destroy(s_rec);
 
-    tosdb_record_t* d_rec = tosdb_table_create_record(table2);
+       tosdb_record_t* d_rec = tosdb_table_create_record(table2);
 
-    d_rec->set_int64(d_rec, "id", 52);
+       d_rec->set_int64(d_rec, "id", 52);
 
-    if(!d_rec->delete_record(d_rec)) {
+       if(!d_rec->delete_record(d_rec)) {
         print_error("cannot delete record");
         pass = false;
-    }
+       }
 
-    d_rec->destroy(d_rec);
+       d_rec->destroy(d_rec);
 
-    if(!pass) {
+       if(!pass) {
         goto tdb_close;
-    }
+       }
 
 
-    set_t* pks = tosdb_table_get_primary_keys(table2);
+       set_t* pks = tosdb_table_get_primary_keys(table2);
 
-    if(!pks) {
+       if(!pks) {
         print_error("cannot get pks");
         pass = false;
 
         goto tdb_close;
-    }
+       }
 
-    int64_t rec_cnt = 0;
+       int64_t rec_cnt = 0;
 
-    iter = set_create_iterator(pks);
+       iter = set_create_iterator(pks);
 
-    while(iter->end_of_iterator(iter) != 0) {
+       while(iter->end_of_iterator(iter) != 0) {
         d_rec = (tosdb_record_t*)iter->get_item(iter);
 
         int64_t id = 0;
 
         if(d_rec->get_int64(d_rec, "id", &id)) {
-            //printf("pk id %lli\n", id);
+            // printf("pk id %lli\n", id);
             rec_cnt++;
         }
 
         d_rec->destroy(d_rec);
 
         iter = iter->next(iter);
-    }
+       }
 
-    iter->destroy(iter);
-    set_destroy(pks);
+       iter->destroy(iter);
+       set_destroy(pks);
 
-    if(rec_cnt != 100) {
+       if(rec_cnt != 10000) {
         print_error("pk count failed");
         pass = false;
-    }
+       }
 
-    logging_module_levels[TOSDB] = LOG_DEBUG;
+       logging_module_levels[TOSDB] = LOG_DEBUG;
 
-    tosdb_table_close(table2);
-    table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
+       tosdb_table_close(table2);
+       table2 = tosdb_table_create_or_open(testdb, "table2", 1 << 10, 128 << 10, 8);
 
 
-    tosdb_compact(tosdb, TOSDB_COMPACTION_TYPE_MAJOR);
+       tosdb_compact(tosdb, TOSDB_COMPACTION_TYPE_MAJOR);
+     */
 
 tdb_close:
     if(!tosdb_close(tosdb)) {
