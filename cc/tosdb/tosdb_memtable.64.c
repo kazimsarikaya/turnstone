@@ -298,7 +298,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
     }
 
     if(!tbl->memtables) {
-        tbl->memtables = linkedlist_create_stack();
+        tbl->memtables = list_create_stack();
 
         if(!tbl->memtables) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable stack for table %s", tbl->name);
@@ -332,10 +332,10 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
     }
 
     tbl->current_memtable = mt;
-    linkedlist_stack_push(tbl->memtables, mt);
+    list_stack_push(tbl->memtables, mt);
 
-    while(linkedlist_size(tbl->memtables) > tbl->max_memtable_count)  {
-        tosdb_memtable_t* r_mt = (tosdb_memtable_t*)linkedlist_delete_at_tail(tbl->memtables);
+    while(list_size(tbl->memtables) > tbl->max_memtable_count)  {
+        tosdb_memtable_t* r_mt = (tosdb_memtable_t*)list_delete_at_tail(tbl->memtables);
 
         if(!tosdb_memtable_free(r_mt)) {
             error = true;
@@ -356,8 +356,8 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
 
 
     if(mt->stli) {
-        linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
-        PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, linkedlist_size(mt->tbl->sstable_list_items));
+        list_stack_push(mt->tbl->sstable_list_items, mt->stli);
+        PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, list_size(mt->tbl->sstable_list_items));
     }
 
 
@@ -793,7 +793,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     }
 
     if(!mt->tbl->sstable_list_items) {
-        mt->tbl->sstable_list_items = linkedlist_create_stack();
+        mt->tbl->sstable_list_items = list_create_stack();
 
         if(!mt->tbl->sstable_list_items) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list items stack");
@@ -1103,7 +1103,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    linkedlist_t* mts = ctx->table->memtables;
+    list_t* mts = ctx->table->memtables;
 
     if(!mts) {
         memory_free(item);
@@ -1115,7 +1115,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     const tosdb_memtable_index_item_t* found_item = NULL;
     const tosdb_memtable_t* mt = NULL;
 
-    iter = linkedlist_iterator_create(mts);
+    iter = list_iterator_create(mts);
 
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);
@@ -1193,9 +1193,9 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    linkedlist_t* mts = ctx->table->memtables;
+    list_t* mts = ctx->table->memtables;
 
-    if(linkedlist_size(mts) == 0) {
+    if(list_size(mts) == 0) {
         memory_free(item);
 
         return false;
@@ -1205,7 +1205,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     const tosdb_memtable_index_item_t* found_item = NULL;
     const tosdb_memtable_t* mt = NULL;
 
-    iter = linkedlist_iterator_create(mts);
+    iter = list_iterator_create(mts);
 
     uint64_t col_id = 0;
 
@@ -1330,9 +1330,9 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     item->secondary_key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->data, item->secondary_key_length);
 
-    linkedlist_t* mts = ctx->table->memtables;
+    list_t* mts = ctx->table->memtables;
 
-    if(linkedlist_size(mts) == 0) {
+    if(list_size(mts) == 0) {
         memory_free(item);
 
         return true;
@@ -1341,7 +1341,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     const tosdb_memtable_t* mt = NULL;
     boolean_t error = false;
 
-    iter = linkedlist_iterator_create(mts);
+    iter = list_iterator_create(mts);
 
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);

@@ -11,7 +11,7 @@
 
 #include <types.h>
 #include <memory.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <cpu/sync.h>
 #include <future.h>
 #include <disk.h>
@@ -699,7 +699,7 @@ typedef struct ahci_hba_s {
 } ahci_hba_t;
 
 
-int8_t   ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices);
+int8_t   ahci_init(memory_heap_t* heap, list_t* sata_pci_devices);
 int8_t   ahci_identify(uint64_t disk_id);
 future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
 future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);

@@ -228,8 +228,8 @@ int8_t compiler_init(compiler_t * compiler, compiler_ast_t * ast) {
     compiler->next_stack_offset = 16;
     compiler->stack_size = 8;
 
-    compiler->cond_label_stack = linkedlist_create_stack();
-    compiler->loop_label_stack = linkedlist_create_stack();
+    compiler->cond_label_stack = list_create_stack();
+    compiler->loop_label_stack = list_create_stack();
 
     if (compiler->cond_label_stack == NULL) {
         buffer_destroy(compiler->text_buffer);
@@ -272,8 +272,8 @@ int8_t compiler_destroy(compiler_t * compiler) {
         hashmap_destroy(compiler->types_by_name);
     }
 
-    linkedlist_destroy(compiler->cond_label_stack);
-    linkedlist_destroy(compiler->loop_label_stack);
+    list_destroy(compiler->cond_label_stack);
+    list_destroy(compiler->loop_label_stack);
 
     compiler_destroy_symbol_table(compiler);
     compiler_destroy_external_symbols(compiler);

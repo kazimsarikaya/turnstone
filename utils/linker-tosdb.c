@@ -14,10 +14,10 @@
 #include <hashmap.h>
 #include <buffer.h>
 #include <linker.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <compression.h>
 
-//utils programs need dep headers for linking
+// utils programs need dep headers for linking
 #include <utils.h>
 #include <set.h>
 #include <cache.h>
@@ -492,7 +492,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     s_sym_rec->set_string(s_sym_rec, "name", entrypoint_symbol);
 
-    linkedlist_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
+    list_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
 
     if(!found_symbols) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot search for entrypoint symbol");
@@ -505,16 +505,16 @@ int32_t main(int32_t argc, char_t** argv) {
 
     s_sym_rec->destroy(s_sym_rec);
 
-    if(linkedlist_size(found_symbols) == 0) {
+    if(list_size(found_symbols) == 0) {
         PRINTLOG(LINKER, LOG_ERROR, "entrypoint symbol not found");
-        linkedlist_destroy(found_symbols);
+        list_destroy(found_symbols);
 
         exit_code = -1;
         goto exit;
     }
 
-    s_sym_rec = (tosdb_record_t*)linkedlist_queue_pop(found_symbols);
-    linkedlist_destroy(found_symbols);
+    s_sym_rec = (tosdb_record_t*)list_queue_pop(found_symbols);
+    list_destroy(found_symbols);
 
     if(!s_sym_rec) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot get record for entrypoint symbol");

@@ -11,7 +11,7 @@
 #include <types.h>
 #include <memory.h>
 #include <indexer.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <iterator.h>
 
 /**

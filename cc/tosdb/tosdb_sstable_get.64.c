@@ -15,7 +15,7 @@
 
 MODULE("turnstone.kernel.db");
 
-boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, linkedlist_t* st_list, tosdb_memtable_index_item_t* item, uint64_t index_id);
+boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, list_t* st_list, tosdb_memtable_index_item_t* item, uint64_t index_id);
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id);
 int8_t    tosdb_sstable_index_comparator(const void* i1, const void* i2);
 
@@ -565,10 +565,10 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 }
 #pragma GCC diagnostic pop
 
-boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, linkedlist_t* st_list, tosdb_memtable_index_item_t* item, uint64_t index_id) {
+boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, list_t* st_list, tosdb_memtable_index_item_t* item, uint64_t index_id) {
     boolean_t found = false;
 
-    iterator_t* iter = linkedlist_iterator_create(st_list);
+    iterator_t* iter = list_iterator_create(st_list);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstables list items iterator");
@@ -647,7 +647,7 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
         PRINTLOG(TOSDB, LOG_TRACE, "searching on sstable levels");
 
         for(uint64_t i = 1; i <= ctx->table->sstable_max_level; i++) {
-            linkedlist_t* st_lvl_l = (linkedlist_t*)hashmap_get(ctx->table->sstable_levels, (void*)i);
+            list_t* st_lvl_l = (list_t*)hashmap_get(ctx->table->sstable_levels, (void*)i);
 
             if(st_lvl_l) {
                 PRINTLOG(TOSDB, LOG_TRACE, "searching on sstable level 0x%llx", i);

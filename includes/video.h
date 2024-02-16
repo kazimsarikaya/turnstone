@@ -11,7 +11,7 @@
 
 #include <types.h>
 #include <memory.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <graphics/image.h>
 
 /*! magic for psf2 fonts*/
@@ -87,7 +87,7 @@ void video_clear_screen(void);
  * @param[in] display_controllers list of display controllers
  * @return 0 if success
  */
-int8_t video_display_init(memory_heap_t* heap, linkedlist_t* display_controllers);
+int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers);
 int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline);
 
 typedef void (*video_display_flush_f)(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);

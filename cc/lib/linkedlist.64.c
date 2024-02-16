@@ -179,7 +179,7 @@ uint8_t linkedlist_destroy_with_type(linkedlist_t* list, linkedlist_destroy_type
     linkedlist_item_t* item = list->head;
 
     while(item) {
-        if(type == LINKEDLIST_DESTROY_WITH_DATA) {
+        if(type == LIST_DESTROY_WITH_DATA) {
             if(destroyer) {
                 destroyer(heap, (void*)item->data);
             } else {
@@ -251,7 +251,7 @@ size_t linkedlist_insert_at(linkedlist_t* list, const void* data, linkedlist_ins
         return 0;
     }
 
-    if(where == LINKEDLIST_INSERT_AT_HEAD) {
+    if(where == LIST_INSERT_AT_HEAD) {
         item->next = list->head;
         list->head->previous = item;
         list->head = item;
@@ -270,7 +270,7 @@ size_t linkedlist_insert_at(linkedlist_t* list, const void* data, linkedlist_ins
             list->middle_position++;
         }
 
-    } else if(where == LINKEDLIST_INSERT_AT_TAIL) {
+    } else if(where == LIST_INSERT_AT_TAIL) {
         item->previous = list->tail;
         list->tail->next = item;
         list->tail = item;
@@ -288,7 +288,7 @@ size_t linkedlist_insert_at(linkedlist_t* list, const void* data, linkedlist_ins
             list->balance = 0;
         }
 
-    } else if(where == LINKEDLIST_INSERT_AT_SORTED) {
+    } else if(where == LIST_INSERT_AT_SORTED) {
         linkedlist_item_t* cur = list->middle;
         linkedlist_item_t* h = list->head;
         linkedlist_item_t* t = list->tail;
@@ -349,14 +349,14 @@ size_t linkedlist_insert_at(linkedlist_t* list, const void* data, linkedlist_ins
             list->balance = 0;
         }
 
-    } else if(where == LINKEDLIST_INSERT_AT_INDEXED) {
+    } else if(where == LIST_INSERT_AT_INDEXED) {
         item->next = list->head;
         list->head->previous = item;
         list->head = item;
         indexer_index(list->indexer, data, item);
         result = 0;
 
-    }else if(where == LINKEDLIST_INSERT_AT_POSITION) {
+    }else if(where == LIST_INSERT_AT_POSITION) {
         linkedlist_item_t* cur = list->head;
         size_t index = 0;
 
@@ -422,7 +422,7 @@ size_t linkedlist_insert_at(linkedlist_t* list, const void* data, linkedlist_ins
 #pragma GCC diagnostic pop
 
 const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlist_insert_delete_at_t where, size_t position){
-    if(data == NULL && where == LINKEDLIST_DELETE_AT_FINDBY) {
+    if(data == NULL && where == LIST_DELETE_AT_FINDBY) {
         return NULL;
     }
 
@@ -437,7 +437,7 @@ const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlis
     }
 
     if(!position && list->item_count == 1) {
-        where = LINKEDLIST_DELETE_AT_HEAD;
+        where = LIST_DELETE_AT_HEAD;
     }
 
     if(list->item_count == 0) {
@@ -452,7 +452,7 @@ const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlis
 
     const void* result = NULL;
 
-    if(where == LINKEDLIST_DELETE_AT_HEAD) {
+    if(where == LIST_DELETE_AT_HEAD) {
         linkedlist_item_t* item = list->head;
         list->head = list->head->next;
 
@@ -490,7 +490,7 @@ const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlis
             list->middle_position = 0;
         }
 
-    } else if(where == LINKEDLIST_DELETE_AT_TAIL) {
+    } else if(where == LIST_DELETE_AT_TAIL) {
         linkedlist_item_t* item = list->tail;
         list->tail = list->tail->previous;
 
@@ -527,8 +527,8 @@ const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlis
             list->middle_position = 0;
         }
 
-    } else if(where == LINKEDLIST_DELETE_AT_FINDBY) {
-        if(list->type == LINKEDLIST_TYPE_INDEXEDLIST) {
+    } else if(where == LIST_DELETE_AT_FINDBY) {
+        if(list->type == LIST_TYPE_INDEXEDLIST) {
 
             iterator_t* pk_iter = indexer_search(list->indexer, 0, data, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
 
@@ -604,7 +604,7 @@ const void* linkedlist_delete_at(linkedlist_t* list, const void* data, linkedlis
 
             iter->destroy(iter);
         }
-    } else if(where == LINKEDLIST_DELETE_AT_POSITION) {
+    } else if(where == LIST_DELETE_AT_POSITION) {
         linkedlist_item_t* cur = list->head;
         size_t index = 0;
 
@@ -850,7 +850,7 @@ int8_t linkedlist_get_position(linkedlist_t* list, const void* data, size_t* pos
         return -1;
     }
 
-    if(list->type == LINKEDLIST_TYPE_SORTEDLIST && !list->equality_comparator) {
+    if(list->type == LIST_TYPE_SORTEDLIST && !list->equality_comparator) {
         linkedlist_item_t* h = list->head;
         linkedlist_item_t* t = list->tail;
         linkedlist_item_t* m = list->middle;
@@ -1153,7 +1153,7 @@ const void* linkedlist_iterator_delete_item(iterator_t* iterator){
     iter->list->item_count--;
     memory_free_ext(iter->list->heap, current);
 
-    if(iter->list->type == LINKEDLIST_TYPE_INDEXEDLIST) {
+    if(iter->list->type == LIST_TYPE_INDEXEDLIST) {
         // TODO: check error
         indexer_delete(iter->list->indexer, data);
     }
@@ -1193,7 +1193,7 @@ linkedlist_t* linkedlist_duplicate_list_with_heap(memory_heap_t* heap, linkedlis
 
     while(iter->end_of_iterator(iter) != 0) {
         const void* item = iter->get_item(iter);
-        linkedlist_insert_at(new_list, item, LINKEDLIST_INSERT_AT_TAIL, 0);
+        linkedlist_insert_at(new_list, item, LIST_INSERT_AT_TAIL, 0);
         iter = iter->next(iter);
     }
     iter->destroy(iter);
@@ -1209,7 +1209,7 @@ int8_t linkedlist_merge(linkedlist_t* self, linkedlist_t* list){
         return -1;
     }
 
-    if(self->type == LINKEDLIST_TYPE_INDEXEDLIST) {
+    if(self->type == LIST_TYPE_INDEXEDLIST) {
         return -1;
     }
 
@@ -1220,7 +1220,7 @@ int8_t linkedlist_merge(linkedlist_t* self, linkedlist_t* list){
             return -1;
         }
 
-        if(linkedlist_insert_at(self, item, LINKEDLIST_INSERT_AT_TAIL, 0) == -1ULL) {
+        if(linkedlist_insert_at(self, item, LIST_INSERT_AT_TAIL, 0) == -1ULL) {
             return -1;
         }
     }

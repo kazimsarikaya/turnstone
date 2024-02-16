@@ -230,7 +230,7 @@ typedef struct {
     uint64_t                    queue_avail_offset;
     uint64_t                    queue_used_offset;
     virtio_queue_ext_t*         queues;
-    linkedlist_t*               return_queue;
+    list_t*                     return_queue;
     void*                       extra_data;
     uint64_t                    rx_task_id;
 }virtio_dev_t;

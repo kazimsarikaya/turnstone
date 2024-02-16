@@ -13,7 +13,7 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <systeminfo.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <cpu.h>
 #include <strings.h>
 
@@ -66,8 +66,8 @@ int8_t acpi_poweroff(void){
     } else if(s5->type != ACPI_AML_OT_PACKAGE) {
         PRINTLOG(ACPI, LOG_ERROR, "s5 wrong object type: %i", s5->type);
     } else {
-        const acpi_aml_object_t* slp_type_a = linkedlist_get_data_at_position(s5->package.elements, 0);
-        const acpi_aml_object_t* slp_type_b = linkedlist_get_data_at_position(s5->package.elements, 1);
+        const acpi_aml_object_t* slp_type_a = list_get_data_at_position(s5->package.elements, 0);
+        const acpi_aml_object_t* slp_type_b = list_get_data_at_position(s5->package.elements, 1);
 
         if(slp_type_a == NULL || slp_type_b == NULL) {
             PRINTLOG(ACPI, LOG_ERROR, "s5 sleep type a 0x%p or b 0x%p is null", slp_type_a, slp_type_b);
@@ -339,7 +339,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
     return 0;
 }
 
-acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, linkedlist_t* old_tables) {
+acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, const char_t* signature, list_t* old_tables) {
     if(xrsdp_desc->rsdp.revision == 0) {
         uint32_t addr = xrsdp_desc->rsdp.rsdt_address;
 
@@ -360,7 +360,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
             if(memory_memcompare(res->signature, signature, 4) == 0) {
 
-                if(old_tables && linkedlist_contains(old_tables, res) == 0) {
+                if(old_tables && list_contains(old_tables, res) == 0) {
                     continue;
                 }
 
@@ -387,7 +387,7 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
             if(memory_memcompare(res->signature, signature, 4) == 0) {
 
-                if(old_tables && linkedlist_contains(old_tables, res) == 0) {
+                if(old_tables && list_contains(old_tables, res) == 0) {
                     continue;
                 }
 
@@ -405,12 +405,12 @@ acpi_sdt_header_t* acpi_get_next_table(acpi_xrsdp_descriptor_t* xrsdp_desc, cons
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-linkedlist_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
+list_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_header_t* sdt_header){
     if(memory_memcompare(sdt_header->signature, "APIC", 4) != 0) {
         return NULL;
     }
 
-    linkedlist_t* entries = linkedlist_create_list_with_heap(heap);
+    list_t* entries = list_create_list_with_heap(heap);
     acpi_table_madt_entry_t* e;
     uint8_t* data = (uint8_t*)sdt_header;
     uint8_t* data_end = data + sdt_header->length;
@@ -423,15 +423,15 @@ linkedlist_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sd
     data += sizeof(uint32_t);
     e->local_apic_address.flags = (uint32_t)(*((uint32_t*)data));
     data += sizeof(uint32_t);
-    linkedlist_list_insert(entries, e);
+    list_list_insert(entries, e);
 
     while(data < data_end) {
         e = (acpi_table_madt_entry_t*)data;
-        linkedlist_list_insert(entries, e);
+        list_list_insert(entries, e);
         data += e->info.length;
 
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_LOCAL_APIC_ADDRESS_OVERRIDE) {
-            const acpi_table_madt_entry_t* t_e = linkedlist_delete_at_position(entries, 0);
+            const acpi_table_madt_entry_t* t_e = list_delete_at_position(entries, 0);
             memory_free_ext(heap, (void*)t_e);
         }
 
@@ -546,7 +546,7 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     uint32_t ssdt_cnt = 0;
 
-    linkedlist_t* old_ssdts = linkedlist_create_list();
+    list_t* old_ssdts = list_create_list();
 
     while(ssdt) {
         if(acpi_aml_parser_parse_table(pctx, ssdt) == 0) {
@@ -558,12 +558,12 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
         ssdt_cnt++;
 
-        linkedlist_list_insert(old_ssdts, ssdt);
+        list_list_insert(old_ssdts, ssdt);
 
         ssdt = acpi_get_next_table(desc, "SSDT", old_ssdts);
     }
 
-    linkedlist_destroy(old_ssdts);
+    list_destroy(old_ssdts);
 
     if(acpi_device_build(pctx) != 0) {
         PRINTLOG(ACPI, LOG_ERROR, "devices cannot be builded");

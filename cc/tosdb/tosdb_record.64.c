@@ -462,7 +462,7 @@ static boolean_t tosdb_record_compare_values(data_type_t type, uint64_t item1_le
     return true;
 }
 
-linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
+list_t* tosdb_record_search(tosdb_record_t* record) {
     if(!record || !record->context) {
         return NULL;
     }
@@ -566,7 +566,7 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
 
     tosdb_record_context_t* r_ctx = record->context;
 
-    linkedlist_t* recs = linkedlist_create_list();
+    list_t* recs = list_create_list();
 
     boolean_t dont_add = false;
 
@@ -649,7 +649,7 @@ linkedlist_t* tosdb_record_search(tosdb_record_t* record) {
 
                                 rec->destroy(rec);
                             } else {
-                                if(linkedlist_list_insert(recs, rec) == -1ULL) {
+                                if(list_list_insert(recs, rec) == -1ULL) {
                                     PRINTLOG(TOSDB, LOG_ERROR, "cannot insert record to list");
                                     dont_add = true;
                                     rec->destroy(rec);

@@ -2,7 +2,7 @@
  * @file indexer.h
  * @brief indexer interface
  *
- * allow indexing of @ref linkedlist_t
+ * allow indexing of @ref list_t
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.

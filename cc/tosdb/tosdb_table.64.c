@@ -117,10 +117,10 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
             tbl->sstable_max_level = MAX(tbl->sstable_max_level, level);
 
 
-            linkedlist_t* st_l = (linkedlist_t*)hashmap_get(tbl->sstable_levels, (void*)level);
+            list_t* st_l = (list_t*)hashmap_get(tbl->sstable_levels, (void*)level);
 
             if(!st_l) {
-                st_l = linkedlist_create_queue();
+                st_l = list_create_queue();
 
                 if(!st_l) {
                     PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list for level");
@@ -133,7 +133,7 @@ boolean_t tosdb_table_load_sstables(tosdb_table_t* tbl) {
                 hashmap_put(tbl->sstable_levels, (void*)level, st_l);
             }
 
-            linkedlist_queue_push(st_l, st);
+            list_queue_push(st_l, st);
 
             PRINTLOG(TOSDB, LOG_DEBUG, "table %s sstable %lli with level %lli lazy loaded", tbl->name, st->sstable_id, st->level);
         }
@@ -532,7 +532,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
         PRINTLOG(TOSDB, LOG_TRACE, "indexes of table %s destroyed", tbl->name);
 
         if(tbl->memtables) {
-            iter = linkedlist_iterator_create(tbl->memtables);
+            iter = list_iterator_create(tbl->memtables);
 
             if(!iter) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable iterator");
@@ -552,7 +552,7 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
 
             iter->destroy(iter);
 
-            linkedlist_destroy(tbl->memtables);
+            list_destroy(tbl->memtables);
             tbl->memtables = NULL;
             tbl->current_memtable = NULL;
         }
@@ -569,9 +569,9 @@ boolean_t tosdb_table_close(tosdb_table_t* tbl) {
             }
 
             while(stl_iter->end_of_iterator(stl_iter) != 0) {
-                linkedlist_t* st_list = (linkedlist_t*)stl_iter->get_item(stl_iter);
+                list_t* st_list = (list_t*)stl_iter->get_item(stl_iter);
 
-                linkedlist_destroy_with_data(st_list);
+                list_destroy_with_data(st_list);
 
                 stl_iter = stl_iter->next(stl_iter);
             }
@@ -651,7 +651,7 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
     }
 
     if(tbl->memtables) {
-        iterator_t* iter = linkedlist_iterator_create(tbl->memtables);
+        iterator_t* iter = list_iterator_create(tbl->memtables);
 
         if(!iter) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable iterator");
@@ -674,11 +674,11 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
 
         }
 
-        linkedlist_destroy(tbl->memtables);
+        list_destroy(tbl->memtables);
     }
 
     if(tbl->sstable_list_items) {
-        linkedlist_destroy_with_data(tbl->sstable_list_items);
+        list_destroy_with_data(tbl->sstable_list_items);
     }
 
     if(tbl->sstable_levels) {
@@ -690,9 +690,9 @@ boolean_t tosdb_table_free(tosdb_table_t* tbl) {
             error = true;
         } else {
             while(stl_iter->end_of_iterator(stl_iter) != 0) {
-                linkedlist_t* st_list = (linkedlist_t*)stl_iter->get_item(stl_iter);
+                list_t* st_list = (list_t*)stl_iter->get_item(stl_iter);
 
-                linkedlist_destroy_with_data(st_list);
+                list_destroy_with_data(st_list);
 
                 stl_iter = stl_iter->next(stl_iter);
             }
@@ -736,7 +736,7 @@ boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
     block->database_id = tbl->db->id;
     block->table_id = tbl->id;
 
-    iterator_t* iter = linkedlist_iterator_create(tbl->index_new);
+    iterator_t* iter = list_iterator_create(tbl->index_new);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create index iterator");
@@ -780,7 +780,7 @@ boolean_t tosdb_table_index_persist(tosdb_table_t* tbl) {
 
 
     tbl->index_new_count = 0;
-    linkedlist_destroy(tbl->index_new);
+    list_destroy(tbl->index_new);
 
     return true;
 }
@@ -808,7 +808,7 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
     block->database_id = tbl->db->id;
     block->table_id = tbl->id;
 
-    iterator_t* iter = linkedlist_iterator_create(tbl->column_new);
+    iterator_t* iter = list_iterator_create(tbl->column_new);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create column iterator");
@@ -852,7 +852,7 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
 
 
     tbl->column_new_count = 0;
-    linkedlist_destroy(tbl->column_new);
+    list_destroy(tbl->column_new);
 
     return true;
 }
@@ -899,9 +899,9 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         }
     }
 
-    if(tbl->memtables && linkedlist_size(tbl->memtables)) {
+    if(tbl->memtables && list_size(tbl->memtables)) {
         need_persist = true;
-        PRINTLOG(TOSDB, LOG_TRACE, "persisting memtables for table %s memtable count %lli", tbl->name, linkedlist_size(tbl->memtables));
+        PRINTLOG(TOSDB, LOG_TRACE, "persisting memtables for table %s memtable count %lli", tbl->name, list_size(tbl->memtables));
 
         if(!tosdb_table_memtable_persist(tbl)) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot persist memtables for table %s", tbl->name);
@@ -999,7 +999,7 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, const char_t* colname, data
     }
 
     if(!tbl->column_new) {
-        tbl->column_new = linkedlist_create_list();
+        tbl->column_new = list_create_list();
 
         if(!tbl->column_new) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create new column list for table  %s", tbl->name);
@@ -1025,7 +1025,7 @@ boolean_t tosdb_table_column_add(tosdb_table_t* tbl, const char_t* colname, data
     tbl->column_new_count++;
 
     hashmap_put(tbl->columns, col->name, col);
-    linkedlist_list_insert(tbl->column_new, col);
+    list_list_insert(tbl->column_new, col);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "col %s is added to table %s", colname, tbl->name);
 
@@ -1055,7 +1055,7 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, to
 
 
     if(!tbl->index_new) {
-        tbl->index_new = linkedlist_create_list();
+        tbl->index_new = list_create_list();
 
         if(!tbl->index_new) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create new index list for table  %s", tbl->name);
@@ -1088,7 +1088,7 @@ boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, to
 
     hashmap_put(tbl->indexes, (void*)idx->id, idx);
     hashmap_put(tbl->index_column_map, (void*)idx->column_id, idx);
-    linkedlist_list_insert(tbl->index_new, idx);
+    list_list_insert(tbl->index_new, idx);
 
     PRINTLOG(TOSDB, LOG_DEBUG, "index %lli for column %s is added to table %s", idx->id, colname, tbl->name);
 
@@ -1111,16 +1111,16 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
 
     lock_acquire(tbl->lock);
 
-    uint64_t idx = linkedlist_size(tbl->memtables);
+    uint64_t idx = list_size(tbl->memtables);
 
     do {
         idx--;
 
-        tosdb_memtable_t* mt = (tosdb_memtable_t*)linkedlist_get_data_at_position(tbl->memtables, idx);
+        tosdb_memtable_t* mt = (tosdb_memtable_t*)list_get_data_at_position(tbl->memtables, idx);
 
         if(!mt->is_dirty) {
             if(mt->stli) {
-                linkedlist_stack_push(tbl->sstable_list_items, mt->stli);
+                list_stack_push(tbl->sstable_list_items, mt->stli);
                 mt->stli = NULL;
             }
 
@@ -1132,19 +1132,19 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
         }
 
         if(mt->stli) {
-            linkedlist_stack_push(tbl->sstable_list_items, mt->stli);
+            list_stack_push(tbl->sstable_list_items, mt->stli);
             mt->stli = NULL;
         }
 
     } while(idx > 0);
 
-    if(!linkedlist_size(tbl->sstable_list_items)) {
+    if(!list_size(tbl->sstable_list_items)) {
         return true;
     }
 
-    PRINTLOG(TOSDB, LOG_DEBUG, "sstable list items count %lli", linkedlist_size(tbl->sstable_list_items));
+    PRINTLOG(TOSDB, LOG_DEBUG, "sstable list items count %lli", list_size(tbl->sstable_list_items));
 
-    uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + linkedlist_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
+    uint64_t block_size = sizeof(tosdb_block_sstable_list_t) + list_size(tbl->sstable_list_items) * sizeof(tosdb_block_sstable_list_item_t);
 
 
     buffer_t* buf_stli = buffer_new_with_capacity(NULL, block_size * 2);
@@ -1156,7 +1156,7 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
         return false;
     }
 
-    iterator_t* iter = linkedlist_iterator_create(tbl->sstable_list_items);
+    iterator_t* iter = list_iterator_create(tbl->sstable_list_items);
 
     if(!iter) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable iter");
@@ -1165,7 +1165,7 @@ boolean_t tosdb_table_memtable_persist(tosdb_table_t* tbl) {
         return false;
     }
 
-    uint64_t stli_cnt = linkedlist_size(tbl->sstable_list_items);
+    uint64_t stli_cnt = list_size(tbl->sstable_list_items);
 
     while(iter->end_of_iterator(iter) != 0) {
         tosdb_block_sstable_list_item_t* stli = (tosdb_block_sstable_list_item_t*)iter->delete_item(iter);

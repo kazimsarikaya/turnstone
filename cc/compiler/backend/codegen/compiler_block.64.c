@@ -67,11 +67,11 @@ int8_t compiler_execute_block_type(compiler_t* compiler, compiler_ast_node_t* no
     hashmap_put(compiler->types_by_name, node->type_data->name, node->type_data);
     hashmap_put(compiler->types_by_id, (void*)node->type_data->id, node->type_data);
 
-    while(linkedlist_size(node->type_data->fields)) {
-        compiler_ast_node_t * field_node = (compiler_ast_node_t*)linkedlist_queue_pop(node->type_data->fields);
+    while(list_size(node->type_data->fields)) {
+        compiler_ast_node_t * field_node = (compiler_ast_node_t*)list_queue_pop(node->type_data->fields);
 
-        for(size_t i = 0; i < linkedlist_size(field_node->children); i++) {
-            compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(field_node->children, i);
+        for(size_t i = 0; i < list_size(field_node->children); i++) {
+            compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)list_get_data_at_position(field_node->children, i);
 
             if(hashmap_get(node->type_data->field_map, tmp_symbol->name) != NULL) {
                 PRINTLOG(COMPILER, LOG_ERROR, "field %s already defined", tmp_symbol->name);
@@ -262,8 +262,8 @@ int8_t compiler_execute_block_var_int(compiler_t* compiler, compiler_symbol_t* s
 int8_t compiler_execute_block_var(compiler_t* compiler, compiler_ast_node_t* node, int64_t* result) {
     UNUSED(result);
 
-    for(size_t j = 0; j < linkedlist_size(node->children); j++) {
-        compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(node->children, j);
+    for(size_t j = 0; j < list_size(node->children); j++) {
+        compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)list_get_data_at_position(node->children, j);
 
         if(strcmp(compiler->program_name, tmp_symbol->name) != 0 && hashmap_get(compiler->current_symbol_table->symbols, tmp_symbol->name) != NULL) {
             PRINTLOG(COMPILER, LOG_ERROR, "symbol %s already defined", tmp_symbol->name);
@@ -296,8 +296,8 @@ int8_t compiler_execute_block(compiler_t* compiler, compiler_ast_node_t* node, i
     if(node->left) {
         if(node->left->type == COMPILER_AST_NODE_TYPE_DECLS) {
 
-            for(size_t i = 0; i < linkedlist_size(node->left->children); i++) {
-                compiler_ast_node_t * tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->left->children, i);
+            for(size_t i = 0; i < list_size(node->left->children); i++) {
+                compiler_ast_node_t * tmp_node = (compiler_ast_node_t*)list_get_data_at_position(node->left->children, i);
 
                 int8_t ret = -1;
 

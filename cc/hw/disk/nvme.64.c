@@ -94,10 +94,10 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t nvme_init(memory_heap_t* heap, linkedlist_t* nvme_pci_devices) {
+int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
     PRINTLOG(NVME, LOG_INFO, "disk searching started");
 
-    if(linkedlist_size(nvme_pci_devices) == 0) {
+    if(list_size(nvme_pci_devices) == 0) {
         PRINTLOG(NVME, LOG_WARNING, "no SATA devices");
         return 0;
     }
@@ -120,7 +120,7 @@ int8_t nvme_init(memory_heap_t* heap, linkedlist_t* nvme_pci_devices) {
 
     uint64_t disk_id = 0;
 
-    iterator_t* iter = linkedlist_iterator_create(nvme_pci_devices);
+    iterator_t* iter = list_iterator_create(nvme_pci_devices);
 
     while(iter->end_of_iterator(iter) != 0) {
         const pci_dev_t* p = iter->get_item(iter);

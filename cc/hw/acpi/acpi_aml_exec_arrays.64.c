@@ -141,7 +141,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
     int64_t src2_copy_len = 0;
 
     if(new_buflen >= 2) {
-        new_buflen -= 2; //remove end tag
+        new_buflen -= 2; // remove end tag
     }
 
     src1_copy_len = new_buflen;
@@ -176,7 +176,7 @@ int8_t acpi_aml_exec_concatres(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t
     memory_memcopy(src1->buffer.buf, new_buf, src1_copy_len);
     memory_memcopy(src2->buffer.buf, new_buf + src1_copy_len, src2_copy_len);
 
-    new_buf[new_buflen - 2] = 0x79; //endtag
+    new_buf[new_buflen - 2] = 0x79; // endtag
 
     res->buffer.buf = new_buf;
 
@@ -241,7 +241,7 @@ int8_t acpi_aml_exec_index(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* op
         res->field.offset = 8 * idx_val;
 
     } else {
-        acpi_aml_object_t* tmp = (acpi_aml_object_t*)linkedlist_get_data_at_position(src->package.elements, idx_val);
+        acpi_aml_object_t* tmp = (acpi_aml_object_t*)list_get_data_at_position(src->package.elements, idx_val);
         res->type = ACPI_AML_OT_REFOF;
         res->refof_target = tmp;
     }

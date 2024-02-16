@@ -19,8 +19,8 @@
 
 MODULE("turnstone.kernel.hw.disk.ahci");
 
-linkedlist_t* sata_ports = NULL;
-linkedlist_t* sata_hbas = NULL;
+list_t* sata_ports = NULL;
+list_t* sata_hbas = NULL;
 
 ahci_device_type_t ahci_check_type(ahci_hba_port_t* port);
 int8_t             ahci_find_command_slot(ahci_sata_disk_t* disk);
@@ -40,15 +40,15 @@ const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
     tmp_disk.disk_id = disk_id;
     uint64_t pos;
 
-    if(linkedlist_get_position(sata_ports, &tmp_disk, &pos) != 0) {
+    if(list_get_position(sata_ports, &tmp_disk, &pos) != 0) {
         return NULL;
     }
 
-    return linkedlist_get_data_at_position(sata_ports, pos);
+    return list_get_data_at_position(sata_ports, pos);
 }
 
 const ahci_sata_disk_t* ahci_get_first_inserted_disk(void) {
-    iterator_t* iter = linkedlist_iterator_create(sata_ports);
+    iterator_t* iter = list_iterator_create(sata_ports);
 
     while(iter->end_of_iterator(iter) != 0) {
         const ahci_sata_disk_t* disk = iter->get_item(iter);
@@ -73,7 +73,7 @@ int8_t ahci_isr(interrupt_frame_ext_t* frame){
 
     boolean_t irq_handled = 0;
 
-    iterator_t* iter = linkedlist_iterator_create(sata_hbas);
+    iterator_t* iter = list_iterator_create(sata_hbas);
 
     while(iter->end_of_iterator(iter) != 0) {
         const ahci_hba_t* hba = iter->get_item(iter);
@@ -117,7 +117,7 @@ int8_t ahci_isr(interrupt_frame_ext_t* frame){
 
 void ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id) {
     ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)hba->hba_addr;
-    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
+    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
     PRINTLOG(AHCI, LOG_TRACE, "interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x",
@@ -313,20 +313,20 @@ int8_t ahci_disk_id_comparator(const void* disk1, const void* disk2) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
+int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
     PRINTLOG(AHCI, LOG_INFO, "ahci controller init started");
 
-    if(linkedlist_size(sata_pci_devices) == 0) {
+    if(list_size(sata_pci_devices) == 0) {
         PRINTLOG(AHCI, LOG_WARNING, "no SATA devices");
         return 0;
     }
 
     uint64_t disk_id = 0;
 
-    sata_ports = linkedlist_create_sortedlist_with_heap(heap, ahci_disk_id_comparator);
-    sata_hbas = linkedlist_create_list_with_heap(heap);
+    sata_ports = list_create_sortedlist_with_heap(heap, ahci_disk_id_comparator);
+    sata_hbas = list_create_list_with_heap(heap);
 
-    iterator_t* iter = linkedlist_iterator_create(sata_pci_devices);
+    iterator_t* iter = list_iterator_create(sata_pci_devices);
 
     while(iter->end_of_iterator(iter) != 0) {
         const pci_dev_t* p = iter->get_item(iter);
@@ -427,7 +427,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
             PRINTLOG(AHCI, LOG_TRACE, "sata revision %i.%i sata bar %i offset 0x%x", hba->revision_major, hba->revision_minor, hba->sata_bar, hba->sata_bar_offset );
         }
 
-        linkedlist_list_insert(sata_hbas, hba);
+        list_list_insert(sata_hbas, hba);
 
         if(msi_cap) {
             PRINTLOG(AHCI, LOG_TRACE, "msi capability present");
@@ -494,7 +494,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
             disk->command_count = nr_cmd_slots;
             disk->disk_lock = lock_create_with_heap(heap);
 
-            linkedlist_list_insert(sata_ports, disk);
+            list_list_insert(sata_ports, disk);
 
             PRINTLOG(AHCI, LOG_DEBUG, "Disk %lli inserted for port %d", disk->disk_id, port_idx);
 
@@ -546,7 +546,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
 
     iter->destroy(iter);
 
-    uint64_t disk_cnt = linkedlist_size(sata_ports);
+    uint64_t disk_cnt = list_size(sata_ports);
 
     PRINTLOG(AHCI, LOG_INFO, "disk searching ended, %lli disks found", disk_cnt);
 
@@ -555,7 +555,7 @@ int8_t ahci_init(memory_heap_t* heap, linkedlist_t* sata_pci_devices) {
 #pragma GCC diagnostic pop
 
 future_t ahci_flush(uint64_t disk_id) {
-    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
+    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
@@ -597,7 +597,7 @@ future_t ahci_flush(uint64_t disk_id) {
 }
 
 int8_t ahci_identify(uint64_t disk_id) {
-    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
+    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
@@ -753,7 +753,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 }
 
 future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
-    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
+    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
@@ -852,7 +852,7 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffe
 }
 
 future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
-    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)linkedlist_get_data_at_position(sata_ports, disk_id);
+    ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 

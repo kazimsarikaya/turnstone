@@ -10,12 +10,12 @@
 #define ___NETWORK_INFO_H 0
 
 #include <network/network_protocols.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <map.h>
 
 typedef struct network_info_t {
     network_mac_address_t  mac;
-    linkedlist_t*          return_queue;
+    list_t*                return_queue;
     network_ipv4_address_t ipv4_address;
     network_ipv4_address_t ipv4_subnetmask;
     network_ipv4_address_t ipv4_broadcast;

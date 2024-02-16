@@ -11,7 +11,7 @@
 #include <cpu/task.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <time/timer.h>
 #include <logging.h>
 #include <systeminfo.h>
@@ -26,8 +26,8 @@ uint64_t task_id = 0;
 
 task_t* current_task = NULL;
 
-linkedlist_t* task_queue = NULL;
-linkedlist_t* task_cleaner_queue = NULL;
+list_t* task_queue = NULL;
+list_t* task_cleaner_queue = NULL;
 map_t task_map = NULL;
 uint32_t task_mxcsr_mask = 0;
 
@@ -108,8 +108,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     tss->rsp1 = tss->rsp2  + stack_size;
     tss->rsp0 = rsp;
 
-    task_queue = linkedlist_create_queue_with_heap(heap);
-    task_cleaner_queue = linkedlist_create_queue_with_heap(heap);
+    task_queue = list_create_queue_with_heap(heap);
+    task_cleaner_queue = list_create_queue_with_heap(heap);
 
     interrupt_irq_set_handler(0x60, &task_task_switch_isr);
 
@@ -287,8 +287,8 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
 }
 
 void task_cleanup(void){
-    while(linkedlist_size(task_cleaner_queue)) {
-        task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
+    while(list_size(task_cleaner_queue)) {
+        task_t* tmp = (task_t*)list_queue_pop(task_cleaner_queue);
 
         map_delete(task_map, (void*)tmp->task_id);
 
@@ -346,15 +346,15 @@ boolean_t task_idle_check_need_yield(void) {
 
     boolean_t need_yield = false;
 
-    for(uint64_t i = 0; i < linkedlist_size(task_queue); i++) {
-        task_t* t = (task_t*)linkedlist_get_data_at_position(task_queue, i);
+    for(uint64_t i = 0; i < list_size(task_queue); i++) {
+        task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
         if(t) {
             if(t->message_waiting && t->message_queues) {
-                for(uint64_t q_idx = 0; q_idx < linkedlist_size(t->message_queues); q_idx++) {
-                    linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(t->message_queues, q_idx);
+                for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
+                    list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
 
-                    if(linkedlist_size(q)) {
+                    if(list_size(q)) {
                         t->message_waiting = false;
                         need_yield = true;
                     }
@@ -377,7 +377,7 @@ task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
     while(1) {
-        tmp_task = (task_t*)linkedlist_queue_pop(task_queue);
+        tmp_task = (task_t*)list_queue_pop(task_queue);
 
         if(tmp_task->sleeping) {
 
@@ -386,7 +386,7 @@ task_t* task_find_next_task(void) {
                 break;
             }
 
-            linkedlist_queue_push(task_queue, tmp_task);
+            list_queue_push(task_queue, tmp_task);
         } else if(tmp_task->message_waiting) {
 
 
@@ -399,18 +399,18 @@ task_t* task_find_next_task(void) {
                 }
             } else if(tmp_task->message_queues) {
 
-                for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
-                    const linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
+                for(uint64_t q_idx = 0; q_idx < list_size(tmp_task->message_queues); q_idx++) {
+                    const list_t* q = (list_t*)list_get_data_at_position(tmp_task->message_queues, q_idx);
 
                     if(q) {
-                        if(linkedlist_size(q)) {
+                        if(list_size(q)) {
                             tmp_task->message_waiting = false;
                             break;
                         }
 
                     } else {
                         PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli has null queue in message queues, removing task", tmp_task->task_id);
-                        linkedlist_queue_push(task_cleaner_queue, tmp_task);
+                        list_queue_push(task_cleaner_queue, tmp_task);
 
                         continue;
                     }
@@ -419,12 +419,12 @@ task_t* task_find_next_task(void) {
 
             } else {
                 PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli in message waiting state without message queues, removing task", tmp_task->task_id);
-                linkedlist_queue_push(task_cleaner_queue, tmp_task);
+                list_queue_push(task_cleaner_queue, tmp_task);
 
                 continue;
             }
 
-            linkedlist_queue_push(task_queue, tmp_task);
+            list_queue_push(task_queue, tmp_task);
         } else {
             break;
         }
@@ -456,7 +456,7 @@ static inline void task_switch_task_exit_prep(void) {
 }
 
 __attribute__((no_stack_protector)) void task_switch_task(void) {
-    if(current_task == NULL || task_queue == NULL || linkedlist_size(task_queue) == 0) {
+    if(current_task == NULL || task_queue == NULL || list_size(task_queue) == 0) {
         task_switch_task_exit_prep();
 
         return;
@@ -470,7 +470,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     }
 
     task_save_registers(current_task);
-    linkedlist_queue_push(task_queue, current_task);
+    list_queue_push(task_queue, current_task);
 
     if(current_task->task_id == TASK_KERNEL_TASK_ID) {
         task_cleanup();
@@ -488,7 +488,7 @@ void task_end_task(void) {
     cpu_cli();
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
-    linkedlist_queue_push(task_cleaner_queue, current_task);
+    list_queue_push(task_cleaner_queue, current_task);
 
     PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
 
@@ -500,13 +500,13 @@ void task_end_task(void) {
 }
 
 
-void task_add_message_queue(linkedlist_t* queue){
+void task_add_message_queue(list_t* queue){
     cpu_cli();
     if(current_task->message_queues == NULL) {
-        current_task->message_queues = linkedlist_create_list();
+        current_task->message_queues = list_create_list();
     }
 
-    linkedlist_list_insert(current_task->message_queues, queue);
+    list_list_insert(current_task->message_queues, queue);
 
     cpu_sti();
 }
@@ -634,7 +634,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     cpu_cli();
 
-    linkedlist_stack_push(task_queue, new_task);
+    list_stack_push(task_queue, new_task);
     map_insert(task_map, (void*)new_task->task_id, new_task);
 
     cpu_sti();
@@ -643,7 +643,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 }
 
 void task_yield(void) {
-    if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
+    if(list_size(task_queue)) { // prevent unneccessary interrupt
         // __asm__ __volatile__ ("int $0x80\n");
         cpu_cli();
         task_task_switch_set_parameters(false, true);

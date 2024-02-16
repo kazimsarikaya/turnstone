@@ -11,7 +11,7 @@
 
 #include <types.h>
 #include <buffer.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <hashmap.h>
 
 /**
@@ -167,7 +167,7 @@ struct compiler_type_t {
     int64_t               id;
     compiler_token_type_t type;
     boolean_t             is_packed;
-    linkedlist_t*         fields;
+    list_t*               fields;
     int64_t               size;
     hashmap_t*            field_map;
 };
@@ -180,7 +180,7 @@ struct compiler_ast_node_t {
     compiler_ast_node_t*     left;
     compiler_ast_node_t*     right;
     compiler_ast_node_t*     condition;
-    linkedlist_t*            children;
+    list_t*                  children;
     compiler_type_t*         type_data;
     int16_t                  used_register;
     compiler_symbol_t*       symbol;
@@ -224,9 +224,9 @@ typedef struct compiler_t {
     uint16_t                 next_stack_offset;
     boolean_t                busy_regs[COMPILER_VM_REG_COUNT];
     int32_t                  next_label_id;
-    linkedlist_t*            cond_label_stack;
+    list_t*                  cond_label_stack;
     int64_t                  cond_depth;
-    linkedlist_t*            loop_label_stack;
+    list_t*                  loop_label_stack;
     int64_t                  loop_depth;
     boolean_t                is_cond_eval;
 } compiler_t;
@@ -236,7 +236,7 @@ int8_t compiler_token_destroy(compiler_token_t * token);
 
 int8_t compiler_symbol_destroyer(memory_heap_t* heap, void* symbol);
 
-#define compiler_destroy_symbol_list(list) linkedlist_destroy_with_type(list, LINKEDLIST_DESTROY_WITH_DATA, compiler_symbol_destroyer)
+#define compiler_destroy_symbol_list(list) list_destroy_with_type(list, LIST_DESTROY_WITH_DATA, compiler_symbol_destroyer)
 int8_t compiler_ast_node_destroy(compiler_ast_node_t * node);
 int8_t compiler_ast_node_destroyer(memory_heap_t* heap, void* node);
 int8_t compiler_ast_init(compiler_ast_t * ast);

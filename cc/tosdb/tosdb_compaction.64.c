@@ -23,9 +23,9 @@ boolean_t tosdb_compact(tosdb_t* tdb, tosdb_compaction_type_t type) {
     }
 
     if(type == TOSDB_COMPACTION_TYPE_MAJOR) {
-        //if(!tosdb_compact(tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
-        //return false;
-        //}
+        // if(!tosdb_compact(tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
+        // return false;
+        // }
     }
 
     hashmap_t* dbs = tdb->databases;
@@ -107,15 +107,15 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
     boolean_t error = false;
 
     set_t* pks = set_create(tosdb_record_primary_key_comparator);
-    linkedlist_t* old_pks = linkedlist_create_list();
+    list_t* old_pks = list_create_list();
     tosdb_table_get_primary_keys_internal(tbl, pks, old_pks);
 
     printf("!!! ss %s %lli\n", tbl->name, set_size(pks));
     set_destroy_with_callback(pks, tosdb_record_search_set_destroy_cb);
 
-    printf("!!! ls %s %lli\n", tbl->name, linkedlist_size(old_pks));
+    printf("!!! ls %s %lli\n", tbl->name, list_size(old_pks));
 
-    iterator_t* iter = linkedlist_iterator_create(old_pks);
+    iterator_t* iter = list_iterator_create(old_pks);
 
     hashmap_t* level_holes = hashmap_integer(128);
 
@@ -138,7 +138,7 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
     }
 
     iter->destroy(iter);
-    linkedlist_destroy(old_pks);
+    list_destroy(old_pks);
 
     iter = hashmap_iterator_create(level_holes);
 

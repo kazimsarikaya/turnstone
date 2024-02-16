@@ -11,7 +11,7 @@
 
 #include <types.h>
 #include <buffer.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <hashmap.h>
 #include <compiler/compiler.h>
 

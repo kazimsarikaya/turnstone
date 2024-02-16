@@ -15,7 +15,7 @@
 #include <logging.h>
 #include <strings.h>
 #include <efi.h>
-#include <linkedlist.h>
+#include <list.h>
 
 MODULE("turnstone.lib");
 
@@ -112,7 +112,7 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
         return -1;
     }
 
-    linkedlist_t* symbols = s_sym_rec->search_record(s_sym_rec);
+    list_t* symbols = s_sym_rec->search_record(s_sym_rec);
 
     s_sym_rec->destroy(s_sym_rec);
 
@@ -122,9 +122,9 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
         return -1;
     }
 
-    PRINTLOG(LINKER, LOG_DEBUG, "found %llu symbols for section id 0x%llx", linkedlist_size(symbols), section_id);
+    PRINTLOG(LINKER, LOG_DEBUG, "found %llu symbols for section id 0x%llx", list_size(symbols), section_id);
 
-    iterator_t* it = linkedlist_iterator_create(symbols);
+    iterator_t* it = list_iterator_create(symbols);
 
     if(!it) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for symbols");
@@ -251,7 +251,7 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
 
     it->destroy(it);
 
-    linkedlist_destroy(symbols);
+    list_destroy(symbols);
 
     return res;
 
@@ -268,7 +268,7 @@ clean_symbols_iter:
 
     it->destroy(it);
 
-    linkedlist_destroy(symbols);
+    list_destroy(symbols);
 
     return -1;
 }
@@ -297,7 +297,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
     PRINTLOG(LINKER, LOG_TRACE, "searching relocations for section id 0x%llx", section_id);
 
-    linkedlist_t* relocations = s_rel_reloc->search_record(s_rel_reloc);
+    list_t* relocations = s_rel_reloc->search_record(s_rel_reloc);
 
     s_rel_reloc->destroy(s_rel_reloc);
 
@@ -307,9 +307,9 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         return -1;
     }
 
-    PRINTLOG(LINKER, LOG_DEBUG, "relocations count of section 0x%llx: 0x%llx", section_id, linkedlist_size(relocations));
+    PRINTLOG(LINKER, LOG_DEBUG, "relocations count of section 0x%llx: 0x%llx", section_id, list_size(relocations));
 
-    iterator_t* it = linkedlist_iterator_create(relocations);
+    iterator_t* it = list_iterator_create(relocations);
 
     if(!it) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for relocations");
@@ -528,7 +528,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
     it->destroy(it);
 
-    linkedlist_destroy(relocations);
+    list_destroy(relocations);
 
     return res;
 
@@ -545,7 +545,7 @@ clean_relocs_iter:
 
     it->destroy(it);
 
-    linkedlist_destroy(relocations);
+    list_destroy(relocations);
 
     return -1;
 }
@@ -594,7 +594,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
         return -1;
     }
 
-    linkedlist_t* sections = s_sec_rec->search_record(s_sec_rec);
+    list_t* sections = s_sec_rec->search_record(s_sec_rec);
 
     s_sec_rec->destroy(s_sec_rec);
 
@@ -604,7 +604,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
         return -1;
     }
 
-    PRINTLOG(LINKER, LOG_DEBUG, "module 0x%llx sections count: %llu", module_id, linkedlist_size(sections));
+    PRINTLOG(LINKER, LOG_DEBUG, "module 0x%llx sections count: %llu", module_id, list_size(sections));
 
 
     uint64_t section_id = 0;
@@ -617,7 +617,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
     uint64_t section_offset = 0;
 
-    iterator_t* it = linkedlist_iterator_create(sections);
+    iterator_t* it = list_iterator_create(sections);
 
     while(it->end_of_iterator(it) != 0) {
         tosdb_record_t* sec_rec = (tosdb_record_t*)it->delete_item(it);
@@ -775,7 +775,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
     it->destroy(it);
 
-    linkedlist_destroy(sections);
+    list_destroy(sections);
 
     PRINTLOG(LINKER, LOG_DEBUG, "module id 0x%llx built", module_id);
 
@@ -794,7 +794,7 @@ clean_secs_iter:
 
     it->destroy(it);
 
-    linkedlist_destroy(sections);
+    list_destroy(sections);
 
     return -1;
 }
@@ -1165,7 +1165,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
         return NULL;
     }
 
-    linkedlist_t* relocations_list = linkedlist_create_sortedlist(linker_efi_image_relocation_entry_cmp);
+    list_t* relocations_list = list_create_sortedlist(linker_efi_image_relocation_entry_cmp);
 
     if(!relocations_list) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create list");
@@ -1221,7 +1221,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
                 } else {
                     if(efi_reloc_entry->page_rva != er_page) {
                         efi_reloc_entry->block_size = sizeof(efi_image_relocation_entry_t) + efi_reloc_entry_count * sizeof(uint16_t);
-                        linkedlist_sortedlist_insert(relocations_list, efi_reloc_entry);
+                        list_sortedlist_insert(relocations_list, efi_reloc_entry);
 
                         efi_reloc_entry = memory_malloc(sizeof(efi_image_relocation_entry_t) + sizeof(uint16_t) * EFI_IMAGE_MAX_RELOCATION_ENTRIES);
 
@@ -1250,7 +1250,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
 
         if(efi_reloc_entry_count && efi_reloc_entry) {
             efi_reloc_entry->block_size = sizeof(efi_image_relocation_entry_t) + efi_reloc_entry_count * sizeof(uint16_t);
-            linkedlist_sortedlist_insert(relocations_list, efi_reloc_entry);
+            list_sortedlist_insert(relocations_list, efi_reloc_entry);
         }
 
         it = it->next(it);
@@ -1268,7 +1268,7 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
     }
 
 
-    it = linkedlist_iterator_create(relocations_list);
+    it = list_iterator_create(relocations_list);
 
     while(it->end_of_iterator(it) != 0) {
         efi_image_relocation_entry_t* efi_reloc_entry = (efi_image_relocation_entry_t*)it->get_item(it);
@@ -1286,12 +1286,12 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
 
     it->destroy(it);
 
-    linkedlist_destroy_with_data(relocations_list);
+    list_destroy_with_data(relocations_list);
 
     return relocations_buffer;
 
 error:
-    linkedlist_destroy_with_data(relocations_list);
+    list_destroy_with_data(relocations_list);
     it->destroy(it);
 
     return NULL;
@@ -1304,7 +1304,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
         return NULL;
     }
 
-    linkedlist_t* sections_list = linkedlist_create_sortedlist(linker_efi_image_section_header_cmp);
+    list_t* sections_list = list_create_sortedlist(linker_efi_image_section_header_cmp);
 
     if(!sections_list) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot create list");
@@ -1364,7 +1364,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
                 efi_section_header->characteristics = EFI_IMAGE_SECTION_FLAGS_BSS;
             }
 
-            linkedlist_sortedlist_insert(sections_list, efi_section_header);
+            list_sortedlist_insert(sections_list, efi_section_header);
 
         }
 
@@ -1383,7 +1383,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
     }
 
 
-    it = linkedlist_iterator_create(sections_list);
+    it = list_iterator_create(sections_list);
 
     while(it->end_of_iterator(it) != 0) {
         efi_image_section_header_t* efi_reloc_entry = (efi_image_section_header_t*)it->get_item(it);
@@ -1399,12 +1399,12 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
 
     it->destroy(it);
 
-    linkedlist_destroy_with_data(sections_list);
+    list_destroy_with_data(sections_list);
 
     return sections_buffer;
 
 error:
-    linkedlist_destroy_with_data(sections_list);
+    list_destroy_with_data(sections_list);
     it->destroy(it);
 
     return NULL;

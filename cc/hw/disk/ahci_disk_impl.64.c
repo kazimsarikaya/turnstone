@@ -8,7 +8,7 @@
 #include <disk.h>
 #include <driver/ahci.h>
 #include <utils.h>
-#include <linkedlist.h>
+#include <list.h>
 
 MODULE("turnstone.kernel.hw.disk.ahci");
 
@@ -53,7 +53,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint32_t max_len = 65536 * ctx->block_size;
     future_t fut = NULL;
 
-    linkedlist_t* futs = linkedlist_create_list_with_heap(ctx->sata_disk->heap);
+    list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
     while(offset < buffer_len) {
         uint16_t iter_write_size = MIN(buffer_len, max_len);
@@ -62,14 +62,14 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
             fut = ahci_write(ctx->sata_disk->disk_id, lba, iter_write_size, data + offset);
         }while(fut == NULL);
 
-        linkedlist_list_insert(futs, fut);
+        list_list_insert(futs, fut);
 
 
         lba += iter_write_size / ctx->block_size;
         offset += iter_write_size;
     }
 
-    iterator_t* iter = linkedlist_iterator_create(futs);
+    iterator_t* iter = list_iterator_create(futs);
 
     while(iter->end_of_iterator(iter) != 0) {
         fut = (future_t*)iter->get_item(iter);
@@ -79,7 +79,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
         iter = iter->next(iter);
     }
 
-    linkedlist_destroy(futs);
+    list_destroy(futs);
 
     return 0;
 }
@@ -99,7 +99,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint32_t max_len = 65536 * ctx->block_size;
     future_t fut = NULL;
 
-    linkedlist_t* futs = linkedlist_create_list_with_heap(ctx->sata_disk->heap);
+    list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
     while(offset < buffer_len) {
         uint16_t iter_read_size = MIN(buffer_len, max_len);
@@ -108,13 +108,13 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
             fut = ahci_read(ctx->sata_disk->disk_id, lba, iter_read_size, read_buf + offset);
         }while(fut == NULL);
 
-        linkedlist_list_insert(futs, fut);
+        list_list_insert(futs, fut);
 
         lba += iter_read_size / ctx->block_size;
         offset += iter_read_size;
     }
 
-    iterator_t* iter = linkedlist_iterator_create(futs);
+    iterator_t* iter = list_iterator_create(futs);
 
     while(iter->end_of_iterator(iter) != 0) {
         fut = (future_t*)iter->get_item(iter);
@@ -124,7 +124,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
         iter = iter->next(iter);
     }
 
-    linkedlist_destroy(futs);
+    list_destroy(futs);
 
     return 0;
 }

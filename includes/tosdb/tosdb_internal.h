@@ -14,7 +14,7 @@
 #include <utils.h>
 #include <hashmap.h>
 #include <cpu/sync.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <indexer.h>
 #include <bloomfilter.h>
 #include <set.h>
@@ -378,23 +378,23 @@ struct tosdb_table_t {
     boolean_t         is_deleted;
     uint64_t          column_next_id;
     uint64_t          column_new_count;
-    linkedlist_t*     column_new;
+    list_t*           column_new;
     uint64_t          column_list_location;
     uint64_t          column_list_size;
     uint64_t          index_next_id;
     uint64_t          index_new_count;
-    linkedlist_t*     index_new;
+    list_t*           index_new;
     uint64_t          index_list_location;
     uint64_t          index_list_size;
     uint64_t          max_record_count;
     uint64_t          max_valuelog_size;
     uint64_t          max_memtable_count;
     tosdb_memtable_t* current_memtable;
-    linkedlist_t*     memtables;
+    list_t*           memtables;
     uint64_t          memtable_next_id;
     uint64_t          sstable_list_location;
     uint64_t          sstable_list_size;
-    linkedlist_t*     sstable_list_items;
+    list_t*           sstable_list_items;
     hashmap_t*        sstable_levels;
     uint64_t          sstable_max_level;
 };
@@ -503,15 +503,15 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record);
 boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results);
 boolean_t tosdb_sstable_search(tosdb_record_t* record, set_t* results);
 
-linkedlist_t* tosdb_record_search(tosdb_record_t* record);
-boolean_t     tosdb_record_search_set_destroy_cb(void * item);
+list_t*   tosdb_record_search(tosdb_record_t* record);
+boolean_t tosdb_record_search_set_destroy_cb(void * item);
 
 boolean_t tosdb_database_compact(const tosdb_database_t* db, tosdb_compaction_type_t type);
 boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t type);
 boolean_t tosdb_sstable_level_minor_compact(const tosdb_table_t* tbl, uint64_t level);
 boolean_t tosdb_sstable_level_major_compact(const tosdb_table_t* tbl, uint64_t level);
 int8_t    tosdb_record_primary_key_comparator(const void* item1, const void* item2);
-boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, linkedlist_t* old_pks);
+boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, list_t* old_pks);
 
 #define TOSDB_SEQUENCE_TABLE_NAME ".sequences"
 

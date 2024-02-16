@@ -50,7 +50,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     buffer_t* inbuf  = buffer_encapsulate(in_data, in_size);
 
 
-    linkedlist_t* tokens = asm_parser_parse(inbuf);
+    list_t* tokens = asm_parser_parse(inbuf);
 
     buffer_destroy(inbuf);
     memory_free(in_data);
@@ -60,7 +60,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     buffer_t* outbuf = buffer_new_with_capacity(NULL, 1024);
 
-    linkedlist_t* relocs = linkedlist_create_list();
+    list_t* relocs = list_create_list();
 
     int8_t result = asm_encode_instructions(tokens, outbuf, relocs);
 

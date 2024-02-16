@@ -15,7 +15,7 @@
 #include <strings.h>
 #include <utils.h>
 #include <random.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <time.h>
 
 

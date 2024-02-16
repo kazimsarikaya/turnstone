@@ -41,16 +41,16 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(method),
     PARSER_F_NAME(external),
     NULL, NULL, NULL, /*0x18*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
-    NULL,// 0x20 // empty
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x28*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,//empty
-    NULL,//0x30//empty
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x38*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,//empty
-    NULL,//0x40//empty
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x48*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,//empty
-    NULL,//0x50//empty
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x58*/ NULL, NULL,//empty
+    NULL, // 0x20 // empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x28*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
+    NULL, // 0x30//empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x38*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
+    NULL, // 0x40//empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x48*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL, // empty
+    NULL, // 0x50//empty
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0x58*/ NULL, NULL, // empty
     PARSER_F_NAME(op_extended),
-    NULL, NULL, NULL, NULL,//empty
+    NULL, NULL, NULL, NULL, // empty
     PARSER_F_NAME(opcnt_0), // 0x60
     PARSER_F_NAME(opcnt_0),
     PARSER_F_NAME(opcnt_0),
@@ -121,17 +121,17 @@ const acpi_aml_parse_f acpi_aml_parse_fs[] = {
     PARSER_F_NAME(opcnt_1),
     PARSER_F_NAME(opcnt_0),
     NULL, NULL, NULL, /*0xA8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,//0xB0
+    NULL, // 0xB0
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xB8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,//0xC0
+    NULL, // 0xC0
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xC8*/ NULL, NULL, NULL,
-    PARSER_F_NAME(opcnt_0),//0xCC
+    PARSER_F_NAME(opcnt_0), // 0xCC
     NULL, NULL, NULL,
-    NULL,//0xD0
+    NULL, // 0xD0
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xD8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,//0xE0
+    NULL, // 0xE0
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL,//0xF0
+    NULL, // 0xF0
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /*0xE8*/ NULL, NULL, NULL, NULL, NULL, NULL,
     PARSER_F_NAME(const_data)
 };
@@ -216,7 +216,7 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
             return -1;
         }
 
-        //char_t* nomname = acpi_aml_normalize_name(ctx, ctx->scope_prefix, name);
+        // char_t* nomname = acpi_aml_normalize_name(ctx, ctx->scope_prefix, name);
         tmp_obj->name = strdup_at_heap(ctx->heap, name);
         tmp_obj->type = ACPI_AML_OT_RUNTIMEREF;
 
@@ -259,9 +259,9 @@ int8_t acpi_aml_parse_symbol(acpi_aml_parser_context_t* ctx, void** data, uint64
 const acpi_aml_parse_f acpi_aml_parse_ext_fs[] = {
     PARSER_F_NAME(mutex), // 0x01 -> 0
     PARSER_F_NAME(event),
-    PARSER_F_NAME(extopcnt_2), //0x12 -> 2
+    PARSER_F_NAME(extopcnt_2), // 0x12 -> 2
     PARSER_F_NAME(create_field),
-    PARSER_F_NAME(extopcnt_6), //0x1F -> 4
+    PARSER_F_NAME(extopcnt_6), // 0x1F -> 4
     PARSER_F_NAME(extopcnt_2),
     PARSER_F_NAME(extopcnt_1),
     PARSER_F_NAME(extopcnt_1),
@@ -377,7 +377,7 @@ int8_t acpi_aml_parser_parse_table(acpi_aml_parser_context_t* ctx, acpi_sdt_head
 }
 
 void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
-    iterator_t* iter = linkedlist_iterator_create(ctx->devices);
+    iterator_t* iter = list_iterator_create(ctx->devices);
 
     while(iter->end_of_iterator(iter) != 0) {
         acpi_aml_device_t* d = (acpi_aml_device_t*)iter->get_item(iter);
@@ -388,7 +388,7 @@ void acpi_aml_parser_context_destroy(acpi_aml_parser_context_t* ctx) {
 
     iter->destroy(iter);
 
-    linkedlist_destroy(ctx->devices);
+    list_destroy(ctx->devices);
 
     acpi_aml_destroy_symbol_table(ctx, 0);
     memory_free_ext(ctx->heap, ctx);

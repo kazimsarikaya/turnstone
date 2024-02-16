@@ -14,7 +14,7 @@
 #include <cpu/interrupt.h>
 #include <logging.h>
 #include <time/timer.h>
-#include <linkedlist.h>
+#include <list.h>
 
 MODULE("turnstone.kernel.cpu.apic");
 
@@ -29,7 +29,7 @@ uint32_t lapic_initial_timer_count = 0;
 uint64_t apic_ap_count = 0;
 boolean_t apic_x2apic = false;
 
-linkedlist_t* irq_remappings = NULL;
+list_t* irq_remappings = NULL;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -108,7 +108,7 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
 
     PRINTLOG(APIC, LOG_DEBUG, "madt is found");
 
-    linkedlist_t* apic_entries = acpi_get_apic_table_entries(madt);
+    list_t* apic_entries = acpi_get_apic_table_entries(madt);
 
     if(apic_init_apic(apic_entries) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "cannot enable apic");
@@ -121,7 +121,7 @@ int8_t apic_setup(acpi_xrsdp_descriptor_t* desc) {
     return 0;
 }
 
-int8_t apic_init_apic(linkedlist_t* apic_entries){
+int8_t apic_init_apic(list_t* apic_entries){
     cpu_cpuid_regs_t query = {0x1, 0, 0, 0};
     cpu_cpuid_regs_t answer = {0, 0, 0, 0};
 
@@ -132,7 +132,7 @@ int8_t apic_init_apic(linkedlist_t* apic_entries){
     }
 
 
-    irq_remappings = linkedlist_create_list();
+    irq_remappings = list_create_list();
     if(irq_remappings == NULL) {
         return -1;
     }
@@ -153,7 +153,7 @@ int8_t apic_init_apic(linkedlist_t* apic_entries){
     const acpi_table_madt_entry_t* la = NULL;
 
 
-    iterator_t* iter = linkedlist_iterator_create(apic_entries);
+    iterator_t* iter = list_iterator_create(apic_entries);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);
@@ -167,7 +167,7 @@ int8_t apic_init_apic(linkedlist_t* apic_entries){
         }
 
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_INTERRUPT_SOURCE_OVERRIDE) {
-            linkedlist_list_insert(irq_remappings, e);
+            list_list_insert(irq_remappings, e);
             PRINTLOG(APIC, LOG_DEBUG, "source irq 0x%02x is at gsi 0x%02x", e->interrupt_source_override.irq_source, e->interrupt_source_override.global_system_interrupt);
         }
 
@@ -177,7 +177,7 @@ int8_t apic_init_apic(linkedlist_t* apic_entries){
     iter->destroy(iter);
 
     if(la == NULL) {
-        la = linkedlist_get_data_at_position(apic_entries, 0);
+        la = list_get_data_at_position(apic_entries, 0);
         lapic_addr = la->local_apic_address.address;
     } else {
         lapic_addr = la->local_apic_address_override.address;
@@ -222,7 +222,7 @@ int8_t apic_init_apic(linkedlist_t* apic_entries){
 }
 
 uint8_t apic_get_irq_override(uint8_t old_irq){
-    iterator_t* iter = linkedlist_iterator_create(irq_remappings);
+    iterator_t* iter = list_iterator_create(irq_remappings);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);
@@ -606,9 +606,9 @@ uint64_t apic_get_ap_count(void) {
 
     acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
 
-    linkedlist_t* apic_entries = acpi_get_apic_table_entries(madt);
+    list_t* apic_entries = acpi_get_apic_table_entries(madt);
 
-    iterator_t* iter = linkedlist_iterator_create(apic_entries);
+    iterator_t* iter = list_iterator_create(apic_entries);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);

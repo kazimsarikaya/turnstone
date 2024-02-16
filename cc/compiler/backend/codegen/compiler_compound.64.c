@@ -34,15 +34,15 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
     symbol_table->parent = compiler->current_symbol_table;
     compiler->current_symbol_table = symbol_table;
 
-    for(size_t i = 0; i < linkedlist_size(node->children); i++) {
-        compiler_ast_node_t * tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->children, i);
+    for(size_t i = 0; i < list_size(node->children); i++) {
+        compiler_ast_node_t * tmp_node = (compiler_ast_node_t*)list_get_data_at_position(node->children, i);
 
         if(tmp_node->type == COMPILER_AST_NODE_TYPE_DECLS) {
-            for(size_t j = 0; j < linkedlist_size(tmp_node->children); j++) {
-                compiler_ast_node_t * tmp_var_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(tmp_node->children, j);
+            for(size_t j = 0; j < list_size(tmp_node->children); j++) {
+                compiler_ast_node_t * tmp_var_node = (compiler_ast_node_t*)list_get_data_at_position(tmp_node->children, j);
 
-                for(size_t k = 0; k < linkedlist_size(tmp_var_node->children); k++) {
-                    compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(tmp_var_node->children, k);
+                for(size_t k = 0; k < list_size(tmp_var_node->children); k++) {
+                    compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)list_get_data_at_position(tmp_var_node->children, k);
 
                     if(strcmp(compiler->program_name, tmp_symbol->name) != 0 && hashmap_get(compiler->current_symbol_table->symbols, tmp_symbol->name) != NULL) {
                         PRINTLOG(COMPILER, LOG_ERROR, "symbol %s already defined", tmp_symbol->name);
@@ -137,8 +137,8 @@ int8_t compiler_execute_compound(compiler_t* compiler, compiler_ast_node_t* node
         return -1;
     }
 
-    for(size_t i = 0; i < linkedlist_size(node->children); i++) {
-        compiler_ast_node_t * tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->children, i);
+    for(size_t i = 0; i < list_size(node->children); i++) {
+        compiler_ast_node_t * tmp_node = (compiler_ast_node_t*)list_get_data_at_position(node->children, i);
 
         if(tmp_node->type != COMPILER_AST_NODE_TYPE_DECLS && compiler_execute_ast_node(compiler, tmp_node, result) != 0) {
             return -1;
