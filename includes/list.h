@@ -45,6 +45,8 @@ typedef enum list_type_t {
     LIST_TYPE_QUEUE = 1 << 2, ///< queue
     LIST_TYPE_STACK = 1 << 3, ///< stack
     LIST_TYPE_INDEXEDLIST = 1 << 8, ///< indexed list
+    LIST_TYPE_LINKED = 1 << 9, ///< linked list
+    LIST_TYPE_ARRAY = 1 << 10, ///< array list
 }list_type_t;
 
 /**
