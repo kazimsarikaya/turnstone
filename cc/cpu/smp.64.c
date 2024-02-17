@@ -149,7 +149,7 @@ int8_t smp_init(void) {
 
     *trampoline_call_addr = (uint32_t)((uint64_t)smp_ap_boot);
 
-    linkedlist_t* apic_entries = acpi_get_apic_table_entries(madt);
+    list_t* apic_entries = acpi_get_apic_table_entries(madt);
 
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = 16 * ap_cpu_count;
@@ -174,7 +174,7 @@ int8_t smp_init(void) {
     smp_data->cr4 = cpu_read_cr4();
     smp_data->idt = IDT_REGISTER;
 
-    iterator_t* iter = linkedlist_iterator_create(apic_entries);
+    iterator_t* iter = list_iterator_create(apic_entries);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_table_madt_entry_t* e = iter->get_item(iter);

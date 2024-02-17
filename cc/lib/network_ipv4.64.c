@@ -15,7 +15,7 @@
 #include <logging.h>
 #include <time.h>
 #include <logging.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <map.h>
 
 MODULE("turnstone.lib");
@@ -30,8 +30,8 @@ typedef struct network_ipv4_fragment_t {
 } network_ipv4_fragment_t;
 
 typedef struct network_ipv4_fragment_item_t {
-    uint32_t      total_length;
-    linkedlist_t* fragments;
+    uint32_t total_length;
+    list_t*  fragments;
 } network_ipv4_fragment_item_t;
 
 typedef union network_ipv4_fragment_key_t {
@@ -164,7 +164,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
                 return NULL;
             }
 
-            frag_item->fragments = linkedlist_create_sortedlist(&network_ipv4_fragment_comparator);
+            frag_item->fragments = list_create_sortedlist(&network_ipv4_fragment_comparator);
 
             map_insert(network_ipv4_packet_fragments, (void*)key, frag_item);
         }
@@ -186,7 +186,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         frag->data = memory_malloc(data_len);
         memory_memcopy(data, frag->data, data_len);
 
-        linkedlist_sortedlist_insert(frag_item->fragments, frag);
+        list_sortedlist_insert(frag_item->fragments, frag);
 
         return NULL;
     }
@@ -219,11 +219,11 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         frag->data = memory_malloc(data_len);
         memory_memcopy(data, frag->data, data_len);
 
-        linkedlist_sortedlist_insert(frag_item->fragments, frag);
+        list_sortedlist_insert(frag_item->fragments, frag);
 
         packet_data = memory_malloc(frag_item->total_length);
 
-        iterator_t* iter = linkedlist_iterator_create(frag_item->fragments);
+        iterator_t* iter = list_iterator_create(frag_item->fragments);
 
         while(iter->end_of_iterator(iter) != 0) {
             frag =  (network_ipv4_fragment_t*)iter->get_item(iter);
@@ -240,7 +240,7 @@ uint8_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, vo
         iter->destroy(iter);
 
         map_delete(network_ipv4_packet_fragments, (void*)key);
-        linkedlist_destroy_with_data(frag_item->fragments);
+        list_destroy_with_data(frag_item->fragments);
         memory_free(frag_item);
 
     } else {

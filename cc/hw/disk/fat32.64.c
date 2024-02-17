@@ -11,7 +11,7 @@
 #include <memory.h>
 #include <time.h>
 #include <random.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <strings.h>
 #include <utils.h>
 #include <logging.h>
@@ -633,7 +633,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
 
 
     if((ctx->dirents[cur_idx].attributes & FAT32_DIRENT_TYPE_LONGNAME) == FAT32_DIRENT_TYPE_LONGNAME) {
-        linkedlist_t* name_parts = linkedlist_create_stack();
+        list_t* name_parts = list_create_stack();
 
         wchar_t* p;
 
@@ -649,7 +649,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
                 }
             }
 
-            linkedlist_stack_push(name_parts, p);
+            list_stack_push(name_parts, p);
 
             p = memory_malloc(sizeof(wchar_t) * 7);
             memory_memcopy(ln->name_part2, p, sizeof(wchar_t) * 6);
@@ -660,7 +660,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
                 }
             }
 
-            linkedlist_stack_push(name_parts, p);
+            list_stack_push(name_parts, p);
 
             p = memory_malloc(sizeof(wchar_t) * 6);
             memory_memcopy(ln->name_part1, p, sizeof(wchar_t) * 5);
@@ -671,7 +671,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
                 }
             }
 
-            linkedlist_stack_push(name_parts, p);
+            list_stack_push(name_parts, p);
 
             cur_idx++;
         }
@@ -679,8 +679,8 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
         wchar_t* wname = memory_malloc(sizeof(wchar_t) * 256);
         int64_t wname_idx = 0;
 
-        while(linkedlist_size(name_parts)) {
-            p = (wchar_t*)linkedlist_stack_pop(name_parts);
+        while(list_size(name_parts)) {
+            p = (wchar_t*)list_stack_pop(name_parts);
 
             memory_memcopy(p, wname + wname_idx, sizeof(wchar_t) * wchar_size(p));
             wname_idx += wchar_size(p);
@@ -688,7 +688,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
             memory_free(p);
         }
 
-        linkedlist_destroy(name_parts);
+        list_destroy(name_parts);
 
         dirent_name = wchar_to_char(wname);
 

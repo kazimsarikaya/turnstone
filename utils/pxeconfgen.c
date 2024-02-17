@@ -87,7 +87,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     printf("tosdb %s path %s size: 0x%llx\n", tosdb, tosdbp, tosdb_size);
 
-    data_t* ser_data = data_bson_serialize(&pxeconf_data, DATA_SERIALIZE_WITH_ALL);
+    data_t* ser_data = data_bson_serialize(&pxeconf_data);
 
     FILE* pco = fopen(output, "w");
 

@@ -74,7 +74,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
     if(!fut) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup super block");
 
-        memory_free(main_sb);
+        memory_free_ext(backend->heap, main_sb);
 
         return NULL;
     }

@@ -22,7 +22,7 @@ typedef struct bloomfilter_t {
     uint64_t  entry_count; ///< entry count at filter
     float64_t bpe; ///< bit per entry
     float64_t error; ///< error rate for false positive
-    uint64_t  hash_count;  ///< how much hashing
+    uint64_t  hash_count; ///< how much hashing
     uint64_t  hash_seed; ///< xxhash seed
     uint64_t  bit_count; ///< bit count at array
     uint64_t* bits; ///bit array
@@ -173,7 +173,7 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf) {
 
     d.value = fields;
 
-    data_t* res = data_bson_serialize(&d, DATA_SERIALIZE_WITH_LENGTH | DATA_SERIALIZE_WITH_TYPE);
+    data_t* res = data_bson_serialize(&d);
 
     memory_free(fields);
 
@@ -189,7 +189,7 @@ bloomfilter_t* bloomfilter_deserialize(data_t* data) {
         return NULL;
     }
 
-    data_t* bf_data = data_bson_deserialize(data, DATA_SERIALIZE_WITH_LENGTH | DATA_SERIALIZE_WITH_TYPE);
+    data_t* bf_data = data_bson_deserialize(data);
 
     if(!bf_data) {
         return NULL;

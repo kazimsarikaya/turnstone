@@ -8,7 +8,7 @@
 #include <disk.h>
 #include <driver/nvme.h>
 #include <utils.h>
-#include <linkedlist.h>
+#include <list.h>
 
 MODULE("turnstone.kernel.hw.disk.nvme");
 
@@ -67,7 +67,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
     future_t fut = NULL;
 
-    linkedlist_t* futs = linkedlist_create_list_with_heap(ctx->nvme_disk->heap);
+    list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
     while(rem_lba) {
         uint16_t iter_read_size = MIN(rem_lba, max_lba);
@@ -76,7 +76,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
             fut = nvme_write(ctx->nvme_disk->disk_id, lba, iter_read_size * ctx->block_size, write_buf + offset);
         }while(fut == NULL);
 
-        linkedlist_list_insert(futs, fut);
+        list_list_insert(futs, fut);
 
         lba += iter_read_size;
         offset += iter_read_size * ctx->block_size;
@@ -87,7 +87,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
         memory_free_ext(ctx->nvme_disk->heap, write_buf);
     }
 
-    iterator_t* iter = linkedlist_iterator_create(futs);
+    iterator_t* iter = list_iterator_create(futs);
 
     while(iter->end_of_iterator(iter) != 0) {
         fut = (future_t*)iter->get_item(iter);
@@ -97,7 +97,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
         iter = iter->next(iter);
     }
 
-    linkedlist_destroy(futs);
+    list_destroy(futs);
 
     return 0;
 }
@@ -123,7 +123,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
     future_t fut = NULL;
 
-    linkedlist_t* futs = linkedlist_create_list_with_heap(ctx->nvme_disk->heap);
+    list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
     while(rem_lba) {
         uint16_t iter_read_size = MIN(rem_lba, max_lba);
@@ -132,14 +132,14 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
             fut = nvme_read(ctx->nvme_disk->disk_id, lba, iter_read_size * ctx->block_size, read_buf + offset);
         }while(fut == NULL);
 
-        linkedlist_list_insert(futs, fut);
+        list_list_insert(futs, fut);
 
         lba += iter_read_size;
         offset += iter_read_size * ctx->block_size;
         rem_lba -= iter_read_size;
     }
 
-    iterator_t* iter = linkedlist_iterator_create(futs);
+    iterator_t* iter = list_iterator_create(futs);
 
     while(iter->end_of_iterator(iter) != 0) {
         fut = (future_t*)iter->get_item(iter);
@@ -149,7 +149,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
         iter = iter->next(iter);
     }
 
-    linkedlist_destroy(futs);
+    list_destroy(futs);
 
     return 0;
 }

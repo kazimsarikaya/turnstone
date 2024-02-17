@@ -29,7 +29,9 @@ tosdb_backend_t* tosdb_backend_disk_new(disk_or_partition_t* dp) {
         return NULL;
     }
 
-    tosdb_backend_disk_ctx_t* ctx = memory_malloc(sizeof(tosdb_backend_disk_ctx_t));
+    memory_heap_t* heap = dp->get_heap(dp);
+
+    tosdb_backend_disk_ctx_t* ctx = memory_malloc_ext(heap, sizeof(tosdb_backend_disk_ctx_t), 0);
 
     if(!ctx) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend context");
@@ -43,11 +45,12 @@ tosdb_backend_t* tosdb_backend_disk_new(disk_or_partition_t* dp) {
 
     if(!backend) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create backend");
-        memory_free(ctx);
+        memory_free_ext(heap, ctx);
 
         return NULL;
     }
 
+    backend->heap = heap;
     backend->context = ctx;
     backend->capacity = dp->get_size(dp);
     backend->type = TOSDB_BACKEND_TYPE_DISK;
@@ -87,6 +90,9 @@ uint64_t  tosdb_backend_disk_write(tosdb_backend_t* backend, uint64_t position, 
     tosdb_backend_disk_ctx_t* d_ctx = backend->context;
     uint64_t bs = d_ctx->dp->get_block_size(d_ctx->dp);
 
+    PRINTLOG(TOSDB, LOG_TRACE, "write to disk position 0x%llx (0x%llx) size 0x%llx (0x%llx)",
+             position, position / bs, size, size / bs);
+
     uint64_t res = d_ctx->dp->write(d_ctx->dp, position / bs, size / bs, data);
 
     return res == 0?size:0;
@@ -109,8 +115,8 @@ boolean_t tosdb_backend_disk_close(tosdb_backend_t* backend) {
         res = false;
     }
 
-    memory_free(backend->context);
-    memory_free(backend);
+    memory_free_ext(backend->heap, backend->context);
+    memory_free_ext(backend->heap, backend);
 
     return res;
 }

@@ -8,7 +8,7 @@
 
 #include <types.h>
 #include <buffer.h>
-#include <linkedlist.h>
+#include <list.h>
 
 typedef enum asm_token_type_t {
     ASM_TOKEN_TYPE_NULL,
@@ -45,8 +45,8 @@ typedef struct asm_token_t {
 } asm_token_t;
 
 
-linkedlist_t* asm_parser_parse(buffer_t* buf);
-void          asm_parser_print_tokens(linkedlist_t* tokens);
-boolean_t     asm_parser_destroy_tokens(linkedlist_t* tokens);
+list_t*   asm_parser_parse(buffer_t* buf);
+void      asm_parser_print_tokens(list_t* tokens);
+boolean_t asm_parser_destroy_tokens(list_t* tokens);
 
 #endif /* __COMPILER_ASM_PARSER_H */

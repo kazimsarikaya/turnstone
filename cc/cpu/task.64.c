@@ -11,7 +11,7 @@
 #include <cpu/task.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <time/timer.h>
 #include <logging.h>
 #include <systeminfo.h>
@@ -26,8 +26,8 @@ uint64_t task_id = 0;
 
 task_t* current_task = NULL;
 
-linkedlist_t* task_queue = NULL;
-linkedlist_t* task_cleaner_queue = NULL;
+list_t* task_queue = NULL;
+list_t* task_cleaner_queue = NULL;
 map_t task_map = NULL;
 uint32_t task_mxcsr_mask = 0;
 
@@ -48,10 +48,12 @@ task_t* task_get_current_task(void){
     return current_task;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t task_init_tasking_ext(memory_heap_t* heap) {
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization started");
 
-    uint64_t rsp;
+    uint64_t rsp = 0;
 
     __asm__ __volatile__ ("mov %%rsp, %0\n" : : "m" (rsp));
 
@@ -106,12 +108,19 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     tss->rsp1 = tss->rsp2  + stack_size;
     tss->rsp0 = rsp;
 
-    task_queue = linkedlist_create_queue_with_heap(heap);
-    task_cleaner_queue = linkedlist_create_queue_with_heap(heap);
+    task_queue = list_create_queue_with_heap(heap);
+    task_cleaner_queue = list_create_queue_with_heap(heap);
 
     interrupt_irq_set_handler(0x60, &task_task_switch_isr);
 
     current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+
+    if(current_task == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task");
+
+        return -1;
+    }
+
     current_task->creator_heap = heap;
     current_task->heap = heap;
     current_task->task_id = TASK_KERNEL_TASK_ID;
@@ -163,6 +172,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task) {
     __asm__ __volatile__ (
@@ -277,8 +287,8 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
 }
 
 void task_cleanup(void){
-    while(linkedlist_size(task_cleaner_queue)) {
-        task_t* tmp = (task_t*)linkedlist_queue_pop(task_cleaner_queue);
+    while(list_size(task_cleaner_queue)) {
+        task_t* tmp = (task_t*)list_queue_pop(task_cleaner_queue);
 
         map_delete(task_map, (void*)tmp->task_id);
 
@@ -336,15 +346,15 @@ boolean_t task_idle_check_need_yield(void) {
 
     boolean_t need_yield = false;
 
-    for(uint64_t i = 0; i < linkedlist_size(task_queue); i++) {
-        task_t* t = (task_t*)linkedlist_get_data_at_position(task_queue, i);
+    for(uint64_t i = 0; i < list_size(task_queue); i++) {
+        task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
         if(t) {
             if(t->message_waiting && t->message_queues) {
-                for(uint64_t q_idx = 0; q_idx < linkedlist_size(t->message_queues); q_idx++) {
-                    linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(t->message_queues, q_idx);
+                for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
+                    list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
 
-                    if(linkedlist_size(q)) {
+                    if(list_size(q)) {
                         t->message_waiting = false;
                         need_yield = true;
                     }
@@ -367,7 +377,7 @@ task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
     while(1) {
-        tmp_task = (task_t*)linkedlist_queue_pop(task_queue);
+        tmp_task = (task_t*)list_queue_pop(task_queue);
 
         if(tmp_task->sleeping) {
 
@@ -376,7 +386,7 @@ task_t* task_find_next_task(void) {
                 break;
             }
 
-            linkedlist_queue_push(task_queue, tmp_task);
+            list_queue_push(task_queue, tmp_task);
         } else if(tmp_task->message_waiting) {
 
 
@@ -389,18 +399,18 @@ task_t* task_find_next_task(void) {
                 }
             } else if(tmp_task->message_queues) {
 
-                for(uint64_t q_idx = 0; q_idx < linkedlist_size(tmp_task->message_queues); q_idx++) {
-                    const linkedlist_t* q = (linkedlist_t*)linkedlist_get_data_at_position(tmp_task->message_queues, q_idx);
+                for(uint64_t q_idx = 0; q_idx < list_size(tmp_task->message_queues); q_idx++) {
+                    const list_t* q = (list_t*)list_get_data_at_position(tmp_task->message_queues, q_idx);
 
                     if(q) {
-                        if(linkedlist_size(q)) {
+                        if(list_size(q)) {
                             tmp_task->message_waiting = false;
                             break;
                         }
 
                     } else {
                         PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli has null queue in message queues, removing task", tmp_task->task_id);
-                        linkedlist_queue_push(task_cleaner_queue, tmp_task);
+                        list_queue_push(task_cleaner_queue, tmp_task);
 
                         continue;
                     }
@@ -409,12 +419,12 @@ task_t* task_find_next_task(void) {
 
             } else {
                 PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli in message waiting state without message queues, removing task", tmp_task->task_id);
-                linkedlist_queue_push(task_cleaner_queue, tmp_task);
+                list_queue_push(task_cleaner_queue, tmp_task);
 
                 continue;
             }
 
-            linkedlist_queue_push(task_queue, tmp_task);
+            list_queue_push(task_queue, tmp_task);
         } else {
             break;
         }
@@ -446,7 +456,7 @@ static inline void task_switch_task_exit_prep(void) {
 }
 
 __attribute__((no_stack_protector)) void task_switch_task(void) {
-    if(current_task == NULL || task_queue == NULL || linkedlist_size(task_queue) == 0) {
+    if(current_task == NULL || task_queue == NULL || list_size(task_queue) == 0) {
         task_switch_task_exit_prep();
 
         return;
@@ -460,7 +470,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     }
 
     task_save_registers(current_task);
-    linkedlist_queue_push(task_queue, current_task);
+    list_queue_push(task_queue, current_task);
 
     if(current_task->task_id == TASK_KERNEL_TASK_ID) {
         task_cleanup();
@@ -468,6 +478,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
     current_task = task_find_next_task();
     current_task->last_tick_count = time_timer_get_tick_count();
+    current_task->task_switch_count++;
     task_load_registers(current_task);
 
     task_switch_task_exit_prep();
@@ -477,7 +488,7 @@ void task_end_task(void) {
     cpu_cli();
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
-    linkedlist_queue_push(task_cleaner_queue, current_task);
+    list_queue_push(task_cleaner_queue, current_task);
 
     PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
 
@@ -489,13 +500,13 @@ void task_end_task(void) {
 }
 
 
-void task_add_message_queue(linkedlist_t* queue){
+void task_add_message_queue(list_t* queue){
     cpu_cli();
     if(current_task->message_queues == NULL) {
-        current_task->message_queues = linkedlist_create_list();
+        current_task->message_queues = list_create_list();
     }
 
-    linkedlist_list_insert(current_task->message_queues, queue);
+    list_list_insert(current_task->message_queues, queue);
 
     cpu_sti();
 }
@@ -602,7 +613,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
     new_task->rbp = rbp;
-    new_task->rsp = rbp - 24;
+    new_task->rsp = rbp - 16;
 
     new_task->rdi = args_cnt;
     new_task->rsi = (uint64_t)args;
@@ -610,7 +621,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
     stack[-2] = (uint64_t)entry_point;
-    stack[-3] = (uint64_t)apic_eoi;
+    // stack[-3] = (uint64_t)cpu_sti;
+    // stack[-4] = (uint64_t)apic_eoi;
 
 
     new_task->input_buffer = buffer_create_with_heap(task_heap, 0x1000);
@@ -622,7 +634,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     cpu_cli();
 
-    linkedlist_stack_push(task_queue, new_task);
+    list_stack_push(task_queue, new_task);
     map_insert(task_map, (void*)new_task->task_id, new_task);
 
     cpu_sti();
@@ -631,7 +643,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 }
 
 void task_yield(void) {
-    if(linkedlist_size(task_queue)) { // prevent unneccessary interrupt
+    if(list_size(task_queue)) { // prevent unneccessary interrupt
         // __asm__ __volatile__ ("int $0x80\n");
         cpu_cli();
         task_task_switch_set_parameters(false, true);
@@ -711,8 +723,14 @@ void task_print_all(void) {
     while(it->end_of_iterator(it) != 0) {
         const task_t* task = it->get_item(it);
 
-        printf("\ttask %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
-               task->task_name, task->task_id, task, task->rsp, task->rbp, task->heap, task->heap_size);
+        printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
+               task->task_name, task->task_id, task, task->task_switch_count,
+               task->rsp, task->rbp, task->heap, task->heap_size);
+
+        memory_heap_stat_t stat = {0};
+        memory_get_heap_stat_ext(task->heap, &stat);
+
+        printf("\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n", stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
 
         it = it->next(it);
     }

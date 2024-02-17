@@ -166,32 +166,15 @@ static int8_t tosdb_memtable_secondary_index_key_cloner(memory_heap_t* heap, con
     return 0;
 }
 
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
-    if(!tbl) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
-
-        return false;
-    }
-
-    if(!tbl->memtables) {
-        tbl->memtables = linkedlist_create_stack();
-
-        if(!tbl->memtables) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable stack for table %s", tbl->name);
-
-            return false;
-        }
-    }
-
+tosdb_memtable_t* tosdb_memtable_new_internal(tosdb_table_t * tbl) {
     tosdb_memtable_t* mt = memory_malloc(sizeof(tosdb_memtable_t));
 
     if(!mt) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable for table %s at memory", tbl->name);
 
-        return false;
+        return NULL;
     }
 
     mt->is_dirty = true;
@@ -201,7 +184,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create valuelog for table %s at memory", tbl->name);
         memory_free(mt);
 
-        return false;
+        return NULL;
     }
 
     mt->indexes = hashmap_integer(128);
@@ -211,7 +194,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         buffer_destroy(mt->values);
         memory_free(mt);
 
-        return false;
+        return NULL;
     }
 
     boolean_t error = false;
@@ -279,7 +262,7 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
             buffer_destroy(mt->values);
             memory_free(mt);
 
-            return false;
+            return NULL;
         }
 
         while(mt_idx_iter->end_of_iterator(mt_idx_iter) != 0) {
@@ -301,9 +284,38 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
         hashmap_destroy(mt->indexes);
         memory_free(mt);
 
+        return NULL;
+    }
+
+    return mt;
+}
+
+boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
         return false;
     }
 
+    if(!tbl->memtables) {
+        tbl->memtables = list_create_stack();
+
+        if(!tbl->memtables) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable stack for table %s", tbl->name);
+
+            return false;
+        }
+    }
+
+    tosdb_memtable_t* mt = tosdb_memtable_new_internal(tbl);
+
+    if(!mt) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable for table %s", tbl->name);
+
+        return false;
+    }
+
+    boolean_t error = false;
 
     mt->tbl = tbl;
     mt->id = tbl->memtable_next_id;
@@ -320,10 +332,10 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
     }
 
     tbl->current_memtable = mt;
-    linkedlist_stack_push(tbl->memtables, mt);
+    list_stack_push(tbl->memtables, mt);
 
-    while(linkedlist_size(tbl->memtables) > tbl->max_memtable_count)  {
-        tosdb_memtable_t* r_mt = (tosdb_memtable_t*)linkedlist_delete_at_tail(tbl->memtables);
+    while(list_size(tbl->memtables) > tbl->max_memtable_count)  {
+        tosdb_memtable_t* r_mt = (tosdb_memtable_t*)list_delete_at_tail(tbl->memtables);
 
         if(!tosdb_memtable_free(r_mt)) {
             error = true;
@@ -344,8 +356,8 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
 
 
     if(mt->stli) {
-        linkedlist_stack_push(mt->tbl->sstable_list_items, mt->stli);
-        PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, linkedlist_size(mt->tbl->sstable_list_items));
+        list_stack_push(mt->tbl->sstable_list_items, mt->stli);
+        PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, list_size(mt->tbl->sstable_list_items));
     }
 
 
@@ -781,7 +793,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
     }
 
     if(!mt->tbl->sstable_list_items) {
-        mt->tbl->sstable_list_items = linkedlist_create_stack();
+        mt->tbl->sstable_list_items = list_create_stack();
 
         if(!mt->tbl->sstable_list_items) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstable list items stack");
@@ -1091,7 +1103,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    linkedlist_t* mts = ctx->table->memtables;
+    list_t* mts = ctx->table->memtables;
 
     if(!mts) {
         memory_free(item);
@@ -1103,7 +1115,7 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     const tosdb_memtable_index_item_t* found_item = NULL;
     const tosdb_memtable_t* mt = NULL;
 
-    iter = linkedlist_iterator_create(mts);
+    iter = list_iterator_create(mts);
 
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);
@@ -1181,9 +1193,9 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    linkedlist_t* mts = ctx->table->memtables;
+    list_t* mts = ctx->table->memtables;
 
-    if(linkedlist_size(mts) == 0) {
+    if(list_size(mts) == 0) {
         memory_free(item);
 
         return false;
@@ -1193,7 +1205,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     const tosdb_memtable_index_item_t* found_item = NULL;
     const tosdb_memtable_t* mt = NULL;
 
-    iter = linkedlist_iterator_create(mts);
+    iter = list_iterator_create(mts);
 
     uint64_t col_id = 0;
 
@@ -1250,7 +1262,7 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     s_d.type = DATA_TYPE_INT8_ARRAY;
     s_d.value = f_d;
 
-    data_t* r_d = data_bson_deserialize(&s_d, DATA_SERIALIZE_WITH_ALL);
+    data_t* r_d = data_bson_deserialize(&s_d);
 
     memory_free(f_d);
 
@@ -1318,9 +1330,9 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     item->secondary_key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->data, item->secondary_key_length);
 
-    linkedlist_t* mts = ctx->table->memtables;
+    list_t* mts = ctx->table->memtables;
 
-    if(linkedlist_size(mts) == 0) {
+    if(list_size(mts) == 0) {
         memory_free(item);
 
         return true;
@@ -1329,7 +1341,7 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
     const tosdb_memtable_t* mt = NULL;
     boolean_t error = false;
 
-    iter = linkedlist_iterator_create(mts);
+    iter = list_iterator_create(mts);
 
     while(iter->end_of_iterator(iter) != 0) {
         mt = iter->get_item(iter);

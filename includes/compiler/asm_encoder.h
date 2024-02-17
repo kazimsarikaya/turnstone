@@ -9,7 +9,7 @@
 
 #include <types.h>
 #include <buffer.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <linker.h>
 
 #define ASM_INSTRUCTION_PREFIX_LOCK                  0xF0
@@ -60,8 +60,8 @@ typedef struct asm_relocation_t {
     char_t*                  label;
 } asm_relocation_t;
 
-boolean_t asm_encode_instructions(linkedlist_t* tokens, buffer_t* out, linkedlist_t* relocs);
-void      asm_encoder_print_relocs(linkedlist_t* relocs);
-void      asm_encoder_destroy_relocs(linkedlist_t* relocs);
+boolean_t asm_encode_instructions(list_t* tokens, buffer_t* out, list_t* relocs);
+void      asm_encoder_print_relocs(list_t* relocs);
+void      asm_encoder_destroy_relocs(list_t* relocs);
 
 #endif /* asm_encoder.h */

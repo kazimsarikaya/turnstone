@@ -15,7 +15,7 @@
 #include <systeminfo.h>
 #include <cpu.h>
 #include <cpu/sync.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <pci.h>
 #include <driver/video_virtio.h>
 #include <driver/video_vmwaresvga.h>
@@ -470,8 +470,8 @@ void video_text_print(const char_t* string) {
     }
 }
 
-int8_t video_display_init(memory_heap_t* heap, linkedlist_t* display_controllers) {
-    iterator_t* iter = linkedlist_iterator_create(display_controllers);
+int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers) {
+    iterator_t* iter = list_iterator_create(display_controllers);
 
     if(iter == NULL) {
         return -1;

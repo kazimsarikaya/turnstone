@@ -434,7 +434,7 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
         return -1;
     }
 
-    linkedlist_t* symbol_list = linkedlist_create_list();
+    list_t* symbol_list = list_create_list();
 
     if (symbol_list == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create symbol list");
@@ -456,7 +456,7 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
         symbol->is_const = is_const;
         symbol->name = strdup(token->text);
 
-        linkedlist_queue_push(symbol_list, symbol);
+        list_queue_push(symbol_list, symbol);
 
         if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_ID, true) != 0) {
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected id");
@@ -559,8 +559,8 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
         return -1;
     }
 
-    for(size_t i = 0; i < linkedlist_size(symbol_list); i++) {
-        compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(symbol_list, i);
+    for(size_t i = 0; i < list_size(symbol_list); i++) {
+        compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)list_get_data_at_position(symbol_list, i);
 
         if(need_token_type == COMPILER_TOKEN_TYPE_INTEGER_CONST) {
             tmp_symbol->type = COMPILER_SYMBOL_TYPE_INTEGER;
@@ -593,10 +593,10 @@ int8_t pascal_parser_variable(pascal_parser_t * parser, compiler_ast_node_t ** n
             return -1;
         }
 
-        size_t value_count = linkedlist_size(symbol_list);
+        size_t value_count = list_size(symbol_list);
 
         for(size_t i = 0; i < value_count; i++) {
-            compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)linkedlist_get_data_at_position(symbol_list, i);
+            compiler_symbol_t * tmp_symbol = (compiler_symbol_t*)list_get_data_at_position(symbol_list, i);
 
             tmp_symbol->initilized = true;
 
@@ -738,31 +738,31 @@ int8_t pascal_parser_variables(pascal_parser_t* parser, compiler_ast_node_t** no
         }
     }
 
-    linkedlist_t* variables_list = linkedlist_create_list();
+    list_t* variables_list = list_create_list();
 
     while (parser->current_token->type == COMPILER_TOKEN_TYPE_ID) {
         compiler_ast_node_t * new_node = NULL;
 
         if(pascal_parser_variable(parser, &new_node, is_const, is_local) != 0) {
-            linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+            list_destroy_with_type(variables_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected variable");
             return -1;
         }
 
-        linkedlist_queue_push(variables_list, new_node);
+        list_queue_push(variables_list, new_node);
     }
 
     compiler_ast_node_t * new_node = *node;
 
-    if(linkedlist_size(variables_list) > 0) {
+    if(list_size(variables_list) > 0) {
         if(new_node->children != NULL) {
-            int8_t merge_res = linkedlist_merge(new_node->children, variables_list);
+            int8_t merge_res = list_merge(new_node->children, variables_list);
 
-            linkedlist_destroy(variables_list);
+            list_destroy(variables_list);
 
             if(merge_res != 0) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot merge lists");
-                linkedlist_destroy_with_type(new_node->children, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+                list_destroy_with_type(new_node->children, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
                 return -1;
             }
         } else {
@@ -771,7 +771,7 @@ int8_t pascal_parser_variables(pascal_parser_t* parser, compiler_ast_node_t** no
 
         new_node->type = COMPILER_AST_NODE_TYPE_DECLS;
     } else {
-        linkedlist_destroy(variables_list);
+        list_destroy(variables_list);
     }
 
     return 0;
@@ -831,7 +831,7 @@ int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node)
         return -1;
     }
 
-    linkedlist_t* variables_list = linkedlist_create_list();
+    list_t* variables_list = list_create_list();
 
     if(type_token_type == COMPILER_TOKEN_TYPE_RECORD) {
 
@@ -839,19 +839,19 @@ int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node)
             compiler_ast_node_t * new_node = NULL;
 
             if(pascal_parser_variable(parser, &new_node, false, false) != 0) {
-                linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+                list_destroy_with_type(variables_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected variable");
                 return -1;
             }
 
-            linkedlist_queue_push(variables_list, new_node);
+            list_queue_push(variables_list, new_node);
         }
 
 
         if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_END, true) != 0) {
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected end");
             memory_free((void*)type_name);
-            linkedlist_destroy(variables_list);
+            list_destroy(variables_list);
             return -1;
         }
     }
@@ -859,7 +859,7 @@ int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node)
     if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_SEMI, true) != 0) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ;");
         memory_free((void*)type_name);
-        linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+        list_destroy_with_type(variables_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
         return -1;
     }
 
@@ -868,7 +868,7 @@ int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node)
     if (type == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create type");
         memory_free((void*)type_name);
-        linkedlist_destroy_with_type(variables_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+        list_destroy_with_type(variables_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
         return -1;
     }
 
@@ -888,10 +888,10 @@ int8_t pascal_parser_type(pascal_parser_t * parser, compiler_ast_node_t ** node)
     compiler_ast_node_t * new_node = *node;
 
     if(new_node->children == NULL) {
-        new_node->children = linkedlist_create_list();
+        new_node->children = list_create_list();
     }
 
-    linkedlist_queue_push(new_node->children, type_node);
+    list_queue_push(new_node->children, type_node);
 
     new_node->type = COMPILER_AST_NODE_TYPE_DECLS;
 
@@ -1064,7 +1064,7 @@ int8_t pascal_parser_function_call(pascal_parser_t* parser, compiler_ast_node_t*
         return -1;
     }
 
-    linkedlist_t* children_list = linkedlist_create_list();
+    list_t* children_list = list_create_list();
 
     if (children_list == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create children list");
@@ -1076,16 +1076,16 @@ int8_t pascal_parser_function_call(pascal_parser_t* parser, compiler_ast_node_t*
 
         if(pascal_parser_expr(parser, &new_node) != 0) {
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected expression");
-            linkedlist_destroy_with_type(children_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+            list_destroy_with_type(children_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
             return -1;
         }
 
-        linkedlist_queue_push(children_list, new_node);
+        list_queue_push(children_list, new_node);
 
         if(parser->current_token->type != COMPILER_TOKEN_TYPE_RPAREN) {
             if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_COMMA, true) != 0) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ,");
-                linkedlist_destroy_with_type(children_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+                list_destroy_with_type(children_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
                 return -1;
             }
         }
@@ -1192,10 +1192,10 @@ int8_t pascal_parser_with_statement(pascal_parser_t * parser, compiler_ast_node_
     if(statement->type == COMPILER_AST_NODE_TYPE_NO_OP) {
 
     } else if(statement->type == COMPILER_AST_NODE_TYPE_COMPOUND) {
-        linkedlist_t* children = statement->children;
+        list_t* children = statement->children;
 
-        for(size_t i = 0; i < linkedlist_size(children); i++) {
-            compiler_ast_node_t* child = (compiler_ast_node_t*)linkedlist_get_data_at_position(children, i);
+        for(size_t i = 0; i < list_size(children); i++) {
+            compiler_ast_node_t* child = (compiler_ast_node_t*)list_get_data_at_position(children, i);
 
             if(child->type == COMPILER_AST_NODE_TYPE_ASSIGN) {
                 compiler_ast_node_t* prefix = memory_malloc(sizeof(compiler_ast_node_t));
@@ -1444,7 +1444,7 @@ int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, compiler_ast_nod
     }
 
     while_body_wrapper->type = COMPILER_AST_NODE_TYPE_COMPOUND;
-    while_body_wrapper->children = linkedlist_create_list();
+    while_body_wrapper->children = list_create_list();
 
     if (while_body_wrapper->children == NULL) {
         compiler_ast_node_destroy(label_node);
@@ -1454,8 +1454,8 @@ int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, compiler_ast_nod
         return -1;
     }
 
-    linkedlist_queue_push(while_body_wrapper->children, label_node);
-    linkedlist_queue_push(while_body_wrapper->children, repeat_body_statement);
+    list_queue_push(while_body_wrapper->children, label_node);
+    list_queue_push(while_body_wrapper->children, repeat_body_statement);
 
     compiler_ast_node_t * while_node = memory_malloc(sizeof(compiler_ast_node_t));
 
@@ -1477,7 +1477,7 @@ int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, compiler_ast_nod
     }
 
     new_node->type = COMPILER_AST_NODE_TYPE_COMPOUND;
-    new_node->children = linkedlist_create_list();
+    new_node->children = list_create_list();
 
     if (new_node->children == NULL) {
         compiler_ast_node_destroy(while_node);
@@ -1485,8 +1485,8 @@ int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, compiler_ast_nod
         return -1;
     }
 
-    linkedlist_queue_push(new_node->children, goto_node);
-    linkedlist_queue_push(new_node->children, while_node);
+    list_queue_push(new_node->children, goto_node);
+    list_queue_push(new_node->children, while_node);
 
     *node = new_node;
 
@@ -1715,20 +1715,20 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, compiler_ast_node_t
         return -1;
     }
 
-    linkedlist_t* for_body_list = linkedlist_create_list();
+    list_t* for_body_list = list_create_list();
 
     if (for_body_list == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create list");
         return -1;
     }
 
-    linkedlist_queue_push(for_body_list, for_body_statement);
-    linkedlist_queue_push(for_body_list, for_step_assign);
+    list_queue_push(for_body_list, for_body_statement);
+    list_queue_push(for_body_list, for_step_assign);
 
     compiler_ast_node_t* for_body_compound = memory_malloc(sizeof(compiler_ast_node_t));
 
     if (for_body_compound == NULL) {
-        linkedlist_destroy(for_body_list);
+        list_destroy(for_body_list);
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
         return -1;
     }
@@ -1748,20 +1748,20 @@ int8_t pascal_parser_for_statement(pascal_parser_t * parser, compiler_ast_node_t
     while_wrapper->left = for_body_compound;
 
 
-    linkedlist_t* for_wrapper_list = linkedlist_create_list();
+    list_t* for_wrapper_list = list_create_list();
 
     if (for_wrapper_list == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create list");
         return -1;
     }
 
-    linkedlist_queue_push(for_wrapper_list, for_assignment);
-    linkedlist_queue_push(for_wrapper_list, while_wrapper);
+    list_queue_push(for_wrapper_list, for_assignment);
+    list_queue_push(for_wrapper_list, while_wrapper);
 
     compiler_ast_node_t* for_wrapper_compound = memory_malloc(sizeof(compiler_ast_node_t));
 
     if (for_wrapper_compound == NULL) {
-        linkedlist_destroy(for_wrapper_list);
+        list_destroy(for_wrapper_list);
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create node");
         return -1;
     }
@@ -1836,7 +1836,7 @@ int8_t pascal_parser_compound_statement(pascal_parser_t * parser, compiler_ast_n
         return -1;
     }
 
-    linkedlist_t* children_list = linkedlist_create_list();
+    list_t* children_list = list_create_list();
 
     if (children_list == NULL) {
         PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "cannot create children list");
@@ -1848,16 +1848,16 @@ int8_t pascal_parser_compound_statement(pascal_parser_t * parser, compiler_ast_n
 
         if(pascal_parser_statement(parser, &new_node) != 0) {
             PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected statement");
-            linkedlist_destroy_with_type(children_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+            list_destroy_with_type(children_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
             return -1;
         }
 
-        linkedlist_queue_push(children_list, new_node);
+        list_queue_push(children_list, new_node);
 
         if(parser->current_token->type != COMPILER_TOKEN_TYPE_END) {
             if(pascal_parser_eat(parser, COMPILER_TOKEN_TYPE_SEMI, true) != 0) {
                 PRINTLOG(COMPILER_PASCAL, LOG_ERROR, "expected ;");
-                linkedlist_destroy_with_type(children_list, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+                list_destroy_with_type(children_list, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
                 return -1;
             }
         }
@@ -1877,11 +1877,11 @@ int8_t pascal_parser_compound_statement(pascal_parser_t * parser, compiler_ast_n
 
     new_node->type = COMPILER_AST_NODE_TYPE_NO_OP;
 
-    if(linkedlist_size(children_list) > 0) {
+    if(list_size(children_list) > 0) {
         new_node->children = children_list;
         new_node->type = COMPILER_AST_NODE_TYPE_COMPOUND;
     } else {
-        linkedlist_destroy(children_list);
+        list_destroy(children_list);
     }
 
     *node = new_node;

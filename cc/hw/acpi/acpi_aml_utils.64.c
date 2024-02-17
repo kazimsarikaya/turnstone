@@ -1373,7 +1373,7 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
         memory_free_ext(ctx->heap, obj->buffer.buf);
         break;
     case ACPI_AML_OT_PACKAGE:
-        iter = linkedlist_iterator_create(obj->package.elements);
+        iter = list_iterator_create(obj->package.elements);
 
         while(iter->end_of_iterator(iter) != 0) {
             acpi_aml_object_t* t_obj = (acpi_aml_object_t*)iter->get_item(iter);
@@ -1387,7 +1387,7 @@ void acpi_aml_destroy_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* 
 
         iter->destroy(iter);
 
-        linkedlist_destroy(obj->package.elements);
+        list_destroy(obj->package.elements);
 
         if(obj->package.pkglen->name == NULL) {
             memory_free_ext(ctx->heap, obj->package.pkglen);
@@ -1518,7 +1518,7 @@ void acpi_aml_print_object(acpi_aml_parser_context_t* ctx, acpi_aml_object_t* ob
         break;
     case ACPI_AML_OT_PACKAGE:
         acpi_aml_read_as_integer(ctx, obj->package.pkglen, &ival);
-        printf("pkg pkglen=%lli initial pkglen=%lli\n", len, linkedlist_size(obj->package.elements) );
+        printf("pkg pkglen=%lli initial pkglen=%lli\n", len, list_size(obj->package.elements) );
         break;
     case ACPI_AML_OT_SCOPE:
         printf("scope\n");

@@ -12,7 +12,7 @@
 #include <utils.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <stdbufs.h>
 
 MODULE("turnstone.kernel.hw.acpi");
@@ -53,7 +53,7 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
 
     if(d) {
         PRINTLOG(ACPI, LOG_DEBUG, "device %s found for address 0x%llx", d->name, addr);
-        uint64_t ic = linkedlist_size(d->interrupts);
+        uint64_t ic = list_size(d->interrupts);
 
         if(ic) {
             res = memory_malloc_ext(ctx->heap, ic, 0);
@@ -63,7 +63,7 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
             }
 
             for(uint64_t i = 0; i < ic; i++) {
-                const acpi_aml_device_interrupt_t* int_item = linkedlist_get_data_at_position(d->interrupts, i);
+                const acpi_aml_device_interrupt_t* int_item = list_get_data_at_position(d->interrupts, i);
 
                 res[i] = int_item->interrupt_no;
             }
@@ -86,7 +86,7 @@ uint8_t* acpi_device_get_interrupts(acpi_aml_parser_context_t* ctx, uint64_t add
 
     uint64_t ic = 0;
 
-    iterator_t* iter = linkedlist_iterator_create(ctx->interrupt_map);
+    iterator_t* iter = list_iterator_create(ctx->interrupt_map);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_aml_interrupt_map_item_t* int_item = iter->get_item(iter);
@@ -146,7 +146,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
     memory_free_ext(ctx->heap, val_obj);
 
-    iter = linkedlist_iterator_create(ctx->devices);
+    iter = list_iterator_create(ctx->devices);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_aml_device_t* d = iter->get_item(iter);
@@ -161,13 +161,13 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
             } else if(prt_table == NULL || prt_table->type != ACPI_AML_OT_PACKAGE) {
                 PRINTLOG(ACPI, LOG_ERROR, "prt table is null or not package");
             } else {
-                iterator_t* prt_iter = linkedlist_iterator_create(prt_table->package.elements);
+                iterator_t* prt_iter = list_iterator_create(prt_table->package.elements);
 
                 while(prt_iter->end_of_iterator(prt_iter) != 0) {
                     const acpi_aml_object_t* item = prt_iter->get_item(prt_iter);
 
                     if(item->type == ACPI_AML_OT_PACKAGE) {
-                        const acpi_aml_object_t* int_dev_ref = linkedlist_get_data_at_position(item->package.elements, 2);
+                        const acpi_aml_object_t* int_dev_ref = list_get_data_at_position(item->package.elements, 2);
 
                         if(int_dev_ref->type == ACPI_AML_OT_RUNTIMEREF) {
                             const acpi_aml_device_t* int_dev = acpi_device_lookup_by_name(ctx, int_dev_ref->name);
@@ -226,10 +226,10 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
     memory_free_ext(ctx->heap, val_obj);
 
-    ctx->interrupt_map = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_intmap_addr_sorter);
-    linkedlist_set_equality_comparator(ctx->interrupt_map, acpi_aml_intmap_eq);
+    ctx->interrupt_map = list_create_sortedlist_with_heap(ctx->heap, acpi_aml_intmap_addr_sorter);
+    list_set_equality_comparator(ctx->interrupt_map, acpi_aml_intmap_eq);
 
-    iter = linkedlist_iterator_create(ctx->devices);
+    iter = list_iterator_create(ctx->devices);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_aml_device_t* d = iter->get_item(iter);
@@ -245,18 +245,18 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
                 PRINTLOG(ACPI, LOG_ERROR, "prt table is null or not package");
             } else {
 
-                iterator_t* prt_iter = linkedlist_iterator_create(prt_table->package.elements);
+                iterator_t* prt_iter = list_iterator_create(prt_table->package.elements);
 
                 while(prt_iter->end_of_iterator(prt_iter) != 0) {
                     const acpi_aml_object_t* item = prt_iter->get_item(prt_iter);
 
                     if(item->type == ACPI_AML_OT_PACKAGE) {
-                        const acpi_aml_object_t* addr_obj = linkedlist_get_data_at_position(item->package.elements, 0);
+                        const acpi_aml_object_t* addr_obj = list_get_data_at_position(item->package.elements, 0);
 
                         if(addr_obj->type == ACPI_AML_OT_NUMBER) {
                             uint64_t addr = addr_obj->number.value;
 
-                            const acpi_aml_object_t* int_dev_ref = linkedlist_get_data_at_position(item->package.elements, 2);
+                            const acpi_aml_object_t* int_dev_ref = list_get_data_at_position(item->package.elements, 2);
 
                             uint32_t int_no_val = 0;
 
@@ -267,7 +267,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
                                 if(int_no_val == 0) {
                                     PRINTLOG(ACPI, LOG_TRACE, "global direct int no");
-                                    const acpi_aml_object_t* global_int_ref = linkedlist_get_data_at_position(item->package.elements, 3);
+                                    const acpi_aml_object_t* global_int_ref = list_get_data_at_position(item->package.elements, 3);
 
                                     int_no_val = global_int_ref->number.value;
                                 }
@@ -278,7 +278,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
                                 const acpi_aml_device_t* int_dev = acpi_device_lookup_by_name(ctx, int_dev_ref->name);
 
                                 if(int_dev && int_dev->interrupts) {
-                                    const acpi_aml_device_interrupt_t* int_obj = linkedlist_get_data_at_position(int_dev->interrupts, 0);
+                                    const acpi_aml_device_interrupt_t* int_obj = list_get_data_at_position(int_dev->interrupts, 0);
 
                                     int_no_val = int_obj->interrupt_no;
                                 } else {
@@ -295,7 +295,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
                             if(int_no_val) {
                                 acpi_aml_interrupt_map_item_t tmp_int_map_item = {addr, int_no_val};
 
-                                if(linkedlist_contains(ctx->interrupt_map, &tmp_int_map_item) != 0) {
+                                if(list_contains(ctx->interrupt_map, &tmp_int_map_item) != 0) {
                                     acpi_aml_interrupt_map_item_t* int_map_item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_interrupt_map_item_t), 0);
 
                                     if(int_map_item == NULL) {
@@ -307,7 +307,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
                                     PRINTLOG(ACPI, LOG_TRACE, "apic map item addr 0x%llx intno 0x%x", addr, int_no_val);
 
-                                    linkedlist_sortedlist_insert(ctx->interrupt_map, int_map_item);
+                                    list_sortedlist_insert(ctx->interrupt_map, int_map_item);
                                 } else {
                                     PRINTLOG(ACPI, LOG_TRACE, "apic map item exists");
                                 }
@@ -337,7 +337,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 
     iter->destroy(iter);
 
-    PRINTLOG(ACPI, LOG_TRACE, "interrupt map size %lli error count %i", linkedlist_size(ctx->interrupt_map), err_cnt);
+    PRINTLOG(ACPI, LOG_TRACE, "interrupt map size %lli error count %i", list_size(ctx->interrupt_map), err_cnt);
     PRINTLOG(ACPI, LOG_DEBUG, "apic mode map builded");
 
     return err_cnt == 0?0:-1;
@@ -346,7 +346,7 @@ int8_t acpi_build_interrupt_map(acpi_aml_parser_context_t* ctx){
 int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
     uint64_t item_count = 0;
 
-    ctx->devices = linkedlist_create_sortedlist_with_heap(ctx->heap, acpi_aml_device_name_comparator);
+    ctx->devices = list_create_sortedlist_with_heap(ctx->heap, acpi_aml_device_name_comparator);
     acpi_aml_device_t* curr_device = NULL;
 
 
@@ -385,7 +385,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
             }
 
             new_device->name = sym->name;
-            linkedlist_sortedlist_insert(ctx->devices, new_device);
+            list_sortedlist_insert(ctx->devices, new_device);
 
             if(curr_device != NULL) {
                 int64_t len_diff = strlen(sym->name) - strlen(curr_device->name);
@@ -487,7 +487,7 @@ int8_t acpi_device_build(acpi_aml_parser_context_t* ctx) {
 #pragma GCC diagnostic pop
 
 const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char_t* dev_name, uint64_t address) {
-    iterator_t* iter = linkedlist_iterator_create(ctx->devices);
+    iterator_t* iter = list_iterator_create(ctx->devices);
     const acpi_aml_device_t* res = NULL;
 
     while(iter->end_of_iterator(iter) != 0) {
@@ -533,7 +533,7 @@ int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
 
     KERNEL_FRAME_ALLOCATOR->release_acpi_reclaim_memory(KERNEL_FRAME_ALLOCATOR);
 
-    iterator_t* dev_iter = linkedlist_iterator_create(ctx->devices);
+    iterator_t* dev_iter = list_iterator_create(ctx->devices);
 
 
     while(dev_iter->end_of_iterator(dev_iter) != 0) {
@@ -542,7 +542,7 @@ int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
         if(d->memory_ranges) {
             PRINTLOG(ACPI, LOG_DEBUG, "device %s has memory ranges", d->name);
 
-            iterator_t* mem_iter = linkedlist_iterator_create(d->memory_ranges);
+            iterator_t* mem_iter = list_iterator_create(d->memory_ranges);
 
 
             while(mem_iter->end_of_iterator(mem_iter) != 0) {
@@ -572,7 +572,7 @@ int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
 }
 
 int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
-    iterator_t* iter = linkedlist_iterator_create(ctx->devices);
+    iterator_t* iter = list_iterator_create(ctx->devices);
 
     int32_t err_cnt = 0;
 
@@ -666,7 +666,7 @@ int8_t acpi_device_init(acpi_aml_parser_context_t* ctx) {
 
 void acpi_device_print_all(acpi_aml_parser_context_t* ctx) {
     uint64_t item_count = 0;
-    iterator_t* iter = linkedlist_iterator_create(ctx->devices);
+    iterator_t* iter = list_iterator_create(ctx->devices);
 
     while(iter->end_of_iterator(iter) != 0) {
         const acpi_aml_device_t* d = iter->get_item(iter);

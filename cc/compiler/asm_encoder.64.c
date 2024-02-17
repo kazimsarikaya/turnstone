@@ -136,7 +136,7 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param);
 boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, uint8_t* modrm, uint8_t* sib,
                                boolean_t* need_rex, uint8_t* rex,
                                boolean_t* has_displacement, uint8_t* disp_size);
-boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, linkedlist_t* relocs);
+boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* relocs);
 
 boolean_t asm_parse_number(char_t* data, uint64_t* result) {
     boolean_t is_hex = false;
@@ -526,8 +526,8 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
 
 
 
-boolean_t asm_encode_instructions(linkedlist_t* tokens, buffer_t* out, linkedlist_t* relocs) {
-    iterator_t* it = linkedlist_iterator_create(tokens);
+boolean_t asm_encode_instructions(list_t* tokens, buffer_t* out, list_t* relocs) {
+    iterator_t* it = list_iterator_create(tokens);
 
     boolean_t result = true;
 
@@ -579,8 +579,8 @@ boolean_t asm_encode_instructions(linkedlist_t* tokens, buffer_t* out, linkedlis
     return result;
 }
 
-void asm_encoder_print_relocs(linkedlist_t* relocs) {
-    iterator_t* iter = linkedlist_iterator_create(relocs);
+void asm_encoder_print_relocs(list_t* relocs) {
+    iterator_t* iter = list_iterator_create(relocs);
 
     while(iter->end_of_iterator(iter) != 0) {
         const asm_relocation_t* reloc = iter->get_item(iter);
@@ -593,8 +593,8 @@ void asm_encoder_print_relocs(linkedlist_t* relocs) {
     iter->destroy(iter);
 }
 
-void asm_encoder_destroy_relocs(linkedlist_t* relocs) {
-    iterator_t* iter = linkedlist_iterator_create(relocs);
+void asm_encoder_destroy_relocs(list_t* relocs) {
+    iterator_t* iter = list_iterator_create(relocs);
 
     while(iter->end_of_iterator(iter) != 0) {
         const asm_relocation_t* reloc = iter->get_item(iter);
@@ -606,10 +606,10 @@ void asm_encoder_destroy_relocs(linkedlist_t* relocs) {
 
     iter->destroy(iter);
 
-    linkedlist_destroy_with_data(relocs);
+    list_destroy_with_data(relocs);
 }
 
-boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, linkedlist_t* relocs) {
+boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* relocs) {
     boolean_t result = true;
 
     const asm_token_t* tok_operand = it->get_item(it);
@@ -914,7 +914,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, linkedlist_t*
                           disp_size == 4?LINKER_RELOCATION_TYPE_64_32:LINKER_RELOCATION_TYPE_64_64;
             reloc->label = op_mem.label;
 
-            linkedlist_queue_push(relocs, reloc);
+            list_queue_push(relocs, reloc);
         }
 
         buffer_append_bytes(outbuf, (uint8_t*)&op_mem.displacement, disp_size);
@@ -937,7 +937,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, linkedlist_t*
             reloc->offset = buffer_get_position(outbuf);
             reloc->label = op_imm.label;
 
-            linkedlist_queue_push(relocs, reloc);
+            list_queue_push(relocs, reloc);
         }
         buffer_append_bytes(outbuf, (uint8_t*)&op_imm.immediate, imm_size);
 

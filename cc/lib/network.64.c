@@ -10,7 +10,7 @@
 #include <driver/network_virtio.h>
 #include <driver/network_e1000.h>
 #include <pci.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <memory.h>
 #include <logging.h>
 #include <cpu/task.h>
@@ -24,7 +24,7 @@ MODULE("turnstone.lib");
 int8_t   network_process_rx(void);
 uint64_t network_info_mke(const void* key);
 
-linkedlist_t* network_received_packets = NULL;
+list_t* network_received_packets = NULL;
 
 map_t network_info_map = NULL;
 
@@ -37,7 +37,7 @@ uint64_t network_info_mke(const void* key) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-static int8_t network_set_return_queue(const network_mac_address_t* mac, linkedlist_t* return_queue) {
+static int8_t network_set_return_queue(const network_mac_address_t* mac, list_t* return_queue) {
     network_info_t* ni = (network_info_t*)map_get(network_info_map, mac);
 
     if(!ni) {
@@ -60,19 +60,19 @@ static int8_t network_set_return_queue(const network_mac_address_t* mac, linkedl
 #pragma GCC diagnostic pop
 
 int8_t network_process_rx(void){
-    network_received_packets = linkedlist_create_queue_with_heap(NULL);
+    network_received_packets = list_create_queue_with_heap(NULL);
 
     task_add_message_queue(network_received_packets);
 
     while(1) {
-        if(linkedlist_size(network_received_packets) == 0) {
+        if(list_size(network_received_packets) == 0) {
             PRINTLOG(NETWORK, LOG_TRACE, "no packet received, changing task");
             task_set_message_waiting();
             task_yield();
         }
 
-        while(linkedlist_size(network_received_packets)) {
-            const network_received_packet_t* packet = linkedlist_queue_peek(network_received_packets);
+        while(list_size(network_received_packets)) {
+            const network_received_packet_t* packet = list_queue_peek(network_received_packets);
 
             if(packet) {
                 PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
@@ -87,32 +87,32 @@ int8_t network_process_rx(void){
                     return_data = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info, &return_data_len);
                 }
 
-                linkedlist_t* return_queue = packet->return_queue;
+                list_t* return_queue = packet->return_queue;
 
                 memory_free(packet->packet_data);
                 memory_free((void*)packet);
 
                 if(return_data && return_data_len) {
                     if(return_queue) {
-                        network_transmit_packet_t* tx_packet = memory_malloc_ext(linkedlist_get_heap(return_queue), sizeof(network_transmit_packet_t), 0);
+                        network_transmit_packet_t* tx_packet = memory_malloc_ext(list_get_heap(return_queue), sizeof(network_transmit_packet_t), 0);
 
                         if(tx_packet == NULL) {
                             memory_free(return_data);
 
-                            linkedlist_queue_pop(network_received_packets);
+                            list_queue_pop(network_received_packets);
 
                             task_yield();
 
                             continue;
                         }
 
-                        uint8_t* tx_packet_data = memory_malloc_ext(linkedlist_get_heap(return_queue), return_data_len, 0);
+                        uint8_t* tx_packet_data = memory_malloc_ext(list_get_heap(return_queue), return_data_len, 0);
 
                         if(tx_packet_data == NULL) {
                             memory_free(return_data);
-                            memory_free_ext(linkedlist_get_heap(return_queue), tx_packet);
+                            memory_free_ext(list_get_heap(return_queue), tx_packet);
 
-                            linkedlist_queue_pop(network_received_packets);
+                            list_queue_pop(network_received_packets);
 
                             task_yield();
 
@@ -126,11 +126,11 @@ int8_t network_process_rx(void){
                         tx_packet->packet_len = return_data_len;
                         tx_packet->packet_data = tx_packet_data;
 
-                        if(linkedlist_queue_push(return_queue, tx_packet) == -1ULL) {
-                            memory_free_ext(linkedlist_get_heap(return_queue), tx_packet_data);
-                            memory_free_ext(linkedlist_get_heap(return_queue), tx_packet);
+                        if(list_queue_push(return_queue, tx_packet) == -1ULL) {
+                            memory_free_ext(list_get_heap(return_queue), tx_packet_data);
+                            memory_free_ext(list_get_heap(return_queue), tx_packet);
 
-                            linkedlist_queue_pop(network_received_packets);
+                            list_queue_pop(network_received_packets);
 
                             task_yield();
 
@@ -148,10 +148,10 @@ int8_t network_process_rx(void){
                     PRINTLOG(NETWORK, LOG_TRACE, "packet discarded");
                 }
 
-                linkedlist_queue_pop(network_received_packets);
+                list_queue_pop(network_received_packets);
             }
 
-            PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%llx", linkedlist_size(network_received_packets));
+            PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%llx", list_size(network_received_packets));
         }
 
     }
@@ -166,7 +166,7 @@ int8_t network_init(void) {
 
     network_info_map = map_new(&network_info_mke);
 
-    iterator_t* iter = linkedlist_iterator_create(PCI_CONTEXT->network_controllers);
+    iterator_t* iter = list_iterator_create(PCI_CONTEXT->network_controllers);
 
     while(iter->end_of_iterator(iter) != 0) {
         const pci_dev_t* pci_netdev = iter->get_item(iter);

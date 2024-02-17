@@ -284,14 +284,14 @@ int8_t pci_setup(memory_heap_t* heap) {
     PRINTLOG(PCI, LOG_INFO, "pci devices enumerating");
 
     PCI_CONTEXT = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
-    PCI_CONTEXT->sata_controllers = linkedlist_create_list_with_heap(heap);
-    PCI_CONTEXT->nvme_controllers = linkedlist_create_list_with_heap(heap);
-    PCI_CONTEXT->network_controllers = linkedlist_create_list_with_heap(heap);
-    PCI_CONTEXT->display_controllers = linkedlist_create_list_with_heap(heap);
-    PCI_CONTEXT->usb_controllers = linkedlist_create_list_with_heap(heap);
-    PCI_CONTEXT->other_devices = linkedlist_create_list_with_heap(heap);
+    PCI_CONTEXT->sata_controllers = list_create_list_with_heap(heap);
+    PCI_CONTEXT->nvme_controllers = list_create_list_with_heap(heap);
+    PCI_CONTEXT->network_controllers = list_create_list_with_heap(heap);
+    PCI_CONTEXT->display_controllers = list_create_list_with_heap(heap);
+    PCI_CONTEXT->usb_controllers = list_create_list_with_heap(heap);
+    PCI_CONTEXT->other_devices = list_create_list_with_heap(heap);
 
-    linkedlist_t* old_mcfgs = linkedlist_create_list();
+    list_t* old_mcfgs = list_create_list();
 
     while(mcfg) {
         PRINTLOG(PCI, LOG_TRACE, "mcfg is found at 0x%p", mcfg);
@@ -322,34 +322,34 @@ int8_t pci_setup(memory_heap_t* heap) {
             if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                 p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
 
-                linkedlist_list_insert(PCI_CONTEXT->sata_controllers, p);
+                list_list_insert(PCI_CONTEXT->sata_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as sata controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_NVME_CONTROLLER) {
 
-                linkedlist_list_insert(PCI_CONTEXT->nvme_controllers, p);
+                list_list_insert(PCI_CONTEXT->nvme_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as nvme controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_NETWORK_CONTROLLER &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_ETHERNET) {
 
-                linkedlist_list_insert(PCI_CONTEXT->network_controllers, p);
+                list_list_insert(PCI_CONTEXT->network_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as network controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if(p->pci_header->class_code == PCI_DEVICE_CLASS_DISPLAY_CONTROLLER) {
 
-                linkedlist_list_insert(PCI_CONTEXT->display_controllers, p);
+                list_list_insert(PCI_CONTEXT->display_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
 
-                linkedlist_list_insert(PCI_CONTEXT->usb_controllers, p);
+                list_list_insert(PCI_CONTEXT->usb_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
@@ -357,7 +357,7 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x is not supported",
                          p->group_number, p->bus_number, p->device_number, p->function_number, p->pci_header->class_code, p->pci_header->subclass_code);
 
-                linkedlist_list_insert(PCI_CONTEXT->other_devices, p);
+                list_list_insert(PCI_CONTEXT->other_devices, p);
 
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
@@ -392,21 +392,21 @@ int8_t pci_setup(memory_heap_t* heap) {
         }
         iter->destroy(iter);
 
-        linkedlist_list_insert(old_mcfgs, mcfg);
+        list_list_insert(old_mcfgs, mcfg);
 
         mcfg = (acpi_table_mcfg_t*)acpi_get_next_table(ACPI_CONTEXT->xrsdp_desc, "MCFG", old_mcfgs);
     }
 
-    linkedlist_destroy(old_mcfgs);
+    list_destroy(old_mcfgs);
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
     PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli other devices %lli",
-             linkedlist_size(PCI_CONTEXT->sata_controllers),
-             linkedlist_size(PCI_CONTEXT->nvme_controllers),
-             linkedlist_size(PCI_CONTEXT->network_controllers),
-             linkedlist_size(PCI_CONTEXT->display_controllers),
-             linkedlist_size(PCI_CONTEXT->usb_controllers),
-             linkedlist_size(PCI_CONTEXT->other_devices)
+             list_size(PCI_CONTEXT->sata_controllers),
+             list_size(PCI_CONTEXT->nvme_controllers),
+             list_size(PCI_CONTEXT->network_controllers),
+             list_size(PCI_CONTEXT->display_controllers),
+             list_size(PCI_CONTEXT->usb_controllers),
+             list_size(PCI_CONTEXT->other_devices)
              );
 
     return 0;
@@ -487,7 +487,7 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
                 for(size_t func_addr = 0; func_addr < PCI_FUNCTION_MAX_COUNT; func_addr++) {
                     iter_metadata->function_number = func_addr;
 
-                    //calculate mmio address of device
+                    // calculate mmio address of device
                     size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_config[i].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
                     size_t pci_mmio_addr_va  = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
 
@@ -567,7 +567,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
             for(size_t dev_addr = iter_metadata->device_number; dev_addr < PCI_DEVICE_MAX_COUNT; dev_addr++) {
                 iter_metadata->device_number = dev_addr;
 
-                //calculate mmio address of device
+                // calculate mmio address of device
                 size_t pci_mmio_addr_fa = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | 0 << 12 );
                 size_t pci_mmio_addr_va  = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
 
@@ -576,7 +576,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 
                 if(pci_frames == NULL) {
                     PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
-                    iter_metadata->end_of_iter = 0; //end iter
+                    iter_metadata->end_of_iter = 0; // end iter
 
                     return iterator;
                 } else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
@@ -606,7 +606,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
 
                                 if(pci_frames == NULL) {
                                     PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
-                                    iter_metadata->end_of_iter = 0; //end iter
+                                    iter_metadata->end_of_iter = 0; // end iter
 
                                     return iterator;
                                 } else if((pci_frames->frame_attributes & FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) != FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED) {
@@ -635,7 +635,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
                     check_func0 = 0;
                 }
 
-            } //end of device loop
+            } // end of device loop
 
             if(dev_found == 0) {
                 break;
@@ -649,7 +649,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
         }else if((bus_group + 1) < iter_metadata->group_number_count) {
             iter_metadata->bus_number = iter_metadata->mcfg->pci_segment_group_config[bus_group + 1].bus_start;
         }
-    } //end of bus group loop
+    } // end of bus group loop
 
     if(dev_found == -1) {
         iter_metadata->end_of_iter = 0;

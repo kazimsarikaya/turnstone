@@ -12,7 +12,7 @@
 #include <types.h>
 #include <data.h>
 #include <buffer.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <disk.h>
 #include <set.h>
 #include <compression.h>
@@ -528,7 +528,7 @@ typedef boolean_t (*tosdb_record_get_f)(tosdb_record_t* record);
  * @param[in] record secondary key of record for retrive
  * @return the record list
  */
-typedef linkedlist_t * (*tosdb_record_search_f)(tosdb_record_t* record);
+typedef list_t * (*tosdb_record_search_f)(tosdb_record_t* record);
 
 /**
  * @brief checks if record is deleted

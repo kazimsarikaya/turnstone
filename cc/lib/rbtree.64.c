@@ -8,7 +8,7 @@
 
 #include <rbtree.h>
 #include <cpu/sync.h>
-#include <linkedlist.h>
+#include <list.h>
 
 MODULE("turnstone.lib");
 
@@ -155,20 +155,20 @@ struct rbtree_t {
     rbtree_node_t* root;
 };
 
-void          rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
-void          rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
-void          rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn);
-void          rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn);
-void          rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v);
-boolean_t     rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res);
-uint64_t      rbtree_size(index_t* idx);
-int8_t        rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data);
-int8_t        rbtree_delete(index_t* idx, const void* key, void** removed_data);
-const void*   rbtree_find(index_t* idx, const void* key);
-iterator_t*   rbtree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
-iterator_t*   rbtree_create_iterator(index_t* idx);
-boolean_t     rbtree_contains(index_t* idx, const void* key);
-linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria);
+void        rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
+void        rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
+void        rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn);
+void        rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn);
+void        rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v);
+boolean_t   rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res);
+uint64_t    rbtree_size(index_t* idx);
+int8_t      rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data);
+int8_t      rbtree_delete(index_t* idx, const void* key, void** removed_data);
+const void* rbtree_find(index_t* idx, const void* key);
+iterator_t* rbtree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
+iterator_t* rbtree_create_iterator(index_t* idx);
+boolean_t   rbtree_contains(index_t* idx, const void* key);
+list_t*     rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria);
 
 void rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
     rbtree_node_t* new_parent = rbn->right;
@@ -570,7 +570,7 @@ const void* rbtree_find(index_t* idx, const void* key) {
     return res->data;
 }
 
-linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
+list_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
     if(!idx) {
         return NULL;
     }
@@ -578,16 +578,16 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
 
     rbtree_t* rbt = idx->metadata;
 
-    linkedlist_t* stack = linkedlist_create_stack_with_heap(idx->heap);
+    list_t* stack = list_create_stack_with_heap(idx->heap);
 
     if(!stack) {
         return NULL;
     }
 
-    linkedlist_t* results = linkedlist_create_list_with_heap(idx->heap);
+    list_t* results = list_create_list_with_heap(idx->heap);
 
     if(!results) {
-        linkedlist_destroy(stack);
+        list_destroy(stack);
 
         return NULL;
     }
@@ -597,11 +597,11 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
     rbtree_node_t* current = rbt->root;
 
 
-    while(current != NULL || linkedlist_size(stack)) {
+    while(current != NULL || list_size(stack)) {
         while(current != NULL) {
 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_NULL) {
-                linkedlist_stack_push(stack, current);
+                list_stack_push(stack, current);
                 current = current->left;
 
                 continue;
@@ -611,19 +611,19 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_LESS) {
                 if(c_res_1 == -1) {
-                    linkedlist_stack_push(stack, current);
+                    list_stack_push(stack, current);
                 }
             }
 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_LESSOREQUAL) {
                 if(c_res_1 <= 0) {
-                    linkedlist_stack_push(stack, current);
+                    list_stack_push(stack, current);
                 }
             }
 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL) {
                 if(c_res_1 == 0) {
-                    linkedlist_stack_push(stack, current);
+                    list_stack_push(stack, current);
                 } else if(c_res_1 == -1) {
                     break;
                 }
@@ -631,7 +631,7 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_EQUALORGREATER) {
                 if(c_res_1 >= 0) {
-                    linkedlist_stack_push(stack, current);
+                    list_stack_push(stack, current);
                 } else  {
                     if(current->right) {
                         current = current->right;
@@ -643,7 +643,7 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
 
             if(criteria == INDEXER_KEY_COMPARATOR_CRITERIA_GREATER) {
                 if(c_res_1 > 0) {
-                    linkedlist_stack_push(stack, current);
+                    list_stack_push(stack, current);
                 } else  {
                     if(current->right) {
                         current = current->right;
@@ -657,7 +657,7 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
                 int8_t c_res_2 = idx->comparator(current->key, key2);
 
                 if(c_res_1 >= 0 && c_res_2 <= 0) {
-                    linkedlist_stack_push(stack, current);
+                    list_stack_push(stack, current);
                 } else if(c_res_1 == -1) {
                     if(current->right) {
                         current = current->right;
@@ -672,9 +672,9 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
             current = current->left;
         }
 
-        if(linkedlist_size(stack)) {
-            current = (rbtree_node_t*)linkedlist_stack_pop(stack);
-            linkedlist_list_insert(results, current);
+        if(list_size(stack)) {
+            current = (rbtree_node_t*)list_stack_pop(stack);
+            list_list_insert(results, current);
         }
 
         if(current) {
@@ -685,7 +685,7 @@ linkedlist_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, i
 
     lock_release(rbt->lock);
 
-    linkedlist_destroy(stack);
+    list_destroy(stack);
 
     return results;
 }
@@ -785,7 +785,7 @@ typedef struct rbtree_iterator_t {
     memory_heap_t* heap;
     uint64_t       size;
     size_t         current_index;
-    linkedlist_t*  items;
+    list_t*        items;
 } rbtree_iterator_t;
 
 int8_t      rbtree_iterator_destroy(iterator_t * iterator);
@@ -813,7 +813,7 @@ iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, con
 
     iter->heap = idx->heap;
     iter->items = rbtree_inorder(idx, key1, key2, criteria);
-    iter->size = linkedlist_size(iter->items);
+    iter->size = list_size(iter->items);
 
     if(!iter->items) {
         memory_free_ext(idx->heap, iter);
@@ -824,7 +824,7 @@ iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, con
     iterator_t* iterator = memory_malloc_ext(idx->heap, sizeof(iterator_t), 0x0);
 
     if(iterator == NULL) {
-        linkedlist_destroy(iter->items);
+        list_destroy(iter->items);
         memory_free_ext(idx->heap, iter);
 
         return NULL;
@@ -847,7 +847,7 @@ int8_t rbtree_iterator_destroy(iterator_t * iterator){
     rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
     memory_heap_t* heap = iter->heap;
 
-    linkedlist_destroy(iter->items);
+    list_destroy(iter->items);
     memory_free_ext(heap, iter);
     memory_free_ext(heap, iterator);
 
@@ -879,7 +879,7 @@ const void* rbtree_iterator_get_key(iterator_t * iterator) {
         return NULL;
     }
 
-    rbtree_node_t* cn = (rbtree_node_t*)linkedlist_get_data_at_position(iter->items, iter->current_index);
+    rbtree_node_t* cn = (rbtree_node_t*)list_get_data_at_position(iter->items, iter->current_index);
 
     return cn->key;
 }
@@ -891,7 +891,7 @@ const void* rbtree_iterator_get_data(iterator_t* iterator) {
         return NULL;
     }
 
-    rbtree_node_t* cn = (rbtree_node_t*)linkedlist_get_data_at_position(iter->items, iter->current_index);
+    rbtree_node_t* cn = (rbtree_node_t*)list_get_data_at_position(iter->items, iter->current_index);
 
     return cn->data;
 }

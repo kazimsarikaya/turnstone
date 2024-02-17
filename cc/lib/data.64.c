@@ -25,59 +25,87 @@ data_t* data_json_deserialize(data_t* data) {
     return NULL;
 }
 
-data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
-    if(sw == DATA_SERIALIZE_WITH_NONE) {
-        return NULL;
-    }
+int8_t  data_bson_serialize_with_buffer(buffer_t* buf, data_t* data, uint64_t* sub_len);
+data_t* data_bson_deserialize_with_processed(data_t* data, uint64_t* processed);
 
-    data_serialize_with_t org_sw = sw;
-
+data_t* data_bson_serialize(data_t* data) {
     buffer_t* buf = buffer_new();
 
     if(buf == NULL) {
         return NULL;
     }
 
-    uint8_t bc = 0;
+    uint64_t len = 0;
 
-    if(data->name == NULL) {
-        sw &= ~DATA_SERIALIZE_WITH_NAME;
+    if(data_bson_serialize_with_buffer(buf, data, &len) == -1) {
+        buffer_destroy(buf);
+        return NULL;
     }
 
-    if(sw & DATA_SERIALIZE_WITH_FLAGS) {
-        buffer_append_bytes(buf, (uint8_t*)&sw, sizeof(uint8_t));
+    uint64_t obuflen = 0;
+    uint8_t* obuf = buffer_get_all_bytes(buf, &obuflen);
+
+    buffer_destroy(buf);
+
+    if(!obuflen || !obuf) {
+        return NULL;
     }
 
-    if((sw & DATA_SERIALIZE_WITH_NAME) && data->name) {
-        data_t* tmp_name = data_bson_serialize(data->name, DATA_SERIALIZE_WITH_TYPE | DATA_SERIALIZE_WITH_LENGTH);
-
-        if(tmp_name == NULL) {
-            buffer_destroy(buf);
-
-            return NULL;
-        }
-
-        buffer_append_bytes(buf, (uint8_t*)tmp_name->value, tmp_name->length);
-
-        memory_free(tmp_name->value);
-        memory_free(tmp_name);
+    if(len != obuflen) {
+        return NULL;
     }
 
-    if(sw & DATA_SERIALIZE_WITH_TYPE) {
-        buffer_append_bytes(buf, (uint8_t*)&data->type, sizeof(uint8_t));
+    data_t* res = memory_malloc(sizeof(data_t));
+
+    if(!res) {
+        memory_free(obuf);
+
+        return NULL;
     }
 
-    if((sw & DATA_SERIALIZE_WITH_LENGTH) && data->type >= DATA_TYPE_STRING) {
-        uint64_t len = data->length;
+    res->type = DATA_TYPE_INT8_ARRAY;
+    res->length = obuflen;
+    res->value = obuf;
+
+    return res;
+}
+
+int8_t depth = 0;
+
+int8_t data_bson_serialize_with_buffer(buffer_t* buf, data_t* data, uint64_t* sub_len) {
+    uint64_t len = 0;
+
+    uint64_t len_pos = buffer_get_position(buf);
+
+    buffer_append_bytes(buf, (uint8_t*)&len, sizeof(uint64_t));
+    len += sizeof(uint64_t);
+
+    if(data == NULL) {
+        *sub_len = len; // len
+        return 0;
+    }
+
+
+    buffer_append_bytes(buf, (uint8_t*)&data->type, sizeof(uint8_t));
+    len += sizeof(uint8_t);
+
+    uint64_t name_len = 0;
+
+    if(data_bson_serialize_with_buffer(buf, data->name, &name_len) == -1) {
+        return -1;
+    }
+
+    len += name_len;
+
+    if(data->type >= DATA_TYPE_STRING) {
+        uint64_t type_len = data->length;
 
         if(data->type == DATA_TYPE_STRING) {
-            len = strlen((char_t*)data->value);
+            type_len = strlen((char_t*)data->value);
         }
 
-        bc = byte_count(len);
-
-        buffer_append_byte(buf, bc);
-        buffer_append_bytes(buf, (uint8_t*)&len, bc);
+        buffer_append_bytes(buf, (uint8_t*)&type_len, sizeof(uint64_t));
+        len += sizeof(uint64_t);
     }
 
     switch (data->type) {
@@ -87,104 +115,94 @@ data_t* data_bson_serialize(data_t* data, data_serialize_with_t sw){
     case DATA_TYPE_CHAR:
     case DATA_TYPE_INT8:
         buffer_append_bytes(buf, (uint8_t*)&data->value, sizeof(uint8_t));
+        len += sizeof(uint8_t);
         break;
     case DATA_TYPE_INT16:
         buffer_append_bytes(buf, (uint8_t*)&data->value, sizeof(uint16_t));
+        len += sizeof(uint16_t);
         break;
     case DATA_TYPE_INT32:
         buffer_append_bytes(buf, (uint8_t*)&data->value, sizeof(uint32_t));
+        len += sizeof(uint32_t);
         break;
     case DATA_TYPE_INT64:
         buffer_append_bytes(buf, (uint8_t*)&data->value, sizeof(uint64_t));
+        len += sizeof(uint64_t);
         break;
     case DATA_TYPE_FLOAT32:
         buffer_append_bytes(buf, (uint8_t*)&data->value, sizeof(float32_t));
+        len += sizeof(float32_t);
         break;
     case DATA_TYPE_FLOAT64:
         buffer_append_bytes(buf, (uint8_t*)&data->value, sizeof(float64_t));
+        len += sizeof(float64_t);
         break;
     case DATA_TYPE_STRING:
         buffer_append_bytes(buf, (uint8_t*)data->value, strlen((char_t*)data->value));
+        len += strlen((char_t*)data->value);
         break;
-    case DATA_TYPE_DATA:
-        for(uint64_t i = 0; i < data->length; i++) {
-            data_t* tmp_data = data_bson_serialize(&(((data_t*)(data->value))[i]), org_sw);
+    case DATA_TYPE_DATA: {
+        data_t* datas = (data_t*)data->value;
 
-            if(tmp_data == NULL) {
-                buffer_destroy(buf);
-                return NULL;
+        for(uint64_t i = 0; i < data->length; i++) {
+            uint64_t item_len = 0;
+
+            if(data_bson_serialize_with_buffer(buf, &datas[i], &item_len) == -1) {
+                return -1;
             }
 
-            buffer_append_bytes(buf, (uint8_t*)tmp_data->value, tmp_data->length);
-
-            memory_free(tmp_data->value);
-            memory_free(tmp_data);
+            len += item_len;
         }
-        break;
+    }
+    break;
     case DATA_TYPE_INT8_ARRAY:
         buffer_append_bytes(buf, (uint8_t*)data->value, data->length * sizeof(uint8_t));
+        len += data->length * sizeof(uint8_t);
         break;
     case DATA_TYPE_INT16_ARRAY:
         buffer_append_bytes(buf, (uint8_t*)data->value, data->length * sizeof(uint16_t));
+        len += data->length * sizeof(uint16_t);
         break;
     case DATA_TYPE_INT32_ARRAY:
         buffer_append_bytes(buf, (uint8_t*)data->value, data->length * sizeof(uint32_t));
+        len += data->length * sizeof(uint32_t);
         break;
     case DATA_TYPE_INT64_ARRAY:
         buffer_append_bytes(buf, (uint8_t*)data->value, data->length * sizeof(uint64_t));
+        len += data->length * sizeof(uint64_t);
         break;
     case DATA_TYPE_FLOAT32_ARRAY:
         buffer_append_bytes(buf, (uint8_t*)data->value, data->length * sizeof(float32_t));
+        len += data->length * sizeof(float32_t);
         break;
     case DATA_TYPE_FLOAT64_ARRAY:
         buffer_append_bytes(buf, (uint8_t*)data->value, data->length * sizeof(float64_t));
+        len += data->length * sizeof(float64_t);
         break;
     default:
-        buffer_destroy(buf);
-        return NULL;
+        return -1;
     }
 
+    uint64_t pos = buffer_get_position(buf);
 
-    data_t* res = memory_malloc(sizeof(data_t));
+    buffer_seek(buf, len_pos, BUFFER_SEEK_DIRECTION_START);
+    buffer_append_bytes(buf, (uint8_t*)&len, sizeof(uint64_t));
+    buffer_seek(buf, pos, BUFFER_SEEK_DIRECTION_START);
 
-    uint64_t obuflen = 0;
-    uint8_t* obuf = buffer_get_all_bytes(buf, &obuflen);
+    *sub_len = len;
 
-    if(!obuflen || !obuf) {
-        memory_free(res);
-        buffer_destroy(buf);
+    return 0;
+}
 
-        return NULL;
-    }
+data_t* data_bson_deserialize(data_t* data) {
+    uint64_t processed = 0;
 
-    bc = byte_count(obuflen);
-
-    res->type = DATA_TYPE_INT8_ARRAY;
-    res->length = 1 + bc + obuflen;
-
-    uint8_t* ores = memory_malloc(res->length);
-
-    if(!ores) {
-        memory_free(obuf);
-        memory_free(res);
-        buffer_destroy(buf);
-
-        return NULL;
-    }
-
-    ores[0] = bc;
-    memory_memcopy((uint8_t*)&obuflen, ores + 1, bc);
-    memory_memcopy(obuf, ores + 1 + bc, obuflen);
-    memory_free(obuf);
-
-    res->value = ores;
-
-    buffer_destroy(buf);
+    data_t* res = data_bson_deserialize_with_processed(data, &processed);
 
     return res;
 }
 
-data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
+data_t* data_bson_deserialize_with_processed(data_t* data, uint64_t* processed) {
     if(data == NULL) {
         return NULL;
     }
@@ -193,12 +211,11 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         return NULL;
     }
 
-    uint8_t bc = 0;
+    uint64_t l_processed = 0;
     uint64_t len = 0;
-    uint8_t* blen = (uint8_t*)&len;
     uint64_t total_len = data->length;
 
-    if(total_len < 1) {
+    if(total_len < 8) {
         return NULL;
     }
 
@@ -208,23 +225,20 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         return NULL;
     }
 
-    bc = *tmp_data;
+    len = *((uint64_t*)tmp_data);
+    l_processed += sizeof(uint64_t);
 
-    if(bc > 8 || total_len < 1ULL + bc) {
+    if(len == 0) {
+        *processed = l_processed;
         return NULL;
     }
-
-    tmp_data++;
-    total_len--;
-
-    memory_memcopy(tmp_data, blen, bc);
-
-    tmp_data += bc;
-    total_len -= bc;
 
     if(total_len < len) {
         return NULL;
     }
+
+    tmp_data += sizeof(uint64_t);
+    total_len -= sizeof(uint64_t);
 
     data_t* res = memory_malloc(sizeof(data_t));
 
@@ -232,73 +246,40 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         return NULL;
     }
 
-    if(sw & DATA_SERIALIZE_WITH_FLAGS) {
-        sw = (data_serialize_with_t)*tmp_data;
-        tmp_data++;
-        total_len--;
+    if(total_len < 1) {
+        goto catch_error;
     }
 
-    if(sw & DATA_SERIALIZE_WITH_NAME) {
-        data_t td = {DATA_TYPE_INT8_ARRAY, total_len, NULL, tmp_data};
-        res->name = data_bson_deserialize(&td, DATA_SERIALIZE_WITH_TYPE | DATA_SERIALIZE_WITH_LENGTH);
+    res->type = *tmp_data;
 
-        if(res->name == NULL) {
-            goto catch_error;
-        }
+    tmp_data++;
+    total_len--;
+    l_processed++;
 
-        if(total_len < res->name->length) {
-            memory_free(res);
+    data_t td_name = {DATA_TYPE_INT8_ARRAY, total_len, NULL, tmp_data};
+    uint64_t name_len = 0;
+    res->name = data_bson_deserialize_with_processed(&td_name, &name_len);
 
-            return NULL;
-        }
+    if(res->name && total_len < res->name->length) {
+        memory_free(res);
 
-        bc = *tmp_data;
-        tmp_data++;
-        total_len--;
-        len = 0;
-        memory_memcopy(tmp_data, blen, bc);
-
-        tmp_data += len + bc;
-        total_len -= len + bc;
+        return NULL;
     }
 
-    if(sw & DATA_SERIALIZE_WITH_TYPE) {
-        if(total_len < 1) {
+    tmp_data += name_len;
+    total_len -= name_len;
+    l_processed += name_len;
+
+    if(res->type >= DATA_TYPE_STRING) {
+        if(total_len < 8) {
             goto catch_error;
         }
 
-        res->type = *tmp_data;
-        tmp_data++;
-        total_len--;
-    } else {
-        res->type = DATA_TYPE_INT8_ARRAY;
-    }
+        res->length = *((uint64_t*)tmp_data);
 
-    if((sw & DATA_SERIALIZE_WITH_LENGTH) && res->type >= DATA_TYPE_STRING) {
-        if(total_len < 1) {
-            goto catch_error;
-        }
-
-        bc = *tmp_data;
-
-        if(bc > 8 || total_len < 1ULL + bc) {
-            goto catch_error;
-        }
-
-        tmp_data++;
-        total_len--;
-
-        len = 0;
-        memory_memcopy(tmp_data, blen, bc);
-
-        tmp_data += bc;
-        total_len -= bc;
-
-        if(total_len < len) {
-            goto catch_error;
-        }
-
-        res->length = len;
+        tmp_data += sizeof(uint64_t);
+        total_len -= sizeof(uint64_t);
+        l_processed += sizeof(uint64_t);
     }
 
     if(res->length == 0 && res->type < DATA_TYPE_STRING) {
@@ -331,6 +312,8 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
     }
 
     if(res->length == 0) {
+        *processed = l_processed;
+
         return res;
     }
 
@@ -339,23 +322,28 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
 
         for(uint64_t i = 0; i < res->length; i++) {
             data_t td = {DATA_TYPE_INT8_ARRAY, total_len, NULL, tmp_data};
-            data_t* data_item = data_bson_deserialize(&td, sw);
+            uint64_t item_len = 0;
+            data_t* data_item = data_bson_deserialize_with_processed(&td, &item_len);
+
+            if(data_item == NULL) {
+                memory_free(data_items);
+                data_free(res);
+
+                return NULL;
+            }
 
             memory_memcopy(data_item, data_items + i, sizeof(data_t));
 
             memory_free(data_item);
 
-            bc = *tmp_data;
-            tmp_data++;
-            total_len--;
-            len = 0;
-            memory_memcopy(tmp_data, blen, bc);
-
-            tmp_data += len + bc;
-            total_len -= len + bc;
+            tmp_data += item_len;
+            total_len -= item_len;
+            l_processed += item_len;
         }
 
         res->value = data_items;
+
+        *processed = l_processed;
 
         return res;
     }
@@ -449,21 +437,12 @@ data_t* data_bson_deserialize(data_t* data, data_serialize_with_t sw) {
         res->value = idata;
     }
 
+    *processed = l_processed + ilen;
+
     return res;
 
 catch_error:
-    if(res->name) {
-        if(res->name->type >= DATA_TYPE_STRING) {
-            memory_free(res->name->value);
-            memory_free(res->name);
-        }
-    }
-
-    if(res->type >= DATA_TYPE_STRING) { // FIXME: DATA_TYPE_DATA memory leak
-        memory_free(res->value);
-    }
-
-    memory_free(res);
+    data_free(res);
 
     return NULL;
 }
@@ -474,7 +453,7 @@ void data_free(data_t* data) {
     }
 
     if(data->type >= DATA_TYPE_STRING) {
-        if(data->type == DATA_TYPE_DATA) {
+        if(data->type == DATA_TYPE_DATA && data->value) {
             data_t* ds = data->value;
             for(uint64_t i = 0; i < data->length; i++) {
                 if(ds[i].name) {

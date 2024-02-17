@@ -10,7 +10,7 @@
 #define ___NETWORK_H 0
 
 #include <types.h>
-#include <linkedlist.h>
+#include <list.h>
 
 #define NETWORK_DEVICE_VENDOR_ID_VIRTIO  0x1AF4
 #define NETWORK_DEVICE_DEVICE_ID_VIRTNET1 0x1000
@@ -26,7 +26,7 @@ typedef enum network_type_t {
 typedef struct network_received_packet_t {
     uint64_t       packet_len;
     uint8_t*       packet_data;
-    linkedlist_t*  return_queue;
+    list_t*        return_queue;
     network_type_t network_type;
     void*          network_info;
 } network_received_packet_t;
@@ -36,7 +36,7 @@ typedef struct network_transmit_packet_t {
     uint8_t* packet_data;
 } network_transmit_packet_t;
 
-extern linkedlist_t* network_received_packets;
+extern list_t* network_received_packets;
 
 int8_t network_init(void);
 

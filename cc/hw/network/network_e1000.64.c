@@ -25,7 +25,7 @@
 
 MODULE("turnstone.kernel.hw.network.e1000");
 
-linkedlist_t* e1000_net_devs = NULL;
+list_t* e1000_net_devs = NULL;
 
 uint16_t network_e1000_eeprom_read(network_e1000_dev_t* dev, uint8_t addr);
 uint16_t network_e1000_phy_read(network_e1000_dev_t* dev, int regaddr);
@@ -40,19 +40,19 @@ void     network_e1000_phy_write(network_e1000_dev_t* dev, int regaddr, uint16_t
 
 int8_t network_e1000_process_tx(void) {
 
-    for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(e1000_net_devs); dev_idx++) {
-        const network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, dev_idx);
+    for(uint64_t dev_idx = 0; dev_idx < list_size(e1000_net_devs); dev_idx++) {
+        const network_e1000_dev_t* dev = list_get_data_at_position(e1000_net_devs, dev_idx);
         task_add_message_queue(dev->transmit_queue);
     }
 
     while(1) {
         boolean_t packet_exists = 0;
 
-        for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(e1000_net_devs); dev_idx++) {
-            network_e1000_dev_t* dev = (network_e1000_dev_t*)linkedlist_get_data_at_position(e1000_net_devs, dev_idx);
+        for(uint64_t dev_idx = 0; dev_idx < list_size(e1000_net_devs); dev_idx++) {
+            network_e1000_dev_t* dev = (network_e1000_dev_t*)list_get_data_at_position(e1000_net_devs, dev_idx);
 
-            while(linkedlist_size(dev->transmit_queue)) {
-                const network_transmit_packet_t* packet = linkedlist_queue_pop(dev->transmit_queue);
+            while(list_size(dev->transmit_queue)) {
+                const network_transmit_packet_t* packet = list_queue_pop(dev->transmit_queue);
 
                 if(packet) {
                     PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
@@ -76,7 +76,7 @@ int8_t network_e1000_process_tx(void) {
 
                 }
 
-                PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", linkedlist_size(dev->transmit_queue));
+                PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", list_size(dev->transmit_queue));
             }
 
         }
@@ -310,7 +310,7 @@ void network_e1000_rx_poll(const network_e1000_dev_t* dev) {
 
             memory_memcopy(pkt, packet->packet_data, pktlen);
 
-            linkedlist_queue_push(network_received_packets, packet);
+            list_queue_push(network_received_packets, packet);
         }
 
         // update RX counts and the tail pointer
@@ -328,7 +328,7 @@ void network_e1000_rx_poll(const network_e1000_dev_t* dev) {
 int8_t network_e1000_rx_isr(interrupt_frame_ext_t* frame)  {
     uint8_t intnum = frame->interrupt_number;
 
-    const network_e1000_dev_t* dev = linkedlist_get_data_at_position(e1000_net_devs, 0);
+    const network_e1000_dev_t* dev = list_get_data_at_position(e1000_net_devs, 0);
 
     // read the pending interrupt status
     uint32_t icr = dev->mmio->isr_status;
@@ -389,7 +389,7 @@ int8_t network_e1000_rx_isr(interrupt_frame_ext_t* frame)  {
 int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
     pci_common_header_t* pci_header = pci_netdev->pci_header;
 
-    e1000_net_devs = linkedlist_create_list_with_heap(NULL);
+    e1000_net_devs = list_create_list_with_heap(NULL);
 
     if(e1000_net_devs == NULL) {
         PRINTLOG(E1000, LOG_ERROR, "cannot create e1000 network devices list");
@@ -411,7 +411,7 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
     dev->tx_count = 0;
     dev->packets_dropped = 0;
 
-    dev->transmit_queue = linkedlist_create_queue_with_heap(NULL);
+    dev->transmit_queue = list_create_queue_with_heap(NULL);
 
     pci_generic_device_t* pci_dev = (pci_generic_device_t*)pci_header;
 
@@ -524,7 +524,7 @@ int8_t network_e1000_init(const pci_dev_t* pci_netdev) {
 
     task_create_task(NULL, 64 << 10, 1 << 20, &network_e1000_process_tx, 0, NULL, "e1000 tx");
 
-    linkedlist_list_insert(e1000_net_devs, dev);
+    list_list_insert(e1000_net_devs, dev);
 
     PRINTLOG(E1000, LOG_INFO, "device initialized");
 

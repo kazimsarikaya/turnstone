@@ -31,7 +31,7 @@ int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_con
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_aml_resource_parse_smallitem_irq(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res) {
     if(device->interrupts == NULL) {
-        device->interrupts = linkedlist_create_list_with_heap(ctx->heap);
+        device->interrupts = list_create_list_with_heap(ctx->heap);
     }
 
     acpi_aml_device_interrupt_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_interrupt_t), 0);
@@ -53,14 +53,14 @@ int8_t acpi_aml_resource_parse_smallitem_irq(acpi_aml_parser_context_t* ctx, acp
         intno >>= 1;
     }
 
-    linkedlist_list_insert(device->interrupts, item);
+    list_list_insert(device->interrupts, item);
 
     return 0;
 }
 
 int8_t acpi_aml_resource_parse_smallitem_io(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res) {
     if(device->ioports == NULL) {
-        device->ioports = linkedlist_create_list_with_heap(ctx->heap);
+        device->ioports = list_create_list_with_heap(ctx->heap);
     }
 
     acpi_aml_device_ioport_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_ioport_t), 0);
@@ -72,14 +72,14 @@ int8_t acpi_aml_resource_parse_smallitem_io(acpi_aml_parser_context_t* ctx, acpi
     item->min = res->io.min;
     item->max = res->io.max;
 
-    linkedlist_list_insert(device->ioports, item);
+    list_list_insert(device->ioports, item);
 
     return 0;
 }
 
 int8_t acpi_aml_resource_parse_smallitem_dma(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_smallitem_t* res) {
     if(device->dmas == NULL) {
-        device->dmas = linkedlist_create_list_with_heap(ctx->heap);
+        device->dmas = list_create_list_with_heap(ctx->heap);
     }
 
     acpi_aml_device_dma_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_dma_t), 0);
@@ -92,7 +92,7 @@ int8_t acpi_aml_resource_parse_smallitem_dma(acpi_aml_parser_context_t* ctx, acp
     item->channels = res->dma.channels;
     item->speed = res->dma.speed_type;
 
-    linkedlist_list_insert(device->dmas, item);
+    list_list_insert(device->dmas, item);
 
     return 0;
 }
@@ -106,7 +106,7 @@ int8_t acpi_aml_resource_parse_smallitem_endtag(acpi_aml_parser_context_t* ctx, 
 
 int8_t acpi_aml_resource_parse_largeitem_memory_range_32bit_fixed(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
     if(device->memory_ranges == NULL) {
-        device->memory_ranges = linkedlist_create_list_with_heap(ctx->heap);
+        device->memory_ranges = list_create_list_with_heap(ctx->heap);
     }
 
     acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
@@ -124,14 +124,14 @@ int8_t acpi_aml_resource_parse_largeitem_memory_range_32bit_fixed(acpi_aml_parse
 
     item->max--;
 
-    linkedlist_list_insert(device->memory_ranges, item);
+    list_list_insert(device->memory_ranges, item);
 
     return 0;
 }
 
 int8_t acpi_aml_resource_parse_largeitem_extended_interrupt(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
     if(device->interrupts == NULL) {
-        device->interrupts = linkedlist_create_list_with_heap(ctx->heap);
+        device->interrupts = list_create_list_with_heap(ctx->heap);
     }
 
     for(int32_t i = 0; i < res->extended_interrupt.count; i++) {
@@ -147,7 +147,7 @@ int8_t acpi_aml_resource_parse_largeitem_extended_interrupt(acpi_aml_parser_cont
         item->wake_capability = res->extended_interrupt.wake_capability;
         item->interrupt_no =  res->extended_interrupt.interrupts[i];
 
-        linkedlist_list_insert(device->interrupts, item);
+        list_list_insert(device->interrupts, item);
     }
 
     return 0;
@@ -156,7 +156,7 @@ int8_t acpi_aml_resource_parse_largeitem_extended_interrupt(acpi_aml_parser_cont
 int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
     if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_MEMORY) {
         if(device->memory_ranges == NULL) {
-            device->memory_ranges = linkedlist_create_list_with_heap(ctx->heap);
+            device->memory_ranges = list_create_list_with_heap(ctx->heap);
         }
 
         acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
@@ -181,10 +181,10 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
             item->max <<= res->word_address_space.gra + 1;
         }
 
-        linkedlist_list_insert(device->memory_ranges, item);
+        list_list_insert(device->memory_ranges, item);
     } else if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_IO) {
         if(device->ioports == NULL) {
-            device->ioports = linkedlist_create_list_with_heap(ctx->heap);
+            device->ioports = list_create_list_with_heap(ctx->heap);
         }
 
         acpi_aml_device_ioport_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_ioport_t), 0);
@@ -204,10 +204,10 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
             item->max <<= res->word_address_space.gra + 1;
         }
 
-        linkedlist_list_insert(device->ioports, item);
+        list_list_insert(device->ioports, item);
     } else if(res->word_address_space.type == ACPI_AML_RESOURCE_WORD_ADDRESS_SPACE_TYPE_BUS) {
         if(device->buses == NULL) {
-            device->buses = linkedlist_create_list_with_heap(ctx->heap);
+            device->buses = list_create_list_with_heap(ctx->heap);
         }
 
         acpi_aml_device_bus_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_bus_t), 0);
@@ -227,7 +227,7 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
             item->max <<= res->word_address_space.gra + 1;
         }
 
-        linkedlist_list_insert(device->buses, item);
+        list_list_insert(device->buses, item);
     } else {
         PRINTLOG(ACPIAML, LOG_ERROR, "device %s unknown word address type %i", device->name, res->word_address_space.type);
 
@@ -239,7 +239,7 @@ int8_t acpi_aml_resource_parse_largeitem_word_address_space(acpi_aml_parser_cont
 
 int8_t acpi_aml_resource_parse_largeitem_dword_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
     if(device->memory_ranges == NULL) {
-        device->memory_ranges = linkedlist_create_list_with_heap(ctx->heap);
+        device->memory_ranges = list_create_list_with_heap(ctx->heap);
     }
 
     acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
@@ -263,14 +263,14 @@ int8_t acpi_aml_resource_parse_largeitem_dword_address_space(acpi_aml_parser_con
         item->max <<= res->word_address_space.gra + 1;
     }
 
-    linkedlist_list_insert(device->memory_ranges, item);
+    list_list_insert(device->memory_ranges, item);
 
     return 0;
 }
 
 int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_resource_largeitem_t* res) {
     if(device->memory_ranges == NULL) {
-        device->memory_ranges = linkedlist_create_list_with_heap(ctx->heap);
+        device->memory_ranges = list_create_list_with_heap(ctx->heap);
     }
 
     acpi_aml_device_memory_range_t* item = memory_malloc_ext(ctx->heap, sizeof(acpi_aml_device_memory_range_t), 0);
@@ -294,7 +294,7 @@ int8_t acpi_aml_resource_parse_largeitem_qword_address_space(acpi_aml_parser_con
         item->max <<= res->word_address_space.gra + 1;
     }
 
-    linkedlist_list_insert(device->memory_ranges, item);
+    list_list_insert(device->memory_ranges, item);
 
     return 0;
 }

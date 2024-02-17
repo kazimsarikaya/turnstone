@@ -508,17 +508,17 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
         return false;
     }
 
-    linkedlist_t* s_reloc_list = s_reloc_rec->search_record(s_reloc_rec);
+    list_t* s_reloc_list = s_reloc_rec->search_record(s_reloc_rec);
 
     s_reloc_rec->destroy(s_reloc_rec);
 
     boolean_t error = false;
 
-    if(linkedlist_size(s_reloc_list)) {
-        iterator_t* it = linkedlist_iterator_create(s_reloc_list);
+    if(list_size(s_reloc_list)) {
+        iterator_t* it = list_iterator_create(s_reloc_list);
 
         if(!it) {
-            linkedlist_destroy_with_data(s_reloc_list);
+            list_destroy_with_data(s_reloc_list);
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator");
 
             return false;
@@ -564,7 +564,7 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
 
     }
 
-    linkedlist_destroy(s_reloc_list);
+    list_destroy(s_reloc_list);
 
     s_reloc_rec = tosdb_table_create_record(tbl_relocations);
 
@@ -585,11 +585,11 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
 
     s_reloc_rec->destroy(s_reloc_rec);
 
-    if(linkedlist_size(s_reloc_list)) {
-        iterator_t* it = linkedlist_iterator_create(s_reloc_list);
+    if(list_size(s_reloc_list)) {
+        iterator_t* it = list_iterator_create(s_reloc_list);
 
         if(!it) {
-            linkedlist_destroy_with_data(s_reloc_list);
+            list_destroy_with_data(s_reloc_list);
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator");
 
             return false;
@@ -636,7 +636,7 @@ static boolean_t linkerdb_clear_relocation_references_at_section(linkerdb_t* ldb
 
     }
 
-    linkedlist_destroy(s_reloc_list);
+    list_destroy(s_reloc_list);
 
 
     return !error;
@@ -661,17 +661,17 @@ static boolean_t linkerdb_clear_symbol_references(linkerdb_t* ldb, int64_t secti
         return false;
     }
 
-    linkedlist_t* s_sym_list = s_sym_rec->search_record(s_sym_rec);
+    list_t* s_sym_list = s_sym_rec->search_record(s_sym_rec);
 
     s_sym_rec->destroy(s_sym_rec);
 
     boolean_t error = false;
 
-    if(linkedlist_size(s_sym_list)) {
-        iterator_t* it = linkedlist_iterator_create(s_sym_list);
+    if(list_size(s_sym_list)) {
+        iterator_t* it = list_iterator_create(s_sym_list);
 
         if(!it) {
-            linkedlist_destroy_with_data(s_sym_list);
+            list_destroy_with_data(s_sym_list);
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator");
 
             return false;
@@ -724,7 +724,7 @@ static boolean_t linkerdb_clear_symbol_references(linkerdb_t* ldb, int64_t secti
 
     }
 
-    linkedlist_destroy(s_sym_list);
+    list_destroy(s_sym_list);
 
     return !error;
 }
@@ -748,17 +748,17 @@ static boolean_t linkerdb_clear_implementation_references(linkerdb_t* ldb, int64
         return false;
     }
 
-    linkedlist_t* s_sec_list = s_sec_rec->search_record(s_sec_rec);
+    list_t* s_sec_list = s_sec_rec->search_record(s_sec_rec);
 
     s_sec_rec->destroy(s_sec_rec);
 
     boolean_t error = false;
 
-    if(linkedlist_size(s_sec_list)) {
-        iterator_t* it = linkedlist_iterator_create(s_sec_list);
+    if(list_size(s_sec_list)) {
+        iterator_t* it = list_iterator_create(s_sec_list);
 
         if(!it) {
-            linkedlist_destroy_with_data(s_sec_list);
+            list_destroy_with_data(s_sec_list);
             PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator");
 
             return false;
@@ -806,7 +806,7 @@ static boolean_t linkerdb_clear_implementation_references(linkerdb_t* ldb, int64
 
     }
 
-    linkedlist_destroy(s_sec_list);
+    list_destroy(s_sec_list);
 
     return !error;
 }
@@ -910,6 +910,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
     if(!linkerdb_create_clean_implementation(ldb, filename, is, &implementation_id)) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot create clean implementation");
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -918,6 +920,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
     if(!fp) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot open file '%s'", filename);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -956,6 +960,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     } else {
         PRINTLOG(TOSDB, LOG_ERROR, "unknown file class %i", e_indent.class );
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -963,6 +969,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     if(e_shnum == 0) {
         PRINTLOG(TOSDB, LOG_ERROR, "no section in file %s", filename);
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -972,6 +980,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     if(!sections) {
         printf("cannot allocate sections for file %s", filename);
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -989,6 +999,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         memory_free(sections);
         PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate section string table for file %s", filename);
         fclose(fp);
+        hashmap_destroy(section_ids);
+        hashmap_destroy(symbol_ids);
 
         return false;
     }
@@ -1514,7 +1526,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     s_recs_need->set_int64(s_recs_need, "symbol_section_id", 0);
 
-    linkedlist_t* res_recs = s_recs_need->search_record(s_recs_need);
+    list_t* res_recs = s_recs_need->search_record(s_recs_need);
 
     if(!res_recs) {
         s_recs_need->destroy(s_recs_need);
@@ -1523,14 +1535,14 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
         return false;
     }
 
-    uint64_t need_fix_count = linkedlist_size(res_recs);
+    uint64_t need_fix_count = list_size(res_recs);
     PRINTLOG(LINKER, LOG_INFO, "record probably need fix count: %lli", need_fix_count);
 
-    iterator_t* iter = linkedlist_iterator_create(res_recs);
+    iterator_t* iter = list_iterator_create(res_recs);
 
     if(!iter) {
         s_recs_need->destroy(s_recs_need);
-        linkedlist_destroy_with_data(res_recs);
+        list_destroy_with_data(res_recs);
         print_error("cannot create iterator");
 
         return false;
@@ -1621,7 +1633,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         s_sym_rec->set_string(s_sym_rec, "name", sym_name);
 
-        linkedlist_t* s_sym_recs = s_sym_rec->search_record(s_sym_rec);
+        list_t* s_sym_recs = s_sym_rec->search_record(s_sym_rec);
 
         if(!s_sym_recs) {
             error = true;
@@ -1631,14 +1643,14 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
             break;
         }
 
-        if(linkedlist_size(s_sym_recs) == 0) {
+        if(list_size(s_sym_recs) == 0) {
             if(!set_append(set_nf, sym_name)) {
                 memory_free(sym_name);
             }
 
             nf_count++;
 
-            linkedlist_destroy(s_sym_recs);
+            list_destroy(s_sym_recs);
             s_sym_rec->destroy(s_sym_rec);
             reloc_rec->destroy(reloc_rec);
             iter = iter->next(iter);
@@ -1646,11 +1658,11 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
             continue;
         }
 
-        if(linkedlist_size(s_sym_recs) > 1) {
+        if(list_size(s_sym_recs) > 1) {
 
             dup_count++;
 
-            iterator_t* iter_dup = linkedlist_iterator_create(s_sym_recs);
+            iterator_t* iter_dup = list_iterator_create(s_sym_recs);
 
             while(iter_dup->end_of_iterator(iter_dup) != 0) {
                 tosdb_record_t* dup_rec = (tosdb_record_t*)iter_dup->get_item(iter_dup);
@@ -1672,7 +1684,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
                 memory_free(sym_name);
             }
 
-            linkedlist_destroy(s_sym_recs);
+            list_destroy(s_sym_recs);
             s_sym_rec->destroy(s_sym_rec);
             reloc_rec->destroy(reloc_rec);
 
@@ -1681,9 +1693,9 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
         s_sym_rec->destroy(s_sym_rec);
 
-        s_sym_rec = (tosdb_record_t*)linkedlist_delete_at_tail(s_sym_recs);
+        s_sym_rec = (tosdb_record_t*)list_delete_at_tail(s_sym_recs);
 
-        linkedlist_destroy(s_sym_recs);
+        list_destroy(s_sym_recs);
 
         if(!s_sym_rec->get_int64(s_sym_rec, "section_id", (int64_t*)&sec_id)) {
             s_sym_rec->destroy(s_sym_rec);
@@ -1749,7 +1761,7 @@ boolean_t linkerdb_fix_reloc_symbol_section_ids(linkerdb_t* ldb) {
 
     iter->destroy(iter);
 
-    linkedlist_destroy(res_recs);
+    list_destroy(res_recs);
     s_recs_need->destroy(s_recs_need);
 
     int64_t fixed_count = need_fix_count - nf_count - dup_count;

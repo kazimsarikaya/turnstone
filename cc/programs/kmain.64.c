@@ -20,7 +20,7 @@
 #include <iterator.h>
 #include <ports.h>
 #include <apic.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/smp.h>

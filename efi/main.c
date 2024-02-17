@@ -353,7 +353,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     if(pxeconfig_is_json) {
         pxeconfig_data = data_json_deserialize(&pxeconf_deser_data);
     } else {
-        pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data, DATA_SERIALIZE_WITH_FLAGS);
+        pxeconfig_data = data_bson_deserialize(&pxeconf_deser_data);
     }
 
     memory_free(buffer);
@@ -943,7 +943,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     s_sym_rec->set_string(s_sym_rec, "name", entry_point);
 
-    linkedlist_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
+    list_t* found_symbols = s_sym_rec->search_record(s_sym_rec);
 
     if(!found_symbols) {
         PRINTLOG(EFI, LOG_ERROR, "cannot search for entrypoint symbol");
@@ -955,17 +955,17 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     s_sym_rec->destroy(s_sym_rec);
 
-    if(linkedlist_size(found_symbols) == 0) {
+    if(list_size(found_symbols) == 0) {
         PRINTLOG(EFI, LOG_ERROR, "entrypoint symbol not found");
-        linkedlist_destroy(found_symbols);
+        list_destroy(found_symbols);
         tosdb_table_close(tbl_symbols);
         tosdb_database_close(db);
 
         goto catch_efi_error;
     }
 
-    s_sym_rec = (tosdb_record_t*)linkedlist_queue_pop(found_symbols);
-    linkedlist_destroy(found_symbols);
+    s_sym_rec = (tosdb_record_t*)list_queue_pop(found_symbols);
+    list_destroy(found_symbols);
 
     if(!s_sym_rec) {
         PRINTLOG(EFI, LOG_ERROR, "cannot get record for entrypoint symbol");

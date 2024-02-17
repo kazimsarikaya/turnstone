@@ -13,7 +13,7 @@
 #include <iterator.h>
 #include <acpi.h>
 #include <memory.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <cpu/interrupt.h>
 
 #define PCI_HEADER_TYPE_GENERIC_DEVICE 0x0
@@ -292,12 +292,12 @@ typedef struct pci_capability_msix_table_t {
 }__attribute__((packed)) pci_capability_msix_table_t;
 
 typedef struct pci_context_t {
-    linkedlist_t* sata_controllers;
-    linkedlist_t* nvme_controllers;
-    linkedlist_t* network_controllers;
-    linkedlist_t* display_controllers;
-    linkedlist_t* usb_controllers;
-    linkedlist_t* other_devices;
+    list_t* sata_controllers;
+    list_t* nvme_controllers;
+    list_t* network_controllers;
+    list_t* display_controllers;
+    list_t* usb_controllers;
+    list_t* other_devices;
 } pci_context_t;
 
 extern pci_context_t* PCI_CONTEXT;

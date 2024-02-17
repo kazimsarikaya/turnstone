@@ -11,7 +11,7 @@
 
 #include <types.h>
 #include <memory.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <pci.h>
 #include <utils.h>
 #include <future.h>
@@ -24,7 +24,7 @@
  * @param[in] nvme_pci_devices pci device list contains nvmes
  * @return nvme disk count
  */
-int8_t nvme_init(memory_heap_t* heap, linkedlist_t* nvme_pci_devices);
+int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices);
 
 /**
  * @union nvme_controller_cap_t
@@ -200,9 +200,9 @@ typedef struct nvme_controller_registers_t {
     nvme_controller_bpinfo_t  bpinfo; ///< boot partition information
     nvme_controller_bprsel_t  bprsel; ///< boot partition read select
     uint64_t                  bpmbl; ///< boot partition memory buffer location
-    nvme_controller_cmbmsc_t  cmbmsc;///< controller memory buffer memory space control
+    nvme_controller_cmbmsc_t  cmbmsc; ///< controller memory buffer memory space control
     nvme_controller_cmbsts_t  cmbsts; ///< controller memory buffer status
-    uint8_t                   reserved1[0xDFF - 0x5C + 1];///< reserved
+    uint8_t                   reserved1[0xDFF - 0x5C + 1]; ///< reserved
     uint32_t                  pmrcap; ///< persistent memory capabilities
     uint32_t                  pmrctl; ///< persistent memory region control
     uint32_t                  pmrsts; ///< persistent memory region status

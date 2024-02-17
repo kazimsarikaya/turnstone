@@ -13,7 +13,24 @@
 uint32_t main(uint32_t argc, char_t** argv);
 int8_t   test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, void* data);
 int8_t   test_ser_deser_datalist(void);
-int8_t   test_ser_deser_recurive(void);
+int8_t   test_ser_deser_recursive(void);
+
+void print_hex(uint8_t* data, uint64_t len);
+void print_hex(uint8_t* data, uint64_t len) {
+    for(uint64_t i = 0; i < len; i++) {
+        if(i % 16 == 0) {
+            printf("\n");
+        }
+
+        if(i % 8 == 0) {
+            printf("     ");
+        }
+
+        printf("0x%02x ", data[i]);
+    }
+
+    printf("\n");
+}
 
 int8_t test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, void* data) {
     uint64_t ihash = xxhash64_hash((void*)&data, datalen);
@@ -21,15 +38,17 @@ int8_t test_ser_deser_primitive(char_t* name, data_type_t dt, uint64_t datalen, 
     data_t tmp_name = {DATA_TYPE_STRING, 0, NULL, name};
     data_t tmp_data = {dt, datalen, &tmp_name, data};
 
-    data_t* ser_data = data_bson_serialize(&tmp_data, DATA_SERIALIZE_WITH_ALL);
+    data_t* ser_data = data_bson_serialize(&tmp_data);
 
-    data_t* dser_data = data_bson_deserialize(ser_data, DATA_SERIALIZE_WITH_FLAGS);
+    data_t* dser_data = data_bson_deserialize(ser_data);
+
+    print_hex(ser_data->value, ser_data->length);
 
     memory_free(ser_data->value);
     memory_free(ser_data);
 
     if(dser_data == NULL) {
-        print_error("TESTS FAILED");
+        print_error("TESTS FAILED, cannot deserialize");
 
         return -1;
     }
@@ -80,7 +99,7 @@ int8_t test_ser_deser_datalist(void) {
     data_t tmp_data_lvl1 = {DATA_TYPE_DATA, 1, NULL, &tmp_data_lvl2};
     data_t tmp_data_lvl0 = {DATA_TYPE_DATA, 1, NULL, &tmp_data_lvl1};
 
-    data_t* ser_data = data_bson_serialize(&tmp_data_lvl0, DATA_SERIALIZE_WITH_ALL);
+    data_t* ser_data = data_bson_serialize(&tmp_data_lvl0);
 
     if(ser_data == NULL) {
         print_error("TESTS FAILED cannot ser");
@@ -88,7 +107,9 @@ int8_t test_ser_deser_datalist(void) {
         return -1;
     }
 
-    data_t* dser_data = data_bson_deserialize(ser_data, DATA_SERIALIZE_WITH_FLAGS);
+    print_hex(ser_data->value, ser_data->length);
+
+    data_t* dser_data = data_bson_deserialize(ser_data);
 
     memory_free(ser_data->value);
     memory_free(ser_data);
@@ -130,7 +151,7 @@ int8_t test_ser_deser_datalist(void) {
     return 0;
 }
 
-int8_t test_ser_deser_recurive(void) {
+int8_t test_ser_deser_recursive(void) {
     data_t* data_list = memory_malloc(sizeof(data_t) * 10);
 
     if(data_list == NULL) {
@@ -144,7 +165,7 @@ int8_t test_ser_deser_recurive(void) {
 
     data_t tmp_data = {DATA_TYPE_DATA, 10, NULL, data_list};
 
-    data_t* ser_data = data_bson_serialize(&tmp_data, DATA_SERIALIZE_WITH_ALL);
+    data_t* ser_data = data_bson_serialize(&tmp_data);
 
     if(ser_data == NULL) {
         print_error("TESTS FAILED cannot ser");
@@ -152,9 +173,11 @@ int8_t test_ser_deser_recurive(void) {
         return -1;
     }
 
+    print_hex(ser_data->value, ser_data->length);
+
     memory_free(data_list);
 
-    data_t* dser_data = data_bson_deserialize(ser_data, DATA_SERIALIZE_WITH_FLAGS);
+    data_t* dser_data = data_bson_deserialize(ser_data);
 
     memory_free(ser_data->value);
     memory_free(ser_data);
@@ -222,7 +245,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     res += test_ser_deser_datalist();
 
-    res += test_ser_deser_recurive();
+    res += test_ser_deser_recursive();
 
     if(res == 0) {
         print_success("TESTS PASSED");

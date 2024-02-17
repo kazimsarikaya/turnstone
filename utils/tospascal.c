@@ -10,7 +10,7 @@
 #include <logging.h>
 #include <utils.h>
 #include <hashmap.h>
-#include <linkedlist.h>
+#include <list.h>
 
 
 int32_t main(int32_t argc, char * argv[]);

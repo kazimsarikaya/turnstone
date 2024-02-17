@@ -25,7 +25,7 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
     buffer_printf(compiler->text_buffer, "# begin while cond %lli\n", compiler->loop_depth);
 
 
-    linkedlist_stack_push(compiler->cond_label_stack, end_label);
+    list_stack_push(compiler->cond_label_stack, end_label);
 
     compiler->is_cond_eval = true;
 
@@ -38,7 +38,7 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
 
     compiler->is_cond_eval = false;
 
-    linkedlist_stack_push(compiler->cond_label_stack, end_label);
+    list_stack_push(compiler->cond_label_stack, end_label);
 
     if(node->condition->is_const) {
         if(!condition) {
@@ -65,7 +65,7 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
     buffer_printf(compiler->text_buffer, "# end while cond %lli\n", compiler->cond_depth);
     buffer_printf(compiler->text_buffer, "# begin while body %lli\n", compiler->cond_depth);
 
-    linkedlist_stack_push(compiler->loop_label_stack, end_label);
+    list_stack_push(compiler->loop_label_stack, end_label);
 
     if(compiler_execute_ast_node(compiler, node->left, result) != 0) {
         memory_free(end_label);
@@ -74,7 +74,7 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
         return -1;
     }
 
-    linkedlist_stack_pop(compiler->loop_label_stack);
+    list_stack_pop(compiler->loop_label_stack);
 
     buffer_printf(compiler->text_buffer, "\tjmp %s\n", while_label);
     buffer_printf(compiler->text_buffer, "# end while body %lli\n", compiler->loop_depth);

@@ -9,7 +9,7 @@
 #include <types.h>
 #include <indexer.h>
 #include <memory.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <iterator.h>
 #include <strings.h>
 
@@ -24,7 +24,7 @@ typedef struct indexer_idx_kc_internal_t {
 
 typedef struct indexer_internal_t {
     memory_heap_t* heap;
-    linkedlist_t*  indexes;
+    list_t*        indexes;
 } indexer_internal_t;
 
 indexer_t indexer_create_with_heap(memory_heap_t* heap){
@@ -35,10 +35,10 @@ indexer_t indexer_create_with_heap(memory_heap_t* heap){
     }
 
     l_idxer->heap = heap;
-    l_idxer->indexes = linkedlist_create_list_with_heap(heap);
+    l_idxer->indexes = list_create_list_with_heap(heap);
 
     if(l_idxer->indexes == NULL) {
-        linkedlist_destroy(l_idxer->indexes);
+        list_destroy(l_idxer->indexes);
         memory_free_ext(heap, l_idxer);
 
         return NULL;
@@ -54,7 +54,7 @@ int8_t indexer_destroy(indexer_t idxer){
         return 0;
     }
 
-    linkedlist_destroy(l_idxer->indexes);
+    list_destroy(l_idxer->indexes);
     memory_free_ext(l_idxer->heap, idxer);
 
     return 0;
@@ -79,7 +79,7 @@ int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, in
     pair->idx = idx;
     pair->key_creator = key_creator;
     pair->keyarg = keyarg;
-    linkedlist_list_insert(l_idxer->indexes, pair);
+    list_list_insert(l_idxer->indexes, pair);
     return 0;
 }
 #pragma GCC diagnostic pop
@@ -91,7 +91,7 @@ int8_t indexer_index(indexer_t idxer, const void* key, const void* data){
         return 0;
     }
 
-    iterator_t* iter = linkedlist_iterator_create(l_idxer->indexes);
+    iterator_t* iter = list_iterator_create(l_idxer->indexes);
 
     if(iter == NULL) {
         return -1;
@@ -121,7 +121,7 @@ const void* indexer_delete(indexer_t idxer, const void* key){
     }
 
     void* data = NULL;
-    iterator_t* iter = linkedlist_iterator_create(l_idxer->indexes);
+    iterator_t* iter = list_iterator_create(l_idxer->indexes);
 
     if(iter == NULL) {
         return NULL;
@@ -157,7 +157,7 @@ iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, const void* key1, c
 
     const indexer_idx_kc_internal_t* idx_pair = NULL;
 
-    iterator_t* iter = linkedlist_iterator_create(l_idxer->indexes);
+    iterator_t* iter = list_iterator_create(l_idxer->indexes);
 
     if(iter == NULL) {
         return NULL;

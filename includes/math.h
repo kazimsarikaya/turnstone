@@ -86,4 +86,23 @@ float64_t math_root(float64_t number, float64_t root);
  */
 float64_t math_sin(float64_t number);
 
+///! exponent part of float64_t
+#define MATH_EXP_MASK  0x7FF0000000000000ULL
+///! fraction part of float64_t
+#define MATH_FRAC_MASK 0x000FFFFFFFFFFFFFULL
+
+/**
+ * @brief checks if given number is nan
+ * @param[in] number number for calculation
+ * @return true if number is nan
+ */
+boolean_t math_isnan(float64_t number);
+
+/**
+ * @brief checks if given number is infinite
+ * @param[in] number number for calculation
+ * @return true if number is infinite
+ */
+boolean_t math_isinf(float64_t number);
+
 #endif

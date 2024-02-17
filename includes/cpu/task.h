@@ -13,7 +13,7 @@
 #include <cpu/interrupt.h>
 #include <memory.h>
 #include <memory/paging.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <buffer.h>
 
 /*! maximum tick count of a task without yielding */
@@ -101,11 +101,12 @@ typedef struct {
     uint64_t                     heap_size; ///< task's heap size
     uint64_t                     task_id; ///< task's id
     uint64_t                     last_tick_count; ///< tick count when task removes from executing, used for scheduling
+    uint64_t                     task_switch_count; ///< task switch count
     task_state_t                 state; ///< task state
     void*                        entry_point; ///< entry point address
     void*                        stack; ///< stack pointer
     uint64_t                     stack_size; ///< stack size of task
-    linkedlist_t*                message_queues; ///< task's listining queues.
+    list_t*                      message_queues; ///< task's listining queues.
     boolean_t                    message_waiting; ///< task state for sleeping should move @ref task_state_s
     boolean_t                    sleeping; ///< task state for sleeping should move @ref task_state_s
     boolean_t                    interruptible; ///< task state for interruptible should move @ref task_state_s
@@ -200,7 +201,7 @@ void task_set_interrupt_received(uint64_t task_id);
  * @brief adds a queue to task
  * @param[in] queue queue which task will have. tasks consumes these queues
  */
-void task_add_message_queue(linkedlist_t* queue);
+void task_add_message_queue(list_t* queue);
 
 /**
  * @brief creates a task and apends it to wait queue

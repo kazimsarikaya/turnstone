@@ -14,7 +14,7 @@
 #include <network/network_protocols.h>
 #include <network/network_ethernet.h>
 #include <driver/virtio.h>
-#include <linkedlist.h>
+#include <list.h>
 
 #define VIRTIO_NETWORK_F_CHEKCSUM         (1ULL <<  0)
 #define VIRTIO_NETWORK_F_GUEST_CHEKCSUM   (1ULL <<  1)
@@ -83,7 +83,7 @@ typedef struct {
     uint8_t class;
     uint8_t command;
     uint8_t command_spesific_data[];
-    //uint8_t ack;
+    // uint8_t ack;
 }__attribute__((packed)) virtio_network_control_t;
 
 #define VIRTIO_NETWORK_CTRL_RX              0

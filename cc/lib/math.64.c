@@ -152,3 +152,15 @@ float64_t math_sin(float64_t number) {
 
     return res;
 }
+
+boolean_t math_isnan(float64_t number) {
+    uint64_t mem_address = (uint64_t)&number;
+    uint64_t parsed = *((uint64_t*)mem_address);
+    return ((parsed & MATH_EXP_MASK) == MATH_EXP_MASK) && ((parsed & MATH_FRAC_MASK) != 0);
+}
+
+boolean_t math_isinf(float64_t number) {
+    uint64_t mem_address = (uint64_t)&number;
+    uint64_t parsed = *((uint64_t*)mem_address);
+    return ((parsed & MATH_EXP_MASK) == MATH_EXP_MASK) && ((parsed & MATH_FRAC_MASK) == 0);
+}

@@ -20,7 +20,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
     boolean_t pushed_registers[7] = {false}; // rax, rdi, rsi, rdx, rcx, r8, r9
     int16_t pushed_reg_ids[] = {COMPILER_VM_REG_RAX, COMPILER_VM_REG_RDI, COMPILER_VM_REG_RSI, COMPILER_VM_REG_RDX, COMPILER_VM_REG_RCX, COMPILER_VM_REG_R8, COMPILER_VM_REG_R9};
 
-    size_t children_size = linkedlist_size(node->children);
+    size_t children_size = list_size(node->children);
 
     if(children_size > 6) {
         PRINTLOG(COMPILER, LOG_ERROR, "function call expects 6 arguments");
@@ -36,7 +36,7 @@ int8_t compiler_execute_function_call(compiler_t* compiler, compiler_ast_node_t*
     }
 
     for(size_t i = 1; i <= children_size; i++) {
-        compiler_ast_node_t* tmp_node = (compiler_ast_node_t*)linkedlist_get_data_at_position(node->children, i - 1);
+        compiler_ast_node_t* tmp_node = (compiler_ast_node_t*)list_get_data_at_position(node->children, i - 1);
 
         buffer_printf(compiler->text_buffer, "# function call argument %lli\n", i - 1);
 

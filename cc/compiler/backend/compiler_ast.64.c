@@ -64,7 +64,7 @@ int8_t compiler_ast_node_destroy(compiler_ast_node_t * node) {
             memory_free((void*)node->type_data->name);
 
             if(node->type_data->fields) {
-                linkedlist_destroy_with_type(node->type_data->fields, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+                list_destroy_with_type(node->type_data->fields, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
             }
 
             if(node->type_data->field_map) {
@@ -91,7 +91,7 @@ int8_t compiler_ast_node_destroy(compiler_ast_node_t * node) {
     if(node->type == COMPILER_AST_NODE_TYPE_DECLS ||
        node->type == COMPILER_AST_NODE_TYPE_COMPOUND ||
        node->type == COMPILER_AST_NODE_TYPE_FUNCTION_CALL) {
-        linkedlist_destroy_with_type(node->children, LINKEDLIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
+        list_destroy_with_type(node->children, LIST_DESTROY_WITH_DATA, compiler_ast_node_destroyer);
     }
 
     if(node->token != NULL && node->token->not_free == false) {

@@ -9,7 +9,7 @@
 #include <driver/network_virtio.h>
 #include <driver/virtio.h>
 #include <logging.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <pci.h>
 #include <ports.h>
 #include <network.h>
@@ -26,7 +26,7 @@
 
 MODULE("turnstone.kernel.hw.network.virtnet");
 
-linkedlist_t* virtio_net_devs = NULL;
+list_t* virtio_net_devs = NULL;
 
 int8_t   network_virtio_rx_isr(interrupt_frame_ext_t* frame);
 int8_t   network_virtio_tx_isr(interrupt_frame_ext_t* frame);
@@ -69,10 +69,10 @@ int8_t network_virtio_send_packet(network_transmit_packet_t* packet, virtio_dev_
 
 int8_t network_virtio_process_tx(void){
 
-    for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-        virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+    for(uint64_t dev_idx = 0; dev_idx < list_size(virtio_net_devs); dev_idx++) {
+        virtio_dev_t* vdev = (virtio_dev_t*)list_get_data_at_position(virtio_net_devs, dev_idx);
 
-        vdev->return_queue = linkedlist_create_queue_with_heap(NULL);
+        vdev->return_queue = list_create_queue_with_heap(NULL);
         task_add_message_queue(vdev->return_queue);
 
         void** args = memory_malloc(sizeof(void*) * 2);
@@ -90,8 +90,8 @@ int8_t network_virtio_process_tx(void){
     while(1) {
         boolean_t packet_exists = 0;
 
-        for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-            virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+        for(uint64_t dev_idx = 0; dev_idx < list_size(virtio_net_devs); dev_idx++) {
+            virtio_dev_t* vdev = (virtio_dev_t*)list_get_data_at_position(virtio_net_devs, dev_idx);
 
             if(!vdev->is_legacy) {
                 if(vdev->selected_features & VIRTIO_NETWORK_F_STATUS) {
@@ -104,17 +104,17 @@ int8_t network_virtio_process_tx(void){
             virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_tx->vq);
             virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_tx->vq);
 
-            while(linkedlist_size(vdev->return_queue)) {
-                network_transmit_packet_t* packet = (network_transmit_packet_t*)linkedlist_queue_peek(vdev->return_queue);
+            while(list_size(vdev->return_queue)) {
+                network_transmit_packet_t* packet = (network_transmit_packet_t*)list_queue_peek(vdev->return_queue);
 
                 if(packet) {
                     packet_exists = 1;
                     network_virtio_send_packet(packet, vdev, vq_tx, avail, descs);
 
-                    linkedlist_queue_pop(vdev->return_queue);
+                    list_queue_pop(vdev->return_queue);
                 }
 
-                PRINTLOG(VIRTIONET, LOG_TRACE, "tx queue size 0x%llx", linkedlist_size(vdev->return_queue));
+                PRINTLOG(VIRTIONET, LOG_TRACE, "tx queue size 0x%llx", list_size(vdev->return_queue));
             }
 
         }
@@ -155,7 +155,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
             while(vq_rx->last_used_index < used->index) {
                 PRINTLOG(VIRTIONET, LOG_TRACE, "packet received. last used index %i", vq_rx->last_used_index);
 
-                network_received_packet_t* packet = memory_malloc_ext(linkedlist_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
+                network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
 
                 if(packet == NULL) {
                     PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet");
@@ -185,11 +185,11 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
                 packet->network_info = vdev->extra_data;
                 packet->network_type = NETWORK_TYPE_ETHERNET;
 
-                packet->packet_data = memory_malloc_ext(linkedlist_get_heap(network_received_packets), packet_len, 0);
+                packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), packet_len, 0);
 
                 if(packet->packet_data == NULL) {
                     PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet data. packet len 0x%llx", packet_len);
-                    memory_free_ext(linkedlist_get_heap(network_received_packets), packet);
+                    memory_free_ext(list_get_heap(network_received_packets), packet);
 
                     task_yield();
 
@@ -209,10 +209,10 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
                 PRINTLOG(VIRTIONET, LOG_TRACE, "packet received with length 0x%llx", packet_len);
                 PRINTLOG(VIRTIONET, LOG_TRACE, "dst mac %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-                if(linkedlist_queue_push(network_received_packets, packet) == -1ULL) {
+                if(list_queue_push(network_received_packets, packet) == -1ULL) {
                     PRINTLOG(VIRTIONET, LOG_ERROR, "failed to queue packet");
-                    memory_free_ext(linkedlist_get_heap(network_received_packets), packet->packet_data);
-                    memory_free_ext(linkedlist_get_heap(network_received_packets), packet);
+                    memory_free_ext(list_get_heap(network_received_packets), packet->packet_data);
+                    memory_free_ext(list_get_heap(network_received_packets), packet);
                 } else {
                     PRINTLOG(VIRTIONET, LOG_TRACE, "packet queued");
                 }
@@ -240,8 +240,8 @@ int8_t network_virtio_rx_isr(interrupt_frame_ext_t* frame) {
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet received int 0x%02x", intnum);
 
-    for(uint64_t dev_idx = 0; dev_idx < linkedlist_size(virtio_net_devs); dev_idx++) {
-        virtio_dev_t* vdev = (virtio_dev_t*)linkedlist_get_data_at_position(virtio_net_devs, dev_idx);
+    for(uint64_t dev_idx = 0; dev_idx < list_size(virtio_net_devs); dev_idx++) {
+        virtio_dev_t* vdev = (virtio_dev_t*)list_get_data_at_position(virtio_net_devs, dev_idx);
 
         if(vdev->rx_task_id) {
             task_set_interrupt_received(vdev->rx_task_id);
@@ -261,7 +261,7 @@ int8_t network_virtio_tx_isr(interrupt_frame_ext_t* frame) {
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "packet sended int 0x%02x", intnum);
 
-    const virtio_dev_t* vdev = linkedlist_get_data_at_position(virtio_net_devs, 0);
+    const virtio_dev_t* vdev = list_get_data_at_position(virtio_net_devs, 0);
 
     pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 1);
     apic_eoi();
@@ -528,7 +528,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
 int8_t network_virtio_init(const pci_dev_t* pci_netdev){
     PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device starting");
 
-    virtio_net_devs = linkedlist_create_list_with_heap(NULL);
+    virtio_net_devs = list_create_list_with_heap(NULL);
 
     if(virtio_net_devs == NULL) {
         PRINTLOG(VIRTIONET, LOG_ERROR, "cannot create virtio network devices list");
@@ -542,7 +542,7 @@ int8_t network_virtio_init(const pci_dev_t* pci_netdev){
         return -1;
     }
 
-    linkedlist_list_insert(virtio_net_devs, vdev_net);
+    list_list_insert(virtio_net_devs, vdev_net);
 
     vdev_net->queue_size = VIRTIO_QUEUE_SIZE;
 
