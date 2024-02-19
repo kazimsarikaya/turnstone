@@ -309,7 +309,7 @@ time_t time_ns(time_t* t) {
 
     int64_t year = time.year;
 
-    if(time_is_leap(year)) {
+    if(time_is_leap(year) && time.month > 2) {
         days++;
     }
 

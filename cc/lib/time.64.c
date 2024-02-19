@@ -152,7 +152,7 @@ time_t timeparsed_to_time(timeparsed_t* tp) {
 
     int64_t year = tp->year;
 
-    if(time_is_leap(year)) {
+    if(time_is_leap(year) && tp->month > 2) {
         days++;
     }
 
