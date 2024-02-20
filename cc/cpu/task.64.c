@@ -349,21 +349,31 @@ boolean_t task_idle_check_need_yield(void) {
     for(uint64_t i = 0; i < list_size(task_queue); i++) {
         task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
-        if(t) {
-            if(t->message_waiting && t->message_queues) {
+        if(!t) {
+            continue;
+        }
+
+        if(t->message_waiting) {
+            if(t->interruptible && t->interrupt_received) {
+                // t->interrupt_received = false;
+                need_yield = true;
+                break;
+            } else if(t->message_queues) {
                 for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
                     list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
 
                     if(list_size(q)) {
-                        t->message_waiting = false;
+                        // t->message_waiting = false;
                         need_yield = true;
+                        break;
                     }
                 }
-            } else if(t->sleeping) {
-                if(t->wake_tick < time_timer_get_tick_count()) {
-                    t->sleeping = false;
-                    need_yield = true;
-                }
+            }
+        } else if(t->sleeping) {
+            if(t->wake_tick < time_timer_get_tick_count()) {
+                // t->sleeping = false;
+                need_yield = true;
+                break;
             }
         }
     }
