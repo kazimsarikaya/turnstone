@@ -19,7 +19,7 @@
 #include <network/network_protocols.h>
 #include <network/network_info.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.user.programs.network");
 
 int8_t   network_process_rx(void);
 uint64_t network_info_mke(const void* key);
