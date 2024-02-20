@@ -323,27 +323,30 @@ boolean_t tosdb_database_free(tosdb_database_t* db) {
 
     boolean_t error = false;
 
-    iterator_t* iter = hashmap_iterator_create(db->tables);
+    if(db->tables) {
+        iterator_t* iter = hashmap_iterator_create(db->tables);
 
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
-        error = true;
-    } else {
-        while(iter->end_of_iterator(iter) != 0) {
-            tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
+        if(!iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create table iterator");
+            error = true;
+        } else {
+            while(iter->end_of_iterator(iter) != 0) {
+                tosdb_table_t* tbl = (tosdb_table_t*)iter->get_item(iter);
 
-            if(!tosdb_table_free(tbl)) {
-                PRINTLOG(TOSDB, LOG_ERROR, "cannot free table %s", tbl->name);
-                error = true;
+                if(!tosdb_table_free(tbl)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot free table %s", tbl->name);
+                    error = true;
+                }
+
+                iter = iter->next(iter);
             }
 
-            iter = iter->next(iter);
+            iter->destroy(iter);
         }
 
-        iter->destroy(iter);
+        hashmap_destroy(db->tables);
     }
 
-    hashmap_destroy(db->tables);
     hashmap_destroy(db->table_new);
 
     memory_free(db->name);
