@@ -24,7 +24,10 @@ MODULE("turnstone.kernel.cpu.task");
 
 uint64_t task_id = 0;
 
-task_t* current_task = NULL;
+task_t** current_tasks = NULL;
+
+boolean_t* task_switch_paramters_need_eoi = false;
+boolean_t* task_switch_paramters_need_sti = false;
 
 list_t* task_queue = NULL;
 list_t* task_cleaner_queue = NULL;
@@ -44,7 +47,25 @@ extern buffer_t* stdbufs_default_input_buffer;
 extern buffer_t* stdbufs_default_output_buffer;
 extern buffer_t* stdbufs_default_error_buffer;
 
+void   task_idle_task(void);
+int8_t task_create_idle_task(memory_heap_t* heap);
+
 task_t* task_get_current_task(void){
+    cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return NULL;
+    }
+
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
+    cpu_sti();
+
     return current_task;
 }
 
@@ -113,36 +134,43 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     interrupt_irq_set_handler(0x60, &task_task_switch_isr);
 
-    current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+    task_t* kernel_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 
-    if(current_task == NULL) {
+    if(kernel_task == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task");
 
         return -1;
     }
 
-    current_task->creator_heap = heap;
-    current_task->heap = heap;
-    current_task->task_id = TASK_KERNEL_TASK_ID;
-    current_task->state = TASK_STATE_CREATED;
-    current_task->entry_point = kmain64;
-    current_task->page_table = memory_paging_get_table();
-    current_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
-    current_task->stack = (void*)(stack_top + stack_size);
-    current_task->stack_size = stack_size;
-    current_task->task_name = "kernel";
-    current_task->input_buffer = stdbufs_default_input_buffer;
-    current_task->output_buffer = stdbufs_default_output_buffer;
-    current_task->error_buffer = stdbufs_default_error_buffer;
+    kernel_task->creator_heap = heap;
+    kernel_task->heap = heap;
+    kernel_task->task_id = TASK_KERNEL_TASK_ID;
+    kernel_task->state = TASK_STATE_CREATED;
+    kernel_task->entry_point = kmain64;
+    kernel_task->page_table = memory_paging_get_table();
+    kernel_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+
+    if(kernel_task->fx_registers == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task fx registers");
+
+        return -1;
+    }
+
+    kernel_task->stack = (void*)(stack_top + stack_size);
+    kernel_task->stack_size = stack_size;
+    kernel_task->task_name = "kernel";
+    kernel_task->input_buffer = stdbufs_default_input_buffer;
+    kernel_task->output_buffer = stdbufs_default_output_buffer;
+    kernel_task->error_buffer = stdbufs_default_error_buffer;
 
     // get mxcsr by fxsave
-    asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (current_task->fx_registers) : : "rax", "memory");
+    asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (kernel_task->fx_registers) : : "rax", "memory");
 
-    task_mxcsr_mask = *(uint32_t*)&current_task->fx_registers[28];
+    task_mxcsr_mask = *(uint32_t*)&kernel_task->fx_registers[28];
 
     PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
-    task_id = current_task->task_id + 1;
+    task_id = kernel_task->task_id + 1;
 
     task_map = map_integer();
 
@@ -152,7 +180,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    map_insert(task_map, (void*)current_task->task_id, current_task);
+    map_insert(task_map, (void*)kernel_task->task_id, kernel_task);
 
     uint32_t tss_limit = sizeof(tss_t) - 1;
     DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
@@ -168,7 +196,46 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     interrupt_redirect_main_interrupts(7);
 
-    PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p", current_task);
+    uint32_t cpu_count = apic_get_ap_count() + 1;
+
+    PRINTLOG(TASKING, LOG_INFO, "cpu count %d", cpu_count);
+
+    current_tasks = memory_malloc_ext(heap, sizeof(task_t*) * cpu_count, 0x0);
+
+    if(current_tasks == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for current tasks");
+
+        return -1;
+    }
+
+    task_switch_paramters_need_eoi = memory_malloc_ext(heap, sizeof(boolean_t) * cpu_count, 0x0);
+
+    if(task_switch_paramters_need_eoi == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for task switch parameters need eoi");
+
+        return -1;
+    }
+
+    task_switch_paramters_need_sti = memory_malloc_ext(heap, sizeof(boolean_t) * cpu_count, 0x0);
+
+    if(task_switch_paramters_need_sti == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for task switch parameters need sti");
+
+        return -1;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    current_tasks[apic_id] = kernel_task;
+/*
+    if(task_create_idle_task(heap) != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");
+
+        return -1;
+    }
+ */
+
+    PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p lapic id %d", kernel_task, apic_id);
 
     return 0;
 }
@@ -441,38 +508,46 @@ task_t* task_find_next_task(void) {
 
     }
 
-    // PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution", tmp_task->task_id);
+    // PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution. queue size %lli", tmp_task->task_id, list_size(task_queue));
 
     return tmp_task;
 }
 
-boolean_t task_switch_paramters_need_eoi = false;
-boolean_t task_switch_paramters_need_sti = false;
-
 void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti) {
-    task_switch_paramters_need_eoi = need_eoi;
-    task_switch_paramters_need_sti = need_sti;
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_switch_paramters_need_eoi[apic_id] = need_eoi;
+    task_switch_paramters_need_sti[apic_id] = need_sti;
 }
 
 
 static inline void task_switch_task_exit_prep(void) {
-    if(task_switch_paramters_need_eoi) {
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    if(task_switch_paramters_need_eoi[apic_id]) {
         apic_eoi();
     }
 
-    if(task_switch_paramters_need_sti) {
+    if(task_switch_paramters_need_sti[apic_id]) {
         cpu_sti();
     }
 }
 
 __attribute__((no_stack_protector)) void task_switch_task(void) {
-    if(current_task == NULL || task_queue == NULL || list_size(task_queue) == 0) {
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    if(current_tasks == NULL || current_tasks[apic_id] == NULL || task_queue == NULL || list_size(task_queue) == 0) {
         task_switch_task_exit_prep();
 
         return;
     }
 
-    if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT && time_timer_get_tick_count() > current_task->last_tick_count && !current_task->message_waiting && !current_task->sleeping) {
+    task_t* current_task = current_tasks[apic_id];
+
+    if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
+       time_timer_get_tick_count() > current_task->last_tick_count &&
+       !current_task->message_waiting &&
+       !current_task->sleeping) {
 
         task_switch_task_exit_prep();
 
@@ -489,6 +564,9 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     current_task = task_find_next_task();
     current_task->last_tick_count = time_timer_get_tick_count();
     current_task->task_switch_count++;
+
+    current_tasks[apic_id] = current_task;
+
     task_load_registers(current_task);
 
     task_switch_task_exit_prep();
@@ -496,6 +574,11 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
 void task_end_task(void) {
     cpu_cli();
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
     list_queue_push(task_cleaner_queue, current_task);
@@ -512,6 +595,17 @@ void task_end_task(void) {
 
 void task_add_message_queue(list_t* queue){
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
     if(current_task->message_queues == NULL) {
         current_task->message_queues = list_create_list();
     }
@@ -523,6 +617,16 @@ void task_add_message_queue(list_t* queue){
 
 void task_set_message_waiting(void){
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
 
     current_task->message_waiting = 1;
 
@@ -649,8 +753,102 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     cpu_sti();
 
+    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue", new_task->task_name, new_task->task_id);
+
     return new_task->task_id;
 }
+
+void task_idle_task(void) {
+    while(true) {
+        asm volatile ("hlt\n");
+    }
+}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+int8_t task_create_idle_task(memory_heap_t* heap) {
+    task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+
+    if(new_task == NULL) {
+        return -1;
+    }
+
+    new_task->creator_heap = heap;
+
+    uint8_t* fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+
+    if(fx_registers == NULL) {
+        memory_free_ext(heap, new_task);
+
+        return -1;
+    }
+
+    uint64_t stack_size = 0x1000;
+
+
+    frame_t* stack_frames;
+    uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    stack_size = stack_frames_cnt * FRAME_SIZE;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
+        memory_free_ext(heap, new_task);
+        memory_free_ext(heap, fx_registers);
+
+        return -1;
+    }
+
+    uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
+
+    if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
+
+        cpu_hlt();
+    }
+
+    cpu_cli();
+
+    uint64_t new_task_id = task_id++;
+
+    cpu_sti();
+
+    new_task->heap = NULL;
+    new_task->heap_size = 0;
+    new_task->task_id = new_task_id;
+    new_task->state = TASK_STATE_CREATED;
+    new_task->entry_point = task_idle_task;
+    new_task->page_table = memory_paging_get_table();
+    new_task->fx_registers = fx_registers;
+    new_task->rflags = 0x202;
+    new_task->stack_size = stack_size;
+    new_task->stack = (void*)stack_va;
+    new_task->task_name = "idle";
+
+    *(uint16_t*)&new_task->fx_registers[0] = 0x37F;
+    *(uint32_t*)&new_task->fx_registers[24] = 0x1F80 & task_mxcsr_mask;
+
+    uint64_t rbp = (uint64_t)new_task->stack;
+    rbp += stack_size - 16;
+    new_task->rbp = rbp;
+    new_task->rsp = rbp - 24;
+
+    uint64_t* stack = (uint64_t*)rbp;
+    stack[-1] = (uint64_t)task_end_task;
+    stack[-2] = (uint64_t)new_task->entry_point;
+    stack[-3] = (uint64_t)task_switch_task_exit_prep;
+
+    cpu_cli();
+
+    list_stack_push(task_queue, new_task);
+    map_insert(task_map, (void*)new_task->task_id, new_task);
+
+    cpu_sti();
+
+    PRINTLOG(TASKING, LOG_INFO, "task[0x%p] with ep 0x%p %s 0x%llx added to task queue", new_task, new_task->entry_point, new_task->task_name, new_task->task_id);
+
+    return 0;
+}
+#pragma GCC diagnostic pop
 
 void task_yield(void) {
     if(list_size(task_queue)) { // prevent unneccessary interrupt
@@ -676,6 +874,16 @@ uint64_t task_get_id(void) {
 
     cpu_cli();
 
+    if(!current_tasks) {
+        cpu_sti();
+
+        return id;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
     if(current_task) {
         id = current_task->task_id;
     }
@@ -687,6 +895,16 @@ uint64_t task_get_id(void) {
 
 void task_current_task_sleep(uint64_t wake_tick) {
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
 
     if(current_task) {
         current_task->wake_tick = wake_tick;
@@ -719,6 +937,16 @@ void task_set_interrupt_received(uint64_t tid) {
 
 void task_set_interruptible(void) {
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
 
     if(current_task) {
         current_task->interruptible = true;
@@ -753,6 +981,16 @@ buffer_t* task_get_input_buffer(void) {
 
     cpu_cli();
 
+    if(!current_tasks) {
+        cpu_sti();
+
+        return buffer;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
     if(current_task) {
         buffer = current_task->input_buffer;
     }
@@ -767,6 +1005,16 @@ buffer_t* task_get_output_buffer(void) {
 
     cpu_cli();
 
+    if(!current_tasks) {
+        cpu_sti();
+
+        return buffer;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
     if(current_task) {
         buffer = current_task->output_buffer;
     }
@@ -780,6 +1028,16 @@ buffer_t* task_get_error_buffer(void) {
     buffer_t* buffer = NULL;
 
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return buffer;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
 
     if(current_task) {
         buffer = current_task->error_buffer;
@@ -796,6 +1054,16 @@ int8_t task_set_input_buffer(buffer_t* buffer) {
     }
 
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
 
     if(!current_task) {
         cpu_sti();
@@ -816,6 +1084,16 @@ int8_t task_set_output_buffer(buffer_t * buffer) {
 
     cpu_cli();
 
+    if(!current_tasks) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
+
     if(!current_task) {
         cpu_sti();
 
@@ -834,6 +1112,16 @@ int8_t task_set_error_buffer(buffer_t * buffer) {
     }
 
     cpu_cli();
+
+    if(!current_tasks) {
+        cpu_sti();
+
+        return -1;
+    }
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = current_tasks[apic_id];
 
     if(!current_task) {
         cpu_sti();
