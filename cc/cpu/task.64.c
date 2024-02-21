@@ -26,8 +26,8 @@ uint64_t task_id = 0;
 
 task_t** current_tasks = NULL;
 
-boolean_t* task_switch_paramters_need_eoi = false;
-boolean_t* task_switch_paramters_need_sti = false;
+volatile boolean_t* task_switch_paramters_need_eoi = false;
+volatile boolean_t* task_switch_paramters_need_sti = false;
 
 list_t* task_queue = NULL;
 list_t* task_cleaner_queue = NULL;
@@ -51,20 +51,19 @@ void   task_idle_task(void);
 int8_t task_create_idle_task(memory_heap_t* heap);
 
 task_t* task_get_current_task(void){
-    cpu_cli();
-
     if(!current_tasks) {
-        cpu_sti();
-
         return NULL;
     }
 
-
     uint32_t apic_id = apic_get_local_apic_id();
+
+    boolean_t old_value = cpu_cli();
 
     task_t* current_task = current_tasks[apic_id];
 
-    cpu_sti();
+    if(!old_value) {
+        cpu_sti();
+    }
 
     return current_task;
 }
@@ -409,8 +408,6 @@ void task_cleanup(void){
 }
 
 boolean_t task_idle_check_need_yield(void) {
-    cpu_cli();
-
     boolean_t need_yield = false;
 
     for(uint64_t i = 0; i < list_size(task_queue); i++) {
@@ -444,8 +441,6 @@ boolean_t task_idle_check_need_yield(void) {
             }
         }
     }
-
-    cpu_sti();
 
     return need_yield;
 }
@@ -521,7 +516,7 @@ void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti) {
 }
 
 
-static inline void task_switch_task_exit_prep(void) {
+static __attribute__((noinline)) void task_switch_task_exit_prep(void) {
     uint32_t apic_id = apic_get_local_apic_id();
 
     if(task_switch_paramters_need_eoi[apic_id]) {
@@ -534,15 +529,13 @@ static inline void task_switch_task_exit_prep(void) {
 }
 
 __attribute__((no_stack_protector)) void task_switch_task(void) {
-    uint32_t apic_id = apic_get_local_apic_id();
+    task_t* current_task = task_get_current_task();
 
-    if(current_tasks == NULL || current_tasks[apic_id] == NULL || task_queue == NULL || list_size(task_queue) == 0) {
+    if(current_task == NULL || task_queue == NULL || list_size(task_queue) == 0) {
         task_switch_task_exit_prep();
 
         return;
     }
-
-    task_t* current_task = current_tasks[apic_id];
 
     if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
        time_timer_get_tick_count() > current_task->last_tick_count &&
@@ -565,7 +558,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     current_task->last_tick_count = time_timer_get_tick_count();
     current_task->task_switch_count++;
 
-    current_tasks[apic_id] = current_task;
+    current_tasks[apic_get_local_apic_id()] = current_task;
 
     task_load_registers(current_task);
 
@@ -573,11 +566,11 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 }
 
 void task_end_task(void) {
-    cpu_cli();
+    task_t* current_task = task_get_current_task();
 
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    if(current_task == NULL) {
+        return;
+    }
 
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
@@ -587,50 +580,35 @@ void task_end_task(void) {
 
     current_task = NULL;
 
-    cpu_sti();
-
     __asm__ __volatile__ ("int $0x80\n");
 }
 
 
 void task_add_message_queue(list_t* queue){
-    cpu_cli();
+    task_t* current_task = task_get_current_task();
 
-    if(!current_tasks) {
-        cpu_sti();
-
+    if(!current_task) {
         return;
     }
 
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
-
+    boolean_t old_value = cpu_cli();
     if(current_task->message_queues == NULL) {
         current_task->message_queues = list_create_list();
     }
 
-    list_list_insert(current_task->message_queues, queue);
+    if(!old_value) {
+        cpu_sti();
+    }
 
-    cpu_sti();
+    list_list_insert(current_task->message_queues, queue);
 }
 
 void task_set_message_waiting(void){
-    cpu_cli();
+    task_t* current_task = task_get_current_task();
 
-    if(!current_tasks) {
-        cpu_sti();
-
-        return;
+    if(current_task) {
+        current_task->message_waiting = 1;
     }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
-
-    current_task->message_waiting = 1;
-
-    cpu_sti();
 }
 
 uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
@@ -691,6 +669,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         cpu_hlt();
     }
 
+    memory_memclean((void*)stack_va, stack_size);
+
     uint64_t heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(heap_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(heap_va, heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
@@ -701,11 +681,13 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     memory_heap_t* task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
 
-    cpu_cli();
+    boolean_t old_int_status = cpu_cli();
 
     uint64_t new_task_id = task_id++;
 
-    cpu_sti();
+    if(!old_int_status) {
+        cpu_sti();
+    }
 
     task_heap->task_id = new_task_id;
 
@@ -746,12 +728,14 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, new_task->rsp, new_task->rbp, new_task->heap, new_task->heap_size);
 
-    cpu_cli();
+    old_int_status = cpu_cli();
 
     list_stack_push(task_queue, new_task);
     map_insert(task_map, (void*)new_task->task_id, new_task);
 
-    cpu_sti();
+    if(!old_int_status) {
+        cpu_sti();
+    }
 
     PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue", new_task->task_name, new_task->task_id);
 
@@ -806,11 +790,13 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
         cpu_hlt();
     }
 
-    cpu_cli();
+    boolean_t old_int_status = cpu_cli();
 
     uint64_t new_task_id = task_id++;
 
-    cpu_sti();
+    if(!old_int_status) {
+        cpu_sti();
+    }
 
     new_task->heap = NULL;
     new_task->heap_size = 0;
@@ -837,12 +823,14 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
     stack[-2] = (uint64_t)new_task->entry_point;
     stack[-3] = (uint64_t)task_switch_task_exit_prep;
 
-    cpu_cli();
+    old_int_status = cpu_cli();
 
     list_stack_push(task_queue, new_task);
     map_insert(task_map, (void*)new_task->task_id, new_task);
 
-    cpu_sti();
+    if(!old_int_status) {
+        cpu_sti();
+    }
 
     PRINTLOG(TASKING, LOG_INFO, "task[0x%p] with ep 0x%p %s 0x%llx added to task queue", new_task, new_task->entry_point, new_task->task_name, new_task->task_id);
 
@@ -872,46 +860,22 @@ int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
 uint64_t task_get_id(void) {
     uint64_t id = TASK_KERNEL_TASK_ID;
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return id;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(current_task) {
         id = current_task->task_id;
     }
 
-    cpu_sti();
-
     return id;
 }
 
 void task_current_task_sleep(uint64_t wake_tick) {
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(current_task) {
         current_task->wake_tick = wake_tick;
         current_task->sleeping = true;
         task_yield();
-    } else {
-        cpu_sti();
     }
 }
 
@@ -936,23 +900,11 @@ void task_set_interrupt_received(uint64_t tid) {
 }
 
 void task_set_interruptible(void) {
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(current_task) {
         current_task->interruptible = true;
     }
-
-    cpu_sti();
 }
 
 void task_print_all(void) {
@@ -979,23 +931,11 @@ void task_print_all(void) {
 buffer_t* task_get_input_buffer(void) {
     buffer_t* buffer = NULL;
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return buffer;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(current_task) {
         buffer = current_task->input_buffer;
     }
-
-    cpu_sti();
 
     return buffer;
 }
@@ -1003,23 +943,11 @@ buffer_t* task_get_input_buffer(void) {
 buffer_t* task_get_output_buffer(void) {
     buffer_t* buffer = NULL;
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return buffer;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(current_task) {
         buffer = current_task->output_buffer;
     }
-
-    cpu_sti();
 
     return buffer;
 }
@@ -1027,23 +955,11 @@ buffer_t* task_get_output_buffer(void) {
 buffer_t* task_get_error_buffer(void) {
     buffer_t* buffer = NULL;
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return buffer;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(current_task) {
         buffer = current_task->error_buffer;
     }
-
-    cpu_sti();
 
     return buffer;
 }
@@ -1053,26 +969,18 @@ int8_t task_set_input_buffer(buffer_t* buffer) {
         return -1;
     }
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return -1;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(!current_task) {
-        cpu_sti();
-
         return -1;
     }
 
+    boolean_t old_value = cpu_cli();
     current_task->input_buffer = buffer;
-    cpu_sti();
+
+    if(!old_value) {
+        cpu_sti();
+    }
 
     return 0;
 }
@@ -1082,26 +990,18 @@ int8_t task_set_output_buffer(buffer_t * buffer) {
         return -1;
     }
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return -1;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(!current_task) {
-        cpu_sti();
-
         return -1;
     }
 
+    boolean_t old_value = cpu_cli();
     current_task->output_buffer = buffer;
-    cpu_sti();
+
+    if(!old_value) {
+        cpu_sti();
+    }
 
     return 0;
 }
@@ -1111,26 +1011,18 @@ int8_t task_set_error_buffer(buffer_t * buffer) {
         return -1;
     }
 
-    cpu_cli();
-
-    if(!current_tasks) {
-        cpu_sti();
-
-        return -1;
-    }
-
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    task_t* current_task = current_tasks[apic_id];
+    task_t* current_task = task_get_current_task();
 
     if(!current_task) {
-        cpu_sti();
-
         return -1;
     }
 
+    boolean_t old_value = cpu_cli();
     current_task->error_buffer = buffer;
-    cpu_sti();
+
+    if(!old_value) {
+        cpu_sti();
+    }
 
     return 0;
 }

@@ -26,8 +26,19 @@ void cpu_idle(void);
  *
  * This command disables interrupts with cli assembly command.
  */
-static inline void cpu_cli(void) {
+static inline boolean_t cpu_cli(void) {
+    // read rflags and checks already interrupts are disabled and returns old value
+    boolean_t old_value;
+    __asm__ __volatile__ ("pushf\n"
+                          "pop %%rax\n"
+                          "test $0x200, %%rax\n"
+                          "setz %0\n"
+                          "cli"
+                          : "=r" (old_value)
+                          :
+                          : "rax");
     __asm__ __volatile__ ("cli");
+    return old_value; // if 0 interrupts are enabled
 }
 
 /**

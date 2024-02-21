@@ -28,7 +28,7 @@ virtio_dev_t* virtio_mouse = NULL;
 virtio_dev_t* virtio_tablet = NULL;
 boolean_t kbd_is_usb = false;
 
-wchar_t kbd_ps2_tmp = NULL;
+volatile wchar_t kbd_ps2_tmp = NULL;
 
 kbd_state_t kbd_state = {0, 0, 0, 0, 0};
 
@@ -113,6 +113,9 @@ int8_t dev_kbd_cleanup_isr(interrupt_frame_ext_t* frame){
     kbd_ps2_tmp = NULL;
 
     inb(KBD_DATA_PORT);
+
+    apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_INTERRUPT_DISABLED);
+    interrupt_irq_remove_handler(0x1, &dev_kbd_cleanup_isr);
 
     apic_eoi();
 
@@ -444,6 +447,9 @@ int8_t kbd_init(void){
             return 0;
         }
 
+        // disable PS/2 keyboard
+        // it is ugly dirty hack
+
         kbd_ps2_tmp = 0xFFFF;
 
         interrupt_irq_set_handler(0x1, &dev_kbd_cleanup_isr);
@@ -453,13 +459,15 @@ int8_t kbd_init(void){
         outb(KBD_CMD_PORT, KBD_CMD_DISABLE_KBD_PORT);
         outb(KBD_CMD_PORT, KBD_CMD_DISABLE_MOUSE_PORT);
 
-        while(kbd_ps2_tmp != 0) {
+        int32_t timeout = 1000000;
+
+        while(kbd_ps2_tmp != 0 && timeout-- > 0) {
             asm volatile ("pause" : : : "memory");
         }
 
-        apic_ioapic_setup_irq(0x1, APIC_IOAPIC_TRIGGER_MODE_EDGE);
-        apic_ioapic_disable_irq(0x1);
-        interrupt_irq_remove_handler(0x1, &dev_kbd_cleanup_isr);
+        if(timeout <= 0 && kbd_ps2_tmp != 0) {
+            PRINTLOG(KERNEL, LOG_WARNING, "cannot disable PS/2 keyboard");
+        }
 
         return 0;
     }
