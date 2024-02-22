@@ -517,6 +517,13 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
                     }
 
                     return NULL;
+                } else if(recv_tcpv4_packet->rst) {
+                    // connection reset
+                    PRINTLOG(NETWORK, LOG_TRACE, "Connection reset");
+
+                    network_tcpv4_connection_del(connection);
+
+                    return NULL;
                 }
             } else if(connection->state == NETWORK_TCP_CONNECTION_STATE_CLOSE_WAIT) {
                 network_tcpv4_connection_del(connection);
