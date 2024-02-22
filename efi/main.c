@@ -187,7 +187,7 @@ efi_status_t efi_setup_heap(void){
 
     size_t start = (size_t)heap_area;
 
-    memory_heap_t* heap = memory_create_heap_simple(start, start + heap_size);
+    memory_heap_t* heap = memory_create_heap_hash(start, start + heap_size);
 
     if(heap) {
         PRINTLOG(EFI, LOG_DEBUG, "heap created at 0x%p with size 0x%llx", (void*)heap_area, heap_size);
@@ -797,11 +797,14 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     BS = system_table->boot_services;
     RS = system_table->runtime_services;
 
+    time_t boot_time = time_ns(NULL);
+
     efi_status_t res;
 
     video_clear_screen();
 
     PRINTLOG(EFI, LOG_INFO, "TURNSTONE EFI Loader Starting...");
+    PRINTLOG(EFI, LOG_INFO, "boot time: %llu", boot_time);
 
     res = efi_setup_heap();
 
@@ -1063,6 +1066,9 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // null entry
     buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // got itself
 
+    time_t start_time = time_ns(NULL);
+    PRINTLOG(EFI, LOG_INFO, "build module start time %llu", start_time);
+
     if(linker_build_module(ctx, mod_id, true) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot build module");
         linker_destroy_context(ctx);
@@ -1072,6 +1078,9 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     PRINTLOG(EFI, LOG_INFO, "modules built");
 
+    time_t end_time = time_ns(NULL);
+    PRINTLOG(EFI, LOG_INFO, "build module end time %llu", end_time);
+
     if(!linker_is_all_symbols_resolved(ctx)) {
         PRINTLOG(EFI, LOG_ERROR, "not all symbols resolved");
         linker_destroy_context(ctx);
@@ -1080,6 +1089,9 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     }
 
     PRINTLOG(EFI, LOG_INFO, "all symbols resolved");
+
+    time_t start_link_time = time_ns(NULL);
+    PRINTLOG(EFI, LOG_INFO, "link start time %llu", start_link_time);
 
     if(linker_calculate_program_size(ctx) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot calculate program size");
@@ -1177,6 +1189,9 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     }
 
     PRINTLOG(EFI, LOG_INFO, "program linked");
+
+    time_t end_link_time = time_ns(NULL);
+    PRINTLOG(EFI, LOG_INFO, "link end time %llu", end_link_time);
 
     uint8_t* program_data = (uint8_t*)requested_program_base;
 
@@ -1365,6 +1380,8 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     PRINTLOG(EFI, LOG_DEBUG, "tosdb backend closed");
 
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
+    time_t efi_end_time = time_ns(NULL);
+    PRINTLOG(EFI, LOG_INFO, "efi end time %llu took: %llu ms", efi_end_time, (efi_end_time - boot_time) / 1000000ULL);
 
     BS->exit_boot_services(image, map_key);
 

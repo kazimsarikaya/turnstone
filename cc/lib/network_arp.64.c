@@ -63,14 +63,14 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
     arp_packet->protocol_address_length = NETWORK_ARP_PROTOCOL_ADDRESS_LENGTH;
     arp_packet->operation_code = BYTE_SWAP16(NETWORK_ARP_OPERATION_CODE_ANSWER);
 
-    memory_memcopy(src_arp_packet->source_ip, arp_packet->target_ip, sizeof(network_ipv4_address_t));
+    arp_packet->target_ip = src_arp_packet->source_ip;
     memory_memcopy(src_arp_packet->source_mac, arp_packet->target_mac, sizeof(network_mac_address_t));
 
-    PRINTLOG(NETWORK, LOG_TRACE, "arp ip address %i.%i.%i.%i", arp_packet->target_ip[0], arp_packet->target_ip[1], arp_packet->target_ip[2], arp_packet->target_ip[3]);
+    PRINTLOG(NETWORK, LOG_TRACE, "arp ip address %i.%i.%i.%i", arp_packet->target_ip.as_bytes[0], arp_packet->target_ip.as_bytes[1], arp_packet->target_ip.as_bytes[2], arp_packet->target_ip.as_bytes[3]);
     PRINTLOG(NETWORK, LOG_TRACE, "arp mac address %02x:%02x:%02x:%02x:%02x:%02x", arp_packet->target_mac[0], arp_packet->target_mac[1], arp_packet->target_mac[2], arp_packet->target_mac[3], arp_packet->target_mac[4], arp_packet->target_mac[5]);
 
     memory_memcopy(mac, arp_packet->source_mac, sizeof(network_mac_address_t));
-    memory_memcopy(src_arp_packet->target_ip, arp_packet->source_ip, sizeof(network_ipv4_address_t));
+    arp_packet->source_ip = src_arp_packet->target_ip;
 
     *return_packet_len = sizeof(network_arp_t);
 
@@ -91,8 +91,8 @@ network_arp_t* network_arp_create_request(network_mac_address_t src_mac, network
     arp_packet->operation_code = BYTE_SWAP16(NETWORK_ARP_OPERATION_CODE_REQUEST);
 
     memory_memcopy(src_mac, arp_packet->source_mac, sizeof(network_mac_address_t));
-    memory_memcopy(src_ip, arp_packet->source_ip, sizeof(network_ipv4_address_t));
-    memory_memcopy(tgt_ip, arp_packet->target_ip, sizeof(network_ipv4_address_t));
+    arp_packet->source_ip = src_ip;
+    arp_packet->target_ip = tgt_ip;
 
     return arp_packet;
 }

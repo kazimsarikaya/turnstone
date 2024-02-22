@@ -166,6 +166,18 @@ typedef uint64_t efi_status_t;
 typedef uint64_t efi_physical_address_t;
 typedef uint64_t efi_virtual_address_t;
 
+#define EFI_TPL_APPLICATION 4
+#define EFI_TPL_CALLBACK 8
+#define EFI_TPL_NOTIFY 16
+#define EFI_TPL_HIGH_LEVEL 31
+
+#define EFI_EVT_TIMER                         0x80000000
+#define EFI_EVT_RUNTIME                       0x40000000
+#define EFI_EVT_NOTIFY_WAIT                   0x00000100
+#define EFI_EVT_NOTIFY_SIGNAL                 0x00000200
+#define EFI_EVT_SIGNAL_EXIT_BOOT_SERVICES     0x00000201
+#define EFI_EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE 0x60000202
+
 typedef enum {
     EFI_ALLOCATE_ANY_PAGES,
     EFI_ALLOCATE_MAX_ADDRESS,
@@ -1065,5 +1077,21 @@ typedef struct efi_edid_discovered_protocol_t {
     uint32_t size_of_edid;
     uint8_t* edid;
 } efi_edid_discovered_protocol_t;
+
+#define EFI_TIMESTAMP_PROTOCOL_GUID \
+        { 0xafbfde41, 0x2e6e, 0x4262, { 0xba, 0x65, 0x62, 0xb9, 0x23, 0x6e, 0x54, 0x95 } }
+
+typedef struct efi_timestamp_properties_t {
+    uint64_t frequency;
+    uint64_t end_value;
+} efi_timestamp_properties_t;
+
+typedef uint64_t     (EFIAPI* efi_timestamp_get_f)(void);
+typedef efi_status_t (EFIAPI* efi_timestamp_get_properties_f)(efi_timestamp_properties_t* properties);
+
+typedef struct efi_timestamp_protocol_t {
+    efi_timestamp_get_f            get_timestamp;
+    efi_timestamp_get_properties_f get_properties;
+} efi_timestamp_protocol_t;
 
 #endif

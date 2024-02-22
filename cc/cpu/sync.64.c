@@ -95,11 +95,9 @@ void lock_release(lock_t lock) {
 
     lock_internal_t* li = (lock_internal_t*)lock;
 
-    if(li) {
-        li->owner_task_id = 0;
-        li->owner_cpu_id = 0;
-        li->lock_value = 0;
-    }
+    li->owner_task_id = 0;
+    li->owner_cpu_id = 0;
+    li->lock_value = 0;
 }
 
 typedef struct semaphore_internal_t {

@@ -110,7 +110,14 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
     list_t* old_pks = list_create_list();
     tosdb_table_get_primary_keys_internal(tbl, pks, old_pks);
 
-    printf("!!! ss %s %lli\n", tbl->name, set_size(pks));
+    if(!tosdb_table_get_primary_keys_internal(tbl, pks, old_pks)) {
+        error = true;
+        set_destroy_with_callback(pks, tosdb_record_search_set_destroy_cb);
+
+        return false;
+    }
+
+    printf("!!! ss %s live pk count: %lli\n", tbl->name, set_size(pks));
     set_destroy_with_callback(pks, tosdb_record_search_set_destroy_cb);
 
     printf("!!! ls %s %lli\n", tbl->name, list_size(old_pks));
@@ -125,7 +132,9 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
 
         if(hashmap_exists(level_holes, (void*)ctx->level)) {
             hashmap_t* st_holes = (hashmap_t*)hashmap_get(level_holes, (void*)ctx->level);
-            hashmap_put(st_holes, (void*)ctx->sstable_id, (void*)((uint64_t)hashmap_get(st_holes, (void*)ctx->sstable_id) + 1));
+            uint64_t hole_count = (uint64_t)hashmap_get(st_holes, (void*)ctx->sstable_id);
+            hole_count++;
+            hashmap_put(st_holes, (void*)ctx->sstable_id, (void*)hole_count);
         } else {
             hashmap_t* st_holes = hashmap_integer(128);
             hashmap_put(st_holes, (void*)ctx->sstable_id, (void*)1);
@@ -152,7 +161,7 @@ boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t 
             uint64_t hole_count = (uint64_t)st_iter->get_item(st_iter);
             uint64_t st_id = (uint64_t)st_iter->get_extra_data(st_iter);
 
-            printf("!!! %lli %lli %lli\n", level, st_id, hole_count);
+            printf("level: %lli sstable id: %lli hole count: %lli\n", level, st_id, hole_count);
 
             st_iter = st_iter->next(st_iter);
         }

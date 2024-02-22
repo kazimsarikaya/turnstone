@@ -12,6 +12,7 @@
 #include <types.h>
 #include <network.h>
 #include <network/network_protocols.h>
+#include <network/network_info.h>
 
 typedef enum network_dhcpv4_options_t {
     NETWORK_DHCPV4_OPTION_PAD = 0,
@@ -85,7 +86,9 @@ typedef struct network_dhcpv4_t{
     uint8_t options[];
 } __attribute((packed)) network_dhcpv4_t;
 
-int32_t  network_dhcpv4_send_discover(uint64_t args_cnt, void** args);
-uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, void* network_info, uint16_t* return_packet_len);
+int32_t           network_dhcpv4_send_discover(uint64_t args_cnt, void** args);
+uint8_t*          network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, void* network_info, uint16_t* return_packet_len);
+network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t mac, uint32_t xid, uint16_t * return_packet_len);
+network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint32_t xid, uint16_t * return_packet_len);
 
 #endif

@@ -29,8 +29,10 @@ boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network
     return true;
 }
 
-uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, void* network_info, uint16_t* return_packet_len) {
-    if(recv_eth_packet == NULL || return_packet_len == NULL) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, void* network_info) {
+    if(recv_eth_packet == NULL) {
         return NULL;
     }
 
@@ -50,41 +52,99 @@ uint8_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, vo
     uint8_t* data_inner_packet = (data + sizeof(network_ethernet_t));
 
 
-    uint8_t* return_data = NULL;
-    uint16_t return_data_len = 0;
 
     if(packet_type == NETWORK_PROTOCOL_ARP) {
         PRINTLOG(NETWORK, LOG_TRACE, "arp packet received");
+        uint8_t* return_data = NULL;
+        uint16_t return_data_len = 0;
+
         return_data = network_arp_process_packet((network_arp_t*)data_inner_packet, network_info, &return_data_len);
+
+        if(return_data == NULL || return_data_len == 0) {
+            return NULL;
+        }
+
+        uint8_t* eth_packet = network_ethernet_create_packet(recv_eth_packet->source, our_mac, NETWORK_PROTOCOL_ARP, return_data_len, return_data);
+
+        if(eth_packet == NULL) {
+            return NULL;
+        }
+
+        list_t* res = list_create_list();
+
+        if(res == NULL) {
+            memory_free(eth_packet);
+            return NULL;
+        }
+
+        network_transmit_packet_t* transmit_packet = memory_malloc(sizeof(network_transmit_packet_t));
+
+        if(transmit_packet == NULL) {
+            memory_free(eth_packet);
+            list_destroy(res);
+            return NULL;
+        }
+
+        transmit_packet->packet_data = eth_packet;
+        transmit_packet->packet_len = sizeof(network_ethernet_t) + return_data_len;
+
+        list_queue_push(res, transmit_packet);
+
+        return res;
     } else if(packet_type == NETWORK_PROTOCOL_IPV4) {
         PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet received");
-        return_data = network_ipv4_process_packet((network_ipv4_header_t*)data_inner_packet, network_info, &return_data_len);
+        list_t* ip_pckts = network_ipv4_process_packet((network_ipv4_header_t*)data_inner_packet, network_info);
+
+        if(ip_pckts == NULL) {
+            return NULL;
+        }
+
+        list_t* res = list_create_list();
+
+        if(res == NULL) {
+            list_destroy_with_type(ip_pckts, LIST_DESTROY_WITH_DATA, network_transmit_packet_destroyer);
+            return NULL;
+        }
+
+        while(list_size(ip_pckts)) {
+            network_transmit_packet_t* ip_pckt = (network_transmit_packet_t*)list_queue_pop(ip_pckts);
+
+            if(ip_pckt) {
+                uint8_t* eth_packet = network_ethernet_create_packet(recv_eth_packet->source, our_mac, NETWORK_PROTOCOL_IPV4, ip_pckt->packet_len, ip_pckt->packet_data);
+
+                if(eth_packet == NULL) {
+                    memory_free(ip_pckt); // data deleted by network_ethernet_create_packet
+                    break;
+                }
+
+                network_transmit_packet_t* transmit_packet = memory_malloc(sizeof(network_transmit_packet_t));
+
+                if(transmit_packet == NULL) {
+                    memory_free(ip_pckt); // data deleted by network_ethernet_create_packet
+                    memory_free(eth_packet);
+                    break;
+                }
+
+                transmit_packet->packet_data = eth_packet;
+                transmit_packet->packet_len = sizeof(network_ethernet_t) + ip_pckt->packet_len;
+
+                list_queue_push(res, transmit_packet);
+
+                memory_free(ip_pckt); // data deleted by network_ethernet_create_packet
+            }
+        }
+
+        list_destroy_with_type(ip_pckts, LIST_DESTROY_WITH_DATA, network_transmit_packet_destroyer);
+
+        return res;
     } else {
         PRINTLOG(NETWORK, LOG_TRACE, "unimplemented packet type 0x%04x", packet_type);
     }
 
-    if(return_data_len == 0 || return_data == NULL) {
-        return NULL;
-    } else {
-        *return_packet_len = return_data_len + sizeof(network_ethernet_t);
-    }
-
-    uint8_t* res = memory_malloc(sizeof(network_ethernet_t) + *return_packet_len);
-
-    if(res == NULL) {
-        return NULL;
-    }
-
-    network_ethernet_t* eth_packet = (network_ethernet_t*)res;
-    eth_packet->type = recv_eth_packet->type;
-    memory_memcopy(recv_eth_packet->source, eth_packet->destination, sizeof(network_mac_address_t));
-    memory_memcopy(our_mac, eth_packet->source, sizeof(network_mac_address_t));
-    memory_memcopy(return_data, res + sizeof(network_ethernet_t), return_data_len);
-
-    memory_free(return_data);
-
-    return res;
+    return NULL;
 }
+#pragma GCC diagnostic pop
+
 uint8_t* network_ethernet_create_packet(network_mac_address_t dst, network_mac_address_t src, network_ethernet_type_t type, uint16_t data_len, uint8_t* data) {
     uint8_t* res = memory_malloc(sizeof(network_ethernet_t) + data_len);
 

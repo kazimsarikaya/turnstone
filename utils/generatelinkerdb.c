@@ -1965,7 +1965,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     printf("%lli\n", time_ns(NULL));
 
-#if 0
+#if 1
     tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
 

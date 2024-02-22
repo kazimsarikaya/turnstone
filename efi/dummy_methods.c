@@ -285,14 +285,46 @@ static inline boolean_t time_is_leap(int64_t year) {
 /*! days of a leap year */
 #define TIME_DAYS_AT_LEAP_YEAR      366
 
-time_t time_ns(time_t* t) {
-    UNUSED(t);
+time_t efi_current_time_ns = 0;
 
+void        efi_timer_init(void);
+EFIAPI void efi_timer_cb(efi_event_t event, void* context);
+void        efi_set_current_time_ns(void);
+
+void efi_timer_init(void) {
+    efi_set_current_time_ns();
+    efi_event_t event = {0};
+
+    efi_status_t res = BS->create_event(EFI_EVT_TIMER | EFI_EVT_NOTIFY_SIGNAL, EFI_TPL_NOTIFY, efi_timer_cb, NULL, &event);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot create event: 0x%llx", res);
+        return;
+    }
+
+    res = BS->set_timer(event, EFI_TIMER_PERIODIC, 100000000ULL / 100); // 100ms period is in 100ns units
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot set timer: 0x%llx", res);
+        return;
+    }
+
+    PRINTLOG(EFI, LOG_INFO, "timer initialized. current time: %llu", efi_current_time_ns);
+}
+
+EFIAPI void efi_timer_cb(efi_event_t event, void* context) {
+    UNUSED(event);
+    UNUSED(context);
+
+    efi_current_time_ns += 100000000ULL; // 100ms
+}
+
+void efi_set_current_time_ns(void) {
     efi_time_t time = {0};
     efi_time_capabilities_t time_caps = {0};
 
     if(RS->get_time(&time, &time_caps) != EFI_SUCCESS) {
-        return 0;
+        return;
     }
 
     time_t res = 0;
@@ -309,7 +341,7 @@ time_t time_ns(time_t* t) {
 
     int64_t year = time.year;
 
-    if(time_is_leap(year)) {
+    if(time_is_leap(year) && time.month > 2) {
         days++;
     }
 
@@ -331,5 +363,15 @@ time_t time_ns(time_t* t) {
 
     res += time.nano_second;
 
-    return res;
+    efi_current_time_ns = res;
+}
+
+time_t time_ns(time_t* t) {
+    UNUSED(t);
+
+    if(efi_current_time_ns == 0) {
+        efi_timer_init();
+    }
+
+    return efi_current_time_ns;
 }

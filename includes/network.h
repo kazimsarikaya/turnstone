@@ -38,6 +38,8 @@ typedef struct network_transmit_packet_t {
 
 extern list_t* network_received_packets;
 
+int8_t network_transmit_packet_destroyer(memory_heap_t* heap, void* data);
+
 int8_t network_init(void);
 
 #endif

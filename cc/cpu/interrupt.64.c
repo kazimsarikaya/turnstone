@@ -335,6 +335,8 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
         video_text_print((char_t*)"\n");
 
         stackframe_t* s_frame = (stackframe_t*)frame->rbp;
+        PRINTLOG(KERNEL, LOG_ERROR, "bsp stucked, recovering...");
+        PRINTLOG(KERNEL, LOG_ERROR, "return symbol name: %s", return_symbol_name);
         backtrace_print(s_frame);
         KERNEL_PANIC_DISABLE_LOCKS = false;
 
