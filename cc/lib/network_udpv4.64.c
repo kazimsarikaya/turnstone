@@ -17,9 +17,11 @@
 
 MODULE("turnstone.lib");
 
-uint8_t* network_udpv4_process_packet(network_udpv4_header_t* recv_udpv4_packet, void* network_info, uint16_t* return_packet_len) {
+uint8_t* network_udpv4_process_packet(network_ipv4_address_t dip, network_ipv4_address_t sip, network_udpv4_header_t* recv_udpv4_packet, void* network_info, uint16_t* return_packet_len) {
     UNUSED(network_info);
     UNUSED(return_packet_len);
+    UNUSED(sip);
+    UNUSED(dip);
 
     if(recv_udpv4_packet == NULL) {
         return NULL;

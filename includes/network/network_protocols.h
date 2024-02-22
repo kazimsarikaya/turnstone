@@ -16,7 +16,11 @@
 #define NETWORK_PROTOCOL_IPV4  0x0800
 
 
-typedef uint8_t network_ipv4_address_t[4];
+typedef union network_ipv4_address_t {
+    uint8_t  as_bytes[4];
+    uint16_t as_words[2];
+    uint32_t as_dword;
+} network_ipv4_address_t;
 
 typedef uint8_t network_mac_address_t[6];
 

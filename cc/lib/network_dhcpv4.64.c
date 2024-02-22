@@ -75,7 +75,7 @@ network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint3
     dhcp_discover->hops = NETWORK_DHCPV4_HOPS;
     dhcp_discover->xid = xid;
 
-    memory_memcopy(ni->ipv4_dhcpserver, dhcp_discover->server_ip, sizeof(network_ipv4_address_t));
+    dhcp_discover->server_ip = ni->ipv4_dhcpserver;
     memory_memcopy(ni->mac, dhcp_discover->client_mac_address, sizeof(network_mac_address_t));
 
     dhcp_discover->magic_cookie = BYTE_SWAP32(NETWORK_DHCPV4_MAGICCOOKIE);
@@ -86,12 +86,12 @@ network_dhcpv4_t* network_dhcpv4_create_request_packet(network_info_t* ni, uint3
 
     dhcp_discover->options[3] = NETWORK_DHCPV4_OPTION_REQUESTIP;
     dhcp_discover->options[4] = 4;
-    memory_memcopy(ni->ipv4_address, &dhcp_discover->options[5], sizeof(network_ipv4_address_t));
+    memory_memcopy(ni->ipv4_address.as_bytes, &dhcp_discover->options[5], sizeof(network_ipv4_address_t));
 
 
     dhcp_discover->options[9] = NETWORK_DHCPV4_OPTION_SERVERIP;
     dhcp_discover->options[10] = 4;
-    memory_memcopy(ni->ipv4_dhcpserver, &dhcp_discover->options[11], sizeof(network_ipv4_address_t));
+    memory_memcopy(ni->ipv4_dhcpserver.as_bytes, &dhcp_discover->options[11], sizeof(network_ipv4_address_t));
 
     dhcp_discover->options[15] = NETWORK_DHCPV4_OPTION_END;
 
@@ -146,8 +146,8 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     }
 
     if(type == NETWORK_DHCPV4_OPCODE_OFFER) {
-        memory_memcopy(recv_dhcpv4_packet->your_ip, ni->ipv4_address, sizeof(network_ipv4_address_t));
-        memory_memcopy(recv_dhcpv4_packet->server_ip, ni->ipv4_dhcpserver, sizeof(network_ipv4_address_t));
+        ni->ipv4_address = recv_dhcpv4_packet->your_ip;
+        ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
 
         uint16_t dhcp_packet_len = 0;
         network_dhcpv4_t* dhcp_packet = network_dhcpv4_create_request_packet(ni, recv_dhcpv4_packet->xid, &dhcp_packet_len);
@@ -229,25 +229,45 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     } else if(type == NETWORK_DHCPV4_OPCODE_ACK) {
         PRINTLOG(NETWORK, LOG_TRACE, "dhcp type is ack");
 
-        memory_memcopy(recv_dhcpv4_packet->your_ip, ni->ipv4_address, sizeof(network_ipv4_address_t));
-        PRINTLOG(NETWORK, LOG_TRACE, "ipaddr %i.%i.%i.%i", ni->ipv4_address[0], ni->ipv4_address[1], ni->ipv4_address[2], ni->ipv4_address[3]);
-        memory_memcopy(recv_dhcpv4_packet->server_ip, ni->ipv4_dhcpserver, sizeof(network_ipv4_address_t));
+        ni->ipv4_address = recv_dhcpv4_packet->your_ip;
+        PRINTLOG(NETWORK, LOG_TRACE, "ipaddr %i.%i.%i.%i",
+                 ni->ipv4_address.as_bytes[0],
+                 ni->ipv4_address.as_bytes[1],
+                 ni->ipv4_address.as_bytes[2],
+                 ni->ipv4_address.as_bytes[3]);
+        ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
 
         idx = 0;
 
         while(options[idx] != NETWORK_DHCPV4_OPTION_END) {
             if(options[idx] == NETWORK_DHCPV4_OPTION_SUBNETMASK) {
-                memory_memcopy(options + idx + 2, ni->ipv4_subnetmask, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "subnet %i.%i.%i.%i", ni->ipv4_subnetmask[0], ni->ipv4_subnetmask[1], ni->ipv4_subnetmask[2], ni->ipv4_subnetmask[3]);
+                memory_memcopy(options + idx + 2, ni->ipv4_subnetmask.as_bytes, sizeof(network_ipv4_address_t));
+                PRINTLOG(NETWORK, LOG_TRACE, "subnet %i.%i.%i.%i",
+                         ni->ipv4_subnetmask.as_bytes[0],
+                         ni->ipv4_subnetmask.as_bytes[1],
+                         ni->ipv4_subnetmask.as_bytes[2],
+                         ni->ipv4_subnetmask.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_ROUTER) {
-                memory_memcopy(options + idx + 2, ni->ipv4_gateway, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "gw %i.%i.%i.%i", ni->ipv4_gateway[0], ni->ipv4_gateway[1], ni->ipv4_gateway[2], ni->ipv4_gateway[3]);
+                memory_memcopy(options + idx + 2, ni->ipv4_gateway.as_bytes, sizeof(network_ipv4_address_t));
+                PRINTLOG(NETWORK, LOG_TRACE, "gw %i.%i.%i.%i",
+                         ni->ipv4_gateway.as_bytes[0],
+                         ni->ipv4_gateway.as_bytes[1],
+                         ni->ipv4_gateway.as_bytes[2],
+                         ni->ipv4_gateway.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER) {
-                memory_memcopy(options + idx + 2, ni->ipv4_nameserver, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "ns %i.%i.%i.%i", ni->ipv4_nameserver[0], ni->ipv4_nameserver[1], ni->ipv4_nameserver[2], ni->ipv4_nameserver[3]);
+                memory_memcopy(options + idx + 2, ni->ipv4_nameserver.as_bytes, sizeof(network_ipv4_address_t));
+                PRINTLOG(NETWORK, LOG_TRACE, "ns %i.%i.%i.%i",
+                         ni->ipv4_nameserver.as_bytes[0],
+                         ni->ipv4_nameserver.as_bytes[1],
+                         ni->ipv4_nameserver.as_bytes[2],
+                         ni->ipv4_nameserver.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_BROADCAST) {
-                memory_memcopy(options + idx + 2, ni->ipv4_broadcast, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "bcast %i.%i.%i.%i", ni->ipv4_broadcast[0], ni->ipv4_broadcast[1], ni->ipv4_broadcast[2], ni->ipv4_broadcast[3]);
+                memory_memcopy(options + idx + 2, ni->ipv4_broadcast.as_bytes, sizeof(network_ipv4_address_t));
+                PRINTLOG(NETWORK, LOG_TRACE, "bcast %i.%i.%i.%i",
+                         ni->ipv4_broadcast.as_bytes[0],
+                         ni->ipv4_broadcast.as_bytes[1],
+                         ni->ipv4_broadcast.as_bytes[2],
+                         ni->ipv4_broadcast.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_IPLEASETIME) {
                 ni->lease_time = (uint32_t)*((uint32_t*)(options + idx + 2));
                 ni->lease_time = BYTE_SWAP32(ni->lease_time);

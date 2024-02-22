@@ -9,6 +9,7 @@
 #include <network/network_ipv4.h>
 #include <network/network_icmpv4.h>
 #include <network/network_udpv4.h>
+#include <network/network_tcpv4.h>
 #include <network/network_info.h>
 #include <network/network_ethernet.h>
 #include <utils.h>
@@ -46,8 +47,8 @@ typedef union network_ipv4_fragment_key_t {
     uint64_t bits;
 } network_ipv4_fragment_key_t;
 
-network_ipv4_address_t NETWORK_IPV4_GLOBAL_BROADCAST_IP = {255, 255, 255, 255};
-network_ipv4_address_t NETWORK_IPV4_ZERO_IP = {0, 0, 0, 0};
+network_ipv4_address_t NETWORK_IPV4_GLOBAL_BROADCAST_IP = { .as_bytes = {255, 255, 255, 255} };
+network_ipv4_address_t NETWORK_IPV4_ZERO_IP = { .as_bytes = {0, 0, 0, 0} };
 
 int8_t   network_ipv4_fragment_comparator(const void* f1, const void* f2);
 uint16_t network_ipv4_header_checksum(network_ipv4_header_t* ipv4_hdr);
@@ -73,7 +74,7 @@ int8_t network_ipv4_fragment_comparator(const void* f1, const void* f2){
 static inline uint64_t network_ipv4_fragment_key_generator(network_ipv4_address_t ip, uint16_t identification, uint8_t protocol) {
     network_ipv4_fragment_key_t res;
 
-    memory_memcopy(ip, res.fields.ip, sizeof(network_ipv4_address_t));
+    res.fields.ip = ip;
     res.fields.identification = identification;
     res.fields.protocol = protocol;
 
@@ -81,13 +82,7 @@ static inline uint64_t network_ipv4_fragment_key_generator(network_ipv4_address_
 }
 
 boolean_t network_ipv4_is_address_eq(const network_ipv4_address_t ipv4_addr1, const network_ipv4_address_t ipv4_addr2) {
-    for(uint64_t i = 0; i < sizeof(network_ipv4_address_t); i++) {
-        if(ipv4_addr1[i] != ipv4_addr2[i]) {
-            return false;
-        }
-    }
-
-    return true;
+    return (ipv4_addr1.as_dword == ipv4_addr2.as_dword);
 }
 
 uint16_t network_ipv4_header_checksum(network_ipv4_header_t* ipv4_hdr){
@@ -297,11 +292,30 @@ list_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, voi
     } else if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_UDPV4) {
         network_udpv4_header_t* recv_udpv4_hdr = (network_udpv4_header_t*)packet_data;
 
-        network_udpv4_header_t* resp_udpv4_hdr = (network_udpv4_header_t*)network_udpv4_process_packet(recv_udpv4_hdr, network_info, NULL);
+        network_udpv4_header_t* resp_udpv4_hdr = (network_udpv4_header_t*)network_udpv4_process_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, recv_udpv4_hdr, network_info, NULL);
 
         memory_free(packet_data);
 
         list_t* ip_pckts = network_ipv4_create_packet_from_udp_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, resp_udpv4_hdr);
+
+        if(ip_pckts == NULL) {
+            PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet response discarded");
+            return NULL;
+        }
+
+        return ip_pckts;
+    } else if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_TCPV4) {
+        network_tcpv4_header_t* recv_tcpv4_hdr = (network_tcpv4_header_t*)packet_data;
+
+        uint16_t data_len = BYTE_SWAP16(recv_ipv4_packet->total_length) - (recv_ipv4_packet->header_length * 4);
+
+        uint16_t pp_len = 0;
+
+        network_tcpv4_header_t* resp_tcpv4_hdr = (network_tcpv4_header_t*)network_tcpv4_process_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, recv_tcpv4_hdr, network_info, data_len, &pp_len);
+
+        memory_free(packet_data);
+
+        list_t* ip_pckts = network_ipv4_create_packet_from_tcp_packet(recv_ipv4_packet->destination_ip, recv_ipv4_packet->source_ip, resp_tcpv4_hdr, pp_len);
 
         if(ip_pckts == NULL) {
             PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet response discarded");
@@ -332,8 +346,8 @@ list_t* network_ipv4_create_packet_from_icmp_packet(const network_ipv4_address_t
     ipv4_packet->ttl = NETWORK_IPV4_TTL;
     ipv4_packet->protocol = NETWORK_IPV4_PROTOCOL_ICMPV4;
 
-    memory_memcopy(sip, ipv4_packet->source_ip, sizeof(network_ipv4_address_t));
-    memory_memcopy(dip, ipv4_packet->destination_ip, sizeof(network_ipv4_address_t));
+    ipv4_packet->source_ip = sip;
+    ipv4_packet->destination_ip = dip;
 
     network_ipv4_header_checksum(ipv4_packet);
 
@@ -417,15 +431,12 @@ list_t* network_ipv4_create_packet_from_udp_packet(const network_ipv4_address_t 
         ipv4_packet->flags_fragment_offset.fields.flags = NETWORK_IPV4_FLAG_MORE_FRAGMENTS;
         ipv4_packet->flags_fragment_offset.bits = BYTE_SWAP16(ipv4_packet->flags_fragment_offset.bits);
 
-        memory_memcopy(sip, ipv4_packet->source_ip, sizeof(network_ipv4_address_t));
-        memory_memcopy(dip, ipv4_packet->destination_ip, sizeof(network_ipv4_address_t));
+        ipv4_packet->source_ip = sip;
+        ipv4_packet->destination_ip = dip;
 
         network_ipv4_header_checksum(ipv4_packet);
 
-        uint16_t* sip_u16 = (uint16_t*)sip;
-        uint16_t* dip_u16 = (uint16_t*)dip;
-
-        uint32_t hcsum = udp_hdr->checksum + sip_u16[0] + sip_u16[1] + dip_u16[0] + dip_u16[1];
+        uint32_t hcsum = udp_hdr->checksum + sip.as_words[0] + sip.as_words[1] + dip.as_words[0] + dip.as_words[1];
 
         while(hcsum >> 16) {
             uint32_t carry = hcsum >> 16;
@@ -475,15 +486,13 @@ list_t* network_ipv4_create_packet_from_udp_packet(const network_ipv4_address_t 
     ipv4_packet->flags_fragment_offset.fields.fragment_offset = offset >> 3;
     ipv4_packet->flags_fragment_offset.bits = BYTE_SWAP16(ipv4_packet->flags_fragment_offset.bits);
 
-    memory_memcopy(sip, ipv4_packet->source_ip, sizeof(network_ipv4_address_t));
-    memory_memcopy(dip, ipv4_packet->destination_ip, sizeof(network_ipv4_address_t));
+    ipv4_packet->source_ip = sip;
+    ipv4_packet->destination_ip = dip;
 
     network_ipv4_header_checksum(ipv4_packet);
 
-    uint16_t* sip_u16 = (uint16_t*)sip;
-    uint16_t* dip_u16 = (uint16_t*)dip;
 
-    uint32_t hcsum = udp_hdr->checksum + sip_u16[0] + sip_u16[1] + dip_u16[0] + dip_u16[1];
+    uint32_t hcsum = udp_hdr->checksum + sip.as_words[0] + sip.as_words[1] + dip.as_words[0] + dip.as_words[1];
 
     while(hcsum >> 16) {
         uint32_t carry = hcsum >> 16;
@@ -501,6 +510,149 @@ list_t* network_ipv4_create_packet_from_udp_packet(const network_ipv4_address_t 
     memory_memcopy(raw_udp_hdr, buf, packet_len);
 
     memory_free(udp_hdr);
+
+    network_transmit_packet_t* ipv4_pckt = memory_malloc(sizeof(network_transmit_packet_t));
+
+    if(ipv4_pckt == NULL) {
+        memory_free(ipv4_packet);
+        list_destroy_with_type(fragments, LIST_DESTROY_WITH_DATA, network_transmit_packet_destroyer);
+        return NULL;
+    }
+
+    ipv4_pckt->packet_data = (uint8_t*)ipv4_packet;
+    ipv4_pckt->packet_len = packet_len + sizeof(network_ipv4_header_t);
+
+    list_queue_push(fragments, ipv4_pckt);
+
+    return fragments;
+}
+
+list_t* network_ipv4_create_packet_from_tcp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_tcpv4_header_t* tcp_hdr, uint16_t packet_len) {
+    if(tcp_hdr == NULL) {
+        return NULL;
+    }
+
+    list_t* fragments = list_create_list();
+
+    if(fragments == NULL) {
+        memory_free(tcp_hdr);
+
+        return NULL;
+    }
+
+    uint8_t* raw_tcp_hdr = (uint8_t*)tcp_hdr;
+
+    uint16_t max_packet_len = 1500 - sizeof(network_ipv4_header_t);
+
+    if(max_packet_len % 8) {
+        max_packet_len -= max_packet_len % 8;
+    }
+
+    uint16_t identification = 0;
+
+    if(packet_len > max_packet_len) {
+        identification = rand();
+    }
+
+    uint16_t offset = 0;
+
+    while(packet_len > max_packet_len) {
+        packet_len -= max_packet_len;
+
+        network_ipv4_header_t* ipv4_packet = memory_malloc(max_packet_len + sizeof(network_ipv4_header_t));
+
+        if(ipv4_packet == NULL) {
+            return NULL;
+        }
+
+        ipv4_packet->version = NETWORK_IPV4_VERSION;
+        ipv4_packet->header_length = 5;
+        ipv4_packet->total_length = BYTE_SWAP16(max_packet_len + sizeof(network_ipv4_header_t));
+        ipv4_packet->ttl = NETWORK_IPV4_TTL;
+        ipv4_packet->protocol = NETWORK_IPV4_PROTOCOL_TCPV4;
+        ipv4_packet->identification = BYTE_SWAP16(identification);
+        ipv4_packet->flags_fragment_offset.fields.fragment_offset = offset >> 3;
+        ipv4_packet->flags_fragment_offset.fields.flags = NETWORK_IPV4_FLAG_MORE_FRAGMENTS;
+        ipv4_packet->flags_fragment_offset.bits = BYTE_SWAP16(ipv4_packet->flags_fragment_offset.bits);
+
+        ipv4_packet->source_ip = sip;
+        ipv4_packet->destination_ip = dip;
+
+        network_ipv4_header_checksum(ipv4_packet);
+
+        uint32_t hcsum = tcp_hdr->checksum + sip.as_words[0] + sip.as_words[1] + dip.as_words[0] + dip.as_words[1];
+
+        while(hcsum >> 16) {
+            uint32_t carry = hcsum >> 16;
+            hcsum &= 0xFFFF;
+            hcsum += carry;
+        }
+
+        int16_t csum = hcsum;
+
+        tcp_hdr->checksum = ~csum;
+
+        uint8_t* buf = (uint8_t*)ipv4_packet;
+        buf += ipv4_packet->header_length * 4;
+
+        memory_memcopy(raw_tcp_hdr, buf, max_packet_len);
+
+        raw_tcp_hdr += max_packet_len;
+        offset += max_packet_len;
+
+        network_transmit_packet_t* ipv4_pckt = memory_malloc(sizeof(network_transmit_packet_t));
+
+        if(ipv4_pckt == NULL) {
+            memory_free(ipv4_packet);
+            list_destroy_with_type(fragments, LIST_DESTROY_WITH_DATA, network_transmit_packet_destroyer);
+            return NULL;
+        }
+
+        ipv4_pckt->packet_data = (uint8_t*)ipv4_packet;
+        ipv4_pckt->packet_len = max_packet_len + sizeof(network_ipv4_header_t);
+
+        list_queue_push(fragments, ipv4_pckt);
+    }
+
+
+    network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len + sizeof(network_ipv4_header_t));
+
+    if(ipv4_packet == NULL) {
+        return NULL;
+    }
+
+    ipv4_packet->version = NETWORK_IPV4_VERSION;
+    ipv4_packet->header_length = 5;
+    ipv4_packet->total_length = BYTE_SWAP16(packet_len + sizeof(network_ipv4_header_t));
+    ipv4_packet->ttl = NETWORK_IPV4_TTL;
+    ipv4_packet->protocol = NETWORK_IPV4_PROTOCOL_TCPV4;
+    ipv4_packet->identification = BYTE_SWAP16(identification);
+    ipv4_packet->flags_fragment_offset.fields.fragment_offset = offset >> 3;
+    ipv4_packet->flags_fragment_offset.bits = BYTE_SWAP16(ipv4_packet->flags_fragment_offset.bits);
+
+    ipv4_packet->source_ip = sip;
+    ipv4_packet->destination_ip = dip;
+
+    network_ipv4_header_checksum(ipv4_packet);
+
+    uint32_t hcsum = tcp_hdr->checksum + sip.as_words[0] + sip.as_words[1] + dip.as_words[0] + dip.as_words[1];
+
+    while(hcsum >> 16) {
+        uint32_t carry = hcsum >> 16;
+        hcsum &= 0xFFFF;
+        hcsum += carry;
+    }
+
+    int16_t csum = hcsum;
+
+    tcp_hdr->checksum = ~csum;
+
+    uint8_t* buf = (uint8_t*)ipv4_packet;
+    buf += ipv4_packet->header_length * 4;
+
+    memory_memcopy(raw_tcp_hdr, buf, packet_len);
+
+    memory_free(tcp_hdr);
 
     network_transmit_packet_t* ipv4_pckt = memory_malloc(sizeof(network_transmit_packet_t));
 
