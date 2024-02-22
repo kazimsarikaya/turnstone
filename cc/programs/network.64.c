@@ -35,6 +35,17 @@ uint64_t network_info_mke(const void* key) {
     return x;
 }
 
+int8_t network_transmit_packet_destroyer(memory_heap_t* heap, void* data) {
+    UNUSED(heap);
+
+    network_transmit_packet_t* t_pckt = data;
+
+    memory_free(t_pckt->packet_data);
+    memory_free(t_pckt);
+
+    return 0;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t network_set_return_queue(const network_mac_address_t* mac, list_t* return_queue) {
@@ -57,6 +68,49 @@ static int8_t network_set_return_queue(const network_mac_address_t* mac, list_t*
 
     return 0;
 }
+
+static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_packet, list_t* return_queue) {
+    network_transmit_packet_t* tx_packet = memory_malloc_ext(list_get_heap(return_queue), sizeof(network_transmit_packet_t), 0);
+
+    if(tx_packet == NULL) {
+        network_transmit_packet_destroyer(NULL, orginal_packet);
+
+        task_yield();
+
+        return -1;
+    }
+
+    uint8_t* tx_packet_data = memory_malloc_ext(list_get_heap(return_queue), orginal_packet->packet_len, 0);
+
+    if(tx_packet_data == NULL) {
+        network_transmit_packet_destroyer(NULL, orginal_packet);
+        memory_free_ext(list_get_heap(return_queue), tx_packet);
+
+        task_yield();
+
+        return -1;
+    }
+
+    memory_memcopy(orginal_packet->packet_data, tx_packet_data, orginal_packet->packet_len);
+
+    tx_packet->packet_len = orginal_packet->packet_len;
+    tx_packet->packet_data = tx_packet_data;
+
+    network_transmit_packet_destroyer(NULL, orginal_packet);
+
+    if(list_queue_push(return_queue, tx_packet) == -1ULL) {
+        memory_free_ext(list_get_heap(return_queue), tx_packet_data);
+        memory_free_ext(list_get_heap(return_queue), tx_packet);
+
+        task_yield();
+
+        return -1;
+    } else {
+        PRINTLOG(NETWORK, LOG_TRACE, "packet pushed to return queue");
+    }
+
+    return 0;
+}
 #pragma GCC diagnostic pop
 
 int8_t network_process_rx(void){
@@ -72,19 +126,18 @@ int8_t network_process_rx(void){
         }
 
         while(list_size(network_received_packets)) {
-            const network_received_packet_t* packet = list_queue_peek(network_received_packets);
+            const network_received_packet_t* packet = list_queue_pop(network_received_packets);
 
             if(packet) {
                 PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
 
-                uint16_t return_data_len = 0;
-                uint8_t* return_data = NULL;
+                list_t* return_list = NULL;
 
                 if(packet->network_type == NETWORK_TYPE_ETHERNET) {
 
                     network_set_return_queue(packet->network_info, packet->return_queue);
 
-                    return_data = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info, &return_data_len);
+                    return_list = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info);
                 }
 
                 list_t* return_queue = packet->return_queue;
@@ -92,63 +145,30 @@ int8_t network_process_rx(void){
                 memory_free(packet->packet_data);
                 memory_free((void*)packet);
 
-                if(return_data && return_data_len) {
+                if(return_list) {
                     if(return_queue) {
-                        network_transmit_packet_t* tx_packet = memory_malloc_ext(list_get_heap(return_queue), sizeof(network_transmit_packet_t), 0);
+                        while(list_size(return_list)) {
+                            network_transmit_packet_t* tx_packet = (network_transmit_packet_t*)list_queue_pop(return_list);
 
-                        if(tx_packet == NULL) {
-                            memory_free(return_data);
-
-                            list_queue_pop(network_received_packets);
-
-                            task_yield();
-
-                            continue;
+                            if(tx_packet) {
+                                if(network_send_packet_to_nic(tx_packet, return_queue) == -1) {
+                                    break;
+                                }
+                            }
                         }
 
-                        uint8_t* tx_packet_data = memory_malloc_ext(list_get_heap(return_queue), return_data_len, 0);
+                        list_destroy_with_type(return_list, LIST_DESTROY_WITH_DATA, &network_transmit_packet_destroyer);
 
-                        if(tx_packet_data == NULL) {
-                            memory_free(return_data);
-                            memory_free_ext(list_get_heap(return_queue), tx_packet);
-
-                            list_queue_pop(network_received_packets);
-
-                            task_yield();
-
-                            continue;
-                        }
-
-                        memory_memcopy(return_data, tx_packet_data, return_data_len);
-
-                        memory_free(return_data);
-
-                        tx_packet->packet_len = return_data_len;
-                        tx_packet->packet_data = tx_packet_data;
-
-                        if(list_queue_push(return_queue, tx_packet) == -1ULL) {
-                            memory_free_ext(list_get_heap(return_queue), tx_packet_data);
-                            memory_free_ext(list_get_heap(return_queue), tx_packet);
-
-                            list_queue_pop(network_received_packets);
-
-                            task_yield();
-
-                            continue;
-                        } else {
-                            PRINTLOG(NETWORK, LOG_TRACE, "packet pushed to return queue");
-                        }
                     } else {
                         PRINTLOG(NETWORK, LOG_TRACE, "there is no return queue");
 
-                        memory_free(return_data);
+                        list_destroy_with_type(return_list, LIST_DESTROY_WITH_DATA, &network_transmit_packet_destroyer);
                     }
 
                 } else {
                     PRINTLOG(NETWORK, LOG_TRACE, "packet discarded");
                 }
 
-                list_queue_pop(network_received_packets);
             }
 
             PRINTLOG(NETWORK, LOG_TRACE, "rx queue size 0x%llx", list_size(network_received_packets));

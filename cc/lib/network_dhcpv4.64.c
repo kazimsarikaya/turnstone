@@ -168,17 +168,31 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
             return NULL;
         }
 
-        network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(NETWORK_IPV4_ZERO_IP, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
+        list_t* l_ip = network_ipv4_create_packet_from_udp_packet(NETWORK_IPV4_ZERO_IP, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
 
-        if(ip == NULL) {
+        if(l_ip == NULL) {
             PRINTLOG(NETWORK, LOG_ERROR, "ip packet is null");
 
             return NULL;
         }
 
+        network_transmit_packet_t* t_ip = (network_transmit_packet_t*)list_queue_pop(l_ip);
+
+        list_destroy(l_ip);
+
+        if(t_ip == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "ip packet is null");
+
+            return NULL;
+        }
+
+        network_ipv4_header_t* ip = (network_ipv4_header_t*)t_ip->packet_data;
+
+        memory_free(t_ip);
+
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 
-        uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, network_info, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
+        uint8_t* eth = network_ethernet_create_packet(BROADCAST_MAC, network_info, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
 
         network_transmit_packet_t* res = memory_malloc_ext(list_get_heap(ni->return_queue), sizeof(network_transmit_packet_t), 0);
 

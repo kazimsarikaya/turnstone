@@ -102,13 +102,25 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             continue;
         }
 
-        network_ipv4_header_t* ip = network_ipv4_create_packet_from_udp_packet(ni->ipv4_address, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
+        list_t* l_ip = network_ipv4_create_packet_from_udp_packet(ni->ipv4_address, NETWORK_IPV4_GLOBAL_BROADCAST_IP, udp);
 
-        if(ip == NULL) {
+        if(l_ip == NULL) {
             PRINTLOG(NETWORK, LOG_ERROR, "ip packet is null, re trying...");
 
             continue;
         }
+
+        network_transmit_packet_t* t_ip = (network_transmit_packet_t*)list_queue_pop(l_ip);
+
+        if(t_ip == NULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "ip packet is null, re trying...");
+
+            continue;
+        }
+
+        network_ipv4_header_t* ip = (network_ipv4_header_t*)t_ip->packet_data;
+
+        memory_free(t_ip);
 
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 

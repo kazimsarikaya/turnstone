@@ -27,7 +27,7 @@ typedef struct network_ethernet_t {
 extern network_mac_address_t BROADCAST_MAC;
 
 boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network_mac_address_t mac2);
-uint8_t*  network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, void* network_info, uint16_t* return_packet_len);
+list_t*   network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, void* network_info);
 
 uint8_t* network_ethernet_create_packet(network_mac_address_t dest, network_mac_address_t src, network_ethernet_type_t type, uint16_t data_len, uint8_t* data);
 
