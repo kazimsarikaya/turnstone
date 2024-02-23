@@ -713,7 +713,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
     new_task->rbp = rbp;
-    new_task->rsp = rbp - 24; // 24 is for last return address, entry point and end task
+    new_task->rsp = rbp - 32; // 24 is for last return address, entry point and end task
 
     new_task->rdi = args_cnt;
     new_task->rsi = (uint64_t)args;
@@ -721,8 +721,9 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
     stack[-2] = (uint64_t)entry_point;
-    stack[-3] = (uint64_t)task_switch_task_exit_prep; // do we need this?
-    // stack[-4] = (uint64_t)apic_eoi;
+    // stack[-3] = (uint64_t)task_switch_task_exit_prep; // do we need this?
+    stack[-3] = (uint64_t)cpu_sti; // FIXME: force sti for now
+    stack[-4] = (uint64_t)apic_eoi; // FIXME: force eoi for now may be we lose some interrupts
 
 
     new_task->input_buffer = buffer_create_with_heap(task_heap, 0x1000);
@@ -820,12 +821,14 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
     new_task->rbp = rbp;
-    new_task->rsp = rbp - 24;
+    new_task->rsp = rbp - 32;
 
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
     stack[-2] = (uint64_t)new_task->entry_point;
-    stack[-3] = (uint64_t)task_switch_task_exit_prep;
+    // stack[-3] = (uint64_t)task_switch_task_exit_prep; // do we need this?
+    stack[-3] = (uint64_t)cpu_sti; // FIXME: force sti for now
+    stack[-4] = (uint64_t)apic_eoi; // FIXME: force eoi for now may be we lose some interrupts
 
     old_int_status = cpu_cli();
 
