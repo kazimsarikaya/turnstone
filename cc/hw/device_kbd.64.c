@@ -62,22 +62,16 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
         kbd_state.is_meta_pressed = pressed;
     }
 
+    boolean_t is_printable = false;
+    kbd_report_t report = {0};
 
-    if(pressed == 1) {
-        wchar_t buffer[2] = {0, 0};
-        boolean_t is_p = 0;
+    report.key = kbd_scancode_get_value(key, &kbd_state, &is_printable);
+    report.is_pressed = pressed;
+    report.is_printable = is_printable;
+    report.state = kbd_state;
 
-        buffer[0] = kbd_scancode_get_value(key, &kbd_state, &is_p);
-
-        if(is_p) {
-            char_t* data = wchar_to_char(buffer);
-
-            if(shell_buffer != NULL) {
-                buffer_append_byte(shell_buffer, data[0]);
-            }
-
-            memory_free(data);
-        }
+    if(shell_buffer != NULL) {
+        buffer_append_bytes(shell_buffer, (uint8_t*)&report, sizeof(kbd_report_t));
     }
 
     return 0;

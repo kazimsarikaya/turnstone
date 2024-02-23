@@ -299,6 +299,32 @@ wchar_t video_get_wc(const char_t* string, int64_t * idx) {
     return wc;
 }
 
+static void video_print_glyph(wchar_t wc) {
+    uint8_t* glyph = FONT_ADDRESS + (wc * FONT_BYTES_PER_GLYPH);
+
+    int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
+
+    int32_t x, y, line, mask;
+
+    for(y = 0; y < FONT_HEIGHT; y++) {
+        line = offs;
+        mask = FONT_MASK;
+
+        uint32_t tmp = BYTE_SWAP32(*((uint32_t*)glyph));
+
+        for(x = 0; x < FONT_WIDTH; x++) {
+
+            *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = tmp & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
+
+            mask >>= 1;
+            line++;
+        }
+
+        glyph += FONT_BYTES_PERLINE;
+        offs  += VIDEO_PIXELS_PER_SCANLINE;
+    }
+}
+
 void video_graphics_print(const char_t* string) {
     int64_t i = 0;
     uint64_t flush_offset = 0;
@@ -321,6 +347,25 @@ void video_graphics_print(const char_t* string) {
         if(wc == '\r') {
             cursor_graphics_x = 0;
             i++;
+
+            full_flush = true; // FIXME: calculate the area to flush
+
+            continue;
+        }
+
+        if(wc == '\b') {
+            if(cursor_graphics_x > 0) {
+                cursor_graphics_x--;
+            } else {
+                if(cursor_graphics_y > 0) {
+                    cursor_graphics_y--;
+                    cursor_graphics_x = FONT_CHARS_PER_LINE - 1;
+                }
+            }
+
+            i++;
+
+            full_flush = true; // FIXME: calculate the area to flush
 
             continue;
         }
@@ -360,29 +405,7 @@ void video_graphics_print(const char_t* string) {
             wc = video_font_unicode_table[wc];
         }
 
-        uint8_t* glyph = FONT_ADDRESS + (wc * FONT_BYTES_PER_GLYPH);
-
-        int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
-
-        int32_t x, y, line, mask;
-
-        for(y = 0; y < FONT_HEIGHT; y++) {
-            line = offs;
-            mask = FONT_MASK;
-
-            uint32_t tmp = BYTE_SWAP32(*((uint32_t*)glyph));
-
-            for(x = 0; x < FONT_WIDTH; x++) {
-
-                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = tmp & mask ? VIDEO_GRAPHICS_FOREGROUND : VIDEO_GRAPHICS_BACKGROUND;
-
-                mask >>= 1;
-                line++;
-            }
-
-            glyph += FONT_BYTES_PERLINE;
-            offs  += VIDEO_PIXELS_PER_SCANLINE;
-        }
+        video_print_glyph(wc);
 
         cursor_graphics_x++;
 
@@ -523,6 +546,21 @@ int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, 
             j += (new_pixels_per_scanline - VIDEO_PIXELS_PER_SCANLINE);
         }
     }
+
+    return 0;
+}
+
+int8_t video_move_text_cursor(int32_t x, int32_t y) {
+    if(GRAPHICS_MODE) {
+        return -1;
+    }
+
+    if(x >= VIDEO_GRAPHICS_WIDTH || y >= VIDEO_GRAPHICS_HEIGHT || x < 0 || y < 0) {
+        return -1;
+    }
+
+    cursor_graphics_x = x;
+    cursor_graphics_y = y;
 
     return 0;
 }
