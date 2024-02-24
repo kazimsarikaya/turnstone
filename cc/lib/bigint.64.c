@@ -1309,7 +1309,101 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     return 0;
 }
 
+int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    bigint_destroy_items(result);
 
+    if(a->sign == 0 && b->sign == 0) {
+        return -1;
+    }
+
+    if (a->sign == 0) {
+        result->sign = 0;
+        return 0;
+    }
+
+    if (b->sign == 0) {
+        result->sign = 1;
+        bigint_set_int64(result, 1);
+        return 0;
+    }
+
+    if (b->sign < 0) {
+        return -1;
+    }
+
+    bigint_t* base = bigint_create();
+
+    if (bigint_set_bigint(base, a) == -1) {
+        bigint_destroy(base);
+        return -1;
+    }
+
+    bigint_t* exp = bigint_create();
+
+    if (bigint_set_bigint(exp, b) == -1) {
+        bigint_destroy(base);
+        bigint_destroy(exp);
+        return -1;
+    }
+
+    bigint_t* one = bigint_create();
+
+    if (bigint_set_int64(one, 1) == -1) {
+        bigint_destroy(base);
+        bigint_destroy(exp);
+        bigint_destroy(one);
+        return -1;
+    }
+
+    bigint_t* zero = bigint_create();
+
+    bigint_t* tmp = bigint_create();
+
+    if (bigint_set_bigint(result, base) == -1) {
+        bigint_destroy(base);
+        bigint_destroy(exp);
+        bigint_destroy(one);
+        bigint_destroy(zero);
+        bigint_destroy(tmp);
+        return -1;
+    }
+
+    bigint_sub(tmp, exp, one);
+
+    bigint_set_bigint(exp, tmp);
+
+    while (exp->sign > 0) {
+        if (bigint_mul(tmp, result, base) == -1) {
+            bigint_destroy(base);
+            bigint_destroy(exp);
+            bigint_destroy(one);
+            bigint_destroy(zero);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        if (bigint_set_bigint(result, tmp) == -1) {
+            bigint_destroy(base);
+            bigint_destroy(exp);
+            bigint_destroy(one);
+            bigint_destroy(zero);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        bigint_sub(tmp, exp, one);
+
+        bigint_set_bigint(exp, tmp);
+    }
+
+    bigint_destroy(base);
+    bigint_destroy(exp);
+    bigint_destroy(one);
+    bigint_destroy(zero);
+    bigint_destroy(tmp);
+
+    return 0;
+}
 
 
 

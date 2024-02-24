@@ -720,6 +720,90 @@ static int32_t bigint_test_mul(void) {
     return 0;
 }
 
+static int32_t bigint_test_pow(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "3");
+        bigint_set_str(bigint_2, "2");
+
+        if(bigint_pow(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_pow failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_pow: %s\n", str);
+
+            if(strncmp(str, "9", 1) != 0) {
+                print_error("bigint_pow failed");
+            } else {
+                print_success("bigint_pow passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_pow failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "12");
+        bigint_set_str(bigint_2, "34");
+
+        if(bigint_pow(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_pow failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_pow: %s\n", str);
+
+            if(strncmp(str, "1C9040830AA8880352DFDF4C48E4FBA82690BE45210000000000000", 55) != 0) {
+                print_error("bigint_pow failed");
+            } else {
+                print_success("bigint_pow passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_pow failed");
+            return -1;
+
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
 int32_t main(void) {
     int32_t result = 0;
 
@@ -748,6 +832,12 @@ int32_t main(void) {
     }
 
     result = bigint_test_mul();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_pow();
 
     if(result != 0) {
         return result;
