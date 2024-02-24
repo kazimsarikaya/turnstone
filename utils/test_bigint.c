@@ -497,6 +497,214 @@ static int32_t bigint_test_add_sub(void) {
             return -1;
         }
 
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF1234567890ABCDEF");
+
+        if(bigint_add(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_add failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_add: %s\n", str);
+
+            if(strncmp(str, "-10000000000000000000000", 24) != 0) {
+                print_error("bigint_add failed");
+            } else {
+                print_success("bigint_add passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_add failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_add(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_add failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_add: %s\n", str);
+
+            if(strncmp(str, "-1234567890BE02458AC602467FBE0245", 33) != 0) {
+                print_error("bigint_add failed");
+            } else {
+                print_success("bigint_add passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_add failed");
+            return -1;
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
+static int32_t bigint_test_mul(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "5678");
+
+        if(bigint_mul(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_mul: %s\n", str);
+
+            if(strncmp(str, "6260060", 7) != 0) {
+                print_error("bigint_mul failed");
+            } else {
+                print_success("bigint_mul passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234");
+
+        if(bigint_mul(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_mul: %s\n", str);
+
+            if(strncmp(str, "14B60B60AA97760A3D760B60AA97760A28C", 35) != 0) {
+                print_error("bigint_mul failed");
+            } else {
+                print_success("bigint_mul passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_2, "FEDCBA9876543210");
+
+        if(bigint_mul(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_mul: %s\n", str);
+
+            if(strncmp(str, "121FA00ACD77D742358D290922D96432236D88FE55618CF0", 48) != 0) {
+                print_error("bigint_mul failed");
+            } else {
+                print_success("bigint_mul passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_2, "-FEDCBA9876543210");
+
+        if(bigint_mul(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_mul: %s\n", str);
+
+            if(strncmp(str, "-121FA00ACD77D742358D290922D96432236D88FE55618CF0", 48) != 0) {
+                print_error("bigint_mul failed");
+            } else {
+                print_success("bigint_mul passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_mul failed");
+            return -1;
+
+        }
+
     } else {
         bigint_destroy(bigint_1);
         bigint_destroy(bigint_2);
@@ -534,6 +742,12 @@ int32_t main(void) {
     }
 
     result = bigint_test_add_sub();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_mul();
 
     if(result != 0) {
         return result;

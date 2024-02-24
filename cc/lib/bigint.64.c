@@ -958,10 +958,18 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return bigint_set_bigint(result, a);
     }
 
+    int32_t sign = 1;
+    int32_t b_sign = b->sign;
+
     if (a->sign < 0 && b->sign < 0) {
-        result->sign = -1;
-    } else {
-        result->sign = 1;
+        sign = -1;
+        b_sign = 1;
+    } else if(a->sign > 0 && b->sign > 0) { // pass
+    } else if(a->sign < 0) {
+        const bigint_t* tmp = b;
+        b = a;
+        a = tmp;
+        b_sign = -1;
     }
 
     bigint_item_t* item_a = a->lsb;
@@ -978,7 +986,7 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             return -1;
         }
 
-        if(b->sign < 0) {
+        if(b_sign < 0) {
             item->value = item_a->value - item_b->value - carry;
 
             if(item_a->value < item_b->value + carry) {
@@ -1020,7 +1028,7 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
                 return -1;
             }
 
-            if(b->sign < 0) {
+            if(b_sign < 0) {
                 item->value = item_a->value - carry;
 
                 if(item_a->value < carry) {
@@ -1060,7 +1068,7 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
                 return -1;
             }
 
-            if(b->sign < 0) {
+            if(b_sign < 0) {
                 item->value = item_b->value - carry;
 
                 if(item_b->value < carry) {
@@ -1091,9 +1099,6 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             prev = item;
 
             item_b = item_b->next;
-
-
-
         }
     }
 
@@ -1102,6 +1107,8 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     if (carry) {
         if(res_sign < 0) {
             // carry is 1 so result is negative
+
+            result->sign = -1;
 
             bigint_t* complement = bigint_create();
 
@@ -1148,7 +1155,11 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             prev = item;
 
             result->msb = prev;
+
+            result->sign = sign;
         }
+    } else {
+        result->sign = sign;
     }
 
 
@@ -1178,9 +1189,125 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     return 0;
 }
 
+int8_t bigint_cmp(const bigint_t* a, const bigint_t* b) {
+    bigint_t* result = bigint_create();
 
+    if(bigint_sub(result, a, b) == -1) {
+        bigint_destroy(result);
+        return 0;
+    }
 
+    int8_t ret = result->sign;
 
+    bigint_destroy(result);
+
+    return ret;
+}
+
+int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    bigint_destroy_items(result);
+
+    if (a->sign == 0 || b->sign == 0) {
+        result->sign = 0;
+        return 0;
+    }
+
+    bigint_item_t* item_a = a->msb;
+    bigint_item_t* item_b = b->lsb;
+
+    while (item_a) {
+        bigint_t* row_result = bigint_create();
+
+        if (!row_result) {
+            return -1;
+        }
+
+        row_result->sign = a->sign * b->sign;
+
+        bigint_item_t* item = row_result->lsb;
+        bigint_item_t* prev_item = NULL;
+        uint128_t carry = 0;
+
+        while (item_b) {
+            if (!item) {
+                item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
+
+                if (!item) {
+                    bigint_destroy(row_result);
+                    return -1;
+                }
+
+                item->next = NULL;
+                item->prev = prev_item;
+
+                if (prev_item) {
+                    prev_item->next = item;
+                } else {
+                    row_result->lsb = item;
+                }
+
+                row_result->msb = item;
+            }
+
+            uint128_t value = (uint128_t)item_a->value * (uint128_t)item_b->value + carry;
+
+            item->value = value & BIGINT_ITEM_MAX;
+
+            carry = value >> BIGINT_ITEM_BITS;
+
+            prev_item = item;
+            item = item->next;
+
+            item_b = item_b->next;
+
+        } // while (item_b)
+
+        row_result->msb = prev_item; // msb is at msb
+
+        if (carry) {
+            item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
+
+            if (!item) {
+                return -1;
+            }
+
+            item->value = carry;
+
+            item->next = NULL;
+            item->prev = prev_item;
+
+            if (prev_item) {
+                prev_item->next = item;
+            } else {
+                row_result->lsb = item;
+            }
+
+            row_result->msb = item;
+        }
+
+        item_a = item_a->prev;
+        item_b = b->lsb;
+
+        bigint_t* tmp_result = bigint_create();
+
+        if(bigint_shl(tmp_result, result, BIGINT_ITEM_BITS) == -1) {
+            bigint_destroy(row_result);
+            bigint_destroy(tmp_result);
+            return -1;
+        }
+
+        if(bigint_add(result, tmp_result, row_result) == -1) {
+            bigint_destroy(row_result);
+            bigint_destroy(tmp_result);
+            return -1;
+        }
+
+        bigint_destroy(tmp_result);
+        bigint_destroy(row_result);
+    }
+
+    return 0;
+}
 
 
 

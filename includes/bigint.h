@@ -34,6 +34,7 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b);
+int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b);
 
 int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b);
