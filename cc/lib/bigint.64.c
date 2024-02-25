@@ -2253,7 +2253,7 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     return 0;
 }
 
-int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b) {
     bigint_t* orig_result = result;
     boolean_t orig_result_is_a = false;
 
@@ -2288,26 +2288,110 @@ int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return 0;
     }
 
-    if (b->sign == 1) {
-        return bigint_div_unsigned(result, a, b);
+    if(orig_result_is_a) {
+        bigint_destroy(result);
+    }
+
+    if (b->sign == 1 && a->sign == 1) {
+        return bigint_div_unsigned(orig_result, remainder, a, b);
+    }
+
+    if (b->sign == -1 && a->sign == -1) {
+
+        bigint_t* neg_a = bigint_create();
+
+        if (bigint_neg(neg_a, a) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(neg_a);
+            return -1;
+        }
+
+        bigint_t* neg_b = bigint_create();
+
+        if (bigint_neg(neg_b, b) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(neg_a);
+            bigint_destroy(neg_b);
+            return -1;
+        }
+
+        int8_t ret = bigint_div_unsigned(orig_result, remainder, neg_a, neg_b);
+
+        orig_result->sign = 1;
+
+        bigint_destroy(neg_a);
+        bigint_destroy(neg_b);
+
+        return ret;
     }
 
     bigint_t* neg_a = bigint_create();
 
-    if (bigint_set_bigint(neg_a, a) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
+    if(a->sign != -1) {
+        if (bigint_set_bigint(neg_a, a) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(neg_a);
+            return -1;
         }
 
-        bigint_destroy(neg_a);
-        return -1;
-    }
+        neg_a->sign = 1;
+    } else {
+        if (bigint_neg(neg_a, a) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
 
-    neg_a->sign = -neg_a->sign;
+            bigint_destroy(neg_a);
+            return -1;
+        }
+    }
 
     bigint_t* neg_b = bigint_create();
 
-    if (bigint_set_bigint(neg_b, b) == -1) {
+    if(b->sign != -1) {
+        if (bigint_set_bigint(neg_b, b) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(neg_a);
+            bigint_destroy(neg_b);
+            return -1;
+        }
+
+        neg_b->sign = 1;
+    } else {
+        if (bigint_neg(neg_b, b) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(neg_a);
+            bigint_destroy(neg_b);
+            return -1;
+        }
+    }
+
+    int8_t ret = bigint_div_unsigned(orig_result, remainder, neg_a, neg_b);
+
+    if (ret == -1) {
+        bigint_destroy(neg_a);
+        bigint_destroy(neg_b);
+        return -1;
+    }
+
+    bigint_t* one = bigint_one();
+
+    if(!one) {
         if (orig_result_is_a) {
             bigint_destroy(result);
         }
@@ -2317,24 +2401,28 @@ int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    neg_b->sign = -neg_b->sign;
+    if(bigint_add(orig_result, orig_result, one) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
 
-    int8_t ret = bigint_div_unsigned(result, neg_a, neg_b);
+        bigint_destroy(neg_a);
+        bigint_destroy(neg_b);
+        bigint_destroy(one);
+        return -1;
+    }
 
-    result->sign = 1;
+    bigint_destroy(one);
+
+    result->sign = -1;
 
     bigint_destroy(neg_a);
     bigint_destroy(neg_b);
 
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
-    }
-
     return ret;
 }
 
-int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b) {
     bigint_t* orig_result = result;
     boolean_t orig_result_is_a = false;
 
@@ -2421,18 +2509,7 @@ int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* 
         return -1;
     }
 
-    // const uint64_t half_max = 1 + (BIGINT_ITEM_MAX / 2);
-
-    // boolean_t overflow = false;
-
     while (bigint_cmp(denom, a) != 1) {
-        /*
-           if (denom->msb->value >= half_max) {
-            overflow = true;
-            break;
-           }
-         */
-
         if (bigint_shl(current, current, 1) == -1) {
             if (orig_result_is_a) {
                 bigint_destroy(result);
@@ -2455,31 +2532,7 @@ int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* 
             return -1;
         }
     }
-/*
-    if (!overflow) {
-        if (bigint_shr(denom, denom, 1) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
 
-            bigint_destroy(denom);
-            bigint_destroy(current);
-            bigint_destroy(tmp);
-            return -1;
-        }
-
-        if (bigint_shr(current, current, 1) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(denom);
-            bigint_destroy(current);
-            bigint_destroy(tmp);
-            return -1;
-        }
-    }
- */
     while(!bigint_is_zero(current)) {
         if (bigint_cmp(tmp, denom) != -1) {
             if(bigint_sub(tmp, tmp, denom) == -1) {
@@ -2530,6 +2583,11 @@ int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* 
 
     bigint_destroy(denom);
     bigint_destroy(current);
+
+    if(remainder) {
+        bigint_set_bigint(remainder, tmp);
+    }
+
     bigint_destroy(tmp);
 
     if (orig_result_is_a) {
@@ -2540,57 +2598,9 @@ int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* 
     return 0;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    return bigint_div_with_remainder(result, NULL, a, b);
+}
 
 
 

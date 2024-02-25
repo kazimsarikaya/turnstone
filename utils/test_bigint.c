@@ -1986,6 +1986,37 @@ static int32_t bigint_test_div(void) {
 
         }
 
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+
+        if(bigint_div(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_div: %s\n", str);
+
+            if(strncmp(str, "124924923F07FFFE", 16) != 0) {
+                print_error("bigint_div failed");
+            } else {
+                print_success("bigint_div passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+
+        }
+
     } else {
         bigint_destroy(bigint_1);
         bigint_destroy(bigint_2);
