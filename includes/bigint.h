@@ -28,10 +28,14 @@ int8_t bigint_clear_bit(bigint_t* bigint, uint64_t bit);
 
 const char_t* bigint_to_str(const bigint_t* bigint);
 
+uint64_t bigint_bit_length(const bigint_t* bigint);
+
+int8_t bigint_neg(bigint_t* result, const bigint_t* a);
 int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b);
+int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b);

@@ -559,6 +559,37 @@ static int32_t bigint_test_add_sub(void) {
             return -1;
         }
 
+        bigint_set_str(bigint_1, "91A000000000");
+        bigint_set_str(bigint_2, "1234567890ABCDEF1234567890ABCDEF");
+
+        if(bigint_sub(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_sub failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_sub: %s\n", str);
+
+            if(strncmp(str, "-1234567890ABCDEF1233C4D890ABCDEF", 24) != 0) {
+                print_error("bigint_sub failed");
+            } else {
+                print_success("bigint_sub passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_sub failed");
+            return -1;
+        }
+
     } else {
         bigint_destroy(bigint_1);
         bigint_destroy(bigint_2);
