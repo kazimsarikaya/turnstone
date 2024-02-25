@@ -342,6 +342,830 @@ static int32_t bigint_test_shl_shr(void) {
     return 0;
 }
 
+static int32_t bigint_test_not(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+
+    if(bigint_1 && bigint_2) {
+        bigint_set_str(bigint_1, "1234");
+
+        if(bigint_not(bigint_2, bigint_1) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_not failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_2);
+
+        if (str) {
+            printf("bigint_not: %s\n", str);
+
+            if(strncmp(str, "FFFFFFFFEDCB", 12) != 0) {
+                print_error("bigint_not failed");
+            } else {
+                print_success("bigint_not passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_not failed");
+            return -1;
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+
+    return 0;
+}
+
+static int32_t bigint_test_and(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "5678");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "1230", 4) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567890ABCDEF1234567890ABCDEF");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "1234567890ABCDEF1234567890ABCDEF", 32) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567891ABCDEF1234567890ABCDEF");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "1234567890ABCDEF1234567890ABCDEF", 32) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234");
+        bigint_set_str(bigint_2, "-9876");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "-9A78", 5) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "-1234567890BBFDFF7AB5FFFDFFBBFE00", 33) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "1234567890A9C9A90224543010A9C9AA", 32) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567891ABCDEF123456");
+
+        if(bigint_and(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_and: %s\n", str);
+
+            if(strncmp(str, "1030106881A9856F103010", 22) != 0) {
+                print_error("bigint_and failed");
+            } else {
+                print_success("bigint_and passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_and failed");
+            return -1;
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
+static int32_t bigint_test_or(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "9876");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "9A76", 4) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "-9876");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "-8842", 5) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234");
+        bigint_set_str(bigint_2, "9876");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "-202", 4) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234");
+        bigint_set_str(bigint_2, "-9876");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "-1032", 5) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567890ABCDEF1234567890ABCDEF");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "1234567890ABCDEF1234567890ABCDEF", 32) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567891ABCDEF1234567890ABCDEF");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "1234567891ABCDEF1234567890ABCDEF", 32) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "-204461010024880020445", 22) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "-1030106881A9856F103011", 23) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567891ABCDEF123456");
+
+        if(bigint_or(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_or: %s\n", str);
+
+            if(strncmp(str, "-1234567890A9C9A90224543010A9C9A9", 33) != 0) {
+                print_error("bigint_or failed");
+            } else {
+                print_success("bigint_or passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_or failed");
+            return -1;
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
+static int32_t bigint_test_xor(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "5678");
+
+        if(bigint_xor(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_xor: %s\n", str);
+
+            if(strncmp(str, "444C", 4) != 0) {
+                print_error("bigint_xor failed");
+            } else {
+                print_success("bigint_xor passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567890ABCDEF1234567890ABCDEF");
+
+        if(bigint_xor(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_xor: %s\n", str);
+
+            if(strncmp(str, "0", 1) != 0) {
+                print_error("bigint_xor failed");
+            } else {
+                print_success("bigint_xor passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567891ABCDEF1234567890ABCDEF");
+
+        if(bigint_xor(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_xor: %s\n", str);
+
+            if(strncmp(str, "10000000000000000000000", 23) != 0) {
+                print_error("bigint_xor failed");
+            } else {
+                print_success("bigint_xor passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_xor(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_xor: %s\n", str);
+
+            if(strncmp(str, "1234567890B9F9B96AA5FDB57FB9F9BB", 32) != 0) {
+                print_error("bigint_xor failed");
+            } else {
+                print_success("bigint_xor passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-1234567891ABCDEF123456");
+
+        if(bigint_xor(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_xor: %s\n", str);
+
+            if(strncmp(str, "-1234567890B9F9B96AA5FDB57FB9F9BB", 33) != 0) {
+                print_error("bigint_xor failed");
+            } else {
+                print_success("bigint_xor passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234567891ABCDEF123456");
+
+        if(bigint_xor(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_xor: %s\n", str);
+
+            if(strncmp(str, "-1234567890B9F9B96AA5FDB57FB9F9B9", 33) != 0) {
+                print_error("bigint_xor failed");
+            } else {
+                print_success("bigint_xor passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_xor failed");
+            return -1;
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
+static int32_t bigint_test_bitwise(void) {
+    int32_t ret = 0;
+
+    ret = bigint_test_not();
+
+    if(ret != 0) {
+        return ret;
+    }
+
+    ret = bigint_test_and();
+
+    if(ret != 0) {
+        return ret;
+    }
+
+    ret = bigint_test_or();
+
+    if(ret != 0) {
+        return ret;
+    }
+
+    ret = bigint_test_xor();
+
+    if(ret != 0) {
+        return ret;
+    }
+
+    return 0;
+}
+
 static int32_t bigint_test_cmp(void) {
     bigint_t* bigint_1 = bigint_create();
     bigint_t* bigint_2 = bigint_create();
@@ -960,6 +1784,12 @@ int32_t main(void) {
     }
 
     result = bigint_test_shl_shr();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_bitwise();
 
     if(result != 0) {
         return result;
