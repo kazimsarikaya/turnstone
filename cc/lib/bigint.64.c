@@ -758,15 +758,22 @@ int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         bigint_destroy_items(result);
     }
 
-    if (a->sign == 0 || b->sign == 0) {
-        result->sign = 0;
-
+    if (a->sign == 0) {
         if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
             bigint_destroy(result);
         }
 
-        return 0;
+        return bigint_set_bigint(orig_result, b);
+    }
+
+    if (b->sign == 0) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+
+            return 0; // result is already a
+        }
+
+        return bigint_set_bigint(orig_result, a);
     }
 
     if (a->sign > 0 && b->sign > 0) {
@@ -933,15 +940,22 @@ int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         bigint_destroy_items(result);
     }
 
-    if (a->sign == 0 || b->sign == 0) {
-        result->sign = 0;
-
+    if (a->sign == 0) {
         if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
             bigint_destroy(result);
         }
 
-        return 0;
+        return bigint_set_bigint(orig_result, b);
+    }
+
+    if (b->sign == 0) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+
+            return 0; // result is already a
+        }
+
+        return bigint_set_bigint(orig_result, a);
     }
 
     if (a->sign < 0 && b->sign < 0) {
@@ -1170,10 +1184,7 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
     }
 
     if (a->sign == 0) {
-        result->sign = 0;
-
         if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
             bigint_destroy(result);
         }
 
@@ -1299,10 +1310,7 @@ int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift) {
     }
 
     if (a->sign == 0) {
-        result->sign = 0;
-
         if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
             bigint_destroy(result);
         }
 
@@ -1676,7 +1684,7 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             return 0;
         }
 
-        return bigint_set_bigint(result, a);
+        return bigint_set_bigint(orig_result, a);
     }
 
     bigint_t* tmp_a = bigint_create();
@@ -2245,7 +2253,292 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     return 0;
 }
 
+int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    bigint_t* orig_result = result;
+    boolean_t orig_result_is_a = false;
 
+    if (result == a) {
+        result = bigint_create();
+
+        if (!orig_result) {
+            return -1;
+        }
+
+        orig_result_is_a = true;
+    }else {
+        bigint_destroy_items(result);
+    }
+
+    if (b->sign == 0) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        return -1;
+    }
+
+    if (a->sign == 0) {
+        result->sign = 0;
+
+        if (orig_result_is_a) {
+            bigint_set_bigint(orig_result, result);
+            bigint_destroy(result);
+        }
+
+        return 0;
+    }
+
+    if (b->sign == 1) {
+        return bigint_div_unsigned(result, a, b);
+    }
+
+    bigint_t* neg_a = bigint_create();
+
+    if (bigint_set_bigint(neg_a, a) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(neg_a);
+        return -1;
+    }
+
+    neg_a->sign = -neg_a->sign;
+
+    bigint_t* neg_b = bigint_create();
+
+    if (bigint_set_bigint(neg_b, b) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(neg_a);
+        bigint_destroy(neg_b);
+        return -1;
+    }
+
+    neg_b->sign = -neg_b->sign;
+
+    int8_t ret = bigint_div_unsigned(result, neg_a, neg_b);
+
+    result->sign = 1;
+
+    bigint_destroy(neg_a);
+    bigint_destroy(neg_b);
+
+    if (orig_result_is_a) {
+        bigint_set_bigint(orig_result, result);
+        bigint_destroy(result);
+    }
+
+    return ret;
+}
+
+int8_t bigint_div_unsigned(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    bigint_t* orig_result = result;
+    boolean_t orig_result_is_a = false;
+
+    if (result == a) {
+        result = bigint_create();
+
+        if (!orig_result) {
+            return -1;
+        }
+
+        orig_result_is_a = true;
+    }else {
+        bigint_destroy_items(result);
+    }
+
+    if (b->sign == 0) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        return -1;
+    }
+
+    if (a->sign == 0 && b->sign == 0) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        return -1;
+    }
+
+    if (a->sign == 0) {
+        if (orig_result_is_a) {
+            bigint_destroy_items(orig_result);
+            bigint_destroy(result);
+        }
+
+        return 0;
+    }
+
+    bigint_t* denom = bigint_create();
+
+    if (bigint_set_bigint(denom, b) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(denom);
+        return -1;
+    }
+
+    bigint_t* current = bigint_one();
+
+    if (!current) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(denom);
+        bigint_destroy(current);
+        return -1;
+    }
+
+    bigint_t* tmp = bigint_create();
+
+    if(!tmp) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(denom);
+        bigint_destroy(current);
+        return -1;
+    }
+
+    if(bigint_set_bigint(tmp, a) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(denom);
+        bigint_destroy(current);
+        bigint_destroy(tmp);
+        return -1;
+    }
+
+    // const uint64_t half_max = 1 + (BIGINT_ITEM_MAX / 2);
+
+    // boolean_t overflow = false;
+
+    while (bigint_cmp(denom, a) != 1) {
+        /*
+           if (denom->msb->value >= half_max) {
+            overflow = true;
+            break;
+           }
+         */
+
+        if (bigint_shl(current, current, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(denom);
+            bigint_destroy(current);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        if (bigint_shl(denom, denom, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(denom);
+            bigint_destroy(current);
+            bigint_destroy(tmp);
+            return -1;
+        }
+    }
+/*
+    if (!overflow) {
+        if (bigint_shr(denom, denom, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(denom);
+            bigint_destroy(current);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        if (bigint_shr(current, current, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(denom);
+            bigint_destroy(current);
+            bigint_destroy(tmp);
+            return -1;
+        }
+    }
+ */
+    while(!bigint_is_zero(current)) {
+        if (bigint_cmp(tmp, denom) != -1) {
+            if(bigint_sub(tmp, tmp, denom) == -1) {
+                if (orig_result_is_a) {
+                    bigint_destroy(result);
+                }
+
+                bigint_destroy(denom);
+                bigint_destroy(current);
+                bigint_destroy(tmp);
+                return -1;
+            }
+
+            if(bigint_or(result, result, current) == -1) {
+                if (orig_result_is_a) {
+                    bigint_destroy(result);
+                }
+
+                bigint_destroy(denom);
+                bigint_destroy(current);
+                bigint_destroy(tmp);
+                return -1;
+            }
+        }
+
+        if (bigint_shr(current, current, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(denom);
+            bigint_destroy(current);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        if (bigint_shr(denom, denom, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(denom);
+            bigint_destroy(current);
+            bigint_destroy(tmp);
+            return -1;
+        }
+    }
+
+    bigint_destroy(denom);
+    bigint_destroy(current);
+    bigint_destroy(tmp);
+
+    if (orig_result_is_a) {
+        bigint_set_bigint(orig_result, result);
+        bigint_destroy(result);
+    }
+
+    return 0;
+}
 
 
 

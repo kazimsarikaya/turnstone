@@ -329,6 +329,62 @@ static int32_t bigint_test_shl_shr(void) {
             return -1;
         }
 
+        bigint_set_str(bigint_1, "1");
+
+        if(bigint_shl(bigint_2, bigint_1, 64) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_shl failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_2);
+
+        if (str) {
+            printf("bigint_shl: %s\n", str);
+
+            if(strncmp(str, "10000000000000000", 17) != 0 || strlen(str) != 17) {
+                print_error("bigint_shl failed");
+            } else {
+                print_success("bigint_shl passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_shl failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "800000000000");
+
+        if(bigint_shl(bigint_2, bigint_1, 1) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_shl failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_2);
+
+        if (str) {
+            printf("bigint_shl: %s\n", str);
+
+            if(strncmp(str, "1000000000000", 13) != 0 || strlen(str) != 13) {
+                print_error("bigint_shl failed");
+            } else {
+                print_success("bigint_shl passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_shl failed");
+            return -1;
+        }
+
     } else {
         bigint_destroy(bigint_1);
         bigint_destroy(bigint_2);
@@ -1768,6 +1824,183 @@ static int32_t bigint_test_pow(void) {
     return 0;
 }
 
+static int32_t bigint_test_div(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "56");
+
+        if(bigint_div(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_div: %s\n", str);
+
+            if(strncmp(str, "36", 2) != 0) {
+                print_error("bigint_div failed");
+            } else {
+                print_success("bigint_div passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890AB");
+        bigint_set_str(bigint_2, "56");
+
+        if(bigint_div(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_div: %s\n", str);
+
+            if(strncmp(str, "3630A22567", 2) != 0) {
+                print_error("bigint_div failed");
+            } else {
+                print_success("bigint_div passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234");
+
+        if(bigint_div(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_div: %s\n", str);
+
+            if(strncmp(str, "10004C01602D88D768FF32BC2824B", 29) != 0) {
+                print_error("bigint_div failed");
+            } else {
+                print_success("bigint_div passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_2, "FEDCBA9876543210");
+
+        if(bigint_div(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_div: %s\n", str);
+
+            if(strncmp(str, "124924923F07FFFE", 16) != 0) {
+                print_error("bigint_div failed");
+            } else {
+                print_success("bigint_div passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_2, "-FEDCBA9876543210");
+
+        if(bigint_div(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_div: %s\n", str);
+
+            if(strncmp(str, "-124924923F07FFFF", 17) != 0) {
+                print_error("bigint_div failed");
+            } else {
+                print_success("bigint_div passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_div failed");
+            return -1;
+
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
 int32_t main(void) {
     int32_t result = 0;
 
@@ -1814,6 +2047,12 @@ int32_t main(void) {
     }
 
     result = bigint_test_pow();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_div();
 
     if(result != 0) {
         return result;
