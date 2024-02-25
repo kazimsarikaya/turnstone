@@ -342,6 +342,115 @@ static int32_t bigint_test_shl_shr(void) {
     return 0;
 }
 
+static int32_t bigint_test_cmp(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+
+    if(bigint_1 && bigint_2) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "5678");
+
+        if(bigint_cmp(bigint_1, bigint_2) != -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "1234");
+
+        if(bigint_cmp(bigint_1, bigint_2) != 0) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "5678");
+        bigint_set_str(bigint_2, "1234");
+
+        if(bigint_cmp(bigint_1, bigint_2) != 1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-5678");
+        bigint_set_str(bigint_2, "-1234");
+
+        if(bigint_cmp(bigint_1, bigint_2) != -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234");
+        bigint_set_str(bigint_2, "-5678");
+
+        if(bigint_cmp(bigint_1, bigint_2) != 1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234");
+        bigint_set_str(bigint_2, "5678");
+
+        if(bigint_cmp(bigint_1, bigint_2) != -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "-5678");
+
+        if(bigint_cmp(bigint_1, bigint_2) != 1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "5678");
+
+        if(bigint_cmp(bigint_1, bigint_2) != 1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "-5678");
+
+        if(bigint_cmp(bigint_1, bigint_2) != -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_cmp failed");
+            return -1;
+        }
+
+        print_success("bigint_cmp passed");
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+
+    return 0;
+}
+
 static int32_t bigint_test_add_sub(void) {
     bigint_t* bigint_1 = bigint_create();
     bigint_t* bigint_2 = bigint_create();
@@ -851,6 +960,12 @@ int32_t main(void) {
     }
 
     result = bigint_test_shl_shr();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_cmp();
 
     if(result != 0) {
         return result;
