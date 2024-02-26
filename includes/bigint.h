@@ -22,6 +22,7 @@ int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value);
 int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src);
 
 bigint_t* bigint_one(void);
+bigint_t* bigint_clone(const bigint_t* src);
 
 int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value);
 int8_t bigint_get_bit(const bigint_t* bigint, uint64_t bit, boolean_t* value);

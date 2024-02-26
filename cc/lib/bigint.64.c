@@ -262,6 +262,23 @@ int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src) {
 }
 #pragma GCC diagnostic pop
 
+bigint_t* bigint_clone(const bigint_t* src) {
+    if(!src) {
+        return NULL;
+    }
+
+    bigint_t* bigint = bigint_create();
+
+    if (bigint) {
+        if (bigint_set_bigint(bigint, src) == -1) {
+            bigint_destroy(bigint);
+            bigint = NULL;
+        }
+    }
+
+    return bigint;
+}
+
 int8_t bigint_set_str(bigint_t* bigint, const char_t* str) {
     if (!str || !bigint) {
         return -1;
@@ -639,7 +656,7 @@ int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         result->sign = 1;
     }
 
-    bigint_t* tmp_a = bigint_create();
+    bigint_t* tmp_a = bigint_clone(a);
 
     if(!tmp_a) {
         if(orig_result_is_a) {
@@ -649,9 +666,7 @@ int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    bigint_set_bigint(tmp_a, a);
-
-    bigint_t* tmp_b = bigint_create();
+    bigint_t* tmp_b = bigint_clone(b);
 
     if(!tmp_b) {
         bigint_destroy(tmp_a);
@@ -662,8 +677,6 @@ int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
         return -1;
     }
-
-    bigint_set_bigint(tmp_b, b);
 
     if (tmp_a->sign < 0) {
         if(bigint_neg_with_sign(tmp_a, tmp_a) == -1) {
@@ -825,7 +838,7 @@ int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         result->sign = -1;
     }
 
-    bigint_t* tmp_a = bigint_create();
+    bigint_t* tmp_a = bigint_clone(a);
 
     if(!tmp_a) {
         if(orig_result_is_a) {
@@ -835,9 +848,7 @@ int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    bigint_set_bigint(tmp_a, a);
-
-    bigint_t* tmp_b = bigint_create();
+    bigint_t* tmp_b = bigint_clone(b);
 
     if(!tmp_b) {
         bigint_destroy(tmp_a);
@@ -848,8 +859,6 @@ int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
         return -1;
     }
-
-    bigint_set_bigint(tmp_b, b);
 
     if (tmp_a->sign < 0) {
         if(bigint_neg_with_sign(tmp_a, tmp_a) == -1) {
@@ -1013,7 +1022,7 @@ int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         result->sign = -1;
     }
 
-    bigint_t* tmp_a = bigint_create();
+    bigint_t* tmp_a = bigint_clone(a);
 
     if(!tmp_a) {
         if(orig_result_is_a) {
@@ -1023,9 +1032,7 @@ int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    bigint_set_bigint(tmp_a, a);
-
-    bigint_t* tmp_b = bigint_create();
+    bigint_t* tmp_b = bigint_clone(b);
 
     if(!tmp_b) {
         bigint_destroy(tmp_a);
@@ -1036,8 +1043,6 @@ int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
         return -1;
     }
-
-    bigint_set_bigint(tmp_b, b);
 
     if (tmp_a->sign < 0) {
         if(bigint_neg_with_sign(tmp_a, tmp_a) == -1) {
@@ -1770,7 +1775,7 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return bigint_set_bigint(orig_result, a);
     }
 
-    bigint_t* tmp_a = bigint_create();
+    bigint_t* tmp_a = bigint_clone(a);
 
     if(!tmp_a) {
         if(orig_result_is_a) {
@@ -1780,9 +1785,7 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    bigint_set_bigint(tmp_a, a);
-
-    bigint_t* tmp_b = bigint_create();
+    bigint_t* tmp_b = bigint_clone(b);
 
     if(!tmp_b) {
         bigint_destroy(tmp_a);
@@ -1793,8 +1796,6 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
         return -1;
     }
-
-    bigint_set_bigint(tmp_b, b);
 
     if (tmp_a->sign < 0) {
         if(bigint_neg_with_sign(tmp_a, tmp_a) == -1) {
@@ -2266,9 +2267,9 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    bigint_t* base = bigint_create();
+    bigint_t* base = bigint_clone(a);
 
-    if (bigint_set_bigint(base, a) == -1) {
+    if (!base) {
         if (orig_result_is_a) {
             bigint_destroy(result);
         }
@@ -2277,9 +2278,9 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    bigint_t* exp = bigint_create();
+    bigint_t* exp = bigint_clone(b);
 
-    if (bigint_set_bigint(exp, b) == -1) {
+    if (!exp) {
         if (orig_result_is_a) {
             bigint_destroy(result);
         }
@@ -2543,9 +2544,9 @@ int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t
         return 0;
     }
 
-    bigint_t* denom = bigint_create();
+    bigint_t* denom = bigint_clone(b);
 
-    if (bigint_set_bigint(denom, b) == -1) {
+    if (!denom) {
         if (orig_result_is_a) {
             bigint_destroy(result);
         }
@@ -2566,7 +2567,7 @@ int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t
         return -1;
     }
 
-    bigint_t* tmp = bigint_create();
+    bigint_t* tmp = bigint_clone(a);
 
     if(!tmp) {
         if (orig_result_is_a) {
@@ -2575,17 +2576,6 @@ int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t
 
         bigint_destroy(denom);
         bigint_destroy(current);
-        return -1;
-    }
-
-    if(bigint_set_bigint(tmp, a) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(denom);
-        bigint_destroy(current);
-        bigint_destroy(tmp);
         return -1;
     }
 
@@ -2779,7 +2769,7 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         a_is_smaller = true;
     }
 
-    bigint_t* tmp_a = bigint_create();
+    bigint_t* tmp_a = bigint_clone(a);
 
     if (!tmp_a) {
         if (orig_result_is_a) {
@@ -2789,16 +2779,7 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return -1;
     }
 
-    if (bigint_set_bigint(tmp_a, a) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(tmp_a);
-        return -1;
-    }
-
-    bigint_t* tmp_b = bigint_create();
+    bigint_t* tmp_b = bigint_clone(b);
 
     if (!tmp_b) {
         if (orig_result_is_a) {
@@ -2806,16 +2787,6 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         }
 
         bigint_destroy(tmp_a);
-        return -1;
-    }
-
-    if (bigint_set_bigint(tmp_b, b) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(tmp_a);
-        bigint_destroy(tmp_b);
         return -1;
     }
 
