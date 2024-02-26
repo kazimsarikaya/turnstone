@@ -2602,12 +2602,56 @@ int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     return bigint_div_with_remainder(result, NULL, a, b);
 }
 
+int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    bigint_t* tmp_result = bigint_create();
+    bigint_t* tmp_remainder = bigint_create();
 
+    if (!tmp_result || !tmp_remainder) {
+        bigint_destroy(tmp_result);
+        bigint_destroy(tmp_remainder);
+        return -1;
+    }
 
+    if (bigint_div_with_remainder(tmp_result, tmp_remainder, a, b) == -1) {
+        bigint_destroy(tmp_result);
+        bigint_destroy(tmp_remainder);
+        return -1;
+    }
 
+    if(a->sign > 0 && b->sign > 0) {
+        // do nothing
+    } else if(a->sign < 0 && b->sign < 0) {
+        tmp_remainder->sign = -1;
+    } else if(a->sign < 0) {
+        if(bigint_sub(tmp_result, b, tmp_remainder) == -1) {
+            bigint_destroy(tmp_result);
+            bigint_destroy(tmp_remainder);
+            return -1;
+        }
 
+        if(bigint_set_bigint(tmp_remainder, tmp_result) == -1) {
+            bigint_destroy(tmp_result);
+            bigint_destroy(tmp_remainder);
+            return -1;
+        }
+    } else {
+        if(bigint_add(tmp_remainder, tmp_remainder, b) == -1) {
+            bigint_destroy(tmp_result);
+            bigint_destroy(tmp_remainder);
+            return -1;
+        }
 
+        tmp_remainder->sign = -1;
+    }
 
+    bigint_destroy(tmp_result);
 
+    if (bigint_set_bigint(result, tmp_remainder) == -1) {
+        bigint_destroy(tmp_remainder);
+        return -1;
+    }
 
+    bigint_destroy(tmp_remainder);
 
+    return 0;
+}
