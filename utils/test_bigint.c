@@ -2271,6 +2271,214 @@ static int32_t bigint_test_mod(void) {
     return 0;
 }
 
+static int32_t bigint_test_gcd(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+    bigint_t* bigint_3 = bigint_create();
+
+    if(bigint_1 && bigint_2 && bigint_3) {
+        bigint_set_str(bigint_1, "1234");
+        bigint_set_str(bigint_2, "56");
+
+        if(bigint_gcd(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        const char_t* str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_gcd: %s\n", str);
+
+            if(strncmp(str, "2", 1) != 0) {
+                print_error("bigint_gcd failed");
+            } else {
+                print_success("bigint_gcd passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890AB");
+        bigint_set_str(bigint_2, "56");
+
+        if(bigint_gcd(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_gcd: %s\n", str);
+
+            if(strncmp(str, "1", 1) != 0) {
+                print_error("bigint_gcd failed");
+            } else {
+                print_success("bigint_gcd passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        bigint_set_str(bigint_1, "1234567890ABCDEF1234567890ABCDEF");
+        bigint_set_str(bigint_2, "1234");
+
+        if(bigint_gcd(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_gcd: %s\n", str);
+
+            if(strncmp(str, "5", 1) != 0) {
+                print_error("bigint_gcd failed");
+            } else {
+                print_success("bigint_gcd passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_2, "FEDCBA9876543210");
+
+        if(bigint_gcd(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_gcd: %s\n", str);
+
+            if(strncmp(str, "F", 1) != 0) {
+                print_error("bigint_gcd failed");
+            } else {
+                print_success("bigint_gcd passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_2, "-FEDCBA9876543210");
+
+        if(bigint_gcd(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_gcd: %s\n", str);
+
+            if(strncmp(str, "F", 1) != 0) {
+                print_error("bigint_gcd failed");
+            } else {
+                print_success("bigint_gcd passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+
+        }
+
+        bigint_set_str(bigint_1, "-1234567890ABCDEF1234567890ABCDEF");
+
+        if(bigint_gcd(bigint_3, bigint_1, bigint_2) == -1) {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+        }
+
+        str = bigint_to_str(bigint_3);
+
+        if (str) {
+            printf("bigint_gcd: %s\n", str);
+
+            if(strncmp(str, "F", 1) != 0) {
+                print_error("bigint_gcd failed");
+            } else {
+                print_success("bigint_gcd passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            bigint_destroy(bigint_3);
+            print_error("bigint_gcd failed");
+            return -1;
+
+        }
+
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        bigint_destroy(bigint_3);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+    bigint_destroy(bigint_3);
+
+    return 0;
+}
+
 int32_t main(void) {
     int32_t result = 0;
 
@@ -2333,6 +2541,8 @@ int32_t main(void) {
     if(result != 0) {
         return result;
     }
+
+    result = bigint_test_gcd();
 
     if (result == 0) {
         print_success("bigint test passed");

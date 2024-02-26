@@ -215,6 +215,8 @@ bigint_t* bigint_one(void) {
     return bigint;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src) {
     if(!bigint || !src) {
         return -1;
@@ -258,6 +260,7 @@ int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 int8_t bigint_set_str(bigint_t* bigint, const char_t* str) {
     if (!str || !bigint) {
@@ -1988,6 +1991,10 @@ uint64_t bigint_bit_length(const bigint_t* bigint) {
         return 0;
     }
 
+    if(bigint->lsb == NULL) {
+        return 0;
+    }
+
     uint64_t length = 0;
 
     bigint_item_t* item = bigint->lsb;
@@ -2658,10 +2665,13 @@ int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t
     bigint_destroy(current);
 
     if(remainder) {
+        bigint_remove_leading_zeros(tmp);
         bigint_set_bigint(remainder, tmp);
     }
 
     bigint_destroy(tmp);
+
+    bigint_remove_leading_zeros(result);
 
     if (orig_result_is_a) {
         bigint_set_bigint(orig_result, result);
@@ -2723,6 +2733,8 @@ int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     bigint_destroy(tmp_result);
 
+    bigint_remove_leading_zeros(tmp_remainder);
+
     if (bigint_set_bigint(result, tmp_remainder) == -1) {
         bigint_destroy(tmp_remainder);
         return -1;
@@ -2732,3 +2744,167 @@ int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     return 0;
 }
+
+int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    if(!result || !a || !b) {
+        return -1;
+    }
+
+    bigint_t* orig_result = result;
+    boolean_t orig_result_is_a = false;
+
+    if (result == a) {
+        result = bigint_create();
+
+        if (!result) {
+            return -1;
+        }
+
+        orig_result_is_a = true;
+    }else {
+        bigint_destroy_items(result);
+    }
+
+    int8_t cmp = bigint_cmp(a, b);
+    boolean_t a_is_smaller = false;
+
+    if (cmp == 0) {
+        if (orig_result_is_a) {
+            bigint_set_bigint(orig_result, a);
+            bigint_destroy(result);
+        }
+
+        return 0;
+    } else if (cmp == -1) {
+        a_is_smaller = true;
+    }
+
+    bigint_t* tmp_a = bigint_create();
+
+    if (!tmp_a) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        return -1;
+    }
+
+    if (bigint_set_bigint(tmp_a, a) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(tmp_a);
+        return -1;
+    }
+
+    bigint_t* tmp_b = bigint_create();
+
+    if (!tmp_b) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(tmp_a);
+        return -1;
+    }
+
+    if (bigint_set_bigint(tmp_b, b) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(tmp_a);
+        bigint_destroy(tmp_b);
+        return -1;
+    }
+
+    bigint_t* tmp = bigint_create();
+
+    if (!tmp) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(tmp_a);
+        bigint_destroy(tmp_b);
+        return -1;
+    }
+
+    if(!a_is_smaller) {
+        bigint_t* swap = tmp_a;
+        tmp_a = tmp_b;
+        tmp_b = swap;
+    }
+
+    while (tmp_a->sign != 0) {
+        if (bigint_mod(tmp, tmp_b, tmp_a) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(tmp_a);
+            bigint_destroy(tmp_b);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        if (bigint_set_bigint(tmp_b, tmp_a) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(tmp_a);
+            bigint_destroy(tmp_b);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+        if (bigint_set_bigint(tmp_a, tmp) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+
+            bigint_destroy(tmp_a);
+            bigint_destroy(tmp_b);
+            bigint_destroy(tmp);
+            return -1;
+        }
+
+    }
+
+    if (bigint_set_bigint(result, tmp_b) == -1) {
+        if (orig_result_is_a) {
+            bigint_destroy(result);
+        }
+
+        bigint_destroy(tmp_a);
+        bigint_destroy(tmp_b);
+        bigint_destroy(tmp);
+        return -1;
+    }
+
+    if(result->sign == -1) {
+        result->sign = 1;
+    }
+
+    bigint_destroy(tmp_a);
+    bigint_destroy(tmp_b);
+    bigint_destroy(tmp);
+
+    if (orig_result_is_a) {
+        bigint_set_bigint(orig_result, result);
+        bigint_destroy(result);
+    }
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
