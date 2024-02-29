@@ -323,8 +323,11 @@ boolean_t tosdb_memtable_new(tosdb_table_t * tbl) {
     tbl->is_dirty = true;
 
     if(tbl->current_memtable) {
+        mt->level = tbl->current_memtable->level; // current memtable level
         tbl->current_memtable->is_full = true;
         tbl->current_memtable->is_readonly = true;
+    } else {
+        mt->level = 1;
     }
 
     if(tbl->current_memtable && !tosdb_memtable_persist(tbl->current_memtable)) {
@@ -355,11 +358,14 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
              mt->id, mt->tbl->name, mt->stli != NULL, mt->tbl->sstable_list_items != NULL);
 
 
-    if(mt->stli) {
+    if(mt->level == 1 && mt->stli) {
         list_stack_push(mt->tbl->sstable_list_items, mt->stli);
         PRINTLOG(TOSDB, LOG_DEBUG, "push sstable list item %p for table %s, stlis size %lli", mt->stli, mt->tbl->name, list_size(mt->tbl->sstable_list_items));
+    } else {
+        if(mt->stli) {
+            memory_free(mt->stli);
+        }
     }
-
 
     boolean_t error = false;
 
@@ -416,7 +422,7 @@ boolean_t tosdb_memtable_free(tosdb_memtable_t* mt) {
     return !error;
 }
 
-boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
+boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * record, boolean_t del, tosdb_memtable_t** mt_out) {
     if(!record || !record->context) {
         PRINTLOG(TOSDB, LOG_ERROR, "record is null");
 
@@ -426,33 +432,14 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     tosdb_record_context_t* r_ctx = record->context;
     tosdb_table_t* tbl = r_ctx->table;
 
-    if(!tbl || !tbl->is_open) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is null or closed");
-
-        return false;
-    }
-
-    lock_acquire(tbl->lock);
-
-    if(!tbl->current_memtable || tbl->current_memtable->is_readonly) {
-        if(!tosdb_memtable_new(tbl)) {
-            lock_release(tbl->lock);
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot create a new memtable for table %s", tbl->name);
-
-            return false;
-        }
-    }
-
     if(hashmap_size(tbl->indexes) != hashmap_size(r_ctx->keys)) {
         if(del) {
             if(!record->get_record(record)) {
-                lock_release(tbl->lock);
                 PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
 
                 return false;
             }
         } else {
-            lock_release(tbl->lock);
             PRINTLOG(TOSDB, LOG_ERROR, "required columns are missing from record for table %s", tbl->name);
 
             return false;
@@ -467,28 +454,50 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
         data_t* sd = tosdb_record_serialize(record);
 
         if(!sd) {
-            lock_release(tbl->lock);
             PRINTLOG(TOSDB, LOG_ERROR, "cannot serialize record");
 
             return false;
         }
 
-        if(buffer_get_length(tbl->current_memtable->values) > tbl->max_valuelog_size ||
-           tbl->current_memtable->record_count == tbl->max_record_count) {
-            if(!tosdb_memtable_new(tbl)) {
-                lock_release(tbl->lock);
+        if(buffer_get_length(mt->values) > tbl->max_valuelog_size ||
+           mt->record_count == tbl->max_record_count) {
+            if(tbl->current_memtable == mt) {
+                if(!tosdb_memtable_new(tbl)) {
+                    memory_free(sd->value);
+                    memory_free(sd);
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot create a new memtable for table %s", tbl->name);
+
+                    return false;
+                }
+
+                mt = tbl->current_memtable;
+            } else if(mt_out) {
+                uint64_t old_level = mt->level;
+                mt = tosdb_memtable_new_internal(tbl);
+
+                if(!mt) {
+                    memory_free(sd->value);
+                    memory_free(sd);
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot create a new memtable for table %s", tbl->name);
+
+                    return false;
+                }
+
+                mt->level = old_level;
+
+                *mt_out = mt;
+            } else {
                 memory_free(sd->value);
                 memory_free(sd);
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot create a new memtable for table %s", tbl->name);
 
                 return false;
             }
-
         }
 
-        offset = buffer_get_position(tbl->current_memtable->values);
+        offset = buffer_get_position(mt->values);
         length = sd->length;
-        buffer_append_bytes(tbl->current_memtable->values, sd->value, sd->length);
+        buffer_append_bytes(mt->values, sd->value, sd->length);
 
         memory_free(sd->value);
         memory_free(sd);
@@ -508,16 +517,14 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
         if(!r_key) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot find record key for table %s", tbl->name);
-            lock_release(tbl->lock);
 
             return false;
         }
 
-        tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)hashmap_get(tbl->current_memtable->indexes, (void*)index->id);
+        tosdb_memtable_index_t* mt_idx = (tosdb_memtable_index_t*)hashmap_get(mt->indexes, (void*)index->id);
 
         if(!mt_idx) {
             PRINTLOG(TOSDB, LOG_ERROR, "cannot find memtable index for table %s", tbl->name);
-            lock_release(tbl->lock);
 
             return false;
         }
@@ -530,7 +537,6 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
             if(!idx_item) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable index item for table %s", tbl->name);
-                lock_release(tbl->lock);
 
                 return false;
             }
@@ -559,7 +565,6 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             if(!bloomfilter_add(mt_idx->bloomfilter, &d_key)) {
                 memory_free(idx_item);
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot add primary/unique index to bloomfilter for table %s", tbl->name);
-                lock_release(tbl->lock);
 
                 return false;
             }
@@ -574,7 +579,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
                 pri_uniq_idx_remove_count++;
 
                 if(idx_item->record_id != old_item->record_id) {
-                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli %s %lli", index->id, tbl->name, tbl->current_memtable->id);
+                    PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli %s %lli", index->id, tbl->name, mt->id);
                     PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new rec id: %llx old rec id: %llx", index->id, (uint64_t)idx_item->record_id,  (uint64_t)old_item->record_id);
                     PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new key hash: %llx old key hash: %llx", index->id, (uint64_t)idx_item->key_hash,  (uint64_t)old_item->key_hash);
                     PRINTLOG(TOSDB, LOG_ERROR, "pri/uniq %lli new deleted: %s old deleted: %s", index->id, idx_item->is_deleted ? "true" : "false", old_item->is_deleted ? "true" : "false");
@@ -592,7 +597,6 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
 
             if(!sec_idx_item) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot create memtable secondary index item for table %s", tbl->name);
-                lock_release(tbl->lock);
 
                 return false;
             }
@@ -623,7 +627,6 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             if(!bloomfilter_add(mt_idx->bloomfilter, &d_key)) {
                 memory_free(sec_idx_item);
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot add secondary index to bloomfilter for table %s", tbl->name);
-                lock_release(tbl->lock);
 
                 return false;
             }
@@ -635,7 +638,7 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
             if(old_item) {
 
                 if(sec_idx_item->record_id != old_item->record_id) {
-                    PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli %s %lli", index->id, tbl->name, tbl->current_memtable->id);
+                    PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli %s %lli", index->id, tbl->name, mt->id);
                     PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli new rec id: %llx old rec id: %llx", index->id, (uint64_t)sec_idx_item->record_id,  (uint64_t)old_item->record_id);
                     PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli new key hash: %llx old key hash: %llx", index->id, (uint64_t)sec_idx_item->secondary_key_hash,  (uint64_t)old_item->secondary_key_hash);
                     PRINTLOG(TOSDB, LOG_ERROR, "secidx %lli new deleted: %s old deleted: %s", index->id, sec_idx_item->is_primary_key_deleted ? "true" : "false", old_item->is_primary_key_deleted ? "true" : "false");
@@ -655,11 +658,44 @@ boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
     }
 
     if(need_rc_inc) {
-        tbl->current_memtable->record_count++;
+        mt->record_count++;
     }
 
-    lock_release(tbl->lock);
     return true;
+}
+
+boolean_t tosdb_memtable_upsert(tosdb_record_t * record, boolean_t del) {
+    if(!record || !record->context) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record is null");
+
+        return false;
+    }
+
+    tosdb_record_context_t* r_ctx = record->context;
+    tosdb_table_t* tbl = r_ctx->table;
+
+    if(!tbl || !tbl->is_open) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null or closed");
+
+        return false;
+    }
+
+    lock_acquire(tbl->lock);
+
+    if(!tbl->current_memtable || tbl->current_memtable->is_readonly) {
+        if(!tosdb_memtable_new(tbl)) {
+            lock_release(tbl->lock);
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create a new memtable for table %s", tbl->name);
+
+            return false;
+        }
+    }
+
+    boolean_t res = tosdb_memtable_upsert_internal(tbl->current_memtable, record, del, NULL);
+
+    lock_release(tbl->lock);
+
+    return res;
 }
 
 #pragma GCC diagnostic push
@@ -757,7 +793,7 @@ boolean_t tosdb_memtable_persist(tosdb_memtable_t* mt) {
 
     stli->record_count = mt->record_count;
     stli->sstable_id = mt->id;
-    stli->level = 1;
+    stli->level = mt->level;
     stli->valuelog_location = b_vl_loc;
     stli->valuelog_size = b_vl_size;
     stli->index_count = hashmap_size(mt->indexes);
