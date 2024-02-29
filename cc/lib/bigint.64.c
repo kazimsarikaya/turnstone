@@ -3503,8 +3503,6 @@ boolean_t bigint_is_prime(const bigint_t* a) {
     return bigint_is_prime_miller_rabin(a, 128);
 }
 
-#include <time.h>
-
 bigint_t* bigint_random_prime(uint64_t bits) {
     if(bits < 2) {
         return NULL;
