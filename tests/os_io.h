@@ -34,4 +34,10 @@ void*   mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd
 int     munmap(void * addr, size_t length);
 void    exit(int status);
 
+#define SIGABRT 6
+
+typedef void (*sighandler_t)(int32_t);
+
+sighandler_t signal(int32_t signum, sighandler_t handler);
+
 #endif

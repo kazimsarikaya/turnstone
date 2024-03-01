@@ -47,7 +47,14 @@ int32_t unlink(const char_t * pathname);
 FILE*   tmpfile(void);
 void*   mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd, int32_t offset);
 int     munmap(void * addr, size_t length);
-int     msync(void * addr, size_t length, int flags);
-void    exit(int status);
+int     msync(void * addr, size_t length, int32_t flags);
+void    exit(int32_t status);
+
+
+#define SIGABRT 6
+
+typedef void (*sighandler_t)(int32_t);
+
+sighandler_t signal(int32_t signum, sighandler_t handler);
 
 #endif
