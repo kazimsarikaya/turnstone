@@ -47,7 +47,7 @@ struct hashmap_t {
     hashmap_key_generator_f  hkg; ///< key generator
     hashmap_key_comparator_f hkc; ///< key comparator
     hashmap_segment_t*       segments; ///< segments
-    lock_t                   lock; ///< lock
+    lock_t*                  lock; ///< lock
 }; ///< hashmap
 
 /**

@@ -99,7 +99,24 @@ int8_t list_string_comprator(const void* data1, const void* data2);
 list_t* list_create_with_type(memory_heap_t* heap, list_type_t type,
                               list_data_comparator_f comparator, indexer_t indexer);
 
+/**
+ * @brief returns list's heap
+ * @param[in]  list list to be get heap
+ * @return @ref memory_heap_t
+ */
 memory_heap_t* list_get_heap(list_t* list);
+
+/**
+ * @brief sets list's capacity
+ * @param[in]  list       list to be modified
+ * @param  capacity new capacity
+ * @return 0 on success
+ *
+ * if list is null then this method returns -1.
+ * if new capacity is less than current size of list then this method returns -1.
+ * if list is not array list then this method returns -2.
+ */
+int8_t list_set_capacity(list_t* list, size_t capacity);
 
 /**
  * @brief updates list's comparator and returns the old one.

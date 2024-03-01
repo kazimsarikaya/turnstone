@@ -33,7 +33,7 @@ typedef struct list_item_t {
 typedef struct list_t {
     memory_heap_t*         heap; ///< the heap of the list
     list_type_t            type; ///< list type
-    lock_t                 lock; ///< lock for the list
+    lock_t*                lock; ///< lock for the list
     list_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
     list_data_comparator_f equality_comparator; ///< if the list is sorted, this is comparator function for data
     size_t                 item_count; ///< item count at the list, for fast access.
@@ -108,6 +108,8 @@ const void* linkedlist_iterator_delete_item(iterator_t* iterator);
 
 list_t* linkedlist_create_with_type(memory_heap_t* heap, list_type_t type,
                                     list_data_comparator_f comparator, indexer_t indexer){
+    heap = memory_get_heap(heap); // get rid of null pointer, so heap is always stable.
+
     list_t* list;
 
     list = memory_malloc_ext(heap, sizeof(list_t), 0x0);

@@ -17,7 +17,7 @@
 #include <buffer.h>
 
 /*! maximum tick count of a task without yielding */
-#define TASK_MAX_TICK_COUNT 50
+#define TASK_MAX_TICK_COUNT 10
 
 /*! kernel task id*/
 #define TASK_KERNEL_TASK_ID 1

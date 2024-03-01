@@ -26,10 +26,11 @@ typedef struct list_item_t {
 typedef struct list_t {
     memory_heap_t*         heap; ///< the heap of the list
     list_type_t            type; ///< list type
-    lock_t                 lock; ///< lock for the list
+    lock_t*                lock; ///< lock for the list
     list_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
     list_data_comparator_f equality_comparator; ///< if the list is sorted, this is comparator function for data
     size_t                 item_count; ///< item count at the list, for fast access.
+    indexer_t              indexer; ///< if the list is indexed, this is the indexer
 } list_t;
 
 /**
@@ -131,6 +132,8 @@ const void* list_get_data_from_listitem(list_item_t* item) {
 
 list_t* linkedlist_create_with_type(memory_heap_t* heap, list_type_t type,
                                     list_data_comparator_f comparator, indexer_t indexer);
+list_t* arraylist_create_with_type(memory_heap_t* heap, list_type_t type,
+                                   list_data_comparator_f comparator, indexer_t indexer);
 
 list_t* list_create_with_type(memory_heap_t* heap, list_type_t type,
                               list_data_comparator_f comparator, indexer_t indexer) {
@@ -139,14 +142,14 @@ list_t* list_create_with_type(memory_heap_t* heap, list_type_t type,
     if(type & LIST_TYPE_LINKED) {
         return linkedlist_create_with_type(heap, type, comparator, indexer);
     } else if(type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return NULL;
+        return arraylist_create_with_type(heap, type, comparator, indexer);
     } else { // default is linked list
         return linkedlist_create_with_type(heap, type, comparator, indexer);
     }
 }
 
 uint8_t linkedlist_destroy_with_type(list_t* list, list_destroy_type_t type, list_item_destroyer_callback_f destroyer);
+uint8_t arraylist_destroy_with_type(list_t* list, list_destroy_type_t type, list_item_destroyer_callback_f destroyer);
 
 uint8_t list_destroy_with_type(list_t* list, list_destroy_type_t type, list_item_destroyer_callback_f destroyer) {
     if(list == NULL) {
@@ -156,8 +159,7 @@ uint8_t list_destroy_with_type(list_t* list, list_destroy_type_t type, list_item
     if(list->type & LIST_TYPE_LINKED) {
         return linkedlist_destroy_with_type(list, type, destroyer);
     } else if(list->type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return -1;
+        return arraylist_destroy_with_type(list, type, destroyer);
     }
 
     // default is linked list
@@ -165,6 +167,7 @@ uint8_t list_destroy_with_type(list_t* list, list_destroy_type_t type, list_item
 }
 
 size_t linkedlist_insert_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
+size_t arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
 
 size_t list_insert_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position) {
     if(list == NULL) {
@@ -174,8 +177,7 @@ size_t list_insert_at(list_t* list, const void* data, list_insert_delete_at_t wh
     if(list->type & LIST_TYPE_LINKED) {
         return linkedlist_insert_at(list, data, where, position);
     } else if(list->type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return -1ULL;
+        return arraylist_insert_at(list, data, where, position);
     }
 
     // default is linked list
@@ -183,6 +185,7 @@ size_t list_insert_at(list_t* list, const void* data, list_insert_delete_at_t wh
 }
 
 const void* linkedlist_delete_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
+const void* arraylist_delete_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
 
 const void* list_delete_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position) {
     if(list == NULL) {
@@ -192,8 +195,7 @@ const void* list_delete_at(list_t* list, const void* data, list_insert_delete_at
     if(list->type & LIST_TYPE_LINKED) {
         return linkedlist_delete_at(list, data, where, position);
     } else if(list->type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return NULL;
+        return arraylist_delete_at(list, data, where, position);
     }
 
     // default is linked list
@@ -202,6 +204,7 @@ const void* list_delete_at(list_t* list, const void* data, list_insert_delete_at
 
 
 const void* linkedlist_get_data_at_position(list_t* list, size_t position);
+const void* arraylist_get_data_at_position(list_t* list, size_t position);
 
 const void* list_get_data_at_position(list_t* list, size_t position) {
     if(list == NULL) {
@@ -211,8 +214,7 @@ const void* list_get_data_at_position(list_t* list, size_t position) {
     if(list->type & LIST_TYPE_LINKED) {
         return linkedlist_get_data_at_position(list, position);
     } else if(list->type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return NULL;
+        return arraylist_get_data_at_position(list, position);
     }
 
     // default is linked list
@@ -221,6 +223,7 @@ const void* list_get_data_at_position(list_t* list, size_t position) {
 
 
 int8_t linkedlist_get_position(list_t* list, const void* data, size_t* position);
+int8_t arraylist_get_position(list_t* list, const void* data, size_t* position);
 
 int8_t list_get_position(list_t* list, const void* data, size_t* position) {
     if(list == NULL) {
@@ -230,8 +233,7 @@ int8_t list_get_position(list_t* list, const void* data, size_t* position) {
     if(list->type & LIST_TYPE_LINKED) {
         return linkedlist_get_position(list, data, position);
     } else if(list->type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return -1;
+        return arraylist_get_position(list, data, position);
     }
 
     // default is linked list
@@ -240,6 +242,7 @@ int8_t list_get_position(list_t* list, const void* data, size_t* position) {
 
 
 iterator_t* linkedlist_iterator_create(list_t* list);
+iterator_t* arraylist_iterator_create(list_t* list);
 
 iterator_t* list_iterator_create(list_t* list) {
     if(list == NULL) {
@@ -249,10 +252,23 @@ iterator_t* list_iterator_create(list_t* list) {
     if(list->type & LIST_TYPE_LINKED) {
         return linkedlist_iterator_create(list);
     } else if(list->type & LIST_TYPE_ARRAY) {
-        NOTIMPLEMENTEDLOG(KERNEL);
-        return NULL;
+        return arraylist_iterator_create(list);
     }
 
     // default is linked list
     return linkedlist_iterator_create(list);
+}
+
+int8_t arraylist_set_capacity(list_t* list, size_t capacity);
+
+int8_t list_set_capacity(list_t* list, size_t capacity) {
+    if(list == NULL) {
+        return -1;
+    }
+
+    if(list->type & LIST_TYPE_ARRAY) {
+        return arraylist_set_capacity(list, capacity);
+    }
+
+    return -2;
 }

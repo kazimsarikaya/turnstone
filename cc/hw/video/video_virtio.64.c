@@ -42,9 +42,9 @@ uint32_t mouse_width = 0;
 uint32_t mouse_height = 0;
 
 virtio_gpu_wrapper_t* virtio_gpu_wrapper = NULL;
-lock_t virtio_gpu_lock = NULL;
-lock_t virtio_gpu_cursor_lock = NULL;
-lock_t virtio_gpu_flush_lock = NULL;
+lock_t* virtio_gpu_lock = NULL;
+lock_t* virtio_gpu_cursor_lock = NULL;
+lock_t* virtio_gpu_flush_lock = NULL;
 
 void video_text_print(char_t* string);
 
@@ -145,7 +145,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     descs[desc_index].length = sizeof(virtio_gpu_transfer_to_host_2d_t);
 
     virtio_gpu_lock = lock_create_for_future();
-    future_t fut = future_create(virtio_gpu_lock);
+    future_t* fut = future_create(virtio_gpu_lock);
 
     avail->index++;
     vq_control->nd->vqn = 0;
@@ -245,7 +245,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     uint16_t desc_index;
     uint8_t* offset;
-    future_t fut;
+    future_t* fut;
     virtio_gpu_ctrl_hdr_t* hdr;
 
     desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
@@ -561,7 +561,7 @@ void virtio_gpu_mouse_init(void) {
 
     uint16_t desc_index;
     uint8_t* offset;
-    future_t fut;
+    future_t* fut;
     virtio_gpu_ctrl_hdr_t* hdr;
 
     desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
@@ -764,7 +764,7 @@ void virtio_gpu_mouse_move(uint32_t x, uint32_t y) {
 
     uint16_t desc_index;
     uint8_t* offset;
-    future_t fut;
+    future_t* fut;
     virtio_gpu_ctrl_hdr_t* hdr;
     desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
     offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);

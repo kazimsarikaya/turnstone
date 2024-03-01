@@ -124,7 +124,7 @@ typedef struct usb_config_desc_t {
     uint8_t  configuration_string;
     uint8_t  attributes;
     uint8_t  max_power;
-    //uint8_t  config_data[]; we cannot use like that may be padding exists
+    // uint8_t  config_data[]; we cannot use like that may be padding exists
 }__attribute__((packed)) usb_config_desc_t;
 
 typedef struct usb_interface_desc_t {
@@ -275,13 +275,13 @@ typedef struct usb_transfer_t {
     uint8_t*              data;
     uint32_t              length;
     boolean_t             is_async;
-    lock_t                async_lock;
+    lock_t*               async_lock;
     boolean_t             complete;
     boolean_t             success;
     uint64_t              error_count;
     int8_t (*transfer_callback)(usb_controller_t* controller, usb_transfer_t* transfer);
     boolean_t need_future;
-    future_t  transfer_future;
+    future_t* transfer_future;
 } usb_transfer_t;
 
 typedef struct usb_controller_t {

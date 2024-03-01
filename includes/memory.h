@@ -12,7 +12,7 @@
 #include <types.h>
 
 /*! lock type preventing sync.h recursion*/
-typedef void * lock_t;
+typedef struct lock_t lock_t;
 
 /**
  * @struct memory_heap_stat_t
@@ -37,7 +37,7 @@ typedef struct memory_heap_t {
     void* (* malloc)(struct memory_heap_t*, size_t, size_t); ///< malloc function of heap implementation
     int8_t (* free)(struct memory_heap_t*, void*); ///< free function of heap implementation
     void (* stat)(struct memory_heap_t*, memory_heap_stat_t*); ///< return heap stats
-    lock_t   lock; ///< heap's lock
+    lock_t*  lock; ///< heap's lock
     uint64_t task_id; ///< task id of heap
 } memory_heap_t; ///< short hand for struct
 

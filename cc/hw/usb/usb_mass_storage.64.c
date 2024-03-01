@@ -29,7 +29,7 @@ typedef struct usb_driver_t {
     uint32_t                      cbw_tag;
     uint64_t                      lba_count;
     uint32_t                      block_size;
-    lock_t                        lock;
+    lock_t*                       lock;
     boolean_t                     command_size_16_supported;
     scsi_standard_inquiry_data_t* inquiry_data;
 } usb_driver_t;
@@ -458,10 +458,10 @@ int8_t usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t l
         return -1;
     }
 
-    //uint64_t buffer_len = ctx->block_size;
+    // uint64_t buffer_len = ctx->block_size;
     uint8_t* tmp_data = data;
 
-    //for(uint64_t i = 0; i < count; i++) {
+    // for(uint64_t i = 0; i < count; i++) {
     uint8_t cbw_buffer[16] = {0};
     memory_memclean(cbw_buffer, 16);
     uint8_t cbw_buffer_len = 16;
@@ -498,9 +498,9 @@ int8_t usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t l
         return -1;
     }
 
-    //    lba++;
-    //    tmp_data += buffer_len;
-    //}
+    // lba++;
+    // tmp_data += buffer_len;
+    // }
 
 
     return 0;
@@ -519,7 +519,7 @@ int8_t usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lb
 
     uint8_t* tmp_data = *data;
 
-    //for(uint64_t i = 0; i < count; i++) {
+    // for(uint64_t i = 0; i < count; i++) {
     uint8_t cbw_buffer[16] = {0};
     memory_memclean(cbw_buffer, 16);
     uint8_t cbw_buffer_len = 16;
@@ -557,9 +557,9 @@ int8_t usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lb
     }
 
 
-    //    lba++;
-    //    tmp_data += ctx->block_size;
-    //}
+    // lba++;
+    // tmp_data += ctx->block_size;
+    // }
 
 
 

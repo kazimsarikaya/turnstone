@@ -18,6 +18,9 @@
 #include <windowmanager.h>
 #include <stdbufs.h>
 #include <device/mouse.h>
+#include <device/kbd.h>
+#include <device/kbd_scancodes.h>
+#include <utils.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -51,7 +54,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\tdate\t\t: prints the current date with time alias time\n"
                "\tusbprobe\t: probes the USB bus\n"
                "\tfree\t\t: prints the frame usage\n"
-               "\twm\t\t: prints the frame usage\n"
+               "\twm\t\t: opens test window\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -120,11 +123,34 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     return res;
 }
 
+static uint32_t shell_append_wchar_to_buffer(wchar_t src, char_t* dst, uint32_t dst_idx) {
+    if(dst == NULL) {
+        return NULL;
+    }
+
+    int64_t j = dst_idx;
+
+    if(src >= 0x800) {
+        dst[j++] = ((src >> 12) & 0xF) | 0xE0;
+        dst[j++] = ((src >> 6) & 0x3F) | 0x80;
+        dst[j++] = (src & 0x3F) | 0x80;
+    } else if(src >= 0x80) {
+        dst[j++] = ((src >> 6) & 0x1F) | 0xC0;
+        dst[j++] = (src & 0x3F) | 0x80;
+    } else {
+        dst[j++] = src & 0x7F;
+    }
+
+    return j;
+}
+
+void video_text_print(const char_t* string);
+
 int32_t shell_main(int32_t argc, char* argv[]) {
     UNUSED(argc);
     UNUSED(argv);
 
-    shell_buffer = buffer_new_with_capacity(NULL, 4096);
+    shell_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* argument_buffer = buffer_new_with_capacity(NULL, 4096);
@@ -132,13 +158,15 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
     while(true) {
         uint64_t kbd_length = 0;
+        uint32_t kbd_ev_cnt = 0;
         uint64_t mouse_length = 0;
+        uint32_t mouse_ev_cnt = 0;
 
-        uint8_t* data = buffer_get_all_bytes_and_reset(shell_buffer, &kbd_length);
+        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(shell_buffer, &kbd_length);
         mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
         if(kbd_length == 0 && mouse_length == 0) {
-            memory_free(data);
+            memory_free(kbd_data);
             memory_free(mouse_data);
             task_yield();
 
@@ -146,7 +174,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         }
 
         if(mouse_length) {
-            uint32_t mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
+            mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
 
             if(VIDEO_MOVE_CURSOR) {
                 VIDEO_MOVE_CURSOR(mouse_data[mouse_ev_cnt - 1].x, mouse_data[mouse_ev_cnt - 1].y);
@@ -156,11 +184,34 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         memory_free(mouse_data);
 
         if(kbd_length == 0) {
-            memory_free(data);
+            memory_free(kbd_data);
             task_yield();
 
             continue;
         }
+
+        char_t data[4096] = {0};
+        uint32_t data_idx = 0;
+
+        kbd_ev_cnt = kbd_length / sizeof(kbd_report_t);
+
+        for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
+            if(kbd_data[i].is_pressed) {
+                if(kbd_data[i].is_printable) {
+                    data_idx = shell_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
+                } else {
+                    if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
+                        data[data_idx++] = '\b';
+                        data[data_idx++] = ' ';
+                        data[data_idx++] = '\b';
+                    }
+                }
+            }
+        }
+
+        data[data_idx] = NULL;
+
+        memory_free(kbd_data);
 
         char_t last_char = data[4095];
 
@@ -178,9 +229,9 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         uint64_t idx = 0;
 
-        while(kbd_length > 0) {
+        while(data_idx > 0) {
             char_t c = data[idx++];
-            kbd_length--;
+            data_idx--;
 
             if(c == '\n') {
                 first_space = false;
@@ -195,6 +246,23 @@ int32_t shell_main(int32_t argc, char* argv[]) {
                 break;
             }
 
+            if(c == '\b') {
+                data_idx -= 2; // remove ' \b'
+                idx += 2; // remove ' \b'
+
+                if(first_space) {
+                    buffer_seek(argument_buffer, -1, BUFFER_SEEK_DIRECTION_CURRENT);
+                    buffer_append_byte(argument_buffer, NULL);
+                    buffer_seek(argument_buffer, -1, BUFFER_SEEK_DIRECTION_CURRENT);
+                } else {
+                    buffer_seek(command_buffer, -1, BUFFER_SEEK_DIRECTION_CURRENT);
+                    buffer_append_byte(command_buffer, NULL);
+                    buffer_seek(command_buffer, -1, BUFFER_SEEK_DIRECTION_CURRENT);
+                }
+
+                continue;
+            }
+
             if(first_space) {
                 buffer_append_byte(argument_buffer, c);
             } else {
@@ -207,8 +275,6 @@ int32_t shell_main(int32_t argc, char* argv[]) {
                 buffer_append_byte(command_buffer, c);
             }
         }
-
-        memory_free(data);
     }
 
     return 0;

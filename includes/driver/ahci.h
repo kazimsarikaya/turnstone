@@ -677,10 +677,10 @@ typedef struct ahci_sata_disk_s {
     ahci_ata_logging_t logging;
     ahci_ata_smart_t   smart_status;
     uint8_t            command_count;
-    lock_t             disk_lock;
+    lock_t*            disk_lock;
     uint32_t           acquired_slots;
     uint32_t           current_commands;
-    lock_t             future_locks[32];
+    lock_t*            future_locks[32];
     boolean_t          inserted;
     uint64_t           physical_sector_size;
     uint64_t           logical_sector_size;
@@ -699,11 +699,11 @@ typedef struct ahci_hba_s {
 } ahci_hba_t;
 
 
-int8_t   ahci_init(memory_heap_t* heap, list_t* sata_pci_devices);
-int8_t   ahci_identify(uint64_t disk_id);
-future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
-future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
-future_t ahci_flush(uint64_t disk_id);
+int8_t    ahci_init(memory_heap_t* heap, list_t* sata_pci_devices);
+int8_t    ahci_identify(uint64_t disk_id);
+future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
+future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
+future_t* ahci_flush(uint64_t disk_id);
 
 const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id);
 const ahci_sata_disk_t* ahci_get_first_inserted_disk(void);

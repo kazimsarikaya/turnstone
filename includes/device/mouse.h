@@ -29,6 +29,8 @@ typedef struct mouse_report_t {
     int32_t         wheel;
 } mouse_report_t;
 
+_Static_assert(sizeof(mouse_report_t) == 16, "mouse_report_t size is not 16 bytes");
+
 int8_t mouse_report(mouse_report_t * report);
 
 #endif // ___MOUSE_H

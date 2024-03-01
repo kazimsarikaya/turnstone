@@ -13,13 +13,13 @@
 
 MODULE("turnstone.kernel.cpu.sync");
 
-typedef struct lock_internal_t {
+typedef struct lock_t {
     memory_heap_t*    heap;
     volatile uint64_t lock_value;
     uint64_t          owner_task_id;
     uint64_t          owner_cpu_id;
     boolean_t         for_future;
-}lock_internal_t;
+}lock_t;
 
 extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
 
@@ -29,8 +29,8 @@ static inline int8_t sync_test_set_get(volatile uint64_t* value, uint64_t offset
     return res;
 }
 
-lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future) {
-    lock_internal_t* lock = memory_malloc_ext(heap, sizeof(lock_internal_t), 0x0);
+lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future) {
+    lock_t* lock = memory_malloc_ext(heap, sizeof(lock_t), 0x0);
 
     if(lock == NULL) {
         return NULL;
@@ -46,12 +46,11 @@ lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_futur
     return lock;
 }
 
-int8_t lock_destroy(lock_t lock){
-    lock_internal_t* li = (lock_internal_t*)lock;
-    return memory_free_ext(li->heap, li);
+int8_t lock_destroy(lock_t* lock){
+    return memory_free_ext(lock->heap, lock);
 }
 
-void lock_acquire(lock_t lock) {
+void lock_acquire(lock_t* lock) {
     if(lock == NULL) {
         return;
     }
@@ -60,7 +59,6 @@ void lock_acquire(lock_t lock) {
         return;
     }
 
-    lock_internal_t* li = (lock_internal_t*)lock;
     task_t* current_task = task_get_current_task();
     uint64_t current_task_id;
 
@@ -72,11 +70,11 @@ void lock_acquire(lock_t lock) {
         current_task_id = current_task->task_id;
     }
 
-    if(li->lock_value && li->for_future == 0 && li->owner_cpu_id == current_cpu_id && li->owner_task_id == current_task_id) {
+    if(lock->lock_value && lock->for_future == 0 && lock->owner_cpu_id == current_cpu_id && lock->owner_task_id == current_task_id) {
         return;
     }
 
-    while(sync_test_set_get(&li->lock_value, 0)) {
+    while(sync_test_set_get(&lock->lock_value, 0)) {
         if(current_cpu_id == 1) {
             task_yield();
         } else {
@@ -84,31 +82,31 @@ void lock_acquire(lock_t lock) {
         }
     }
 
-    li->owner_task_id = current_task_id;
-    li->owner_cpu_id = current_cpu_id;
+    lock->owner_task_id = current_task_id;
+    lock->owner_cpu_id = current_cpu_id;
 }
 
-void lock_release(lock_t lock) {
+void lock_release(lock_t* lock) {
     if(lock == NULL) {
         return;
     }
 
-    lock_internal_t* li = (lock_internal_t*)lock;
-
-    li->owner_task_id = 0;
-    li->owner_cpu_id = 0;
-    li->lock_value = 0;
+    if(lock) {
+        lock->owner_task_id = 0;
+        lock->owner_cpu_id = 0;
+        lock->lock_value = 0;
+    }
 }
 
-typedef struct semaphore_internal_t {
+typedef struct semaphore_t {
     memory_heap_t* heap;
-    lock_t         lock;
+    lock_t*        lock;
     uint64_t       initial_count;
     uint64_t       current_count;
-}semaphore_internal_t;
+}semaphore_t;
 
-semaphore_t semaphore_create_with_heap(memory_heap_t* heap, uint64_t count){
-    semaphore_internal_t* semaphore = memory_malloc_ext(heap, sizeof(semaphore_internal_t), 0x0);
+semaphore_t* semaphore_create_with_heap(memory_heap_t* heap, uint64_t count){
+    semaphore_t* semaphore = memory_malloc_ext(heap, sizeof(semaphore_t), 0x0);
 
     if(semaphore == NULL) {
         return NULL;
@@ -122,55 +120,58 @@ semaphore_t semaphore_create_with_heap(memory_heap_t* heap, uint64_t count){
     return semaphore;
 }
 
-int8_t semaphore_destroy(semaphore_t semaphore){
-    semaphore_internal_t* si = (semaphore_internal_t*)semaphore;
-    lock_destroy(si->lock);
+int8_t semaphore_destroy(semaphore_t* semaphore){
+    lock_destroy(semaphore->lock);
 
-    return memory_free_ext(si->heap, si);
+    return memory_free_ext(semaphore->heap, semaphore);
 }
 
-int8_t semaphore_acquire_with_count(semaphore_t semaphore, uint64_t count){
-    semaphore_internal_t* si = (semaphore_internal_t*)semaphore;
+int8_t semaphore_acquire_with_count(semaphore_t* semaphore, uint64_t count){
+    if(semaphore == NULL) {
+        return -1;
+    }
 
-    lock_acquire(si->lock);
+    lock_acquire(semaphore->lock);
 
-    if(si->initial_count < count) {
-        lock_release(si->lock);
+    if(semaphore->initial_count < count) {
+        lock_release(semaphore->lock);
 
         return -1;
     }
 
-    while(1) {
-        lock_acquire(si->lock);
+    while(true) {
+        lock_acquire(semaphore->lock);
 
-        if(si->current_count >= count) {
-            si->current_count -= count;
-            lock_release(si->lock);
+        if(semaphore->current_count >= count) {
+            semaphore->current_count -= count;
+            lock_release(semaphore->lock);
 
             return 0;
         }
 
-        lock_release(si->lock);
+        lock_release(semaphore->lock);
         task_yield();
     }
 
     return 0;
 }
 
-int8_t semaphore_release_with_count(semaphore_t semaphore, uint64_t count){
-    semaphore_internal_t* si = (semaphore_internal_t*)semaphore;
+int8_t semaphore_release_with_count(semaphore_t* semaphore, uint64_t count){
+    if(semaphore == NULL) {
+        return -1;
+    }
 
-    lock_acquire(si->lock);
+    lock_acquire(semaphore->lock);
 
-    if(si->current_count + count > si->initial_count) {
-        lock_release(si->lock);
+    if(semaphore->current_count + count > semaphore->initial_count) {
+        lock_release(semaphore->lock);
 
         return -1;
     }
 
-    si->current_count += count;
+    semaphore->current_count += count;
 
-    lock_release(si->lock);
+    lock_release(semaphore->lock);
 
     return 0;
 }

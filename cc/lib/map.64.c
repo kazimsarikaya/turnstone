@@ -17,7 +17,7 @@ MODULE("turnstone.lib");
 
 typedef struct map_internal_t {
     memory_heap_t*      heap;
-    lock_t              lock;
+    lock_t*             lock;
     map_key_extractor_f mke;
     index_t*            store;
 } map_internal_t;

@@ -92,7 +92,7 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
         cpu_hlt();
     } else {
         while(1) {
-#if TASK_MAX_TICK_COUNT > 1
+#if 0 && TASK_MAX_TICK_COUNT > 1
             if(task_idle_check_need_yield()) {
                 task_yield();
             } else {

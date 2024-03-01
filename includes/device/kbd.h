@@ -11,9 +11,6 @@
 
 
 #include <types.h>
-#include <cpu/interrupt.h>
-#include <pci.h>
-#include <driver/virtio.h>
 
 #define KBD_DATA_PORT 0x60
 #define KBD_STATUS_PORT 0x64
@@ -24,6 +21,26 @@
 
 #define KBD_DEVICE_VENDOR_ID_VIRTIO  0x1AF4
 #define KBD_DEVICE_DEVICE_ID_VIRTIO  0x1052
+
+typedef struct kbd_state_t {
+    boolean_t is_capson;
+    boolean_t is_shift_pressed;
+    boolean_t is_alt_pressed;
+    boolean_t is_ctrl_pressed;
+    boolean_t is_meta_pressed;
+}kbd_state_t;
+
+typedef struct kbd_report_t {
+    kbd_state_t state;
+    wchar_t     key;
+    boolean_t   is_pressed;
+    boolean_t   is_printable;
+}kbd_report_t;
+
+
+_Static_assert(sizeof(kbd_report_t) == 10, "kbd_report_t size is not 10 bytes");
+
+#undef strigify
 
 int8_t kbd_init(void);
 

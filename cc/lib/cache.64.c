@@ -33,7 +33,7 @@ struct cache_t {
     cache_item_t*  lru_list_tail;
     hashmap_t*     lru_map;
     uint64_t       lru_size;
-    lock_t         lock;
+    lock_t*        lock;
 };
 
 static inline int8_t cache_insert_head(cache_t* cache, boolean_t mru, cache_item_t* ci) {

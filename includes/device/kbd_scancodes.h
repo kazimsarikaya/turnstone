@@ -10,6 +10,7 @@
 #define ___KBD_SCANCODES_H 0
 
 #include <types.h>
+#include <device/kbd.h>
 
 #define KBD_PS2_EXTCODE_PREFIX    0xE0
 
@@ -71,14 +72,6 @@ extern const wchar_t KBD_SCANCODES_SHIFT[];
 extern const wchar_t KBD_SCANCODES_SHIFTCAPSON[];
 extern const wchar_t KBD_SCANCODES_ALT[];
 extern const wchar_t KBD_SCANCODES_ALTSHIFT[];
-
-typedef struct kbd_state_s {
-    boolean_t is_capson;
-    boolean_t is_shift_pressed;
-    boolean_t is_alt_pressed;
-    boolean_t is_ctrl_pressed;
-    boolean_t is_meta_pressed;
-}kbd_state_t;
 
 wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_printable);
 wchar_t kbd_scancode_fixcode(wchar_t ps2code);
