@@ -108,6 +108,8 @@ const void* linkedlist_iterator_delete_item(iterator_t* iterator);
 
 list_t* linkedlist_create_with_type(memory_heap_t* heap, list_type_t type,
                                     list_data_comparator_f comparator, indexer_t indexer){
+    heap = memory_get_heap(heap); // get rid of null pointer, so heap is always stable.
+
     list_t* list;
 
     list = memory_malloc_ext(heap, sizeof(list_t), 0x0);
