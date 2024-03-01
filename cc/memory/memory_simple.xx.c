@@ -126,7 +126,7 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
         lock_start += 0x20 - (lock_start % 0x20);
     }
 
-    heap->lock = (lock_t)lock_start;
+    heap->lock = (lock_t*)lock_start;
     memory_heap_t** lock_heap = (memory_heap_t**)(lock_start); // black magic first element of lock is heap
     *lock_heap = heap;
     size_t metadata_start = lock_start + SYNC_LOCK_SIZE;

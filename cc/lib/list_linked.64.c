@@ -33,7 +33,7 @@ typedef struct list_item_t {
 typedef struct list_t {
     memory_heap_t*         heap; ///< the heap of the list
     list_type_t            type; ///< list type
-    lock_t                 lock; ///< lock for the list
+    lock_t*                lock; ///< lock for the list
     list_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
     list_data_comparator_f equality_comparator; ///< if the list is sorted, this is comparator function for data
     size_t                 item_count; ///< item count at the list, for fast access.

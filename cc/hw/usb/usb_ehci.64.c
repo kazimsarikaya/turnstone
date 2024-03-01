@@ -53,10 +53,10 @@ typedef struct usb_controller_metadata_t {
     uint64_t                                    sitd_fa;
     uint64_t                                    sitd_va;
     uint64_t                                    framelist_entries_count;
-    lock_t                                      async_list_lock;
+    lock_t*                                     async_list_lock;
     uint64_t                                    current_async_transfer_count;
     uint64_t                                    async_list_tid;
-    lock_t                                      periodic_list_lock;
+    lock_t*                                     periodic_list_lock;
     uint64_t                                    current_periodic_transfer_count;
     uint64_t                                    periodic_list_tid;
 } usb_controller_metadata_t;

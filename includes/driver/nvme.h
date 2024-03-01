@@ -495,9 +495,9 @@ typedef struct nvme_disk_t {
 } nvme_disk_t; ///< shorthand for struct
 
 
-future_t           nvme_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
-future_t           nvme_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
-future_t           nvme_flush(uint64_t disk_id);
+future_t*          nvme_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
+future_t*          nvme_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer);
+future_t*          nvme_flush(uint64_t disk_id);
 disk_t*            nvme_disk_impl_open(nvme_disk_t* nvme_disk);
 const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id);
 #endif

@@ -19,7 +19,7 @@ uint8_t buffer_tmp_buffer_area_for_printf[BUFFER_PRINTF_BUFFER_SIZE];
 
 typedef struct buffer_t {
     memory_heap_t* heap;
-    lock_t         lock;
+    lock_t*        lock;
     uint64_t       capacity;
     uint64_t       length;
     uint64_t       position;

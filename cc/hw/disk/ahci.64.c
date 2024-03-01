@@ -554,7 +554,7 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
 }
 #pragma GCC diagnostic pop
 
-future_t ahci_flush(uint64_t disk_id) {
+future_t* ahci_flush(uint64_t disk_id) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -588,7 +588,7 @@ future_t ahci_flush(uint64_t disk_id) {
 
     disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
 
-    future_t fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], NULL);
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], NULL);
 
     disk->current_commands |= 1 << slot;
     port->command_issue = 1 << slot;
@@ -752,7 +752,7 @@ int8_t ahci_identify(uint64_t disk_id) {
     return 0;
 }
 
-future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
+future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -843,7 +843,7 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffe
 
     disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
 
-    future_t fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
 
     disk->current_commands |= 1 << slot;
     port->command_issue = 1 << slot;
@@ -851,7 +851,7 @@ future_t ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffe
     return fut;
 }
 
-future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
+future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buffer) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
@@ -944,7 +944,7 @@ future_t ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 
     disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
 
-    future_t fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
 
     disk->current_commands |= 1 << slot;
     port->command_issue = 1 << slot;

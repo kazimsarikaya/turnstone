@@ -22,7 +22,7 @@ typedef struct list_item_t {
 typedef struct list_t {
     memory_heap_t*         heap; ///< the heap of the list
     list_type_t            type; ///< list type
-    lock_t                 lock; ///< lock for the list
+    lock_t*                lock; ///< lock for the list
     list_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
     list_data_comparator_f equality_comparator; ///< if the list is sorted, this is comparator function for data
     size_t                 item_count; ///< item count at the list, for fast access.
@@ -36,7 +36,7 @@ typedef struct list_t {
 
 list_t* arraylist_create_with_type(memory_heap_t* heap, list_type_t type,
                                    list_data_comparator_f comparator, indexer_t indexer);
-int8_t      list_set_capacity(list_t* list, size_t capacity);
+int8_t      arraylist_set_capacity(list_t* list, size_t capacity);
 uint8_t     arraylist_destroy_with_type(list_t* list, list_destroy_type_t type, list_item_destroyer_callback_f destroyer);
 size_t      arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
 const void* arraylist_delete_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
@@ -79,7 +79,7 @@ list_t* arraylist_create_with_type(memory_heap_t* heap, list_type_t type,
     return list;
 }
 
-int8_t list_set_capacity(list_t* list, size_t capacity) {
+int8_t arraylist_set_capacity(list_t* list, size_t capacity) {
     if(list == NULL) {
         return -1;
     }
@@ -172,4 +172,42 @@ int8_t arraylist_get_position(list_t* list, const void* data, size_t* position) 
     }
 
     return -1;
+}
+
+size_t arraylist_insert_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position) {
+    if(list == NULL) {
+        return -1;
+    }
+
+    UNUSED(data);
+    UNUSED(where);
+    UNUSED(position);
+    NOTIMPLEMENTEDLOG(KERNEL);
+
+    return -1;
+}
+
+const void* arraylist_delete_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position) {
+    if(list == NULL) {
+        return NULL;
+    }
+
+    UNUSED(data);
+    UNUSED(where);
+    UNUSED(position);
+    NOTIMPLEMENTEDLOG(KERNEL);
+
+    return NULL;
+}
+
+iterator_t* arraylist_iterator_create(list_t* list) {
+    if(list == NULL) {
+        return NULL;
+    }
+
+    UNUSED(list);
+
+    NOTIMPLEMENTEDLOG(KERNEL);
+
+    return NULL;
 }

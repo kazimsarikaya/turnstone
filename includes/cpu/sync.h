@@ -16,7 +16,7 @@
 #define SYNC_LOCK_SIZE 0x28
 
 /*! lock type */
-typedef void * lock_t;
+typedef struct lock_t lock_t;
 
 /**
  * @brief creates lock
@@ -24,14 +24,14 @@ typedef void * lock_t;
  * @param[in] for_future is lock for future
  * @return lock
  */
-lock_t lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
 
 /**
  * @brief destroys lock
  * @param[in] lock lock to destroy
  * @return 0 if succeed
  */
-int8_t lock_destroy(lock_t lock);
+int8_t lock_destroy(lock_t* lock);
 
 /**
  * @brief macro for creating lock with heap
@@ -53,16 +53,16 @@ int8_t lock_destroy(lock_t lock);
  * @brief acquires lock
  * @param[in] lock lock to acquire
  */
-void lock_acquire(lock_t lock);
+void lock_acquire(lock_t* lock);
 
 /**
  * @brief relaases lock
  * @param[in] lock lock to release
  */
-void lock_release(lock_t lock);
+void lock_release(lock_t* lock);
 
 /*! semaphore type*/
-typedef void * semaphore_t;
+typedef struct semaphore_t semaphore_t;
 
 /**
  * @brief create semaphore
@@ -70,13 +70,13 @@ typedef void * semaphore_t;
  * @param[in] count semaphore count value
  * @return semaphore
  */
-semaphore_t semaphore_create_with_heap(memory_heap_t* heap, uint64_t count);
+semaphore_t* semaphore_create_with_heap(memory_heap_t* heap, uint64_t count);
 
 /**
  * @brief destroys semaphore
  * @param[in] semaphore semaphore to destroy
  */
-int8_t semaphore_destroy(semaphore_t semaphore);
+int8_t semaphore_destroy(semaphore_t* semaphore);
 
 /**
  * @brief creats sempahore at default heap with count
@@ -90,7 +90,7 @@ int8_t semaphore_destroy(semaphore_t semaphore);
  * @param[in] count semaphore decrease value
  * @return 0 if succeed, or waits
  */
-int8_t semaphore_acquire_with_count(semaphore_t semaphore, uint64_t count);
+int8_t semaphore_acquire_with_count(semaphore_t* semaphore, uint64_t count);
 
 /**
  * @brief acquires one slot at semaphore
@@ -104,7 +104,7 @@ int8_t semaphore_acquire_with_count(semaphore_t semaphore, uint64_t count);
  * @param[in] count semaphore increase value
  * @return 0 if succeed
  */
-int8_t semaphore_release_with_count(semaphore_t semaphore, uint64_t count);
+int8_t semaphore_release_with_count(semaphore_t* semaphore, uint64_t count);
 
 /**
  * @brief releases one slot at semaphore

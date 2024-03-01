@@ -30,7 +30,7 @@ typedef struct frame_allocator_context_t {
     index_t*       free_frames_by_address;
     index_t*       allocated_frames_by_address;
     index_t*       reserved_frames_by_address;
-    lock_t         lock;
+    lock_t*        lock;
     uint64_t       total_frame_count;
     uint64_t       free_frame_count;
     uint64_t       allocated_frame_count;

@@ -34,11 +34,9 @@ MODULE("turnstone.efi");
 /*! dummy task_t type for efi */
 typedef void * task_t;
 
-/*! dummy lock_t type for efi */
-typedef void * lock_t;
 
 /*! global video lock for efi */
-lock_t video_lock = NULL;
+lock_t* video_lock = NULL;
 
 /*! global kernel panic lock for efi */
 boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
@@ -90,7 +88,7 @@ int8_t apic_get_local_apic_id(void);
  * @param data data to store in future.
  * @return data if data is not NULL. otherwise 0xdeadbeaf.
  */
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data);
 
 /**
  * @brief dummy method for efi for getting data from future and destroying it.
@@ -151,7 +149,7 @@ int8_t apic_get_local_apic_id(void) {
     return 0;
 }
 
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
+future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data) {
     UNUSED(heap);
     UNUSED(lock);
 

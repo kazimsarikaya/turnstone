@@ -51,7 +51,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint64_t buffer_len = count * ctx->block_size;
     uint64_t offset = 0;
     uint32_t max_len = 65536 * ctx->block_size;
-    future_t fut = NULL;
+    future_t* fut = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
@@ -97,7 +97,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint8_t* read_buf = *data;
     uint64_t offset = 0;
     uint32_t max_len = 65536 * ctx->block_size;
-    future_t fut = NULL;
+    future_t* fut = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
@@ -132,7 +132,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 int8_t ahci_disk_impl_flush(const disk_or_partition_t* d) {
     ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
 
-    future_t f_fut = ahci_flush(ctx->sata_disk->disk_id);
+    future_t* f_fut = ahci_flush(ctx->sata_disk->disk_id);
 
     future_get_data_and_destroy(f_fut);
 

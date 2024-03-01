@@ -325,7 +325,7 @@ struct tosdb_t {
     boolean_t            is_dirty; ///< is dirty
     hashmap_t*           databases; ///< databases
     hashmap_t*           database_new; ///< new databases
-    lock_t               lock; ///< lock
+    lock_t*              lock; ///< lock
     tosdb_cache_t*       cache; ///< cache
     const compression_t* compression; ///< compression
 };
@@ -344,7 +344,7 @@ struct tosdb_database_t {
     uint64_t   id;
     uint64_t   table_next_id;
     char_t*    name;
-    lock_t     lock;
+    lock_t*    lock;
     hashmap_t* tables;
     hashmap_t* table_new;
     uint64_t   metadata_location;
@@ -366,7 +366,7 @@ struct tosdb_table_t {
     boolean_t         is_dirty;
     uint64_t          id;
     char_t*           name;
-    lock_t            lock;
+    lock_t*           lock;
     hashmap_t*        columns;
     hashmap_t*        indexes;
     hashmap_t*        index_column_map;
@@ -523,7 +523,7 @@ typedef struct tosdb_sequence_t {
     int64_t         next_value;
     int64_t         cache_size;
     int64_t         cache_current_size;
-    lock_t          lock;
+    lock_t*         lock;
 } tosdb_sequence_t;
 
 #endif

@@ -27,9 +27,9 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
         return NULL;
     }
 
-    future_t fut;
+    future_t* fut;
 
-    fut = backend->read(backend, 0, sizeof(tosdb_superblock_t));
+    fut = (future_t*)backend->read(backend, 0, sizeof(tosdb_superblock_t));
 
     if(!fut) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read main super block");
@@ -69,7 +69,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
     }
 
 
-    fut = backend->read(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t));
+    fut = (future_t*)backend->read(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t));
 
     if(!fut) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup super block");

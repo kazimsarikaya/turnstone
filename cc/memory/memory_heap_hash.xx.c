@@ -651,7 +651,7 @@ memory_heap_t* memory_create_heap_hash(uint64_t start, uint64_t end) {
 
     memory_heap_t** lock_heap = (memory_heap_t**)lock_start;
     *lock_heap = heap;
-    heap->lock = (lock_t)lock_heap;
+    heap->lock = (lock_t*)lock_heap;
 
     uint64_t metadata_start = lock_start + SYNC_LOCK_SIZE;
 

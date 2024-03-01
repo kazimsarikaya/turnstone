@@ -60,7 +60,7 @@ int32_t VIDEO_GRAPHICS_HEIGHT = 0;
 uint32_t VIDEO_GRAPHICS_FOREGROUND = 0xFFFFFF;
 uint32_t VIDEO_GRAPHICS_BACKGROUND = 0x000000;
 
-lock_t video_lock = NULL;
+lock_t* video_lock = NULL;
 
 wchar_t* video_font_unicode_table = NULL;
 

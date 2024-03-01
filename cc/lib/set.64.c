@@ -16,7 +16,7 @@ MODULE("turnstone.lib");
 
 struct set_t {
     index_t* index;
-    lock_t   lock;
+    lock_t*  lock;
 };
 
 int8_t set_string_cmp(const void* i1, const void* i2);

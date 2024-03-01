@@ -107,7 +107,7 @@ int8_t setup_ram2(void) {
 
     if(mmap_res != (void*)mmmap_address) {
         print_error("cannot mmap ram tmpfile");
-        //fclose(mem_backend);
+        // fclose(mem_backend);
         mem_backend = NULL;
         return -3;
     }
@@ -139,7 +139,7 @@ void remove_ram2(void) {
 
     if(mem_backend) {
         munmap((void*)mmmap_address, mmap_size);
-        //fclose(mem_backend);
+        // fclose(mem_backend);
     }
 }
 
@@ -162,22 +162,22 @@ void __attribute__((destructor)) stop_ram(void) {
 }
 
 #ifdef ___TESTMODE
-typedef void * future_t;
+typedef struct future_t future_t;
 
-void*    lock_create_with_heap(memory_heap_t* heap);
-int8_t   lock_destroy(void* lock);
-void     lock_acquire(void* lock);
-void     lock_release(void* lock);
-void*    lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
-void     dump_ram(char_t* fname);
-void     cpu_sti(void);
-void     apic_eoi(void);
-void     task_current_task_sleep(uint64_t when_tick);
-time_t   rtc_get_time(void);
-void*    task_get_current_task(void);
-void     task_switch_task(void);
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data);
-void*    future_get_data_and_destroy(future_t fut);
+lock_t*   lock_create_with_heap(memory_heap_t* heap);
+int8_t    lock_destroy(lock_t* lock);
+void      lock_acquire(lock_t* lock);
+void      lock_release(lock_t* lock);
+lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+void      dump_ram(char_t* fname);
+void      cpu_sti(void);
+void      apic_eoi(void);
+void      task_current_task_sleep(uint64_t when_tick);
+time_t    rtc_get_time(void);
+void*     task_get_current_task(void);
+void      task_switch_task(void);
+future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data);
+void*     future_get_data_and_destroy(future_t* fut);
 
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
@@ -214,31 +214,31 @@ void* task_get_current_task(void){
     return NULL;
 }
 
-void* lock_create_with_heap(memory_heap_t* heap){
+lock_t* lock_create_with_heap(memory_heap_t* heap){
     UNUSED(heap);
     return (void*)0xdeadbeaf;
 }
 
-void* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future){
+lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future){
     UNUSED(heap);
     UNUSED(for_future);
     return (void*)0xdeadbeaf;
 }
 
-int8_t lock_destroy(void* lock){
+int8_t lock_destroy(lock_t* lock){
     UNUSED(lock);
     return 0;
 }
 
-void lock_acquire(void* lock){
+void lock_acquire(lock_t* lock){
     UNUSED(lock);
 }
 
-void lock_release(void* lock){
+void lock_release(lock_t* lock){
     UNUSED(lock);
 }
 
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
+future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data) {
     UNUSED(heap);
     UNUSED(lock);
 
@@ -249,7 +249,7 @@ future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void
     return (void*)0xdeadbeaf;
 }
 
-void* future_get_data_and_destroy(future_t fut) {
+void* future_get_data_and_destroy(future_t* fut) {
     if(!fut) {
         return NULL;
     }

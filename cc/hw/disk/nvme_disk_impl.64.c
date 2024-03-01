@@ -65,7 +65,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     uint64_t offset = 0;
     uint16_t rem_lba = count;
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
-    future_t fut = NULL;
+    future_t* fut = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
@@ -121,7 +121,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     uint64_t offset = 0;
     uint64_t rem_lba = count;
     uint64_t max_lba = MIN(512, ctx->nvme_disk->max_prp_entries);
-    future_t fut = NULL;
+    future_t* fut = NULL;
 
     list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
@@ -157,7 +157,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 int8_t nvme_disk_impl_flush(const disk_or_partition_t* d) {
     nvme_disk_impl_context_t* ctx = (nvme_disk_impl_context_t*)d->context;
 
-    future_t f_fut = nvme_flush(ctx->nvme_disk->disk_id);
+    future_t* f_fut = nvme_flush(ctx->nvme_disk->disk_id);
 
     future_get_data_and_destroy(f_fut);
 

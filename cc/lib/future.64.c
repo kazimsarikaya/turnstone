@@ -10,14 +10,14 @@
 
 MODULE("turnstone.lib");
 
-typedef struct future_internal_t {
+typedef struct future_t {
     memory_heap_t* heap;
-    lock_t         lock;
+    lock_t*        lock;
     void*          data;
-} future_internal_t;
+} future_t;
 
-future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void* data) {
-    future_internal_t* fi = memory_malloc_ext(heap, sizeof(future_internal_t), 0);
+future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data) {
+    future_t* fi = memory_malloc_ext(heap, sizeof(future_t), 0);
 
     if(fi == NULL) {
         return NULL;
@@ -30,8 +30,12 @@ future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t lock, void
     return fi;
 }
 
-void* future_get_data_and_destroy(future_t future) {
-    future_internal_t* fi = (future_internal_t*)future;
+void* future_get_data_and_destroy(future_t* future) {
+    future_t* fi = (future_t*)future;
+
+    if(fi == NULL) {
+        return NULL;
+    }
 
     lock_acquire(fi->lock);
 

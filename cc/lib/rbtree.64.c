@@ -150,7 +150,7 @@ typedef struct rbtree_t rbtree_t;
 
 struct rbtree_t {
     memory_heap_t* heap;
-    lock_t         lock;
+    lock_t*        lock;
     uint64_t       size;
     rbtree_node_t* root;
 };
