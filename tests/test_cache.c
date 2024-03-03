@@ -6,7 +6,7 @@
 #include "setup.h"
 #include <cache.h>
 #include <hashmap.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <strings.h>
 #include <utils.h>
 

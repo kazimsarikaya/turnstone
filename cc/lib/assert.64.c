@@ -11,6 +11,7 @@
 #include <logging.h>
 #include <cpu.h>
 
+MODULE("turnstone.lib")
 
 #if ___TESTMODE == 1
 extern _Noreturn void abort(void);
@@ -24,7 +25,7 @@ _Noreturn void __assert(const char_t * expr, const char_t * file, size_t line, c
 #if ___TESTMODE == 1
     abort();
 #else
-    cpu_halt();
+    cpu_hlt();
 #endif
 
 }

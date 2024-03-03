@@ -272,3 +272,21 @@ int8_t list_set_capacity(list_t* list, size_t capacity) {
 
     return -2;
 }
+
+list_t* linkedlist_duplicate_list_with_heap(memory_heap_t* heap, list_t* list);
+list_t* arraylist_duplicate_list_with_heap(memory_heap_t* heap, list_t* list);
+
+list_t* list_duplicate_list_with_heap(memory_heap_t* heap, list_t* list) {
+    if(list == NULL) {
+        return NULL;
+    }
+
+    if(list->type & LIST_TYPE_LINKED) {
+        return linkedlist_duplicate_list_with_heap(heap, list);
+    } else if(list->type & LIST_TYPE_ARRAY) {
+        return arraylist_duplicate_list_with_heap(heap, list);
+    }
+
+    // default is linked list
+    return linkedlist_duplicate_list_with_heap(heap, list);
+}

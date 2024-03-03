@@ -4,7 +4,7 @@
  */
 
 #include "setup.h"
-#include <linkedlist.h>
+#include <list.h>
 #include <utils.h>
 #include <xxhash.h>
 #include <strings.h>
@@ -59,7 +59,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    linkedlist_t* list = linkedlist_create_sortedlist(key_cmp);
+    list_t* list = list_create_sortedlist(key_cmp);
 
     for(int64_t i = 1; i < 100; i++) {
         char_t* s_i = itoa(i % 17);
@@ -80,14 +80,14 @@ int32_t main(uint32_t argc, char_t** argv) {
 
         memory_free(item);
 
-        linkedlist_sortedlist_insert(list, ii);
+        list_sortedlist_insert(list, ii);
 
     }
 
 
-    iterator_t* iter = linkedlist_iterator_create(list);
+    iterator_t* iter = list_iterator_create(list);
 
-    printf("!!! ls %lli\n", linkedlist_size(list));
+    printf("!!! ls %lli\n", list_size(list));
 
     uint64_t prev_hash = 0;
 
@@ -114,7 +114,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     iter->destroy(iter);
 
 
-    linkedlist_destroy_with_data(list);
+    list_destroy_with_data(list);
 
     print_success("TESTS PASSED");
 
