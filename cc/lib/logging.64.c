@@ -45,6 +45,7 @@ const char_t*const logging_module_names[] = {
     "COMPILER",
     "COMPILER_ASSEMBLER",
     "COMPILER_PASCAL",
+    "HYPERVISOR",
 };
 
 
@@ -94,6 +95,7 @@ uint8_t logging_module_levels[] = {
     LOG_LEVEL_COMPILER,
     LOG_LEVEL_COMPILER_ASSEMBLER,
     LOG_LEVEL_COMPILER_PASCAL,
+    LOG_LEVEL_HYPERVISOR,
 };
 
 extern boolean_t windowmanager_initialized;

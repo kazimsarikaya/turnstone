@@ -23,10 +23,10 @@
 #define TASK_KERNEL_TASK_ID 1
 
 /**
- * @struct descriptor_tss
+ * @struct descriptor_tss_t
  * @brief 64 bit tss descriptor
  */
-typedef struct descriptor_tss {
+typedef struct descriptor_tss_t {
     uint16_t segment_limit1 : 16; ///< segment limit bits 0-15
     uint32_t base_address1  : 24; ///< base address bits 0-23
     uint8_t  type           : 4; ///< tss type 0x9 in bits

@@ -30,6 +30,13 @@ uint64_t cpu_read_cr2(void) {
     return cr2;
 }
 
+uint64_t cpu_read_cr3(void) {
+    uint64_t cr3 = 0;
+    __asm__ __volatile__ ("mov %%cr3, %0\n"
+                          : "=r" (cr3));
+    return cr3;
+}
+
 
 cpu_reg_cr4_t cpu_read_cr4(void) {
     cpu_reg_cr4_t cr4;
@@ -59,7 +66,7 @@ void cpu_write_cr0(cpu_reg_cr0_t cr0) {
 void cpu_toggle_cr0_wp(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
 
-    cr0.write_protect = ~cr0.write_protect;
+    cr0.fields.write_protect = ~cr0.fields.write_protect;
 
     cpu_write_cr0(cr0);
 }
@@ -67,7 +74,7 @@ void cpu_toggle_cr0_wp(void) {
 void cpu_cr0_disable_wp(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
 
-    cr0.write_protect = 0;
+    cr0.fields.write_protect = 0;
 
     cpu_write_cr0(cr0);
 }
@@ -75,18 +82,18 @@ void cpu_cr0_disable_wp(void) {
 void cpu_cr0_enable_wp(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
 
-    cr0.write_protect = 1;
+    cr0.fields.write_protect = 1;
 
     cpu_write_cr0(cr0);
 }
 
 void cpu_enable_sse(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
-    cr0.monitor_coprocessor = 1;
-    cr0.emulation = 0;
-    cr0.task_switched = 0;
-    cr0.numeric_error = 1;
-    cr0.write_protect = 1;
+    cr0.fields.monitor_coprocessor = 1;
+    cr0.fields.emulation = 0;
+    cr0.fields.task_switched = 0;
+    cr0.fields.numeric_error = 1;
+    cr0.fields.write_protect = 1;
     cpu_write_cr0(cr0);
 
     cpu_reg_cr4_t cr4 = cpu_read_cr4();
@@ -104,4 +111,14 @@ void cpu_clear_segments(void) {
         "mov %ax, %fs\n"
         "mov %ax, %gs\n"
         );
+}
+
+uint64_t cpu_read_fs_base(void) {
+    uint64_t fs_base = cpu_read_msr(CPU_MSR_IA32_FS_BASE);
+    return fs_base;
+}
+
+uint64_t cpu_read_gs_base(void) {
+    uint64_t gs_base = cpu_read_msr(CPU_MSR_IA32_GS_BASE);
+    return gs_base;
 }

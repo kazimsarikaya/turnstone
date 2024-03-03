@@ -43,6 +43,7 @@
 #include <stdbufs.h>
 #include <backtrace.h>
 #include <debug.h>
+#include <hypervisor/hypervisor.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -480,6 +481,13 @@ int8_t kmain64(size_t entry_point) {
     }
 
     PRINTLOG(KERNEL, LOG_INFO, "smbios version 0x%llx smbios data address 0x%p", SYSTEM_INFO->smbios_version, SYSTEM_INFO->smbios_table);
+
+    if(hypervisor_init() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor. Halting...");
+    } else {
+        PRINTLOG(KERNEL, LOG_INFO, "hypervisor is supported");
+        hypervisor_stop();
+    }
 
     PRINTLOG(KERNEL, LOG_INFO, "current time %lli", time_ns(NULL));
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");

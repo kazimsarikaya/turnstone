@@ -111,6 +111,14 @@ int8_t cpu_write_msr(uint32_t msr_address, uint64_t value);
 uint64_t cpu_read_cr2(void);
 
 /**
+ * @brief read cr3 and return
+ * @return             cr3 value
+ *
+ * returns cr3 value for page tables
+ */
+uint64_t cpu_read_cr3(void);
+
+/**
  * @struct cpu_cpuid_regs_t
  * @brief cpuid command set/get registers.
  *
@@ -163,4 +171,8 @@ static inline void cpu_tlb_flush(void) {
 }
 
 boolean_t cpu_is_interrupt_enabled(void);
+
+uint64_t cpu_read_fs_base(void);
+uint64_t cpu_read_gs_base(void);
+
 #endif
