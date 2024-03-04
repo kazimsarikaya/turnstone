@@ -27,6 +27,10 @@
 
 /*! hard coded gdt code segment value */
 #define KERNEL_CODE_SEG 0x08
+/*! hard coded gdt data segment value */
+#define KERNEL_DATA_SEG 0x10
+/*! hard coded gdt tss segment value */
+#define KERNEL_TSS_SEG  0x18
 
 /**
  * @struct descriptor_gdt_null
@@ -75,7 +79,7 @@ typedef struct descriptor_gdt_data {
     uint8_t  present   : 1; ///< 2/15 aka 47 is always 1
     uint16_t unused5   : 5; ///< 2/16-20 aka 48-52 are unused
     uint16_t long_mode : 1; ///< 2/21 aka 53 is always 1
-    uint16_t unused6   : 10;///< 2/22-31 aka 54-63 are unused
+    uint16_t unused6   : 10; ///< 2/22-31 aka 54-63 are unused
 }__attribute__((packed)) descriptor_gdt_data_t; ///< struct short hand
 
 /**
@@ -166,7 +170,7 @@ typedef struct descriptor_idt {
     uint8_t  present   : 1; ///< interrupt present?
     uint16_t offset_2; ///< offset bits 16..31 of where interrupt function reside
     uint32_t offset_3; ///< offset bits 32..63 of where interrupt function reside
-    uint32_t zero;    ///< reserved, always zero
+    uint32_t zero; ///< reserved, always zero
 }__attribute__((packed)) descriptor_idt_t; ///< struct short hand
 
 /**

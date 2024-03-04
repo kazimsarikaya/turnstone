@@ -906,9 +906,9 @@ token_error:
         goto rec_destroy;
     }
 
-    linkedlist_t* s_recs = s_rec->search_record(s_rec);
+    list_t* s_recs = s_rec->search_record(s_rec);
 
-    iterator_t* iter = linkedlist_iterator_create(s_recs);
+    iterator_t* iter = list_iterator_create(s_recs);
 
     if(!iter) {
         print_error("cannot create search iterator");
@@ -971,7 +971,7 @@ token_error:
 
 search_iter_destroy:
     iter->destroy(iter);
-    linkedlist_destroy(s_recs);
+    list_destroy(s_recs);
 
 rec_destroy:
 
@@ -1163,9 +1163,9 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
         goto rec_destroy;
     }
 
-    linkedlist_t* s_recs = s_rec->search_record(s_rec);
+    list_t* s_recs = s_rec->search_record(s_rec);
 
-    iterator_t* iter = linkedlist_iterator_create(s_recs);
+    iterator_t* iter = list_iterator_create(s_recs);
 
     if(!iter) {
         print_error("cannot create search iterator");
@@ -1231,7 +1231,7 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
 
 search_iter_destroy:
     iter->destroy(iter);
-    linkedlist_destroy(s_recs);
+    list_destroy(s_recs);
 
 rec_destroy:
 

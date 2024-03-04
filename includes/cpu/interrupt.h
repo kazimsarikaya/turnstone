@@ -132,4 +132,5 @@ typedef union interrupt_errorcode_pagefault_u {
     uint32_t bits; ///< all value in 32bit integer
 } interrupt_errorcode_pagefault_t; ///< union short hand for @ref interrupt_errorcode_pagefault_u
 
+void interrupt_generic_handler(interrupt_frame_ext_t* frame);
 #endif

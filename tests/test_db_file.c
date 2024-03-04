@@ -11,7 +11,7 @@
 #include <strings.h>
 #include <utils.h>
 #include <random.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <time.h>
 #include <utils.h>
 #include <buffer.h>
@@ -449,9 +449,9 @@ token_error:
         goto rec_destroy;
        }
 
-       linkedlist_t* s_recs = s_rec->search_record(s_rec);
+       list_t* s_recs = s_rec->search_record(s_rec);
 
-       iterator_t* iter = linkedlist_iterator_create(s_recs);
+       iterator_t* iter = list_iterator_create(s_recs);
 
        if(!iter) {
         print_error("cannot create search iterator");
@@ -514,7 +514,7 @@ token_error:
 
        search_iter_destroy:
        iter->destroy(iter);
-       linkedlist_destroy(s_recs);
+       list_destroy(s_recs);
 
        rec_destroy:
 

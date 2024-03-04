@@ -42,6 +42,7 @@ size_t      arraylist_insert_at(list_t* list, const void* data, list_insert_dele
 const void* arraylist_delete_at(list_t* list, const void* data, list_insert_delete_at_t where, size_t position);
 const void* arraylist_get_data_at_position(list_t* list, size_t position);
 int8_t      arraylist_get_position(list_t* list, const void* data, size_t* position);
+list_t*     arraylist_duplicate_list_with_heap(memory_heap_t* heap, list_t* list);
 iterator_t* arraylist_iterator_create(list_t* list);
 
 
@@ -195,6 +196,18 @@ const void* arraylist_delete_at(list_t* list, const void* data, list_insert_dele
     UNUSED(data);
     UNUSED(where);
     UNUSED(position);
+    NOTIMPLEMENTEDLOG(KERNEL);
+
+    return NULL;
+}
+
+list_t* arraylist_duplicate_list_with_heap(memory_heap_t* heap, list_t* list) {
+    if(list == NULL) {
+        return NULL;
+    }
+
+    UNUSED(heap);
+    UNUSED(list);
     NOTIMPLEMENTEDLOG(KERNEL);
 
     return NULL;

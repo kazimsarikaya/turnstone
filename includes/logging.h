@@ -52,6 +52,7 @@ typedef enum logging_modules_t {
     COMPILER,
     COMPILER_ASSEMBLER,
     COMPILER_PASCAL,
+    HYPERVISOR,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -239,6 +240,11 @@ extern uint8_t logging_module_levels[];
 #ifndef LOG_LEVEL_COMPILER_PASCAL
 /*! default log level for compiler pascal module */
 #define LOG_LEVEL_COMPILER_PASCAL LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_HYPERVISOR
+/*! default log level for hypervisor module */
+#define LOG_LEVEL_HYPERVISOR LOG_DEBUG
 #endif
 
 #ifndef LOG_LOCATION

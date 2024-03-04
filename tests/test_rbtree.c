@@ -6,7 +6,7 @@
 #include "setup.h"
 #include <rbtree.h>
 #include <strings.h>
-#include <linkedlist.h>
+#include <list.h>
 
 int32_t main(uint32_t argc, char_t** argv);
 int8_t  integer_cmp(const void* item1, const void* item2);
@@ -72,7 +72,7 @@ int32_t main(uint32_t argc, char_t** argv) {
 
     for(int64_t i = 0; i <  128 * 1024; i++) {
         idx->insert(idx, (void*)(i * sign), (void*)i, NULL);
-        //sign *= -1;
+        // sign *= -1;
     }
 
     if(!idx->contains(idx, (void*)123456)) {

@@ -39,6 +39,12 @@ int8_t                            setup_ram2(void);
 void                              remove_ram2(void);
 void __attribute__((constructor)) start_ram(void);
 void __attribute__((destructor))  stop_ram(void);
+void                              on_sigabrt(int32_t sig);
+
+void on_sigabrt(int32_t sig) {
+    UNUSED(sig);
+    exit(-1);
+}
 
 extern int64_t errno;
 
@@ -165,6 +171,8 @@ void __attribute__((constructor)) start_ram(void) {
     uint64_t seed = time_ns(NULL);
 
     srand(seed);
+
+    signal(SIGABRT, on_sigabrt);
 }
 
 void __attribute__((destructor)) stop_ram(void) {

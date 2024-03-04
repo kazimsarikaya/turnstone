@@ -7,7 +7,7 @@
 #include "setup.h"
 #include <acpi.h>
 #include <acpi/aml.h>
-#include <linkedlist.h>
+#include <list.h>
 #include <strings.h>
 #include <utils.h>
 #include <bplustree.h>

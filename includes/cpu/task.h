@@ -23,10 +23,10 @@
 #define TASK_KERNEL_TASK_ID 1
 
 /**
- * @struct descriptor_tss
+ * @struct descriptor_tss_t
  * @brief 64 bit tss descriptor
  */
-typedef struct descriptor_tss {
+typedef struct descriptor_tss_t {
     uint16_t segment_limit1 : 16; ///< segment limit bits 0-15
     uint32_t base_address1  : 24; ///< base address bits 0-23
     uint8_t  type           : 4; ///< tss type 0x9 in bits
@@ -117,6 +117,7 @@ typedef struct {
     buffer_t*                    input_buffer; ///< input buffer
     buffer_t*                    output_buffer; ///< output buffer
     buffer_t*                    error_buffer; ///< error buffer
+    uint64_t                     vmcs_physical_address; ///< vmcs physical address
     uint64_t                     rax; ///< register
     uint64_t                     rbx; ///< register
     uint64_t                     rcx; ///< register
@@ -226,6 +227,8 @@ boolean_t task_idle_check_need_yield(void);
  */
 void task_current_task_sleep(uint64_t wake_tick);
 
+void task_end_task(void);
+
 void task_print_all(void);
 
 buffer_t* task_get_input_buffer(void);
@@ -234,5 +237,9 @@ buffer_t* task_get_error_buffer(void);
 int8_t    task_set_input_buffer(buffer_t* buffer);
 int8_t    task_set_output_buffer(buffer_t * buffer);
 int8_t    task_set_error_buffer(buffer_t * buffer);
+
+void     task_set_vmcs_physical_address(uint64_t vmcs_physical_address);
+uint64_t task_get_vmcs_physical_address(void);
+
 
 #endif

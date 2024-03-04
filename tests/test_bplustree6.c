@@ -4,7 +4,7 @@
  */
 
 #include "setup.h"
-#include <linkedlist.h>
+#include <list.h>
 #include <utils.h>
 #include <xxhash.h>
 #include <strings.h>

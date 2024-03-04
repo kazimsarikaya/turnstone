@@ -8,7 +8,7 @@
 #include <rbtree.h>
 #include <strings.h>
 #include <utils.h>
-#include <linkedlist.h>
+#include <list.h>
 
 int32_t   main(uint32_t argc, char_t** argv);
 boolean_t str_free(void* item);

@@ -41,20 +41,22 @@ Turnstone OS:
     Database:
       ✔  @high Implement disk layout with lsm @done (2023-04-09 22:52)
       ✔ Implement memory cache. @done (2023-10-09 03:42)
-      ☐ Implement backend cache.
+      ✔ Implement backend cache. @done (2024-03-04 20:43)
       ☐ Implement wal.
       ☐ Implement compaction.
       ✔ Optimise delete. @done (2023-04-09 23:11)
-      ☐ Implement secondary index and search.
+      ✔ Implement secondary index and search. @done (2024-03-04 20:43)
     Network:
       ☐ Implement TCP
+        ✔ Parial implementation of TCP @done (2024-03-04 20:43)
+        ☐ Full implementation of TCP with congestion control
       ✔ Implement DHCP Client @done(2022-12-13 21:21:25)
       ☐ Implement DNS Client
       ☐ arp tables
       ☐ routing
       ✔ @high ipv4 receive packet simple fragmantation reassembly @done(2022-12-18 07:28:16)
       ☐ @low ipv4 receive packet fragmantation timeout
-      ☐ @low ipv4 send packet fragmantation
+      ✔ @low ipv4 send packet fragmantation @done (2024-03-04 20:46)
       ✔ @high dhcpv4 client renew and timeout @done(2022-12-17 22:55:57)
       ☐ @medium each network protocol should be module and have in/out tasks
     Message Queue:
@@ -65,20 +67,33 @@ Turnstone OS:
         ☐ Write preprocessor
         ☐ Write C to assembly compiler
         ☐ Write optimizers
+      ☐ Write Pascal like syntax with C compiler
+        ✔ Several syntaxes completed @done (2024-03-04 20:46)
       ☐ Write bootstrapper
     Linker-Loader:
       ☐ Write linker/loader for programs readed from disk
       ☐ Write shared library linker/loader
     Crypto Libraries:
       ☐ @high bigint implementation 
+        ✔ Partial implementation of bigint @done (2024-03-04 20:43)
       ✔ @high sha384, sha224 @done(2022-12-13 13:47:29)
-      ☐ aes encryption with gcm
+      ✔ aes encryption with gcm @done (2024-03-04 20:41)
       ☐ ec implementation
       ☐ @low rsa implementation
       ☐ @low dh implementation
       ☐ tls implementation especially dtls
-
-      
+    Hypervisor:
+      ☐ Implement hypervisor with kvm
+        ✔ Create VM @done (2024-03-04 20:48)
+        ✔ Run VM @done (2024-03-04 20:48)
+        ✔ Schedule VM as task @done (2024-03-04 20:48)
+        ☐ Handle VM exit
+          ✔ HLT, External Interrupt @done (2024-03-04 20:48)
+          ☐ PIO, MMIO
+          ☐ rdmsr wrmsr
+          ☐ cpuid
+          ☐ control register
+        ☐ Task as VM
 ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
 Archive:
   ✔ Memory bug when store opcode's target (maybe return one) is DEBUG object @done(2022-02-13 18:10:00) @project(Turnstone OS / Issues)

@@ -21,7 +21,7 @@ else
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
 LD = gcc
 LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-linux -lvex-amd64-linux \
-		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -static -nostdlib -Wl,-e_tos_start -Wl,-pie -Wl,-I/lib/ld-musl-x86_64.so.1
+		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -Wl,-nostdlib -nostdlib -Wl,-e_tos_start -Wl,-pie 
 endif
 
 OUTPUT = ../output

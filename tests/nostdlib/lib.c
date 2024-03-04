@@ -12,9 +12,77 @@
 #include <utils.h>
 
 
+int64_t errno = 0;
+
+int32_t printf(const char_t* format, ...);
+int32_t fprintf(uint32_t fd, const char_t* format, ...);
+int32_t fvprintf(uint32_t fd, const char_t* format, va_list arg );
+int32_t vprintf(const char_t* format, va_list arg );
 
 void __attribute__((constructor)) __init_srand_seed(void);
 void                              __clean_tmpfiles(void);
+
+__attribute__((noreturn)) void _tos_start_2(uint64_t* rsp);
+
+
+uint32_t __srand_seed = 0;
+
+void    srand(uint32_t seed);
+int32_t rand(void);
+
+__attribute__((naked, force_align_arg_pointer)) int32_t _tos_start(void);
+
+int32_t main(int32_t argc, char_t** argv, char_t** envp);
+void    __premain(void);
+void    __postmain(void);
+
+#define O_RDONLY 0x0000
+#define O_WRONLY 0x0001
+#define O_RDWR   0x0002
+#define O_CREAT  0x0040
+#define O_TRUNC  0x0200
+#define O_APPEND 0x0400
+
+#define S_IRWXU 0000700
+#define S_IRUSR 0000400
+#define S_IWUSR 0000200
+#define S_IXUSR 0000100
+#define S_IRWXG 0000070
+#define S_IRGRP 0000040
+#define S_IWGRP 0000020
+#define S_IXGRP 0000010
+#define S_IRWXO 0000007
+#define S_IROTH 0000004
+#define S_IWOTH 0000002
+#define S_IXOTH 0000001
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
+typedef uint64_t FILE;
+
+int32_t                        open(const char_t* pathname, int32_t flags, int32_t mode);
+int64_t                        read(uint64_t fd, void* buf, uint64_t count);
+int64_t                        write(uint64_t fd, const void* buf, uint64_t count);
+int64_t                        close(uint64_t fd);
+uint64_t                       lseek(uint64_t fd, uint64_t offset, int32_t whence);
+void*                          mmap(uint64_t addr, uint64_t length, int32_t prot, int32_t flags, uint64_t fd, uint64_t offset);
+int32_t                        mprotect(void* addr, uint64_t len, int32_t prot);
+int64_t                        munmap(void* addr, uint64_t length);
+__attribute__((noreturn)) void exit(int64_t status);
+int32_t                        unlink(const char_t * pathname);
+
+
+int64_t video_print(const char_t* buf);
+int64_t fvideo_print(uint32_t fd, const char_t* buf);
+
+int32_t __popcountdi2(uint64_t x);
+
+extern void (*__init_array_start []) (void) __attribute__((weak));
+extern void (*__init_array_end []) (void) __attribute__((weak));
+extern void (*__fini_array_start []) (void) __attribute__((weak));
+extern void (*__fini_array_end []) (void) __attribute__((weak));
 
 
 typedef struct timeval {
@@ -41,15 +109,105 @@ typedef struct tms {
 
 typedef uint32_t time_t;
 
-typedef int32_t clockid_t;
+typedef int32_t  clockid_t;
+typedef uint64_t pid_t;
 
-int32_t  gettimeofday(timeval_t* tv, timezone_t* tz);
-uint32_t time(time_t* t);
-int32_t  clock_gettime(clockid_t clk_id, timespec_t* tp);
-char_t*  tolower(char_t* s);
+typedef void (*sighandler_t)(int32_t);
+
+typedef struct siginfo_t siginfo_t;
+typedef uint64_t         sigset_t;
+
+struct sigaction {
+    sighandler_t sa_handler;
+    uint64_t     sa_flags;
+    void         (*sa_restorer)(void);
+    sigset_t     sa_mask;
+};
+
+#define SIG_ERR  ((sighandler_t)-1)
+#define SIGABRT 6
+#define SA_RESTORER 0x04000000
+
+int32_t                               gettimeofday(timeval_t* tv, timezone_t* tz);
+uint32_t                              time(time_t* t);
+int32_t                               clock_gettime(clockid_t clk_id, timespec_t* tp);
+char_t*                               tolower(char_t* s);
+sighandler_t                          signal(int32_t signum, sighandler_t handler);
+void                                  abort(void);
+int32_t                               raise(int32_t sig);
+pid_t                                 getpid(void);
+int32_t                               kill(pid_t pid, int32_t sig);
+void __attribute__((noreturn, naked)) signal_restorer(void);
 
 char_t* tolower(char_t* s) {
     return strlower(s);
+}
+
+pid_t getpid(void) {
+    pid_t ret = 0;
+
+    asm volatile (
+        "mov $0x27, %%rax\n"
+        "syscall\n"
+        : "=a" (ret)
+        );
+
+    return ret;
+}
+
+int32_t raise(int32_t sig) {
+    return kill(getpid(), sig);
+}
+
+int32_t kill(pid_t pid, int32_t sig) {
+    int32_t ret = 0;
+
+    asm volatile (
+        "mov $0x3e, %%rax\n"
+        "syscall\n"
+        : "=a" (ret)
+        : "D" (pid), "S" (sig)
+        );
+
+    return ret;
+}
+
+void signal_restorer(void) {
+    asm volatile (
+        "mov $0xf, %rax\n"
+        "syscall\n"
+        );
+}
+
+sighandler_t signal(int32_t signum, sighandler_t handler) {
+    struct sigaction act = {0};
+
+    act.sa_handler = handler;
+    act.sa_flags = SA_RESTORER;
+    act.sa_restorer = signal_restorer;
+
+    struct sigaction oldact = {0};
+    int32_t ret = 0;
+
+    register uint64_t r10 asm ("r10") = sizeof(sigset_t);
+
+    asm volatile (
+        "mov $0xd, %%rax\n"
+        "syscall\n"
+        : "=a" (ret)
+        : "D" (signum), "S" (&act), "d" (&oldact), "r" (r10)
+        );
+
+    if(ret < 0) {
+        errno = ret;
+        return SIG_ERR;
+    }
+
+    return oldact.sa_handler;
+}
+
+void abort(void) {
+    raise(SIGABRT);
 }
 
 int32_t clock_gettime(clockid_t clk_id, timespec_t* tp) {
@@ -106,12 +264,6 @@ uint32_t time(time_t* t) {
     return tv.tv_sec;
 }
 
-int64_t errno = 0;
-uint32_t __srand_seed = 0;
-
-void    srand(uint32_t seed);
-int32_t rand(void);
-
 void srand(uint32_t seed) {
     __srand_seed = seed;
 }
@@ -121,59 +273,6 @@ int32_t rand(void) {
 
     return (__srand_seed / 65536) % 32768;
 }
-
-__attribute__((naked, force_align_arg_pointer)) int32_t _tos_start(void);
-
-int32_t main(int32_t argc, char_t** argv, char_t** envp);
-void    __premain(void);
-void    __postmain(void);
-
-#define O_RDONLY 0x0000
-#define O_WRONLY 0x0001
-#define O_RDWR   0x0002
-#define O_CREAT  0x0040
-#define O_TRUNC  0x0200
-#define O_APPEND 0x0400
-
-#define S_IRWXU 0000700
-#define S_IRUSR 0000400
-#define S_IWUSR 0000200
-#define S_IXUSR 0000100
-#define S_IRWXG 0000070
-#define S_IRGRP 0000040
-#define S_IWGRP 0000020
-#define S_IXGRP 0000010
-#define S_IRWXO 0000007
-#define S_IROTH 0000004
-#define S_IWOTH 0000002
-#define S_IXOTH 0000001
-
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
-
-typedef uint64_t FILE;
-
-int32_t                        open(const char_t* pathname, int32_t flags, int32_t mode);
-int64_t                        read(uint64_t fd, void* buf, uint64_t count);
-int64_t                        write(uint64_t fd, const void* buf, uint64_t count);
-int64_t                        close(uint64_t fd);
-uint64_t                       lseek(uint64_t fd, uint64_t offset, int32_t whence);
-void*                          mmap(uint64_t addr, uint64_t length, int32_t prot, int32_t flags, uint64_t fd, uint64_t offset);
-int32_t                        mprotect(void* addr, uint64_t len, int32_t prot);
-int64_t                        munmap(void* addr, uint64_t length);
-__attribute__((noreturn)) void exit(int64_t status);
-int32_t                        unlink(const char_t * pathname);
-
-
-int32_t printf(const char_t* format, ...);
-int32_t fprintf(uint32_t fd, const char_t* format, ...);
-int32_t fvprintf(uint32_t fd, const char_t* format, va_list arg );
-int32_t vprintf(const char_t* format, va_list arg );
-int64_t video_print(const char_t* buf);
-int64_t fvideo_print(uint32_t fd, const char_t* buf);
-
-int32_t __popcountdi2(uint64_t x);
 
 int32_t printf(const char_t* format, ...) {
     va_list arg;
@@ -560,6 +659,7 @@ int64_t munmap(void* addr, uint64_t length) {
 }
 
 void exit(int64_t status) {
+    __postmain();
     __clean_tmpfiles();
 
     int64_t ret = 0;
@@ -781,8 +881,6 @@ uint64_t fseek(const FILE* stream, size_t offset, int32_t origin) {
     return lseek((uint64_t)stream, offset, origin);
 }
 
-__attribute__((noreturn)) void _tos_start_2(uint64_t* rsp);
-
 void _tos_start_2(uint64_t* _rsp) {
     int32_t argc = (int32_t)*_rsp;
     char_t** argv = (char_t**)(_rsp + 1);
@@ -793,8 +891,6 @@ void _tos_start_2(uint64_t* _rsp) {
     __premain();
 
     ret = main(argc, argv, envp);
-
-    __postmain();
 
     exit(ret);
 }
@@ -807,11 +903,6 @@ int32_t _tos_start(void) {
         "call _tos_start_2\n"
         );
 }
-
-extern void (*__init_array_start []) (void) __attribute__((weak));
-extern void (*__init_array_end []) (void) __attribute__((weak));
-extern void (*__fini_array_start []) (void) __attribute__((weak));
-extern void (*__fini_array_end []) (void) __attribute__((weak));
 
 void __premain(void) {
     char_t test_data[] = "A";

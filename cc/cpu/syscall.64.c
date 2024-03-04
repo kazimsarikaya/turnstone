@@ -86,6 +86,21 @@ const syscall_f SYSCALL_TABLE[] = {
 /*! system call table size */
 #define SYSCALL_TABLE_SIZE (sizeof(SYSCALL_TABLE) / sizeof(SYSCALL_TABLE[0]))
 
+void syscall_init(void) {
+    uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
+    msr_efer |= 1;
+    cpu_write_msr(CPU_MSR_EFER, msr_efer);
+
+    uint64_t msr_star = 0x00200008ULL << 32;
+    cpu_write_msr(CPU_MSR_STAR, msr_star);
+
+    uint64_t msr_lstar = (uint64_t)syscall_handler;
+    cpu_write_msr(CPU_MSR_LSTAR, msr_lstar);
+
+    uint64_t msr_fmask = 0x200;
+    cpu_write_msr(CPU_MSR_FMASK, msr_fmask);
+}
+
 uint64_t syscall_handler_create_stack(uint64_t old_stack) {
     smp_data_t* smp_data = (smp_data_t*)0x9000;
     uint64_t ap_id = apic_get_local_apic_id();
