@@ -17,4 +17,6 @@
  */
 void syscall_handler(void);
 
+void syscall_init(void);
+
 #endif /* !___CPU_SYSCALL_H */

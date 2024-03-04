@@ -76,7 +76,7 @@ static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* v
 
     cpu_sti();
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Handler Returned");
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Handler Returned: 0x%llx", (uint64_t)vmexit_info->registers);
 
     return (uint64_t)vmexit_info->registers;
 }
@@ -88,16 +88,15 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
     uint64_t instruction_info = vmexit_info->instruction_info;
     uint64_t instruction_length = vmexit_info->instruction_length;
 
+    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+    uint64_t guest_cs = vmx_read(VMX_GUEST_CS_SELECTOR);
+    uint64_t eptp = vmx_read(VMX_CTLS_EPTP);
+
     PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT Misconfig: 0x%llx", exit_qualification);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Guest Linear Addr: 0x%llx", guest_linear_addr);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Guest Physical Addr: 0x%llx", guest_physical_addr);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Length: 0x%llx", instruction_length);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Info: 0x%llx", instruction_info);
-
-    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
-    uint64_t guest_cs = vmx_read(VMX_GUEST_CS_SELECTOR);
-    uint64_t eptp = vmx_read(VMX_CTLS_EPTP);
-
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Guest RIP: 0x%llx:0x%llx", guest_cs, guest_rip);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    EPTP: 0x%llx", eptp);
 

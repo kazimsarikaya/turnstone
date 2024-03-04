@@ -44,7 +44,7 @@ uint64_t hypervisor_create_stack(uint64_t stack_size) {
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
-        PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
 
         return -1;
     }
@@ -52,12 +52,14 @@ uint64_t hypervisor_create_stack(uint64_t stack_size) {
     uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
 
     if(memory_paging_add_va_for_frame(stack_va, stack_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
-        PRINTLOG(TASKING, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot add stack va 0x%llx for frame at 0x%llx with count 0x%llx", stack_va, stack_frames->frame_address, stack_frames->frame_count);
 
         cpu_hlt();
     }
 
     memory_memclean((void*)stack_va, stack_size);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "stack va 0x%llx[0x%llx]", stack_va, stack_size);
 
     return stack_va + stack_size - 16;
 }

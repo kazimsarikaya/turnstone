@@ -15,5 +15,6 @@
 int8_t hypervisor_init(void);
 int8_t hypervisor_stop(void);
 
+int8_t hypervisor_vm_create(void);
 
 #endif

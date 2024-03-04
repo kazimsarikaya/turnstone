@@ -19,6 +19,7 @@
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 #include <cpu/syscall.h>
+#include <hypervisor/hypervisor.h>
 
 MODULE("turnstone.kernel.cpu");
 
@@ -239,21 +240,13 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Test Data: %s", cpu_id, test_data);
 
-    uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
-    msr_efer |= 1;
-    cpu_write_msr(CPU_MSR_EFER, msr_efer);
+    syscall_init();
 
-    uint64_t msr_star = 0x00200008ULL << 32;
-    cpu_write_msr(CPU_MSR_STAR, msr_star);
+    if(hypervisor_init() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
 
-    uint64_t msr_lstar = (uint64_t)syscall_handler;
-    cpu_write_msr(CPU_MSR_LSTAR, msr_lstar);
-
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i syscall handler: %llx", cpu_id, msr_lstar);
-
-    uint64_t msr_fmask = 0x200;
-    cpu_write_msr(CPU_MSR_FMASK, msr_fmask);
-
+        cpu_hlt();
+    }
 
     frame_t* user_code_frames = NULL;
 

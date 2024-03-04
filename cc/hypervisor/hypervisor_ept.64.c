@@ -25,7 +25,7 @@ uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
         high_mem -= high_mem % MEMORY_PAGING_PAGE_TYPE_2M;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "low_mem: 0x%llx, high_mem: 0x%llx", low_mem, high_mem);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "low_mem: 0x%llx, high_mem: 0x%llx", low_mem, high_mem);
 
 
     uint64_t pde_row_count = (high_mem - low_mem) / MEMORY_PAGING_PAGE_LENGTH_2M;
@@ -48,12 +48,12 @@ uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
     uint64_t guest_size = high_mem - low_mem;
 
     uint64_t guest_frames_va = hypervisor_allocate_region(&guest_frames, guest_size);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "guest_frames_va: 0x%llx", guest_frames_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "guest_frames_va: 0x%llx", guest_frames_va);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "ept_frames_va: 0x%llx", ept_frames_va);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pde_row_count: 0x%llx pde_count: 0x%llx", pde_row_count, pde_count);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pdpte_row_count: 0x%llx pdpte_count: 0x%llx", pdpte_row_count, pdpte_count);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pml4e_row_count: 0x%llx", pml4e_row_count);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "ept_frames_va: 0x%llx", ept_frames_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pde_row_count: 0x%llx pde_count: 0x%llx", pde_row_count, pde_count);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pdpte_row_count: 0x%llx pdpte_count: 0x%llx", pdpte_row_count, pdpte_count);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pml4e_row_count: 0x%llx", pml4e_row_count);
 
     hypervisor_ept_pml4e_t* pml4e = (hypervisor_ept_pml4e_t*)ept_frames_va;
 
@@ -100,19 +100,21 @@ uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
         pdes[i].address = (guest_frames->frame_address + (low_mem + i * MEMORY_PAGING_PAGE_LENGTH_2M)) >> 21;
     }
 
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "EPT setup complete. EPT frames VA: 0x%llx", ept_frames_va);
+
     return ept_frames->frame_address;
 }
 
 uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical) {
     ept_base = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_base);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "ept_base: 0x%llx, guest_physical: 0x%llx", ept_base, guest_physical);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "ept_base: 0x%llx, guest_physical: 0x%llx", ept_base, guest_physical);
 
     hypervisor_ept_pml4e_t* pml4e = (hypervisor_ept_pml4e_t*)ept_base;
 
     uint64_t pml4e_index = (guest_physical >> 39) & 0x1FF;
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pml4e_index: 0x%llx", pml4e_index);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pml4e_index: 0x%llx", pml4e_index);
 
     if(pml4e[pml4e_index].read_access == 0 && pml4e[pml4e_index].write_access == 0 && pml4e[pml4e_index].execute_access == 0) {
         return -1ULL;
@@ -123,13 +125,13 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
 
     uint64_t pdpte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pdpte_fa);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pdpte_va: 0x%llx", pdpte_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pdpte_va: 0x%llx", pdpte_va);
 
     hypervisor_ept_pdpte_t* pdptes = (hypervisor_ept_pdpte_t*)pdpte_va;
 
     uint64_t pdpte_index = (guest_physical >> 30) & 0x1FF;
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pdpte_index: 0x%llx", pdpte_index);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pdpte_index: 0x%llx", pdpte_index);
 
     if(pdptes[pdpte_index].read_access == 0 && pdptes[pdpte_index].write_access == 0 && pdptes[pdpte_index].execute_access == 0) {
         return -1ULL;
@@ -140,13 +142,13 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
 
     uint64_t pde_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pde_fa);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pde_va: 0x%llx", pde_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pde_va: 0x%llx", pde_va);
 
     hypervisor_ept_pde_t* pdes = (hypervisor_ept_pde_t*)pde_va;
 
     uint64_t pde_index = (guest_physical >> 21) & 0x1FF;
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pde_index: 0x%llx", pde_index);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pde_index: 0x%llx", pde_index);
 
     if(pdes[pde_index].read_access == 0 && pdes[pde_index].write_access == 0 && pdes[pde_index].execute_access == 0) {
         return -1ULL;

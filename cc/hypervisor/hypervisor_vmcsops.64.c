@@ -26,7 +26,9 @@ uint32_t hypervisor_vmcs_revision_id(void) {
 void hypervisor_vmcs_exit_handler_error(void);
 
 void hypervisor_vmcs_exit_handler_error(void) {
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error");
+    uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
 }
 
 static __attribute__((naked)) void hypervisor_exit_handler(void) {
@@ -47,10 +49,11 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "pushq %r10\n"
         "pushq %r9\n"
         "pushq %r8\n"
+        "sub $0x200, %rsp\n"
+        "fxsave (%rsp)\n"
         "movq %cr2, %rax\n"
         "pushq % rax\n"
         "pushfq\n"
-        "// call the vmexit handler written in C\n"
         "movq %rsp, %rdi\n"
         "lea 0x0(%rip), %rax\n"
         "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
@@ -65,6 +68,8 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "popfq\n"
         "popq %rax\n"
         "movq %rax, %cr2\n"
+        "fxrstor (%rsp)\n"
+        "add $0x200, %rsp\n"
         "popq %r8\n"
         "popq %r9\n"
         "popq %r10\n"
@@ -83,7 +88,15 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "popq %rbp\n"
         "// resume the VM\n"
         "vmresume\n"
-        "// FIXME: cleanup task\n"
+        "pushq %rax\n"
+        "pushq %rcx\n"
+        "movq $0x4400, %rcx\n"
+        "vmread %rcx, %rax\n"
+        "cmp $0x5, %rax\n"
+        "jne ___vmexit_handler_entry_error\n"
+        "popq %rcx\n"
+        "popq %rax\n"
+        "vmlaunch\n"
         "___vmexit_handler_entry_error:\n"
         "lea 0x0(%rip), %rax\n"
         "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
@@ -97,7 +110,7 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "ret\n");
 }
 
-_Static_assert(sizeof(vmcs_registers_t) == 0x90, "vmcs_registers_t size mismatch. Fix add rsp above");
+_Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch. Fix add rsp above");
 
 
 int8_t hypervisor_vmcs_prepare_host_state(void) {
@@ -415,11 +428,11 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
     vmx_write(VMX_CTLS_VPID, 1); // VPID is 1
 
     uint64_t guest_code = hypervisor_ept_guest_to_host(ept_pml4_base, 0x1000);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "Guest code:0x%llx", guest_code);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Guest code:0x%llx", guest_code);
 
     uint64_t guest_code_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_code);
 
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "Guest code VA:0x%llx", guest_code_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Guest code VA:0x%llx", guest_code_va);
 
     uint8_t* guest_code_ptr = (uint8_t*)guest_code_va;
 

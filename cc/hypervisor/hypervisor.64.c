@@ -24,10 +24,41 @@ MODULE("turnstone.hypervisor");
 
 
 
-static int32_t hypervisor_vm_task(void) {
+static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
+    if(argc != 1) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid argument count");
+        return -1;
+    }
+
+    uint64_t vmcs_frame_va = (uint64_t)args[0];
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
+
+    if(vmcs_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid vmcs frame va");
+        return -1;
+    }
+
+    vmcs_frame_va = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(vmcs_frame_va);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vmcs_frame_va);
+
+    task_set_vmcs_physical_address(vmcs_frame_va);
+
+    if(vmptrld(vmcs_frame_va) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
+    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_va);
+
     if(vmlaunch() != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch/vmresume failed");
         hypervisor_vmcs_dump();
+
+        cpu_sti(); // ensure interrupts are enabled
+
         return -1;
     }
 
@@ -92,6 +123,28 @@ int8_t hypervisor_init(void) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon frame va: 0x%llx", vmxon_frame_va);
 
+    uint32_t revision_id = hypervisor_vmcs_revision_id();
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "VMCS revision id: 0x%x", revision_id);
+
+    *(uint32_t*)vmxon_frame_va = revision_id;
+
+    uint8_t err = 0;
+
+    err = vmxon(vmxon_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxon failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon success");
+
+
+    return 0;
+}
+
+int8_t hypervisor_vm_create(void) {
     frame_t* vmcs_frame = NULL;
 
     uint64_t vmcs_frame_va = hypervisor_allocate_region(&vmcs_frame, FRAME_SIZE);
@@ -103,25 +156,11 @@ int8_t hypervisor_init(void) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
 
+    uint32_t revision_id = hypervisor_vmcs_revision_id();
 
-    uint32_t vmcs_revision_id = hypervisor_vmcs_revision_id();
-
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "VMCS revision id: 0x%x", vmcs_revision_id);
-
-    *(uint32_t*)vmcs_frame_va = vmcs_revision_id;
-    *(uint32_t*)vmxon_frame_va = vmcs_revision_id;
+    *(uint32_t*)vmcs_frame_va = revision_id;
 
     uint8_t err = 0;
-
-
-    err = vmxon(vmxon_frame->frame_address);
-
-    if(err) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxon failed");
-        return -1;
-    }
-
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon success");
 
     err = vmclear(vmcs_frame->frame_address);
 
@@ -171,7 +210,33 @@ int8_t hypervisor_init(void) {
         return -1;
     }
 
-    if(task_create_task(NULL, 16 << 10, 16 << 10, hypervisor_vm_task, 0, NULL, "vm01") == -1ULL) {
+    err = vmclear(vmcs_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmclear failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmclear success");
+
+    err = vmptrld(vmcs_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
+        return -1;
+    }
+
+    void** args = memory_malloc(sizeof(void*) * 2);
+
+    if(args == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate args");
+
+        return -1;
+    }
+
+    args[0] = (void*)vmcs_frame_va;
+
+    if(task_create_task(NULL, 16 << 10, 16 << 10, hypervisor_vm_task, 1, args, "vm01") == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         return -1;
     }

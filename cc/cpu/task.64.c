@@ -19,6 +19,7 @@
 #include <utils.h>
 #include <map.h>
 #include <stdbufs.h>
+#include <hypervisor/hypervisor_vmxops.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -360,8 +361,6 @@ void task_cleanup(void){
     while(list_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)list_queue_pop(task_cleaner_queue);
 
-        PRINTLOG(TASKING, LOG_INFO, "cleaning task 0x%llx", tmp->task_id);
-
         map_delete(task_map, (void*)tmp->task_id);
 
         uint64_t stack_va = (uint64_t)tmp->stack;
@@ -547,21 +546,30 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
         return;
     }
 
-    if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
-       time_timer_get_tick_count() > current_task->last_tick_count &&
-       !current_task->message_waiting &&
-       !current_task->sleeping) {
+    if(current_task->state != TASK_STATE_ENDED) {
+        if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
+           time_timer_get_tick_count() > current_task->last_tick_count &&
+           !current_task->message_waiting &&
+           !current_task->sleeping) {
 
-        task_switch_task_exit_prep();
+            task_switch_task_exit_prep();
 
-        return;
-    }
+            return;
+        }
 
-    task_save_registers(current_task);
-    list_queue_push(task_queue, current_task);
+        if(current_task->vmcs_physical_address) {
+            if(vmclear(current_task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+                return;
+            }
+        }
 
-    if(current_task->task_id == TASK_KERNEL_TASK_ID) {
-        task_cleanup();
+        task_save_registers(current_task);
+        list_queue_push(task_queue, current_task);
+
+        if(current_task->task_id == TASK_KERNEL_TASK_ID && list_size(task_cleaner_queue) > 0) {
+            task_cleanup();
+        }
     }
 
     current_task = task_find_next_task();
@@ -569,6 +577,12 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     current_task->task_switch_count++;
 
     current_tasks[apic_get_local_apic_id()] = current_task;
+
+    if(current_task->vmcs_physical_address) {
+        if(vmptrld(current_task->vmcs_physical_address) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "vmptrld failed for task 0x%llx", current_task->task_id);
+        }
+    }
 
     task_load_registers(current_task);
 
@@ -584,13 +598,15 @@ void task_end_task(void) {
 
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
 
+    current_task->state = TASK_STATE_ENDED;
+
     list_queue_push(task_cleaner_queue, current_task);
 
     PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
 
-    current_task = NULL;
+    cpu_sti(); // no matter what, we need to enable interrupts
 
-    __asm__ __volatile__ ("int $0x80\n");
+    task_yield();
 }
 
 
@@ -1038,4 +1054,26 @@ int8_t task_set_error_buffer(buffer_t * buffer) {
     }
 
     return 0;
+}
+
+void task_set_vmcs_physical_address(uint64_t vmcs_physical_address) {
+    task_t* current_task = task_get_current_task();
+
+    cpu_cli();
+    if(current_task) {
+        current_task->vmcs_physical_address = vmcs_physical_address;
+    }
+    cpu_sti();
+}
+
+uint64_t task_get_vmcs_physical_address(void) {
+    uint64_t vmcs_physical_address = 0;
+
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        vmcs_physical_address = current_task->vmcs_physical_address;
+    }
+
+    return vmcs_physical_address;
 }

@@ -22,6 +22,7 @@ typedef struct vmcs_msr_blob_t {
 typedef struct vmcs_registers_t {
     uint64_t rflags;
     uint64_t cr2;
+    uint8_t  sse[512];
     uint64_t r8;
     uint64_t r9;
     uint64_t r10;
@@ -40,7 +41,7 @@ typedef struct vmcs_registers_t {
     uint64_t rbp;
 } __attribute__((packed)) vmcs_registers_t;
 
-_Static_assert(sizeof(vmcs_registers_t) == 0x90, "vmcs_registers_t size mismatch");
+_Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch");
 
 
 uint32_t hypervisor_vmcs_revision_id(void);
