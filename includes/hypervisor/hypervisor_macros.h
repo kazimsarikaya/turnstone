@@ -20,12 +20,9 @@
 
 
 #define VMX_DATA_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7)
-#define VMX_CODE_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7 | 1 << 13)
+#define VMX_CODE_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7 | 1 << 3)
 #define VMX_LDTR_ACCESS_RIGHT (0x2 | 1 << 7)
-#define VMX_TR_ACCESS_RIGHT (0x3 | 1 << 7)
-#define VMX_RFLAG_RESERVED (1 << 1)
-
-
+#define VMX_TR_ACCESS_RIGHT (0x3 | 1 << 3 | 1 << 7)
 #define VMX_RFLAG_RESERVED (1 << 1)
 
 
@@ -150,9 +147,82 @@
 
 #define VMX_VM_INSTRUCTION_ERROR            0x4400
 
+#define VMX_GUEST_PHYSICAL_ADDR             0x2400
+#define VMX_VMEXIT_REASON                   0x4402
+#define VMX_VMEXIT_INTERRUPT_INFO           0x4404
+#define VMX_VMEXIT_INTERRUPT_ERROR_CODE     0x4406
+#define VMX_VMEXIT_INSTRUCTION_LENGTH       0x440c
+#define VMX_VMEXIT_INSTRUCTION_INFO         0x440e
+#define VMX_EXIT_QUALIFICATION              0x6400
+#define VMX_GUEST_LINEAR_ADDR               0x640a
 
-
-
+#define VMX_VMEXIT_REASON_EXCEPTION_OR_NMI            0
+#define VMX_VMEXIT_REASON_EXTERNAL_INTERRUPT          1
+#define VMX_VMEXIT_REASON_TRIPLE_FAULT                2
+#define VMX_VMEXIT_REASON_INIT                        3
+#define VMX_VMEXIT_REASON_SIPI                        4
+#define VMX_VMEXIT_REASON_IO_SMI                      5
+#define VMX_VMEXIT_REASON_OTHER_SMI                   6
+#define VMX_VMEXIT_REASON_INTERRUPT_WINDOW            7
+#define VMX_VMEXIT_REASON_NMI_WINDOW                  8
+#define VMX_VMEXIT_REASON_TASK_SWITCH                 9
+#define VMX_VMEXIT_REASON_CPUID                      10
+#define VMX_VMEXIT_REASON_GETSEC                     11
+#define VMX_VMEXIT_REASON_HLT                        12
+#define VMX_VMEXIT_REASON_INVD                       13
+#define VMX_VMEXIT_REASON_INVLPG                     14
+#define VMX_VMEXIT_REASON_RDPMC                      15
+#define VMX_VMEXIT_REASON_RDTSC                      16
+#define VMX_VMEXIT_REASON_RSM                        17
+#define VMX_VMEXIT_REASON_VMCALL                     18
+#define VMX_VMEXIT_REASON_VMCLEAR                    19
+#define VMX_VMEXIT_REASON_VMLAUNCH                   20
+#define VMX_VMEXIT_REASON_VMPTRLD                    21
+#define VMX_VMEXIT_REASON_VMPTRST                    22
+#define VMX_VMEXIT_REASON_VMREAD                     23
+#define VMX_VMEXIT_REASON_VMRESUME                   24
+#define VMX_VMEXIT_REASON_VMWRITE                    25
+#define VMX_VMEXIT_REASON_VMXOFF                     26
+#define VMX_VMEXIT_REASON_VMXON                      27
+#define VMX_VMEXIT_CONTROL_REGISTER_ACCESS           28
+#define VMX_VMEXIT_REASON_MOV_CR                     29
+#define VMX_VMEXIT_REASON_IO_INSTRUCTION             30
+#define VMX_VMEXIT_REASON_RDMSR                      31
+#define VMX_VMEXIT_REASON_WRMSR                      32
+#define VMX_VMEXIT_REASON_INVALID_GUEST_STATE        33
+#define VMX_VMEXIT_REASON_MSR_LOADING                34
+#define VMX_VMEXIT_REASON_MWAIT                      36
+#define VMX_VMEXIT_REASON_MONITOR_TRAP_FLAG          37
+#define VMX_VMEXIT_REASON_MONITOR                    39
+#define VMX_VMEXIT_REASON_PAUSE                      40
+#define VMX_VMEXIT_REASON_MACHINE_CHECK              41
+#define VMX_VMEXIT_REASON_TPR_BELOW_THRESHOLD        43
+#define VMX_VMEXIT_REASON_APIC_ACCESS                44
+#define VMX_VMEXIT_REASON_VIRTUALIZED_EOI            45
+#define VMX_VMEXIT_REASON_GDTR_IDTR_ACCESS           46
+#define VMX_VMEXIT_REASON_LDTR_TR_ACCESS             47
+#define VMX_VMEXIT_REASON_EPT_VIOLATION              48
+#define VMX_VMEXIT_REASON_EPT_MISCONFIG              49
+#define VMX_VMEXIT_REASON_INVEPT                     50
+#define VMX_VMEXIT_REASON_RDTSCP                     51
+#define VMX_VMEXIT_REASON_VMX_TIMER_EXPIRED          52
+#define VMX_VMEXIT_REASON_INVVPID                    53
+#define VMX_VMEXIT_REASON_WBINVD                     54
+#define VMX_VMEXIT_REASON_XSETBV                     55
+#define VMX_VMEXIT_REASON_APIC_WRITE                 56
+#define VMX_VMEXIT_REASON_RDRAND                     57
+#define VMX_VMEXIT_REASON_INVPCID                    58
+#define VMX_VMEXIT_REASON_VMFUNC                     59
+#define VMX_VMEXIT_REASON_ENCLS                      60
+#define VMX_VMEXIT_REASON_RDSEED                     61
+#define VMX_VMEXIT_REASON_PML_FULL                   62
+#define VMX_VMEXIT_REASON_XSAVES                     63
+#define VMX_VMEXIT_REASON_XRSTORS                    64
+#define VMX_VMEXIT_REASON_SPP                        66
+#define VMX_VMEXIT_REASON_UMWAIT                     67
+#define VMX_VMEXIT_REASON_TPAUSE                     68
+#define VMX_VMEXIT_REASON_LOADIWKEY                  69
+#define VMX_VMEXIT_REASON_COUNT                      70
 
 
 

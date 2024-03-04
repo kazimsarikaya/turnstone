@@ -34,8 +34,6 @@ typedef struct interrupt_irq_list_item_t {
 interrupt_irq_list_item_t** interrupt_irqs = NULL;
 uint8_t next_empty_interrupt = 0;
 
-void interrupt_generic_handler(interrupt_frame_ext_t* frame);
-
 int8_t interrupt_int01_debug_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t*);
 int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t*);

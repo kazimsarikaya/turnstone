@@ -12,8 +12,6 @@
 
 #include <types.h>
 
-uint32_t hypervisor_vmcs_revision_id(void);
-
 int8_t hypervisor_init(void);
 int8_t hypervisor_stop(void);
 

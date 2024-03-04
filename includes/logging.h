@@ -244,7 +244,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_HYPERVISOR
 /*! default log level for hypervisor module */
-#define LOG_LEVEL_HYPERVISOR LOG_TRACE
+#define LOG_LEVEL_HYPERVISOR LOG_DEBUG
 #endif
 
 #ifndef LOG_LOCATION

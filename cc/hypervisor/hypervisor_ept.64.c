@@ -96,6 +96,7 @@ uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
         pdes[i].user_mode_execute_access = 1;
         pdes[i].memory_type = 6; // WB
         pdes[i].ignore_pat = 1;
+        pdes[i].must_one = 1; // 2MB page
         pdes[i].address = (guest_frames->frame_address + (low_mem + i * MEMORY_PAGING_PAGE_LENGTH_2M)) >> 21;
     }
 

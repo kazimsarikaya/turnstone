@@ -23,10 +23,16 @@
 MODULE("turnstone.hypervisor");
 
 
-uint32_t hypervisor_vmcs_revision_id(void) {
-    return cpu_read_msr(CPU_MSR_IA32_VMX_BASIC) & 0xffffffff;
-}
 
+static int32_t hypervisor_vm_task(void) {
+    if(vmlaunch() != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch/vmresume failed");
+        hypervisor_vmcs_dump();
+        return -1;
+    }
+
+    return 0;
+}
 
 
 int8_t hypervisor_init(void) {
@@ -160,9 +166,13 @@ int8_t hypervisor_init(void) {
         return -1;
     }
 
-    if(vmlaunch() != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch failed");
-        hypervisor_vmcs_dump();
+    if(hypervisor_vmcs_prepare_vmexit_handlers() != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vmexit handlers");
+        return -1;
+    }
+
+    if(task_create_task(NULL, 16 << 10, 16 << 10, hypervisor_vm_task, 0, NULL, "vm01") == -1ULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         return -1;
     }
 

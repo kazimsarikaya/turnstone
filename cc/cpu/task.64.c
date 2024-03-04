@@ -360,6 +360,8 @@ void task_cleanup(void){
     while(list_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)list_queue_pop(task_cleaner_queue);
 
+        PRINTLOG(TASKING, LOG_INFO, "cleaning task 0x%llx", tmp->task_id);
+
         map_delete(task_map, (void*)tmp->task_id);
 
         uint64_t stack_va = (uint64_t)tmp->stack;
@@ -384,7 +386,7 @@ void task_cleanup(void){
             cpu_hlt();
         }
 
-        uint64_t heap_va = (uint64_t)tmp->stack;
+        uint64_t heap_va = (uint64_t)tmp->heap;
         uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
 
         uint64_t heap_size = tmp->heap_size;
@@ -396,6 +398,10 @@ void task_cleanup(void){
 
         if(memory_paging_delete_va_for_frame_ext(tmp->page_table, heap_va, &heap_frames) != 0 ) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for heap at va 0x%llx", heap_va);
+
+            if(tmp->page_table) {
+                PRINTLOG(TASKING, LOG_ERROR, "page table 0x%p", tmp->page_table->page_table);
+            }
 
             cpu_hlt();
         }

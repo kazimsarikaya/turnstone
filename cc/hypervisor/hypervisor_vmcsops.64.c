@@ -19,9 +19,86 @@
 
 MODULE("turnstone.hypervisor");
 
-static __attribute__((naked)) void hypervisor_exit_handler(void) {
-    asm volatile ("vmresume");
+uint32_t hypervisor_vmcs_revision_id(void) {
+    return cpu_read_msr(CPU_MSR_IA32_VMX_BASIC) & 0xffffffff;
 }
+
+void hypervisor_vmcs_exit_handler_error(void);
+
+void hypervisor_vmcs_exit_handler_error(void) {
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error");
+}
+
+static __attribute__((naked)) void hypervisor_exit_handler(void) {
+    asm volatile (
+        "pushq %rbp\n"
+        "pushq %rsp\n"
+        "pushq %rax\n"
+        "pushq %rbx\n"
+        "pushq %rcx\n"
+        "pushq %rdx\n"
+        "pushq %rsi\n"
+        "pushq %rdi\n"
+        "pushq %r15\n"
+        "pushq %r14\n"
+        "pushq %r13\n"
+        "pushq %r12\n"
+        "pushq %r11\n"
+        "pushq %r10\n"
+        "pushq %r9\n"
+        "pushq %r8\n"
+        "movq %cr2, %rax\n"
+        "pushq % rax\n"
+        "pushfq\n"
+        "// call the vmexit handler written in C\n"
+        "movq %rsp, %rdi\n"
+        "lea 0x0(%rip), %rax\n"
+        "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
+        "add %rax, %r15\n"
+        "movabsq $hypervisor_vmcs_exit_handler_entry@GOT, %rax\n"
+        "call *(%r15, %rax, 1)\n"
+        "// Check return value may end vm task\n"
+        "// Restore the RSP and guest non-vmcs processor state\n"
+        "cmp $-1, %rax\n"
+        "je ___vmexit_handler_entry_error\n"
+        "movq %rax, %rsp\n"
+        "popfq\n"
+        "popq %rax\n"
+        "movq %rax, %cr2\n"
+        "popq %r8\n"
+        "popq %r9\n"
+        "popq %r10\n"
+        "popq %r11\n"
+        "popq %r12\n"
+        "popq %r13\n"
+        "popq %r14\n"
+        "popq %r15\n"
+        "popq %rdi\n"
+        "popq %rsi\n"
+        "popq %rdx\n"
+        "popq %rcx\n"
+        "popq %rbx\n"
+        "popq %rax\n"
+        "popq %rsp\n"
+        "popq %rbp\n"
+        "// resume the VM\n"
+        "vmresume\n"
+        "// FIXME: cleanup task\n"
+        "___vmexit_handler_entry_error:\n"
+        "lea 0x0(%rip), %rax\n"
+        "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
+        "add %rax, %r15\n"
+        "movabsq $hypervisor_vmcs_exit_handler_error@GOT, %rax\n"
+        "call *(%r15, %rax, 1)\n"
+        "add $0x80, %rsp\n"
+        "popq %rsp\n"
+        "sti\n"
+        "leave\n"
+        "ret\n");
+}
+
+_Static_assert(sizeof(vmcs_registers_t) == 0x90, "vmcs_registers_t size mismatch. Fix add rsp above");
+
 
 int8_t hypervisor_vmcs_prepare_host_state(void) {
     uint64_t cr0 = cpu_read_cr0().bits;
@@ -338,6 +415,8 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
     vmx_write(VMX_CTLS_VPID, 1); // VPID is 1
 
     uint64_t guest_code = hypervisor_ept_guest_to_host(ept_pml4_base, 0x1000);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "Guest code:0x%llx", guest_code);
+
     uint64_t guest_code_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_code);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "Guest code VA:0x%llx", guest_code_va);
@@ -347,8 +426,6 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
     guest_code_ptr[0] = 0x90; // NOP
     guest_code_ptr[1] = 0xeb; // JMP
     guest_code_ptr[2] = 0xfd; // -1
-
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "Guest code:0x%llx", guest_code);
 
     return 0;
 }
