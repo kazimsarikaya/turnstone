@@ -29,6 +29,10 @@ void hypervisor_vmcs_exit_handler_error(void) {
     uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
+
+    // hypervisor_vmcs_dump();
+
+    task_end_task();
 }
 
 static __attribute__((naked)) void hypervisor_exit_handler(void) {
@@ -103,11 +107,10 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "add %rax, %r15\n"
         "movabsq $hypervisor_vmcs_exit_handler_error@GOT, %rax\n"
         "call *(%r15, %rax, 1)\n"
-        "add $0x80, %rsp\n"
-        "popq %rsp\n"
-        "sti\n"
-        "leave\n"
-        "ret\n");
+        "___vmexit_handler_entry_end:\n"
+        "cli\n"
+        "hlt\n"
+        "jmp ___vmexit_handler_entry_end\n");
 }
 
 _Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch. Fix add rsp above");
@@ -436,9 +439,9 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
 
     uint8_t* guest_code_ptr = (uint8_t*)guest_code_va;
 
-    guest_code_ptr[0] = 0x90; // NOP
+    guest_code_ptr[0] = 0xf4; // HLT
     guest_code_ptr[1] = 0xeb; // JMP
-    guest_code_ptr[2] = 0xfd; // -1
+    guest_code_ptr[2] = 0xfd; // -2
 
     return 0;
 }

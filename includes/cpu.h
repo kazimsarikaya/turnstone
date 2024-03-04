@@ -37,7 +37,6 @@ static inline boolean_t cpu_cli(void) {
                           : "=r" (old_value)
                           :
                           : "rax");
-    __asm__ __volatile__ ("cli");
     return old_value; // if 0 interrupts are enabled
 }
 

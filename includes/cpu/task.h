@@ -227,6 +227,8 @@ boolean_t task_idle_check_need_yield(void);
  */
 void task_current_task_sleep(uint64_t wake_tick);
 
+void task_end_task(void);
+
 void task_print_all(void);
 
 buffer_t* task_get_input_buffer(void);

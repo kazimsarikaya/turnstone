@@ -44,7 +44,6 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task
 __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task);
 void                                            task_cleanup(void);
 task_t*                                         task_find_next_task(void);
-void                                            task_end_task(void);
 
 extern buffer_t* stdbufs_default_input_buffer;
 extern buffer_t* stdbufs_default_output_buffer;
@@ -603,8 +602,6 @@ void task_end_task(void) {
     list_queue_push(task_cleaner_queue, current_task);
 
     PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
-
-    cpu_sti(); // no matter what, we need to enable interrupts
 
     task_yield();
 }

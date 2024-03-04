@@ -14,6 +14,7 @@
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/interrupt.h>
+#include <cpu/task.h>
 #include <logging.h>
 
 MODULE("turnstone.hypervisor");
@@ -33,6 +34,12 @@ typedef struct vmcs_vmexit_info {
 typedef uint64_t (*vmexit_handler_t)(vmcs_vmexit_info_t* vmexit_info);
 
 vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
+
+static void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+    guest_rip += vmexit_info->instruction_length;
+    vmx_write(VMX_GUEST_RIP, guest_rip);
+}
 
 static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t interrupt_info = vmexit_info->interrupt_info;
@@ -103,6 +110,14 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
     return -1;
 }
 
+static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
+    task_yield();
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
 
@@ -144,5 +159,6 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
 int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_EXTERNAL_INTERRUPT] = hypervisor_vmcs_external_interrupt_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_EPT_MISCONFIG] = hypervisor_vmcs_ept_misconfig_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_HLT] = hypervisor_vmcs_hlt_handler;
     return 0;
 }

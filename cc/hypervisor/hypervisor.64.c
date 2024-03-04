@@ -57,8 +57,6 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch/vmresume failed");
         hypervisor_vmcs_dump();
 
-        cpu_sti(); // ensure interrupts are enabled
-
         return -1;
     }
 
