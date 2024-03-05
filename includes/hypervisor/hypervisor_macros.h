@@ -19,10 +19,10 @@
 #define CPU_MSR_IA32_FEATURE_CONTROL        0x0000003a
 
 
-#define VMX_DATA_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7)
-#define VMX_CODE_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7 | 1 << 3)
-#define VMX_LDTR_ACCESS_RIGHT (0x2 | 1 << 7)
-#define VMX_TR_ACCESS_RIGHT (0x3 | 1 << 3 | 1 << 7)
+#define VMX_DATA_ACCESS_RIGHT  0xc093
+#define VMX_CODE_ACCESS_RIGHT  0xc09b
+#define VMX_LDTR_ACCESS_RIGHT  0x0082
+#define VMX_TR_ACCESS_RIGHT    0x008b
 #define VMX_RFLAG_RESERVED (1 << 1)
 
 

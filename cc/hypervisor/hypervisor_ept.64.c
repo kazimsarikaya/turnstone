@@ -9,6 +9,7 @@
 #include <hypervisor/hypervisor_ept.h>
 #include <hypervisor/hypervisor_utils.h>
 #include <memory/paging.h>
+#include <cpu/task.h>
 #include <logging.h>
 
 MODULE("turnstone.hypervisor");
@@ -159,4 +160,80 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
     host_physical += guest_physical & ((1ULL << 21) - 1);
 
     return host_physical;
+}
+
+int8_t hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t high_mem) {
+    // FIXME: now only supports low_mem is 0
+
+    if(low_mem % MEMORY_PAGING_PAGE_TYPE_2M != 0) {
+        low_mem += MEMORY_PAGING_PAGE_TYPE_2M - (low_mem % MEMORY_PAGING_PAGE_TYPE_2M);
+    }
+
+    if(high_mem % MEMORY_PAGING_PAGE_TYPE_2M != 0) {
+        high_mem -= high_mem % MEMORY_PAGING_PAGE_TYPE_2M;
+    }
+
+    uint64_t guest_low = hypervisor_ept_guest_to_host(ept_base, low_mem);
+
+    if(guest_low == -1ULL) {
+        return -1;
+    }
+
+    guest_low = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_low);
+
+    uint64_t* gdt = (uint64_t*)(guest_low + 0x2000);
+
+    gdt[0] = 0;
+    gdt[1] = 0x00c09b0000000000ULL;
+    gdt[2] = 0x00c0930000000000ULL;
+
+    descriptor_tss_t* d_tss = (descriptor_tss_t*)&gdt[3];
+    tss_t* tss = (tss_t*)(gdt + 10);
+
+    tss->rsp0 = 3 << 20; // 3mib
+
+    uint64_t tss_base = 0x2000 + 10 * sizeof(uint64_t);
+    uint32_t tss_limit = sizeof(tss_t) - 1;
+    DESCRIPTOR_BUILD_TSS_SEG(d_tss, tss_base, tss_limit, DPL_KERNEL);
+
+
+    uint64_t l3_row_count = (high_mem - low_mem) / MEMORY_PAGING_PAGE_LENGTH_2M;
+    // uint64_t l3_count = (l3_row_count + 512 - 1) / 512; // 512 PDEs per PDPTE entry
+    uint64_t l2_row_count = (l3_row_count + 512 - 1) / 512; // 512 PDEs per PDPT entry
+    uint64_t l2_count = (l2_row_count + 512 - 1) / 512; // 512 PDPTs per PML4T entry
+    uint64_t l1_row_count = (l2_row_count + 512 - 1) / 512; // 512 PDPTs per PML4T entry
+
+
+    memory_page_table_t* l1 = (memory_page_table_t*)(guest_low + 0x2000);
+    uint64_t l2_fa = 0x3000;
+    uint64_t orig_l2_fa = l2_fa;
+
+    for(uint64_t i = 0; i < l1_row_count; i++) {
+        l1->pages[i].present = 1;
+        l1->pages[i].writable = 1;
+        l1->pages[i].physical_address = l2_fa >> 12;
+        l2_fa += 0x1000;
+    }
+
+    memory_page_table_t* l2 = l1 + 1;
+    l2_fa = orig_l2_fa;
+    uint64_t l3_fa = l2_fa + 0x1000 * l2_count;
+
+    for(uint64_t i = 0; i < l2_row_count; i++) {
+        l2->pages[i].present = 1;
+        l2->pages[i].writable = 1;
+        l2->pages[i].physical_address = l3_fa >> 12;
+        l3_fa += 0x1000;
+    }
+
+    memory_page_entry_t* l3 = (memory_page_entry_t*)(l2 + l2_count);
+
+    for(uint64_t i = 0; i < l3_row_count; i++) {
+        l3[i].present = 1;
+        l3[i].writable = 1;
+        l3[i].hugepage = 1;
+        l3[i].physical_address = (0 + i * MEMORY_PAGING_PAGE_LENGTH_2M) >> 12;
+    }
+
+    return 0;
 }

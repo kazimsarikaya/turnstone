@@ -163,13 +163,14 @@ int8_t hypervisor_vmcs_prepare_host_state(void) {
 }
 
 int8_t hypervisor_vmcs_prepare_guest_state(void) {
-    vmx_write(VMX_GUEST_ES_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_CS_SELECTOR, 0x100);
-    vmx_write(VMX_GUEST_DS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_FS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_GS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_SS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_TR_SELECTOR, 0x0);
+    // prepare guest state at long mode
+    vmx_write(VMX_GUEST_ES_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_CS_SELECTOR, 0x08);
+    vmx_write(VMX_GUEST_DS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_FS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_GS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_SS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_TR_SELECTOR, 0x18);
     vmx_write(VMX_GUEST_LDTR_SELECTOR, 0x0);
     vmx_write(VMX_GUEST_CS_BASE, 0x0);
     vmx_write(VMX_GUEST_DS_BASE, 0x0);
@@ -178,19 +179,19 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     vmx_write(VMX_GUEST_GS_BASE, 0x0);
     vmx_write(VMX_GUEST_SS_BASE, 0x0);
     vmx_write(VMX_GUEST_LDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_IDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_GDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_TR_BASE, 0x0);
-    vmx_write(VMX_GUEST_CS_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_DS_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_ES_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_FS_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_GS_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_SS_LIMIT, 0xffff);
+    vmx_write(VMX_GUEST_IDTR_BASE, 0x1000);
+    vmx_write(VMX_GUEST_GDTR_BASE, 0x2000);
+    vmx_write(VMX_GUEST_TR_BASE, 0x2050);
+    vmx_write(VMX_GUEST_CS_LIMIT, 0xffffffff);
+    vmx_write(VMX_GUEST_DS_LIMIT, 0xffffffff);
+    vmx_write(VMX_GUEST_ES_LIMIT, 0xffffffff);
+    vmx_write(VMX_GUEST_FS_LIMIT, 0xffffffff);
+    vmx_write(VMX_GUEST_GS_LIMIT, 0xffffffff);
+    vmx_write(VMX_GUEST_SS_LIMIT, 0xffffffff);
     vmx_write(VMX_GUEST_LDTR_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_TR_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_GDTR_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_IDTR_LIMIT, 0xffff);
+    vmx_write(VMX_GUEST_TR_LIMIT, 0x67);
+    vmx_write(VMX_GUEST_GDTR_LIMIT, 0x4f);
+    vmx_write(VMX_GUEST_IDTR_LIMIT, 0xfff);
     vmx_write(VMX_GUEST_CS_ACCESS_RIGHT, VMX_CODE_ACCESS_RIGHT);
     vmx_write(VMX_GUEST_DS_ACCESS_RIGHT, VMX_DATA_ACCESS_RIGHT);
     vmx_write(VMX_GUEST_ES_ACCESS_RIGHT, VMX_DATA_ACCESS_RIGHT);
@@ -205,25 +206,29 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     uint64_t cr0_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED0);
     // cr0_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED1);
     cpu_reg_cr0_t cr0 = { .bits = cr0_fixed };
-    cr0.fields.protection_enabled = 0;
-    cr0.fields.paging = 0;
+    cr0.fields.protection_enabled = 1;
+    cr0.fields.paging = 1;
 
     vmx_write(VMX_GUEST_CR0, cr0.bits);
 
-    vmx_write(VMX_GUEST_CR3, 0x0);
+    vmx_write(VMX_GUEST_CR3, 0x3000); // cr3 is set to 8kib
 
     uint64_t cr4_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED0);
     // cr4_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);
     cpu_reg_cr4_t cr4 = { .bits = cr4_fixed };
+
+    cr4.fields.physical_address_extension = 1;
+    cr4.fields.page_global_enable = 1;
+
     vmx_write(VMX_GUEST_CR4, cr4.bits);
 
     vmx_write(VMX_GUEST_DR7, 0x0);
-    vmx_write(VMX_GUEST_RSP, 0x0);
-    vmx_write(VMX_GUEST_RIP, 0x0); // guest cs:ip -> 0x100:0
+    vmx_write(VMX_GUEST_RSP, 3 << 20); // rsp is set to 3mib
+    vmx_write(VMX_GUEST_RIP, 2 << 20); // rip is set to 2mib
     vmx_write(VMX_GUEST_RFLAGS, VMX_RFLAG_RESERVED);
     vmx_write(VMX_GUEST_VMCS_LINK_POINTER_LOW, 0xffffffff);
     vmx_write(VMX_GUEST_VMCS_LINK_POINTER_HIGH, 0xffffffff);
-    vmx_write(VMX_GUEST_IA32_EFER, 0x0);
+    vmx_write(VMX_GUEST_IA32_EFER, 0x500); // enable long mode LME/LMA bit
 
     return 0;
 }
@@ -394,6 +399,7 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     vm_entry_msr_edx = vm_entry_msr >> 32;
     uint32_t vm_entry_ctls = 0;
 
+    vm_entry_ctls |= 1 << 9; // VM entry to 64-bit long mode.
     vm_entry_ctls |= 1 << 15; // load EFER msr on vm-entry
     vm_entry_ctls = vmx_fix_reserved_1_bits(vm_entry_ctls, vm_entry_msr_eax);
     vm_entry_ctls = vmx_fix_reserved_0_bits(vm_entry_ctls, vm_entry_msr_edx);
@@ -407,9 +413,9 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
 }
 
 static const uint8_t hypervisor_guest_test_code[]  = {
-    0x66, 0x8c, 0xc8, 0x8e, 0xd8, 0x8e, 0xc0, 0xbe, 0x1c, 0x00, 0x00, 0x00, 0xba, 0xf8, 0x03, 0x00,
-    0x00, 0xac, 0x84, 0xc0, 0x74, 0x03, 0xee, 0xeb, 0xf8, 0xf4, 0xeb, 0xfd, 0x48, 0x65, 0x6c, 0x6c,
-    0x6f, 0x2c, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x00
+    0x48, 0xc7, 0xc6, 0x19, 0x00, 0x20, 0x00, 0x48, 0xc7, 0xc2, 0xf8, 0x03, 0x00, 0x00, 0xac, 0x84,
+    0xc0, 0x74, 0x03, 0xee, 0xeb, 0xf8, 0xf4, 0xeb, 0xfd, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x2c, 0x20,
+    0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x00
 };
 
 #define GUEST_CODE_SIZE (sizeof(hypervisor_guest_test_code))
@@ -417,6 +423,16 @@ static const uint8_t hypervisor_guest_test_code[]  = {
 
 int8_t hypervisor_vmcs_prepare_ept(void) {
     uint64_t ept_pml4_base = hypervisor_ept_setup(0, 16 << 20);
+
+    if (ept_pml4_base == -1ULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT setup failed");
+        return -1;
+    }
+
+    if(hypervisor_ept_build_tables(ept_pml4_base, 0, 16 << 20) == -1) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT build tables failed");
+        return -1;
+    }
 
     uint64_t vpid_cap = cpu_read_msr(CPU_MSR_IA32_VMX_EPT_VPID_CAP);
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "VPID_CAP:0x%llx", vpid_cap);
@@ -438,7 +454,7 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
     vmx_write(VMX_CTLS_EPTP, eptp);
     vmx_write(VMX_CTLS_VPID, 1); // VPID is 1
 
-    uint64_t guest_code = hypervisor_ept_guest_to_host(ept_pml4_base, 0x1000);
+    uint64_t guest_code = hypervisor_ept_guest_to_host(ept_pml4_base, 2 << 20); // 2mib
     PRINTLOG(HYPERVISOR, LOG_TRACE, "Guest code:0x%llx", guest_code);
 
     uint64_t guest_code_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_code);

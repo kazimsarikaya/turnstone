@@ -66,5 +66,6 @@ _Static_assert(sizeof(hypervisor_ept_pde_t) == 8, "PDE size is not 8 bytes");
 
 uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem);
 uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical);
+int8_t   hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t high_mem);
 
 #endif

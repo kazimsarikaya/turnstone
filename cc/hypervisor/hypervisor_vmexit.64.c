@@ -195,7 +195,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     }
 
     // Unhandled VMExit
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled VMExit: %lli", vmexit_info.reason);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled VMExit: 0x%llx", vmexit_info.reason);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Exit Qualification: 0x%llx", vmexit_info.exit_qualification);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Guest Linear Addr: 0x%llx", vmexit_info.guest_linear_addr);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Guest Physical Addr: 0x%llx", vmexit_info.guest_physical_addr);
