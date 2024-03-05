@@ -39,6 +39,15 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
 
     task_add_message_queue(mq_list);
 
+    buffer_t* buffer = buffer_new();
+
+    if(buffer == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
+        return -1;
+    }
+
+    task_set_output_buffer(buffer);
+
     uint64_t vmcs_frame_va = (uint64_t)args[0];
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
@@ -243,7 +252,7 @@ int8_t hypervisor_vm_create(void) {
 
     args[0] = (void*)vmcs_frame_va;
 
-    if(task_create_task(NULL, 16 << 10, 16 << 10, hypervisor_vm_task, 1, args, "vm01") == -1ULL) {
+    if(task_create_task(NULL, 2 << 20, 16 << 10, hypervisor_vm_task, 1, args, "vm01") == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         return -1;
     }

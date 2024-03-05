@@ -120,6 +120,55 @@ static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
     return (uint64_t)vmexit_info->registers;
 }
 
+static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t exit_qualification = vmexit_info->exit_qualification;
+
+    uint16_t port = (exit_qualification >> 16) & 0xFFFF;
+    uint8_t size = exit_qualification & 0x7;
+    uint8_t direction = (exit_qualification >> 3) & 0x1;
+
+    switch(size) {
+    case 0:
+        size = 1;
+        break;
+    case 1:
+        size = 2;
+        break;
+    case 3:
+        size = 4;
+        break;
+    default:
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Invalid IO Instruction Size: 0x%x", size);
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x", port, size, direction)
+
+    uint64_t mask = 0xFFFFFFFFFFFFFFFF >> (64 - (size * 8));
+
+    uint64_t data = vmexit_info->registers->rax;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Data: 0x%llx mask 0x%llx", data, mask);
+
+    data &= mask;
+
+    uint8_t* data_ptr = (uint8_t*)&data;
+
+    if(port == 0x3f8 && direction == 0) {
+        for(uint8_t i = 0; i < size; i++) {
+            printf("%c", data_ptr[i]);
+        }
+    } else {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x Data 0x%llx",
+                 port, size, direction, data);
+        return -1;
+    }
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
 
@@ -162,5 +211,6 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_EXTERNAL_INTERRUPT] = hypervisor_vmcs_external_interrupt_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_EPT_MISCONFIG] = hypervisor_vmcs_ept_misconfig_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_HLT] = hypervisor_vmcs_hlt_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_IO_INSTRUCTION] = hypervisor_vmcs_io_instruction_handler;
     return 0;
 }

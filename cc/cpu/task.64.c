@@ -949,6 +949,36 @@ void task_print_all(void) {
     it->destroy(it);
 }
 
+buffer_t* task_get_task_input_buffer(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        return task->input_buffer;
+    }
+
+    return NULL;
+}
+
+buffer_t* task_get_task_output_buffer(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        return task->output_buffer;
+    }
+
+    return NULL;
+}
+
+buffer_t* task_get_task_error_buffer(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        return task->error_buffer;
+    }
+
+    return NULL;
+}
+
 buffer_t* task_get_input_buffer(void) {
     buffer_t* buffer = NULL;
 
