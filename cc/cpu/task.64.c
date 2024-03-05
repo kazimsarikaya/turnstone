@@ -23,7 +23,7 @@
 
 MODULE("turnstone.kernel.cpu.task");
 
-uint64_t task_id = 0;
+uint64_t task_next_task_id = 0;
 
 volatile task_t** current_tasks = NULL;
 
@@ -171,7 +171,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
-    task_id = kernel_task->task_id + 1;
+    task_next_task_id = kernel_task->task_id + 1;
 
     task_map = map_integer();
 
@@ -621,6 +621,20 @@ void task_add_message_queue(list_t* queue){
     list_list_insert(current_task->message_queues, queue);
 }
 
+list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number) {
+    const task_t* task = map_get(task_map, (void*)task_id);
+
+    if(task == NULL) {
+        return NULL;
+    }
+
+    if(task->message_queues == NULL) {
+        return NULL;
+    }
+
+    return (list_t*)list_get_data_at_position(task->message_queues, queue_number);
+}
+
 void task_set_message_waiting(void){
     task_t* current_task = task_get_current_task();
 
@@ -701,7 +715,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     boolean_t old_int_status = cpu_cli();
 
-    uint64_t new_task_id = task_id++;
+    uint64_t new_task_id = task_next_task_id++;
 
     if(!old_int_status) {
         cpu_sti();
@@ -811,7 +825,7 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
 
     boolean_t old_int_status = cpu_cli();
 
-    uint64_t new_task_id = task_id++;
+    uint64_t new_task_id = task_next_task_id++;
 
     if(!old_int_status) {
         cpu_sti();

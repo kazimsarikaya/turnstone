@@ -204,6 +204,9 @@ void task_set_interrupt_received(uint64_t task_id);
  */
 void task_add_message_queue(list_t* queue);
 
+list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number);
+#define task_get_current_task_message_queue(queue_number) task_get_message_queue(task_get_id(), queue_number)
+
 /**
  * @brief creates a task and apends it to wait queue
  * @param[in] heap creator heap

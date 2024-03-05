@@ -11,11 +11,13 @@
 #include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_macros.h>
 #include <hypervisor/hypervisor_ept.h>
+#include <hypervisor/hypervisor_ipc.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
 #include <logging.h>
+#include <list.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -39,6 +41,87 @@ static void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_inf
     uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
     guest_rip += vmexit_info->instruction_length;
     vmx_write(VMX_GUEST_RIP, guest_rip);
+}
+
+static int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
+    list_t* mq = task_get_current_task_message_queue(0);
+
+    if(!mq) {
+        return -1;
+    }
+
+    if(list_size(mq) == 0) {
+        return 0;
+    }
+
+    hypervisor_ipc_message_t* message = (hypervisor_ipc_message_t*)list_queue_pop(mq);
+
+    if(!message) {
+        return -1;
+    }
+
+    buffer_t* buffer = message->message_data;
+
+    buffer_printf(buffer, "rax: 0x%016llx ", vmexit_info->registers->rax);
+    buffer_printf(buffer, "rbx: 0x%016llx ", vmexit_info->registers->rbx);
+    buffer_printf(buffer, "rcx: 0x%016llx ", vmexit_info->registers->rcx);
+    buffer_printf(buffer, "rdx: 0x%016llx\n", vmexit_info->registers->rdx);
+    buffer_printf(buffer, "rsi: 0x%016llx ", vmexit_info->registers->rsi);
+    buffer_printf(buffer, "rdi: 0x%016llx ", vmexit_info->registers->rdi);
+    buffer_printf(buffer, "rbp: 0x%016llx ", vmexit_info->registers->rbp);
+    buffer_printf(buffer, "rsp: 0x%016llx\n", vmexit_info->registers->rsp);
+    buffer_printf(buffer, "r8:  0x%016llx ", vmexit_info->registers->r8);
+    buffer_printf(buffer, "r9:  0x%016llx ", vmexit_info->registers->r9);
+    buffer_printf(buffer, "r10: 0x%016llx ", vmexit_info->registers->r10);
+    buffer_printf(buffer, "r11: 0x%016llx\n", vmexit_info->registers->r11);
+    buffer_printf(buffer, "r12: 0x%016llx ", vmexit_info->registers->r12);
+    buffer_printf(buffer, "r13: 0x%016llx ", vmexit_info->registers->r13);
+    buffer_printf(buffer, "r14: 0x%016llx ", vmexit_info->registers->r14);
+    buffer_printf(buffer, "r15: 0x%016llx\n", vmexit_info->registers->r15);
+    buffer_printf(buffer, "rip: 0x%016llx rflags: 0x%08llx\n",
+                  vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS));
+    buffer_printf(buffer, "\n");
+
+    buffer_printf(buffer, "cr0: 0x%08llx cr3: 0x%016llx cr4: 0x%08llx\n",
+                  vmx_read(VMX_GUEST_CR0), vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
+    buffer_printf(buffer, "\n");
+
+    buffer_printf(buffer, "cs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_CS_SELECTOR), vmx_read(VMX_GUEST_CS_BASE),
+                  vmx_read(VMX_GUEST_CS_LIMIT), vmx_read(VMX_GUEST_CS_ACCESS_RIGHT));
+    buffer_printf(buffer, "ss:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_SS_SELECTOR), vmx_read(VMX_GUEST_SS_BASE),
+                  vmx_read(VMX_GUEST_SS_LIMIT), vmx_read(VMX_GUEST_SS_ACCESS_RIGHT));
+    buffer_printf(buffer, "ds:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_DS_SELECTOR), vmx_read(VMX_GUEST_DS_BASE),
+                  vmx_read(VMX_GUEST_DS_LIMIT), vmx_read(VMX_GUEST_DS_ACCESS_RIGHT));
+    buffer_printf(buffer, "es:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_ES_SELECTOR), vmx_read(VMX_GUEST_ES_BASE),
+                  vmx_read(VMX_GUEST_ES_LIMIT), vmx_read(VMX_GUEST_ES_ACCESS_RIGHT));
+    buffer_printf(buffer, "fs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_FS_SELECTOR), vmx_read(VMX_GUEST_FS_BASE),
+                  vmx_read(VMX_GUEST_FS_LIMIT), vmx_read(VMX_GUEST_FS_ACCESS_RIGHT));
+    buffer_printf(buffer, "gs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_GS_SELECTOR), vmx_read(VMX_GUEST_GS_BASE),
+                  vmx_read(VMX_GUEST_GS_LIMIT), vmx_read(VMX_GUEST_GS_ACCESS_RIGHT));
+    buffer_printf(buffer, "\n");
+
+    buffer_printf(buffer, "ldtr: 0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_LDTR_SELECTOR), vmx_read(VMX_GUEST_LDTR_BASE),
+                  vmx_read(VMX_GUEST_LDTR_LIMIT), vmx_read(VMX_GUEST_LDTR_ACCESS_RIGHT));
+    buffer_printf(buffer, "tr:   0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_TR_SELECTOR), vmx_read(VMX_GUEST_TR_BASE),
+                  vmx_read(VMX_GUEST_TR_LIMIT), vmx_read(VMX_GUEST_TR_ACCESS_RIGHT));
+    buffer_printf(buffer, "gdtr: 0x%016llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_GDTR_BASE), vmx_read(VMX_GUEST_GDTR_LIMIT));
+    buffer_printf(buffer, "idt:  0x%016llx 0x%08llx\n",
+                  vmx_read(VMX_GUEST_IDTR_BASE), vmx_read(VMX_GUEST_IDTR_LIMIT));
+    buffer_printf(buffer, "efer: 0x%08llx\n",
+                  vmx_read(VMX_GUEST_IA32_EFER));
+
+    message->message_data_completed = true;
+
+    return 0;
 }
 
 static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* vmexit_info) {
@@ -83,6 +166,8 @@ static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* v
 
     cpu_sti();
 
+    hypervisor_vmcs_check_ipc(vmexit_info);
+
     PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Handler Returned: 0x%llx", (uint64_t)vmexit_info->registers);
 
     return (uint64_t)vmexit_info->registers;
@@ -114,6 +199,8 @@ static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
     task_set_message_waiting();
 
     task_yield();
+
+    hypervisor_vmcs_check_ipc(vmexit_info);
 
     hypervisor_vmcs_goto_next_instruction(vmexit_info);
 

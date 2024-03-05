@@ -21,6 +21,8 @@
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
 #include <utils.h>
+#include <hypervisor/hypervisor_ipc.h>
+#include <list.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -35,7 +37,7 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
     char_t vmid_str[64] = {0};
 
     if(arguments == NULL || strlen(arguments) == 0) {
-        printf("Usage: vm <command> <vmid>\n");
+        printf("Usage: vm <vmid> <command>\n");
         return -1;
     }
 
@@ -43,17 +45,12 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
     uint32_t i = 0;
 
     while(arguments[i] != ' ' && arguments[i] != NULL) {
-        command[i] = arguments[i];
+        vmid_str[i] = arguments[i];
         i++;
     }
 
     if(arguments[i] == NULL) {
-        printf("Usage: vm <command> <vmid>\n");
-        return -1;
-    }
-
-    if(strncmp(command, "output", 6) != 0) {
-        printf("Unknown VM command: %s\n", command);
+        printf("Usage: vm <vmid> <command>\n");
         return -1;
     }
 
@@ -63,35 +60,87 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
     uint32_t j = 0;
 
     while(arguments[i] != ' ' && arguments[i] != NULL) {
-        vmid_str[j] = arguments[i];
+        command[j] = arguments[i];
         i++;
         j++;
     }
 
     if(arguments[i] != NULL) {
-        printf("Usage: vm <command> <vmid>\n");
+        printf("Usage: vm <vmid> <command>\n");
         return -1;
     }
 
     uint64_t vmid = atoh(vmid_str);
 
-    buffer_t* buffer = task_get_task_output_buffer(vmid);
+    if(strncmp(command, "output", 6) == 0) {
 
-    if(!buffer) {
-        printf("VM not found\n");
+        buffer_t* buffer = task_get_task_output_buffer(vmid);
+
+        if(!buffer) {
+            printf("VM not found\n");
+            return -1;
+        }
+
+        uint8_t* buffer_data = buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
+
+        if(!buffer_data) {
+            printf("VM output not found\n");
+            return -1;
+        }
+
+        printf("VM 0x%llx output:\n", vmid);
+        printf("%s", buffer_data);
+        printf("\n");
+    } else if(strncmp(command, "dump", 4) == 0) {
+        list_t* vm_mq = task_get_message_queue(vmid, 0);
+
+        if(!vm_mq) {
+            printf("VM not found\n");
+            return -1;
+        }
+
+        hypervisor_ipc_message_t* msg = memory_malloc(sizeof(hypervisor_ipc_message_t));
+
+        if(!msg) {
+            printf("Failed to allocate memory\n");
+            return -1;
+        }
+
+        msg->message_type = HYPERVISOR_IPC_MESSAGE_TYPE_VM_CALL;
+        msg->message_data = buffer_new();
+
+        if(!msg->message_data) {
+            printf("Failed to allocate memory\n");
+            memory_free(msg);
+            return -1;
+        }
+
+        list_queue_push(vm_mq, msg);
+
+        while(!msg->message_data_completed) {
+            task_yield();
+        }
+
+        uint8_t* msg_data = buffer_get_all_bytes_and_destroy(msg->message_data, NULL);
+
+        memory_free(msg);
+
+        if(!msg_data) {
+            printf("Failed to get VM state\n");
+            return -1;
+        }
+
+        printf("VM 0x%llx state:\n", vmid);
+        printf("%s", msg_data);
+        printf("\n");
+
+    } else {
+        printf("Unknown command: %s\n", command);
+        printf("Usage: vm <vmid> <command>\n");
+        printf("\toutput\t: prints the VM output\n");
+        printf("\tdump\t: dumps the VM state\n");
         return -1;
     }
-
-    uint8_t* buffer_data = buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
-
-    if(!buffer_data) {
-        printf("VM output not found\n");
-        return -1;
-    }
-
-    printf("VM 0x%llx output:\n", vmid);
-    printf("%s", buffer_data);
-    printf("\n");
 
     return 0;
 }
@@ -102,6 +151,11 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 
     if(command == NULL) {
         return -1;
+    }
+
+    if(strlen(command) == 0) {
+        memory_free(command);
+        return 0;
     }
 
     char_t* arguments = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
