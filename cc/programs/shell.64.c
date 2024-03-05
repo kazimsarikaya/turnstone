@@ -30,6 +30,72 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 buffer_t* shell_buffer = NULL;
 buffer_t* mouse_buffer = NULL;
 
+static int8_t shell_handle_vm_command(const char_t* arguments) {
+    char_t command[64] = {0};
+    char_t vmid_str[64] = {0};
+
+    if(arguments == NULL || strlen(arguments) == 0) {
+        printf("Usage: vm <command> <vmid>\n");
+        return -1;
+    }
+
+    // copy command until space
+    uint32_t i = 0;
+
+    while(arguments[i] != ' ' && arguments[i] != NULL) {
+        command[i] = arguments[i];
+        i++;
+    }
+
+    if(arguments[i] == NULL) {
+        printf("Usage: vm <command> <vmid>\n");
+        return -1;
+    }
+
+    if(strncmp(command, "output", 6) != 0) {
+        printf("Unknown VM command: %s\n", command);
+        return -1;
+    }
+
+    i++;
+
+    // copy vmid until space
+    uint32_t j = 0;
+
+    while(arguments[i] != ' ' && arguments[i] != NULL) {
+        vmid_str[j] = arguments[i];
+        i++;
+        j++;
+    }
+
+    if(arguments[i] != NULL) {
+        printf("Usage: vm <command> <vmid>\n");
+        return -1;
+    }
+
+    uint64_t vmid = atoh(vmid_str);
+
+    buffer_t* buffer = task_get_task_output_buffer(vmid);
+
+    if(!buffer) {
+        printf("VM not found\n");
+        return -1;
+    }
+
+    uint8_t* buffer_data = buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
+
+    if(!buffer_data) {
+        printf("VM output not found\n");
+        return -1;
+    }
+
+    printf("VM 0x%llx output:\n", vmid);
+    printf("%s", buffer_data);
+    printf("\n");
+
+    return 0;
+}
+
 
 int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer) {
     char_t* command = (char_t*)buffer_get_all_bytes_and_reset(command_buffer, NULL);
@@ -55,6 +121,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\tusbprobe\t: probes the USB bus\n"
                "\tfree\t\t: prints the frame usage\n"
                "\twm\t\t: opens test window\n"
+               "\tvm\t\t: vm commands\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -111,7 +178,9 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         res = 0;
     } else if(strcmp(command, "wm") == 0) {
         res = windowmanager_init();
-    } else {
+    } else if(strcmp(command, "vm") == 0) {
+        res = shell_handle_vm_command(arguments);
+    }else {
         printf("Unknown command: %s\n", command);
         res = -1;
     }
@@ -150,6 +219,8 @@ int32_t shell_main(int32_t argc, char* argv[]) {
     UNUSED(argc);
     UNUSED(argv);
 
+    task_set_interruptible();
+
     shell_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
@@ -168,6 +239,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         if(kbd_length == 0 && mouse_length == 0) {
             memory_free(kbd_data);
             memory_free(mouse_data);
+            task_set_message_waiting();
             task_yield();
 
             continue;
@@ -185,6 +257,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         if(kbd_length == 0) {
             memory_free(kbd_data);
+            task_set_message_waiting();
             task_yield();
 
             continue;
@@ -280,6 +353,9 @@ int32_t shell_main(int32_t argc, char* argv[]) {
     return 0;
 }
 
+uint64_t shell_task_id = 0;
+
 int8_t shell_init(void) {
-    return task_create_task(NULL, 32 << 20, 64 << 10, shell_main, 0, NULL, "shell") == -1ULL ? -1 : 0;
+    shell_task_id = task_create_task(NULL, 32 << 20, 64 << 10, shell_main, 0, NULL, "shell");
+    return shell_task_id == -1ULL ? -1 : 0;
 }

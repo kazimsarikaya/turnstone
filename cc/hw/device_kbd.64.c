@@ -10,6 +10,7 @@
 #include <device/mouse.h>
 #include <logging.h>
 #include <cpu.h>
+#include <cpu/task.h>
 #include <apic.h>
 #include <ports.h>
 #include <driver/virtio.h>
@@ -20,6 +21,7 @@
 #include <acpi.h>
 #include <time.h>
 #include <shell.h>
+#include <utils.h>
 
 MODULE("turnstone.kernel.hw.kbd");
 
@@ -29,8 +31,11 @@ virtio_dev_t* virtio_tablet = NULL;
 boolean_t kbd_is_usb = false;
 
 volatile wchar_t kbd_ps2_tmp = NULL;
+extern uint64_t shell_task_id;
 
 kbd_state_t kbd_state = {0, 0, 0, 0, 0};
+
+void video_text_print(const char_t* string);
 
 int8_t dev_virtio_kbd_isr(interrupt_frame_ext_t* frame);
 int8_t dev_virtio_kbd_create_queues(virtio_dev_t* vdev);
@@ -72,6 +77,10 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
     if(shell_buffer != NULL) {
         buffer_append_bytes(shell_buffer, (uint8_t*)&report, sizeof(kbd_report_t));
+
+        if(shell_task_id != 0) {
+            task_set_interrupt_received(shell_task_id);
+        }
     }
 
     return 0;
@@ -150,8 +159,6 @@ int8_t dev_virtio_kbd_isr(interrupt_frame_ext_t* frame){
     return 0;
 }
 
-void video_text_print(const char_t* string);
-#include <utils.h>
 int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
 

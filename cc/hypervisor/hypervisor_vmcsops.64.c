@@ -406,6 +406,14 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     return 0;
 }
 
+static const uint8_t hypervisor_guest_test_code[]  = {
+    0x66, 0x8c, 0xc8, 0x8e, 0xd8, 0x8e, 0xc0, 0xbe, 0x1c, 0x00, 0x00, 0x00, 0xba, 0xf8, 0x03, 0x00,
+    0x00, 0xac, 0x84, 0xc0, 0x74, 0x03, 0xee, 0xeb, 0xf8, 0xf4, 0xeb, 0xfd, 0x48, 0x65, 0x6c, 0x6c,
+    0x6f, 0x2c, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x00
+};
+
+#define GUEST_CODE_SIZE (sizeof(hypervisor_guest_test_code))
+
 
 int8_t hypervisor_vmcs_prepare_ept(void) {
     uint64_t ept_pml4_base = hypervisor_ept_setup(0, 16 << 20);
@@ -435,13 +443,16 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
 
     uint64_t guest_code_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_code);
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "Guest code VA:0x%llx", guest_code_va);
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "Guest code VA:0x%llx", guest_code_va);
 
     uint8_t* guest_code_ptr = (uint8_t*)guest_code_va;
 
-    guest_code_ptr[0] = 0xf4; // HLT
-    guest_code_ptr[1] = 0xeb; // JMP
-    guest_code_ptr[2] = 0xfd; // -2
+    // guest_code_ptr[0] = 0xf4; // HLT
+    // guest_code_ptr[0] = 0x90; // NOP
+    // guest_code_ptr[1] = 0xeb; // JMP
+    // guest_code_ptr[2] = 0xfd; // -2
+
+    memory_memcopy(hypervisor_guest_test_code, guest_code_ptr, GUEST_CODE_SIZE);
 
     return 0;
 }

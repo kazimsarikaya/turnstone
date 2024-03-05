@@ -13,6 +13,7 @@
 #include <graphics/image.h>
 #include <device/mouse.h>
 #include <buffer.h>
+#include <cpu/task.h>
 
 
 MODULE("turnstone.kernel.hw.video");
@@ -20,6 +21,7 @@ MODULE("turnstone.kernel.hw.video");
 extern uint8_t mouse_data_start;
 extern uint8_t mouse_data_end;
 extern buffer_t* mouse_buffer;
+extern uint64_t shell_task_id;
 
 graphics_raw_image_t* video_get_mouse_image(void) {
     graphics_tga_image_t* tga_image = (graphics_tga_image_t*)&mouse_data_start;
@@ -37,6 +39,10 @@ int8_t mouse_report(mouse_report_t * report) {
 
     if(mouse_buffer) {
         buffer_append_bytes(mouse_buffer, (uint8_t*)report, sizeof(mouse_report_t));
+
+        if(shell_task_id != 0) {
+            task_set_interrupt_received(shell_task_id);
+        }
     }
 
     return 0;

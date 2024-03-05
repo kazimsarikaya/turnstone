@@ -231,6 +231,9 @@ void task_end_task(void);
 
 void task_print_all(void);
 
+buffer_t* task_get_task_input_buffer(uint64_t tid);
+buffer_t* task_get_task_output_buffer(uint64_t tid);
+buffer_t* task_get_task_error_buffer(uint64_t tid);
 buffer_t* task_get_input_buffer(void);
 buffer_t* task_get_output_buffer(void);
 buffer_t* task_get_error_buffer(void);

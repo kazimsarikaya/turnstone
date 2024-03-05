@@ -66,6 +66,8 @@ void trampoline_code(system_info_t* sysinfo) {
 }
 #endif
 
+volatile boolean_t kmain64_completed = false;
+
 __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     cpu_cli();
 
@@ -90,10 +92,13 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     res = kmain64_test((size_t)&___kstart64);
 #endif
 
+    kmain64_completed = true;
+
     if(res != 0) {
         cpu_hlt();
     } else {
         while(1) {
+            cpu_sti();
 #if 0 && TASK_MAX_TICK_COUNT > 1
             if(task_idle_check_need_yield()) {
                 task_yield();
