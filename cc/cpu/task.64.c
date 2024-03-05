@@ -453,13 +453,20 @@ boolean_t task_idle_check_need_yield(void) {
     return need_yield;
 }
 
+extern volatile boolean_t kmain64_completed;
+
 task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
+
+    boolean_t first_time = true;
 
     while(1) {
         tmp_task = (task_t*)list_queue_pop(task_queue);
 
-        if(tmp_task->sleeping) {
+        if(kmain64_completed && tmp_task->task_id == TASK_KERNEL_TASK_ID && first_time) {
+            first_time = false;
+            list_queue_push(task_queue, tmp_task);
+        } else if(tmp_task->sleeping) {
 
             if(tmp_task->wake_tick < time_timer_get_tick_count()) {
                 tmp_task->sleeping = false;

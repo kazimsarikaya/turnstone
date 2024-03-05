@@ -30,6 +30,15 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
+    list_t* mq_list = list_create_queue();
+
+    if(mq_list == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create message queue");
+        return -1;
+    }
+
+    task_add_message_queue(mq_list);
+
     uint64_t vmcs_frame_va = (uint64_t)args[0];
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);

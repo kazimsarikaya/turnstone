@@ -150,6 +150,8 @@ int32_t shell_main(int32_t argc, char* argv[]) {
     UNUSED(argc);
     UNUSED(argv);
 
+    task_set_interruptible();
+
     shell_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
@@ -168,6 +170,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         if(kbd_length == 0 && mouse_length == 0) {
             memory_free(kbd_data);
             memory_free(mouse_data);
+            task_set_message_waiting();
             task_yield();
 
             continue;
@@ -185,6 +188,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         if(kbd_length == 0) {
             memory_free(kbd_data);
+            task_set_message_waiting();
             task_yield();
 
             continue;
@@ -280,6 +284,9 @@ int32_t shell_main(int32_t argc, char* argv[]) {
     return 0;
 }
 
+uint64_t shell_task_id = 0;
+
 int8_t shell_init(void) {
-    return task_create_task(NULL, 32 << 20, 64 << 10, shell_main, 0, NULL, "shell") == -1ULL ? -1 : 0;
+    shell_task_id = task_create_task(NULL, 32 << 20, 64 << 10, shell_main, 0, NULL, "shell");
+    return shell_task_id == -1ULL ? -1 : 0;
 }

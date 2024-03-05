@@ -111,6 +111,8 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
 }
 
 static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
+    task_set_message_waiting();
+
     task_yield();
 
     hypervisor_vmcs_goto_next_instruction(vmexit_info);
