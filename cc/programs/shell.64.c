@@ -134,6 +134,8 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
         printf("%s", msg_data);
         printf("\n");
 
+        memory_free(msg_data);
+
     } else {
         printf("Unknown command: %s\n", command);
         printf("Usage: vm <vmid> <command>\n");
