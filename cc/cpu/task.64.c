@@ -459,60 +459,48 @@ task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
     boolean_t first_time = true;
+    uint64_t found_index = -1;
 
     while(1) {
-        tmp_task = (task_t*)list_queue_pop(task_queue);
+        for(uint64_t i = 0; i < list_size(task_queue); i++) {
+            task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
-        if(kmain64_completed && tmp_task->task_id == TASK_KERNEL_TASK_ID && first_time) {
-            first_time = false;
-            list_queue_push(task_queue, tmp_task);
-        } else if(tmp_task->sleeping) {
-
-            if(tmp_task->wake_tick < time_timer_get_tick_count()) {
-                tmp_task->sleeping = false;
-                break;
-            }
-
-            list_queue_push(task_queue, tmp_task);
-        } else if(tmp_task->message_waiting) {
-
-
-            if(tmp_task->interruptible) {
-                if(tmp_task->interrupt_received) {
-                    tmp_task->interrupt_received = false;
-                    tmp_task->message_waiting = false;
-
+            if(kmain64_completed && t->task_id == TASK_KERNEL_TASK_ID && first_time) {
+                first_time = false;
+                continue;
+            } else if(t->sleeping) {
+                if(t->wake_tick < time_timer_get_tick_count()) {
+                    t->sleeping = false;
+                    found_index = i;
                     break;
                 }
-            } else if(tmp_task->message_queues) {
+            } else if(t->message_waiting) {
+                if(t->interruptible) {
+                    if(t->interrupt_received) {
+                        t->interrupt_received = false;
+                        t->message_waiting = false;
+                        found_index = i;
+                        break;
+                    }
+                } else if(t->message_queues) {
+                    for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
+                        list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
 
-                for(uint64_t q_idx = 0; q_idx < list_size(tmp_task->message_queues); q_idx++) {
-                    const list_t* q = (list_t*)list_get_data_at_position(tmp_task->message_queues, q_idx);
-
-                    if(q) {
                         if(list_size(q)) {
-                            tmp_task->message_waiting = false;
+                            t->message_waiting = false;
+                            found_index = i;
                             break;
                         }
-
-                    } else {
-                        PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli has null queue in message queues, removing task", tmp_task->task_id);
-                        list_queue_push(task_cleaner_queue, tmp_task);
-
-                        continue;
                     }
-
                 }
-
             } else {
-                PRINTLOG(TASKING, LOG_ERROR, "task 0x%lli in message waiting state without message queues, removing task", tmp_task->task_id);
-                list_queue_push(task_cleaner_queue, tmp_task);
-
-                continue;
+                found_index = i;
+                break;
             }
+        }
 
-            list_queue_push(task_queue, tmp_task);
-        } else {
+        if(found_index != -1ULL) {
+            tmp_task = (task_t*)list_delete_at_position(task_queue, found_index);
             break;
         }
 
