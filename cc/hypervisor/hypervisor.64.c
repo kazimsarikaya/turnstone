@@ -12,6 +12,7 @@
 #include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_vmcsops.h>
 #include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vm.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>
@@ -30,24 +31,6 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-    list_t* mq_list = list_create_queue();
-
-    if(mq_list == NULL) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create message queue");
-        return -1;
-    }
-
-    task_add_message_queue(mq_list);
-
-    buffer_t* buffer = buffer_new();
-
-    if(buffer == NULL) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
-        return -1;
-    }
-
-    task_set_output_buffer(buffer);
-
     uint64_t vmcs_frame_va = (uint64_t)args[0];
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
@@ -59,9 +42,11 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
 
     vmcs_frame_va = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(vmcs_frame_va);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vmcs_frame_va);
 
-    task_set_vmcs_physical_address(vmcs_frame_va);
+    if(hypervisor_vm_create_and_attach_to_task(vmcs_frame_va) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm and attach to task");
+        return -1;
+    }
 
     if(vmptrld(vmcs_frame_va) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
@@ -95,6 +80,11 @@ int8_t hypervisor_init(void) {
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "Hypervisor supported");
+
+    if(hypervisor_vm_init() != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize hypervisor vm");
+        return -1;
+    }
 
 
     cpu_reg_cr4_t cr4 = cpu_read_cr4();

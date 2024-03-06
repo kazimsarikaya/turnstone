@@ -20,6 +20,7 @@
 #include <map.h>
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vm.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -360,6 +361,11 @@ void task_cleanup(void){
     while(list_size(task_cleaner_queue)) {
         task_t* tmp = (task_t*)list_queue_pop(task_cleaner_queue);
 
+        if(tmp->vm) {
+            hypervisor_vm_destroy(tmp->vm);
+        }
+
+
         map_delete(task_map, (void*)tmp->task_id);
 
         uint64_t stack_va = (uint64_t)tmp->stack;
@@ -591,6 +597,12 @@ void task_end_task(void) {
     }
 
     PRINTLOG(TASKING, LOG_TRACE, "ending task 0x%lli", current_task->task_id);
+
+    if(current_task->vmcs_physical_address) {
+        if(vmclear(current_task->vmcs_physical_address) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+        }
+    }
 
     current_task->state = TASK_STATE_ENDED;
 
@@ -1112,4 +1124,26 @@ uint64_t task_get_vmcs_physical_address(void) {
     }
 
     return vmcs_physical_address;
+}
+
+void task_set_vm(void* vm) {
+    task_t* current_task = task_get_current_task();
+
+    cpu_cli();
+    if(current_task) {
+        current_task->vm = vm;
+    }
+    cpu_sti();
+}
+
+void* task_get_vm(void) {
+    void* vm = NULL;
+
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        vm = current_task->vm;
+    }
+
+    return vm;
 }

@@ -118,6 +118,7 @@ typedef struct {
     buffer_t*                    output_buffer; ///< output buffer
     buffer_t*                    error_buffer; ///< error buffer
     uint64_t                     vmcs_physical_address; ///< vmcs physical address
+    void*                        vm; ///< vm
     uint64_t                     rax; ///< register
     uint64_t                     rbx; ///< register
     uint64_t                     rcx; ///< register
@@ -246,6 +247,8 @@ int8_t    task_set_error_buffer(buffer_t * buffer);
 
 void     task_set_vmcs_physical_address(uint64_t vmcs_physical_address);
 uint64_t task_get_vmcs_physical_address(void);
+void     task_set_vm(void* vm);
+void*    task_get_vm(void);
 
 
 #endif

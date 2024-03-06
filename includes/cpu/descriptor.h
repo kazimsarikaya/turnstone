@@ -173,6 +173,8 @@ typedef struct descriptor_idt {
     uint32_t zero; ///< reserved, always zero
 }__attribute__((packed)) descriptor_idt_t; ///< struct short hand
 
+_Static_assert(sizeof(descriptor_idt_t) == 16, "descriptor_idt_t size must be 16");
+
 /**
  * @brief assign a function to interrupt nomber
  * @param[in]  IE        interrupt vector

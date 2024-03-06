@@ -15,6 +15,7 @@
 #include <logging.h>
 #include <time/timer.h>
 #include <list.h>
+#include <time.h>
 
 MODULE("turnstone.kernel.cpu.apic");
 
@@ -30,6 +31,8 @@ uint64_t apic_ap_count = 0;
 boolean_t apic_x2apic = false;
 
 list_t* irq_remappings = NULL;
+
+extern volatile uint64_t time_timer_rdtsc_delta;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -301,6 +304,16 @@ int8_t apic_init_timer(void) {
 
     time_timer_reset_tick_count();
     time_timer_configure_spinsleep();
+
+    uint64_t old_tsc = rdtsc();
+    time_timer_spinsleep(1000); // 1ms
+    uint64_t new_tsc = rdtsc();
+
+    uint64_t delta = new_tsc - old_tsc;
+    time_timer_rdtsc_delta = delta;
+
+    PRINTLOG(APIC, LOG_INFO, "delta is 0x%016llx", delta);
+
 
     return 0;
 }

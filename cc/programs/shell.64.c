@@ -106,7 +106,7 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
             return -1;
         }
 
-        msg->message_type = HYPERVISOR_IPC_MESSAGE_TYPE_VM_CALL;
+        msg->message_type = HYPERVISOR_IPC_MESSAGE_TYPE_DUMP;
         msg->message_data = buffer_new();
 
         if(!msg->message_data) {
@@ -178,6 +178,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\tfree\t\t: prints the frame usage\n"
                "\twm\t\t: opens test window\n"
                "\tvm\t\t: vm commands\n"
+               "\trdtsc\t\t: read timestamp counter\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -236,7 +237,10 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         res = windowmanager_init();
     } else if(strcmp(command, "vm") == 0) {
         res = shell_handle_vm_command(arguments);
-    }else {
+    } else if(strcmp(command, "rdtsc") == 0) {
+        printf("rdtsc: 0x%llx\n", rdtsc());
+        res = 0;
+    } else {
         printf("Unknown command: %s\n", command);
         res = -1;
     }

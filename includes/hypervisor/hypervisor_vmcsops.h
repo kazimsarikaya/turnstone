@@ -43,12 +43,24 @@ typedef struct vmcs_registers_t {
 
 _Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch");
 
+typedef struct vmcs_vmexit_info {
+    vmcs_registers_t* registers;
+    uint64_t          reason;
+    uint64_t          exit_qualification;
+    uint64_t          guest_linear_addr;
+    uint64_t          guest_physical_addr;
+    uint64_t          instruction_length;
+    uint64_t          instruction_info;
+    uint64_t          interrupt_info;
+    uint64_t          interrupt_error_code;
+}vmcs_vmexit_info_t;
 
 uint32_t hypervisor_vmcs_revision_id(void);
 int8_t   hypervisor_vmcs_prepare_host_state(void);
 int8_t   hypervisor_vmcs_prepare_guest_state(void);
 int8_t   hypervisor_vmcs_prepare_pinbased_control(void);
 int8_t   hypervisor_vmcs_prepare_procbased_control(void);
+int8_t   hypervisor_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read);
 void     hypervisor_io_bitmap_set_port(uint8_t * bitmap, uint16_t port);
 int8_t   hypervisor_vmcs_prepare_io_bitmap(void);
 int8_t   hypervisor_vmcs_prepare_execution_control(void);

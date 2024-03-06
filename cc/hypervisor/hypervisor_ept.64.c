@@ -184,17 +184,9 @@ int8_t hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t
     uint64_t* gdt = (uint64_t*)(guest_low + 0x2000);
 
     gdt[0] = 0;
-    gdt[1] = 0x00c09b0000000000ULL;
-    gdt[2] = 0x00c0930000000000ULL;
-
-    descriptor_tss_t* d_tss = (descriptor_tss_t*)&gdt[3];
-    tss_t* tss = (tss_t*)(gdt + 10);
-
-    tss->rsp0 = 3 << 20; // 3mib
-
-    uint64_t tss_base = 0x2000 + 10 * sizeof(uint64_t);
-    uint32_t tss_limit = sizeof(tss_t) - 1;
-    DESCRIPTOR_BUILD_TSS_SEG(d_tss, tss_base, tss_limit, DPL_KERNEL);
+    gdt[1] = 0x00209b0000000000ULL;
+    gdt[2] = 0x0000930000000000ULL;
+    gdt[3] = 0x00008b0030000067ULL;
 
 
     uint64_t l3_row_count = (high_mem - low_mem) / MEMORY_PAGING_PAGE_LENGTH_2M;
@@ -204,8 +196,8 @@ int8_t hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t
     uint64_t l1_row_count = (l2_row_count + 512 - 1) / 512; // 512 PDPTs per PML4T entry
 
 
-    memory_page_table_t* l1 = (memory_page_table_t*)(guest_low + 0x2000);
-    uint64_t l2_fa = 0x3000;
+    memory_page_table_t* l1 = (memory_page_table_t*)(guest_low + 0x4000);
+    uint64_t l2_fa = 0x5000;
     uint64_t orig_l2_fa = l2_fa;
 
     for(uint64_t i = 0; i < l1_row_count; i++) {

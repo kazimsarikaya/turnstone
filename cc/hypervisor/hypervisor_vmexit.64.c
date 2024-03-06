@@ -12,26 +12,16 @@
 #include <hypervisor/hypervisor_macros.h>
 #include <hypervisor/hypervisor_ept.h>
 #include <hypervisor/hypervisor_ipc.h>
+#include <hypervisor/hypervisor_vm.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
 #include <logging.h>
 #include <list.h>
+#include <apic.h>
 
 MODULE("turnstone.hypervisor");
-
-typedef struct vmcs_vmexit_info {
-    vmcs_registers_t* registers;
-    uint64_t          reason;
-    uint64_t          exit_qualification;
-    uint64_t          guest_linear_addr;
-    uint64_t          guest_physical_addr;
-    uint64_t          instruction_length;
-    uint64_t          instruction_info;
-    uint64_t          interrupt_info;
-    uint64_t          interrupt_error_code;
-}vmcs_vmexit_info_t;
 
 typedef uint64_t (*vmexit_handler_t)(vmcs_vmexit_info_t* vmexit_info);
 
@@ -41,87 +31,6 @@ static void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_inf
     uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
     guest_rip += vmexit_info->instruction_length;
     vmx_write(VMX_GUEST_RIP, guest_rip);
-}
-
-static int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
-    list_t* mq = task_get_current_task_message_queue(0);
-
-    if(!mq) {
-        return -1;
-    }
-
-    if(list_size(mq) == 0) {
-        return 0;
-    }
-
-    hypervisor_ipc_message_t* message = (hypervisor_ipc_message_t*)list_queue_pop(mq);
-
-    if(!message) {
-        return -1;
-    }
-
-    buffer_t* buffer = message->message_data;
-
-    buffer_printf(buffer, "rax: 0x%016llx ", vmexit_info->registers->rax);
-    buffer_printf(buffer, "rbx: 0x%016llx ", vmexit_info->registers->rbx);
-    buffer_printf(buffer, "rcx: 0x%016llx ", vmexit_info->registers->rcx);
-    buffer_printf(buffer, "rdx: 0x%016llx\n", vmexit_info->registers->rdx);
-    buffer_printf(buffer, "rsi: 0x%016llx ", vmexit_info->registers->rsi);
-    buffer_printf(buffer, "rdi: 0x%016llx ", vmexit_info->registers->rdi);
-    buffer_printf(buffer, "rbp: 0x%016llx ", vmexit_info->registers->rbp);
-    buffer_printf(buffer, "rsp: 0x%016llx\n", vmexit_info->registers->rsp);
-    buffer_printf(buffer, "r8:  0x%016llx ", vmexit_info->registers->r8);
-    buffer_printf(buffer, "r9:  0x%016llx ", vmexit_info->registers->r9);
-    buffer_printf(buffer, "r10: 0x%016llx ", vmexit_info->registers->r10);
-    buffer_printf(buffer, "r11: 0x%016llx\n", vmexit_info->registers->r11);
-    buffer_printf(buffer, "r12: 0x%016llx ", vmexit_info->registers->r12);
-    buffer_printf(buffer, "r13: 0x%016llx ", vmexit_info->registers->r13);
-    buffer_printf(buffer, "r14: 0x%016llx ", vmexit_info->registers->r14);
-    buffer_printf(buffer, "r15: 0x%016llx\n", vmexit_info->registers->r15);
-    buffer_printf(buffer, "rip: 0x%016llx rflags: 0x%08llx\n",
-                  vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS));
-    buffer_printf(buffer, "\n");
-
-    buffer_printf(buffer, "cr0: 0x%08llx cr3: 0x%016llx cr4: 0x%08llx\n",
-                  vmx_read(VMX_GUEST_CR0), vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
-    buffer_printf(buffer, "\n");
-
-    buffer_printf(buffer, "cs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_CS_SELECTOR), vmx_read(VMX_GUEST_CS_BASE),
-                  vmx_read(VMX_GUEST_CS_LIMIT), vmx_read(VMX_GUEST_CS_ACCESS_RIGHT));
-    buffer_printf(buffer, "ss:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_SS_SELECTOR), vmx_read(VMX_GUEST_SS_BASE),
-                  vmx_read(VMX_GUEST_SS_LIMIT), vmx_read(VMX_GUEST_SS_ACCESS_RIGHT));
-    buffer_printf(buffer, "ds:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_DS_SELECTOR), vmx_read(VMX_GUEST_DS_BASE),
-                  vmx_read(VMX_GUEST_DS_LIMIT), vmx_read(VMX_GUEST_DS_ACCESS_RIGHT));
-    buffer_printf(buffer, "es:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_ES_SELECTOR), vmx_read(VMX_GUEST_ES_BASE),
-                  vmx_read(VMX_GUEST_ES_LIMIT), vmx_read(VMX_GUEST_ES_ACCESS_RIGHT));
-    buffer_printf(buffer, "fs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_FS_SELECTOR), vmx_read(VMX_GUEST_FS_BASE),
-                  vmx_read(VMX_GUEST_FS_LIMIT), vmx_read(VMX_GUEST_FS_ACCESS_RIGHT));
-    buffer_printf(buffer, "gs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_GS_SELECTOR), vmx_read(VMX_GUEST_GS_BASE),
-                  vmx_read(VMX_GUEST_GS_LIMIT), vmx_read(VMX_GUEST_GS_ACCESS_RIGHT));
-    buffer_printf(buffer, "\n");
-
-    buffer_printf(buffer, "ldtr: 0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_LDTR_SELECTOR), vmx_read(VMX_GUEST_LDTR_BASE),
-                  vmx_read(VMX_GUEST_LDTR_LIMIT), vmx_read(VMX_GUEST_LDTR_ACCESS_RIGHT));
-    buffer_printf(buffer, "tr:   0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_TR_SELECTOR), vmx_read(VMX_GUEST_TR_BASE),
-                  vmx_read(VMX_GUEST_TR_LIMIT), vmx_read(VMX_GUEST_TR_ACCESS_RIGHT));
-    buffer_printf(buffer, "gdtr: 0x%016llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_GDTR_BASE), vmx_read(VMX_GUEST_GDTR_LIMIT));
-    buffer_printf(buffer, "idt:  0x%016llx 0x%08llx\n",
-                  vmx_read(VMX_GUEST_IDTR_BASE), vmx_read(VMX_GUEST_IDTR_LIMIT));
-    buffer_printf(buffer, "efer: 0x%08llx\n",
-                  vmx_read(VMX_GUEST_IA32_EFER));
-
-    message->message_data_completed = true;
-
-    return 0;
 }
 
 static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* vmexit_info) {
@@ -256,10 +165,162 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
     return (uint64_t)vmexit_info->registers;
 }
 
+static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vmexit_info) {
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window");
+
+    uint32_t interuptibility_state = vmx_read(VMX_GUEST_INTERRUPTIBILITY_STATE);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Interruptibility State: 0x%x rip: %llx", interuptibility_state, vmx_read(VMX_GUEST_RIP));
+
+
+    hypervisor_vm_t* vm = task_get_vm();
+
+    if(vm->need_to_notify) {
+        uint32_t interrupt_info = 0;
+        interrupt_info = vm->lapic.in_service_vector & 0xFF;
+        interrupt_info |= (1 << 31); // valid
+
+        if(vm->lapic.in_service_vector >= 0x20) {
+            interrupt_info |= (0 << 8); // type
+
+            vmx_write(VMX_CTLS_VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "guest rip: 0x%llx", vmx_read(VMX_GUEST_RIP));
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "injected instruction length: %llx", vmexit_info->instruction_length);
+            vmx_write(VMX_CTLS_VM_ENTRY_INSTRUCTION_LENGTH, vmexit_info->instruction_length);
+        }
+
+        vmx_write(VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD, interrupt_info);
+
+        vm->lapic.apic_eoi_pending = true;
+        vm->need_to_notify = false;
+
+        if(vm->lapic_timer_pending) {
+            vm->lapic_timer_pending = false;
+        }
+
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window: Injected Interrupt: 0x%x", interrupt_info);
+    }
+
+    if(!vm->lapic.apic_eoi_pending) {
+        vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) & ~(1 << 2));
+    }
+
+    return (uint64_t)vmexit_info->registers;
+}
+
+static uint64_t hypervisor_vmcs_rdmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t msr = vmexit_info->registers->rcx;
+
+    hypervisor_vm_t* vm = task_get_vm();
+
+    uint64_t value = 0;
+
+    switch(msr) {
+    case CPU_MSR_EFER:
+        value = vmx_read(VMX_GUEST_IA32_EFER);
+        break;
+    case APIC_X2APIC_MSR_TIMER_INITIAL_VALUE:
+        value = vm->lapic.timer_initial_value;
+        break;
+    case APIC_X2APIC_MSR_TIMER_CURRENT_VALUE:
+        value = vm->lapic.timer_current_value;
+        break;
+    case APIC_X2APIC_MSR_TIMER_DIVIDER:
+        value = vm->lapic.timer_divider;
+        break;
+    case APIC_X2APIC_MSR_LVT_TIMER:
+        value = vm->lapic.timer_vector | (vm->lapic.timer_periodic << 17) | (vm->lapic.timer_masked << 16);
+        break;
+    default:
+        value = (uint64_t)map_get(vm->msr_map, (void*)msr);
+        break;
+    }
+
+    vmexit_info->registers->rax = value & 0xFFFFFFFF;
+    vmexit_info->registers->rdx = (value >> 32) & 0xFFFFFFFF;
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
+static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t msr = vmexit_info->registers->rcx;
+    uint64_t value = vmexit_info->registers->rax | (vmexit_info->registers->rdx << 32);
+
+    hypervisor_vm_t* vm = task_get_vm();
+
+    switch(msr) {
+    case CPU_MSR_EFER:
+        vmx_write(VMX_GUEST_IA32_EFER, value);
+        break;
+    case APIC_X2APIC_MSR_TIMER_INITIAL_VALUE:
+        vm->lapic.timer_initial_value = value;
+        vm->lapic.timer_current_value = value;
+        vm->lapic_timer_enabled = true;
+        break;
+    case APIC_X2APIC_MSR_TIMER_CURRENT_VALUE:
+        vm->lapic.timer_current_value = value;
+        break;
+    case APIC_X2APIC_MSR_TIMER_DIVIDER:
+        vm->lapic.timer_divider = value;
+        switch(value) {
+        case 0x0:
+            vm->lapic.timer_divider_realvalue = 2;
+            break;
+        case 0x1:
+            vm->lapic.timer_divider_realvalue = 4;
+            break;
+        case 0x2:
+            vm->lapic.timer_divider_realvalue = 8;
+            break;
+        case 0x3:
+            vm->lapic.timer_divider_realvalue = 16;
+            break;
+        case 0x8:
+            vm->lapic.timer_divider_realvalue = 32;
+            break;
+        case 0x9:
+            vm->lapic.timer_divider_realvalue = 64;
+            break;
+        case 0xA:
+            vm->lapic.timer_divider_realvalue = 128;
+            break;
+        case 0xB:
+            vm->lapic.timer_divider_realvalue = 1;
+            break;
+        default:
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Invalid Timer Divider: 0x%llx", value);
+            return -1;
+        }
+
+        break;
+    case APIC_X2APIC_MSR_LVT_TIMER:
+        vm->lapic.timer_vector = value & 0xFF;
+        vm->lapic.timer_periodic = (value >> 17) & 0x1;
+        vm->lapic.timer_masked = (value >> 16) & 0x1;
+        break;
+    case APIC_X2APIC_MSR_EOI:
+        vm->lapic.apic_eoi_pending = false;
+        PRINTLOG(HYPERVISOR, LOG_DEBUG, "EOI");
+        return -1;
+        break;
+    default:
+        map_insert(vm->msr_map, (void*)msr, (void*)value);
+        break;
+    }
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
 
     vmcs_registers_t* registers = (vmcs_registers_t*)rsp;
+    // registers->rsp = vmx_read(VMX_GUEST_RSP);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "VMExit RSP: 0x%llx", rsp);
 
@@ -290,6 +351,30 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Info: 0x%llx", vmexit_info.instruction_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Info: 0x%llx", vmexit_info.interrupt_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Error Code: 0x%llx", vmexit_info.interrupt_error_code);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%llx", vmx_read(VMX_GUEST_RIP));
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RFLAGS: 0x%llx", vmx_read(VMX_GUEST_RFLAGS));
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    EFER: 0x%llx", vmx_read(VMX_GUEST_IA32_EFER));
+    printf("rax: 0x%016llx ", vmexit_info.registers->rax);
+    printf("rbx: 0x%016llx ", vmexit_info.registers->rbx);
+    printf("rcx: 0x%016llx ", vmexit_info.registers->rcx);
+    printf("rdx: 0x%016llx\n", vmexit_info.registers->rdx);
+    printf("rsi: 0x%016llx ", vmexit_info.registers->rsi);
+    printf("rdi: 0x%016llx ", vmexit_info.registers->rdi);
+    printf("rbp: 0x%016llx ", vmexit_info.registers->rbp);
+    printf("rsp: 0x%016llx\n", vmx_read(VMX_GUEST_RSP));
+    printf("r8:  0x%016llx ", vmexit_info.registers->r8);
+    printf("r9:  0x%016llx ", vmexit_info.registers->r9);
+    printf("r10: 0x%016llx ", vmexit_info.registers->r10);
+    printf("r11: 0x%016llx\n", vmexit_info.registers->r11);
+    printf("r12: 0x%016llx ", vmexit_info.registers->r12);
+    printf("r13: 0x%016llx ", vmexit_info.registers->r13);
+    printf("r14: 0x%016llx ", vmexit_info.registers->r14);
+    printf("r15: 0x%016llx\n", vmexit_info.registers->r15);
+    printf("\n");
+
+    printf("cr0: 0x%08llx cr2: 0x%016llx cr3: 0x%016llx cr4: 0x%08llx\n",
+           vmx_read(VMX_GUEST_CR0), vmexit_info.registers->cr2, vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
+    printf("\n");
 
     return -1;
 }
@@ -299,5 +384,8 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_EPT_MISCONFIG] = hypervisor_vmcs_ept_misconfig_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_HLT] = hypervisor_vmcs_hlt_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_IO_INSTRUCTION] = hypervisor_vmcs_io_instruction_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_INTERRUPT_WINDOW] = hypervisor_vmcs_interrupt_window_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_RDMSR] = hypervisor_vmcs_rdmsr_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_WRMSR] = hypervisor_vmcs_wrmsr_handler;
     return 0;
 }
