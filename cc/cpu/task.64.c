@@ -960,9 +960,25 @@ void task_print_all(void) {
     while(it->end_of_iterator(it) != 0) {
         const task_t* task = it->get_item(it);
 
+
+        uint64_t msgcount = 0;
+
+        if(task->message_queues) {
+            for(uint64_t q_idx = 0; q_idx < list_size(task->message_queues); q_idx++) {
+                list_t* q = (list_t*)list_get_data_at_position(task->message_queues, q_idx);
+
+                msgcount += list_size(q);
+            }
+        }
+
         printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
                task->task_name, task->task_id, task, task->task_switch_count,
                task->rsp, task->rbp, task->heap, task->heap_size);
+
+        printf("\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d\n",
+               task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received);
+
+        printf("\t\tmessage queues %lli messages %lli\n", list_size(task->message_queues), msgcount);
 
         memory_heap_stat_t stat = {0};
         memory_get_heap_stat_ext(task->heap, &stat);
