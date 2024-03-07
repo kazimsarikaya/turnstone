@@ -250,7 +250,9 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
         }
     }
 
-    vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) & ~(1 << 2));
+    if(!vm->need_to_notify) {
+        vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) & ~(1 << 2));
+    }
 
     return (uint64_t)vmexit_info->registers;
 }
@@ -396,30 +398,24 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Info: 0x%llx", vmexit_info.instruction_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Info: 0x%llx", vmexit_info.interrupt_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Error Code: 0x%llx", vmexit_info.interrupt_error_code);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%llx", vmx_read(VMX_GUEST_RIP));
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RFLAGS: 0x%llx", vmx_read(VMX_GUEST_RFLAGS));
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    EFER: 0x%llx", vmx_read(VMX_GUEST_IA32_EFER));
-    printf("rax: 0x%016llx ", vmexit_info.registers->rax);
-    printf("rbx: 0x%016llx ", vmexit_info.registers->rbx);
-    printf("rcx: 0x%016llx ", vmexit_info.registers->rcx);
-    printf("rdx: 0x%016llx\n", vmexit_info.registers->rdx);
-    printf("rsi: 0x%016llx ", vmexit_info.registers->rsi);
-    printf("rdi: 0x%016llx ", vmexit_info.registers->rdi);
-    printf("rbp: 0x%016llx ", vmexit_info.registers->rbp);
-    printf("rsp: 0x%016llx\n", vmx_read(VMX_GUEST_RSP));
-    printf("r8:  0x%016llx ", vmexit_info.registers->r8);
-    printf("r9:  0x%016llx ", vmexit_info.registers->r9);
-    printf("r10: 0x%016llx ", vmexit_info.registers->r10);
-    printf("r11: 0x%016llx\n", vmexit_info.registers->r11);
-    printf("r12: 0x%016llx ", vmexit_info.registers->r12);
-    printf("r13: 0x%016llx ", vmexit_info.registers->r13);
-    printf("r14: 0x%016llx ", vmexit_info.registers->r14);
-    printf("r15: 0x%016llx\n", vmexit_info.registers->r15);
-    printf("\n");
-
-    printf("cr0: 0x%08llx cr2: 0x%016llx cr3: 0x%016llx cr4: 0x%08llx\n",
-           vmx_read(VMX_GUEST_CR0), vmexit_info.registers->cr2, vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
-    printf("\n");
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
+             vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS),
+             vmx_read(VMX_GUEST_IA32_EFER));
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RAX: 0x%016llx RBX: 0x%016llx RCX: 0x%016llx RDX: 0x%016llx",
+             vmexit_info.registers->rax, vmexit_info.registers->rbx,
+             vmexit_info.registers->rcx, vmexit_info.registers->rdx);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RSI: 0x%016llx RDI: 0x%016llx RBP: 0x%016llx RSP: 0x%016llx",
+             vmexit_info.registers->rsi, vmexit_info.registers->rdi,
+             vmexit_info.registers->rbp, vmx_read(VMX_GUEST_RSP));
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R8:  0x%016llx R9:  0x%016llx R10: 0x%016llx R11: 0x%016llx",
+             vmexit_info.registers->r8, vmexit_info.registers->r9,
+             vmexit_info.registers->r10, vmexit_info.registers->r11);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R12: 0x%016llx R13: 0x%016llx R14: 0x%016llx R15: 0x%016llx\n",
+             vmexit_info.registers->r12, vmexit_info.registers->r13,
+             vmexit_info.registers->r14, vmexit_info.registers->r15);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    CR0: 0x%08llx CR2: 0x%016llx CR3: 0x%016llx CR4: 0x%08llx\n",
+             vmx_read(VMX_GUEST_CR0), vmexit_info.registers->cr2,
+             vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
 
     return -1;
 }

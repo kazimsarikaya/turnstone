@@ -117,22 +117,7 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     return 0;
 }
 
-static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
-    UNUSED(vmexit_info);
-    UNUSED(message);
-
-    hypervisor_vm_t* vm = task_get_vm();
-
-    if(!vm) {
-        return -1;
-    }
-
-    if(vm->lapic.timer_masked) {
-        vm->lapic_timer_pending = false;
-        return 0;
-    }
-
-    uint8_t vector = vm->lapic.timer_vector;
+static int8_t hypervisor_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
     uint32_t vector_byte = vector / 8;
     uint32_t vector_bit = vector % 8;
 
@@ -152,6 +137,23 @@ static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, h
     }
 
     return 0;
+}
+
+static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
+    UNUSED(vmexit_info);
+    UNUSED(message);
+
+    hypervisor_vm_t* vm = task_get_vm();
+
+    if(!vm) {
+        return -1;
+    }
+
+    if(vm->lapic.timer_masked) {
+        return 0;
+    }
+
+    return hypervisor_ipc_handle_irq(vm, vm->lapic.timer_vector);
 }
 
 
