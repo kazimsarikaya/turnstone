@@ -21,7 +21,38 @@ typedef struct lock_t {
     boolean_t         for_future;
 }lock_t;
 
-extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
+boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
+
+typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
+typedef task_t   * (*lock_current_task_getter_f)(void);
+typedef void     (*lock_task_yielder_f)(void);
+
+lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter = NULL;
+lock_current_task_getter_f lock_get_current_task_getter = NULL;
+lock_task_yielder_f lock_task_yielder = NULL;
+
+static uint32_t lock_get_local_apic_id(void) {
+    if(lock_get_local_apic_id_getter) {
+        return lock_get_local_apic_id_getter();
+    }
+
+    return NULL;
+}
+
+static task_t* lock_get_current_task(void) {
+    if(lock_get_current_task_getter) {
+        return lock_get_current_task_getter();
+    }
+
+    return 0;
+}
+
+static void lock_task_yield(void) {
+    if(lock_task_yielder) {
+        lock_task_yielder();
+    }
+}
+
 
 static inline int8_t sync_test_set_get(volatile uint64_t* value, uint64_t offset){
     int8_t res = 0;
@@ -59,10 +90,10 @@ void lock_acquire(lock_t* lock) {
         return;
     }
 
-    task_t* current_task = task_get_current_task();
+    task_t* current_task = lock_get_current_task();
     uint64_t current_task_id;
 
-    uint64_t current_cpu_id = apic_get_local_apic_id() + 1; // add one for preventing bsp cpu id 0
+    uint64_t current_cpu_id = lock_get_local_apic_id() + 1; // add one for preventing bsp cpu id 0
 
     if(current_task == NULL) {
         current_task_id = TASK_KERNEL_TASK_ID;
@@ -76,7 +107,7 @@ void lock_acquire(lock_t* lock) {
 
     while(sync_test_set_get(&lock->lock_value, 0)) {
         if(current_cpu_id == 1) {
-            task_yield();
+            lock_task_yield();
         } else {
             asm volatile ("pause");
         }
@@ -150,7 +181,7 @@ int8_t semaphore_acquire_with_count(semaphore_t* semaphore, uint64_t count){
         }
 
         lock_release(semaphore->lock);
-        task_yield();
+        lock_task_yielder();
     }
 
     return 0;

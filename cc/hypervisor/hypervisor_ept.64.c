@@ -61,8 +61,8 @@ uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
     hypervisor_ept_pdpte_t* pdptes = (hypervisor_ept_pdpte_t*)(ept_frames_va + FRAME_SIZE);
     hypervisor_ept_pdpte_t* pdptes_orig = pdptes;
 
-    hypervisor_ept_pde_t* pdes = (hypervisor_ept_pde_t*)(ept_frames_va + FRAME_SIZE * (1 + pdpte_count));
-    hypervisor_ept_pde_t* pdes_orig = pdes;
+    hypervisor_ept_pde_2mib_t* pdes = (hypervisor_ept_pde_2mib_t*)(ept_frames_va + FRAME_SIZE * (1 + pdpte_count));
+    hypervisor_ept_pde_2mib_t* pdes_orig = pdes;
 
     for(uint64_t i = 0; i < pml4e_row_count; i++) {
         pml4e[i].read_access = 1;
@@ -145,19 +145,53 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pde_va: 0x%llx", pde_va);
 
-    hypervisor_ept_pde_t* pdes = (hypervisor_ept_pde_t*)pde_va;
+    hypervisor_ept_pde_2mib_t* pdes_2mib = (hypervisor_ept_pde_2mib_t*)pde_va;
 
     uint64_t pde_index = (guest_physical >> 21) & 0x1FF;
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "pde_index: 0x%llx", pde_index);
 
+    if(pdes_2mib[pde_index].must_one) { // 2MiB page entry
+
+        if(pdes_2mib[pde_index].read_access == 0 && pdes_2mib[pde_index].write_access == 0 && pdes_2mib[pde_index].execute_access == 0) {
+            return -1ULL;
+        }
+
+        uint64_t host_physical = pdes_2mib[pde_index].address;
+        host_physical <<= 21;
+        host_physical += guest_physical & ((1ULL << 21) - 1);
+
+        return host_physical;
+
+    }
+
+    // 4KiB page entry so go to next level
+    hypervisor_ept_pde_t* pdes = (hypervisor_ept_pde_t*)pde_va;
+
     if(pdes[pde_index].read_access == 0 && pdes[pde_index].write_access == 0 && pdes[pde_index].execute_access == 0) {
         return -1ULL;
     }
 
-    uint64_t host_physical = pdes[pde_index].address;
-    host_physical <<= 21;
-    host_physical += guest_physical & ((1ULL << 21) - 1);
+    uint64_t pte_fa = pdes[pde_index].address;
+    pte_fa <<= 12;
+
+    uint64_t pte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pte_fa);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pte_va: 0x%llx", pte_va);
+
+    hypervisor_ept_pte_t* ptes = (hypervisor_ept_pte_t*)pte_va;
+
+    uint64_t pte_index = (guest_physical >> 12) & 0x1FF;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pte_index: 0x%llx", pte_index);
+
+    if(ptes[pte_index].read_access == 0 && ptes[pte_index].write_access == 0 && ptes[pte_index].execute_access == 0) {
+        return -1ULL;
+    }
+
+    uint64_t host_physical = ptes[pte_index].address;
+    host_physical <<= 12;
+    host_physical += guest_physical & ((1ULL << 12) - 1);
 
     return host_physical;
 }
@@ -188,7 +222,7 @@ int8_t hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t
     gdt[2] = 0x0000930000000000ULL;
     gdt[3] = 0x00008b0030000067ULL;
 
-
+#if 0
     uint64_t l3_row_count = (high_mem - low_mem) / MEMORY_PAGING_PAGE_LENGTH_2M;
     // uint64_t l3_count = (l3_row_count + 512 - 1) / 512; // 512 PDEs per PDPTE entry
     uint64_t l2_row_count = (l3_row_count + 512 - 1) / 512; // 512 PDEs per PDPT entry
@@ -226,6 +260,23 @@ int8_t hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t
         l3[i].hugepage = 1;
         l3[i].physical_address = (0 + i * MEMORY_PAGING_PAGE_LENGTH_2M) >> 12;
     }
+#else
+    // for ept testing create identity map for first 4GB with 1GB pages
+    memory_page_table_t* l1 = (memory_page_table_t*)(guest_low + 0x4000);
+    uint64_t l2_fa = 0x5000;
 
+    l1->pages[0].present = 1;
+    l1->pages[0].writable = 1;
+    l1->pages[0].physical_address = l2_fa >> 12;
+
+    memory_page_entry_t* l2 = (memory_page_entry_t*)(l1 + 1);
+
+    for(uint64_t i = 0; i < 4; i++) {
+        l2[i].present = 1;
+        l2[i].writable = 1;
+        l2[i].hugepage = 1;
+        l2[i].physical_address = (0 + i * MEMORY_PAGING_PAGE_LENGTH_1G) >> 12;
+    }
+#endif
     return 0;
 }

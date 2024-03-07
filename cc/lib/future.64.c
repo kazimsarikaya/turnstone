@@ -8,7 +8,7 @@
 
 #include <future.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.future");
 
 typedef struct future_t {
     memory_heap_t* heap;

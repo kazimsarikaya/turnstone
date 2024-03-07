@@ -23,6 +23,7 @@
 #include <utils.h>
 #include <hypervisor/hypervisor_ipc.h>
 #include <list.h>
+#include <tosdb/tosdb_manager.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -31,6 +32,53 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 
 buffer_t* shell_buffer = NULL;
 buffer_t* mouse_buffer = NULL;
+
+static int8_t shell_handle_tosdb_command(const char_t* arguments) {
+    char_t command[64] = {0};
+
+    if(arguments == NULL || strlen(arguments) == 0) {
+        printf("Usage: tosdb <close|init|build_program <entry_point>>\n");
+        return -1;
+    }
+
+    uint32_t i = 0;
+
+    while(arguments[i] != ' ' && arguments[i] != NULL) {
+        command[i] = arguments[i];
+        i++;
+    }
+
+    if(strncmp("close", command, 5) == 0) {
+        return tosdb_manager_close();
+    } else if(strncmp("init", command, 4) == 0) {
+        return tosdb_manager_init();
+    } else if(strncmp("build_program", command, 13) == 0) {
+        if(arguments[i] == NULL) {
+            printf("Usage: tosdb build_program <entry_point>\n");
+            return -1;
+        }
+
+        i++;
+
+        char_t entry_point[64] = {0};
+        uint32_t j = 0;
+
+        while(arguments[i] != NULL) {
+            entry_point[j] = arguments[i];
+            i++;
+            j++;
+        }
+
+        printf("not implemented: Building program with entry point: %s\n", entry_point);
+
+        return -1;
+    }
+
+    printf("Unknown command: %s\n", command);
+    printf("Usage: tosdb <close|init|build_program <entry_point>>\n");
+
+    return -1;
+}
 
 static int8_t shell_handle_vm_command(const char_t* arguments) {
     char_t command[64] = {0};
@@ -179,6 +227,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\twm\t\t: opens test window\n"
                "\tvm\t\t: vm commands\n"
                "\trdtsc\t\t: read timestamp counter\n"
+               "\ttosdb\t\t: tosdb commands\n"
+               "\tkill\t\t: kills a process with pid\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -237,9 +287,22 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         res = windowmanager_init();
     } else if(strcmp(command, "vm") == 0) {
         res = shell_handle_vm_command(arguments);
+    } else if(strcmp(command, "tosdb") == 0) {
+        res = shell_handle_tosdb_command(arguments);
     } else if(strcmp(command, "rdtsc") == 0) {
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
+    } else if(strcmp(command, "kill") == 0) {
+        uint64_t pid = atoh(arguments);
+
+        if(pid == 0) {
+            printf("Usage: kill <pid>\n");
+            printf("\tgiven arguments: %s\n", arguments);
+            res = -1;
+        } else {
+            task_kill_task(pid);
+            res = 0;
+        }
     } else {
         printf("Unknown command: %s\n", command);
         res = -1;

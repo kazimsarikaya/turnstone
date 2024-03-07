@@ -20,9 +20,8 @@
 #include <memcheck.h>
 #pragma GCC diagnostic pop
 #endif
-#if ___KERNELBUILD == 1
-#include <backtrace.h>
-#endif
+
+void memory_heap_backtrace(void);
 
 MODULE("turnstone.lib.memory");
 
@@ -368,7 +367,7 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
                 memory_heap_stat_t stat;
                 memory_simple_stat(heap, &stat);
 
-                PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap 0x%p task 0x%llx", heap, task_get_id());
+                PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap 0x%p task 0x%llx", heap, heap->task_id);
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
                 PRINTLOG(SIMPLEHEAP, LOG_ERROR, "no free slot 0x%p 0x%llx 0x%x", empty_hi_t, empty_hi_t->size * sizeof(heapinfo_t), empty_hi_t->flags);
                 return NULL;
@@ -666,7 +665,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
         PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p not inside heap heap task 0x%llx", address, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
         return -1;
@@ -682,7 +681,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
         PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p broken heap task 0x%llx", address, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
         return -1;
@@ -692,7 +691,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
         PRINTLOG(SIMPLEHEAP, LOG_WARNING, "memory 0x%p is already freed. heap task 0x%llx", address, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
         return 0;
@@ -705,7 +704,7 @@ int8_t memory_simple_free(memory_heap_t* heap, void* address){
         PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p with size 0x%llx not inside heap. heap task 0x%llx", address, size, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
         return -1;

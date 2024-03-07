@@ -152,7 +152,11 @@ void remove_ram2(void) {
     }
 }
 
+extern stdbufs_video_printer stdbufs_video_print;
+
 void __attribute__((constructor)) start_ram(void) {
+    stdbufs_video_print = video_print;
+
     int8_t res = setup_ram2();
 
     if(res) {

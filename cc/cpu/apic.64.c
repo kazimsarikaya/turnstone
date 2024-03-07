@@ -34,6 +34,9 @@ list_t* irq_remappings = NULL;
 
 extern volatile uint64_t time_timer_rdtsc_delta;
 
+typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
+extern lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter;
+
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
         return cpu_read_msr(APIC_X2APIC_MSR_TIMER_CURRENT_VALUE);
@@ -219,6 +222,7 @@ int8_t apic_init_apic(list_t* apic_entries){
     apic_write_spurious_interrupt_vector(0x10f);
 
     apic_ap_count = apic_get_ap_count();
+    lock_get_local_apic_id_getter = &apic_get_local_apic_id;
     apic_enabled = 1;
 
     return apic_init_timer();

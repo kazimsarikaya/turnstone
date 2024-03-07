@@ -21,7 +21,7 @@
 #include <map.h>
 #include <random.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.network");
 
 
 map_t network_ipv4_packet_fragments = NULL;

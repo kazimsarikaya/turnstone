@@ -15,7 +15,7 @@
 #include <time.h>
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.network");
 
 uint8_t*       network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, network_mac_address_t mac, uint16_t* return_packet_len);
 network_arp_t* network_arp_create_request(network_mac_address_t src_mac, network_ipv4_address_t src_ip, network_ipv4_address_t tgt_ip);

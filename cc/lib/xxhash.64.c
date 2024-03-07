@@ -11,7 +11,7 @@
 #include <memory.h>
 
 /*! module name */
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.xxhash");
 
 /*! xxHash 64-bit prime constant 1 */
 #define XXHASH64_PRIME1  11400714785074694791ULL

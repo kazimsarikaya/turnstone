@@ -24,6 +24,20 @@
 
 MODULE("turnstone.kernel.cpu.task");
 
+typedef task_t * (*memory_current_task_getter_f)(void);
+void memory_set_current_task_getter(memory_current_task_getter_f getter);
+
+typedef task_t * (*lock_current_task_getter_f)(void);
+extern lock_current_task_getter_f lock_get_current_task_getter;
+
+typedef void (*lock_task_yielder_f)(void);
+extern lock_task_yielder_f lock_task_yielder;
+
+typedef buffer_t * (*stdbuf_task_buffer_getter_f)(void);
+stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer = NULL;
+stdbuf_task_buffer_getter_f stdbufs_task_get_output_buffer = NULL;
+stdbuf_task_buffer_getter_f stdbufs_task_get_error_buffer = NULL;
+
 uint64_t task_next_task_id = 0;
 
 volatile task_t** current_tasks = NULL;
@@ -238,6 +252,15 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
  */
 
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p lapic id %d", kernel_task, apic_id);
+
+    memory_set_current_task_getter(&task_get_current_task);
+
+    lock_get_current_task_getter = &task_get_current_task;
+    lock_task_yielder = &task_yield;
+
+    stdbufs_task_get_input_buffer = &task_get_input_buffer;
+    stdbufs_task_get_output_buffer = &task_get_output_buffer;
+    stdbufs_task_get_error_buffer = &task_get_error_buffer;
 
     task_tasking_initialized = true;
 
@@ -611,6 +634,24 @@ void task_end_task(void) {
     PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
 
     task_yield();
+}
+
+void task_kill_task(uint64_t task_id) {
+    task_t* task = (task_t*)map_get(task_map, (void*)task_id);
+
+    if(task == NULL) {
+        return;
+    }
+
+    if(task->state == TASK_STATE_ENDED) {
+        return;
+    }
+
+    task->state = TASK_STATE_ENDED;
+
+    list_queue_push(task_cleaner_queue, task);
+
+    PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", task->task_id);
 }
 
 

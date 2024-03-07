@@ -16,10 +16,31 @@ MODULE("turnstone.lib.memory");
 /*! default heap variable */
 memory_heap_t* memory_heap_default = NULL;
 
+typedef task_t * (*memory_current_task_getter_f)(void);
+void memory_set_current_task_getter(memory_current_task_getter_f getter);
+memory_current_task_getter_f memory_current_task_getter = NULL;
+
+
+static task_t* memory_get_current_task(void) {
+    if(memory_current_task_getter) {
+        return memory_current_task_getter();
+    }
+
+    return NULL;
+}
+
+void memory_set_current_task_getter(memory_current_task_getter_f getter) {
+    memory_current_task_getter = getter;
+}
+
 memory_heap_t* memory_set_default_heap(memory_heap_t* heap) {
     memory_heap_t* res = memory_heap_default;
     memory_heap_default = heap;
     return res;
+}
+
+memory_heap_t* memory_get_default_heap(void) {
+    return memory_heap_default;
 }
 
 memory_heap_t* memory_get_heap(memory_heap_t* heap) {
@@ -27,7 +48,7 @@ memory_heap_t* memory_get_heap(memory_heap_t* heap) {
         return heap;
     }
 
-    task_t* current_task = task_get_current_task();
+    task_t* current_task = memory_get_current_task();
 
     if(current_task != NULL && current_task->heap != NULL) {
         return current_task->heap;
@@ -48,7 +69,7 @@ void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
     void* res = NULL;
 
     if(heap == NULL) {
-        task_t* current_task = task_get_current_task();
+        task_t* current_task = memory_get_current_task();
         if(current_task != NULL && current_task->heap != NULL) {
             lock_acquire(current_task->heap->lock);
             res = current_task->heap->malloc(current_task->heap, size, align);
@@ -81,7 +102,7 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
     int8_t res = -1;
 
     if(heap == NULL) {
-        task_t* current_task = task_get_current_task();
+        task_t* current_task = memory_get_current_task();
         if(current_task != NULL && current_task->heap != NULL) {
             lock_acquire(current_task->heap->lock);
             res = current_task->heap->free(current_task->heap, address);
@@ -106,7 +127,7 @@ int8_t memory_free_ext(memory_heap_t* heap, void* address){
 
 void memory_get_heap_stat_ext(memory_heap_t* heap, memory_heap_stat_t* stat){
     if(heap == NULL) {
-        task_t* current_task = task_get_current_task();
+        task_t* current_task = memory_get_current_task();
         if(current_task != NULL && current_task->heap != NULL) {
             current_task->heap->stat(current_task->heap, stat);
 
@@ -502,4 +523,16 @@ int8_t memory_memclean(void* address, size_t size) {
     return 0;
 }
 #endif
+
+
+typedef void (*memory_backtrace_f)(void);
+memory_backtrace_f memory_heap_backtrace_func = NULL;
+
+void memory_heap_backtrace(void);
+
+void memory_heap_backtrace(void) {
+    if(memory_heap_backtrace_func) {
+        memory_heap_backtrace_func();
+    }
+}
 

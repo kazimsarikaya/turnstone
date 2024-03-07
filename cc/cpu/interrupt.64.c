@@ -41,7 +41,7 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t*);
 
-boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
+extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"

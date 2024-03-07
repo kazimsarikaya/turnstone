@@ -21,7 +21,7 @@
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
 
-MODULE("turnstone.kernel.cpu");
+MODULE("turnstone.kernel.cpu.smp");
 
 int8_t  smp_init_cpu(uint8_t cpu_id);
 int32_t smp_ap_boot(uint8_t cpu_id);

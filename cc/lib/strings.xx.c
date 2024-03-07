@@ -11,7 +11,7 @@
 #include <utils.h>
 #include <buffer.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.strings");
 
 
 size_t strlen(const char_t* string) {

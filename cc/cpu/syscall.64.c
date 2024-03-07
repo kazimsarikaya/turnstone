@@ -14,7 +14,7 @@
 #include <memory.h>
 
 /*! module name */
-MODULE("turnstone.kernel.cpu");
+MODULE("turnstone.kernel.cpu.syscall");
 
 /**
  * @typedef syscall_f

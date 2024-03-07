@@ -33,8 +33,7 @@ void video_clear_screen(void) {
     ST->console_output->clear_screen(ST->console_output);
 }
 
-void video_print(const char_t* string)
-{
+void video_print(const char_t* string) {
     if(string == NULL) {
         return;
     }

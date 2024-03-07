@@ -9,7 +9,7 @@
 #include <random.h>
 #include <xxhash.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.random");
 
 uint64_t random_xoroshiro_seed = 0;
 uint64_t random_xoroshiro_state[4] = {};

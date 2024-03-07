@@ -15,7 +15,10 @@
 #include <cpu/task.h>
 #include <bplustree.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.backtrace");
+
+typedef void (*memory_backtrace_f)(void);
+extern memory_backtrace_f memory_heap_backtrace_func;
 
 static index_t* backtrace_symbol_table = NULL;
 
@@ -108,6 +111,8 @@ int8_t backtrace_init(void) {
 
     iter->destroy(iter);
  */
+
+    memory_heap_backtrace_func = backtrace;
 
     return 0;
 }

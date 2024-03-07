@@ -10,7 +10,7 @@
  */
 #include <ports.h>
 
-MODULE("turnstone.kernel.hw.io");
+MODULE("turnstone.kernel.hw.io.com");
 
 /**
  * @brief checks data present at port

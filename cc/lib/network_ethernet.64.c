@@ -15,7 +15,7 @@
 #include <time.h>
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.network");
 
 network_mac_address_t BROADCAST_MAC = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
