@@ -37,6 +37,8 @@ typedef struct hypervisor_vm_t {
     boolean_t lapic_timer_pending;
     boolean_t lapic_timer_enabled;
     boolean_t need_to_notify;
+    boolean_t is_halted;
+    boolean_t is_halt_need_next_instruction;
     map_t*    msr_map;
 } hypervisor_vm_t;
 

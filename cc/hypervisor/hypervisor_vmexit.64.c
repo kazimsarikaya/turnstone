@@ -105,13 +105,20 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
 }
 
 static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
+    hypervisor_vm_t* vm = task_get_vm();
+    vm->is_halted = true;
+
     task_set_message_waiting();
 
     task_yield();
 
     hypervisor_vmcs_check_ipc(vmexit_info);
 
-    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    if(vm->is_halt_need_next_instruction) {
+        vm->is_halted = false;
+        vm->is_halt_need_next_instruction = false;
+        hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    }
 
     return (uint64_t)vmexit_info->registers;
 }
@@ -165,6 +172,50 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
     return (uint64_t)vmexit_info->registers;
 }
 
+static void hypervisor_vmcs_find_next_x2apic_interrupt(hypervisor_vm_t* vm, boolean_t iterate, boolean_t for_eoi) {
+    uint32_t interrupt_vector = 0;
+    boolean_t found = false;
+
+    if(for_eoi && vm->lapic.in_service_vector == vm->lapic.timer_vector && vm->lapic_timer_pending) {
+        vm->lapic_timer_pending = false;
+    }
+
+    for(uint32_t vector = 0; vector < 256; vector++) {
+        uint32_t vector_byte = vector / 8;
+        uint32_t vector_bit = vector % 8;
+
+        if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
+            interrupt_vector = vector;
+            found = true;
+
+            if(iterate) {
+                vm->lapic.in_request_vectors[vector_byte] &= ~(1 << vector_bit);
+            }
+
+            break;
+        }
+    }
+
+    if(found) {
+        if(iterate) {
+            vm->lapic.in_service_vector = interrupt_vector;
+            vm->lapic.apic_eoi_pending = true;
+        }
+
+        uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
+
+        if((rflags & (1 << 9))) {
+            vm->need_to_notify = true;
+        }
+
+    } else {
+        vm->lapic.in_service_vector = 0;
+        vm->need_to_notify = false;
+        vm->lapic.apic_eoi_pending = false;
+    }
+
+}
+
 static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vmexit_info) {
     PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window");
 
@@ -176,35 +227,30 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
     hypervisor_vm_t* vm = task_get_vm();
 
     if(vm->need_to_notify) {
-        uint32_t interrupt_info = 0;
-        interrupt_info = vm->lapic.in_service_vector & 0xFF;
-        interrupt_info |= (1 << 31); // valid
+        hypervisor_vmcs_find_next_x2apic_interrupt(vm, true, false);
 
-        if(vm->lapic.in_service_vector >= 0x20) {
-            interrupt_info |= (0 << 8); // type
+        if(vm->need_to_notify) { // if there is an interrupt need_to_notify still true
+            uint32_t interrupt_info = 0;
+            interrupt_info = vm->lapic.in_service_vector & 0xFF;
+            interrupt_info |= (1 << 31); // valid
 
-            vmx_write(VMX_CTLS_VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+            if(vm->lapic.in_service_vector >= 0x20) {
+                interrupt_info |= (0 << 8); // type
 
-            PRINTLOG(HYPERVISOR, LOG_TRACE, "guest rip: 0x%llx", vmx_read(VMX_GUEST_RIP));
-            PRINTLOG(HYPERVISOR, LOG_TRACE, "injected instruction length: %llx", vmexit_info->instruction_length);
-            vmx_write(VMX_CTLS_VM_ENTRY_INSTRUCTION_LENGTH, vmexit_info->instruction_length);
+                vmx_write(VMX_CTLS_VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+
+                PRINTLOG(HYPERVISOR, LOG_TRACE, "guest rip: 0x%llx", vmx_read(VMX_GUEST_RIP));
+                PRINTLOG(HYPERVISOR, LOG_TRACE, "injected instruction length: %llx", vmexit_info->instruction_length);
+                vmx_write(VMX_CTLS_VM_ENTRY_INSTRUCTION_LENGTH, vmexit_info->instruction_length);
+            }
+
+            vmx_write(VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD, interrupt_info);
+
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window: Injected Interrupt: 0x%x", interrupt_info);
         }
-
-        vmx_write(VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD, interrupt_info);
-
-        vm->lapic.apic_eoi_pending = true;
-        vm->need_to_notify = false;
-
-        if(vm->lapic_timer_pending) {
-            vm->lapic_timer_pending = false;
-        }
-
-        PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window: Injected Interrupt: 0x%x", interrupt_info);
     }
 
-    if(!vm->lapic.apic_eoi_pending) {
-        vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) & ~(1 << 2));
-    }
+    vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) & ~(1 << 2));
 
     return (uint64_t)vmexit_info->registers;
 }
@@ -302,9 +348,8 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
         vm->lapic.timer_masked = (value >> 16) & 0x1;
         break;
     case APIC_X2APIC_MSR_EOI:
+        hypervisor_vmcs_find_next_x2apic_interrupt(vm, false, true);
         vm->lapic.apic_eoi_pending = false;
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "EOI");
-        return -1;
         break;
     default:
         map_insert(vm->msr_map, (void*)msr, (void*)value);

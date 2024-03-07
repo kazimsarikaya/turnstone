@@ -25,6 +25,8 @@ extern list_t* hypervisor_vm_list;
 static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
     buffer_t* buffer = message->message_data;
 
+    hypervisor_vm_t* vm = task_get_vm();
+
     buffer_printf(buffer, "rax: 0x%016llx ", vmexit_info->registers->rax);
     buffer_printf(buffer, "rbx: 0x%016llx ", vmexit_info->registers->rbx);
     buffer_printf(buffer, "rcx: 0x%016llx ", vmexit_info->registers->rcx);
@@ -41,8 +43,9 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     buffer_printf(buffer, "r13: 0x%016llx ", vmexit_info->registers->r13);
     buffer_printf(buffer, "r14: 0x%016llx ", vmexit_info->registers->r14);
     buffer_printf(buffer, "r15: 0x%016llx\n", vmexit_info->registers->r15);
-    buffer_printf(buffer, "rip: 0x%016llx rflags: 0x%08llx(0x%08llx)\n",
-                  vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS), vmexit_info->registers->rflags);
+    buffer_printf(buffer, "rip: 0x%016llx rflags: 0x%08llx(0x%08llx) hlt=%i\n",
+                  vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS), vmexit_info->registers->rflags,
+                  vm->is_halted);
     buffer_printf(buffer, "\n");
 
     buffer_printf(buffer, "cr0: 0x%08llx cr2: 0x%016llx cr3: 0x%016llx cr4: 0x%08llx\n",
@@ -82,37 +85,32 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     buffer_printf(buffer, "efer: 0x%08llx\n",
                   vmx_read(VMX_GUEST_IA32_EFER));
 
-    hypervisor_vm_t* vm = task_get_vm();
+    buffer_printf(buffer, "\n");
+    buffer_printf(buffer, "lapic timer:\n");
+    buffer_printf(buffer, "\tenabled: %s\n", (vm->lapic_timer_enabled == 0) ? "no" : "yes");
+    buffer_printf(buffer, "\tcurrent: 0x%016llx\n", vm->lapic.timer_current_value);
+    buffer_printf(buffer, "\tinitial: 0x%016llx\n", vm->lapic.timer_initial_value);
+    buffer_printf(buffer, "\tdivide:  0x%016llx\n", vm->lapic.timer_divider);
+    buffer_printf(buffer, "\tvector:  0x%02x type: %s masked: %s\n", vm->lapic.timer_vector,
+                  (vm->lapic.timer_periodic == 0) ? "one-shot" : "periodic",
+                  (vm->lapic.timer_masked == 0) ? "unmasked" : "masked");
 
-    if(vm) {
-        buffer_printf(buffer, "\n");
-        buffer_printf(buffer, "lapic timer:\n");
-        buffer_printf(buffer, "\tenabled: %s\n", (vm->lapic_timer_enabled == 0) ? "no" : "yes");
-        buffer_printf(buffer, "\tcurrent: 0x%016llx\n", vm->lapic.timer_current_value);
-        buffer_printf(buffer, "\tinitial: 0x%016llx\n", vm->lapic.timer_initial_value);
-        buffer_printf(buffer, "\tdivide:  0x%016llx\n", vm->lapic.timer_divider);
-        buffer_printf(buffer, "\tvector:  0x%02x type: %s masked: %s\n", vm->lapic.timer_vector,
-                      (vm->lapic.timer_periodic == 0) ? "one-shot" : "periodic",
-                      (vm->lapic.timer_masked == 0) ? "unmasked" : "masked");
+    buffer_printf(buffer, "\n");
 
-        buffer_printf(buffer, "\n");
+    buffer_printf(buffer, "lapic eoi pending: %s\n", (vm->lapic.apic_eoi_pending == 0) ? "no" : "yes");
+    buffer_printf(buffer, "in service vector: 0x%02x\n", vm->lapic.in_service_vector);
+    buffer_printf(buffer, "in request vectors: ");
 
-        buffer_printf(buffer, "lapic eoi pending: %s\n", (vm->lapic.apic_eoi_pending == 0) ? "no" : "yes");
-        buffer_printf(buffer, "in service vector: 0x%02x\n", vm->lapic.in_service_vector);
-        buffer_printf(buffer, "in request vectors: ");
+    for(uint32_t vector = 0; vector < 256; vector++) {
+        uint32_t vector_byte = vector / 8;
+        uint32_t vector_bit = vector % 8;
 
-        for(uint32_t vector = 0; vector < 256; vector++) {
-            uint32_t vector_byte = vector / 8;
-            uint32_t vector_bit = vector % 8;
-
-            if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
-                buffer_printf(buffer, "0x%02x ", vector);
-            }
+        if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
+            buffer_printf(buffer, "0x%02x ", vector);
         }
-
-        buffer_printf(buffer, "\n");
-
     }
+
+    buffer_printf(buffer, "\n");
 
     message->message_data_completed = true;
 
@@ -138,39 +136,20 @@ static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, h
     uint32_t vector_byte = vector / 8;
     uint32_t vector_bit = vector % 8;
 
-    if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
-        return 0;
-    }
-
     vm->lapic.in_request_vectors[vector_byte] |= (1 << vector_bit);
 
-    uint64_t rf = vmx_read(VMX_GUEST_RFLAGS);
-
-    if((rf & 0x200) == 0) { // IF is not set
-        return 0;
-    }
-
-    if(vm->lapic.apic_eoi_pending) { // EOI is pending so we can't inject another interrupt
-        return 0;
-    }
-
-    // vm->lapic.apic_eoi_pending = true;
-
-    vm->lapic.in_request_vectors[vector_byte] &= ~(1 << vector_bit);
-    vm->lapic.in_service_vector = vector;
     vm->need_to_notify = true;
 
+    uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
 
-    // uint64_t interrupt_info = vector;
-    // interrupt_info |= (1 << 31); // valid
+    if(rflags & 0x200) {
+        // enable interrupt window exiting if IF is set
+        vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) | (1 << 2));
 
-    // vmx_write(VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD, interrupt_info);
-
-    // enable interrupt window exiting
-    vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) | (1 << 2));
-
-    // should cleared by EOI
-    // vm->lapic_timer_pending = false;
+        if(vm->is_halted) {
+            vm->is_halt_need_next_instruction = true;
+        }
+    }
 
     return 0;
 }
@@ -183,27 +162,24 @@ int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
         return -1;
     }
 
-    if(list_size(mq) == 0) {
-        return 0;
+    while(list_size(mq)) {
+        hypervisor_ipc_message_t* message = (hypervisor_ipc_message_t*)list_queue_pop(mq);
+
+        if(!message) {
+            return -1;
+        }
+
+        switch(message->message_type) {
+        case HYPERVISOR_IPC_MESSAGE_TYPE_DUMP:
+            hypervisor_ipc_handle_dump(vmexit_info, message);
+            break;
+        case HYPERVISOR_IPC_MESSAGE_TYPE_TIMER_INT:
+            hypervisor_ipc_handle_timer_int(vmexit_info, message);
+            break;
+        default:
+            break;
+        }
     }
-
-    hypervisor_ipc_message_t* message = (hypervisor_ipc_message_t*)list_queue_pop(mq);
-
-    if(!message) {
-        return -1;
-    }
-
-    switch(message->message_type) {
-    case HYPERVISOR_IPC_MESSAGE_TYPE_DUMP:
-        hypervisor_ipc_handle_dump(vmexit_info, message);
-        break;
-    case HYPERVISOR_IPC_MESSAGE_TYPE_TIMER_INT:
-        hypervisor_ipc_handle_timer_int(vmexit_info, message);
-        break;
-    default:
-        break;
-    }
-
 
     return 0;
 }
