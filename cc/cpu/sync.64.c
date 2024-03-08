@@ -130,10 +130,6 @@ void lock_acquire(lock_t* lock) {
 }
 
 void lock_release(lock_t* lock) {
-    if(lock == NULL) {
-        return;
-    }
-
     if(lock) {
         if(lock->for_future) {
             // future_task_wait_toggler(lock->owner_task_id);

@@ -336,6 +336,17 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
     } else if(strcmp(command, "kill") == 0) {
+        char_t* rem = strchr(arguments, ' ');
+        boolean_t force = false;
+
+        if(rem) {
+            *rem = 0;
+            rem++;
+            if(strncmp(rem, "force", 5) == 0) {
+                force = true;
+            }
+        }
+
         uint64_t pid = atoh(arguments);
 
         if(pid == 0) {
@@ -343,7 +354,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
             printf("\tgiven arguments: %s\n", arguments);
             res = -1;
         } else {
-            task_kill_task(pid);
+            task_kill_task(pid, force);
             res = 0;
         }
     } else {

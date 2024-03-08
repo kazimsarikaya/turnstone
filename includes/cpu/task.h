@@ -233,7 +233,7 @@ boolean_t task_idle_check_need_yield(void);
 void task_current_task_sleep(uint64_t wake_tick);
 
 void task_end_task(void);
-void task_kill_task(uint64_t task_id);
+void task_kill_task(uint64_t task_id, boolean_t force);
 
 void task_print_all(void);
 
@@ -252,5 +252,6 @@ uint64_t task_get_vmcs_physical_address(void);
 void     task_set_vm(void* vm);
 void*    task_get_vm(void);
 
+void task_remove_task_after_fault(uint64_t task_id);
 
 #endif

@@ -76,10 +76,8 @@ int8_t ahci_isr(interrupt_frame_ext_t* frame){
 
     boolean_t irq_handled = 0;
 
-    iterator_t* iter = list_iterator_create(sata_hbas);
-
-    while(iter->end_of_iterator(iter) != 0) {
-        const ahci_hba_t* hba = iter->get_item(iter);
+    for(uint64_t disk_idx = 0; disk_idx < list_size(sata_hbas); disk_idx++) {
+        const ahci_hba_t* hba = list_get_data_at_position(sata_hbas, disk_idx);
 
         if(hba->intnum_base <= intnum && intnum < (hba->intnum_base + hba->intnum_count)) {
             ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)hba->hba_addr;
@@ -99,15 +97,11 @@ int8_t ahci_isr(interrupt_frame_ext_t* frame){
                 ahci_handle_disk_isr(hba, hba->disk_base + intnum - hba->intnum_base);
             }
 
-            irq_handled = 1;
+            irq_handled = true;
 
             break;
         }
-
-        iter = iter->next(iter);
     }
-
-    iter->destroy(iter);
 
     if(irq_handled) {
         apic_eoi();

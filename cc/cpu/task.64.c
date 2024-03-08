@@ -389,68 +389,71 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
         );
 }
 
+static void task_cleanup_task(task_t* task) {
+    if(task->vm) {
+        hypervisor_vm_destroy(task->vm);
+    }
+
+    memory_free_ext(task->heap, (void*)task->task_name);
+
+    map_delete(task_map, (void*)task->task_id);
+
+    uint64_t stack_va = (uint64_t)task->stack;
+    uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
+
+    uint64_t stack_size = task->stack_size;
+    uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
+
+    memory_memclean(task->stack, stack_size);
+
+    frame_t stack_frames = {stack_fa, stack_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
+
+    if(memory_paging_delete_va_for_frame_ext(task->page_table, stack_va, &stack_frames) != 0 ) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
+
+        cpu_hlt();
+    }
+
+    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &stack_frames) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
+
+        cpu_hlt();
+    }
+
+    uint64_t heap_va = (uint64_t)task->heap;
+    uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
+
+    uint64_t heap_size = task->heap_size;
+    uint64_t heap_frames_cnt = heap_size / FRAME_SIZE;
+
+    memory_memclean(task->heap, heap_size);
+
+    frame_t heap_frames = {heap_fa, heap_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
+
+    if(memory_paging_delete_va_for_frame_ext(task->page_table, heap_va, &heap_frames) != 0 ) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for heap at va 0x%llx", heap_va);
+
+        if(task->page_table) {
+            PRINTLOG(TASKING, LOG_ERROR, "page table 0x%p", task->page_table->page_table);
+        }
+
+        cpu_hlt();
+    }
+
+    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &heap_frames) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot release heap with frames at 0x%llx with count 0x%llx", stack_fa, heap_frames_cnt);
+
+        cpu_hlt();
+    }
+
+    memory_free_ext(task->creator_heap, task->fx_registers);
+    memory_free_ext(task->creator_heap, task);
+}
+
 void task_cleanup(void){
     while(list_size(task_cleaner_queue)) {
-        task_t* tmp = (task_t*)list_queue_pop(task_cleaner_queue);
-
-        if(tmp->vm) {
-            hypervisor_vm_destroy(tmp->vm);
-        }
-
-        memory_free_ext(tmp->heap, (void*)tmp->task_name);
-
-        map_delete(task_map, (void*)tmp->task_id);
-
-        uint64_t stack_va = (uint64_t)tmp->stack;
-        uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
-
-        uint64_t stack_size = tmp->stack_size;
-        uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
-
-        memory_memclean(tmp->stack, stack_size);
-
-        frame_t stack_frames = {stack_fa, stack_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
-
-        if(memory_paging_delete_va_for_frame_ext(tmp->page_table, stack_va, &stack_frames) != 0 ) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
-
-            cpu_hlt();
-        }
-
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &stack_frames) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
-
-            cpu_hlt();
-        }
-
-        uint64_t heap_va = (uint64_t)tmp->heap;
-        uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
-
-        uint64_t heap_size = tmp->heap_size;
-        uint64_t heap_frames_cnt = heap_size / FRAME_SIZE;
-
-        memory_memclean(tmp->heap, heap_size);
-
-        frame_t heap_frames = {heap_fa, heap_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
-
-        if(memory_paging_delete_va_for_frame_ext(tmp->page_table, heap_va, &heap_frames) != 0 ) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for heap at va 0x%llx", heap_va);
-
-            if(tmp->page_table) {
-                PRINTLOG(TASKING, LOG_ERROR, "page table 0x%p", tmp->page_table->page_table);
-            }
-
-            cpu_hlt();
-        }
-
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &heap_frames) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot release heap with frames at 0x%llx with count 0x%llx", stack_fa, heap_frames_cnt);
-
-            cpu_hlt();
-        }
-
-        memory_free_ext(tmp->creator_heap, tmp->fx_registers);
-        memory_free_ext(tmp->creator_heap, tmp);
+        task_t* task = (task_t*)list_queue_pop(task_cleaner_queue);
+        task_cleanup_task(task);
     }
 }
 
@@ -674,7 +677,7 @@ void task_end_task(void) {
     task_yield();
 }
 
-void task_kill_task(uint64_t task_id) {
+void task_kill_task(uint64_t task_id, boolean_t force) {
     task_t* task = (task_t*)map_get(task_map, (void*)task_id);
 
     if(task == NULL) {
@@ -683,6 +686,10 @@ void task_kill_task(uint64_t task_id) {
     }
 
     if(task->state == TASK_STATE_ENDED) {
+        if(force) {
+            task_cleanup_task(task);
+        }
+
         return;
     }
 
@@ -1273,4 +1280,23 @@ void task_toggle_wait_for_future(uint64_t tid) {
 
         task->wait_for_future = !task->wait_for_future;
     }
+}
+
+void task_remove_task_after_fault(uint64_t task_id) {
+    task_t* task = (task_t*)map_get(task_map, (void*)task_id);
+
+    task->state = TASK_STATE_ENDED;
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    task_t* current_task = (task_t*)kernel_idle_tasks[apic_id];
+    current_task->last_tick_count = time_timer_get_tick_count();
+    current_task->task_switch_count++;
+
+    current_tasks[apic_id] = current_task;
+    current_task->state = TASK_STATE_RUNNING;
+
+    task_load_registers(current_task);
+
+    cpu_sti();
 }
