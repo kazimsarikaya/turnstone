@@ -179,6 +179,7 @@ int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
             hypervisor_ipc_handle_timer_int(vmexit_info, message);
             break;
         case HYPERVISOR_IPC_MESSAGE_TYPE_CLOSE:
+            PRINTLOG(HYPERVISOR, LOG_INFO, "VM close message received. Close sequence started");
             task_end_task();
             break;
         default:
@@ -219,7 +220,7 @@ int8_t hypervisor_ipc_send_close(uint64_t vm_id) {
         return -1;
     }
 
-    list_queue_push(vm_mq, (void*)&hypervisor_ipc_message_timer_int);
+    list_queue_push(vm_mq, (void*)&hypervisor_ipc_message_close);
 
     return 0;
 }

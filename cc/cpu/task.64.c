@@ -316,7 +316,6 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task
         "popfq\n"
         "pop %%rax\n"
         "mov %%rsp, %17\n"
-        "movq %19, %18\n"
         "retq\n"
         : :
         "m" (task->rax),
@@ -336,9 +335,7 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task
         "m" (task->rbp),
         "m" (task->fx_registers),
         "m" (task->rflags),
-        "m" (task->rsp),
-        "m" (task->state),
-        "I" (TASK_STATE_SUSPENDED)
+        "m" (task->rsp)
         );
 }
 
@@ -368,11 +365,6 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
         "popfq\n"
         "pop %%rax\n"
         "mov %17, %%rsp\n"
-        "push %%rax\n"
-        "mov %18, %%ax\n"
-        "cmp %19, %%ax\n"
-        "pop %%rax\n"
-        "movq %20, %18\n"
         "mov %12, %%rdi\n"
         "retq\n"
         : :
@@ -393,10 +385,7 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task
         "m" (task->rbp),
         "m" (task->fx_registers),
         "m" (task->rflags),
-        "m" (task->rsp),
-        "m" (task->state),
-        "I" (TASK_STATE_CREATED),
-        "I" (TASK_STATE_RUNNING)
+        "m" (task->rsp)
         );
 }
 
@@ -518,7 +507,6 @@ task_t* task_find_next_task(uint32_t apic_id) {
 
     uint64_t found_index = -1;
 
-re_check:
     for(uint64_t i = 0; i < list_size(task_queue); i++) {
         task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
@@ -569,8 +557,7 @@ re_check:
         if(tmp_task->state == TASK_STATE_ENDED) {
             // it is already task clear queue so find next
             list_queue_push(task_cleaner_queue, tmp_task);
-            found_index = -1ULL;
-            goto re_check;
+            tmp_task = (task_t*)kernel_idle_tasks[apic_id]; // idle task will clean it
         }
     } else {
         tmp_task = (task_t*)kernel_idle_tasks[apic_id];
@@ -622,23 +609,27 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
             return;
         }
+    }
 
-        if(current_task->vmcs_physical_address) {
-            if(vmclear(current_task->vmcs_physical_address) != 0) {
-                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
-                return;
-            }
+    if(current_task->vmcs_physical_address) {
+        if(vmclear(current_task->vmcs_physical_address) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+            return;
         }
+    }
 
-        task_save_registers(current_task);
+    task_save_registers(current_task);
 
-        if(!kmain64_completed || current_task->task_id != TASK_KERNEL_TASK_ID) {
-            list_queue_push(task_queue, current_task);
-        }
+    if(current_task->state != TASK_STATE_ENDED) {
+        current_task->state = TASK_STATE_SUSPENDED;
+    }
 
-        if(current_task->task_id == TASK_KERNEL_TASK_ID && list_size(task_cleaner_queue) > 0) {
-            task_cleanup();
-        }
+    if(!kmain64_completed || current_task->task_id != TASK_KERNEL_TASK_ID) {
+        list_queue_push(task_queue, current_task);
+    }
+
+    if(current_task->task_id == TASK_KERNEL_TASK_ID && list_size(task_cleaner_queue) > 0) {
+        task_cleanup();
     }
 
     current_task = task_find_next_task(apic_id);
@@ -646,6 +637,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     current_task->task_switch_count++;
 
     current_tasks[apic_id] = current_task;
+    current_task->state = TASK_STATE_RUNNING;
 
     if(current_task->vmcs_physical_address) {
         if(vmptrld(current_task->vmcs_physical_address) != 0) {
@@ -673,6 +665,10 @@ void task_end_task(void) {
         }
     }
 
+    current_task->message_waiting = false;
+    current_task->interruptible = false;
+    current_task->wait_for_future = false;
+
     current_task->state = TASK_STATE_ENDED;
 
     task_yield();
@@ -689,6 +685,10 @@ void task_kill_task(uint64_t task_id) {
     if(task->state == TASK_STATE_ENDED) {
         return;
     }
+
+    task->message_waiting = false;
+    task->interruptible = false;
+    task->wait_for_future = false;
 
     task->state = TASK_STATE_ENDED;
 
@@ -1060,9 +1060,10 @@ void task_print_all(void) {
             }
         }
 
-        printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]\n",
+        printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n",
                task->task_name, task->task_id, task, task->task_switch_count,
-               task->rsp, task->rbp, task->heap, task->heap_size);
+               task->rsp, task->rbp, task->heap, task->heap_size,
+               task->stack, task->stack_size);
 
         printf("\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n",
                task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
