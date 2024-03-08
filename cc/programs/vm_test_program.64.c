@@ -17,7 +17,7 @@
 
 MODULE("turnstone.user.programs.vm_test_program");
 
-_Noreturn void vm_test_program_main(void);
+_Noreturn void vmtpm(void);
 
 static void vm_test_program_print(const char* str) {
     while(*str != '\0') {
@@ -46,8 +46,8 @@ _Noreturn static void vm_test_program_halt(void) {
     cpu_hlt();
 }
 
-_Noreturn void vm_test_program_main(void) {
-    memory_heap_t* heap = memory_create_heap_simple(0, 0);
+_Noreturn void vmtpm(void) {
+    memory_heap_t* heap = memory_create_heap_simple(10 << 20, 16 << 20);
 
     if(heap == NULL) {
         vm_test_program_print("Failed to create heap\n");

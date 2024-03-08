@@ -120,23 +120,23 @@ void ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    PRINTLOG(AHCI, LOG_TRACE, "interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x",
-             port->interrupt_status, port->command_and_status, port->sata_active, port->sata_error, port->command_issue, port->task_file_data);
+    // PRINTLOG(AHCI, LOG_TRACE, "interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x",
+    // port->interrupt_status, port->command_and_status, port->sata_active, port->sata_error, port->command_issue, port->task_file_data);
 
     uint32_t finished_commands = disk->current_commands ^ port->command_issue;
 
     for(uint32_t i = 0; i < disk->command_count; i++) {
         if(finished_commands & 1) {
-            PRINTLOG(AHCI, LOG_TRACE, "command %i finished for disk %lli", i, disk_id);
-
-            disk->current_commands ^= (1 << i);
-            disk->acquired_slots ^= (1 << i);
+            // PRINTLOG(AHCI, LOG_TRACE, "command %i finished for disk %lli", i, disk_id);
 
             if(disk->future_locks[i]) {
-                PRINTLOG(AHCI, LOG_TRACE, "releasing future lock for command %i for disk %lli", i, disk_id);
+                // PRINTLOG(AHCI, LOG_TRACE, "releasing future lock for command %i for disk %lli", i, disk_id);
                 lock_release(disk->future_locks[i]);
                 disk->future_locks[i] = NULL;
             }
+
+            bit_clear32(&disk->current_commands, i);
+            bit_clear32(&disk->acquired_slots, i);
         }
 
         finished_commands >>= 1;
@@ -238,7 +238,7 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
 
     if(memory_paging_get_physical_address((uint64_t)&error_log, &el_phy_addr) != 0) {
         PRINTLOG(AHCI, LOG_ERROR, "cannot get physical address of error log 0x%p", &error_log);
-        disk->acquired_slots ^= (1 << slot);
+        bit_clear32(&disk->acquired_slots, slot);
 
         return -1;
     }
@@ -274,13 +274,13 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
 
         if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
             PRINTLOG(AHCI, LOG_FATAL, "read ncq log error is 0x%x tfd 0x%x err 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
-            disk->acquired_slots ^= (1 << slot);
+            bit_clear32(&disk->acquired_slots, slot);
 
             return -1;
         }
     }
 
-    disk->acquired_slots ^= (1 << slot);
+    bit_clear32(&disk->acquired_slots, slot);
 
     if(port->interrupt_status & 1) {
         ahci_hba_fis_t* hba_fis = (ahci_hba_fis_t*)port->fis_base_address;
@@ -590,8 +590,11 @@ future_t* ahci_flush(uint64_t disk_id) {
 
     future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], NULL);
 
-    disk->current_commands |= 1 << slot;
-    port->command_issue = 1 << slot;
+    bit_set32(&disk->current_commands, slot);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    bit_set32(&port->command_issue, slot);
+#pragma GCC diagnostic pop
 
     return fut;
 }
@@ -633,7 +636,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     if(memory_paging_get_physical_address((uint64_t)&identify_data, &id_phy_addr) != 0) {
         PRINTLOG(AHCI, LOG_ERROR, "cannot find physical address of buffer 0x%p", &identify_data);
-        disk->acquired_slots ^= (1 << slot);
+        bit_clear32(&disk->acquired_slots, slot);
 
         return -1;
     }
@@ -662,7 +665,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
         if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
             PRINTLOG(AHCI, LOG_FATAL, "disk identify error");
-            disk->acquired_slots ^= (1 << slot);
+            bit_clear32(&disk->acquired_slots, slot);
 
             return -1;
         }
@@ -670,12 +673,12 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
         PRINTLOG(AHCI, LOG_FATAL, "disk identify error");
-        disk->acquired_slots ^= (1 << slot);
+        bit_clear32(&disk->acquired_slots, slot);
 
         return -1;
     }
 
-    disk->acquired_slots ^= (1 << slot);
+    bit_clear32(&disk->acquired_slots, slot);
 
     PRINTLOG(AHCI, LOG_TRACE, "building identify data");
 
@@ -764,6 +767,10 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         return NULL;
     }
 
+    PRINTLOG(AHCI, LOG_TRACE, "read port 0x%p slot %i", port, slot);
+    PRINTLOG(AHCI, LOG_TRACE, "read disk 0x%p lba 0x%llx size 0x%x buffer 0x%p", disk, lba, size, buffer);
+    PRINTLOG(AHCI, LOG_TRACE, "logical sector size 0x%llx", disk->logical_sector_size);
+
     uint32_t sector_count = size / disk->logical_sector_size;
 
     if(size % disk->logical_sector_size != 0) {
@@ -845,8 +852,12 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 
     future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
 
-    disk->current_commands |= 1 << slot;
-    port->command_issue = 1 << slot;
+
+    bit_set32(&disk->current_commands, slot);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    bit_set32(&port->command_issue, slot);
+#pragma GCC diagnostic pop
 
     return fut;
 }
@@ -946,8 +957,12 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
 
     future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
 
-    disk->current_commands |= 1 << slot;
-    port->command_issue = 1 << slot;
+    bit_set32(&disk->current_commands, slot);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    bit_set32(&port->command_issue, slot);
+#pragma GCC diagnostic pop
 
     return fut;
 }
@@ -992,7 +1007,7 @@ int8_t ahci_find_command_slot(ahci_sata_disk_t* disk) {
 
     for(int8_t i = 0; i < disk->command_count; i++) {
         if((slots & 1) == 0) {
-            disk->acquired_slots |= 1 << i;
+            bit_set32(&disk->acquired_slots, i);
 
             lock_release(disk->disk_lock);
 

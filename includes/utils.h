@@ -136,6 +136,32 @@ static inline boolean_t bit_test(uint64_t* data, uint8_t bitloc) {
  * @return old value
  *
  **/
+static inline boolean_t bit_clear32(volatile uint32_t* data, uint8_t bitloc) {
+    boolean_t res = false;
+    asm volatile ("btr %%ebx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));
+    return res;
+}
+
+/**
+ * @brief sets bit value of given data at bitloc
+ * @param[in] data bit array
+ * @param[in] bitloc bit location at data
+ * @return old value
+ *
+ **/
+static inline boolean_t bit_set32(volatile uint32_t* data, uint8_t bitloc) {
+    boolean_t res = false;
+    asm volatile ("bts %%ebx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));
+    return res;
+}
+
+/**
+ * @brief clears bit value of given data at bitloc
+ * @param[in] data bit array
+ * @param[in] bitloc bit location at data
+ * @return old value
+ *
+ **/
 static inline boolean_t bit_clear(uint64_t* data, uint8_t bitloc) {
     boolean_t res = false;
     asm volatile ("btr %%rbx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));

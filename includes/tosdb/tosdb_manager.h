@@ -15,16 +15,15 @@
 
 int8_t tosdb_manager_init(void);
 
-typedef enum tosdb_manager_ipc_type_t
-{
+typedef enum tosdb_manager_ipc_type_t {
     TOSDB_MANAGER_IPC_TYPE_NONE = 0,
     TOSDB_MANAGER_IPC_TYPE_CLOSE,
     TOSDB_MANAGER_IPC_TYPE_PROGRAM_BUILD,
 } tosdb_manager_ipc_type_t;
 
-typedef struct tosdb_manager_ipc_t
-{
+typedef struct tosdb_manager_ipc_t {
     tosdb_manager_ipc_type_t type;
+    uint64_t                 sender_task_id;
     buffer_t*                response_buffer;
     boolean_t                is_response_done;
     boolean_t                is_response_success;
@@ -35,11 +34,14 @@ typedef struct tosdb_manager_ipc_t
             boolean_t     for_vm;
             uint64_t      program_handle;
             uint8_t*      program;
+            uint64_t      program_size;
+            uint64_t      program_entry_point_virtual_address;
         } program_build;
     };
 
 } tosdb_manager_ipc_t;
 
 int8_t tosdb_manager_close(void);
+int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc);
 
 #endif

@@ -17,21 +17,39 @@
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>
 #include <cpu/task.h>
+#include <cpu/sync.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <logging.h>
+#include <utils.h>
+#include <strings.h>
 
 MODULE("turnstone.hypervisor");
 
-
+uint64_t hypervisor_next_vm_id = 0;
+lock_t* hypervisor_vm_lock = NULL;
 
 static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
-    if(argc != 1) {
+    if(argc != 2) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid argument count");
         return -1;
     }
 
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "args pointer: 0x%llx", (uint64_t)args);
+
     uint64_t vmcs_frame_va = (uint64_t)args[0];
+
+    char_t* entry_point_name = args[1];
+
+    if(vmcs_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid vmcs frame va");
+        return -1;
+    }
+
+    if(strlen(entry_point_name) == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
+        return -1;
+    }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
 
@@ -56,6 +74,11 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_va);
 
+    if(hypevisor_deploy_program(entry_point_name) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
+        return -1;
+    }
+
     if(vmlaunch() != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch/vmresume failed");
         hypervisor_vmcs_dump();
@@ -68,6 +91,15 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
 
 
 int8_t hypervisor_init(void) {
+    if(hypervisor_vm_lock == NULL) { // thread safe, first creator is main thread, ap threads will soon call
+        hypervisor_vm_lock = lock_create();
+
+        if(hypervisor_vm_lock == NULL) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm lock");
+            return -1;
+        }
+    }
+
     cpu_cpuid_regs_t query;
     cpu_cpuid_regs_t result;
     query.eax = 0x1;
@@ -150,7 +182,12 @@ int8_t hypervisor_init(void) {
     return 0;
 }
 
-int8_t hypervisor_vm_create(void) {
+int8_t hypervisor_vm_create(const char_t* entry_point_name) {
+    if(strlen(entry_point_name) == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
+        return -1;
+    }
+
     frame_t* vmcs_frame = NULL;
 
     uint64_t vmcs_frame_va = hypervisor_allocate_region(&vmcs_frame, FRAME_SIZE);
@@ -232,7 +269,7 @@ int8_t hypervisor_vm_create(void) {
         return -1;
     }
 
-    void** args = memory_malloc(sizeof(void*) * 2);
+    void** args = memory_malloc(sizeof(void*) * 3);
 
     if(args == NULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate args");
@@ -241,11 +278,22 @@ int8_t hypervisor_vm_create(void) {
     }
 
     args[0] = (void*)vmcs_frame_va;
+    args[1] = (void*)entry_point_name;
 
-    if(task_create_task(NULL, 2 << 20, 16 << 10, hypervisor_vm_task, 1, args, "vm01") == -1ULL) {
+
+    char_t* vm_name = sprintf("vm%08llx", ++hypervisor_next_vm_id);
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    if(task_create_task(heap, 2 << 20, 16 << 10, hypervisor_vm_task, 2, args, vm_name) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
+        memory_free(args);
+        memory_free(vm_name);
+
         return -1;
     }
+
+    memory_free(vm_name);
 
     return 0;
 }

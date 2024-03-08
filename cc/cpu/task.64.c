@@ -21,6 +21,7 @@
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_vm.h>
+#include <strings.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -388,6 +389,7 @@ void task_cleanup(void){
             hypervisor_vm_destroy(tmp->vm);
         }
 
+        memory_free_ext(tmp->heap, (void*)tmp->task_name);
 
         map_delete(task_map, (void*)tmp->task_id);
 
@@ -454,12 +456,18 @@ boolean_t task_idle_check_need_yield(void) {
             continue;
         }
 
+        if(t->state == TASK_STATE_ENDED) {
+            continue;
+        }
+
         if(t->message_waiting) {
             if(t->interruptible && t->interrupt_received) {
                 // t->interrupt_received = false;
                 need_yield = true;
                 break;
-            } else if(t->message_queues) {
+            }
+
+            if(t->message_queues) {
                 for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
                     list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
 
@@ -494,6 +502,11 @@ task_t* task_find_next_task(void) {
         for(uint64_t i = 0; i < list_size(task_queue); i++) {
             task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
+            if(t->state == TASK_STATE_ENDED) {
+                found_index = i;
+                break; // trick to remove ended task from queue
+            }
+
             if(kmain64_completed && t->task_id == TASK_KERNEL_TASK_ID && first_time) {
                 first_time = false;
                 continue;
@@ -511,7 +524,9 @@ task_t* task_find_next_task(void) {
                         found_index = i;
                         break;
                     }
-                } else if(t->message_queues) {
+                }
+
+                if(t->message_queues) {
                     for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
                         list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
 
@@ -530,6 +545,15 @@ task_t* task_find_next_task(void) {
 
         if(found_index != -1ULL) {
             tmp_task = (task_t*)list_delete_at_position(task_queue, found_index);
+
+            // need check it is ended?
+            if(tmp_task->state == TASK_STATE_ENDED) {
+                // it is already task clear queue so find next
+                list_queue_push(task_cleaner_queue, tmp_task);
+                found_index = -1ULL;
+                continue;
+            }
+
             break;
         }
 
@@ -629,10 +653,6 @@ void task_end_task(void) {
 
     current_task->state = TASK_STATE_ENDED;
 
-    list_queue_push(task_cleaner_queue, current_task);
-
-    PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", current_task->task_id);
-
     task_yield();
 }
 
@@ -640,6 +660,7 @@ void task_kill_task(uint64_t task_id) {
     task_t* task = (task_t*)map_get(task_map, (void*)task_id);
 
     if(task == NULL) {
+        PRINTLOG(TASKING, LOG_WARNING, "task 0x%lli not found", task_id);
         return;
     }
 
@@ -649,9 +670,8 @@ void task_kill_task(uint64_t task_id) {
 
     task->state = TASK_STATE_ENDED;
 
-    list_queue_push(task_cleaner_queue, task);
 
-    PRINTLOG(TASKING, LOG_TRACE, "task 0x%lli added to cleaning queue", task->task_id);
+    PRINTLOG(TASKING, LOG_INFO, "task 0x%lli will be ended", task->task_id);
 }
 
 
@@ -764,7 +784,13 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         cpu_hlt();
     }
 
-    memory_heap_t* task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
+    memory_heap_t* task_heap = NULL;
+
+    if(heap_size > (16 << 20)) {
+        task_heap = memory_create_heap_hash(heap_va, heap_va + heap_size);
+    } else {
+        task_heap = memory_create_heap_simple(heap_va, heap_va + heap_size);
+    }
 
     boolean_t old_int_status = cpu_cli();
 
@@ -786,7 +812,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->rflags = 0x202;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
-    new_task->task_name = task_name;
+    new_task->task_name = strdup_at_heap(task_heap, task_name);
 
     *(uint16_t*)&new_task->fx_registers[0] = 0x37F;
     *(uint32_t*)&new_task->fx_registers[24] = 0x1F80 & task_mxcsr_mask;

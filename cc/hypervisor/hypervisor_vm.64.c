@@ -40,6 +40,8 @@ int8_t hypervisor_vm_create_and_attach_to_task(uint64_t vmcs_frame_fa) {
         return -1;
     }
 
+    task_set_interruptible();
+
     list_t* mq_list = list_create_queue();
 
     if(mq_list == NULL) {

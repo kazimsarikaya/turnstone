@@ -21,6 +21,7 @@
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
 #include <utils.h>
+#include <hypervisor/hypervisor.h>
 #include <hypervisor/hypervisor_ipc.h>
 #include <list.h>
 #include <tosdb/tosdb_manager.h>
@@ -85,24 +86,34 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
     char_t vmid_str[64] = {0};
 
     if(arguments == NULL || strlen(arguments) == 0) {
+        printf("empty arguments\n");
         printf("Usage: vm <vmid> <command>\n");
+        printf("Usage: vm create <entrypoint_name>\n");
         return -1;
     }
 
     // copy command until space
     uint32_t i = 0;
+    uint64_t vmid = 0;
 
-    while(arguments[i] != ' ' && arguments[i] != NULL) {
-        vmid_str[i] = arguments[i];
+
+    if(strstarts(arguments, "create") != 0) {
+        while(arguments[i] != ' ' && arguments[i] != NULL && isdigit(arguments[i])) {
+            vmid_str[i] = arguments[i];
+            i++;
+        }
+
+        if(arguments[i] == NULL) {
+            printf("cannot parse vmid\n");
+            printf("Usage: vm <vmid> <command>\n");
+            printf("Usage: vm create <entrypoint_name>\n");
+            return -1;
+        }
+
+        vmid = atoh(vmid_str);
+
         i++;
     }
-
-    if(arguments[i] == NULL) {
-        printf("Usage: vm <vmid> <command>\n");
-        return -1;
-    }
-
-    i++;
 
     // copy vmid until space
     uint32_t j = 0;
@@ -113,12 +124,12 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
         j++;
     }
 
-    if(arguments[i] != NULL) {
+    if(strlen(command) == 0) {
+        printf("cannot parse command: %s\n", arguments);
         printf("Usage: vm <vmid> <command>\n");
+        printf("Usage: vm create <entrypoint_name>\n");
         return -1;
     }
-
-    uint64_t vmid = atoh(vmid_str);
 
     if(strncmp(command, "output", 6) == 0) {
 
@@ -184,11 +195,40 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
 
         memory_free(msg_data);
 
+    } else if(strncmp(command, "create", 6) == 0) {
+        if(strlen(arguments) == 6) {
+            printf("entrypoint name is missing\n");
+            printf("Usage: vm create <entrypoint_name>\n");
+            return -1;
+        }
+
+        char_t entrypoint_name[256] = {0};
+        uint32_t k = 0;
+
+        i++;
+
+        while(arguments[i] != NULL) {
+            entrypoint_name[k] = arguments[i];
+            i++;
+            k++;
+        }
+
+        if(strlen(entrypoint_name) == 0) {
+            printf("entrypoint name is missing\n");
+            printf("Usage: vm create <entrypoint_name>\n");
+            return -1;
+        }
+
+        printf("Creating VM with entrypoint: -%s-\n", entrypoint_name);
+
+        return hypervisor_vm_create(strdup(entrypoint_name));
     } else {
-        printf("Unknown command: %s\n", command);
+        printf("Unknown command: %s\n", arguments);
         printf("Usage: vm <vmid> <command>\n");
+        printf("Usage: vm create <entrypoint_name>\n");
         printf("\toutput\t: prints the VM output\n");
         printf("\tdump\t: dumps the VM state\n");
+        printf("\tcreate\t: creates a new VM with given entrypoint name\n");
         return -1;
     }
 
