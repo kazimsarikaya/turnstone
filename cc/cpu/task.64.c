@@ -47,6 +47,7 @@ extern future_task_wait_toggler_f future_task_wait_toggler_func;
 uint64_t task_next_task_id = 0;
 
 volatile task_t** current_tasks = NULL;
+volatile task_t** kernel_idle_tasks = NULL;
 
 volatile boolean_t* task_switch_paramters_need_eoi = false;
 volatile boolean_t* task_switch_paramters_need_sti = false;
@@ -64,7 +65,7 @@ int8_t                                          task_task_switch_isr(interrupt_f
 __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task);
 __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task);
 void                                            task_cleanup(void);
-task_t*                                         task_find_next_task(void);
+task_t*                                         task_find_next_task(uint32_t apic_id);
 
 extern buffer_t* stdbufs_default_input_buffer;
 extern buffer_t* stdbufs_default_output_buffer;
@@ -232,6 +233,14 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
+    kernel_idle_tasks = memory_malloc_ext(heap, sizeof(task_t*) * cpu_count, 0x0);
+
+    if(kernel_idle_tasks == NULL) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel idle tasks");
+
+        return -1;
+    }
+
     task_switch_paramters_need_eoi = memory_malloc_ext(heap, sizeof(boolean_t) * cpu_count, 0x0);
 
     if(task_switch_paramters_need_eoi == NULL) {
@@ -251,6 +260,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     uint32_t apic_id = apic_get_local_apic_id();
 
     current_tasks[apic_id] = kernel_task;
+    kernel_idle_tasks[apic_id] = kernel_task;
 /*
     if(task_create_idle_task(heap) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");
@@ -503,75 +513,69 @@ boolean_t task_idle_check_need_yield(void) {
 
 extern volatile boolean_t kmain64_completed;
 
-task_t* task_find_next_task(void) {
+task_t* task_find_next_task(uint32_t apic_id) {
     task_t* tmp_task = NULL;
 
-    boolean_t first_time = true;
     uint64_t found_index = -1;
 
-    while(1) {
-        for(uint64_t i = 0; i < list_size(task_queue); i++) {
-            task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
+re_check:
+    for(uint64_t i = 0; i < list_size(task_queue); i++) {
+        task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
 
-            if(t->state == TASK_STATE_ENDED) {
+        if(t->state == TASK_STATE_ENDED) {
+            found_index = i;
+            break; // trick to remove ended task from queue
+        }
+
+        if(t->wait_for_future) {
+            continue;
+        } else if(t->sleeping) {
+            if(t->wake_tick < time_timer_get_tick_count()) {
+                t->sleeping = false;
                 found_index = i;
-                break; // trick to remove ended task from queue
+                break;
             }
-
-            if(kmain64_completed && t->task_id == TASK_KERNEL_TASK_ID && first_time) {
-                continue;
-            } else if(t->wait_for_future) {
-                continue;
-            } else if(t->sleeping) {
-                if(t->wake_tick < time_timer_get_tick_count()) {
-                    t->sleeping = false;
+        } else if(t->message_waiting) {
+            if(t->interruptible) {
+                if(t->interrupt_received) {
+                    t->interrupt_received = false;
+                    t->message_waiting = false;
                     found_index = i;
                     break;
                 }
-            } else if(t->message_waiting) {
-                if(t->interruptible) {
-                    if(t->interrupt_received) {
-                        t->interrupt_received = false;
+            }
+
+            if(t->message_queues) {
+                for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
+                    list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
+
+                    if(list_size(q)) {
                         t->message_waiting = false;
                         found_index = i;
                         break;
                     }
                 }
-
-                if(t->message_queues) {
-                    for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
-                        list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
-
-                        if(list_size(q)) {
-                            t->message_waiting = false;
-                            found_index = i;
-                            break;
-                        }
-                    }
-                }
-            } else {
-                found_index = i;
-                break;
             }
-        }
-
-        first_time = false;
-
-        if(found_index != -1ULL) {
-            tmp_task = (task_t*)list_delete_at_position(task_queue, found_index);
-
-            // need check it is ended?
-            if(tmp_task->state == TASK_STATE_ENDED) {
-                // it is already task clear queue so find next
-                list_queue_push(task_cleaner_queue, tmp_task);
-                found_index = -1ULL;
-                continue;
-            }
-
+        } else {
+            found_index = i;
             break;
         }
-
     }
+
+    if(found_index != -1ULL) {
+        tmp_task = (task_t*)list_delete_at_position(task_queue, found_index);
+
+        // need check it is ended?
+        if(tmp_task->state == TASK_STATE_ENDED) {
+            // it is already task clear queue so find next
+            list_queue_push(task_cleaner_queue, tmp_task);
+            found_index = -1ULL;
+            goto re_check;
+        }
+    } else {
+        tmp_task = (task_t*)kernel_idle_tasks[apic_id];
+    }
+
 
     // PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution. queue size %lli", tmp_task->task_id, list_size(task_queue));
 
@@ -600,8 +604,9 @@ static __attribute__((noinline)) void task_switch_task_exit_prep(void) {
 
 __attribute__((no_stack_protector)) void task_switch_task(void) {
     task_t* current_task = task_get_current_task();
+    uint32_t apic_id = apic_get_local_apic_id();
 
-    if(current_task == NULL || task_queue == NULL || list_size(task_queue) == 0) {
+    if(current_task == NULL) {
         task_switch_task_exit_prep();
 
         return;
@@ -626,18 +631,21 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
         }
 
         task_save_registers(current_task);
-        list_queue_push(task_queue, current_task);
+
+        if(!kmain64_completed || current_task->task_id != TASK_KERNEL_TASK_ID) {
+            list_queue_push(task_queue, current_task);
+        }
 
         if(current_task->task_id == TASK_KERNEL_TASK_ID && list_size(task_cleaner_queue) > 0) {
             task_cleanup();
         }
     }
 
-    current_task = task_find_next_task();
+    current_task = task_find_next_task(apic_id);
     current_task->last_tick_count = time_timer_get_tick_count();
     current_task->task_switch_count++;
 
-    current_tasks[apic_get_local_apic_id()] = current_task;
+    current_tasks[apic_id] = current_task;
 
     if(current_task->vmcs_physical_address) {
         if(vmptrld(current_task->vmcs_physical_address) != 0) {
@@ -1056,8 +1064,9 @@ void task_print_all(void) {
                task->task_name, task->task_id, task, task->task_switch_count,
                task->rsp, task->rbp, task->heap, task->heap_size);
 
-        printf("\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d\n",
-               task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received);
+        printf("\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n",
+               task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
+               task->wait_for_future, task->state);
 
         printf("\t\tmessage queues %lli messages %lli\n", list_size(task->message_queues), msgcount);
 
