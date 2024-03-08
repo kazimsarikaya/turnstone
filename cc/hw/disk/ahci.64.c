@@ -853,12 +853,6 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 
     uint64_t tid = task_get_id();
 
-    char_t buf[256] = {0};
-    itoa_with_buffer(buf, tid);
-    video_text_print("fut for: ");
-    video_text_print(buf);
-    video_text_print("\n");
-
     disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
 
     future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], buffer);
