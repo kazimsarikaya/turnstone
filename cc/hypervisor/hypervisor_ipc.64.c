@@ -178,6 +178,9 @@ int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
         case HYPERVISOR_IPC_MESSAGE_TYPE_TIMER_INT:
             hypervisor_ipc_handle_timer_int(vmexit_info, message);
             break;
+        case HYPERVISOR_IPC_MESSAGE_TYPE_CLOSE:
+            task_end_task();
+            break;
         default:
             break;
         }
@@ -202,4 +205,21 @@ void hypervisor_ipc_send_timer_interrupt(hypervisor_vm_t* vm) {
     }
 
     list_queue_push(mq, (void*)&hypervisor_ipc_message_timer_int);
+}
+
+const hypervisor_ipc_message_t hypervisor_ipc_message_close = {
+    .message_type = HYPERVISOR_IPC_MESSAGE_TYPE_CLOSE,
+};
+
+int8_t hypervisor_ipc_send_close(uint64_t vm_id) {
+    list_t* vm_mq = task_get_message_queue(vm_id, 0);
+
+    if(!vm_mq) {
+        printf("VM not found\n");
+        return -1;
+    }
+
+    list_queue_push(vm_mq, (void*)&hypervisor_ipc_message_timer_int);
+
+    return 0;
 }

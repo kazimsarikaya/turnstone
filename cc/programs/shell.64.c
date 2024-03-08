@@ -222,6 +222,8 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
         printf("Creating VM with entrypoint: -%s-\n", entrypoint_name);
 
         return hypervisor_vm_create(strdup(entrypoint_name));
+    } else if(strncmp(command, "close", 5) == 0) {
+        return hypervisor_ipc_send_close(vmid);
     } else {
         printf("Unknown command: %s\n", arguments);
         printf("Usage: vm <vmid> <command>\n");
@@ -229,6 +231,7 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
         printf("\toutput\t: prints the VM output\n");
         printf("\tdump\t: dumps the VM state\n");
         printf("\tcreate\t: creates a new VM with given entrypoint name\n");
+        printf("\tclose\t: closes vm\n");
         return -1;
     }
 
