@@ -15,6 +15,7 @@
 #include <time/timer.h>
 #include <apic.h>
 #include <hashmap.h>
+#include <cpu/task.h>
 
 
 MODULE("turnstone.kernel.hw.drivers");
@@ -670,7 +671,8 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14 = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15 = 0;
 
-    lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true);
+    uint64_t tid = task_get_id();
+    lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true, tid);
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
     future_t* fut = future_create(lock);
 
@@ -716,7 +718,8 @@ future_t* nvme_flush(uint64_t disk_id) {
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw14 = 0;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].cdw15 = 0;
 
-    lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true);
+    uint64_t tid = task_get_id();
+    lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true, tid);
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
     future_t* fut = future_create_with_heap_and_data(nvme_disk->heap, lock, NULL);
 

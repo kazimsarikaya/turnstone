@@ -24,7 +24,7 @@ typedef struct lock_t lock_t;
  * @param[in] for_future is lock for future
  * @return lock
  */
-lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id);
 
 /**
  * @brief destroys lock
@@ -37,7 +37,7 @@ int8_t lock_destroy(lock_t* lock);
  * @brief macro for creating lock with heap
  * @param[in] h heap
  */
-#define lock_create_with_heap(h) lock_create_with_heap_for_future(h, 0)
+#define lock_create_with_heap(h) lock_create_with_heap_for_future(h, 0, 0)
 
 /**
  * @brief macro for creating lock with default heap
@@ -47,7 +47,7 @@ int8_t lock_destroy(lock_t* lock);
 /**
  * @brief macro for creating future lock with default heap
  */
-#define lock_create_for_future() lock_create_with_heap_for_future(NULL, 1)
+#define lock_create_for_future(tid) lock_create_with_heap_for_future(NULL, true, tid)
 
 /**
  * @brief acquires lock

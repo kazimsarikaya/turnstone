@@ -25,6 +25,8 @@
 
 MODULE("turnstone.kernel.cpu.task");
 
+void video_text_print(const char_t* str);
+
 typedef task_t * (*memory_current_task_getter_f)(void);
 void memory_set_current_task_getter(memory_current_task_getter_f getter);
 
@@ -38,6 +40,9 @@ typedef buffer_t * (*stdbuf_task_buffer_getter_f)(void);
 stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer = NULL;
 stdbuf_task_buffer_getter_f stdbufs_task_get_output_buffer = NULL;
 stdbuf_task_buffer_getter_f stdbufs_task_get_error_buffer = NULL;
+
+typedef void (*future_task_wait_toggler_f)(uint64_t task_id);
+extern future_task_wait_toggler_f future_task_wait_toggler_func;
 
 uint64_t task_next_task_id = 0;
 
@@ -67,6 +72,8 @@ extern buffer_t* stdbufs_default_error_buffer;
 
 void   task_idle_task(void);
 int8_t task_create_idle_task(memory_heap_t* heap);
+
+void task_toggle_wait_for_future(uint64_t task_id);
 
 task_t* task_get_current_task(void){
     if(!current_tasks) {
@@ -262,6 +269,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     stdbufs_task_get_input_buffer = &task_get_input_buffer;
     stdbufs_task_get_output_buffer = &task_get_output_buffer;
     stdbufs_task_get_error_buffer = &task_get_error_buffer;
+
+    future_task_wait_toggler_func = &task_toggle_wait_for_future;
 
     task_tasking_initialized = true;
 
@@ -484,6 +493,8 @@ boolean_t task_idle_check_need_yield(void) {
                 need_yield = true;
                 break;
             }
+        } else if(t->wait_for_future) {
+            break;
         }
     }
 
@@ -508,7 +519,8 @@ task_t* task_find_next_task(void) {
             }
 
             if(kmain64_completed && t->task_id == TASK_KERNEL_TASK_ID && first_time) {
-                first_time = false;
+                continue;
+            } else if(t->wait_for_future) {
                 continue;
             } else if(t->sleeping) {
                 if(t->wake_tick < time_timer_get_tick_count()) {
@@ -542,6 +554,8 @@ task_t* task_find_next_task(void) {
                 break;
             }
         }
+
+        first_time = false;
 
         if(found_index != -1ULL) {
             tmp_task = (task_t*)list_delete_at_position(task_queue, found_index);
@@ -1229,4 +1243,24 @@ void* task_get_vm(void) {
     }
 
     return vm;
+}
+
+void task_toggle_wait_for_future(uint64_t tid) {
+    if(tid == 0 || tid == TASK_KERNEL_TASK_ID) {
+        return;
+    }
+
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+
+    if(task) {
+        char_t buf[64] = {0};
+        itoa_with_buffer(buf, task->task_id);
+        video_text_print("task id: ");
+        video_text_print(buf);
+        video_text_print(" wait for future: ");
+        video_text_print(!task->wait_for_future ? "true" : "false");
+        video_text_print("\n");
+
+        task->wait_for_future = !task->wait_for_future;
+    }
 }

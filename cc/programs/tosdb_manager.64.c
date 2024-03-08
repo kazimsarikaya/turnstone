@@ -24,7 +24,7 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv);
 boolean_t tosdb_manager_is_initialized = false;
 
 static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
-    logging_module_levels[LINKER] = LOG_DEBUG;
+    // logging_module_levels[LINKER] = LOG_DEBUG;
 
     int8_t exit_code = 0;
 
@@ -250,6 +250,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
+    // logging_module_levels[AHCI] = LOG_TRACE;
+
     memory_heap_t* heap = memory_get_heap(NULL);
 
     PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
@@ -270,6 +272,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
     }
 
+    PRINTLOG(TOSDB, LOG_INFO, "ahci and nvme initialized");
+
     ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_first_inserted_disk();
 
     if (sd == NULL) {
@@ -285,6 +289,9 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
+    PRINTLOG(TOSDB, LOG_INFO, "GPT disk opened");
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB partition searching");
+
     efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_TOSDB_PART_GUID;
 
     disk_or_partition_t* tosdb_part = (disk_or_partition_t*)sata0->get_partition_by_type_data(sata0, &kernel_guid);
@@ -294,6 +301,9 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB partition found");
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB backend creating");
+
     tosdb_backend_t* tosdb_backend = tosdb_backend_disk_new(tosdb_part);
 
     if (tosdb_backend == NULL) {
@@ -301,12 +311,18 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB backend created");
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB database opening");
+
     tosdb_t* tdb = tosdb_new(tosdb_backend, COMPRESSION_TYPE_NONE);
 
     if (tdb == NULL) {
         PRINTLOG(TOSDB, LOG_ERROR, "Failed to create TOSDB instance");
         return -1;
     }
+
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB database opened");
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB cache config setting");
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
@@ -318,6 +334,9 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         PRINTLOG(TOSDB, LOG_ERROR, "Failed to set cache config");
         return -1;
     }
+
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB cache config set");
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB defalut databases and tables openning");
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb, "system");
 
@@ -338,6 +357,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
 
         return -1;
     }
+
+    PRINTLOG(TOSDB, LOG_INFO, "TOSDB defalut databases and tables opened");
 
     list_t* mq_list = list_create_queue();
 

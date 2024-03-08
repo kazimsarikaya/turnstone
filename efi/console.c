@@ -59,3 +59,8 @@ void video_print(const char_t* string) {
         i++;
     }
 }
+
+void video_text_print(const char_t* str);
+void video_text_print(const char_t* str) {
+    video_print(str);
+}

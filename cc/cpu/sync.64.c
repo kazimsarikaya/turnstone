@@ -21,6 +21,8 @@ typedef struct lock_t {
     boolean_t         for_future;
 }lock_t;
 
+void video_text_print(const char* str);
+
 boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
 
 typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
@@ -30,6 +32,8 @@ typedef void     (*lock_task_yielder_f)(void);
 lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter = NULL;
 lock_current_task_getter_f lock_get_current_task_getter = NULL;
 lock_task_yielder_f lock_task_yielder = NULL;
+
+void future_task_wait_toggler(uint64_t task_id);
 
 static uint32_t lock_get_local_apic_id(void) {
     if(lock_get_local_apic_id_getter) {
@@ -60,7 +64,7 @@ static inline int8_t sync_test_set_get(volatile uint64_t* value, uint64_t offset
     return res;
 }
 
-lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future) {
+lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id) {
     lock_t* lock = memory_malloc_ext(heap, sizeof(lock_t), 0x0);
 
     if(lock == NULL) {
@@ -71,6 +75,7 @@ lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_futu
     lock->for_future = for_future;
 
     if(lock->for_future) {
+        lock->owner_task_id = task_id;
         lock->lock_value = 1;
     }
 
@@ -107,13 +112,20 @@ void lock_acquire(lock_t* lock) {
 
     while(sync_test_set_get(&lock->lock_value, 0)) {
         if(current_cpu_id == 1) {
+            if(lock->for_future) {
+                // future_task_wait_toggler(lock->owner_task_id);
+            }
+
             lock_task_yield();
         } else {
             asm volatile ("pause");
         }
     }
 
-    lock->owner_task_id = current_task_id;
+    if(!lock->for_future) {
+        lock->owner_task_id = current_task_id;
+    }
+
     lock->owner_cpu_id = current_cpu_id;
 }
 
@@ -123,6 +135,10 @@ void lock_release(lock_t* lock) {
     }
 
     if(lock) {
+        if(lock->for_future) {
+            // future_task_wait_toggler(lock->owner_task_id);
+        }
+
         lock->owner_task_id = 0;
         lock->owner_cpu_id = 0;
         lock->lock_value = 0;

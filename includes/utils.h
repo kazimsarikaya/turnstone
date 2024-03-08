@@ -123,9 +123,9 @@ uint8_t byte_count(const uint64_t num);
  * @return bit value
  *
  **/
-static inline boolean_t bit_test(uint64_t* data, uint8_t bitloc) {
+static inline boolean_t bit_test32(uint32_t* data, uint8_t bitloc) {
     boolean_t res = false;
-    asm volatile ("bt %%rbx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));
+    asm volatile ("bt %%ebx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));
     return res;
 }
 
@@ -152,6 +152,19 @@ static inline boolean_t bit_clear32(volatile uint32_t* data, uint8_t bitloc) {
 static inline boolean_t bit_set32(volatile uint32_t* data, uint8_t bitloc) {
     boolean_t res = false;
     asm volatile ("bts %%ebx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));
+    return res;
+}
+
+/**
+ * @brief test bit value of given data at bitloc
+ * @param[in] data bit array
+ * @param[in] bitloc bit location at data
+ * @return bit value
+ *
+ **/
+static inline boolean_t bit_test(uint64_t* data, uint8_t bitloc) {
+    boolean_t res = false;
+    asm volatile ("bt %%rbx,(%%rax)" : "=@ccc" (res) : "a" (data), "b" (bitloc));
     return res;
 }
 

@@ -12,12 +12,15 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <cpu/interrupt.h>
+#include <cpu/task.h>
 #include <apic.h>
 #include <cpu.h>
 #include <time/timer.h>
 #include <utils.h>
 
 MODULE("turnstone.kernel.hw.disk.ahci");
+
+void video_text_print(const char* str);
 
 list_t* sata_ports = NULL;
 list_t* sata_hbas = NULL;
@@ -126,7 +129,7 @@ void ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id) {
     uint32_t finished_commands = disk->current_commands ^ port->command_issue;
 
     for(uint32_t i = 0; i < disk->command_count; i++) {
-        if(finished_commands & 1) {
+        if(bit_test32(&finished_commands, i)) {
             // PRINTLOG(AHCI, LOG_TRACE, "command %i finished for disk %lli", i, disk_id);
 
             if(disk->future_locks[i]) {
@@ -138,8 +141,6 @@ void ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id) {
             bit_clear32(&disk->current_commands, i);
             bit_clear32(&disk->acquired_slots, i);
         }
-
-        finished_commands >>= 1;
     }
 
     if(port->task_file_data & 1) {
@@ -559,7 +560,7 @@ future_t* ahci_flush(uint64_t disk_id) {
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    int8_t slot = ahci_find_command_slot(disk);
+    int32_t slot = ahci_find_command_slot(disk);
 
     if(slot == -1) {
         PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot");
@@ -586,9 +587,11 @@ future_t* ahci_flush(uint64_t disk_id) {
     fis->control_or_command = 1;
     fis->command = AHCI_ATA_CMD_FLUSH_EXT;
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
+    uint64_t tid = task_get_id();
 
-    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], NULL);
+    disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
+
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], NULL);
 
     bit_set32(&disk->current_commands, slot);
 #pragma GCC diagnostic push
@@ -760,7 +763,7 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    int8_t slot = ahci_find_command_slot(disk);
+    int32_t slot = ahci_find_command_slot(disk);
 
     if(slot == -1) {
         PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot");
@@ -848,9 +851,17 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         port->sata_active = 1 << slot;
     }
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
+    uint64_t tid = task_get_id();
 
-    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
+    char_t buf[256] = {0};
+    itoa_with_buffer(buf, tid);
+    video_text_print("fut for: ");
+    video_text_print(buf);
+    video_text_print("\n");
+
+    disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
+
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], buffer);
 
 
     bit_set32(&disk->current_commands, slot);
@@ -867,7 +878,7 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    int8_t slot = ahci_find_command_slot(disk);
+    int32_t slot = ahci_find_command_slot(disk);
 
     if(slot == -1) {
         PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot");
@@ -953,9 +964,11 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
         port->sata_active = 1 << slot;
     }
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
+    uint64_t tid = task_get_id();
 
-    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
+    disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
+
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], buffer);
 
     bit_set32(&disk->current_commands, slot);
 
@@ -999,22 +1012,18 @@ ahci_device_type_t ahci_check_type(ahci_hba_port_t* port) {
 
 
 int8_t ahci_find_command_slot(ahci_sata_disk_t* disk) {
-    ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
+    // ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
     lock_acquire(disk->disk_lock);
 
-    uint32_t slots = port->sata_active | port->command_issue | disk->acquired_slots;
-
     for(int8_t i = 0; i < disk->command_count; i++) {
-        if((slots & 1) == 0) {
+        if(bit_test32(&disk->acquired_slots, i) == 0) {
             bit_set32(&disk->acquired_slots, i);
 
             lock_release(disk->disk_lock);
 
             return i;
         }
-
-        slots >>= 1;
     }
 
     lock_release(disk->disk_lock);

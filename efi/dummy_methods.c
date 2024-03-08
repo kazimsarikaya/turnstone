@@ -119,6 +119,8 @@ buffer_t* task_get_output_buffer(void);
  */
 buffer_t* task_get_error_buffer(void);
 
+void future_task_wait_toggler(uint64_t task_id);
+
 uint64_t task_get_id(void){
     return 0;
 }
@@ -158,6 +160,10 @@ future_t future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, voi
     }
 
     return (void*)0xdeadbeaf;
+}
+
+void future_task_wait_toggler(uint64_t task_id) {
+    UNUSED(task_id);
 }
 
 void* future_get_data_and_destroy(future_t fut) {
