@@ -452,6 +452,18 @@ int8_t tosdb_manager_close(void) {
     return 0;
 }
 
+int8_t tosdb_manager_clear(void) {
+    if(!tosdb_manager_is_initialized) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot clear not initialized manager");
+        return -1;
+    }
+
+    tosdb_manager_is_initialized = false;
+    tosdb_manager_task_id = 0;
+
+    return 0;
+}
+
 int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
     if(!tosdb_manager_is_initialized) {
         PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_close: not initialized");
