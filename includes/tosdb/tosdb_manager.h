@@ -42,6 +42,7 @@ typedef struct tosdb_manager_ipc_t {
 } tosdb_manager_ipc_t;
 
 int8_t tosdb_manager_close(void);
+int8_t tosdb_manager_clear(void);
 int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc);
 
 #endif

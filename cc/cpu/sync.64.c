@@ -6,6 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
+#include <cpu.h>
 #include <cpu/sync.h>
 #include <cpu/task.h>
 #include <apic.h>
@@ -112,11 +113,16 @@ void lock_acquire(lock_t* lock) {
 
     while(sync_test_set_get(&lock->lock_value, 0)) {
         if(current_cpu_id == 1) {
-            if(lock->for_future) {
-                // future_task_wait_toggler(lock->owner_task_id);
+            if(!lock->for_future) {
+                lock_task_yield();
+            } else {
+                if(lock->owner_task_id == 0) { // when it is gpu sets future's owner task id 0
+                    lock_task_yield();
+                } else {
+                    cpu_sti();
+                    asm volatile ("pause");
+                }
             }
-
-            lock_task_yield();
         } else {
             asm volatile ("pause");
         }

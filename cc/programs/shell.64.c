@@ -34,44 +34,67 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 buffer_t* shell_buffer = NULL;
 buffer_t* mouse_buffer = NULL;
 
-static int8_t shell_handle_tosdb_command(const char_t* arguments) {
-    char_t command[64] = {0};
+typedef struct shell_argument_parser_t {
+    char_t*  arguments;
+    uint32_t idx;
+} shell_argument_parser_t;
 
-    if(arguments == NULL || strlen(arguments) == 0) {
-        printf("Usage: tosdb <close|init|build_program <entry_point>>\n");
-        return -1;
+static char_t* shell_argument_parser_advance(shell_argument_parser_t* parser) {
+    if(parser == NULL) {
+        return NULL;
     }
 
-    uint32_t i = 0;
+    if(parser->arguments == NULL) {
+        return NULL;
+    }
 
-    while(arguments[i] != ' ' && arguments[i] != NULL) {
-        command[i] = arguments[i];
+    if(parser->arguments[parser->idx] == NULL) {
+        return NULL;
+    }
+
+    uint32_t i = parser->idx;
+
+    while(parser->arguments[i] == ' ') { // trim spaces
         i++;
     }
+
+    char_t* start = &parser->arguments[i]; // save start
+
+    while(parser->arguments[i] != ' ' && parser->arguments[i] != NULL) { // find end
+        i++;
+    }
+
+    if(parser->arguments[i] == ' ') { // replace space with null
+        parser->arguments[i] = NULL;
+        i++;
+    }
+
+
+    parser->idx = i; // save new index
+
+    return start;
+}
+
+
+static int8_t shell_handle_tosdb_command(char_t* arguments) {
+    shell_argument_parser_t parser = {arguments, 0};
+
+    char_t* command = shell_argument_parser_advance(&parser);
+
 
     if(strncmp("close", command, 5) == 0) {
         return tosdb_manager_close();
     } else if(strncmp("init", command, 4) == 0) {
         return tosdb_manager_init();
-    } else if(strncmp("build_program", command, 13) == 0) {
-        if(arguments[i] == NULL) {
-            printf("Usage: tosdb build_program <entry_point>\n");
-            return -1;
+    } else if(strncmp("clear", command, 5) == 0) {
+        // clear takes a force argument
+        char_t* force = shell_argument_parser_advance(&parser);
+
+        if(strncmp(force, "force", 5) == 0) {
+            return tosdb_manager_clear();
         }
 
-        i++;
-
-        char_t entry_point[64] = {0};
-        uint32_t j = 0;
-
-        while(arguments[i] != NULL) {
-            entry_point[j] = arguments[i];
-            i++;
-            j++;
-        }
-
-        printf("not implemented: Building program with entry point: %s\n", entry_point);
-
+        printf("Usage: tosdb clear force\n");
         return -1;
     }
 
@@ -81,62 +104,41 @@ static int8_t shell_handle_tosdb_command(const char_t* arguments) {
     return -1;
 }
 
-static int8_t shell_handle_vm_command(const char_t* arguments) {
-    char_t command[64] = {0};
-    char_t vmid_str[64] = {0};
+static int8_t shell_handle_vm_command(char_t* arguments) {
+    shell_argument_parser_t parser = {arguments, 0};
 
-    if(arguments == NULL || strlen(arguments) == 0) {
-        printf("empty arguments\n");
-        printf("Usage: vm <vmid> <command>\n");
-        printf("Usage: vm create <entrypoint_name>\n");
-        return -1;
-    }
+    char_t* command = shell_argument_parser_advance(&parser);
 
-    // copy command until space
-    uint32_t i = 0;
-    uint64_t vmid = 0;
+    if(strncmp("create", command, 6) == 0) {
+        char_t* entrypoint = shell_argument_parser_advance(&parser);
 
-
-    if(strstarts(arguments, "create") != 0) {
-        while(arguments[i] != ' ' && arguments[i] != NULL && isdigit(arguments[i])) {
-            vmid_str[i] = arguments[i];
-            i++;
-        }
-
-        if(arguments[i] == NULL) {
-            printf("cannot parse vmid\n");
-            printf("Usage: vm <vmid> <command>\n");
+        if(entrypoint == NULL) {
             printf("Usage: vm create <entrypoint_name>\n");
             return -1;
         }
 
-        vmid = atoh(vmid_str);
+        printf("Creating VM with entrypoint: -%s-\n", entrypoint);
 
-        i++;
+        return hypervisor_vm_create(strdup(entrypoint));
     }
 
-    // copy vmid until space
-    uint32_t j = 0;
+    uint64_t vmid = atoh(command);
 
-    while(arguments[i] != ' ' && arguments[i] != NULL) {
-        command[j] = arguments[i];
-        i++;
-        j++;
-    }
-
-    if(strlen(command) == 0) {
-        printf("cannot parse command: %s\n", arguments);
+    if(vmid == 0) {
+        printf("cannot parse vmid: -%s-\n", command);
         printf("Usage: vm <vmid> <command>\n");
         printf("Usage: vm create <entrypoint_name>\n");
         return -1;
     }
+
+    command = shell_argument_parser_advance(&parser);
 
     if(strncmp(command, "output", 6) == 0) {
 
         buffer_t* buffer = task_get_task_output_buffer(vmid);
 
         if(!buffer) {
-            printf("VM not found\n");
+            printf("VM not found: 0x%llx\n", vmid);
             return -1;
         }
 
@@ -154,7 +156,7 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
         list_t* vm_mq = task_get_message_queue(vmid, 0);
 
         if(!vm_mq) {
-            printf("VM not found\n");
+            printf("VM not found: 0x%llx\n", vmid);
             return -1;
         }
 
@@ -195,37 +197,10 @@ static int8_t shell_handle_vm_command(const char_t* arguments) {
 
         memory_free(msg_data);
 
-    } else if(strncmp(command, "create", 6) == 0) {
-        if(strlen(arguments) == 6) {
-            printf("entrypoint name is missing\n");
-            printf("Usage: vm create <entrypoint_name>\n");
-            return -1;
-        }
-
-        char_t entrypoint_name[256] = {0};
-        uint32_t k = 0;
-
-        i++;
-
-        while(arguments[i] != NULL) {
-            entrypoint_name[k] = arguments[i];
-            i++;
-            k++;
-        }
-
-        if(strlen(entrypoint_name) == 0) {
-            printf("entrypoint name is missing\n");
-            printf("Usage: vm create <entrypoint_name>\n");
-            return -1;
-        }
-
-        printf("Creating VM with entrypoint: -%s-\n", entrypoint_name);
-
-        return hypervisor_vm_create(strdup(entrypoint_name));
     } else if(strncmp(command, "close", 5) == 0) {
         return hypervisor_ipc_send_close(vmid);
     } else {
-        printf("Unknown command: %s\n", arguments);
+        printf("Unknown command: %llx -%s-\n", vmid, command);
         printf("Usage: vm <vmid> <command>\n");
         printf("Usage: vm create <entrypoint_name>\n");
         printf("\toutput\t: prints the VM output\n");
@@ -248,11 +223,20 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 
     if(strlen(command) == 0) {
         memory_free(command);
+        char_t* discard = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
+        memory_free(discard);
         return 0;
     }
 
+    char_t* orig_command = command;
+
+    while(*command == ' ') {
+        command++;
+    }
+
     char_t* arguments = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
-    UNUSED(arguments);
+
+    shell_argument_parser_t parser = {arguments, 0};
 
     int8_t res = -1;
 
@@ -282,31 +266,18 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     } else if(strcmp(command, "reboot") == 0) {
         acpi_reset();
     } else if(strcmp(command, "color") == 0) {
-        if(arguments == NULL) {
-            printf("Usage: color <foreground> <background>\n");
+        char_t* foreground_str = shell_argument_parser_advance(&parser);
+        char_t* background_str = shell_argument_parser_advance(&parser);
+
+        if(foreground_str == NULL && background_str == NULL) {
+            printf("Usage: color <foreground> [<background>]\n");
             res = -1;
         } else {
-            uint32_t foreground = 0;
-            uint32_t background = 0;
+            uint32_t foreground = atoh(foreground_str);
+            uint32_t background = atoh(background_str);
 
-            if(strlen(arguments) == 6) {
-                foreground = atoh(arguments);
-                res = 0;
-            } else if(strlen(arguments) == 13 && arguments[6] == ' ') {
-                arguments[6] = 0;
-                foreground = atoh(arguments);
-                background = atoh(arguments + 7);
-                res = 0;
-            } else {
-                printf("Usage: color <foreground> <background>\n");
-                printf("\tgiven arguments: %s %lli\n", arguments, strlen(arguments));
-                res = -1;
-            }
-
-            if(res != -1) {
-                printf("request foreground: %x background: %x\n", foreground, background);
-                video_set_color(foreground, background);
-            }
+            video_set_color(foreground, background);
+            res = 0;
         }
     } else if(strcmp(command, "ps") == 0) {
         task_print_all();
@@ -336,18 +307,13 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
     } else if(strcmp(command, "kill") == 0) {
-        char_t* rem = strchr(arguments, ' ');
+        uint64_t pid = atoh(shell_argument_parser_advance(&parser));
+        char_t* force_str = shell_argument_parser_advance(&parser);
         boolean_t force = false;
 
-        if(rem) {
-            *rem = 0;
-            rem++;
-            if(strncmp(rem, "force", 5) == 0) {
-                force = true;
-            }
+        if(strncmp(force_str, "force", 5) == 0) {
+            force = true;
         }
-
-        uint64_t pid = atoh(arguments);
 
         if(pid == 0) {
             printf("Usage: kill <pid>\n");
@@ -363,7 +329,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     }
 
 
-    memory_free(command);
+    memory_free(orig_command);
     memory_free(arguments);
 
     return res;
@@ -478,6 +444,13 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         data[4095] = last_char;
 
         uint64_t idx = 0;
+
+        if(buffer_get_length(command_buffer) == 0) {
+            while(data[idx] == ' ') {
+                idx++;
+                data_idx--;
+            }
+        }
 
         while(data_idx > 0) {
             char_t c = data[idx++];

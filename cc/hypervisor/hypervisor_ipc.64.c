@@ -216,7 +216,7 @@ int8_t hypervisor_ipc_send_close(uint64_t vm_id) {
     list_t* vm_mq = task_get_message_queue(vm_id, 0);
 
     if(!vm_mq) {
-        printf("VM not found\n");
+        printf("VM not found: 0x%llx\n", vm_id);
         return -1;
     }
 
