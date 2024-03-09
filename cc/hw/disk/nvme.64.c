@@ -16,9 +16,12 @@
 #include <apic.h>
 #include <hashmap.h>
 #include <cpu/task.h>
+#include <utils.h>
 
 
 MODULE("turnstone.kernel.hw.drivers");
+
+void video_text_print(const char* str);
 
 hashmap_t* nvme_disks = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
@@ -45,6 +48,12 @@ int8_t    nvme_send_admin_command(nvme_disk_t* nvme_disk,
                                   uint32_t*    sdw0);
 
 
+static void video_int_print(uint64_t i) {
+    char str[64];
+    utoh_with_buffer(str, i);
+    video_text_print(str);
+}
+
 
 const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id) {
     return hashmap_get(nvme_disks, (void*)disk_id);
@@ -54,38 +63,36 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
     uint8_t intnum = frame->interrupt_number;
     intnum -= 0x20;
 
-    PRINTLOG(NVME, LOG_TRACE, "nvme isr %i", intnum);
     nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disk_isr_map, (void*)(uint64_t)intnum);
 
     if(nvme_disk == NULL) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot find nvme disk for isr %i", intnum);
+        video_text_print("nvme disk not found\n");
         apic_eoi();
 
         return 0;
     }
 
-    uint32_t status_code = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_code;
-    uint32_t status_type = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_type;
-    uint32_t sqhd = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqhd;
-    uint32_t sqid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqid;
+    // uint32_t status_code = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_code;
+    // uint32_t status_type = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_type;
+    // uint32_t sqhd = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqhd;
+    // uint32_t sqid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqid;
     uint32_t cid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].cid;
 
-    PRINTLOG(NVME, LOG_TRACE, "status code %i", status_code);
-    PRINTLOG(NVME, LOG_TRACE, "status type %i", status_type);
-    PRINTLOG(NVME, LOG_TRACE, "sqhd %i", sqhd);
-    PRINTLOG(NVME, LOG_TRACE, "sqid %i", sqid);
-    PRINTLOG(NVME, LOG_TRACE, "cid %i", cid);
-
     lock_t* lock = (lock_t*)hashmap_get(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
+    hashmap_delete(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
 
     if(lock == NULL) {
-        PRINTLOG(NVME, LOG_ERROR, "cannot find lock for cid %i", cid);
+        video_text_print("nvme lock not found cid: ");
+        video_int_print(cid);
+        video_text_print("\n");
     }
 
     lock_release(lock);
 
     nvme_disk->io_c_queue_head = (nvme_disk->io_c_queue_head + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_completion_queue_head_doorbell = nvme_disk->io_c_queue_head;
+
+    nvme_disk->active_command_count--;
 
 
     pci_msix_clear_pending_bit(nvme_disk->pci_device, nvme_disk->msix_capability, 1);
@@ -415,7 +422,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
                                    0x0, // mptr
                                    queue_frames->frame_address + 3 * FRAME_SIZE, // prp1
                                    0x0, // prp2
-                                   ((nvme_disk->io_queue_size) << 16) | 1, // cdw10
+                                   ((nvme_disk->io_queue_size - 1) << 16) | 1, // cdw10
                                    (1 << 16) | (1 << 1) | 1, // cdw11
                                    0x0, // cdw12
                                    0x0, // cdw13
@@ -442,7 +449,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
                                    0x0, // mptr
                                    queue_frames->frame_address + 2 * FRAME_SIZE, // prp1
                                    0x0, // prp2
-                                   ((nvme_disk->io_queue_size) << 16) | 1, // cdw10
+                                   ((nvme_disk->io_queue_size - 1) << 16) | 1, // cdw10
                                    (1 << 16) | 1, // cdw11
                                    0x0, // cdw12
                                    0x0, // cdw13
@@ -602,6 +609,12 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
         return NULL;
     }
 
+    if(nvme_disk->active_command_count > nvme_disk->io_queue_size - 1) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot %s: too many active commands", write?"write":"read");
+
+        return NULL;
+    }
+
     if(size % nvme_disk->lba_size) {
         PRINTLOG(NVME, LOG_ERROR, "cannot %s: size not multiple of 0x%x", write?"write":"read", nvme_disk->lba_size);
 
@@ -634,6 +647,10 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
     }
 
     uint16_t cid = nvme_disk->next_cid++;
+
+    if(cid == 0) {
+        cid = nvme_disk->next_cid++;
+    }
 
     uint64_t iosqt = nvme_disk->io_s_queue_tail;
 
@@ -673,11 +690,29 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
 
     uint64_t tid = task_get_id();
     lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true, tid);
+
+    if(lock == NULL) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot create lock for %s", write?"write":"read");
+
+        return NULL;
+    }
+
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
     future_t* fut = future_create(lock);
 
+    if(fut == NULL) {
+        lock_destroy(lock);
+        PRINTLOG(NVME, LOG_ERROR, "cannot create future for %s", write?"write":"read");
+
+        return NULL;
+    }
+
     nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % 64;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
+
+    nvme_disk->active_command_count++;
+
+    video_text_print("fixme\n"); // FIXME: for slowing down the system. why? idk :) but it works
 
     PRINTLOG(NVME, LOG_TRACE, "%s command sent with cid %x and s tail %llx", write?"write":"read", cid, nvme_disk->io_s_queue_tail - 1);
 
@@ -695,6 +730,12 @@ future_t* nvme_flush(uint64_t disk_id) {
         return NULL;
     }
 
+    if(nvme_disk->active_command_count > nvme_disk->io_queue_size - 1) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot flush: too many active commands");
+
+        return NULL;
+    }
+
     if(!nvme_disk->flush_supported) {
         PRINTLOG(NVME, LOG_TRACE, "cannot flush: flush not supported");
 
@@ -702,6 +743,10 @@ future_t* nvme_flush(uint64_t disk_id) {
     }
 
     uint16_t cid = nvme_disk->next_cid++;
+
+    if(cid == 0) {
+        cid = nvme_disk->next_cid++;
+    }
 
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].opc = NVME_CMD_FLUSH;
     nvme_disk->io_submission_queue[nvme_disk->io_s_queue_tail].fuse = 0;
@@ -720,11 +765,28 @@ future_t* nvme_flush(uint64_t disk_id) {
 
     uint64_t tid = task_get_id();
     lock_t* lock = lock_create_with_heap_for_future(nvme_disk->heap, true, tid);
+
+    if(lock == NULL) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot create lock for flush");
+
+        return NULL;
+    }
+
+
     hashmap_put(nvme_disk->command_lock_map, (void*)(uint64_t)cid, lock);
     future_t* fut = future_create_with_heap_and_data(nvme_disk->heap, lock, NULL);
 
+    if(fut == NULL) {
+        lock_destroy(lock);
+        PRINTLOG(NVME, LOG_ERROR, "cannot create future for flush");
+
+        return NULL;
+    }
+
     nvme_disk->io_s_queue_tail = (nvme_disk->io_s_queue_tail + 1) % nvme_disk->io_queue_size;
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
+
+    nvme_disk->active_command_count++;
 
     PRINTLOG(NVME, LOG_TRACE, "flush command sent with cid %x and s tail %llx", cid, nvme_disk->io_s_queue_tail - 1);
 
