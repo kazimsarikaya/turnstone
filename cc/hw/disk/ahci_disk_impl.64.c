@@ -57,7 +57,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
     while(offset < buffer_len) {
-        uint16_t iter_write_size = MIN(buffer_len, max_len);
+        uint32_t iter_write_size = MIN(buffer_len, max_len);
 
         do  {
             fut = ahci_write(ctx->sata_disk->disk_id, lba, iter_write_size, data + offset);
@@ -112,7 +112,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
         return -1;
     }
 
-    *data = memory_malloc_ext(ctx->sata_disk->heap, buffer_len + (16 << 10), 0x1000);
+    *data = memory_malloc_ext(ctx->sata_disk->heap, buffer_len, 0x0);
 
     if(*data == NULL) {
         PRINTLOG(AHCI, LOG_ERROR, "failed to allocate memory\n");
@@ -133,7 +133,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     }
 
     while(offset < buffer_len) {
-        uint16_t iter_read_size = MIN(buffer_len, max_len);
+        uint32_t iter_read_size = MIN(buffer_len, max_len);
 
         do  {
             PRINTLOG(AHCI, LOG_TRACE, "sending read request with lba: 0x%llx, count: 0x%x to offset 0x%llx\n", lba, iter_read_size, offset);

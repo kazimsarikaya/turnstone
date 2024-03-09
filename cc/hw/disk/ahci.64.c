@@ -738,7 +738,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     disk->physical_sector_size = disk->logical_sector_size << identify_data.physical_logical_sector_size.logical_sectors_per_physical_sector;
 
-    PRINTLOG(AHCI, LOG_TRACE, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
+    PRINTLOG(AHCI, LOG_INFO, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
              disk->disk_id, disk->cylinders, disk->heads,
              disk->sectors, disk->lba_count, disk->serial, disk->model,
              disk->queue_depth, disk->sncq, disk->volatile_write_cache,
@@ -792,6 +792,8 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         return NULL;
     }
 
+    PRINTLOG(AHCI, LOG_TRACE, "size 0x%x sector count 0x%x prdt length 0x%x", size, sector_count, prdt_length);
+
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
     cmd_hdr += slot;
 
@@ -811,11 +813,16 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         return NULL;
     }
 
+    PRINTLOG(AHCI, LOG_TRACE, "buffer 0x%p physical address 0x%llx", buffer, buffer_phy_addr);
+
+
     uint32_t tmp_size = size;
 
     for(uint32_t i = 0; i < cmd_hdr->prdt_length; i++) {
         cmd_table->prdt_entry[i].data_base_address = buffer_phy_addr;
         cmd_table->prdt_entry[i].data_byte_count = (tmp_size > (4 << 20)) ? (4 << 20) - 1 : tmp_size - 1;
+
+        PRINTLOG(AHCI, LOG_TRACE, "prdt entry %i data base address 0x%llx data byte count 0x%x", i, cmd_table->prdt_entry[i].data_base_address, cmd_table->prdt_entry[i].data_byte_count);
 
         tmp_size -= (4 << 20);
         buffer_phy_addr += (4 << 20);
@@ -835,11 +842,28 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         fis->count = slot << 3;
         fis->featurel = (size / disk->logical_sector_size) & 0xFF;
         fis->featureh = ((size / disk->logical_sector_size) >> 8) & 0xFF;
+
+        PRINTLOG(AHCI, LOG_TRACE, "read fpdma queued count 0x%x featurel 0x%x featureh 0x%x", fis->count, fis->featurel, fis->featureh);
     }
 
     fis->lba0 = lba & 0xFFFFFF;
     fis->lba1 = (lba >> 24) & 0xFFFFFF;
     fis->device = 1 << 6;
+
+    PRINTLOG(AHCI, LOG_TRACE, "read lba 0x%llx lba0 0x%x lba1 0x%x", lba, fis->lba0, fis->lba1);
+
+    uint64_t spin = 0;
+
+    while((port->task_file_data  & (AHCI_ATA_DEV_BUSY | AHCI_ATA_DEV_DRQ)) && spin < 1000000) {
+        spin++;
+    }
+
+    if(spin == 1000000) {
+        PRINTLOG(AHCI, LOG_FATAL, "disk is busy");
+        return NULL;
+    }
+
+    PRINTLOG(AHCI, LOG_TRACE, "disk is not busy spin: 0x%llx", spin);
 
     if(disk->sncq && disk->queue_depth) {
         port->sata_active = 1 << slot;
@@ -947,6 +971,17 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
 
     fis->lba0 = lba & 0xFFFFFF;
     fis->lba1 = (lba >> 24) & 0xFFFFFF;
+
+    uint64_t spin = 0;
+
+    while((port->task_file_data  & (AHCI_ATA_DEV_BUSY | AHCI_ATA_DEV_DRQ)) && spin < 1000000) {
+        spin++;
+    }
+
+    if(spin == 1000000) {
+        PRINTLOG(AHCI, LOG_FATAL, "disk is busy");
+        return NULL;
+    }
 
     if(disk->sncq && disk->queue_depth) {
         port->sata_active = 1 << slot;
