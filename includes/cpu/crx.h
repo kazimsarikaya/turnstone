@@ -16,8 +16,9 @@
 #define CPU_MSR_LSTAR 0xC0000082 ///< system call target address register
 #define CPU_MSR_FMASK 0xC0000084 ///< system call rflags mask register
 
-#define CPU_MSR_IA32_FS_BASE 0xC0000100 ///< fs base address
-#define CPU_MSR_IA32_GS_BASE 0xC0000101 ///< gs base address
+#define CPU_MSR_IA32_FS_BASE        0xC0000100 ///< fs base address
+#define CPU_MSR_IA32_GS_BASE        0xC0000101 ///< gs base address
+#define CPU_MSR_IA32_KERNEL_GS_BASE 0xC0000102 ///< kernel gs base address
 
 
 /**

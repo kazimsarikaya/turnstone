@@ -9,6 +9,7 @@
 #include <cpu.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
+#include <cpu/crx.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <list.h>
@@ -76,20 +77,23 @@ int8_t task_create_idle_task(memory_heap_t* heap);
 
 void task_toggle_wait_for_future(uint64_t task_id);
 
+extern boolean_t local_apic_id_is_valid;
+extern uint32_t __seg_gs * local_apic_id;
+
 task_t* task_get_current_task(void){
     if(!current_tasks) {
         return NULL;
     }
 
-    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t apic_id = 0;
 
-    boolean_t old_value = cpu_cli();
+    if(local_apic_id_is_valid) {
+        apic_id = *local_apic_id;
+    } else {
+        apic_id = apic_get_local_apic_id();
+    }
 
     volatile task_t* current_task = current_tasks[apic_id];
-
-    if(!old_value) {
-        cpu_sti();
-    }
 
     return (task_t*)current_task;
 }
@@ -102,6 +106,34 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     uint64_t rsp = 0;
 
     __asm__ __volatile__ ("mov %%rsp, %0\n" : : "m" (rsp));
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+
+    frame_t* kernel_gs_frames = NULL;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
+
+        return -1;
+    }
+
+    uint64_t kernel_gs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(kernel_gs_frames->frame_address);
+
+    memory_paging_add_va_for_frame(kernel_gs_va, kernel_gs_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    memory_memclean((void*)kernel_gs_va, 0x4000);
+
+    uint64_t old_gs_base = cpu_read_msr(CPU_MSR_IA32_GS_BASE);
+
+    PRINTLOG(TASKING, LOG_TRACE, "old gs base 0x%llx new gs base 0x%llx", old_gs_base, kernel_gs_va);
+
+    cpu_write_msr(CPU_MSR_IA32_GS_BASE, kernel_gs_va);
+
+    uint64_t* gs_base = (uint64_t*)kernel_gs_va;
+    gs_base[0] = apic_id;
+    local_apic_id_is_valid = true;
+
 
     descriptor_gdt_t* gdts = (descriptor_gdt_t*)GDT_REGISTER->base;
 
@@ -169,6 +201,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     kernel_task->creator_heap = heap;
     kernel_task->heap = heap;
+    kernel_task->heap_size = kernel->program_heap_size;
     kernel_task->task_id = TASK_KERNEL_TASK_ID;
     kernel_task->state = TASK_STATE_CREATED;
     kernel_task->entry_point = kmain64;
@@ -256,8 +289,6 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
         return -1;
     }
-
-    uint32_t apic_id = apic_get_local_apic_id();
 
     current_tasks[apic_id] = kernel_task;
     kernel_idle_tasks[apic_id] = kernel_task;

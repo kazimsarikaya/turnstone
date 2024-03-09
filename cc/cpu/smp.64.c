@@ -168,12 +168,33 @@ int8_t smp_init(void) {
         return -1;
     }
 
+    frame_t* ap_gs_frames = NULL;
+    uint64_t ap_gs_frames_cnt = 4 * ap_cpu_count;
+    uint64_t ap_gs_size = 4 * FRAME_SIZE;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, ap_gs_frames_cnt, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &ap_gs_frames, NULL) != 0) {
+        PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
+
+        return -1;
+    }
+
+    uint64_t ap_gs_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ap_gs_frames->frame_address);
+
+    memory_paging_add_va_for_frame(ap_gs_va, ap_gs_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    memory_memclean((void*)ap_gs_va, ap_gs_frames_cnt * FRAME_SIZE);
+
+    uint64_t* ap_gs = (uint64_t*)ap_gs_va;
+
+
     smp_data->stack_base = stack_frames_va;
     smp_data->stack_size = stack_size;
     smp_data->cr0 = cpu_read_cr0();
     smp_data->cr3 =  MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(memory_paging_get_table()->page_table);
     smp_data->cr4 = cpu_read_cr4();
     smp_data->idt = IDT_REGISTER;
+    smp_data->gs_base = ap_gs_va;
+    smp_data->gs_base_size = ap_gs_size;
 
     iterator_t* iter = list_iterator_create(apic_entries);
 
@@ -186,6 +207,8 @@ int8_t smp_init(void) {
             PRINTLOG(APIC, LOG_INFO, "SMP: Found APIC ID: %d local apic? %i", apic_id, apic_id == local_apic_id);
 
             if (apic_id != local_apic_id) {
+                ap_gs[((apic_id - 1) * ap_gs_size) / sizeof(uint64_t)] = apic_id;
+
                 smp_init_cpu(apic_id);
             }
         }
@@ -201,6 +224,11 @@ int8_t smp_init(void) {
 
 int32_t smp_ap_boot(uint8_t cpu_id) {
     cpu_cli();
+
+    smp_data_t* smp_data = (smp_data_t*)0x9000;
+    uint64_t gs_base = smp_data->gs_base;
+    gs_base += (cpu_id - 1) * smp_data->gs_base_size;
+    cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
 
     apic_enable_lapic();
 
@@ -226,7 +254,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     cpu_sti();
 
-    char_t* test_data = memory_malloc(sizeof(char_t*) * 32);
+    char_t * test_data = memory_malloc(sizeof(char_t*) * 32);
 
     if(test_data == NULL) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: AP %i Failed to allocate test data", cpu_id);
