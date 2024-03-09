@@ -493,6 +493,7 @@ typedef struct nvme_disk_t {
     uint64_t                       prp_frame_va; ///< prp frame va
     uint64_t                       max_prp_entries; ///< max prp entries
     int64_t                        active_command_count; ///< active command count
+    boolean_t                      current_phase; ///< current phase
 } nvme_disk_t; ///< shorthand for struct
 
 

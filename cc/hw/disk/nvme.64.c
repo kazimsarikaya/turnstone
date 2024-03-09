@@ -76,24 +76,41 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
     // uint32_t status_type = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_type;
     // uint32_t sqhd = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqhd;
     // uint32_t sqid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].sqid;
-    uint32_t cid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].cid;
 
-    lock_t* lock = (lock_t*)hashmap_get(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
-    hashmap_delete(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
+    while(nvme_disk->io_s_queue_tail != nvme_disk->io_c_queue_head) {
+        uint32_t cid = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].cid;
+        uint32_t status_code = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].status_code;
+        boolean_t phase = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].p;
 
-    if(lock == NULL) {
-        video_text_print("nvme lock not found cid: ");
-        video_int_print(cid);
-        video_text_print("\n");
+        if(status_code != 0) {
+            video_text_print("!");
+        }
+
+        if(nvme_disk->current_phase != phase) {
+            video_text_print("-");
+        } else {
+            lock_t* lock = (lock_t*)hashmap_get(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
+            hashmap_delete(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
+
+            if(lock == NULL) {
+                video_text_print("nvme lock not found cid: ");
+                video_int_print(cid);
+                video_text_print("\n");
+            }
+
+            lock_release(lock);
+
+            nvme_disk->active_command_count--;
+
+            nvme_disk->io_c_queue_head = (nvme_disk->io_c_queue_head + 1) % nvme_disk->io_queue_size;
+
+            *nvme_disk->io_completion_queue_head_doorbell = nvme_disk->io_c_queue_head;
+
+            if(nvme_disk->io_c_queue_head == 0) {
+                nvme_disk->current_phase = !nvme_disk->current_phase;
+            }
+        }
     }
-
-    lock_release(lock);
-
-    nvme_disk->io_c_queue_head = (nvme_disk->io_c_queue_head + 1) % nvme_disk->io_queue_size;
-    *nvme_disk->io_completion_queue_head_doorbell = nvme_disk->io_c_queue_head;
-
-    nvme_disk->active_command_count--;
-
 
     pci_msix_clear_pending_bit(nvme_disk->pci_device, nvme_disk->msix_capability, 1);
     apic_eoi();
@@ -159,6 +176,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
         nvme_disk->heap = heap;
         nvme_disk->disk_id = disk_id;
         nvme_disk->pci_device = pci_nvme;
+        nvme_disk->current_phase = true; // when nvme controller is reset, phase is 1
 
 
         pci_capability_msi_t* msi_cap = NULL;
@@ -701,6 +719,7 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
     future_t* fut = future_create(lock);
 
     if(fut == NULL) {
+        hashmap_delete(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
         lock_destroy(lock);
         PRINTLOG(NVME, LOG_ERROR, "cannot create future for %s", write?"write":"read");
 
@@ -711,8 +730,6 @@ future_t* nvme_read_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t
     *nvme_disk->io_submission_queue_tail_doorbell = nvme_disk->io_s_queue_tail;
 
     nvme_disk->active_command_count++;
-
-    video_text_print("fixme\n"); // FIXME: for slowing down the system. why? idk :) but it works
 
     PRINTLOG(NVME, LOG_TRACE, "%s command sent with cid %x and s tail %llx", write?"write":"read", cid, nvme_disk->io_s_queue_tail - 1);
 
