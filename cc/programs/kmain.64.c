@@ -427,6 +427,7 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_INFO, "smbios version 0x%llx smbios data address 0x%p", SYSTEM_INFO->smbios_version, SYSTEM_INFO->smbios_table);
 
     PRINTLOG(KERNEL, LOG_INFO, "current time %lli", time_ns(NULL));
+
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 
     return 0;

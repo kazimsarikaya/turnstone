@@ -38,9 +38,9 @@ typedef void (*lock_task_yielder_f)(void);
 extern lock_task_yielder_f lock_task_yielder;
 
 typedef buffer_t * (*stdbuf_task_buffer_getter_f)(void);
-stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer = NULL;
-stdbuf_task_buffer_getter_f stdbufs_task_get_output_buffer = NULL;
-stdbuf_task_buffer_getter_f stdbufs_task_get_error_buffer = NULL;
+extern stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer;
+extern stdbuf_task_buffer_getter_f stdbufs_task_get_output_buffer;
+extern stdbuf_task_buffer_getter_f stdbufs_task_get_error_buffer;
 
 typedef void (*future_task_wait_toggler_f)(uint64_t task_id);
 extern future_task_wait_toggler_f future_task_wait_toggler_func;
