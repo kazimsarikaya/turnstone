@@ -711,13 +711,8 @@ void task_add_message_queue(list_t* queue){
         return;
     }
 
-    boolean_t old_value = cpu_cli();
     if(current_task->message_queues == NULL) {
         current_task->message_queues = list_create_list();
-    }
-
-    if(!old_value) {
-        cpu_sti();
     }
 
     list_list_insert(current_task->message_queues, queue);
@@ -1166,12 +1161,7 @@ int8_t task_set_input_buffer(buffer_t* buffer) {
         return -1;
     }
 
-    boolean_t old_value = cpu_cli();
     current_task->input_buffer = buffer;
-
-    if(!old_value) {
-        cpu_sti();
-    }
 
     return 0;
 }
@@ -1187,12 +1177,7 @@ int8_t task_set_output_buffer(buffer_t * buffer) {
         return -1;
     }
 
-    boolean_t old_value = cpu_cli();
     current_task->output_buffer = buffer;
-
-    if(!old_value) {
-        cpu_sti();
-    }
 
     return 0;
 }
@@ -1208,12 +1193,7 @@ int8_t task_set_error_buffer(buffer_t * buffer) {
         return -1;
     }
 
-    boolean_t old_value = cpu_cli();
     current_task->error_buffer = buffer;
-
-    if(!old_value) {
-        cpu_sti();
-    }
 
     return 0;
 }
@@ -1221,11 +1201,9 @@ int8_t task_set_error_buffer(buffer_t * buffer) {
 void task_set_vmcs_physical_address(uint64_t vmcs_physical_address) {
     task_t* current_task = task_get_current_task();
 
-    cpu_cli();
     if(current_task) {
         current_task->vmcs_physical_address = vmcs_physical_address;
     }
-    cpu_sti();
 }
 
 uint64_t task_get_vmcs_physical_address(void) {
@@ -1243,11 +1221,9 @@ uint64_t task_get_vmcs_physical_address(void) {
 void task_set_vm(void* vm) {
     task_t* current_task = task_get_current_task();
 
-    cpu_cli();
     if(current_task) {
         current_task->vm = vm;
     }
-    cpu_sti();
 }
 
 void* task_get_vm(void) {
