@@ -70,7 +70,7 @@ int8_t nvme_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
     while(rem_lba) {
-        uint16_t iter_read_size = MIN(rem_lba, max_lba);
+        uint32_t iter_read_size = MIN(rem_lba, max_lba);
 
         do  {
             fut = nvme_write(ctx->nvme_disk->disk_id, lba, iter_read_size * ctx->block_size, write_buf + offset);
@@ -126,7 +126,7 @@ int8_t nvme_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     list_t* futs = list_create_list_with_heap(ctx->nvme_disk->heap);
 
     while(rem_lba) {
-        uint16_t iter_read_size = MIN(rem_lba, max_lba);
+        uint32_t iter_read_size = MIN(rem_lba, max_lba);
 
         do  {
             fut = nvme_read(ctx->nvme_disk->disk_id, lba, iter_read_size * ctx->block_size, read_buf + offset);

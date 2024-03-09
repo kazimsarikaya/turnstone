@@ -10,7 +10,7 @@
 #include <logging.h>
 #include <cpu.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.stack_protection");
 
 #define STACK_PROTECTION_CHECK_GUARD 0xE85093A9FABF3890
 

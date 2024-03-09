@@ -23,6 +23,8 @@ typedef struct smp_data_t {
     memory_page_table_t*   cr3;
     cpu_reg_cr4_t          cr4;
     descriptor_register_t* idt;
+    uint64_t               gs_base;
+    uint64_t               gs_base_size;
 } smp_data_t;
 
 

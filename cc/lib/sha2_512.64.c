@@ -10,7 +10,7 @@
 #include <memory.h>
 #include <utils.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.crypto");
 
 
 #define CH(x, y, z) (((x) & (y)) ^ (~(x) & (z)))

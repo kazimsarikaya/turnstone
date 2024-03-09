@@ -19,10 +19,10 @@
 #define CPU_MSR_IA32_FEATURE_CONTROL        0x0000003a
 
 
-#define VMX_DATA_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7)
-#define VMX_CODE_ACCESS_RIGHT (0x3 | 1 << 4 | 1 << 7 | 1 << 3)
-#define VMX_LDTR_ACCESS_RIGHT (0x2 | 1 << 7)
-#define VMX_TR_ACCESS_RIGHT (0x3 | 1 << 3 | 1 << 7)
+#define VMX_DATA_ACCESS_RIGHT  0x0093
+#define VMX_CODE_ACCESS_RIGHT  0x209b
+#define VMX_LDTR_ACCESS_RIGHT  0x0082
+#define VMX_TR_ACCESS_RIGHT    0x008b
 #define VMX_RFLAG_RESERVED (1 << 1)
 
 
@@ -74,8 +74,8 @@
 #define VMX_GUEST_DS_SELECTOR           0x0806
 #define VMX_GUEST_FS_SELECTOR           0x0808
 #define VMX_GUEST_GS_SELECTOR           0x080a
-#define VMX_GUEST_LDTR_SELECTOR         0x080e
-#define VMX_GUEST_TR_SELECTOR           0x080c
+#define VMX_GUEST_LDTR_SELECTOR         0x080c
+#define VMX_GUEST_TR_SELECTOR           0x080e
 
 #define VMX_GUEST_CR0                       0x6800
 #define VMX_GUEST_CR3                       0x6802
@@ -88,8 +88,8 @@
 #define VMX_GUEST_GS_BASE                   0x6810
 #define VMX_GUEST_LDTR_BASE                 0x6812
 #define VMX_GUEST_TR_BASE                   0x6814
-#define VMX_GUEST_IDTR_BASE                 0x6816
-#define VMX_GUEST_GDTR_BASE                 0x6818
+#define VMX_GUEST_GDTR_BASE                 0x6816
+#define VMX_GUEST_IDTR_BASE                 0x6818
 #define VMX_GUEST_DR7                       0x681a
 #define VMX_GUEST_RSP                       0x681c
 #define VMX_GUEST_RIP                       0x681e
@@ -100,9 +100,13 @@
 
 #define VMX_CTLS_IO_BITMAP_A                0x2000
 #define VMX_CTLS_IO_BITMAP_B                0x2002
+#define VMX_CTLS_MSR_BITMAP                 0x2004
 #define VMX_CTLS_VM_EXIT_MSR_STORE          0x2006
 #define VMX_CTLS_VM_EXIT_MSR_LOAD           0x2008
 #define VMX_CTLS_VM_ENTRY_MSR_LOAD          0x200a
+#define VMX_CTLS_TSC_OFFSET                 0x2010
+#define VMX_CTLS_VIRTUAL_APIC_PAGE_ADDR     0x2012
+#define VMX_CTLS_APIC_ACCESS_ADDR           0x2014
 #define VMX_CTLS_EPTP                       0x201a
 
 #define VMX_GUEST_VMCS_LINK_POINTER_LOW     0x2800
@@ -119,6 +123,8 @@
 #define VMX_CTLS_VM_ENTRY                              0x4012
 #define VMX_CTLS_VM_ENTRY_MSR_LOAD_COUNT               0x4014
 #define VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD  0x4016
+#define VMX_CTLS_VM_ENTRY_EXCEPTION_ERROR_CODE         0x4018
+#define VMX_CTLS_VM_ENTRY_INSTRUCTION_LENGTH           0x401a
 #define VMX_CTLS_SEC_PROC_BASED_VM_EXECUTION           0x401e
 
 #define VMX_GUEST_ES_LIMIT                  0x4800

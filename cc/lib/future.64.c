@@ -7,14 +7,26 @@
  */
 
 #include <future.h>
+#include <cpu/task.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.future");
 
 typedef struct future_t {
     memory_heap_t* heap;
     lock_t*        lock;
     void*          data;
 } future_t;
+
+typedef void (*future_task_wait_toggler_f)(uint64_t task_id);
+future_task_wait_toggler_f future_task_wait_toggler_func = NULL;
+
+void future_task_wait_toggler(uint64_t task_id);
+
+void future_task_wait_toggler(uint64_t task_id) {
+    if(future_task_wait_toggler_func) {
+        future_task_wait_toggler_func(task_id);
+    }
+}
 
 future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data) {
     future_t* fi = memory_malloc_ext(heap, sizeof(future_t), 0);

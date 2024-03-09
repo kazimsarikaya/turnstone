@@ -303,6 +303,7 @@ int32_t main(int32_t argc, char_t** argv) {
     uint64_t program_start_virtual = 0;
     boolean_t recursive = false;
     boolean_t for_efi = false;
+    boolean_t for_vm = false;
     boolean_t print_context = false;
     char_t* output_file = NULL;
 
@@ -364,6 +365,11 @@ int32_t main(int32_t argc, char_t** argv) {
             argv++;
 
             for_efi = true;
+        } else if(strcmp(*argv, "--for-vm") == 0) {
+            argc--;
+            argv++;
+
+            for_vm = true;
         } else if(strcmp(*argv, "--print") == 0) {
             argc--;
             argv++;
@@ -441,7 +447,21 @@ int32_t main(int32_t argc, char_t** argv) {
         return -1;
     }
 
+    if(for_efi && for_vm) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot build for efi and vm at the same time");
+        PRINTLOG(LINKER, LOG_ERROR, "LINKERDB FAILED");
+
+        return -1;
+    }
+
     if(for_efi && output_file == NULL) {
+        PRINTLOG(LINKER, LOG_ERROR, "no output file specified");
+        PRINTLOG(LINKER, LOG_ERROR, "LINKERDB FAILED");
+
+        return -1;
+    }
+
+    if(for_vm && output_file == NULL) {
         PRINTLOG(LINKER, LOG_ERROR, "no output file specified");
         PRINTLOG(LINKER, LOG_ERROR, "LINKERDB FAILED");
 
@@ -674,6 +694,45 @@ int32_t main(int32_t argc, char_t** argv) {
         fclose(out);
 
         buffer_destroy(efi_program);
+    } else if(for_vm) {
+        uint64_t vm_program_size = ctx->program_size + ctx->global_offset_table_size;
+
+        uint8_t* vm_program_data = memory_malloc(vm_program_size);
+
+        if(!vm_program_data) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot allocate program data");
+
+            exit_code = -1;
+            goto exit_with_destroy_context;
+        }
+
+        if(linker_dump_program_to_array(ctx, LINKER_PROGRAM_DUMP_TYPE_CODE | LINKER_PROGRAM_DUMP_TYPE_GOT, vm_program_data) != 0) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot dump program");
+            memory_free(vm_program_data);
+
+            exit_code = -1;
+            goto exit_with_destroy_context;
+        }
+
+        FILE* out = fopen(output_file, "w");
+
+        if(!out) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot open output file %s", output_file);
+            memory_free(vm_program_data);
+
+            exit_code = -1;
+            goto exit_with_destroy_context;
+        }
+
+        fwrite(vm_program_data, 1, vm_program_size, out);
+
+        fclose(out);
+
+        memory_free(vm_program_data);
+
+        PRINTLOG(LINKER, LOG_INFO, "vm program written to %s", output_file);
+        PRINTLOG(LINKER, LOG_INFO, "program size: 0x%llx", vm_program_size);
+        PRINTLOG(LINKER, LOG_INFO, "entry point virtual address: 0x%llx", ctx->entrypoint_address_virtual);
     }
 
 

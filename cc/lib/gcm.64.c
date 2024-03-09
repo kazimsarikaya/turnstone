@@ -9,7 +9,7 @@
 #include <aes.h>
 #include <memory.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.crypto");
 
 static const uint64_t gcm_last4[16] = {
     0x0000, 0x1c20, 0x3840, 0x2460, 0x7080, 0x6ca0, 0x48c0, 0x54e0,

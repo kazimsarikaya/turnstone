@@ -8,7 +8,7 @@
 #include <aes.h>
 #include <memory.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.crypto");
 
 static int32_t aes_tables_inited = 0;
 

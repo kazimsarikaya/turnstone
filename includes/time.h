@@ -42,4 +42,6 @@ time_t timeparsed_to_time(timeparsed_t* tp);
 
 timeparsed_t* time_to_timeparsed(time_t t);
 
+uint64_t rdtsc(void);
+
 #endif

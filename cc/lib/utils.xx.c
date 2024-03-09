@@ -11,7 +11,7 @@
 #include <strings.h>
 #include <random.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.utils");
 
 number_t power(number_t base, number_t p) {
     if (p == 0 ) {

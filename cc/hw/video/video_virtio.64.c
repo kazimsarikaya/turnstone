@@ -144,7 +144,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     descs[desc_index].length = sizeof(virtio_gpu_transfer_to_host_2d_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     future_t* fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -200,7 +200,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_flush_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -264,7 +264,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_get_edid_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -307,7 +307,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_ctrl_hdr_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -354,7 +354,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_create_2d_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -414,7 +414,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     descs[desc_index].length = sizeof(virtio_gpu_resource_attach_backing_t) +
                                sizeof(virtio_gpu_mem_entry_t) * attach_hdr->nr_entries;
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -455,7 +455,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_transfer_to_host_2d_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -497,7 +497,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_set_scanout_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -584,7 +584,7 @@ void virtio_gpu_mouse_init(void) {
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_create_2d_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -647,7 +647,7 @@ void virtio_gpu_mouse_init(void) {
     descs[desc_index].length = sizeof(virtio_gpu_resource_attach_backing_t) +
                                sizeof(virtio_gpu_mem_entry_t) * attach_hdr->nr_entries;
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -688,7 +688,7 @@ void virtio_gpu_mouse_init(void) {
 
     descs[desc_index].length = sizeof(virtio_gpu_transfer_to_host_2d_t);
 
-    virtio_gpu_lock = lock_create_for_future();
+    virtio_gpu_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_lock);
 
     avail->index++;
@@ -732,7 +732,7 @@ void virtio_gpu_mouse_init(void) {
 
     descs[desc_index].length = sizeof(virtio_gpu_update_cursor_t);
 
-    virtio_gpu_cursor_lock = lock_create_for_future();
+    virtio_gpu_cursor_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_cursor_lock);
 
     avail->index++;
@@ -785,7 +785,7 @@ void virtio_gpu_mouse_move(uint32_t x, uint32_t y) {
 
     descs[desc_index].length = sizeof(virtio_gpu_update_cursor_t);
 
-    virtio_gpu_cursor_lock = lock_create_for_future();
+    virtio_gpu_cursor_lock = lock_create_for_future(0);
     fut = future_create(virtio_gpu_cursor_lock);
 
     avail->index++;

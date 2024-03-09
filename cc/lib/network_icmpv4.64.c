@@ -13,7 +13,7 @@
 #include <time.h>
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.network");
 
 network_icmpv4_ping_header_t* network_create_ping_packet(boolean_t is_reply, uint16_t identifier, uint16_t sequence, uint16_t data_len, uint8_t* data, uint16_t* packet_len);
 

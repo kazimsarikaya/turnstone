@@ -9,7 +9,7 @@
 
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.logging");
 
 
 const char_t*const logging_module_names[] = {

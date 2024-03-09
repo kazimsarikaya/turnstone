@@ -15,6 +15,7 @@
 #include <logging.h>
 #include <time/timer.h>
 #include <list.h>
+#include <time.h>
 
 MODULE("turnstone.kernel.cpu.apic");
 
@@ -30,6 +31,14 @@ uint64_t apic_ap_count = 0;
 boolean_t apic_x2apic = false;
 
 list_t* irq_remappings = NULL;
+
+extern volatile uint64_t time_timer_rdtsc_delta;
+
+typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
+extern lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter;
+
+extern boolean_t local_apic_id_is_valid;
+extern uint32_t __seg_gs * local_apic_id;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -216,6 +225,7 @@ int8_t apic_init_apic(list_t* apic_entries){
     apic_write_spurious_interrupt_vector(0x10f);
 
     apic_ap_count = apic_get_ap_count();
+    lock_get_local_apic_id_getter = &apic_get_local_apic_id;
     apic_enabled = 1;
 
     return apic_init_timer();
@@ -301,6 +311,16 @@ int8_t apic_init_timer(void) {
 
     time_timer_reset_tick_count();
     time_timer_configure_spinsleep();
+
+    uint64_t old_tsc = rdtsc();
+    time_timer_spinsleep(1000); // 1ms
+    uint64_t new_tsc = rdtsc();
+
+    uint64_t delta = new_tsc - old_tsc;
+    time_timer_rdtsc_delta = delta;
+
+    PRINTLOG(APIC, LOG_INFO, "delta is 0x%016llx", delta);
+
 
     return 0;
 }
@@ -497,7 +517,9 @@ void  apic_eoi(void) {
 }
 
 uint32_t apic_get_local_apic_id(void) {
-    if(apic_enabled) {
+    if(local_apic_id_is_valid) {
+        return *local_apic_id;
+    } else if(apic_enabled) {
         if(apic_x2apic) {
             uint64_t msr = cpu_read_msr(APIC_X2APIC_MSR_APICID);
             return msr & 0xFFFFFFFF;
@@ -602,7 +624,7 @@ void apic_send_nmi(uint8_t destination) {
 uint64_t apic_get_ap_count(void) {
     uint64_t ap_count = 0;
 
-    uint8_t local_apic_id = apic_get_local_apic_id();
+    uint8_t lcl_apic_id = apic_get_local_apic_id();
 
     acpi_sdt_header_t* madt = acpi_get_table(ACPI_CONTEXT->xrsdp_desc, "APIC");
 
@@ -616,7 +638,7 @@ uint64_t apic_get_ap_count(void) {
         if(e->info.type == ACPI_MADT_ENTRY_TYPE_PROCESSOR_LOCAL_APIC) {
             uint8_t apic_id = e->processor_local_apic.apic_id;
 
-            if (apic_id != local_apic_id) {
+            if (apic_id != lcl_apic_id) {
                 ap_count++;
             }
         }

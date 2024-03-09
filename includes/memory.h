@@ -64,11 +64,13 @@ memory_heap_t* memory_create_heap_hash(size_t start, size_t end);
  */
 memory_heap_t* memory_set_default_heap(memory_heap_t* heap);
 
+memory_heap_t* memory_get_default_heap(void);
+
 /**
  * @brief returns heap, finds correct heap for task.
  * @return correct heap for task
  */
-memory_heap_t* memory_get_heap(memory_heap_t* heap);
+memory_heap_t* memory_get_heap(memory_heap_t * heap);
 
 /**
  * @brief returns stats for heap

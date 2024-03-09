@@ -16,6 +16,7 @@
 #include <device/hpet.h>
 #include <time.h>
 #include <random.h>
+#include <hypervisor/hypervisor_vm.h>
 
 MODULE("turnstone.kernel.timer");
 
@@ -31,6 +32,7 @@ __volatile__ uint64_t time_timer_ap1_tick_count = 0;
 
 __volatile__ uint64_t time_timer_spinsleep_counter_value = 0;
 __volatile__ uint8_t time_timer_start_spinsleep_counter = 0;
+volatile uint64_t time_timer_rdtsc_delta = 0;
 
 void time_timer_reset_tick_count(void) {
     time_timer_tick_count = 0;
@@ -101,6 +103,8 @@ int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
         }
 
         srand(TIME_EPOCH);
+
+        hypervisor_vm_notify_timers();
     }
 
     if(apic_id == 1) {

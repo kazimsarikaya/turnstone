@@ -13,7 +13,9 @@
 
 #include <buffer.h>
 
-int8_t  stdbufs_init_buffers(void);
+typedef void (*stdbufs_video_printer)(const char_t* string);
+
+int8_t  stdbufs_init_buffers(stdbufs_video_printer video_printer);
 int64_t printf(const char * format, ...) __attribute__((format(printf, 1, 2)));
 int64_t vprintf(const char * format, va_list ap);
 int64_t stdbufs_flush_buffer(buffer_t* buffer, uint64_t old_position);

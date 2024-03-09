@@ -27,15 +27,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
         return NULL;
     }
 
-    future_t* fut;
-
-    fut = (future_t*)backend->read(backend, 0, sizeof(tosdb_superblock_t));
-
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot read main super block");
-    }
-
-    tosdb_superblock_t* main_sb = future_get_data_and_destroy(fut);
+    tosdb_superblock_t* main_sb = (tosdb_superblock_t*)backend->read(backend, 0, sizeof(tosdb_superblock_t));
 
     if(!main_sb) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read main superblock");
@@ -68,18 +60,7 @@ tosdb_t* tosdb_new(tosdb_backend_t* backend, compression_type_t compression_type
         PRINTLOG(TOSDB, LOG_WARNING, "main super block failed");
     }
 
-
-    fut = (future_t*)backend->read(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t));
-
-    if(!fut) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup super block");
-
-        memory_free_ext(backend->heap, main_sb);
-
-        return NULL;
-    }
-
-    tosdb_superblock_t* backup_sb = future_get_data_and_destroy(fut);
+    tosdb_superblock_t* backup_sb = (tosdb_superblock_t*)backend->read(backend, backend->capacity - sizeof(tosdb_superblock_t), sizeof(tosdb_superblock_t));
 
     if(!backup_sb) {
         PRINTLOG(TOSDB, LOG_ERROR, "cannot read backup superblock");

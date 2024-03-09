@@ -23,7 +23,6 @@ typedef struct window_t {
     pixel_t*      buffer;
 } window_t;
 
-boolean_t windowmanager_initialized = false;
 uint64_t windowmanager_next_window_id = 0;
 
 extern int32_t VIDEO_GRAPHICS_WIDTH;

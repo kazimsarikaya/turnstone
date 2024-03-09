@@ -9,7 +9,7 @@
 #include <tests.h>
 #include <ports.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.tests");
 
 void test_init_output(void) {
     init_serial(COM2);

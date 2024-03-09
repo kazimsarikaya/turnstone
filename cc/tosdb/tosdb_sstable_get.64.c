@@ -300,11 +300,13 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
     }
 
     if(c_id) {
+        PRINTLOG(TOSDB, LOG_TRACE, "index data read from cache");
         st_idx_items = c_id->index_items;
         record_count = c_id->record_count;
         valuelog_location = c_id->valuelog_location;
         valuelog_size = c_id->valuelog_size;
     } else {
+        PRINTLOG(TOSDB, LOG_TRACE, "index data read from backend");
         valuelog_location = sli->valuelog_location;
         valuelog_size = sli->valuelog_size;
 

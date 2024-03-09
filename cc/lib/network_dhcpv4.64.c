@@ -16,7 +16,7 @@
 #include <utils.h>
 #include <time/timer.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.network");
 
 network_dhcpv4_t* network_dhcpv4_create_discover_packet(network_mac_address_t mac, uint32_t xid, uint16_t * return_packet_len) {
     uint16_t dhcp_discover_size = sizeof(network_dhcpv4_t) + 9;

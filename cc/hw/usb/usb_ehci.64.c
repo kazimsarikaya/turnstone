@@ -809,7 +809,7 @@ int8_t usb_ehci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* 
     PRINTLOG(USB, LOG_TRACE, "EHCI qh 0x%p qtd 0x%p", qh, qtd);
 
     if(transfer->need_future) {
-        qh->transfer_lock = lock_create_for_future();
+        qh->transfer_lock = lock_create_for_future(task_get_id());
         transfer->transfer_future = future_create(qh->transfer_lock);
     }
 

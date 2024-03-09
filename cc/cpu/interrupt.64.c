@@ -41,7 +41,7 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t*);
 int8_t interrupt_int13_simd_floating_point_exception(interrupt_frame_ext_t*);
 
-boolean_t KERNEL_PANIC_DISABLE_LOCKS = false;
+extern boolean_t KERNEL_PANIC_DISABLE_LOCKS;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -299,6 +299,14 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
 
     interrupt_print_frame_ext(frame);
 
+    uint64_t tid = task_get_id();
+
+    if(tid != TASK_KERNEL_TASK_ID) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
+
     cpu_hlt();
 }
 
@@ -353,6 +361,14 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     interrupt_print_frame_ext(frame);
 
+    uint64_t tid = task_get_id();
+
+    if(tid != TASK_KERNEL_TASK_ID) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
+
     cpu_hlt();
 
     return -1;
@@ -390,6 +406,14 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 
     interrupt_print_frame_ext(frame);
 
+    uint64_t tid = task_get_id();
+
+    if(tid != TASK_KERNEL_TASK_ID) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
+
     cpu_hlt();
 
     return -1;
@@ -415,6 +439,14 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
     backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
+
+    uint64_t tid = task_get_id();
+
+    if(tid != TASK_KERNEL_TASK_ID) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
 
     cpu_hlt();
 

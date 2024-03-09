@@ -11,7 +11,7 @@
 #include <logging.h>
 #include <cpu.h>
 
-MODULE("turnstone.lib")
+MODULE("turnstone.lib.assert")
 
 #if ___TESTMODE == 1
 extern _Noreturn void abort(void);

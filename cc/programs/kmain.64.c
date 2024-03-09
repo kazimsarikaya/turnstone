@@ -45,6 +45,7 @@
 #include <debug.h>
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
+#include <tosdb/tosdb_manager.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -128,7 +129,7 @@ int8_t kmain64(size_t entry_point) {
 
     srand(SYSTEM_INFO->random_seed);
 
-    stdbufs_init_buffers();
+    stdbufs_init_buffers(video_print);
 
     video_init();
     video_clear_screen();
@@ -355,83 +356,14 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
-    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
-    int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
-
-    if(sata_port_cnt == -1) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");
+    if(tosdb_manager_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init tosdb manager. Halting...");
         cpu_hlt();
-    } else {
-        PRINTLOG(KERNEL, LOG_INFO, "sata port count is %i", sata_port_cnt);
-    }
-
-    if(nvme_port_cnt == -1) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init nvme. Halting...");
-        cpu_hlt();
-    } else {
-        PRINTLOG(KERNEL, LOG_INFO, "nvme port count is %i", nvme_port_cnt);
     }
 
     if(network_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init network. Halting...");
         cpu_hlt();
-    }
-
-    ahci_sata_disk_t* sd = (ahci_sata_disk_t*)ahci_get_first_inserted_disk();
-
-    if(sd) {
-        PRINTLOG(KERNEL, LOG_DEBUG, "try to read sata disk 0x%p", sd);
-        disk_t* sata0 = gpt_get_or_create_gpt_disk(ahci_disk_impl_open(sd));
-
-        if(sata0) {
-            PRINTLOG(KERNEL, LOG_INFO, "sata disk size 0x%llx", sata0->disk.get_size((disk_or_partition_t*)sata0));
-
-            disk_partition_context_t* part_ctx;
-
-            part_ctx = sata0->get_partition_context(sata0, 0);
-            PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
-            memory_free(part_ctx);
-
-            part_ctx = sata0->get_partition_context(sata0, 1);
-            PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
-            memory_free(part_ctx);
-
-            sata0->disk.flush((disk_or_partition_t*)sata0);
-        } else {
-            PRINTLOG(KERNEL, LOG_INFO, "sata0 is empty");
-        }
-
-    } else {
-        PRINTLOG(KERNEL, LOG_WARNING, "sata disk 0 not found");
-    }
-
-    nvme_disk_t* nd = (nvme_disk_t*)nvme_get_disk_by_id(0);
-
-    if(nd) {
-        PRINTLOG(KERNEL, LOG_DEBUG, "try to read nvme disk 0x%p", nd);
-        disk_t* nvme0 = gpt_get_or_create_gpt_disk(nvme_disk_impl_open(nd));
-
-        if(nvme0) {
-            PRINTLOG(KERNEL, LOG_INFO, "nvme disk size 0x%llx", nvme0->disk.get_size((disk_or_partition_t*)nvme0));
-
-            disk_partition_context_t* part_ctx;
-
-            part_ctx = nvme0->get_partition_context(nvme0, 0);
-            PRINTLOG(KERNEL, LOG_INFO, "part 0 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
-            memory_free(part_ctx);
-
-            part_ctx = nvme0->get_partition_context(nvme0, 1);
-            PRINTLOG(KERNEL, LOG_INFO, "part 1 start lba 0x%llx end lba 0x%llx", part_ctx->start_lba, part_ctx->end_lba);
-            memory_free(part_ctx);
-
-            nvme0->disk.flush((disk_or_partition_t*)nvme0);
-        } else {
-            PRINTLOG(KERNEL, LOG_INFO, "nvme0 is empty");
-        }
-
-    } else {
-        PRINTLOG(KERNEL, LOG_WARNING, "nvme disk 0 not found");
     }
 
     if(usb_mass_storage_get_disk_count()) {
@@ -494,11 +426,8 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "smbios version 0x%llx smbios data address 0x%p", SYSTEM_INFO->smbios_version, SYSTEM_INFO->smbios_table);
 
-    if(hypervisor_vm_create() != 0) {
-        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
-    }
-
     PRINTLOG(KERNEL, LOG_INFO, "current time %lli", time_ns(NULL));
+
     PRINTLOG(KERNEL, LOG_INFO, "all services is up... :)");
 
     return 0;

@@ -15,6 +15,7 @@
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>
 #include <cpu/task.h>
+#include <apic.h>
 #include <logging.h>
 
 MODULE("turnstone.hypervisor");
@@ -29,6 +30,7 @@ void hypervisor_vmcs_exit_handler_error(void) {
     uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VM will be terminated");
 
     // hypervisor_vmcs_dump();
 
@@ -163,13 +165,14 @@ int8_t hypervisor_vmcs_prepare_host_state(void) {
 }
 
 int8_t hypervisor_vmcs_prepare_guest_state(void) {
-    vmx_write(VMX_GUEST_ES_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_CS_SELECTOR, 0x100);
-    vmx_write(VMX_GUEST_DS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_FS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_GS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_SS_SELECTOR, 0x0);
-    vmx_write(VMX_GUEST_TR_SELECTOR, 0x0);
+    // prepare guest state at long mode
+    vmx_write(VMX_GUEST_ES_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_CS_SELECTOR, 0x08);
+    vmx_write(VMX_GUEST_DS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_FS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_GS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_SS_SELECTOR, 0x10);
+    vmx_write(VMX_GUEST_TR_SELECTOR, 0x18);
     vmx_write(VMX_GUEST_LDTR_SELECTOR, 0x0);
     vmx_write(VMX_GUEST_CS_BASE, 0x0);
     vmx_write(VMX_GUEST_DS_BASE, 0x0);
@@ -178,19 +181,19 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     vmx_write(VMX_GUEST_GS_BASE, 0x0);
     vmx_write(VMX_GUEST_SS_BASE, 0x0);
     vmx_write(VMX_GUEST_LDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_IDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_GDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_TR_BASE, 0x0);
+    vmx_write(VMX_GUEST_IDTR_BASE, 0x1000);
+    vmx_write(VMX_GUEST_GDTR_BASE, 0x2000);
+    vmx_write(VMX_GUEST_TR_BASE, 0x3000);
     vmx_write(VMX_GUEST_CS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_DS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_ES_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_FS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_GS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_SS_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_LDTR_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_TR_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_GDTR_LIMIT, 0xffff);
-    vmx_write(VMX_GUEST_IDTR_LIMIT, 0xffff);
+    vmx_write(VMX_GUEST_LDTR_LIMIT, 0x0);
+    vmx_write(VMX_GUEST_TR_LIMIT, 0x67);
+    vmx_write(VMX_GUEST_GDTR_LIMIT, 0x2f);
+    vmx_write(VMX_GUEST_IDTR_LIMIT, 0xfff);
     vmx_write(VMX_GUEST_CS_ACCESS_RIGHT, VMX_CODE_ACCESS_RIGHT);
     vmx_write(VMX_GUEST_DS_ACCESS_RIGHT, VMX_DATA_ACCESS_RIGHT);
     vmx_write(VMX_GUEST_ES_ACCESS_RIGHT, VMX_DATA_ACCESS_RIGHT);
@@ -205,25 +208,36 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     uint64_t cr0_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED0);
     // cr0_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED1);
     cpu_reg_cr0_t cr0 = { .bits = cr0_fixed };
-    cr0.fields.protection_enabled = 0;
-    cr0.fields.paging = 0;
+    cr0.fields.protection_enabled = 1;
+    cr0.fields.monitor_coprocessor = 1;
+    cr0.fields.emulation = 0;
+    cr0.fields.task_switched = 0;
+    cr0.fields.numeric_error = 1;
+    cr0.fields.write_protect = 1;
+    cr0.fields.paging = 1;
 
     vmx_write(VMX_GUEST_CR0, cr0.bits);
 
-    vmx_write(VMX_GUEST_CR3, 0x0);
+    vmx_write(VMX_GUEST_CR3, 0x4000); // cr3 is set to 16kib
 
     uint64_t cr4_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED0);
     // cr4_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);
     cpu_reg_cr4_t cr4 = { .bits = cr4_fixed };
+
+    cr4.fields.physical_address_extension = 1;
+    cr4.fields.os_fx_support = 1;
+    cr4.fields.os_unmasked_exception_support = 1;
+    cr4.fields.page_global_enable = 1;
+
     vmx_write(VMX_GUEST_CR4, cr4.bits);
 
     vmx_write(VMX_GUEST_DR7, 0x0);
-    vmx_write(VMX_GUEST_RSP, 0x0);
-    vmx_write(VMX_GUEST_RIP, 0x0); // guest cs:ip -> 0x100:0
+    vmx_write(VMX_GUEST_RSP, 3 << 20); // rsp is set to 3mib
+    vmx_write(VMX_GUEST_RIP, 2 << 20); // rip is set to 2mib
     vmx_write(VMX_GUEST_RFLAGS, VMX_RFLAG_RESERVED);
     vmx_write(VMX_GUEST_VMCS_LINK_POINTER_LOW, 0xffffffff);
     vmx_write(VMX_GUEST_VMCS_LINK_POINTER_HIGH, 0xffffffff);
-    vmx_write(VMX_GUEST_IA32_EFER, 0x0);
+    vmx_write(VMX_GUEST_IA32_EFER, 0x500); // enable long mode LME/LMA bit
 
     return 0;
 }
@@ -248,6 +262,26 @@ int8_t hypervisor_vmcs_prepare_pinbased_control(void){
     return 0;
 }
 
+int8_t hypervisor_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read) {
+    if(read) {
+        if(msr >= 0xC0000000) {
+            bitmap += 1024;
+        }
+    } else {
+        bitmap += 2048;
+
+        if(msr >= 0xC0000000) {
+            bitmap += 1024;
+        }
+    }
+
+
+    uint32_t byte_index = msr / 8;
+    uint8_t bit_index = msr % 8;
+    bitmap[byte_index] |= 1 << bit_index;
+    return 0;
+}
+
 int8_t hypervisor_vmcs_prepare_procbased_control(void) {
     // uint32_t vpid_and_ept_msr_eax, vpid_and_ept_msr_edx;
     // uint64_t vpid_and_ept_msr = cpu_read_msr(CPU_MSR_IA32_VMX_EPT_VPID_CAP);
@@ -256,11 +290,13 @@ int8_t hypervisor_vmcs_prepare_procbased_control(void) {
 
     uint32_t pri_procbased_msr_eax, pri_procbased_msr_edx;
     uint64_t pri_procbased_msr = cpu_read_msr(CPU_MSR_IA32_VMX_PRI_PROCBASED_CTLS);
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pri_procbased_msr:0x%016llx", pri_procbased_msr);
     pri_procbased_msr_eax = pri_procbased_msr & 0xffffffff;
     pri_procbased_msr_edx = pri_procbased_msr >> 32;
 
     uint32_t sec_procbased_msr_eax, sec_procbased_msr_edx;
     uint64_t sec_procbased_msr = cpu_read_msr(CPU_MSR_IA32_VMX_SEC_PROCBASED_CTLS);
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "sec_procbased_msr:0x%016llx", sec_procbased_msr);
     sec_procbased_msr_eax = sec_procbased_msr & 0xffffffff;
     sec_procbased_msr_edx = sec_procbased_msr >> 32;
 
@@ -272,30 +308,74 @@ int8_t hypervisor_vmcs_prepare_procbased_control(void) {
     pri_procbase_ctls |= 1 << 12; // RDTSC exiting
     pri_procbase_ctls |= 1 << 15; // CR3-load causes vm exit
     pri_procbase_ctls |= 1 << 16; // CR3-store causes vm exit
+    pri_procbase_ctls |= 1 << 19; // CR8-load causes vm exit
+    pri_procbase_ctls |= 1 << 20; // CR8-store causes vm exit
+    pri_procbase_ctls |= 1 << 21; // Use TPR shadow
     pri_procbase_ctls |= 1 << 24; // Unconditional IO exiting
     pri_procbase_ctls |= 1 << 25; // Use IO bitmap
+    pri_procbase_ctls |= 1 << 28; // Use MSR bitmap
     pri_procbase_ctls |= 1 << 30; // PAUSE causes vm exit
     pri_procbase_ctls |= 1 << 31; // activate secondary controls
-    pri_procbase_ctls = vmx_fix_reserved_1_bits(pri_procbase_ctls,
-                                                pri_procbased_msr_eax);
-    pri_procbase_ctls = vmx_fix_reserved_0_bits(pri_procbase_ctls,
-                                                pri_procbased_msr_edx);
+
+    pri_procbase_ctls = vmx_fix_reserved_1_bits(pri_procbase_ctls, pri_procbased_msr_eax);
+    pri_procbase_ctls = vmx_fix_reserved_0_bits(pri_procbase_ctls, pri_procbased_msr_edx);
+
     vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, pri_procbase_ctls);
 
     uint32_t sec_procbase_ctls = 0;
+    // sec_procbase_ctls |= 1 << 0; // virtualize APIC access
     sec_procbase_ctls |= 1 << 1; // use EPT
     sec_procbase_ctls |= 1 << 2; // descriptor-table exiting:GDT/LDT/IDT/TR
+    sec_procbase_ctls |= 1 << 3; // enable RDTSCP
+    sec_procbase_ctls |= 1 << 4; // enable virtualize APIC access x2APIC mode
     sec_procbase_ctls |= 1 << 5; // enable VPID
     sec_procbase_ctls |= 1 << 7; // unrestricted guest
-    sec_procbase_ctls = vmx_fix_reserved_1_bits(sec_procbase_ctls,
-                                                sec_procbased_msr_eax);
-    sec_procbase_ctls = vmx_fix_reserved_0_bits(sec_procbase_ctls,
-                                                sec_procbased_msr_edx);
+    sec_procbase_ctls |= 1 << 8; // enable virtualize APIC register access
+    sec_procbase_ctls |= 1 << 9; // virtual-interrupt delivery
+
+    sec_procbase_ctls = vmx_fix_reserved_1_bits(sec_procbase_ctls, sec_procbased_msr_eax);
+    sec_procbase_ctls = vmx_fix_reserved_0_bits(sec_procbase_ctls, sec_procbased_msr_edx);
 
     vmx_write(VMX_CTLS_SEC_PROC_BASED_VM_EXECUTION, sec_procbase_ctls);
 
-    vmx_write(VMX_CTLS_EXCEPTION_BITMAP, 0);
+    vmx_write(VMX_CTLS_EXCEPTION_BITMAP, 0xFFFFFFFF);
     vmx_write(VMX_CTLS_CR3_TARGET_COUNT, 0x0);
+
+    frame_t* vapic_frame = NULL;
+
+    uint64_t vapic_region_va = hypervisor_allocate_region(&vapic_frame, 0x1000);
+
+    if (vapic_region_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate VAPIC region");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic_region_va:0x%llx", vapic_region_va);
+
+    uint64_t vapic_region_pa = vapic_frame->frame_address;
+
+    vmx_write(VMX_CTLS_VIRTUAL_APIC_PAGE_ADDR, vapic_region_pa);
+    vmx_write(VMX_CTLS_APIC_ACCESS_ADDR, 0xfee00000);
+
+    frame_t* msr_bitmap_frame = NULL;
+
+    uint64_t msr_bitmap_region_va = hypervisor_allocate_region(&msr_bitmap_frame, 0x2000);
+
+    if (msr_bitmap_region_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate MSR bitmap region");
+        return -1;
+    }
+
+    uint8_t * msr_bitmap = (uint8_t*)msr_bitmap_region_va;
+
+    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
+    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
+    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
+    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
+
+    uint64_t msr_bitmap_region_pa = msr_bitmap_frame->frame_address;
+
+    vmx_write(VMX_CTLS_MSR_BITMAP, msr_bitmap_region_pa);
 
     return 0;
 }
@@ -349,9 +429,12 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     uint32_t vm_exit_ctls = 0;
     vm_exit_ctls |= 1 << 9; // VM exit to 64-bit long mode.
     vm_exit_ctls |= 1 << 15; // ACK external interrupts.
+    vm_exit_ctls |= 1 << 20; // Save IA32_EFER on vm-exit
     vm_exit_ctls |= 1 << 21; // Load IA32_EFER on vm-exit
     vm_exit_ctls = vmx_fix_reserved_1_bits(vm_exit_ctls, vm_exit_msr_eax);
     vm_exit_ctls = vmx_fix_reserved_0_bits(vm_exit_ctls, vm_exit_msr_edx);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm_exit_ctls:0x%x", vm_exit_ctls);
 
     vmx_write(VMX_CTLS_VM_EXIT, vm_exit_ctls);
 
@@ -394,9 +477,12 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     vm_entry_msr_edx = vm_entry_msr >> 32;
     uint32_t vm_entry_ctls = 0;
 
+    vm_entry_ctls |= 1 << 9; // VM entry to 64-bit long mode.
     vm_entry_ctls |= 1 << 15; // load EFER msr on vm-entry
     vm_entry_ctls = vmx_fix_reserved_1_bits(vm_entry_ctls, vm_entry_msr_eax);
     vm_entry_ctls = vmx_fix_reserved_0_bits(vm_entry_ctls, vm_entry_msr_edx);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm_entry_ctls:0x%x", vm_entry_ctls);
 
     vmx_write(VMX_CTLS_VM_ENTRY, vm_entry_ctls);
     vmx_write(VMX_CTLS_VM_ENTRY_MSR_LOAD_COUNT, vm_exit_store_msr_count);
@@ -406,17 +492,18 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     return 0;
 }
 
-static const uint8_t hypervisor_guest_test_code[]  = {
-    0x66, 0x8c, 0xc8, 0x8e, 0xd8, 0x8e, 0xc0, 0xbe, 0x1c, 0x00, 0x00, 0x00, 0xba, 0xf8, 0x03, 0x00,
-    0x00, 0xac, 0x84, 0xc0, 0x74, 0x03, 0xee, 0xeb, 0xf8, 0xf4, 0xeb, 0xfd, 0x48, 0x65, 0x6c, 0x6c,
-    0x6f, 0x2c, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x00
-};
-
-#define GUEST_CODE_SIZE (sizeof(hypervisor_guest_test_code))
-
-
 int8_t hypervisor_vmcs_prepare_ept(void) {
     uint64_t ept_pml4_base = hypervisor_ept_setup(0, 16 << 20);
+
+    if (ept_pml4_base == -1ULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT setup failed");
+        return -1;
+    }
+
+    if(hypervisor_ept_build_tables(ept_pml4_base, 0, 16 << 20) == -1) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT build tables failed");
+        return -1;
+    }
 
     uint64_t vpid_cap = cpu_read_msr(CPU_MSR_IA32_VMX_EPT_VPID_CAP);
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "VPID_CAP:0x%llx", vpid_cap);
@@ -436,23 +523,7 @@ int8_t hypervisor_vmcs_prepare_ept(void) {
     }
 
     vmx_write(VMX_CTLS_EPTP, eptp);
-    vmx_write(VMX_CTLS_VPID, 1); // VPID is 1
-
-    uint64_t guest_code = hypervisor_ept_guest_to_host(ept_pml4_base, 0x1000);
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "Guest code:0x%llx", guest_code);
-
-    uint64_t guest_code_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_code);
-
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "Guest code VA:0x%llx", guest_code_va);
-
-    uint8_t* guest_code_ptr = (uint8_t*)guest_code_va;
-
-    // guest_code_ptr[0] = 0xf4; // HLT
-    // guest_code_ptr[0] = 0x90; // NOP
-    // guest_code_ptr[1] = 0xeb; // JMP
-    // guest_code_ptr[2] = 0xfd; // -2
-
-    memory_memcopy(hypervisor_guest_test_code, guest_code_ptr, GUEST_CODE_SIZE);
+    vmx_write(VMX_CTLS_VPID, task_get_id()); // VPID is 1
 
     return 0;
 }

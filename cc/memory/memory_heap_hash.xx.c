@@ -20,12 +20,10 @@
 #include <memcheck.h>
 #pragma GCC diagnostic pop
 #endif
-#if ___KERNELBUILD == 1
-#include <backtrace.h>
-#endif
 
 MODULE("turnstone.lib.memory");
 
+void memory_heap_backtrace(void);
 
 typedef struct memory_heap_hash_block_t {
     uint32_t  address;
@@ -517,7 +515,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
         PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p out of heap range. heap task 0x%llx", ptr, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
         return -1;
@@ -533,7 +531,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
         PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p not found. heap task 0x%llx", ptr, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
 #if ___TESTMODE == 1
@@ -547,7 +545,7 @@ int8_t memory_heap_hash_free(memory_heap_t* heap, void* ptr) {
         PRINTLOG(HEAP_HASH, LOG_WARNING, "address %p is already freed. heap task 0x%llx", ptr, heap->task_id);
 
 #if ___KERNELBUILD == 1
-        backtrace();
+        memory_heap_backtrace();
 #endif
 
 #if ___TESTMODE == 1

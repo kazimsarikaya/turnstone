@@ -152,7 +152,11 @@ void remove_ram2(void) {
     }
 }
 
+extern stdbufs_video_printer stdbufs_video_print;
+
 void __attribute__((constructor)) start_ram(void) {
+    stdbufs_video_print = video_print;
+
     int8_t res = setup_ram2();
 
     if(res) {
@@ -179,7 +183,7 @@ lock_t*   lock_create_with_heap(memory_heap_t* heap);
 int8_t    lock_destroy(lock_t* lock);
 void      lock_acquire(lock_t* lock);
 void      lock_release(lock_t* lock);
-lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future);
+lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id);
 void      dump_ram(char_t* fname);
 void      cpu_sti(void);
 void      apic_eoi(void);
@@ -230,9 +234,10 @@ lock_t* lock_create_with_heap(memory_heap_t* heap){
     return (void*)0xdeadbeaf;
 }
 
-lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future){
+lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id){
     UNUSED(heap);
     UNUSED(for_future);
+    UNUSED(task_id);
     return (void*)0xdeadbeaf;
 }
 

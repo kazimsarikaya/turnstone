@@ -8,10 +8,14 @@
 
 
 #include <hypervisor/hypervisor_utils.h>
+#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_ept.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <logging.h>
 #include <cpu.h>
+#include <tosdb/tosdb_manager.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -111,4 +115,49 @@ uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1) {
     }
 
     return target;
+}
+
+int8_t hypevisor_deploy_program(const char_t* entry_point_name) {
+    tosdb_manager_ipc_t ipc = {0};
+
+    ipc.type = TOSDB_MANAGER_IPC_TYPE_PROGRAM_BUILD;
+    ipc.program_build.entry_point_name = entry_point_name;
+    ipc.program_build.for_vm = true;
+
+    uint64_t ept_base = vmx_read(VMX_CTLS_EPTP);
+
+    ept_base &= 0xfffffffffffff000;
+
+    uint64_t guest_address_fa = hypervisor_ept_guest_to_host(ept_base, 2 << 20);
+
+    if(guest_address_fa == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot convert guest address to host");
+        return -1;
+    }
+
+    uint64_t guest_address_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_address_fa);
+
+    ipc.program_build.program = (uint8_t*)guest_address_va;
+
+    if(tosdb_manager_ipc_send_and_wait(&ipc) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot send program build ipc");
+        return -1;
+    }
+
+    if(!ipc.is_response_done) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "program build ipc response not done");
+        return -1;
+    }
+
+    if(!ipc.is_response_success) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "program build ipc response failed");
+        return -1;
+    }
+
+    vmx_write(VMX_GUEST_RIP, ipc.program_build.program_entry_point_virtual_address);
+    vmx_write(VMX_GUEST_RSP, vmx_read(VMX_GUEST_RSP) - 8); // why ?
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "deployed program entry point is at 0x%llx", ipc.program_build.program_entry_point_virtual_address);
+
+    return 0;
 }

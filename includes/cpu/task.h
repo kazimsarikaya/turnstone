@@ -107,10 +107,11 @@ typedef struct {
     void*                        stack; ///< stack pointer
     uint64_t                     stack_size; ///< stack size of task
     list_t*                      message_queues; ///< task's listining queues.
-    boolean_t                    message_waiting; ///< task state for sleeping should move @ref task_state_s
-    boolean_t                    sleeping; ///< task state for sleeping should move @ref task_state_s
-    boolean_t                    interruptible; ///< task state for interruptible should move @ref task_state_s
-    boolean_t                    interrupt_received; ///< task state for interrupt received should move @ref task_state_s
+    boolean_t                    message_waiting; ///< task state for sleeping should move @ref task_state_e
+    boolean_t                    sleeping; ///< task state for sleeping should move @ref task_state_e
+    boolean_t                    interruptible; ///< task state for interruptible should move @ref task_state_e
+    boolean_t                    interrupt_received; ///< task state for interrupt received should move @ref task_state_e
+    boolean_t                    wait_for_future; ///< task state for waiting future event should move @ref task_state_e
     uint64_t                     wake_tick; ///< tick value when task wakes up
     const char*                  task_name; ///< task name
     memory_page_table_context_t* page_table; ///< page table
@@ -118,6 +119,7 @@ typedef struct {
     buffer_t*                    output_buffer; ///< output buffer
     buffer_t*                    error_buffer; ///< error buffer
     uint64_t                     vmcs_physical_address; ///< vmcs physical address
+    void*                        vm; ///< vm
     uint64_t                     rax; ///< register
     uint64_t                     rbx; ///< register
     uint64_t                     rcx; ///< register
@@ -204,6 +206,9 @@ void task_set_interrupt_received(uint64_t task_id);
  */
 void task_add_message_queue(list_t* queue);
 
+list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number);
+#define task_get_current_task_message_queue(queue_number) task_get_message_queue(task_get_id(), queue_number)
+
 /**
  * @brief creates a task and apends it to wait queue
  * @param[in] heap creator heap
@@ -228,6 +233,7 @@ boolean_t task_idle_check_need_yield(void);
 void task_current_task_sleep(uint64_t wake_tick);
 
 void task_end_task(void);
+void task_kill_task(uint64_t task_id, boolean_t force);
 
 void task_print_all(void);
 
@@ -243,6 +249,9 @@ int8_t    task_set_error_buffer(buffer_t * buffer);
 
 void     task_set_vmcs_physical_address(uint64_t vmcs_physical_address);
 uint64_t task_get_vmcs_physical_address(void);
+void     task_set_vm(void* vm);
+void*    task_get_vm(void);
 
+void task_remove_task_after_fault(uint64_t task_id);
 
 #endif

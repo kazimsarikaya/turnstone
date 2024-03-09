@@ -469,7 +469,7 @@ typedef struct nvme_disk_t {
     uint32_t*                      admin_completion_queue_head_doorbell; ///< admin completion queue head doorbell
     nvme_submission_queue_entry_t* admin_submission_queue; ///< admin submission queue
     nvme_completion_queue_entry_t* admin_completion_queue; ///< admin completion queue
-    uint64_t                       io_queue_size; ///< io queue size
+    int64_t                        io_queue_size; ///< io queue size
     uint64_t                       io_s_queue_tail; ///< io queue tail
     uint64_t                       io_c_queue_head; ///< io completion queue head
     uint32_t*                      io_submission_queue_tail_doorbell; ///< io submission queue tail doorbell
@@ -492,6 +492,8 @@ typedef struct nvme_disk_t {
     uint64_t                       prp_frame_fa; ///< prp frame fa
     uint64_t                       prp_frame_va; ///< prp frame va
     uint64_t                       max_prp_entries; ///< max prp entries
+    int64_t                        active_command_count; ///< active command count
+    boolean_t                      current_phase; ///< current phase
 } nvme_disk_t; ///< shorthand for struct
 
 

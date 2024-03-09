@@ -11,7 +11,7 @@
 #include <utils.h>
 #include <strings.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.buffer");
 
 #define BUFFER_PRINTF_BUFFER_SIZE 2048
 

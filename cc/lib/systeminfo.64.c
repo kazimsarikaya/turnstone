@@ -9,7 +9,7 @@
 #include <systeminfo.h>
 
 /*! module name */
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.systeminfo");
 
 /*! system information global variable. */
 system_info_t* SYSTEM_INFO = NULL;

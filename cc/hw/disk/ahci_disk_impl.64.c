@@ -9,6 +9,7 @@
 #include <driver/ahci.h>
 #include <utils.h>
 #include <list.h>
+#include <logging.h>
 
 MODULE("turnstone.kernel.hw.disk.ahci");
 
@@ -56,7 +57,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
     while(offset < buffer_len) {
-        uint16_t iter_write_size = MIN(buffer_len, max_len);
+        uint32_t iter_write_size = MIN(buffer_len, max_len);
 
         do  {
             fut = ahci_write(ctx->sata_disk->disk_id, lba, iter_write_size, data + offset);
@@ -87,10 +88,34 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
 int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
     ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
 
+    PRINTLOG(AHCI, LOG_TRACE, "reading disk with lba: 0x%llx, count: 0x%llx\n", lba, count);
+
+    if(ctx == NULL || data == NULL || count == 0) {
+        PRINTLOG(AHCI, LOG_ERROR, "invalid parameter\n");
+        return -1;
+    }
+
+    if(lba + count > ctx->sata_disk->lba_count) {
+        PRINTLOG(AHCI, LOG_ERROR, "invalid parameter outside disk.\n");
+        return -1;
+    }
+
+    if(ctx->block_size == 0) {
+        PRINTLOG(AHCI, LOG_ERROR, "invalid block size\n");
+        return -1;
+    }
+
     uint64_t buffer_len = count * ctx->block_size;
-    *data = memory_malloc_ext(ctx->sata_disk->heap, buffer_len, 0);
+
+    if(buffer_len == 0) {
+        PRINTLOG(AHCI, LOG_ERROR, "invalid buffer length\n");
+        return -1;
+    }
+
+    *data = memory_malloc_ext(ctx->sata_disk->heap, buffer_len, 0x0);
 
     if(*data == NULL) {
+        PRINTLOG(AHCI, LOG_ERROR, "failed to allocate memory\n");
         return -1;
     }
 
@@ -101,12 +126,26 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 
     list_t* futs = list_create_list_with_heap(ctx->sata_disk->heap);
 
+    if(futs == NULL) {
+        PRINTLOG(AHCI, LOG_ERROR, "failed to create future list\n");
+        memory_free_ext(ctx->sata_disk->heap, *data);
+        return -1;
+    }
+
     while(offset < buffer_len) {
-        uint16_t iter_read_size = MIN(buffer_len, max_len);
+        uint32_t iter_read_size = MIN(buffer_len, max_len);
 
         do  {
+            PRINTLOG(AHCI, LOG_TRACE, "sending read request with lba: 0x%llx, count: 0x%x to offset 0x%llx\n", lba, iter_read_size, offset);
             fut = ahci_read(ctx->sata_disk->disk_id, lba, iter_read_size, read_buf + offset);
         }while(fut == NULL);
+
+        if(fut == NULL) {
+            list_destroy(futs);
+            memory_free_ext(ctx->sata_disk->heap, *data);
+            PRINTLOG(AHCI, LOG_ERROR, "failed to create future\n");
+            return -1;
+        }
 
         list_list_insert(futs, fut);
 
@@ -125,6 +164,8 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
     }
 
     list_destroy(futs);
+
+    PRINTLOG(AHCI, LOG_TRACE, "read disk with lba: 0x%llx, count: 0x%llx\n", lba, count);
 
     return 0;
 }

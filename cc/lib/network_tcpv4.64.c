@@ -17,7 +17,7 @@
 #include <random.h>
 #include <strings.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.network");
 
 hashmap_t* network_tcpv4_listener_ip_map = NULL;
 

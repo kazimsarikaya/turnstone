@@ -816,7 +816,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     srand(time_ns(NULL));
 
-    if(stdbufs_init_buffers() != 0) {
+    if(stdbufs_init_buffers(video_print) != 0) {
         PRINTLOG(EFI, LOG_FATAL, "cannot setup stdbufs");
 
         goto catch_efi_error;

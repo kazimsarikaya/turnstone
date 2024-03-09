@@ -21,6 +21,10 @@
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
 #include <utils.h>
+#include <hypervisor/hypervisor.h>
+#include <hypervisor/hypervisor_ipc.h>
+#include <list.h>
+#include <tosdb/tosdb_manager.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -30,68 +34,181 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 buffer_t* shell_buffer = NULL;
 buffer_t* mouse_buffer = NULL;
 
-static int8_t shell_handle_vm_command(const char_t* arguments) {
-    char_t command[64] = {0};
-    char_t vmid_str[64] = {0};
+typedef struct shell_argument_parser_t {
+    char_t*  arguments;
+    uint32_t idx;
+} shell_argument_parser_t;
 
-    if(arguments == NULL || strlen(arguments) == 0) {
-        printf("Usage: vm <command> <vmid>\n");
-        return -1;
+static char_t* shell_argument_parser_advance(shell_argument_parser_t* parser) {
+    if(parser == NULL) {
+        return NULL;
     }
 
-    // copy command until space
-    uint32_t i = 0;
+    if(parser->arguments == NULL) {
+        return NULL;
+    }
 
-    while(arguments[i] != ' ' && arguments[i] != NULL) {
-        command[i] = arguments[i];
+    if(parser->arguments[parser->idx] == NULL) {
+        return NULL;
+    }
+
+    uint32_t i = parser->idx;
+
+    while(parser->arguments[i] == ' ') { // trim spaces
         i++;
     }
 
-    if(arguments[i] == NULL) {
-        printf("Usage: vm <command> <vmid>\n");
-        return -1;
-    }
+    char_t* start = &parser->arguments[i]; // save start
 
-    if(strncmp(command, "output", 6) != 0) {
-        printf("Unknown VM command: %s\n", command);
-        return -1;
-    }
-
-    i++;
-
-    // copy vmid until space
-    uint32_t j = 0;
-
-    while(arguments[i] != ' ' && arguments[i] != NULL) {
-        vmid_str[j] = arguments[i];
+    while(parser->arguments[i] != ' ' && parser->arguments[i] != NULL) { // find end
         i++;
-        j++;
     }
 
-    if(arguments[i] != NULL) {
-        printf("Usage: vm <command> <vmid>\n");
+    if(parser->arguments[i] == ' ') { // replace space with null
+        parser->arguments[i] = NULL;
+        i++;
+    }
+
+
+    parser->idx = i; // save new index
+
+    return start;
+}
+
+
+static int8_t shell_handle_tosdb_command(char_t* arguments) {
+    shell_argument_parser_t parser = {arguments, 0};
+
+    char_t* command = shell_argument_parser_advance(&parser);
+
+
+    if(strncmp("close", command, 5) == 0) {
+        return tosdb_manager_close();
+    } else if(strncmp("init", command, 4) == 0) {
+        return tosdb_manager_init();
+    } else if(strncmp("clear", command, 5) == 0) {
+        // clear takes a force argument
+        char_t* force = shell_argument_parser_advance(&parser);
+
+        if(strncmp(force, "force", 5) == 0) {
+            return tosdb_manager_clear();
+        }
+
+        printf("Usage: tosdb clear force\n");
         return -1;
     }
 
-    uint64_t vmid = atoh(vmid_str);
+    printf("Unknown command: %s\n", command);
+    printf("Usage: tosdb <close|init|build_program <entry_point>>\n");
 
-    buffer_t* buffer = task_get_task_output_buffer(vmid);
+    return -1;
+}
 
-    if(!buffer) {
-        printf("VM not found\n");
+static int8_t shell_handle_vm_command(char_t* arguments) {
+    shell_argument_parser_t parser = {arguments, 0};
+
+    char_t* command = shell_argument_parser_advance(&parser);
+
+    if(strncmp("create", command, 6) == 0) {
+        char_t* entrypoint = shell_argument_parser_advance(&parser);
+
+        if(entrypoint == NULL) {
+            printf("Usage: vm create <entrypoint_name>\n");
+            return -1;
+        }
+
+        printf("Creating VM with entrypoint: -%s-\n", entrypoint);
+
+        return hypervisor_vm_create(strdup(entrypoint));
+    }
+
+    uint64_t vmid = atoh(command);
+
+    if(vmid == 0) {
+        printf("cannot parse vmid: -%s-\n", command);
+        printf("Usage: vm <vmid> <command>\n");
+        printf("Usage: vm create <entrypoint_name>\n");
         return -1;
     }
 
-    uint8_t* buffer_data = buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
+    command = shell_argument_parser_advance(&parser);
 
-    if(!buffer_data) {
-        printf("VM output not found\n");
+    if(strncmp(command, "output", 6) == 0) {
+
+        buffer_t* buffer = task_get_task_output_buffer(vmid);
+
+        if(!buffer) {
+            printf("VM not found: 0x%llx\n", vmid);
+            return -1;
+        }
+
+        uint8_t* buffer_data = buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
+
+        if(!buffer_data) {
+            printf("VM output not found\n");
+            return -1;
+        }
+
+        printf("VM 0x%llx output:\n", vmid);
+        printf("%s", buffer_data);
+        printf("\n");
+    } else if(strncmp(command, "dump", 4) == 0) {
+        list_t* vm_mq = task_get_message_queue(vmid, 0);
+
+        if(!vm_mq) {
+            printf("VM not found: 0x%llx\n", vmid);
+            return -1;
+        }
+
+        hypervisor_ipc_message_t* msg = memory_malloc(sizeof(hypervisor_ipc_message_t));
+
+        if(!msg) {
+            printf("Failed to allocate memory\n");
+            return -1;
+        }
+
+        msg->message_type = HYPERVISOR_IPC_MESSAGE_TYPE_DUMP;
+        msg->message_data = buffer_new();
+
+        if(!msg->message_data) {
+            printf("Failed to allocate memory\n");
+            memory_free(msg);
+            return -1;
+        }
+
+        list_queue_push(vm_mq, msg);
+
+        while(!msg->message_data_completed) {
+            task_yield();
+        }
+
+        uint8_t* msg_data = buffer_get_all_bytes_and_destroy(msg->message_data, NULL);
+
+        memory_free(msg);
+
+        if(!msg_data) {
+            printf("Failed to get VM state\n");
+            return -1;
+        }
+
+        printf("VM 0x%llx state:\n", vmid);
+        printf("%s", msg_data);
+        printf("\n");
+
+        memory_free(msg_data);
+
+    } else if(strncmp(command, "close", 5) == 0) {
+        return hypervisor_ipc_send_close(vmid);
+    } else {
+        printf("Unknown command: %llx -%s-\n", vmid, command);
+        printf("Usage: vm <vmid> <command>\n");
+        printf("Usage: vm create <entrypoint_name>\n");
+        printf("\toutput\t: prints the VM output\n");
+        printf("\tdump\t: dumps the VM state\n");
+        printf("\tcreate\t: creates a new VM with given entrypoint name\n");
+        printf("\tclose\t: closes vm\n");
         return -1;
     }
-
-    printf("VM 0x%llx output:\n", vmid);
-    printf("%s", buffer_data);
-    printf("\n");
 
     return 0;
 }
@@ -104,8 +221,22 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         return -1;
     }
 
+    if(strlen(command) == 0) {
+        memory_free(command);
+        char_t* discard = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
+        memory_free(discard);
+        return 0;
+    }
+
+    char_t* orig_command = command;
+
+    while(*command == ' ') {
+        command++;
+    }
+
     char_t* arguments = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
-    UNUSED(arguments);
+
+    shell_argument_parser_t parser = {arguments, 0};
 
     int8_t res = -1;
 
@@ -122,6 +253,9 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\tfree\t\t: prints the frame usage\n"
                "\twm\t\t: opens test window\n"
                "\tvm\t\t: vm commands\n"
+               "\trdtsc\t\t: read timestamp counter\n"
+               "\ttosdb\t\t: tosdb commands\n"
+               "\tkill\t\t: kills a process with pid\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -132,31 +266,18 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     } else if(strcmp(command, "reboot") == 0) {
         acpi_reset();
     } else if(strcmp(command, "color") == 0) {
-        if(arguments == NULL) {
-            printf("Usage: color <foreground> <background>\n");
+        char_t* foreground_str = shell_argument_parser_advance(&parser);
+        char_t* background_str = shell_argument_parser_advance(&parser);
+
+        if(foreground_str == NULL && background_str == NULL) {
+            printf("Usage: color <foreground> [<background>]\n");
             res = -1;
         } else {
-            uint32_t foreground = 0;
-            uint32_t background = 0;
+            uint32_t foreground = atoh(foreground_str);
+            uint32_t background = atoh(background_str);
 
-            if(strlen(arguments) == 6) {
-                foreground = atoh(arguments);
-                res = 0;
-            } else if(strlen(arguments) == 13 && arguments[6] == ' ') {
-                arguments[6] = 0;
-                foreground = atoh(arguments);
-                background = atoh(arguments + 7);
-                res = 0;
-            } else {
-                printf("Usage: color <foreground> <background>\n");
-                printf("\tgiven arguments: %s %lli\n", arguments, strlen(arguments));
-                res = -1;
-            }
-
-            if(res != -1) {
-                printf("request foreground: %x background: %x\n", foreground, background);
-                video_set_color(foreground, background);
-            }
+            video_set_color(foreground, background);
+            res = 0;
         }
     } else if(strcmp(command, "ps") == 0) {
         task_print_all();
@@ -180,13 +301,35 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         res = windowmanager_init();
     } else if(strcmp(command, "vm") == 0) {
         res = shell_handle_vm_command(arguments);
-    }else {
+    } else if(strcmp(command, "tosdb") == 0) {
+        res = shell_handle_tosdb_command(arguments);
+    } else if(strcmp(command, "rdtsc") == 0) {
+        printf("rdtsc: 0x%llx\n", rdtsc());
+        res = 0;
+    } else if(strcmp(command, "kill") == 0) {
+        uint64_t pid = atoh(shell_argument_parser_advance(&parser));
+        char_t* force_str = shell_argument_parser_advance(&parser);
+        boolean_t force = false;
+
+        if(strncmp(force_str, "force", 5) == 0) {
+            force = true;
+        }
+
+        if(pid == 0) {
+            printf("Usage: kill <pid>\n");
+            printf("\tgiven arguments: %s\n", arguments);
+            res = -1;
+        } else {
+            task_kill_task(pid, force);
+            res = 0;
+        }
+    } else {
         printf("Unknown command: %s\n", command);
         res = -1;
     }
 
 
-    memory_free(command);
+    memory_free(orig_command);
     memory_free(arguments);
 
     return res;
@@ -301,6 +444,13 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         data[4095] = last_char;
 
         uint64_t idx = 0;
+
+        if(buffer_get_length(command_buffer) == 0) {
+            while(data[idx] == ' ') {
+                idx++;
+                data_idx--;
+            }
+        }
 
         while(data_idx > 0) {
             char_t c = data[idx++];

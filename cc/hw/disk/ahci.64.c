@@ -12,12 +12,15 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <cpu/interrupt.h>
+#include <cpu/task.h>
 #include <apic.h>
 #include <cpu.h>
 #include <time/timer.h>
 #include <utils.h>
 
 MODULE("turnstone.kernel.hw.disk.ahci");
+
+void video_text_print(const char* str);
 
 list_t* sata_ports = NULL;
 list_t* sata_hbas = NULL;
@@ -73,10 +76,8 @@ int8_t ahci_isr(interrupt_frame_ext_t* frame){
 
     boolean_t irq_handled = 0;
 
-    iterator_t* iter = list_iterator_create(sata_hbas);
-
-    while(iter->end_of_iterator(iter) != 0) {
-        const ahci_hba_t* hba = iter->get_item(iter);
+    for(uint64_t disk_idx = 0; disk_idx < list_size(sata_hbas); disk_idx++) {
+        const ahci_hba_t* hba = list_get_data_at_position(sata_hbas, disk_idx);
 
         if(hba->intnum_base <= intnum && intnum < (hba->intnum_base + hba->intnum_count)) {
             ahci_hba_mem_t* hba_mem = (ahci_hba_mem_t*)hba->hba_addr;
@@ -96,15 +97,11 @@ int8_t ahci_isr(interrupt_frame_ext_t* frame){
                 ahci_handle_disk_isr(hba, hba->disk_base + intnum - hba->intnum_base);
             }
 
-            irq_handled = 1;
+            irq_handled = true;
 
             break;
         }
-
-        iter = iter->next(iter);
     }
-
-    iter->destroy(iter);
 
     if(irq_handled) {
         apic_eoi();
@@ -120,26 +117,24 @@ void ahci_handle_disk_isr(const ahci_hba_t* hba, uint64_t disk_id) {
     ahci_sata_disk_t* disk = (ahci_sata_disk_t*)list_get_data_at_position(sata_ports, disk_id);
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    PRINTLOG(AHCI, LOG_TRACE, "interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x",
-             port->interrupt_status, port->command_and_status, port->sata_active, port->sata_error, port->command_issue, port->task_file_data);
+    // PRINTLOG(AHCI, LOG_TRACE, "interrupt status 0x%x cmd_status 0x%x sactive 0x%x serror 0x%x cmdissued 0x%x tfd 0x%x",
+    // port->interrupt_status, port->command_and_status, port->sata_active, port->sata_error, port->command_issue, port->task_file_data);
 
     uint32_t finished_commands = disk->current_commands ^ port->command_issue;
 
     for(uint32_t i = 0; i < disk->command_count; i++) {
-        if(finished_commands & 1) {
-            PRINTLOG(AHCI, LOG_TRACE, "command %i finished for disk %lli", i, disk_id);
-
-            disk->current_commands ^= (1 << i);
-            disk->acquired_slots ^= (1 << i);
+        if(bit_test32(&finished_commands, i)) {
+            // PRINTLOG(AHCI, LOG_TRACE, "command %i finished for disk %lli", i, disk_id);
 
             if(disk->future_locks[i]) {
-                PRINTLOG(AHCI, LOG_TRACE, "releasing future lock for command %i for disk %lli", i, disk_id);
+                // PRINTLOG(AHCI, LOG_TRACE, "releasing future lock for command %i for disk %lli", i, disk_id);
                 lock_release(disk->future_locks[i]);
                 disk->future_locks[i] = NULL;
             }
-        }
 
-        finished_commands >>= 1;
+            bit_clear32(&disk->current_commands, i);
+            bit_clear32(&disk->acquired_slots, i);
+        }
     }
 
     if(port->task_file_data & 1) {
@@ -238,7 +233,7 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
 
     if(memory_paging_get_physical_address((uint64_t)&error_log, &el_phy_addr) != 0) {
         PRINTLOG(AHCI, LOG_ERROR, "cannot get physical address of error log 0x%p", &error_log);
-        disk->acquired_slots ^= (1 << slot);
+        bit_clear32(&disk->acquired_slots, slot);
 
         return -1;
     }
@@ -274,13 +269,13 @@ int8_t ahci_read_log_ncq(ahci_sata_disk_t* disk) {
 
         if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
             PRINTLOG(AHCI, LOG_FATAL, "read ncq log error is 0x%x tfd 0x%x err 0x%x", port->interrupt_status, port->task_file_data, port->sata_error);
-            disk->acquired_slots ^= (1 << slot);
+            bit_clear32(&disk->acquired_slots, slot);
 
             return -1;
         }
     }
 
-    disk->acquired_slots ^= (1 << slot);
+    bit_clear32(&disk->acquired_slots, slot);
 
     if(port->interrupt_status & 1) {
         ahci_hba_fis_t* hba_fis = (ahci_hba_fis_t*)port->fis_base_address;
@@ -559,7 +554,7 @@ future_t* ahci_flush(uint64_t disk_id) {
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    int8_t slot = ahci_find_command_slot(disk);
+    int32_t slot = ahci_find_command_slot(disk);
 
     if(slot == -1) {
         PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot");
@@ -586,12 +581,17 @@ future_t* ahci_flush(uint64_t disk_id) {
     fis->control_or_command = 1;
     fis->command = AHCI_ATA_CMD_FLUSH_EXT;
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
+    uint64_t tid = task_get_id();
 
-    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], NULL);
+    disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
 
-    disk->current_commands |= 1 << slot;
-    port->command_issue = 1 << slot;
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], NULL);
+
+    bit_set32(&disk->current_commands, slot);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    bit_set32(&port->command_issue, slot);
+#pragma GCC diagnostic pop
 
     return fut;
 }
@@ -633,7 +633,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     if(memory_paging_get_physical_address((uint64_t)&identify_data, &id_phy_addr) != 0) {
         PRINTLOG(AHCI, LOG_ERROR, "cannot find physical address of buffer 0x%p", &identify_data);
-        disk->acquired_slots ^= (1 << slot);
+        bit_clear32(&disk->acquired_slots, slot);
 
         return -1;
     }
@@ -662,7 +662,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
         if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
             PRINTLOG(AHCI, LOG_FATAL, "disk identify error");
-            disk->acquired_slots ^= (1 << slot);
+            bit_clear32(&disk->acquired_slots, slot);
 
             return -1;
         }
@@ -670,12 +670,12 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     if(port->interrupt_status & AHCI_HBA_PxIS_TFES) {
         PRINTLOG(AHCI, LOG_FATAL, "disk identify error");
-        disk->acquired_slots ^= (1 << slot);
+        bit_clear32(&disk->acquired_slots, slot);
 
         return -1;
     }
 
-    disk->acquired_slots ^= (1 << slot);
+    bit_clear32(&disk->acquired_slots, slot);
 
     PRINTLOG(AHCI, LOG_TRACE, "building identify data");
 
@@ -738,7 +738,7 @@ int8_t ahci_identify(uint64_t disk_id) {
 
     disk->physical_sector_size = disk->logical_sector_size << identify_data.physical_logical_sector_size.logical_sectors_per_physical_sector;
 
-    PRINTLOG(AHCI, LOG_TRACE, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
+    PRINTLOG(AHCI, LOG_INFO, "disk %lli cyl %x head %x sec %x lba %llx serial %s model %s queue depth %i sncq %i vwc %i logging %i smart %x physical sector size %llx logical sector size %llx",
              disk->disk_id, disk->cylinders, disk->heads,
              disk->sectors, disk->lba_count, disk->serial, disk->model,
              disk->queue_depth, disk->sncq, disk->volatile_write_cache,
@@ -757,12 +757,16 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    int8_t slot = ahci_find_command_slot(disk);
+    int32_t slot = ahci_find_command_slot(disk);
 
     if(slot == -1) {
         PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot");
         return NULL;
     }
+
+    PRINTLOG(AHCI, LOG_TRACE, "read port 0x%p slot %i", port, slot);
+    PRINTLOG(AHCI, LOG_TRACE, "read disk 0x%p lba 0x%llx size 0x%x buffer 0x%p", disk, lba, size, buffer);
+    PRINTLOG(AHCI, LOG_TRACE, "logical sector size 0x%llx", disk->logical_sector_size);
 
     uint32_t sector_count = size / disk->logical_sector_size;
 
@@ -788,6 +792,8 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         return NULL;
     }
 
+    PRINTLOG(AHCI, LOG_TRACE, "size 0x%x sector count 0x%x prdt length 0x%x", size, sector_count, prdt_length);
+
     ahci_hba_cmd_header_t* cmd_hdr = (ahci_hba_cmd_header_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(port->command_list_base_address);
     cmd_hdr += slot;
 
@@ -807,11 +813,16 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         return NULL;
     }
 
+    PRINTLOG(AHCI, LOG_TRACE, "buffer 0x%p physical address 0x%llx", buffer, buffer_phy_addr);
+
+
     uint32_t tmp_size = size;
 
     for(uint32_t i = 0; i < cmd_hdr->prdt_length; i++) {
         cmd_table->prdt_entry[i].data_base_address = buffer_phy_addr;
         cmd_table->prdt_entry[i].data_byte_count = (tmp_size > (4 << 20)) ? (4 << 20) - 1 : tmp_size - 1;
+
+        PRINTLOG(AHCI, LOG_TRACE, "prdt entry %i data base address 0x%llx data byte count 0x%x", i, cmd_table->prdt_entry[i].data_base_address, cmd_table->prdt_entry[i].data_byte_count);
 
         tmp_size -= (4 << 20);
         buffer_phy_addr += (4 << 20);
@@ -831,22 +842,45 @@ future_t* ahci_read(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buff
         fis->count = slot << 3;
         fis->featurel = (size / disk->logical_sector_size) & 0xFF;
         fis->featureh = ((size / disk->logical_sector_size) >> 8) & 0xFF;
+
+        PRINTLOG(AHCI, LOG_TRACE, "read fpdma queued count 0x%x featurel 0x%x featureh 0x%x", fis->count, fis->featurel, fis->featureh);
     }
 
     fis->lba0 = lba & 0xFFFFFF;
     fis->lba1 = (lba >> 24) & 0xFFFFFF;
     fis->device = 1 << 6;
 
+    PRINTLOG(AHCI, LOG_TRACE, "read lba 0x%llx lba0 0x%x lba1 0x%x", lba, fis->lba0, fis->lba1);
+
+    uint64_t spin = 0;
+
+    while((port->task_file_data  & (AHCI_ATA_DEV_BUSY | AHCI_ATA_DEV_DRQ)) && spin < 1000000) {
+        spin++;
+    }
+
+    if(spin == 1000000) {
+        PRINTLOG(AHCI, LOG_FATAL, "disk is busy");
+        return NULL;
+    }
+
+    PRINTLOG(AHCI, LOG_TRACE, "disk is not busy spin: 0x%llx", spin);
+
     if(disk->sncq && disk->queue_depth) {
         port->sata_active = 1 << slot;
     }
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
+    uint64_t tid = task_get_id();
 
-    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
+    disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
 
-    disk->current_commands |= 1 << slot;
-    port->command_issue = 1 << slot;
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], buffer);
+
+
+    bit_set32(&disk->current_commands, slot);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    bit_set32(&port->command_issue, slot);
+#pragma GCC diagnostic pop
 
     return fut;
 }
@@ -856,7 +890,7 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
 
     ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
-    int8_t slot = ahci_find_command_slot(disk);
+    int32_t slot = ahci_find_command_slot(disk);
 
     if(slot == -1) {
         PRINTLOG(AHCI, LOG_FATAL, "cannot find empty command slot");
@@ -938,16 +972,33 @@ future_t* ahci_write(uint64_t disk_id, uint64_t lba, uint32_t size, uint8_t* buf
     fis->lba0 = lba & 0xFFFFFF;
     fis->lba1 = (lba >> 24) & 0xFFFFFF;
 
+    uint64_t spin = 0;
+
+    while((port->task_file_data  & (AHCI_ATA_DEV_BUSY | AHCI_ATA_DEV_DRQ)) && spin < 1000000) {
+        spin++;
+    }
+
+    if(spin == 1000000) {
+        PRINTLOG(AHCI, LOG_FATAL, "disk is busy");
+        return NULL;
+    }
+
     if(disk->sncq && disk->queue_depth) {
         port->sata_active = 1 << slot;
     }
 
-    disk->future_locks[(1 << slot) - 1] = lock_create_with_heap_for_future(disk->heap, true);
+    uint64_t tid = task_get_id();
 
-    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[(1 << slot) - 1], buffer);
+    disk->future_locks[slot] = lock_create_with_heap_for_future(disk->heap, true, tid);
 
-    disk->current_commands |= 1 << slot;
-    port->command_issue = 1 << slot;
+    future_t* fut = future_create_with_heap_and_data(disk->heap, disk->future_locks[slot], buffer);
+
+    bit_set32(&disk->current_commands, slot);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+    bit_set32(&port->command_issue, slot);
+#pragma GCC diagnostic pop
 
     return fut;
 }
@@ -984,22 +1035,18 @@ ahci_device_type_t ahci_check_type(ahci_hba_port_t* port) {
 
 
 int8_t ahci_find_command_slot(ahci_sata_disk_t* disk) {
-    ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
+    // ahci_hba_port_t* port = (ahci_hba_port_t*)disk->port_address;
 
     lock_acquire(disk->disk_lock);
 
-    uint32_t slots = port->sata_active | port->command_issue | disk->acquired_slots;
-
     for(int8_t i = 0; i < disk->command_count; i++) {
-        if((slots & 1) == 0) {
-            disk->acquired_slots |= 1 << i;
+        if(bit_test32(&disk->acquired_slots, i) == 0) {
+            bit_set32(&disk->acquired_slots, i);
 
             lock_release(disk->disk_lock);
 
             return i;
         }
-
-        slots >>= 1;
     }
 
     lock_release(disk->disk_lock);
