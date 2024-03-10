@@ -12,11 +12,27 @@
 #include <types.h>
 #include <list.h>
 #include <memory.h>
+#include <memory/frame.h>
 #include <buffer.h>
 #include <map.h>
 
+typedef enum hypervisor_vm_frame_type_t {
+    HYPERVISOR_VM_FRAME_TYPE_SELF,
+    HYPERVISOR_VM_FRAME_TYPE_VMCS,
+    HYPERVISOR_VM_FRAME_TYPE_VMEXIT_STACK,
+    HYPERVISOR_VM_FRAME_TYPE_VAPIC,
+    HYPERVISOR_VM_FRAME_TYPE_MSR_BITMAP,
+    HYPERVISOR_VM_FRAME_TYPE_IO_BITMAP,
+    HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_LOAD_MSR,
+    HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_STORE_MSR,
+    HYPERVISOR_VM_FRAME_TYPE_EPT,
+    HYPERVISOR_VM_FRAME_TYPE_GUEST,
+    HYPERVISOR_VM_FRAME_TYPE_NR,
+} hypervisor_vm_frame_type_t;
+
 typedef struct hypervisor_vm_t {
     memory_heap_t* heap;
+    const char_t*  entry_point_name;
     uint64_t       task_id;
     list_t*        ipc_queue;
     uint64_t       vmcs_frame_fa;
@@ -40,12 +56,13 @@ typedef struct hypervisor_vm_t {
     boolean_t is_halted;
     boolean_t is_halt_need_next_instruction;
     map_t*    msr_map;
+    frame_t   owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
 } hypervisor_vm_t;
 
 
 int8_t hypervisor_vm_init(void);
 
-int8_t hypervisor_vm_create_and_attach_to_task(uint64_t vmcs_frame_fa);
+int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm);
 void   hypervisor_vm_destroy(hypervisor_vm_t* vm);
 void   hypervisor_vm_notify_timers(void);
 

@@ -30,49 +30,42 @@ uint64_t hypervisor_next_vm_id = 0;
 lock_t* hypervisor_vm_lock = NULL;
 
 static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
-    if(argc != 2) {
+    if(argc != 1) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid argument count");
         return -1;
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "args pointer: 0x%llx", (uint64_t)args);
 
-    uint64_t vmcs_frame_va = (uint64_t)args[0];
+    hypervisor_vm_t* vm = args[0];
 
-    char_t* entry_point_name = args[1];
-
-    if(vmcs_frame_va == 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid vmcs frame va");
-        return -1;
-    }
+    const char_t* entry_point_name = vm->entry_point_name;
 
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
+    uint64_t vmcs_frame_fa = vm->vmcs_frame_fa;
 
-    if(vmcs_frame_va == 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid vmcs frame va");
+    if(vmcs_frame_fa == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid vmcs frame fa");
         return -1;
     }
 
-    vmcs_frame_va = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(vmcs_frame_va);
 
-
-    if(hypervisor_vm_create_and_attach_to_task(vmcs_frame_va) != 0) {
+    if(hypervisor_vm_create_and_attach_to_task(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm and attach to task");
         return -1;
     }
 
-    if(vmptrld(vmcs_frame_va) != 0) {
+    if(vmptrld(vmcs_frame_fa) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
         return -1;
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
-    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_va);
+    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_fa);
 
     if(hypevisor_deploy_program(entry_point_name) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
@@ -188,6 +181,19 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
+    frame_t* vm_frame = NULL;
+
+    uint64_t vm_frame_va = hypervisor_allocate_region(&vm_frame, FRAME_SIZE);
+
+    if(vm_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vm frame");
+        return -1;
+    }
+
+    hypervisor_vm_t* vm = (hypervisor_vm_t*)vm_frame_va;
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF] = *vm_frame;
+
     frame_t* vmcs_frame = NULL;
 
     uint64_t vmcs_frame_va = hypervisor_allocate_region(&vmcs_frame, FRAME_SIZE);
@@ -196,6 +202,10 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vmcs frame");
         return -1;
     }
+
+    vm->vmcs_frame_fa = vmcs_frame->frame_address;
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMCS] = *vmcs_frame;
+    vm->entry_point_name = entry_point_name;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
 
@@ -223,7 +233,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
 
-    if(hypervisor_vmcs_prepare_host_state() != 0) {
+    if(hypervisor_vmcs_prepare_host_state(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare host state");
         return -1;
     }
@@ -233,17 +243,17 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    if(hypervisor_vmcs_prepare_execution_control() != 0) {
+    if(hypervisor_vmcs_prepare_execution_control(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare execution control");
         return -1;
     }
 
-    if(hypervisor_vmcs_prepare_vm_exit_and_entry_control() != 0) {
+    if(hypervisor_vmcs_prepare_vm_exit_and_entry_control(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm exit control");
         return -1;
     }
 
-    if(hypervisor_vmcs_prepare_ept() != 0) {
+    if(hypervisor_vmcs_prepare_ept(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
         return -1;
     }
@@ -269,7 +279,9 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    void** args = memory_malloc(sizeof(void*) * 3);
+    memory_heap_t* heap = memory_get_default_heap();
+
+    void** args = memory_malloc_ext(heap, sizeof(void*) * 2, 0);
 
     if(args == NULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate args");
@@ -277,15 +289,11 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    args[0] = (void*)vmcs_frame_va;
-    args[1] = (void*)entry_point_name;
-
+    args[0] = vm;
 
     char_t* vm_name = sprintf("vm%08llx", ++hypervisor_next_vm_id);
 
-    memory_heap_t* heap = memory_get_default_heap();
-
-    if(task_create_task(heap, 2 << 20, 16 << 10, hypervisor_vm_task, 2, args, vm_name) == -1ULL) {
+    if(task_create_task(heap, 2 << 20, 16 << 10, hypervisor_vm_task, 1, args, vm_name) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         memory_free(args);
         memory_free(vm_name);

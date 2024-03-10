@@ -17,7 +17,7 @@ MODULE("turnstone.hypervisor");
 
 
 
-uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
+uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm, uint64_t low_mem, uint64_t high_mem) {
     if(low_mem % MEMORY_PAGING_PAGE_TYPE_2M != 0) {
         low_mem += MEMORY_PAGING_PAGE_TYPE_2M - (low_mem % MEMORY_PAGING_PAGE_TYPE_2M);
     }
@@ -45,10 +45,20 @@ uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem) {
         return 0;
     }
 
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_EPT] = *ept_frames;
+
     frame_t* guest_frames = NULL;
     uint64_t guest_size = high_mem - low_mem;
 
     uint64_t guest_frames_va = hypervisor_allocate_region(&guest_frames, guest_size);
+
+    if(guest_frames_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate guest frames");
+        return 0;
+    }
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_GUEST] = *guest_frames;
+
     PRINTLOG(HYPERVISOR, LOG_TRACE, "guest_frames_va: 0x%llx", guest_frames_va);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "ept_frames_va: 0x%llx", ept_frames_va);

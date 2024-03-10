@@ -42,7 +42,7 @@ uint64_t hypervisor_allocate_region(frame_t** frame, uint64_t size) {
     return frame_va;
 }
 
-uint64_t hypervisor_create_stack(uint64_t stack_size) {
+uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size) {
     frame_t* stack_frames;
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
@@ -52,6 +52,8 @@ uint64_t hypervisor_create_stack(uint64_t stack_size) {
 
         return -1;
     }
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMEXIT_STACK] = *stack_frames;
 
     uint64_t stack_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(stack_frames->frame_address);
 
