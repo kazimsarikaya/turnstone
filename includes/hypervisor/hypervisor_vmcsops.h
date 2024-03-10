@@ -11,6 +11,7 @@
 #define ___HYPERVISOR_VMCSOPS_H 0
 
 #include <types.h>
+#include <hypervisor/hypervisor_vm.h>
 
 typedef struct vmcs_msr_blob_t {
     uint32_t index;
@@ -56,16 +57,16 @@ typedef struct vmcs_vmexit_info {
 }vmcs_vmexit_info_t;
 
 uint32_t hypervisor_vmcs_revision_id(void);
-int8_t   hypervisor_vmcs_prepare_host_state(void);
+int8_t   hypervisor_vmcs_prepare_host_state(hypervisor_vm_t* vm);
 int8_t   hypervisor_vmcs_prepare_guest_state(void);
 int8_t   hypervisor_vmcs_prepare_pinbased_control(void);
-int8_t   hypervisor_vmcs_prepare_procbased_control(void);
+int8_t   hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm);
 int8_t   hypervisor_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read);
 void     hypervisor_io_bitmap_set_port(uint8_t * bitmap, uint16_t port);
-int8_t   hypervisor_vmcs_prepare_io_bitmap(void);
-int8_t   hypervisor_vmcs_prepare_execution_control(void);
-int8_t   hypervisor_vmcs_prepare_vm_exit_and_entry_control(void);
-int8_t   hypervisor_vmcs_prepare_ept(void);
+int8_t   hypervisor_vmcs_prepare_io_bitmap(hypervisor_vm_t* vm);
+int8_t   hypervisor_vmcs_prepare_execution_control(hypervisor_vm_t* vm);
+int8_t   hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm);
+int8_t   hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm);
 int8_t   hypervisor_vmcs_prepare_vmexit_handlers(void);
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp);
 #endif

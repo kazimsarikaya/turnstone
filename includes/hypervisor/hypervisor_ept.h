@@ -11,6 +11,7 @@
 #define ___HYPERVISOR_EPT_H 0
 
 #include <types.h>
+#include <hypervisor/hypervisor_vm.h>
 
 typedef struct hypervisor_ept_pml4e_t {
     uint64_t read_access              :1;
@@ -101,7 +102,7 @@ typedef struct hypervisor_ept_pte_t {
 
 _Static_assert(sizeof(hypervisor_ept_pte_t) == 8, "PTE size is not 8 bytes");
 
-uint64_t hypervisor_ept_setup(uint64_t low_mem, uint64_t high_mem);
+uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm, uint64_t low_mem, uint64_t high_mem);
 uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical);
 int8_t   hypervisor_ept_build_tables(uint64_t ept_base, uint64_t low_mem, uint64_t high_mem);
 

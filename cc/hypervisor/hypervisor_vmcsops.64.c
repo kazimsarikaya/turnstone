@@ -118,7 +118,7 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
 _Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch. Fix add rsp above");
 
 
-int8_t hypervisor_vmcs_prepare_host_state(void) {
+int8_t hypervisor_vmcs_prepare_host_state(hypervisor_vm_t* vm) {
     uint64_t cr0 = cpu_read_cr0().bits;
     uint64_t cr3 = cpu_read_cr3();
     uint64_t cr4 = cpu_read_cr4().bits;
@@ -157,7 +157,7 @@ int8_t hypervisor_vmcs_prepare_host_state(void) {
     vmx_write(VMX_HOST_TR_BASE, tss_base);
 
 
-    vmx_write(VMX_HOST_RSP, hypervisor_create_stack(64 << 10));
+    vmx_write(VMX_HOST_RSP, hypervisor_create_stack(vm, 64 << 10));
     vmx_write(VMX_HOST_RIP, (uint64_t)hypervisor_exit_handler);
     vmx_write(VMX_HOST_EFER, efer);
 
@@ -282,7 +282,7 @@ int8_t hypervisor_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read)
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_procbased_control(void) {
+int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
     // uint32_t vpid_and_ept_msr_eax, vpid_and_ept_msr_edx;
     // uint64_t vpid_and_ept_msr = cpu_read_msr(CPU_MSR_IA32_VMX_EPT_VPID_CAP);
     // vpid_and_ept_msr_eax = vpid_and_ept_msr & 0xffffffff;
@@ -350,6 +350,8 @@ int8_t hypervisor_vmcs_prepare_procbased_control(void) {
         return -1;
     }
 
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC] = *vapic_frame;
+
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic_region_va:0x%llx", vapic_region_va);
 
     uint64_t vapic_region_pa = vapic_frame->frame_address;
@@ -365,6 +367,8 @@ int8_t hypervisor_vmcs_prepare_procbased_control(void) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate MSR bitmap region");
         return -1;
     }
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_MSR_BITMAP] = *msr_bitmap_frame;
 
     uint8_t * msr_bitmap = (uint8_t*)msr_bitmap_region_va;
 
@@ -387,10 +391,18 @@ void hypervisor_io_bitmap_set_port(uint8_t * bitmap, uint16_t port) {
 }
 
 
-int8_t hypervisor_vmcs_prepare_io_bitmap(void) {
+int8_t hypervisor_vmcs_prepare_io_bitmap(hypervisor_vm_t* vm) {
     frame_t* io_bitmap_frame = NULL;
 
     uint8_t * io_bitmap_region_va = (uint8_t*)hypervisor_allocate_region(&io_bitmap_frame, 0x2000);
+
+    if (io_bitmap_region_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate IO bitmap region");
+        return -1;
+    }
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_IO_BITMAP] = *io_bitmap_frame;
+
     // Enable serial ports
     hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3f8);
     hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3f9);
@@ -412,15 +424,15 @@ int8_t hypervisor_vmcs_prepare_io_bitmap(void) {
 }
 
 
-int8_t hypervisor_vmcs_prepare_execution_control(void) {
+int8_t hypervisor_vmcs_prepare_execution_control(hypervisor_vm_t* vm) {
     hypervisor_vmcs_prepare_pinbased_control();
-    hypervisor_vmcs_prepare_io_bitmap();
-    hypervisor_vmcs_prepare_procbased_control();
+    hypervisor_vmcs_prepare_io_bitmap(vm);
+    hypervisor_vmcs_prepare_procbased_control(vm);
 
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
+int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     uint32_t vm_exit_msr_eax, vm_exit_msr_edx;
     uint64_t vm_exit_msr = cpu_read_msr(CPU_MSR_IA32_VMX_VM_EXIT_CTLS);
     vm_exit_msr_eax = vm_exit_msr & 0xffffffff;
@@ -447,7 +459,22 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     frame_t* vm_exit_store_msr_region = NULL;
 
     uint64_t vm_exit_load_msr_region_va = hypervisor_allocate_region(&vm_exit_load_msr_region, FRAME_SIZE);
+
+    if(vm_exit_load_msr_region_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate vm_exit_load_msr_region");
+        return -1;
+    }
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_LOAD_MSR] = *vm_exit_load_msr_region;
+
     uint64_t vm_exit_store_msr_region_va = hypervisor_allocate_region(&vm_exit_store_msr_region, FRAME_SIZE);
+
+    if(vm_exit_store_msr_region_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate vm_exit_store_msr_region");
+        return -1;
+    }
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_STORE_MSR] = *vm_exit_store_msr_region;
 
     for (uint32_t index = 0; index < nr_msrs; index++) {
         vmcs_msr_blob_t * vmcs_msr = ((vmcs_msr_blob_t *)vm_exit_store_msr_region_va) + index;
@@ -492,8 +519,8 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(void) {
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_ept(void) {
-    uint64_t ept_pml4_base = hypervisor_ept_setup(0, 16 << 20);
+int8_t hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm) {
+    uint64_t ept_pml4_base = hypervisor_ept_setup(vm, 0, 16 << 20);
 
     if (ept_pml4_base == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT setup failed");
