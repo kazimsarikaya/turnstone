@@ -321,102 +321,102 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
 __attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task) {
     __asm__ __volatile__ (
-        "mov %%rax, %0\n"
-        "mov %%rbx, %1\n"
-        "mov %%rcx, %2\n"
-        "mov %%rdx, %3\n"
-        "mov %%r8,  %4\n"
-        "mov %%r9,  %5\n"
-        "mov %%r10, %6\n"
-        "mov %%r11, %7\n"
-        "mov %%r12, %8\n"
-        "mov %%r13, %9\n"
-        "mov %%r14, %10\n"
-        "mov %%r15, %11\n"
-        "mov %%rdi, %12\n"
-        "mov %%rsi, %13\n"
-        "mov %%rbp, %14\n"
+        "mov %%rax, %[rax]\n"
+        "mov %%rbx, %[rbx]\n"
+        "mov %%rcx, %[rcx]\n"
+        "mov %%rdx, %[rdx]\n"
+        "mov %%r8,  %[r8]\n"
+        "mov %%r9,  %[r9]\n"
+        "mov %%r10, %[r10]\n"
+        "mov %%r11, %[r11]\n"
+        "mov %%r12, %[r12]\n"
+        "mov %%r13, %[r13]\n"
+        "mov %%r14, %[r14]\n"
+        "mov %%r15, %[r15]\n"
+        "mov %%rdi, %[rdi]\n"
+        "mov %%rsi, %[rsi]\n"
+        "mov %%rbp, %[rbp]\n"
         "push %%rbx\n"
-        "mov %15, %%rbx\n"
+        "mov %[fx], %%rbx\n"
         "fxsave (%%rbx)\n"
         "pop %%rbx\n"
         "push %%rax\n"
         "pushfq\n"
         "mov (%%rsp), %%rax\n"
-        "mov %%rax, %16\n"
+        "mov %%rax, %[rflags]\n"
         "popfq\n"
         "pop %%rax\n"
-        "mov %%rsp, %17\n"
+        "mov %%rsp, %[rsp]\n"
         "retq\n"
         : :
-        "m" (task->rax),
-        "m" (task->rbx),
-        "m" (task->rcx),
-        "m" (task->rdx),
-        "m" (task->r8),
-        "m" (task->r9),
-        "m" (task->r10),
-        "m" (task->r11),
-        "m" (task->r12),
-        "m" (task->r13),
-        "m" (task->r14),
-        "m" (task->r15),
-        "m" (task->rdi),
-        "m" (task->rsi),
-        "m" (task->rbp),
-        "m" (task->fx_registers),
-        "m" (task->rflags),
-        "m" (task->rsp)
+        [rax]    "m" (task->rax),
+        [rbx]    "m" (task->rbx),
+        [rcx]    "m" (task->rcx),
+        [rdx]    "m" (task->rdx),
+        [r8]     "m" (task->r8),
+        [r9]     "m" (task->r9),
+        [r10]    "m" (task->r10),
+        [r11]    "m" (task->r11),
+        [r12]    "m" (task->r12),
+        [r13]    "m" (task->r13),
+        [r14]    "m" (task->r14),
+        [r15]    "m" (task->r15),
+        [rdi]    "m" (task->rdi),
+        [rsi]    "m" (task->rsi),
+        [rbp]    "m" (task->rbp),
+        [fx]     "m" (task->fx_registers),
+        [rflags] "m" (task->rflags),
+        [rsp]    "m" (task->rsp)
         );
 }
 
 __attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task) {
     __asm__ __volatile__ (
-        "mov %0,  %%rax\n"
-        "mov %1,  %%rbx\n"
-        "mov %2,  %%rcx\n"
-        "mov %3,  %%rdx\n"
-        "mov %4,  %%r8\n"
-        "mov %5,  %%r9\n"
-        "mov %6,  %%r10\n"
-        "mov %7,  %%r11\n"
-        "mov %8,  %%r12\n"
-        "mov %9,  %%r13\n"
-        "mov %10, %%r14\n"
-        "mov %11, %%r15\n"
-        "mov %13, %%rsi\n"
-        "mov %14, %%rbp\n"
+        "mov %[rax],  %%rax\n"
+        "mov %[rbx],  %%rbx\n"
+        "mov %[rcx],  %%rcx\n"
+        "mov %[rdx],  %%rdx\n"
+        "mov %[r8],  %%r8\n"
+        "mov %[r9],  %%r9\n"
+        "mov %[r10],  %%r10\n"
+        "mov %[r11],  %%r11\n"
+        "mov %[r12],  %%r12\n"
+        "mov %[r13],  %%r13\n"
+        "mov %[r14], %%r14\n"
+        "mov %[r15], %%r15\n"
+        "mov %[rsi], %%rsi\n"
+        "mov %[rbp], %%rbp\n"
         "push %%rbx\n"
-        "mov %15, %%rbx\n"
+        "mov %[fx], %%rbx\n"
         "fxrstor (%%rbx)\n"
         "pop %%rbx\n"
         "push %%rax\n"
-        "mov %16, %%rax\n"
+        "mov %[rflags], %%rax\n"
         "push %%rax\n"
         "popfq\n"
         "pop %%rax\n"
-        "mov %17, %%rsp\n"
-        "mov %12, %%rdi\n"
+        "mov %[rsp], %%rsp\n"
+        "mov %[rdi], %%rdi\n"
         "retq\n"
         : :
-        "m" (task->rax),
-        "m" (task->rbx),
-        "m" (task->rcx),
-        "m" (task->rdx),
-        "m" (task->r8),
-        "m" (task->r9),
-        "m" (task->r10),
-        "m" (task->r11),
-        "m" (task->r12),
-        "m" (task->r13),
-        "m" (task->r14),
-        "m" (task->r15),
-        "m" (task->rdi),
-        "m" (task->rsi),
-        "m" (task->rbp),
-        "m" (task->fx_registers),
-        "m" (task->rflags),
-        "m" (task->rsp)
+        [rax]     "m" (task->rax),
+        [rbx]     "m" (task->rbx),
+        [rcx]     "m" (task->rcx),
+        [rdx]     "m" (task->rdx),
+        [r8]      "m" (task->r8),
+        [r9]      "m" (task->r9),
+        [r10]     "m" (task->r10),
+        [r11]     "m" (task->r11),
+        [r12]     "m" (task->r12),
+        [r13]     "m" (task->r13),
+        [r14]     "m" (task->r14),
+        [r15]     "m" (task->r15),
+        [rdi]     "m" (task->rdi),
+        [rsi]     "m" (task->rsi),
+        [rbp]     "m" (task->rbp),
+        [fx]      "m" (task->fx_registers),
+        [rflags]  "m" (task->rflags),
+        [rsp]     "m" (task->rsp)
         );
 }
 
