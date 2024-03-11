@@ -1130,7 +1130,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         uint8_t sec_type = LINKER_SECTION_TYPE_TEXT;
 
         if(strstarts(sec_name, ".data.rel.ro") == 0) {
-            sec_type = LINKER_SECTION_TYPE_ROREL;
+            sec_type = LINKER_SECTION_TYPE_RODATARELOC;
+        } else if(strstarts(sec_name, ".data.rel") == 0) {
+            sec_type = LINKER_SECTION_TYPE_DATARELOC;
         } else if(strstarts(sec_name, ".data") == 0) {
             sec_type = LINKER_SECTION_TYPE_DATA;
         } else if(strstarts(sec_name, ".rodata") == 0) {
@@ -1316,10 +1318,6 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
 
         if(strcmp(tmp_section_name, ".eh_frame") == 0) {
             continue;
-        }
-
-        if(strstarts(tmp_section_name, ".data") == 0 && strstarts(tmp_section_name, ".data.rel.ro") != 0) {
-            PRINTLOG(LINKER, LOG_WARNING, "relocation at data section %s at %s", tmp_section_name, filename);
         }
 
         int64_t reloc_sec_id = ELF_SECTION_INFO(e_class, sections, sec_idx);

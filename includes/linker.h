@@ -23,8 +23,9 @@
 typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
+    LINKER_SECTION_TYPE_DATARELOC, ///< read-write relocation data section
     LINKER_SECTION_TYPE_RODATA, ///< readonly data section
-    LINKER_SECTION_TYPE_ROREL, ///< readonly relocation data section
+    LINKER_SECTION_TYPE_RODATARELOC, ///< readonly relocation data section
     LINKER_SECTION_TYPE_BSS, ///< bss section
     LINKER_SECTION_TYPE_RELOCATION_TABLE, ///< relocation table section
     LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE, ///< got relative relocation table section
@@ -33,6 +34,12 @@ typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_HEAP, ///< heap section
     LINKER_SECTION_TYPE_NR_SECTIONS, ///< hack four enum item count
 } linker_section_type_t; ///< shorthand for enum
+
+/**
+ * @var linker_section_type_names
+ * @brief linker section type names
+ */
+extern const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS];
 
 /**
  * @enum linker_relocation_type_t
@@ -174,6 +181,7 @@ typedef struct linker_section_t {
 
 typedef struct linker_module_t {
     uint64_t         id;
+    uint64_t         module_name_offset;
     uint64_t         virtual_start;
     uint64_t         physical_start;
     linker_section_t sections[LINKER_SECTION_TYPE_NR_SECTIONS];
@@ -230,4 +238,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
 buffer_t* linker_build_efi(linker_context_t* ctx);
 int8_t    linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array);
 
+void linker_build_modules_at_memory(void);
+void linker_print_modules_at_memory(void);
+void linker_print_module_info_at_memory(uint64_t module_id);
 #endif

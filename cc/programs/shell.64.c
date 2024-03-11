@@ -25,6 +25,7 @@
 #include <hypervisor/hypervisor_ipc.h>
 #include <list.h>
 #include <tosdb/tosdb_manager.h>
+#include <linker.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -75,6 +76,39 @@ static char_t* shell_argument_parser_advance(shell_argument_parser_t* parser) {
     return start;
 }
 
+
+static int8_t shell_handle_module_command(char_t* arguments) {
+    shell_argument_parser_t parser = {arguments, 0};
+
+    char_t* command = shell_argument_parser_advance(&parser);
+
+    if(strncmp("list", command, 6) == 0) {
+        linker_print_modules_at_memory();
+        return 0;
+    }
+
+    uint64_t module_id = atoh(command);
+
+    if(module_id == 0) {
+        printf("cannot parse module id: -%s-\n", command);
+        printf("Usage: module <list>\n");
+        printf("Usage: module id <info>\n");
+        return -1;
+    }
+
+    command = shell_argument_parser_advance(&parser);
+
+    if(strncmp(command, "info", 4) == 0){
+        linker_print_module_info_at_memory(module_id);
+        return 0;
+    }
+
+    printf("Unknown command: %s\n", command);
+    printf("Usage: module <list>\n");
+    printf("Usage: module id <info>\n");
+
+    return -1;
+}
 
 static int8_t shell_handle_tosdb_command(char_t* arguments) {
     shell_argument_parser_t parser = {arguments, 0};
@@ -256,6 +290,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\trdtsc\t\t: read timestamp counter\n"
                "\ttosdb\t\t: tosdb commands\n"
                "\tkill\t\t: kills a process with pid\n"
+               "\tmodule\t\t: module(library) utils\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -303,6 +338,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         res = shell_handle_vm_command(arguments);
     } else if(strcmp(command, "tosdb") == 0) {
         res = shell_handle_tosdb_command(arguments);
+    } else if(strcmp(command, "module") == 0) {
+        res = shell_handle_module_command(arguments);
     } else if(strcmp(command, "rdtsc") == 0) {
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;

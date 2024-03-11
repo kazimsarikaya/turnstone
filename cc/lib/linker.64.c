@@ -17,13 +17,27 @@
 #include <efi.h>
 #include <list.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.linker");
 
 int8_t    linker_link_module(linker_context_t* ctx, linker_module_t* module);
 int8_t    linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
 int8_t    linker_efi_image_section_header_cmp(const void* a, const void* b);
 buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
+
+const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS] = {
+    [LINKER_SECTION_TYPE_TEXT] = ".text",
+    [LINKER_SECTION_TYPE_DATA] = ".data",
+    [LINKER_SECTION_TYPE_DATARELOC] = ".datareloc",
+    [LINKER_SECTION_TYPE_RODATA] = ".rodata",
+    [LINKER_SECTION_TYPE_RODATARELOC] = ".rodatareloc",
+    [LINKER_SECTION_TYPE_BSS] = ".bss",
+    [LINKER_SECTION_TYPE_RELOCATION_TABLE] = ".reloc",
+    [LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE] = ".gotrel",
+    [LINKER_SECTION_TYPE_GOT] = ".got",
+    [LINKER_SECTION_TYPE_STACK] = ".stack",
+    [LINKER_SECTION_TYPE_HEAP] = ".heap",
+};
 
 int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     efi_image_relocation_entry_t* entry_a = (efi_image_relocation_entry_t*)a;
@@ -556,6 +570,9 @@ clean_relocs_iter:
 int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t recursive) {
     int8_t res = 0;
 
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
+
     linker_module_t* module = (linker_module_t*)hashmap_get(ctx->modules, (void*)module_id);
 
     if(!module) {
@@ -567,6 +584,51 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             return -1;
         }
 
+        if(ctx->symbol_table_buffer) {
+            tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+
+            tosdb_record_t* s_mod_rec = tosdb_table_create_record(tbl_modules);
+
+            if(!s_mod_rec) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot create record for searching modules");
+
+                return -1;
+            }
+
+            if(!s_mod_rec->set_uint64(s_mod_rec, "id", module_id)) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot set search key for records id column for module id 0x%llx", module_id);
+                s_mod_rec->destroy(s_mod_rec);
+
+                return -1;
+            }
+
+            if(!s_mod_rec->get_record(s_mod_rec)) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get module record for module id 0x%llx", module_id);
+                s_mod_rec->destroy(s_mod_rec);
+
+                return -1;
+            }
+
+            char_t* module_name = NULL;
+
+            if(!s_mod_rec->get_string(s_mod_rec, "name", &module_name)) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get module name for module id 0x%llx", module_id);
+                s_mod_rec->destroy(s_mod_rec);
+
+                return -1;
+            }
+
+            s_mod_rec->destroy(s_mod_rec);
+
+            uint64_t symbol_table_index = buffer_get_length(ctx->symbol_table_buffer);
+
+            buffer_append_bytes(ctx->symbol_table_buffer, (uint8_t*)module_name, strlen(module_name) + 1);
+
+            module->module_name_offset = symbol_table_index;
+
+            memory_free(module_name);
+        }
+
         module->id = module_id;
         hashmap_put(ctx->modules, (void*)module_id, module);
     } else {
@@ -574,10 +636,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             return -2;
         }
     }
-
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
-
 
     tosdb_record_t* s_sec_rec = tosdb_table_create_record(tbl_sections);
 
@@ -1353,10 +1411,10 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
             if(i == LINKER_SECTION_TYPE_TEXT) {
                 strcpy(".text", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_TEXT;
-            } else if(i == LINKER_SECTION_TYPE_DATA) {
+            } else if(i == LINKER_SECTION_TYPE_DATA || i == LINKER_SECTION_TYPE_DATARELOC) {
                 strcpy(".data", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_DATA;
-            } else if(i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_ROREL) {
+            } else if(i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_RODATARELOC) {
                 strcpy(".rdata", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_RODATA;
             } else if(i == LINKER_SECTION_TYPE_BSS) {
@@ -1497,7 +1555,10 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
         .base_relocation_table.size = reloc_section.size_of_raw_data,
         .size_of_code = ctx->size_of_sections[LINKER_SECTION_TYPE_TEXT],
-        .size_of_initialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_DATA] + ctx->size_of_sections[LINKER_SECTION_TYPE_RODATA] + ctx->size_of_sections[LINKER_SECTION_TYPE_ROREL],
+        .size_of_initialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_DATA] +
+                                    ctx->size_of_sections[LINKER_SECTION_TYPE_DATARELOC] +
+                                    ctx->size_of_sections[LINKER_SECTION_TYPE_RODATA] +
+                                    ctx->size_of_sections[LINKER_SECTION_TYPE_RODATARELOC],
         .size_of_uninitialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_BSS],
         .size_of_headers = size_of_headers,
         .size_of_image = ctx->program_size + relocation_size + ctx->program_start_physical + padding_after_relocations,
@@ -1801,7 +1862,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                         page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
                     }
 
-                    if(i == LINKER_SECTION_TYPE_ROREL || i == LINKER_SECTION_TYPE_RODATA) {
+                    if(i == LINKER_SECTION_TYPE_RODATARELOC || i == LINKER_SECTION_TYPE_RODATA) {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
                     }
 
@@ -2129,6 +2190,26 @@ error_destroy_buffer:
     return NULL;
 }
 
+static int8_t linker_build_metadata_buffer_null_terminator(buffer_t* metadata_buffer, uint64_t count) {
+    if(!metadata_buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid buffer");
+
+        return -1;
+    }
+
+    uint64_t null_terminator = 0;
+
+    for(uint64_t i = 0; i < count; i++) {
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&null_terminator, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
@@ -2158,6 +2239,13 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
 
         if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->module_name_offset, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module size to buffer");
             it->destroy(it);
 
             goto error_destroy_buffer;
@@ -2211,11 +2299,25 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
             }
         }
 
+        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+
         it = it->next(it);
     }
 
 
     it->destroy(it);
+
+    if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+        goto error_destroy_buffer;
+    }
 
     return metadata_buffer;
 
