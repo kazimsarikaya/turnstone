@@ -288,6 +288,11 @@ int32_t main(int32_t argc, char** argv) {
 
                 FILE* fp_efi_boot = fopen(efi_boot_file_name, "r");
 
+                if(fp_efi_boot == NULL) {
+                    print_error("efi boot file can not opened");
+                    return -1;
+                }
+
                 uint8_t buf[4096];
 
                 while(1) {
