@@ -1435,8 +1435,11 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                 case R_X86_64_GOTPC64:
                     reloc_type = LINKER_RELOCATION_TYPE_64_GOTPC64;
                     break;
+                case R_X86_64_PLTOFF64:
+                    reloc_type = LINKER_RELOCATION_TYPE_64_PLTOFF64;
+                    break;
                 default:
-                    print_error("unknown 64 bit reloc type 0x%llx", reloc_type);
+                    PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x", reloc_type);
                     error = true;
                     break;
                 }
