@@ -174,6 +174,8 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    linker_build_modules_at_memory();
+
     if(debug_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init debug. Halting...");
         cpu_hlt();

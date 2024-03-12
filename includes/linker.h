@@ -23,9 +23,11 @@
 typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_TEXT, ///< executable (text) section
     LINKER_SECTION_TYPE_DATA, ///< read-write data section
+    LINKER_SECTION_TYPE_DATARELOC, ///< read-write relocation data section
     LINKER_SECTION_TYPE_RODATA, ///< readonly data section
-    LINKER_SECTION_TYPE_ROREL, ///< readonly relocation data section
+    LINKER_SECTION_TYPE_RODATARELOC, ///< readonly relocation data section
     LINKER_SECTION_TYPE_BSS, ///< bss section
+    LINKER_SECTION_TYPE_PLT, ///< procedure linkage table section
     LINKER_SECTION_TYPE_RELOCATION_TABLE, ///< relocation table section
     LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE, ///< got relative relocation table section
     LINKER_SECTION_TYPE_GOT, ///< global offset table section
@@ -33,6 +35,12 @@ typedef enum linker_section_type_t {
     LINKER_SECTION_TYPE_HEAP, ///< heap section
     LINKER_SECTION_TYPE_NR_SECTIONS, ///< hack four enum item count
 } linker_section_type_t; ///< shorthand for enum
+
+/**
+ * @var linker_section_type_names
+ * @brief linker section type names
+ */
+extern const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS];
 
 /**
  * @enum linker_relocation_type_t
@@ -53,6 +61,7 @@ typedef enum linker_relocation_type_t {
     LINKER_RELOCATION_TYPE_64_GOT64, ///< 64 bit width 64 bit got direct
     LINKER_RELOCATION_TYPE_64_GOTOFF64, ///< 64 bit width 64 bit got offset relocation
     LINKER_RELOCATION_TYPE_64_GOTPC64, ///< 64 bit width 64 bit got pc relative relocation
+    LINKER_RELOCATION_TYPE_64_PLTOFF64, ///< 64 bit width 64 bit plt offset relocation
 } linker_relocation_type_t; ///< shorthand for enum
 
 
@@ -115,6 +124,7 @@ typedef struct linker_global_offset_table_entry_t {
 }__attribute__((packed)) linker_global_offset_table_entry_t; ///< shorthand for struct
 
 _Static_assert(sizeof(linker_global_offset_table_entry_t) % 8 == 0, "linker_global_offset_table_entry_t align mismatch");
+_Static_assert(sizeof(linker_global_offset_table_entry_t) == 0x38, "linker_global_offset_table_entry_t size mismatch");
 
 /*! linker executable or library magic TOSEL */
 #define TOS_EXECUTABLE_OR_LIBRARY_MAGIC "TOSELF"
@@ -174,8 +184,10 @@ typedef struct linker_section_t {
 
 typedef struct linker_module_t {
     uint64_t         id;
+    uint64_t         module_name_offset;
     uint64_t         virtual_start;
     uint64_t         physical_start;
+    hashmap_t*       plt_offsets;
     linker_section_t sections[LINKER_SECTION_TYPE_NR_SECTIONS];
 } linker_module_t;
 
@@ -218,7 +230,7 @@ typedef enum linker_program_dump_type_t {
 int8_t    linker_destroy_context(linker_context_t* ctx);
 int8_t    linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t recursive);
 int8_t    linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t section_id, uint8_t section_type, uint64_t section_offset);
-int8_t    linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_section_t* section, boolean_t recursive);
+int8_t    linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_module_t* module, boolean_t recursive);
 boolean_t linker_is_all_symbols_resolved(linker_context_t* ctx);
 int8_t    linker_calculate_program_size(linker_context_t* ctx);
 int8_t    linker_bind_linear_addresses(linker_context_t* ctx);
@@ -230,4 +242,7 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
 buffer_t* linker_build_efi(linker_context_t* ctx);
 int8_t    linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_type_t dump_type, uint8_t* array);
 
+void linker_build_modules_at_memory(void);
+void linker_print_modules_at_memory(void);
+void linker_print_module_info_at_memory(uint64_t module_id);
 #endif

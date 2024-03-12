@@ -63,8 +63,8 @@ uint32_t task_mxcsr_mask = 0;
 extern int8_t kmain64(void);
 
 int8_t                                          task_task_switch_isr(interrupt_frame_ext_t* frame);
-__attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task);
-__attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task);
+__attribute__((naked, no_stack_protector)) void task_save_registers(task_registers_t* registers);
+__attribute__((naked, no_stack_protector)) void task_load_registers(task_registers_t* registers);
 void                                            task_cleanup(void);
 task_t*                                         task_find_next_task(uint32_t apic_id);
 
@@ -206,9 +206,9 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->state = TASK_STATE_CREATED;
     kernel_task->entry_point = kmain64;
     kernel_task->page_table = memory_paging_get_table();
-    kernel_task->fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+    kernel_task->registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
 
-    if(kernel_task->fx_registers == NULL) {
+    if(kernel_task->registers == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task fx registers");
 
         return -1;
@@ -221,10 +221,10 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->output_buffer = stdbufs_default_output_buffer;
     kernel_task->error_buffer = stdbufs_default_error_buffer;
 
-    // get mxcsr by fxsave
-    asm volatile ("mov %0, %%rax\nfxsave (%%rax)\n" : "=m" (kernel_task->fx_registers) : : "rax", "memory");
+    // get mxcsr
+    task_save_registers(kernel_task->registers);
 
-    task_mxcsr_mask = *(uint32_t*)&kernel_task->fx_registers[28];
+    task_mxcsr_mask = *(uint32_t*)&kernel_task->registers->sse[28];
 
     PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
@@ -319,104 +319,110 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 }
 #pragma GCC diagnostic pop
 
-__attribute__((naked, no_stack_protector)) void task_save_registers(task_t* task) {
+__attribute__((naked, no_stack_protector)) void task_save_registers(task_registers_t* registers) {
     __asm__ __volatile__ (
-        "mov %%rax, %0\n"
-        "mov %%rbx, %1\n"
-        "mov %%rcx, %2\n"
-        "mov %%rdx, %3\n"
-        "mov %%r8,  %4\n"
-        "mov %%r9,  %5\n"
-        "mov %%r10, %6\n"
-        "mov %%r11, %7\n"
-        "mov %%r12, %8\n"
-        "mov %%r13, %9\n"
-        "mov %%r14, %10\n"
-        "mov %%r15, %11\n"
-        "mov %%rdi, %12\n"
-        "mov %%rsi, %13\n"
-        "mov %%rbp, %14\n"
+        "mov %%rax, %[rax]\n"
+        "mov %%rbx, %[rbx]\n"
+        "mov %%rcx, %[rcx]\n"
+        "mov %%rdx, %[rdx]\n"
+        "mov %%r8,  %[r8]\n"
+        "mov %%r9,  %[r9]\n"
+        "mov %%r10, %[r10]\n"
+        "mov %%r11, %[r11]\n"
+        "mov %%r12, %[r12]\n"
+        "mov %%r13, %[r13]\n"
+        "mov %%r14, %[r14]\n"
+        "mov %%r15, %[r15]\n"
+        "mov %%rdi, %[rdi]\n"
+        "mov %%rsi, %[rsi]\n"
+        "mov %%rbp, %[rbp]\n"
         "push %%rbx\n"
-        "mov %15, %%rbx\n"
+        "lea %[sse], %%rbx\n"
         "fxsave (%%rbx)\n"
         "pop %%rbx\n"
         "push %%rax\n"
         "pushfq\n"
         "mov (%%rsp), %%rax\n"
-        "mov %%rax, %16\n"
+        "mov %%rax, %[rflags]\n"
         "popfq\n"
+        "mov %%cr3, %%rax\n"
+        "mov %%rax, %[cr3]\n"
         "pop %%rax\n"
-        "mov %%rsp, %17\n"
+        "mov %%rsp, %[rsp]\n"
         "retq\n"
         : :
-        "m" (task->rax),
-        "m" (task->rbx),
-        "m" (task->rcx),
-        "m" (task->rdx),
-        "m" (task->r8),
-        "m" (task->r9),
-        "m" (task->r10),
-        "m" (task->r11),
-        "m" (task->r12),
-        "m" (task->r13),
-        "m" (task->r14),
-        "m" (task->r15),
-        "m" (task->rdi),
-        "m" (task->rsi),
-        "m" (task->rbp),
-        "m" (task->fx_registers),
-        "m" (task->rflags),
-        "m" (task->rsp)
+        [rax]    "m" (registers->rax),
+        [rbx]    "m" (registers->rbx),
+        [rcx]    "m" (registers->rcx),
+        [rdx]    "m" (registers->rdx),
+        [r8]     "m" (registers->r8),
+        [r9]     "m" (registers->r9),
+        [r10]    "m" (registers->r10),
+        [r11]    "m" (registers->r11),
+        [r12]    "m" (registers->r12),
+        [r13]    "m" (registers->r13),
+        [r14]    "m" (registers->r14),
+        [r15]    "m" (registers->r15),
+        [rdi]    "m" (registers->rdi),
+        [rsi]    "m" (registers->rsi),
+        [rbp]    "m" (registers->rbp),
+        [sse]    "m" (registers->sse),
+        [rflags] "m" (registers->rflags),
+        [rsp]    "m" (registers->rsp),
+        [cr3]     "m" (registers->cr3)
         );
 }
 
-__attribute__((naked, no_stack_protector)) void task_load_registers(task_t* task) {
+__attribute__((naked, no_stack_protector)) void task_load_registers(task_registers_t* registers) {
     __asm__ __volatile__ (
-        "mov %0,  %%rax\n"
-        "mov %1,  %%rbx\n"
-        "mov %2,  %%rcx\n"
-        "mov %3,  %%rdx\n"
-        "mov %4,  %%r8\n"
-        "mov %5,  %%r9\n"
-        "mov %6,  %%r10\n"
-        "mov %7,  %%r11\n"
-        "mov %8,  %%r12\n"
-        "mov %9,  %%r13\n"
-        "mov %10, %%r14\n"
-        "mov %11, %%r15\n"
-        "mov %13, %%rsi\n"
-        "mov %14, %%rbp\n"
+        "mov %[rax],  %%rax\n"
+        "mov %[rbx],  %%rbx\n"
+        "mov %[rcx],  %%rcx\n"
+        "mov %[rdx],  %%rdx\n"
+        "mov %[r8],  %%r8\n"
+        "mov %[r9],  %%r9\n"
+        "mov %[r10],  %%r10\n"
+        "mov %[r11],  %%r11\n"
+        "mov %[r12],  %%r12\n"
+        "mov %[r13],  %%r13\n"
+        "mov %[r14], %%r14\n"
+        "mov %[r15], %%r15\n"
+        "mov %[rsi], %%rsi\n"
+        "mov %[rbp], %%rbp\n"
         "push %%rbx\n"
-        "mov %15, %%rbx\n"
+        "lea %[sse], %%rbx\n"
         "fxrstor (%%rbx)\n"
         "pop %%rbx\n"
         "push %%rax\n"
-        "mov %16, %%rax\n"
+        "mov %[cr3], %%rax\n"
+        "mov %%rax, %%cr3\n"
+        "mov %[rflags], %%rax\n"
         "push %%rax\n"
         "popfq\n"
         "pop %%rax\n"
-        "mov %17, %%rsp\n"
-        "mov %12, %%rdi\n"
+        "mov %[rsp], %%rsp\n"
+        "mov %[rdi], %%rdi\n"
         "retq\n"
         : :
-        "m" (task->rax),
-        "m" (task->rbx),
-        "m" (task->rcx),
-        "m" (task->rdx),
-        "m" (task->r8),
-        "m" (task->r9),
-        "m" (task->r10),
-        "m" (task->r11),
-        "m" (task->r12),
-        "m" (task->r13),
-        "m" (task->r14),
-        "m" (task->r15),
-        "m" (task->rdi),
-        "m" (task->rsi),
-        "m" (task->rbp),
-        "m" (task->fx_registers),
-        "m" (task->rflags),
-        "m" (task->rsp)
+        [rax]     "m" (registers->rax),
+        [rbx]     "m" (registers->rbx),
+        [rcx]     "m" (registers->rcx),
+        [rdx]     "m" (registers->rdx),
+        [r8]      "m" (registers->r8),
+        [r9]      "m" (registers->r9),
+        [r10]     "m" (registers->r10),
+        [r11]     "m" (registers->r11),
+        [r12]     "m" (registers->r12),
+        [r13]     "m" (registers->r13),
+        [r14]     "m" (registers->r14),
+        [r15]     "m" (registers->r15),
+        [rdi]     "m" (registers->rdi),
+        [rsi]     "m" (registers->rsi),
+        [rbp]     "m" (registers->rbp),
+        [sse]     "m" (registers->sse),
+        [rflags]  "m" (registers->rflags),
+        [rsp]     "m" (registers->rsp),
+        [cr3]     "m" (registers->cr3)
         );
 }
 
@@ -477,7 +483,7 @@ static void task_cleanup_task(task_t* task) {
         cpu_hlt();
     }
 
-    memory_free_ext(task->creator_heap, task->fx_registers);
+    memory_free_ext(task->creator_heap, task->registers);
     memory_free_ext(task->creator_heap, task);
 }
 
@@ -652,7 +658,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
         }
     }
 
-    task_save_registers(current_task);
+    task_save_registers(current_task->registers);
 
     if(current_task->state != TASK_STATE_ENDED) {
         current_task->state = TASK_STATE_SUSPENDED;
@@ -679,7 +685,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
         }
     }
 
-    task_load_registers(current_task);
+    task_load_registers(current_task->registers);
 
     task_switch_task_exit_prep();
 }
@@ -781,9 +787,9 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     new_task->creator_heap = heap;
 
-    uint8_t* fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
 
-    if(fx_registers == NULL) {
+    if(registers == NULL) {
         memory_free_ext(heap, new_task);
 
         return -1;
@@ -797,7 +803,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
-        memory_free_ext(heap, fx_registers);
+        memory_free_ext(heap, registers);
 
         return -1;
     }
@@ -816,7 +822,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         }
 
         memory_free_ext(heap, new_task);
-        memory_free_ext(heap, fx_registers);
+        memory_free_ext(heap, registers);
 
         return -1;
     }
@@ -863,22 +869,28 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = entry_point;
     new_task->page_table = memory_paging_get_table();
-    new_task->fx_registers = fx_registers;
-    new_task->rflags = 0x202;
+    new_task->registers = registers;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
     new_task->task_name = strdup_at_heap(task_heap, task_name);
 
-    *(uint16_t*)&new_task->fx_registers[0] = 0x37F;
-    *(uint32_t*)&new_task->fx_registers[24] = 0x1F80 & task_mxcsr_mask;
+    registers->rflags = 0x202;
+
+    uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
+    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
+
+    registers->cr3 = cr3_fa;
+
+    *(uint16_t*)&registers->sse[0] = 0x37F;
+    *(uint32_t*)&registers->sse[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
-    new_task->rbp = rbp;
-    new_task->rsp = rbp - 32; // 24 is for last return address, entry point and end task
+    registers->rbp = rbp;
+    registers->rsp = rbp - 32; // 24 is for last return address, entry point and end task
 
-    new_task->rdi = args_cnt;
-    new_task->rsi = (uint64_t)args;
+    registers->rdi = args_cnt;
+    registers->rsi = (uint64_t)args;
 
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
@@ -893,7 +905,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->error_buffer = buffer_create_with_heap(task_heap, 0x1000);
 
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
-             new_task->task_name, new_task->task_id, new_task, new_task->rsp, new_task->rbp, new_task->heap, new_task->heap_size);
+             new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->heap, new_task->heap_size);
 
     old_int_status = cpu_cli();
 
@@ -926,9 +938,9 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
 
     new_task->creator_heap = heap;
 
-    uint8_t* fx_registers = memory_malloc_ext(heap, sizeof(uint8_t) * 512, 0x10);
+    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
 
-    if(fx_registers == NULL) {
+    if(registers == NULL) {
         memory_free_ext(heap, new_task);
 
         return -1;
@@ -944,7 +956,7 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
     if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
-        memory_free_ext(heap, fx_registers);
+        memory_free_ext(heap, registers);
 
         return -1;
     }
@@ -971,19 +983,25 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = task_idle_task;
     new_task->page_table = memory_paging_get_table();
-    new_task->fx_registers = fx_registers;
-    new_task->rflags = 0x202;
+    new_task->registers = registers;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
     new_task->task_name = "idle";
 
-    *(uint16_t*)&new_task->fx_registers[0] = 0x37F;
-    *(uint32_t*)&new_task->fx_registers[24] = 0x1F80 & task_mxcsr_mask;
+    registers->rflags = 0x202;
+
+    uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
+    cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
+
+    registers->cr3 = cr3_fa;
+
+    *(uint16_t*)&registers->sse[0] = 0x37F;
+    *(uint32_t*)&registers->sse[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
-    new_task->rbp = rbp;
-    new_task->rsp = rbp - 32;
+    registers->rbp = rbp;
+    registers->rsp = rbp - 32;
 
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = (uint64_t)task_end_task;
@@ -1095,7 +1113,7 @@ void task_print_all(void) {
 
         printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n",
                task->task_name, task->task_id, task, task->task_switch_count,
-               task->rsp, task->rbp, task->heap, task->heap_size,
+               task->registers->rsp, task->registers->rbp, task->heap, task->heap_size,
                task->stack, task->stack_size);
 
         printf("\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n",
@@ -1303,7 +1321,7 @@ void task_remove_task_after_fault(uint64_t task_id) {
     current_tasks[apic_id] = current_task;
     current_task->state = TASK_STATE_RUNNING;
 
-    task_load_registers(current_task);
+    task_load_registers(current_task->registers);
 
     cpu_sti();
 }

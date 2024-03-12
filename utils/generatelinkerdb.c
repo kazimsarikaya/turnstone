@@ -1130,7 +1130,9 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         uint8_t sec_type = LINKER_SECTION_TYPE_TEXT;
 
         if(strstarts(sec_name, ".data.rel.ro") == 0) {
-            sec_type = LINKER_SECTION_TYPE_ROREL;
+            sec_type = LINKER_SECTION_TYPE_RODATARELOC;
+        } else if(strstarts(sec_name, ".data.rel") == 0) {
+            sec_type = LINKER_SECTION_TYPE_DATARELOC;
         } else if(strstarts(sec_name, ".data") == 0) {
             sec_type = LINKER_SECTION_TYPE_DATA;
         } else if(strstarts(sec_name, ".rodata") == 0) {
@@ -1318,10 +1320,6 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             continue;
         }
 
-        if(strstarts(tmp_section_name, ".data") == 0 && strstarts(tmp_section_name, ".data.rel.ro") != 0) {
-            PRINTLOG(LINKER, LOG_WARNING, "relocation at data section %s at %s", tmp_section_name, filename);
-        }
-
         int64_t reloc_sec_id = ELF_SECTION_INFO(e_class, sections, sec_idx);
 
         if(!reloc_sec_id) {
@@ -1437,8 +1435,11 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                 case R_X86_64_GOTPC64:
                     reloc_type = LINKER_RELOCATION_TYPE_64_GOTPC64;
                     break;
+                case R_X86_64_PLTOFF64:
+                    reloc_type = LINKER_RELOCATION_TYPE_64_PLTOFF64;
+                    break;
                 default:
-                    print_error("unknown 64 bit reloc type 0x%llx", reloc_type);
+                    PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x", reloc_type);
                     error = true;
                     break;
                 }

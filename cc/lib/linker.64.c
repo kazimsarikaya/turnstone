@@ -17,13 +17,28 @@
 #include <efi.h>
 #include <list.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.linker");
 
 int8_t    linker_link_module(linker_context_t* ctx, linker_module_t* module);
 int8_t    linker_efi_image_relocation_entry_cmp(const void* a, const void* b);
 int8_t    linker_efi_image_section_header_cmp(const void* a, const void* b);
 buffer_t* linker_build_relocation_table_buffer(linker_context_t* ctx);
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx);
+
+const char_t*const linker_section_type_names[LINKER_SECTION_TYPE_NR_SECTIONS] = {
+    [LINKER_SECTION_TYPE_TEXT] = ".text",
+    [LINKER_SECTION_TYPE_DATA] = ".data",
+    [LINKER_SECTION_TYPE_DATARELOC] = ".datareloc",
+    [LINKER_SECTION_TYPE_RODATA] = ".rodata",
+    [LINKER_SECTION_TYPE_RODATARELOC] = ".rodatareloc",
+    [LINKER_SECTION_TYPE_BSS] = ".bss",
+    [LINKER_SECTION_TYPE_PLT] = ".plt",
+    [LINKER_SECTION_TYPE_RELOCATION_TABLE] = ".reloc",
+    [LINKER_SECTION_TYPE_GOT_RELATIVE_RELOCATION_TABLE] = ".gotrel",
+    [LINKER_SECTION_TYPE_GOT] = ".got",
+    [LINKER_SECTION_TYPE_STACK] = ".stack",
+    [LINKER_SECTION_TYPE_HEAP] = ".heap",
+};
 
 int8_t linker_efi_image_relocation_entry_cmp(const void* a, const void* b) {
     efi_image_relocation_entry_t* entry_a = (efi_image_relocation_entry_t*)a;
@@ -74,6 +89,10 @@ int8_t linker_destroy_context(linker_context_t* ctx) {
 
         for(uint8_t i = 0; i < LINKER_SECTION_TYPE_NR_SECTIONS; i++) {
             buffer_destroy(module->sections[i].section_data);
+        }
+
+        if(module->plt_offsets) {
+            hashmap_destroy(module->plt_offsets);
         }
 
         memory_free(module);
@@ -273,8 +292,31 @@ clean_symbols_iter:
     return -1;
 }
 
-int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_section_t* section, boolean_t recursive) {
+const uint8_t linker_plt_entry_data[] = {
+    0x41, 0x57, // push %r15
+    0x41, 0x56, // push %r14
+    0x49, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs $_GLOBAL_OFFSET_TABLE_, %r15
+    0x4c, 0x8d, 0x35, 0xeb, 0xff, 0xff, 0xff, // lea -0x15(%rip),%r14
+    0x4d, 0x01, 0xf7, // add %r14,%r15
+    0x49, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs $symbol@GOT, %r11
+    0x4f, 0x8b, 0x74, 0x3b, 0x08, // mov 0x8(%r11,%r15,1),%r14
+    0x49, 0x0f, 0xba, 0xe6, 0x00, // bt $0x0, %r14
+    0x73, 0x0b, // jae <notfound>
+    0x41, 0x5e, // pop %r14
+    0x4f, 0x8b, 0x1c, 0x3b, // mov (%r11,%r15,1),%r11
+    0x41, 0x5f, // pop %r15
+    0x41, 0xff, 0xe3, // jmp *%r11
+    0xe9, 0x00, 0x00, 0x00, 0x00, // notfound: jmp PLT0
+    0x90, // nop
+    0x90, // nop
+};
+
+_Static_assert(sizeof(linker_plt_entry_data) == 0x40, "plt entry size mismatch");
+
+int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_module_t* module, boolean_t recursive) {
     int8_t res = 0;
+
+    linker_section_t* reloc_section = &module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE];
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
@@ -327,8 +369,8 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
     char_t* symbol_name = NULL;
     int64_t module_id = 0;
 
-    if(!section->section_data) {
-        section->section_data = buffer_new();
+    if(!reloc_section->section_data) {
+        reloc_section->section_data = buffer_new();
     }
 
     while(it->end_of_iterator(it) != 0) {
@@ -463,6 +505,114 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             PRINTLOG(LINKER, LOG_DEBUG, "relocation 0x%llx source symbol section id 0x%llx", reloc_id, symbol_section_id);
         }
 
+        if(reloc_type == LINKER_RELOCATION_TYPE_64_PLTOFF64) {
+            PRINTLOG(LINKER, LOG_TRACE, "relocation 0x%llx is PLTOFF64", reloc_id);
+            linker_section_t* plt_section = &module->sections[LINKER_SECTION_TYPE_PLT];
+
+            if(!module->plt_offsets) {
+                module->plt_offsets = hashmap_integer(128);
+
+                if(!module->plt_offsets) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot create plt offsets hashmap");
+                    reloc_rec->destroy(reloc_rec);
+
+                    goto clean_relocs_iter;
+                }
+            }
+
+            if(buffer_get_length(plt_section->section_data) == 0) {
+                PRINTLOG(LINKER, LOG_TRACE, "module 0x%llx needs PLT section", module->id);
+                plt_section->section_data = buffer_new();
+
+                if(!plt_section->section_data) {
+                    PRINTLOG(LINKER, LOG_ERROR, "cannot create plt section data buffer");
+                    reloc_rec->destroy(reloc_rec);
+
+                    goto clean_relocs_iter;
+                }
+
+                uint32_t nopl = 0x041f0f;
+
+                // fill first 64 bytes with nopl 0x0(%rax,%rax,1)
+                for(int64_t idx = 0; idx < 16; idx++) {
+                    buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
+                }
+
+                // each modules PLT0 entry needs to be defined as symbol with id module_id << 32
+                // also we need to add it to got table
+                linker_global_offset_table_entry_t got_entry = {0};
+
+                uint64_t plt_symbol_id = module->id << 32; // may be we have over 0x100000000 symbols ???
+
+                got_entry.resolved = true;
+                got_entry.module_id = module->id;
+                got_entry.symbol_id = plt_symbol_id;
+                got_entry.symbol_type = LINKER_SYMBOL_TYPE_FUNCTION;
+                got_entry.symbol_scope = LINKER_SYMBOL_SCOPE_LOCAL;
+                got_entry.symbol_value = 0;
+                got_entry.symbol_size = 4;
+                got_entry.section_type = LINKER_SECTION_TYPE_PLT;
+
+                uint64_t got_entry_index = buffer_get_length(ctx->got_table_buffer) / sizeof(linker_global_offset_table_entry_t);
+
+                buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&got_entry, sizeof(linker_global_offset_table_entry_t));
+
+                hashmap_put(ctx->got_symbol_index_map, (void*)plt_symbol_id, (void*)got_entry_index);
+                PRINTLOG(LINKER, LOG_TRACE, "added PLT0 0x%llx entry for module id 0x%llx to got table at index 0x%llx", plt_symbol_id, module->id, got_entry_index);
+            }
+
+            uint64_t plt_offset = buffer_get_length(plt_section->section_data);
+
+            hashmap_put(module->plt_offsets, (void*)symbol_id, (void*)plt_offset);
+
+            _Static_assert(sizeof(linker_global_offset_table_entry_t) == 0x38, "fix plt entry values");
+
+            buffer_append_bytes(plt_section->section_data, (uint8_t*)linker_plt_entry_data, sizeof(linker_plt_entry_data));
+
+            plt_section->size = buffer_get_length(plt_section->section_data);
+
+            // each PLT entry is 0x40 bytes
+            // it has 3 relocations
+            // 1. at 0x6 a GOTPC64 for _GLOBAL_OFFSET_TABLE_ (symbol id 0x1)
+            // 2. at 0x1a a GOT64 for the symbol
+            // 3. at 0x3a a PC32 for the PLT0 entry
+
+            memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
+
+            relocation.symbol_id = 1;
+            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOTPC64;
+            relocation.offset = plt_offset + 0x6;
+            relocation.addend = 6; // two push instructions before this and it is also 2 bytes
+
+            buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+            reloc_section->size += sizeof(linker_relocation_entry_t);
+
+            memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
+
+            relocation.symbol_id = symbol_id;
+            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOT64;
+            relocation.offset = plt_offset + 0x1a;
+            relocation.addend = 0;
+
+            buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+            reloc_section->size += sizeof(linker_relocation_entry_t);
+
+            memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
+
+            relocation.symbol_id = module->id << 32;
+            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.relocation_type = LINKER_RELOCATION_TYPE_64_PC32;
+            relocation.offset = plt_offset + 0x3a;
+            relocation.addend = -4;
+
+            buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+            reloc_section->size += sizeof(linker_relocation_entry_t);
+
+            PRINTLOG(LINKER, LOG_TRACE, "added PLT entry for symbol 0x%llx at offset 0x%llx for module id 0x%llx", symbol_id, plt_offset, module->id);
+        }
+
         memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
         relocation.symbol_id = symbol_id;
@@ -471,8 +621,8 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         relocation.offset = reloc_offset + section_offset;
         relocation.addend = reloc_addend;
 
-        buffer_append_bytes(section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
-        section->size += sizeof(linker_relocation_entry_t);
+        buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+        reloc_section->size += sizeof(linker_relocation_entry_t);
 
         if(!is_got_symbol) {
             PRINTLOG(LINKER, LOG_TRACE, "check if symbol 0x%llx loaded?", symbol_id);
@@ -556,6 +706,9 @@ clean_relocs_iter:
 int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t recursive) {
     int8_t res = 0;
 
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
+
     linker_module_t* module = (linker_module_t*)hashmap_get(ctx->modules, (void*)module_id);
 
     if(!module) {
@@ -567,6 +720,51 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             return -1;
         }
 
+        if(ctx->symbol_table_buffer) {
+            tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+
+            tosdb_record_t* s_mod_rec = tosdb_table_create_record(tbl_modules);
+
+            if(!s_mod_rec) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot create record for searching modules");
+
+                return -1;
+            }
+
+            if(!s_mod_rec->set_uint64(s_mod_rec, "id", module_id)) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot set search key for records id column for module id 0x%llx", module_id);
+                s_mod_rec->destroy(s_mod_rec);
+
+                return -1;
+            }
+
+            if(!s_mod_rec->get_record(s_mod_rec)) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get module record for module id 0x%llx", module_id);
+                s_mod_rec->destroy(s_mod_rec);
+
+                return -1;
+            }
+
+            char_t* module_name = NULL;
+
+            if(!s_mod_rec->get_string(s_mod_rec, "name", &module_name)) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get module name for module id 0x%llx", module_id);
+                s_mod_rec->destroy(s_mod_rec);
+
+                return -1;
+            }
+
+            s_mod_rec->destroy(s_mod_rec);
+
+            uint64_t symbol_table_index = buffer_get_length(ctx->symbol_table_buffer);
+
+            buffer_append_bytes(ctx->symbol_table_buffer, (uint8_t*)module_name, strlen(module_name) + 1);
+
+            module->module_name_offset = symbol_table_index;
+
+            memory_free(module_name);
+        }
+
         module->id = module_id;
         hashmap_put(ctx->modules, (void*)module_id, module);
     } else {
@@ -574,10 +772,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             return -2;
         }
     }
-
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
-    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
-
 
     tosdb_record_t* s_sec_rec = tosdb_table_create_record(tbl_sections);
 
@@ -759,7 +953,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             goto clean_secs_iter;
         }
 
-        if(linker_build_relocations(ctx,  section_id, section_type, section_offset, &module->sections[LINKER_SECTION_TYPE_RELOCATION_TABLE], recursive) != 0) {
+        if(linker_build_relocations(ctx,  section_id, section_type, section_offset, module, recursive) != 0) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot build relocations for section id 0x%llx", section_id);
             sec_rec->destroy(sec_rec);
 
@@ -1111,7 +1305,20 @@ int8_t linker_link_module(linker_context_t* ctx, linker_module_t* module) {
         } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_GOTPC64) {
             uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
             *value = ctx->got_address_virtual + reloc_entries[reloc_id].addend - (module->sections[reloc_entries[reloc_id].section_type].virtual_start + reloc_entries[reloc_id].offset);
-        } else {
+        } else if(reloc_entries[reloc_id].relocation_type == LINKER_RELOCATION_TYPE_64_PLTOFF64) {
+            // do nothing
+            uint64_t* value = (uint64_t*)(section_data + reloc_entries[reloc_id].offset);
+            uint64_t plt_offset = (uint64_t)hashmap_get(module->plt_offsets, (void*)reloc_entries[reloc_id].symbol_id);
+
+            if(!plt_offset) {
+                PRINTLOG(LINKER, LOG_ERROR, "cannot get plt offset for symbol 0x%llx", reloc_entries[reloc_id].symbol_id);
+
+                return -1;
+            }
+
+            uint64_t plt_virtual = module->sections[LINKER_SECTION_TYPE_PLT].virtual_start + plt_offset;
+            *value = plt_virtual - ctx->got_address_virtual;
+        }else {
             PRINTLOG(LINKER, LOG_ERROR, "invalid relocation type");
 
             return -1;
@@ -1353,10 +1560,10 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
             if(i == LINKER_SECTION_TYPE_TEXT) {
                 strcpy(".text", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_TEXT;
-            } else if(i == LINKER_SECTION_TYPE_DATA) {
+            } else if(i == LINKER_SECTION_TYPE_DATA || i == LINKER_SECTION_TYPE_DATARELOC) {
                 strcpy(".data", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_DATA;
-            } else if(i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_ROREL) {
+            } else if(i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_RODATARELOC) {
                 strcpy(".rdata", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_RODATA;
             } else if(i == LINKER_SECTION_TYPE_BSS) {
@@ -1497,7 +1704,10 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
         .base_relocation_table.size = reloc_section.size_of_raw_data,
         .size_of_code = ctx->size_of_sections[LINKER_SECTION_TYPE_TEXT],
-        .size_of_initialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_DATA] + ctx->size_of_sections[LINKER_SECTION_TYPE_RODATA] + ctx->size_of_sections[LINKER_SECTION_TYPE_ROREL],
+        .size_of_initialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_DATA] +
+                                    ctx->size_of_sections[LINKER_SECTION_TYPE_DATARELOC] +
+                                    ctx->size_of_sections[LINKER_SECTION_TYPE_RODATA] +
+                                    ctx->size_of_sections[LINKER_SECTION_TYPE_RODATARELOC],
         .size_of_uninitialized_data = ctx->size_of_sections[LINKER_SECTION_TYPE_BSS],
         .size_of_headers = size_of_headers,
         .size_of_image = ctx->program_size + relocation_size + ctx->program_start_physical + padding_after_relocations,
@@ -1795,13 +2005,13 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
 
                     memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_UNKNOWN;
 
-                    if(i == LINKER_SECTION_TYPE_TEXT) {
+                    if(i == LINKER_SECTION_TYPE_TEXT || i == LINKER_SECTION_TYPE_PLT) {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
                     } else {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
                     }
 
-                    if(i == LINKER_SECTION_TYPE_ROREL || i == LINKER_SECTION_TYPE_RODATA) {
+                    if(i == LINKER_SECTION_TYPE_RODATARELOC || i == LINKER_SECTION_TYPE_RODATA) {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
                     }
 
@@ -2129,6 +2339,26 @@ error_destroy_buffer:
     return NULL;
 }
 
+static int8_t linker_build_metadata_buffer_null_terminator(buffer_t* metadata_buffer, uint64_t count) {
+    if(!metadata_buffer) {
+        PRINTLOG(LINKER, LOG_ERROR, "invalid buffer");
+
+        return -1;
+    }
+
+    uint64_t null_terminator = 0;
+
+    for(uint64_t i = 0; i < count; i++) {
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&null_terminator, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "invalid context");
@@ -2158,6 +2388,13 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
 
         if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->id, sizeof(uint64_t))) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot append module id to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+        if(!buffer_append_bytes(metadata_buffer, (uint8_t*)&module->module_name_offset, sizeof(uint64_t))) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append module size to buffer");
             it->destroy(it);
 
             goto error_destroy_buffer;
@@ -2211,11 +2448,25 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
             }
         }
 
+        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+            it->destroy(it);
+
+            goto error_destroy_buffer;
+        }
+
+
         it = it->next(it);
     }
 
 
     it->destroy(it);
+
+    if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
+
+        goto error_destroy_buffer;
+    }
 
     return metadata_buffer;
 

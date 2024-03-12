@@ -1379,6 +1379,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     tosdb_backend_close(tdb_ctx->backend);
     PRINTLOG(EFI, LOG_DEBUG, "tosdb backend closed");
 
+    PRINTLOG(EFI, LOG_INFO, "program entry point 0x%llx", program_header->program_entry);
     PRINTLOG(EFI, LOG_INFO, "calling kernel @ 0x%llx with sysinfo @ 0x%p, and will switch to 0x%llx", requested_program_base, sysinfo, program_base);
     time_t efi_end_time = time_ns(NULL);
     PRINTLOG(EFI, LOG_INFO, "efi end time %llu took: %llu ms", efi_end_time, (efi_end_time - boot_time) / 1000000ULL);
