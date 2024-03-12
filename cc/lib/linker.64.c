@@ -288,6 +288,27 @@ clean_symbols_iter:
     return -1;
 }
 
+const uint8_t linker_plt_entry_data[] = {
+    0x41, 0x57, // push %r15
+    0x41, 0x56, // push %r14
+    0x49, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs $_GLOBAL_OFFSET_TABLE_, %r15
+    0x4c, 0x8d, 0x35, 0xeb, 0xff, 0xff, 0xff, // lea -0x15(%rip),%r14
+    0x4d, 0x01, 0xf7, // add %r14,%r15
+    0x49, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs $symbol@GOT, %r11
+    0x4f, 0x8b, 0x74, 0x3b, 0x08, // mov 0x8(%r11,%r15,1),%r14
+    0x49, 0x0f, 0xba, 0xe6, 0x00, // bt $0x0, %r14
+    0x73, 0x0b, // jae <notfound>
+    0x41, 0x5e, // pop %r14
+    0x4f, 0x8b, 0x1c, 0x3b, // mov (%r11,%r15,1),%r11
+    0x41, 0x5f, // pop %r15
+    0x41, 0xff, 0xe3, // jmp *%r11
+    0xe9, 0x00, 0x00, 0x00, 0x00, // notfound: jmp PLT0
+    0x90, // nop
+    0x90, // nop
+};
+
+_Static_assert(sizeof(linker_plt_entry_data) == 0x40, "plt entry size mismatch");
+
 int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint8_t section_type, uint64_t section_offset, linker_module_t* module, boolean_t recursive) {
     int8_t res = 0;
 
@@ -496,6 +517,7 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             }
 
             if(buffer_get_length(plt_section->section_data) == 0) {
+                PRINTLOG(LINKER, LOG_TRACE, "module 0x%llx needs PLT section", module->id);
                 plt_section->section_data = buffer_new();
 
                 if(!plt_section->section_data) {
@@ -507,12 +529,32 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                 uint32_t nopl = 0x041f0f;
 
-                // fill first 20 bytes with nopl 0x0(%rax,%rax,1)
-                buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
-                buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
-                buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
-                buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
-                buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
+                // fill first 64 bytes with nopl 0x0(%rax,%rax,1)
+                for(int64_t idx = 0; idx < 16; idx++) {
+                    buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
+                }
+
+                // each modules PLT0 entry needs to be defined as symbol with id module_id << 32
+                // also we need to add it to got table
+                linker_global_offset_table_entry_t got_entry = {0};
+
+                uint64_t plt_symbol_id = module->id << 32; // may be we have over 0x100000000 symbols ???
+
+                got_entry.resolved = true;
+                got_entry.module_id = module->id;
+                got_entry.symbol_id = plt_symbol_id;
+                got_entry.symbol_type = LINKER_SYMBOL_TYPE_FUNCTION;
+                got_entry.symbol_scope = LINKER_SYMBOL_SCOPE_LOCAL;
+                got_entry.symbol_value = 0;
+                got_entry.symbol_size = 4;
+                got_entry.section_type = LINKER_SECTION_TYPE_PLT;
+
+                uint64_t got_entry_index = buffer_get_length(ctx->got_table_buffer) / sizeof(linker_global_offset_table_entry_t);
+
+                buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&got_entry, sizeof(linker_global_offset_table_entry_t));
+
+                hashmap_put(ctx->got_symbol_index_map, (void*)plt_symbol_id, (void*)got_entry_index);
+                PRINTLOG(LINKER, LOG_TRACE, "added PLT0 0x%llx entry for module id 0x%llx to got table at index 0x%llx", plt_symbol_id, module->id, got_entry_index);
             }
 
             uint64_t plt_offset = buffer_get_length(plt_section->section_data);
@@ -521,37 +563,50 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
             _Static_assert(sizeof(linker_global_offset_table_entry_t) == 0x38, "fix plt entry values");
 
-            /* fill plt section with:
-             * movabs $symbol@GOT, %r11
-             * jmp *(%r11,%r15)
-             * jmp *0x38(%r15)
-             * nop
-             * nop
-             */
-            uint16_t movabs = 0xbb49;
-            uint64_t symbol_value = 0;
-            uint32_t jmp_got_symbol = 0x3b24ff43;
-            uint32_t jmp_got_plt_resolver = 0x3867ff41;
-            uint16_t nopw = 0x9090;
-
-            buffer_append_bytes(plt_section->section_data, (uint8_t*)&movabs, sizeof(uint16_t));
-            buffer_append_bytes(plt_section->section_data, (uint8_t*)&symbol_value, sizeof(uint64_t));
-            buffer_append_bytes(plt_section->section_data, (uint8_t*)&jmp_got_symbol, sizeof(uint32_t));
-            buffer_append_bytes(plt_section->section_data, (uint8_t*)&jmp_got_plt_resolver, sizeof(uint32_t));
-            buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopw, sizeof(uint16_t));
+            buffer_append_bytes(plt_section->section_data, (uint8_t*)linker_plt_entry_data, sizeof(linker_plt_entry_data));
 
             plt_section->size = buffer_get_length(plt_section->section_data);
+
+            // each PLT entry is 0x40 bytes
+            // it has 3 relocations
+            // 1. at 0x6 a GOTPC64 for _GLOBAL_OFFSET_TABLE_ (symbol id 0x1)
+            // 2. at 0x1a a GOT64 for the symbol
+            // 3. at 0x3a a PC32 for the PLT0 entry
+
+            memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
+
+            relocation.symbol_id = 1;
+            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOTPC64;
+            relocation.offset = plt_offset + 0x6;
+            relocation.addend = 6; // two push instructions before this and it is also 2 bytes
+
+            buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+            reloc_section->size += sizeof(linker_relocation_entry_t);
 
             memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
 
             relocation.symbol_id = symbol_id;
             relocation.section_type = LINKER_SECTION_TYPE_PLT;
             relocation.relocation_type = LINKER_RELOCATION_TYPE_64_GOT64;
-            relocation.offset = plt_offset + 0x2;
+            relocation.offset = plt_offset + 0x1a;
             relocation.addend = 0;
 
             buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
             reloc_section->size += sizeof(linker_relocation_entry_t);
+
+            memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
+
+            relocation.symbol_id = module->id << 32;
+            relocation.section_type = LINKER_SECTION_TYPE_PLT;
+            relocation.relocation_type = LINKER_RELOCATION_TYPE_64_PC32;
+            relocation.offset = plt_offset + 0x3a;
+            relocation.addend = -4;
+
+            buffer_append_bytes(reloc_section->section_data, (uint8_t*)&relocation, sizeof(linker_relocation_entry_t));
+            reloc_section->size += sizeof(linker_relocation_entry_t);
+
+            PRINTLOG(LINKER, LOG_TRACE, "added PLT entry for symbol 0x%llx at offset 0x%llx for module id 0x%llx", symbol_id, plt_offset, module->id);
         }
 
         memory_memclean(&relocation, sizeof(linker_relocation_entry_t));
