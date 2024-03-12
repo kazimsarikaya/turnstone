@@ -12,6 +12,14 @@ UEFIBIOSVARS=""
 ACCEL="$([[ -c /dev/kvm ]] && echo kvm || echo tcg)"
 NETDEV=""
 
+DEBUG=$1
+PREVENTSHUTDOWN=""
+
+if [[ "${DEBUG}x" == "debugx" ]]; then
+  ACCEL="tcg -s -S"
+  PREVENTSHUTDOWN="--no-shutdown --no-reboot"
+fi
+
 if [ `uname -s` == "Linux" ]; then
   UEFIBIOSCODE="/usr/share/OVMF/OVMF_CODE.fd"  
   UEFIBIOSVARS="/usr/share/OVMF/OVMF_VARS.fd"
@@ -38,7 +46,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 qemu-system-x86_64 \
-  -nodefaults -no-user-config -no-reboot --no-shutdown\
+  -nodefaults -no-user-config $PREVENTSHUTDOWN \
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL \
