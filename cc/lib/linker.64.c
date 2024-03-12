@@ -91,6 +91,10 @@ int8_t linker_destroy_context(linker_context_t* ctx) {
             buffer_destroy(module->sections[i].section_data);
         }
 
+        if(module->plt_offsets) {
+            hashmap_destroy(module->plt_offsets);
+        }
+
         memory_free(module);
 
         it = it->next(it);
