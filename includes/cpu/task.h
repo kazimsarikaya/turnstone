@@ -15,6 +15,7 @@
 #include <memory/paging.h>
 #include <list.h>
 #include <buffer.h>
+#include <utils.h>
 
 /*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 10
@@ -95,7 +96,32 @@ typedef enum task_state_e {
     TASK_STATE_ENDED, ///< task is ended
 } task_state_t; ///< short hand for enum
 
-typedef struct {
+typedef struct task_registers_t {
+    uint64_t rax; ///< register
+    uint64_t rbx; ///< register
+    uint64_t rcx; ///< register
+    uint64_t rdx; ///< register
+    uint64_t r8; ///< register
+    uint64_t r9; ///< register
+    uint64_t r10; ///< register
+    uint64_t r11; ///< register
+    uint64_t r12; ///< register
+    uint64_t r13; ///< register
+    uint64_t r14; ///< register
+    uint64_t r15; ///< register
+    uint64_t rsi; ///< register
+    uint64_t rdi; ///< register
+    uint64_t rsp; ///< register
+    uint64_t rbp; ///< register
+    uint64_t rflags; ///< register
+    uint64_t cr3; ///< register
+    uint8_t  sse[512]; ///< register
+} task_registers_t;
+
+_Static_assert(sizeof(task_registers_t) == 0x290, "task_registers_t size must be 0x290");
+_Static_assert((offsetof_field(task_registers_t, sse) % 0x10) == 0x0, "task_registers_t sse offset must be aligned 0x10");
+
+typedef struct task_t {
     memory_heap_t*               creator_heap; ///< the heap which task struct is at
     memory_heap_t*               heap; ///< task's heap
     uint64_t                     heap_size; ///< task's heap size
@@ -120,24 +146,7 @@ typedef struct {
     buffer_t*                    error_buffer; ///< error buffer
     uint64_t                     vmcs_physical_address; ///< vmcs physical address
     void*                        vm; ///< vm
-    uint64_t                     rax; ///< register
-    uint64_t                     rbx; ///< register
-    uint64_t                     rcx; ///< register
-    uint64_t                     rdx; ///< register
-    uint64_t                     r8; ///< register
-    uint64_t                     r9; ///< register
-    uint64_t                     r10; ///< register
-    uint64_t                     r11; ///< register
-    uint64_t                     r12; ///< register
-    uint64_t                     r13; ///< register
-    uint64_t                     r14; ///< register
-    uint64_t                     r15; ///< register
-    uint64_t                     rsi; ///< register
-    uint64_t                     rdi; ///< register
-    uint64_t                     rsp; ///< register
-    uint64_t                     rbp; ///< register
-    uint8_t*                     fx_registers; ///< register
-    uint64_t                     rflags; ///< register
+    task_registers_t*            registers; ///< task registers
 } task_t; ///< short hand for struct
 
 /**
