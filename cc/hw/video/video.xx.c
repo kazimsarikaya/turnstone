@@ -325,6 +325,30 @@ static void video_print_glyph(wchar_t wc) {
     }
 }
 
+static void video_text_cursor_toggle(boolean_t flush) {
+    int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
+    uint32_t orig_offs = offs;
+
+    int32_t x, y, line;
+
+    for(y = 0; y < FONT_HEIGHT; y++) {
+        line = offs;
+
+        for(x = 0; x < FONT_WIDTH; x++) {
+
+            *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = ~(*((pixel_t*)(VIDEO_BASE_ADDRESS + line)));
+
+            line++;
+        }
+
+        offs  += VIDEO_PIXELS_PER_SCANLINE;
+    }
+
+    if(flush) {
+        VIDEO_DISPLAY_FLUSH(0, orig_offs * sizeof(pixel_t), cursor_graphics_x * FONT_WIDTH, cursor_graphics_y * FONT_HEIGHT, FONT_WIDTH, FONT_HEIGHT);
+    }
+}
+
 void video_graphics_print(const char_t* string) {
     int64_t i = 0;
     uint64_t flush_offset = 0;
@@ -476,7 +500,9 @@ void video_print(const char_t* string) {
     video_text_print(string);
 
     if(GRAPHICS_MODE) {
+        video_text_cursor_toggle(false);
         video_graphics_print(string);
+        video_text_cursor_toggle(true);
     }
 
     lock_release(video_lock);

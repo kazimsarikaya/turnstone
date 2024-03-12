@@ -61,15 +61,32 @@ static char_t* shell_argument_parser_advance(shell_argument_parser_t* parser) {
 
     char_t* start = &parser->arguments[i]; // save start
 
-    while(parser->arguments[i] != ' ' && parser->arguments[i] != NULL) { // find end
+    if(start[0] == '\'' || start[0] == '\"'){
+        char_t quote = start[0];
+        start++;
         i++;
-    }
 
-    if(parser->arguments[i] == ' ') { // replace space with null
-        parser->arguments[i] = NULL;
-        i++;
-    }
+        while(parser->arguments[i] != quote && parser->arguments[i] != NULL) { // find end
+            i++;
+        }
 
+        if(parser->arguments[i] == quote) {
+            parser->arguments[i] = NULL;
+            i++;
+        } else {
+            printf("Cannot parse argument: -%s-\n", start);
+            return NULL;
+        }
+    } else {
+        while(parser->arguments[i] != ' ' && parser->arguments[i] != NULL) { // find end
+            i++;
+        }
+
+        if(parser->arguments[i] == ' ') { // replace space with null
+            parser->arguments[i] = NULL;
+            i++;
+        }
+    }
 
     parser->idx = i; // save new index
 
