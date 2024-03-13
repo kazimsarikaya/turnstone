@@ -163,6 +163,7 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
         goto exit;
     }
 
+    ctx->for_hypervisor_application = ipc->program_build.for_vm;
     ctx->entrypoint_symbol_id = sym_id;
     ctx->program_start_physical = 2 << 20;
     ctx->program_start_virtual = 2 << 20;
@@ -176,7 +177,7 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // null entry
     buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // got itself
 
-    if(linker_build_module(ctx, mod_id, true) != 0) {
+    if(linker_build_module(ctx, mod_id, !ctx->for_hypervisor_application) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot build module");
 
         exit_code = -1;

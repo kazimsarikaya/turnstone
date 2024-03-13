@@ -211,6 +211,7 @@ typedef struct linker_context_t {
     hashmap_t* got_symbol_index_map;
     tosdb_t*   tdb;
     uint64_t   page_table_helper_frames;
+    boolean_t  for_hypervisor_application;
 } linker_context_t;
 
 typedef enum linker_program_dump_type_t {

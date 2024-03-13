@@ -23,15 +23,7 @@
 
 MODULE("turnstone.hypervisor");
 
-typedef uint64_t (*vmexit_handler_t)(vmcs_vmexit_info_t* vmexit_info);
-
 vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
-
-static void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
-    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
-    guest_rip += vmexit_info->instruction_length;
-    vmx_write(VMX_GUEST_RIP, guest_rip);
-}
 
 static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t interrupt_info = vmexit_info->interrupt_info;
@@ -428,5 +420,6 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_INTERRUPT_WINDOW] = hypervisor_vmcs_interrupt_window_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_RDMSR] = hypervisor_vmcs_rdmsr_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_WRMSR] = hypervisor_vmcs_wrmsr_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_VMCALL] = hypervisor_vmcs_vmcalls_handler;
     return 0;
 }

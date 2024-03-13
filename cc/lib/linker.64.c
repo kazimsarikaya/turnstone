@@ -292,6 +292,43 @@ clean_symbols_iter:
     return -1;
 }
 
+const uint8_t linker_vm_plt0_entry_data[] = {
+    0x50, // push %rax
+    0x48, 0xc7, 0xc0, 0x00, 0x10, 0x00, 0x00, // mov $0x1000, %rax
+    0x0f, 0x01, 0xc1, // vmcall
+    0x48, 0x85, 0xc0, // test %rax,%rax
+    0x75, 0x0c, // jne 1c failed
+    0x58, // pop %rax
+    0x41, 0x5e, // pop %r14
+    0x4f, 0x8b, 0x1c, 0x3b, // mov (%r11,%r15,1),%r11
+    0x41, 0x5f, // pop %r15
+    0x41, 0xff, 0xe3, // jmp *%r11
+    0xfa, // failed: cli
+    0x48, 0x8d, 0x0d, 0x15, 0x00, 0x00, 0x00, // lea 0x15(%rip),%rcx failed_msg_size
+    0x48, 0x8b, 0x09, // mov (%rcx),%rcx
+    0x48, 0x8d, 0x35, 0x13, 0x00, 0x00, 0x00, // lea 0xf(%rip),%rsi  failed_msg
+    0x66, 0xba, 0xf8, 0x03, // mov $0x3f8,%dx
+    0xac, // failed_print: lods %ds:(%rsi),%al
+    0xee, // out %al,(%dx)
+    0xe2, 0xfc, // loop failed_print
+    0xf4, // failed_loop: hlt
+    0xeb, 0xfd, // jmp failed_loop
+    0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // failed_msg_size
+    0x64, 0x79, 0x6e, 0x61, 0x6d, 0x69, 0x63, 0x20, // dynamic
+    0x6c, 0x6f, 0x61, 0x64, 0x65, 0x72, 0x20, // loader
+    0x66, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x2e, 0x20, // failed.
+    0x68, 0x61, 0x6c, 0x74, 0x69, 0x6e, 0x67, 0x2e, 0x2e, 0x2e, 0x0a, 0x00, // halting...
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+    0x0f, 0x1f, 0x04, 0x00, // nopl (%rax,%rax,1)
+};
+
+_Static_assert(sizeof(linker_vm_plt0_entry_data) == 0x80, "plt0 entry size mismatch");
+
 const uint8_t linker_plt_entry_data[] = {
     0x41, 0x57, // push %r15
     0x41, 0x56, // push %r14
@@ -531,11 +568,15 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
                     goto clean_relocs_iter;
                 }
 
-                uint32_t nopl = 0x041f0f;
+                if(ctx->for_hypervisor_application) {
+                    buffer_append_bytes(plt_section->section_data, (uint8_t*)linker_vm_plt0_entry_data, sizeof(linker_vm_plt0_entry_data));
+                } else {
+                    uint32_t nopl = 0x041f0f;
 
-                // fill first 64 bytes with nopl 0x0(%rax,%rax,1)
-                for(int64_t idx = 0; idx < 16; idx++) {
-                    buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
+                    // fill first 64 bytes with nopl 0x0(%rax,%rax,1)
+                    for(int64_t idx = 0; idx < 32; idx++) {
+                        buffer_append_bytes(plt_section->section_data, (uint8_t*)&nopl, sizeof(uint32_t));
+                    }
                 }
 
                 // each modules PLT0 entry needs to be defined as symbol with id module_id << 32
