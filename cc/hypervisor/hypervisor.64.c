@@ -67,7 +67,7 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_fa);
 
-    if(hypevisor_deploy_program(entry_point_name) != 0) {
+    if(hypevisor_deploy_program(vm, entry_point_name) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
         return -1;
     }
@@ -250,11 +250,6 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 
     if(hypervisor_vmcs_prepare_vm_exit_and_entry_control(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm exit control");
-        return -1;
-    }
-
-    if(hypervisor_vmcs_prepare_ept(vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
         return -1;
     }
 

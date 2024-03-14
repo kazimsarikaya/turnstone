@@ -7,6 +7,7 @@
  */
 
 #include <linker.h>
+#include <linker_utils.h>
 #include <cpu.h>
 #include <memory.h>
 #include <memory/frame.h>
@@ -19,26 +20,6 @@
 #include <hashmap.h>
 
 MODULE("turnstone.lib.linker");
-
-
-typedef struct linker_module_at_memory_t {
-    uint64_t id;
-    uint64_t module_name_offset;
-    uint64_t physical_start;
-    uint64_t virtual_start;
-} linker_module_at_memory_t;
-
-typedef struct linker_section_at_memory_t {
-    uint64_t section_type;
-    uint64_t physical_start;
-    uint64_t virtual_start;
-    uint64_t size;
-} linker_section_at_memory_t;
-
-typedef union linker_metadata_at_memory_t {
-    linker_module_at_memory_t  module;
-    linker_section_at_memory_t section;
-} linker_metadata_at_memory_t;
 
 hashmap_t* linker_modules_at_memory = NULL;
 

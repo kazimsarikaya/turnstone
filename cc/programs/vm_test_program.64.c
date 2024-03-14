@@ -47,7 +47,9 @@ _Noreturn static void vm_test_program_halt(void) {
 }
 
 _Noreturn void vmtpm(void) {
-    memory_heap_t* heap = memory_create_heap_simple(10 << 20, 16 << 20);
+    uint64_t heap_base = 4ULL << 40;
+    uint64_t heap_size = 16ULL << 20;
+    memory_heap_t* heap = memory_create_heap_simple(heap_base, heap_base + heap_size);
 
     if(heap == NULL) {
         vm_test_program_print("Failed to create heap\n");

@@ -232,12 +232,10 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     vmx_write(VMX_GUEST_CR4, cr4.bits);
 
     vmx_write(VMX_GUEST_DR7, 0x0);
-    vmx_write(VMX_GUEST_RSP, 3 << 20); // rsp is set to 3mib
-    vmx_write(VMX_GUEST_RIP, 2 << 20); // rip is set to 2mib
     vmx_write(VMX_GUEST_RFLAGS, VMX_RFLAG_RESERVED);
     vmx_write(VMX_GUEST_VMCS_LINK_POINTER_LOW, 0xffffffff);
     vmx_write(VMX_GUEST_VMCS_LINK_POINTER_HIGH, 0xffffffff);
-    vmx_write(VMX_GUEST_IA32_EFER, 0x500); // enable long mode LME/LMA bit
+    vmx_write(VMX_GUEST_IA32_EFER, 0xD00); // enable long mode LME/LMA bit and NXE bit
 
     return 0;
 }
@@ -520,14 +518,14 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
 }
 
 int8_t hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm) {
-    uint64_t ept_pml4_base = hypervisor_ept_setup(vm, 0, 16 << 20);
+    uint64_t ept_pml4_base = hypervisor_ept_setup(vm);
 
     if (ept_pml4_base == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT setup failed");
         return -1;
     }
 
-    if(hypervisor_ept_build_tables(ept_pml4_base, 0, 16 << 20) == -1) {
+    if(hypervisor_ept_build_tables(vm) == -1) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT build tables failed");
         return -1;
     }
@@ -550,7 +548,7 @@ int8_t hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm) {
     }
 
     vmx_write(VMX_CTLS_EPTP, eptp);
-    vmx_write(VMX_CTLS_VPID, task_get_id()); // VPID is 1
+    vmx_write(VMX_CTLS_VPID, 1); // VPID is 1
 
     return 0;
 }

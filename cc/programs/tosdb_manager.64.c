@@ -23,6 +23,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv);
 
 boolean_t tosdb_manager_is_initialized = false;
 
+hashmap_t* tosdb_manager_deployed_modules = NULL;
+
 static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     // logging_module_levels[LINKER] = LOG_DEBUG;
 
@@ -154,6 +156,27 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
 
     PRINTLOG(LINKER, LOG_INFO, "module id: 0x%llx", mod_id);
 
+    tosdb_manager_deployed_module_t* deployed_module = (tosdb_manager_deployed_module_t*)hashmap_get(tosdb_manager_deployed_modules, (void*)mod_id);
+
+    if(deployed_module) {
+        ipc->program_build.program_handle = mod_id;
+        ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
+        ipc->program_build.program_size = deployed_module->program_size;
+        ipc->program_build.program_physical_address = deployed_module->program_physical_address;
+        ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
+        ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
+        ipc->program_build.got_physical_address = deployed_module->got_physical_address;
+        ipc->program_build.got_size = deployed_module->got_size;
+        ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
+        ipc->program_build.metadata_size = deployed_module->metadata_size;
+
+        ipc->is_response_success = (exit_code == 0);
+        ipc->is_response_done = true;
+        task_set_interrupt_received(ipc->sender_task_id);
+
+        return;
+    }
+
     linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
 
     if(!ctx) {
@@ -193,6 +216,31 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
         goto exit_with_destroy_context;
     }
 
+    uint64_t total_program_size = ctx->program_size + ctx->global_offset_table_size + ctx->metadata_size;
+
+    frame_t* program_dump_frame = NULL;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
+                                                       total_program_size / FRAME_SIZE,
+                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                       &program_dump_frame, NULL) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    uint64_t program_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(program_dump_frame->frame_address);
+
+    if(memory_paging_add_va_for_frame(program_va, program_dump_frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot map region frame");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    memory_memclean((void*)program_va, total_program_size);
+
 
     if(linker_bind_linear_addresses(ctx) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot bind addresses");
@@ -216,29 +264,66 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
         goto exit_with_destroy_context;
     }
 
-    uint64_t vm_program_size = ctx->program_size + ctx->global_offset_table_size;
+    uint64_t vm_program_size = ctx->program_size + ctx->global_offset_table_size + ctx->metadata_size;
+    uint8_t* vm_program = (uint8_t*)program_va;
 
     if(linker_dump_program_to_array(ctx,
+                                    LINKER_PROGRAM_DUMP_TYPE_METADATA |
                                     LINKER_PROGRAM_DUMP_TYPE_CODE | LINKER_PROGRAM_DUMP_TYPE_GOT,
-                                    ipc->program_build.program) != 0) {
+                                    vm_program) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot dump program");
 
         exit_code = -1;
         goto exit_with_destroy_context;
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "program size: 0x%llx", vm_program_size);
+    PRINTLOG(LINKER, LOG_INFO, "program dump frame address: 0x%llx", program_dump_frame->frame_address);
+    PRINTLOG(LINKER, LOG_INFO, "program physical address: 0x%llx", ctx->program_start_physical);
+    PRINTLOG(LINKER, LOG_INFO, "program total size: 0x%llx", vm_program_size);
+    PRINTLOG(LINKER, LOG_INFO, "program size: 0x%llx", ctx->program_size);
     PRINTLOG(LINKER, LOG_INFO, "entry point virtual address: 0x%llx", ctx->entrypoint_address_virtual);
+    PRINTLOG(LINKER, LOG_INFO, "got physical address: 0x%llx", ctx->got_address_physical);
+    PRINTLOG(LINKER, LOG_INFO, "metadata physical address: 0x%llx", ctx->metadata_address_physical);
 
-    ipc->program_build.program_size = vm_program_size;
-    ipc->program_build.program_entry_point_virtual_address = ctx->entrypoint_address_virtual;
+    deployed_module = memory_malloc(sizeof(tosdb_manager_deployed_module_t));
+
+    if(!deployed_module) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate deployed module");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    deployed_module->program_handle = mod_id;
+    deployed_module->program_dump_frame_address = program_dump_frame->frame_address;
+    deployed_module->program_size = ctx->program_size;
+    deployed_module->program_physical_address = ctx->program_start_physical;
+    deployed_module->program_virtual_address = ctx->program_start_virtual;
+    deployed_module->program_entry_point_virtual_address = ctx->entrypoint_address_virtual;
+    deployed_module->got_physical_address = ctx->got_address_physical;
+    deployed_module->got_size = ctx->global_offset_table_size;
+    deployed_module->metadata_physical_address = ctx->metadata_address_physical;
+    deployed_module->metadata_size = ctx->metadata_size;
+
+    hashmap_put(tosdb_manager_deployed_modules, (void*)mod_id, deployed_module);
+
+    ipc->program_build.program_handle = deployed_module->program_handle;
+    ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
+    ipc->program_build.program_size = deployed_module->program_size;
+    ipc->program_build.program_physical_address = deployed_module->program_physical_address;
+    ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
+    ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
+    ipc->program_build.got_physical_address = deployed_module->got_physical_address;
+    ipc->program_build.got_size = deployed_module->got_size;
+    ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
+    ipc->program_build.metadata_size = deployed_module->metadata_size;
 
 exit_with_destroy_context:
     linker_destroy_context(ctx);
 exit:
     ipc->is_response_success = (exit_code == 0);
-    task_set_interrupt_received(ipc->sender_task_id);
     ipc->is_response_done = true;
+    task_set_interrupt_received(ipc->sender_task_id);
 }
 
 
@@ -249,6 +334,10 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     if(tosdb_manager_is_initialized) {
         PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_main: already initialized");
         return -1;
+    }
+
+    if(!tosdb_manager_deployed_modules) {
+        tosdb_manager_deployed_modules = hashmap_integer(128);
     }
 
     // logging_module_levels[AHCI] = LOG_TRACE;
@@ -461,6 +550,7 @@ int8_t tosdb_manager_clear(void) {
 
     tosdb_manager_is_initialized = false;
     tosdb_manager_task_id = 0;
+    tosdb_manager_deployed_modules = NULL;
 
     return 0;
 }

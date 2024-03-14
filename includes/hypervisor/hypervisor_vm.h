@@ -57,6 +57,19 @@ typedef struct hypervisor_vm_t {
     boolean_t is_halt_need_next_instruction;
     map_t*    msr_map;
     frame_t   owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
+    uint64_t  program_dump_frame_address;
+    uint64_t  program_physical_address;
+    uint64_t  program_virtual_address;
+    uint64_t  program_size;
+    uint64_t  program_entry_point_virtual_address;
+    uint64_t  got_physical_address;
+    uint64_t  got_size;
+    uint64_t  metadata_physical_address;
+    uint8_t   metadata_size;
+    uint64_t  guest_stack_size;
+    uint64_t  guest_heap_size;
+    uint64_t  ept_pml4_base;
+    uint64_t  next_page_address;
 } hypervisor_vm_t;
 
 

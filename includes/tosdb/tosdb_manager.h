@@ -33,13 +33,32 @@ typedef struct tosdb_manager_ipc_t {
             const char_t* entry_point_name;
             boolean_t     for_vm;
             uint64_t      program_handle;
-            uint8_t*      program;
+            uint64_t      program_dump_frame_address;
+            uint64_t      program_physical_address;
+            uint64_t      program_virtual_address;
             uint64_t      program_size;
             uint64_t      program_entry_point_virtual_address;
+            uint64_t      got_physical_address;
+            uint64_t      got_size;
+            uint64_t      metadata_physical_address;
+            uint8_t       metadata_size;
         } program_build;
     };
 
 } tosdb_manager_ipc_t;
+
+typedef struct tosdb_manager_deployed_module_t {
+    uint64_t program_handle;
+    uint64_t program_dump_frame_address;
+    uint64_t program_physical_address;
+    uint64_t program_virtual_address;
+    uint64_t program_size;
+    uint64_t program_entry_point_virtual_address;
+    uint64_t got_physical_address;
+    uint64_t got_size;
+    uint64_t metadata_physical_address;
+    uint8_t  metadata_size;
+} tosdb_manager_deployed_module_t;
 
 int8_t tosdb_manager_close(void);
 int8_t tosdb_manager_clear(void);

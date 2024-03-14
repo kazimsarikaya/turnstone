@@ -198,6 +198,8 @@ typedef struct linker_context_t {
     uint64_t   program_size;
     uint64_t   global_offset_table_size;
     uint64_t   relocation_table_size;
+    uint64_t   metadata_address_physical;
+    uint64_t   metadata_address_virtual;
     uint64_t   metadata_size;
     uint64_t   symbol_table_size;
     uint64_t   entrypoint_symbol_id;

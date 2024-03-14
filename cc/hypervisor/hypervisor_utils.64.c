@@ -119,27 +119,12 @@ uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1) {
     return target;
 }
 
-int8_t hypevisor_deploy_program(const char_t* entry_point_name) {
+int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_name) {
     tosdb_manager_ipc_t ipc = {0};
 
     ipc.type = TOSDB_MANAGER_IPC_TYPE_PROGRAM_BUILD;
     ipc.program_build.entry_point_name = entry_point_name;
     ipc.program_build.for_vm = true;
-
-    uint64_t ept_base = vmx_read(VMX_CTLS_EPTP);
-
-    ept_base &= 0xfffffffffffff000;
-
-    uint64_t guest_address_fa = hypervisor_ept_guest_to_host(ept_base, 2 << 20);
-
-    if(guest_address_fa == 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot convert guest address to host");
-        return -1;
-    }
-
-    uint64_t guest_address_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_address_fa);
-
-    ipc.program_build.program = (uint8_t*)guest_address_va;
 
     if(tosdb_manager_ipc_send_and_wait(&ipc) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot send program build ipc");
@@ -156,8 +141,25 @@ int8_t hypevisor_deploy_program(const char_t* entry_point_name) {
         return -1;
     }
 
+    vm->program_dump_frame_address = ipc.program_build.program_dump_frame_address;
+    vm->program_entry_point_virtual_address = ipc.program_build.program_entry_point_virtual_address;
+    vm->program_size = ipc.program_build.program_size;
+    vm->program_physical_address = ipc.program_build.program_physical_address;
+    vm->program_virtual_address = ipc.program_build.program_virtual_address;
+    vm->metadata_physical_address = ipc.program_build.metadata_physical_address;
+    vm->got_size = ipc.program_build.got_size;
+    vm->got_physical_address = ipc.program_build.got_physical_address;
+
+    vm->guest_stack_size = 2ULL << 20; // 2MiB
+    vm->guest_heap_size = 16ULL << 20; // 16MiB
+
+    if(hypervisor_vmcs_prepare_ept(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
+        return -1;
+    }
+
     vmx_write(VMX_GUEST_RIP, ipc.program_build.program_entry_point_virtual_address);
-    vmx_write(VMX_GUEST_RSP, vmx_read(VMX_GUEST_RSP) - 8); // why ?
+    vmx_write(VMX_GUEST_RSP, (256ULL << 30) - 8); // we subtract 8 because sse needs 16 byte alignment
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "deployed program entry point is at 0x%llx", ipc.program_build.program_entry_point_virtual_address);
 

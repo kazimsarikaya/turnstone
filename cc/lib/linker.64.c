@@ -1156,7 +1156,12 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
     it->destroy(it);
 
     ctx->got_address_physical = offset_pyhsical;
-    ctx->got_address_virtual = offset_virtual;
+
+    if(ctx->for_hypervisor_application) {
+        ctx->got_address_virtual = 512ULL << 30;
+    } else {
+        ctx->got_address_virtual = 8ULL << 40;
+    }
 
     return 0;
 }
@@ -2089,12 +2094,14 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         PRINTLOG(LINKER, LOG_DEBUG, "copying got to 0x%llx with size 0x%llx", program_target_offset, got_size);
         memory_memcopy(got, array + program_target_offset, got_size);
 
+        // ctx->got_address_physical = ctx->program_start_physical + program_target_offset;
+
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
             program_header_t* program_header = (program_header_t*)array;
 
             program_header->got_offset = program_target_offset;
             program_header->got_size = ctx->global_offset_table_size;
-            program_header->got_virtual_address = program_header->header_virtual_address + program_target_offset;
+            program_header->got_virtual_address = ctx->got_address_virtual; // program_header->header_virtual_address + program_target_offset;
             program_header->got_physical_address = program_header->header_physical_address + program_target_offset;
 
             program_header->total_size += ctx->global_offset_table_size;
@@ -2182,6 +2189,9 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         memory_memcopy(metadata, array + program_target_offset, metadata_size);
 
         buffer_destroy(metadata_buf);
+
+        ctx->metadata_address_physical = ctx->program_start_physical + program_target_offset;
+        ctx->metadata_address_virtual = ctx->program_start_virtual + program_target_offset;
 
         if(dump_type & LINKER_PROGRAM_DUMP_TYPE_HEADER) {
             program_header_t* program_header = (program_header_t*)array;

@@ -25,7 +25,7 @@ int8_t   vmx_validate_capability(uint64_t target, uint32_t allowed0, uint32_t al
 uint32_t vmx_fix_reserved_1_bits(uint32_t target, uint32_t allowed0);
 uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1);
 
-int8_t hypevisor_deploy_program(const char_t* entry_point_name);
+int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_name);
 
 
 void     hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info);
