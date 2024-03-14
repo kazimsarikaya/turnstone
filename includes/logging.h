@@ -75,7 +75,7 @@ extern const char_t*const logging_module_names[];
 /*! logging level names */
 extern const char_t*const logging_level_names[];
 /*! logging levels for each module, can be changed at run time */
-extern uint8_t logging_module_levels[];
+extern logging_level_t logging_module_levels[];
 
 #ifndef LOG_LEVEL
 /*! default log level for all modules */

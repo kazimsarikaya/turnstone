@@ -12,6 +12,7 @@
 
 #include <types.h>
 #include <hypervisor/hypervisor_vm.h>
+#include <hypervisor/hypervisor_utils.h>
 
 typedef struct hypervisor_ept_pml4e_t {
     uint64_t read_access              :1;
@@ -105,5 +106,6 @@ _Static_assert(sizeof(hypervisor_ept_pte_t) == 8, "PTE size is not 8 bytes");
 uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm);
 uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical);
 int8_t   hypervisor_ept_build_tables(hypervisor_vm_t* vm);
+int8_t   hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_load_t* module_load);
 
 #endif

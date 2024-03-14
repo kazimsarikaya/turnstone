@@ -112,15 +112,16 @@ typedef struct linker_section_locations_t {
 typedef struct linker_global_offset_table_entry_t {
     uint64_t              entry_value; ///< entry value
     boolean_t             resolved; ///< is resolved
+    boolean_t             binded; ///< is binded
     linker_section_type_t section_type : 8; ///< section type
     linker_symbol_type_t  symbol_type  : 8; ///< symbol type
     linker_symbol_scope_t symbol_scope : 8; ///< symbol scope
+    uint8_t               padding[3]; ///< align padding
     uint64_t              module_id; ///< module id
     uint64_t              symbol_id; ///< symbol id
     uint64_t              symbol_size; ///< symbol size
     uint64_t              symbol_value; ///< symbol value
     uint64_t              symbol_name_offset; ///< symbol name offset
-    uint8_t               padding[4]; ///< align padding
 }__attribute__((packed)) linker_global_offset_table_entry_t; ///< shorthand for struct
 
 _Static_assert(sizeof(linker_global_offset_table_entry_t) % 8 == 0, "linker_global_offset_table_entry_t align mismatch");

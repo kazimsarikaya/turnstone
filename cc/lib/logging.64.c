@@ -62,7 +62,7 @@ const char_t*const logging_level_names[] = {
     "TRACE" /** 9 **/,
 };
 
-uint8_t logging_module_levels[] = {
+logging_level_t logging_module_levels[] = {
     LOG_LEVEL_KERNEL,
     LOG_LEVEL_MEMORY,
     LOG_LEVEL_SIMPLEHEAP,

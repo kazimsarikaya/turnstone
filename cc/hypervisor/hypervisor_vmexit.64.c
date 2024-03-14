@@ -354,6 +354,36 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
 
     return (uint64_t)vmexit_info->registers;
 }
+static uint64_t hypervisor_vmcs_control_register_access_handler(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t exit_qualification = vmexit_info->exit_qualification;
+    uint64_t reg = (exit_qualification >> 8) & 0xF;
+    uint64_t access_type = (exit_qualification >> 4) & 0x3;
+    uint64_t cr = exit_qualification & 0xF;
+
+    if(reg != 15) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
+        return -1;
+    }
+
+    if(cr != 3) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
+        return -1;
+    }
+
+    if(access_type == 0) {
+        uint64_t value = vmexit_info->registers->r15;
+        vmx_write(VMX_GUEST_CR3, value);
+    } else if(access_type == 1) {
+        vmexit_info->registers->r15 = vmx_read(VMX_GUEST_CR3);
+    } else {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
+        return -1;
+    }
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
 
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
@@ -409,6 +439,9 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
              vmx_read(VMX_GUEST_CR0), vmexit_info.registers->cr2,
              vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
 
+    while(true) {
+        cpu_idle();
+    }
     return -1;
 }
 
@@ -421,5 +454,6 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_RDMSR] = hypervisor_vmcs_rdmsr_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_WRMSR] = hypervisor_vmcs_wrmsr_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_VMCALL] = hypervisor_vmcs_vmcalls_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_CONTROL_REGISTER_ACCESS] = hypervisor_vmcs_control_register_access_handler;
     return 0;
 }

@@ -47,6 +47,7 @@ _Noreturn static void vm_test_program_halt(void) {
 }
 
 _Noreturn void vmtpm(void) {
+    vm_test_program_print("VM Test Program\n");
     uint64_t heap_base = 4ULL << 40;
     uint64_t heap_size = 16ULL << 20;
     memory_heap_t* heap = memory_create_heap_simple(heap_base, heap_base + heap_size);

@@ -190,7 +190,7 @@
 #define VMX_VMEXIT_REASON_VMWRITE                    0x19
 #define VMX_VMEXIT_REASON_VMXOFF                     0x1a
 #define VMX_VMEXIT_REASON_VMXON                      0x1b
-#define VMX_VMEXIT_CONTROL_REGISTER_ACCESS           0x1c
+#define VMX_VMEXIT_REASON_CONTROL_REGISTER_ACCESS    0x1c
 #define VMX_VMEXIT_REASON_MOV_CR                     0x1d
 #define VMX_VMEXIT_REASON_IO_INSTRUCTION             0x1e
 #define VMX_VMEXIT_REASON_RDMSR                      0x1f

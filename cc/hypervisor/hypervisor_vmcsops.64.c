@@ -288,13 +288,13 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
 
     uint32_t pri_procbased_msr_eax, pri_procbased_msr_edx;
     uint64_t pri_procbased_msr = cpu_read_msr(CPU_MSR_IA32_VMX_PRI_PROCBASED_CTLS);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "pri_procbased_msr:0x%016llx", pri_procbased_msr);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pri_procbased_msr:0x%016llx", pri_procbased_msr);
     pri_procbased_msr_eax = pri_procbased_msr & 0xffffffff;
     pri_procbased_msr_edx = pri_procbased_msr >> 32;
 
     uint32_t sec_procbased_msr_eax, sec_procbased_msr_edx;
     uint64_t sec_procbased_msr = cpu_read_msr(CPU_MSR_IA32_VMX_SEC_PROCBASED_CTLS);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "sec_procbased_msr:0x%016llx", sec_procbased_msr);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "sec_procbased_msr:0x%016llx", sec_procbased_msr);
     sec_procbased_msr_eax = sec_procbased_msr & 0xffffffff;
     sec_procbased_msr_edx = sec_procbased_msr >> 32;
 
@@ -350,7 +350,7 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
 
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC] = *vapic_frame;
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic_region_va:0x%llx", vapic_region_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vapic_region_va:0x%llx", vapic_region_va);
 
     uint64_t vapic_region_pa = vapic_frame->frame_address;
 
@@ -444,7 +444,7 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     vm_exit_ctls = vmx_fix_reserved_1_bits(vm_exit_ctls, vm_exit_msr_eax);
     vm_exit_ctls = vmx_fix_reserved_0_bits(vm_exit_ctls, vm_exit_msr_edx);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm_exit_ctls:0x%x", vm_exit_ctls);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_exit_ctls:0x%x", vm_exit_ctls);
 
     vmx_write(VMX_CTLS_VM_EXIT, vm_exit_ctls);
 
@@ -507,7 +507,7 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     vm_entry_ctls = vmx_fix_reserved_1_bits(vm_entry_ctls, vm_entry_msr_eax);
     vm_entry_ctls = vmx_fix_reserved_0_bits(vm_entry_ctls, vm_entry_msr_edx);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm_entry_ctls:0x%x", vm_entry_ctls);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_entry_ctls:0x%x", vm_entry_ctls);
 
     vmx_write(VMX_CTLS_VM_ENTRY, vm_entry_ctls);
     vmx_write(VMX_CTLS_VM_ENTRY_MSR_LOAD_COUNT, vm_exit_store_msr_count);
@@ -531,7 +531,7 @@ int8_t hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm) {
     }
 
     uint64_t vpid_cap = cpu_read_msr(CPU_MSR_IA32_VMX_EPT_VPID_CAP);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "VPID_CAP:0x%llx", vpid_cap);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "VPID_CAP:0x%llx", vpid_cap);
 
     uint64_t eptp = ept_pml4_base;
 

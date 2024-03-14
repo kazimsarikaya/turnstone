@@ -301,6 +301,8 @@ const uint8_t linker_vm_plt0_entry_data[] = {
     0x58, // pop %rax
     0x41, 0x5e, // pop %r14
     0x4f, 0x8b, 0x1c, 0x3b, // mov (%r11,%r15,1),%r11
+    // 0x41, 0x0f, 0x20, 0xdf, // mov %cr3,%r15
+    // 0x41, 0x0f, 0x22, 0xdf, // mov %r15,%cr3
     0x41, 0x5f, // pop %r15
     0x41, 0xff, 0xe3, // jmp *%r11
     0xfa, // failed: cli
@@ -1218,7 +1220,7 @@ int8_t linker_bind_got_entry_values(linker_context_t* ctx) {
     linker_global_offset_table_entry_t* got_entries = (linker_global_offset_table_entry_t*)buffer_get_view_at_position(ctx->got_table_buffer, 0, got_size);
 
     for(uint64_t i = 0; i < got_entry_count; i++) {
-        if(got_entries[i].resolved) {
+        if(got_entries[i].resolved && !got_entries[i].binded) {
             linker_module_t* module = (linker_module_t*)hashmap_get(ctx->modules, (void*)got_entries[i].module_id);
 
             if(!module) {
@@ -1228,6 +1230,7 @@ int8_t linker_bind_got_entry_values(linker_context_t* ctx) {
             }
 
             got_entries[i].entry_value = module->sections[got_entries[i].section_type].virtual_start + got_entries[i].symbol_value;
+            got_entries[i].binded = true;
         }
     }
 

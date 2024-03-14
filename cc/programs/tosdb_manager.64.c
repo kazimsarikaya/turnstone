@@ -21,11 +21,12 @@ MODULE("turnstone.kernel.programs.tosdb_manager");
 
 int32_t tosdb_manager_main(int32_t argc, char_t** argv);
 
-boolean_t tosdb_manager_is_initialized = false;
+static boolean_t tosdb_manager_is_initialized = false;
 
-hashmap_t* tosdb_manager_deployed_modules = NULL;
+static hashmap_t* tosdb_manager_deployed_modules = NULL;
 
-buffer_t* tosdb_manager_global_offset_table_buffer = NULL;
+static buffer_t* tosdb_manager_global_offset_table_buffer = NULL;
+static hashmap_t* tosdb_manager_got_symbol_index_map = NULL;
 
 static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_size) {
     uint64_t got_buffer_size = buffer_get_length(tosdb_manager_global_offset_table_buffer);
@@ -58,7 +59,7 @@ static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_siz
 
     uint8_t* got = buffer_get_view_at_position(tosdb_manager_global_offset_table_buffer, 0, got_buffer_size);
 
-    memory_memcopy(got, (void*)got_va, got_size);
+    memory_memcopy(got, (void*)got_va, got_buffer_size);
 
     uint64_t got_physical_address = got_dump_frame->frame_address;
 
@@ -141,9 +142,21 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
     ctx->tdb = tdb;
     ctx->modules = hashmap_integer(16);
     ctx->got_table_buffer = tosdb_manager_global_offset_table_buffer;
-    ctx->got_symbol_index_map = hashmap_integer(1024);
+    ctx->got_symbol_index_map = tosdb_manager_got_symbol_index_map;
 
     if(!tosdb_manager_global_offset_table_buffer) {
+        tosdb_manager_got_symbol_index_map = hashmap_integer(1024);
+
+        if(!tosdb_manager_got_symbol_index_map) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot allocate got symbol index map");
+
+            exit_code = -1;
+            goto exit_with_destroy_context;
+        }
+
+        ctx->got_symbol_index_map = tosdb_manager_got_symbol_index_map;
+
+
         tosdb_manager_global_offset_table_buffer = buffer_new();
         ctx->got_table_buffer = tosdb_manager_global_offset_table_buffer;
 
@@ -240,6 +253,7 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
     }
 
     ctx->got_table_buffer = NULL; // do not free got table buffer
+    ctx->got_symbol_index_map = NULL; // do not free got symbol index map
 
     uint64_t got_size = 0;
     uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size);
@@ -596,9 +610,13 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
             PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received close message");
             tosdb_manager_main_close = true;
             break;
-        case TOSDB_MANAGER_IPC_TYPE_PROGRAM_BUILD:
-            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received program build message");
+        case TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD:
+            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received program load message");
             tosdb_manger_build_program(tdb, ipc);
+            break;
+        case TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD:
+            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received program load message");
+            tosdb_manger_build_module(tdb, ipc, ipc->program_build.program_handle, -1);
             break;
         default:
             PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_main: unknown message type");
@@ -613,7 +631,7 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     return 0;
 }
 
-uint64_t tosdb_manager_task_id = 0;
+static uint64_t tosdb_manager_task_id = 0;
 
 int8_t tosdb_manager_init(void) {
     if(tosdb_manager_is_initialized) {

@@ -18,7 +18,8 @@ int8_t tosdb_manager_init(void);
 typedef enum tosdb_manager_ipc_type_t {
     TOSDB_MANAGER_IPC_TYPE_NONE = 0,
     TOSDB_MANAGER_IPC_TYPE_CLOSE,
-    TOSDB_MANAGER_IPC_TYPE_PROGRAM_BUILD,
+    TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD,
+    TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD,
 } tosdb_manager_ipc_type_t;
 
 typedef struct tosdb_manager_ipc_t {
