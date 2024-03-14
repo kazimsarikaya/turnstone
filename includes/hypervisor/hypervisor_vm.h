@@ -58,6 +58,7 @@ typedef struct hypervisor_vm_t {
     frame_t    owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
     list_t*    ept_frames;
     hashmap_t* loaded_module_ids;
+    list_t*    read_only_frames;
     uint64_t   program_dump_frame_address;
     uint64_t   program_physical_address;
     uint64_t   program_virtual_address;

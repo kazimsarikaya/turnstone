@@ -11,6 +11,7 @@
 #include <hypervisor/hypervisor_macros.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <memory/paging.h>
+#include <cpu/interrupt.h>
 #include <cpu/task.h>
 #include <cpu.h>
 #include <logging.h>
@@ -845,6 +846,12 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
             page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
         }
 
+        if(section_type == LINKER_SECTION_TYPE_BSS ||
+           section_type == LINKER_SECTION_TYPE_DATA ||
+           section_type == LINKER_SECTION_TYPE_DATARELOC) {
+            list_list_insert(vm->read_only_frames, metadata);
+        }
+
         PRINTLOG(HYPERVISOR, LOG_TRACE, "section start 0x%llx section type: %d, section_page_count: 0x%llx page type: 0x%x",
                  metadata->section.physical_start, section_type, section_page_count, page_type);
 
@@ -887,4 +894,90 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     vm->got_size = module_load->new_got_size;
 
     return 0;
+}
+
+uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t error_code = vmexit_info->interrupt_error_code;
+    hypervisor_vm_t* vm = task_get_vm();
+
+    interrupt_errorcode_pagefault_t pagefault_error = {.bits = error_code};
+
+    if(pagefault_error.fields.present && pagefault_error.fields.write) {
+        uint64_t error_address = vmexit_info->exit_qualification; // exit qualification is the address that caused the page fault
+
+        linker_metadata_at_memory_t md = {.section = {.virtual_start = error_address, .size = 1}};
+
+        uint64_t pos = 0;
+
+        if(list_get_position(vm->read_only_frames, &md, &pos) == 0) {
+            PRINTLOG(HYPERVISOR, LOG_INFO, "Write access to read only memory at 0x%llx", error_address);
+
+            const linker_metadata_at_memory_t* res_md = list_get_data_at_position(vm->read_only_frames, pos);
+
+            list_delete_at_position(vm->read_only_frames, pos);
+
+            PRINTLOG(HYPERVISOR, LOG_INFO, "Section type: 0x%llx", res_md->section.section_type);
+            PRINTLOG(HYPERVISOR, LOG_INFO, "Section virtual start: 0x%llx", res_md->section.virtual_start);
+            PRINTLOG(HYPERVISOR, LOG_INFO, "Section size: 0x%llx", res_md->section.size);
+
+            uint64_t section_size = res_md->section.size;
+            uint64_t section_virtual_start = res_md->section.virtual_start;
+            uint64_t section_physical_start = res_md->section.physical_start;
+            uint64_t section_page_count = (section_size + MEMORY_PAGING_PAGE_LENGTH_4K - 1) / MEMORY_PAGING_PAGE_LENGTH_4K;
+
+            for(uint64_t i = 0; i < section_page_count; i++) {
+                if(hypervisor_ept_paging_del_page(vm, section_physical_start, section_virtual_start) != 0) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to del readonly pages from page table");
+                    return -1;
+                }
+
+                if(hypervisor_ept_del_ept_page(vm, section_physical_start, section_physical_start) != 0) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to del readonly pages from ept");
+                    return -1;
+                }
+
+                section_physical_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+                section_virtual_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+            }
+
+            frame_t* new_section_frame = NULL;
+            uint64_t frame_va = hypervisor_allocate_region(&new_section_frame, section_page_count * FRAME_SIZE);
+
+            if(frame_va == -1ULL) {
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate frame for new section");
+                return -1;
+            }
+
+            list_list_insert(vm->ept_frames, new_section_frame);
+
+            uint64_t old_section_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(res_md->section.physical_start);
+
+            memory_memcopy((void*)old_section_va, (void*)frame_va, section_size);
+
+            uint64_t new_section_physical_start = new_section_frame->frame_address;
+            section_virtual_start = res_md->section.virtual_start;
+            section_physical_start = res_md->section.physical_start;
+
+            for(uint64_t i = 0; i < section_page_count; i++) {
+                if(hypervisor_ept_add_ept_page(vm, new_section_physical_start, section_physical_start, true) != 0) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to ept");
+                    return -1;
+                }
+
+                if(hypervisor_ept_paging_add_page(vm, section_physical_start, section_virtual_start,
+                                                  MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
+                    return -1;
+                }
+
+                section_physical_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+                section_virtual_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+                new_section_physical_start += MEMORY_PAGING_PAGE_LENGTH_4K;
+            }
+
+            return (uint64_t)vmexit_info->registers;
+        }
+    }
+
+    return -1;
 }

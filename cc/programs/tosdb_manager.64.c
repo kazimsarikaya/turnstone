@@ -95,7 +95,7 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
 
 
 
-    PRINTLOG(LINKER, LOG_INFO, "module id: 0x%llx", mod_id);
+    PRINTLOG(LINKER, LOG_DEBUG, "module id: 0x%llx", mod_id);
 
     tosdb_manager_deployed_module_t* deployed_module = (tosdb_manager_deployed_module_t*)hashmap_get(tosdb_manager_deployed_modules, (void*)mod_id);
 
@@ -180,7 +180,7 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
         goto exit_with_destroy_context;
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "modules built");
+    PRINTLOG(LINKER, LOG_DEBUG, "modules built");
 
     if(linker_calculate_program_size(ctx) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot calculate program size");
@@ -265,13 +265,13 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
         goto exit_with_destroy_context;
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "program dump frame address: 0x%llx", program_dump_frame->frame_address);
-    PRINTLOG(LINKER, LOG_INFO, "program physical address: 0x%llx", ctx->program_start_physical);
-    PRINTLOG(LINKER, LOG_INFO, "program total size: 0x%llx", vm_program_size);
-    PRINTLOG(LINKER, LOG_INFO, "program size: 0x%llx", ctx->program_size);
-    PRINTLOG(LINKER, LOG_INFO, "entry point virtual address: 0x%llx", ctx->entrypoint_address_virtual);
-    PRINTLOG(LINKER, LOG_INFO, "got physical address: 0x%llx", got_physical_address);
-    PRINTLOG(LINKER, LOG_INFO, "metadata physical address: 0x%llx", ctx->metadata_address_physical);
+    PRINTLOG(LINKER, LOG_DEBUG, "program dump frame address: 0x%llx", program_dump_frame->frame_address);
+    PRINTLOG(LINKER, LOG_DEBUG, "program physical address: 0x%llx", ctx->program_start_physical);
+    PRINTLOG(LINKER, LOG_DEBUG, "program total size: 0x%llx", vm_program_size);
+    PRINTLOG(LINKER, LOG_DEBUG, "program size: 0x%llx", ctx->program_size);
+    PRINTLOG(LINKER, LOG_DEBUG, "entry point virtual address: 0x%llx", ctx->entrypoint_address_virtual);
+    PRINTLOG(LINKER, LOG_DEBUG, "got physical address: 0x%llx", got_physical_address);
+    PRINTLOG(LINKER, LOG_DEBUG, "metadata physical address: 0x%llx", ctx->metadata_address_physical);
 
     deployed_module = memory_malloc(sizeof(tosdb_manager_deployed_module_t));
 
@@ -406,7 +406,7 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     s_sym_rec->destroy(s_sym_rec);
 
 
-    PRINTLOG(LINKER, LOG_INFO, "entrypoint symbol %s id 0x%llx section id: 0x%llx",
+    PRINTLOG(LINKER, LOG_DEBUG, "entrypoint symbol %s id 0x%llx section id: 0x%llx",
              ipc->program_build.entry_point_name, sym_id, sec_id);
 
 
@@ -441,7 +441,7 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
 
     s_sec_rec->destroy(s_sec_rec);
 
-    PRINTLOG(LINKER, LOG_INFO, "module id: 0x%llx", mod_id);
+    PRINTLOG(LINKER, LOG_TRACE, "module id: 0x%llx", mod_id);
 
     return tosdb_manger_build_module(tdb, ipc, mod_id, sym_id);
 
@@ -503,8 +503,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
-    PRINTLOG(TOSDB, LOG_INFO, "GPT disk opened");
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB partition searching");
+    PRINTLOG(TOSDB, LOG_DEBUG, "GPT disk opened");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB partition searching");
 
     efi_guid_t kernel_guid = EFI_PART_TYPE_TURNSTONE_TOSDB_PART_GUID;
 
@@ -515,8 +515,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB partition found");
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB backend creating");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB partition found");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB backend creating");
 
     tosdb_backend_t* tosdb_backend = tosdb_backend_disk_new(tosdb_part);
 
@@ -525,8 +525,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB backend created");
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB database opening");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB backend created");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB database opening");
 
     tosdb_t* tdb = tosdb_new(tosdb_backend, COMPRESSION_TYPE_NONE);
 
@@ -535,8 +535,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB database opened");
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB cache config setting");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB database opened");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB cache config setting");
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
@@ -549,8 +549,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
         return -1;
     }
 
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB cache config set");
-    PRINTLOG(TOSDB, LOG_INFO, "TOSDB defalut databases and tables openning");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB cache config set");
+    PRINTLOG(TOSDB, LOG_DEBUG, "TOSDB defalut databases and tables openning");
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb, "system");
 
@@ -596,7 +596,7 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
             continue;
         }
 
-        PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: processing message");
+        PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: processing message");
 
         tosdb_manager_ipc_t* ipc = (tosdb_manager_ipc_t*)list_queue_pop(mq_list);
 

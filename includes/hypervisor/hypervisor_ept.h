@@ -108,4 +108,6 @@ uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical
 int8_t   hypervisor_ept_build_tables(hypervisor_vm_t* vm);
 int8_t   hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_load_t* module_load);
 
+uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info);
+
 #endif

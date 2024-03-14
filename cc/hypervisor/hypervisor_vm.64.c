@@ -15,6 +15,7 @@
 #include <memory/paging.h>
 #include <logging.h>
 #include <time.h>
+#include <linker_utils.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -31,6 +32,27 @@ int8_t hypervisor_vm_init(void) {
 
     if (hypervisor_vm_list == NULL) {
         return -1;
+    }
+
+    return 0;
+}
+
+static int8_t hypervisor_vm_readonly_section_cmp(const void* a, const void* b) {
+    linker_metadata_at_memory_t* ma = (linker_metadata_at_memory_t*)a;
+    linker_metadata_at_memory_t* mb = (linker_metadata_at_memory_t*)b;
+
+    uint64_t a_start = ma->section.virtual_start;
+    uint64_t b_start = mb->section.virtual_start;
+
+    uint64_t a_end = a_start + ma->section.size;
+    uint64_t b_end = b_start + mb->section.size;
+
+    if(a_end < b_start) {
+        return -1;
+    }
+
+    if(b_end < a_start) {
+        return 1;
     }
 
     return 0;
@@ -69,6 +91,9 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     vm->msr_map = map_integer();
     vm->ept_frames = list_create_list();
     vm->loaded_module_ids = hashmap_integer(128);
+    vm->read_only_frames = list_create_list();
+
+    list_set_equality_comparator(vm->read_only_frames, hypervisor_vm_readonly_section_cmp);
 
     list_list_insert(hypervisor_vm_list, vm);
 

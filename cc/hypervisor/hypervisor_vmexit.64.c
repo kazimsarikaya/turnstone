@@ -385,6 +385,24 @@ static uint64_t hypervisor_vmcs_control_register_access_handler(vmcs_vmexit_info
     return (uint64_t)vmexit_info->registers;
 }
 
+static uint64_t hypervisor_vmcs_exception_or_nmi_handler(vmcs_vmexit_info_t* exit_info) {
+    uint64_t interrupt_info = exit_info->interrupt_info;
+
+    int8_t vector = interrupt_info & 0xFF;
+
+    if(vector == 0xE) {
+        uint64_t ret = hypervisor_ept_page_fault_handler(exit_info);
+
+        if(ret == -1ULL) {
+            return -1;
+        }
+
+        return (uint64_t)exit_info->registers;
+    }
+
+    return -1;
+}
+
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
 
@@ -407,7 +425,11 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
 
     if (vmexit_info.reason < VMX_VMEXIT_REASON_COUNT) {
         if (vmexit_handlers[vmexit_info.reason]) {
-            return vmexit_handlers[vmexit_info.reason](&vmexit_info);
+            uint64_t ret = vmexit_handlers[vmexit_info.reason](&vmexit_info);
+
+            if(ret == (uint64_t)registers) {
+                return ret;
+            }
         }
     }
 
@@ -455,5 +477,6 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_WRMSR] = hypervisor_vmcs_wrmsr_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_VMCALL] = hypervisor_vmcs_vmcalls_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_CONTROL_REGISTER_ACCESS] = hypervisor_vmcs_control_register_access_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_EXCEPTION_OR_NMI] = hypervisor_vmcs_exception_or_nmi_handler;
     return 0;
 }
