@@ -54,8 +54,6 @@ typedef struct tosdb_manager_deployed_module_t {
     uint64_t program_virtual_address;
     uint64_t program_size;
     uint64_t program_entry_point_virtual_address;
-    uint64_t got_physical_address;
-    uint64_t got_size;
     uint64_t metadata_physical_address;
     uint8_t  metadata_size;
 } tosdb_manager_deployed_module_t;

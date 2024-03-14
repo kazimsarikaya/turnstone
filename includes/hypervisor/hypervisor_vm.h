@@ -25,8 +25,6 @@ typedef enum hypervisor_vm_frame_type_t {
     HYPERVISOR_VM_FRAME_TYPE_IO_BITMAP,
     HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_LOAD_MSR,
     HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_STORE_MSR,
-    HYPERVISOR_VM_FRAME_TYPE_EPT,
-    HYPERVISOR_VM_FRAME_TYPE_GUEST,
     HYPERVISOR_VM_FRAME_TYPE_NR,
 } hypervisor_vm_frame_type_t;
 
@@ -66,7 +64,9 @@ typedef struct hypervisor_vm_t {
     uint64_t  got_size;
     uint64_t  metadata_physical_address;
     uint8_t   metadata_size;
+    uint64_t  guest_stack_physical_base;
     uint64_t  guest_stack_size;
+    uint64_t  guest_heap_physical_base;
     uint64_t  guest_heap_size;
     uint64_t  ept_pml4_base;
     uint64_t  next_page_address;

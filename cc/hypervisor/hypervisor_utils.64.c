@@ -159,7 +159,7 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
     }
 
     vmx_write(VMX_GUEST_RIP, ipc.program_build.program_entry_point_virtual_address);
-    vmx_write(VMX_GUEST_RSP, (256ULL << 30) - 8); // we subtract 8 because sse needs 16 byte alignment
+    vmx_write(VMX_GUEST_RSP, (4ULL << 40) - 8); // we subtract 8 because sse needs 16 byte alignment
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "deployed program entry point is at 0x%llx", ipc.program_build.program_entry_point_virtual_address);
 

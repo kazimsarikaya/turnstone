@@ -1155,13 +1155,9 @@ int8_t linker_bind_linear_addresses(linker_context_t* ctx) {
 
     it->destroy(it);
 
-    ctx->got_address_physical = offset_pyhsical;
+    // ctx->got_address_physical = offset_pyhsical;
 
-    if(ctx->for_hypervisor_application) {
-        ctx->got_address_virtual = 512ULL << 30;
-    } else {
-        ctx->got_address_virtual = 8ULL << 40;
-    }
+    ctx->got_address_virtual = 8ULL << 40;
 
     return 0;
 }
@@ -1235,15 +1231,17 @@ int8_t linker_bind_got_entry_values(linker_context_t* ctx) {
         }
     }
 
-    uint64_t entry_point_got_index = (uint64_t)hashmap_get(ctx->got_symbol_index_map, (void*)ctx->entrypoint_symbol_id);
+    if(ctx->entrypoint_symbol_id != -1ULL) {
+        uint64_t entry_point_got_index = (uint64_t)hashmap_get(ctx->got_symbol_index_map, (void*)ctx->entrypoint_symbol_id);
 
-    if(entry_point_got_index == 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot get entry point GOT index");
+        if(entry_point_got_index == 0) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot get entry point GOT index");
 
-        return -1;
+            return -1;
+        }
+
+        ctx->entrypoint_address_virtual = got_entries[entry_point_got_index].entry_value;
     }
-
-    ctx->entrypoint_address_virtual = got_entries[entry_point_got_index].entry_value;
 
     return 0;
 }

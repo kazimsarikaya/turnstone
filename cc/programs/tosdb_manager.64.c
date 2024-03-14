@@ -25,6 +25,279 @@ boolean_t tosdb_manager_is_initialized = false;
 
 hashmap_t* tosdb_manager_deployed_modules = NULL;
 
+buffer_t* tosdb_manager_global_offset_table_buffer = NULL;
+
+static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_size) {
+    uint64_t got_buffer_size = buffer_get_length(tosdb_manager_global_offset_table_buffer);
+    uint64_t got_size = got_buffer_size;
+
+    if(got_size % FRAME_SIZE != 0) {
+        got_size += FRAME_SIZE - (got_size % FRAME_SIZE);
+    }
+
+    frame_t* got_dump_frame = NULL;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
+                                                       got_size / FRAME_SIZE,
+                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                       &got_dump_frame, NULL) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
+
+        return -1;
+    }
+
+    uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_dump_frame->frame_address);
+
+    if(memory_paging_add_va_for_frame(got_va, got_dump_frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot map region frame");
+
+        return -1;
+    }
+
+    memory_memclean((void*)got_va, got_size);
+
+    uint8_t* got = buffer_get_view_at_position(tosdb_manager_global_offset_table_buffer, 0, got_buffer_size);
+
+    memory_memcopy(got, (void*)got_va, got_size);
+
+    uint64_t got_physical_address = got_dump_frame->frame_address;
+
+    *got_return_size = got_size;
+
+    return got_physical_address;
+}
+
+static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
+    int8_t exit_code = 0;
+
+    tosdb_database_t* db_system = tosdb_database_create_or_open(tdb, "system");
+
+    if(!db_system) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot open system database");
+
+        exit_code = -1;
+        goto exit;
+    }
+
+    tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db_system, "sections", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db_system, "symbols", 1 << 10, 512 << 10, 8);
+    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
+
+
+    if(!tbl_sections || !tbl_modules || !tbl_symbols || !tbl_relocations) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot open system tables");
+
+        exit_code = -1;
+        goto exit;
+    }
+
+
+
+    PRINTLOG(LINKER, LOG_INFO, "module id: 0x%llx", mod_id);
+
+    tosdb_manager_deployed_module_t* deployed_module = (tosdb_manager_deployed_module_t*)hashmap_get(tosdb_manager_deployed_modules, (void*)mod_id);
+
+    if(deployed_module) {
+        uint64_t got_size = 0;
+        uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size);
+
+        if(got_physical_address == -1ULL) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot clone got");
+
+            exit_code = -1;
+            goto exit;
+        }
+
+        ipc->program_build.program_handle = mod_id;
+        ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
+        ipc->program_build.program_size = deployed_module->program_size;
+        ipc->program_build.program_physical_address = deployed_module->program_physical_address;
+        ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
+        ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
+        ipc->program_build.got_physical_address = got_physical_address;
+        ipc->program_build.got_size = got_size;
+        ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
+        ipc->program_build.metadata_size = deployed_module->metadata_size;
+
+        ipc->is_response_success = (exit_code == 0);
+        ipc->is_response_done = true;
+        task_set_interrupt_received(ipc->sender_task_id);
+
+        return;
+    }
+
+    linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
+
+    if(!ctx) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate linker context");
+
+        exit_code = -1;
+        goto exit;
+    }
+
+    ctx->for_hypervisor_application = ipc->program_build.for_vm;
+    ctx->entrypoint_symbol_id = sym_id;
+    ctx->tdb = tdb;
+    ctx->modules = hashmap_integer(16);
+    ctx->got_table_buffer = tosdb_manager_global_offset_table_buffer;
+    ctx->got_symbol_index_map = hashmap_integer(1024);
+
+    if(!tosdb_manager_global_offset_table_buffer) {
+        tosdb_manager_global_offset_table_buffer = buffer_new();
+        ctx->got_table_buffer = tosdb_manager_global_offset_table_buffer;
+
+        if(!tosdb_manager_global_offset_table_buffer) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot allocate got buffer");
+
+            exit_code = -1;
+            goto exit_with_destroy_context;
+        }
+
+        linker_global_offset_table_entry_t empty_got_entry = {0};
+
+        buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // null entry
+        buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // got itself
+    }
+
+    if(linker_build_module(ctx, mod_id, !ctx->for_hypervisor_application) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot build module");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    PRINTLOG(LINKER, LOG_INFO, "modules built");
+
+    if(linker_calculate_program_size(ctx) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot calculate program size");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    uint64_t total_program_size = ctx->program_size + ctx->metadata_size;
+
+    frame_t* program_dump_frame = NULL;
+
+    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
+                                                       total_program_size / FRAME_SIZE,
+                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                       &program_dump_frame, NULL) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    uint64_t program_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(program_dump_frame->frame_address);
+
+    if(memory_paging_add_va_for_frame(program_va, program_dump_frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot map region frame");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    memory_memclean((void*)program_va, total_program_size);
+
+    ctx->program_start_physical = program_dump_frame->frame_address;
+    ctx->program_start_virtual = program_dump_frame->frame_address;
+
+    if(linker_bind_linear_addresses(ctx) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot bind addresses");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+
+    if(linker_bind_got_entry_values(ctx) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot bind got entry values");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    if(linker_link_program(ctx) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot link program");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    uint64_t vm_program_size = ctx->program_size + ctx->metadata_size;
+    uint8_t* vm_program = (uint8_t*)program_va;
+
+    if(linker_dump_program_to_array(ctx,
+                                    LINKER_PROGRAM_DUMP_TYPE_METADATA |
+                                    LINKER_PROGRAM_DUMP_TYPE_CODE,
+                                    vm_program) != 0) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot dump program");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    ctx->got_table_buffer = NULL; // do not free got table buffer
+
+    uint64_t got_size = 0;
+    uint64_t got_physical_address = tosdb_manager_clone_global_offset_table(&got_size);
+
+    if(got_physical_address == -1ULL) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot clone got");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    PRINTLOG(LINKER, LOG_INFO, "program dump frame address: 0x%llx", program_dump_frame->frame_address);
+    PRINTLOG(LINKER, LOG_INFO, "program physical address: 0x%llx", ctx->program_start_physical);
+    PRINTLOG(LINKER, LOG_INFO, "program total size: 0x%llx", vm_program_size);
+    PRINTLOG(LINKER, LOG_INFO, "program size: 0x%llx", ctx->program_size);
+    PRINTLOG(LINKER, LOG_INFO, "entry point virtual address: 0x%llx", ctx->entrypoint_address_virtual);
+    PRINTLOG(LINKER, LOG_INFO, "got physical address: 0x%llx", got_physical_address);
+    PRINTLOG(LINKER, LOG_INFO, "metadata physical address: 0x%llx", ctx->metadata_address_physical);
+
+    deployed_module = memory_malloc(sizeof(tosdb_manager_deployed_module_t));
+
+    if(!deployed_module) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate deployed module");
+
+        exit_code = -1;
+        goto exit_with_destroy_context;
+    }
+
+    deployed_module->program_handle = mod_id;
+    deployed_module->program_dump_frame_address = program_dump_frame->frame_address;
+    deployed_module->program_size = ctx->program_size;
+    deployed_module->program_physical_address = ctx->program_start_physical;
+    deployed_module->program_virtual_address = ctx->program_start_virtual;
+    deployed_module->program_entry_point_virtual_address = ctx->entrypoint_address_virtual;
+    deployed_module->metadata_physical_address = ctx->metadata_address_physical;
+    deployed_module->metadata_size = ctx->metadata_size;
+
+    hashmap_put(tosdb_manager_deployed_modules, (void*)mod_id, deployed_module);
+
+    ipc->program_build.program_handle = deployed_module->program_handle;
+    ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
+    ipc->program_build.program_size = deployed_module->program_size;
+    ipc->program_build.program_physical_address = deployed_module->program_physical_address;
+    ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
+    ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
+    ipc->program_build.got_physical_address = got_physical_address;
+    ipc->program_build.got_size = got_size;
+    ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
+    ipc->program_build.metadata_size = deployed_module->metadata_size;
+
+exit_with_destroy_context:
+    linker_destroy_context(ctx);
+exit:
+    ipc->is_response_success = (exit_code == 0);
+    ipc->is_response_done = true;
+    task_set_interrupt_received(ipc->sender_task_id);
+}
+
 static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     // logging_module_levels[LINKER] = LOG_DEBUG;
 
@@ -156,176 +429,13 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
 
     PRINTLOG(LINKER, LOG_INFO, "module id: 0x%llx", mod_id);
 
-    tosdb_manager_deployed_module_t* deployed_module = (tosdb_manager_deployed_module_t*)hashmap_get(tosdb_manager_deployed_modules, (void*)mod_id);
+    return tosdb_manger_build_module(tdb, ipc, mod_id, sym_id);
 
-    if(deployed_module) {
-        ipc->program_build.program_handle = mod_id;
-        ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
-        ipc->program_build.program_size = deployed_module->program_size;
-        ipc->program_build.program_physical_address = deployed_module->program_physical_address;
-        ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
-        ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
-        ipc->program_build.got_physical_address = deployed_module->got_physical_address;
-        ipc->program_build.got_size = deployed_module->got_size;
-        ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
-        ipc->program_build.metadata_size = deployed_module->metadata_size;
-
-        ipc->is_response_success = (exit_code == 0);
-        ipc->is_response_done = true;
-        task_set_interrupt_received(ipc->sender_task_id);
-
-        return;
-    }
-
-    linker_context_t* ctx = memory_malloc(sizeof(linker_context_t));
-
-    if(!ctx) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate linker context");
-
-        exit_code = -1;
-        goto exit;
-    }
-
-    ctx->for_hypervisor_application = ipc->program_build.for_vm;
-    ctx->entrypoint_symbol_id = sym_id;
-    ctx->program_start_physical = 2 << 20;
-    ctx->program_start_virtual = 2 << 20;
-    ctx->tdb = tdb;
-    ctx->modules = hashmap_integer(16);
-    ctx->got_table_buffer = buffer_new();
-    ctx->got_symbol_index_map = hashmap_integer(1024);
-
-    linker_global_offset_table_entry_t empty_got_entry = {0};
-
-    buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // null entry
-    buffer_append_bytes(ctx->got_table_buffer, (uint8_t*)&empty_got_entry, sizeof(linker_global_offset_table_entry_t)); // got itself
-
-    if(linker_build_module(ctx, mod_id, !ctx->for_hypervisor_application) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot build module");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    PRINTLOG(LINKER, LOG_INFO, "modules built");
-
-    if(linker_calculate_program_size(ctx) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot calculate program size");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    uint64_t total_program_size = ctx->program_size + ctx->global_offset_table_size + ctx->metadata_size;
-
-    frame_t* program_dump_frame = NULL;
-
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       total_program_size / FRAME_SIZE,
-                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &program_dump_frame, NULL) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    uint64_t program_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(program_dump_frame->frame_address);
-
-    if(memory_paging_add_va_for_frame(program_va, program_dump_frame, MEMORY_PAGING_PAGE_TYPE_4K) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot map region frame");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    memory_memclean((void*)program_va, total_program_size);
-
-
-    if(linker_bind_linear_addresses(ctx) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot bind addresses");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-
-    if(linker_bind_got_entry_values(ctx) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot bind got entry values");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    if(linker_link_program(ctx) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot link program");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    uint64_t vm_program_size = ctx->program_size + ctx->global_offset_table_size + ctx->metadata_size;
-    uint8_t* vm_program = (uint8_t*)program_va;
-
-    if(linker_dump_program_to_array(ctx,
-                                    LINKER_PROGRAM_DUMP_TYPE_METADATA |
-                                    LINKER_PROGRAM_DUMP_TYPE_CODE | LINKER_PROGRAM_DUMP_TYPE_GOT,
-                                    vm_program) != 0) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot dump program");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    PRINTLOG(LINKER, LOG_INFO, "program dump frame address: 0x%llx", program_dump_frame->frame_address);
-    PRINTLOG(LINKER, LOG_INFO, "program physical address: 0x%llx", ctx->program_start_physical);
-    PRINTLOG(LINKER, LOG_INFO, "program total size: 0x%llx", vm_program_size);
-    PRINTLOG(LINKER, LOG_INFO, "program size: 0x%llx", ctx->program_size);
-    PRINTLOG(LINKER, LOG_INFO, "entry point virtual address: 0x%llx", ctx->entrypoint_address_virtual);
-    PRINTLOG(LINKER, LOG_INFO, "got physical address: 0x%llx", ctx->got_address_physical);
-    PRINTLOG(LINKER, LOG_INFO, "metadata physical address: 0x%llx", ctx->metadata_address_physical);
-
-    deployed_module = memory_malloc(sizeof(tosdb_manager_deployed_module_t));
-
-    if(!deployed_module) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot allocate deployed module");
-
-        exit_code = -1;
-        goto exit_with_destroy_context;
-    }
-
-    deployed_module->program_handle = mod_id;
-    deployed_module->program_dump_frame_address = program_dump_frame->frame_address;
-    deployed_module->program_size = ctx->program_size;
-    deployed_module->program_physical_address = ctx->program_start_physical;
-    deployed_module->program_virtual_address = ctx->program_start_virtual;
-    deployed_module->program_entry_point_virtual_address = ctx->entrypoint_address_virtual;
-    deployed_module->got_physical_address = ctx->got_address_physical;
-    deployed_module->got_size = ctx->global_offset_table_size;
-    deployed_module->metadata_physical_address = ctx->metadata_address_physical;
-    deployed_module->metadata_size = ctx->metadata_size;
-
-    hashmap_put(tosdb_manager_deployed_modules, (void*)mod_id, deployed_module);
-
-    ipc->program_build.program_handle = deployed_module->program_handle;
-    ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
-    ipc->program_build.program_size = deployed_module->program_size;
-    ipc->program_build.program_physical_address = deployed_module->program_physical_address;
-    ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
-    ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
-    ipc->program_build.got_physical_address = deployed_module->got_physical_address;
-    ipc->program_build.got_size = deployed_module->got_size;
-    ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
-    ipc->program_build.metadata_size = deployed_module->metadata_size;
-
-exit_with_destroy_context:
-    linker_destroy_context(ctx);
 exit:
     ipc->is_response_success = (exit_code == 0);
     ipc->is_response_done = true;
     task_set_interrupt_received(ipc->sender_task_id);
 }
-
 
 int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     UNUSED(argc);
