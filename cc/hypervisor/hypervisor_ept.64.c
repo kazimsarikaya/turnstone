@@ -13,6 +13,7 @@
 #include <logging.h>
 #include <linker.h>
 #include <linker_utils.h>
+#include <list.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -35,6 +36,8 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate PDPT frames");
             return -1;
         }
+
+        list_list_insert(vm->ept_frames, pdpte_frames);
 
         pml4e[pml4e_index].read_access = 1;
         pml4e[pml4e_index].write_access = 1;
@@ -67,6 +70,8 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
             return -1;
         }
 
+        list_list_insert(vm->ept_frames, pde_frames);
+
         pdptes[pdpte_index].read_access = 1;
         pdptes[pdpte_index].write_access = 1;
         pdptes[pdpte_index].execute_access = 1;
@@ -97,6 +102,8 @@ static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to allocate PTE frames");
             return -1;
         }
+
+        list_list_insert(vm->ept_frames, pte_frames);
 
         pdes[pde_index].read_access = 1;
         pdes[pde_index].write_access = 1;
@@ -141,10 +148,14 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
     frame_t* ept_frames = NULL;
     hypervisor_allocate_region(&ept_frames, FRAME_SIZE);
 
+    list_list_insert(vm->ept_frames, ept_frames);
+
     vm->ept_pml4_base = ept_frames->frame_address;
 
     frame_t* descriptor_frames = NULL;
     hypervisor_allocate_region(&descriptor_frames, 4 * FRAME_SIZE);
+
+    list_list_insert(vm->ept_frames, descriptor_frames);
 
     for(uint64_t i = 0; i < 4; i++) {
         if(hypervisor_ept_add_ept_page(vm, descriptor_frames->frame_address + i * FRAME_SIZE, 0x1000 * i, true) != 0) {
@@ -157,6 +168,9 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
 
     frame_t* heap_frames = NULL;
     hypervisor_allocate_region(&heap_frames, heap_page_count * FRAME_SIZE);
+
+    list_list_insert(vm->ept_frames, heap_frames);
+
     vm->guest_heap_physical_base = heap_frames->frame_address;
 
     for(uint64_t i = 0; i < heap_page_count; i++) {
@@ -171,6 +185,9 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
 
     frame_t* stack_frames = NULL;
     hypervisor_allocate_region(&stack_frames, stack_page_count * FRAME_SIZE);
+
+    list_list_insert(vm->ept_frames, stack_frames);
+
     vm->guest_stack_physical_base = stack_frames->frame_address;
 
     for(uint64_t i = 0; i < stack_page_count; i++) {
@@ -306,6 +323,8 @@ static uint64_t hypervisor_ept_guest_to_host_ensured(hypervisor_vm_t* vm, uint64
         frame_t* frame = NULL;
 
         uint64_t frame_va = hypervisor_allocate_region(&frame, MEMORY_PAGING_PAGE_LENGTH_4K);
+
+        list_list_insert(vm->ept_frames, frame);
 
         memory_paging_add_va_for_frame(frame_va, frame, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 

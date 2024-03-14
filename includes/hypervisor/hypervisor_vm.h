@@ -15,6 +15,7 @@
 #include <memory/frame.h>
 #include <buffer.h>
 #include <map.h>
+#include <hashmap.h>
 
 typedef enum hypervisor_vm_frame_type_t {
     HYPERVISOR_VM_FRAME_TYPE_SELF,
@@ -46,30 +47,32 @@ typedef struct hypervisor_vm_t {
         uint8_t   in_service_vector;
         uint8_t   in_request_vectors[32];
         boolean_t apic_eoi_pending;
-    }         lapic;
-    uint64_t  last_tsc;
-    boolean_t lapic_timer_pending;
-    boolean_t lapic_timer_enabled;
-    boolean_t need_to_notify;
-    boolean_t is_halted;
-    boolean_t is_halt_need_next_instruction;
-    map_t*    msr_map;
-    frame_t   owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
-    uint64_t  program_dump_frame_address;
-    uint64_t  program_physical_address;
-    uint64_t  program_virtual_address;
-    uint64_t  program_size;
-    uint64_t  program_entry_point_virtual_address;
-    uint64_t  got_physical_address;
-    uint64_t  got_size;
-    uint64_t  metadata_physical_address;
-    uint8_t   metadata_size;
-    uint64_t  guest_stack_physical_base;
-    uint64_t  guest_stack_size;
-    uint64_t  guest_heap_physical_base;
-    uint64_t  guest_heap_size;
-    uint64_t  ept_pml4_base;
-    uint64_t  next_page_address;
+    }          lapic;
+    uint64_t   last_tsc;
+    boolean_t  lapic_timer_pending;
+    boolean_t  lapic_timer_enabled;
+    boolean_t  need_to_notify;
+    boolean_t  is_halted;
+    boolean_t  is_halt_need_next_instruction;
+    map_t*     msr_map;
+    frame_t    owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
+    list_t*    ept_frames;
+    hashmap_t* loaded_module_ids;
+    uint64_t   program_dump_frame_address;
+    uint64_t   program_physical_address;
+    uint64_t   program_virtual_address;
+    uint64_t   program_size;
+    uint64_t   program_entry_point_virtual_address;
+    uint64_t   got_physical_address;
+    uint64_t   got_size;
+    uint64_t   metadata_physical_address;
+    uint8_t    metadata_size;
+    uint64_t   guest_stack_physical_base;
+    uint64_t   guest_stack_size;
+    uint64_t   guest_heap_physical_base;
+    uint64_t   guest_heap_size;
+    uint64_t   ept_pml4_base;
+    uint64_t   next_page_address;
 } hypervisor_vm_t;
 
 
