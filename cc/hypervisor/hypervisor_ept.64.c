@@ -403,7 +403,7 @@ static uint64_t hypervisor_ept_guest_to_host_ensured(hypervisor_vm_t* vm, uint64
 
         host_physical = frame->frame_address;
 
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "guest_physical: 0x%llx, host_physical: 0x%llx", guest_physical, host_physical);
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "guest_physical: 0x%llx, host_physical: 0x%llx", guest_physical, host_physical);
     }
 
     return host_physical;
@@ -871,7 +871,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
 
     uint64_t host_page = hypervisor_ept_guest_to_host(vm->ept_pml4_base, 0x4000);
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "page tables added to guest page table. cr3 on host: 0x%llx", host_page);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "page tables added to guest page table. cr3 on host: 0x%llx", host_page);
 /*
     cpu_tlb_flush();
 

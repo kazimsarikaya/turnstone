@@ -364,7 +364,7 @@ int8_t usb_mass_storage_init(usb_device_t * usb_device)
         uint64_t last_lba = BYTE_SWAP64(capacity_16.last_logical_block_address);
         uint32_t block_size = BYTE_SWAP32(capacity_16.logical_block_length);
 
-        PRINTLOG(USB, LOG_DEBUG, "16 bytes command supported")
+        PRINTLOG(USB, LOG_DEBUG, "16 bytes command supported");
 
         usb_ms->lba_count = last_lba + 1;
         usb_ms->block_size = block_size;

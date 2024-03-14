@@ -137,15 +137,15 @@ static void hypervisor_cleanup_unused_modules(hypervisor_vm_t * vm, uint64_t got
             break;
         }
 
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "got entry 0x%llx 0x%x 0x%x", got_entry->module_id, got_entry->symbol_type, got_entry->resolved);
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "got entry 0x%llx 0x%x 0x%x", got_entry->module_id, got_entry->symbol_type, got_entry->resolved);
 
         if(!got_entry->resolved) {
-            PRINTLOG(HYPERVISOR, LOG_WARNING, "unresolved global object 0x%llx 0x%x", got_entry->module_id, got_entry->symbol_type);
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "unresolved global object 0x%llx 0x%x", got_entry->module_id, got_entry->symbol_type);
         }
 
         if(hashmap_get(vm->loaded_module_ids, (void*)got_entry->module_id) == NULL) {
             if(got_entry->resolved) {
-                PRINTLOG(HYPERVISOR, LOG_WARNING, "cleaning up unused module 0x%llx", got_entry->module_id);
+                PRINTLOG(HYPERVISOR, LOG_TRACE, "cleaning up unused module 0x%llx", got_entry->module_id);
                 got_entry->resolved = false;
             }
         }

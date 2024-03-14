@@ -31,6 +31,10 @@ int32_t mem_backend_fd = 0;
 uint64_t mmmap_address = 4ULL << 30;
 uint64_t mmap_size = RAMSIZE;
 boolean_t windowmanager_initialized = false;
+boolean_t windowmanager_is_initialized(void);
+boolean_t windowmanager_is_initialized(void) {
+    return windowmanager_initialized;
+}
 
 size_t                            video_printf(const char_t* fmt, ...);
 void                              video_print(const char_t* string);

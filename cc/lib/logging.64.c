@@ -8,6 +8,7 @@
  */
 
 #include <logging.h>
+#include <windowmanager.h>
 
 MODULE("turnstone.lib.logging");
 
@@ -98,10 +99,16 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_HYPERVISOR,
 };
 
-extern boolean_t windowmanager_initialized;
+boolean_t logging_need_logging(logging_modules_t module, logging_level_t level) {
+    return level <= LOG_LEVEL || level <= logging_module_levels[module];
+}
+
+void logging_set_level(logging_modules_t module, logging_level_t level) {
+    logging_module_levels[module] = level;
+}
 
 void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, uint64_t line_no, const char_t* format, ...) {
-    if(!LOG_NEED_LOG(module, level)) {
+    if(!logging_need_logging(module, level)) {
         return;
     }
 
@@ -131,7 +138,7 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
 
     buffer_printf(buffer_error, "\n");
 
-    if(!windowmanager_initialized) {
+    if(!windowmanager_is_initialized()) {
         stdbufs_flush_buffer(buffer_error, buffer_old_position);
     }
 

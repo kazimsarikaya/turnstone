@@ -581,7 +581,7 @@ int8_t usb_ehci_init_qtd(usb_controller_t* usb_controller, usb_ehci_qtd_t* qtd, 
 }
 
 int8_t usb_ehci_isochronous_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
-    logging_module_levels[USB] = LOG_TRACE;
+    logging_set_level(USB, LOG_TRACE);
     PRINTLOG(USB, LOG_TRACE, "EHCI isochronous transfer");
 
     usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
@@ -719,7 +719,7 @@ int8_t usb_ehci_isochronous_transfer(usb_controller_t* usb_controller, usb_trans
 
 
     PRINTLOG(USB, LOG_TRACE, "EHCI itd %x frame linked to 0x%p nlp 0x%x this raw 0x%x", itd->id, frame_itd, itd->next_link_pointer.raw, itd->this_raw);
-    logging_module_levels[USB] = LOG_DEBUG;
+    logging_set_level(USB, LOG_DEBUG);
     return 0;
 }
 
@@ -1144,7 +1144,7 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
         uint64_t pci_base = (uint64_t)pci_dev->pci_header;
         uint32_t raw_l_caps = read_memio(pci_base + hccparams.bits.eecp, 32);
         usb_legacy_support_capabilities_t l_caps = (usb_legacy_support_capabilities_t)raw_l_caps;
-        PRINTLOG(USB, LOG_DEBUG, "EHCI controller legacy support capabilities: 0x%x", raw_l_caps)
+        PRINTLOG(USB, LOG_DEBUG, "EHCI controller legacy support capabilities: 0x%x", raw_l_caps);
 
 
         if(l_caps.bits.capability_id == 1) {
