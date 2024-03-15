@@ -39,7 +39,11 @@ iterator_t* pci_iterator_next(iterator_t* iterator);
 int8_t      pci_iterator_end_of_iterator(iterator_t* iterator);
 const void* pci_iterator_get_item(iterator_t* iterator);
 
-pci_context_t* PCI_CONTEXT = NULL;
+static pci_context_t* pci_context_default = NULL;
+
+pci_context_t* pci_get_context(void) {
+    return pci_context_default;
+}
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -55,14 +59,14 @@ int8_t pci_setup(memory_heap_t* heap) {
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumerating");
 
-    PCI_CONTEXT = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
-    PCI_CONTEXT->sata_controllers = list_create_list_with_heap(heap);
-    PCI_CONTEXT->nvme_controllers = list_create_list_with_heap(heap);
-    PCI_CONTEXT->network_controllers = list_create_list_with_heap(heap);
-    PCI_CONTEXT->display_controllers = list_create_list_with_heap(heap);
-    PCI_CONTEXT->usb_controllers = list_create_list_with_heap(heap);
-    PCI_CONTEXT->input_controllers = list_create_list_with_heap(heap);
-    PCI_CONTEXT->other_devices = list_create_list_with_heap(heap);
+    pci_context_default = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
+    pci_context_default->sata_controllers = list_create_list_with_heap(heap);
+    pci_context_default->nvme_controllers = list_create_list_with_heap(heap);
+    pci_context_default->network_controllers = list_create_list_with_heap(heap);
+    pci_context_default->display_controllers = list_create_list_with_heap(heap);
+    pci_context_default->usb_controllers = list_create_list_with_heap(heap);
+    pci_context_default->input_controllers = list_create_list_with_heap(heap);
+    pci_context_default->other_devices = list_create_list_with_heap(heap);
 
     list_t* old_mcfgs = list_create_list();
 
@@ -95,40 +99,40 @@ int8_t pci_setup(memory_heap_t* heap) {
             if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                 p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
 
-                list_list_insert(PCI_CONTEXT->sata_controllers, p);
+                list_list_insert(pci_context_default->sata_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as sata controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_NVME_CONTROLLER) {
 
-                list_list_insert(PCI_CONTEXT->nvme_controllers, p);
+                list_list_insert(pci_context_default->nvme_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as nvme controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_NETWORK_CONTROLLER &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_ETHERNET) {
 
-                list_list_insert(PCI_CONTEXT->network_controllers, p);
+                list_list_insert(pci_context_default->network_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as network controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if(p->pci_header->class_code == PCI_DEVICE_CLASS_DISPLAY_CONTROLLER) {
 
-                list_list_insert(PCI_CONTEXT->display_controllers, p);
+                list_list_insert(pci_context_default->display_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
 
-                list_list_insert(PCI_CONTEXT->usb_controllers, p);
+                list_list_insert(pci_context_default->usb_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             }  else if( p->pci_header->class_code == PCI_DEVICE_CLASS_INPUT_DEVICE) {
 
-                list_list_insert(PCI_CONTEXT->input_controllers, p);
+                list_list_insert(pci_context_default->input_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
@@ -136,7 +140,7 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x is not supported",
                          p->group_number, p->bus_number, p->device_number, p->function_number, p->pci_header->class_code, p->pci_header->subclass_code);
 
-                list_list_insert(PCI_CONTEXT->other_devices, p);
+                list_list_insert(pci_context_default->other_devices, p);
 
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
@@ -180,13 +184,13 @@ int8_t pci_setup(memory_heap_t* heap) {
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
     PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli input controllers %lli other devices %lli",
-             list_size(PCI_CONTEXT->sata_controllers),
-             list_size(PCI_CONTEXT->nvme_controllers),
-             list_size(PCI_CONTEXT->network_controllers),
-             list_size(PCI_CONTEXT->display_controllers),
-             list_size(PCI_CONTEXT->usb_controllers),
-             list_size(PCI_CONTEXT->input_controllers),
-             list_size(PCI_CONTEXT->other_devices)
+             list_size(pci_context_default->sata_controllers),
+             list_size(pci_context_default->nvme_controllers),
+             list_size(pci_context_default->network_controllers),
+             list_size(pci_context_default->display_controllers),
+             list_size(pci_context_default->usb_controllers),
+             list_size(pci_context_default->input_controllers),
+             list_size(pci_context_default->other_devices)
              );
 
     return 0;

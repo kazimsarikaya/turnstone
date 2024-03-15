@@ -469,8 +469,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     memory_heap_t* heap = memory_get_heap(NULL);
 
     PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
-    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
-    int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
+    int8_t sata_port_cnt = ahci_init(heap, pci_get_context()->sata_controllers);
+    int8_t nvme_port_cnt = nvme_init(heap, pci_get_context()->nvme_controllers);
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");

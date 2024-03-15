@@ -35,7 +35,7 @@ int8_t usb_init(void) {
     }
 
 
-    iterator_t* it = list_iterator_create(PCI_CONTEXT->usb_controllers);
+    iterator_t* it = list_iterator_create(pci_get_context()->usb_controllers);
 
     while(it->end_of_iterator(it) != 0) {
         usb_controller_t* usb_controller = memory_malloc(sizeof(usb_controller_t));

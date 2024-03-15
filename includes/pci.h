@@ -303,7 +303,7 @@ typedef struct pci_context_t {
     list_t* other_devices;
 } pci_context_t;
 
-extern pci_context_t* PCI_CONTEXT;
+pci_context_t* pci_get_context(void);
 
 uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no);
 uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no);
