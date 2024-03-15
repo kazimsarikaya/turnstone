@@ -128,7 +128,7 @@ static void hypervisor_cleanup_unused_modules(hypervisor_vm_t * vm, uint64_t got
     uint64_t got_entry_count = got_size / sizeof(linker_global_offset_table_entry_t);
     linker_global_offset_table_entry_t* got_entries = (linker_global_offset_table_entry_t*)got_va;
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "got 0x%llx 0x%llx", got_fa, got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "got 0x%llx 0x%llx", got_fa, got_size);
 
     for(uint64_t i = 2; i < got_entry_count; i++) {
         linker_global_offset_table_entry_t* got_entry = &got_entries[i];
@@ -278,10 +278,10 @@ int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
     ml.metadata_size = ipc.program_build.metadata_size;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", module_id);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "new got 0x%llx 0x%llx", ml.new_got_physical_address, ml.new_got_size);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "module 0x%llx 0x%llx", ml.module_physical_address, ml.module_size);
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "module dump 0x%llx", ml.module_dump_physical_address);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "new got 0x%llx 0x%llx", ml.new_got_physical_address, ml.new_got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "module 0x%llx 0x%llx", ml.module_physical_address, ml.module_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "module dump 0x%llx", ml.module_dump_physical_address);
 
 
     if(hypervisor_ept_merge_module(vm, &ml) != 0) {

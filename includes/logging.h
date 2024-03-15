@@ -246,7 +246,7 @@ extern logging_level_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_HYPERVISOR
 /*! default log level for hypervisor module */
-#define LOG_LEVEL_HYPERVISOR LOG_DEBUG
+#define LOG_LEVEL_HYPERVISOR LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

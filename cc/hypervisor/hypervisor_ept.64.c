@@ -910,15 +910,15 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
         uint64_t pos = 0;
 
         if(list_get_position(vm->read_only_frames, &md, &pos) == 0) {
-            PRINTLOG(HYPERVISOR, LOG_INFO, "Write access to read only memory at 0x%llx", error_address);
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "Write access to read only memory at 0x%llx", error_address);
 
             const linker_metadata_at_memory_t* res_md = list_get_data_at_position(vm->read_only_frames, pos);
 
             list_delete_at_position(vm->read_only_frames, pos);
 
-            PRINTLOG(HYPERVISOR, LOG_INFO, "Section type: 0x%llx", res_md->section.section_type);
-            PRINTLOG(HYPERVISOR, LOG_INFO, "Section virtual start: 0x%llx", res_md->section.virtual_start);
-            PRINTLOG(HYPERVISOR, LOG_INFO, "Section size: 0x%llx", res_md->section.size);
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "Section type: 0x%llx", res_md->section.section_type);
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "Section virtual start: 0x%llx", res_md->section.virtual_start);
+            PRINTLOG(HYPERVISOR, LOG_TRACE, "Section size: 0x%llx", res_md->section.size);
 
             uint64_t section_size = res_md->section.size;
             uint64_t section_virtual_start = res_md->section.virtual_start;

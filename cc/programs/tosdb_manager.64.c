@@ -589,7 +589,7 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
 
     while(!tosdb_manager_main_close) {
         if(list_size(mq_list) == 0) {
-            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: waiting for message");
+            PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: waiting for message");
             task_set_message_waiting();
             task_yield();
 
@@ -607,15 +607,15 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
 
         switch(ipc->type) {
         case TOSDB_MANAGER_IPC_TYPE_CLOSE:
-            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received close message");
+            PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received close message");
             tosdb_manager_main_close = true;
             break;
         case TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD:
-            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received program load message");
+            PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received program load message");
             tosdb_manger_build_program(tdb, ipc);
             break;
         case TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD:
-            PRINTLOG(TOSDB, LOG_INFO, "tosdb_manager_main: received program load message");
+            PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received program load message");
             tosdb_manger_build_module(tdb, ipc, ipc->program_build.program_handle, -1);
             break;
         default:
