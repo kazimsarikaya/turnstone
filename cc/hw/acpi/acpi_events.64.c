@@ -235,7 +235,7 @@ int8_t acpi_setup_events(void) {
     }
 
 
-    PRINTLOG(ACPI, LOG_INFO, "sci interrupt 0x%02x registered", irq)
+    PRINTLOG(ACPI, LOG_INFO, "sci interrupt 0x%02x registered", irq);
 
     return 0;
 }

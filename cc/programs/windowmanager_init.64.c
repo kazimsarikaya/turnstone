@@ -14,3 +14,7 @@
 MODULE("turnstone.user.programs.windowmanager.init");
 
 boolean_t windowmanager_initialized = false;
+
+boolean_t windowmanager_is_initialized(void) {
+    return windowmanager_initialized;
+}

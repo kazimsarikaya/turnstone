@@ -67,7 +67,7 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_fa);
 
-    if(hypevisor_deploy_program(entry_point_name) != 0) {
+    if(hypevisor_deploy_program(vm, entry_point_name) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
         return -1;
     }
@@ -207,7 +207,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMCS] = *vmcs_frame;
     vm->entry_point_name = entry_point_name;
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame va: 0x%llx", vmcs_frame_va);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmcs frame va: 0x%llx", vmcs_frame_va);
 
     uint32_t revision_id = hypervisor_vmcs_revision_id();
 
@@ -222,7 +222,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmclear success");
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmclear success");
 
     err = vmptrld(vmcs_frame->frame_address);
 
@@ -231,7 +231,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmptrld success");
 
     if(hypervisor_vmcs_prepare_host_state(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare host state");
@@ -253,11 +253,6 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    if(hypervisor_vmcs_prepare_ept(vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
-        return -1;
-    }
-
     if(hypervisor_vmcs_prepare_vmexit_handlers() != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vmexit handlers");
         return -1;
@@ -270,7 +265,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmclear success");
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmclear success");
 
     err = vmptrld(vmcs_frame->frame_address);
 
@@ -308,6 +303,6 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 
 int8_t hypervisor_stop(void) {
     asm volatile ("vmxoff" ::: "cc");
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxoff success");
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmxoff success");
     return 0;
 }

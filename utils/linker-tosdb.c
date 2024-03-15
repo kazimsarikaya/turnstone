@@ -354,12 +354,12 @@ int32_t main(int32_t argc, char_t** argv) {
             argc--;
             argv++;
 
-            logging_module_levels[LINKER] = LOG_DEBUG;
+            logging_set_level(LINKER, LOG_DEBUG);
         } else if(strcmp(*argv, "-v") == 0) {
             argc--;
             argv++;
 
-            logging_module_levels[LINKER] = LOG_VERBOSE;
+            logging_set_level(LINKER, LOG_VERBOSE);
         } else if(strcmp(*argv, "--for-efi") == 0) {
             argc--;
             argv++;

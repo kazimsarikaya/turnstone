@@ -12,6 +12,6 @@
 
 #include <types.h>
 
-int8_t windowmanager_init(void);
-
+int8_t    windowmanager_init(void);
+boolean_t windowmanager_is_initialized(void);
 #endif

@@ -70,12 +70,14 @@ typedef enum logging_level_t {
     LOG_TRACE=9,
 } logging_level_t; ///< type short hand for enum @ref logging_level_e
 
+#if 0
 /*! logging module names */
 extern const char_t*const logging_module_names[];
 /*! logging level names */
 extern const char_t*const logging_level_names[];
 /*! logging levels for each module, can be changed at run time */
-extern uint8_t logging_module_levels[];
+extern logging_level_t logging_module_levels[];
+#endif
 
 #ifndef LOG_LEVEL
 /*! default log level for all modules */
@@ -244,7 +246,7 @@ extern uint8_t logging_module_levels[];
 
 #ifndef LOG_LEVEL_HYPERVISOR
 /*! default log level for hypervisor module */
-#define LOG_LEVEL_HYPERVISOR LOG_DEBUG
+#define LOG_LEVEL_HYPERVISOR LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION
@@ -252,8 +254,12 @@ extern uint8_t logging_module_levels[];
 #define LOG_LOCATION 1
 #endif
 
+boolean_t logging_need_logging(logging_modules_t module, logging_level_t level);
+
+void logging_set_level(logging_modules_t module, logging_level_t level);
+
 /*! checks for need logging for log message */
-#define LOG_NEED_LOG(M, L)  (L <= LOG_LEVEL || L <= logging_module_levels[M])
+#define LOG_NEED_LOG(M, L) logging_need_logging(M, L)
 
 /*! logs fellowing block */
 #define LOGBLOCK(M, L) if(LOG_NEED_LOG(M, L))
@@ -276,9 +282,7 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
  * @param[in] msg log message, also if it contains after this there should be a variable arg list
  * @param[in] ... arguments for format in msg
  */
-#define PRINTLOG(M, L, msg, ...)  if(LOG_NEED_LOG(M, L)) { \
-            logging_printlog(M, L, __FILE__, __LINE__, msg, ## __VA_ARGS__); \
-}
+#define PRINTLOG(M, L, msg, ...)  logging_printlog(M, L, __FILE__, __LINE__, msg, ## __VA_ARGS__)
 
 
 #define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)

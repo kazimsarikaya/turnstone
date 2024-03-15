@@ -23,15 +23,7 @@
 
 MODULE("turnstone.hypervisor");
 
-typedef uint64_t (*vmexit_handler_t)(vmcs_vmexit_info_t* vmexit_info);
-
 vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
-
-static void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
-    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
-    guest_rip += vmexit_info->instruction_length;
-    vmx_write(VMX_GUEST_RIP, guest_rip);
-}
 
 static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t interrupt_info = vmexit_info->interrupt_info;
@@ -145,7 +137,7 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x", port, size, direction)
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x", port, size, direction);
 
     uint64_t mask = 0xFFFFFFFFFFFFFFFF >> (64 - (size * 8));
 
@@ -362,6 +354,54 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
 
     return (uint64_t)vmexit_info->registers;
 }
+static uint64_t hypervisor_vmcs_control_register_access_handler(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t exit_qualification = vmexit_info->exit_qualification;
+    uint64_t reg = (exit_qualification >> 8) & 0xF;
+    uint64_t access_type = (exit_qualification >> 4) & 0x3;
+    uint64_t cr = exit_qualification & 0xF;
+
+    if(reg != 15) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
+        return -1;
+    }
+
+    if(cr != 3) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
+        return -1;
+    }
+
+    if(access_type == 0) {
+        uint64_t value = vmexit_info->registers->r15;
+        vmx_write(VMX_GUEST_CR3, value);
+    } else if(access_type == 1) {
+        vmexit_info->registers->r15 = vmx_read(VMX_GUEST_CR3);
+    } else {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
+        return -1;
+    }
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
+static uint64_t hypervisor_vmcs_exception_or_nmi_handler(vmcs_vmexit_info_t* exit_info) {
+    uint64_t interrupt_info = exit_info->interrupt_info;
+
+    int8_t vector = interrupt_info & 0xFF;
+
+    if(vector == 0xE) {
+        uint64_t ret = hypervisor_ept_page_fault_handler(exit_info);
+
+        if(ret == -1ULL) {
+            return -1;
+        }
+
+        return (uint64_t)exit_info->registers;
+    }
+
+    return -1;
+}
 
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
@@ -385,7 +425,11 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
 
     if (vmexit_info.reason < VMX_VMEXIT_REASON_COUNT) {
         if (vmexit_handlers[vmexit_info.reason]) {
-            return vmexit_handlers[vmexit_info.reason](&vmexit_info);
+            uint64_t ret = vmexit_handlers[vmexit_info.reason](&vmexit_info);
+
+            if(ret == (uint64_t)registers) {
+                return ret;
+            }
         }
     }
 
@@ -417,6 +461,9 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
              vmx_read(VMX_GUEST_CR0), vmexit_info.registers->cr2,
              vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
 
+    while(true) {
+        cpu_idle();
+    }
     return -1;
 }
 
@@ -428,5 +475,8 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_INTERRUPT_WINDOW] = hypervisor_vmcs_interrupt_window_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_RDMSR] = hypervisor_vmcs_rdmsr_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_WRMSR] = hypervisor_vmcs_wrmsr_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_VMCALL] = hypervisor_vmcs_vmcalls_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_CONTROL_REGISTER_ACCESS] = hypervisor_vmcs_control_register_access_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_EXCEPTION_OR_NMI] = hypervisor_vmcs_exception_or_nmi_handler;
     return 0;
 }

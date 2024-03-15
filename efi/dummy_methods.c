@@ -47,6 +47,11 @@ typedef void * future_t;
 /*! windowmanager initialized flag global variable */
 boolean_t windowmanager_initialized = false;
 
+boolean_t windowmanager_is_initialized(void);
+boolean_t windowmanager_is_initialized(void) {
+    return windowmanager_initialized;
+}
+
 /**
  * @brief dummy method for efi for getting the current task.
  * @details this method is not required for efi however is required for linking.

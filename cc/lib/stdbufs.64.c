@@ -18,10 +18,6 @@ buffer_t* stdbufs_default_input_buffer = NULL;
 buffer_t* stdbufs_default_output_buffer = NULL;
 buffer_t* stdbufs_default_error_buffer = NULL;
 
-extern boolean_t windowmanager_initialized;
-uint64_t stdbufs_default_output_buffer_last_position = 0;
-
-
 static void stdbufs_video_null_printer(const char_t* text) {
     // do nothing
     UNUSED(text);
@@ -62,6 +58,10 @@ int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
 
 
 #if ___TESTMODE != 1
+
+#include <windowmanager.h>
+
+static uint64_t stdbufs_default_output_buffer_last_position = 0;
 
 typedef buffer_t * (*stdbuf_task_buffer_getter_f)(void);
 stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer = NULL;
@@ -143,7 +143,7 @@ int64_t vprintf(const char * format, va_list ap) {
 
     int64_t ret = buffer_vprintf(buffer, format, ap);
 
-    if(!windowmanager_initialized) {
+    if(!windowmanager_is_initialized()) {
         stdbufs_flush_buffer(buffer, stdbufs_default_output_buffer_last_position);
     }
 

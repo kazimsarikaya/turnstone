@@ -237,7 +237,7 @@ int8_t acpi_aml_exec_mth_return(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_
     mthctx->mthobjs[15] = obj; // acpi_aml_duplicate_object(ctx, obj);
     opcode->return_obj = obj;
 
-    PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method return obj type %i", ctx->scope_prefix, obj->type)
+    PRINTLOG(ACPIAML, LOG_TRACE, "ctx %s method return obj type %i", ctx->scope_prefix, obj->type);
 
     return 0;
 }
@@ -301,7 +301,7 @@ int8_t acpi_aml_exec_method(acpi_aml_parser_context_t* ctx, acpi_aml_opcode_t* o
     }
 
     mthctx->mthobjs = mthobjs;
-    mthctx->arg_count = opcode->operand_count - 1; //first op is method call object
+    mthctx->arg_count = opcode->operand_count - 1; // first op is method call object
 
 
     char_t* old_scope_prefix = ctx->scope_prefix;

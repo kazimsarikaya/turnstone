@@ -14,6 +14,7 @@
 #include <cpu.h>
 #include <ports.h>
 #include <buffer.h>
+#include <stdbufs.h>
 
 MODULE("turnstone.user.programs.vm_test_program");
 
@@ -47,7 +48,10 @@ _Noreturn static void vm_test_program_halt(void) {
 }
 
 _Noreturn void vmtpm(void) {
-    memory_heap_t* heap = memory_create_heap_simple(10 << 20, 16 << 20);
+    vm_test_program_print("VM Test Program\n");
+    uint64_t heap_base = 4ULL << 40;
+    uint64_t heap_size = 16ULL << 20;
+    memory_heap_t* heap = memory_create_heap_simple(heap_base, heap_base + heap_size);
 
     if(heap == NULL) {
         vm_test_program_print("Failed to create heap\n");
@@ -55,6 +59,8 @@ _Noreturn void vmtpm(void) {
     }
 
     memory_set_default_heap(heap);
+
+    stdbufs_init_buffers(vm_test_program_print);
 
     vm_test_program_printf("Hello, World!\n");
     vm_test_program_printf("This is a test program for the VM\n");
