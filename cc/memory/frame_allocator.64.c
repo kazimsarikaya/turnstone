@@ -21,7 +21,7 @@
 MODULE("turnstone.kernel.memory.frame");
 
 
-frame_allocator_t* KERNEL_FRAME_ALLOCATOR = NULL;
+static frame_allocator_t* frame_allocator_default = NULL;
 
 typedef struct frame_allocator_context_t {
     memory_heap_t* heap;
@@ -1079,4 +1079,13 @@ void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t* fa) {
     }
 
     iter->destroy(iter);
+}
+
+
+frame_allocator_t* frame_get_allocator(void) {
+    return frame_allocator_default;
+}
+
+void frame_set_allocator(frame_allocator_t* fa) {
+    frame_allocator_default = fa;
 }

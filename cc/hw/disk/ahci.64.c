@@ -374,7 +374,7 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
 
         PRINTLOG(AHCI, LOG_TRACE, "frame address at bar 0x%llx", abar_fa);
 
-        frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)abar_fa);
+        frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)abar_fa);
         uint64_t bar_frm_cnt = 2;
         frame_t bar_req_frm = {abar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
 
@@ -383,7 +383,7 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
         if(bar_frames == NULL) {
             PRINTLOG(AHCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", abar_fa);
 
-            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
                 PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frame");
 
                 return -1;
@@ -502,7 +502,7 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
 
                 frame_t* port_frames = NULL;
 
-                if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 10, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
+                if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 10, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &port_frames, NULL) != 0) {
                     PRINTLOG(AHCI, LOG_ERROR, "cannot allocate frames for disk %lli at 0x%llx", disk->disk_id, disk->port_address);
                     iter->destroy(iter);
 

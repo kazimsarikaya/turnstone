@@ -33,7 +33,7 @@ int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix
     bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->bir);
     bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
-    frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+    frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
 
     uint64_t bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
@@ -41,7 +41,7 @@ int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix
     if(bar_frames == NULL) {
         PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
 
-        if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+        if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
             PRINTLOG(PCI, LOG_ERROR, "cannot allocate frame");
 
             return -1;
@@ -55,7 +55,7 @@ int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix
         bar_size = pci_get_bar_size(pci_gen_dev, msix_cap->pending_bit_bir);
         bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
 
-        bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+        bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
 
         bar_frm_cnt = (bar_size + FRAME_SIZE - 1) / FRAME_SIZE;
         bar_req_frm.frame_address = bar_fa;
@@ -64,7 +64,7 @@ int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix
         if(bar_frames == NULL) {
             PRINTLOG(PCI, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
 
-            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
                 PRINTLOG(PCI, LOG_ERROR, "cannot allocate frame");
 
                 return -1;

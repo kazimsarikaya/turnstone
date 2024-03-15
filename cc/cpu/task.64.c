@@ -112,7 +112,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     frame_t* kernel_gs_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 4, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &kernel_gs_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
 
         return -1;
@@ -157,7 +157,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     frame_t* stack_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), frame_count, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
         return -1;
@@ -451,7 +451,7 @@ static void task_cleanup_task(task_t* task) {
         cpu_hlt();
     }
 
-    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &stack_frames) != 0) {
+    if(frame_get_allocator()->release_frame(frame_get_allocator(), &stack_frames) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
 
         cpu_hlt();
@@ -477,7 +477,7 @@ static void task_cleanup_task(task_t* task) {
         cpu_hlt();
     }
 
-    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &heap_frames) != 0) {
+    if(frame_get_allocator()->release_frame(frame_get_allocator(), &heap_frames) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release heap with frames at 0x%llx with count 0x%llx", stack_fa, heap_frames_cnt);
 
         cpu_hlt();
@@ -800,7 +800,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);
@@ -812,10 +812,10 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t heap_frames_cnt = (heap_size + FRAME_SIZE - 1) / FRAME_SIZE;
     heap_size = heap_frames_cnt * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), heap_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &heap_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate heap with frame count 0x%llx", heap_frames_cnt);
 
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, stack_frames) != 0) {
+        if(frame_get_allocator()->release_frame(frame_get_allocator(), stack_frames) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_frames->frame_address, stack_frames->frame_count);
 
             cpu_hlt();
@@ -953,7 +953,7 @@ int8_t task_create_idle_task(memory_heap_t* heap) {
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
         memory_free_ext(heap, new_task);
         memory_free_ext(heap, registers);

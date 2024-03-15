@@ -187,7 +187,7 @@ int8_t kmain64(size_t entry_point) {
 
     if(fa) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
-        KERNEL_FRAME_ALLOCATOR = fa;
+        frame_set_allocator(fa);
 
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
@@ -281,15 +281,15 @@ int8_t kmain64(size_t entry_point) {
 
     printf("random data 0x%x\n", rand());
 
-    KERNEL_FRAME_ALLOCATOR->cleanup(KERNEL_FRAME_ALLOCATOR);
+    frame_get_allocator()->cleanup(frame_get_allocator());
 
     LOGBLOCK(FRAMEALLOCATOR, LOG_DEBUG){
-        frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
+        frame_allocator_print(frame_get_allocator());
     }
 
     PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initializing");
 
-    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
+    frame_allocator_map_page_of_acpi_code_data_frames(frame_get_allocator());
 
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 

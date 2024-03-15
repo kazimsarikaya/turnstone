@@ -380,11 +380,11 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     frame_t* screen_frm = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       screen_frm_cnt,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                       &screen_frm,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      screen_frm_cnt,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                      &screen_frm,
+                                                      NULL) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate screen frame");
 
         return;
@@ -610,11 +610,11 @@ void virtio_gpu_mouse_init(void) {
 
     frame_t* mouse_frm = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       mouse_frm_cnt,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                       &mouse_frm,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      mouse_frm_cnt,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                      &mouse_frm,
+                                                      NULL) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate mouse frame");
 
         return;

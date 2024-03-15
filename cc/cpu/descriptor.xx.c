@@ -111,11 +111,11 @@ uint8_t descriptor_build_ap_descriptors_register(void){
 
     frame_t* stack_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       frame_count,
-                                                       FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &stack_frames,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      frame_count,
+                                                      FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &stack_frames,
+                                                      NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
         return -1;
@@ -180,7 +180,7 @@ uint8_t descriptor_build_idt_register(void){
 
     PRINTLOG(KERNEL, LOG_DEBUG, "idt frame address: 0x%llx count 0x%llx", idt_frame.frame_address, idt_frame.frame_count);
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &idt_frame) != 0) {
+    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &idt_frame) != 0) {
         return -1;
     }
 

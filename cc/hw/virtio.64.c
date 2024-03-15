@@ -50,8 +50,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
     boolean_t do_not_init = !write;
 
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) == 0 &&
-       KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) == 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), queue_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) == 0 &&
+       frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), queue_meta_frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_meta_frames, NULL) == 0) {
         queue_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
         queue_meta_frames->frame_attributes |= FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED;
 
@@ -401,7 +401,7 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
 
                     PRINTLOG(VIRTIO, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
-                    frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+                    frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
                     uint64_t size = pci_get_bar_size(pci_gen_dev, vcap->bar_no);
                     PRINTLOG(VIRTIO, LOG_TRACE, "bar size 0x%llx", size);
                     uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
@@ -412,7 +412,7 @@ virtio_dev_t* virtio_get_device(const pci_dev_t* pci_dev) {
                     if(bar_frames == NULL) {
                         PRINTLOG(VIRTIO, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
 
-                        if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+                        if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
                             PRINTLOG(VIRTIO, LOG_ERROR, "cannot allocate frame");
                             memory_free(vdev);
 

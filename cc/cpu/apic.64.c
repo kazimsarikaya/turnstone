@@ -192,13 +192,13 @@ int8_t apic_init_apic(list_t* apic_entries){
         lapic_addr = la->local_apic_address_override.address;
     }
 
-    frame_t* lapic_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)lapic_addr);
+    frame_t* lapic_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)lapic_addr);
 
     if(lapic_frames == NULL) {
         PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of lapic 0x%016llx", lapic_addr);
         frame_t tmp_lapic_frm = {lapic_addr, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
-        if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &tmp_lapic_frm) != 0) {
+        if(frame_get_allocator()->reserve_system_frames(frame_get_allocator(), &tmp_lapic_frm) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of lapic 0x%016llx", lapic_addr);
 
             return -1;
@@ -379,13 +379,13 @@ uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
     PRINTLOG(IOAPIC, LOG_DEBUG, "address is 0x%08llx", ioapic_base);
 
 
-    frame_t* ioapic_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)ioapic_base);
+    frame_t* ioapic_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)ioapic_base);
 
     if(ioapic_frames == NULL) {
         PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of ioapic 0x%016llx", ioapic_base);
         frame_t tmp_ioapic_frm = {ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
-        if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &tmp_ioapic_frm) != 0) {
+        if(frame_get_allocator()->reserve_system_frames(frame_get_allocator(), &tmp_ioapic_frm) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of ioapic 0x%016llx", ioapic_base);
 
             return -1;

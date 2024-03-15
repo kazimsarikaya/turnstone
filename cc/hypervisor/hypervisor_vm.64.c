@@ -131,7 +131,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
                 PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
             }
 
-            if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, frame) != 0) {
+            if(frame_get_allocator()->release_frame(frame_get_allocator(), frame) != 0) {
                 PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                          frame->frame_address, frame->frame_count);
             }
@@ -152,7 +152,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
         }
 
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, ept_frame) != 0) {
+        if(frame_get_allocator()->release_frame(frame_get_allocator(), ept_frame) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                      ept_frame->frame_address, ept_frame->frame_count);
         }
@@ -177,7 +177,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
         }
 
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &got_frame) != 0) {
+        if(frame_get_allocator()->release_frame(frame_get_allocator(), &got_frame) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                      got_frame.frame_address, got_frame.frame_count);
         }
@@ -192,7 +192,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
     }
 
-    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &self_frame) != 0) {
+    if(frame_get_allocator()->release_frame(frame_get_allocator(), &self_frame) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                  self_frame.frame_address, self_frame.frame_count);
     }

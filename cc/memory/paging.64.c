@@ -27,16 +27,16 @@ uint64_t memory_paging_get_internal_frame(memory_page_table_context_t* table_con
 static void memory_paging_internal_frame_build(memory_page_table_context_t* table_context) {
     frame_t* internal_frms;
 
-    if(!KERNEL_FRAME_ALLOCATOR || KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count == NULL) {
+    if(!frame_get_allocator() || frame_get_allocator()->allocate_frame_by_count == NULL) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. frame allocator 0x%p0 is null halting...",
-                 KERNEL_FRAME_ALLOCATOR);
+                 frame_get_allocator());
         cpu_hlt();
     }
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                       &internal_frms, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      MEMORY_PAGING_INTERNAL_FRAMES_MAX_COUNT,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                      &internal_frms, NULL) != 0) {
         PRINTLOG(PAGING, LOG_PANIC, "cannot allocate internal paging frames. Halting...");
         cpu_hlt();
     }
@@ -415,7 +415,7 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
     frm.frame_count = table_context->internal_frames_1_count;
 
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &frm) != 0) {
+    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &frm) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to allocate internal frames");
 
         return -1;
@@ -425,7 +425,7 @@ int8_t memory_paging_reserve_current_page_table_frames(void) {
     frm.frame_count = table_context->internal_frames_2_count;
 
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &frm) != 0) {
+    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &frm) != 0) {
         PRINTLOG(PAGING, LOG_ERROR, "failed to allocate internal frames");
 
         return -1;
@@ -957,7 +957,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_page_table_context_t* tabl
                     memory_memclean(&t_p2->pages[p2_idx], sizeof(memory_page_entry_t));
 
                     frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p1), 1, 0, 0};
-                    KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &f);
+                    frame_get_allocator()->release_frame(frame_get_allocator(), &f);
                 }
 
             }
@@ -974,7 +974,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_page_table_context_t* tabl
                 memory_memclean(&t_p3->pages[p3_idx], sizeof(memory_page_entry_t));
 
                 frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p2), 1, 0, 0};
-                KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &f);
+                frame_get_allocator()->release_frame(frame_get_allocator(), &f);
             }
         }
 
@@ -990,7 +990,7 @@ int8_t memory_paging_delete_page_ext_with_heap(memory_page_table_context_t* tabl
             memory_memclean(&p4->pages[p4_idx], sizeof(memory_page_entry_t));
 
             frame_t f = {MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)t_p3), 1, 0, 0};
-            KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &f);
+            frame_get_allocator()->release_frame(frame_get_allocator(), &f);
         }
     }
 

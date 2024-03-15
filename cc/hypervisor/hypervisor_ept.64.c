@@ -771,7 +771,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
         return -1;
     }
 
-    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &got_frame) != 0) {
+    if(frame_get_allocator()->release_frame(frame_get_allocator(), &got_frame) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                  got_frame.frame_address, got_frame.frame_count);
         return -1;

@@ -131,7 +131,7 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
         .type = FRAME_TYPE_RESERVED,
     };
 
-    KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &fb_bar_frm);
+    frame_get_allocator()->allocate_frame(frame_get_allocator(), &fb_bar_frm);
     memory_paging_add_va_for_frame(fb_bar_addr_va, &fb_bar_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
     frame_t fifo_bar_frm = {
@@ -140,7 +140,7 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
         .type = FRAME_TYPE_RESERVED,
     };
 
-    KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &fifo_bar_frm);
+    frame_get_allocator()->allocate_frame(frame_get_allocator(), &fifo_bar_frm);
     memory_paging_add_va_for_frame(fifo_bar_addr_va, &fifo_bar_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
 

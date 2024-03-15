@@ -234,7 +234,7 @@ iterator_t* pci_iterator_create_with_heap(memory_heap_t* heap, acpi_table_mcfg_t
                     size_t pci_mmio_addr_va  = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
 
 
-                    frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_fa);
+                    frame_t* pci_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)pci_mmio_addr_fa);
 
                     if(pci_frames == NULL) {
                         PRINTLOG(PCI, LOG_ERROR, "cannot find frames of mmio 0x%016llx", pci_mmio_addr_fa);
@@ -318,7 +318,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
                 size_t pci_mmio_addr_va  = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_fa);
 
 
-                frame_t* pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_fa);
+                frame_t* pci_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)pci_mmio_addr_fa);
 
                 if(pci_frames == NULL) {
                     PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);
@@ -352,7 +352,7 @@ iterator_t* pci_iterator_next(iterator_t* iterator){
                                 size_t pci_mmio_addr_f_fa = iter_metadata->mcfg->pci_segment_group_config[bus_group].base_address + ( bus_addr << 20 | dev_addr << 15 | func_addr << 12 );
                                 size_t pci_mmio_addr_f_va  = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pci_mmio_addr_f_fa);
 
-                                pci_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)pci_mmio_addr_f_fa);
+                                pci_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)pci_mmio_addr_f_fa);
 
                                 if(pci_frames == NULL) {
                                     PRINTLOG(PCI, LOG_ERROR, "cannot find frames of pci dev 0x%016llx", pci_mmio_addr_fa);

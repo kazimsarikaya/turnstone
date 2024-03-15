@@ -247,7 +247,6 @@ int8_t efi_frame_allocate_frame_by_count(struct frame_allocator_t* self, uint64_
     return EFI_SUCCESS;
 }
 
-
 efi_status_t efi_frame_allocator_init(void) {
     frame_allocator_t* frame_allocator = memory_malloc(sizeof(frame_allocator_t));
 
@@ -255,7 +254,7 @@ efi_status_t efi_frame_allocator_init(void) {
         return EFI_OUT_OF_RESOURCES;
     }
 
-    KERNEL_FRAME_ALLOCATOR = frame_allocator;
+    frame_set_allocator(frame_allocator);
 
     frame_allocator->allocate_frame_by_count = efi_frame_allocate_frame_by_count;
 

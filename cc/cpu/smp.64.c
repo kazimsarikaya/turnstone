@@ -156,7 +156,7 @@ int8_t smp_init(void) {
     uint64_t stack_frames_cnt = 16 * ap_cpu_count;
     uint64_t stack_size = 16 * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: Failed to allocate stack frames");
         return -1;
     }
@@ -172,7 +172,7 @@ int8_t smp_init(void) {
     uint64_t ap_gs_frames_cnt = 4 * ap_cpu_count;
     uint64_t ap_gs_size = 4 * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, ap_gs_frames_cnt, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &ap_gs_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), ap_gs_frames_cnt, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &ap_gs_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
 
         return -1;
@@ -278,11 +278,11 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     frame_t* user_code_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       2,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &user_code_frames,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      2,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &user_code_frames,
+                                                      NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate user code frame");
 
         cpu_hlt();

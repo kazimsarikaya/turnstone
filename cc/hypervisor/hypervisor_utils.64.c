@@ -24,10 +24,10 @@ MODULE("turnstone.hypervisor");
 
 
 uint64_t hypervisor_allocate_region(frame_t** frame, uint64_t size) {
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       size / FRAME_SIZE,
-                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       frame, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      size / FRAME_SIZE,
+                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      frame, NULL) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate region frame");
         return 0;
     }
@@ -51,7 +51,7 @@ uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size) {
     uint64_t stack_frames_cnt = (stack_size + FRAME_SIZE - 1) / FRAME_SIZE;
     stack_size = stack_frames_cnt * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate stack with frame count 0x%llx", stack_frames_cnt);
 
         return -1;
