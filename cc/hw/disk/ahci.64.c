@@ -53,6 +53,10 @@ const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id) {
 const ahci_sata_disk_t* ahci_get_first_inserted_disk(void) {
     iterator_t* iter = list_iterator_create(sata_ports);
 
+    if(iter == NULL) {
+        return NULL;
+    }
+
     while(iter->end_of_iterator(iter) != 0) {
         const ahci_sata_disk_t* disk = iter->get_item(iter);
 

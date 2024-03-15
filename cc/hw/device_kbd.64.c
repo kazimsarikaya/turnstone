@@ -339,7 +339,7 @@ int8_t dev_virtio_tablet_create_queues(virtio_dev_t* vdev){
 int8_t dev_virtio_kbd_init(void) {
     int8_t errors = 0;
 
-    iterator_t* iter = list_iterator_create(PCI_CONTEXT->other_devices);
+    iterator_t* iter = list_iterator_create(PCI_CONTEXT->input_controllers);
     const pci_dev_t* kbd_pci_dev = NULL;
     const pci_dev_t* mouse_pci_dev = NULL;
     const pci_dev_t* tablet_pci_dev = NULL;

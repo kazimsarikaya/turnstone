@@ -28,6 +28,7 @@
 #define PCI_DEVICE_CLASS_DISPLAY_CONTROLLER       0x03
 #define PCI_DEVICE_CLASS_BRIDGE_CONTROLLER        0x06
 #define PCI_DEVICE_CLASS_SYSTEM_PERIPHERAL        0x08
+#define PCI_DEVICE_CLASS_INPUT_DEVICE             0x09
 #define PCI_DEVICE_CLASS_SERIAL_BUS               0x0C
 
 #define PCI_DEVICE_SUBCLASS_USB_CONTROLLER   0x03
@@ -225,6 +226,7 @@ typedef struct pci_dev_t {
     uint8_t              bus_number; ///< bus number of the device
     uint8_t              device_number; ///< device number
     uint8_t              function_number; ///< device function number
+    uint64_t             header_size; ///< header size of the device
     pci_common_header_t* pci_header; ///< pci generic memory area
 } pci_dev_t; ///< short hand for struct
 
@@ -297,6 +299,7 @@ typedef struct pci_context_t {
     list_t* network_controllers;
     list_t* display_controllers;
     list_t* usb_controllers;
+    list_t* input_controllers;
     list_t* other_devices;
 } pci_context_t;
 
