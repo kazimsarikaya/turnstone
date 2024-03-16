@@ -21,6 +21,10 @@
 
 MODULE("turnstone.hypervisor");
 
+static void hypervisor_ept_invept(uint64_t type) {
+    uint128_t eptp = vmx_read(VMX_CTLS_EPTP);
+    asm volatile ("invept (%0), %1" : : "r" (&eptp), "r" (type) : "memory");
+}
 
 static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_physical, uint64_t guest_physical, boolean_t wb) {
     uint64_t ept_base_fa = vm->ept_pml4_base;
@@ -879,16 +883,8 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     uint64_t host_page = hypervisor_ept_guest_to_host(vm->ept_pml4_base, 0x4000);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "page tables added to guest page table. cr3 on host: 0x%llx", host_page);
-/*
-    cpu_tlb_flush();
 
-
-    uint128_t eptp = 0; // vmx_read(VMX_CTLS_EPTP);
-    eptp &= 0xFFFFFFFFFFFFF000ULL;
-    uint64_t all_contexts = 2;
-
-    asm volatile ("invept (%0), %1" : : "r" (&eptp), "r" (all_contexts) : "memory");
- */
+    hypervisor_ept_invept(1);
 
     vm->got_physical_address = module_load->new_got_physical_address;
     vm->got_size = module_load->new_got_size;
@@ -975,8 +971,17 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
                 new_section_physical_start += MEMORY_PAGING_PAGE_LENGTH_4K;
             }
 
+            hypervisor_ept_invept(1);
+
             return (uint64_t)vmexit_info->registers;
         }
+    }
+
+    if(!pagefault_error.fields.present) {
+        uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+        uint64_t guest_rip_at_host = hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_rip);
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip at host: 0x%llx", guest_rip_at_host);
+        return -1;
     }
 
     return -1;
