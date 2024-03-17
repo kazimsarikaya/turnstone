@@ -439,3 +439,102 @@ const void* pci_iterator_get_item(iterator_t* iterator){
 
     return d;
 }
+
+const pci_dev_t* pci_find_device_by_address(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number) {
+    if(pci_context_default == NULL) {
+        return NULL;
+    }
+
+    if(pci_context_default->display_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_default->display_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->display_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_default->network_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_default->network_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->network_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_default->nvme_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_default->nvme_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->nvme_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_default->sata_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_default->sata_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->sata_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_default->usb_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_default->usb_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->usb_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_default->input_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_default->input_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->input_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_default->other_devices) {
+        for(size_t i = 0; i < list_size(pci_context_default->other_devices); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_default->other_devices, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    return NULL;
+}

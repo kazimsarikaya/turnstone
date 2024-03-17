@@ -318,4 +318,6 @@ void pci_enable_interrupt(pci_generic_device_t* pci_dev);
 
 int8_t pci_setup(memory_heap_t* heap);
 
+const pci_dev_t* pci_find_device_by_address(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number);
+
 #endif
