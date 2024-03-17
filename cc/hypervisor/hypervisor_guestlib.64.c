@@ -57,8 +57,8 @@ _Noreturn void vm_guest_exit(void) {
 uint64_t vm_guest_attach_pci_dev(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number) {
     uint64_t pci_address = (uint64_t)group_number << 24 |
                            (uint64_t)bus_number << 16 |
-                           (uint64_t)device_number << 11 |
-                           (uint64_t)function_number << 8;
+                           (uint64_t)device_number << 8 |
+                           (uint64_t)function_number;
 
     uint64_t result = 0;
 

@@ -19,6 +19,7 @@
 #include <cpu/task.h>
 #include <tosdb/tosdb_manager.h>
 #include <linker.h>
+#include <pci.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -210,16 +211,28 @@ void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
     vmx_write(VMX_GUEST_RIP, guest_rip);
 }
 
-int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info);
+int8_t   hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vmexit_info);
+uint64_t hypervisor_vmcall_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address);
 
-int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
-    hypervisor_vm_t* vm = task_get_vm();
+uint64_t hypervisor_vmcall_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address) {
+    uint8_t group = (pci_address >> 24) & 0xff;
+    uint8_t bus = (pci_address >> 16) & 0xff;
+    uint8_t device = (pci_address >> 8) & 0xff;
+    uint8_t function = pci_address & 0xff;
 
-    if(!vm) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vm is not set");
+    const pci_dev_t* pci_dev = pci_find_device_by_address(group, bus, device, function);
+
+    if(pci_dev == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot find pci device 0x%x 0x%x 0x%x 0x%x", group, bus, device, function);
         return -1;
     }
 
+    uint64_t pci_va = hypervisor_ept_map_pci_device(vm, pci_dev);
+
+    return pci_va;
+}
+
+int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vmexit_info) {
     uint64_t got_fa = vm->got_physical_address;
     uint64_t got_size = vm->got_size;
     uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
@@ -313,8 +326,11 @@ uint64_t hypervisor_vmcs_vmcalls_handler(vmcs_vmexit_info_t* vmexit_info) {
     case HYPERVISOR_VMCALL_GET_HOST_PHYSICAL_ADDRESS:
         ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
         break;
+    case HYPERVISOR_VMCALL_ATTACH_PCI_DEV:
+        ret = hypervisor_vmcall_attach_pci_dev(vm, vmexit_info->registers->rdi);
+        break;
     case HYPERVISOR_VMCALL_LOAD_MODULE:
-        ret = hypervisor_vmcall_load_module(vmexit_info);
+        ret = hypervisor_vmcall_load_module(vm, vmexit_info);
         break;
     default:
         PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown vmcall rax 0x%llx", rax);

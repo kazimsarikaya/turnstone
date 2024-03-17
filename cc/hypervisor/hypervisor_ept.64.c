@@ -606,7 +606,7 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
     return 0;
 }
 
-static int8_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, uint64_t virtual_address) {
+static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, uint64_t virtual_address) {
     uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, 0x4000);
     uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
 
@@ -1064,5 +1064,126 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
 
 uint64_t hypervisor_ept_guest_virtual_to_host_physical(hypervisor_vm_t* vm, uint64_t guest_virtual) {
     uint64_t guest_physical = hypervisor_ept_paging_get_guest_physical(vm, guest_virtual);
+
+    if(guest_physical == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to get guest physical address for guest virtual address 0x%llx", guest_virtual);
+        return -1;
+    }
+
     return hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_physical);
+}
+
+uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci_dev) {
+    pci_common_header_t* pci_header = pci_dev->pci_header;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header: class 0x%x, subclass 0x%x, prog if 0x%x",
+             pci_header->class_code, pci_header->subclass_code, pci_header->prog_if);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header: vendor id 0x%x, device id 0x%x, revision id 0x%x",
+             pci_header->vendor_id, pci_header->device_id, pci_header->revsionid);
+
+    uint64_t pci_header_va = (uint64_t)pci_header;
+
+    uint64_t pci_header_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(pci_header_va);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header va: 0x%llx, pci header fa: 0x%llx", pci_header_va, pci_header_fa);
+
+    frame_allocator_t* frame_allocator = frame_get_allocator();
+
+    frame_t* frame = frame_allocator->get_reserved_frames_of_address(frame_allocator, (void*)pci_header_fa);
+
+    if(frame == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to get frame for pci header");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "frame address: 0x%llx frame_count: 0x%llx", frame->frame_address, frame->frame_count);
+
+    uint64_t frame_address = pci_header_fa; // frame->frame_address;
+    uint64_t frame_count = 1; // frame->frame_count; // TODO: check frame count
+
+    for(uint64_t i = 0; i < frame_count; i++) {
+        if(hypervisor_ept_add_ept_page(vm, frame_address, frame_address, true) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add pci frame address to ept");
+            return -1;
+        }
+
+        if(hypervisor_ept_paging_add_page(vm, frame_address,
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame_address),
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
+            return -1;
+        }
+
+        frame_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+    }
+
+    pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)pci_header;
+    pci_bar_register_t* bar = &pci_gen_dev->bar0;
+    pci_bar_register_t* bar5 = &pci_gen_dev->bar5;
+
+    uint8_t bar_no = 0;
+
+    while(bar <= bar5){
+        if(bar->bar_type.type == 0) {
+            uint64_t bar_fa = pci_get_bar_address(pci_gen_dev, bar_no);
+            uint64_t bar_size = pci_get_bar_size(pci_gen_dev, bar_no);
+
+            if(bar_size != 0) {
+                frame = frame_allocator->get_reserved_frames_of_address(frame_allocator, (void*)bar_fa);
+
+                if(frame == NULL) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to get frame for pci bar");
+                    return -1;
+                }
+
+                PRINTLOG(HYPERVISOR, LOG_TRACE, " bar %i frame address: 0x%llx frame_count: 0x%llx", bar_no,
+                         frame->frame_address, frame->frame_count);
+                PRINTLOG(HYPERVISOR, LOG_TRACE, " bar %i fa: 0x%llx, size: 0x%llx", bar_no, bar_fa, bar_size);
+
+                uint64_t bar_frm_cnt = bar_size / FRAME_SIZE;
+
+                if(bar_size % FRAME_SIZE != 0) {
+                    bar_frm_cnt++;
+                }
+
+                frame_address = bar_fa; // frame->frame_address;
+                frame_count = bar_frm_cnt; // frame->frame_count;
+
+                for(uint64_t i = 0; i < frame_count; i++) {
+                    if(hypervisor_ept_add_ept_page(vm, frame_address, frame_address, true) != 0) {
+                        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add pci frame address to ept");
+                        return -1;
+                    }
+
+                    if(hypervisor_ept_paging_add_page(vm, frame_address,
+                                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame_address),
+                                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
+                        return -1;
+                    }
+
+                    frame_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+                }
+
+            }
+
+            bar++;
+            bar_no++;
+            if(bar->memory_space_bar.bar_type == 2){
+                bar++;
+                bar_no++;
+            }
+        } else if(bar->bar_type.type == 1) {
+            // TODO: io space bar add update IOBITMAP_A and IOBITMAP_B at vmcs
+
+
+            bar++;
+            bar_no++;
+        }
+    }
+
+    hypervisor_ept_invept(1);
+
+
+    return pci_header_va;
 }
