@@ -606,6 +606,76 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
     return 0;
 }
 
+static int8_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, uint64_t virtual_address) {
+    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, 0x4000);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+
+    uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
+
+    memory_page_table_t* p4 = (memory_page_table_t*)p4_va;
+
+    uint64_t p3_fa = 0;
+
+    if(!p4->pages[p4_index].present) {
+        return 0;
+    } else {
+        uint64_t tmp_guest_fa = p4->pages[p4_index].physical_address;
+        tmp_guest_fa <<= 12;
+
+        p3_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
+    }
+
+    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+
+    uint64_t p3_index = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
+    memory_page_table_t* p3 = (memory_page_table_t*)p3_va;
+
+    uint64_t p2_fa = 0;
+
+    if(!p3->pages[p3_index].present) {
+        return 0;
+    } else {
+        uint64_t tmp_guest_fa = p3->pages[p3_index].physical_address;
+        tmp_guest_fa <<= 12;
+
+        p2_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
+    }
+
+    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+
+    uint64_t p2_index = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
+    memory_page_table_t* p2 = (memory_page_table_t*)p2_va;
+
+    uint64_t p1_fa = 0;
+
+    if(!p2->pages[p2_index].present) {
+        return 0;
+    } else {
+        uint64_t tmp_guest_fa = p2->pages[p2_index].physical_address;
+        tmp_guest_fa <<= 12;
+
+        p1_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
+    }
+
+    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+
+    uint64_t p1_index = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
+    memory_page_table_t* p1 = (memory_page_table_t*)p1_va;
+
+    uint64_t pte_address = p1->pages[p1_index].physical_address;
+    pte_address <<= 12;
+
+    if(p1->pages[p1_index].present) {
+        return pte_address;
+    }
+
+    return 0;
+}
+
+
 int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     uint64_t ept_pml4e_base = vm->ept_pml4_base;
 
@@ -990,4 +1060,9 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
     }
 
     return -1;
+}
+
+uint64_t hypervisor_ept_guest_virtual_to_host_physical(hypervisor_vm_t* vm, uint64_t guest_virtual) {
+    uint64_t guest_physical = hypervisor_ept_paging_get_guest_physical(vm, guest_virtual);
+    return hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_physical);
 }

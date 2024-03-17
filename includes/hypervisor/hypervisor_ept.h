@@ -105,6 +105,7 @@ _Static_assert(sizeof(hypervisor_ept_pte_t) == 8, "PTE size is not 8 bytes");
 
 uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm);
 uint64_t hypervisor_ept_guest_to_host(uint64_t ept_base, uint64_t guest_physical);
+uint64_t hypervisor_ept_guest_virtual_to_host_physical(hypervisor_vm_t* vm, uint64_t guest_virtual);
 int8_t   hypervisor_ept_build_tables(hypervisor_vm_t* vm);
 int8_t   hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_load_t* module_load);
 

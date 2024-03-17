@@ -24,9 +24,19 @@ uint32_t hypervisor_vmcs_revision_id(void) {
     return cpu_read_msr(CPU_MSR_IA32_VMX_BASIC) & 0xffffffff;
 }
 
-void hypervisor_vmcs_exit_handler_error(void);
+void hypervisor_vmcs_exit_handler_error(int64_t error_code);
 
-void hypervisor_vmcs_exit_handler_error(void) {
+void hypervisor_vmcs_exit_handler_error(int64_t error_code) {
+    if(!error_code) {
+        task_end_task();
+
+        while(true) { // never reach here
+            cpu_idle();
+        }
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error Code: 0x%llx", error_code);
+
     uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
@@ -68,8 +78,9 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "call *(%r15, %rax, 1)\n"
         "// Check return value may end vm task\n"
         "// Restore the RSP and guest non-vmcs processor state\n"
-        "cmp $-1, %rax\n"
-        "je ___vmexit_handler_entry_error\n"
+        "cmp %rsp, %rax\n"
+        "cmovne %rax, %rdi\n"
+        "jne ___vmexit_handler_entry_error\n"
         "movq %rax, %rsp\n"
         "popfq\n"
         "popq %rax\n"

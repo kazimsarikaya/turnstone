@@ -11,6 +11,7 @@
 #include <hypervisor/hypervisor_macros.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_ept.h>
+#include <hypervisor/hypervisor_guestlib.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <logging.h>
@@ -209,7 +210,6 @@ void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
     vmx_write(VMX_GUEST_RIP, guest_rip);
 }
 
-#define HYPERVISOR_VMCALL_LOAD_MODULE 0x1000
 int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info);
 
 int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
@@ -299,14 +299,26 @@ int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
 
 
 uint64_t hypervisor_vmcs_vmcalls_handler(vmcs_vmexit_info_t* vmexit_info) {
+    hypervisor_vm_t* vm = task_get_vm();
     uint64_t rax = vmexit_info->registers->rax;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcall rax 0x%llx", rax);
 
     uint64_t ret = -1;
 
-    if(rax == HYPERVISOR_VMCALL_LOAD_MODULE) {
+    switch(rax) {
+    case HYPERVISOR_VMCALL_EXIT:
+        return 0;
+        break;
+    case HYPERVISOR_VMCALL_GET_HOST_PHYSICAL_ADDRESS:
+        ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
+        break;
+    case HYPERVISOR_VMCALL_LOAD_MODULE:
         ret = hypervisor_vmcall_load_module(vmexit_info);
+        break;
+    default:
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown vmcall rax 0x%llx", rax);
+        break;
     }
 
     vmexit_info->registers->rax = ret;

@@ -17,12 +17,13 @@
 #include <buffer.h>
 #include <stdbufs.h>
 
-MODULE("turnstone.user.programs.vm_test_program");
+MODULE("turnstone.user.programs.vmedu");
 
-_Noreturn void vmtpm(void);
+_Noreturn void vmedu(void);
 
-_Noreturn void vmtpm(void) {
-    vm_guest_print("VM Test Program\n");
+
+_Noreturn void vmedu(void) {
+    vm_guest_print("VM EDU Passthrough Test Program\n");
     uint64_t heap_base = 4ULL << 40;
     uint64_t heap_size = 16ULL << 20;
     memory_heap_t* heap = memory_create_heap_simple(heap_base, heap_base + heap_size);
@@ -36,10 +37,12 @@ _Noreturn void vmtpm(void) {
 
     stdbufs_init_buffers(vm_guest_print);
 
-    vm_guest_printf("Hello, World!\n");
-    vm_guest_printf("This is a test program for the VM\n");
-    vm_guest_printf("Now halting...\n");
+    printf("base init done\n");
 
+    uint64_t hpa = vm_guest_get_host_physical_address((uint64_t)heap);
 
-    vm_guest_halt();
+    printf("Heap HPA: 0x%llx\n", hpa);
+
+    vm_guest_exit();
+
 }

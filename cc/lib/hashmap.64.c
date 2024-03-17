@@ -13,7 +13,7 @@
 #include <strings.h>
 
 /*! module name */
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.hashmap");
 
 /**
  * @struct hashmap_item_t

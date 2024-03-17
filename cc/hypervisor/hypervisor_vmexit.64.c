@@ -440,7 +440,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
         if (vmexit_handlers[vmexit_info.reason]) {
             uint64_t ret = vmexit_handlers[vmexit_info.reason](&vmexit_info);
 
-            if(ret == (uint64_t)registers) {
+            if(ret == (uint64_t)registers || ret == 0) {
                 return ret;
             }
         }
