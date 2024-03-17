@@ -84,11 +84,6 @@ _Noreturn void vmedu(void) {
     printf("Source HPA: 0x%llx\n", source_hpa);
     printf("Dest HPA: 0x%llx\n", dest_hpa);
 
-    if(source_hpa >= (256 << 20) || dest_hpa >= (256 << 20)) {
-        printf("edu device cannot transfer dma\n");
-        vm_guest_halt();
-    }
-
     const char_t* str = "this is a test of dma transfer";
 
     strcpy(str, source);
