@@ -426,13 +426,11 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 
     interrupt_print_frame_ext(frame);
 
-    // uint64_t tid = task_get_id();
-
-    // if(tid != apic_id + 1) {
-    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-    // KERNEL_PANIC_DISABLE_LOCKS = false;
-    // task_remove_task_after_fault(tid);
-    // }
+    if(tid != apic_id + 1) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        // KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
 
     cpu_hlt();
 
@@ -468,11 +466,11 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
 
     interrupt_print_frame_ext(frame);
 
-    // if(tid != apic_id + 1) {
-    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-    //// KERNEL_PANIC_DISABLE_LOCKS = false;
-    // task_remove_task_after_fault(tid);
-    // }
+    if(tid != apic_id + 1) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        // KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
 
     cpu_hlt();
 
