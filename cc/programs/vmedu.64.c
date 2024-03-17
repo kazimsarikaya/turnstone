@@ -90,7 +90,7 @@ _Noreturn void vmedu(void) {
 
     printf("DMA transfer starting\n");
     edu->dma_source = source_hpa;
-    edu->dma_destination = 0x40000;
+    edu->dma_destination = EDU_DMA_TRANSFER_ADDRESS;
     edu->dma_length = strlen(str) + 1;
     edu->dma_command = 1;
 
@@ -98,7 +98,7 @@ _Noreturn void vmedu(void) {
         asm volatile ("pause");
     }
 
-    edu->dma_source = 0x40000;
+    edu->dma_source = EDU_DMA_TRANSFER_ADDRESS;
     edu->dma_destination = dest_hpa;
     edu->dma_length = strlen(str) + 1;
     edu->dma_command = 3;
