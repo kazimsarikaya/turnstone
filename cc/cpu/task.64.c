@@ -24,6 +24,7 @@
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_vm.h>
+#include <hypervisor/hypervisor_macros.h>
 #include <strings.h>
 
 MODULE("turnstone.kernel.cpu.task");
@@ -336,6 +337,10 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
         return -1;
     }
+
+    current_task->input_buffer = buffer_create_with_heap(heap, 0x1000);
+    current_task->output_buffer = buffer_create_with_heap(heap, 0x1000);
+    current_task->error_buffer = buffer_create_with_heap(heap, 0x1000);
 
     current_task->stack = (void*)stack_base;
     current_task->stack_size = stack_size;
@@ -753,6 +758,9 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
             video_text_print(task_switch_task_id_buf);
             video_text_print("\n");
         }
+
+        vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+        vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
     }
 
     task_load_registers(current_task->registers);
@@ -1109,6 +1117,9 @@ int8_t task_create_idle_task(void) {
     stack[-4] = (uint64_t)apic_eoi; // FIXME: force eoi for now may be we lose some interrupts
 
     cpu_state->idle_task = new_task;
+
+    new_task->output_buffer = buffer_create_with_heap(heap, 0x1000);
+    new_task->error_buffer = buffer_create_with_heap(heap, 0x1000);
 
     lock_acquire(task_find_next_task_lock);
     map_insert(task_map, (void*)new_task->task_id, new_task);

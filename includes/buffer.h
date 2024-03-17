@@ -302,4 +302,6 @@ char_t* buffer_read_line_ext(buffer_t* buffer, char_t line_continuation_char, ch
 /*! macro to read a line from buffer, line is null terminated, position is advanced */
 #define buffer_read_line(b) buffer_read_line_ext(b, '\\', '\n', NULL)
 
+uint64_t  buffer_get_mark_position(buffer_t* buffer);
+boolean_t buffer_set_mark_position(buffer_t* buffer, uint64_t position);
 #endif

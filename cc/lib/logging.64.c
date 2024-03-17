@@ -121,8 +121,6 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
         using_tmp_printf_buffer = true;
     }
 
-    uint64_t buffer_old_position = buffer_get_length(buffer_error);
-
     if(LOG_LOCATION) {
         buffer_printf(buffer_error, "%s:%lli:", file_name, line_no);
     }
@@ -139,7 +137,7 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
     buffer_printf(buffer_error, "\n");
 
     if(!windowmanager_is_initialized()) {
-        stdbufs_flush_buffer(buffer_error, buffer_old_position);
+        stdbufs_flush_buffer(buffer_error);
     }
 
     if(using_tmp_printf_buffer) {

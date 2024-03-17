@@ -61,8 +61,6 @@ int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
 
 #include <windowmanager.h>
 
-static uint64_t stdbufs_default_output_buffer_last_position = 0;
-
 typedef buffer_t * (*stdbuf_task_buffer_getter_f)(void);
 stdbuf_task_buffer_getter_f stdbufs_task_get_input_buffer = NULL;
 stdbuf_task_buffer_getter_f stdbufs_task_get_output_buffer = NULL;
@@ -139,12 +137,10 @@ int64_t printf(const char * format, ...) {
 int64_t vprintf(const char * format, va_list ap) {
     buffer_t* buffer = buffer_get_io_buffer(BUFFER_IO_OUTPUT);
 
-    stdbufs_default_output_buffer_last_position = buffer_get_length(buffer);
-
     int64_t ret = buffer_vprintf(buffer, format, ap);
 
     if(!windowmanager_is_initialized()) {
-        stdbufs_flush_buffer(buffer, stdbufs_default_output_buffer_last_position);
+        stdbufs_flush_buffer(buffer);
     }
 
     return ret;
@@ -152,12 +148,25 @@ int64_t vprintf(const char * format, va_list ap) {
 
 #endif
 
-int64_t stdbufs_flush_buffer(buffer_t* buffer, uint64_t old_position) {
+int64_t stdbufs_flush_buffer(buffer_t* buffer) {
     uint64_t new_position = buffer_get_length(buffer);
+    uint64_t old_position = buffer_get_mark_position(buffer);
+
+    uint64_t length = new_position - old_position;
+
+    if (length == 0) {
+        return 0;
+    }
 
     char_t* buffer_data = (char_t*)buffer_get_view_at_position(buffer, old_position, new_position - old_position);
 
+    if (buffer_data == NULL) {
+        return -1;
+    }
+
     stdbufs_video_print(buffer_data);
+
+    buffer_set_mark_position(buffer, new_position);
 
     return strlen(buffer_data);
 }

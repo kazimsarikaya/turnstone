@@ -9,8 +9,11 @@
 
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_ipc.h>
+#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmxops.h>
 #include <list.h>
 #include <cpu/task.h>
+#include <cpu.h>
 #include <memory.h>
 #include <memory/paging.h>
 #include <logging.h>
@@ -74,29 +77,14 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
 
     task_add_message_queue(mq_list);
 
-    buffer_t* stdout = buffer_new();
+    buffer_t* output_buffer = task_get_output_buffer();
 
-    if(stdout == NULL) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
-        return -1;
-    }
-
-    task_set_output_buffer(stdout);
-
-    buffer_t* stderr = buffer_new();
-
-    if(stderr == NULL) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
-        return -1;
-    }
-
-    task_set_error_buffer(stderr);
 
     vm->heap = memory_get_heap(NULL);
     vm->ipc_queue = mq_list;
     vm->task_id = task_get_id();
     vm->last_tsc = rdtsc();
-    vm->output_buffer = stdout;
+    vm->output_buffer = output_buffer;
     vm->msr_map = map_integer();
     vm->ept_frames = list_create_list();
     vm->loaded_module_ids = hashmap_integer(128);
@@ -109,6 +97,9 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vm->vmcs_frame_fa);
     task_set_vmcs_physical_address(vm->vmcs_frame_fa);
     task_set_vm(vm);
+
+    vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+    vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
 
     return 0;
 }
