@@ -80,7 +80,14 @@ int8_t interrupt_init(void);
  * @param[in] ist interrupt stack table index
  * @return 0 if succeed
  */
-int8_t interrupt_redirect_main_interrupts(uint8_t ist);
+int8_t interrupt_ist_redirect_main_interrupts(uint8_t ist);
+
+/**
+ * @brief interrupt redirector for main interrupts
+ * @param[in] ist interrupt stack table index
+ * @return 0 if succeed
+ */
+int8_t interrupt_ist_redirect_interrupt(uint8_t vec, uint8_t ist);
 
 /**
  * @brief irq method signature

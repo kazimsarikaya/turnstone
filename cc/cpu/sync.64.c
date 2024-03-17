@@ -87,6 +87,8 @@ int8_t lock_destroy(lock_t* lock){
     return memory_free_ext(lock->heap, lock);
 }
 
+extern lock_t* task_find_next_task_lock;
+
 void lock_acquire(lock_t* lock) {
     if(lock == NULL) {
         return;
@@ -96,43 +98,75 @@ void lock_acquire(lock_t* lock) {
         return;
     }
 
-    task_t* current_task = lock_get_current_task();
-    uint64_t current_task_id;
 
     uint64_t current_cpu_id = lock_get_local_apic_id() + 1; // add one for preventing bsp cpu id 0
 
-    if(current_task == NULL) {
-        current_task_id = TASK_KERNEL_TASK_ID;
-    } else {
+    task_t* current_task = lock_get_current_task();
+
+
+    uint64_t current_task_id = current_cpu_id;
+
+    if(current_task != NULL) {
         current_task_id = current_task->task_id;
     }
 
-    if(lock->lock_value && lock->for_future == 0 && lock->owner_cpu_id == current_cpu_id && lock->owner_task_id == current_task_id) {
+
+    if(lock->lock_value && !lock->for_future && lock->owner_cpu_id == current_cpu_id && lock->owner_task_id == current_task_id) {
+
+#if  ___KERNELBUILD == 1
+        if(lock == task_find_next_task_lock) {
+            char_t str[100];
+            utoh_with_buffer(str, (uint64_t)lock);
+            video_text_print(str);
+            video_text_print(" lock self acquired by ");
+            utoh_with_buffer(str, current_task_id);
+            video_text_print(str);
+            video_text_print(" on cpu ");
+            utoh_with_buffer(str, current_cpu_id);
+            video_text_print(str);
+            video_text_print("\n");
+        }
+#endif
         return;
     }
 
     while(sync_test_set_get(&lock->lock_value, 0)) {
-        if(current_cpu_id == 1) {
-            if(!lock->for_future) {
+        if(!lock->for_future) {
+            // lock_task_yield();
+            cpu_sti();
+            asm volatile ("pause" ::: "memory");
+        } else {
+            if(lock->owner_task_id == 0) { // when it is gpu sets future's owner task id 0
                 lock_task_yield();
             } else {
-                if(lock->owner_task_id == 0) { // when it is gpu sets future's owner task id 0
-                    lock_task_yield();
-                } else {
-                    cpu_sti();
-                    asm volatile ("pause");
-                }
+                cpu_sti();
+                asm volatile ("pause" ::: "memory");
             }
-        } else {
-            asm volatile ("pause");
         }
     }
+
+    asm volatile ("pause" ::: "memory");
 
     if(!lock->for_future) {
         lock->owner_task_id = current_task_id;
     }
 
     lock->owner_cpu_id = current_cpu_id;
+
+#if  ___KERNELBUILD == 1
+    if(lock == task_find_next_task_lock) {
+        char_t str[100];
+        utoh_with_buffer(str, (uint64_t)lock);
+        video_text_print(str);
+        video_text_print(" lock acquired by ");
+        utoh_with_buffer(str, current_task_id);
+        video_text_print(str);
+        video_text_print(" on cpu ");
+        utoh_with_buffer(str, current_cpu_id);
+        video_text_print(str);
+        video_text_print("\n");
+    }
+#endif
 }
 
 void lock_release(lock_t* lock) {
@@ -140,10 +174,28 @@ void lock_release(lock_t* lock) {
         if(lock->for_future) {
             // future_task_wait_toggler(lock->owner_task_id);
         }
+#if  ___KERNELBUILD == 1
+        if(lock == task_find_next_task_lock) {
+            char_t str[100];
+            utoh_with_buffer(str, (uint64_t)lock);
+            video_text_print(str);
+            video_text_print(" lock released by ");
+            utoh_with_buffer(str, lock->owner_task_id);
+            video_text_print(str);
+            video_text_print(" on cpu ");
+            utoh_with_buffer(str, lock->owner_cpu_id);
+            video_text_print(str);
+            video_text_print(" released ");
+            utoh_with_buffer(str, apic_get_local_apic_id() + 1);
+            video_text_print(str);
+            video_text_print("\n");
+        }
+#endif
 
         lock->owner_task_id = 0;
         lock->owner_cpu_id = 0;
         lock->lock_value = 0;
+        asm volatile ("pause" ::: "memory");
     }
 }
 

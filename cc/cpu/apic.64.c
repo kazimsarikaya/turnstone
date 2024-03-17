@@ -7,6 +7,7 @@
  */
 #include <apic.h>
 #include <cpu.h>
+#include <cpu/cpu_state.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <acpi.h>
@@ -38,7 +39,7 @@ typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
 extern lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter;
 
 extern boolean_t local_apic_id_is_valid;
-extern uint32_t __seg_gs * local_apic_id;
+extern cpu_state_t __seg_gs * cpu_state;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -518,7 +519,7 @@ void  apic_eoi(void) {
 
 uint32_t apic_get_local_apic_id(void) {
     if(local_apic_id_is_valid) {
-        return *local_apic_id;
+        return cpu_state->local_apic_id;
     } else if(apic_enabled) {
         if(apic_x2apic) {
             uint64_t msr = cpu_read_msr(APIC_X2APIC_MSR_APICID);

@@ -20,8 +20,9 @@
 /*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 10
 
+#define TASK_IDLE_TASK_ID 1
 /*! kernel task id*/
-#define TASK_KERNEL_TASK_ID 1
+#define TASK_KERNEL_TASK_ID 2
 
 /**
  * @struct descriptor_tss_t
@@ -262,5 +263,7 @@ void     task_set_vm(void* vm);
 void*    task_get_vm(void);
 
 void task_remove_task_after_fault(uint64_t task_id);
+
+int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size);
 
 #endif

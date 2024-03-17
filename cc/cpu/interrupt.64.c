@@ -22,7 +22,7 @@
 
 MODULE("turnstone.kernel.cpu.interrupt");
 
-void video_text_print(char_t* string);
+void video_text_print(const char_t* string);
 
 void interrupt_register_dummy_handlers(descriptor_idt_t*);
 
@@ -114,13 +114,24 @@ int8_t interrupt_init(void) {
 }
 #pragma GCC diagnostic pop
 
-int8_t interrupt_redirect_main_interrupts(uint8_t ist) {
+int8_t interrupt_ist_redirect_main_interrupts(uint8_t ist) {
     cpu_cli();
     descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
 
     for(int32_t i = 0; i < 32; i++) {
         idt_table[i].ist = ist;
     }
+
+    cpu_sti();
+
+    return 0;
+}
+
+int8_t interrupt_ist_redirect_interrupt(uint8_t vec, uint8_t ist) {
+    cpu_cli();
+    descriptor_idt_t* idt_table = (descriptor_idt_t*)IDT_REGISTER->base;
+
+    idt_table[vec].ist = ist;
 
     cpu_sti();
 
@@ -299,13 +310,13 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
 
     interrupt_print_frame_ext(frame);
 
-    uint64_t tid = task_get_id();
+    // uint64_t tid = task_get_id();
 
-    if(tid != TASK_KERNEL_TASK_ID) {
-        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-        KERNEL_PANIC_DISABLE_LOCKS = false;
-        task_remove_task_after_fault(tid);
-    }
+    // if(tid != TASK_IDLE_TASK_ID) {
+    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+    // KERNEL_PANIC_DISABLE_LOCKS = false;
+    // task_remove_task_after_fault(tid);
+    // }
 
     cpu_hlt();
 }
@@ -335,10 +346,10 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
 
     if(apic_id == 0 && apic_is_waiting_timer()) {
-        video_text_print((char_t*)"bsp stucked, recovering...\n");
-        video_text_print((char_t*)"return symbol name: ");
-        video_text_print((char_t*)return_symbol_name);
-        video_text_print((char_t*)"\n");
+        video_text_print("bsp stucked, recovering...\n");
+        video_text_print("return symbol name: ");
+        video_text_print(return_symbol_name);
+        video_text_print("\n");
 
         stackframe_t* s_frame = (stackframe_t*)frame->rbp;
         PRINTLOG(KERNEL, LOG_ERROR, "bsp stucked, recovering...");
@@ -361,13 +372,13 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     interrupt_print_frame_ext(frame);
 
-    uint64_t tid = task_get_id();
+    // uint64_t tid = task_get_id();
 
-    if(tid != TASK_KERNEL_TASK_ID) {
-        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-        KERNEL_PANIC_DISABLE_LOCKS = false;
-        task_remove_task_after_fault(tid);
-    }
+    // if(tid != TASK_IDLE_TASK_ID) {
+    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+    // KERNEL_PANIC_DISABLE_LOCKS = false;
+    // task_remove_task_after_fault(tid);
+    // }
 
     cpu_hlt();
 
@@ -393,6 +404,10 @@ int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
 
 
 int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame){
+    while(true) {
+        cpu_hlt();
+    }
+
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
@@ -406,13 +421,13 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 
     interrupt_print_frame_ext(frame);
 
-    uint64_t tid = task_get_id();
+    // uint64_t tid = task_get_id();
 
-    if(tid != TASK_KERNEL_TASK_ID) {
-        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-        KERNEL_PANIC_DISABLE_LOCKS = false;
-        task_remove_task_after_fault(tid);
-    }
+    // if(tid != TASK_IDLE_TASK_ID) {
+    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+    // KERNEL_PANIC_DISABLE_LOCKS = false;
+    // task_remove_task_after_fault(tid);
+    // }
 
     cpu_hlt();
 
@@ -420,9 +435,17 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 }
 
 int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
-    KERNEL_PANIC_DISABLE_LOCKS = true;
+    while(true) {
+        cpu_hlt();
+    }
+
+    // KERNEL_PANIC_DISABLE_LOCKS = true;
+
+    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_get_local_apic_id());
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
+    video_text_print(return_symbol_name);
+    video_text_print(" wtf\n");
 
     PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, task_get_id());
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
@@ -440,13 +463,15 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
 
     interrupt_print_frame_ext(frame);
 
-    uint64_t tid = task_get_id();
+// uint64_t tid = task_get_id();
 
-    if(tid != TASK_KERNEL_TASK_ID) {
-        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-        KERNEL_PANIC_DISABLE_LOCKS = false;
-        task_remove_task_after_fault(tid);
-    }
+    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_get_local_apic_id());
+
+// if(tid != TASK_IDLE_TASK_ID) {
+// PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+// KERNEL_PANIC_DISABLE_LOCKS = false;
+// task_remove_task_after_fault(tid);
+// }
 
     cpu_hlt();
 
