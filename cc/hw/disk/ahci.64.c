@@ -439,11 +439,17 @@ int8_t ahci_init(memory_heap_t* heap, list_t* sata_pci_devices) {
             hba->intnum_base = intnum - INTERRUPT_IRQ_BASE;
             hba->intnum_count = msg_count;
 
+            uint32_t msg_addr = 0xFEE00000;
+            uint32_t apic_id = apic_get_local_apic_id();
+            apic_id <<= 12;
+            msg_addr |= apic_id;
+
+
             if(msi_cap->ma64_support) {
-                msi_cap->ma64.message_address = 0xFEE00000; // | (1 << 3) | (0 << 2);
+                msi_cap->ma64.message_address = msg_addr; // | (1 << 3) | (0 << 2);
                 msi_cap->ma64.message_data = intnum;
             } else {
-                msi_cap->ma32.message_address = 0xFEE00000; // | (1 << 3) | (0 << 2);
+                msi_cap->ma32.message_address = msg_addr; // | (1 << 3) | (0 << 2);
                 msi_cap->ma32.message_data = intnum;
             }
 

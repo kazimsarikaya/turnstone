@@ -127,6 +127,7 @@ typedef struct task_t {
     memory_heap_t*               heap; ///< task's heap
     uint64_t                     heap_size; ///< task's heap size
     uint64_t                     task_id; ///< task's id
+    uint64_t                     cpu_id; ///< cpu id which task is running
     uint64_t                     last_tick_count; ///< tick count when task removes from executing, used for scheduling
     uint64_t                     task_switch_count; ///< task switch count
     task_state_t                 state; ///< task state

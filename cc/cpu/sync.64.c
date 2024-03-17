@@ -87,8 +87,6 @@ int8_t lock_destroy(lock_t* lock){
     return memory_free_ext(lock->heap, lock);
 }
 
-extern lock_t* task_find_next_task_lock;
-
 void lock_acquire(lock_t* lock) {
     if(lock == NULL) {
         return;
@@ -112,21 +110,6 @@ void lock_acquire(lock_t* lock) {
 
 
     if(lock->lock_value && !lock->for_future && lock->owner_cpu_id == current_cpu_id && lock->owner_task_id == current_task_id) {
-
-#if  ___KERNELBUILD == 1
-        if(lock == task_find_next_task_lock) {
-            char_t str[100];
-            utoh_with_buffer(str, (uint64_t)lock);
-            video_text_print(str);
-            video_text_print(" lock self acquired by ");
-            utoh_with_buffer(str, current_task_id);
-            video_text_print(str);
-            video_text_print(" on cpu ");
-            utoh_with_buffer(str, current_cpu_id);
-            video_text_print(str);
-            video_text_print("\n");
-        }
-#endif
         return;
     }
 
@@ -152,21 +135,6 @@ void lock_acquire(lock_t* lock) {
     }
 
     lock->owner_cpu_id = current_cpu_id;
-
-#if  ___KERNELBUILD == 1
-    if(lock == task_find_next_task_lock) {
-        char_t str[100];
-        utoh_with_buffer(str, (uint64_t)lock);
-        video_text_print(str);
-        video_text_print(" lock acquired by ");
-        utoh_with_buffer(str, current_task_id);
-        video_text_print(str);
-        video_text_print(" on cpu ");
-        utoh_with_buffer(str, current_cpu_id);
-        video_text_print(str);
-        video_text_print("\n");
-    }
-#endif
 }
 
 void lock_release(lock_t* lock) {
@@ -174,23 +142,6 @@ void lock_release(lock_t* lock) {
         if(lock->for_future) {
             // future_task_wait_toggler(lock->owner_task_id);
         }
-#if  ___KERNELBUILD == 1
-        if(lock == task_find_next_task_lock) {
-            char_t str[100];
-            utoh_with_buffer(str, (uint64_t)lock);
-            video_text_print(str);
-            video_text_print(" lock released by ");
-            utoh_with_buffer(str, lock->owner_task_id);
-            video_text_print(str);
-            video_text_print(" on cpu ");
-            utoh_with_buffer(str, lock->owner_cpu_id);
-            video_text_print(str);
-            video_text_print(" released ");
-            utoh_with_buffer(str, apic_get_local_apic_id() + 1);
-            video_text_print(str);
-            video_text_print("\n");
-        }
-#endif
 
         lock->owner_task_id = 0;
         lock->owner_cpu_id = 0;

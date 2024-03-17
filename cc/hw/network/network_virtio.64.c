@@ -71,6 +71,7 @@ int8_t network_virtio_process_tx(void){
 
     for(uint64_t dev_idx = 0; dev_idx < list_size(virtio_net_devs); dev_idx++) {
         virtio_dev_t* vdev = (virtio_dev_t*)list_get_data_at_position(virtio_net_devs, dev_idx);
+        pci_msix_update_lapic((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 1);
 
         vdev->return_queue = list_create_queue_with_heap(NULL);
         task_add_message_queue(vdev->return_queue);
@@ -144,6 +145,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
 
     PRINTLOG(VIRTIONET, LOG_TRACE, "virtio network rx clear pending bit send set interruptible");
     cpu_cli();
+    pci_msix_update_lapic((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
     pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
     task_set_interruptible();
     cpu_sti();

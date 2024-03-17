@@ -404,10 +404,6 @@ int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
 
 
 int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame){
-    while(true) {
-        cpu_hlt();
-    }
-
     KERNEL_PANIC_DISABLE_LOCKS = true;
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
@@ -435,11 +431,7 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 }
 
 int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
-    while(true) {
-        cpu_hlt();
-    }
-
-    // KERNEL_PANIC_DISABLE_LOCKS = true;
+    KERNEL_PANIC_DISABLE_LOCKS = true;
 
     PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_get_local_apic_id());
 

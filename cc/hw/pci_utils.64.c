@@ -13,6 +13,7 @@
 #include <memory/frame.h>
 #include <utils.h>
 #include <ports.h>
+#include <apic.h>
 
 MODULE("turnstone.kernel.hw.pci.utils");
 
@@ -84,8 +85,13 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
 
     pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
 
+    uint32_t msg_addr = 0xFEE00000;
+    uint32_t apic_id = apic_get_local_apic_id();
+    apic_id <<= 12;
+    msg_addr |= apic_id;
+
     uint8_t intnum = interrupt_get_next_empty_interrupt();
-    msix_table->entries[msix_vector].message_address = 0xFEE00000;
+    msix_table->entries[msix_vector].message_address = msg_addr;
     msix_table->entries[msix_vector].message_data = intnum;
     msix_table->entries[msix_vector].masked = 0;
 
@@ -96,6 +102,24 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
     PRINTLOG(PCI, LOG_TRACE, "msix table %p offset %x vector 0x%x int 0x%02x", msix_table, msix_cap->table_offset, msix_vector,  msix_table->entries[msix_vector].message_data);
 
     return isrnum;
+}
+
+uint8_t pci_msix_update_lapic(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+    uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);
+
+    msix_table_address += (msix_cap->table_offset << 3);
+
+    pci_capability_msix_table_t* msix_table = (pci_capability_msix_table_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(msix_table_address);
+
+    uint32_t msg_addr = msix_table->entries[msix_vector].message_address;
+    msg_addr &= 0xFFF00FFF;
+    uint32_t apic_id = apic_get_local_apic_id();
+    apic_id <<= 12;
+    msg_addr |= apic_id;
+
+    msix_table->entries[msix_vector].message_address = msg_addr;
+
+    return 0;
 }
 
 int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {

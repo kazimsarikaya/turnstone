@@ -183,7 +183,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     current_cpu_state->task_queue = task_queues[0];
     current_cpu_state->task_cleanup_queue = task_cleanup_queues[0];
 
-    interrupt_irq_set_handler(0x60, &task_task_switch_isr);
+    interrupt_irq_set_handler(0xde, &task_task_switch_isr);
 
     task_t* kernel_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 
@@ -319,6 +319,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     lock_acquire(task_next_task_id_lock);
     current_task->task_id = task_next_task_id++;
     lock_release(task_next_task_id_lock);
+
+    current_task->cpu_id = apic_id;
 
     current_task->creator_heap = heap;
     current_task->heap = heap;
@@ -958,9 +960,22 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->heap, new_task->heap_size);
 
+    uint64_t cpu_count = apic_get_ap_count() + 1;
+    size_t min_queue_size = -1;
+    list_t* min_queue = NULL;
+
+    for(uint64_t i = 0; i < cpu_count; i++) {
+        list_t* queue = task_queues[i];
+
+        if(list_size(queue) < min_queue_size) {
+            min_queue_size = list_size(queue);
+            min_queue = queue;
+            new_task->cpu_id = i;
+        }
+    }
 
     lock_acquire(task_find_next_task_lock);
-    list_stack_push(cpu_state->task_queue, new_task);
+    list_stack_push(min_queue, new_task);
     map_insert(task_map, (void*)new_task->task_id, new_task);
     lock_release(task_find_next_task_lock);
 
@@ -1021,6 +1036,7 @@ int8_t task_create_idle_task(void) {
         cpu_hlt();
     }
     new_task->task_id = apic_get_local_apic_id() + 1;
+    new_task->cpu_id = apic_get_local_apic_id();
 
     new_task->heap = NULL;
     new_task->heap_size = 0;
@@ -1068,6 +1084,8 @@ void task_yield(void) {
     cpu_cli();
     task_task_switch_set_parameters(false, true);
     task_switch_task();
+
+    // asm volatile ("int $0xfe\n");
 }
 
 int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
@@ -1147,21 +1165,21 @@ void task_print_all(void) {
             }
         }
 
-        printf("\ttask %s 0x%llx 0x%p switched 0x%llx stack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n",
-               task->task_name, task->task_id, task, task->task_switch_count,
-               task->registers->rsp, task->registers->rbp, task->heap, task->heap_size,
-               task->stack, task->stack_size);
-
-        printf("\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n",
-               task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
-               task->wait_for_future, task->state);
-
-        printf("\t\tmessage queues %lli messages %lli\n", list_size(task->message_queues), msgcount);
-
         memory_heap_stat_t stat = {0};
         memory_get_heap_stat_ext(task->heap, &stat);
 
-        printf("\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n", stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count);
+        printf("\ttask %s 0x%llx 0x%p on cpu 0x%llx switched 0x%llx\n"
+               "\t\tstack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n"
+               "\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n"
+               "\t\tmessage queues %lli messages %lli\n"
+               "\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n",
+               task->task_name, task->task_id, task, task->cpu_id, task->task_switch_count,
+               task->registers->rsp, task->registers->rbp, task->heap, task->heap_size,
+               task->stack, task->stack_size,
+               task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
+               task->wait_for_future, task->state, list_size(task->message_queues), msgcount,
+               stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count
+               );
 
         it = it->next(it);
     }

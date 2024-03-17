@@ -437,6 +437,11 @@ uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
 int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
     uint8_t base_irq = INTERRUPT_IRQ_BASE;
 
+    props |= APIC_IOAPIC_DESTINATION_MODE_LOGICAL;
+    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t dest = 1 << apic_id;
+    dest = dest << 24;
+
     for(uint8_t i = 0; i < ioapic_count; i++) {
         __volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_bases[i];
 
@@ -452,7 +457,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq;
         io_apic_r->value = (base_irq + irq) | props;
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq + 1;
-        io_apic_r->value = 0;
+        io_apic_r->value = dest;
 
         PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", irq, base_irq + irq);
 

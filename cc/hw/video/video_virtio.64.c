@@ -105,7 +105,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     lock_acquire(virtio_gpu_flush_lock);
     virtio_gpu_lock = NULL;
-    char_t buffer[100] = {0};
+    // char_t buffer[100] = {0};
     volatile virtio_gpu_ctrl_hdr_t* hdr;
 
     // video_text_print((char_t*)"virtio gpu display flush\n");
@@ -158,10 +158,11 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-        video_text_print((char_t*)"virtio gpu transfer to host 2d failed: ");
-        utoh_with_buffer(buffer, hdr->type);
-        video_text_print(buffer);
-        video_text_print((char_t*)"\n");
+        // video_text_print((char_t*)"virtio gpu transfer to host 2d failed: ");
+        // utoh_with_buffer(buffer, hdr->type);
+        // video_text_print(buffer);
+        // video_text_print((char_t*)"\n");
+
         memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
         lock_release(virtio_gpu_flush_lock);
@@ -214,10 +215,11 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-        video_text_print((char_t*)"virtio gpu resource flush failed\n");
-        utoh_with_buffer(buffer, hdr->type);
-        video_text_print(buffer);
-        video_text_print((char_t*)"\n");
+        // video_text_print((char_t*)"virtio gpu resource flush failed\n");
+        // utoh_with_buffer(buffer, hdr->type);
+        // video_text_print(buffer);
+        // video_text_print((char_t*)"\n");
+
         memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
         lock_release(virtio_gpu_flush_lock);
