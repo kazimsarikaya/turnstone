@@ -976,6 +976,9 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
             hypervisor_ept_invept(1);
 
             return (uint64_t)vmexit_info->registers;
+        } else {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Write access to unknown memory at 0x%llx", error_address);
+            return -1;
         }
     }
 

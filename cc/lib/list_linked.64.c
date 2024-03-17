@@ -828,11 +828,13 @@ int8_t linkedlist_get_position(list_t* list, const void* data, size_t* position)
         cmp = list_default_data_comparator;
     }
 
-    list_item_t* item = list->middle;
+    list_item_t* item = NULL;
+
+    item = list->middle;
 
     if(!item) {
         item = list->head;
-    } else {
+    } else if(list->type == LIST_TYPE_SORTEDLIST) {
         if(cmp(data, item->data) == -1) {
             item = list->head;
         } else {
@@ -840,11 +842,13 @@ int8_t linkedlist_get_position(list_t* list, const void* data, size_t* position)
                 (*position) = list->middle_position;
             }
         }
+    } else {
+        item = list->head;
     }
 
     while(item) {
 
-        if(cmp(item->data, data) == 0) {
+        if(cmp(data, item->data) == 0) {
             res = 0;
             break;
         }
