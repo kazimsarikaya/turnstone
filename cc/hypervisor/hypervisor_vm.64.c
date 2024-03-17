@@ -74,20 +74,29 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
 
     task_add_message_queue(mq_list);
 
-    buffer_t* buffer = buffer_new();
+    buffer_t* stdout = buffer_new();
 
-    if(buffer == NULL) {
+    if(stdout == NULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
         return -1;
     }
 
-    task_set_output_buffer(buffer);
+    task_set_output_buffer(stdout);
+
+    buffer_t* stderr = buffer_new();
+
+    if(stderr == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
+        return -1;
+    }
+
+    task_set_error_buffer(stderr);
 
     vm->heap = memory_get_heap(NULL);
     vm->ipc_queue = mq_list;
     vm->task_id = task_get_id();
     vm->last_tsc = rdtsc();
-    vm->output_buffer = buffer;
+    vm->output_buffer = stdout;
     vm->msr_map = map_integer();
     vm->ept_frames = list_create_list();
     vm->loaded_module_ids = hashmap_integer(128);

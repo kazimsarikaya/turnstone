@@ -53,12 +53,6 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-
-    if(hypervisor_vm_create_and_attach_to_task(vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm and attach to task");
-        return -1;
-    }
-
     if(vmptrld(vmcs_frame_fa) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
         return -1;
@@ -66,6 +60,12 @@ static int32_t hypervisor_vm_task(uint64_t argc, void** args) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmptrld success");
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcs_frame_fa);
+
+
+    if(hypervisor_vm_create_and_attach_to_task(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm and attach to task");
+        return -1;
+    }
 
     if(hypevisor_deploy_program(vm, entry_point_name) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
@@ -266,13 +266,6 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
     }
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vmclear success");
-
-    err = vmptrld(vmcs_frame->frame_address);
-
-    if(err) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
-        return -1;
-    }
 
     memory_heap_t* heap = memory_get_default_heap();
 

@@ -422,7 +422,11 @@ uint64_t buffer_remaining(buffer_t* buffer) {
 }
 
 
-boolean_t   buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_direction_t direction) {
+boolean_t buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_direction_t direction) {
+    if(!buffer) {
+        return false;
+    }
+
     lock_acquire(buffer->lock);
 
     if(direction == BUFFER_SEEK_DIRECTION_START) {

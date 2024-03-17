@@ -418,6 +418,24 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
     task_set_interruptible();
 
+    buffer_t* stdout = buffer_new();
+
+    if(stdout == NULL) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot create buffer");
+        return -1;
+    }
+
+    task_set_output_buffer(stdout);
+
+    buffer_t* stderr = buffer_new();
+
+    if(stderr == NULL) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot create buffer");
+        return -1;
+    }
+
+    task_set_error_buffer(stderr);
+
     shell_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);

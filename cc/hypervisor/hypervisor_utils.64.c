@@ -215,6 +215,11 @@ int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info);
 int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
     hypervisor_vm_t* vm = task_get_vm();
 
+    if(!vm) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vm is not set");
+        return -1;
+    }
+
     uint64_t got_fa = vm->got_physical_address;
     uint64_t got_size = vm->got_size;
     uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);

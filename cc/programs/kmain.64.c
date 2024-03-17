@@ -338,10 +338,10 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    if(video_display_init(NULL, pci_get_context()->display_controllers) != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init video display. Halting...");
-        cpu_hlt();
-    }
+    // if(video_display_init(NULL, pci_get_context()->display_controllers) != 0) {
+    // PRINTLOG(KERNEL, LOG_FATAL, "cannot init video display. Halting...");
+    // cpu_hlt();
+    // }
 
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");

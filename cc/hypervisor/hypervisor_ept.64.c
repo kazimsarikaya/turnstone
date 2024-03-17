@@ -718,6 +718,8 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
         hypervisor_ept_paging_add_page(vm, i, i, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
     }
 
+    hypervisor_ept_invept(1);
+
     PRINTLOG(HYPERVISOR, LOG_TRACE, "page tables added to guest page table.");
 
     return 0;

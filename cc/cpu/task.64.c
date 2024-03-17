@@ -685,6 +685,8 @@ static __attribute__((noinline)) void task_switch_task_exit_prep(void) {
     }
 }
 
+static char_t task_switch_task_id_buf[100] = {0};
+
 __attribute__((no_stack_protector)) void task_switch_task(void) {
     task_t* current_task = cpu_state->current_task;
 
@@ -702,15 +704,23 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
     if(current_task->vmcs_physical_address) {
         if(vmclear(current_task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+            utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+            video_text_print("vmclear failed for task 0x");
+            video_text_print(task_switch_task_id_buf);
+            video_text_print("\n");
             return;
         }
     }
 
     task_save_registers(current_task->registers);
 
-    if(current_task->state != TASK_STATE_ENDED) {
+    switch(current_task->state) {
+    case TASK_STATE_CREATED:
+    case TASK_STATE_ENDED:
+        break;
+    default:
         current_task->state = TASK_STATE_SUSPENDED;
+        break;
     }
 
     if(current_task != cpu_state->idle_task) {
@@ -724,13 +734,24 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     current_task = task_find_next_task();
     current_task->last_tick_count = time_timer_get_tick_count();
     current_task->task_switch_count++;
-    current_task->state = TASK_STATE_RUNNING;
+
+    switch(current_task->state) {
+    case TASK_STATE_CREATED:
+        current_task->state = TASK_STATE_STARTING;
+        break;
+    default:
+        current_task->state = TASK_STATE_RUNNING;
+        break;
+    }
 
     cpu_state->current_task = current_task;
 
     if(current_task->vmcs_physical_address) {
         if(vmptrld(current_task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmptrld failed for task 0x%llx", current_task->task_id);
+            utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+            video_text_print("vmclear failed for task 0x");
+            video_text_print(task_switch_task_id_buf);
+            video_text_print("\n");
         }
     }
 
@@ -740,14 +761,24 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 }
 
 void task_end_task(void) {
-    cpu_cli();
-    task_t* current_task = task_get_current_task();
+    task_t* current_task = cpu_state->current_task;
 
     if(current_task == NULL) {
-        return;
+        PRINTLOG(TASKING, LOG_ERROR, "no current task");
+        cpu_hlt();
     }
 
-    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%lli", current_task->task_id);
+    typedef int64_t (*entry_point_f)(uint64_t, void**);
+    entry_point_f entry_point = current_task->entry_point;
+
+    int64_t ret = 0;
+
+    if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
+        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx", current_task->task_name, current_task->task_id);
+        ret = entry_point(current_task->arguments_count, current_task->arguments);
+    }
+
+    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%lli return code 0x%llx", current_task->task_id, ret);
 
     // if(current_task->vmcs_physical_address) {
     // if(vmclear(current_task->vmcs_physical_address) != 0) {
@@ -927,6 +958,9 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->stack = (void*)stack_va;
     new_task->task_name = strdup_at_heap(task_heap, task_name);
 
+    new_task->arguments_count = args_cnt;
+    new_task->arguments = args;
+
     registers->rflags = 0x202;
 
     uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
@@ -942,12 +976,10 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     registers->rbp = rbp;
     registers->rsp = rbp - 32; // 24 is for last return address, entry point and end task
 
-    registers->rdi = args_cnt;
-    registers->rsi = (uint64_t)args;
 
     uint64_t* stack = (uint64_t*)rbp;
-    stack[-1] = (uint64_t)task_end_task;
-    stack[-2] = (uint64_t)entry_point;
+    stack[-1] = 0; // (uint64_t)task_end_task;
+    stack[-2] = (uint64_t)task_end_task; // entry_point;
     // stack[-3] = (uint64_t)task_switch_task_exit_prep; // do we need this?
     stack[-3] = (uint64_t)cpu_sti; // FIXME: force sti for now
     stack[-4] = (uint64_t)apic_eoi; // FIXME: force eoi for now may be we lose some interrupts
@@ -980,7 +1012,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     lock_release(task_find_next_task_lock);
 
 
-    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue", new_task->task_name, new_task->task_id);
+    PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task->cpu_id);
 
     return new_task->task_id;
 }
@@ -994,6 +1026,7 @@ void task_idle_task(void) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t task_create_idle_task(void) {
+    program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
     memory_heap_t* heap = memory_get_default_heap();
 
     task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
@@ -1004,6 +1037,7 @@ int8_t task_create_idle_task(void) {
 
     new_task->creator_heap = heap;
     new_task->heap = heap;
+    new_task->heap_size = kernel->program_heap_size;
 
     task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
 
@@ -1038,8 +1072,6 @@ int8_t task_create_idle_task(void) {
     new_task->task_id = apic_get_local_apic_id() + 1;
     new_task->cpu_id = apic_get_local_apic_id();
 
-    new_task->heap = NULL;
-    new_task->heap_size = 0;
     new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = task_idle_task;
     new_task->page_table = memory_paging_get_table();
@@ -1060,7 +1092,7 @@ int8_t task_create_idle_task(void) {
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
-    registers->rbp = rbp;
+    registers->rbp = rbp - 32;
     registers->rsp = rbp - 32;
 
     uint64_t* stack = (uint64_t*)rbp;

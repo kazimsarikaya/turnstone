@@ -299,7 +299,9 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot find irq for 0x%02x", intnum);
     }
 
+    uint32_t apic_id = apic_get_local_apic_id();
 
+    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_id);
     PRINTLOG(KERNEL, LOG_FATAL, "Uncatched interrupt 0x%02x occured without error code.\nReturn address 0x%016llx", intnum, frame->return_rip);
     PRINTLOG(KERNEL, LOG_FATAL, "KERN: FATAL return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "cr4: 0x%llx", (cpu_read_cr4()).bits);
@@ -310,13 +312,13 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
 
     interrupt_print_frame_ext(frame);
 
-    // uint64_t tid = task_get_id();
+    uint64_t tid = task_get_id();
 
-    // if(tid != TASK_IDLE_TASK_ID) {
-    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-    // KERNEL_PANIC_DISABLE_LOCKS = false;
-    // task_remove_task_after_fault(tid);
-    // }
+    if(tid != apic_id + 1) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
 
     cpu_hlt();
 }
@@ -372,13 +374,13 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     interrupt_print_frame_ext(frame);
 
-    // uint64_t tid = task_get_id();
+    uint64_t tid = task_get_id();
 
-    // if(tid != TASK_IDLE_TASK_ID) {
-    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-    // KERNEL_PANIC_DISABLE_LOCKS = false;
-    // task_remove_task_after_fault(tid);
-    // }
+    if(tid != apic_id + 1) {
+        PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+        KERNEL_PANIC_DISABLE_LOCKS = false;
+        task_remove_task_after_fault(tid);
+    }
 
     cpu_hlt();
 
@@ -404,11 +406,18 @@ int8_t interrupt_int03_breakpoint_exception(interrupt_frame_ext_t* frame) {
 
 
 int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame){
-    KERNEL_PANIC_DISABLE_LOCKS = true;
+    // KERNEL_PANIC_DISABLE_LOCKS = true;
+
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    uint64_t tid = task_get_id();
+
+    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x frame ext pointer 0x%p", apic_id, frame);
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
 
-    PRINTLOG(KERNEL, LOG_FATAL, "general protection error 0x%llx at 0x%x:0x%llx %s", frame->error_code, frame->return_cs, frame->return_rip, return_symbol_name);
+    PRINTLOG(KERNEL, LOG_FATAL, "general protection error 0x%llx at 0x%x:0x%llx %s task 0x%llx",
+             frame->error_code, frame->return_cs, frame->return_rip, return_symbol_name, tid);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
     PRINTLOG(KERNEL, LOG_FATAL, "Cpu is halting.");
 
@@ -419,7 +428,7 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 
     // uint64_t tid = task_get_id();
 
-    // if(tid != TASK_IDLE_TASK_ID) {
+    // if(tid != apic_id + 1) {
     // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
     // KERNEL_PANIC_DISABLE_LOCKS = false;
     // task_remove_task_after_fault(tid);
@@ -431,15 +440,19 @@ int8_t interrupt_int0D_general_protection_exception(interrupt_frame_ext_t* frame
 }
 
 int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
-    KERNEL_PANIC_DISABLE_LOCKS = true;
+    // KERNEL_PANIC_DISABLE_LOCKS = true;
 
-    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_get_local_apic_id());
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    uint64_t tid = task_get_id();
+
+    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x frame ext pointer 0x%p", apic_id, frame);
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
     video_text_print(return_symbol_name);
     video_text_print(" wtf\n");
 
-    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, task_get_id());
+    PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, tid);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
     uint64_t cr2 = cpu_read_cr2();
@@ -455,15 +468,11 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
 
     interrupt_print_frame_ext(frame);
 
-// uint64_t tid = task_get_id();
-
-    PRINTLOG(KERNEL, LOG_FATAL, "lapic id 0x%x", apic_get_local_apic_id());
-
-// if(tid != TASK_IDLE_TASK_ID) {
-// PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
-// KERNEL_PANIC_DISABLE_LOCKS = false;
-// task_remove_task_after_fault(tid);
-// }
+    // if(tid != apic_id + 1) {
+    // PRINTLOG(KERNEL, LOG_FATAL, "task 0x%llx is going to killed", tid);
+    //// KERNEL_PANIC_DISABLE_LOCKS = false;
+    // task_remove_task_after_fault(tid);
+    // }
 
     cpu_hlt();
 

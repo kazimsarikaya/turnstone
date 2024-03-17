@@ -92,6 +92,7 @@ typedef struct tss_s {
 typedef enum task_state_e {
     TASK_STATE_NULL, ///< task state not known
     TASK_STATE_CREATED, ///< task created but never runned
+    TASK_STATE_STARTING, ///< task is starting
     TASK_STATE_RUNNING, ///< task is running
     TASK_STATE_SUSPENDED, ///< task is at wait queue
     TASK_STATE_ENDED, ///< task is ended
@@ -132,6 +133,8 @@ typedef struct task_t {
     uint64_t                     task_switch_count; ///< task switch count
     task_state_t                 state; ///< task state
     void*                        entry_point; ///< entry point address
+    uint64_t                     arguments_count; ///< argument count
+    void**                       arguments; ///< argument list
     void*                        stack; ///< stack pointer
     uint64_t                     stack_size; ///< stack size of task
     list_t*                      message_queues; ///< task's listining queues.
