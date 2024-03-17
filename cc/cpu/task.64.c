@@ -778,13 +778,13 @@ void task_end_task(void) {
         ret = entry_point(current_task->arguments_count, current_task->arguments);
     }
 
-    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%lli return code 0x%llx", current_task->task_id, ret);
+    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx", current_task->task_id, ret);
 
-    // if(current_task->vmcs_physical_address) {
-    // if(vmclear(current_task->vmcs_physical_address) != 0) {
-    // PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
-    // }
-    // }
+    if(current_task->vmcs_physical_address) {
+        if(vmclear(current_task->vmcs_physical_address) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+        }
+    }
 
     current_task->message_waiting = false;
     current_task->interruptible = false;
@@ -805,7 +805,7 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
     task_t* task = (task_t*)map_get(task_map, (void*)task_id);
 
     if(task == NULL) {
-        PRINTLOG(TASKING, LOG_WARNING, "task 0x%lli not found", task_id);
+        PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx not found", task_id);
         return;
     }
 
@@ -817,6 +817,12 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
         return;
     }
 
+    if(task->vmcs_physical_address) {
+        if(vmclear(task->vmcs_physical_address) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+        }
+    }
+
     task->message_waiting = false;
     task->interruptible = false;
     task->wait_for_future = false;
@@ -824,7 +830,7 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
     task->state = TASK_STATE_ENDED;
 
 
-    PRINTLOG(TASKING, LOG_INFO, "task 0x%lli will be ended", task->task_id);
+    PRINTLOG(TASKING, LOG_INFO, "task 0x%llx will be ended", task->task_id);
 }
 
 
@@ -1072,7 +1078,7 @@ int8_t task_create_idle_task(void) {
     new_task->task_id = apic_get_local_apic_id() + 1;
     new_task->cpu_id = apic_get_local_apic_id();
 
-    new_task->state = TASK_STATE_CREATED;
+    new_task->state = TASK_STATE_SUSPENDED;
     new_task->entry_point = task_idle_task;
     new_task->page_table = memory_paging_get_table();
     new_task->registers = registers;
@@ -1397,6 +1403,16 @@ void task_remove_task_after_fault(uint64_t task_id) {
     task_t* task = (task_t*)map_get(task_map, (void*)task_id);
 
     task->state = TASK_STATE_ENDED;
+
+    if(task->vmcs_physical_address) {
+        if(vmclear(task->vmcs_physical_address) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+        }
+    }
+
+    task->message_waiting = false;
+    task->interruptible = false;
+    task->wait_for_future = false;
 
     task_t* current_task = (task_t*)cpu_state->idle_task;
     current_task->last_tick_count = time_timer_get_tick_count();
