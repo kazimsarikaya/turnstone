@@ -223,7 +223,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
 
         PRINTLOG(NVME, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
 
-        frame_t* bar_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)bar_fa);
+        frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
         uint64_t size = pci_get_bar_size(pci_nvme, 0);
         PRINTLOG(NVME, LOG_TRACE, "bar size 0x%llx", size);
         uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
@@ -234,7 +234,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
         if(bar_frames == NULL) {
             PRINTLOG(NVME, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
 
-            if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &bar_req_frm) != 0) {
+            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
                 PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame");
                 memory_free_ext(heap, nvme_disk);
 
@@ -252,7 +252,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
 
         frame_t* queue_frames = NULL;
 
-        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 4, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) != 0) {
+        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 4, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) != 0) {
             PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for queues");
             memory_free_ext(heap, nvme_disk);
 
@@ -333,7 +333,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
 
         frame_t* identify_frames = NULL;
 
-        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 3, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &identify_frames, NULL) != 0) {
+        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 3, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &identify_frames, NULL) != 0) {
             PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for identify");
             memory_free_ext(heap, nvme_disk);
 
@@ -485,7 +485,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
 
         frame_t* prp_frames = NULL;
 
-        if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, 64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &prp_frames, NULL) != 0) {
+        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &prp_frames, NULL) != 0) {
             PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for prp");
             memory_free_ext(heap, nvme_disk);
 

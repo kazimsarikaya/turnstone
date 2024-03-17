@@ -345,9 +345,9 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         res = usb_probe_all_devices_all_ports();
     } else if(strcmp(command, "free") == 0) {
         printf("\tfree frames: 0x%llx\n\tallocated frames: 0x%llx\n\ttotal frames: 0x%llx\n",
-               KERNEL_FRAME_ALLOCATOR->get_free_frame_count(KERNEL_FRAME_ALLOCATOR),
-               KERNEL_FRAME_ALLOCATOR->get_allocated_frame_count(KERNEL_FRAME_ALLOCATOR),
-               KERNEL_FRAME_ALLOCATOR->get_total_frame_count(KERNEL_FRAME_ALLOCATOR));
+               frame_get_allocator()->get_free_frame_count(frame_get_allocator()),
+               frame_get_allocator()->get_allocated_frame_count(frame_get_allocator()),
+               frame_get_allocator()->get_total_frame_count(frame_get_allocator()));
         res = 0;
     } else if(strcmp(command, "wm") == 0) {
         res = windowmanager_init();

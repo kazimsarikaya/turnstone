@@ -20,8 +20,9 @@
 /*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 10
 
+#define TASK_IDLE_TASK_ID 1
 /*! kernel task id*/
-#define TASK_KERNEL_TASK_ID 1
+#define TASK_KERNEL_TASK_ID 2
 
 /**
  * @struct descriptor_tss_t
@@ -91,6 +92,7 @@ typedef struct tss_s {
 typedef enum task_state_e {
     TASK_STATE_NULL, ///< task state not known
     TASK_STATE_CREATED, ///< task created but never runned
+    TASK_STATE_STARTING, ///< task is starting
     TASK_STATE_RUNNING, ///< task is running
     TASK_STATE_SUSPENDED, ///< task is at wait queue
     TASK_STATE_ENDED, ///< task is ended
@@ -126,10 +128,13 @@ typedef struct task_t {
     memory_heap_t*               heap; ///< task's heap
     uint64_t                     heap_size; ///< task's heap size
     uint64_t                     task_id; ///< task's id
+    uint64_t                     cpu_id; ///< cpu id which task is running
     uint64_t                     last_tick_count; ///< tick count when task removes from executing, used for scheduling
     uint64_t                     task_switch_count; ///< task switch count
     task_state_t                 state; ///< task state
     void*                        entry_point; ///< entry point address
+    uint64_t                     arguments_count; ///< argument count
+    void**                       arguments; ///< argument list
     void*                        stack; ///< stack pointer
     uint64_t                     stack_size; ///< stack size of task
     list_t*                      message_queues; ///< task's listining queues.
@@ -262,5 +267,7 @@ void     task_set_vm(void* vm);
 void*    task_get_vm(void);
 
 void task_remove_task_after_fault(uint64_t task_id);
+
+int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size);
 
 #endif

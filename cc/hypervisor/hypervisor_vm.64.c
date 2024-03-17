@@ -9,8 +9,11 @@
 
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_ipc.h>
+#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmxops.h>
 #include <list.h>
 #include <cpu/task.h>
+#include <cpu.h>
 #include <memory.h>
 #include <memory/paging.h>
 #include <logging.h>
@@ -74,20 +77,14 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
 
     task_add_message_queue(mq_list);
 
-    buffer_t* buffer = buffer_new();
+    buffer_t* output_buffer = task_get_output_buffer();
 
-    if(buffer == NULL) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create buffer");
-        return -1;
-    }
-
-    task_set_output_buffer(buffer);
 
     vm->heap = memory_get_heap(NULL);
     vm->ipc_queue = mq_list;
     vm->task_id = task_get_id();
     vm->last_tsc = rdtsc();
-    vm->output_buffer = buffer;
+    vm->output_buffer = output_buffer;
     vm->msr_map = map_integer();
     vm->ept_frames = list_create_list();
     vm->loaded_module_ids = hashmap_integer(128);
@@ -100,6 +97,9 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vm->vmcs_frame_fa);
     task_set_vmcs_physical_address(vm->vmcs_frame_fa);
     task_set_vm(vm);
+
+    vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+    vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
 
     return 0;
 }
@@ -131,7 +131,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
                 PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
             }
 
-            if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, frame) != 0) {
+            if(frame_get_allocator()->release_frame(frame_get_allocator(), frame) != 0) {
                 PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                          frame->frame_address, frame->frame_count);
             }
@@ -152,7 +152,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
         }
 
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, ept_frame) != 0) {
+        if(frame_get_allocator()->release_frame(frame_get_allocator(), ept_frame) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                      ept_frame->frame_address, ept_frame->frame_count);
         }
@@ -177,7 +177,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
         }
 
-        if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &got_frame) != 0) {
+        if(frame_get_allocator()->release_frame(frame_get_allocator(), &got_frame) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                      got_frame.frame_address, got_frame.frame_count);
         }
@@ -192,7 +192,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
     }
 
-    if(KERNEL_FRAME_ALLOCATOR->release_frame(KERNEL_FRAME_ALLOCATOR, &self_frame) != 0) {
+    if(frame_get_allocator()->release_frame(frame_get_allocator(), &self_frame) != 0) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                  self_frame.frame_address, self_frame.frame_count);
     }

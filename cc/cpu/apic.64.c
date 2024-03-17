@@ -7,6 +7,7 @@
  */
 #include <apic.h>
 #include <cpu.h>
+#include <cpu/cpu_state.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <acpi.h>
@@ -38,7 +39,7 @@ typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
 extern lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter;
 
 extern boolean_t local_apic_id_is_valid;
-extern uint32_t __seg_gs * local_apic_id;
+extern cpu_state_t __seg_gs * cpu_state;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -192,13 +193,13 @@ int8_t apic_init_apic(list_t* apic_entries){
         lapic_addr = la->local_apic_address_override.address;
     }
 
-    frame_t* lapic_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)lapic_addr);
+    frame_t* lapic_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)lapic_addr);
 
     if(lapic_frames == NULL) {
         PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of lapic 0x%016llx", lapic_addr);
         frame_t tmp_lapic_frm = {lapic_addr, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
-        if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &tmp_lapic_frm) != 0) {
+        if(frame_get_allocator()->reserve_system_frames(frame_get_allocator(), &tmp_lapic_frm) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of lapic 0x%016llx", lapic_addr);
 
             return -1;
@@ -379,13 +380,13 @@ uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
     PRINTLOG(IOAPIC, LOG_DEBUG, "address is 0x%08llx", ioapic_base);
 
 
-    frame_t* ioapic_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)ioapic_base);
+    frame_t* ioapic_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)ioapic_base);
 
     if(ioapic_frames == NULL) {
         PRINTLOG(APIC, LOG_DEBUG, "cannot find frames of ioapic 0x%016llx", ioapic_base);
         frame_t tmp_ioapic_frm = {ioapic_base, 1, FRAME_TYPE_RESERVED, FRAME_ATTRIBUTE_RESERVED_PAGE_MAPPED};
 
-        if(KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &tmp_ioapic_frm) != 0) {
+        if(frame_get_allocator()->reserve_system_frames(frame_get_allocator(), &tmp_ioapic_frm) != 0) {
             PRINTLOG(APIC, LOG_ERROR, "cannot reserve frames of ioapic 0x%016llx", ioapic_base);
 
             return -1;
@@ -436,6 +437,11 @@ uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic) {
 int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
     uint8_t base_irq = INTERRUPT_IRQ_BASE;
 
+    props |= APIC_IOAPIC_DESTINATION_MODE_LOGICAL;
+    uint32_t apic_id = apic_get_local_apic_id();
+    uint32_t dest = 1 << apic_id;
+    dest = dest << 24;
+
     for(uint8_t i = 0; i < ioapic_count; i++) {
         __volatile__ apic_ioapic_register_t* io_apic_r = (__volatile__ apic_ioapic_register_t*)ioapic_bases[i];
 
@@ -451,7 +457,7 @@ int8_t apic_ioapic_setup_irq(uint8_t irq, uint32_t props) {
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq;
         io_apic_r->value = (base_irq + irq) | props;
         io_apic_r->selector = APIC_IOAPIC_REGISTER_IRQ_BASE + 2 * irq + 1;
-        io_apic_r->value = 0;
+        io_apic_r->value = dest;
 
         PRINTLOG(IOAPIC, LOG_DEBUG, "irq 0x%02x mapped to 0x%02x", irq, base_irq + irq);
 
@@ -518,7 +524,7 @@ void  apic_eoi(void) {
 
 uint32_t apic_get_local_apic_id(void) {
     if(local_apic_id_is_valid) {
-        return *local_apic_id;
+        return cpu_state->local_apic_id;
     } else if(apic_enabled) {
         if(apic_x2apic) {
             uint64_t msr = cpu_read_msr(APIC_X2APIC_MSR_APICID);

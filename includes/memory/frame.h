@@ -184,7 +184,7 @@ void frame_allocator_print(frame_allocator_t* fa);
  */
 void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t * fa);
 
-/*! kernel frame allocator */
-extern frame_allocator_t* KERNEL_FRAME_ALLOCATOR;
+frame_allocator_t* frame_get_allocator(void);
+void               frame_set_allocator(frame_allocator_t* fa);
 
 #endif

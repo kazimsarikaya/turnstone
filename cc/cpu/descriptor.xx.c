@@ -66,10 +66,6 @@ uint8_t descriptor_build_gdt_register(void){
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t descriptor_build_ap_descriptors_register(void){
 
-    uint64_t rsp = 0;
-
-    __asm__ __volatile__ ("mov %%rsp, %0\n" : : "m" (rsp));
-
     uint16_t gdt_size = sizeof(descriptor_gdt_t) * 7;
     descriptor_gdt_t* gdts = memory_malloc(gdt_size);
     if(gdts == NULL) {
@@ -107,15 +103,15 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     uint64_t stack_size = kernel->program_stack_size;
 
 
-    uint64_t frame_count = 9 * stack_size / FRAME_SIZE;
+    uint64_t frame_count = 10 * stack_size / FRAME_SIZE;
 
     frame_t* stack_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       frame_count,
-                                                       FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &stack_frames,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      frame_count,
+                                                      FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &stack_frames,
+                                                      NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate stack frames of count 0x%llx", frame_count);
 
         return -1;
@@ -134,7 +130,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
         return -1;
     }
 
-    tss->ist7 = stack_bottom + stack_size;
+    tss->ist7 = stack_bottom + stack_size - 0x10;
     tss->ist6 = tss->ist7  + stack_size;
     tss->ist5 = tss->ist6  + stack_size;
     tss->ist4 = tss->ist5  + stack_size;
@@ -143,7 +139,7 @@ uint8_t descriptor_build_ap_descriptors_register(void){
     tss->ist1 = tss->ist2  + stack_size;
     tss->rsp2 = tss->ist1  + stack_size;
     tss->rsp1 = tss->rsp2  + stack_size;
-    tss->rsp0 = rsp;
+    tss->rsp0 = tss->rsp1  + stack_size;
 
 
     descriptor_tss_t* d_tss = (descriptor_tss_t*)&gdts[3];
@@ -180,7 +176,7 @@ uint8_t descriptor_build_idt_register(void){
 
     PRINTLOG(KERNEL, LOG_DEBUG, "idt frame address: 0x%llx count 0x%llx", idt_frame.frame_address, idt_frame.frame_count);
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame(KERNEL_FRAME_ALLOCATOR, &idt_frame) != 0) {
+    if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &idt_frame) != 0) {
         return -1;
     }
 

@@ -16,12 +16,15 @@
 #include <memory/frame.h>
 #include <cpu.h>
 #include <cpu/crx.h>
+#include <cpu/task.h>
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
 
 MODULE("turnstone.kernel.cpu.smp");
+
+void video_text_print(const char_t* str);
 
 int8_t  smp_init_cpu(uint8_t cpu_id);
 int32_t smp_ap_boot(uint8_t cpu_id);
@@ -156,7 +159,7 @@ int8_t smp_init(void) {
     uint64_t stack_frames_cnt = 16 * ap_cpu_count;
     uint64_t stack_size = 16 * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), stack_frames_cnt, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &stack_frames, NULL) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: Failed to allocate stack frames");
         return -1;
     }
@@ -168,11 +171,13 @@ int8_t smp_init(void) {
         return -1;
     }
 
+    memory_memclean((void*)stack_frames_va, stack_frames_cnt * FRAME_SIZE);
+
     frame_t* ap_gs_frames = NULL;
     uint64_t ap_gs_frames_cnt = 4 * ap_cpu_count;
     uint64_t ap_gs_size = 4 * FRAME_SIZE;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, ap_gs_frames_cnt, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &ap_gs_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), ap_gs_frames_cnt, FRAME_ALLOCATION_TYPE_RESERVED | FRAME_ALLOCATION_TYPE_BLOCK, &ap_gs_frames, NULL) != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate stack frames of count 4");
 
         return -1;
@@ -226,15 +231,17 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
     cpu_cli();
 
     smp_data_t* smp_data = (smp_data_t*)0x9000;
+
     uint64_t gs_base = smp_data->gs_base;
     gs_base += (cpu_id - 1) * smp_data->gs_base_size;
     cpu_write_msr(CPU_MSR_IA32_GS_BASE, gs_base);
 
+    uint64_t stack_base = smp_data->stack_base;
+    stack_base += (cpu_id - 1) * smp_data->stack_size;
+
     apic_enable_lapic();
 
     uint32_t local_apic_id = apic_get_local_apic_id();
-
-    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting local apic id %i", cpu_id, local_apic_id);
 
     if(local_apic_id != cpu_id) {
         PRINTLOG(APIC, LOG_ERROR, "SMP: AP cpu id %i mismatch local apic id %i", cpu_id, local_apic_id);
@@ -252,7 +259,9 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
 
     apic_configure_lapic();
 
-    cpu_sti();
+    task_set_current_and_idle_task(smp_ap_boot, stack_base, smp_data->stack_size);
+
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i Booting local apic id %i", cpu_id, local_apic_id);
 
     char_t * test_data = memory_malloc(sizeof(char_t*) * 32);
 
@@ -276,13 +285,18 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
         cpu_hlt();
     }
 
+    PRINTLOG(APIC, LOG_INFO, "SMP: AP %i init done", cpu_id);
+
+    cpu_sti();
+
+#if 0
     frame_t* user_code_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       2,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &user_code_frames,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      2,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &user_code_frames,
+                                                      NULL) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot allocate user code frame");
 
         cpu_hlt();
@@ -341,10 +355,12 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
         "sysretq\n"
         : : "a" (user_stack_va + 0x1000 - 0x10), "c" (user_code_va)
         );
+#endif
 
+    task_end_task();
 
-    while(true) {
-        cpu_idle();
+    while(true) { // never reach here
+        cpu_hlt();
     }
 
     return 0;

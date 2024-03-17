@@ -96,20 +96,16 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
     kmain64_completed = true;
 
     if(res != 0) {
-        cpu_hlt();
-    } else {
-        while(1) {
-            cpu_sti();
-#if 0 && TASK_MAX_TICK_COUNT > 1
-            if(task_idle_check_need_yield()) {
-                task_yield();
-            } else {
-                cpu_idle();
-            }
-#else
-            cpu_idle();
-#endif
+        PRINTLOG(KERNEL, LOG_FATAL, "kmain64 returned with error %i", res);
+        while(true){
+            cpu_hlt();
         }
+    }
+
+    task_end_task();
+
+    while(true){ // should not reach here
+        cpu_hlt();
     }
 }
 
@@ -187,7 +183,7 @@ int8_t kmain64(size_t entry_point) {
 
     if(fa) {
         PRINTLOG(KERNEL, LOG_DEBUG, "frame allocator created");
-        KERNEL_FRAME_ALLOCATOR = fa;
+        frame_set_allocator(fa);
 
         program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
@@ -281,15 +277,15 @@ int8_t kmain64(size_t entry_point) {
 
     printf("random data 0x%x\n", rand());
 
-    KERNEL_FRAME_ALLOCATOR->cleanup(KERNEL_FRAME_ALLOCATOR);
+    frame_get_allocator()->cleanup(frame_get_allocator());
 
     LOGBLOCK(FRAMEALLOCATOR, LOG_DEBUG){
-        frame_allocator_print(KERNEL_FRAME_ALLOCATOR);
+        frame_allocator_print(frame_get_allocator());
     }
 
     PRINTLOG(KERNEL, LOG_DEBUG, "acpi is initializing");
 
-    frame_allocator_map_page_of_acpi_code_data_frames(KERNEL_FRAME_ALLOCATOR);
+    frame_allocator_map_page_of_acpi_code_data_frames(frame_get_allocator());
 
     acpi_xrsdp_descriptor_t* desc = acpi_find_xrsdp();
 
@@ -324,6 +320,12 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_DEBUG, "tasking is initializing");
 
+    syscall_init();
+
+    if(hypervisor_init() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
+    }
+
     if(task_init_tasking_ext(heap) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init tasking. Halting...");
         cpu_hlt();
@@ -336,15 +338,9 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    if(video_display_init(NULL, PCI_CONTEXT->display_controllers) != 0) {
+    if(video_display_init(NULL, pci_get_context()->display_controllers) != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init video display. Halting...");
         cpu_hlt();
-    }
-
-    syscall_init();
-
-    if(hypervisor_init() != 0) {
-        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
     }
 
     if(smp_init() != 0) {

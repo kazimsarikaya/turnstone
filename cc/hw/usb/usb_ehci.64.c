@@ -1260,7 +1260,7 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
 
     frame_t* data_frames = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR, data_fa_count, fa_type, &data_frames, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), data_fa_count, fa_type, &data_frames, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for usb controller data");
 
         return -1;

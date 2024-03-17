@@ -24,6 +24,7 @@ typedef struct buffer_t {
     uint64_t       length;
     uint64_t       position;
     boolean_t      readonly;
+    uint64_t       mark_position;
     uint8_t*       data;
 }buffer_t;
 
@@ -114,6 +115,28 @@ uint64_t buffer_get_length(buffer_t* buffer) {
     }
 
     return buffer->length;
+};
+
+uint64_t buffer_get_mark_position(buffer_t* buffer) {
+    if(!buffer) {
+        return 0;
+    }
+
+    return buffer->mark_position;
+};
+
+boolean_t buffer_set_mark_position(buffer_t* buffer, uint64_t position) {
+    if(!buffer) {
+        return false;
+    }
+
+    if(position > buffer->length) {
+        return false;
+    }
+
+    buffer->mark_position = position;
+
+    return true;
 };
 
 boolean_t buffer_reset(buffer_t* buffer) {
@@ -422,7 +445,11 @@ uint64_t buffer_remaining(buffer_t* buffer) {
 }
 
 
-boolean_t   buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_direction_t direction) {
+boolean_t buffer_seek(buffer_t* buffer, int64_t position, buffer_seek_direction_t direction) {
+    if(!buffer) {
+        return false;
+    }
+
     lock_acquire(buffer->lock);
 
     if(direction == BUFFER_SEEK_DIRECTION_START) {

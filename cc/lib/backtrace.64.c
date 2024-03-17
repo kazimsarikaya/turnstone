@@ -224,6 +224,10 @@ void backtrace_print(stackframe_t* frame) {
         return;
     }
 
+    if((frame->rip < (2 << 20) || frame->rip > (256 << 20))) {
+        return;
+    }
+
     uint8_t max_frames = 20;
 
     while(max_frames--) {
@@ -240,6 +244,10 @@ void backtrace_print(stackframe_t* frame) {
         frame = frame->previous;
 
         if(!frame) {
+            break;
+        }
+
+        if((frame->rip < (2 << 20) || frame->rip > (256 << 20))) {
             break;
         }
 

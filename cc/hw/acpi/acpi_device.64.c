@@ -531,7 +531,7 @@ const acpi_aml_device_t* acpi_device_lookup(acpi_aml_parser_context_t* ctx, char
 
 int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
 
-    KERNEL_FRAME_ALLOCATOR->release_acpi_reclaim_memory(KERNEL_FRAME_ALLOCATOR);
+    frame_get_allocator()->release_acpi_reclaim_memory(frame_get_allocator());
 
     iterator_t* dev_iter = list_iterator_create(ctx->devices);
 
@@ -554,7 +554,7 @@ int8_t acpi_device_reserve_memory_ranges(acpi_aml_parser_context_t* ctx) {
 
                 frame_t f = {mem->min, frm_cnt, 0, 0};
 
-                KERNEL_FRAME_ALLOCATOR->reserve_system_frames(KERNEL_FRAME_ALLOCATOR, &f);
+                frame_get_allocator()->reserve_system_frames(frame_get_allocator(), &f);
 
                 mem_iter = mem_iter->next(mem_iter);
             }

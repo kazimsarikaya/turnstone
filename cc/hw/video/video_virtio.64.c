@@ -105,7 +105,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     lock_acquire(virtio_gpu_flush_lock);
     virtio_gpu_lock = NULL;
-    char_t buffer[100] = {0};
+    // char_t buffer[100] = {0};
     volatile virtio_gpu_ctrl_hdr_t* hdr;
 
     // video_text_print((char_t*)"virtio gpu display flush\n");
@@ -158,10 +158,11 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-        video_text_print((char_t*)"virtio gpu transfer to host 2d failed: ");
-        utoh_with_buffer(buffer, hdr->type);
-        video_text_print(buffer);
-        video_text_print((char_t*)"\n");
+        // video_text_print((char_t*)"virtio gpu transfer to host 2d failed: ");
+        // utoh_with_buffer(buffer, hdr->type);
+        // video_text_print(buffer);
+        // video_text_print((char_t*)"\n");
+
         memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
         lock_release(virtio_gpu_flush_lock);
@@ -214,10 +215,11 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-        video_text_print((char_t*)"virtio gpu resource flush failed\n");
-        utoh_with_buffer(buffer, hdr->type);
-        video_text_print(buffer);
-        video_text_print((char_t*)"\n");
+        // video_text_print((char_t*)"virtio gpu resource flush failed\n");
+        // utoh_with_buffer(buffer, hdr->type);
+        // video_text_print(buffer);
+        // video_text_print((char_t*)"\n");
+
         memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
         lock_release(virtio_gpu_flush_lock);
@@ -380,11 +382,11 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     frame_t* screen_frm = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       screen_frm_cnt,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                       &screen_frm,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      screen_frm_cnt,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                      &screen_frm,
+                                                      NULL) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate screen frame");
 
         return;
@@ -610,11 +612,11 @@ void virtio_gpu_mouse_init(void) {
 
     frame_t* mouse_frm = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       mouse_frm_cnt,
-                                                       FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
-                                                       &mouse_frm,
-                                                       NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      mouse_frm_cnt,
+                                                      FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED,
+                                                      &mouse_frm,
+                                                      NULL) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate mouse frame");
 
         return;

@@ -186,7 +186,7 @@ int8_t network_init(void) {
 
     network_info_map = map_new(&network_info_mke);
 
-    iterator_t* iter = list_iterator_create(PCI_CONTEXT->network_controllers);
+    iterator_t* iter = list_iterator_create(pci_get_context()->network_controllers);
 
     while(iter->end_of_iterator(iter) != 0) {
         const pci_dev_t* pci_netdev = iter->get_item(iter);

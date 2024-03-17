@@ -45,6 +45,14 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
   dd if=/dev/zero of=${OUTPUTDIR}/qemu-nvme-cache bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
 fi
 
+NUMCPUS=4 
+
+SERIALS=""
+
+for i in `seq 0 $((NUMCPUS-1))`; do
+  SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
+done
+
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
   -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
@@ -63,6 +71,7 @@ qemu-system-x86_64 \
   -device virtio-keyboard,id=kbd \
   -device virtio-mouse,id=mouse \
   -device virtio-tablet,id=tablet \
-  -serial file:${BASEDIR}/tmp/qemu-video.log \
+  -device edu \
+  $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -display sdl,gl=on,show-cursor=on 

@@ -115,6 +115,19 @@ static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
     return (uint64_t)vmexit_info->registers;
 }
 
+static uint64_t hypervisor_vmcs_pause_handler(vmcs_vmexit_info_t* vmexit_info) {
+    hypervisor_vm_t* vm = task_get_vm();
+    vm->is_halted = true;
+
+    task_yield();
+
+    hypervisor_vmcs_check_ipc(vmexit_info);
+
+    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
 static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t exit_qualification = vmexit_info->exit_qualification;
 
@@ -471,6 +484,7 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_EXTERNAL_INTERRUPT] = hypervisor_vmcs_external_interrupt_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_EPT_MISCONFIG] = hypervisor_vmcs_ept_misconfig_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_HLT] = hypervisor_vmcs_hlt_handler;
+    vmexit_handlers[VMX_VMEXIT_REASON_PAUSE] = hypervisor_vmcs_pause_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_IO_INSTRUCTION] = hypervisor_vmcs_io_instruction_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_INTERRUPT_WINDOW] = hypervisor_vmcs_interrupt_window_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_RDMSR] = hypervisor_vmcs_rdmsr_handler;

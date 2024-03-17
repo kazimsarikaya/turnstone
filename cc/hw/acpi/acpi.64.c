@@ -191,7 +191,7 @@ int8_t acpi_build_register(acpi_aml_object_t** reg, uint64_t address, uint8_t ad
 acpi_xrsdp_descriptor_t* acpi_find_xrsdp(void){
     PRINTLOG(ACPI, LOG_DEBUG, "searching for rsdp");
 
-    frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, SYSTEM_INFO->acpi_table);
+    frame_t* acpi_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), SYSTEM_INFO->acpi_table);
 
     if(acpi_frames == NULL) {
         PRINTLOG(ACPI, LOG_ERROR, "cannot find acpi frames of table 0x%p", SYSTEM_INFO->acpi_table);
@@ -270,7 +270,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
 
             PRINTLOG(ACPI, LOG_TRACE, "table %llx of %llx at fa 0x%x va 0x%p", i, table_count, table_addr, res);
 
-            frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)(uint64_t)table_addr);
+            frame_t* acpi_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)(uint64_t)table_addr);
 
             if(acpi_frames == NULL) {
                 PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%016x", table_addr);
@@ -296,7 +296,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
             PRINTLOG(ACPI, LOG_TRACE, "table %lli of %lli at fa 0x%p va 0x%p", i, table_count, xrsdt->acpi_sdt_header_ptrs[i], res);
 
 
-            frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, xrsdt->acpi_sdt_header_ptrs[i]);
+            frame_t* acpi_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), xrsdt->acpi_sdt_header_ptrs[i]);
 
             if(acpi_frames == NULL) {
                 PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of table 0x%p", xrsdt->acpi_sdt_header_ptrs[i]);
@@ -325,7 +325,7 @@ int8_t acpi_page_map_table_addresses(acpi_xrsdp_descriptor_t* xrsdp_desc){
         dsdt_fa = fadt->dsdt_address_32bit;
     }
 
-    frame_t* acpi_frames = KERNEL_FRAME_ALLOCATOR->get_reserved_frames_of_address(KERNEL_FRAME_ALLOCATOR, (void*)dsdt_fa);
+    frame_t* acpi_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)dsdt_fa);
 
     if(acpi_frames == NULL) {
         PRINTLOG(ACPI, LOG_ERROR, "cannot find frames of  dsdt table");

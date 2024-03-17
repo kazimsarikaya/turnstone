@@ -20,6 +20,7 @@
 #include <driver/video_virtio.h>
 #include <driver/video_vmwaresvga.h>
 #include <logging.h>
+#include <apic.h>
 
 MODULE("turnstone.kernel.hw.video");
 
@@ -508,13 +509,17 @@ void video_print(const char_t* string) {
     lock_release(video_lock);
 }
 
+static const int32_t serial_ports[] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
+
 void video_text_print(const char_t* string) {
     if(string == NULL) {
         return;
     }
     size_t i = 0;
+    uint32_t apic_id = apic_get_local_apic_id();
+
     while(string[i] != '\0') {
-        write_serial(COM1, string[i]);
+        write_serial(serial_ports[apic_id], string[i]);
         i++;
     }
 }

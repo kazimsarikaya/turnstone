@@ -38,10 +38,10 @@ static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_siz
 
     frame_t* got_dump_frame = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       got_size / FRAME_SIZE,
-                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &got_dump_frame, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      got_size / FRAME_SIZE,
+                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &got_dump_frame, NULL) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
 
         return -1;
@@ -193,10 +193,10 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
 
     frame_t* program_dump_frame = NULL;
 
-    if(KERNEL_FRAME_ALLOCATOR->allocate_frame_by_count(KERNEL_FRAME_ALLOCATOR,
-                                                       total_program_size / FRAME_SIZE,
-                                                       FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
-                                                       &program_dump_frame, NULL) != 0) {
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(),
+                                                      total_program_size / FRAME_SIZE,
+                                                      FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK,
+                                                      &program_dump_frame, NULL) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot allocate region frame");
 
         exit_code = -1;
@@ -469,8 +469,8 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     memory_heap_t* heap = memory_get_heap(NULL);
 
     PRINTLOG(KERNEL, LOG_INFO, "Initializing ahci and nvme");
-    int8_t sata_port_cnt = ahci_init(heap, PCI_CONTEXT->sata_controllers);
-    int8_t nvme_port_cnt = nvme_init(heap, PCI_CONTEXT->nvme_controllers);
+    int8_t sata_port_cnt = ahci_init(heap, pci_get_context()->sata_controllers);
+    int8_t nvme_port_cnt = nvme_init(heap, pci_get_context()->nvme_controllers);
 
     if(sata_port_cnt == -1) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init ahci. Halting...");

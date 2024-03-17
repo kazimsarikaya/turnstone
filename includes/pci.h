@@ -28,6 +28,7 @@
 #define PCI_DEVICE_CLASS_DISPLAY_CONTROLLER       0x03
 #define PCI_DEVICE_CLASS_BRIDGE_CONTROLLER        0x06
 #define PCI_DEVICE_CLASS_SYSTEM_PERIPHERAL        0x08
+#define PCI_DEVICE_CLASS_INPUT_DEVICE             0x09
 #define PCI_DEVICE_CLASS_SERIAL_BUS               0x0C
 
 #define PCI_DEVICE_SUBCLASS_USB_CONTROLLER   0x03
@@ -225,6 +226,7 @@ typedef struct pci_dev_t {
     uint8_t              bus_number; ///< bus number of the device
     uint8_t              device_number; ///< device number
     uint8_t              function_number; ///< device function number
+    uint64_t             header_size; ///< header size of the device
     pci_common_header_t* pci_header; ///< pci generic memory area
 } pci_dev_t; ///< short hand for struct
 
@@ -297,16 +299,18 @@ typedef struct pci_context_t {
     list_t* network_controllers;
     list_t* display_controllers;
     list_t* usb_controllers;
+    list_t* input_controllers;
     list_t* other_devices;
 } pci_context_t;
 
-extern pci_context_t* PCI_CONTEXT;
+pci_context_t* pci_get_context(void);
 
 uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no);
 uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no);
 int8_t   pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64_t bar_fa);
 int8_t   pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap);
 uint8_t  pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr);
+uint8_t  pci_msix_update_lapic(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
 int8_t   pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
 
 void pci_disable_interrupt(pci_generic_device_t* pci_dev);

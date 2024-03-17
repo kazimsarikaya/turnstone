@@ -38,7 +38,7 @@ void time_timer_reset_tick_count(void) {
     time_timer_tick_count = 0;
 }
 
-void video_text_print(char_t* string);
+void video_text_print(const char_t* string);
 
 int8_t time_timer_pit_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
@@ -115,39 +115,23 @@ int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
         time_timer_ap1_tick_count++;
     }
 
-    LOGBLOCK(TIMER, LOG_DEBUG) {
-
-        if((time_timer_tick_count % 1000) == 0) {
-            PRINTLOG(TIMER, LOG_DEBUG, "timer hits!, value 0x%llx epoch %lli", time_timer_tick_count, TIME_EPOCH);
-
-            memory_heap_stat_t stat;
-            memory_get_heap_stat(&stat);
-
-            PRINTLOG(TIMER, LOG_DEBUG, "memory stat ts 0x%llx fs 0x%llx mc 0x%llx fc 0x%llx diff 0x%llx fh 0x%llx", stat.total_size, stat.free_size, stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count, stat.fast_hit);
+#if 0
+    if(apic_id == 1) {
+        if(time_timer_tick_count > time_timer_old_tick_count) {
+            time_timer_old_tick_count = time_timer_tick_count;
+            we_sended_nmi_to_bsp = false;
+        } else if(!we_sended_nmi_to_bsp && time_timer_ap1_tick_count > time_timer_old_tick_count + 0x5000) {
+            // bsp may be in stuck state, wake it up
+            we_sended_nmi_to_bsp = true;
+            // apic_send_nmi(0);
         }
-
     }
+#endif
 
-
-    if(apic_id == 0) {
-        if(task_tasking_initialized && (time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
-            task_task_switch_set_parameters(true, false);
-            task_switch_task();
-        } else {
-            apic_eoi();
-        }
+    if(task_tasking_initialized && (time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
+        task_task_switch_set_parameters(true, false);
+        task_switch_task();
     } else {
-        if(apic_id == 1) {
-            if(time_timer_tick_count > time_timer_old_tick_count) {
-                time_timer_old_tick_count = time_timer_tick_count;
-                we_sended_nmi_to_bsp = false;
-            } else if(!we_sended_nmi_to_bsp && time_timer_ap1_tick_count > time_timer_old_tick_count + 0x5000) {
-                // bsp may be in stuck state, wake it up
-                we_sended_nmi_to_bsp = true;
-                apic_send_nmi(0);
-            }
-        }
-
         apic_eoi();
     }
 
