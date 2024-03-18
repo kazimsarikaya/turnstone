@@ -1,6 +1,6 @@
 /**
- * @file vm_test_program.64.c
- * @brief VM Test Program
+ * @file vmedu.64.c
+ * @brief VM EDU PCI(e) Mapping Test Program
  *
  * This is a sample program that will run in the VM.
  * It has minimal dependencies and is used to test the VM.
