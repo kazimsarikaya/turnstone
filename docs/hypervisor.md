@@ -1,4 +1,4 @@
-# Hypervisor
+# Hypervisor {#hypervisor}
 
 Turnstone OS has internal hypervisor which uses [VMX].
 
