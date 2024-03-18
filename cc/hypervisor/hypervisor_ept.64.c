@@ -226,11 +226,11 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
     vm->ept_pml4_base = ept_frames->frame_address;
 
     frame_t* descriptor_frames = NULL;
-    hypervisor_allocate_region(&descriptor_frames, 4 * FRAME_SIZE);
+    hypervisor_allocate_region(&descriptor_frames, 5 * FRAME_SIZE);
 
     list_list_insert(vm->ept_frames, descriptor_frames);
 
-    for(uint64_t i = 0; i < 4; i++) {
+    for(uint64_t i = 0; i < 5; i++) {
         if(hypervisor_ept_add_ept_page(vm, descriptor_frames->frame_address + i * FRAME_SIZE, 0x1000 * i, true) != 0) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add EPT page for descriptor");
             return -1;
@@ -417,7 +417,7 @@ static uint64_t hypervisor_ept_guest_to_host_ensured(hypervisor_vm_t* vm, uint64
 static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
                                              uint64_t physical_address, uint64_t virtual_address,
                                              memory_paging_page_type_t type) {
-    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, 0x4000);
+    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
     uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
 
     uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
@@ -534,7 +534,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
 
 static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
                                              uint64_t physical_address, uint64_t virtual_address) {
-    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, 0x4000);
+    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
     uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
 
     uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
@@ -606,10 +606,80 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
     return 0;
 }
 
+static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, uint64_t virtual_address) {
+    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+
+    uint64_t p4_index = MEMORY_PT_GET_P4_INDEX(virtual_address);
+
+    memory_page_table_t* p4 = (memory_page_table_t*)p4_va;
+
+    uint64_t p3_fa = 0;
+
+    if(!p4->pages[p4_index].present) {
+        return 0;
+    } else {
+        uint64_t tmp_guest_fa = p4->pages[p4_index].physical_address;
+        tmp_guest_fa <<= 12;
+
+        p3_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
+    }
+
+    uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+
+    uint64_t p3_index = MEMORY_PT_GET_P3_INDEX(virtual_address);
+
+    memory_page_table_t* p3 = (memory_page_table_t*)p3_va;
+
+    uint64_t p2_fa = 0;
+
+    if(!p3->pages[p3_index].present) {
+        return 0;
+    } else {
+        uint64_t tmp_guest_fa = p3->pages[p3_index].physical_address;
+        tmp_guest_fa <<= 12;
+
+        p2_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
+    }
+
+    uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+
+    uint64_t p2_index = MEMORY_PT_GET_P2_INDEX(virtual_address);
+
+    memory_page_table_t* p2 = (memory_page_table_t*)p2_va;
+
+    uint64_t p1_fa = 0;
+
+    if(!p2->pages[p2_index].present) {
+        return 0;
+    } else {
+        uint64_t tmp_guest_fa = p2->pages[p2_index].physical_address;
+        tmp_guest_fa <<= 12;
+
+        p1_fa = hypervisor_ept_guest_to_host_ensured(vm, tmp_guest_fa);
+    }
+
+    uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+
+    uint64_t p1_index = MEMORY_PT_GET_P1_INDEX(virtual_address);
+
+    memory_page_table_t* p1 = (memory_page_table_t*)p1_va;
+
+    uint64_t pte_address = p1->pages[p1_index].physical_address;
+    pte_address <<= 12;
+
+    if(p1->pages[p1_index].present) {
+        return pte_address;
+    }
+
+    return 0;
+}
+
+
 int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     uint64_t ept_pml4e_base = vm->ept_pml4_base;
 
-    uint64_t gdt_fa = hypervisor_ept_guest_to_host(ept_pml4e_base, 0x2000);
+    uint64_t gdt_fa = hypervisor_ept_guest_to_host(ept_pml4e_base, VMX_GUEST_GDTR_BASE_VALUE);
     uint64_t gdt_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(gdt_fa);
 
     memory_paging_add_page(gdt_va, gdt_fa, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
@@ -621,12 +691,13 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     gdt[2] = 0x0000930000000000ULL;
     gdt[3] = 0x00008b0030000067ULL;
 
-    vm->next_page_address = 0x5000;
+    vm->next_page_address = VMX_GUEST_CR3_BASE_VALUE;
 
-    // main descriptor tables idt, gdt, tss
-    hypervisor_ept_paging_add_page(vm, 0x1000, 0x1000, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-    hypervisor_ept_paging_add_page(vm, 0x1000, 0x2000, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-    hypervisor_ept_paging_add_page(vm, 0x1000, 0x3000, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    // main descriptor tables idt, extended interrupt frame, gdt, tss
+    hypervisor_ept_paging_add_page(vm, VMX_GUEST_IDTR_BASE_VALUE, VMX_GUEST_IDTR_BASE_VALUE, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    hypervisor_ept_paging_add_page(vm, VMX_GUEST_IFEXT_BASE_VALUE, VMX_GUEST_IFEXT_BASE_VALUE, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    hypervisor_ept_paging_add_page(vm, VMX_GUEST_GDTR_BASE_VALUE, VMX_GUEST_GDTR_BASE_VALUE, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    hypervisor_ept_paging_add_page(vm, VMX_GUEST_TR_BASE_VALUE, VMX_GUEST_TR_BASE_VALUE, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "descriptor tables added to guest page table.");
 
@@ -645,7 +716,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_TRACE, "program va 0x%llx metadata offset 0x%llx metadata_address: 0x%llx",
              program_va, metadata_offset, metadata_address);
 
-    uint64_t heap_v_base = 4ULL << 40;
+    uint64_t heap_v_base = VMX_GUEST_HEAP_BASE_VALUE;
     uint64_t heap_p_base = vm->guest_heap_physical_base;
 
     for(uint64_t i = 0; i < heap_page_count; i++) {
@@ -656,7 +727,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "heap pages added to guest page table.");
 
-    uint64_t stack_v_base = 4ULL << 40;
+    uint64_t stack_v_base = VMX_GUEST_STACK_TOP_VALUE;
     stack_v_base -= stack_page_count * FRAME_SIZE;
     uint64_t stack_p_base = vm->guest_stack_physical_base;
 
@@ -668,7 +739,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "stack pages added to guest page table.");
 
-    uint64_t got_v_base = 8ULL << 40;
+    uint64_t got_v_base = VMX_GUEST_GOT_BASE_VALUE;
     uint64_t got_p_base = vm->got_physical_address;
 
     for(uint64_t i = 0; i < got_page_count; i++) {
@@ -699,6 +770,12 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
             page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
         }
 
+        if(section_type == LINKER_SECTION_TYPE_BSS ||
+           section_type == LINKER_SECTION_TYPE_DATA ||
+           section_type == LINKER_SECTION_TYPE_DATARELOC) {
+            list_list_insert(vm->read_only_frames, metadata);
+        }
+
         uint64_t section_v_base = metadata->section.virtual_start;
         uint64_t section_p_base = metadata->section.physical_start;
 
@@ -714,7 +791,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_TRACE, "next page address: 0x%llx", vm->next_page_address);
 
     // page tables itself
-    for(uint64_t i = 0x4000; i < vm->next_page_address; i += MEMORY_PAGING_PAGE_LENGTH_4K) {
+    for(uint64_t i = VMX_GUEST_CR3_BASE_VALUE; i < vm->next_page_address; i += MEMORY_PAGING_PAGE_LENGTH_4K) {
         hypervisor_ept_paging_add_page(vm, i, i, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
     }
 
@@ -741,7 +818,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     PRINTLOG(HYPERVISOR, LOG_TRACE, "old got physical address: 0x%llx, old got size: 0x%llx, old got page count: 0x%llx",
              old_got_physical_address, old_got_size, old_got_page_count);
 
-    uint64_t got_v_base = 8ULL << 40;
+    uint64_t got_v_base = VMX_GUEST_GOT_BASE_VALUE;
 
     for(uint64_t i = 0; i < old_got_page_count; i++) {
         if(hypervisor_ept_paging_del_page(vm, old_got_physical_address, got_v_base) != 0) {
@@ -799,7 +876,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     }
 
     new_got_physical_address = module_load->new_got_physical_address;
-    uint64_t got_base = 8ULL << 40;
+    uint64_t got_base = VMX_GUEST_GOT_BASE_VALUE;
 
     for(uint64_t i = 0; i < new_got_page_count; i++) {
         if(hypervisor_ept_paging_add_page(vm, new_got_physical_address, got_base, true) != 0) {
@@ -878,11 +955,11 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     PRINTLOG(HYPERVISOR, LOG_TRACE, "next page address: 0x%llx", vm->next_page_address);
 
     // page tables itself
-    for(uint64_t i = 0x4000; i < vm->next_page_address; i += MEMORY_PAGING_PAGE_LENGTH_4K) {
+    for(uint64_t i = VMX_GUEST_CR3_BASE_VALUE; i < vm->next_page_address; i += MEMORY_PAGING_PAGE_LENGTH_4K) {
         hypervisor_ept_paging_add_page(vm, i, i, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
     }
 
-    uint64_t host_page = hypervisor_ept_guest_to_host(vm->ept_pml4_base, 0x4000);
+    uint64_t host_page = hypervisor_ept_guest_to_host(vm->ept_pml4_base, VMX_GUEST_CR3_BASE_VALUE);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "page tables added to guest page table. cr3 on host: 0x%llx", host_page);
 
@@ -990,4 +1067,130 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
     }
 
     return -1;
+}
+
+uint64_t hypervisor_ept_guest_virtual_to_host_physical(hypervisor_vm_t* vm, uint64_t guest_virtual) {
+    uint64_t guest_physical = hypervisor_ept_paging_get_guest_physical(vm, guest_virtual);
+
+    if(guest_physical == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to get guest physical address for guest virtual address 0x%llx", guest_virtual);
+        return -1;
+    }
+
+    return hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_physical);
+}
+
+uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci_dev) {
+    pci_common_header_t* pci_header = pci_dev->pci_header;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header: class 0x%x, subclass 0x%x, prog if 0x%x",
+             pci_header->class_code, pci_header->subclass_code, pci_header->prog_if);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header: vendor id 0x%x, device id 0x%x, revision id 0x%x",
+             pci_header->vendor_id, pci_header->device_id, pci_header->revsionid);
+
+    uint64_t pci_header_va = (uint64_t)pci_header;
+
+    uint64_t pci_header_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(pci_header_va);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pci header va: 0x%llx, pci header fa: 0x%llx", pci_header_va, pci_header_fa);
+
+    frame_allocator_t* frame_allocator = frame_get_allocator();
+
+    frame_t* frame = frame_allocator->get_reserved_frames_of_address(frame_allocator, (void*)pci_header_fa);
+
+    if(frame == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to get frame for pci header");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "frame address: 0x%llx frame_count: 0x%llx", frame->frame_address, frame->frame_count);
+
+    uint64_t frame_address = pci_header_fa; // frame->frame_address;
+    uint64_t frame_count = 1; // frame->frame_count; // TODO: check frame count
+
+    for(uint64_t i = 0; i < frame_count; i++) {
+        if(hypervisor_ept_add_ept_page(vm, frame_address, frame_address, false) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add pci frame address to ept");
+            return -1;
+        }
+
+        if(hypervisor_ept_paging_add_page(vm, frame_address,
+                                          MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame_address),
+                                          MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
+            return -1;
+        }
+
+        frame_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+    }
+
+    pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)pci_header;
+    pci_bar_register_t* bar = &pci_gen_dev->bar0;
+    pci_bar_register_t* bar5 = &pci_gen_dev->bar5;
+
+    uint8_t bar_no = 0;
+
+    while(bar <= bar5){
+        if(bar->bar_type.type == 0) {
+            uint64_t bar_fa = pci_get_bar_address(pci_gen_dev, bar_no);
+            uint64_t bar_size = pci_get_bar_size(pci_gen_dev, bar_no);
+
+            if(bar_size != 0) {
+                frame = frame_allocator->get_reserved_frames_of_address(frame_allocator, (void*)bar_fa);
+
+                if(frame == NULL) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to get frame for pci bar");
+                    return -1;
+                }
+
+                PRINTLOG(HYPERVISOR, LOG_TRACE, " bar %i frame address: 0x%llx frame_count: 0x%llx", bar_no,
+                         frame->frame_address, frame->frame_count);
+                PRINTLOG(HYPERVISOR, LOG_TRACE, " bar %i fa: 0x%llx, size: 0x%llx", bar_no, bar_fa, bar_size);
+
+                uint64_t bar_frm_cnt = bar_size / FRAME_SIZE;
+
+                if(bar_size % FRAME_SIZE != 0) {
+                    bar_frm_cnt++;
+                }
+
+                frame_address = bar_fa; // frame->frame_address;
+                frame_count = bar_frm_cnt; // frame->frame_count;
+
+                for(uint64_t i = 0; i < frame_count; i++) {
+                    if(hypervisor_ept_add_ept_page(vm, frame_address, frame_address, false) != 0) {
+                        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add pci frame address to ept");
+                        return -1;
+                    }
+
+                    if(hypervisor_ept_paging_add_page(vm, frame_address,
+                                                      MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(frame_address),
+                                                      MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+                        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new section pages to page table");
+                        return -1;
+                    }
+
+                    frame_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+                }
+
+            }
+
+            bar++;
+            bar_no++;
+            if(bar->memory_space_bar.bar_type == 2){
+                bar++;
+                bar_no++;
+            }
+        } else if(bar->bar_type.type == 1) {
+            // TODO: io space bar add update IOBITMAP_A and IOBITMAP_B at vmcs
+
+
+            bar++;
+            bar_no++;
+        }
+    }
+
+    hypervisor_ept_invept(1);
+
+
+    return pci_header_va;
 }

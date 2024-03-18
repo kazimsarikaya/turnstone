@@ -24,9 +24,19 @@ uint32_t hypervisor_vmcs_revision_id(void) {
     return cpu_read_msr(CPU_MSR_IA32_VMX_BASIC) & 0xffffffff;
 }
 
-void hypervisor_vmcs_exit_handler_error(void);
+void hypervisor_vmcs_exit_handler_error(int64_t error_code);
 
-void hypervisor_vmcs_exit_handler_error(void) {
+void hypervisor_vmcs_exit_handler_error(int64_t error_code) {
+    if(!error_code) {
+        task_end_task();
+
+        while(true) { // never reach here
+            cpu_idle();
+        }
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error Code: 0x%llx", error_code);
+
     uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
@@ -68,8 +78,9 @@ static __attribute__((naked)) void hypervisor_exit_handler(void) {
         "call *(%r15, %rax, 1)\n"
         "// Check return value may end vm task\n"
         "// Restore the RSP and guest non-vmcs processor state\n"
-        "cmp $-1, %rax\n"
-        "je ___vmexit_handler_entry_error\n"
+        "cmp %rsp, %rax\n"
+        "cmovne %rax, %rdi\n"
+        "jne ___vmexit_handler_entry_error\n"
         "movq %rax, %rsp\n"
         "popfq\n"
         "popq %rax\n"
@@ -181,9 +192,9 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     vmx_write(VMX_GUEST_GS_BASE, 0x0);
     vmx_write(VMX_GUEST_SS_BASE, 0x0);
     vmx_write(VMX_GUEST_LDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_IDTR_BASE, 0x1000);
-    vmx_write(VMX_GUEST_GDTR_BASE, 0x2000);
-    vmx_write(VMX_GUEST_TR_BASE, 0x3000);
+    vmx_write(VMX_GUEST_IDTR_BASE, VMX_GUEST_IDTR_BASE_VALUE);
+    vmx_write(VMX_GUEST_GDTR_BASE, VMX_GUEST_GDTR_BASE_VALUE);
+    vmx_write(VMX_GUEST_TR_BASE, VMX_GUEST_TR_BASE_VALUE);
     vmx_write(VMX_GUEST_CS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_DS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_ES_LIMIT, 0xffff);
@@ -218,7 +229,7 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
 
     vmx_write(VMX_GUEST_CR0, cr0.bits);
 
-    vmx_write(VMX_GUEST_CR3, 0x4000); // cr3 is set to 16kib
+    vmx_write(VMX_GUEST_CR3, VMX_GUEST_CR3_BASE_VALUE); // cr3 is set to 16kib
 
     uint64_t cr4_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED0);
     // cr4_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);

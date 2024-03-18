@@ -11,6 +11,7 @@
 #include <hypervisor/hypervisor_macros.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_ept.h>
+#include <hypervisor/hypervisor_guestlib.h>
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <logging.h>
@@ -18,6 +19,8 @@
 #include <cpu/task.h>
 #include <tosdb/tosdb_manager.h>
 #include <linker.h>
+#include <pci.h>
+#include <apic.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -196,7 +199,7 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
     }
 
     vmx_write(VMX_GUEST_RIP, ipc.program_build.program_entry_point_virtual_address);
-    vmx_write(VMX_GUEST_RSP, (4ULL << 40) - 8); // we subtract 8 because sse needs 16 byte alignment
+    vmx_write(VMX_GUEST_RSP, (VMX_GUEST_STACK_TOP_VALUE) -8); // we subtract 8 because sse needs 16 byte alignment
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "deployed program entry point is at 0x%llx", ipc.program_build.program_entry_point_virtual_address);
 
@@ -209,17 +212,32 @@ void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
     vmx_write(VMX_GUEST_RIP, guest_rip);
 }
 
-#define HYPERVISOR_VMCALL_LOAD_MODULE 0x1000
-int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info);
+int8_t   hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vmexit_info);
+uint64_t hypervisor_vmcall_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address);
 
-int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
-    hypervisor_vm_t* vm = task_get_vm();
+uint64_t hypervisor_vmcall_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address) {
+    uint8_t group = (pci_address >> 24) & 0xff;
+    uint8_t bus = (pci_address >> 16) & 0xff;
+    uint8_t device = (pci_address >> 8) & 0xff;
+    uint8_t function = pci_address & 0xff;
 
-    if(!vm) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vm is not set");
+    const pci_dev_t* pci_dev = pci_find_device_by_address(group, bus, device, function);
+
+    if(pci_dev == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot find pci device 0x%x 0x%x 0x%x 0x%x", group, bus, device, function);
         return -1;
     }
 
+    uint64_t pci_va = hypervisor_ept_map_pci_device(vm, pci_dev);
+
+    if(pci_va != -1ULL){
+        list_list_insert(vm->mapped_pci_devices, pci_dev);
+    }
+
+    return pci_va;
+}
+
+int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vmexit_info) {
     uint64_t got_fa = vm->got_physical_address;
     uint64_t got_size = vm->got_size;
     uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
@@ -297,16 +315,159 @@ int8_t hypervisor_vmcall_load_module(vmcs_vmexit_info_t* vmexit_info) {
     return 0;
 }
 
+void video_text_print(const char* str);
+
+list_t* hypervisor_vmcall_interrupt_mapped_vms[256] = {0};
+
+static int8_t hypervisor_vmcall_intterupt_mapped_isr(interrupt_frame_ext_t* frame) {
+    uint8_t interrupt_number = frame->interrupt_number;
+
+    list_t* vms = hypervisor_vmcall_interrupt_mapped_vms[interrupt_number];
+
+    if(list_size(vms)) {
+        for(size_t i = 0; i < list_size(vms); i++) {
+            hypervisor_vm_t* vm = (hypervisor_vm_t*)list_get_data_at_position(vms, i);
+
+            interrupt_frame_ext_t* cloned_frame = memory_malloc_ext(vm->heap, sizeof(interrupt_frame_ext_t), 0);
+            memory_memcopy(frame, cloned_frame, sizeof(interrupt_frame_ext_t));
+
+            list_queue_push(vm->interrupt_queue, cloned_frame);
+        }
+
+        apic_eoi();
+
+        return 0;
+    }
+
+    return -1;
+}
+
+static int16_t hypervisor_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vmexit_info) {
+    pci_generic_device_t* pci_dev = (pci_generic_device_t*)vmexit_info->registers->rdi;
+    vm_guest_interrupt_type_t interrupt_type = (vm_guest_interrupt_type_t)vmexit_info->registers->rsi;
+    uint8_t interrupt_number = (uint8_t)vmexit_info->registers->rdx;
+
+
+
+    pci_capability_msi_t* msi_cap = NULL;
+    pci_capability_msix_t* msix_cap = NULL;
+
+    if(pci_dev->common_header.status.capabilities_list) {
+        pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pci_dev) + pci_dev->capabilities_pointer);
+
+
+        while(pci_cap->capability_id != 0xFF) {
+            if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSI) {
+                msi_cap = (pci_capability_msi_t*)pci_cap;
+            } else if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSIX) {
+                msix_cap = (pci_capability_msix_t*)pci_cap;
+            }
+
+            if(pci_cap->next_pointer == NULL) {
+                break;
+            }
+
+            pci_cap = (pci_capability_t*)(((uint8_t*)pci_dev) + pci_cap->next_pointer);
+        }
+    }
+
+    if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSI && !msi_cap) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "pci device does not support msi");
+        return -1;
+    } else if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSIX && !msix_cap) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "pci device does not support msix");
+        return -1;
+    }
+
+    uint8_t intnum = 0;
+
+    if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSI) {
+        intnum = interrupt_get_next_empty_interrupt();
+
+        uint32_t msg_addr = 0xFEE00000;
+        uint32_t apic_id = apic_get_local_apic_id();
+        apic_id <<= 12;
+        msg_addr |= apic_id;
+
+
+        if(msi_cap->ma64_support) {
+            msi_cap->ma64.message_address = msg_addr; // | (1 << 3) | (0 << 2);
+            msi_cap->ma64.message_data = intnum;
+        } else {
+            msi_cap->ma32.message_address = msg_addr; // | (1 << 3) | (0 << 2);
+            msi_cap->ma32.message_data = intnum;
+        }
+
+        uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
+        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
+
+        msi_cap->enable = 1;
+    } else if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSIX) {
+        intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_intterupt_mapped_isr);
+        intnum += INTERRUPT_IRQ_BASE;
+    } else {
+        intnum = interrupt_number;
+        uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
+        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
+    }
+
+    interrupt_number = intnum;
+
+    if(!hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]) {
+        hypervisor_vmcall_interrupt_mapped_vms[interrupt_number] = list_create_list();
+    }
+
+    list_list_insert(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number], vm);
+
+    list_list_insert(vm->mapped_interrupts, (void*)(uint64_t)(interrupt_number));
+
+    return interrupt_number;
+}
+
+void hypervisor_vmcall_cleanup_mapped_interrupts(hypervisor_vm_t* vm) {
+    while(list_size(vm->mapped_interrupts)) {
+        uint64_t interrupt_number = (uint64_t)list_queue_pop(vm->mapped_interrupts);
+        list_list_delete(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number], vm);
+
+        if(!list_size(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number])) {
+            interrupt_irq_remove_handler(interrupt_number - INTERRUPT_IRQ_BASE, &hypervisor_vmcall_intterupt_mapped_isr);
+        }
+    }
+
+    while(list_size(vm->interrupt_queue)) {
+        interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_pop(vm->interrupt_queue);
+        memory_free_ext(vm->heap, frame);
+    }
+}
 
 uint64_t hypervisor_vmcs_vmcalls_handler(vmcs_vmexit_info_t* vmexit_info) {
+    hypervisor_vm_t* vm = task_get_vm();
     uint64_t rax = vmexit_info->registers->rax;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcall rax 0x%llx", rax);
 
     uint64_t ret = -1;
 
-    if(rax == HYPERVISOR_VMCALL_LOAD_MODULE) {
-        ret = hypervisor_vmcall_load_module(vmexit_info);
+    switch(rax) {
+    case HYPERVISOR_VMCALL_NUMBER_EXIT:
+        hypervisor_vmcall_cleanup_mapped_interrupts(vm);
+        return 0;
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS:
+        ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV:
+        ret = hypervisor_vmcall_attach_pci_dev(vm, vmexit_info->registers->rdi);
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT:
+        ret = hypervisor_vmcall_attach_interrupt(vm, vmexit_info);
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_LOAD_MODULE:
+        ret = hypervisor_vmcall_load_module(vm, vmexit_info);
+        break;
+    default:
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown vmcall rax 0x%llx", rax);
+        break;
     }
 
     vmexit_info->registers->rax = ret;

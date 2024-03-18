@@ -102,8 +102,8 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     buffer_printf(buffer, "in request vectors: ");
 
     for(uint32_t vector = 0; vector < 256; vector++) {
-        uint32_t vector_byte = vector / 8;
-        uint32_t vector_bit = vector % 8;
+        uint32_t vector_byte = vector / 64;
+        uint32_t vector_bit = vector % 64;
 
         if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
             buffer_printf(buffer, "0x%02x ", vector);
@@ -118,8 +118,8 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
 }
 
 static int8_t hypervisor_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
-    uint32_t vector_byte = vector / 8;
-    uint32_t vector_bit = vector % 8;
+    uint32_t vector_byte = vector / 64;
+    uint32_t vector_bit = vector % 64;
 
     vm->lapic.in_request_vectors[vector_byte] |= (1 << vector_bit);
 
@@ -157,7 +157,44 @@ static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, h
 }
 
 
+
+static void hypervisor_ipc_handle_interrupts(vmcs_vmexit_info_t * vmexit_info) {
+    UNUSED(vmexit_info);
+    hypervisor_vm_t* vm = task_get_vm();
+
+    if(!vm) {
+        return;
+    }
+
+    list_t* mq = vm->interrupt_queue;
+
+    if(list_size(mq)) {
+        interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_peek(mq);
+
+        uint32_t vector_byte = frame->interrupt_number / 64;
+        uint32_t vector_bit = frame->interrupt_number % 64;
+
+        vm->lapic.in_request_vectors[vector_byte] |= (1 << vector_bit);
+
+        vm->need_to_notify = true;
+
+        uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
+
+        if(rflags & 0x200) {
+            // enable interrupt window exiting if IF is set
+            vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) | (1 << 2));
+
+            if(vm->is_halted) {
+                vm->is_halt_need_next_instruction = true;
+            }
+        }
+    }
+}
+
+
 int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
+    hypervisor_ipc_handle_interrupts(vmexit_info);
+
     list_t* mq = task_get_current_task_message_queue(0);
 
     if(!mq) {

@@ -185,31 +185,48 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(hypervisor_vm_t* vm, bool
         vm->lapic_timer_pending = false;
     }
 
-    for(uint32_t vector = 0; vector < 256; vector++) {
-        uint32_t vector_byte = vector / 8;
-        uint32_t vector_bit = vector % 8;
+    uint64_t waiting_int_count = 0;
 
-        if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
+    for(uint32_t vector = 0; vector < 256; vector++) {
+        uint32_t vector_byte = vector / 64;
+        uint32_t vector_bit = vector % 64;
+
+        if(!found && vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
             interrupt_vector = vector;
             found = true;
 
             if(iterate) {
                 vm->lapic.in_request_vectors[vector_byte] &= ~(1 << vector_bit);
             }
-
-            break;
         }
+
+        uint64_t popcnt = 0;
+        asm volatile ("popcnt %1, %0" : "=r" (popcnt) : "r" (vm->lapic.in_request_vectors[vector_byte]));
+
+        waiting_int_count += popcnt;
     }
+
 
     if(found) {
         if(iterate) {
             vm->lapic.in_service_vector = interrupt_vector;
             vm->lapic.apic_eoi_pending = true;
+
+            if(interrupt_vector != 0x20 && list_size(vm->interrupt_queue)){
+                interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_pop(vm->interrupt_queue);
+
+                uint64_t guest_ifext_fa = hypervisor_ept_guest_to_host(vm->ept_pml4_base, VMX_GUEST_IFEXT_BASE_VALUE);
+                uint64_t guest_ifext_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_ifext_fa);
+
+                memory_memcopy(frame, (void*)guest_ifext_va, sizeof(interrupt_frame_ext_t));
+
+                memory_free_ext(vm->heap, frame);
+            }
         }
 
         uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
 
-        if((rflags & (1 << 9))) {
+        if((rflags & (1 << 9)) && waiting_int_count) {
             vm->need_to_notify = true;
         }
 
@@ -252,6 +269,8 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
             vmx_write(VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD, interrupt_info);
 
             PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window: Injected Interrupt: 0x%x", interrupt_info);
+
+            vm->need_to_notify = false;
         }
     }
 
@@ -440,7 +459,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
         if (vmexit_handlers[vmexit_info.reason]) {
             uint64_t ret = vmexit_handlers[vmexit_info.reason](&vmexit_info);
 
-            if(ret == (uint64_t)registers) {
+            if(ret == (uint64_t)registers || ret == 0) {
                 return ret;
             }
         }

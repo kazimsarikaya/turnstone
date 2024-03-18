@@ -11,6 +11,7 @@
 #include <hypervisor/hypervisor_ipc.h>
 #include <hypervisor/hypervisor_macros.h>
 #include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <list.h>
 #include <cpu/task.h>
 #include <cpu.h>
@@ -92,6 +93,10 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
 
     list_set_equality_comparator(vm->read_only_frames, hypervisor_vm_readonly_section_cmp);
 
+    vm->mapped_pci_devices = list_create_list();
+    vm->mapped_interrupts = list_create_list();
+    vm->interrupt_queue = list_create_queue();
+
     list_list_insert(hypervisor_vm_list, vm);
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vm->vmcs_frame_fa);
@@ -115,6 +120,11 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
     list_destroy(vm->ipc_queue);
     map_destroy(vm->msr_map);
     hashmap_destroy(vm->loaded_module_ids);
+
+    list_destroy(vm->mapped_pci_devices);
+    list_destroy(vm->mapped_interrupts);
+    hypervisor_vmcall_cleanup_mapped_interrupts(vm);
+    list_destroy(vm->interrupt_queue);
 
     frame_t self_frame = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF];
 

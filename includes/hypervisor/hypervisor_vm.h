@@ -45,7 +45,7 @@ typedef struct hypervisor_vm_t {
         boolean_t timer_periodic;
         boolean_t timer_masked;
         uint8_t   in_service_vector;
-        uint8_t   in_request_vectors[32];
+        uint64_t  in_request_vectors[4];
         boolean_t apic_eoi_pending;
     }          lapic;
     uint64_t   last_tsc;
@@ -59,6 +59,9 @@ typedef struct hypervisor_vm_t {
     list_t*    ept_frames;
     hashmap_t* loaded_module_ids;
     list_t*    read_only_frames;
+    list_t*    mapped_pci_devices;
+    list_t*    mapped_interrupts;
+    list_t*    interrupt_queue;
     uint64_t   program_dump_frame_address;
     uint64_t   program_physical_address;
     uint64_t   program_virtual_address;
