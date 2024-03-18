@@ -192,9 +192,9 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
     vmx_write(VMX_GUEST_GS_BASE, 0x0);
     vmx_write(VMX_GUEST_SS_BASE, 0x0);
     vmx_write(VMX_GUEST_LDTR_BASE, 0x0);
-    vmx_write(VMX_GUEST_IDTR_BASE, 0x1000);
-    vmx_write(VMX_GUEST_GDTR_BASE, 0x2000);
-    vmx_write(VMX_GUEST_TR_BASE, 0x3000);
+    vmx_write(VMX_GUEST_IDTR_BASE, VMX_GUEST_IDTR_BASE_VALUE);
+    vmx_write(VMX_GUEST_GDTR_BASE, VMX_GUEST_GDTR_BASE_VALUE);
+    vmx_write(VMX_GUEST_TR_BASE, VMX_GUEST_TR_BASE_VALUE);
     vmx_write(VMX_GUEST_CS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_DS_LIMIT, 0xffff);
     vmx_write(VMX_GUEST_ES_LIMIT, 0xffff);
@@ -229,7 +229,7 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
 
     vmx_write(VMX_GUEST_CR0, cr0.bits);
 
-    vmx_write(VMX_GUEST_CR3, 0x4000); // cr3 is set to 16kib
+    vmx_write(VMX_GUEST_CR3, VMX_GUEST_CR3_BASE_VALUE); // cr3 is set to 16kib
 
     uint64_t cr4_fixed = cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED0);
     // cr4_fixed |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);

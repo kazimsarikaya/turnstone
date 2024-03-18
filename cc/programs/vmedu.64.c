@@ -25,6 +25,15 @@ MODULE("turnstone.user.programs.vmedu");
 
 _Noreturn void vmedu(void);
 
+volatile edu_t* edu = NULL;
+
+static void edu_isr(interrupt_frame_ext_t* frame) {
+    UNUSED(frame);
+    printf("EDU ISR 0x%x\n", edu->interrupt_status);
+    edu->interrupt_acknowledge = edu->interrupt_status;
+    vm_guest_apic_eoi();
+}
+
 
 _Noreturn void vmedu(void) {
     vm_guest_print("VM EDU Passthrough Test Program\n");
@@ -58,11 +67,19 @@ _Noreturn void vmedu(void) {
 
     pci_generic_device_t* edu_pci_dev = (pci_generic_device_t*)edu_pci_va;
 
+    printf("getting bar address\n");
     uint64_t edu_pci_bar0_addr = pci_get_bar_address(edu_pci_dev, 0);
+    printf("EDU PCI BAR0 Address: 0x%llx\n", edu_pci_bar0_addr);
 
     uint64_t edu_pci_bar0_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(edu_pci_bar0_addr);
 
-    volatile edu_t* edu = (edu_t*)edu_pci_bar0_va;
+    printf("EDU PCI BAR0 VA: 0x%llx\n", edu_pci_bar0_va);
+
+    edu = (edu_t*)edu_pci_bar0_va;
+
+    printf("setting up interrupt\n");
+    vm_guest_attach_interrupt(edu_pci_dev, VM_GUEST_INTERRUPT_TYPE_MSI, 0, edu_isr);
+    printf("interrupt setup finished\n");
 
     printf("edu identification 0x%x\n", edu->identification);
 
@@ -117,7 +134,19 @@ _Noreturn void vmedu(void) {
     memory_free(source);
     memory_free(dest);
 
+    cpu_sti();
+
+    printf("interrupt status before: 0x%x\n", edu->interrupt_status);
+
+    edu->interrupt_raise = 0x5A5A5A5A;
+
+    printf("interrupt status after: 0x%x\n", edu->interrupt_status);
+
     printf("Test program complete\n");
+
+    while(true) {
+        cpu_idle();
+    }
 
     vm_guest_exit();
 
