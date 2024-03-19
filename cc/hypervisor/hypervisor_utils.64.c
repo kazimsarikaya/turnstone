@@ -223,7 +223,7 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 }
 
 void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
-    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+    uint64_t guest_rip = vmexit_info->guest_rip;
     guest_rip += vmexit_info->instruction_length;
     vmx_write(VMX_GUEST_RIP, guest_rip);
 }
@@ -457,7 +457,7 @@ void hypervisor_vmcall_cleanup_mapped_interrupts(hypervisor_vm_t* vm) {
 }
 
 uint64_t hypervisor_vmcs_vmcalls_handler(vmcs_vmexit_info_t* vmexit_info) {
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
     uint64_t rax = vmexit_info->registers->rax;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcall rax 0x%llx", rax);

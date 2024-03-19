@@ -46,6 +46,13 @@ _Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatc
 
 typedef struct vmcs_vmexit_info {
     vmcs_registers_t* registers;
+    uint64_t          guest_rflags;
+    uint64_t          guest_rip;
+    uint64_t          guest_rsp;
+    uint64_t          guest_efer;
+    uint64_t          guest_cr0;
+    uint64_t          guest_cr3;
+    uint64_t          guest_cr4;
     uint64_t          reason;
     uint64_t          exit_qualification;
     uint64_t          guest_linear_addr;
@@ -54,6 +61,7 @@ typedef struct vmcs_vmexit_info {
     uint64_t          instruction_info;
     uint64_t          interrupt_info;
     uint64_t          interrupt_error_code;
+    hypervisor_vm_t*  vm;
 }vmcs_vmexit_info_t;
 
 uint32_t hypervisor_vmcs_revision_id(void);

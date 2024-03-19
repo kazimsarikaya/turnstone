@@ -25,7 +25,7 @@ extern list_t* hypervisor_vm_list;
 static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
     buffer_t* buffer = message->message_data;
 
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
     buffer_printf(buffer, "rax: 0x%016llx ", vmexit_info->registers->rax);
     buffer_printf(buffer, "rbx: 0x%016llx ", vmexit_info->registers->rbx);
@@ -44,12 +44,12 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     buffer_printf(buffer, "r14: 0x%016llx ", vmexit_info->registers->r14);
     buffer_printf(buffer, "r15: 0x%016llx\n", vmexit_info->registers->r15);
     buffer_printf(buffer, "rip: 0x%016llx rflags: 0x%08llx(0x%08llx) hlt=%i\n",
-                  vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS), vmexit_info->registers->rflags,
+                  vmexit_info->guest_rip, vmexit_info->guest_rflags, vmexit_info->registers->rflags,
                   vm->is_halted);
     buffer_printf(buffer, "\n");
 
     buffer_printf(buffer, "cr0: 0x%08llx cr2: 0x%016llx cr3: 0x%016llx cr4: 0x%08llx\n",
-                  vmx_read(VMX_GUEST_CR0), vmexit_info->registers->cr2, vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
+                  vmexit_info->guest_cr0, vmexit_info->registers->cr2, vmexit_info->guest_cr3, vmexit_info->guest_cr4);
     buffer_printf(buffer, "\n");
 
     buffer_printf(buffer, "cs:  0x%04llx 0x%016llx 0x%08llx 0x%08llx\n",
@@ -83,7 +83,7 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     buffer_printf(buffer, "idt:  0x%016llx 0x%08llx\n",
                   vmx_read(VMX_GUEST_IDTR_BASE), vmx_read(VMX_GUEST_IDTR_LIMIT));
     buffer_printf(buffer, "efer: 0x%08llx\n",
-                  vmx_read(VMX_GUEST_IA32_EFER));
+                  vmexit_info->guest_efer);
 
     buffer_printf(buffer, "\n");
     buffer_printf(buffer, "lapic timer:\n");
@@ -117,7 +117,7 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     return 0;
 }
 
-static int8_t hypervisor_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
+static int8_t hypervisor_ipc_handle_irq(vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, uint8_t vector) {
     uint32_t vector_byte = vector / 64;
     uint32_t vector_bit = vector % 64;
 
@@ -125,7 +125,7 @@ static int8_t hypervisor_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
 
     vm->need_to_notify = true;
 
-    uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
+    uint64_t rflags = vmexit_info->guest_rflags;
 
     if(rflags & 0x200) {
         // enable interrupt window exiting if IF is set
@@ -140,10 +140,9 @@ static int8_t hypervisor_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
 }
 
 static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
-    UNUSED(vmexit_info);
     UNUSED(message);
 
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
     if(!vm) {
         return -1;
@@ -153,14 +152,13 @@ static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, h
         return 0;
     }
 
-    return hypervisor_ipc_handle_irq(vm, vm->lapic.timer_vector);
+    return hypervisor_ipc_handle_irq(vmexit_info, vm, vm->lapic.timer_vector);
 }
 
 
 
 static void hypervisor_ipc_handle_interrupts(vmcs_vmexit_info_t * vmexit_info) {
-    UNUSED(vmexit_info);
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
     if(!vm) {
         return;
@@ -178,7 +176,7 @@ static void hypervisor_ipc_handle_interrupts(vmcs_vmexit_info_t * vmexit_info) {
 
         vm->need_to_notify = true;
 
-        uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
+        uint64_t rflags = vmexit_info->guest_rflags;
 
         if(rflags & 0x200) {
             // enable interrupt window exiting if IF is set
