@@ -177,24 +177,40 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
         return -1;
     }
 
-    vm->program_dump_frame_address = ipc.program_build.program_dump_frame_address;
     vm->program_entry_point_virtual_address = ipc.program_build.program_entry_point_virtual_address;
-    vm->program_size = ipc.program_build.program_size;
-    vm->program_physical_address = ipc.program_build.program_physical_address;
-    vm->program_virtual_address = ipc.program_build.program_virtual_address;
-    vm->metadata_physical_address = ipc.program_build.metadata_physical_address;
-    vm->got_size = ipc.program_build.got_size;
-    vm->got_physical_address = ipc.program_build.got_physical_address;
 
     vm->guest_stack_size = 2ULL << 20; // 2MiB
     vm->guest_heap_size = 16ULL << 20; // 16MiB
 
-    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.program_handle, (void*)true);
+    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.module.module_handle, (void*)true);
 
     hypervisor_cleanup_unused_modules(vm, ipc.program_build.got_physical_address, ipc.program_build.got_size);
 
     if(hypervisor_vmcs_prepare_ept(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
+        return -1;
+    }
+
+    hypervisor_vm_module_load_t ml = {0};
+
+    ml.old_got_physical_address = vm->got_physical_address;
+    ml.old_got_size = vm->got_size;
+    ml.new_got_physical_address = ipc.program_build.got_physical_address;
+    ml.new_got_size = ipc.program_build.got_size;
+    ml.module_physical_address = ipc.program_build.module.module_physical_address;
+    ml.module_virtual_address = ipc.program_build.module.module_virtual_address;
+    ml.module_size = ipc.program_build.module.module_size;
+    ml.metadata_physical_address = ipc.program_build.module.metadata_physical_address;
+    ml.metadata_virtual_address = ipc.program_build.module.metadata_virtual_address;
+    ml.metadata_size = ipc.program_build.module.metadata_size;
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", ipc.program_build.module.module_handle);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "new got 0x%llx 0x%llx", ml.new_got_physical_address, ml.new_got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "module 0x%llx 0x%llx", ml.module_physical_address, ml.module_size);
+
+    if(hypervisor_ept_merge_module(vm, &ml) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot merge module");
         return -1;
     }
 
@@ -266,7 +282,7 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
     tosdb_manager_ipc_t ipc = {0};
 
     ipc.type = TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD;
-    ipc.program_build.program_handle = module_id;
+    ipc.program_build.module.module_handle = module_id;
     ipc.program_build.for_vm = true;
 
     if(tosdb_manager_ipc_send_and_wait(&ipc) != 0) {
@@ -284,7 +300,7 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
         return -1;
     }
 
-    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.program_handle, (void*)true);
+    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.module.module_handle, (void*)true);
 
     hypervisor_cleanup_unused_modules(vm, ipc.program_build.got_physical_address, ipc.program_build.got_size);
 
@@ -294,18 +310,17 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
     ml.old_got_size = vm->got_size;
     ml.new_got_physical_address = ipc.program_build.got_physical_address;
     ml.new_got_size = ipc.program_build.got_size;
-    ml.module_dump_physical_address = ipc.program_build.program_dump_frame_address;
-    ml.module_physical_address = ipc.program_build.program_physical_address;
-    ml.module_size = ipc.program_build.program_size;
-    ml.metadata_physical_address = ipc.program_build.metadata_physical_address;
-    ml.metadata_size = ipc.program_build.metadata_size;
+    ml.module_physical_address = ipc.program_build.module.module_physical_address;
+    ml.module_virtual_address = ipc.program_build.module.module_virtual_address;
+    ml.module_size = ipc.program_build.module.module_size;
+    ml.metadata_physical_address = ipc.program_build.module.metadata_physical_address;
+    ml.metadata_virtual_address = ipc.program_build.module.metadata_virtual_address;
+    ml.metadata_size = ipc.program_build.module.metadata_size;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", module_id);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "new got 0x%llx 0x%llx", ml.new_got_physical_address, ml.new_got_size);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "module 0x%llx 0x%llx", ml.module_physical_address, ml.module_size);
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "module dump 0x%llx", ml.module_dump_physical_address);
-
 
     if(hypervisor_ept_merge_module(vm, &ml) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot merge module");
@@ -326,6 +341,7 @@ static int8_t hypervisor_vmcall_intterupt_mapped_isr(interrupt_frame_ext_t* fram
 
     if(list_size(vms)) {
         for(size_t i = 0; i < list_size(vms); i++) {
+            video_text_print("interrupt mapped\n");
             hypervisor_vm_t* vm = (hypervisor_vm_t*)list_get_data_at_position(vms, i);
 
             interrupt_frame_ext_t* cloned_frame = memory_malloc_ext(vm->heap, sizeof(interrupt_frame_ext_t), 0);

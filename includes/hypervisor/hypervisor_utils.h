@@ -37,10 +37,11 @@ typedef struct hypervisor_vm_module_load_t {
     uint64_t old_got_size;
     uint64_t new_got_physical_address;
     uint64_t new_got_size;
-    uint64_t module_dump_physical_address;
     uint64_t module_physical_address;
+    uint64_t module_virtual_address;
     uint64_t module_size;
     uint64_t metadata_physical_address;
+    uint64_t metadata_virtual_address;
     uint64_t metadata_size;
 } hypervisor_vm_module_load_t;
 

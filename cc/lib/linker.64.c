@@ -1109,7 +1109,7 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
         }
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx symbol table size 0x%llx",
+    PRINTLOG(LINKER, LOG_DEBUG, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx symbol table size 0x%llx",
              ctx->program_size, ctx->global_offset_table_size, ctx->relocation_table_size, ctx->metadata_size, ctx->symbol_table_size);
 
     return 0;
