@@ -209,7 +209,7 @@ int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64
         }
 
     } else {
-        return -1;
+        bar->io_space_bar.base_address = (bar_fa >> 2) & 0xFFFFFFF;
     }
 
     return 0;

@@ -62,6 +62,7 @@ typedef struct hypervisor_vm_t {
     list_t*    mapped_pci_devices;
     list_t*    mapped_interrupts;
     list_t*    interrupt_queue;
+    list_t*    mapped_io_ports;
     uint64_t   program_dump_frame_address;
     uint64_t   program_physical_address;
     uint64_t   program_virtual_address;

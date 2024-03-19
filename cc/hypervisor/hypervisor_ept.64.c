@@ -669,7 +669,7 @@ static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, ui
     pte_address <<= 12;
 
     if(p1->pages[p1_index].present) {
-        return pte_address;
+        return pte_address | (virtual_address & ((1ULL << 12) - 1));
     }
 
     return 0;
@@ -1106,7 +1106,7 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
     PRINTLOG(HYPERVISOR, LOG_TRACE, "frame address: 0x%llx frame_count: 0x%llx", frame->frame_address, frame->frame_count);
 
     uint64_t frame_address = pci_header_fa; // frame->frame_address;
-    uint64_t frame_count = 1; // frame->frame_count; // TODO: check frame count
+    uint64_t frame_count = 1; // in spec MCFG table only 1 page is used for pci header, bar registers and capabilities
 
     for(uint64_t i = 0; i < frame_count; i++) {
         if(hypervisor_ept_add_ept_page(vm, frame_address, frame_address, false) != 0) {
@@ -1181,8 +1181,25 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
                 bar_no++;
             }
         } else if(bar->bar_type.type == 1) {
-            // TODO: io space bar add update IOBITMAP_A and IOBITMAP_B at vmcs
+            uint64_t port_base = pci_get_bar_address(pci_gen_dev, bar_no);
+            uint64_t port_count = pci_get_bar_size(pci_gen_dev, bar_no);
 
+            uint8_t* io_bitmap_a = (uint8_t*)vmx_read(VMX_CTLS_IO_BITMAP_A);
+            uint8_t* io_bitmap_b = (uint8_t*)vmx_read(VMX_CTLS_IO_BITMAP_B);
+
+            for(uint64_t i = 0; i < port_count; i++) {
+                uint64_t port = port_base + i;
+                uint64_t bitmap_index = port / 8;
+                uint64_t bitmap_bit = port % 8;
+
+                if(port < 0x8000) {
+                    io_bitmap_a[bitmap_index] |= (1 << bitmap_bit);
+                } else {
+                    io_bitmap_b[bitmap_index] |= (1 << bitmap_bit);
+                }
+
+                list_list_insert(vm->mapped_io_ports, (void*)port);
+            }
 
             bar++;
             bar_no++;

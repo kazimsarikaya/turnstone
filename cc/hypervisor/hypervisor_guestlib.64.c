@@ -14,14 +14,17 @@
 #include <cpu.h>
 #include <cpu/descriptor.h>
 #include <apic.h>
+#include <strings.h>
 
 MODULE("turnstone.hypervisor.guestlib");
 
 void vm_guest_print(const char* str) {
-    while(*str != '\0') {
-        outb(0x3f8, *str);
-        str++;
-    }
+    uint64_t str_len = strlen(str);
+
+    asm volatile ("rep outsb"
+                  :
+                  : "S" (str), "c" (str_len), "d" (0x3f8)
+                  : "memory");
 }
 
 void __attribute__((format(printf, 1, 2))) vm_guest_printf(const char* fstr, ...){

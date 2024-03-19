@@ -94,6 +94,7 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     list_set_equality_comparator(vm->read_only_frames, hypervisor_vm_readonly_section_cmp);
 
     vm->mapped_pci_devices = list_create_list();
+    vm->mapped_io_ports = list_create_list();
     vm->mapped_interrupts = list_create_list();
     vm->interrupt_queue = list_create_queue();
 
@@ -122,6 +123,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
     hashmap_destroy(vm->loaded_module_ids);
 
     list_destroy(vm->mapped_pci_devices);
+    list_destroy(vm->mapped_io_ports);
     list_destroy(vm->mapped_interrupts);
     hypervisor_vmcall_cleanup_mapped_interrupts(vm);
     list_destroy(vm->interrupt_queue);

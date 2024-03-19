@@ -20,6 +20,8 @@
 #include <logging.h>
 #include <list.h>
 #include <apic.h>
+#include <ports.h>
+#include <strings.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -130,10 +132,13 @@ static uint64_t hypervisor_vmcs_pause_handler(vmcs_vmexit_info_t* vmexit_info) {
 
 static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t exit_qualification = vmexit_info->exit_qualification;
+    hypervisor_vm_t* vm = task_get_vm();
 
-    uint16_t port = (exit_qualification >> 16) & 0xFFFF;
+    uint64_t port = (exit_qualification >> 16) & 0xFFFF;
     uint8_t size = exit_qualification & 0x7;
     uint8_t direction = (exit_qualification >> 3) & 0x1;
+    boolean_t is_string = (exit_qualification >> 4) & 0x1;
+    boolean_t is_rep = (exit_qualification >> 5) & 0x1;
 
     switch(size) {
     case 0:
@@ -150,7 +155,8 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x", port, size, direction);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%llx, Size: 0x%x, Direction: 0x%x String %i Rep %i",
+             port, size, direction, is_string, is_rep);
 
     uint64_t mask = 0xFFFFFFFFFFFFFFFF >> (64 - (size * 8));
 
@@ -160,16 +166,72 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
 
     data &= mask;
 
-    uint8_t* data_ptr = (uint8_t*)&data;
+    // TODO: handle direction flag, also handle rep at mapped io ports when rep is set update rsi and rcx
 
-    if(port == 0x3f8 && direction == 0) {
-        for(uint8_t i = 0; i < size; i++) {
-            printf("%c", data_ptr[i]);
+    if(list_contains(vm->mapped_io_ports, (void*)port) == 0){
+        if(direction == 0) {
+            if(size == 1) {
+                outb(port, data);
+            } else if(size == 2) {
+                outw(port, data);
+            } else {
+                outl(port, data);
+            }
+        } else {
+            uint64_t value = 0;
+
+            if(size == 1) {
+                value = inb(port);
+            } else if(size == 2) {
+                value = inw(port);
+            } else {
+                value = inl(port);
+            }
+
+            vmexit_info->registers->rax = (vmexit_info->registers->rax & ~mask) | (value & mask);
         }
     } else {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x Data 0x%llx",
-                 port, size, direction, data);
-        return -1;
+
+        if(port == 0x3f8 && direction == 0) {
+            if(is_string && is_rep) {
+                uint64_t rsi = vmexit_info->registers->rsi;
+                uint64_t rcx = vmexit_info->registers->rcx;
+
+                uint64_t data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, rsi);
+                uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+
+                PRINTLOG(HYPERVISOR, LOG_TRACE,
+                         "IO Instruction String: port 0x%llx size: 0x%llx, rsi 0x%llx, data ptr fa 0x%llx va 0x%llx",
+                         port, rcx, rsi, data_ptr_fa, data_ptr_va);
+
+                char_t* data_ptr = (char_t*)data_ptr_va;
+
+                uint64_t data_len = strlen(data_ptr);
+
+                if(rcx != data_len) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "IO Instruction String Length Mismatch: 0x%llx 0x%llx", rcx, data_len);
+                }
+
+                char_t tmp = data_ptr[data_len];
+                data_ptr[data_len] = 0;
+
+                printf("%s", data_ptr);
+
+                data_ptr[data_len] = tmp;
+
+                vmexit_info->registers->rsi += data_len;
+                vmexit_info->registers->rcx -= data_len;
+            } else {
+                uint8_t* data_ptr = (uint8_t*)&data;
+                for(uint8_t i = 0; i < size; i++) {
+                    printf("%c", data_ptr[i]);
+                }
+            }
+        } else {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled IO Instruction: Port: 0x%llx, Size: 0x%x, Direction: 0x%x Data 0x%llx",
+                     port, size, direction, data);
+            return -1;
+        }
     }
 
     hypervisor_vmcs_goto_next_instruction(vmexit_info);
