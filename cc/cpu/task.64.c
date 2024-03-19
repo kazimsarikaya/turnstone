@@ -1032,9 +1032,51 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 }
 
 void task_idle_task(void) {
-    while(true) {
-        asm volatile ("sti\nhlt\n");
+    cpu_cpuid_regs_t query = {0};
+    query.eax = 0x1;
+    cpu_cpuid_regs_t answer = {0};
+
+    cpu_cpuid(query, &answer);
+
+    PRINTLOG(TASKING, LOG_TRACE, "monitor/mwait query 0x%x", answer.ecx);
+
+    boolean_t monitor_mwait_supported = (answer.ecx >> 3) & 0x1;
+
+    query.eax = 0x5;
+    query.ecx = 0x0;
+    query.edx = 0x0;
+    query.ebx = 0x0;
+    cpu_cpuid(query, &answer);
+
+    PRINTLOG(TASKING, LOG_TRACE, "monitor/mwait extended query 0x%x", answer.ecx);
+
+    boolean_t monitor_mwait_extended_supported = (answer.ecx >> 1) & 0x1;
+
+    register uint64_t data asm ("r11") = cpu_read_gs_base();
+
+    if(monitor_mwait_supported && monitor_mwait_extended_supported) {
+        asm volatile (
+            "xor %rcx, %rcx\n"
+            "xor %rdx, %rdx\n");
+        while(true) {
+            asm volatile (
+                "mov %0, %%rax\n"
+                "monitor\n"
+                "mov $1, %%rcx\n"
+                "mov $1, %%rax\n"
+                "mwait\n"
+                :
+                : "r" (data)
+                :
+                "rax", "rdx", "memory"
+                );
+        }
+    } else {
+        while(true) {
+            asm volatile ("sti\nhlt\n");
+        }
     }
+
 }
 
 #pragma GCC diagnostic push
