@@ -167,7 +167,7 @@ uint8_t apic_get_irq_override(uint8_t old_irq);
 void apic_eoi(void);
 
 uint32_t apic_get_local_apic_id(void);
-void     apic_send_ipi(uint8_t destination, uint8_t vector);
+void     apic_send_ipi(uint8_t destination, uint8_t vector, boolean_t wait);
 void     apic_send_init(uint8_t destination);
 void     apic_send_sipi(uint8_t destination, uint8_t vector);
 void     apic_send_nmi(uint8_t destination);

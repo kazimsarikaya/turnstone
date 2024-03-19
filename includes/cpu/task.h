@@ -214,6 +214,9 @@ void task_set_interruptible(void);
  */
 void task_set_interrupt_received(uint64_t task_id);
 
+
+void task_set_message_received(uint64_t tid);
+
 /**
  * @brief adds a queue to task
  * @param[in] queue queue which task will have. tasks consumes these queues

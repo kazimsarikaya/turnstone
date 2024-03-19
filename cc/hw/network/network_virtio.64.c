@@ -130,6 +130,7 @@ int8_t network_virtio_process_tx(void){
     return 0;
 }
 
+extern uint64_t network_rx_task_id;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -151,6 +152,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
     cpu_sti();
 
     while(true) {
+        boolean_t notify_network_rx = true;
 
         if(network_received_packets != NULL && vdev->return_queue != NULL) {
 
@@ -161,6 +163,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
 
                 if(packet == NULL) {
                     PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet");
+                    notify_network_rx = true;
 
                     task_yield();
 
@@ -192,6 +195,7 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
                 if(packet->packet_data == NULL) {
                     PRINTLOG(VIRTIONET, LOG_ERROR, "failed to allocate packet data. packet len 0x%llx", packet_len);
                     memory_free_ext(list_get_heap(network_received_packets), packet);
+                    notify_network_rx = true;
 
                     task_yield();
 
@@ -217,6 +221,12 @@ int32_t network_virtio_process_rx(uint64_t args_cnt, void** args){
                     memory_free_ext(list_get_heap(network_received_packets), packet);
                 } else {
                     PRINTLOG(VIRTIONET, LOG_TRACE, "packet queued");
+
+                    if(notify_network_rx && network_rx_task_id) {
+                        task_set_message_received(network_rx_task_id);
+                        PRINTLOG(VIRTIONET, LOG_TRACE, "cleared message waiting for rx task 0x%llx", network_rx_task_id);
+                        notify_network_rx = false;
+                    }
                 }
 
                 vq_rx->last_used_index++;
@@ -526,6 +536,7 @@ int8_t network_virtio_create_queues(virtio_dev_t* vdev){
     return 0;
 }
 
+uint64_t network_vnet_tx_task_id = 0;
 
 int8_t network_virtio_init(const pci_dev_t* pci_netdev){
     PRINTLOG(VIRTIONET, LOG_INFO, "virtnet device starting");
@@ -567,7 +578,7 @@ int8_t network_virtio_init(const pci_dev_t* pci_netdev){
     uint64_t rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_rx, 1, rx_args, "vnet rx");
     vdev_net->rx_task_id = rx_task_id;
 
-    task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_tx, 0, NULL, "vnet tx");
+    network_vnet_tx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_virtio_process_tx, 0, NULL, "vnet tx");
 
     if(!vdev_net->is_legacy) {
         if(vdev_net->selected_features & VIRTIO_NETWORK_F_STATUS) {

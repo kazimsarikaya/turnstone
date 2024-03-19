@@ -696,10 +696,10 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     task_t* current_task = cpu_state->current_task;
 
     if(current_task->state != TASK_STATE_ENDED) {
-        if((time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
-           time_timer_get_tick_count() > current_task->last_tick_count &&
-           !current_task->message_waiting &&
-           !current_task->sleeping) {
+        if(!current_task->message_waiting &&
+           !current_task->sleeping &&
+           (time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
+           time_timer_get_tick_count() > current_task->last_tick_count) {
 
             task_switch_task_exit_prep();
 
@@ -1181,9 +1181,31 @@ void task_clear_message_waiting(uint64_t tid) {
 
 void task_set_interrupt_received(uint64_t tid) {
     task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* current_task = cpu_state->current_task;
 
     if(task) {
         task->interrupt_received = true;
+
+        if(current_task->cpu_id != task->cpu_id) {
+            apic_send_ipi(task->cpu_id, 0xFE, false);
+        }
+
+    } else {
+        PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
+    }
+}
+
+void task_set_message_received(uint64_t tid) {
+    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* current_task = cpu_state->current_task;
+
+    if(task) {
+        task->message_waiting = false;
+
+        if(current_task->cpu_id != task->cpu_id) {
+            apic_send_ipi(task->cpu_id, 0xFE, false);
+        }
+
     } else {
         PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
     }
