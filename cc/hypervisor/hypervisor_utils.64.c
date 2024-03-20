@@ -348,6 +348,8 @@ static int8_t hypervisor_vmcall_intterupt_mapped_isr(interrupt_frame_ext_t* fram
             memory_memcopy(frame, cloned_frame, sizeof(interrupt_frame_ext_t));
 
             list_queue_push(vm->interrupt_queue, cloned_frame);
+
+            task_set_interrupt_received(vm->task_id);
         }
 
         apic_eoi();
@@ -398,20 +400,30 @@ static int16_t hypervisor_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmcs_vmex
     uint8_t intnum = 0;
 
     if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSI) {
-        intnum = interrupt_get_next_empty_interrupt();
-
         uint32_t msg_addr = 0xFEE00000;
         uint32_t apic_id = apic_get_local_apic_id();
         apic_id <<= 12;
         msg_addr |= apic_id;
 
-
         if(msi_cap->ma64_support) {
             msi_cap->ma64.message_address = msg_addr; // | (1 << 3) | (0 << 2);
-            msi_cap->ma64.message_data = intnum;
+
+            if(!msi_cap->ma64.message_data){
+                intnum = interrupt_get_next_empty_interrupt();
+                msi_cap->ma64.message_data = intnum;
+            } else {
+                intnum = msi_cap->ma64.message_data;
+            }
+
         } else {
             msi_cap->ma32.message_address = msg_addr; // | (1 << 3) | (0 << 2);
-            msi_cap->ma32.message_data = intnum;
+
+            if(!msi_cap->ma32.message_data){
+                intnum = interrupt_get_next_empty_interrupt();
+                msi_cap->ma32.message_data = intnum;
+            } else {
+                intnum = msi_cap->ma32.message_data;
+            }
         }
 
         uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
@@ -422,7 +434,8 @@ static int16_t hypervisor_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmcs_vmex
         intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_intterupt_mapped_isr);
         intnum += INTERRUPT_IRQ_BASE;
     } else {
-        intnum = interrupt_number;
+        intnum = INTERRUPT_IRQ_BASE + pci_dev->interrupt_line;
+        apic_ioapic_enable_irq(pci_dev->interrupt_line);
         uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
         interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
     }

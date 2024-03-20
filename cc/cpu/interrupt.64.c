@@ -208,8 +208,18 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
     } else {
         interrupt_irq_list_item_t* item = interrupt_irqs[irqnum];
 
+        if(item->irq == irq) {
+            cpu_sti();
+            return 0;
+        }
+
         while(item->next) {
             item = item->next;
+
+            if(item->irq == irq) {
+                cpu_sti();
+                return 0;
+            }
         }
 
         item->next = memory_malloc(sizeof(interrupt_irq_list_item_t));

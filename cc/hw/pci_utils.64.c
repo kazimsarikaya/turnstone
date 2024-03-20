@@ -90,9 +90,16 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
     apic_id <<= 12;
     msg_addr |= apic_id;
 
-    uint8_t intnum = interrupt_get_next_empty_interrupt();
+    uint8_t intnum = 0;
+
+    if(!msix_table->entries[msix_vector].message_data) {
+        intnum = interrupt_get_next_empty_interrupt();
+        msix_table->entries[msix_vector].message_data = intnum;
+    } else {
+        intnum = msix_table->entries[msix_vector].message_data;
+    }
+
     msix_table->entries[msix_vector].message_address = msg_addr;
-    msix_table->entries[msix_vector].message_data = intnum;
     msix_table->entries[msix_vector].masked = 0;
 
     uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
