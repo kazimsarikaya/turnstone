@@ -94,6 +94,9 @@ typedef enum memory_paging_page_type_e {
     MEMORY_PAGING_PAGE_TYPE_READONLY = 1 << 4, ///< read only
     MEMORY_PAGING_PAGE_TYPE_NOEXEC = 1 << 5, ///< no executable
     MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE = 1 << 6, ///< no executable
+    MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH = 1 << 7, ///< write through
+    MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE = 1 << 8, ///< no cache
+    MEMORY_PAGING_PAGE_TYPE_GLOBAL = 1 << 9, ///< global
     MEMORY_PAGING_PAGE_TYPE_INTERNAL = 1 << 15, ///< no executable
     MEMORY_PAGING_PAGE_TYPE_WILL_DELETED = 1 << 16, ///< no executable
 } memory_paging_page_type_t; ///< short hand for enum

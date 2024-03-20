@@ -1985,6 +1985,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                   program_header->header_virtual_address,
                                                   &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                   MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot add header page to page table");
 
@@ -1994,6 +1995,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                   program_header->header_physical_address,
                                                   &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                   MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot add header page to page table");
 
@@ -2050,7 +2052,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                         .frame_count = section_size / FRAME_SIZE,
                     };
 
-                    memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_UNKNOWN;
+                    memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_GLOBAL;
 
                     if(i == LINKER_SECTION_TYPE_TEXT || i == LINKER_SECTION_TYPE_PLT) {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
@@ -2117,6 +2119,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->got_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add got to page table");
 
@@ -2164,6 +2167,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->relocation_table_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add relocation table to page table");
 
@@ -2214,6 +2218,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->metadata_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add metadata to page table");
 
@@ -2260,6 +2265,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->symbol_table_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add symbol table to page table");
 
