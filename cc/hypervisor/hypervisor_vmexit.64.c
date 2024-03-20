@@ -130,6 +130,40 @@ static uint64_t hypervisor_vmcs_pause_handler(vmcs_vmexit_info_t* vmexit_info) {
     return (uint64_t)vmexit_info->registers;
 }
 
+static void hypervisor_vmcs_io_fast_string_printf_io(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t rsi = vmexit_info->registers->rsi;
+    uint64_t rcx = vmexit_info->registers->rcx;
+
+    uint64_t port = 0x3f8;
+
+    hypervisor_vm_t * vm = vmexit_info->vm;
+
+    uint64_t data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, rsi);
+    uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE,
+             "IO Instruction String: port 0x%llx size: 0x%llx, rsi 0x%llx, data ptr fa 0x%llx va 0x%llx",
+             port, rcx, rsi, data_ptr_fa, data_ptr_va);
+
+    char_t* data_ptr = (char_t*)data_ptr_va;
+
+    uint64_t data_len = strlen(data_ptr);
+
+    if(rcx != data_len) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "IO Instruction String Length Mismatch: 0x%llx 0x%llx", rcx, data_len);
+    }
+
+    char_t tmp = data_ptr[data_len];
+    data_ptr[data_len] = 0;
+
+    printf("%s", data_ptr);
+
+    data_ptr[data_len] = tmp;
+
+    vmexit_info->registers->rsi += data_len;
+    vmexit_info->registers->rcx -= data_len;
+}
+
 static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t exit_qualification = vmexit_info->exit_qualification;
     hypervisor_vm_t* vm = vmexit_info->vm;
@@ -139,6 +173,9 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
     uint8_t direction = (exit_qualification >> 3) & 0x1;
     boolean_t is_string = (exit_qualification >> 4) & 0x1;
     boolean_t is_rep = (exit_qualification >> 5) & 0x1;
+    boolean_t is_port_imm = (exit_qualification >> 6) & 0x1;
+
+    UNUSED(is_port_imm);
 
     switch(size) {
     case 0:
@@ -155,6 +192,12 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
         return -1;
     }
 
+    uint64_t count = 1;
+
+    if(is_rep) {
+        count = vmexit_info->registers->rcx;
+    }
+
     PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%llx, Size: 0x%x, Direction: 0x%x String %i Rep %i",
              port, size, direction, is_string, is_rep);
 
@@ -166,61 +209,115 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
 
     data &= mask;
 
-    // TODO: handle direction flag, also handle rep at mapped io ports when rep is set update rsi and rcx
+    boolean_t decrement = (vmexit_info->guest_rflags >> 10) & 0x1;
+
+    uint64_t data_ptr_fa = 0;
+    uint64_t data_ptr_va = 0;
+
+    if(is_string) {
+        if(direction == 0){ // out from rsi
+            data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rsi);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+        } else {
+            data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+        }
+
+
+
+    }
 
     if(list_contains(vm->mapped_io_ports, (void*)port) == 0){
-        if(direction == 0) {
-            if(size == 1) {
-                outb(port, data);
-            } else if(size == 2) {
-                outw(port, data);
-            } else {
-                outl(port, data);
-            }
-        } else {
-            uint64_t value = 0;
+        for(uint64_t i = 0; i < count; i++) {
+            if(direction == 0) {
+                if(is_string) {
+                    char_t* data_ptr = (char_t*)data_ptr_va;
 
-            if(size == 1) {
-                value = inb(port);
-            } else if(size == 2) {
-                value = inw(port);
-            } else {
-                value = inl(port);
-            }
+                    if(size == 1) {
+                        data = data_ptr[0];
+                    } else if(size == 2) {
+                        data = *((uint16_t*)data_ptr);
+                    } else {
+                        data = *((uint32_t*)data_ptr);
+                    }
 
-            vmexit_info->registers->rax = (vmexit_info->registers->rax & ~mask) | (value & mask);
+                    if(decrement) {
+                        data_ptr_va -= size;
+                    } else {
+                        data_ptr_va += size;
+                    }
+                }
+
+
+                if(size == 1) {
+                    outb(port, data);
+                } else if(size == 2) {
+                    outw(port, data);
+                } else {
+                    outl(port, data);
+                }
+            } else {
+                uint64_t value = 0;
+
+                if(size == 1) {
+                    value = inb(port);
+                } else if(size == 2) {
+                    value = inw(port);
+                } else {
+                    value = inl(port);
+                }
+
+                if(is_string) {
+                    char_t* data_ptr = (char_t*)data_ptr_va;
+
+                    if(size == 1) {
+                        data_ptr[0] = value;
+                    } else if(size == 2) {
+                        *((uint16_t*)data_ptr) = value;
+                    } else {
+                        *((uint32_t*)data_ptr) = value;
+                    }
+
+                    if(decrement) {
+                        data_ptr_va -= size;
+                    } else {
+                        data_ptr_va += size;
+                    }
+
+                } else {
+                    vmexit_info->registers->rax = (vmexit_info->registers->rax & ~mask) | (value & mask);
+                }
+            }
+        }
+
+        if(is_rep){
+            vmexit_info->registers->rcx = 0;
+        }
+
+        if(is_string) {
+            if(decrement) {
+                if(direction == 0) {
+                    vmexit_info->registers->rsi -= count * size;
+                } else {
+                    vmexit_info->registers->rdi -= count * size;
+                }
+            } else {
+                if(direction == 0) {
+                    vmexit_info->registers->rsi += count * size;
+                } else {
+                    vmexit_info->registers->rdi += count * size;
+                }
+            }
         }
     } else {
 
         if(port == 0x3f8 && direction == 0) {
             if(is_string && is_rep) {
-                uint64_t rsi = vmexit_info->registers->rsi;
-                uint64_t rcx = vmexit_info->registers->rcx;
-
-                uint64_t data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, rsi);
-                uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
-
-                PRINTLOG(HYPERVISOR, LOG_TRACE,
-                         "IO Instruction String: port 0x%llx size: 0x%llx, rsi 0x%llx, data ptr fa 0x%llx va 0x%llx",
-                         port, rcx, rsi, data_ptr_fa, data_ptr_va);
-
-                char_t* data_ptr = (char_t*)data_ptr_va;
-
-                uint64_t data_len = strlen(data_ptr);
-
-                if(rcx != data_len) {
-                    PRINTLOG(HYPERVISOR, LOG_ERROR, "IO Instruction String Length Mismatch: 0x%llx 0x%llx", rcx, data_len);
+                if(!decrement) {
+                    hypervisor_vmcs_io_fast_string_printf_io(vmexit_info);
+                } else {
+                    // TODO: Implement decrement
                 }
-
-                char_t tmp = data_ptr[data_len];
-                data_ptr[data_len] = 0;
-
-                printf("%s", data_ptr);
-
-                data_ptr[data_len] = tmp;
-
-                vmexit_info->registers->rsi += data_len;
-                vmexit_info->registers->rcx -= data_len;
             } else {
                 uint8_t* data_ptr = (uint8_t*)&data;
                 for(uint8_t i = 0; i < size; i++) {
