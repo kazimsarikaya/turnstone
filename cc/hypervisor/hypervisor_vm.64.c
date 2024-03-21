@@ -124,8 +124,8 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
     list_destroy(vm->mapped_pci_devices);
     list_destroy(vm->mapped_io_ports);
-    list_destroy(vm->mapped_interrupts);
     hypervisor_vmcall_cleanup_mapped_interrupts(vm);
+    list_destroy(vm->mapped_interrupts);
     list_destroy(vm->interrupt_queue);
 
     frame_t self_frame = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF];

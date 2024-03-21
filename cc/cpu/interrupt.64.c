@@ -149,6 +149,8 @@ int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq) {
         return -1;
     }
 
+    memory_heap_t * heap = memory_get_default_heap();
+
     cpu_cli();
 
     irqnum += 32;
@@ -166,17 +168,25 @@ int8_t interrupt_irq_remove_handler(uint8_t irqnum, interrupt_irq irq) {
             if(prev) {
                 prev->next = item->next;
             } else {
-                interrupt_irqs[irqnum] = NULL;
+                interrupt_irqs[irqnum] = item->next;
             }
 
-            memory_free(item);
+            // video_text_print("irq list updated\n");
+
+            memory_free_ext(heap, item);
         }
 
     } else {
+        cpu_sti();
+
+        video_text_print("irq not found\n");
+
         return -1;
     }
 
     cpu_sti();
+
+    // video_text_print("irq removed\n");
 
     return 0;
 }
@@ -188,16 +198,18 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         return -1;
     }
 
+    memory_heap_t * heap = memory_get_default_heap();
+
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip((uint64_t)irq);
 
-    PRINTLOG(KERNEL, LOG_INFO, "Setting IRQ handler for IRQ 0x%x func at 0x%p %s", irqnum, irq, return_symbol_name);
+    PRINTLOG(KERNEL, LOG_DEBUG, "Setting IRQ handler for IRQ 0x%x func at 0x%p %s", irqnum, irq, return_symbol_name);
 
     cpu_cli();
 
     irqnum += 32;
 
     if(interrupt_irqs[irqnum] == NULL) {
-        interrupt_irqs[irqnum] = memory_malloc(sizeof(interrupt_irq_list_item_t));
+        interrupt_irqs[irqnum] = memory_malloc_ext(heap, sizeof(interrupt_irq_list_item_t), 0x0);
 
         if(interrupt_irqs[irqnum] == NULL) {
             return -1;
@@ -222,7 +234,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
             }
         }
 
-        item->next = memory_malloc(sizeof(interrupt_irq_list_item_t));
+        item->next = memory_malloc_ext(heap, sizeof(interrupt_irq_list_item_t), 0x0);
 
         if(item->next == NULL) {
             return -1;

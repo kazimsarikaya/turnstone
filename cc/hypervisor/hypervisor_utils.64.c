@@ -332,9 +332,31 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
 
 void video_text_print(const char* str);
 
-list_t* hypervisor_vmcall_interrupt_mapped_vms[256] = {0};
+list_t** hypervisor_vmcall_interrupt_mapped_vms = NULL;
 
-static int8_t hypervisor_vmcall_intterupt_mapped_isr(interrupt_frame_ext_t* frame) {
+int8_t hypervisor_vmcall_init_interrupt_mapped_vms(void) {
+    if(hypervisor_vmcall_interrupt_mapped_vms != NULL) {
+        return 0;
+    }
+
+    hypervisor_vmcall_interrupt_mapped_vms = memory_malloc_ext(NULL, 256 * sizeof(list_t*), 0);
+
+    if(hypervisor_vmcall_interrupt_mapped_vms == NULL) {
+        return -1;
+    }
+
+    for(uint64_t i = 0; i < 256; i++) {
+        hypervisor_vmcall_interrupt_mapped_vms[i] = list_create_list();
+
+        if(hypervisor_vmcall_interrupt_mapped_vms[i] == NULL) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int8_t hypervisor_vmcall_interrupt_mapped_isr(interrupt_frame_ext_t* frame) {
     uint8_t interrupt_number = frame->interrupt_number;
 
     list_t* vms = hypervisor_vmcall_interrupt_mapped_vms[interrupt_number];
@@ -355,6 +377,18 @@ static int8_t hypervisor_vmcall_intterupt_mapped_isr(interrupt_frame_ext_t* fram
         apic_eoi();
 
         return 0;
+    } else {
+        char_t buf[64] = {0};
+        utoh_with_buffer(buf, interrupt_number);
+        video_text_print("interrupt not mapped: 0x");
+        video_text_print(buf);
+        video_text_print("list size 0x");
+        utoh_with_buffer(buf, list_size(vms));
+        video_text_print(buf);
+        video_text_print(" list 0x");
+        utoh_with_buffer(buf, (uint64_t)vms);
+        video_text_print(buf);
+        video_text_print("\n");
     }
 
     return -1;
@@ -427,26 +461,26 @@ static int16_t hypervisor_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmcs_vmex
         }
 
         uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
-        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
+        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_interrupt_mapped_isr);
 
         msi_cap->enable = 1;
     } else if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSIX) {
-        intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_intterupt_mapped_isr);
+        intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_interrupt_mapped_isr);
         intnum += INTERRUPT_IRQ_BASE;
     } else {
         intnum = INTERRUPT_IRQ_BASE + pci_dev->interrupt_line;
         apic_ioapic_enable_irq(pci_dev->interrupt_line);
         uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
-        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
+        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_interrupt_mapped_isr);
     }
 
     interrupt_number = intnum;
 
-    if(!hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]) {
-        hypervisor_vmcall_interrupt_mapped_vms[interrupt_number] = list_create_list();
-    }
-
     list_list_insert(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number], vm);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "interrupt number 0x%x mapped. list size 0x%llx list 0x%p",
+             interrupt_number, list_size(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]),
+             hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]);
 
     list_list_insert(vm->mapped_interrupts, (void*)(uint64_t)(interrupt_number));
 
@@ -459,7 +493,7 @@ void hypervisor_vmcall_cleanup_mapped_interrupts(hypervisor_vm_t* vm) {
         list_list_delete(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number], vm);
 
         if(!list_size(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number])) {
-            interrupt_irq_remove_handler(interrupt_number - INTERRUPT_IRQ_BASE, &hypervisor_vmcall_intterupt_mapped_isr);
+            interrupt_irq_remove_handler(interrupt_number - INTERRUPT_IRQ_BASE, &hypervisor_vmcall_interrupt_mapped_isr);
         }
     }
 

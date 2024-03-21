@@ -93,6 +93,12 @@ int8_t hypervisor_init(void) {
         }
     }
 
+    if(hypervisor_vmcall_init_interrupt_mapped_vms() != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize vmcall interrupt mapped vms");
+        return -1;
+    }
+
+
     cpu_cpuid_regs_t query;
     cpu_cpuid_regs_t result;
     query.eax = 0x1;
