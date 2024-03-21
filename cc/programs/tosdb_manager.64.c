@@ -85,7 +85,8 @@ static uint64_t tosdb_manager_get_entrypoint_virtual_address(uint64_t sym_id) {
 
     return got_entry->entry_value;
 }
-static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
+
+static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
     int8_t exit_code = 0;
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb, "system");
@@ -316,7 +317,7 @@ exit:
     task_set_interrupt_received(ipc->sender_task_id);
 }
 
-static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
+static void tosdb_manager_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     // logging_module_levels[LINKER] = LOG_DEBUG;
 
     int8_t exit_code = 0;
@@ -447,7 +448,7 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
 
     PRINTLOG(LINKER, LOG_TRACE, "module id: 0x%llx", mod_id);
 
-    return tosdb_manger_build_module(tdb, ipc, mod_id, sym_id);
+    return tosdb_manager_build_module(tdb, ipc, mod_id, sym_id);
 
 exit:
     ipc->is_response_success = (exit_code == 0);
@@ -616,11 +617,11 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
             break;
         case TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD:
             PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received program load message");
-            tosdb_manger_build_program(tdb, ipc);
+            tosdb_manager_build_program(tdb, ipc);
             break;
         case TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD:
             PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received program load message");
-            tosdb_manger_build_module(tdb, ipc, ipc->program_build.module.module_handle, -1);
+            tosdb_manager_build_module(tdb, ipc, ipc->program_build.module.module_handle, -1);
             break;
         default:
             PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_main: unknown message type");
@@ -631,6 +632,9 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     tosdb_close(tdb);
 
     tosdb_manager_is_initialized = false;
+    tosdb_manager_deployed_modules = NULL;
+    tosdb_manager_global_offset_table_buffer = NULL;
+    tosdb_manager_got_symbol_index_map = NULL;
 
     return 0;
 }
@@ -683,6 +687,8 @@ int8_t tosdb_manager_clear(void) {
     tosdb_manager_is_initialized = false;
     tosdb_manager_task_id = 0;
     tosdb_manager_deployed_modules = NULL;
+    tosdb_manager_global_offset_table_buffer = NULL;
+    tosdb_manager_got_symbol_index_map = NULL;
 
     return 0;
 }
