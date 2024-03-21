@@ -1261,7 +1261,7 @@ void task_set_interruptible(void) {
     }
 }
 
-void task_print_all(void) {
+void task_print_all(buffer_t* buffer) {
     iterator_t* it = map_create_iterator(task_map);
 
     while(it->end_of_iterator(it) != 0) {
@@ -1281,18 +1281,19 @@ void task_print_all(void) {
         memory_heap_stat_t stat = {0};
         memory_get_heap_stat_ext(task->heap, &stat);
 
-        printf("\ttask %s 0x%llx 0x%p on cpu 0x%llx switched 0x%llx\n"
-               "\t\tstack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n"
-               "\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n"
-               "\t\tmessage queues %lli messages %lli\n"
-               "\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n",
-               task->task_name, task->task_id, task, task->cpu_id, task->task_switch_count,
-               task->registers->rsp, task->registers->rbp, task->heap, task->heap_size,
-               task->stack, task->stack_size,
-               task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
-               task->wait_for_future, task->state, list_size(task->message_queues), msgcount,
-               stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count
-               );
+        buffer_printf(buffer,
+                      "\ttask %s 0x%llx 0x%p on cpu 0x%llx switched 0x%llx\n"
+                      "\t\tstack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n"
+                      "\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n"
+                      "\t\tmessage queues %lli messages %lli\n"
+                      "\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n",
+                      task->task_name, task->task_id, task, task->cpu_id, task->task_switch_count,
+                      task->registers->rsp, task->registers->rbp, task->heap, task->heap_size,
+                      task->stack, task->stack_size,
+                      task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
+                      task->wait_for_future, task->state, list_size(task->message_queues), msgcount,
+                      stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count
+                      );
 
         it = it->next(it);
     }

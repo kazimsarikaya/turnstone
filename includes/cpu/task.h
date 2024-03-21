@@ -252,7 +252,7 @@ void task_current_task_sleep(uint64_t wake_tick);
 void task_end_task(void);
 void task_kill_task(uint64_t task_id, boolean_t force);
 
-void task_print_all(void);
+void task_print_all(buffer_t* buffer);
 
 buffer_t* task_get_task_input_buffer(uint64_t tid);
 buffer_t* task_get_task_output_buffer(uint64_t tid);

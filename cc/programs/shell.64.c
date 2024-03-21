@@ -332,7 +332,11 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
             res = 0;
         }
     } else if(strcmp(command, "ps") == 0) {
-        task_print_all();
+        buffer_t* buffer = buffer_new();
+        task_print_all(buffer);
+        char_t* buffer_data = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
+        printf("%s", buffer_data);
+        memory_free(buffer_data);
         res = 0;
     } else if(strcmp(command, "date") == 0 || strcmp(command, "time") == 0) {
         timeparsed_t tp;
