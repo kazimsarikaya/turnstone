@@ -308,6 +308,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\ttosdb\t\t: tosdb commands\n"
                "\tkill\t\t: kills a process with pid\n"
                "\tmodule\t\t: module(library) utils\n"
+               "\tlog\t\t: configures the log level\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
@@ -380,6 +381,16 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         } else {
             task_kill_task(pid, force);
             res = 0;
+        }
+    } else if(strcmp(command, "log") == 0) {
+        char_t* log_module = shell_argument_parser_advance(&parser);
+        char_t* log_level = shell_argument_parser_advance(&parser);
+
+        if(!log_module || !log_level) {
+            printf("Usage: log <module> <level>\n");
+            res = -1;
+        } else {
+            res = logging_set_level_by_string_values(log_module, log_level);
         }
     } else {
         printf("Unknown command: %s\n", command);

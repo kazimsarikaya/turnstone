@@ -287,5 +287,6 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
 
 #define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
 
+int8_t logging_set_level_by_string_values(const char_t* module, const char_t* level);
 
 #endif
