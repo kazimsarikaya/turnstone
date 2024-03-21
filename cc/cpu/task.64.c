@@ -695,16 +695,16 @@ static char_t task_switch_task_id_buf[100] = {0};
 __attribute__((no_stack_protector)) void task_switch_task(void) {
     task_t* current_task = cpu_state->current_task;
 
-    if(current_task->state != TASK_STATE_ENDED) {
-        if(!current_task->message_waiting &&
-           !current_task->sleeping &&
-           (time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
-           time_timer_get_tick_count() > current_task->last_tick_count) {
+    if(current_task != cpu_state->idle_task &&
+       current_task->state != TASK_STATE_ENDED &&
+       !current_task->message_waiting &&
+       !current_task->sleeping &&
+       (time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
+       time_timer_get_tick_count() > current_task->last_tick_count) {
 
-            task_switch_task_exit_prep();
+        task_switch_task_exit_prep();
 
-            return;
-        }
+        return;
     }
 
     if(current_task->vmcs_physical_address) {
