@@ -53,6 +53,7 @@ INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 ASSETSDIR = assets
+ASSETOBJDIR = $(OBJDIR)/assets
 EFISRCDIR = efi
 UTILSSRCDIR = utils
 
@@ -98,17 +99,17 @@ DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.h)
 DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.c)
 DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.h)
 
-#FONTSRC = https://www.zap.org.au/projects/console-fonts-distributed/psftx-debian-9.4/Lat15-Terminus24x12.psf
-FONTOBJ = $(CCOBJDIR)/font.o
-MOUSEOBJ = $(CCOBJDIR)/mouse_data.o
+ASSETS = $(shell find $(ASSETSDIR) -type f)
+ASSETOBJS = $(patsubst %,$(OBJDIR)/%.data.o,$(ASSETS))
 
-OBJS = $(ASOBJS) $(CC64OBJS) $(FONTOBJ) $(MOUSEOBJ) $(CC64ASMOUTS)
+OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
 ifeq (,$(wildcard $(TOSDBIMG)))
-LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)
+LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS)
 else
 LASTCCOBJS = $(shell find $(CCOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
+LASTCCOBJS += $(shell find $(ASSETOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
 endif
 
 MKDIRSDONE = .mkdirsdone
@@ -168,6 +169,7 @@ test: qemu-test
 gendirs:
 	mkdir -p $(CCGENDIR) $(INCLUDESGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
 	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
+	find $(ASSETSDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
 	make -C efi gendirs
 	make -C tests gendirs
 	make -C utils gendirs
@@ -190,7 +192,7 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(FONTOBJ) $(MOUSEOBJ)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS)
 	$(TOSDBIMG_BUILDER) -o $@ $(LASTCCOBJS)
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
@@ -229,15 +231,8 @@ $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
 $(SUBDIRS):
 	$(MAKE) -j $(nproc) -C $@
 
-$(FONTOBJ):
-	echo -n turnstone.kernel.hw.video > $(OBJDIR)/font.module_name.txt
-	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.font --redefine-sym _binary_assets_font_psf_start=font_data_start --redefine-sym _binary_assets_font_psf_end=font_data_end --redefine-sym _binary_assets_font_psf_size=font_data_size --add-section .___module___=$(OBJDIR)/font.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.video $(ASSETSDIR)/font.psf $@
-	rm -f $(OBJDIR)/font.module_name.txt
-
-$(MOUSEOBJ):
-	echo -n turnstone.kernel.hw.video > $(OBJDIR)/mouse.module_name.txt
-	$(OBJCOPY) -O elf64-x86-64 -B i386 -I binary --rename-section .data=.rodata.mouse --redefine-sym _binary_assets_mouse_tga_start=mouse_data_start --redefine-sym _binary_assets_mouse_tga_end=mouse_data_end --redefine-sym _binary_assets_mouse_tga_size=mouse_data_size --add-section .___module___=$(OBJDIR)/mouse.module_name.txt --add-symbol ___module___=.___module___:turnstone.kernel.hw.mouse $(ASSETSDIR)/mouse.tga $@
-	rm -f $(OBJDIR)/mouse.module_name.txt
+$(ASSETOBJS): $(ASSETS) 
+	scripts/assets/build.sh $@
 
 clean:
 	rm -fr $(DOCSOBJDIR)/*

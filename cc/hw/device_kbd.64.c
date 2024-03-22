@@ -32,6 +32,7 @@ boolean_t kbd_is_usb = false;
 
 volatile wchar_t kbd_ps2_tmp = NULL;
 extern uint64_t shell_task_id;
+extern uint64_t windowmanager_task_id;
 
 kbd_state_t kbd_state = {0, 0, 0, 0, 0};
 
@@ -80,6 +81,10 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
         if(shell_task_id != 0) {
             task_set_interrupt_received(shell_task_id);
+        }
+
+        if(windowmanager_task_id != 0) {
+            task_set_interrupt_received(windowmanager_task_id);
         }
     }
 

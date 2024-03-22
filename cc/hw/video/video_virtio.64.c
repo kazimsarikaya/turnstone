@@ -580,7 +580,7 @@ void virtio_gpu_mouse_init(void) {
     virtio_gpu_wrapper->mouse_resource_id = mouse_resource_id;
 
     create_hdr->resource_id = mouse_resource_id;
-    create_hdr->format = VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM;
+    create_hdr->format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
     create_hdr->width = mouse_width;
     create_hdr->height = mouse_height;
 

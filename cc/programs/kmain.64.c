@@ -37,7 +37,7 @@
 #include <network.h>
 #include <crc.h>
 #include <device/hpet.h>
-#include <shell.h>
+#include <windowmanager.h>
 #include <driver/usb.h>
 #include <driver/usb_mass_storage_disk.h>
 #include <stdbufs.h>
@@ -392,8 +392,8 @@ int8_t kmain64(size_t entry_point) {
         }
     }
 
-    if(shell_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init shell. Halting...");
+    if(windowmanager_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init window manager. Halting...");
         cpu_hlt();
     }
 
