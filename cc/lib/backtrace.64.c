@@ -160,7 +160,17 @@ void backtrace_print_location_and_stackframe_by_rip(uint64_t rip, stackframe_t* 
     backtrace_print(frame);
 }
 
-static inline stackframe_t* backtrace_validate_stackframe(stackframe_t* frame) {
+stackframe_t* backtrace_get_stackframe(void) {
+    stackframe_t* frame = NULL;
+
+    asm ("mov %%rbp, %0\n" : "=r" (frame));
+
+    frame += 2;
+
+    return frame;
+}
+
+void backtrace_print(stackframe_t* frame) {
     task_t* task = task_get_current_task();
 
     program_header_t* ph = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
@@ -171,8 +181,8 @@ static inline stackframe_t* backtrace_validate_stackframe(stackframe_t* frame) {
 
     if(task) {
         PRINTLOG(KERNEL, LOG_ERROR, "Task Id: %llx", task->task_id);
-        stack_end = (uint64_t)task->stack;
-        stack_start = stack_end - task->stack_size;
+        stack_start = (uint64_t)task->stack;
+        stack_end = stack_start + task->stack_size;
         stack_size = task->stack_size;
     } else {
         stack_start = ph->program_stack_virtual_address;
@@ -183,54 +193,26 @@ static inline stackframe_t* backtrace_validate_stackframe(stackframe_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "Stack start: 0x%llx end: 0x%llx size: 0x%llx", stack_start, stack_end, stack_size);
 
     if(stack_start == 0 || stack_end == 0) {
-        return NULL;
+        return;
     }
 
-    if((uint64_t)frame < stack_start) {
-        return NULL;
-    }
-
-    if((uint64_t)frame > stack_end) {
-        return NULL;
-    }
-
-    /*
-       if(frame->rip < ph->section_locations[LINKER_SECTION_TYPE_TEXT].section_start) {
-        return NULL;
-       }
-
-       if(frame->rip > ph->section_locations[LINKER_SECTION_TYPE_TEXT].section_start + ph->section_locations[LINKER_SECTION_TYPE_TEXT].section_size) {
-        return NULL;
-       }
-     */
-
-    return frame;
-}
-
-stackframe_t* backtrace_get_stackframe(void) {
-    stackframe_t* frame = NULL;
-
-    asm ("mov %%rbp, %0\n" : "=r" (frame));
-
-    frame += 2;
-
-    return backtrace_validate_stackframe(frame);
-}
-
-void backtrace_print(stackframe_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "Trace by frame 0x%p:", frame);
-
-    if(!frame) {
-        return;
-    }
-
-    if((frame->rip < (2 << 20) || frame->rip > (256 << 20))) {
-        return;
-    }
 
     uint8_t max_frames = 20;
 
     while(max_frames--) {
+        if(!frame) {
+            return;
+        }
+
+        if((uint64_t)frame < stack_start) {
+            return;
+        }
+
+        if((uint64_t)frame > stack_end) {
+            return;
+        }
+
         linker_global_offset_table_entry_t* got_entry = (linker_global_offset_table_entry_t*)backtrace_get_symbol_entry(frame->rip);
 
         if(got_entry) {
@@ -242,16 +224,6 @@ void backtrace_print(stackframe_t* frame) {
         }
 
         frame = frame->previous;
-
-        if(!frame) {
-            break;
-        }
-
-        if((frame->rip < (2 << 20) || frame->rip > (256 << 20))) {
-            break;
-        }
-
-        // frame = backtrace_validate_stackframe(frame);
     }
 
     // cpu_hlt();
