@@ -530,9 +530,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
         video_copy_contents_to_frame_buffer((uint8_t*)screen_va, screen_width, screen_height, screen_width);
         video_refresh_frame_buffer_address();
-        cpu_cli();
         VIDEO_DISPLAY_FLUSH = virtio_gpu_display_flush;
-        cpu_sti();
     }
 
     VIDEO_DISPLAY_FLUSH(scanout, 0, 0, 0, screen_width, screen_height);

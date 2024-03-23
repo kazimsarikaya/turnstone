@@ -35,11 +35,10 @@ extern video_psf2_font_t font_data_end;
 /**
  * @brief scrolls video up for one line
  */
-void    video_graphics_scroll(void);
-wchar_t video_get_wc(const char_t* string, int64_t * idx);
-void    video_text_print(const char_t* string);
-void    video_graphics_print(const char_t* string);
-void    video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+void video_graphics_scroll(void);
+void video_text_print(const char_t* string);
+void video_graphics_print(const char_t* string);
+void video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;

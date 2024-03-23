@@ -105,4 +105,5 @@ void video_print(const char_t* string);
 int8_t video_move_text_cursor(int32_t x, int32_t y);
 
 graphics_raw_image_t* video_get_mouse_image(void);
+wchar_t               video_get_wc(const char_t* string, int64_t * idx);
 #endif

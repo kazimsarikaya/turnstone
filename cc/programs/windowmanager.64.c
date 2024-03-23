@@ -115,12 +115,16 @@ static void windowmanager_print_text(const window_t* window, int32_t x, int32_t 
         return;
     }
 
-    while(*text) {
-        if(*text == '\n') {
+    int64_t i = 0;
+
+    while(text[i]) {
+        wchar_t wc = video_get_wc(text + i, &i);
+
+        if(wc == '\n') {
             y += FONT_HEIGHT;
             x = 0;
         } else {
-            windowmanager_print_glyph(window, x, y, *text);
+            windowmanager_print_glyph(window, x, y, wc);
             x += FONT_WIDTH;
         }
 
@@ -326,7 +330,8 @@ static window_t* windowmanager_create_main_window(void) {
 }
 #pragma GCC diagnostic pop
 
-static boolean_t windowmanager_draw_window(window_t* window) {
+boolean_t windowmanager_draw_window(window_t* window);
+boolean_t windowmanager_draw_window(window_t* window) {
     if(window == NULL) {
         video_text_print("window is NULL");
         return false;
@@ -344,16 +349,18 @@ static boolean_t windowmanager_draw_window(window_t* window) {
         gfx_draw_rectangle(window->buffer, window->rect.width, window->rect, window->background_color.color);
 
         windowmanager_print_text(window, 0, 0, window->text);
+
+        window->is_dirty = false;
     }
 
     for (size_t i = 0; i < list_size(window->children); i++) {
         window_t* child = (window_t*)list_get_data_at_position(window->children, i);
-        child->is_dirty = child->is_dirty || window->is_dirty;
-        flush_needed = flush_needed || windowmanager_draw_window(child);
-    }
 
-    if(window->is_dirty) {
-        window->is_dirty = false;
+        child->is_dirty = flush_needed || child->is_dirty;
+
+        boolean_t child_flush_needed = windowmanager_draw_window(child);
+
+        flush_needed = flush_needed || child_flush_needed;
     }
 
     return flush_needed;
@@ -506,7 +513,8 @@ int8_t windowmanager_init(void) {
     windowmanager_task_id = task_create_task(heap, 32 << 20, 64 << 10, windowmanager_main, 0, NULL, "windowmanager");
 
     while(!windowmanager_initialized) {
-        task_yield();
+        cpu_sti();
+        cpu_idle();
     }
 
     return windowmanager_task_id == -1ULL ? -1 : 0;
