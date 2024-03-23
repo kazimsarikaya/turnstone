@@ -356,11 +356,11 @@ boolean_t windowmanager_draw_window(window_t* window) {
     for (size_t i = 0; i < list_size(window->children); i++) {
         window_t* child = (window_t*)list_get_data_at_position(window->children, i);
 
-        child->is_dirty = flush_needed || child->is_dirty;
+        child->is_dirty = flush_needed | child->is_dirty;
 
-        boolean_t child_flush_needed = windowmanager_draw_window(child);
+        // boolean_t child_flush_needed = windowmanager_draw_window(child);
 
-        flush_needed = flush_needed || child_flush_needed;
+        flush_needed = flush_needed | windowmanager_draw_window(child);
     }
 
     return flush_needed;
