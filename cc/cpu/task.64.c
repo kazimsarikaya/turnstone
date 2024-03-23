@@ -782,6 +782,7 @@ void task_end_task(void) {
     int64_t ret = 0;
 
     if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
+        task_task_switch_exit();
         PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx", current_task->task_name, current_task->task_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
     }
@@ -938,7 +939,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->arguments_count = args_cnt;
     new_task->arguments = args;
 
-    registers->rflags = 0x202;
+    registers->rflags = 0x002;
 
     uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
     cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
@@ -951,13 +952,13 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
     registers->rbp = rbp;
-    registers->rsp = rbp - 24; // 24 is for last return address, entry point and end task
+    registers->rsp = rbp - 16; // 24 is for last return address, entry point and end task
 
 
     uint64_t* stack = (uint64_t*)rbp;
     stack[-1] = 0; // (uint64_t)task_end_task;
     stack[-2] = (uint64_t)task_end_task; // entry_point;
-    stack[-3] = (uint64_t)task_task_switch_exit;
+    // stack[-3] = (uint64_t)task_task_switch_exit;
 
 
     new_task->input_buffer = buffer_create_with_heap(task_heap, 0x1000);
@@ -1091,7 +1092,7 @@ int8_t task_create_idle_task(void) {
     new_task->task_id = apic_get_local_apic_id() + 1;
     new_task->cpu_id = apic_get_local_apic_id();
 
-    new_task->state = TASK_STATE_SUSPENDED;
+    new_task->state = TASK_STATE_CREATED;
     new_task->entry_point = task_idle_task;
     new_task->page_table = memory_paging_get_table();
     new_task->registers = registers;
@@ -1099,7 +1100,7 @@ int8_t task_create_idle_task(void) {
     new_task->stack = (void*)stack_va;
     new_task->task_name = strdup_at_heap(heap, "idle");
 
-    registers->rflags = 0x202;
+    registers->rflags = 0x002;
 
     uint64_t cr3_fa = (uint64_t)new_task->page_table->page_table;
     cr3_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(cr3_fa);
@@ -1112,12 +1113,13 @@ int8_t task_create_idle_task(void) {
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
     registers->rbp = rbp;
-    registers->rsp = rbp - 24;
+    registers->rsp = rbp - 16;
 
     uint64_t* stack = (uint64_t*)rbp;
-    stack[-1] = (uint64_t)task_end_task;
-    stack[-2] = (uint64_t)new_task->entry_point;
-    stack[-3] = (uint64_t)task_task_switch_exit;
+    stack[-1] = 0; // (uint64_t)task_end_task;
+    stack[-2] = (uint64_t)task_end_task;
+    // stack[-2] = (uint64_t)new_task->entry_point;
+    // stack[-3] = (uint64_t)task_task_switch_exit;
 
     cpu_state->idle_task = new_task;
 
