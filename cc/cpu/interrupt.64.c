@@ -212,6 +212,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         interrupt_irqs[irqnum] = memory_malloc_ext(heap, sizeof(interrupt_irq_list_item_t), 0x0);
 
         if(interrupt_irqs[irqnum] == NULL) {
+            cpu_sti();
             return -1;
         }
 
@@ -237,6 +238,7 @@ int8_t interrupt_irq_set_handler(uint8_t irqnum, interrupt_irq irq) {
         item->next = memory_malloc_ext(heap, sizeof(interrupt_irq_list_item_t), 0x0);
 
         if(item->next == NULL) {
+            cpu_sti();
             return -1;
         }
 

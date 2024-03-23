@@ -502,19 +502,7 @@ int8_t apic_ioapic_switch_irq(uint8_t irq, uint32_t disabled){
 void  apic_eoi(void) {
     if(apic_enabled) {
         if(apic_x2apic) {
-            // write msr should be inline assembly
-            asm volatile (
-                "pushq %rax\n"
-                "pushq %rdx\n"
-                "pushq %rcx\n"
-                "movq $0x80B, %rcx\n"
-                "xorq %rdx, %rdx\n"
-                "xorq %rax, %rax\n"
-                "wrmsr\n"
-                "popq %rcx\n"
-                "popq %rdx\n"
-                "popq %rax\n"
-                );
+            cpu_write_msr(APIC_X2APIC_MSR_EOI, 0);
         } else {
             volatile uint32_t* eio = (volatile uint32_t*)(lapic_addr + APIC_REGISTER_OFFSET_EOI);
             *eio = 0;
