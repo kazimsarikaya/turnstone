@@ -38,16 +38,16 @@ file_ext=${file_name_base##*.}
 echo "Copying asset: ${asset} ${module_name}"
 
 
-echo -n ${module_name} > ${OUTPUTDIR}/module_name.txt
+echo -n ${module_name} > ${OUTPUTDIR}/module_name_${file_name}.txt
 
 ${OBJCOPY} -O elf64-x86-64 -B i386 -I binary \
     --rename-section .data=.rodata.${file_name} \
     --redefine-sym _binary_${asset_under}_start=${file_name}_data_start \
     --redefine-sym _binary_${asset_under}_end=${file_name}_data_end \
     --redefine-sym _binary_${asset_under}_size=${file_name}_data_size \
-    --add-section .___module___=${OUTPUTDIR}/module_name.txt \
+    --add-section .___module___=${OUTPUTDIR}/module_name_${file_name}.txt \
     --add-symbol ___module___=.___module___:${module_name} \
     ${INPUT_FILE} ${OUTPUT_FILE}
 
-rm -f ${OUTPUTDIR}/module_name.txt
+rm -f ${OUTPUTDIR}/module_name_${file_name}.txt
 
