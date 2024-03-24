@@ -7,6 +7,7 @@
  */
 
 #include <windowmanager.h>
+#include <strings.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -23,7 +24,7 @@ window_t* windowmanager_create_greater_window(void) {
     window->is_visible = true;
     window->is_dirty = true;
 
-    char_t* windowmanager_turnstone_ascii_art = (char_t*)&tos_logo_data_start;
+    char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
     rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, 2000);
     rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
@@ -33,7 +34,7 @@ window_t* windowmanager_create_greater_window(void) {
                                                   windowmanager_turnstone_ascii_art,
                                                   rect,
                                                   (color_t){.color = 0x00000000},
-                                                  (color_t){.color = 0xFFFF8822});
+                                                  (color_t){.color = 0xFF2288FF});
 
     if(child == NULL) {
         memory_free(window);
@@ -47,12 +48,14 @@ window_t* windowmanager_create_greater_window(void) {
     int32_t old_y = rect.y;
     int32_t old_height = rect.height;
 
-    rect = windowmanager_calc_text_rect("Press F2 to open panel", 2000);
+    char_t* text = strdup("Press F2 to open panel");
+
+    rect = windowmanager_calc_text_rect(text, 2000);
     rect.x = old_x;
     rect.y = old_y + old_height + 4 * FONT_HEIGHT;
 
     child = windowmanager_create_window(window,
-                                        "Press F2 to open panel",
+                                        text,
                                         rect,
                                         (color_t){.color = 0x00000000},
                                         (color_t){.color = 0xFF00FF00});

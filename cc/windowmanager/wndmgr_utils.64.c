@@ -8,6 +8,9 @@
 
 #include <windowmanager.h>
 #include <utils.h>
+#include <strings.h>
+
+void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
 
@@ -67,6 +70,8 @@ void windowmanager_print_text(const window_t* window, int32_t x, int32_t y, cons
 }
 
 void windowmanager_clear_screen(window_t* window) {
+    video_move_text_cursor(0, 0);
+    video_text_cursor_hide();
     for(int32_t i = 0; i < VIDEO_GRAPHICS_HEIGHT; i++) {
         for(int32_t j = 0; j < VIDEO_GRAPHICS_WIDTH; j++) {
             *((pixel_t*)(VIDEO_BASE_ADDRESS + (i * VIDEO_PIXELS_PER_SCANLINE) + j)) = window->background_color.color;
@@ -87,6 +92,7 @@ rect_t windowmanager_calc_text_rect(const char_t* text, int32_t max_width) {
     rect.height = 0;
 
     int32_t max_calc_width = 0;
+    size_t len = strlen(text);
 
     while(*text) {
         if(*text == '\n') {
@@ -107,6 +113,10 @@ rect_t windowmanager_calc_text_rect(const char_t* text, int32_t max_width) {
     }
 
     rect.width = MAX(rect.width, max_calc_width);
+
+    if(len > 0 && rect.height == 0) {
+        rect.height = FONT_HEIGHT;
+    }
 
     return rect;
 }

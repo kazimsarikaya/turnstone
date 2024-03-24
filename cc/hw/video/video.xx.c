@@ -325,7 +325,9 @@ static void video_print_glyph(wchar_t wc) {
     }
 }
 
-static void video_text_cursor_toggle(boolean_t flush) {
+boolean_t video_text_cursor_visible = true;
+
+void video_text_cursor_toggle(boolean_t flush) {
     int32_t offs = (cursor_graphics_y * FONT_HEIGHT * VIDEO_PIXELS_PER_SCANLINE) + (cursor_graphics_x * FONT_WIDTH);
     uint32_t orig_offs = offs;
 
@@ -344,8 +346,22 @@ static void video_text_cursor_toggle(boolean_t flush) {
         offs  += VIDEO_PIXELS_PER_SCANLINE;
     }
 
+    video_text_cursor_visible = !video_text_cursor_visible;
+
     if(flush) {
         VIDEO_DISPLAY_FLUSH(0, orig_offs * sizeof(pixel_t), cursor_graphics_x * FONT_WIDTH, cursor_graphics_y * FONT_HEIGHT, FONT_WIDTH, FONT_HEIGHT);
+    }
+}
+
+void video_text_cursor_hide(void) {
+    if(video_text_cursor_visible) {
+        video_text_cursor_toggle(true);
+    }
+}
+
+void video_text_cursor_show(void) {
+    if(!video_text_cursor_visible) {
+        video_text_cursor_toggle(true);
     }
 }
 
@@ -555,10 +571,6 @@ int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, 
 }
 
 int8_t video_move_text_cursor(int32_t x, int32_t y) {
-    if(GRAPHICS_MODE) {
-        return -1;
-    }
-
     if(x >= VIDEO_GRAPHICS_WIDTH || y >= VIDEO_GRAPHICS_HEIGHT || x < 0 || y < 0) {
         return -1;
     }

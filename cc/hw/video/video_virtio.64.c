@@ -350,7 +350,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     virtio_gpu_wrapper->fence_ids[scanout] = 1;
 
     create_hdr->resource_id = screen_resource_id;
-    create_hdr->format = VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM;
+    create_hdr->format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
     create_hdr->width = screen_width;
     create_hdr->height = screen_height;
 

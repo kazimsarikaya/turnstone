@@ -18,6 +18,7 @@
 #include <device/mouse.h>
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
+#include <strings.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -46,7 +47,6 @@ static int8_t windowmanager_main(void) {
     shell_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
 
-    video_move_text_cursor(0, 0);
     windowmanager_clear_screen(windowmanager_current_window);
     VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
 
@@ -90,8 +90,20 @@ static int8_t windowmanager_main(void) {
         if(mouse_length) {
             mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
 
+            mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
+
             if(VIDEO_MOVE_CURSOR) {
-                VIDEO_MOVE_CURSOR(mouse_data[mouse_ev_cnt - 1].x, mouse_data[mouse_ev_cnt - 1].y);
+                VIDEO_MOVE_CURSOR(last->x, last->y);
+            }
+
+            if(last->buttons & MOUSE_BUTTON_LEFT) {
+                char_t* blabla = sprintf("Mouse left button pressed at %d, %d", last->x, last->y);
+                video_text_print(blabla);
+                memory_free(blabla);
+
+                video_text_cursor_hide();
+                video_move_text_cursor(last->x / FONT_WIDTH, last->y / FONT_HEIGHT);
+                video_text_cursor_show();
             }
         }
 
@@ -123,6 +135,8 @@ static int8_t windowmanager_main(void) {
                         if(options_window != NULL) {
                             windowmanager_insert_and_set_current_window(options_window);
                         }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
+                        windowmanager_remove_and_set_current_window(windowmanager_current_window);
                     }
                 }
             }

@@ -11,6 +11,8 @@
 
 MODULE("turnstone.windowmanager");
 
+void video_text_print(const char_t* text);
+
 uint64_t windowmanager_next_window_id = 0;
 window_t* windowmanager_current_window = NULL;
 hashmap_t* windowmanager_windows = NULL;
@@ -36,7 +38,7 @@ window_t* windowmanager_create_top_window(void) {
 }
 
 
-window_t* windowmanager_create_window(window_t* parent, const char_t* text, rect_t rect, color_t background_color, color_t foreground_color) {
+window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rect, color_t background_color, color_t foreground_color) {
     window_t* window = memory_malloc(sizeof(window_t));
 
     if(window == NULL) {
@@ -67,6 +69,8 @@ void windowmanager_insert_and_set_current_window(window_t* window) {
         return;
     }
 
+    video_text_cursor_hide();
+
     window_t* next = windowmanager_current_window->next;
 
     window->next = next;
@@ -95,7 +99,34 @@ void windowmanager_destroy_window(window_t* window) {
         list_destroy(window->children);
     }
 
+    memory_free(window->text);
     memory_free(window);
+}
+
+void windowmanager_remove_and_set_current_window(window_t* window) {
+    if(window == NULL) {
+        return;
+    }
+
+    if(window->prev == NULL) {
+        return;
+    }
+
+    video_text_cursor_hide();
+
+    window_t* next = windowmanager_current_window->next;
+    window_t* prev = window->prev;
+
+    prev->next = next;
+
+    if(next != NULL) {
+        next->prev = prev;
+    }
+
+    windowmanager_current_window = prev;
+    windowmanager_current_window->is_dirty = true;
+
+    windowmanager_destroy_window(window);
 }
 
 

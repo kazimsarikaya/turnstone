@@ -37,17 +37,17 @@ struct rect_t {
 };
 
 struct window_t {
-    uint64_t      id;
-    const char_t* text;
-    boolean_t     is_dirty;
-    boolean_t     is_visible;
-    rect_t        rect;
-    pixel_t*      buffer;
-    color_t       background_color;
-    color_t       foreground_color;
-    window_t*     next;
-    window_t*     prev;
-    list_t*       children;
+    uint64_t  id;
+    char_t*   text;
+    boolean_t is_dirty;
+    boolean_t is_visible;
+    rect_t    rect;
+    pixel_t*  buffer;
+    color_t   background_color;
+    color_t   foreground_color;
+    window_t* next;
+    window_t* prev;
+    list_t*   children;
 };
 
 
@@ -76,8 +76,9 @@ uint32_t  windowmanager_append_wchar_to_buffer(wchar_t src, char_t* dst, uint32_
 
 void      windowmanager_destroy_window(window_t* window);
 void      windowmanager_insert_and_set_current_window(window_t* window);
+void      windowmanager_remove_and_set_current_window(window_t* window);
 window_t* windowmanager_create_top_window(void);
-window_t* windowmanager_create_window(window_t* parent, const char_t* text, rect_t rect, color_t background_color, color_t foreground_color);
+window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rect, color_t background_color, color_t foreground_color);
 
 window_t* windowmanager_create_greater_window(void);
 window_t* windowmanager_create_primary_options_window(void);

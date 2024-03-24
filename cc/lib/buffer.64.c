@@ -590,17 +590,20 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             // float128_t fval = 0; // TODO: float128_t ops
             float64_t fval = 0;
             number_t prec = 6;
+            char_t filler = ' ';
 
             while(1) {
                 wfmtb = 1;
 
                 switch (*fmt) {
                 case '0':
+                case ' ':
+                    filler = *fmt;
                     fmt++;
-                    val = *fmt - 0x30;
+                    val = *fmt - '0';
                     fmt++;
                     if(*fmt >= '0' && *fmt <= '9') {
-                        val = val * 10 + *fmt - 0x30;
+                        val = val * 10 + *fmt - '0';
                         fmt++;
                     }
                     wfmtb = 0;
@@ -655,7 +658,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     }
 
                     for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = '0';
+                        buf[idx] = filler;
                         buf[idx + 1] = '\0';
                         cnt++;
                     }
@@ -690,7 +693,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     slen = strlen(ito_buf);
 
                     for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = '0';
+                        buf[idx] = filler;
                         buf[idx + 1] = '\0';
                         cnt++;
                     }
@@ -729,7 +732,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     slen = strlen(ito_buf);
 
                     for(idx = 0; idx < val - slen; idx++) {
-                        buf[idx] = '0';
+                        buf[idx] = filler;
                         buf[idx + 1] = '\0';
                         cnt++;
                     }
