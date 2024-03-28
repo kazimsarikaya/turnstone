@@ -99,7 +99,10 @@ void windowmanager_destroy_window(window_t* window) {
         list_destroy(window->children);
     }
 
-    memory_free(window->text);
+    if(!window->is_text_readonly){
+        memory_free(window->text);
+    }
+
     memory_free(window);
 }
 

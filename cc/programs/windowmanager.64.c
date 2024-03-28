@@ -53,12 +53,12 @@ static int8_t windowmanager_main(void) {
     windowmanager_initialized = true;
 
     while(true) {
-        // windowmanager_clear_screen(windowmanager_current_window);
         boolean_t flush_needed = windowmanager_draw_window(windowmanager_current_window);
 
 
         if(flush_needed) {
             VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+            video_text_cursor_show();
         }
 
         while(list_size(mq) == 0) {
@@ -97,10 +97,6 @@ static int8_t windowmanager_main(void) {
             }
 
             if(last->buttons & MOUSE_BUTTON_LEFT) {
-                char_t* blabla = sprintf("Mouse left button pressed at %d, %d", last->x, last->y);
-                video_text_print(blabla);
-                memory_free(blabla);
-
                 video_text_cursor_hide();
                 video_move_text_cursor(last->x / FONT_WIDTH, last->y / FONT_HEIGHT);
                 video_text_cursor_show();
@@ -123,7 +119,11 @@ static int8_t windowmanager_main(void) {
         for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
             if(kbd_data[i].is_pressed) {
                 if(kbd_data[i].is_printable) {
-                    data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
+                    if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
+                        windowmanager_current_window->on_enter(windowmanager_current_window);
+                    } else {
+                        data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
+                    }
                 } else {
                     if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
                         data[data_idx++] = '\b';
@@ -137,6 +137,22 @@ static int8_t windowmanager_main(void) {
                         }
                     } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
                         windowmanager_remove_and_set_current_window(windowmanager_current_window);
+                    } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
+                        video_text_cursor_hide();
+                        video_move_text_cursor_relative(0, -1);
+                        video_text_cursor_show();
+                    } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
+                        video_text_cursor_hide();
+                        video_move_text_cursor_relative(0, 1);
+                        video_text_cursor_show();
+                    } else if(kbd_data[i].key == KBD_SCANCODE_LEFT) {
+                        video_text_cursor_hide();
+                        video_move_text_cursor_relative(-1, 0);
+                        video_text_cursor_show();
+                    } else if(kbd_data[i].key == KBD_SCANCODE_RIGHT) {
+                        video_text_cursor_hide();
+                        video_move_text_cursor_relative(1, 0);
+                        video_text_cursor_show();
                     }
                 }
             }
@@ -160,6 +176,14 @@ static int8_t windowmanager_main(void) {
         }
 
         data[4095] = last_char;
+
+        window_t* edit_area = NULL;
+
+        if(windowmanager_find_window_by_text_cursor(windowmanager_current_window, &edit_area)) {
+            if(edit_area != NULL) {
+                windowmanager_set_window_text(edit_area, data);
+            }
+        }
     }
 
     return 0;

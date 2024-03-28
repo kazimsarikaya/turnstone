@@ -8,6 +8,8 @@
 
 #include <windowmanager.h>
 #include <strings.h>
+#include <argumentparser.h>
+#include <acpi.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -99,6 +101,9 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
 
     option_input_text->is_visible = true;
     option_input_text->is_dirty = true;
+    option_input_text->is_writable = true;
+    option_input_text->input_length = strlen(input_text);
+    option_input_text->input_id = "option";
 
     window_t* option_list = windowmanager_create_window(window,
                                                         NULL,
@@ -183,6 +188,79 @@ const char_t*const wnd_primary_options_list[] = {
 
 const char_t* wnd_primary_options_title = "tOS Primary Options Menu";
 
+static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
+    if(window == NULL) {
+        return -1;
+    }
+
+    list_t* inputs = windowmanager_get_input_values(window);
+
+    if(!list_size(inputs)) {
+        list_destroy(inputs);
+        return -1;
+    }
+
+    window_input_value_t* input = (window_input_value_t*)list_queue_pop(inputs);
+
+    argument_parser_t argparser = {input->value, 0};
+
+    char_t* option = argument_parser_advance(&argparser);
+
+    if(option == NULL) {
+        memory_free(input->value);
+        memory_free(input);
+
+        list_destroy(inputs);
+
+        return -1;
+    }
+
+    int32_t option_number = atoi(option);
+
+    video_text_print("Option selected: ");
+    video_text_print(option);
+    video_text_print(" ");
+    video_text_print(wnd_primary_options_list[option_number]);
+    video_text_print("\n");
+
+    switch(option_number) {
+    case 0:
+        break;
+    case 1:
+        break;
+    case 2:
+        break;
+    case 3:
+        break;
+    case 4:
+        break;
+    case 5:
+        acpi_reset();
+        break;
+    case 6:
+        acpi_poweroff();
+        break;
+    default:
+        break;
+    }
+
+
+    memory_free(input->value);
+    memory_free(input);
+
+    list_destroy(inputs);
+
+    return 0;
+}
+
 window_t* windowmanager_create_primary_options_window(void) {
-    return windowmanager_create_options_window(wnd_primary_options_title, wnd_primary_options_list);
+    window_t* pri_opt_wnd = windowmanager_create_options_window(wnd_primary_options_title, wnd_primary_options_list);
+
+    if(pri_opt_wnd == NULL) {
+        return NULL;
+    }
+
+    pri_opt_wnd->on_enter = wndmgr_pri_opts_on_enter;
+
+    return pri_opt_wnd;
 }
