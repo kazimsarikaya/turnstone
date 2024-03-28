@@ -8,6 +8,7 @@
 
 #include <windowmanager.h>
 #include <hashmap.h>
+#include <buffer.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -51,7 +52,7 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     window->id     = windowmanager_next_window_id++;
     window->text  = text;
     window->rect   = (rect_t){abs_x, abs_y, rect.width, rect.height};
-    window->buffer = VIDEO_BASE_ADDRESS + (abs_y * VIDEO_PIXELS_PER_SCANLINE) + abs_x;
+    window->buffer = VIDEO_BASE_ADDRESS; // + (abs_y * VIDEO_PIXELS_PER_SCANLINE) + abs_x;
     window->background_color = background_color;
     window->foreground_color = foreground_color;
 
