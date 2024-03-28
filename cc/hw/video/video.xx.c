@@ -580,3 +580,27 @@ int8_t video_move_text_cursor(int32_t x, int32_t y) {
 
     return 0;
 }
+
+int8_t video_move_text_cursor_relative(int32_t x, int32_t y) {
+    if((cursor_graphics_x + x) >= VIDEO_GRAPHICS_WIDTH ||
+       (cursor_graphics_y + y) >= VIDEO_GRAPHICS_HEIGHT ||
+       (cursor_graphics_x + x) < 0 ||
+       (cursor_graphics_y + y) < 0) {
+        return -1;
+    }
+
+    cursor_graphics_x += x;
+    cursor_graphics_y += y;
+
+    return 0;
+}
+
+void video_text_cursor_get(int32_t* x, int32_t* y) {
+    if(x) {
+        *x = cursor_graphics_x;
+    }
+
+    if(y) {
+        *y = cursor_graphics_y;
+    }
+}

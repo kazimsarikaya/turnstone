@@ -103,6 +103,8 @@ void video_set_color(uint32_t foreground, uint32_t background);
 void video_print(const char_t* string);
 
 int8_t video_move_text_cursor(int32_t x, int32_t y);
+int8_t video_move_text_cursor_relative(int32_t x, int32_t y);
+void   video_text_cursor_get(int32_t* x, int32_t* y);
 void   video_text_cursor_toggle(boolean_t flush);
 void   video_text_cursor_hide(void);
 void   video_text_cursor_show(void);
