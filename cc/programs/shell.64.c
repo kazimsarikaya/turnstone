@@ -26,6 +26,7 @@
 #include <list.h>
 #include <tosdb/tosdb_manager.h>
 #include <linker.h>
+#include <argumentparser.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -35,69 +36,10 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 buffer_t* shell_buffer = NULL;
 buffer_t* mouse_buffer = NULL;
 
-typedef struct shell_argument_parser_t {
-    char_t*  arguments;
-    uint32_t idx;
-} shell_argument_parser_t;
-
-static char_t* shell_argument_parser_advance(shell_argument_parser_t* parser) {
-    if(parser == NULL) {
-        return NULL;
-    }
-
-    if(parser->arguments == NULL) {
-        return NULL;
-    }
-
-    if(parser->arguments[parser->idx] == NULL) {
-        return NULL;
-    }
-
-    uint32_t i = parser->idx;
-
-    while(parser->arguments[i] == ' ') { // trim spaces
-        i++;
-    }
-
-    char_t* start = &parser->arguments[i]; // save start
-
-    if(start[0] == '\'' || start[0] == '\"'){
-        char_t quote = start[0];
-        start++;
-        i++;
-
-        while(parser->arguments[i] != quote && parser->arguments[i] != NULL) { // find end
-            i++;
-        }
-
-        if(parser->arguments[i] == quote) {
-            parser->arguments[i] = NULL;
-            i++;
-        } else {
-            printf("Cannot parse argument: -%s-\n", start);
-            return NULL;
-        }
-    } else {
-        while(parser->arguments[i] != ' ' && parser->arguments[i] != NULL) { // find end
-            i++;
-        }
-
-        if(parser->arguments[i] == ' ') { // replace space with null
-            parser->arguments[i] = NULL;
-            i++;
-        }
-    }
-
-    parser->idx = i; // save new index
-
-    return start;
-}
-
-
 static int8_t shell_handle_module_command(char_t* arguments) {
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
-    char_t* command = shell_argument_parser_advance(&parser);
+    char_t* command = argument_parser_advance(&parser);
 
     if(strncmp("list", command, 6) == 0) {
         linker_print_modules_at_memory();
@@ -113,7 +55,7 @@ static int8_t shell_handle_module_command(char_t* arguments) {
         return -1;
     }
 
-    command = shell_argument_parser_advance(&parser);
+    command = argument_parser_advance(&parser);
 
     if(strncmp(command, "info", 4) == 0){
         linker_print_module_info_at_memory(module_id);
@@ -128,9 +70,9 @@ static int8_t shell_handle_module_command(char_t* arguments) {
 }
 
 static int8_t shell_handle_tosdb_command(char_t* arguments) {
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
-    char_t* command = shell_argument_parser_advance(&parser);
+    char_t* command = argument_parser_advance(&parser);
 
 
     if(strncmp("close", command, 5) == 0) {
@@ -139,7 +81,7 @@ static int8_t shell_handle_tosdb_command(char_t* arguments) {
         return tosdb_manager_init();
     } else if(strncmp("clear", command, 5) == 0) {
         // clear takes a force argument
-        char_t* force = shell_argument_parser_advance(&parser);
+        char_t* force = argument_parser_advance(&parser);
 
         if(strncmp(force, "force", 5) == 0) {
             return tosdb_manager_clear();
@@ -156,12 +98,12 @@ static int8_t shell_handle_tosdb_command(char_t* arguments) {
 }
 
 static int8_t shell_handle_vm_command(char_t* arguments) {
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
-    char_t* command = shell_argument_parser_advance(&parser);
+    char_t* command = argument_parser_advance(&parser);
 
     if(strncmp("create", command, 6) == 0) {
-        char_t* entrypoint = shell_argument_parser_advance(&parser);
+        char_t* entrypoint = argument_parser_advance(&parser);
 
         if(entrypoint == NULL) {
             printf("Usage: vm create <entrypoint_name>\n");
@@ -182,7 +124,7 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
         return -1;
     }
 
-    command = shell_argument_parser_advance(&parser);
+    command = argument_parser_advance(&parser);
 
     if(strncmp(command, "output", 6) == 0) {
 
@@ -287,7 +229,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 
     char_t* arguments = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
 
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
     int8_t res = -1;
 
@@ -319,8 +261,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     } else if(strcmp(command, "reboot") == 0) {
         acpi_reset();
     } else if(strcmp(command, "color") == 0) {
-        char_t* foreground_str = shell_argument_parser_advance(&parser);
-        char_t* background_str = shell_argument_parser_advance(&parser);
+        char_t* foreground_str = argument_parser_advance(&parser);
+        char_t* background_str = argument_parser_advance(&parser);
 
         if(foreground_str == NULL && background_str == NULL) {
             printf("Usage: color <foreground> [<background>]\n");
@@ -366,8 +308,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
     } else if(strcmp(command, "kill") == 0) {
-        uint64_t pid = atoh(shell_argument_parser_advance(&parser));
-        char_t* force_str = shell_argument_parser_advance(&parser);
+        uint64_t pid = atoh(argument_parser_advance(&parser));
+        char_t* force_str = argument_parser_advance(&parser);
         boolean_t force = false;
 
         if(strncmp(force_str, "force", 5) == 0) {
@@ -383,8 +325,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
             res = 0;
         }
     } else if(strcmp(command, "log") == 0) {
-        char_t* log_module = shell_argument_parser_advance(&parser);
-        char_t* log_level = shell_argument_parser_advance(&parser);
+        char_t* log_module = argument_parser_advance(&parser);
+        char_t* log_level = argument_parser_advance(&parser);
 
         if(!log_module || !log_level) {
             printf("Usage: log <module> <level>\n");
