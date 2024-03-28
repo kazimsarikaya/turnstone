@@ -17,6 +17,17 @@
 
 MODULE("turnstone.kernel.hw.pci.utils");
 
+static pci_context_t* pci_context_default = NULL;
+
+pci_context_t* pci_get_context(void) {
+    return pci_context_default;
+}
+
+void pci_set_context(pci_context_t* pci_context) {
+    pci_context_default = pci_context;
+}
+
+
 int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap) {
 
     msix_cap->enable = 1;
@@ -313,4 +324,105 @@ uint32_t pci_io_port_read_data(uint32_t address, uint8_t bc) {
     }
 
     return res;
+}
+
+const pci_dev_t* pci_find_device_by_address(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number) {
+    const pci_context_t* pci_context_current = pci_get_context();
+
+    if(pci_context_current == NULL) {
+        return NULL;
+    }
+
+    if(pci_context_current->display_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_current->display_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->display_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_current->network_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_current->network_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->network_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_current->nvme_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_current->nvme_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->nvme_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_current->sata_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_current->sata_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->sata_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_current->usb_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_current->usb_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->usb_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_current->input_controllers) {
+        for(size_t i = 0; i < list_size(pci_context_current->input_controllers); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->input_controllers, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    if(pci_context_current->other_devices) {
+        for(size_t i = 0; i < list_size(pci_context_current->other_devices); i++) {
+            const pci_dev_t* d = list_get_data_at_position(pci_context_current->other_devices, i);
+
+            if(d->group_number == group_number &&
+               d->bus_number == bus_number &&
+               d->device_number == device_number &&
+               d->function_number == function_number) {
+                return d;
+            }
+        }
+    }
+
+    return NULL;
 }

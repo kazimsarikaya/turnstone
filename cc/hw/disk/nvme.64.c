@@ -9,7 +9,6 @@
 #include <driver/nvme.h>
 #include <pci.h>
 #include <logging.h>
-#include <logging.h>
 #include <memory/frame.h>
 #include <memory/paging.h>
 #include <time/timer.h>
@@ -19,9 +18,7 @@
 #include <utils.h>
 
 
-MODULE("turnstone.kernel.hw.drivers");
-
-void video_text_print(const char* str);
+MODULE("turnstone.kernel.hw.drivers.nvme");
 
 hashmap_t* nvme_disks = NULL;
 hashmap_t* nvme_disk_isr_map = NULL;
@@ -47,14 +44,6 @@ int8_t    nvme_send_admin_command(nvme_disk_t* nvme_disk,
                                   uint32_t     cdw15,
                                   uint32_t*    sdw0);
 
-
-static void video_int_print(uint64_t i) {
-    char str[64];
-    utoh_with_buffer(str, i);
-    video_text_print(str);
-}
-
-
 const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id) {
     return hashmap_get(nvme_disks, (void*)disk_id);
 }
@@ -66,7 +55,6 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
     nvme_disk_t* nvme_disk = (nvme_disk_t*)hashmap_get(nvme_disk_isr_map, (void*)(uint64_t)intnum);
 
     if(nvme_disk == NULL) {
-        video_text_print("nvme disk not found\n");
         apic_eoi();
 
         return 0;
@@ -83,19 +71,17 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
         boolean_t phase = nvme_disk->io_completion_queue[nvme_disk->io_c_queue_head].p;
 
         if(status_code != 0) {
-            video_text_print("!");
+            // TODO: handle error
         }
 
         if(nvme_disk->current_phase != phase) {
-            video_text_print("-");
+            // TODO: handle error phase
         } else {
             lock_t* lock = (lock_t*)hashmap_get(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
             hashmap_delete(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
 
             if(lock == NULL) {
-                video_text_print("nvme lock not found cid: ");
-                video_int_print(cid);
-                video_text_print("\n");
+                // TODO: handle error
             }
 
             lock_release(lock);

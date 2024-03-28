@@ -27,7 +27,7 @@
 #include <hypervisor/hypervisor_macros.h>
 #include <strings.h>
 
-MODULE("turnstone.kernel.cpu.task");
+MODULE("turnstone.kernel.cpu.task.utils");
 
 void video_text_print(const char_t* str);
 

@@ -18,7 +18,7 @@
 #include <time/timer.h>
 #include <utils.h>
 
-MODULE("turnstone.kernel.hw.disk.ahci");
+MODULE("turnstone.kernel.hw.drivers.ahci");
 
 void video_text_print(const char* str);
 

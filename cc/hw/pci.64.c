@@ -39,12 +39,6 @@ iterator_t* pci_iterator_next(iterator_t* iterator);
 int8_t      pci_iterator_end_of_iterator(iterator_t* iterator);
 const void* pci_iterator_get_item(iterator_t* iterator);
 
-static pci_context_t* pci_context_default = NULL;
-
-pci_context_t* pci_get_context(void) {
-    return pci_context_default;
-}
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t pci_setup(memory_heap_t* heap) {
@@ -59,14 +53,22 @@ int8_t pci_setup(memory_heap_t* heap) {
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumerating");
 
-    pci_context_default = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
-    pci_context_default->sata_controllers = list_create_list_with_heap(heap);
-    pci_context_default->nvme_controllers = list_create_list_with_heap(heap);
-    pci_context_default->network_controllers = list_create_list_with_heap(heap);
-    pci_context_default->display_controllers = list_create_list_with_heap(heap);
-    pci_context_default->usb_controllers = list_create_list_with_heap(heap);
-    pci_context_default->input_controllers = list_create_list_with_heap(heap);
-    pci_context_default->other_devices = list_create_list_with_heap(heap);
+    pci_context_t* pci_context = memory_malloc_ext(heap, sizeof(pci_context_t), 0);
+
+    if(pci_context == NULL) {
+        return -1;
+    }
+
+    pci_context->heap = heap;
+    pci_context->sata_controllers = list_create_list_with_heap(heap);
+    pci_context->nvme_controllers = list_create_list_with_heap(heap);
+    pci_context->network_controllers = list_create_list_with_heap(heap);
+    pci_context->display_controllers = list_create_list_with_heap(heap);
+    pci_context->usb_controllers = list_create_list_with_heap(heap);
+    pci_context->input_controllers = list_create_list_with_heap(heap);
+    pci_context->other_devices = list_create_list_with_heap(heap);
+
+    pci_set_context(pci_context);
 
     list_t* old_mcfgs = list_create_list();
 
@@ -99,40 +101,40 @@ int8_t pci_setup(memory_heap_t* heap) {
             if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                 p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_SATA_CONTROLLER) {
 
-                list_list_insert(pci_context_default->sata_controllers, p);
+                list_list_insert(pci_context->sata_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as sata controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_MASS_STORAGE_CONTROLLER &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_NVME_CONTROLLER) {
 
-                list_list_insert(pci_context_default->nvme_controllers, p);
+                list_list_insert(pci_context->nvme_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as nvme controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_NETWORK_CONTROLLER &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_ETHERNET) {
 
-                list_list_insert(pci_context_default->network_controllers, p);
+                list_list_insert(pci_context->network_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as network controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if(p->pci_header->class_code == PCI_DEVICE_CLASS_DISPLAY_CONTROLLER) {
 
-                list_list_insert(pci_context_default->display_controllers, p);
+                list_list_insert(pci_context->display_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as display controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_SERIAL_BUS &&
                        p->pci_header->subclass_code == PCI_DEVICE_SUBCLASS_USB_CONTROLLER) {
 
-                list_list_insert(pci_context_default->usb_controllers, p);
+                list_list_insert(pci_context->usb_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
             }  else if( p->pci_header->class_code == PCI_DEVICE_CLASS_INPUT_DEVICE) {
 
-                list_list_insert(pci_context_default->input_controllers, p);
+                list_list_insert(pci_context->input_controllers, p);
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
@@ -140,7 +142,7 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x is not supported",
                          p->group_number, p->bus_number, p->device_number, p->function_number, p->pci_header->class_code, p->pci_header->subclass_code);
 
-                list_list_insert(pci_context_default->other_devices, p);
+                list_list_insert(pci_context->other_devices, p);
 
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as other device",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
@@ -184,13 +186,13 @@ int8_t pci_setup(memory_heap_t* heap) {
 
     PRINTLOG(PCI, LOG_INFO, "pci devices enumeration completed");
     PRINTLOG(PCI, LOG_INFO, "total pci sata controllers %lli nvme controllers %lli network controllers %lli display controllers %lli usb controllers %lli input controllers %lli other devices %lli",
-             list_size(pci_context_default->sata_controllers),
-             list_size(pci_context_default->nvme_controllers),
-             list_size(pci_context_default->network_controllers),
-             list_size(pci_context_default->display_controllers),
-             list_size(pci_context_default->usb_controllers),
-             list_size(pci_context_default->input_controllers),
-             list_size(pci_context_default->other_devices)
+             list_size(pci_context->sata_controllers),
+             list_size(pci_context->nvme_controllers),
+             list_size(pci_context->network_controllers),
+             list_size(pci_context->display_controllers),
+             list_size(pci_context->usb_controllers),
+             list_size(pci_context->input_controllers),
+             list_size(pci_context->other_devices)
              );
 
     return 0;
@@ -438,103 +440,4 @@ const void* pci_iterator_get_item(iterator_t* iterator){
     d->header_size = iter_metadata->frame_count * FRAME_SIZE;
 
     return d;
-}
-
-const pci_dev_t* pci_find_device_by_address(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number) {
-    if(pci_context_default == NULL) {
-        return NULL;
-    }
-
-    if(pci_context_default->display_controllers) {
-        for(size_t i = 0; i < list_size(pci_context_default->display_controllers); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->display_controllers, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    if(pci_context_default->network_controllers) {
-        for(size_t i = 0; i < list_size(pci_context_default->network_controllers); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->network_controllers, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    if(pci_context_default->nvme_controllers) {
-        for(size_t i = 0; i < list_size(pci_context_default->nvme_controllers); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->nvme_controllers, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    if(pci_context_default->sata_controllers) {
-        for(size_t i = 0; i < list_size(pci_context_default->sata_controllers); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->sata_controllers, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    if(pci_context_default->usb_controllers) {
-        for(size_t i = 0; i < list_size(pci_context_default->usb_controllers); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->usb_controllers, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    if(pci_context_default->input_controllers) {
-        for(size_t i = 0; i < list_size(pci_context_default->input_controllers); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->input_controllers, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    if(pci_context_default->other_devices) {
-        for(size_t i = 0; i < list_size(pci_context_default->other_devices); i++) {
-            const pci_dev_t* d = list_get_data_at_position(pci_context_default->other_devices, i);
-
-            if(d->group_number == group_number &&
-               d->bus_number == bus_number &&
-               d->device_number == device_number &&
-               d->function_number == function_number) {
-                return d;
-            }
-        }
-    }
-
-    return NULL;
 }
