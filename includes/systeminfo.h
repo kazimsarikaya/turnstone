@@ -44,6 +44,9 @@ typedef struct system_info_t {
     uint64_t              pxe_tosdb_size; ///< pxe tosdb size
     uint64_t              pxe_tosdb_address; ///< pxe tosdb address
     uint64_t              random_seed; ///< random seed
+    uint64_t              spool_size; ///< spool size
+    uint64_t              spool_physical_start; ///< spool physical start
+    uint64_t              spool_virtual_start; ///< spool virtual start
 } system_info_t; ///< struct short hand for system_info_s
 
 /*! static location of system information */

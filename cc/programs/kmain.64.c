@@ -46,6 +46,7 @@
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
 #include <tosdb/tosdb_manager.h>
+#include <spool.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -124,6 +125,11 @@ int8_t kmain64(size_t entry_point) {
     memory_set_default_heap(heap);
 
     srand(SYSTEM_INFO->random_seed);
+
+    if(spool_init(SYSTEM_INFO->spool_size, SYSTEM_INFO->spool_virtual_start) != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init spool. Halting...");
+        cpu_hlt();
+    }
 
     stdbufs_init_buffers(video_print);
 
@@ -215,6 +221,15 @@ int8_t kmain64(size_t entry_point) {
         }
 
         PRINTLOG(KERNEL, LOG_DEBUG, "kernel stack frames allocated");
+
+        frame_t spool_frames = {SYSTEM_INFO->spool_physical_start, SYSTEM_INFO->spool_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &spool_frames) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default stack frames");
+            cpu_hlt();
+        }
+
+        PRINTLOG(KERNEL, LOG_DEBUG, "spool frames allocated");
 
         if(memory_paging_reserve_current_page_table_frames() != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot reserve current page table frames");

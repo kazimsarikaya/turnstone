@@ -11,6 +11,10 @@
 #include <video.h>
 #include <strings.h>
 
+#if ___KERNELBUILD == 1
+#include <spool.h>
+#endif
+
 MODULE("turnstone.lib.stdbufs");
 
 
@@ -28,9 +32,14 @@ stdbufs_video_printer stdbufs_video_print = stdbufs_video_null_printer;
 int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
     stdbufs_video_print = video_printer;
 
+    memory_heap_t* heap = NULL;
+
+#if ___KERNELBUILD == 1
+    heap = spool_get_heap();
+#endif
 
     if (stdbufs_default_input_buffer == NULL) {
-        stdbufs_default_input_buffer = buffer_new_with_capacity(NULL, 1024);
+        stdbufs_default_input_buffer = buffer_new_with_capacity(heap, 1024);
 
         if(!stdbufs_default_input_buffer) {
             return -1;
@@ -38,7 +47,7 @@ int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
     }
 
     if (stdbufs_default_output_buffer == NULL) {
-        stdbufs_default_output_buffer = buffer_new_with_capacity(NULL, 1024);
+        stdbufs_default_output_buffer = buffer_new_with_capacity(heap, 1024);
 
         if(!stdbufs_default_output_buffer) {
             return -1;
@@ -46,12 +55,16 @@ int8_t stdbufs_init_buffers(stdbufs_video_printer video_printer) {
     }
 
     if (stdbufs_default_error_buffer == NULL) {
-        stdbufs_default_error_buffer = buffer_new_with_capacity(NULL, 1024);
+        stdbufs_default_error_buffer = buffer_new_with_capacity(heap, 1024);
 
         if(!stdbufs_default_error_buffer) {
             return -1;
         }
     }
+
+#if ___KERNELBUILD == 1
+    spool_add("stdbufs", 3, stdbufs_default_input_buffer, stdbufs_default_output_buffer, stdbufs_default_error_buffer);
+#endif
 
     return 0;
 }

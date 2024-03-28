@@ -931,6 +931,22 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     PRINTLOG(EFI, LOG_INFO, "program base 0x%llx", program_base);
 
+    uint64_t* spool_size_ptr = 0;
+
+    res = efi_tosdb_read_config(tdb_ctx, "spool_size", (void**)&spool_size_ptr);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "cannot read spool size");
+
+        goto catch_efi_error;
+    }
+
+    uint64_t spool_size = *spool_size_ptr;
+
+    memory_free(spool_size_ptr);
+
+    PRINTLOG(EFI, LOG_INFO, "spool size 0x%llx", spool_size);
+
     tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
     tosdb_table_t* tbl_sections = tosdb_table_create_or_open(db, "sections", 1 << 10, 512 << 10, 8);
 
@@ -1154,6 +1170,20 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     memory_memclean((void*)stack_address, stack_size);
 
+    uint64_t spool_address = 0;
+
+    res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, spool_size / FRAME_SIZE, &spool_address);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot allocate spool memory");
+
+        goto catch_efi_error;
+    }
+
+    memory_memclean((void*)spool_address, spool_size);
+
+    PRINTLOG(EFI, LOG_INFO, "spool address 0x%llx", spool_address);
+
     uint64_t page_table_helper_frames = 0;
     uint64_t page_frame_helper_size = 4 * FRAME_SIZE;
 
@@ -1301,6 +1331,9 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
     sysinfo->pxe_tosdb_size = tdb_ctx->pxe_data_size;
     sysinfo->pxe_tosdb_address = tdb_ctx->pxe_data_base;
     sysinfo->random_seed = rand64();
+    sysinfo->spool_size = spool_size;
+    sysinfo->spool_physical_start = spool_address;
+    sysinfo->spool_virtual_start = (64UL << 30) | spool_address;
 
     memory_page_table_context_t* page_table_ctx = (memory_page_table_context_t*)program_header->page_table_context_address;
 
@@ -1311,6 +1344,15 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     if(memory_paging_add_va_for_frame_ext(page_table_ctx, frm.frame_address, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC | MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
         PRINTLOG(EFI, LOG_ERROR, "cannot add system info to page table");
+
+        goto catch_efi_error;
+    }
+
+    frm.frame_address = sysinfo->spool_physical_start;
+    frm.frame_count = spool_size / FRAME_SIZE;
+
+    if(memory_paging_add_va_for_frame_ext(page_table_ctx, sysinfo->spool_virtual_start, &frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
+        PRINTLOG(EFI, LOG_ERROR, "cannot add spool to page table");
 
         goto catch_efi_error;
     }

@@ -109,7 +109,7 @@ boolean_t buffer_set_readonly(buffer_t* buffer, boolean_t ro) {
     return true;
 }
 
-uint64_t buffer_get_length(buffer_t* buffer) {
+uint64_t buffer_get_length(const buffer_t* buffer) {
     if(!buffer) {
         return 0;
     }

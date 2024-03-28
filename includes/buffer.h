@@ -74,7 +74,7 @@ buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data);
  * @param[in] buffer buffer to get length
  * @return uint64_t length of buffer
  */
-uint64_t buffer_get_length(buffer_t* buffer);
+uint64_t buffer_get_length(const buffer_t* buffer);
 
 /**
  * @brief resets buffer, sets length and position to 0 and all bytes to 0, capacity stays same

@@ -26,6 +26,7 @@
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_macros.h>
 #include <strings.h>
+#include <spool.h>
 
 MODULE("turnstone.kernel.cpu.task");
 
@@ -321,6 +322,12 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->cpu_id = apic_id;
 
+    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init-%s", current_task->cpu_id);
+
+    current_task->task_name = strdup_at_heap(heap, tmp_task_name);
+
+    memory_free(tmp_task_name);
+
     current_task->creator_heap = heap;
     current_task->heap = heap;
     current_task->heap_size = kernel->program_heap_size;
@@ -336,9 +343,13 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
         return -1;
     }
 
-    current_task->input_buffer = buffer_create_with_heap(heap, 0x1000);
-    current_task->output_buffer = buffer_create_with_heap(heap, 0x1000);
-    current_task->error_buffer = buffer_create_with_heap(heap, 0x1000);
+    memory_heap_t* sheap = spool_get_heap();
+
+    current_task->input_buffer = buffer_create_with_heap(sheap, 0x1000);
+    current_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
+    current_task->error_buffer = buffer_create_with_heap(sheap, 0x1000);
+
+    spool_add(current_task->task_name, 3, current_task->input_buffer, current_task->output_buffer, current_task->error_buffer);
 
     current_task->stack = (void*)stack_base;
     current_task->stack_size = stack_size;
@@ -960,10 +971,13 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     stack[-2] = (uint64_t)task_end_task; // entry_point;
     // stack[-3] = (uint64_t)task_task_switch_exit;
 
+    memory_heap_t* sheap = spool_get_heap();
 
-    new_task->input_buffer = buffer_create_with_heap(task_heap, 0x1000);
-    new_task->output_buffer = buffer_create_with_heap(task_heap, 0x1000);
-    new_task->error_buffer = buffer_create_with_heap(task_heap, 0x1000);
+    new_task->input_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->error_buffer = buffer_create_with_heap(sheap, 0x1000);
+
+    spool_add(new_task->task_name, 3, new_task->input_buffer, new_task->output_buffer, new_task->error_buffer);
 
     PRINTLOG(TASKING, LOG_INFO, "scheduling new task %s 0x%llx 0x%p stack at 0x%llx-0x%llx heap at 0x%p[0x%llx]",
              new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->heap, new_task->heap_size);
@@ -1098,7 +1112,12 @@ int8_t task_create_idle_task(void) {
     new_task->registers = registers;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
-    new_task->task_name = strdup_at_heap(heap, "idle");
+
+    char_t* tmp_task_name = sprintf("%s-%d", "idle", new_task->task_id);
+
+    new_task->task_name = strdup_at_heap(heap, tmp_task_name);
+
+    memory_free(tmp_task_name);
 
     registers->rflags = 0x002;
 
@@ -1123,8 +1142,12 @@ int8_t task_create_idle_task(void) {
 
     cpu_state->idle_task = new_task;
 
-    new_task->output_buffer = buffer_create_with_heap(heap, 0x1000);
-    new_task->error_buffer = buffer_create_with_heap(heap, 0x1000);
+    memory_heap_t* sheap = spool_get_heap();
+
+    new_task->output_buffer = buffer_create_with_heap(sheap, 0x1000);
+    new_task->error_buffer = buffer_create_with_heap(sheap, 0x1000);
+
+    spool_add(new_task->task_name, 2, new_task->output_buffer, new_task->error_buffer);
 
     lock_acquire(task_find_next_task_lock);
     map_insert(task_map, (void*)new_task->task_id, new_task);
