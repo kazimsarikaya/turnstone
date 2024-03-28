@@ -175,14 +175,25 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
     return window;
 }
 
+typedef enum wnd_primary_options_list_item_type_t {
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_POWER_OFF,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END,
+} wnd_primary_options_list_item_type_t;
+
 const char_t*const wnd_primary_options_list[] = {
-    "Spool Browser",
-    "Task Manager",
-    "Virtual Machine Manager",
-    "Network Manager",
-    "Turnstone Database Manager",
-    "Reboot",
-    "Power Off",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER] =    "Spool Browser",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER] =    "Task Manager",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER] =    "Virtual Machine Manager",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER] =    "Network Manager",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER] =    "Turnstone Database Manager",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT] =    "Reboot",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_POWER_OFF] =    "Power Off",
     NULL,
 };
 
@@ -215,7 +226,7 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
         return -1;
     }
 
-    int32_t option_number = atoi(option);
+    wnd_primary_options_list_item_type_t option_number = atoi(option);
 
     video_text_print("Option selected: ");
     video_text_print(option);
@@ -224,23 +235,25 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
     video_text_print("\n");
 
     switch(option_number) {
-    case 0:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER:
+        return windowmanager_create_and_show_spool_browser_window();
         break;
-    case 1:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER:
         break;
-    case 2:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER:
         break;
-    case 3:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER:
         break;
-    case 4:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER:
         break;
-    case 5:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT:
         acpi_reset();
         break;
-    case 6:
+    case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_POWER_OFF:
         acpi_poweroff();
         break;
     default:
+        video_text_print("Invalid option selected\n");
         break;
     }
 
