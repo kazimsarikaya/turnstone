@@ -322,7 +322,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->cpu_id = apic_id;
 
-    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init-%s", current_task->cpu_id);
+    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init", current_task->cpu_id);
 
     current_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
