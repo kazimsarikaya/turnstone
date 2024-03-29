@@ -340,6 +340,14 @@ static int8_t wndmgr_iv_list_destroyer(memory_heap_t* heap, void* item){
     return 0;
 }
 
+int8_t windowmanager_destroy_inputs(list_t* inputs) {
+    if(inputs == NULL) {
+        return -1;
+    }
+
+    return list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 list_t* windowmanager_get_input_values(const window_t* window) {
@@ -347,7 +355,7 @@ list_t* windowmanager_get_input_values(const window_t* window) {
         return NULL;
     }
 
-    list_t* values = list_create_queue();
+    list_t* values = list_create_stack();
 
     if(values == NULL) {
         return NULL;
@@ -376,6 +384,8 @@ list_t* windowmanager_get_input_values(const window_t* window) {
 
             value->id = w->input_id;
             value->value = strdup(w->text);
+            value->extra_data = w->extra_data;
+            value->rect = w->rect;
 
             for(size_t i = 0; i < strlen(value->value); i++) { // TODO: find best way for this
                 if(value->value[i] == '_') {
@@ -390,7 +400,7 @@ list_t* windowmanager_get_input_values(const window_t* window) {
                 return NULL;
             }
 
-            list_queue_push(values, value);
+            list_stack_push(values, value);
         }
 
         if(w->children != NULL) {
@@ -403,3 +413,60 @@ list_t* windowmanager_get_input_values(const window_t* window) {
     return values;
 }
 #pragma GCC diagnostic pop
+
+void windowmanager_move_cursor_to_next_input(window_t* window) {
+    if(!window) {
+        return;
+    }
+
+    list_t* inputs = windowmanager_get_input_values(window);
+
+    if(!inputs) {
+        return;
+    }
+
+    if(list_size(inputs) == 0) {
+        list_destroy(inputs);
+        return;
+    }
+
+    int32_t cursor_x, cursor_y;
+
+    video_text_cursor_get(&cursor_x, &cursor_y);
+
+    cursor_x *= FONT_WIDTH;
+    cursor_y *= FONT_HEIGHT;
+
+    boolean_t input_found = false;
+    const window_input_value_t* first = list_get_data_at_position(inputs, 0);
+    const window_input_value_t* next = NULL;
+
+    for(size_t i = 0; i < list_size(inputs); i++) {
+        window_input_value_t* value = (window_input_value_t*)list_get_data_at_position(inputs, i);
+
+        if(!input_found && windowmanager_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
+            input_found = true;
+            continue;
+        }
+
+        if(input_found) {
+            next = value;
+            break;
+        }
+    }
+
+    if(!input_found || !next) {
+        next = first;
+    }
+
+    if(!next) {
+        list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
+        return;
+    }
+
+    video_text_cursor_hide();
+    video_move_text_cursor(next->rect.x / FONT_WIDTH, next->rect.y / FONT_HEIGHT);
+    video_text_cursor_show();
+
+    list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
+}

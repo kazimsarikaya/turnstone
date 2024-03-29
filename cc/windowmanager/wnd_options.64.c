@@ -176,9 +176,11 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
 
     wnd_primary_options_list_item_type_t option_number = atoi(option);
 
+    int8_t ret = -1;
+
     switch(option_number) {
     case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER:
-        return windowmanager_create_and_show_spool_browser_window();
+        ret = windowmanager_create_and_show_spool_browser_window();
         break;
     case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER:
         break;
@@ -205,7 +207,7 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
 
     list_destroy(inputs);
 
-    return 0;
+    return ret;
 }
 
 window_t* windowmanager_create_primary_options_window(void) {

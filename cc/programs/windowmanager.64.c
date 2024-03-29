@@ -121,7 +121,9 @@ static int8_t windowmanager_main(void) {
                 if(kbd_data[i].is_printable) {
                     if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
                         windowmanager_current_window->on_enter(windowmanager_current_window);
-                    } else {
+                    } else if(kbd_data[i].key == '\t'){
+                        windowmanager_move_cursor_to_next_input(windowmanager_current_window);
+                    }else {
                         data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
                     }
                 } else {

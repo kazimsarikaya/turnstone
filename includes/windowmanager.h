@@ -62,6 +62,8 @@ struct window_t {
 typedef struct window_input_value_t {
     const char_t* id;
     char_t*       value;
+    void*         extra_data;
+    rect_t        rect;
 } window_input_value_t;
 
 
@@ -94,6 +96,8 @@ boolean_t windowmanager_find_window_by_point(window_t* window, int32_t x, int32_
 boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** result);
 int8_t    windowmanager_set_window_text(window_t* window, const char_t* text);
 list_t*   windowmanager_get_input_values(const window_t* window);
+void      windowmanager_move_cursor_to_next_input(window_t* window);
+int8_t    windowmanager_destroy_inputs(list_t* inputs);
 
 void      windowmanager_destroy_window(window_t* window);
 void      windowmanager_insert_and_set_current_window(window_t* window);
