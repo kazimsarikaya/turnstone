@@ -551,6 +551,10 @@ int64_t buffer_printf(buffer_t* buffer, const char_t* fmt, ...) {
     return res;
 }
 
+#if ___KERNELBUILD == 1
+void video_text_print(const char_t* text);
+#endif
+
 int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
     if(!buffer) {
         return 0;
@@ -579,6 +583,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             char_t buf[257] = {0};
             char_t ito_buf[64] = {0};
             int32_t val = 0;
+            boolean_t fill_after = false;
             char_t* str = NULL;
             int32_t slen = 0;
             number_t ival = 0;
@@ -596,6 +601,11 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                 wfmtb = 1;
 
                 switch (*fmt) {
+                case '-':
+                    fill_after = true;
+                    fmt++;
+                    wfmtb = 0;
+                    break;
                 case '0':
                 case ' ':
                     filler = *fmt;
@@ -625,6 +635,28 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     str = va_arg(args, char_t*);
                     slen = strlen(str);
 
+                    if(val > slen){
+                        val -= slen;
+                    } else {
+                        val = 0;
+                    }
+
+                    if(!fill_after && val) {
+                        cnt += val;
+                        for(idx = 0; idx < val; idx++) {
+                            buf[idx] = filler;
+                            buf[idx + 1] = '\0';
+                        }
+
+                        strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                        buffer_vprintf_buffer_idx += idx;
+                    }
+
+                    if((slen > BUFFER_PRINTF_BUFFER_SIZE - 1) && buffer_vprintf_buffer_idx) {
+                        buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+                        buffer_vprintf_buffer_idx = 0;
+                    }
+
                     while(slen > BUFFER_PRINTF_BUFFER_SIZE - 1) {
                         buffer_append_bytes(buffer, (uint8_t*)str, BUFFER_PRINTF_BUFFER_SIZE - 1);
                         str += BUFFER_PRINTF_BUFFER_SIZE - 1;
@@ -634,6 +666,22 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     strcpy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
+
+                    if(fill_after && val) {
+                        cnt += val;
+                        for(idx = 0; idx < val; idx++) {
+                            buf[idx] = filler;
+                            buf[idx + 1] = '\0';
+                        }
+
+                        if(buffer_vprintf_buffer_idx + val >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
+                            buffer_append_bytes(buffer, (uint8_t*)buffer_vprintf_buffer, buffer_vprintf_buffer_idx);
+                            buffer_vprintf_buffer_idx = 0;
+                        }
+
+                        strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                        buffer_vprintf_buffer_idx += idx;
+                    }
 
                     cnt += slen;
                     fmt++;
