@@ -47,6 +47,7 @@ struct window_t {
     boolean_t      is_writable;
     int32_t        input_length;
     const char_t*  input_id;
+    void*          extra_data;
     int32_t        tab_index;
     rect_t         rect;
     pixel_t*       buffer;
@@ -100,8 +101,11 @@ void      windowmanager_remove_and_set_current_window(window_t* window);
 window_t* windowmanager_create_top_window(void);
 window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rect, color_t background_color, color_t foreground_color);
 
+window_t* windowmanager_add_option_window(window_t* parent, rect_t pos);
+
 window_t* windowmanager_create_greater_window(void);
 window_t* windowmanager_create_primary_options_window(void);
+int8_t    windowmanager_create_and_show_spool_browser_window(void);
 
 int8_t    windowmanager_init(void);
 boolean_t windowmanager_is_initialized(void);

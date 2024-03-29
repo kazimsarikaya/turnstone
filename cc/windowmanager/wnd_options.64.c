@@ -46,64 +46,12 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
     title_window->is_visible = true;
     title_window->is_dirty = true;
 
-    window_t* option_input_row = windowmanager_create_window(window,
-                                                             NULL,
-                                                             (rect_t){FONT_WIDTH,
-                                                                      title_window->rect.y + title_window->rect.height + 2 * FONT_HEIGHT,
-                                                                      VIDEO_GRAPHICS_WIDTH - FONT_WIDTH,
-                                                                      FONT_HEIGHT},
-                                                             (color_t){.color = 0x00000000},
-                                                             (color_t){.color = 0xFF00FF00});
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
 
-    if(option_input_row == NULL) {
+    if(!option_input_row) {
         windowmanager_destroy_window(window);
         return NULL;
     }
-
-    option_input_row->is_visible = true;
-    option_input_row->is_dirty = true;
-
-
-    char_t* input_label_text = strdup("Option ===> ");
-
-    rect = windowmanager_calc_text_rect(input_label_text, 2000);
-
-    window_t* option_input_label = windowmanager_create_window(option_input_row,
-                                                               input_label_text,
-                                                               rect,
-                                                               (color_t){.color = 0x00000000},
-                                                               (color_t){.color = 0xFF00FF00});
-
-    if(option_input_label == NULL) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    option_input_label->is_visible = true;
-    option_input_label->is_dirty = true;
-
-    char_t* input_text = strdup("____________________");
-
-    rect = windowmanager_calc_text_rect(input_text, 2000);
-
-    rect.x = option_input_label->rect.width + 2 * FONT_WIDTH;
-
-    window_t* option_input_text = windowmanager_create_window(option_input_row,
-                                                              input_text,
-                                                              rect,
-                                                              (color_t){.color = 0x00000000},
-                                                              (color_t){.color = 0xFFFF0000});
-
-    if(option_input_text == NULL) {
-        windowmanager_destroy_window(window);
-        return NULL;
-    }
-
-    option_input_text->is_visible = true;
-    option_input_text->is_dirty = true;
-    option_input_text->is_writable = true;
-    option_input_text->input_length = strlen(input_text);
-    option_input_text->input_id = "option";
 
     window_t* option_list = windowmanager_create_window(window,
                                                         NULL,
@@ -227,12 +175,6 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
     }
 
     wnd_primary_options_list_item_type_t option_number = atoi(option);
-
-    video_text_print("Option selected: ");
-    video_text_print(option);
-    video_text_print(" ");
-    video_text_print(wnd_primary_options_list[option_number]);
-    video_text_print("\n");
 
     switch(option_number) {
     case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER:
