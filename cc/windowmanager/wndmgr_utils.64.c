@@ -393,6 +393,12 @@ list_t* windowmanager_get_input_values(const window_t* window) {
                 }
             }
 
+            for(size_t i = strlen(value->value); i > 0; i--) { // remove trailing spaces
+                if(value->value[i - 1] == ' ') {
+                    value->value[i - 1] = '\0';
+                }
+            }
+
             if(value->value == NULL) {
                 memory_free(value);
                 list_destroy_with_type(values, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);

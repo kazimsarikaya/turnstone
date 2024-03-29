@@ -15,6 +15,61 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
+static int8_t wndmgr_spool_item_on_enter(const window_t* window) {
+    if(!window) {
+        return -1;
+    }
+
+    list_t* inputs = windowmanager_get_input_values(window);
+
+    if(!inputs) {
+        return -1;
+    }
+
+    if(list_size(inputs) == 0) {
+        list_destroy(inputs);
+        return 0;
+    }
+
+    for(size_t i = 0; i < list_size(inputs); i++) {
+        const window_input_value_t* input = list_get_data_at_position(inputs, i);
+
+        if(!input) {
+            continue;
+        }
+
+        if(strcmp(input->id, "buffer") == 0) {
+            const buffer_t* buffer = (const buffer_t*)input->extra_data;
+
+            if(!buffer) {
+                continue;
+            }
+
+            char_t* buffer_text = input->value;
+
+            if(!buffer_text) {
+                continue;
+            }
+
+            if(strlen(buffer_text) == 0) {
+                continue;
+            }
+
+            if(strcmp(buffer_text, "s") == 0) {
+                // TODO: Show buffer details
+                video_text_print("--------------------\n");
+                video_text_print((char_t*)buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer)));
+                video_text_print("\n--------------------\n");
+                break;
+            }
+        }
+    }
+
+    windowmanager_destroy_inputs(inputs);
+
+    return 0;
+}
+
 static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spool_item){
     window_t* window = windowmanager_create_top_window();
 
@@ -130,6 +185,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         top += FONT_HEIGHT;
     }
 
+    window->on_enter = wndmgr_spool_item_on_enter;
 
     windowmanager_insert_and_set_current_window(window);
 

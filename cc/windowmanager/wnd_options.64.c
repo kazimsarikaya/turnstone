@@ -174,6 +174,15 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
         return -1;
     }
 
+    if(strlen(option) == 0) {
+        memory_free(input->value);
+        memory_free(input);
+
+        list_destroy(inputs);
+
+        return -1;
+    }
+
     wnd_primary_options_list_item_type_t option_number = atoi(option);
 
     int8_t ret = -1;

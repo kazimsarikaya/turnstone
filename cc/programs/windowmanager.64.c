@@ -164,21 +164,6 @@ static int8_t windowmanager_main(void) {
 
         memory_free(kbd_data);
 
-        char_t last_char = data[4095];
-
-        if(last_char != NULL) {
-            data[4095] = NULL;
-        }
-
-        video_text_print(data);
-
-        if(last_char != NULL) {
-            char_t buffer[2] = {last_char, NULL};
-            video_text_print(buffer);
-        }
-
-        data[4095] = last_char;
-
         window_t* edit_area = NULL;
 
         if(windowmanager_find_window_by_text_cursor(windowmanager_current_window, &edit_area)) {
