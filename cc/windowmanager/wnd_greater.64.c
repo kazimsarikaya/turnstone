@@ -15,6 +15,10 @@ MODULE("turnstone.windowmanager");
 extern char_t tos_logo_data_start;
 
 window_t* windowmanager_create_greater_window(void) {
+    uint32_t font_height = 0;
+
+    font_get_font_dimension(NULL, &font_height);
+
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {
@@ -52,7 +56,7 @@ window_t* windowmanager_create_greater_window(void) {
 
     rect = windowmanager_calc_text_rect(text, 2000);
     rect.x = old_x;
-    rect.y = old_y + old_height + 4 * FONT_HEIGHT;
+    rect.y = old_y + old_height + 4 * font_height;
 
     child = windowmanager_create_window(window,
                                         text,

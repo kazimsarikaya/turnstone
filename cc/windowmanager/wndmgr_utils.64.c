@@ -16,36 +16,17 @@ void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
 
-void windowmanager_print_glyph(const window_t* window, int32_t x, int32_t y, wchar_t wc) {
-    uint8_t* glyph = FONT_ADDRESS + (wc * FONT_BYTES_PER_GLYPH);
+void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
 
-    int32_t abs_x = window->rect.x + x;
-    int32_t abs_y = window->rect.y + y;
+    font_print_glyph_with_stride(wc,
+                                 window->foreground_color, window->background_color,
+                                 VIDEO_BASE_ADDRESS,
+                                 x, y,
+                                 VIDEO_PIXELS_PER_SCANLINE);
 
-    int32_t offs = (abs_y * VIDEO_PIXELS_PER_SCANLINE) + abs_x;
-
-    int32_t tx, ty, line, mask;
-
-    for(ty = 0; ty < FONT_HEIGHT; ty++) {
-        line = offs;
-        mask = FONT_MASK;
-
-        uint32_t tmp = BYTE_SWAP32(*((uint32_t*)glyph));
-
-        for(tx = 0; tx < FONT_WIDTH; tx++) {
-
-            *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = tmp & mask ? window->foreground_color.color : window->background_color.color;
-
-            mask >>= 1;
-            line++;
-        }
-
-        glyph += FONT_BYTES_PERLINE;
-        offs  += VIDEO_PIXELS_PER_SCANLINE;
-    }
 }
 
-void windowmanager_print_text(const window_t* window, int32_t x, int32_t y, const char_t* text) {
+void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text) {
     if(window == NULL) {
         return;
     }
@@ -54,17 +35,45 @@ void windowmanager_print_text(const window_t* window, int32_t x, int32_t y, cons
         return;
     }
 
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
+    uint32_t abs_x = window->rect.x + x;
+    uint32_t abs_y = window->rect.y + y;
+
+    uint32_t cur_x = abs_x / font_width;
+    uint32_t cur_y = abs_y / font_height;
+
+    uint32_t max_cur_x = window->rect.x + window->rect.width / font_width;
+    uint32_t max_cur_y = window->rect.y + window->rect.height / font_height;
+
     int64_t i = 0;
 
     while(text[i]) {
-        wchar_t wc = video_get_wc(text + i, &i);
+        wchar_t wc = font_get_wc(text + i, &i);
 
         if(wc == '\n') {
-            y += FONT_HEIGHT;
-            x = 0;
+            cur_y += 1;
+
+            if(cur_y >= max_cur_y) {
+                break;
+            }
+
+            cur_x = abs_x / font_width;
         } else {
-            windowmanager_print_glyph(window, x, y, wc);
-            x += FONT_WIDTH;
+            windowmanager_print_glyph(window, cur_x, cur_y, wc);
+            cur_x += 1;
+
+            if(cur_x >= max_cur_x) {
+                cur_y += 1;
+
+                if(cur_y >= max_cur_y) {
+                    break;
+                }
+
+                cur_x = abs_x / font_width;
+            }
         }
 
         text++;
@@ -74,17 +83,21 @@ void windowmanager_print_text(const window_t* window, int32_t x, int32_t y, cons
 void windowmanager_clear_screen(window_t* window) {
     video_move_text_cursor(0, 0);
     video_text_cursor_hide();
-    for(int32_t i = 0; i < VIDEO_GRAPHICS_HEIGHT; i++) {
-        for(int32_t j = 0; j < VIDEO_GRAPHICS_WIDTH; j++) {
+    for(uint32_t i = 0; i < VIDEO_GRAPHICS_HEIGHT; i++) {
+        for(uint32_t j = 0; j < VIDEO_GRAPHICS_WIDTH; j++) {
             *((pixel_t*)(VIDEO_BASE_ADDRESS + (i * VIDEO_PIXELS_PER_SCANLINE) + j)) = window->background_color.color;
         }
     }
 }
 
-rect_t windowmanager_calc_text_rect(const char_t* text, int32_t max_width) {
+rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     if(text == NULL) {
         return (rect_t){0};
     }
+
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
 
     rect_t rect = {0};
 
@@ -93,21 +106,21 @@ rect_t windowmanager_calc_text_rect(const char_t* text, int32_t max_width) {
     rect.width = 0;
     rect.height = 0;
 
-    int32_t max_calc_width = 0;
+    uint32_t max_calc_width = 0;
     size_t len = strlen(text);
 
     while(*text) {
         if(*text == '\n') {
-            rect.height += FONT_HEIGHT;
+            rect.height += font_height;
             max_calc_width = MAX(max_calc_width, rect.width);
             rect.width = 0;
         } else {
-            if(rect.width + FONT_WIDTH > max_width) {
-                rect.height += FONT_HEIGHT;
+            if(rect.width + font_width > max_width) {
+                rect.height += font_height;
                 max_calc_width = MAX(max_calc_width, rect.width);
                 rect.width = 0;
             } else {
-                rect.width += FONT_WIDTH;
+                rect.width += font_width;
             }
         }
 
@@ -117,7 +130,7 @@ rect_t windowmanager_calc_text_rect(const char_t* text, int32_t max_width) {
     rect.width = MAX(rect.width, max_calc_width);
 
     if(len > 0 && rect.height == 0) {
-        rect.height = FONT_HEIGHT;
+        rect.height = font_height;
     }
 
     return rect;
@@ -144,7 +157,7 @@ uint32_t windowmanager_append_wchar_to_buffer(wchar_t src, char_t* dst, uint32_t
     return j;
 }
 
-boolean_t windowmanager_is_point_in_rect(const rect_t* rect, int32_t x, int32_t y) {
+boolean_t windowmanager_is_point_in_rect(const rect_t* rect, uint32_t x, uint32_t y) {
     if(rect == NULL) {
         return false;
     }
@@ -216,7 +229,7 @@ boolean_t windowmanager_is_rects_intersect(const rect_t* rect1, const rect_t* re
     return true;
 }
 
-boolean_t windowmanager_find_window_by_point(window_t* window, int32_t x, int32_t y, window_t** result) {
+boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint32_t y, window_t** result) {
     if(window == NULL) {
         return false;
     }
@@ -258,8 +271,12 @@ boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** 
 
     video_text_cursor_get(&x, &y);
 
-    x *= FONT_WIDTH;
-    y *= FONT_HEIGHT;
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
+    x *= font_width;
+    y *= font_height;
 
     return windowmanager_find_window_by_point(window, x, y, result);
 }
@@ -282,9 +299,13 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     video_text_cursor_get(&x, &y);
     video_text_cursor_hide();
 
-    int32_t win_x = window->rect.x / FONT_WIDTH;
-    int32_t win_y = window->rect.y / FONT_HEIGHT;
-    int32_t win_w = window->rect.width / FONT_WIDTH;
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
+    int32_t win_x = window->rect.x / font_width;
+    int32_t win_y = window->rect.y / font_height;
+    int32_t win_w = window->rect.width / font_width;
 
     int32_t start_idx = (y - win_y) * win_w + (x - win_x);
 
@@ -440,8 +461,12 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
 
     video_text_cursor_get(&cursor_x, &cursor_y);
 
-    cursor_x *= FONT_WIDTH;
-    cursor_y *= FONT_HEIGHT;
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
+    cursor_x *= font_width;
+    cursor_y *= font_height;
 
     boolean_t input_found = false;
     const window_input_value_t* first = list_get_data_at_position(inputs, 0);
@@ -471,7 +496,7 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
     }
 
     video_text_cursor_hide();
-    video_move_text_cursor(next->rect.x / FONT_WIDTH, next->rect.y / FONT_HEIGHT);
+    video_move_text_cursor(next->rect.x / font_width, next->rect.y / font_height);
     video_text_cursor_show();
 
     list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);

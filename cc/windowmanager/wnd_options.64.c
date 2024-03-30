@@ -22,6 +22,10 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
         return NULL;
     }
 
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
     window->is_visible = true;
     window->is_dirty = true;
 
@@ -29,7 +33,7 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
 
     rect_t rect = windowmanager_calc_text_rect(title, 2000);
     rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
-    rect.y = FONT_HEIGHT;
+    rect.y = font_height;
 
 
     window_t* title_window = windowmanager_create_window(window,
@@ -55,9 +59,9 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
 
     window_t* option_list = windowmanager_create_window(window,
                                                         NULL,
-                                                        (rect_t){FONT_WIDTH,
-                                                                 option_input_row->rect.y + option_input_row->rect.height + 2 * FONT_HEIGHT,
-                                                                 VIDEO_GRAPHICS_WIDTH - FONT_WIDTH,
+                                                        (rect_t){font_width,
+                                                                 option_input_row->rect.y + option_input_row->rect.height + 2 * font_height,
+                                                                 VIDEO_GRAPHICS_WIDTH - font_width,
                                                                  0},
                                                         (color_t){.color = 0x00000000},
                                                         (color_t){.color = 0xFF00FF00});
@@ -98,7 +102,7 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
 
         rect = windowmanager_calc_text_rect(option_text, 2000);
 
-        rect.x = option_number_area->rect.width +  FONT_WIDTH;
+        rect.x = option_number_area->rect.width +  font_width;
 
         rect.y = option_list_height;
         option_list_height += rect.height;

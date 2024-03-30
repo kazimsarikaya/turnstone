@@ -77,6 +77,10 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         return -1;
     }
 
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
     window->is_visible = true;
     window->is_dirty = true;
 
@@ -84,7 +88,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
     rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
-    rect.y = FONT_HEIGHT;
+    rect.y = font_height;
 
 
     window_t* title_window = windowmanager_create_window(window,
@@ -110,9 +114,9 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
     window_t* wnd_header = windowmanager_create_window(window,
                                                        NULL,
                                                        (rect_t){0,
-                                                                option_input_row->rect.y + option_input_row->rect.height + FONT_HEIGHT,
+                                                                option_input_row->rect.y + option_input_row->rect.height + font_height,
                                                                 VIDEO_GRAPHICS_WIDTH,
-                                                                FONT_HEIGHT},
+                                                                font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
 
@@ -128,7 +132,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){FONT_WIDTH, 0, VIDEO_GRAPHICS_WIDTH - FONT_WIDTH, FONT_HEIGHT},
+                                                            (rect_t){font_width, 0, VIDEO_GRAPHICS_WIDTH - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -142,7 +146,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     size_t buf_cnt = spool_get_buffer_count(spool_item);
 
-    int32_t left = FONT_WIDTH + 5 * FONT_WIDTH;
+    int32_t left = font_width + 5 * font_width;
     int32_t top = wnd_header->rect.y + wnd_header->rect.height;
 
     for(size_t i = 0; i < buf_cnt; i++) {
@@ -150,7 +154,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
         window_t* wnd_spool_input = windowmanager_create_window(window,
                                                                 strdup("_"),
-                                                                (rect_t){FONT_WIDTH*2, top, FONT_WIDTH, FONT_HEIGHT},
+                                                                (rect_t){font_width*2, top, font_width, font_height},
                                                                 (color_t){.color = 0x00000000},
                                                                 (color_t){.color = 0xFFF0000});
 
@@ -171,7 +175,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
-                                                          (rect_t){left, top, VIDEO_GRAPHICS_WIDTH - left, FONT_HEIGHT},
+                                                          (rect_t){left, top, VIDEO_GRAPHICS_WIDTH - left, font_height},
                                                           (color_t){.color = 0x00000000},
                                                           (color_t){.color = 0xFF00FF00});
 
@@ -182,7 +186,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
         wnd_spool->is_visible = true;
 
-        top += FONT_HEIGHT;
+        top += font_height;
     }
 
     window->on_enter = wndmgr_spool_item_on_enter;
@@ -254,6 +258,10 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         return -1;
     }
 
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
     window->is_visible = true;
     window->is_dirty = true;
 
@@ -261,7 +269,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
     rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
-    rect.y = FONT_HEIGHT;
+    rect.y = font_height;
 
 
     window_t* title_window = windowmanager_create_window(window,
@@ -287,9 +295,9 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
     window_t* wnd_header = windowmanager_create_window(window,
                                                        NULL,
                                                        (rect_t){0,
-                                                                option_input_row->rect.y + option_input_row->rect.height + FONT_HEIGHT,
+                                                                option_input_row->rect.y + option_input_row->rect.height + font_height,
                                                                 VIDEO_GRAPHICS_WIDTH,
-                                                                FONT_HEIGHT},
+                                                                font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
 
@@ -305,7 +313,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){FONT_WIDTH, 0, VIDEO_GRAPHICS_WIDTH - FONT_WIDTH, FONT_HEIGHT},
+                                                            (rect_t){font_width, 0, VIDEO_GRAPHICS_WIDTH - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -317,7 +325,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     wnd_header_text->is_visible = true;
 
-    int32_t left = FONT_WIDTH + 5 * FONT_WIDTH;
+    int32_t left = font_width + 5 * font_width;
     int32_t top = wnd_header->rect.y + wnd_header->rect.height;
 
     list_t* spool_list = spool_get_all();
@@ -327,7 +335,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
         window_t* wnd_spool_input = windowmanager_create_window(window,
                                                                 strdup("_"),
-                                                                (rect_t){FONT_WIDTH*2, top, FONT_WIDTH, FONT_HEIGHT},
+                                                                (rect_t){font_width*2, top, font_width, font_height},
                                                                 (color_t){.color = 0x00000000},
                                                                 (color_t){.color = 0xFFF0000});
 
@@ -349,7 +357,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
-                                                          (rect_t){left, top, VIDEO_GRAPHICS_WIDTH - left, FONT_HEIGHT},
+                                                          (rect_t){left, top, VIDEO_GRAPHICS_WIDTH - left, font_height},
                                                           (color_t){.color = 0x00000000},
                                                           (color_t){.color = 0xFF00FF00});
 
@@ -360,7 +368,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
         wnd_spool->is_visible = true;
 
-        top += FONT_HEIGHT;
+        top += font_height;
     }
 
     window->on_enter = wndmgr_spool_browser_on_enter;

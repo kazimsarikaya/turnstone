@@ -271,7 +271,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
             uint32_t foreground = atoh(foreground_str);
             uint32_t background = atoh(background_str);
 
-            video_set_color(foreground, background);
+            video_set_color((color_t){.color = foreground}, (color_t){.color = background});
             res = 0;
         }
     } else if(strcmp(command, "ps") == 0) {

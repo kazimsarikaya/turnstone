@@ -652,6 +652,8 @@ void virtio_gpu_display_init(uint32_t scanout) {
         SYSTEM_INFO->frame_buffer->physical_base_address = screen_fa;
         SYSTEM_INFO->frame_buffer->virtual_base_address = screen_va;
 
+        PRINTLOG(VIRTIOGPU, LOG_INFO, "new screen frame buffer address 0x%llx", screen_va);
+
         video_copy_contents_to_frame_buffer((uint8_t*)screen_va, screen_width, screen_height, screen_width);
         video_refresh_frame_buffer_address();
         VIDEO_DISPLAY_FLUSH = virtio_gpu_display_flush;

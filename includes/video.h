@@ -13,42 +13,13 @@
 #include <memory.h>
 #include <list.h>
 #include <graphics/image.h>
-
-/*! magic for psf2 fonts*/
-#define VIDEO_PSF2_FONT_MAGIC 0x864ab572
-/*! magic for psf1 fonts*/
-#define VIDEO_PSF1_FONT_MAGIC 0x0436
+#include <graphics/font.h>
 
 #define VIDEO_PCI_DEVICE_VENDOR_VIRTIO 0x1AF4
 #define VIDEO_PCI_DEVICE_ID_VIRTIO_GPU 0x1050
 
 #define VIDEO_PCI_DEVICE_VENDOR_VMWARE 0x15AD
 #define VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2 0x0405
-
-/**
- * @struct video_psf2_font_t
- * @brief psf v2 font header
- */
-typedef struct video_psf2_font_t {
-    uint32_t magic; ///< magic bytes to identify PSF
-    uint32_t version; ///< zero
-    uint32_t header_size; ///< offset of bitmaps in file, 32
-    uint32_t flags; ///< 0 if there's no unicode table
-    int32_t  glyph_count; ///< number of glyphs
-    int32_t  bytes_per_glyph; ///< size of each glyph
-    int32_t  height; ///< height in pixels
-    int32_t  width; ///< width in pixels
-} __attribute__((packed)) video_psf2_font_t; ///< short hand for struct @ref video_psf2_font_s
-
-/**
- * @struct video_psf1_font_t
- * @brief psf v1 font header
- */
-typedef struct video_psf1_font_t {
-    uint16_t magic; ///< magic bytes to identify PSF
-    uint8_t  mode; ///< mode
-    uint8_t  bytes_per_glyph; ///< size of each glyph
-} __attribute__((packed)) video_psf1_font_t; ///< short hand for struct @ref video_psf1_font_s
 
 /**
  * @struct video_frame_buffer_t
@@ -62,9 +33,6 @@ typedef struct video_frame_buffer_t {
     uint32_t height; ///< height pixel size
     uint32_t pixels_per_scanline; ///< how many pixels per line, it can be bigger than width, if not max resolution is set
 } video_frame_buffer_t; ///< short hand for struct @ref video_frame_buffer_s
-
-/*! pixel type */
-typedef uint32_t pixel_t;
 
 /**
  * @brief initialize video support on kernel
@@ -98,7 +66,7 @@ typedef void (*video_move_cursor_f)(uint32_t x, uint32_t y);
 
 extern video_move_cursor_f VIDEO_MOVE_CURSOR;
 
-void video_set_color(uint32_t foreground, uint32_t background);
+void video_set_color(color_t foreground, color_t background);
 
 void video_print(const char_t* string);
 
@@ -110,5 +78,4 @@ void   video_text_cursor_hide(void);
 void   video_text_cursor_show(void);
 
 graphics_raw_image_t* video_get_mouse_image(void);
-wchar_t               video_get_wc(const char_t* string, int64_t * idx);
 #endif

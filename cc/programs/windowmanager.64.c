@@ -33,6 +33,10 @@ extern buffer_t* shell_buffer;
 extern buffer_t* mouse_buffer;
 
 static int8_t windowmanager_main(void) {
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
     windowmanager_current_window = windowmanager_create_greater_window();
     windowmanager_windows = hashmap_integer(16);
 
@@ -98,7 +102,7 @@ static int8_t windowmanager_main(void) {
 
             if(last->buttons & MOUSE_BUTTON_LEFT) {
                 video_text_cursor_hide();
-                video_move_text_cursor(last->x / FONT_WIDTH, last->y / FONT_HEIGHT);
+                video_move_text_cursor(last->x / font_width, last->y / font_height);
                 video_text_cursor_show();
             }
         }

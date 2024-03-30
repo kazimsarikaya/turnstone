@@ -13,9 +13,9 @@ MODULE("turnstone.windowmanager");
 void video_text_print(const char_t* text);
 
 int8_t gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, pixel_t color) {
-    for (int32_t i = 0; i < rect.height; i++) {
-        for (int32_t j = 0; j < rect.width; j++) {
-            int32_t idx = (rect.y + i) * area_width + (rect.x + j);
+    for (uint32_t i = 0; i < rect.height; i++) {
+        for (uint32_t j = 0; j < rect.width; j++) {
+            uint32_t idx = (rect.y + i) * area_width + (rect.x + j);
 
             if(idx >= VIDEO_GRAPHICS_WIDTH * VIDEO_GRAPHICS_HEIGHT) {
                 return -1;
