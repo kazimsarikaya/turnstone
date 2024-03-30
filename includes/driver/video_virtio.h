@@ -85,6 +85,8 @@ typedef struct virtio_gpu_ctrl_hdr_t {
     uint8_t           padding[3];
 } __attribute__((packed)) virtio_gpu_ctrl_hdr_t;
 
+_Static_assert(sizeof(virtio_gpu_ctrl_hdr_t) == 24, "virtio_gpu_ctrl_hdr_t size is not correct");
+
 #define VIRTIO_GPU_MAX_SCANOUTS 16
 
 typedef struct virtio_gpu_rect_t {
