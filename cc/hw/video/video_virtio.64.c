@@ -119,6 +119,7 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
     volatile virtio_gpu_ctrl_hdr_t* hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
     if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
+        // char_t buffer[64] = {0};
         // video_text_print((char_t*)"virtio gpu transfer to host 2d failed: ");
         // utoh_with_buffer(buffer, hdr->type);
         // video_text_print(buffer);
@@ -339,8 +340,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     if(!res) {
         // TODO: handle error
-        lock_acquire(virtio_gpu_flush_lock);
-        return;
+        // force flush neverless
     }
 
     res = virtio_gpu_queue_send_flush(0, &virtio_gpu_lock,
@@ -349,7 +349,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     if(!res) {
         // TODO: handle error
-        lock_acquire(virtio_gpu_flush_lock);
+        lock_release(virtio_gpu_flush_lock);
         return;
     }
 
@@ -487,27 +487,12 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_ctx_create_t);
 
-    virtio_gpu_lock = lock_create_for_future(0);
-    fut = future_create(virtio_gpu_lock);
+    res = virtio_gpu_wait_for_queue_command(0, &virtio_gpu_lock, desc_index);
 
-    avail->index++;
-    vq_control->nd->vqn = 0;
-
-    future_get_data_and_destroy(fut);
-
-    desc_index = descs[desc_index].next;
-
-    offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
-
-    hdr = (virtio_gpu_ctrl_hdr_t*)offset;
-
-    if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu ctx create failed: 0x%x", hdr->type);
-
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create failed");
         return;
     }
-
-    memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
     /* end context create */
 
@@ -523,8 +508,8 @@ void virtio_gpu_display_init(uint32_t scanout) {
                                                       1, screen_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
                                                       virtio_gpu_screen_width, virtio_gpu_screen_height);
 
-    if(!res) {
-        // TODO: handle error
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource failed");
         return;
     }
 
@@ -534,8 +519,8 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     res = virtio_gpu_queue_context_attach_resource(0, &virtio_gpu_lock, 1, screen_resource_id);
 
-    if(!res) {
-        // TODO: handle error
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context attach resource failed");
         return;
     }
 
@@ -568,8 +553,8 @@ void virtio_gpu_display_init(uint32_t scanout) {
     res = virtio_gpu_queue_attach_backing(0, &virtio_gpu_lock,
                                           1, 0, screen_resource_id, screen_fa, screen_size);
 
-    if(!res) {
-        // TODO: handle error
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu attach backing failed");
         return;
     }
 
@@ -585,8 +570,8 @@ void virtio_gpu_display_init(uint32_t scanout) {
                                            0, 0, 0, virtio_gpu_screen_width, virtio_gpu_screen_height,
                                            stride, layer_stride, 0);
 
-    if(!res) {
-        // TODO: handle error
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu transfer to host 3d failed");
         return;
     }
 
@@ -611,26 +596,12 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     descs[desc_index].length = sizeof(virtio_gpu_set_scanout_t);
 
-    virtio_gpu_lock = lock_create_for_future(0);
-    fut = future_create(virtio_gpu_lock);
+    res = virtio_gpu_wait_for_queue_command(0, &virtio_gpu_lock, desc_index);
 
-    avail->index++;
-    vq_control->nd->vqn = 0;
-
-    future_get_data_and_destroy(fut);
-
-    desc_index = descs[desc_index].next;
-
-    offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
-    hdr = (virtio_gpu_ctrl_hdr_t*)offset;
-
-    if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu set scanout failed: 0x%x", hdr->type);
-
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu set scanout failed");
         return;
     }
-
-    memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
     if(scanout == 0) {
         SYSTEM_INFO->frame_buffer->width = virtio_gpu_screen_width;
@@ -682,7 +653,7 @@ static void virtio_gpu_mouse_move_internal(virtio_gpu_ctrl_type_t type, uint32_t
 
     res = virtio_gpu_wait_for_queue_command(1, &virtio_gpu_cursor_lock, desc_index);
 
-    if(!res) {
+    if(res != 0) {
         // TODO: handle error
     }
 }
@@ -718,7 +689,7 @@ void virtio_gpu_mouse_init(void) {
                                                       1, mouse_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
                                                       virtio_gpu_mouse_width, virtio_gpu_mouse_height);
 
-    if(!res) {
+    if(res != 0) {
         // TODO: handle error
         return;
     }
@@ -758,7 +729,7 @@ void virtio_gpu_mouse_init(void) {
     res = virtio_gpu_queue_attach_backing(0, &virtio_gpu_lock, 1, virtio_gpu_wrapper->fence_ids[0]++,
                                           mouse_resource_id, mouse_fa, mouse_size);
 
-    if(!res) {
+    if(res != 0) {
         // TODO: handle error
         return;
     }
@@ -771,7 +742,7 @@ void virtio_gpu_mouse_init(void) {
                                            0, 0, 0, virtio_gpu_mouse_width, virtio_gpu_mouse_height,
                                            stride, layer_stride, 0);
 
-    if(!res) {
+    if(res != 0) {
         // TODO: handle error
         return;
     }
