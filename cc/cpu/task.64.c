@@ -15,6 +15,7 @@
 #include <memory/paging.h>
 #include <memory/frame.h>
 #include <list.h>
+#include <time.h>
 #include <time/timer.h>
 #include <logging.h>
 #include <systeminfo.h>
@@ -63,6 +64,9 @@ list_t** task_cleanup_queues = NULL;
 map_t task_map = NULL;
 uint32_t task_mxcsr_mask = 0;
 
+uint64_t task_max_tick_count_limit = 0;
+extern volatile uint64_t time_timer_rdtsc_delta;
+
 extern int8_t kmain64(void);
 
 int8_t                                          task_task_switch_isr(interrupt_frame_ext_t* frame);
@@ -95,6 +99,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     uint32_t apic_id = apic_get_local_apic_id();
 
+    task_max_tick_count_limit = TASK_MAX_TICK_COUNT * time_timer_rdtsc_delta;
 
     frame_t* kernel_gs_frames = NULL;
 
@@ -706,12 +711,14 @@ static char_t task_switch_task_id_buf[100] = {0};
 __attribute__((no_stack_protector)) void task_switch_task(void) {
     task_t* current_task = cpu_state->current_task;
 
+    uint64_t current_tick = rdtsc();
+
     if(current_task != cpu_state->idle_task &&
        current_task->state != TASK_STATE_ENDED &&
        !current_task->message_waiting &&
        !current_task->sleeping &&
-       (time_timer_get_tick_count() - current_task->last_tick_count) < TASK_MAX_TICK_COUNT &&
-       time_timer_get_tick_count() > current_task->last_tick_count) {
+       (current_tick - current_task->last_tick_count) < task_max_tick_count_limit &&
+       current_tick > current_task->last_tick_count) {
 
         task_task_switch_exit();
 
@@ -748,7 +755,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     }
 
     current_task = task_find_next_task();
-    current_task->last_tick_count = time_timer_get_tick_count();
+    current_task->last_tick_count = rdtsc();
     current_task->task_switch_count++;
 
     switch(current_task->state) {
