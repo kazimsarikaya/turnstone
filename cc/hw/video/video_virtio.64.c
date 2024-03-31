@@ -23,6 +23,8 @@
 #include <cpu.h>
 #include <logging.h>
 #include <graphics/image.h>
+#include <graphics/virgl.h>
+#include <graphics/font.h>
 
 MODULE("turnstone.kernel.hw.video.virtiogpu");
 
@@ -30,8 +32,9 @@ uint64_t virtio_gpu_select_features(virtio_dev_t* dev, uint64_t selected_feature
 int8_t   virtio_gpu_create_queues(virtio_dev_t* dev);
 int8_t   virtio_gpu_controlq_isr(interrupt_frame_ext_t* frame);
 int8_t   virtio_gpu_cursorq_isr(interrupt_frame_ext_t* frame);
-void     virtio_gpu_display_init(uint32_t scanout);
-void     virtio_gpu_mouse_init(void);
+int8_t   virtio_gpu_display_init(uint32_t scanout);
+int8_t   virtio_gpu_mouse_init(void);
+int8_t   virtio_gpu_font_init(void);
 void     virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 void     virtio_gpu_mouse_move(uint32_t x, uint32_t y);
 
@@ -45,6 +48,8 @@ virtio_gpu_wrapper_t* virtio_gpu_wrapper = NULL;
 lock_t* virtio_gpu_lock = NULL;
 lock_t* virtio_gpu_cursor_lock = NULL;
 lock_t* virtio_gpu_flush_lock = NULL;
+
+static boolean_t virtio_gpu_dont_transfer_on_flush = false;
 
 void video_text_print(char_t* string);
 
@@ -105,11 +110,19 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
     virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
     virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
 
-    *lock = lock_create_for_future(0);
-    future_t* fut = future_create(*lock);
+    future_t* fut = NULL;
+
+    if(lock) {
+        *lock = lock_create_for_future(0);
+        fut = future_create(*lock);
+    }
 
     avail->index++;
     vq_control->nd->vqn = queue_no;
+
+    if(!lock) {
+        return 0;
+    }
 
     future_get_data_and_destroy(fut);
 
@@ -126,8 +139,6 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
         // video_text_print((char_t*)"\n");
 
         memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
-
-        lock_release(virtio_gpu_flush_lock);
 
         return -1;
     }
@@ -243,7 +254,7 @@ static int8_t virtio_gpu_queue_attach_backing(uint32_t queue_no, lock_t** lock,
     virtio_gpu_resource_attach_backing_t* attach_hdr = (virtio_gpu_resource_attach_backing_t*)offset;
 
     attach_hdr->hdr.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING;
-    attach_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
+    attach_hdr->hdr.flags = fence_id?VIRTIO_GPU_FLAG_FENCE:0;
     attach_hdr->hdr.fence_id = fence_id;
     attach_hdr->hdr.ctx_id = context_id;
     // attach_hdr->hdr.padding = 0;
@@ -300,26 +311,110 @@ static int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, loc
     virtio_gpu_resource_create_3d_t* create_hdr = (virtio_gpu_resource_create_3d_t*)offset;
 
     create_hdr->hdr.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_3D;
-    create_hdr->hdr.flags = VIRTIO_GPU_FLAG_FENCE;
+    create_hdr->hdr.flags = fence_id?VIRTIO_GPU_FLAG_FENCE:0;
     create_hdr->hdr.fence_id = fence_id;
     create_hdr->hdr.ctx_id = context_id;
     // create_hdr->hdr.padding = 0;
 
     create_hdr->resource_id = resource_id;
-    create_hdr->target = 2;
+    create_hdr->target = VIRGL_TEXTURE_TARGET_2D;
     create_hdr->format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
-    create_hdr->bind = 2;
+    create_hdr->bind = VIRGL_BIND_RENDER_TARGET | VIRGL_BIND_SAMPLER_VIEW;
     create_hdr->width = resource_width;
     create_hdr->height = resource_height;
     create_hdr->depth = 1;
     create_hdr->array_size = 1;
     create_hdr->last_level = 0;
     create_hdr->nr_samples = 0;
-    create_hdr->flags = VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP;
+    create_hdr->flags = 0; // VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP;
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_create_3d_t);
 
     return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+}
+
+static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
+                                           uint32_t fence_id, virgl_cmd_t* cmd) {
+    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
+
+    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
+    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
+    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
+
+    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
+    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+
+    virtio_gpu_cmd_submit_t* submit_hdr = (virtio_gpu_cmd_submit_t*)offset;
+
+    submit_hdr->hdr.type = VIRTIO_GPU_CMD_SUBMIT_3D;
+    submit_hdr->hdr.flags = fence_id?VIRTIO_GPU_FLAG_FENCE:0;
+    submit_hdr->hdr.fence_id = fence_id;
+    submit_hdr->hdr.ctx_id = cmd->context_id;
+
+    submit_hdr->size = cmd->cmd_dw_count * sizeof(uint32_t);
+    submit_hdr->padding = 0;
+
+    memory_memcopy(cmd->cmd_dws, offset + sizeof(virtio_gpu_cmd_submit_t), cmd->cmd_dw_count * sizeof(uint32_t));
+
+    descs[desc_index].length = sizeof(virtio_gpu_cmd_submit_t) + submit_hdr->size;
+
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+}
+
+static int8_t virtio_gpu_create_surface(uint32_t context_id, uint32_t resource_id, boolean_t is_texture,
+                                        uint32_t fence_id,
+                                        lock_t** lock) {
+    virgl_cmd_t cmd = {0};
+
+    cmd.context_id = context_id;
+
+    virgl_obj_surface_t obj_surface = {0};
+
+    obj_surface.surface_id = 10;
+    obj_surface.resource_id = resource_id;
+    obj_surface.format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
+    obj_surface.texture.level = 0;
+    obj_surface.texture.layers = 0;
+
+    if(virgl_encode_surface(&cmd, &obj_surface, is_texture) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode surface");
+        return -1;
+    }
+
+    virgl_obj_framebuffer_state_t obj_fb_state = {0};
+
+    obj_fb_state.nr_cbufs = 1;
+    obj_fb_state.zsurf_id = 0;
+    obj_fb_state.cbuf_ids[0] = obj_surface.surface_id;
+
+    if(virgl_encode_framebuffer_state(&cmd, &obj_fb_state) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode framebuffer state");
+        return -1;
+    }
+
+    virgl_cmd_clear_t clear_cmd = {0};
+
+    clear_cmd.clear_flags = VIRGL_CLEAR_FLAG_CLEAR_COLOR0;
+
+    clear_cmd.clear_color.f32[0] = 0.0f;
+    clear_cmd.clear_color.f32[1] = 1.0f;
+    clear_cmd.clear_color.f32[2] = 0.0f;
+    clear_cmd.clear_color.f32[3] = 1.0f;
+
+    clear_cmd.clear_depth = 0.0f;
+    clear_cmd.clear_stencil = 0;
+
+    if(virgl_encode_clear(&cmd, &clear_cmd) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode clear");
+        return -1;
+    }
+
+    if(virtio_gpu_queue_send_commad(0, lock, fence_id, &cmd) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to send command");
+        return -1;
+    }
+
+    return 0;
 }
 
 void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
@@ -332,18 +427,20 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
 
     int8_t res = 0;
 
-    res = virtio_gpu_queue_send_transfer3d(0, &virtio_gpu_lock,
-                                           1, virtio_gpu_wrapper->resource_ids[scanout], virtio_gpu_wrapper->fence_ids[scanout]++,
-                                           buf_offset, x, y, width, height,
-                                           0, 0, 0);
-    // width * sizeof(pixel_t), width * height * sizeof(pixel_t), 0); // FIXME: stride and layer_stride
+    if(!virtio_gpu_dont_transfer_on_flush) {
+        res = virtio_gpu_queue_send_transfer3d(0, NULL,
+                                               1, virtio_gpu_wrapper->resource_ids[scanout], virtio_gpu_wrapper->fence_ids[scanout]++,
+                                               buf_offset, x, y, width, height,
+                                               0, 0, 0);
+        // width * sizeof(pixel_t), width * height * sizeof(pixel_t), 0); // FIXME: stride and layer_stride
 
-    if(!res) {
-        // TODO: handle error
-        // force flush neverless
+        if(!res) {
+            // TODO: handle error
+            // force flush neverless
+        }
     }
 
-    res = virtio_gpu_queue_send_flush(0, &virtio_gpu_lock,
+    res = virtio_gpu_queue_send_flush(0, NULL,
                                       1, virtio_gpu_wrapper->resource_ids[scanout], virtio_gpu_wrapper->fence_ids[scanout]++,
                                       x, y, width, height);
 
@@ -356,7 +453,7 @@ void virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x,
     lock_release(virtio_gpu_flush_lock);
 }
 
-void virtio_gpu_display_init(uint32_t scanout) {
+int8_t virtio_gpu_display_init(uint32_t scanout) {
     virtio_gpu_flush_lock = lock_create();
 
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
@@ -408,7 +505,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     if(edid->hdr.type != VIRTIO_GPU_RESP_OK_EDID) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu get edid failed: 0x%x", edid->hdr.type);
 
-        return;
+        return -1;
     }
 
     video_edid_get_max_resolution(edid->edid, &virtio_gpu_screen_width, &virtio_gpu_screen_height);
@@ -455,7 +552,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
     if(info->hdr.type != VIRTIO_GPU_RESP_OK_DISPLAY_INFO) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu get display info failed: 0x%x", info->hdr.type);
 
-        return;
+        return -1;
     }
 
     memory_memclean(offset, sizeof(virtio_gpu_resp_display_info_t));
@@ -491,7 +588,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create failed");
-        return;
+        return -1;
     }
 
     /* end context create */
@@ -505,12 +602,12 @@ void virtio_gpu_display_init(uint32_t scanout) {
     virtio_gpu_wrapper->fence_ids[scanout] = 1;
 
     res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_lock,
-                                                      1, screen_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
+                                                      1, screen_resource_id, virtio_gpu_wrapper->fence_ids[scanout]++,
                                                       virtio_gpu_screen_width, virtio_gpu_screen_height);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource failed");
-        return;
+        return -1;
     }
 
     /* end resource create */
@@ -521,7 +618,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context attach resource failed");
-        return;
+        return -1;
     }
 
     /* end resource attach context */
@@ -540,7 +637,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
                                                       NULL) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate screen frame");
 
-        return;
+        return -1;
     }
 
     uint64_t screen_fa = screen_frm->frame_address;
@@ -555,7 +652,7 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu attach backing failed");
-        return;
+        return -1;
     }
 
     /* end resource attach backing */
@@ -572,8 +669,25 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu transfer to host 3d failed");
-        return;
+        return -1;
     }
+
+    /* end transfer to host 3d */
+
+    /* start create surface */
+
+    res = virtio_gpu_create_surface(1, screen_resource_id, true,
+                                    virtio_gpu_wrapper->fence_ids[scanout]++,
+                                    &virtio_gpu_lock);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu create surface failed");
+        return -1;
+    }
+
+    /* end create surface */
+
+    /* start set scanout */
 
     desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
     offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
@@ -600,8 +714,10 @@ void virtio_gpu_display_init(uint32_t scanout) {
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu set scanout failed");
-        return;
+        return -1;
     }
+
+    /* end set scanout */
 
     if(scanout == 0) {
         SYSTEM_INFO->frame_buffer->width = virtio_gpu_screen_width;
@@ -619,6 +735,8 @@ void virtio_gpu_display_init(uint32_t scanout) {
     }
 
     VIDEO_DISPLAY_FLUSH(scanout, 0, 0, 0, virtio_gpu_screen_width, virtio_gpu_screen_height);
+
+    return 0;
 }
 
 static void virtio_gpu_mouse_move_internal(virtio_gpu_ctrl_type_t type, uint32_t x, uint32_t y) {
@@ -658,21 +776,327 @@ static void virtio_gpu_mouse_move_internal(virtio_gpu_ctrl_type_t type, uint32_t
     }
 }
 
+static void virtio_gpu_scrool_screen(void) {
+    font_table_t* font_table = font_get_font_table();
+    memory_heap_t* heap = memory_get_default_heap();
+
+    virgl_cmd_t* cmd = memory_malloc_ext(heap, sizeof(virgl_cmd_t), 0);
+
+    if(cmd == NULL) {
+        return;
+    }
+
+    cmd->context_id = 1;
+
+    virgl_copy_region_t* copy_region = memory_malloc_ext(heap, sizeof(virgl_copy_region_t), 0);
+
+    if(copy_region == NULL) {
+        memory_free_ext(heap, cmd);
+        return;
+    }
+
+    copy_region->src_resource_id = virtio_gpu_wrapper->resource_ids[0];
+    copy_region->src_level = 0;
+    copy_region->src_x = 0;
+    copy_region->src_y = font_table->font_height;
+    copy_region->src_z = 0;
+
+    copy_region->width = virtio_gpu_screen_width;
+    copy_region->height = virtio_gpu_screen_height - font_table->font_height;
+    copy_region->depth = 1;
+
+    copy_region->dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
+    copy_region->dst_level = 0;
+    copy_region->dst_x = 0;
+    copy_region->dst_y = 0;
+    copy_region->dst_z = 0;
+
+    if(virgl_encode_copy_region(cmd, copy_region) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode copy region");
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, copy_region);
+        return;
+    }
+
+    // copy empty line
+
+    memory_memclean(copy_region, sizeof(virgl_copy_region_t));
+
+    copy_region->src_resource_id = virtio_gpu_wrapper->font_empty_line_resource_id;
+    copy_region->src_level = 0;
+    copy_region->src_x = 0;
+    copy_region->src_y = 0;
+    copy_region->src_z = 0;
+
+    copy_region->width = virtio_gpu_screen_width;
+    copy_region->height = font_table->font_height;
+    copy_region->depth = 1;
+
+    copy_region->dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
+    copy_region->dst_level = 0;
+    copy_region->dst_x = 0;
+    copy_region->dst_y = virtio_gpu_screen_height - font_table->font_height;
+    copy_region->dst_z = 0;
+
+    if(virgl_encode_copy_region(cmd, copy_region) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode copy region");
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, copy_region);
+        return;
+    }
+
+    int8_t res = 0;
+
+    res = virtio_gpu_queue_send_commad(0, // queue_no
+                                       NULL, // lock
+                                       virtio_gpu_wrapper->fence_ids[0]++,
+                                       cmd);
+    if(res != 0) {
+        // TODO: handle error
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, copy_region);
+        return;
+    }
+
+    memory_free_ext(heap, cmd);
+    memory_free_ext(heap, copy_region);
+}
+
+static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
+                                               color_t foreground, color_t background,
+                                               pixel_t* destination_base_address,
+                                               uint32_t x, uint32_t y,
+                                               uint32_t stride) {
+    UNUSED(background);
+    UNUSED(foreground);
+
+    UNUSED(destination_base_address);
+    UNUSED(stride);
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    font_table_t* font_table = font_get_font_table();
+
+    if(wc >= font_table->glyph_count){
+        wc = 0;
+    }
+
+    virgl_cmd_t* cmd = memory_malloc_ext(heap, sizeof(virgl_cmd_t), 0);
+
+    if(cmd == NULL) {
+        return;
+    }
+
+    cmd->context_id = 1;
+
+    virgl_copy_region_t* copy_region = memory_malloc_ext(heap, sizeof(virgl_copy_region_t), 0);
+
+    if(copy_region == NULL) {
+        memory_free_ext(heap, cmd);
+        return;
+    }
+
+    copy_region->src_resource_id = virtio_gpu_wrapper->font_resource_id;
+    copy_region->src_level = 0;
+    copy_region->src_x = font_table->font_width * (wc % font_table->column_count);
+    copy_region->src_y = font_table->font_height * (wc / font_table->column_count);
+    copy_region->src_z = 0;
+
+    copy_region->width = font_table->font_width;
+    copy_region->height = font_table->font_height;
+    copy_region->depth = 1;
+
+    copy_region->dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
+    copy_region->dst_level = 0;
+    copy_region->dst_x = x * font_table->font_width;
+    copy_region->dst_y = y * font_table->font_height;
+    copy_region->dst_z = 0;
+
+    if(virgl_encode_copy_region(cmd, copy_region) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode copy region");
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, copy_region);
+        return;
+    }
+
+    int8_t res = 0;
+
+    res = virtio_gpu_queue_send_commad(0, // queue_no
+                                       NULL, // lock
+                                       virtio_gpu_wrapper->fence_ids[0]++,
+                                       cmd);
 
 
+    if(res != 0) {
+        // TODO: handle error
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, copy_region);
+        return;
+    }
 
-void virtio_gpu_mouse_init(void) {
+    memory_free_ext(heap, cmd);
+    memory_free_ext(heap, copy_region);
+}
+
+static void* virtio_gpu_font_empty_line_value = NULL;
+
+static int8_t virtio_gpu_font_init_empty_line(void) {
+    font_table_t* font_table = font_get_font_table();
+    uint32_t font_empty_line_res_width = virtio_gpu_screen_width;
+    uint32_t font_empty_line_res_height = font_table->font_height;
+    uint32_t font_empty_line_res_size = font_empty_line_res_width * font_empty_line_res_height * sizeof(pixel_t);
+
+    uint64_t font_empty_line_phy_addr = 0;
+
+    virtio_gpu_font_empty_line_value = memory_malloc(font_empty_line_res_size);
+
+    if(virtio_gpu_font_empty_line_value == NULL) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate font_empty_line value");
+        return -1;
+    }
+
+    if(memory_paging_get_physical_address((uint64_t)virtio_gpu_font_empty_line_value, &font_empty_line_phy_addr) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to get font_empty_line physical address");
+        return -1;
+    }
+
+    PRINTLOG(VIRTIOGPU, LOG_INFO, "font_empty_line physical address: 0x%llx", font_empty_line_phy_addr);
+    PRINTLOG(VIRTIOGPU, LOG_INFO, "font_empty_line dimension: %dx%d", font_empty_line_res_width, font_empty_line_res_height);
+    PRINTLOG(VIRTIOGPU, LOG_INFO, "font_empty_line size: %d", font_empty_line_res_size);
+
+    uint32_t font_empty_line_resource_id = virtio_gpu_next_resource_id++;
+    virtio_gpu_wrapper->font_empty_line_resource_id = font_empty_line_resource_id;
+
+    int8_t res = 0;
+
+    /* start resource create */
+
+    res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_lock,
+                                                      1, font_empty_line_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
+                                                      font_empty_line_res_width, font_empty_line_res_height);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource for font_empty_line failed");
+        return -1;
+    }
+
+    /* end resource create */
+
+    /* start resource attach context */
+
+    res = virtio_gpu_queue_context_attach_resource(0, &virtio_gpu_lock, 1, font_empty_line_resource_id);
+
+    /* end resource attach context */
+
+    res = virtio_gpu_queue_attach_backing(0, &virtio_gpu_lock, 1, virtio_gpu_wrapper->fence_ids[0]++,
+                                          font_empty_line_resource_id, font_empty_line_phy_addr, font_empty_line_res_size);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu attach backing for font_empty_line failed");
+        return -1;
+    }
+
+    uint32_t stride = font_empty_line_res_width * sizeof(pixel_t);
+    uint32_t layer_stride = font_empty_line_res_width * font_empty_line_res_height * sizeof(pixel_t);
+
+    res = virtio_gpu_queue_send_transfer3d(0, &virtio_gpu_lock,
+                                           1, font_empty_line_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
+                                           0, 0, 0, font_empty_line_res_width, font_empty_line_res_height,
+                                           stride, layer_stride, 0);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu transfer to host 3d for font_empty_line failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virtio_gpu_font_init(void) {
+    font_table_t* font_table = font_get_font_table();
+    uint32_t font_res_width = font_table->font_width * font_table->column_count;
+    uint32_t font_res_height = font_table->font_height * font_table->row_count;
+    uint32_t font_res_size = font_res_width * font_res_height * sizeof(pixel_t);
+
+    uint64_t font_phy_addr = 0;
+
+    if(memory_paging_get_physical_address((uint64_t)font_table->bitmap, &font_phy_addr) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to get font physical address");
+        return -1;
+    }
+
+    PRINTLOG(VIRTIOGPU, LOG_INFO, "font physical address: 0x%llx", font_phy_addr);
+
+    uint32_t font_resource_id = virtio_gpu_next_resource_id++;
+    virtio_gpu_wrapper->font_resource_id = font_resource_id;
+
+    int8_t res = 0;
+
+    /* start resource create */
+
+    res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_lock,
+                                                      1, font_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
+                                                      font_res_width, font_res_height);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource for font failed");
+        return -1;
+    }
+
+    /* end resource create */
+
+    /* start resource attach context */
+
+    res = virtio_gpu_queue_context_attach_resource(0, &virtio_gpu_lock, 1, font_resource_id);
+
+    /* end resource attach context */
+
+    res = virtio_gpu_queue_attach_backing(0, &virtio_gpu_lock, 1, virtio_gpu_wrapper->fence_ids[0]++,
+                                          font_resource_id, font_phy_addr, font_res_size);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu attach backing for font failed");
+        return -1;
+    }
+
+    uint32_t stride = font_res_width * sizeof(pixel_t);
+    uint32_t layer_stride = font_res_width * font_res_height * sizeof(pixel_t);
+
+    res = virtio_gpu_queue_send_transfer3d(0, &virtio_gpu_lock,
+                                           1, font_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
+                                           0, 0, 0, font_res_width, font_res_height,
+                                           stride, layer_stride, 0);
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu transfer to host 3d for font failed");
+        return -1;
+    }
+
+    if(virtio_gpu_font_init_empty_line() != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to init font empty line");
+        return -1;
+    }
+
+    virtio_gpu_dont_transfer_on_flush = true;
+    VIDEO_PRINT_GLYPH_WITH_STRIDE = virtio_gpu_print_glyph_with_stride;
+    VIDEO_SCROLL_SCREEN = virtio_gpu_scrool_screen;
+
+    return 0;
+}
+
+
+int8_t virtio_gpu_mouse_init(void) {
     graphics_raw_image_t* mouse_image = video_get_mouse_image();
 
     if(mouse_image == NULL || mouse_image->data == NULL) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to get mouse image");
-        return;
+        return -1;
     }
 
     if(mouse_image->width != 64 || mouse_image->height != 64) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "mouse image must be 64x64");
 
-        return;
+        return -1;
     }
 
     virtio_gpu_mouse_width = mouse_image->width;
@@ -690,8 +1114,8 @@ void virtio_gpu_mouse_init(void) {
                                                       virtio_gpu_mouse_width, virtio_gpu_mouse_height);
 
     if(res != 0) {
-        // TODO: handle error
-        return;
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource for mouse failed");
+        return -1;
     }
 
     /* end resource create */
@@ -714,7 +1138,7 @@ void virtio_gpu_mouse_init(void) {
                                                       NULL) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to allocate mouse frame");
 
-        return;
+        return -1;
     }
 
     uint64_t mouse_fa = mouse_frm->frame_address;
@@ -730,8 +1154,8 @@ void virtio_gpu_mouse_init(void) {
                                           mouse_resource_id, mouse_fa, mouse_size);
 
     if(res != 0) {
-        // TODO: handle error
-        return;
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu attach backing for mouse failed");
+        return -1;
     }
 
     uint32_t stride = virtio_gpu_mouse_width * sizeof(pixel_t);
@@ -743,14 +1167,15 @@ void virtio_gpu_mouse_init(void) {
                                            stride, layer_stride, 0);
 
     if(res != 0) {
-        // TODO: handle error
-        return;
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu transfer to host 3d for mouse failed");
+        return -1;
     }
 
     virtio_gpu_mouse_move_internal(VIRTIO_GPU_CMD_UPDATE_CURSOR, 0, 0);
 
     VIDEO_MOVE_CURSOR = virtio_gpu_mouse_move;
 
+    return 0;
 }
 
 void virtio_gpu_mouse_move(uint32_t x, uint32_t y) {
@@ -839,11 +1264,33 @@ int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
         return -1;
     }
 
+    int8_t res = 0;
+
     for(uint32_t i = 0; i < vgpu_conf->num_scanouts; i++) {
-        virtio_gpu_display_init(i);
+        res = virtio_gpu_display_init(i);
+
+        if(res != 0) {
+            PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
+
+            return -1;
+        }
     }
 
-    virtio_gpu_mouse_init();
+    res = virtio_gpu_mouse_init();
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
+
+        return -1;
+    }
+
+    res = virtio_gpu_font_init();
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
+
+        return -1;
+    }
 
     PRINTLOG(VIRTIOGPU, LOG_INFO, "virtio gpu init success");
 

@@ -18,11 +18,11 @@ MODULE("turnstone.windowmanager");
 
 void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
 
-    font_print_glyph_with_stride(wc,
-                                 window->foreground_color, window->background_color,
-                                 VIDEO_BASE_ADDRESS,
-                                 x, y,
-                                 VIDEO_PIXELS_PER_SCANLINE);
+    VIDEO_PRINT_GLYPH_WITH_STRIDE(wc,
+                                  window->foreground_color, window->background_color,
+                                  VIDEO_BASE_ADDRESS,
+                                  x, y,
+                                  VIDEO_PIXELS_PER_SCANLINE);
 
 }
 

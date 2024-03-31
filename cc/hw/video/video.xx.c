@@ -42,6 +42,8 @@ uint32_t* VIDEO_BASE_ADDRESS = NULL;
 uint32_t VIDEO_PIXELS_PER_SCANLINE = 0;
 video_display_flush_f VIDEO_DISPLAY_FLUSH = NULL;
 video_move_cursor_f VIDEO_MOVE_CURSOR = NULL;
+video_print_glyph_with_stride_f VIDEO_PRINT_GLYPH_WITH_STRIDE = NULL;
+video_scroll_screen_f VIDEO_SCROLL_SCREEN = NULL;
 
 boolean_t GRAPHICS_MODE = 0;
 int32_t VIDEO_GRAPHICS_WIDTH = 0;
@@ -84,14 +86,6 @@ void video_refresh_frame_buffer_address(void) {
     if(VIDEO_BASE_ADDRESS) {
         GRAPHICS_MODE = true;
     }
-}
-
-static void video_print_glyph(wchar_t wc) {
-    font_print_glyph_with_stride(wc,
-                                 VIDEO_GRAPHICS_FOREGROUND, VIDEO_GRAPHICS_BACKGROUND,
-                                 VIDEO_BASE_ADDRESS,
-                                 cursor_graphics_x, cursor_graphics_y,
-                                 VIDEO_PIXELS_PER_SCANLINE);
 }
 
 void video_init(void) {
@@ -152,6 +146,8 @@ void video_init(void) {
 
     if(VIDEO_BASE_ADDRESS) {
         GRAPHICS_MODE = true;
+        VIDEO_PRINT_GLYPH_WITH_STRIDE = font_print_glyph_with_stride;
+        VIDEO_SCROLL_SCREEN = video_graphics_scroll;
     }
 
     video_lock = lock_create();
@@ -309,7 +305,7 @@ void video_graphics_print(const char_t* string) {
             i++;
 
             if(cursor_graphics_y >= VIDEO_FONT_LINES_ON_SCREEN) {
-                video_graphics_scroll();
+                VIDEO_SCROLL_SCREEN();
                 cursor_graphics_y = VIDEO_FONT_LINES_ON_SCREEN - 1;
                 full_flush = true;
             }
@@ -318,12 +314,16 @@ void video_graphics_print(const char_t* string) {
         }
 
         if(cursor_graphics_y >= VIDEO_FONT_LINES_ON_SCREEN) {
-            video_graphics_scroll();
+            VIDEO_SCROLL_SCREEN();
             cursor_graphics_y = VIDEO_FONT_LINES_ON_SCREEN - 1;
             full_flush = true;
         }
 
-        video_print_glyph(wc);
+        VIDEO_PRINT_GLYPH_WITH_STRIDE(wc,
+                                      VIDEO_GRAPHICS_FOREGROUND, VIDEO_GRAPHICS_BACKGROUND,
+                                      VIDEO_BASE_ADDRESS,
+                                      cursor_graphics_x, cursor_graphics_y,
+                                      VIDEO_PIXELS_PER_SCANLINE);
 
         cursor_graphics_x++;
 
@@ -332,7 +332,7 @@ void video_graphics_print(const char_t* string) {
             cursor_graphics_y++;
 
             if(cursor_graphics_y >= VIDEO_FONT_LINES_ON_SCREEN) {
-                video_graphics_scroll();
+                VIDEO_SCROLL_SCREEN();
                 cursor_graphics_y = VIDEO_FONT_LINES_ON_SCREEN - 1;
                 full_flush = true;
             }

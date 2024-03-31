@@ -66,6 +66,19 @@ typedef void (*video_move_cursor_f)(uint32_t x, uint32_t y);
 
 extern video_move_cursor_f VIDEO_MOVE_CURSOR;
 
+
+typedef void (*video_print_glyph_with_stride_f)(wchar_t wc,
+                                                color_t foreground, color_t background,
+                                                pixel_t* destination_base_address,
+                                                uint32_t x, uint32_t y,
+                                                uint32_t stride);
+
+extern video_print_glyph_with_stride_f VIDEO_PRINT_GLYPH_WITH_STRIDE;
+
+typedef void (*video_scroll_screen_f)(void);
+
+extern video_scroll_screen_f VIDEO_SCROLL_SCREEN;
+
 void video_set_color(color_t foreground, color_t background);
 
 void video_print(const char_t* string);
