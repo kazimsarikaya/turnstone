@@ -326,6 +326,11 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    if(hpet_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init hpet. Halting...");
+        cpu_hlt();
+    }
+
     if(acpi_setup_events() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot setup acpi events");
         cpu_hlt();
@@ -348,8 +353,8 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
-    if(hpet_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init hpet. Halting...");
+    if(smp_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
         cpu_hlt();
     }
 
@@ -358,8 +363,8 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    if(smp_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
+    if(windowmanager_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init window manager. Halting...");
         cpu_hlt();
     }
 
@@ -405,11 +410,6 @@ int8_t kmain64(size_t entry_point) {
         } else {
             PRINTLOG(KERNEL, LOG_WARNING, "usb mass storage disk 0 not found");
         }
-    }
-
-    if(windowmanager_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init window manager. Halting...");
-        cpu_hlt();
     }
 
     if(kbd_init() != 0) {
