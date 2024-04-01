@@ -79,6 +79,11 @@ typedef void (*video_scroll_screen_f)(void);
 
 extern video_scroll_screen_f VIDEO_SCROLL_SCREEN;
 
+typedef void (*video_clear_screen_area_f)(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background);
+
+extern video_clear_screen_area_f VIDEO_CLEAR_SCREEN_AREA;
+
+
 void video_set_color(color_t foreground, color_t background);
 
 void video_print(const char_t* string);

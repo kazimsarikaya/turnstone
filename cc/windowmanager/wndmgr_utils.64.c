@@ -81,13 +81,7 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
 }
 
 void windowmanager_clear_screen(window_t* window) {
-    video_move_text_cursor(0, 0);
-    video_text_cursor_hide();
-    for(uint32_t i = 0; i < VIDEO_GRAPHICS_HEIGHT; i++) {
-        for(uint32_t j = 0; j < VIDEO_GRAPHICS_WIDTH; j++) {
-            *((pixel_t*)(VIDEO_BASE_ADDRESS + (i * VIDEO_PIXELS_PER_SCANLINE) + j)) = window->background_color.color;
-        }
-    }
+    VIDEO_CLEAR_SCREEN_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
 }
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {

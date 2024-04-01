@@ -12,18 +12,11 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-int8_t gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, pixel_t color) {
-    for (uint32_t i = 0; i < rect.height; i++) {
-        for (uint32_t j = 0; j < rect.width; j++) {
-            uint32_t idx = (rect.y + i) * area_width + (rect.x + j);
+int8_t gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color) {
+    UNUSED(buffer);
+    UNUSED(area_width);
 
-            if(idx >= VIDEO_GRAPHICS_WIDTH * VIDEO_GRAPHICS_HEIGHT) {
-                return -1;
-            }
-
-            buffer[idx] = color;
-        }
-    }
+    VIDEO_CLEAR_SCREEN_AREA(rect.x, rect.y, rect.width, rect.height, color);
 
     return 0;
 }
@@ -78,7 +71,7 @@ boolean_t windowmanager_draw_window(window_t* window) {
         flush_needed = true;
         video_text_cursor_hide();
 
-        gfx_draw_rectangle(window->buffer, VIDEO_PIXELS_PER_SCANLINE, window->rect, window->background_color.color);
+        gfx_draw_rectangle(window->buffer, VIDEO_PIXELS_PER_SCANLINE, window->rect, window->background_color);
 
         windowmanager_print_text(window, 0, 0, window->text);
 

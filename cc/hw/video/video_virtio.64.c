@@ -37,6 +37,7 @@ int8_t   virtio_gpu_mouse_init(void);
 int8_t   virtio_gpu_font_init(void);
 void     virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 void     virtio_gpu_mouse_move(uint32_t x, uint32_t y);
+void     virtio_gpu_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background);
 
 uint32_t virtio_gpu_next_resource_id = 0;
 uint32_t virtio_gpu_screen_width = 0;
@@ -732,6 +733,7 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
         video_copy_contents_to_frame_buffer((uint8_t*)screen_va, virtio_gpu_screen_width, virtio_gpu_screen_height, virtio_gpu_screen_width);
         video_refresh_frame_buffer_address();
         VIDEO_DISPLAY_FLUSH = virtio_gpu_display_flush;
+        VIDEO_CLEAR_SCREEN_AREA = virtio_gpu_clear_screen_area;
     }
 
     VIDEO_DISPLAY_FLUSH(scanout, 0, 0, 0, virtio_gpu_screen_width, virtio_gpu_screen_height);
@@ -776,6 +778,64 @@ static void virtio_gpu_mouse_move_internal(virtio_gpu_ctrl_type_t type, uint32_t
     }
 }
 
+void virtio_gpu_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
+    memory_heap_t* heap = memory_get_default_heap();
+
+    virgl_cmd_t* cmd = memory_malloc_ext(heap, sizeof(virgl_cmd_t), 0);
+
+    if(cmd == NULL) {
+        return;
+    }
+
+    cmd->context_id = 1;
+    cmd->send_cmd = virtio_gpu_queue_send_commad;
+
+    virgl_cmd_clear_texture_t* clear_texture = memory_malloc_ext(heap, sizeof(virgl_cmd_clear_texture_t), 0);
+
+    if(clear_texture == NULL) {
+        memory_free_ext(heap, cmd);
+        return;
+    }
+
+    clear_texture->texture_id = virtio_gpu_wrapper->resource_ids[0];
+    clear_texture->level = 0;
+    clear_texture->box.x = x;
+    clear_texture->box.y = y;
+    clear_texture->box.z = 0;
+    clear_texture->box.w = width;
+    clear_texture->box.h = height;
+    clear_texture->box.d = 1;
+
+    clear_texture->clear_color.f32[0] = background.red / 255.0f;
+    clear_texture->clear_color.f32[1] = background.green / 255.0f;
+    clear_texture->clear_color.f32[2] = background.blue / 255.0f;
+    clear_texture->clear_color.f32[3] = background.alpha / 255.0f;
+
+    if(virgl_encode_clear_texture(cmd, clear_texture) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode clear texture");
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, clear_texture);
+        return;
+    }
+
+    int8_t res = 0;
+
+    res = virtio_gpu_queue_send_commad(0, // queue_no
+                                       NULL, // lock
+                                       virtio_gpu_wrapper->fence_ids[0]++,
+                                       cmd);
+
+    if(res != 0) {
+        // TODO: handle error
+        memory_free_ext(heap, cmd);
+        memory_free_ext(heap, clear_texture);
+        return;
+    }
+
+    memory_free_ext(heap, cmd);
+    memory_free_ext(heap, clear_texture);
+}
+
 static void virtio_gpu_scrool_screen(void) {
     font_table_t* font_table = font_get_font_table();
     memory_heap_t* heap = memory_get_default_heap();
@@ -787,6 +847,7 @@ static void virtio_gpu_scrool_screen(void) {
     }
 
     cmd->context_id = 1;
+    cmd->send_cmd = virtio_gpu_queue_send_commad;
 
     virgl_copy_region_t* copy_region = memory_malloc_ext(heap, sizeof(virgl_copy_region_t), 0);
 
@@ -797,13 +858,13 @@ static void virtio_gpu_scrool_screen(void) {
 
     copy_region->src_resource_id = virtio_gpu_wrapper->resource_ids[0];
     copy_region->src_level = 0;
-    copy_region->src_x = 0;
-    copy_region->src_y = font_table->font_height;
-    copy_region->src_z = 0;
+    copy_region->src_box.x = 0;
+    copy_region->src_box.y = font_table->font_height;
+    copy_region->src_box.z = 0;
+    copy_region->src_box.w = virtio_gpu_screen_width;
+    copy_region->src_box.h = virtio_gpu_screen_height - font_table->font_height;
+    copy_region->src_box.d = 1;
 
-    copy_region->width = virtio_gpu_screen_width;
-    copy_region->height = virtio_gpu_screen_height - font_table->font_height;
-    copy_region->depth = 1;
 
     copy_region->dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
     copy_region->dst_level = 0;
@@ -824,13 +885,13 @@ static void virtio_gpu_scrool_screen(void) {
 
     copy_region->src_resource_id = virtio_gpu_wrapper->font_empty_line_resource_id;
     copy_region->src_level = 0;
-    copy_region->src_x = 0;
-    copy_region->src_y = 0;
-    copy_region->src_z = 0;
+    copy_region->src_box.x = 0;
+    copy_region->src_box.y = 0;
+    copy_region->src_box.z = 0;
+    copy_region->src_box.w = virtio_gpu_screen_width;
+    copy_region->src_box.h = font_table->font_height;
+    copy_region->src_box.d = 1;
 
-    copy_region->width = virtio_gpu_screen_width;
-    copy_region->height = font_table->font_height;
-    copy_region->depth = 1;
 
     copy_region->dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
     copy_region->dst_level = 0;
@@ -898,13 +959,13 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
 
     copy_region->src_resource_id = virtio_gpu_wrapper->font_resource_id;
     copy_region->src_level = 0;
-    copy_region->src_x = font_table->font_width * (wc % font_table->column_count);
-    copy_region->src_y = font_table->font_height * (wc / font_table->column_count);
-    copy_region->src_z = 0;
+    copy_region->src_box.x = font_table->font_width * (wc % font_table->column_count);
+    copy_region->src_box.y = font_table->font_height * (wc / font_table->column_count);
+    copy_region->src_box.z = 0;
+    copy_region->src_box.w = font_table->font_width;
+    copy_region->src_box.h = font_table->font_height;
+    copy_region->src_box.d = 1;
 
-    copy_region->width = font_table->font_width;
-    copy_region->height = font_table->font_height;
-    copy_region->depth = 1;
 
     copy_region->dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
     copy_region->dst_level = 0;

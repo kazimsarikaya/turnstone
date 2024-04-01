@@ -64,7 +64,7 @@ extern uint32_t* VIDEO_BASE_ADDRESS;
 extern uint32_t VIDEO_PIXELS_PER_SCANLINE;
 
 color_t gfx_blend_colors(color_t color1, color_t color2);
-int8_t  gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, pixel_t color);
+int8_t  gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color);
 
 void      windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc);
 void      windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text);

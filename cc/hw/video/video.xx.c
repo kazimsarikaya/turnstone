@@ -36,6 +36,7 @@ void video_graphics_scroll(void);
 void video_text_print(const char_t* string);
 void video_graphics_print(const char_t* string);
 void video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+void video_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background);
 
 
 uint32_t* VIDEO_BASE_ADDRESS = NULL;
@@ -44,6 +45,7 @@ video_display_flush_f VIDEO_DISPLAY_FLUSH = NULL;
 video_move_cursor_f VIDEO_MOVE_CURSOR = NULL;
 video_print_glyph_with_stride_f VIDEO_PRINT_GLYPH_WITH_STRIDE = NULL;
 video_scroll_screen_f VIDEO_SCROLL_SCREEN = NULL;
+video_clear_screen_area_f VIDEO_CLEAR_SCREEN_AREA = NULL;
 
 boolean_t GRAPHICS_MODE = 0;
 int32_t VIDEO_GRAPHICS_WIDTH = 0;
@@ -148,6 +150,7 @@ void video_init(void) {
         GRAPHICS_MODE = true;
         VIDEO_PRINT_GLYPH_WITH_STRIDE = font_print_glyph_with_stride;
         VIDEO_SCROLL_SCREEN = video_graphics_scroll;
+        VIDEO_CLEAR_SCREEN_AREA = video_clear_screen_area;
     }
 
     video_lock = lock_create();
@@ -375,17 +378,28 @@ void video_graphics_print(const char_t* string) {
     }
 }
 
-void video_clear_screen(void){
+void video_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
     if(GRAPHICS_MODE) {
-        for(int64_t i = 0; i < VIDEO_GRAPHICS_HEIGHT * VIDEO_GRAPHICS_WIDTH; i++) {
-            *((pixel_t*)(VIDEO_BASE_ADDRESS + i)) = (pixel_t)VIDEO_GRAPHICS_BACKGROUND.color;
+        uint32_t i = 0;
+        uint32_t j = 0;
+        uint32_t line = 0;
+        uint32_t bg = background.color;
+
+        for(i = 0; i < height; i++) {
+            line = (y + i) * VIDEO_PIXELS_PER_SCANLINE + x;
+
+            for(j = 0; j < width; j++) {
+                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = bg;
+                line++;
+            }
         }
 
-        cursor_graphics_x = 0;
-        cursor_graphics_y = 0;
-
-        VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+        VIDEO_DISPLAY_FLUSH(0, 0, x, y, width, height);
     }
+}
+
+void video_clear_screen(void){
+    video_clear_screen_area(0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT, VIDEO_GRAPHICS_BACKGROUND);
 }
 
 void video_print(const char_t* string) {

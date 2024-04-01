@@ -10,6 +10,7 @@
 #define ___VIRGL_H 0
 
 #include <types.h>
+#include <cpu/sync.h>
 
 
 typedef enum virgl_object_type_t {
@@ -144,17 +145,34 @@ typedef enum virgl_bind_t {
 #define VIRGL_CMD(cmd, obj, len) ((cmd) | ((obj) << 8) | ((len) << 16))
 #define VIRGL_CMD_MAX_DWORDS ((4096 - 4) / 4)
 
-typedef struct virgl_cmd_t {
-    uint32_t context_id;
-    uint32_t cmd_dw_count;
-    uint32_t cmd_dws[VIRGL_CMD_MAX_DWORDS];
-} virgl_cmd_t;
+typedef struct virgl_cmd_t virgl_cmd_t;
+
+typedef int8_t (*virgl_send_cmd_f)(uint32_t queue_no, lock_t** lock, uint32_t fence_id, virgl_cmd_t * cmd);
+
+struct virgl_cmd_t {
+    uint32_t         context_id;
+    uint16_t         queue_no;
+    lock_t**         lock;
+    uint32_t         fence_id;
+    virgl_send_cmd_f send_cmd;
+    uint32_t         cmd_dw_count;
+    uint32_t         cmd_dws[VIRGL_CMD_MAX_DWORDS];
+};
 
 typedef union virgl_color_t {
     int32_t   i32[4];
     uint32_t  ui32[4];
     float32_t f32[4];
 } virgl_color_t;
+
+typedef struct virgl_box_t {
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
+    uint32_t w;
+    uint32_t h;
+    uint32_t d;
+} virgl_box_t;
 
 _Static_assert(sizeof(virgl_color_t) == 16, "virgl_color_t size is not 16 bytes");
 
@@ -191,6 +209,17 @@ _Static_assert(sizeof(virgl_cmd_clear_t) == 32, "virgl_cmd_clear_t size is not 2
 
 #define VIRGL_CMD_CLEAR_CCMD_PAYLOAD_SIZE (sizeof(virgl_cmd_clear_t) / sizeof(uint32_t))
 
+typedef struct virgl_cmd_clear_texture_t {
+    uint32_t      texture_id;
+    uint32_t      level;
+    virgl_box_t   box;
+    virgl_color_t clear_color;
+} virgl_cmd_clear_texture_t;
+
+_Static_assert(sizeof(virgl_cmd_clear_texture_t) == 12 * sizeof(uint32_t), "virgl_cmd_clear_texture_t size is not 48 bytes");
+
+#define VIRGL_CMD_CLEAR_TEXTURE_CCMD_PAYLOAD_SIZE (sizeof(virgl_cmd_clear_texture_t) / sizeof(uint32_t))
+
 #define VIRGL_OBJ_SURFACE_TEXTURE_LAYERS(fl, ll) (((ll) << 16) | (fl))
 
 typedef struct virgl_obj_surface_t {
@@ -224,28 +253,24 @@ typedef struct virgl_obj_framebuffer_state_t {
 #define VIRGL_OBJ_FRAMEBUFFER_STATE_CCMD_PAYLOAD_SIZE(nr_cbufs) (2 + (nr_cbufs))
 
 typedef struct virgl_copy_region_t {
-    uint32_t src_resource_id;
-    uint32_t src_level;
-    uint32_t src_x;
-    uint32_t src_y;
-    uint32_t src_z;
-    uint32_t dst_resource_id;
-    uint32_t dst_level;
-    uint32_t dst_x;
-    uint32_t dst_y;
-    uint32_t dst_z;
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
+    uint32_t    dst_resource_id;
+    uint32_t    dst_level;
+    uint32_t    dst_x;
+    uint32_t    dst_y;
+    uint32_t    dst_z;
+    uint32_t    src_resource_id;
+    uint32_t    src_level;
+    virgl_box_t src_box;
 } virgl_copy_region_t;
 
 _Static_assert(sizeof(virgl_copy_region_t) == 13 * sizeof(uint32_t), "virgl_copy_region_t size is not 52 bytes");
 
 #define VIRGL_COPY_REGION_CCMD_PAYLOAD_SIZE (sizeof(virgl_copy_region_t) / sizeof(uint32_t))
 
-int8_t virgl_encode_clear(virgl_cmd_t* cmd, virgl_cmd_clear_t * clear);
-int8_t virgl_encode_surface(virgl_cmd_t* cmd, virgl_obj_surface_t * surface, boolean_t is_texture);
-int8_t virgl_encode_framebuffer_state(virgl_cmd_t* cmd, virgl_obj_framebuffer_state_t * fb_state);
-int8_t virgl_encode_copy_region(virgl_cmd_t* cmd, virgl_copy_region_t * copy_region);
+int8_t virgl_encode_clear(virgl_cmd_t * cmd, virgl_cmd_clear_t * clear);
+int8_t virgl_encode_clear_texture(virgl_cmd_t * cmd, virgl_cmd_clear_texture_t * clear_texture);
+int8_t virgl_encode_surface(virgl_cmd_t * cmd, virgl_obj_surface_t * surface, boolean_t is_texture);
+int8_t virgl_encode_framebuffer_state(virgl_cmd_t * cmd, virgl_obj_framebuffer_state_t * fb_state);
+int8_t virgl_encode_copy_region(virgl_cmd_t * cmd, virgl_copy_region_t * copy_region);
 
 #endif // ___VIRGL_H
