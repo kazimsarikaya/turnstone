@@ -289,7 +289,8 @@ static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t
 
 static int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, lock_t** lock,
                                                           uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
-                                                          uint32_t resource_width, uint32_t resource_height) {
+                                                          uint32_t resource_width, uint32_t resource_height,
+                                                          boolean_t is_y_0_top) {
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
@@ -318,7 +319,7 @@ static int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, loc
     create_hdr->array_size = 1;
     create_hdr->last_level = 0;
     create_hdr->nr_samples = 0;
-    create_hdr->flags = 0; // VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP;
+    create_hdr->flags = is_y_0_top?VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP:0;
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_create_3d_t);
 
@@ -607,7 +608,7 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
 
     res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_wrapper->lock,
                                                       1, screen_resource_id, virtio_gpu_wrapper->fence_ids[scanout]++,
-                                                      virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
+                                                      virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height, false);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource failed");
@@ -965,7 +966,8 @@ static int8_t virtio_gpu_font_init_empty_line(void) {
 
     res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_wrapper->lock,
                                                       1, font_empty_line_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
-                                                      font_empty_line_res_width, font_empty_line_res_height);
+                                                      font_empty_line_res_width, font_empty_line_res_height,
+                                                      false);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource for font_empty_line failed");
@@ -1028,7 +1030,8 @@ int8_t virtio_gpu_font_init(void) {
 
     res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_wrapper->lock,
                                                       1, font_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
-                                                      font_res_width, font_res_height);
+                                                      font_res_width, font_res_height,
+                                                      false);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource for font failed");
@@ -1103,7 +1106,8 @@ int8_t mouse_init(void) {
 
     res = virtio_gpu_queue_context_create_3d_resource(0, &virtio_gpu_wrapper->lock,
                                                       1, mouse_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
-                                                      virtio_gpu_wrapper->mouse_width, virtio_gpu_wrapper->mouse_height);
+                                                      virtio_gpu_wrapper->mouse_width, virtio_gpu_wrapper->mouse_height,
+                                                      true);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create 3d resource for mouse failed");
