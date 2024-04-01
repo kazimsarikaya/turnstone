@@ -70,7 +70,7 @@ void windowmanager_insert_and_set_current_window(window_t* window) {
         return;
     }
 
-    video_text_cursor_hide();
+    // video_text_cursor_hide();
 
     window_t* next = windowmanager_current_window->next;
 
@@ -116,7 +116,7 @@ void windowmanager_remove_and_set_current_window(window_t* window) {
         return;
     }
 
-    video_text_cursor_hide();
+    // video_text_cursor_hide();
 
     window_t* next = windowmanager_current_window->next;
     window_t* prev = window->prev;

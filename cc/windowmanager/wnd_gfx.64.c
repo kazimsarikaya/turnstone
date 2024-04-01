@@ -69,7 +69,7 @@ boolean_t windowmanager_draw_window(window_t* window) {
 
     if(window->is_dirty) {
         flush_needed = true;
-        video_text_cursor_hide();
+        // video_text_cursor_hide();
 
         gfx_draw_rectangle(window->buffer, VIDEO_PIXELS_PER_SCANLINE, window->rect, window->background_color);
 

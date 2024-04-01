@@ -11,6 +11,113 @@
 
 MODULE("turnstone.kenrel.graphics.virgl");
 
+struct virgl_renderer_t {
+    memory_heap_t* heap;
+    uint32_t       next_resource_id;
+    virgl_cmd_t*   cmd;
+};
+
+struct virgl_cmd_t {
+    uint32_t         context_id;
+    uint16_t         queue_no;
+    lock_t**         lock;
+    uint64_t*        fence_id;
+    virgl_send_cmd_f send_cmd;
+    uint32_t         cmd_dw_count;
+    uint32_t         cmd_dws[VIRGL_CMD_MAX_DWORDS];
+};
+
+virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd) {
+    if(!heap || !lock || !fence_id || !send_cmd) {
+        return NULL;
+    }
+
+    virgl_renderer_t* renderer = memory_malloc_ext(heap, sizeof(virgl_renderer_t), 0);
+    if(!renderer) {
+        return NULL;
+    }
+
+    renderer->heap = heap;
+    renderer->next_resource_id = 1;
+    renderer->cmd = memory_malloc_ext(heap, sizeof(virgl_cmd_t), 0);
+
+    if(!renderer->cmd) {
+        memory_free_ext(heap, renderer);
+        return NULL;
+    }
+
+    renderer->cmd->context_id = context_id;
+    renderer->cmd->queue_no = queue_no;
+    renderer->cmd->lock = lock;
+    renderer->cmd->fence_id = fence_id;
+    renderer->cmd->send_cmd = send_cmd;
+
+    return renderer;
+}
+
+uint32_t virgl_renderer_get_next_resource_id(virgl_renderer_t* renderer) {
+    if(!renderer) {
+        return 1;
+    }
+
+    return renderer->next_resource_id++;
+}
+
+memory_heap_t* virgl_renderer_get_heap(virgl_renderer_t* renderer) {
+    if(!renderer) {
+        return NULL;
+    }
+
+    return renderer->heap;
+}
+
+virgl_cmd_t* virgl_renderer_get_cmd(virgl_renderer_t* renderer) {
+    if(!renderer) {
+        return NULL;
+    }
+
+    return renderer->cmd;
+}
+
+uint32_t virgl_cmd_get_context_id(virgl_cmd_t * cmd) {
+    if(!cmd) {
+        return 1;
+    }
+
+    return cmd->context_id;
+}
+
+uint32_t virgl_cmd_get_size(virgl_cmd_t * cmd) {
+    if(!cmd) {
+        return 0;
+    }
+
+    return cmd->cmd_dw_count * sizeof(uint32_t);
+}
+
+void virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer) {
+    if(!cmd || !buffer) {
+        return;
+    }
+
+    memory_memcopy(cmd->cmd_dws, buffer, virgl_cmd_get_size(cmd));
+    cmd->cmd_dw_count = 0;
+}
+
+int8_t virgl_cmd_flush_commands(virgl_cmd_t * cmd) {
+    if(!cmd || !cmd->send_cmd) {
+        return 0;
+    }
+
+    if(cmd->cmd_dw_count == 0) {
+        return 0;
+    }
+
+    uint32_t fence_id = (*cmd->fence_id)++;
+    return cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
+}
+
+
 static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
     if(cmd->cmd_dw_count + 1 > VIRGL_CMD_MAX_DWORDS) {
         return -1;
@@ -26,7 +133,8 @@ static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type,
     if(cmd->cmd_dw_count + size + 1 > VIRGL_CMD_MAX_DWORDS) {
         int8_t ret = 0;
         if(cmd->send_cmd) {
-            ret = cmd->send_cmd(cmd->queue_no, cmd->lock, cmd->fence_id, cmd);
+            uint32_t fence_id = (*cmd->fence_id)++;
+            ret = cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
         } else {
             ret = -1;
         }

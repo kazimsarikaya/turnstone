@@ -291,7 +291,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     int32_t x, y;
 
     video_text_cursor_get(&x, &y);
-    video_text_cursor_hide();
+    // video_text_cursor_hide();
 
     uint32_t font_width = 0, font_height = 0;
 
@@ -304,7 +304,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     int32_t start_idx = (y - win_y) * win_w + (x - win_x);
 
     if(start_idx < 0 || start_idx >= window->input_length) {
-        video_text_cursor_show();
+        // video_text_cursor_show();
         return -1;
     }
 
@@ -335,7 +335,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     }
 
     video_move_text_cursor(x, y);
-    video_text_cursor_show();
+    // video_text_cursor_show();
 
     window->is_dirty = true;
 
@@ -489,9 +489,9 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
         return;
     }
 
-    video_text_cursor_hide();
+    // video_text_cursor_hide();
     video_move_text_cursor(next->rect.x / font_width, next->rect.y / font_height);
-    video_text_cursor_show();
+    // video_text_cursor_show();
 
     list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
 }

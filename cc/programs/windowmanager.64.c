@@ -62,7 +62,7 @@ static int8_t windowmanager_main(void) {
 
         if(flush_needed) {
             VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
-            video_text_cursor_show();
+            // video_text_cursor_show();
         }
 
         while(list_size(mq) == 0) {
@@ -97,13 +97,13 @@ static int8_t windowmanager_main(void) {
             mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
 
             if(VIDEO_MOVE_CURSOR) {
-                VIDEO_MOVE_CURSOR(last->x, last->y);
+                // VIDEO_MOVE_CURSOR(last->x, last->y);
             }
 
             if(last->buttons & MOUSE_BUTTON_LEFT) {
-                video_text_cursor_hide();
+                // video_text_cursor_hide();
                 video_move_text_cursor(last->x / font_width, last->y / font_height);
-                video_text_cursor_show();
+                // video_text_cursor_show();
             }
         }
 
@@ -144,21 +144,21 @@ static int8_t windowmanager_main(void) {
                     } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
                         windowmanager_remove_and_set_current_window(windowmanager_current_window);
                     } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
-                        video_text_cursor_hide();
+                        // video_text_cursor_hide();
                         video_move_text_cursor_relative(0, -1);
-                        video_text_cursor_show();
+                        // video_text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
-                        video_text_cursor_hide();
+                        // video_text_cursor_hide();
                         video_move_text_cursor_relative(0, 1);
-                        video_text_cursor_show();
+                        // video_text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_LEFT) {
-                        video_text_cursor_hide();
+                        // video_text_cursor_hide();
                         video_move_text_cursor_relative(-1, 0);
-                        video_text_cursor_show();
+                        // video_text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_RIGHT) {
-                        video_text_cursor_hide();
+                        // video_text_cursor_hide();
                         video_move_text_cursor_relative(1, 0);
-                        video_text_cursor_show();
+                        // video_text_cursor_show();
                     }
                 }
             }

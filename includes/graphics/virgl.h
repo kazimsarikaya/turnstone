@@ -10,6 +10,7 @@
 #define ___VIRGL_H 0
 
 #include <types.h>
+#include <memory.h>
 #include <cpu/sync.h>
 
 
@@ -143,21 +144,12 @@ typedef enum virgl_bind_t {
 } virgl_bind_t;
 
 #define VIRGL_CMD(cmd, obj, len) ((cmd) | ((obj) << 8) | ((len) << 16))
-#define VIRGL_CMD_MAX_DWORDS ((4096 - 4) / 4)
+#define VIRGL_CMD_MAX_DWORDS ((4096 - 24) / 4)
 
-typedef struct virgl_cmd_t virgl_cmd_t;
+typedef struct virgl_cmd_t      virgl_cmd_t;
+typedef struct virgl_renderer_t virgl_renderer_t;
 
 typedef int8_t (*virgl_send_cmd_f)(uint32_t queue_no, lock_t** lock, uint32_t fence_id, virgl_cmd_t * cmd);
-
-struct virgl_cmd_t {
-    uint32_t         context_id;
-    uint16_t         queue_no;
-    lock_t**         lock;
-    uint32_t         fence_id;
-    virgl_send_cmd_f send_cmd;
-    uint32_t         cmd_dw_count;
-    uint32_t         cmd_dws[VIRGL_CMD_MAX_DWORDS];
-};
 
 typedef union virgl_color_t {
     int32_t   i32[4];
@@ -266,6 +258,17 @@ typedef struct virgl_copy_region_t {
 _Static_assert(sizeof(virgl_copy_region_t) == 13 * sizeof(uint32_t), "virgl_copy_region_t size is not 52 bytes");
 
 #define VIRGL_COPY_REGION_CCMD_PAYLOAD_SIZE (sizeof(virgl_copy_region_t) / sizeof(uint32_t))
+
+virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd);
+
+uint32_t       virgl_renderer_get_next_resource_id(virgl_renderer_t* renderer);
+memory_heap_t* virgl_renderer_get_heap(virgl_renderer_t* renderer);
+virgl_cmd_t*   virgl_renderer_get_cmd(virgl_renderer_t* renderer);
+
+uint32_t virgl_cmd_get_context_id(virgl_cmd_t * cmd);
+uint32_t virgl_cmd_get_size(virgl_cmd_t * cmd);
+void     virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer);
+int8_t   virgl_cmd_flush_commands(virgl_cmd_t * cmd);
 
 int8_t virgl_encode_clear(virgl_cmd_t * cmd, virgl_cmd_clear_t * clear);
 int8_t virgl_encode_clear_texture(virgl_cmd_t * cmd, virgl_cmd_clear_texture_t * clear_texture);
