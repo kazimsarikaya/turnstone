@@ -367,6 +367,7 @@ typedef struct virtio_gpu_wrapper_t {
     uint32_t*         resource_ids;
     uint32_t          mouse_resource_id;
     uint32_t          font_resource_id;
+    uint32_t          font_colored_resource_id;
     uint32_t          font_empty_line_resource_id;
     uint32_t          screen_width;
     uint32_t          screen_height;

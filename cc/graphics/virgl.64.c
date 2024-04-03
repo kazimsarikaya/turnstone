@@ -8,8 +8,12 @@
 
 #include <graphics/virgl.h>
 #include <memory.h>
+#include <utils.h>
+#include <logging.h>
 
 MODULE("turnstone.kenrel.graphics.virgl");
+
+void video_text_print(const char_t* text);
 
 struct virgl_renderer_t {
     memory_heap_t* heap;
@@ -131,15 +135,10 @@ static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
 
 static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type, uint16_t object_type, uint16_t size) {
     if(cmd->cmd_dw_count + size + 1 > VIRGL_CMD_MAX_DWORDS) {
-        int8_t ret = 0;
-        if(cmd->send_cmd) {
-            uint32_t fence_id = (*cmd->fence_id)++;
-            ret = cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
-        } else {
-            ret = -1;
-        }
+        int8_t ret = virgl_cmd_flush_commands(cmd);
 
         if(ret) {
+            video_text_print("virgl_encode_write_cmd_header: failed to flush commands\n");
             return -1;
         }
     }
@@ -357,6 +356,306 @@ int8_t virgl_encode_copy_region(virgl_cmd_t* cmd, virgl_copy_region_t * copy_reg
 
     if(virgl_encode_write_dword(cmd, copy_region->src_box.d)) {
         return -1;
+    }
+
+    return 0;
+}
+
+
+static void virgl_encode_emit_shader_header(virgl_cmd_t* cmd,
+                                            uint32_t handle, uint32_t len,
+                                            uint32_t type, uint32_t offlen,
+                                            uint32_t num_tokens) {
+    virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_CREATE_OBJECT, VIRGL_OBJECT_SHADER, len);
+    virgl_encode_write_dword(cmd, handle);
+    virgl_encode_write_dword(cmd, type);
+    virgl_encode_write_dword(cmd, offlen);
+    virgl_encode_write_dword(cmd, num_tokens);
+}
+
+static void virgl_encode_emit_shader_streamout(virgl_cmd_t*    cmd,
+                                               virgl_shader_t* shader) {
+    int32_t num_outputs = 0;
+    uint32_t tmp;
+
+    if (shader)
+        num_outputs = shader->num_outputs;
+
+    virgl_encode_write_dword(cmd, num_outputs);
+
+    if (num_outputs) {
+        for (int32_t i = 0; i < 4; i++) {
+            virgl_encode_write_dword(cmd, shader->stride[i]);
+        }
+
+        for (uint32_t i = 0; i < shader->num_outputs; i++) {
+            tmp = VIRGL_ENCODE_SO_DECLARATION(shader->output[i]);
+            virgl_encode_write_dword(cmd, tmp);
+            virgl_encode_write_dword(cmd, 0);
+        }
+    }
+}
+
+static void virgl_encode_write_block(virgl_cmd_t* cmd, const void* data, uint32_t length) {
+    memory_memcopy(data, &cmd->cmd_dws[cmd->cmd_dw_count], length);
+
+    uint32_t rem = length % 4;
+
+    if (rem) {
+        memory_memclean(&cmd->cmd_dws[cmd->cmd_dw_count + length / 4], 0);
+    }
+
+    cmd->cmd_dw_count += (length + 3) / 4;
+}
+
+int8_t virgl_encode_shader(virgl_cmd_t* cmd, virgl_shader_t* shader) {
+    uint32_t left_bytes = shader->data_size;
+
+    uint32_t base_hdr_size = 5;
+    uint32_t strm_hdr_size = shader->num_outputs ? shader->num_outputs * 2 + 4 : 0;
+    boolean_t first_pass = true;
+    const char_t* sptr = shader->data;
+    uint32_t num_tokens = 300; // XXX: why 300?
+
+    while(left_bytes) {
+        uint32_t length, offlen;
+        int32_t hdr_len = base_hdr_size + (first_pass ? strm_hdr_size : 0);
+
+        if (cmd->cmd_dw_count + hdr_len + 1 > VIRGL_CMD_MAX_DWORDS) {
+            if (virgl_cmd_flush_commands(cmd)) {
+                return -1;
+            }
+        }
+
+        uint32_t thispass = (VIRGL_CMD_MAX_DWORDS - cmd->cmd_dw_count - hdr_len - 1) * 4;
+
+        length = MIN(thispass, left_bytes);
+        uint32_t len = ((length + 3) / 4) + hdr_len;
+
+        if (first_pass) {
+            offlen = VIRGL_OBJECT_SHADER_OFFSET_VAL(shader->data_size);
+        } else {
+            offlen = VIRGL_OBJECT_SHADER_OFFSET_VAL((uint64_t)sptr - (uint64_t)shader->data) | VIRGL_OBJECT_SHADER_OFFSET_CONT;
+        }
+
+        virgl_encode_emit_shader_header(cmd, shader->handle, len, shader->type, offlen, num_tokens);
+
+        virgl_encode_emit_shader_streamout(cmd, first_pass ? shader : NULL);
+
+        virgl_encode_write_block(cmd, sptr, length);
+
+        sptr += length;
+        first_pass = false;
+        left_bytes -= length;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_bind_shader(virgl_cmd_t* cmd, uint32_t handle, uint32_t type) {
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_BIND_SHADER, 0, 2)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, handle)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, type)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_link_shader(virgl_cmd_t* cmd, virgl_link_shader_t* link_shader) {
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_LINK_SHADER, 0, VIRGL_LINK_SHADER_CCMD_PAYLOAD_SIZE)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, link_shader->vertex_shader_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, link_shader->fragment_shader_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, link_shader->geometry_shader_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, link_shader->tess_ctrl_shader_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, link_shader->tess_eval_shader_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, link_shader->compute_shader_id)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_set_uniform_buffer(virgl_cmd_t* cmd,
+                                       uint32_t     shader,
+                                       uint32_t     index,
+                                       uint32_t     offset,
+                                       uint32_t     length,
+                                       uint32_t     res) {
+    virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_SET_UNIFORM_BUFFER, 0, VIRGL_SET_UNIFORM_BUFFER_CCMD_PAYLOAD_SIZE);
+    virgl_encode_write_dword(cmd, shader);
+    virgl_encode_write_dword(cmd, index);
+    virgl_encode_write_dword(cmd, offset);
+    virgl_encode_write_dword(cmd, length);
+    virgl_encode_write_dword( cmd, res);
+    return 0;
+}
+
+int8_t virgl_encode_set_shader_buffers(virgl_cmd_t* cmd, virgl_shader_buffer_t* shader_buffer) {
+    if(shader_buffer->num_elements > VIRGL_SHADER_BUFFER_MAX_ELEMENTS) {
+        return -1;
+    }
+
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_SET_SHADER_BUFFERS, 0, VIRGL_SET_SHADER_BUFFERS_CCMD_PAYLOAD_SIZE(shader_buffer->num_elements))) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, shader_buffer->shader_type)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, shader_buffer->index)) {
+        return -1;
+    }
+
+    for(uint32_t i = 0; i < shader_buffer->num_elements; i++) {
+        if(virgl_encode_write_dword(cmd, shader_buffer->elements[i].offset)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, shader_buffer->elements[i].length)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, shader_buffer->elements[i].res)) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_set_shader_images(virgl_cmd_t* cmd, virgl_shader_images_t* shader_images) {
+    if(shader_images->num_images > VIRGL_SHADER_IMAGE_MAX_IMAGES) {
+        return -1;
+    }
+
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_SET_SHADER_IMAGES, 0, VIRGL_SET_SHADER_IMAGES_CCMD_PAYLOAD_SIZE(shader_images->num_images))) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, shader_images->shader_type)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, shader_images->index)) {
+        return -1;
+    }
+
+    for(uint32_t i = 0; i < shader_images->num_images; i++) {
+        if(virgl_encode_write_dword(cmd, shader_images->images[i].format)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, shader_images->images[i].access)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, shader_images->images[i].offset)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, shader_images->images[i].size)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, shader_images->images[i].res)) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_sampler_view(virgl_cmd_t* cmd, virgl_sampler_view_t* sampler_view, boolean_t is_texture) {
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_CREATE_OBJECT, VIRGL_OBJECT_SAMPLER_VIEW, VIRGL_OBJ_SAMPLER_VIEW_CCMD_PAYLOAD_SIZE)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, sampler_view->view_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, sampler_view->texture_id)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, sampler_view->format)) {
+        return -1;
+    }
+
+    if(is_texture) {
+        if(virgl_encode_write_dword(cmd, sampler_view->texture.level)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, sampler_view->texture.layers)) {
+            return -1;
+        }
+    } else {
+        if(virgl_encode_write_dword(cmd, sampler_view->buffer.first_element)) {
+            return -1;
+        }
+
+        if(virgl_encode_write_dword(cmd, sampler_view->buffer.last_element)) {
+            return -1;
+        }
+    }
+
+    uint32_t swizzle = VIRGL_SAMPLER_VIEW_OBJECT_ENCODE_SWIZZLE(sampler_view->swizzle_r, sampler_view->swizzle_g, sampler_view->swizzle_b, sampler_view->swizzle_a);
+
+    if(virgl_encode_write_dword(cmd, swizzle)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_sampler_views(virgl_cmd_t* cmd, virgl_sampler_views_t* sampler_views) {
+    if(sampler_views->num_views > VIRGL_SAMPLER_VIEWS_MAX_VIEWS) {
+        return -1;
+    }
+
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_SET_SAMPLER_VIEWS, 0, VIRGL_SET_SAMPLER_VIEWS_CCMD_PAYLOAD_SIZE(sampler_views->num_views))) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, sampler_views->shader_type)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, sampler_views->index)) {
+        return -1;
+    }
+
+    for(uint32_t i = 0; i < sampler_views->num_views; i++) {
+        if(virgl_encode_write_dword(cmd, sampler_views->res_ids[i])) {
+            return -1;
+        }
     }
 
     return 0;

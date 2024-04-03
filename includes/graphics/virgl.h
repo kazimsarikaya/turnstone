@@ -13,6 +13,7 @@
 #include <memory.h>
 #include <cpu/sync.h>
 
+#define VIRGL_RSTR(...) #__VA_ARGS__
 
 typedef enum virgl_object_type_t {
     VIRGL_OBJECT_NULL,
@@ -210,7 +211,7 @@ typedef struct virgl_cmd_clear_texture_t {
 
 _Static_assert(sizeof(virgl_cmd_clear_texture_t) == 12 * sizeof(uint32_t), "virgl_cmd_clear_texture_t size is not 48 bytes");
 
-#define VIRGL_CMD_CLEAR_TEXTURE_CCMD_PAYLOAD_SIZE (sizeof(virgl_cmd_clear_texture_t) / sizeof(uint32_t))
+#define VIRGL_CMD_CLEAR_TEXTURE_CCMD_PAYLOAD_SIZE (12)
 
 #define VIRGL_OBJ_SURFACE_TEXTURE_LAYERS(fl, ll) (((ll) << 16) | (fl))
 
@@ -259,6 +260,141 @@ _Static_assert(sizeof(virgl_copy_region_t) == 13 * sizeof(uint32_t), "virgl_copy
 
 #define VIRGL_COPY_REGION_CCMD_PAYLOAD_SIZE (sizeof(virgl_copy_region_t) / sizeof(uint32_t))
 
+
+typedef enum virgl_shader_type_t {
+    VIRGL_SHADER_TYPE_VERTEX,
+    VIRGL_SHADER_TYPE_FRAGMENT,
+    VIRGL_SHADER_TYPE_GEOMETRY,
+    VIRGL_SHADER_TYPE_TESS_CTRL,
+    VIRGL_SHADER_TYPE_TESS_EVAL,
+    VIRGL_SHADER_TYPE_COMPUTE,
+    VIRGL_SHADER_TYPE_TYPES,
+    VIRGL_SHADER_TYPE_INVALID,
+} virgl_shader_type_t;
+
+#define VIRGL_SHADER_MAX_SO_OUTPUT_BUFFERS 4
+#define VIRGL_SHADER_MAX_SO_OUTPUTS 64
+
+typedef struct virgl_stream_output_t {
+    uint32_t register_index;
+    uint32_t start_component;
+    uint32_t num_components;
+    uint32_t output_buffer;
+    uint32_t dst_offset;
+    uint32_t stream;
+} virgl_stream_output_t;
+
+#define VIRGL_ENCODE_SO_DECLARATION_RAW(register_index, start_component, num_components, output_buffer, dst_offset, stream) \
+        (((register_index) << 0) | ((start_component) << 8) | ((num_components) << 16) | ((output_buffer) << 24) | ((dst_offset) << 28) | ((stream) << 31))
+#define VIRGL_ENCODE_SO_DECLARATION(so) \
+        VIRGL_ENCODE_SO_DECLARATION_RAW(so.register_index, so.start_component, so.num_components, so.output_buffer, so.dst_offset, so.stream)
+
+typedef struct virgl_shader_t {
+    uint32_t              type;
+    uint32_t              handle;
+    const char_t*         data;
+    uint32_t              data_size;
+    uint32_t              num_tokens;
+    uint32_t              num_outputs;
+    uint32_t              stride[VIRGL_SHADER_MAX_SO_OUTPUT_BUFFERS];
+    virgl_stream_output_t output[VIRGL_SHADER_MAX_SO_OUTPUTS];
+} virgl_shader_t;
+
+#define VIRGL_OBJECT_SHADER_OFFSET_VAL(x) (((x) & 0x7fffffff) << 0)
+#define VIRGL_OBJECT_SHADER_OFFSET_CONT (0x1u << 31)
+
+typedef struct virgl_link_shader_t {
+    uint32_t vertex_shader_id;
+    uint32_t fragment_shader_id;
+    uint32_t geometry_shader_id;
+    uint32_t tess_ctrl_shader_id;
+    uint32_t tess_eval_shader_id;
+    uint32_t compute_shader_id;
+} virgl_link_shader_t;
+
+#define VIRGL_LINK_SHADER_CCMD_PAYLOAD_SIZE (6)
+
+#define VIRGL_SET_UNIFORM_BUFFER_CCMD_PAYLOAD_SIZE (5)
+
+typedef struct virgl_shader_buffer_element_t {
+    uint32_t offset;
+    uint32_t length;
+    uint32_t res;
+} virgl_shader_buffer_element_t;
+
+#define VIRGL_SHADER_BUFFER_MAX_ELEMENTS 16
+
+typedef struct virgl_shader_buffer_t {
+    uint32_t                      shader_type;
+    uint32_t                      index;
+    uint32_t                      num_elements;
+    virgl_shader_buffer_element_t elements[VIRGL_SHADER_BUFFER_MAX_ELEMENTS];
+} virgl_shader_buffer_t;
+
+#define VIRGL_SET_SHADER_BUFFERS_CCMD_PAYLOAD_SIZE(num_elements) (2 + (num_elements * 3))
+
+typedef enum virgl_access_type_t {
+    VIRGL_ACCESS_TYPE_READ = 1,
+    VIRGL_ACCESS_TYPE_WRITE = 2,
+    VIRGL_ACCESS_TYPE_READ_WRITE = 3,
+} virgl_access_type_t;
+
+typedef struct virgl_shader_image_t {
+    uint32_t format;
+    uint32_t access;
+    uint32_t offset;
+    uint32_t size;
+    uint32_t res;
+} virgl_shader_image_t;
+
+#define VIRGL_SHADER_IMAGE_MAX_IMAGES 16
+
+typedef struct virgl_shader_images_t {
+    uint32_t             shader_type;
+    uint32_t             index;
+    uint32_t             num_images;
+    virgl_shader_image_t images[VIRGL_SHADER_IMAGE_MAX_IMAGES];
+} virgl_shader_images_t;
+
+#define VIRGL_SET_SHADER_IMAGES_CCMD_PAYLOAD_SIZE(num_elements) (2 + (num_elements * 5))
+
+typedef struct virgl_sampler_view_t {
+    uint32_t view_id;
+    uint32_t texture_id;
+    uint32_t format;
+    union {
+        struct {
+            uint32_t first_element;
+            uint32_t last_element;
+        } buffer;
+        struct {
+            uint32_t level;
+            uint32_t layers;
+        } texture;
+    };
+    uint32_t swizzle_r;
+    uint32_t swizzle_g;
+    uint32_t swizzle_b;
+    uint32_t swizzle_a;
+} virgl_sampler_view_t;
+
+#define VIRGL_SAMPLER_VIEW_OBJECT_ENCODE_SWIZZLE(r, g, b, a) (((r) << 0) | ((g) << 3) | ((b) << 6) | ((a) << 9))
+
+#define VIRGL_OBJ_SAMPLER_VIEW_CCMD_PAYLOAD_SIZE 6
+
+
+#define VIRGL_SAMPLER_VIEWS_MAX_VIEWS 16
+
+typedef struct virgl_sampler_views_t {
+    uint32_t shader_type;
+    uint32_t index;
+    uint32_t num_views;
+    uint32_t res_ids[VIRGL_SAMPLER_VIEWS_MAX_VIEWS];
+} virgl_sampler_views_t;
+
+#define VIRGL_SET_SAMPLER_VIEWS_CCMD_PAYLOAD_SIZE(num_views) (2 + (num_views))
+
+
 virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd);
 
 uint32_t       virgl_renderer_get_next_resource_id(virgl_renderer_t* renderer);
@@ -275,5 +411,13 @@ int8_t virgl_encode_clear_texture(virgl_cmd_t * cmd, virgl_cmd_clear_texture_t *
 int8_t virgl_encode_surface(virgl_cmd_t * cmd, virgl_obj_surface_t * surface, boolean_t is_texture);
 int8_t virgl_encode_framebuffer_state(virgl_cmd_t * cmd, virgl_obj_framebuffer_state_t * fb_state);
 int8_t virgl_encode_copy_region(virgl_cmd_t * cmd, virgl_copy_region_t * copy_region);
+int8_t virgl_encode_shader(virgl_cmd_t * cmd, virgl_shader_t * shader);
+int8_t virgl_encode_bind_shader(virgl_cmd_t* cmd, uint32_t handle, uint32_t type);
+int8_t virgl_encode_link_shader(virgl_cmd_t* cmd, virgl_link_shader_t* link_shader);
+int8_t virgl_encode_set_uniform_buffer(virgl_cmd_t* cmd, uint32_t shader, uint32_t index, uint32_t offset, uint32_t length, uint32_t res);
+int8_t virgl_encode_set_shader_buffers(virgl_cmd_t* cmd, virgl_shader_buffer_t* shader_buffer);
+int8_t virgl_encode_set_shader_images(virgl_cmd_t* cmd, virgl_shader_images_t* shader_images);
+int8_t virgl_encode_sampler_view(virgl_cmd_t* cmd, virgl_sampler_view_t* sampler_view, boolean_t is_texture);
+int8_t virgl_encode_sampler_views(virgl_cmd_t* cmd, virgl_sampler_views_t* sample_views);
 
 #endif // ___VIRGL_H

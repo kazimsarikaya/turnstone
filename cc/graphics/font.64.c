@@ -295,3 +295,17 @@ void font_get_font_dimension(uint32_t* width, uint32_t* height) {
         *height = FONT_HEIGHT;
     }
 }
+
+void font_dump_colored_font(pixel_t* dst, color_t background, color_t foreground) {
+    font_table_t* ft = font_get_font_table();
+
+    uint32_t len = ft->column_count * ft->font_width * ft->row_count * ft->font_height;
+
+    for(uint32_t i = 0; i < len; i++) {
+        if(ft->bitmap[i] == (pixel_t)0xFFFFFFFF) {
+            dst[i] = foreground.color;
+        } else {
+            dst[i] = background.color;
+        }
+    }
+}

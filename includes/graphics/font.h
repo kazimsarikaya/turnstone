@@ -84,4 +84,6 @@ int8_t font_init(void);
 
 void font_get_font_dimension(uint32_t* width, uint32_t* height);
 
+void font_dump_colored_font(pixel_t* dst, color_t background, color_t foreground);
+
 #endif /* font.h */
