@@ -904,8 +904,6 @@ static void virtio_gpu_scrool_screen(void) {
     }
 }
 
-color_t virtio_gpu_current_font_foreground = {0};
-color_t virtio_gpu_current_font_background = {0};
 hashmap_t* virtio_gpu_font_color_palette = NULL;
 
 #if 0
@@ -998,57 +996,6 @@ static int8_t virtio_gpu_create_font_colored(uint32_t* font_colored_resource_id)
     }
 
     /* end resource attach context */
-#if 0
-    virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
-
-    virgl_cmd_clear_texture_t clear_texture = {0};
-
-    clear_texture.texture_id = font_colored_resource_id;
-    clear_texture.level = 0;
-    clear_texture.box.x = 0;
-    clear_texture.box.y = 0;
-    clear_texture.box.z = 0;
-    clear_texture.box.w = font_res_width;
-    clear_texture.box.h = font_res_height;
-    clear_texture.box.d = 1;
-
-    clear_texture.clear_color.ui32[0] = 0xFF00FF00; // background.red / 255.0f;
-    clear_texture.clear_color.f32[1] = 0; // 1.0f; // background.green / 255.0f;
-    clear_texture.clear_color.f32[2] = 0; // background.blue / 255.0f;
-    clear_texture.clear_color.f32[3] = 0; // background.alpha / 255.0f;
-
-    if(virgl_encode_clear_texture(cmd, &clear_texture) != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode clear texture");
-        return -1;
-    }
-
-    virgl_obj_surface_t obj_surface = {0};
-
-    obj_surface.surface_id = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
-    obj_surface.resource_id = font_colored_resource_id;
-    obj_surface.format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
-    obj_surface.texture.level = 0;
-    obj_surface.texture.layers = 0;
-
-    if(virgl_encode_surface(cmd, &obj_surface, true) != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode surface");
-        return -1;
-    }
-
-    virtio_gpu_font_color_surface_id = obj_surface.surface_id;
-
-    if(virgl_cmd_flush_commands(cmd) != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to flush commands");
-        return -1;
-    }
-
-    res = virtio_gpu_build_font_color_change_shader();
-
-    if(res != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to build font color change shader");
-        return -1;
-    }
-#endif
 
     return 0;
 }
@@ -1057,84 +1004,6 @@ static int8_t virtio_gpu_change_font_color(color_t foreground, color_t backgroun
     int8_t res = 0;
 
     virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
-
-#if 0
-    /*
-
-       if(virgl_cmd_flush_commands(cmd) != 0) { // before changing font color we need to flush commands
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to flush commands");
-        return -1;
-       }
-
-       font_table_t* font_table = font_get_font_table();
-       uint32_t font_width = font_table->font_width * font_table->column_count;
-       uint32_t font_height = font_table->font_height * font_table->row_count;
-       uint32_t stride = font_width * sizeof(pixel_t);
-       uint32_t layer_stride = font_width * font_height * sizeof(pixel_t);
-
-       font_dump_colored_font(virtio_gpu_colored_font_buffer, background, foreground);
-
-
-       int8_t res = 0;
-
-       res = virtio_gpu_queue_send_transfer3d(0, &virtio_gpu_wrapper->lock,
-                                           1, virtio_gpu_wrapper->font_colored_resource_id, virtio_gpu_wrapper->fence_ids[0]++,
-                                           0, 0, 0, font_width, font_height,
-                                           stride, layer_stride, 0);
-       if(res != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu transfer to host 3d for font color failed");
-        return -1;
-       }
-     */
-
-    /*
-       virgl_obj_framebuffer_state_t obj_fb_state = {0};
-
-       obj_fb_state.nr_cbufs = 1;
-       obj_fb_state.zsurf_id = 0;
-       obj_fb_state.cbuf_ids[0] = virtio_gpu_font_color_surface_id;
-
-       if(virgl_encode_framebuffer_state(cmd, &obj_fb_state) != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode framebuffer state");
-        return -1;
-       }
-     */
-
-    res = virgl_encode_bind_shader(cmd, virtio_gpu_font_color_shader_vert_id, VIRGL_SHADER_TYPE_VERTEX);
-
-    if(res != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode bind shader");
-        return -1;
-    }
-
-    res = virgl_encode_bind_shader(cmd, virtio_gpu_font_color_shader_frag_id, VIRGL_SHADER_TYPE_FRAGMENT);
-
-    if(res != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode bind shader");
-        return -1;
-    }
-
-    virgl_link_shader_t link_shader = {0};
-
-    link_shader.vertex_shader_id = virtio_gpu_font_color_shader_vert_id;
-    link_shader.fragment_shader_id = virtio_gpu_font_color_shader_frag_id;
-
-    res = virgl_encode_link_shader(cmd, &link_shader);
-
-    if(res != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode link shader");
-        return -1;
-    }
-
-    virgl_draw_info_t draw_info = {0};
-
-    res = virgl_encode_draw_vbo(cmd, &draw_info);
-
-    if(res != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode draw vbo");
-        return -1;
-    }
-#endif
 
     uint64_t key = ((uint64_t)background.color << 32) | foreground.color;
 
