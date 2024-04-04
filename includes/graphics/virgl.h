@@ -145,7 +145,7 @@ typedef enum virgl_bind_t {
 } virgl_bind_t;
 
 #define VIRGL_CMD(cmd, obj, len) ((cmd) | ((obj) << 8) | ((len) << 16))
-#define VIRGL_CMD_MAX_DWORDS ((4096 - 24) / 4)
+#define VIRGL_CMD_MAX_DWORDS ((64 * 1024 - 24) / 4)
 
 typedef struct virgl_cmd_t      virgl_cmd_t;
 typedef struct virgl_renderer_t virgl_renderer_t;
@@ -394,6 +394,53 @@ typedef struct virgl_sampler_views_t {
 
 #define VIRGL_SET_SAMPLER_VIEWS_CCMD_PAYLOAD_SIZE(num_views) (2 + (num_views))
 
+typedef struct virgl_draw_info_t {
+    uint32_t start;
+    uint32_t count;
+    uint32_t mode;
+    uint32_t indexed;
+    uint32_t instance_count;
+    uint32_t index_bias;
+    uint32_t start_instance;
+    uint32_t primitive_restart;
+    uint32_t restart_index;
+    uint32_t min_index;
+    uint32_t max_index;
+
+    boolean_t has_indirect_handle;
+    uint32_t  indirect_handle;
+    uint32_t  indirect_offset;
+    uint32_t  indirect_stride;
+    uint32_t  indirect_draw_count;
+    uint32_t  indirect_draw_count_offset;
+    uint32_t  indirect_draw_count_handle;
+
+    boolean_t has_count_from_stream_output;
+    uint32_t  stream_output_buffer_size;
+} virgl_draw_info_t;
+
+#define VIRGL_DRAW_CCMD_PAYLOAD_SIZE (12)
+
+typedef enum virgl_resource_usage_t {
+    VIRGL_RESOURCE_USAGE_DEFAULT, /* fast GPU access */
+    VIRGL_RESOURCE_USAGE_IMMUTABLE, /* fast GPU access, immutable */
+    VIRGL_RESOURCE_USAGE_DYNAMIC, /* uploaded data is used multiple times */
+    VIRGL_RESOURCE_USAGE_STREAM, /* uploaded data is used once */
+    VIRGL_RESOURCE_USAGE_STAGING, /* fast CPU access */
+} virgl_resource_usage_t;
+
+typedef struct virgl_res_iw_t {
+    uint32_t    res_id;
+    uint32_t    format;
+    uint32_t    element_size;
+    uint32_t    level;
+    uint32_t    usage;
+    uint32_t    stride;
+    uint32_t    layer_stride;
+    virgl_box_t box;
+    uint32_t    data_start;
+} virgl_res_iw_t;
+
 
 virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd);
 
@@ -419,5 +466,7 @@ int8_t virgl_encode_set_shader_buffers(virgl_cmd_t* cmd, virgl_shader_buffer_t* 
 int8_t virgl_encode_set_shader_images(virgl_cmd_t* cmd, virgl_shader_images_t* shader_images);
 int8_t virgl_encode_sampler_view(virgl_cmd_t* cmd, virgl_sampler_view_t* sampler_view, boolean_t is_texture);
 int8_t virgl_encode_sampler_views(virgl_cmd_t* cmd, virgl_sampler_views_t* sample_views);
+int8_t virgl_encode_draw_vbo(virgl_cmd_t* cmd, virgl_draw_info_t* draw_info);
+int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const void* data);
 
 #endif // ___VIRGL_H

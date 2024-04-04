@@ -660,3 +660,153 @@ int8_t virgl_encode_sampler_views(virgl_cmd_t* cmd, virgl_sampler_views_t* sampl
 
     return 0;
 }
+
+int8_t virgl_encode_draw_vbo(virgl_cmd_t* cmd, virgl_draw_info_t* draw_info) {
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_DRAW_VBO, 0, VIRGL_DRAW_CCMD_PAYLOAD_SIZE)) {
+        return -1;
+    }
+
+    virgl_encode_write_dword(cmd, draw_info->start);
+    virgl_encode_write_dword(cmd, draw_info->count);
+    virgl_encode_write_dword(cmd, draw_info->mode);
+    virgl_encode_write_dword(cmd, draw_info->indexed);
+    virgl_encode_write_dword(cmd, draw_info->instance_count);
+    virgl_encode_write_dword(cmd, draw_info->index_bias);
+    virgl_encode_write_dword(cmd, draw_info->start_instance);
+    virgl_encode_write_dword(cmd, draw_info->primitive_restart);
+    virgl_encode_write_dword(cmd, draw_info->restart_index);
+    virgl_encode_write_dword(cmd, draw_info->min_index);
+    virgl_encode_write_dword(cmd, draw_info->max_index);
+
+    if (draw_info->has_indirect_handle != 0) {
+        virgl_encode_write_dword(cmd, draw_info->indirect_handle);
+        virgl_encode_write_dword(cmd, draw_info->indirect_offset);
+        virgl_encode_write_dword(cmd, draw_info->indirect_stride);
+        virgl_encode_write_dword(cmd, draw_info->indirect_draw_count);
+        virgl_encode_write_dword(cmd, draw_info->indirect_draw_count_offset);
+        virgl_encode_write_dword(cmd, draw_info->indirect_draw_count_handle);
+    }
+
+    if (draw_info->has_count_from_stream_output) {
+        virgl_encode_write_dword(cmd, draw_info->has_count_from_stream_output);
+    } else {
+        virgl_encode_write_dword(cmd, 0);
+    }
+
+    return 0;
+}
+
+static void virgl_encode_transfer3d_common(virgl_cmd_t* cmd,
+                                           uint32_t res,
+                                           unsigned level, unsigned usage,
+                                           virgl_box_t* box,
+                                           unsigned stride, unsigned layer_stride) {
+    virgl_encode_write_dword(cmd, res);
+    virgl_encode_write_dword(cmd, level);
+    virgl_encode_write_dword(cmd, usage);
+    virgl_encode_write_dword(cmd, stride);
+    virgl_encode_write_dword(cmd, layer_stride);
+    virgl_encode_write_dword(cmd, box->x);
+    virgl_encode_write_dword(cmd, box->y);
+    virgl_encode_write_dword(cmd, box->z);
+    virgl_encode_write_dword(cmd, box->w);
+    virgl_encode_write_dword(cmd, box->h);
+    virgl_encode_write_dword(cmd, box->d);
+}
+
+static void virgl_encoder_inline_send_box(virgl_cmd_t* cmd,
+                                          uint32_t res,
+                                          unsigned level, unsigned usage,
+                                          virgl_box_t* box,
+                                          const void* data, unsigned stride,
+                                          unsigned layer_stride, int length) {
+    virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_RESOURCE_INLINE_WRITE, 0, ((length + 3) / 4) + 11);
+    virgl_encode_transfer3d_common(cmd, res, level, usage, box, stride, layer_stride);
+    virgl_encode_write_block(cmd, data, length);
+}
+
+int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const void* data) {
+    uint32_t length, thispass, left_bytes;
+    virgl_box_t mybox = res_iw->box;
+    uint32_t elsize, size;
+    uint32_t layer_size;
+    uint32_t stride_internal = res_iw->stride;
+    uint32_t layer_stride_internal = res_iw->layer_stride;
+    uint32_t layer, row;
+    elsize = res_iw->element_size;
+
+    /* total size of data to transfer */
+    if (!res_iw->stride) {
+        stride_internal = res_iw->box.w * elsize;
+    }
+
+    layer_size = res_iw->box.h * stride_internal;
+
+    if (res_iw->layer_stride && res_iw->layer_stride < layer_size) {
+        return -1;
+    }
+
+    if (!res_iw->layer_stride) {
+        layer_stride_internal = layer_size;
+    }
+
+    size = layer_stride_internal * res_iw->box.d;
+
+    length = 11 + (size + 3) / 4;
+
+    /* can we send it all in one cmdbuf? */
+    if (length < VIRGL_CMD_MAX_DWORDS) {
+        /* is there space in this cmdbuf? if not flush and use another one */
+        if ((cmd->cmd_dw_count + length + 1) > VIRGL_CMD_MAX_DWORDS) {
+            if (virgl_cmd_flush_commands(cmd)) {
+                return -1;
+            }
+        }
+        /* send it all in one go. */
+        virgl_encoder_inline_send_box(cmd, res_iw->res_id, res_iw->level, res_iw->usage, &mybox, data, res_iw->stride, res_iw->layer_stride, size);
+        return 0;
+    }
+
+    /* break things down into chunks we can send */
+    /* send layers in separate chunks */
+    for (layer = 0; layer < res_iw->box.d; layer++) {
+        const uint8_t * layer_data = data;
+        mybox.z = layer;
+        mybox.d = 1;
+
+        /* send one line in separate chunks */
+        for (row = 0; row < res_iw->box.h; row++) {
+            const uint8_t * row_data = layer_data;
+            mybox.y = row;
+            mybox.h = 1;
+            mybox.x = 0;
+
+            left_bytes = res_iw->box.w * elsize;
+            while (left_bytes) {
+                if (cmd->cmd_dw_count + 12 > VIRGL_CMD_MAX_DWORDS) {
+                    if (virgl_cmd_flush_commands(cmd)) {
+                        return -1;
+                    }
+                }
+
+                thispass = (VIRGL_CMD_MAX_DWORDS - cmd->cmd_dw_count - 12) * 4;
+
+                length = MIN(thispass, left_bytes);
+
+                mybox.w = length / elsize;
+
+                virgl_encoder_inline_send_box(cmd, res_iw->res_id, res_iw->level, res_iw->usage, &mybox, row_data, res_iw->stride, res_iw->layer_stride, length);
+
+                left_bytes -= length;
+                mybox.x += length / elsize;
+                row_data += length;
+            }
+
+            layer_data += stride_internal;
+        }
+
+        data = (uint8_t *)data + layer_stride_internal;
+    }
+
+    return 0;
+}
