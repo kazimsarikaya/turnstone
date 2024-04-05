@@ -10,6 +10,7 @@
 #include <strings.h>
 #include <spool.h>
 #include <argumentparser.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -71,6 +72,8 @@ static int8_t wndmgr_spool_item_on_enter(const window_t* window) {
 }
 
 static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spool_item){
+    screen_info_t screen_info = screen_get_info();
+
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {
@@ -87,7 +90,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
     char_t* title_str = sprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
-    rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
+    rect.x = (screen_info.width - rect.width) / 2;
     rect.y = font_height;
 
 
@@ -115,7 +118,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
                                                        NULL,
                                                        (rect_t){0,
                                                                 option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                VIDEO_GRAPHICS_WIDTH,
+                                                                screen_info.width,
                                                                 font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
@@ -132,7 +135,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){font_width, 0, VIDEO_GRAPHICS_WIDTH - font_width, font_height},
+                                                            (rect_t){font_width, 0, screen_info.width - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -175,7 +178,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
-                                                          (rect_t){left, top, VIDEO_GRAPHICS_WIDTH - left, font_height},
+                                                          (rect_t){left, top, screen_info.width - left, font_height},
                                                           (color_t){.color = 0x00000000},
                                                           (color_t){.color = 0xFF00FF00});
 
@@ -252,6 +255,8 @@ static int8_t wndmgr_spool_browser_on_enter(const window_t* window) {
 }
 
 int8_t windowmanager_create_and_show_spool_browser_window(void) {
+    screen_info_t screen_info = screen_get_info();
+
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {
@@ -268,7 +273,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
     char_t* title_str = strdup("tOS Spool Browser");
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
-    rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
+    rect.x = (screen_info.width - rect.width) / 2;
     rect.y = font_height;
 
 
@@ -296,7 +301,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                                        NULL,
                                                        (rect_t){0,
                                                                 option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                VIDEO_GRAPHICS_WIDTH,
+                                                                screen_info.width,
                                                                 font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
@@ -313,7 +318,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){font_width, 0, VIDEO_GRAPHICS_WIDTH - font_width, font_height},
+                                                            (rect_t){font_width, 0, screen_info.width - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -357,7 +362,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
-                                                          (rect_t){left, top, VIDEO_GRAPHICS_WIDTH - left, font_height},
+                                                          (rect_t){left, top, screen_info.width - left, font_height},
                                                           (color_t){.color = 0x00000000},
                                                           (color_t){.color = 0xFF00FF00});
 

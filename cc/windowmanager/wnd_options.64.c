@@ -10,12 +10,15 @@
 #include <strings.h>
 #include <argumentparser.h>
 #include <acpi.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
 static window_t* windowmanager_create_options_window(const char_t* title, const char_t*const* options_list) {
+    screen_info_t screen_info = screen_get_info();
+
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {
@@ -32,7 +35,7 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
     char_t* title_str = strdup(title);
 
     rect_t rect = windowmanager_calc_text_rect(title, 2000);
-    rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
+    rect.x = (screen_info.width - rect.width) / 2;
     rect.y = font_height;
 
 
@@ -61,7 +64,7 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
                                                         NULL,
                                                         (rect_t){font_width,
                                                                  option_input_row->rect.y + option_input_row->rect.height + 2 * font_height,
-                                                                 VIDEO_GRAPHICS_WIDTH - font_width,
+                                                                 screen_info.width - font_width,
                                                                  0},
                                                         (color_t){.color = 0x00000000},
                                                         (color_t){.color = 0xFF00FF00});

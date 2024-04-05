@@ -18,6 +18,7 @@
 #include <driver/video_edid.h>
 #include <cpu.h>
 #include <logging.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.kernel.hw.video.vmwaresvga2");
 
@@ -243,10 +244,8 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
     }
 
     video_refresh_frame_buffer_address();
-    cpu_cli();
-    VIDEO_DISPLAY_FLUSH = vmware_svga2_display_flush;
-    cpu_sti();
-    VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, vmware_svga2->screen_width, vmware_svga2->screen_height);
+    SCREEN_FLUSH = vmware_svga2_display_flush;
+    SCREEN_FLUSH(0, 0, 0, 0, vmware_svga2->screen_width, vmware_svga2->screen_height);
 
     PRINTLOG(VMWARESVGA, LOG_DEBUG, "vmware svga2 initialized");
 

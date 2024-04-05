@@ -9,6 +9,7 @@
 #include <windowmanager.h>
 #include <hashmap.h>
 #include <buffer.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -18,8 +19,11 @@ uint64_t windowmanager_next_window_id = 0;
 window_t* windowmanager_current_window = NULL;
 hashmap_t* windowmanager_windows = NULL;
 
+extern pixel_t* VIDEO_BASE_ADDRESS;
 
 window_t* windowmanager_create_top_window(void) {
+    screen_info_t screen_info = screen_get_info();
+
     window_t* window = memory_malloc(sizeof(window_t));
 
     if(window == NULL) {
@@ -29,8 +33,8 @@ window_t* windowmanager_create_top_window(void) {
     window->id     = windowmanager_next_window_id++;
     window->rect.x      = 0;
     window->rect.y      = 0;
-    window->rect.width  = VIDEO_GRAPHICS_WIDTH;
-    window->rect.height = VIDEO_GRAPHICS_HEIGHT;
+    window->rect.width  = screen_info.width;
+    window->rect.height = screen_info.height;
     window->buffer = VIDEO_BASE_ADDRESS;
     window->background_color.color = 0x00000000;
     window->foreground_color.color = 0xFFFFFFFF;

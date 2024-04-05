@@ -27,6 +27,7 @@
 #include <tosdb/tosdb_manager.h>
 #include <linker.h>
 #include <argumentparser.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -254,7 +255,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
-        video_clear_screen();
+        screen_clear();
         res = 0;
     } else if(strcmp(command, "poweroff") == 0 || strcmp(command, "shutdown") == 0) {
         acpi_poweroff();
@@ -271,7 +272,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
             uint32_t foreground = atoh(foreground_str);
             uint32_t background = atoh(background_str);
 
-            video_set_color((color_t){.color = foreground}, (color_t){.color = background});
+            screen_set_color((color_t){.color = foreground}, (color_t){.color = background});
             res = 0;
         }
     } else if(strcmp(command, "ps") == 0) {

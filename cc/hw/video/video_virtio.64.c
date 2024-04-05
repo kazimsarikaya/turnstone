@@ -25,6 +25,7 @@
 #include <graphics/image.h>
 #include <graphics/virgl.h>
 #include <graphics/font.h>
+#include <graphics/screen.h>
 #include <strings.h>
 #include <hashmap.h>
 
@@ -779,11 +780,11 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
 
         video_copy_contents_to_frame_buffer((uint8_t*)screen_va, virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height, virtio_gpu_wrapper->screen_width);
         video_refresh_frame_buffer_address();
-        VIDEO_DISPLAY_FLUSH = virtio_gpu_display_flush;
-        VIDEO_CLEAR_SCREEN_AREA = virtio_gpu_clear_screen_area;
+        SCREEN_FLUSH = virtio_gpu_display_flush;
+        SCREEN_CLEAR_AREA = virtio_gpu_clear_screen_area;
     }
 
-    VIDEO_DISPLAY_FLUSH(scanout, 0, 0, 0, virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
+    SCREEN_FLUSH(scanout, 0, 0, 0, virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
 
     return 0;
 }
@@ -1292,8 +1293,8 @@ int8_t virtio_gpu_font_init(void) {
 #endif
 
     virtio_gpu_dont_transfer_on_flush = true;
-    VIDEO_PRINT_GLYPH_WITH_STRIDE = virtio_gpu_print_glyph_with_stride;
-    VIDEO_SCROLL_SCREEN = virtio_gpu_scrool_screen;
+    SCREEN_PRINT_GLYPH_WITH_STRIDE = virtio_gpu_print_glyph_with_stride;
+    SCREEN_SCROLL = virtio_gpu_scrool_screen;
 
     return 0;
 }

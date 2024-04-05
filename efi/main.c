@@ -801,7 +801,7 @@ EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_tabl
 
     efi_status_t res;
 
-    video_clear_screen();
+    screen_clear();
 
     PRINTLOG(EFI, LOG_INFO, "TURNSTONE EFI Loader Starting...");
     PRINTLOG(EFI, LOG_INFO, "boot time: %llu", boot_time);

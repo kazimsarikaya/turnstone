@@ -45,11 +45,6 @@ void video_init(void);
 void video_refresh_frame_buffer_address(void);
 
 /**
- * @brief clears screen aka write space to all buffer
- */
-void video_clear_screen(void);
-
-/**
  * @brief video diplay pci devices init
  * @param[in] heap heap to allocate memory
  * @param[in] display_controllers list of display controllers
@@ -58,42 +53,12 @@ void video_clear_screen(void);
 int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers);
 int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline);
 
-typedef void (*video_display_flush_f)(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
-
-extern video_display_flush_f VIDEO_DISPLAY_FLUSH;
+void video_print(const char_t* string);
 
 typedef void (*video_move_cursor_f)(uint32_t x, uint32_t y);
 
 extern video_move_cursor_f VIDEO_MOVE_CURSOR;
 
-
-typedef void (*video_print_glyph_with_stride_f)(wchar_t wc,
-                                                color_t foreground, color_t background,
-                                                pixel_t* destination_base_address,
-                                                uint32_t x, uint32_t y,
-                                                uint32_t stride);
-
-extern video_print_glyph_with_stride_f VIDEO_PRINT_GLYPH_WITH_STRIDE;
-
-typedef void (*video_scroll_screen_f)(void);
-
-extern video_scroll_screen_f VIDEO_SCROLL_SCREEN;
-
-typedef void (*video_clear_screen_area_f)(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background);
-
-extern video_clear_screen_area_f VIDEO_CLEAR_SCREEN_AREA;
-
-
-void video_set_color(color_t foreground, color_t background);
-
-void video_print(const char_t* string);
-
-int8_t video_move_text_cursor(int32_t x, int32_t y);
-int8_t video_move_text_cursor_relative(int32_t x, int32_t y);
-void   video_text_cursor_get(int32_t* x, int32_t* y);
-void   video_text_cursor_toggle(boolean_t flush);
-void   video_text_cursor_hide(void);
-void   video_text_cursor_show(void);
-
 graphics_raw_image_t* video_get_mouse_image(void);
+
 #endif

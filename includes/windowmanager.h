@@ -57,12 +57,6 @@ typedef struct window_input_value_t {
     rect_t        rect;
 } window_input_value_t;
 
-
-extern uint32_t VIDEO_GRAPHICS_WIDTH;
-extern uint32_t VIDEO_GRAPHICS_HEIGHT;
-extern uint32_t* VIDEO_BASE_ADDRESS;
-extern uint32_t VIDEO_PIXELS_PER_SCANLINE;
-
 color_t gfx_blend_colors(color_t color1, color_t color2);
 int8_t  gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color);
 

@@ -11,18 +11,23 @@
 #include <strings.h>
 #include <video.h>
 #include <buffer.h>
+#include <graphics/screen.h>
+#include <graphics/text_cursor.h>
 
 void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
 
-void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
+extern pixel_t* VIDEO_BASE_ADDRESS;
 
-    VIDEO_PRINT_GLYPH_WITH_STRIDE(wc,
-                                  window->foreground_color, window->background_color,
-                                  VIDEO_BASE_ADDRESS,
-                                  x, y,
-                                  VIDEO_PIXELS_PER_SCANLINE);
+void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
+    screen_info_t screen_info = screen_get_info();
+
+    SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
+                                   window->foreground_color, window->background_color,
+                                   VIDEO_BASE_ADDRESS,
+                                   x, y,
+                                   screen_info.pixels_per_scanline);
 
 }
 
@@ -81,7 +86,7 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
 }
 
 void windowmanager_clear_screen(window_t* window) {
-    VIDEO_CLEAR_SCREEN_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
+    SCREEN_CLEAR_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
 }
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
@@ -263,7 +268,7 @@ boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** 
 
     int32_t x, y;
 
-    video_text_cursor_get(&x, &y);
+    text_cursor_get(&x, &y);
 
     uint32_t font_width = 0, font_height = 0;
 
@@ -290,7 +295,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
 
     int32_t x, y;
 
-    video_text_cursor_get(&x, &y);
+    text_cursor_get(&x, &y);
     // video_text_cursor_hide();
 
     uint32_t font_width = 0, font_height = 0;
@@ -334,7 +339,7 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
         text_idx++;
     }
 
-    video_move_text_cursor(x, y);
+    text_cursor_move(x, y);
     // video_text_cursor_show();
 
     window->is_dirty = true;
@@ -453,7 +458,7 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
 
     int32_t cursor_x, cursor_y;
 
-    video_text_cursor_get(&cursor_x, &cursor_y);
+    text_cursor_get(&cursor_x, &cursor_y);
 
     uint32_t font_width = 0, font_height = 0;
 
@@ -490,7 +495,7 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
     }
 
     // video_text_cursor_hide();
-    video_move_text_cursor(next->rect.x / font_width, next->rect.y / font_height);
+    text_cursor_move(next->rect.x / font_width, next->rect.y / font_height);
     // video_text_cursor_show();
 
     list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);

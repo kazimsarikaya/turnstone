@@ -19,6 +19,8 @@
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
 #include <strings.h>
+#include <graphics/screen.h>
+#include <graphics/text_cursor.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -37,6 +39,8 @@ static int8_t windowmanager_main(void) {
 
     font_get_font_dimension(&font_width, &font_height);
 
+    screen_info_t screen_info = screen_get_info();
+
     windowmanager_current_window = windowmanager_create_greater_window();
     windowmanager_windows = hashmap_integer(16);
 
@@ -52,7 +56,7 @@ static int8_t windowmanager_main(void) {
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
 
     windowmanager_clear_screen(windowmanager_current_window);
-    VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+    SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
 
     windowmanager_initialized = true;
 
@@ -61,7 +65,7 @@ static int8_t windowmanager_main(void) {
 
 
         if(flush_needed) {
-            VIDEO_DISPLAY_FLUSH(0, 0, 0, 0, VIDEO_GRAPHICS_WIDTH, VIDEO_GRAPHICS_HEIGHT);
+            SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
             // video_text_cursor_show();
         }
 
@@ -102,7 +106,7 @@ static int8_t windowmanager_main(void) {
 
             if(last->buttons & MOUSE_BUTTON_LEFT) {
                 // video_text_cursor_hide();
-                video_move_text_cursor(last->x / font_width, last->y / font_height);
+                text_cursor_move(last->x / font_width, last->y / font_height);
                 // video_text_cursor_show();
             }
         }
@@ -145,19 +149,19 @@ static int8_t windowmanager_main(void) {
                         windowmanager_remove_and_set_current_window(windowmanager_current_window);
                     } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
                         // video_text_cursor_hide();
-                        video_move_text_cursor_relative(0, -1);
+                        text_cursor_move_relative(0, -1);
                         // video_text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
                         // video_text_cursor_hide();
-                        video_move_text_cursor_relative(0, 1);
+                        text_cursor_move_relative(0, 1);
                         // video_text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_LEFT) {
                         // video_text_cursor_hide();
-                        video_move_text_cursor_relative(-1, 0);
+                        text_cursor_move_relative(-1, 0);
                         // video_text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_RIGHT) {
                         // video_text_cursor_hide();
-                        video_move_text_cursor_relative(1, 0);
+                        text_cursor_move_relative(1, 0);
                         // video_text_cursor_show();
                     }
                 }

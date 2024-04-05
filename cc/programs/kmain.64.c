@@ -47,6 +47,7 @@
 #include <hypervisor/hypervisor.h>
 #include <tosdb/tosdb_manager.h>
 #include <spool.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -134,7 +135,7 @@ int8_t kmain64(size_t entry_point) {
     stdbufs_init_buffers(video_print);
 
     video_init();
-    video_clear_screen();
+    screen_clear();
 
     PRINTLOG(KERNEL, LOG_INFO, "Initializing TURNSTONE OS");
     PRINTLOG(KERNEL, LOG_INFO, "new heap created at 0x%p", heap);

@@ -8,6 +8,7 @@
 
 #include <windowmanager.h>
 #include <strings.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -15,6 +16,8 @@ MODULE("turnstone.windowmanager");
 extern char_t tos_logo_data_start;
 
 window_t* windowmanager_create_greater_window(void) {
+    screen_info_t screen_info = screen_get_info();
+
     uint32_t font_height = 0;
 
     font_get_font_dimension(NULL, &font_height);
@@ -31,8 +34,8 @@ window_t* windowmanager_create_greater_window(void) {
     char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
     rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, 2000);
-    rect.x = (VIDEO_GRAPHICS_WIDTH - rect.width) / 2;
-    rect.y = (VIDEO_GRAPHICS_HEIGHT - rect.height) / 2;
+    rect.x = (screen_info.width - rect.width) / 2;
+    rect.y = (screen_info.height - rect.height) / 2;
 
     window_t* child = windowmanager_create_window(window,
                                                   windowmanager_turnstone_ascii_art,

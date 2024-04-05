@@ -42,4 +42,9 @@ typedef uint64_t time_t;
  */
 time_t time_ns(time_t* t);
 
+/**
+ * @brief clears screen with efi system table's console output protocol.
+ */
+void screen_clear(void);
+
 #endif

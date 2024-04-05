@@ -22,6 +22,7 @@
 #include <time.h>
 #include <shell.h>
 #include <utils.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.kernel.hw.kbd");
 
@@ -206,11 +207,10 @@ int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame){
     return 0;
 }
 
-extern int32_t VIDEO_GRAPHICS_WIDTH;
-extern int32_t VIDEO_GRAPHICS_HEIGHT;
-
 int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
+
+    screen_info_t screen_info = screen_get_info();
 
     virtio_queue_ext_t* vq_ev = &virtio_tablet->queues[0];
     virtio_queue_used_t* used = virtio_queue_get_used(virtio_tablet, vq_ev->vq);
@@ -257,9 +257,9 @@ int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
             float32_t val = (float32_t)ev->value / 32767.0f;
 
             if(ev->code == 0) {
-                mouse_x = val * VIDEO_GRAPHICS_WIDTH;
+                mouse_x = val * screen_info.width;
             } else if(ev->code == 1) {
-                mouse_y = val * VIDEO_GRAPHICS_HEIGHT;
+                mouse_y = val * screen_info.height;
             }
         } else if(ev->type == 0) {
             report_finished = true;

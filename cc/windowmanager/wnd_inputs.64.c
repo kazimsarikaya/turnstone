@@ -9,11 +9,14 @@
 
 #include <windowmanager.h>
 #include <strings.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
 
 
 window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
+    screen_info_t screen_info = screen_get_info();
+
     uint32_t font_width = 0, font_height = 0;
 
     font_get_font_dimension(&font_width, &font_height);
@@ -22,7 +25,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
                                                              NULL,
                                                              (rect_t){font_width,
                                                                       pos.y + pos.height + 2 * font_height,
-                                                                      VIDEO_GRAPHICS_WIDTH - font_width,
+                                                                      screen_info.width - font_width,
                                                                       font_height},
                                                              (color_t){.color = 0x00000000},
                                                              (color_t){.color = 0xFF00FF00});

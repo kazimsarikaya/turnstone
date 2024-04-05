@@ -7,6 +7,7 @@
  */
 
 #include <windowmanager.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -16,7 +17,7 @@ int8_t gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, col
     UNUSED(buffer);
     UNUSED(area_width);
 
-    VIDEO_CLEAR_SCREEN_AREA(rect.x, rect.y, rect.width, rect.height, color);
+    SCREEN_CLEAR_AREA(rect.x, rect.y, rect.width, rect.height, color);
 
     return 0;
 }
@@ -65,13 +66,15 @@ boolean_t windowmanager_draw_window(window_t* window) {
         return false;
     }
 
+    screen_info_t screen_info = screen_get_info();
+
     boolean_t flush_needed = false;
 
     if(window->is_dirty) {
         flush_needed = true;
         // video_text_cursor_hide();
 
-        gfx_draw_rectangle(window->buffer, VIDEO_PIXELS_PER_SCANLINE, window->rect, window->background_color);
+        gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);
 
         windowmanager_print_text(window, 0, 0, window->text);
 

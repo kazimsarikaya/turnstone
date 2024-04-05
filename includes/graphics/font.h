@@ -11,26 +11,12 @@
 #define ___FONT_H 0
 
 #include <types.h>
+#include <graphics/color.h>
 
 /*! magic for psf2 fonts*/
 #define FONT_PSF2_MAGIC 0x864ab572
 /*! magic for psf1 fonts*/
 #define FONT_PSF1_MAGIC 0x0436
-
-/*! pixel type */
-typedef uint32_t pixel_t;
-
-typedef union color_t color_t;
-
-union color_t {
-    struct {
-        uint8_t alpha;
-        uint8_t red;
-        uint8_t green;
-        uint8_t blue;
-    } __attribute__((packed));
-    uint32_t color;
-};
 
 /**
  * @struct font_psf2_t
