@@ -7,7 +7,6 @@
  */
 
 #include <windowmanager.h>
-#include <video.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
@@ -21,6 +20,7 @@
 #include <strings.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
+#include <graphics/font.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -99,10 +99,6 @@ static int8_t windowmanager_main(void) {
             mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
 
             mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
-
-            if(VIDEO_MOVE_CURSOR) {
-                // VIDEO_MOVE_CURSOR(last->x, last->y);
-            }
 
             if(last->buttons & MOUSE_BUTTON_LEFT) {
                 // video_text_cursor_hide();

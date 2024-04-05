@@ -7,8 +7,8 @@
  */
 
 #include <driver/video_virtio.h>
-#include <video.h>
 #include <driver/virtio.h>
+#include <device/mouse.h>
 #include <cpu/interrupt.h>
 #include <apic.h>
 #include <memory/paging.h>
@@ -39,7 +39,7 @@ int8_t   virtio_gpu_display_init(uint32_t scanout);
 int8_t   mouse_init(void);
 int8_t   virtio_gpu_font_init(void);
 void     virtio_gpu_display_flush(uint32_t scanout, uint64_t buf_offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
-void     mouse_move(uint32_t x, uint32_t y);
+void     virtio_gpu_mouse_move(uint32_t x, uint32_t y);
 void     virtio_gpu_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background);
 
 virtio_gpu_wrapper_t* virtio_gpu_wrapper = NULL;
@@ -778,8 +778,8 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
 
         PRINTLOG(VIRTIOGPU, LOG_INFO, "new screen frame buffer address 0x%llx", screen_va);
 
-        video_copy_contents_to_frame_buffer((uint8_t*)screen_va, virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height, virtio_gpu_wrapper->screen_width);
-        video_refresh_frame_buffer_address();
+        video_fb_copy_contents_to_frame_buffer((uint8_t*)screen_va, virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height, virtio_gpu_wrapper->screen_width);
+        video_fb_refresh_frame_buffer_address();
         SCREEN_FLUSH = virtio_gpu_display_flush;
         SCREEN_CLEAR_AREA = virtio_gpu_clear_screen_area;
     }
@@ -1301,7 +1301,7 @@ int8_t virtio_gpu_font_init(void) {
 
 
 int8_t mouse_init(void) {
-    graphics_raw_image_t* mouse_image = video_get_mouse_image();
+    graphics_raw_image_t* mouse_image = mouse_get_image();
 
     if(mouse_image == NULL || mouse_image->data == NULL) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to get mouse image");
@@ -1389,12 +1389,12 @@ int8_t mouse_init(void) {
 
     mouse_move_internal(VIRTIO_GPU_CMD_UPDATE_CURSOR, 0, 0);
 
-    VIDEO_MOVE_CURSOR = mouse_move;
+    MOUSE_MOVE_CURSOR = virtio_gpu_mouse_move;
 
     return 0;
 }
 
-void mouse_move(uint32_t x, uint32_t y) {
+void virtio_gpu_mouse_move(uint32_t x, uint32_t y) {
     mouse_move_internal(VIRTIO_GPU_CMD_MOVE_CURSOR, x, y);
 }
 

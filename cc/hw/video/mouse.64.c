@@ -24,7 +24,9 @@ extern buffer_t* mouse_buffer;
 extern uint64_t shell_task_id;
 extern uint64_t windowmanager_task_id;
 
-graphics_raw_image_t* video_get_mouse_image(void) {
+mouse_move_cursor_f MOUSE_MOVE_CURSOR = NULL;
+
+graphics_raw_image_t* mouse_get_image(void) {
     graphics_tga_image_t* tga_image = (graphics_tga_image_t*)&mouse_icon_data_start;
     uint64_t mouse_data_size = &mouse_icon_data_end - &mouse_icon_data_start;
 

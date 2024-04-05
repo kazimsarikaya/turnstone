@@ -243,7 +243,7 @@ int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev) {
         // test irq for fence completion
     }
 
-    video_refresh_frame_buffer_address();
+    video_fb_refresh_frame_buffer_address();
     SCREEN_FLUSH = vmware_svga2_display_flush;
     SCREEN_FLUSH(0, 0, 0, 0, vmware_svga2->screen_width, vmware_svga2->screen_height);
 

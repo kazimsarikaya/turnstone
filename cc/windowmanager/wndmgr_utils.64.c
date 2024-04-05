@@ -9,7 +9,6 @@
 #include <windowmanager.h>
 #include <utils.h>
 #include <strings.h>
-#include <video.h>
 #include <buffer.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>

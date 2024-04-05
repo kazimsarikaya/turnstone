@@ -48,6 +48,7 @@
 #include <tosdb/tosdb_manager.h>
 #include <spool.h>
 #include <graphics/screen.h>
+#include <driver/video.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -134,7 +135,7 @@ int8_t kmain64(size_t entry_point) {
 
     stdbufs_init_buffers(video_print);
 
-    video_init();
+    video_fb_init();
     screen_clear();
 
     PRINTLOG(KERNEL, LOG_INFO, "Initializing TURNSTONE OS");

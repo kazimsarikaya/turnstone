@@ -7,7 +7,6 @@
  */
 
 #include <shell.h>
-#include <video.h>
 #include <cpu/task.h>
 #include <logging.h>
 #include <strings.h>
@@ -402,10 +401,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         if(mouse_length) {
             mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
-
-            if(VIDEO_MOVE_CURSOR) {
-                VIDEO_MOVE_CURSOR(mouse_data[mouse_ev_cnt - 1].x, mouse_data[mouse_ev_cnt - 1].y);
-            }
+            UNUSED(mouse_ev_cnt);
         }
 
         memory_free(mouse_data);

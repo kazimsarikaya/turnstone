@@ -18,6 +18,8 @@
 /*! magic for psf1 fonts*/
 #define FONT_PSF1_MAGIC 0x0436
 
+#define FONT_TAB_STOP 8
+
 /**
  * @struct font_psf2_t
  * @brief psf v2 font header

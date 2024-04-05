@@ -12,7 +12,7 @@
 #include <types.h>
 #include <memory.h>
 #include <efi.h>
-#include <video.h>
+#include <driver/video_fb.h>
 
 /**
  * @enum system_info_boot_type_t

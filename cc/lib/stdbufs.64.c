@@ -8,7 +8,6 @@
 
 #include <stdbufs.h>
 #include <cpu/task.h>
-#include <video.h>
 #include <strings.h>
 
 #if ___KERNELBUILD == 1

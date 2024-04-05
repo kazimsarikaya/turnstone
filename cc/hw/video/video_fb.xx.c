@@ -7,7 +7,9 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
-#include <video.h>
+
+#include <driver/video.h>
+#include <driver/video_fb.h>
 #include <memory.h>
 #include <ports.h>
 #include <strings.h>
@@ -23,23 +25,16 @@
 #include <apic.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
+#include <graphics/font.h>
 
-MODULE("turnstone.kernel.hw.video");
-
-#define VIDEO_TAB_STOP 8
-
-void video_text_print(const char_t* string);
-
+MODULE("turnstone.kernel.hw.video.fb");
 
 pixel_t* VIDEO_BASE_ADDRESS = NULL;
 
-video_move_cursor_f VIDEO_MOVE_CURSOR = NULL;
+extern boolean_t GRAPHICS_MODE;
+extern lock_t* video_lock;
 
-static boolean_t GRAPHICS_MODE = 0;
-
-static lock_t* video_lock = NULL;
-
-static void video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+static void video_fb_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     UNUSED(scanout);
     UNUSED(offset);
     UNUSED(x);
@@ -48,7 +43,7 @@ static void video_display_flush_dummy(uint32_t scanout, uint64_t offset, uint32_
     UNUSED(height);
 }
 
-void video_refresh_frame_buffer_address(void) {
+void video_fb_refresh_frame_buffer_address(void) {
     VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 
     screen_set_dimensions(SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height, SYSTEM_INFO->frame_buffer->pixels_per_scanline);
@@ -58,7 +53,7 @@ void video_refresh_frame_buffer_address(void) {
     }
 }
 
-static void video_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
+static void video_fb_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
     screen_info_t screen_info = screen_get_info();
 
     int32_t offs = (y * height * screen_info.pixels_per_scanline) + (x * width);
@@ -84,7 +79,7 @@ static void video_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t 
     }
 }
 
-static void video_graphics_scroll(void){
+static void video_fb_graphics_scroll(void){
     font_table_t* ft = font_get_font_table();
     screen_info_t screen_info = screen_get_info();
 
@@ -128,7 +123,7 @@ static void video_graphics_scroll(void){
     }
 }
 
-static void video_graphics_print(const char_t* string) {
+static void video_fb_graphics_print(const char_t* string) {
     int64_t i = 0;
     uint64_t flush_offset = 0;
     uint32_t min_x = 0;
@@ -189,7 +184,7 @@ static void video_graphics_print(const char_t* string) {
                 cursor_graphics_x = 0;
                 cursor_graphics_y++;
             } else {
-                cursor_graphics_x = ((cursor_graphics_x + VIDEO_TAB_STOP) / VIDEO_TAB_STOP) * VIDEO_TAB_STOP;
+                cursor_graphics_x = ((cursor_graphics_x + FONT_TAB_STOP) / FONT_TAB_STOP) * FONT_TAB_STOP;
 
                 if(cursor_graphics_x >= screen_info.chars_per_line) {
                     cursor_graphics_x = cursor_graphics_x % screen_info.chars_per_line;
@@ -272,7 +267,7 @@ static void video_graphics_print(const char_t* string) {
     text_cursor_move(cursor_graphics_x, cursor_graphics_y);
 }
 
-static void video_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
+static void video_fb_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
     if(GRAPHICS_MODE) {
         uint32_t i = 0;
         uint32_t j = 0;
@@ -295,7 +290,7 @@ static void video_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint
 
 
 
-void video_init(void) {
+void video_fb_init(void) {
     video_text_print("video init\n");
     GRAPHICS_MODE = false;
 
@@ -324,11 +319,12 @@ void video_init(void) {
 
     if(VIDEO_BASE_ADDRESS) {
         GRAPHICS_MODE = true;
-        SCREEN_FLUSH = video_display_flush_dummy;
+        SCREEN_FLUSH = video_fb_display_flush_dummy;
         SCREEN_PRINT_GLYPH_WITH_STRIDE = font_print_glyph_with_stride;
-        SCREEN_SCROLL = video_graphics_scroll;
-        SCREEN_CLEAR_AREA = video_clear_screen_area;
-        TEXT_CURSOR_DRAW = video_text_cursor_draw;
+        SCREEN_SCROLL = video_fb_graphics_scroll;
+        SCREEN_CLEAR_AREA = video_fb_clear_screen_area;
+        TEXT_CURSOR_DRAW = video_fb_text_cursor_draw;
+        VIDEO_GRAPHICS_PRINT = video_fb_graphics_print;
     }
 
     video_lock = lock_create();
@@ -340,36 +336,7 @@ void video_init(void) {
     video_text_print("video init done\n");
 }
 
-void video_print(const char_t* string) {
-    lock_acquire(video_lock);
-
-    video_text_print(string);
-
-    if(GRAPHICS_MODE) {
-        text_cursor_hide();
-        video_graphics_print(string);
-        text_cursor_show();
-    }
-
-    lock_release(video_lock);
-}
-
-static const int32_t serial_ports[] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
-
-void video_text_print(const char_t* string) {
-    if(string == NULL) {
-        return;
-    }
-    size_t i = 0;
-    uint32_t apic_id = apic_get_local_apic_id();
-
-    while(string[i] != '\0') {
-        write_serial(serial_ports[apic_id], string[i]);
-        i++;
-    }
-}
-
-int8_t video_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline) {
+int8_t video_fb_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline) {
     if(!VIDEO_BASE_ADDRESS) {
         return -1;
     }

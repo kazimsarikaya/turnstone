@@ -12,13 +12,12 @@
 
 #include <types.h>
 #include <list.h>
-#include <video.h>
+#include <graphics/color.h>
+#include <graphics/font.h>
 
 
 typedef struct window_t window_t;
-typedef union color_t   color_t;
 typedef struct rect_t   rect_t;
-
 
 struct rect_t {
     uint32_t x;
