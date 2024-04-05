@@ -66,7 +66,7 @@ static int8_t windowmanager_main(void) {
 
         if(flush_needed) {
             SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
-            // video_text_cursor_show();
+            text_cursor_show();
         }
 
         while(list_size(mq) == 0) {
@@ -101,9 +101,9 @@ static int8_t windowmanager_main(void) {
             mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
 
             if(last->buttons & MOUSE_BUTTON_LEFT) {
-                // video_text_cursor_hide();
+                text_cursor_hide();
                 text_cursor_move(last->x / font_width, last->y / font_height);
-                // video_text_cursor_show();
+                text_cursor_show();
             }
         }
 
@@ -144,21 +144,21 @@ static int8_t windowmanager_main(void) {
                     } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
                         windowmanager_remove_and_set_current_window(windowmanager_current_window);
                     } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
-                        // video_text_cursor_hide();
+                        text_cursor_hide();
                         text_cursor_move_relative(0, -1);
-                        // video_text_cursor_show();
+                        text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
-                        // video_text_cursor_hide();
+                        text_cursor_hide();
                         text_cursor_move_relative(0, 1);
-                        // video_text_cursor_show();
+                        text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_LEFT) {
-                        // video_text_cursor_hide();
+                        text_cursor_hide();
                         text_cursor_move_relative(-1, 0);
-                        // video_text_cursor_show();
+                        text_cursor_show();
                     } else if(kbd_data[i].key == KBD_SCANCODE_RIGHT) {
-                        // video_text_cursor_hide();
+                        text_cursor_hide();
                         text_cursor_move_relative(1, 0);
-                        // video_text_cursor_show();
+                        text_cursor_show();
                     }
                 }
             }

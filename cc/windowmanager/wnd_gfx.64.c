@@ -8,6 +8,7 @@
 
 #include <windowmanager.h>
 #include <graphics/screen.h>
+#include <graphics/text_cursor.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -72,7 +73,7 @@ boolean_t windowmanager_draw_window(window_t* window) {
 
     if(window->is_dirty) {
         flush_needed = true;
-        // video_text_cursor_hide();
+        text_cursor_hide();
 
         gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);
 

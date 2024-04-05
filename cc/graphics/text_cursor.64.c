@@ -9,6 +9,7 @@
 
 #include <graphics/text_cursor.h>
 #include <graphics/screen.h>
+#include <graphics/font.h>
 
 MODULE("turnstone.kernel.graphics.text_cursor");
 
@@ -47,7 +48,12 @@ void text_cursor_get(int32_t* x, int32_t* y) {
 }
 
 void text_cursor_toggle(boolean_t flush) {
-    UNUSED(flush);
+    if(TEXT_CURSOR_DRAW) {
+        font_table_t* ft = font_get_font_table();
+
+        TEXT_CURSOR_DRAW(text_cursor_x, text_cursor_y, ft->font_width, ft->font_height, flush);
+        text_cursor_visible = !text_cursor_visible;
+    }
 }
 
 void text_cursor_hide(void) {
