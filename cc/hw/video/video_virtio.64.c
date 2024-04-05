@@ -1179,7 +1179,7 @@ static int8_t virtio_gpu_init_text_cursor_data(void) {
 
     res = virtio_gpu_queue_context_create_buffer_resource(0, &virtio_gpu_wrapper->lock,
                                                           1, vertex_res_id, virtio_gpu_wrapper->fence_ids[0]++,
-                                                          4 * sizeof(virgl_vertex_t),
+                                                          6 * sizeof(virgl_vertex_t),
                                                           VIRGL_BIND_VERTEX_BUFFER);
 
     if(res != 0) {
@@ -1298,54 +1298,7 @@ static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int
 
     int8_t res = 0;
 
-    UNUSED(width);
-
     virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
-
-    virgl_vertex_t vertex[4] = {0};
-    vertex[0].x = 0.0f; // x / sw;
-    vertex[0].y = -0.9f; // y / sh;
-    vertex[0].d = 1;
-    vertex[0].color.f32[0] = 1.0f;
-    vertex[0].color.f32[3] = 1.0f;
-
-    vertex[1].x = -0.9f; // (x + width) / sw;
-    vertex[1].y = 0.9f; // y / sh;
-    vertex[1].d = 1;
-    vertex[1].color.f32[1] = 1.0f;
-    vertex[1].color.f32[3] = 1.0f;
-
-    vertex[2].x = 0.9f; // (x + width) / sw;
-    vertex[2].y = 0.9f; // (y + height) / sh;
-    vertex[2].d = 1;
-    vertex[2].color.f32[2] = 1.0f;
-    vertex[2].color.f32[3] = 1.0f;
-
-    vertex[3].x = x / sw;
-    vertex[3].y = (y + height) / sh;
-    vertex[3].d = 1;
-    vertex[3].color.f32[0] = 1.0f;
-    vertex[3].color.f32[3] = 1.0f;
-
-    virgl_res_iw_t res_iw = {0};
-    res_iw.res_id = virtio_gpu_cursor_vertex_buffer_res_id;
-    res_iw.format = VIRGL_FORMAT_B8G8R8A8_UNORM;
-    res_iw.element_size = sizeof(virgl_vertex_t);
-    res_iw.usage = VIRGL_RESOURCE_USAGE_DEFAULT;
-    res_iw.level = 0;
-    res_iw.box.x = 0;
-    res_iw.box.y = 0;
-    res_iw.box.z = 0;
-    res_iw.box.w = 4;
-    res_iw.box.h = 1;
-    res_iw.box.d = 1;
-
-    res = virgl_encode_inline_write(cmd, &res_iw, vertex);
-
-    if(res != 0) {
-        video_text_print("failed to encode inline write");
-        return;
-    }
 
     virgl_obj_framebuffer_state_t obj_fb_state = {0};
 
@@ -1362,6 +1315,65 @@ static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int
 
     if(res != 0) {
         video_text_print("failed to encode bind object");
+        return;
+    }
+
+    float32_t half_w = sw / 2.0f;
+    float32_t half_h = sh / 2.0f;
+
+    virgl_vertex_t vertex[6] = {0};
+
+    // right upper triangle
+    vertex[0].x = (x - half_w) / sw;
+    vertex[0].y = (y - half_h) / sh;
+    vertex[0].d = 1;
+    vertex[0].color.f32[0] = 1.0f;
+    vertex[0].color.f32[3] = 1.0f;
+
+    vertex[1].x = (x + width - half_w) / sw;
+    vertex[1].y = (y - half_h) / sh;
+    vertex[1].d = 1;
+    vertex[1].color.f32[1] = 1.0f;
+    vertex[1].color.f32[3] = 1.0f;
+
+    vertex[2].x = (x + width - half_w) / sw;
+    vertex[2].y = (y + height - half_h) / sh;
+    vertex[2].d = 1;
+    vertex[2].color.f32[2] = 1.0f;
+    vertex[2].color.f32[3] = 1.0f;
+
+    // left lower triangle
+    vertex[3].x = (x - half_w) / sw;
+    vertex[3].y = (y - half_h) / sh;
+    vertex[3].d = 1;
+    vertex[3].color.f32[0] = 1.0f;
+    vertex[3].color.f32[3] = 1.0f;
+
+    vertex[4].x = (x + width - half_w) / sw;
+    vertex[4].y = (y + height - half_h) / sh;
+    vertex[4].d = 1;
+    vertex[4].color.f32[2] = 1.0f;
+    vertex[4].color.f32[3] = 1.0f;
+
+    vertex[5].x = (x - half_w) / sw;
+    vertex[5].y = (y + height - half_h) / sh;
+    vertex[5].d = 1;
+    vertex[5].color.f32[1] = 1.0f;
+    vertex[5].color.f32[3] = 1.0f;
+
+    virgl_res_iw_t res_iw = {0};
+    res_iw.res_id = virtio_gpu_cursor_vertex_buffer_res_id;
+    res_iw.format = VIRGL_FORMAT_B8G8R8A8_UNORM;
+    res_iw.element_size = 1; // sizeof(virgl_vertex_t);
+    res_iw.usage = VIRGL_RESOURCE_USAGE_DEFAULT;
+    res_iw.box.w = 6 * sizeof(virgl_vertex_t);
+    res_iw.box.h = 1;
+    res_iw.box.d = 1;
+
+    res = virgl_encode_inline_write(cmd, &res_iw, vertex);
+
+    if(res != 0) {
+        video_text_print("failed to encode inline write");
         return;
     }
 
@@ -1425,18 +1437,16 @@ static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int
     }
 
     virgl_viewport_state_t vp = {0};
-    float32_t znear = 0, zfar = 1.0;
-    float32_t half_w = sw / 2.0f;
-    float32_t half_h = sh / 2.0f;
-    float32_t half_d = (zfar - znear) / 2.0f;
+    // float32_t znear = 0, zfar = 1.0;
+    // float32_t half_d = (zfar - znear) / 2.0f;
 
-    vp.scale[0] = half_w;
-    vp.scale[1] = half_h;
-    vp.scale[2] = half_d;
+    vp.scale[0] = sw; // half_w;
+    vp.scale[1] = sh; // half_h;
+    vp.scale[2] = 1; // half_d;
 
     vp.translate[0] = half_w + 0;
     vp.translate[1] = half_h + 0;
-    vp.translate[2] = half_d + znear;
+    vp.translate[2] = 1; // half_d + znear;
     res = virgl_encode_set_viewport_states(cmd, 0, 1, &vp);
 
     if(res != 0) {
@@ -1445,7 +1455,7 @@ static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int
     }
 
     virgl_draw_info_t draw_info = {0};
-    draw_info.count = 3;
+    draw_info.count = 6;
     draw_info.mode = VIRGL_PRIM_TRIANGLES;
 
     res = virgl_encode_draw_vbo(cmd, &draw_info);
@@ -1455,9 +1465,17 @@ static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int
         return;
     }
 
-    video_text_print("cursor drawn\n");
-
+    // if(flush) {
     UNUSED(flush);
+    res = virgl_cmd_flush_commands(cmd);
+
+    if(res != 0) {
+        video_text_print("failed to flush commands");
+        return;
+    }
+
+    SCREEN_FLUSH(0, 0, x, y, width, height);
+    // }
 }
 
 static void* virtio_gpu_font_empty_line_value = NULL;
