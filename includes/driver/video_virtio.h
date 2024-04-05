@@ -121,17 +121,6 @@ typedef struct virtio_gpu_resp_edid_t {
     uint8_t               edid[1024];
 } __attribute__((packed)) virtio_gpu_resp_edid_t;
 
-typedef enum virtio_gpu_formats_t {
-    VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM = 1,
-    VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM = 2,
-    VIRTIO_GPU_FORMAT_A8R8G8B8_UNORM = 3,
-    VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM = 4,
-    VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM = 67,
-    VIRTIO_GPU_FORMAT_X8B8G8R8_UNORM = 68,
-    VIRTIO_GPU_FORMAT_A8B8G8R8_UNORM = 121,
-    VIRTIO_GPU_FORMAT_R8G8B8X8_UNORM = 134,
-} virtio_gpu_formats_t;
-
 typedef struct virtio_gpu_resource_create_2d_t {
     virtio_gpu_ctrl_hdr_t hdr;
     uint32_t              resource_id;
@@ -365,6 +354,7 @@ typedef struct virtio_gpu_wrapper_t {
     uint32_t          num_scanouts;
     uint64_t*         fence_ids;
     uint32_t*         resource_ids;
+    uint32_t*         surface_ids;
     uint32_t          mouse_resource_id;
     uint32_t          font_resource_id;
     uint32_t          font_empty_line_resource_id;

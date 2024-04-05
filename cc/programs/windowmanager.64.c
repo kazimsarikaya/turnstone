@@ -65,8 +65,8 @@ static int8_t windowmanager_main(void) {
 
 
         if(flush_needed) {
-            SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
             text_cursor_show();
+            SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
         }
 
         while(list_size(mq) == 0) {

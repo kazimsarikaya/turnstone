@@ -15,6 +15,20 @@
 
 #define VIRGL_RSTR(...) #__VA_ARGS__
 
+typedef enum virgl_format_t {
+    VIRGL_FORMAT_B8G8R8A8_UNORM = 1,
+    VIRGL_FORMAT_B8G8R8X8_UNORM = 2,
+    VIRGL_FORMAT_A8R8G8B8_UNORM = 3,
+    VIRGL_FORMAT_X8R8G8B8_UNORM = 4,
+    VIRGL_FORMAT_R32G32B32A32_FLOAT      = 31,
+    VIRGL_FORMAT_R32G32B32A32_UNORM      = 35,
+    VIRGL_FORMAT_R8_UNORM                = 64,
+    VIRGL_FORMAT_R8G8B8A8_UNORM = 67,
+    VIRGL_FORMAT_X8B8G8R8_UNORM = 68,
+    VIRGL_FORMAT_A8B8G8R8_UNORM = 121,
+    VIRGL_FORMAT_R8G8B8X8_UNORM = 134,
+} virgl_format_t;
+
 typedef enum virgl_object_type_t {
     VIRGL_OBJECT_NULL,
     VIRGL_OBJECT_BLEND,
@@ -394,6 +408,24 @@ typedef struct virgl_sampler_views_t {
 
 #define VIRGL_SET_SAMPLER_VIEWS_CCMD_PAYLOAD_SIZE(num_views) (2 + (num_views))
 
+typedef enum virgl_prim_type_t {
+    VIRGL_PRIM_POINTS,
+    VIRGL_PRIM_LINES,
+    VIRGL_PRIM_LINE_LOOP,
+    VIRGL_PRIM_LINE_STRIP,
+    VIRGL_PRIM_TRIANGLES,
+    VIRGL_PRIM_TRIANGLE_STRIP,
+    VIRGL_PRIM_TRIANGLE_FAN,
+    VIRGL_PRIM_QUADS,
+    VIRGL_PRIM_QUAD_STRIP,
+    VIRGL_PRIM_POLYGON,
+    VIRGL_PRIM_LINES_ADJACENCY,
+    VIRGL_PRIM_LINE_STRIP_ADJACENCY,
+    VIRGL_PRIM_TRIANGLES_ADJACENCY,
+    VIRGL_PRIM_TRIANGLE_STRIP_ADJACENCY,
+    VIRGL_PRIM_PATCHES,
+} virgl_prim_type_t;
+
 typedef struct virgl_draw_info_t {
     uint32_t start;
     uint32_t count;
@@ -441,6 +473,244 @@ typedef struct virgl_res_iw_t {
     uint32_t    data_start;
 } virgl_res_iw_t;
 
+typedef struct virgl_vertex_element_t {
+    uint32_t src_offset;
+    uint32_t instance_divisor;
+    uint32_t buffer_index;
+    uint32_t src_format;
+} virgl_vertex_element_t;
+
+#define VIRGL_CREATE_VERTEX_ELEMENTS_CCMD_PAYLOAD_SIZE(num_elements) (1 + (num_elements * 4))
+
+typedef struct virgl_vertex_t {
+    float32_t     x;
+    float32_t     y;
+    float32_t     z;
+    float32_t     d;
+    virgl_color_t color;
+} virgl_vertex_t;
+
+_Static_assert(sizeof(virgl_vertex_t) == 8 * sizeof(float32_t), "virgl_vertex_t size is not 32 bytes");
+
+typedef enum virgl_mask_t {
+    VIRGL_MASK_R =  0x1,
+    VIRGL_MASK_G =  0x2,
+    VIRGL_MASK_B =  0x4,
+    VIRGL_MASK_A =  0x8,
+    VIRGL_MASK_RGBA = 0xf,
+    VIRGL_MASK_Z = 0x10,
+    VIRGL_MASK_S = 0x20,
+    VIRGL_MASK_ZS = 0x30,
+    VIRGL_MASK_RGBAZS = (VIRGL_MASK_RGBA | VIRGL_MASK_ZS),
+} virgl_mask_t;
+
+typedef enum virgl_compare_func_t {
+    VIRGL_FUNC_NEVER,
+    VIRGL_FUNC_LESS,
+    VIRGL_FUNC_EQUAL,
+    VIRGL_FUNC_LEQUAL,
+    VIRGL_FUNC_GREATER,
+    VIRGL_FUNC_NOTEQUAL,
+    VIRGL_FUNC_GEQUAL,
+    VIRGL_FUNC_ALWAYS,
+} virgl_compare_func_t;
+
+typedef struct virgl_depth_state_t {
+    uint32_t enabled  :1; /**< depth test enabled? */
+    uint32_t writemask:1; /**< allow depth buffer writes? */
+    uint32_t func     :3; /**< depth test func (VIRGL_FUNC_x) */
+} virgl_depth_state_t;
+
+
+typedef struct virgl_stencil_state_t {
+    uint32_t enabled  :1; /**< stencil[0]: stencil enabled, stencil[1]: two-side enabled */
+    uint32_t func     :3; /**< VIRGL_FUNC_x */
+    uint32_t fail_op  :3; /**< VIRGL_STENCIL_OP_x */
+    uint32_t zpass_op :3; /**< VIRGL_STENCIL_OP_x */
+    uint32_t zfail_op :3; /**< VIRGL_STENCIL_OP_x */
+    uint32_t valuemask:8;
+    uint32_t writemask:8;
+} virgl_stencil_state_t;
+
+typedef struct virgl_alpha_state_t {
+    uint32_t enabled:1;
+    uint32_t func   :3; /**< VIRGL_FUNC_x */
+    float    ref_value; /**< reference value */
+} virgl_alpha_state_t;
+
+typedef struct virgl_depth_stencil_alpha_state_t {
+    virgl_depth_state_t   depth;
+    virgl_stencil_state_t stencil[2]; /**< [0] = front, [1] = back */
+    virgl_alpha_state_t   alpha;
+} virgl_depth_stencil_alpha_state_t;
+
+#define VIRGL_OBJ_DSA_SIZE 5
+#define VIRGL_OBJ_DSA_S0_DEPTH_ENABLE(x) (((x) & 0x1) << 0)
+#define VIRGL_OBJ_DSA_S0_DEPTH_WRITEMASK(x) (((x) & 0x1) << 1)
+#define VIRGL_OBJ_DSA_S0_DEPTH_FUNC(x) (((x) & 0x7) << 2)
+#define VIRGL_OBJ_DSA_S0_ALPHA_ENABLED(x) (((x) & 0x1) << 8)
+#define VIRGL_OBJ_DSA_S0_ALPHA_FUNC(x) (((x) & 0x7) << 9)
+#define VIRGL_OBJ_DSA_S1_STENCIL_ENABLED(x) (((x) & 0x1) << 0)
+#define VIRGL_OBJ_DSA_S1_STENCIL_FUNC(x) (((x) & 0x7) << 1)
+#define VIRGL_OBJ_DSA_S1_STENCIL_FAIL_OP(x) (((x) & 0x7) << 4)
+#define VIRGL_OBJ_DSA_S1_STENCIL_ZPASS_OP(x) (((x) & 0x7) << 7)
+#define VIRGL_OBJ_DSA_S1_STENCIL_ZFAIL_OP(x) (((x) & 0x7) << 10)
+#define VIRGL_OBJ_DSA_S1_STENCIL_VALUEMASK(x) (((x) & 0xff) << 13)
+#define VIRGL_OBJ_DSA_S1_STENCIL_WRITEMASK(x) (((x) & 0xff) << 21)
+
+typedef struct virgl_rt_blend_state_t {
+    uint32_t blend_enable:1;
+
+    uint32_t rgb_func      :3; /**< VIRGL_BLEND_x */
+    uint32_t rgb_src_factor:5; /**< VIRGL_BLENDFACTOR_x */
+    uint32_t rgb_dst_factor:5; /**< VIRGL_BLENDFACTOR_x */
+
+    uint32_t alpha_func      :3; /**< VIRGL_BLEND_x */
+    uint32_t alpha_src_factor:5; /**< VIRGL_BLENDFACTOR_x */
+    uint32_t alpha_dst_factor:5; /**< VIRGL_BLENDFACTOR_x */
+
+    uint32_t colormask:4; /**< bitmask of VIRGL_MASK_R/G/B/A */
+} virgl_rt_blend_state_t;
+
+#define VIRGL_BLEND_STATE_MAX_RT 8
+
+typedef struct virgl_blend_state_t {
+    uint32_t               independent_blend_enable:1;
+    uint32_t               logicop_enable          :1;
+    uint32_t               logicop_func            :4; /**< VIRGL_LOGICOP_x */
+    uint32_t               dither                  :1;
+    uint32_t               alpha_to_coverage       :1;
+    uint32_t               alpha_to_one            :1;
+    virgl_rt_blend_state_t rt[VIRGL_BLEND_STATE_MAX_RT];
+} virgl_blend_state_t;
+
+#define VIRGL_OBJ_BLEND_SIZE (VIRGL_BLEND_STATE_MAX_RT + 3)
+#define VIRGL_OBJ_BLEND_S0_INDEPENDENT_BLEND_ENABLE(x) ((x) & 0x1 << 0)
+#define VIRGL_OBJ_BLEND_S0_LOGICOP_ENABLE(x) (((x) & 0x1) << 1)
+#define VIRGL_OBJ_BLEND_S0_DITHER(x) (((x) & 0x1) << 2)
+#define VIRGL_OBJ_BLEND_S0_ALPHA_TO_COVERAGE(x) (((x) & 0x1) << 3)
+#define VIRGL_OBJ_BLEND_S0_ALPHA_TO_ONE(x) (((x) & 0x1) << 4)
+#define VIRGL_OBJ_BLEND_S1_LOGICOP_FUNC(x) (((x) & 0xf) << 0)
+#define VIRGL_OBJ_BLEND_S2(cbuf) (4 + (cbuf))
+#define VIRGL_OBJ_BLEND_S2_RT_BLEND_ENABLE(x) (((x) & 0x1) << 0)
+#define VIRGL_OBJ_BLEND_S2_RT_RGB_FUNC(x) (((x) & 0x7) << 1)
+#define VIRGL_OBJ_BLEND_S2_RT_RGB_SRC_FACTOR(x) (((x) & 0x1f) << 4)
+#define VIRGL_OBJ_BLEND_S2_RT_RGB_DST_FACTOR(x) (((x) & 0x1f) << 9)
+#define VIRGL_OBJ_BLEND_S2_RT_ALPHA_FUNC(x) (((x) & 0x7) << 14)
+#define VIRGL_OBJ_BLEND_S2_RT_ALPHA_SRC_FACTOR(x) (((x) & 0x1f) << 17)
+#define VIRGL_OBJ_BLEND_S2_RT_ALPHA_DST_FACTOR(x) (((x) & 0x1f) << 22)
+#define VIRGL_OBJ_BLEND_S2_RT_COLORMASK(x) (((x) & 0xf) << 27)
+
+typedef enum virgl_polygon_mode_t {
+    VIRGL_POLYGON_MODE_FILL,
+    VIRGL_POLYGON_MODE_LINE,
+    VIRGL_POLYGON_MODE_POINT,
+} virgl_polygon_mode_t;
+
+typedef enum virgl_face_t {
+    VIRGL_FACE_NONE           = 0,
+    VIRGL_FACE_FRONT          = 1,
+    VIRGL_FACE_BACK           = 2,
+    VIRGL_FACE_FRONT_AND_BACK = (VIRGL_FACE_FRONT | VIRGL_FACE_BACK),
+} virgl_face_t;
+
+#define VIRGL_MAX_CLIP_PLANES 8
+
+typedef struct virgl_rasterizer_state_t {
+    unsigned flatshade               :1;
+    unsigned light_twoside           :1;
+    unsigned clamp_vertex_color      :1;
+    unsigned clamp_fragment_color    :1;
+    unsigned front_ccw               :1;
+    unsigned cull_face               :2; /**< VIRGL_FACE_x */
+    unsigned fill_front              :2; /**< VIRGL_POLYGON_MODE_x */
+    unsigned fill_back               :2; /**< VIRGL_POLYGON_MODE_x */
+    unsigned offset_point            :1;
+    unsigned offset_line             :1;
+    unsigned offset_tri              :1;
+    unsigned scissor                 :1;
+    unsigned poly_smooth             :1;
+    unsigned poly_stipple_enable     :1;
+    unsigned point_smooth            :1;
+    unsigned sprite_coord_mode       :1; /**< VIRGL_SPRITE_COORD_ */
+    unsigned point_quad_rasterization:1; /** points rasterized as quads or points */
+    unsigned point_tri_clip          :1; /** large points clipped as tris or points */
+    unsigned point_size_per_vertex   :1; /**< size computed in vertex shader */
+    unsigned multisample             :1; /* XXX maybe more ms state in future */
+    unsigned force_persample_interp  :1;
+    unsigned line_smooth             :1;
+    unsigned line_stipple_enable     :1;
+    unsigned line_last_pixel         :1;
+    unsigned flatshade_first         :1;
+    unsigned half_pixel_center       :1;
+    unsigned bottom_edge_rule        :1;
+    unsigned rasterizer_discard      :1;
+    unsigned depth_clip              :1;
+    unsigned clip_halfz              :1;
+    unsigned clip_plane_enable       :VIRGL_MAX_CLIP_PLANES;
+    unsigned line_stipple_factor     :8; /**< [1..256] actually */
+    unsigned line_stipple_pattern    :16;
+    uint32_t sprite_coord_enable; /* referring to 32 TEXCOORD/GENERIC inputs */
+    float    line_width;
+    float    point_size; /**< used when no per-vertex size */
+    float    offset_units;
+    float    offset_scale;
+    float    offset_clamp;
+} virgl_rasterizer_state_t;
+
+#define VIRGL_OBJ_RS_SIZE 9
+#define VIRGL_OBJ_RS_S0_FLATSHADE(x) (((x) & 0x1) << 0)
+#define VIRGL_OBJ_RS_S0_DEPTH_CLIP(x) (((x) & 0x1) << 1)
+#define VIRGL_OBJ_RS_S0_CLIP_HALFZ(x) (((x) & 0x1) << 2)
+#define VIRGL_OBJ_RS_S0_RASTERIZER_DISCARD(x) (((x) & 0x1) << 3)
+#define VIRGL_OBJ_RS_S0_FLATSHADE_FIRST(x) (((x) & 0x1) << 4)
+#define VIRGL_OBJ_RS_S0_LIGHT_TWOSIZE(x) (((x) & 0x1) << 5)
+#define VIRGL_OBJ_RS_S0_SPRITE_COORD_MODE(x) (((x) & 0x1) << 6)
+#define VIRGL_OBJ_RS_S0_POINT_QUAD_RASTERIZATION(x) (((x) & 0x1) << 7)
+#define VIRGL_OBJ_RS_S0_CULL_FACE(x) (((x) & 0x3) << 8)
+#define VIRGL_OBJ_RS_S0_FILL_FRONT(x) (((x) & 0x3) << 10)
+#define VIRGL_OBJ_RS_S0_FILL_BACK(x) (((x) & 0x3) << 12)
+#define VIRGL_OBJ_RS_S0_SCISSOR(x) (((x) & 0x1) << 14)
+#define VIRGL_OBJ_RS_S0_FRONT_CCW(x) (((x) & 0x1) << 15)
+#define VIRGL_OBJ_RS_S0_CLAMP_VERTEX_COLOR(x) (((x) & 0x1) << 16)
+#define VIRGL_OBJ_RS_S0_CLAMP_FRAGMENT_COLOR(x) (((x) & 0x1) << 17)
+#define VIRGL_OBJ_RS_S0_OFFSET_LINE(x) (((x) & 0x1) << 18)
+#define VIRGL_OBJ_RS_S0_OFFSET_POINT(x) (((x) & 0x1) << 19)
+#define VIRGL_OBJ_RS_S0_OFFSET_TRI(x) (((x) & 0x1) << 20)
+#define VIRGL_OBJ_RS_S0_POLY_SMOOTH(x) (((x) & 0x1) << 21)
+#define VIRGL_OBJ_RS_S0_POLY_STIPPLE_ENABLE(x) (((x) & 0x1) << 22)
+#define VIRGL_OBJ_RS_S0_POINT_SMOOTH(x) (((x) & 0x1) << 23)
+#define VIRGL_OBJ_RS_S0_POINT_SIZE_PER_VERTEX(x) (((x) & 0x1) << 24)
+#define VIRGL_OBJ_RS_S0_MULTISAMPLE(x) (((x) & 0x1) << 25)
+#define VIRGL_OBJ_RS_S0_LINE_SMOOTH(x) (((x) & 0x1) << 26)
+#define VIRGL_OBJ_RS_S0_LINE_STIPPLE_ENABLE(x) (((x) & 0x1) << 27)
+#define VIRGL_OBJ_RS_S0_LINE_LAST_PIXEL(x) (((x) & 0x1) << 28)
+#define VIRGL_OBJ_RS_S0_HALF_PIXEL_CENTER(x) (((x) & 0x1) << 29)
+#define VIRGL_OBJ_RS_S0_BOTTOM_EDGE_RULE(x) (((x) & 0x1) << 30)
+#define VIRGL_OBJ_RS_S0_FORCE_PERSAMPLE_INTERP(x) (((x) & 0x1) << 31)
+#define VIRGL_OBJ_RS_S3_LINE_STIPPLE_PATTERN(x) (((x) & 0xffff) << 0)
+#define VIRGL_OBJ_RS_S3_LINE_STIPPLE_FACTOR(x) (((x) & 0xff) << 16)
+#define VIRGL_OBJ_RS_S3_CLIP_PLANE_ENABLE(x) (((x) & 0xff) << 24)
+
+typedef struct virgl_viewport_state_t {
+    float32_t scale[3];
+    float32_t translate[3];
+} virgl_viewport_state_t;
+
+#define VIRGL_SET_VIEWPORT_STATE_CCMD_PAYLOAD_SIZE(num_viewports) ((6 * num_viewports) + 1)
+
+#define VIRGL_MAX_VERTEX_BUFFERS 16
+
+typedef struct virgl_vertex_buffer_t {
+    uint32_t num_buffers;
+    struct {
+        uint32_t resource_id;
+        uint32_t stride;
+        uint32_t offset;
+    } buffers[VIRGL_MAX_VERTEX_BUFFERS];
+} virgl_vertex_buffer_t;
+
+#define VIRGL_SET_VERTEX_BUFFERS_CCMD_PAYLOAD_SIZE(num_buffers) ((num_buffers * 3))
 
 virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd);
 
@@ -468,5 +738,12 @@ int8_t virgl_encode_sampler_view(virgl_cmd_t* cmd, virgl_sampler_view_t* sampler
 int8_t virgl_encode_sampler_views(virgl_cmd_t* cmd, virgl_sampler_views_t* sample_views);
 int8_t virgl_encode_draw_vbo(virgl_cmd_t* cmd, virgl_draw_info_t* draw_info);
 int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const void* data);
+int8_t virgl_encode_bind_object(virgl_cmd_t* cmd, virgl_object_type_t object_type, uint32_t object_id);
+int8_t virgl_encode_create_vertex_elements(virgl_cmd_t* cmd, uint32_t handle, uint32_t num_elements, const virgl_vertex_element_t* element);
+int8_t virgl_encode_blend_state(virgl_cmd_t* cmd, uint32_t handle, virgl_blend_state_t* blend_state);
+int8_t virgl_encode_dsa_state(virgl_cmd_t* cmd, uint32_t handle, virgl_depth_stencil_alpha_state_t* dsa_state);
+int8_t virgl_encode_rasterizer_state(virgl_cmd_t* cmd, uint32_t handle, virgl_rasterizer_state_t* rasterizer_state);
+int8_t virgl_encode_set_viewport_states(virgl_cmd_t* cmd, int32_t start_slot, int num_viewports, const virgl_viewport_state_t * states);
+int8_t virgl_encode_set_vertex_buffers(virgl_cmd_t* cmd, virgl_vertex_buffer_t* buffers);
 
 #endif // ___VIRGL_H

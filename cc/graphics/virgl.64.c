@@ -31,6 +31,15 @@ struct virgl_cmd_t {
     uint32_t         cmd_dws[VIRGL_CMD_MAX_DWORDS];
 };
 
+static inline uint32_t fui(float32_t f) {
+    union {
+        float32_t f;
+        uint32_t  i;
+    } u;
+    u.f = f;
+    return u.i;
+}
+
 virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd) {
     if(!heap || !lock || !fence_id || !send_cmd) {
         return NULL;
@@ -806,6 +815,304 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
         }
 
         data = (uint8_t *)data + layer_stride_internal;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_bind_object(virgl_cmd_t* cmd, virgl_object_type_t object_type, uint32_t object_id) {
+    if(virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_BIND_OBJECT, object_type, 1)) {
+        return -1;
+    }
+
+    if(virgl_encode_write_dword(cmd, object_id)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_create_vertex_elements(virgl_cmd_t* cmd, uint32_t handle, uint32_t num_elements, const virgl_vertex_element_t* element) {
+    virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_CREATE_OBJECT, VIRGL_OBJECT_VERTEX_ELEMENTS,
+                                  VIRGL_CREATE_VERTEX_ELEMENTS_CCMD_PAYLOAD_SIZE(num_elements));
+
+    virgl_encode_write_dword(cmd, handle);
+
+    for (uint32_t i = 0; i < num_elements; i++) {
+        virgl_encode_write_dword(cmd, element[i].src_offset);
+        virgl_encode_write_dword(cmd, element[i].instance_divisor);
+        virgl_encode_write_dword(cmd, element[i].buffer_index);
+        virgl_encode_write_dword(cmd, element[i].src_format);
+    }
+    return 0;
+}
+
+int8_t virgl_encode_blend_state(virgl_cmd_t* cmd, uint32_t handle, virgl_blend_state_t* blend_state) {
+    uint32_t tmp;
+    int8_t res;
+
+    res = virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_CREATE_OBJECT, VIRGL_OBJECT_BLEND, VIRGL_OBJ_BLEND_SIZE);
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, handle);
+
+    if(res) {
+        return -1;
+    }
+
+    tmp =
+        VIRGL_OBJ_BLEND_S0_INDEPENDENT_BLEND_ENABLE(blend_state->independent_blend_enable) |
+        VIRGL_OBJ_BLEND_S0_LOGICOP_ENABLE(blend_state->logicop_enable) |
+        VIRGL_OBJ_BLEND_S0_DITHER(blend_state->dither) |
+        VIRGL_OBJ_BLEND_S0_ALPHA_TO_COVERAGE(blend_state->alpha_to_coverage) |
+        VIRGL_OBJ_BLEND_S0_ALPHA_TO_ONE(blend_state->alpha_to_one);
+
+    res = virgl_encode_write_dword(cmd, tmp);
+
+    if(res) {
+        return -1;
+    }
+
+    tmp = VIRGL_OBJ_BLEND_S1_LOGICOP_FUNC(blend_state->logicop_func);
+    res = virgl_encode_write_dword(cmd, tmp);
+
+    if(res) {
+        return -1;
+    }
+
+    for (int32_t i = 0; i < VIRGL_BLEND_STATE_MAX_RT; i++) {
+        tmp =
+            VIRGL_OBJ_BLEND_S2_RT_BLEND_ENABLE(blend_state->rt[i].blend_enable) |
+            VIRGL_OBJ_BLEND_S2_RT_RGB_FUNC(blend_state->rt[i].rgb_func) |
+            VIRGL_OBJ_BLEND_S2_RT_RGB_SRC_FACTOR(blend_state->rt[i].rgb_src_factor) |
+            VIRGL_OBJ_BLEND_S2_RT_RGB_DST_FACTOR(blend_state->rt[i].rgb_dst_factor) |
+            VIRGL_OBJ_BLEND_S2_RT_ALPHA_FUNC(blend_state->rt[i].alpha_func) |
+            VIRGL_OBJ_BLEND_S2_RT_ALPHA_SRC_FACTOR(blend_state->rt[i].alpha_src_factor) |
+            VIRGL_OBJ_BLEND_S2_RT_ALPHA_DST_FACTOR(blend_state->rt[i].alpha_dst_factor) |
+            VIRGL_OBJ_BLEND_S2_RT_COLORMASK(blend_state->rt[i].colormask);
+        res = virgl_encode_write_dword(cmd, tmp);
+
+        if (res) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_dsa_state(virgl_cmd_t* cmd, uint32_t handle, virgl_depth_stencil_alpha_state_t* dsa_state) {
+    uint32_t tmp;
+    int8_t res;
+    res = virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_CREATE_OBJECT, VIRGL_OBJECT_DSA, VIRGL_OBJ_DSA_SIZE);
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, handle);
+
+    if(res) {
+        return -1;
+    }
+
+    tmp = VIRGL_OBJ_DSA_S0_DEPTH_ENABLE(dsa_state->depth.enabled) |
+          VIRGL_OBJ_DSA_S0_DEPTH_WRITEMASK(dsa_state->depth.writemask) |
+          VIRGL_OBJ_DSA_S0_DEPTH_FUNC(dsa_state->depth.func) |
+          VIRGL_OBJ_DSA_S0_ALPHA_ENABLED(dsa_state->alpha.enabled) |
+          VIRGL_OBJ_DSA_S0_ALPHA_FUNC(dsa_state->alpha.func);
+    res = virgl_encode_write_dword(cmd, tmp);
+
+    if(res) {
+        return -1;
+    }
+
+    for (int32_t i = 0; i < 2; i++) {
+        tmp = VIRGL_OBJ_DSA_S1_STENCIL_ENABLED(dsa_state->stencil[i].enabled) |
+              VIRGL_OBJ_DSA_S1_STENCIL_FUNC(dsa_state->stencil[i].func) |
+              VIRGL_OBJ_DSA_S1_STENCIL_FAIL_OP(dsa_state->stencil[i].fail_op) |
+              VIRGL_OBJ_DSA_S1_STENCIL_ZPASS_OP(dsa_state->stencil[i].zpass_op) |
+              VIRGL_OBJ_DSA_S1_STENCIL_ZFAIL_OP(dsa_state->stencil[i].zfail_op) |
+              VIRGL_OBJ_DSA_S1_STENCIL_VALUEMASK(dsa_state->stencil[i].valuemask) |
+              VIRGL_OBJ_DSA_S1_STENCIL_WRITEMASK(dsa_state->stencil[i].writemask);
+        res = virgl_encode_write_dword(cmd, tmp);
+
+        if(res) {
+            return -1;
+        }
+    }
+
+    res = virgl_encode_write_dword(cmd, fui(dsa_state->alpha.ref_value));
+
+    if(res) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_rasterizer_state(virgl_cmd_t* cmd, uint32_t handle, virgl_rasterizer_state_t* rasterizer_state) {
+    uint32_t tmp;
+    int8_t res;
+
+    res = virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_CREATE_OBJECT, VIRGL_OBJECT_RASTERIZER, VIRGL_OBJ_RS_SIZE);
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, handle);
+
+    if(res) {
+        return -1;
+    }
+
+    tmp = VIRGL_OBJ_RS_S0_FLATSHADE(rasterizer_state->flatshade) |
+          VIRGL_OBJ_RS_S0_DEPTH_CLIP(rasterizer_state->depth_clip) |
+          VIRGL_OBJ_RS_S0_CLIP_HALFZ(rasterizer_state->clip_halfz) |
+          VIRGL_OBJ_RS_S0_RASTERIZER_DISCARD(rasterizer_state->rasterizer_discard) |
+          VIRGL_OBJ_RS_S0_FLATSHADE_FIRST(rasterizer_state->flatshade_first) |
+          VIRGL_OBJ_RS_S0_LIGHT_TWOSIZE(rasterizer_state->light_twoside) |
+          VIRGL_OBJ_RS_S0_SPRITE_COORD_MODE(rasterizer_state->sprite_coord_mode) |
+          VIRGL_OBJ_RS_S0_POINT_QUAD_RASTERIZATION(rasterizer_state->point_quad_rasterization) |
+          VIRGL_OBJ_RS_S0_CULL_FACE(rasterizer_state->cull_face) |
+          VIRGL_OBJ_RS_S0_FILL_FRONT(rasterizer_state->fill_front) |
+          VIRGL_OBJ_RS_S0_FILL_BACK(rasterizer_state->fill_back) |
+          VIRGL_OBJ_RS_S0_SCISSOR(rasterizer_state->scissor) |
+          VIRGL_OBJ_RS_S0_FRONT_CCW(rasterizer_state->front_ccw) |
+          VIRGL_OBJ_RS_S0_CLAMP_VERTEX_COLOR(rasterizer_state->clamp_vertex_color) |
+          VIRGL_OBJ_RS_S0_CLAMP_FRAGMENT_COLOR(rasterizer_state->clamp_fragment_color) |
+          VIRGL_OBJ_RS_S0_OFFSET_LINE(rasterizer_state->offset_line) |
+          VIRGL_OBJ_RS_S0_OFFSET_POINT(rasterizer_state->offset_point) |
+          VIRGL_OBJ_RS_S0_OFFSET_TRI(rasterizer_state->offset_tri) |
+          VIRGL_OBJ_RS_S0_POLY_SMOOTH(rasterizer_state->poly_smooth) |
+          VIRGL_OBJ_RS_S0_POLY_STIPPLE_ENABLE(rasterizer_state->poly_stipple_enable) |
+          VIRGL_OBJ_RS_S0_POINT_SMOOTH(rasterizer_state->point_smooth) |
+          VIRGL_OBJ_RS_S0_POINT_SIZE_PER_VERTEX(rasterizer_state->point_size_per_vertex) |
+          VIRGL_OBJ_RS_S0_MULTISAMPLE(rasterizer_state->multisample) |
+          VIRGL_OBJ_RS_S0_LINE_SMOOTH(rasterizer_state->line_smooth) |
+          VIRGL_OBJ_RS_S0_LINE_STIPPLE_ENABLE(rasterizer_state->line_stipple_enable) |
+          VIRGL_OBJ_RS_S0_LINE_LAST_PIXEL(rasterizer_state->line_last_pixel) |
+          VIRGL_OBJ_RS_S0_HALF_PIXEL_CENTER(rasterizer_state->half_pixel_center) |
+          VIRGL_OBJ_RS_S0_BOTTOM_EDGE_RULE(rasterizer_state->bottom_edge_rule);
+
+    res = virgl_encode_write_dword(cmd, tmp); /* S0 */
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, fui(rasterizer_state->point_size)); /* S1 */
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, rasterizer_state->sprite_coord_enable); /* S2 */
+
+    if(res) {
+        return -1;
+    }
+
+    tmp = VIRGL_OBJ_RS_S3_LINE_STIPPLE_PATTERN(rasterizer_state->line_stipple_pattern) |
+          VIRGL_OBJ_RS_S3_LINE_STIPPLE_FACTOR(rasterizer_state->line_stipple_factor) |
+          VIRGL_OBJ_RS_S3_CLIP_PLANE_ENABLE(rasterizer_state->clip_plane_enable);
+    res = virgl_encode_write_dword(cmd, tmp); /* S3 */
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, fui(rasterizer_state->line_width)); /* S4 */
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, fui(rasterizer_state->offset_units)); /* S5 */
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, fui(rasterizer_state->offset_scale)); /* S6 */
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, fui(rasterizer_state->offset_clamp)); /* S7 */
+
+    if(res) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_set_viewport_states(virgl_cmd_t* cmd, int32_t start_slot, int num_viewports, const virgl_viewport_state_t * states) {
+    int8_t res;
+
+    res = virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_SET_VIEWPORT_STATE, 0, VIRGL_SET_VIEWPORT_STATE_CCMD_PAYLOAD_SIZE(num_viewports));
+
+    if(res) {
+        return -1;
+    }
+
+    res = virgl_encode_write_dword(cmd, start_slot);
+
+    if(res) {
+        return -1;
+    }
+
+    for (int32_t v = 0; v < num_viewports; v++) {
+        for (int32_t i = 0; i < 3; i++) {
+            res = virgl_encode_write_dword(cmd, fui(states[v].scale[i]));
+
+            if(res) {
+                return -1;
+            }
+        }
+
+        for (int32_t i = 0; i < 3; i++) {
+            res = virgl_encode_write_dword(cmd, fui(states[v].translate[i]));
+
+            if(res) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int8_t virgl_encode_set_vertex_buffers(virgl_cmd_t* cmd, virgl_vertex_buffer_t* buffer) {
+    int8_t res;
+
+    res = virgl_encode_write_cmd_header(cmd, VIRGL_CCMD_SET_VERTEX_BUFFERS, 0, VIRGL_SET_VERTEX_BUFFERS_CCMD_PAYLOAD_SIZE(buffer->num_buffers));
+
+    if(res) {
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < buffer->num_buffers; i++) {
+        res = virgl_encode_write_dword(cmd, buffer->buffers[i].stride);
+
+        if(res) {
+            return -1;
+        }
+        res = virgl_encode_write_dword(cmd, buffer->buffers[i].offset);
+
+        if(res) {
+            return -1;
+        }
+        res = virgl_encode_write_dword(cmd, buffer->buffers[i].resource_id);
+
+        if(res) {
+            return -1;
+        }
     }
 
     return 0;

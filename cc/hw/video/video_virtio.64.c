@@ -26,6 +26,7 @@
 #include <graphics/virgl.h>
 #include <graphics/font.h>
 #include <graphics/screen.h>
+#include <graphics/text_cursor.h>
 #include <strings.h>
 #include <hashmap.h>
 
@@ -309,10 +310,10 @@ static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t
     return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
 }
 
-/*
-   static int8_t virtio_gpu_queue_context_create_buffer_resource(uint32_t queue_no, lock_t** lock,
+static int8_t virtio_gpu_queue_context_create_buffer_resource(uint32_t queue_no, lock_t** lock,
                                                               uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
-                                                              uint32_t resource_size) {
+                                                              uint32_t resource_size,
+                                                              virgl_bind_t bind) {
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
@@ -332,8 +333,8 @@ static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t
 
     create_hdr->resource_id = resource_id;
     create_hdr->target = VIRGL_TEXTURE_TARGET_BUFFER;
-    create_hdr->format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
-    create_hdr->bind = VIRGL_BIND_SHADER_RESOURCE;
+    create_hdr->format = VIRGL_FORMAT_R8_UNORM;
+    create_hdr->bind = bind;
     create_hdr->width = resource_size;
     create_hdr->height = 1;
     create_hdr->depth = 1;
@@ -345,8 +346,7 @@ static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t
     descs[desc_index].length = sizeof(virtio_gpu_resource_create_3d_t);
 
     return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
-   }
- */
+}
 
 static int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, lock_t** lock,
                                                           uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
@@ -372,7 +372,7 @@ static int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, loc
 
     create_hdr->resource_id = resource_id;
     create_hdr->target = VIRGL_TEXTURE_TARGET_2D;
-    create_hdr->format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
+    create_hdr->format = VIRGL_FORMAT_B8G8R8A8_UNORM;
     create_hdr->bind = VIRGL_BIND_RENDER_TARGET;
     create_hdr->width = resource_width;
     create_hdr->height = resource_height;
@@ -417,14 +417,15 @@ static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
 
 static int8_t virtio_gpu_create_surface(uint32_t resource_id, boolean_t is_texture,
                                         uint32_t fence_id,
-                                        lock_t** lock) {
+                                        lock_t** lock,
+                                        uint32_t* surface_id) {
     virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
 
     virgl_obj_surface_t obj_surface = {0};
 
     obj_surface.surface_id = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
     obj_surface.resource_id = resource_id;
-    obj_surface.format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
+    obj_surface.format = VIRGL_FORMAT_B8G8R8A8_UNORM;
     obj_surface.texture.level = 0;
     obj_surface.texture.layers = 0;
 
@@ -447,6 +448,10 @@ static int8_t virtio_gpu_create_surface(uint32_t resource_id, boolean_t is_textu
     if(virtio_gpu_queue_send_commad(0, lock, fence_id, cmd) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to send command");
         return -1;
+    }
+
+    if(surface_id) {
+        *surface_id = obj_surface.surface_id;
     }
 
     return 0;
@@ -727,7 +732,8 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
 
     res = virtio_gpu_create_surface(screen_resource_id, true,
                                     virtio_gpu_wrapper->fence_ids[scanout]++,
-                                    &virtio_gpu_wrapper->lock);
+                                    &virtio_gpu_wrapper->lock,
+                                    &virtio_gpu_wrapper->surface_ids[scanout]);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu create surface failed");
@@ -1068,7 +1074,7 @@ static int8_t virtio_gpu_change_font_color(color_t foreground, color_t backgroun
 
             virgl_res_iw_t res_iw = {0};
             res_iw.res_id = *font_colored_resource_id;
-            res_iw.format = VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM;
+            res_iw.format = VIRGL_FORMAT_B8G8R8A8_UNORM;
             res_iw.element_size = sizeof(pixel_t);
             res_iw.usage = VIRGL_RESOURCE_USAGE_IMMUTABLE;
             // res_iw.stride = stride;
@@ -1137,6 +1143,321 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
         video_text_print("failed to encode copy region");
         return;
     }
+}
+
+uint32_t virtio_gpu_cursor_vertex_buffer_res_id = 0;
+uint32_t virtio_gpu_cursor_vertex_elements_res_id = 0;
+uint32_t virtio_gpu_cursor_shader_vert_id = 0;
+uint32_t virtio_gpu_cursor_shader_frag_id = 0;
+uint32_t virtio_gpu_cursor_surface_id = 0;
+uint32_t virtio_gpu_cursor_blend_state_id = 0;
+uint32_t virtio_gpu_cursor_dsa_state_id = 0;
+uint32_t virtio_gpu_cursor_rasterizer_state_id = 0;
+
+const char_t*const virtio_gpu_cursor_shader_vert_text =
+    "VERT\n"
+    "DCL IN[0]\n"
+    "DCL IN[1]\n"
+    "DCL OUT[0], POSITION\n"
+    "DCL OUT[1], COLOR\n"
+    "  0: MOV OUT[1], IN[1]\n"
+    "  1: MOV OUT[0], IN[0]\n"
+    "  2: END\n";
+
+const char_t*const virtio_gpu_cursor_shader_frag_text =
+    "FRAG\n"
+    "DCL IN[0], COLOR, LINEAR\n"
+    "DCL OUT[0], COLOR\n"
+    "  0: MOV OUT[0], IN[0]\n"
+    "  1: END\n";
+
+static int8_t virtio_gpu_init_text_cursor_data(void) {
+    int8_t res = 0;
+
+
+    uint32_t vertex_res_id = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+
+    res = virtio_gpu_queue_context_create_buffer_resource(0, &virtio_gpu_wrapper->lock,
+                                                          1, vertex_res_id, virtio_gpu_wrapper->fence_ids[0]++,
+                                                          4 * sizeof(virgl_vertex_t),
+                                                          VIRGL_BIND_VERTEX_BUFFER);
+
+    if(res != 0) {
+        video_text_print("failed to create buffer resource");
+        return -1;
+    }
+
+    res = virtio_gpu_queue_context_attach_resource(0, &virtio_gpu_wrapper->lock, 1, vertex_res_id);
+
+    if(res != 0) {
+        video_text_print("failed to attach buffer resource");
+        return -1;
+    }
+
+    virtio_gpu_cursor_vertex_buffer_res_id = vertex_res_id;
+
+    virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
+
+    virgl_vertex_element_t ve[2] = {0};
+    ve[0].src_offset = 0;
+    ve[0].src_format = VIRGL_FORMAT_R32G32B32A32_FLOAT;
+    ve[1].src_offset = offsetof_field(virgl_vertex_t, color);
+    ve[1].src_format = VIRGL_FORMAT_R32G32B32A32_FLOAT;
+
+    uint32_t ve_handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+
+    res = virgl_encode_create_vertex_elements(cmd, ve_handle, 2, ve);
+
+    if(res != 0) {
+        video_text_print("failed to encode create vertex elements");
+        return -1;
+    }
+
+    virtio_gpu_cursor_vertex_elements_res_id = ve_handle;
+
+    virgl_shader_t shader = {0};
+    shader.type = VIRGL_SHADER_TYPE_VERTEX;
+    shader.handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+    shader.data = virtio_gpu_cursor_shader_vert_text;
+    shader.data_size = strlen(virtio_gpu_cursor_shader_vert_text) + 1;
+
+    if(virgl_encode_shader(cmd, &shader) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode create shader");
+        return -1;
+    }
+
+    virtio_gpu_cursor_shader_vert_id = shader.handle;
+
+    memory_memclean(&shader, sizeof(virgl_shader_t));
+
+    shader.type = VIRGL_SHADER_TYPE_FRAGMENT;
+    shader.handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+    shader.data = virtio_gpu_cursor_shader_frag_text;
+    shader.data_size = strlen(virtio_gpu_cursor_shader_frag_text) + 1;
+
+    if(virgl_encode_shader(cmd, &shader) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode create shader");
+        return -1;
+    }
+
+    virtio_gpu_cursor_shader_frag_id = shader.handle;
+
+    virgl_blend_state_t blend = {0};
+    uint32_t blend_handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+    blend.rt[0].colormask = VIRGL_MASK_RGBA;
+    res = virgl_encode_blend_state(cmd, blend_handle, &blend);
+
+    if(res != 0) {
+        video_text_print("failed to encode blend state");
+        return -1;
+    }
+
+    virtio_gpu_cursor_blend_state_id = blend_handle;
+
+    virgl_depth_stencil_alpha_state_t dsa = {0};
+    uint32_t dsa_handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+    dsa.depth.writemask = 1;
+    dsa.depth.func = VIRGL_FUNC_LESS;
+    res = virgl_encode_dsa_state(cmd, dsa_handle, &dsa);
+
+    if(res != 0) {
+        video_text_print("failed to encode dsa state");
+        return -1;
+    }
+
+    virtio_gpu_cursor_dsa_state_id = dsa_handle;
+
+    virgl_rasterizer_state_t rasterizer = {0};
+    uint32_t rs_handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+    rasterizer.cull_face = VIRGL_FACE_NONE;
+    rasterizer.half_pixel_center = 1;
+    rasterizer.bottom_edge_rule = 1;
+    rasterizer.depth_clip = 1;
+    res = virgl_encode_rasterizer_state(cmd, rs_handle, &rasterizer);
+
+    if(res != 0) {
+        video_text_print("failed to encode rasterizer state");
+        return -1;
+    }
+
+    virtio_gpu_cursor_rasterizer_state_id = rs_handle;
+
+    return 0;
+}
+
+static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
+    font_table_t* font_table = font_get_font_table();
+
+    x *= font_table->font_width;
+    y *= font_table->font_height;
+
+    screen_info_t screen_info = screen_get_info();
+
+    float32_t sw = (float)screen_info.width;
+    float32_t sh = (float)screen_info.height;
+
+    int8_t res = 0;
+
+    UNUSED(width);
+
+    virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
+
+    virgl_vertex_t vertex[4] = {0};
+    vertex[0].x = 0.0f; // x / sw;
+    vertex[0].y = -0.9f; // y / sh;
+    vertex[0].d = 1;
+    vertex[0].color.f32[0] = 1.0f;
+    vertex[0].color.f32[3] = 1.0f;
+
+    vertex[1].x = -0.9f; // (x + width) / sw;
+    vertex[1].y = 0.9f; // y / sh;
+    vertex[1].d = 1;
+    vertex[1].color.f32[1] = 1.0f;
+    vertex[1].color.f32[3] = 1.0f;
+
+    vertex[2].x = 0.9f; // (x + width) / sw;
+    vertex[2].y = 0.9f; // (y + height) / sh;
+    vertex[2].d = 1;
+    vertex[2].color.f32[2] = 1.0f;
+    vertex[2].color.f32[3] = 1.0f;
+
+    vertex[3].x = x / sw;
+    vertex[3].y = (y + height) / sh;
+    vertex[3].d = 1;
+    vertex[3].color.f32[0] = 1.0f;
+    vertex[3].color.f32[3] = 1.0f;
+
+    virgl_res_iw_t res_iw = {0};
+    res_iw.res_id = virtio_gpu_cursor_vertex_buffer_res_id;
+    res_iw.format = VIRGL_FORMAT_B8G8R8A8_UNORM;
+    res_iw.element_size = sizeof(virgl_vertex_t);
+    res_iw.usage = VIRGL_RESOURCE_USAGE_DEFAULT;
+    res_iw.level = 0;
+    res_iw.box.x = 0;
+    res_iw.box.y = 0;
+    res_iw.box.z = 0;
+    res_iw.box.w = 4;
+    res_iw.box.h = 1;
+    res_iw.box.d = 1;
+
+    res = virgl_encode_inline_write(cmd, &res_iw, vertex);
+
+    if(res != 0) {
+        video_text_print("failed to encode inline write");
+        return;
+    }
+
+    virgl_obj_framebuffer_state_t obj_fb_state = {0};
+
+    obj_fb_state.nr_cbufs = 1;
+    obj_fb_state.zsurf_id = 0;
+    obj_fb_state.cbuf_ids[0] = virtio_gpu_wrapper->surface_ids[0];
+
+    if(virgl_encode_framebuffer_state(cmd, &obj_fb_state) != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to encode framebuffer state");
+        return;
+    }
+
+    res = virgl_encode_bind_object(cmd, VIRGL_OBJECT_VERTEX_ELEMENTS, virtio_gpu_cursor_vertex_elements_res_id);
+
+    if(res != 0) {
+        video_text_print("failed to encode bind object");
+        return;
+    }
+
+    virgl_vertex_buffer_t vb = {0};
+    vb.num_buffers = 1;
+    vb.buffers[0].stride = sizeof(virgl_vertex_t);
+    vb.buffers[0].offset = 0;
+    vb.buffers[0].resource_id = virtio_gpu_cursor_vertex_buffer_res_id;
+
+    res = virgl_encode_set_vertex_buffers(cmd, &vb);
+
+    if(res != 0) {
+        video_text_print("failed to encode set vertex buffers");
+        return;
+    }
+
+    res = virgl_encode_bind_shader(cmd, virtio_gpu_cursor_shader_vert_id, VIRGL_SHADER_TYPE_VERTEX);
+
+    if(res != 0) {
+        video_text_print("failed to encode bind shader");
+        return;
+    }
+
+    res = virgl_encode_bind_shader(cmd, virtio_gpu_cursor_shader_frag_id, VIRGL_SHADER_TYPE_FRAGMENT);
+
+    if(res != 0) {
+        video_text_print("failed to encode bind shader");
+        return;
+    }
+
+    virgl_link_shader_t link_shader = {0};
+    link_shader.vertex_shader_id = virtio_gpu_cursor_shader_vert_id;
+    link_shader.fragment_shader_id = virtio_gpu_cursor_shader_frag_id;
+
+    res = virgl_encode_link_shader(cmd, &link_shader);
+
+    if(res != 0) {
+        video_text_print("failed to encode link shader");
+        return;
+    }
+
+    res = virgl_encode_bind_object(cmd, VIRGL_OBJECT_BLEND, virtio_gpu_cursor_blend_state_id);
+
+    if(res != 0) {
+        video_text_print("failed to encode bind object");
+        return;
+    }
+
+    res = virgl_encode_bind_object(cmd, VIRGL_OBJECT_DSA, virtio_gpu_cursor_dsa_state_id);
+
+    if(res != 0) {
+        video_text_print("failed to encode bind object");
+        return;
+    }
+
+    res = virgl_encode_bind_object(cmd, VIRGL_OBJECT_RASTERIZER, virtio_gpu_cursor_rasterizer_state_id);
+
+    if(res != 0) {
+        video_text_print("failed to encode bind object");
+        return;
+    }
+
+    virgl_viewport_state_t vp = {0};
+    float32_t znear = 0, zfar = 1.0;
+    float32_t half_w = sw / 2.0f;
+    float32_t half_h = sh / 2.0f;
+    float32_t half_d = (zfar - znear) / 2.0f;
+
+    vp.scale[0] = half_w;
+    vp.scale[1] = half_h;
+    vp.scale[2] = half_d;
+
+    vp.translate[0] = half_w + 0;
+    vp.translate[1] = half_h + 0;
+    vp.translate[2] = half_d + znear;
+    res = virgl_encode_set_viewport_states(cmd, 0, 1, &vp);
+
+    if(res != 0) {
+        video_text_print("failed to encode set viewport states");
+        return;
+    }
+
+    virgl_draw_info_t draw_info = {0};
+    draw_info.count = 3;
+    draw_info.mode = VIRGL_PRIM_TRIANGLES;
+
+    res = virgl_encode_draw_vbo(cmd, &draw_info);
+
+    if(res != 0) {
+        video_text_print("failed to encode draw vbo");
+        return;
+    }
+
+    video_text_print("cursor drawn\n");
+
+    UNUSED(flush);
 }
 
 static void* virtio_gpu_font_empty_line_value = NULL;
@@ -1295,6 +1616,16 @@ int8_t virtio_gpu_font_init(void) {
     virtio_gpu_dont_transfer_on_flush = true;
     SCREEN_PRINT_GLYPH_WITH_STRIDE = virtio_gpu_print_glyph_with_stride;
     SCREEN_SCROLL = virtio_gpu_scrool_screen;
+
+
+    res = virtio_gpu_init_text_cursor_data();
+
+    if(res != 0) {
+        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to init text cursor data");
+        return -1;
+    }
+
+    TEXT_CURSOR_DRAW = virtio_gpu_draw_text_cursor;
 
     return 0;
 }
@@ -1473,8 +1804,9 @@ int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* pci_dev) {
 
     virtio_gpu_wrapper->fence_ids = memory_malloc(sizeof(uint64_t) * vgpu_conf->num_scanouts);
     virtio_gpu_wrapper->resource_ids = memory_malloc(sizeof(uint32_t) * vgpu_conf->num_scanouts);
+    virtio_gpu_wrapper->surface_ids = memory_malloc(sizeof(uint32_t) * vgpu_conf->num_scanouts);
 
-    if(virtio_gpu_wrapper->fence_ids == NULL || virtio_gpu_wrapper->resource_ids == NULL) {
+    if(virtio_gpu_wrapper->fence_ids == NULL || virtio_gpu_wrapper->resource_ids == NULL || virtio_gpu_wrapper->surface_ids == NULL) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu init failed");
 
         return -1;
