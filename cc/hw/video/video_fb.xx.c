@@ -10,19 +10,10 @@
 
 #include <driver/video.h>
 #include <driver/video_fb.h>
-#include <memory.h>
-#include <ports.h>
 #include <strings.h>
 #include <utils.h>
 #include <systeminfo.h>
-#include <cpu.h>
 #include <cpu/sync.h>
-#include <list.h>
-#include <pci.h>
-#include <driver/video_virtio.h>
-#include <driver/video_vmwaresvga.h>
-#include <logging.h>
-#include <apic.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
 #include <graphics/font.h>
@@ -287,8 +278,6 @@ static void video_fb_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, u
         SCREEN_FLUSH(0, 0, x, y, width, height);
     }
 }
-
-
 
 void video_fb_init(void) {
     video_text_print("video init\n");
