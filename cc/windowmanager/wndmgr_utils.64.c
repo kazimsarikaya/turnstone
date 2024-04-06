@@ -415,6 +415,8 @@ list_t* windowmanager_get_input_values(const window_t* window) {
             for(size_t i = strlen(value->value); i > 0; i--) { // remove trailing spaces
                 if(value->value[i - 1] == ' ') {
                     value->value[i - 1] = '\0';
+                } else {
+                    break;
                 }
             }
 
