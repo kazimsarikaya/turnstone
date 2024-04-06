@@ -52,8 +52,6 @@ void video_text_print(const char_t* string);
 int8_t virtio_gpu_controlq_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
-    // video_text_print((char_t*)"virtio gpu control queue isr\n");
-
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     volatile virtio_gpu_config_t* cfg = (volatile virtio_gpu_config_t*)virtio_gpu_dev->device_config;
@@ -71,8 +69,6 @@ int8_t virtio_gpu_controlq_isr(interrupt_frame_ext_t* frame) {
         lock_release(virtio_gpu_wrapper->lock);
     }
 
-// video_text_print((char_t*)".");
-
     pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_gpu_dev->pci_dev->pci_header, virtio_gpu_dev->msix_cap, 0);
     apic_eoi();
 
@@ -81,8 +77,6 @@ int8_t virtio_gpu_controlq_isr(interrupt_frame_ext_t* frame) {
 
 int8_t virtio_gpu_cursorq_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
-
-    // video_text_print((char_t*)"virtio gpu control queue isr\n");
 
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
@@ -100,8 +94,6 @@ int8_t virtio_gpu_cursorq_isr(interrupt_frame_ext_t* frame) {
     if(virtio_gpu_wrapper->cursor_lock) {
         lock_release(virtio_gpu_wrapper->cursor_lock);
     }
-
-// video_text_print((char_t*)".");
 
     pci_msix_clear_pending_bit((pci_generic_device_t*)virtio_gpu_dev->pci_dev->pci_header, virtio_gpu_dev->msix_cap, 1);
     apic_eoi();
