@@ -11,6 +11,7 @@
 #include <cpu/task.h>
 #include <apic.h>
 #include <logging.h>
+#include <utils.h>
 
 MODULE("turnstone.kernel.cpu.sync");
 
@@ -56,13 +57,6 @@ static void lock_task_yield(void) {
     if(lock_task_yielder) {
         lock_task_yielder();
     }
-}
-
-
-static inline int8_t sync_test_set_get(volatile uint64_t* value, uint64_t offset){
-    int8_t res = 0;
-    __asm__ __volatile__ ("lock bts %[offset], %[value]\n" : "=@ccc" (res), [value] "+m" (*value), [offset] "+r" (offset) : : "memory");
-    return res;
 }
 
 lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id) {
@@ -113,7 +107,7 @@ void lock_acquire(lock_t* lock) {
         return;
     }
 
-    while(sync_test_set_get(&lock->lock_value, 0)) {
+    while(bit_locked_set(&lock->lock_value, 0)) {
         if(!lock->for_future) {
             // lock_task_yield();
             cpu_sti();

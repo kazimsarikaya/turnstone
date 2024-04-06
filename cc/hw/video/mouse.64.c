@@ -9,7 +9,6 @@
 
 #include <types.h>
 #include <utils.h>
-#include <video.h>
 #include <graphics/image.h>
 #include <device/mouse.h>
 #include <buffer.h>
