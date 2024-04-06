@@ -232,9 +232,13 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
 
         nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)bar_va;
 
-        PRINTLOG(NVME, LOG_TRACE, "nvme controller %lli ready? %i has msi? %i has_msix? %i", disk_id, nvme_regs->status.ready, msi_cap != NULL, msix_cap != NULL);
-        PRINTLOG(NVME, LOG_DEBUG, "nvme version %i.%i.%i", nvme_regs->version.major, nvme_regs->version.minor, nvme_regs->version.reserved_or_ter);
-        PRINTLOG(NVME, LOG_TRACE, "nvme queue size %i", nvme_regs->capabilities.fields.mqes + 1);
+        nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+        nvme_controller_version_t nvme_version = (nvme_controller_version_t)nvme_regs->version;
+        nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+
+        PRINTLOG(NVME, LOG_TRACE, "nvme controller %lli ready? %i has msi? %i has_msix? %i", disk_id, nvme_status.fields.ready, msi_cap != NULL, msix_cap != NULL);
+        PRINTLOG(NVME, LOG_DEBUG, "nvme version %i.%i.%i", nvme_version.fields.major, nvme_version.fields.minor, nvme_version.fields.reserved_or_ter);
+        PRINTLOG(NVME, LOG_TRACE, "nvme queue size %i", nvme_caps.fields.mqes + 1);
 
         frame_t* queue_frames = NULL;
 
@@ -254,17 +258,25 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
         nvme_disk->io_submission_queue = (nvme_submission_queue_entry_t*)(queue_va + FRAME_SIZE * 2);
         nvme_disk->io_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE * 3);
 
-        nvme_disk->timeout = nvme_regs->capabilities.fields.timeout + 1;
+        nvme_disk->timeout = nvme_caps.fields.timeout + 1;
         nvme_disk->nvme_registers = nvme_regs;
 
-        nvme_regs->config.enable = 0;
+        nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
+        nvme_config.fields.enable = 0;
+        nvme_regs->config = nvme_config.bits;
 
         do {
-            time_timer_spinsleep(500 * (nvme_regs->capabilities.fields.timeout + 1));
-        } while(nvme_regs->status.ready);
+            time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
 
-        if(nvme_regs->status.cfs != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "error at disabling nvme: %i", nvme_regs->status.cfs);
+            nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+            if(!nvme_status.fields.ready) {
+                break;
+            }
+
+        } while(true);
+
+        if(nvme_status.fields.cfs != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "error at disabling nvme: %i", nvme_status.fields.cfs);
             memory_free_ext(heap, nvme_disk);
 
             return -1;
@@ -275,33 +287,38 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
         nvme_disk->io_queue_size = 64;
 
         PRINTLOG(NVME, LOG_TRACE, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
-        nvme_regs->config.css = 0;
+        nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
+        nvme_config.fields.css = 0;
         nvme_regs->asq = queue_frames->frame_address;
         nvme_regs->acq = queue_frames->frame_address + FRAME_SIZE;
-        nvme_regs->aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
-        nvme_regs->config.iosqes = 6;
-        nvme_regs->config.iocqes = 4;
-        nvme_regs->config.ams = 0;
-        nvme_regs->config.mps = 0;
+        nvme_controller_aqa_t nvme_aqa = (nvme_controller_aqa_t)nvme_regs->aqa;
+        nvme_aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
+        nvme_regs->aqa = nvme_aqa.bits;
+        nvme_config.fields.iosqes = 6;
+        nvme_config.fields.iocqes = 4;
+        nvme_config.fields.ams = 0;
+        nvme_config.fields.mps = 0;
 
-        nvme_regs->config.enable = 1;
+        nvme_config.fields.enable = 1;
+        nvme_regs->config = nvme_config.bits;
 
         do {
-            time_timer_spinsleep(500 * (nvme_regs->capabilities.fields.timeout + 1));
+            time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
 
-            if(nvme_regs->status.cfs) {
+            nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+            if(nvme_status.fields.cfs || nvme_status.fields.ready) {
                 break;
             }
-        } while(!nvme_regs->status.ready);
+        } while(true);
 
-        if(nvme_regs->status.ready != 1) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot enable nvme: %i", nvme_regs->status.cfs);
+        if(nvme_status.fields.ready != 1) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot enable nvme: %i", nvme_status.fields.cfs);
             memory_free_ext(heap, nvme_disk);
 
             return -1;
         }
 
-        uint64_t dstrd = nvme_regs->capabilities.fields.dstrd;
+        uint64_t dstrd = nvme_caps.fields.dstrd;
         uint64_t admin_sqtdb = bar_va + 0x1000 + (2 * 0) * (4 << dstrd);
         uint64_t admin_cqhdb = bar_va + 0x1000 + (2 * 0 + 1) * (4 << dstrd);
         uint64_t io_sqtdb = bar_va + 0x1000 + (2 * 1) * (4 << dstrd);
