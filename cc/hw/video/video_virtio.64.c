@@ -1113,11 +1113,19 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
         return;
     }
 
+    if(!font_colored_resource_id) {
+        video_text_print("failed to change font color");
+        return;
+    }
+
     font_table_t* font_table = font_get_font_table();
 
     if(wc >= font_table->glyph_count){
         wc = 0;
     }
+
+    uint32_t font_pallete_width = font_table->font_width * font_table->column_count;
+    uint32_t font_pallete_height = font_table->font_height * font_table->row_count;
 
     virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
 
@@ -1132,12 +1140,29 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
     copy_region.src_box.h = font_table->font_height;
     copy_region.src_box.d = 1;
 
+    if((copy_region.src_box.x + copy_region.src_box.w) > font_pallete_width ||
+       (copy_region.src_box.y + copy_region.src_box.h) > font_pallete_height) {
+        video_text_print("invalid glyph: out of bounds of font pallete");
+        return;
+    }
 
     copy_region.dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
+
+    if(!copy_region.dst_resource_id) {
+        video_text_print("invalid glyph: no screen resource");
+        return;
+    }
+
     copy_region.dst_level = 0;
     copy_region.dst_x = x * font_table->font_width;
     copy_region.dst_y = y * font_table->font_height;
     copy_region.dst_z = 0;
+
+    if((copy_region.dst_x + copy_region.src_box.w) > virtio_gpu_wrapper->screen_width ||
+       (copy_region.dst_y + copy_region.src_box.h) > virtio_gpu_wrapper->screen_height) {
+        video_text_print("invalid glyph: out of bounds of screen");
+        return;
+    }
 
     if(virgl_encode_copy_region(cmd, &copy_region) != 0) {
         video_text_print("failed to encode copy region");
@@ -1244,6 +1269,13 @@ static int8_t virtio_gpu_init_text_cursor_data(void) {
 
     virgl_blend_state_t blend = {0};
     uint32_t blend_handle = virgl_renderer_get_next_resource_id(virtio_gpu_wrapper->renderer);
+    blend.rt[0].blend_enable = 1;
+    blend.rt[0].rgb_func = VIRGL_BLEND_SUBTRACT;
+    blend.rt[0].rgb_src_factor = VIRGL_BLEND_FACTOR_ONE;
+    blend.rt[0].rgb_dst_factor = VIRGL_BLEND_FACTOR_ONE;
+    blend.rt[0].alpha_func = VIRGL_BLEND_SUBTRACT;
+    blend.rt[0].alpha_src_factor = VIRGL_BLEND_FACTOR_ONE;
+    blend.rt[0].alpha_dst_factor = VIRGL_BLEND_FACTOR_ONE;
     blend.rt[0].colormask = VIRGL_MASK_RGBA;
     res = virgl_encode_blend_state(cmd, blend_handle, &blend);
 
@@ -1326,40 +1358,32 @@ static void virtio_gpu_draw_text_cursor(int32_t x, int32_t y, int32_t width, int
     // right upper triangle
     vertex[0].x = (x - half_w) / sw;
     vertex[0].y = (y - half_h) / sh;
-    vertex[0].d = 1;
-    vertex[0].color.f32[0] = 1.0f;
-    vertex[0].color.f32[3] = 1.0f;
 
     vertex[1].x = (x + width - half_w) / sw;
     vertex[1].y = (y - half_h) / sh;
-    vertex[1].d = 1;
-    vertex[1].color.f32[1] = 1.0f;
-    vertex[1].color.f32[3] = 1.0f;
 
     vertex[2].x = (x + width - half_w) / sw;
     vertex[2].y = (y + height - half_h) / sh;
-    vertex[2].d = 1;
-    vertex[2].color.f32[2] = 1.0f;
-    vertex[2].color.f32[3] = 1.0f;
 
     // left lower triangle
     vertex[3].x = (x - half_w) / sw;
     vertex[3].y = (y - half_h) / sh;
-    vertex[3].d = 1;
-    vertex[3].color.f32[0] = 1.0f;
-    vertex[3].color.f32[3] = 1.0f;
 
     vertex[4].x = (x + width - half_w) / sw;
     vertex[4].y = (y + height - half_h) / sh;
-    vertex[4].d = 1;
-    vertex[4].color.f32[2] = 1.0f;
-    vertex[4].color.f32[3] = 1.0f;
 
     vertex[5].x = (x - half_w) / sw;
     vertex[5].y = (y + height - half_h) / sh;
-    vertex[5].d = 1;
-    vertex[5].color.f32[1] = 1.0f;
-    vertex[5].color.f32[3] = 1.0f;
+
+    for(uint32_t i = 0; i < 6; i++) {
+        vertex[i].d = 1.0f;
+
+        for(uint32_t j = 0; j < 3; j++) {
+            vertex[i].color.f32[j] = 1.0f;
+        }
+
+        vertex[i].color.f32[3] = 0.2f;
+    }
 
     virgl_res_iw_t res_iw = {0};
     res_iw.res_id = virtio_gpu_cursor_vertex_buffer_res_id;

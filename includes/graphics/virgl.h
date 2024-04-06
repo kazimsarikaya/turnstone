@@ -159,7 +159,7 @@ typedef enum virgl_bind_t {
 } virgl_bind_t;
 
 #define VIRGL_CMD(cmd, obj, len) ((cmd) | ((obj) << 8) | ((len) << 16))
-#define VIRGL_CMD_MAX_DWORDS ((64 * 1024 - 24) / 4)
+#define VIRGL_CMD_MAX_DWORDS ((64 * 1024 - 24 - 24) / 4)
 
 typedef struct virgl_cmd_t      virgl_cmd_t;
 typedef struct virgl_renderer_t virgl_renderer_t;
@@ -492,6 +492,25 @@ typedef struct virgl_vertex_t {
 
 _Static_assert(sizeof(virgl_vertex_t) == 8 * sizeof(float32_t), "virgl_vertex_t size is not 32 bytes");
 
+typedef enum virgl_logicop_t {
+    VIRGL_LOGICOP_CLEAR,
+    VIRGL_LOGICOP_NOR,
+    VIRGL_LOGICOP_AND_INVERTED,
+    VIRGL_LOGICOP_COPY_INVERTED,
+    VIRGL_LOGICOP_AND_REVERSE,
+    VIRGL_LOGICOP_INVERT,
+    VIRGL_LOGICOP_XOR,
+    VIRGL_LOGICOP_NAND,
+    VIRGL_LOGICOP_AND,
+    VIRGL_LOGICOP_EQUIV,
+    VIRGL_LOGICOP_NOOP,
+    VIRGL_LOGICOP_OR_INVERTED,
+    VIRGL_LOGICOP_COPY,
+    VIRGL_LOGICOP_OR_REVERSE,
+    VIRGL_LOGICOP_OR,
+    VIRGL_LOGICOP_SET,
+} virgl_logicop_t;
+
 typedef enum virgl_mask_t {
     VIRGL_MASK_R =  0x1,
     VIRGL_MASK_G =  0x2,
@@ -514,6 +533,17 @@ typedef enum virgl_compare_func_t {
     VIRGL_FUNC_GEQUAL,
     VIRGL_FUNC_ALWAYS,
 } virgl_compare_func_t;
+
+typedef enum virgl_stencil_op_t {
+    VIRGL_STENCIL_OP_KEEP,
+    VIRGL_STENCIL_OP_ZERO,
+    VIRGL_STENCIL_OP_REPLACE,
+    VIRGL_STENCIL_OP_INCR,
+    VIRGL_STENCIL_OP_DECR,
+    VIRGL_STENCIL_OP_INCR_WRAP,
+    VIRGL_STENCIL_OP_DECR_WRAP,
+    VIRGL_STENCIL_OP_INVERT,
+} virgl_stencil_op_t;
 
 typedef struct virgl_depth_state_t {
     uint32_t enabled  :1; /**< depth test enabled? */
@@ -557,6 +587,38 @@ typedef struct virgl_depth_stencil_alpha_state_t {
 #define VIRGL_OBJ_DSA_S1_STENCIL_ZFAIL_OP(x) (((x) & 0x7) << 10)
 #define VIRGL_OBJ_DSA_S1_STENCIL_VALUEMASK(x) (((x) & 0xff) << 13)
 #define VIRGL_OBJ_DSA_S1_STENCIL_WRITEMASK(x) (((x) & 0xff) << 21)
+
+typedef enum virgl_blend_factor_t {
+    VIRGL_BLEND_FACTOR_ONE = 1,
+    VIRGL_BLEND_FACTOR_SRC_COLOR,
+    VIRGL_BLEND_FACTOR_SRC_ALPHA,
+    VIRGL_BLEND_FACTOR_DST_ALPHA,
+    VIRGL_BLEND_FACTOR_DST_COLOR,
+    VIRGL_BLEND_FACTOR_SRC_ALPHA_SATURATE,
+    VIRGL_BLEND_FACTOR_CONST_COLOR,
+    VIRGL_BLEND_FACTOR_CONST_ALPHA,
+    VIRGL_BLEND_FACTOR_SRC1_COLOR,
+    VIRGL_BLEND_FACTOR_SRC1_ALPHA,
+
+    VIRGL_BLEND_FACTOR_ZERO = 0x11,
+    VIRGL_BLEND_FACTOR_INV_SRC_COLOR,
+    VIRGL_BLEND_FACTOR_INV_SRC_ALPHA,
+    VIRGL_BLEND_FACTOR_INV_DST_ALPHA,
+    VIRGL_BLEND_FACTOR_INV_DST_COLOR,
+
+    VIRGL_BLEND_FACTOR_INV_CONST_COLOR = 0x17,
+    VIRGL_BLEND_FACTOR_INV_CONST_ALPHA,
+    VIRGL_BLEND_FACTOR_INV_SRC1_COLOR,
+    VIRGL_BLEND_FACTOR_INV_SRC1_ALPHA,
+} virgl_blend_factor_t;
+
+typedef enum virgl_blend_func_t {
+    VIRGL_BLEND_ADD,
+    VIRGL_BLEND_SUBTRACT,
+    VIRGL_BLEND_REVERSE_SUBTRACT,
+    VIRGL_BLEND_MIN,
+    VIRGL_BLEND_MAX,
+} virgl_blend_func_t;
 
 typedef struct virgl_rt_blend_state_t {
     uint32_t blend_enable:1;

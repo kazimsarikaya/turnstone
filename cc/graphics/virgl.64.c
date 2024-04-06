@@ -10,6 +10,7 @@
 #include <memory.h>
 #include <utils.h>
 #include <logging.h>
+#include <utils.h>
 
 MODULE("turnstone.kenrel.graphics.virgl");
 
@@ -22,13 +23,15 @@ struct virgl_renderer_t {
 };
 
 struct virgl_cmd_t {
-    uint32_t         context_id;
-    uint16_t         queue_no;
-    lock_t**         lock;
-    uint64_t*        fence_id;
-    virgl_send_cmd_f send_cmd;
-    uint32_t         cmd_dw_count;
-    uint32_t         cmd_dws[VIRGL_CMD_MAX_DWORDS];
+    uint32_t          context_id;
+    uint16_t          queue_no;
+    lock_t**          lock;
+    uint64_t*         fence_id;
+    virgl_send_cmd_f  send_cmd;
+    volatile uint64_t in_use;
+    uint32_t          cmd_old_dw_count;
+    uint32_t          cmd_dw_count;
+    uint32_t          cmd_dws[VIRGL_CMD_MAX_DWORDS];
 };
 
 static inline uint32_t fui(float32_t f) {
@@ -130,9 +133,14 @@ int8_t virgl_cmd_flush_commands(virgl_cmd_t * cmd) {
     return cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
 }
 
+static void virgl_encode_rollback_cmd(virgl_cmd_t* cmd) {
+    cmd->cmd_dw_count = cmd->cmd_old_dw_count;
+    cmd->in_use = 0;
+}
 
 static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
     if(cmd->cmd_dw_count + 1 > VIRGL_CMD_MAX_DWORDS) {
+        virgl_encode_rollback_cmd(cmd);
         return -1;
     }
 
@@ -142,21 +150,9 @@ static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
     return 0;
 }
 
-static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type, uint16_t object_type, uint16_t size) {
-    if(cmd->cmd_dw_count + size + 1 > VIRGL_CMD_MAX_DWORDS) {
-        int8_t ret = virgl_cmd_flush_commands(cmd);
-
-        if(ret) {
-            video_text_print("virgl_encode_write_cmd_header: failed to flush commands\n");
-            return -1;
-        }
-    }
-
-    return virgl_encode_write_dword(cmd, VIRGL_CMD(cmd_type, object_type, size));
-}
-
 static int8_t virgl_encode_write_float64(virgl_cmd_t* cmd, float64_t qword) {
     if(cmd->cmd_dw_count + 2 > VIRGL_CMD_MAX_DWORDS) {
+        virgl_encode_rollback_cmd(cmd);
         return -1;
     }
 
@@ -165,6 +161,42 @@ static int8_t virgl_encode_write_float64(virgl_cmd_t* cmd, float64_t qword) {
     cmd->cmd_dw_count += 2;
 
     return 0;
+}
+
+static void virgl_encode_write_block(virgl_cmd_t* cmd, const void* data, uint32_t length) {
+    memory_memcopy(data, &cmd->cmd_dws[cmd->cmd_dw_count], length);
+
+    uint32_t rem = length % 4;
+
+    if (rem) {
+        memory_memclean(&cmd->cmd_dws[cmd->cmd_dw_count + length / 4], 0);
+    }
+
+    cmd->cmd_dw_count += (length + 3) / 4;
+}
+
+static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type, uint16_t object_type, uint16_t size) {
+    boolean_t in_use = bit_locked_set(&cmd->in_use, 0);
+
+    if(in_use) {
+        video_text_print("virgl_encode_write_cmd_header: cmd is in use\n");
+        return -1;
+    }
+
+
+    if(cmd->cmd_dw_count + size + 1 > VIRGL_CMD_MAX_DWORDS) {
+        int8_t ret = virgl_cmd_flush_commands(cmd);
+
+        if(ret) {
+            video_text_print("virgl_encode_write_cmd_header: failed to flush commands\n");
+            virgl_encode_rollback_cmd(cmd);
+            return -1;
+        }
+    }
+
+    cmd->cmd_old_dw_count = cmd->cmd_dw_count;
+
+    return virgl_encode_write_dword(cmd, VIRGL_CMD(cmd_type, object_type, size));
 }
 
 int8_t virgl_encode_clear(virgl_cmd_t* cmd, virgl_cmd_clear_t * clear) {
@@ -189,6 +221,8 @@ int8_t virgl_encode_clear(virgl_cmd_t* cmd, virgl_cmd_clear_t * clear) {
     if(virgl_encode_write_dword(cmd, clear->clear_stencil)) {
         return -1;
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -246,6 +280,8 @@ int8_t virgl_encode_clear_texture(virgl_cmd_t * cmd, virgl_cmd_clear_texture_t *
         return -1;
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -284,6 +320,8 @@ int8_t virgl_encode_surface(virgl_cmd_t* cmd, virgl_obj_surface_t * surface, boo
         }
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -306,6 +344,8 @@ int8_t virgl_encode_framebuffer_state(virgl_cmd_t* cmd, virgl_obj_framebuffer_st
             return -1;
         }
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -367,6 +407,8 @@ int8_t virgl_encode_copy_region(virgl_cmd_t* cmd, virgl_copy_region_t * copy_reg
         return -1;
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -403,18 +445,6 @@ static void virgl_encode_emit_shader_streamout(virgl_cmd_t*    cmd,
             virgl_encode_write_dword(cmd, 0);
         }
     }
-}
-
-static void virgl_encode_write_block(virgl_cmd_t* cmd, const void* data, uint32_t length) {
-    memory_memcopy(data, &cmd->cmd_dws[cmd->cmd_dw_count], length);
-
-    uint32_t rem = length % 4;
-
-    if (rem) {
-        memory_memclean(&cmd->cmd_dws[cmd->cmd_dw_count + length / 4], 0);
-    }
-
-    cmd->cmd_dw_count += (length + 3) / 4;
 }
 
 int8_t virgl_encode_shader(virgl_cmd_t* cmd, virgl_shader_t* shader) {
@@ -458,6 +488,8 @@ int8_t virgl_encode_shader(virgl_cmd_t* cmd, virgl_shader_t* shader) {
         left_bytes -= length;
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -473,6 +505,8 @@ int8_t virgl_encode_bind_shader(virgl_cmd_t* cmd, uint32_t handle, uint32_t type
     if(virgl_encode_write_dword(cmd, type)) {
         return -1;
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -506,6 +540,8 @@ int8_t virgl_encode_link_shader(virgl_cmd_t* cmd, virgl_link_shader_t* link_shad
         return -1;
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -520,7 +556,10 @@ int8_t virgl_encode_set_uniform_buffer(virgl_cmd_t* cmd,
     virgl_encode_write_dword(cmd, index);
     virgl_encode_write_dword(cmd, offset);
     virgl_encode_write_dword(cmd, length);
-    virgl_encode_write_dword( cmd, res);
+    virgl_encode_write_dword(cmd, res);
+
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -554,6 +593,8 @@ int8_t virgl_encode_set_shader_buffers(virgl_cmd_t* cmd, virgl_shader_buffer_t* 
             return -1;
         }
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -596,6 +637,8 @@ int8_t virgl_encode_set_shader_images(virgl_cmd_t* cmd, virgl_shader_images_t* s
             return -1;
         }
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -667,6 +710,8 @@ int8_t virgl_encode_sampler_views(virgl_cmd_t* cmd, virgl_sampler_views_t* sampl
         }
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -701,6 +746,8 @@ int8_t virgl_encode_draw_vbo(virgl_cmd_t* cmd, virgl_draw_info_t* draw_info) {
     } else {
         virgl_encode_write_dword(cmd, 0);
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -773,6 +820,9 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
         }
         /* send it all in one go. */
         virgl_encoder_inline_send_box(cmd, res_iw->res_id, res_iw->level, res_iw->usage, &mybox, data, res_iw->stride, res_iw->layer_stride, size);
+
+        cmd->in_use = 0;
+
         return 0;
     }
 
@@ -817,6 +867,8 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
         data = (uint8_t *)data + layer_stride_internal;
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -828,6 +880,8 @@ int8_t virgl_encode_bind_object(virgl_cmd_t* cmd, virgl_object_type_t object_typ
     if(virgl_encode_write_dword(cmd, object_id)) {
         return -1;
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -844,6 +898,9 @@ int8_t virgl_encode_create_vertex_elements(virgl_cmd_t* cmd, uint32_t handle, ui
         virgl_encode_write_dword(cmd, element[i].buffer_index);
         virgl_encode_write_dword(cmd, element[i].src_format);
     }
+
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -900,6 +957,8 @@ int8_t virgl_encode_blend_state(virgl_cmd_t* cmd, uint32_t handle, virgl_blend_s
         }
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -949,6 +1008,8 @@ int8_t virgl_encode_dsa_state(virgl_cmd_t* cmd, uint32_t handle, virgl_depth_ste
     if(res) {
         return -1;
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
@@ -1049,6 +1110,8 @@ int8_t virgl_encode_rasterizer_state(virgl_cmd_t* cmd, uint32_t handle, virgl_ra
         return -1;
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -1085,6 +1148,8 @@ int8_t virgl_encode_set_viewport_states(virgl_cmd_t* cmd, int32_t start_slot, in
         }
     }
 
+    cmd->in_use = 0;
+
     return 0;
 }
 
@@ -1114,6 +1179,8 @@ int8_t virgl_encode_set_vertex_buffers(virgl_cmd_t* cmd, virgl_vertex_buffer_t* 
             return -1;
         }
     }
+
+    cmd->in_use = 0;
 
     return 0;
 }
