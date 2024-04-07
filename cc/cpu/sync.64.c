@@ -53,13 +53,15 @@ static task_t* lock_get_current_task(void) {
     return 0;
 }
 
-static void lock_task_yield(void) {
+void lock_task_yield(void);
+void lock_task_yield(void) {
     if(lock_task_yielder) {
         lock_task_yielder();
     }
 }
 
 lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id) {
+    heap = memory_get_heap(heap);
     lock_t* lock = memory_malloc_ext(heap, sizeof(lock_t), 0x0);
 
     if(lock == NULL) {
@@ -108,6 +110,7 @@ void lock_acquire(lock_t* lock) {
     }
 
     while(bit_locked_set(&lock->lock_value, 0)) {
+#if 0
         if(!lock->for_future) {
             // lock_task_yield();
             cpu_sti();
@@ -120,6 +123,11 @@ void lock_acquire(lock_t* lock) {
                 asm volatile ("pause" ::: "memory");
             }
         }
+#else
+        asm volatile ("pause" ::: "memory");
+
+        lock_task_yield();
+#endif
     }
 
     asm volatile ("pause" ::: "memory");

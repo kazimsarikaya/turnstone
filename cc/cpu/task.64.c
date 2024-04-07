@@ -21,7 +21,7 @@
 #include <systeminfo.h>
 #include <linker.h>
 #include <utils.h>
-#include <map.h>
+#include <hashmap.h>
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_vm.h>
@@ -59,9 +59,11 @@ lock_t* task_next_task_id_lock = NULL;
 
 volatile boolean_t task_tasking_initialized = false;
 
+memory_heap_t* task_map_heap = NULL;
+memory_heap_t** task_queue_and_cleanup_heaps = NULL;
 list_t** task_queues = NULL;
 list_t** task_cleanup_queues = NULL;
-map_t task_map = NULL;
+hashmap_t* task_map = NULL;
 uint32_t task_mxcsr_mask = 0;
 
 uint64_t task_max_tick_count_limit = 0;
@@ -141,6 +143,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     uint64_t stack_size = kernel->program_stack_size;
     uint64_t stack_top = kernel->program_stack_virtual_address;
 
+    PRINTLOG(TASKING, LOG_INFO, "stack top 0x%llx size 0x%llx", stack_top, stack_size);
 
     uint64_t frame_count = 10 * stack_size / FRAME_SIZE;
 
@@ -179,18 +182,70 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     uint32_t cpu_count = apic_get_ap_count() + 1;
 
+    task_queue_and_cleanup_heaps = memory_malloc_ext(heap, sizeof(memory_heap_t*) * cpu_count, 0x0);
     task_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
     task_cleanup_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
 
-    task_queues[0] = list_create_queue_with_heap(heap);
-    task_cleanup_queues[0] = list_create_queue_with_heap(heap);
+
+    for(uint32_t i = 0; i < cpu_count; i++) {
+        frame_t* task_related_heap_frames = NULL;
+
+        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0x200, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
+
+            return -1;
+        }
+
+        uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(task_related_heap_frames->frame_address);
+
+        memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+        memory_heap_t* task_related_heap = memory_create_heap_simple(task_related_heap_va,
+                                                                     task_related_heap_va + 0x200 * FRAME_SIZE);
+
+        if(task_related_heap == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task related heap");
+
+            return -1;
+        }
+
+        task_queue_and_cleanup_heaps[i] = task_related_heap;
+        task_queues[i] = list_create_queue_with_heap(task_related_heap);
+        task_cleanup_queues[i] = list_create_queue_with_heap(task_related_heap);
+    }
+
+    {
+        frame_t* task_related_heap_frames = NULL;
+
+        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
+
+            return -1;
+        }
+
+        uint64_t task_related_heap_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(task_related_heap_frames->frame_address);
+
+        memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+        memory_heap_t* task_related_heap = memory_create_heap_simple(task_related_heap_va,
+                                                                     task_related_heap_va + 0x1000 * FRAME_SIZE);
+
+        if(task_related_heap == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task related heap");
+
+            return -1;
+        }
+
+        task_map_heap = task_related_heap;
+    }
+
 
     current_cpu_state->task_queue = task_queues[0];
     current_cpu_state->task_cleanup_queue = task_cleanup_queues[0];
 
     interrupt_irq_set_handler(0xde, &task_task_switch_isr);
 
-    task_t* kernel_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
+    task_t* kernel_task = memory_malloc_ext(task_map_heap, sizeof(task_t), 0x0);
 
     if(kernel_task == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task");
@@ -198,14 +253,14 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    kernel_task->creator_heap = heap;
+    kernel_task->creator_heap = task_map_heap;
     kernel_task->heap = heap;
     kernel_task->heap_size = kernel->program_heap_size;
     kernel_task->task_id = cpu_count + 1;
     kernel_task->state = TASK_STATE_CREATED;
     kernel_task->entry_point = kmain64;
     kernel_task->page_table = memory_paging_get_table();
-    kernel_task->registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
+    kernel_task->registers = memory_malloc_ext(task_map_heap, sizeof(task_registers_t), 0x10);
 
     if(kernel_task->registers == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task fx registers");
@@ -213,9 +268,12 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    kernel_task->stack = (void*)(stack_top + stack_size);
+    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init", apic_id);
+    kernel_task->task_name = strdup_at_heap(task_map_heap, tmp_task_name);
+    memory_free(tmp_task_name);
+
+    kernel_task->stack = (void*)(stack_top);
     kernel_task->stack_size = stack_size;
-    kernel_task->task_name = strdup_at_heap(heap, "kernel");
     kernel_task->input_buffer = stdbufs_default_input_buffer;
     kernel_task->output_buffer = stdbufs_default_output_buffer;
     kernel_task->error_buffer = stdbufs_default_error_buffer;
@@ -230,7 +288,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     task_next_task_id = kernel_task->task_id + 1;
     task_next_task_id_lock = lock_create();
 
-    task_map = map_integer();
+    task_map = hashmap_integer_with_heap(task_map_heap, 128);
 
     if(task_map == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task map");
@@ -238,7 +296,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    map_insert(task_map, (void*)kernel_task->task_id, kernel_task);
+    hashmap_put(task_map, (void*)kernel_task->task_id, kernel_task);
 
     uint32_t tss_limit = sizeof(tss_t) - 1;
     DESCRIPTOR_BUILD_TSS_SEG(d_tss, (size_t)tss, tss_limit, DPL_KERNEL);
@@ -288,24 +346,20 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     future_task_wait_toggler_func = &task_toggle_wait_for_future;
 
     task_tasking_initialized = true;
+    cpu_state->tasking_enabled = true;
 
     return 0;
 }
 #pragma GCC diagnostic pop
 
 int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size) {
-    memory_heap_t* heap = memory_get_default_heap();
+    memory_heap_t* heap = task_map_heap;
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
 
     uint32_t apic_id = apic_get_local_apic_id();
 
-    task_queues[apic_id] = list_create_queue_with_heap(heap);
-    task_cleanup_queues[apic_id] = list_create_queue_with_heap(heap);
-
     if(task_queues[apic_id] == NULL || task_cleanup_queues[apic_id] == NULL) {
-        list_destroy(task_queues[apic_id]);
-        list_destroy(task_cleanup_queues[apic_id]);
-        PRINTLOG(TASKING, LOG_FATAL, "cannot create task queue for apic id %d", apic_id);
+        PRINTLOG(TASKING, LOG_FATAL, "task queues for apic id %d are null", apic_id);
 
         return -1;
     }
@@ -358,14 +412,13 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->stack = (void*)stack_base;
     current_task->stack_size = stack_size;
-    current_task->task_name = strdup_at_heap(heap, "kernel");
 
     task_save_registers(current_task->registers);
 
     cpu_state->current_task = current_task;
 
     lock_acquire(task_find_next_task_lock);
-    map_insert(task_map, (void*)current_task->task_id, current_task);
+    hashmap_put(task_map, (void*)current_task->task_id, current_task);
     lock_release(task_find_next_task_lock);
 
     if(task_create_idle_task() != 0) {
@@ -373,6 +426,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
         return -1;
     }
+
+    cpu_state->tasking_enabled = true;
 
     return 0;
 }
@@ -493,33 +548,33 @@ static void task_cleanup_task(task_t* task) {
         hypervisor_vm_destroy(task->vm);
     }
 
-    memory_free_ext(task->heap, (void*)task->task_name);
+    memory_free_ext(task->creator_heap, (void*)task->task_name);
 
-    map_delete(task_map, (void*)task->task_id);
+    hashmap_delete(task_map, (void*)task->task_id);
 
-    if(task->heap != memory_get_default_heap()) {
-        uint64_t stack_va = (uint64_t)task->stack;
-        uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
+    uint64_t stack_va = (uint64_t)task->stack;
+    uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
-        uint64_t stack_size = task->stack_size;
-        uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
+    uint64_t stack_size = task->stack_size;
+    uint64_t stack_frames_cnt = stack_size / FRAME_SIZE;
 
-        memory_memclean(task->stack, stack_size);
+    memory_memclean(task->stack, stack_size);
 
-        frame_t stack_frames = {stack_fa, stack_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
+    frame_t stack_frames = {stack_fa, stack_frames_cnt, FRAME_TYPE_USED, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK};
 
-        if(memory_paging_delete_va_for_frame_ext(task->page_table, stack_va, &stack_frames) != 0 ) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
+    if(memory_paging_delete_va_for_frame_ext(task->page_table, stack_va, &stack_frames) != 0 ) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", stack_va);
 
-            cpu_hlt();
-        }
+        cpu_hlt();
+    }
 
-        if(frame_get_allocator()->release_frame(frame_get_allocator(), &stack_frames) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
+    if(frame_get_allocator()->release_frame(frame_get_allocator(), &stack_frames) != 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx", stack_fa, stack_frames_cnt);
 
-            cpu_hlt();
-        }
+        cpu_hlt();
+    }
 
+    if(task->heap != memory_get_default_heap() && task->heap != task_map_heap) {
         uint64_t heap_va = (uint64_t)task->heap;
         uint64_t heap_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(heap_va);
 
@@ -829,7 +884,7 @@ void task_end_task(void) {
 }
 
 void task_kill_task(uint64_t task_id, boolean_t force) {
-    task_t* task = (task_t*)map_get(task_map, (void*)task_id);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
 
     if(task == NULL) {
         PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx not found", task_id);
@@ -861,6 +916,7 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
 }
 
 uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
+    heap = task_map_heap; // override heap
 
     task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 
@@ -952,7 +1008,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     new_task->registers = registers;
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
-    new_task->task_name = strdup_at_heap(task_heap, task_name);
+    new_task->task_name = strdup_at_heap(task_map_heap, task_name);
 
     new_task->arguments_count = args_cnt;
     new_task->arguments = args;
@@ -1005,7 +1061,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     lock_acquire(task_find_next_task_lock);
     cpu_cli();
-    map_insert(task_map, (void*)new_task->task_id, new_task);
+    hashmap_put(task_map, (void*)new_task->task_id, new_task);
     list_stack_push(min_queue, new_task);
     cpu_sti();
     lock_release(task_find_next_task_lock);
@@ -1068,7 +1124,7 @@ void task_idle_task(void) {
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t task_create_idle_task(void) {
     program_header_t* kernel = (program_header_t*)SYSTEM_INFO->program_header_virtual_start;
-    memory_heap_t* heap = memory_get_default_heap();
+    memory_heap_t* heap = task_map_heap;
 
     task_t* new_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
 
@@ -1157,7 +1213,7 @@ int8_t task_create_idle_task(void) {
     spool_add(new_task->task_name, 2, new_task->output_buffer, new_task->error_buffer);
 
     lock_acquire(task_find_next_task_lock);
-    map_insert(task_map, (void*)new_task->task_id, new_task);
+    hashmap_put(task_map, (void*)new_task->task_id, new_task);
     lock_release(task_find_next_task_lock);
 
     return 0;
@@ -1165,6 +1221,10 @@ int8_t task_create_idle_task(void) {
 #pragma GCC diagnostic pop
 
 void task_yield(void) {
+    if(!task_tasking_initialized || !cpu_state->tasking_enabled) {
+        return;
+    }
+
     cpu_cli();
     task_task_switch_set_parameters(false, true);
     task_switch_task();
@@ -1182,7 +1242,7 @@ int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
 }
 
 void task_remove_task_after_fault(uint64_t task_id) {
-    task_t* task = (task_t*)map_get(task_map, (void*)task_id);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
 
     task->state = TASK_STATE_ENDED;
 

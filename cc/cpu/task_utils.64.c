@@ -20,7 +20,7 @@
 #include <systeminfo.h>
 #include <linker.h>
 #include <utils.h>
-#include <map.h>
+#include <hashmap.h>
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_vm.h>
@@ -32,7 +32,7 @@ MODULE("turnstone.kernel.cpu.task.utils");
 void video_text_print(const char_t* str);
 
 extern volatile cpu_state_t __seg_gs * cpu_state;
-extern map_t* task_map;
+extern hashmap_t* task_map;
 
 uint64_t task_get_id(void) {
     uint64_t id = apic_get_local_apic_id() + 1;
@@ -57,7 +57,7 @@ void task_current_task_sleep(uint64_t wake_tick) {
 }
 
 void task_clear_message_waiting(uint64_t tid) {
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 
     if(task) {
         task->message_waiting = false;
@@ -67,7 +67,7 @@ void task_clear_message_waiting(uint64_t tid) {
 }
 
 void task_set_interrupt_received(uint64_t tid) {
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
@@ -83,7 +83,7 @@ void task_set_interrupt_received(uint64_t tid) {
 }
 
 void task_set_message_received(uint64_t tid) {
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
@@ -107,7 +107,7 @@ void task_set_interruptible(void) {
 }
 
 void task_print_all(buffer_t* buffer) {
-    iterator_t* it = map_create_iterator(task_map);
+    iterator_t* it = hashmap_iterator_create(task_map);
 
     while(it->end_of_iterator(it) != 0) {
         const task_t* task = it->get_item(it);
@@ -147,7 +147,7 @@ void task_print_all(buffer_t* buffer) {
 }
 
 buffer_t* task_get_task_input_buffer(uint64_t tid) {
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 
     if(task) {
         return task->input_buffer;
@@ -157,7 +157,7 @@ buffer_t* task_get_task_input_buffer(uint64_t tid) {
 }
 
 buffer_t* task_get_task_output_buffer(uint64_t tid) {
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 
     if(task) {
         return task->output_buffer;
@@ -167,7 +167,7 @@ buffer_t* task_get_task_output_buffer(uint64_t tid) {
 }
 
 buffer_t* task_get_task_error_buffer(uint64_t tid) {
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 
     if(task) {
         return task->error_buffer;
@@ -315,7 +315,7 @@ void task_add_message_queue(list_t* queue){
 }
 
 list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number) {
-    const task_t* task = map_get(task_map, (void*)task_id);
+    const task_t* task = hashmap_get(task_map, (void*)task_id);
 
     if(task == NULL) {
         return NULL;
@@ -341,7 +341,7 @@ void task_toggle_wait_for_future(uint64_t tid) {
         return;
     }
 
-    task_t* task = (task_t*)map_get(task_map, (void*)tid);
+    task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 
     if(task) {
         char_t buf[64] = {0};

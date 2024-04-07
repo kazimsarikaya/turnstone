@@ -112,12 +112,12 @@ int8_t hashmap_string_kc(const void* item1, const void* item2) {
     return strcmp(ti1, ti2);
 }
 
-hashmap_t*  hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generator_f hkg, hashmap_key_comparator_f hkc) {
+hashmap_t*  hashmap_new_with_hkg_with_hkc(memory_heap_t* heap, uint64_t capacity, hashmap_key_generator_f hkg, hashmap_key_comparator_f hkc) {
     if(!capacity) {
         return NULL;
     }
 
-    memory_heap_t* heap = memory_get_heap(NULL);
+    heap = memory_get_heap(heap);
 
     hashmap_t* hm = memory_malloc_ext(heap, sizeof(hashmap_t), 0);
 
@@ -155,8 +155,8 @@ hashmap_t*  hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generat
     return hm;
 }
 
-hashmap_t* hashmap_string(uint64_t capacity) {
-    return hashmap_new_with_hkg_with_hkc(capacity, hashmap_string_kg, hashmap_string_kc);
+hashmap_t* hashmap_string_with_heap(memory_heap_t* heap, uint64_t capacity) {
+    return hashmap_new_with_hkg_with_hkc(heap, capacity, hashmap_string_kg, hashmap_string_kc);
 }
 
 boolean_t   hashmap_destroy(hashmap_t* hm) {
