@@ -17,6 +17,12 @@
 #include <memory.h>
 
 /**
+ * @brief prints string to console with efi system table's console output protocol.
+ * @param[in] string string to print.
+ */
+void video_print(const char_t* string);
+
+/**
  * @brief opens an efi protocol based disk
  * @param[in] bio efi block io protocol
  * @return a disk implementation based on efi protocols.
