@@ -48,6 +48,7 @@ const char_t*const logging_module_names[] = {
     "COMPILER_ASSEMBLER",
     "COMPILER_PASCAL",
     "HYPERVISOR",
+    "WINDOWMANAGER",
 };
 
 
@@ -98,6 +99,7 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_COMPILER_ASSEMBLER,
     LOG_LEVEL_COMPILER_PASCAL,
     LOG_LEVEL_HYPERVISOR,
+    LOG_LEVEL_WINDOWMANAGER,
 };
 
 boolean_t logging_need_logging(logging_modules_t module, logging_level_t level) {

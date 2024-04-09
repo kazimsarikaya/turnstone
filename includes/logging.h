@@ -53,6 +53,7 @@ typedef enum logging_modules_t {
     COMPILER_ASSEMBLER,
     COMPILER_PASCAL,
     HYPERVISOR,
+    WINDOWMANAGER,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -247,6 +248,11 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_HYPERVISOR
 /*! default log level for hypervisor module */
 #define LOG_LEVEL_HYPERVISOR LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_WINDOWMANAGER
+/*! default log level for window manager module */
+#define LOG_LEVEL_WINDOWMANAGER LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION
