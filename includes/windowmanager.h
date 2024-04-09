@@ -38,6 +38,7 @@ struct window_t {
     int32_t        input_length;
     const char_t*  input_id;
     void*          extra_data;
+    boolean_t      extra_data_is_allocated;
     int32_t        tab_index;
     rect_t         rect;
     pixel_t*       buffer;
@@ -47,6 +48,7 @@ struct window_t {
     window_t*      prev;
     list_t*        children;
     window_event_f on_enter;
+    window_event_f on_redraw;
 };
 
 typedef struct window_input_value_t {

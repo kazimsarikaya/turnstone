@@ -11,6 +11,8 @@
 #include <buffer.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
+#include <time.h>
+#include <strings.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -70,8 +72,73 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     return window;
 }
 
+static int8_t wndmgr_footer_time_on_redraw(const window_t* window) {
+    if(window == NULL) {
+        return -1;
+    }
+
+    timeparsed_t tp = {0};
+
+    timeparsed(&tp);
+
+    char_t* time_str = sprintf("%02d:%02d:%02d %04d-%02d-%02d",
+                               tp.hours, tp.minutes, tp.seconds,
+                               tp.year, tp.month, tp.day);
+
+    memory_free(window->text);
+
+    ((window_t*)window)->text = time_str;
+
+    return 0;
+}
+
+static int8_t wndmgr_create_footer(window_t* parent) {
+    if(parent == NULL) {
+        return -1;
+    }
+
+    font_table_t* ft = font_get_font_table();
+
+    rect_t rect = {0, parent->rect.height - ft->font_height, parent->rect.width, ft->font_height};
+
+    window_t* footer = windowmanager_create_window(parent, NULL, rect, (color_t){.color = 0xFF282828}, (color_t){.color = 0xFFFFFFFF});
+
+    if(footer == NULL) {
+        return -1;
+    }
+
+    footer->is_visible = true;
+
+    timeparsed_t tp = {0};
+
+    timeparsed(&tp);
+
+    char_t* time_str = sprintf("%02d:%02d:%02d %04d-%02d-%02d",
+                               tp.hours, tp.minutes, tp.seconds,
+                               tp.year, tp.month, tp.day);
+
+    rect = windowmanager_calc_text_rect(time_str, 2000);
+
+    rect.x = parent->rect.width - rect.width - ft->font_width;
+
+    window_t* time_wnd = windowmanager_create_window(footer, time_str, rect, (color_t){.color = 0xFF282828}, (color_t){.color = 0xFF2288FF});
+
+    if(time_wnd == NULL) {
+        return -1;
+    }
+
+    time_wnd->on_redraw = wndmgr_footer_time_on_redraw;
+    time_wnd->is_visible = true;
+
+    return 0;
+}
+
 void windowmanager_insert_and_set_current_window(window_t* window) {
     if(window == NULL) {
+        return;
+    }
+
+    if(wndmgr_create_footer(window) != 0) {
         return;
     }
 
@@ -107,6 +174,10 @@ void windowmanager_destroy_window(window_t* window) {
 
     if(!window->is_text_readonly){
         memory_free(window->text);
+    }
+
+    if(window->extra_data_is_allocated && window->extra_data != NULL) {
+        memory_free(window->extra_data);
     }
 
     memory_free(window);

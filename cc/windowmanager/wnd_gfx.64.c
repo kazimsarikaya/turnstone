@@ -75,6 +75,10 @@ boolean_t windowmanager_draw_window(window_t* window) {
         flush_needed = true;
         text_cursor_hide();
 
+        if(window->on_redraw) {
+            window->on_redraw(window);
+        }
+
         gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);
 
         windowmanager_print_text(window, 0, 0, window->text);

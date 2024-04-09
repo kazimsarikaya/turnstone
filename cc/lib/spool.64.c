@@ -98,14 +98,26 @@ list_t* spool_get_all(void) {
 }
 
 const char_t* spool_get_name(const spool_item_t* item) {
+    if(item == NULL) {
+        return NULL;
+    }
+
     return item->name;
 }
 
 size_t spool_get_buffer_count(const spool_item_t* item) {
+    if(item == NULL) {
+        return 0;
+    }
+
     return list_size(item->buffers);
 }
 
 size_t spool_get_total_buffer_size(const spool_item_t* item) {
+    if(item == NULL) {
+        return 0;
+    }
+
     size_t total_size = 0;
 
     for(size_t i = 0; i < list_size(item->buffers); i++) {
@@ -118,5 +130,9 @@ size_t spool_get_total_buffer_size(const spool_item_t* item) {
 }
 
 const buffer_t* spool_get_buffer(const spool_item_t* item, size_t buf_idx) {
+    if(item == NULL) {
+        return NULL;
+    }
+
     return list_get_data_at_position(item->buffers, buf_idx);
 }

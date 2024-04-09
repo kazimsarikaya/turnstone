@@ -143,6 +143,8 @@ static int8_t windowmanager_main(void) {
                         }
                     } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
                         windowmanager_remove_and_set_current_window(windowmanager_current_window);
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F4) {
+                        windowmanager_current_window->is_dirty = true;
                     } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
                         text_cursor_hide();
                         text_cursor_move_relative(0, -1);

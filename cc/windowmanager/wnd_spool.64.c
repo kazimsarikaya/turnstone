@@ -11,6 +11,7 @@
 #include <spool.h>
 #include <argumentparser.h>
 #include <graphics/screen.h>
+#include <logging.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -67,6 +68,35 @@ static int8_t wndmgr_spool_item_on_enter(const window_t* window) {
     }
 
     windowmanager_destroy_inputs(inputs);
+
+    return 0;
+}
+
+typedef struct sposl_item_window_extra_data {
+    size_t          buffer_id;
+    const buffer_t* buffer;
+} spool_item_window_extra_data_t;
+
+static int8_t wndmgr_spool_item_on_redraw(const window_t* window) {
+    if(!window) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window is NULL");
+        return -1;
+    }
+
+    const spool_item_window_extra_data_t* sied = (const spool_item_window_extra_data_t*)window->extra_data;
+
+    if(!sied) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window extra data of spool item is NULL");
+        return -1;
+    }
+
+    char_t* spool_text = sprintf("% 12i% 15lli",
+                                 sied->buffer_id,
+                                 buffer_get_length(sied->buffer));
+
+    memory_free(window->text);
+
+    ((window_t*)window)->text = spool_text;
 
     return 0;
 }
@@ -187,6 +217,20 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
             return -1;
         }
 
+        spool_item_window_extra_data_t* sied = memory_malloc(sizeof(spool_item_window_extra_data_t));
+
+        if(!sied) {
+            windowmanager_destroy_window(window);
+            return -1;
+        }
+
+        sied->buffer_id = i;
+        sied->buffer = buffer;
+
+        wnd_spool->on_redraw = wndmgr_spool_item_on_redraw;
+        wnd_spool->extra_data = (void*)sied;
+        wnd_spool->extra_data_is_allocated = true;
+
         wnd_spool->is_visible = true;
 
         top += font_height;
@@ -250,6 +294,31 @@ static int8_t wndmgr_spool_browser_on_enter(const window_t* window) {
     }
 
     windowmanager_destroy_inputs(inputs);
+
+    return 0;
+}
+
+static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_t* window) {
+    if(!window) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window is NULL");
+        return -1;
+    }
+
+    const spool_item_t* spool = (const spool_item_t*)window->extra_data;
+
+    if(!spool) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window extra data of spool item is NULL");
+        return -1;
+    }
+
+    char_t* spool_text = sprintf("%- 30s% 15lli% 20lli",
+                                 spool_get_name(spool),
+                                 spool_get_buffer_count(spool),
+                                 spool_get_total_buffer_size(spool));
+
+    memory_free(window->text);
+
+    ((window_t*)window)->text = spool_text;
 
     return 0;
 }
@@ -370,6 +439,9 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
             windowmanager_destroy_window(window);
             return -1;
         }
+
+        wnd_spool->on_redraw = wndmgr_spool_browser_wnd_spool_on_redraw;
+        wnd_spool->extra_data = (void*)spool;
 
         wnd_spool->is_visible = true;
 
