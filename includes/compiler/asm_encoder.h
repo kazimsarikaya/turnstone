@@ -52,6 +52,14 @@ typedef struct asm_instruction_param_t {
     char_t*                      label;
 } asm_instruction_param_t;
 
+typedef struct asm_symbol_t {
+    char_t*               name;
+    linker_symbol_type_t  type;
+    linker_symbol_scope_t scope;
+    uint64_t              offset;
+    uint8_t               size;
+} asm_symbol_t;
+
 typedef struct asm_relocation_t {
     linker_relocation_type_t type;
     uint64_t                 offset;
@@ -60,8 +68,25 @@ typedef struct asm_relocation_t {
     char_t*                  label;
 } asm_relocation_t;
 
-boolean_t asm_encode_instructions(list_t* tokens, buffer_t* out, list_t* relocs);
+typedef struct asm_section_t {
+    char_t*               name;
+    linker_section_type_t type;
+    list_t*               relocs;
+    hashmap_t*            symbols;
+    buffer_t*             data;
+} asm_section_t;
+
+typedef struct asm_encoder_ctx_t {
+    list_t*        tokens;
+    hashmap_t*     sections;
+    asm_section_t* current_section;
+    asm_symbol_t*  current_symbol;
+} asm_encoder_ctx_t;
+
+boolean_t asm_encode_instructions(asm_encoder_ctx_t* ctx);
 void      asm_encoder_print_relocs(list_t* relocs);
 void      asm_encoder_destroy_relocs(list_t* relocs);
+int8_t    asm_encoder_destroy_context(asm_encoder_ctx_t* ctx);
+int8_t    asm_encoder_dump(asm_encoder_ctx_t* ctx, buffer_t* outbuf);
 
 #endif /* asm_encoder.h */

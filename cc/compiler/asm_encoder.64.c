@@ -524,19 +524,342 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
     return true;
 }
 
+static void asm_encoder_destroy_symbols(hashmap_t* symbols) {
+    if(!symbols) {
+        return;
+    }
+
+    iterator_t* it = hashmap_iterator_create(symbols);
+
+    if(!it) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to create iterator for symbols");
+        return;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        asm_symbol_t* symbol = (asm_symbol_t*)it->get_item(it);
+
+        memory_free(symbol->name);
+        memory_free(symbol);
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+
+    hashmap_destroy(symbols);
+}
+
+int8_t asm_encoder_destroy_context(asm_encoder_ctx_t* ctx) {
+    if(!ctx) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid context");
+        return -1;
+    }
+
+    if(ctx->sections) {
+        iterator_t* it = hashmap_iterator_create(ctx->sections);
+
+        if(it) {
+            while(it->end_of_iterator(it) != 0) {
+                asm_section_t* section = (asm_section_t*)it->get_item(it);
+
+                if(section->data) {
+                    buffer_destroy(section->data);
+                }
+
+                if(section->symbols) {
+                    asm_encoder_destroy_symbols(section->symbols);
+                }
+
+                if(section->relocs) {
+                    asm_encoder_destroy_relocs(section->relocs);
+                }
+
+                memory_free(section->name);
+                memory_free(section);
+
+                it = it->next(it);
+            }
+
+            it->destroy(it);
+        }
+    }
+
+    hashmap_destroy(ctx->sections);
+
+    memory_free(ctx);
+
+    return 0;
+}
+
+int8_t asm_encoder_dump(asm_encoder_ctx_t* ctx, buffer_t* outbuf) {
+    if(!ctx) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid context");
+        return -1;
+    }
+
+    if(!outbuf) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid output buffer");
+        return -1;
+    }
 
 
-boolean_t asm_encode_instructions(list_t* tokens, buffer_t* out, list_t* relocs) {
-    iterator_t* it = list_iterator_create(tokens);
+    NOTIMPLEMENTEDLOG(COMPILER_ASSEMBLER);
+    return 0;
+}
+
+static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
+    if(!ctx) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid context");
+        return -1;
+    }
+
+    if(!it) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid iterator");
+        return -1;
+    }
+
+    const asm_token_t* tok = it->get_item(it);
+
+    if(tok->token_type != ASM_TOKEN_TYPE_DIRECTIVE) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token type");
+        return -1;
+    }
+
+    if(tok->directive_type == ASM_DIRECTIVE_TYPE_SECTION) {
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
+            return -1;
+        }
+
+        const asm_token_t* section_tok = it->get_item(it);
+
+        if(section_tok->token_type != ASM_TOKEN_TYPE_PARAMETER) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token type");
+            return -1;
+        }
+
+        asm_section_t* section = memory_malloc(sizeof(asm_section_t));
+
+        if(!section) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for section");
+            return -1;
+        }
+
+        section->name = strdup(section_tok->token_value);
+
+        int32_t section_type = -1;
+
+        for(int32_t i = 0; i < LINKER_SECTION_TYPE_NR_SECTIONS; i++) {
+            if(strstarts(section->name, linker_section_type_names[i]) == 0) {
+                section_type = i;
+                break;
+            }
+        }
+
+        if(section_type == -1) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid section type %s", section->name);
+            return -1;
+        }
+
+        section->type = section_type;
+
+        section->data = buffer_new_with_capacity(NULL, 1024);
+
+        if(!section->data) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for section data");
+            return -1;
+        }
+
+        section->symbols = hashmap_string(16);
+
+        if(!section->symbols) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for section symbols");
+            return -1;
+        }
+
+        section->relocs = list_create_list();
+
+        if(!section->relocs) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for section relocations");
+            return -1;
+        }
+
+        if(!ctx->sections) {
+            ctx->sections = hashmap_string(16);
+
+            if(!ctx->sections) {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for sections");
+                return -1;
+            }
+        }
+
+        hashmap_put(ctx->sections, section->name, section);
+
+        ctx->current_section = section;
+
+    } else if(tok->directive_type == ASM_DIRECTIVE_TYPE_GLOBAL ||
+              tok->directive_type == ASM_DIRECTIVE_TYPE_EXTERN ||
+              tok->directive_type == ASM_DIRECTIVE_TYPE_LOCAL) {
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
+            return -1;
+        }
+
+        const asm_token_t* label_tok = it->get_item(it);
+
+        if(!label_tok) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token");
+            return -1;
+        }
+
+        asm_symbol_t* symbol = NULL;
+
+        if(!ctx->current_symbol) {
+            symbol = memory_malloc(sizeof(asm_symbol_t));
+
+            if(!symbol) {
+                PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for symbol");
+                return -1;
+            }
+        }
+
+        symbol->name = strdup(label_tok->token_value);
+
+        if(!symbol->name) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for symbol name");
+            return -1;
+        }
+
+        symbol->scope = tok->directive_type == ASM_DIRECTIVE_TYPE_LOCAL?LINKER_SYMBOL_SCOPE_LOCAL:LINKER_SYMBOL_SCOPE_GLOBAL;
+
+        if(!ctx->current_symbol) {
+            hashmap_put(ctx->current_section->symbols, symbol->name, symbol);
+
+            ctx->current_symbol = symbol;
+        }
+    } else if(tok->directive_type == ASM_DIRECTIVE_TYPE_TYPE) {
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
+            return -1;
+        }
+
+        const asm_token_t* sym_tok = it->get_item(it);
+
+        if(!sym_tok) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token");
+            return -1;
+        }
+
+        if(!ctx->current_symbol) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "No current symbol");
+            return -1;
+        }
+
+        const char_t* sym_name = sym_tok->token_value;
+
+        if(strcmp(ctx->current_symbol->name, sym_name) != 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Symbol name mismatch %s %s", ctx->current_symbol->name, sym_name);
+            return -1;
+        }
+
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
+            return -1;
+        }
+
+        const asm_token_t* type_tok = it->get_item(it);
+
+        if(!type_tok) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token");
+            return -1;
+        }
+
+        if(strcmp(type_tok->token_value, "@function") == 0) {
+            ctx->current_symbol->type = LINKER_SYMBOL_TYPE_FUNCTION;
+        } else if(strcmp(type_tok->token_value, "@object") == 0) {
+            ctx->current_symbol->type = LINKER_SYMBOL_TYPE_OBJECT;
+        } else {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid symbol type %s", type_tok->token_value);
+            return -1;
+        }
+    } else {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid directive type");
+        return -1;
+    }
+
+    it = it->next(it);
+
+    return 0;
+}
+
+boolean_t asm_encode_instructions(asm_encoder_ctx_t* ctx) {
+    if(!ctx) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid context");
+        return false;
+    }
+
+    if(!ctx->tokens) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "No tokens to encode");
+        return false;
+    }
+
+    iterator_t* it = list_iterator_create(ctx->tokens);
 
     boolean_t result = true;
 
     while(it->end_of_iterator(it) != 0) {
         const asm_token_t* tok = it->get_item(it);
 
-        if(tok->token_type == ASM_TOKEN_TYPE_INSTRUCTION) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_INFO, "token type: %d tok directive type: %d value: %s", tok->token_type, tok->directive_type, tok->token_value);
+
+        if(tok->token_type == ASM_TOKEN_TYPE_DIRECTIVE) {
+            if(asm_encode_directive(ctx, it) != 0) {
+                result = false;
+                break;
+            }
+        } else if(tok->token_type == ASM_TOKEN_TYPE_LABEL) {
+            if(!hashmap_exists(ctx->current_section->symbols, tok->token_value)) {
+                asm_symbol_t* symbol = memory_malloc(sizeof(asm_symbol_t));
+
+                if(!symbol) {
+                    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for symbol %s", tok->token_value);
+                    result = false;
+
+                    break;
+                }
+
+                symbol->offset = buffer_get_position(ctx->current_section->data);
+                symbol->scope = LINKER_SYMBOL_SCOPE_LOCAL;
+                symbol->type = LINKER_SYMBOL_TYPE_SYMBOL;
+                symbol->name = strdup(tok->token_value);
+
+                hashmap_put(ctx->current_section->symbols, symbol->name, symbol);
+            } else {
+                asm_symbol_t* symbol = (asm_symbol_t*)hashmap_get(ctx->current_section->symbols, tok->token_value);
+
+                if(symbol->type != LINKER_SYMBOL_TYPE_FUNCTION) {
+                    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Symbol %s already exists", tok->token_value);
+                    result = false;
+
+                    break;
+                }
+
+                symbol->offset = buffer_get_position(ctx->current_section->data);
+            }
+
+            it = it->next(it);
+        } else if(tok->token_type == ASM_TOKEN_TYPE_INSTRUCTION) {
             if(strcmp("lock", tok->token_value) == 0) {
-                buffer_append_byte(out, ASM_INSTRUCTION_PREFIX_LOCK);
+                buffer_append_byte(ctx->current_section->data, ASM_INSTRUCTION_PREFIX_LOCK);
 
                 it = it->next(it);
 
@@ -544,7 +867,7 @@ boolean_t asm_encode_instructions(list_t* tokens, buffer_t* out, list_t* relocs)
             }
 
             if(strcmp("rep", tok->token_value) == 0 || strcmp("repe", tok->token_value) == 0 || strcmp("repz", tok->token_value) == 0) {
-                buffer_append_byte(out, ASM_INSTRUCTION_PREFIX_REP);
+                buffer_append_byte(ctx->current_section->data, ASM_INSTRUCTION_PREFIX_REP);
 
                 it = it->next(it);
 
@@ -552,20 +875,21 @@ boolean_t asm_encode_instructions(list_t* tokens, buffer_t* out, list_t* relocs)
             }
 
             if(strcmp("repne", tok->token_value) == 0 || strcmp("repnz", tok->token_value) == 0) {
-                buffer_append_byte(out, ASM_INSTRUCTION_PREFIX_REPNE);
+                buffer_append_byte(ctx->current_section->data, ASM_INSTRUCTION_PREFIX_REPNE);
 
                 it = it->next(it);
 
                 continue;
             }
 
-            if(!asm_encode_instruction(it, out, relocs)) {
+            if(!asm_encode_instruction(it, ctx->current_section->data, ctx->current_section->relocs)) {
                 result = false;
 
                 break;
             }
 
         } else {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token type %i", tok->token_type);
             result = false;
 
             break;
