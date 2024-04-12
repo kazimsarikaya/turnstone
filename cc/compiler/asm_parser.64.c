@@ -89,6 +89,10 @@ asm_directive_type_t asm_parser_get_directive_type(const char_t* str) {
         return ASM_DIRECTIVE_TYPE_FILE;
     } else if(strcmp(str, ".globl") == 0) {
         return ASM_DIRECTIVE_TYPE_GLOBAL;
+    } else if(strcmp(str, ".extern") == 0) {
+        return ASM_DIRECTIVE_TYPE_EXTERN;
+    } else if(strcmp(str, ".local") == 0) {
+        return ASM_DIRECTIVE_TYPE_LOCAL;
     } else if(strcmp(str, ".internal") == 0) {
         return ASM_DIRECTIVE_TYPE_INTERNAL;
     } else if(strcmp(str, ".long") == 0) {

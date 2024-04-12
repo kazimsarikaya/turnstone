@@ -55,23 +55,34 @@ uint32_t main(uint32_t argc, char_t** argv) {
     buffer_destroy(inbuf);
     memory_free(in_data);
 
-    asm_parser_print_tokens(tokens);
+    // asm_parser_print_tokens(tokens);
 
+    asm_encoder_ctx_t* ctx = memory_malloc(sizeof(asm_encoder_ctx_t));
 
-    buffer_t* outbuf = buffer_new_with_capacity(NULL, 1024);
+    if(ctx == NULL) {
+        print_error("cannot alloc encoder context");
+        asm_parser_destroy_tokens(tokens);
 
-    list_t* relocs = list_create_list();
+        return -1;
+    }
 
-    int8_t result = asm_encode_instructions(tokens, outbuf, relocs);
+    ctx->tokens = tokens;
 
-    asm_encoder_print_relocs(relocs);
+    int8_t result = asm_encode_instructions(ctx);
 
-    asm_encoder_destroy_relocs(relocs);
     asm_parser_destroy_tokens(tokens);
 
     if(result == false) {
         print_error("cannot encode instructions");
+        asm_encoder_destroy_context(ctx);
+
+        return -1;
     }
+
+    buffer_t* outbuf = buffer_new();
+    asm_encoder_dump(ctx, outbuf);
+
+    asm_encoder_destroy_context(ctx);
 
     fd = fopen(argv[2], "w");
     uint64_t length = 0;
@@ -80,6 +91,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     fwrite(out_data, 1, length, fd);
     memory_free(out_data);
     fclose(fd);
+
 
     return 0;
 }
