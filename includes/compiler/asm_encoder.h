@@ -36,7 +36,9 @@ typedef struct asm_register_t {
     uint8_t   register_index;
     uint8_t   register_size;
     boolean_t force_rex;
+    boolean_t is_segment;
     boolean_t is_control;
+    boolean_t is_debug;
 } asm_register_t;
 
 typedef struct asm_instruction_param_t {

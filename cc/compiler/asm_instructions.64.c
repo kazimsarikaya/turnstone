@@ -5,6 +5,7 @@
 
 #include <compiler/asm_instructions.h>
 #include <strings.h>
+#include <logging.h>
 
 MODULE("turnstone.compiler.assembler");
 
@@ -41,6 +42,11 @@ const asm_instruction_mnemonic_map_t asm_instruction_mnemonic_map[] = {
 
 
     {"or", ASM_INSTRUCTION_MNEMONIC_OR, 3, 3, 32, 32, 0},
+
+    {"pop", ASM_INSTRUCTION_MNEMONIC_POP, 2, 2, 16, 64, 0},
+    {"popf", ASM_INSTRUCTION_MNEMONIC_POPF, 1, 1, 0, 0, 0},
+    {"push", ASM_INSTRUCTION_MNEMONIC_PUSH, 2, 2, 16, 64, 0},
+    {"pushf", ASM_INSTRUCTION_MNEMONIC_PUSHF, 1, 1, 0, 0, 0},
 
 
     {"sgdt", ASM_INSTRUCTION_MNEMONIC_SGDT, 2, 2, 0, 0, 0},
@@ -452,6 +458,109 @@ const asm_instruction_t asm_instructions[] = {
      1, {0x0b, }, true, false, 'r', false, false, true, true, ASM_INSTRUCTION_OPERAND_ENCODE_REG_RM, },
 
 
+    {"pop", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_GS},
+     2, {0x0f, 0xa9, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_GS},
+     2, {0x0f, 0xa9, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_GS},
+     2, {0x0f, 0xa9, }, false, false, 0, true, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_FS},
+     2, {0x0f, 0xa1, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_FS},
+     2, {0x0f, 0xa1, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_FS},
+     2, {0x0f, 0xa1, }, false, false, 0, true, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_SS},
+     1, {0x17, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_ES},
+     1, {0x07, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_DS},
+     1, {0x1f, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_R_64},
+     1, {0x58, }, false, true, 'r', false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_R_32},
+     1, {0x58, }, false, true, 'r', false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_R_16},
+     1, {0x58, }, false, true, 'r', true, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"pop", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_R_OR_M_64},
+     1, {0x8f, }, true, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_RM_REG, },
+    {"pop", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_R_OR_M_32},
+     1, {0x8f, }, true, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_RM_REG, },
+    {"pop", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_POP, ASM_INSTRUCTION_MNEMONIC_R_OR_M_16},
+     1, {0x8f, }, true, false, 0, true, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_RM_REG, },
+
+
+
+
+
+    {"push", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_GS},
+     2, {0x0f, 0xa8, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_FS},
+     2, {0x0f, 0xa0, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_ES},
+     1, {0x06, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_DS},
+     1, {0x1e, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_SS},
+     1, {0x16, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_CS},
+     1, {0x0e, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_IMM_8},
+     1, {0x6A, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_IMM, },
+    {"push", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_IMM_32},
+     1, {0x68, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_IMM, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_IMM_16},
+     1, {0x68, }, false, false, 0, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_IMM, },
+    {"push", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_R_64},
+     1, {0x50, }, false, true, 'r', false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_R_32},
+     1, {0x50, }, false, true, 'r', false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_R_16},
+     1, {0x50, }, false, true, 'r', true, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_NULL, },
+    {"push", true, false,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_R_OR_M_64},
+     1, {0xff, }, true, false, 6, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_REG_RM, },
+    {"push", false, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_R_OR_M_32},
+     1, {0xff, }, true, false, 6, false, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_REG_RM, },
+    {"push", true, true,
+     2, {ASM_INSTRUCTION_MNEMONIC_PUSH, ASM_INSTRUCTION_MNEMONIC_R_OR_M_16},
+     1, {0xff, }, true, false, 6, true, false, false, false, ASM_INSTRUCTION_OPERAND_ENCODE_REG_RM, },
+
+
+
+
+
+
+
+
 
 
 
@@ -622,6 +731,8 @@ const asm_instruction_t asm_instructions[] = {
 
 
 asm_instruction_mnemonic_t asm_instruction_mnemonic_get_by_param(asm_instruction_param_t* param, uint8_t operand_size, uint8_t mem_operand_size) {
+    PRINTLOG(COMPILER_ASSEMBLER, LOG_TRACE, "param->type: %d", param->type);
+
     if(param->type == ASM_INSTRUCTION_PARAM_TYPE_IMMEDIATE) {
         uint8_t imm_size = param->immediate_size;
 
@@ -648,6 +759,103 @@ asm_instruction_mnemonic_t asm_instruction_mnemonic_get_by_param(asm_instruction
     }
 
     if(param->type == ASM_INSTRUCTION_PARAM_TYPE_REGISTER) {
+        if(param->registers[0].is_control) {
+            switch(param->registers[0].register_index) {
+            case 0:
+                return ASM_INSTRUCTION_MNEMONIC_CR0;
+            case 1:
+                return ASM_INSTRUCTION_MNEMONIC_CR1;
+            case 2:
+                return ASM_INSTRUCTION_MNEMONIC_CR2;
+            case 3:
+                return ASM_INSTRUCTION_MNEMONIC_CR3;
+            case 4:
+                return ASM_INSTRUCTION_MNEMONIC_CR4;
+            case 5:
+                return ASM_INSTRUCTION_MNEMONIC_CR5;
+            case 6:
+                return ASM_INSTRUCTION_MNEMONIC_CR6;
+            case 7:
+                return ASM_INSTRUCTION_MNEMONIC_CR7;
+            case 8:
+                return ASM_INSTRUCTION_MNEMONIC_CR8;
+            case 9:
+                return ASM_INSTRUCTION_MNEMONIC_CR9;
+            case 10:
+                return ASM_INSTRUCTION_MNEMONIC_CR10;
+            case 11:
+                return ASM_INSTRUCTION_MNEMONIC_CR11;
+            case 12:
+                return ASM_INSTRUCTION_MNEMONIC_CR12;
+            case 13:
+                return ASM_INSTRUCTION_MNEMONIC_CR13;
+            case 14:
+                return ASM_INSTRUCTION_MNEMONIC_CR14;
+            case 15:
+                return ASM_INSTRUCTION_MNEMONIC_CR15;
+            default:
+                return ASM_INSTRUCTION_MNEMONIC_NULL;
+            }
+        }
+
+        if(param->registers[0].is_debug) {
+            switch(param->registers[0].register_index) {
+            case 0:
+                return ASM_INSTRUCTION_MNEMONIC_DR0;
+            case 1:
+                return ASM_INSTRUCTION_MNEMONIC_DR1;
+            case 2:
+                return ASM_INSTRUCTION_MNEMONIC_DR2;
+            case 3:
+                return ASM_INSTRUCTION_MNEMONIC_DR3;
+            case 4:
+                return ASM_INSTRUCTION_MNEMONIC_DR4;
+            case 5:
+                return ASM_INSTRUCTION_MNEMONIC_DR5;
+            case 6:
+                return ASM_INSTRUCTION_MNEMONIC_DR6;
+            case 7:
+                return ASM_INSTRUCTION_MNEMONIC_DR7;
+            case 8:
+                return ASM_INSTRUCTION_MNEMONIC_DR8;
+            case 9:
+                return ASM_INSTRUCTION_MNEMONIC_DR9;
+            case 10:
+                return ASM_INSTRUCTION_MNEMONIC_DR10;
+            case 11:
+                return ASM_INSTRUCTION_MNEMONIC_DR11;
+            case 12:
+                return ASM_INSTRUCTION_MNEMONIC_DR12;
+            case 13:
+                return ASM_INSTRUCTION_MNEMONIC_DR13;
+            case 14:
+                return ASM_INSTRUCTION_MNEMONIC_DR14;
+            case 15:
+                return ASM_INSTRUCTION_MNEMONIC_DR15;
+            default:
+                return ASM_INSTRUCTION_MNEMONIC_NULL;
+            }
+        }
+
+        if(param->registers[0].is_segment) {
+            switch(param->registers[0].register_index) {
+            case 0:
+                return ASM_INSTRUCTION_MNEMONIC_ES;
+            case 1:
+                return ASM_INSTRUCTION_MNEMONIC_CS;
+            case 2:
+                return ASM_INSTRUCTION_MNEMONIC_SS;
+            case 3:
+                return ASM_INSTRUCTION_MNEMONIC_DS;
+            case 4:
+                return ASM_INSTRUCTION_MNEMONIC_FS;
+            case 5:
+                return ASM_INSTRUCTION_MNEMONIC_GS;
+            default:
+                return ASM_INSTRUCTION_MNEMONIC_NULL;
+            }
+        }
+
         if(param->registers[0].register_index == 0) {
             // rax, eax, ax, al
             switch(param->registers[0].register_size) {
@@ -666,6 +874,8 @@ asm_instruction_mnemonic_t asm_instruction_mnemonic_get_by_param(asm_instruction
 
         if(param->registers[0].register_size == 128) {
             switch(param->registers[0].register_index) {
+            case 0:
+                return ASM_INSTRUCTION_MNEMONIC_XMM0;
             case 1:
                 return ASM_INSTRUCTION_MNEMONIC_XMM1;
             case 2:

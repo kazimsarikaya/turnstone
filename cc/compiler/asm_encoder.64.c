@@ -18,117 +18,133 @@ typedef struct asm_register_map_t {
 } asm_register_map_t;
 
 const asm_register_map_t asm_register_map[] = {
-    {.name = "al", .reg = { .register_index = 0, .register_size  = 8, .force_rex = false, .is_control = false } },
-    {.name = "ax", .reg = { .register_index = 0, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "eax", .reg = { .register_index = 0, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rax", .reg = { .register_index = 0, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm0", .reg = { .register_index = 0, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "es", .reg = { .register_index = 0, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "cr0", .reg = { .register_index = 0, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "cl", .reg = { .register_index = 1, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "cx", .reg = { .register_index = 1, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "ecx", .reg = { .register_index = 1, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rcx", .reg = { .register_index = 1, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm1", .reg = { .register_index = 1, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cs", .reg = { .register_index = 1, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "cr1", .reg = { .register_index = 1, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "dl", .reg = { .register_index = 2, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "dx", .reg = { .register_index = 2, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "edx", .reg = { .register_index = 2, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rdx", .reg = { .register_index = 2, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm2", .reg = { .register_index = 2, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "ss", .reg = { .register_index = 2, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "cr2", .reg = { .register_index = 2, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "bl", .reg = { .register_index = 3, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "bx", .reg = { .register_index = 3, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "ebx", .reg = { .register_index = 3, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rbx", .reg = { .register_index = 3, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm3", .reg = { .register_index = 3, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "ds", .reg = { .register_index = 3, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "cr3", .reg = { .register_index = 3, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "ah", .reg = { .register_index = 4, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "spl", .reg = { .register_index = 4, .register_size = 8, .force_rex = true, .is_control = false } },
-    {.name = "sp", .reg = { .register_index = 4, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "esp", .reg = { .register_index = 4, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rsp", .reg = { .register_index = 4, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm4", .reg = { .register_index = 4, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "fs", .reg = { .register_index = 4, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "cr4", .reg = { .register_index = 4, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "ch", .reg = { .register_index = 5, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "bpl", .reg = { .register_index = 5, .register_size = 8, .force_rex = true, .is_control = false } },
-    {.name = "bp", .reg = { .register_index = 5, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "ebp", .reg = { .register_index = 5, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rbp", .reg = { .register_index = 5, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm5", .reg = { .register_index = 5, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "gs", .reg = { .register_index = 5, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "cr5", .reg = { .register_index = 5, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "dh", .reg = { .register_index = 6, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "sil", .reg = { .register_index = 6, .register_size = 8, .force_rex = true, .is_control = false } },
-    {.name = "si", .reg = { .register_index = 6, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "esi", .reg = { .register_index = 6, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rsi", .reg = { .register_index = 6, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm6", .reg = { .register_index = 6, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr6", .reg = { .register_index = 6, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "bh", .reg = { .register_index = 7, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "dil", .reg = { .register_index = 7, .register_size = 8, .force_rex = true, .is_control = false } },
-    {.name = "di", .reg = { .register_index = 7, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "edi", .reg = { .register_index = 7, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "rdi", .reg = { .register_index = 7, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm7", .reg = { .register_index = 7, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr7", .reg = { .register_index = 7, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r8b", .reg = { .register_index = 8, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r8w", .reg = { .register_index = 8, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r8d", .reg = { .register_index = 8, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r8", .reg = { .register_index = 8, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm8", .reg = { .register_index = 8, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr8", .reg = { .register_index = 8, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r9b", .reg = { .register_index = 9, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r9w", .reg = { .register_index = 9, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r9d", .reg = { .register_index = 9, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r9", .reg = { .register_index = 9, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm9", .reg = { .register_index = 9, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr9", .reg = { .register_index = 9, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r10b", .reg = { .register_index = 10, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r10w", .reg = { .register_index = 10, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r10d", .reg = { .register_index = 10, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r10", .reg = { .register_index = 10, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm10", .reg = { .register_index = 10, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr10", .reg = { .register_index = 10, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r11b", .reg = { .register_index = 11, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r11w", .reg = { .register_index = 11, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r11d", .reg = { .register_index = 11, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r11", .reg = { .register_index = 11, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm11", .reg = { .register_index = 11, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr11", .reg = { .register_index = 11, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r12b", .reg = { .register_index = 12, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r12w", .reg = { .register_index = 12, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r12d", .reg = { .register_index = 12, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r12", .reg = { .register_index = 12, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm12", .reg = { .register_index = 12, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr12", .reg = { .register_index = 12, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r13b", .reg = { .register_index = 13, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r13w", .reg = { .register_index = 13, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r13d", .reg = { .register_index = 13, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r13", .reg = { .register_index = 13, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm13", .reg = { .register_index = 13, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr13", .reg = { .register_index = 13, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r14b", .reg = { .register_index = 14, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r14w", .reg = { .register_index = 14, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r14d", .reg = { .register_index = 14, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r14", .reg = { .register_index = 14, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm14", .reg = { .register_index = 14, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr14", .reg = { .register_index = 14, .register_size = 32, .force_rex = false, .is_control = true } },
-    {.name = "r15b", .reg = { .register_index = 15, .register_size = 8, .force_rex = false, .is_control = false } },
-    {.name = "r15w", .reg = { .register_index = 15, .register_size = 16, .force_rex = false, .is_control = false } },
-    {.name = "r15d", .reg = { .register_index = 15, .register_size = 32, .force_rex = false, .is_control = false } },
-    {.name = "r15", .reg = { .register_index = 15, .register_size = 64, .force_rex = false, .is_control = false } },
-    {.name = "xmm15", .reg = { .register_index = 15, .register_size = 128, .force_rex = false, .is_control = false } },
-    {.name = "cr15", .reg = { .register_index = 15, .register_size = 32, .force_rex = false, .is_control = true } },
+    {.name = "al", .reg = { .register_index = 0, .register_size  = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "ax", .reg = { .register_index = 0, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "eax", .reg = { .register_index = 0, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rax", .reg = { .register_index = 0, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm0", .reg = { .register_index = 0, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "es", .reg = { .register_index = 0, .register_size = 16, .force_rex = false, .is_segment = true, .is_control = false, .is_debug = false } },
+    {.name = "cr0", .reg = { .register_index = 0, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr0", .reg = { .register_index = 0, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "cl", .reg = { .register_index = 1, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cx", .reg = { .register_index = 1, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "ecx", .reg = { .register_index = 1, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rcx", .reg = { .register_index = 1, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm1", .reg = { .register_index = 1, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cs", .reg = { .register_index = 1, .register_size = 16, .force_rex = false, .is_segment = true, .is_control = false, .is_debug = false } },
+    {.name = "cr1", .reg = { .register_index = 1, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr1", .reg = { .register_index = 1, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "dl", .reg = { .register_index = 2, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "dx", .reg = { .register_index = 2, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "edx", .reg = { .register_index = 2, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rdx", .reg = { .register_index = 2, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm2", .reg = { .register_index = 2, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "ss", .reg = { .register_index = 2, .register_size = 16, .force_rex = false, .is_segment = true, .is_control = false, .is_debug = false } },
+    {.name = "cr2", .reg = { .register_index = 2, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr2", .reg = { .register_index = 2, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "bl", .reg = { .register_index = 3, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "bx", .reg = { .register_index = 3, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "ebx", .reg = { .register_index = 3, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rbx", .reg = { .register_index = 3, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm3", .reg = { .register_index = 3, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "ds", .reg = { .register_index = 3, .register_size = 16, .force_rex = false, .is_segment = true, .is_control = false, .is_debug = false } },
+    {.name = "cr3", .reg = { .register_index = 3, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr3", .reg = { .register_index = 3, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "ah", .reg = { .register_index = 4, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "spl", .reg = { .register_index = 4, .register_size = 8, .force_rex = true, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "sp", .reg = { .register_index = 4, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "esp", .reg = { .register_index = 4, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rsp", .reg = { .register_index = 4, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm4", .reg = { .register_index = 4, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "fs", .reg = { .register_index = 4, .register_size = 16, .force_rex = false, .is_segment = true, .is_control = false, .is_debug = false } },
+    {.name = "cr4", .reg = { .register_index = 4, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr4", .reg = { .register_index = 4, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "ch", .reg = { .register_index = 5, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "bpl", .reg = { .register_index = 5, .register_size = 8, .force_rex = true, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "bp", .reg = { .register_index = 5, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "ebp", .reg = { .register_index = 5, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rbp", .reg = { .register_index = 5, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm5", .reg = { .register_index = 5, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "gs", .reg = { .register_index = 5, .register_size = 16, .force_rex = false, .is_segment = true, .is_control = false, .is_debug = false } },
+    {.name = "cr5", .reg = { .register_index = 5, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr5", .reg = { .register_index = 5, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "dh", .reg = { .register_index = 6, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "sil", .reg = { .register_index = 6, .register_size = 8, .force_rex = true, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "si", .reg = { .register_index = 6, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "esi", .reg = { .register_index = 6, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rsi", .reg = { .register_index = 6, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm6", .reg = { .register_index = 6, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr6", .reg = { .register_index = 6, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr6", .reg = { .register_index = 6, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "bh", .reg = { .register_index = 7, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "dil", .reg = { .register_index = 7, .register_size = 8, .force_rex = true, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "di", .reg = { .register_index = 7, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "edi", .reg = { .register_index = 7, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "rdi", .reg = { .register_index = 7, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm7", .reg = { .register_index = 7, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr7", .reg = { .register_index = 7, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr7", .reg = { .register_index = 7, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r8b", .reg = { .register_index = 8, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r8w", .reg = { .register_index = 8, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r8d", .reg = { .register_index = 8, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r8", .reg = { .register_index = 8, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm8", .reg = { .register_index = 8, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr8", .reg = { .register_index = 8, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr8", .reg = { .register_index = 8, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r9b", .reg = { .register_index = 9, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r9w", .reg = { .register_index = 9, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r9d", .reg = { .register_index = 9, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r9", .reg = { .register_index = 9, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm9", .reg = { .register_index = 9, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr9", .reg = { .register_index = 9, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr9", .reg = { .register_index = 9, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r10b", .reg = { .register_index = 10, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r10w", .reg = { .register_index = 10, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r10d", .reg = { .register_index = 10, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r10", .reg = { .register_index = 10, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm10", .reg = { .register_index = 10, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr10", .reg = { .register_index = 10, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr10", .reg = { .register_index = 10, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r11b", .reg = { .register_index = 11, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r11w", .reg = { .register_index = 11, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r11d", .reg = { .register_index = 11, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r11", .reg = { .register_index = 11, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm11", .reg = { .register_index = 11, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr11", .reg = { .register_index = 11, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr11", .reg = { .register_index = 11, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r12b", .reg = { .register_index = 12, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r12w", .reg = { .register_index = 12, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r12d", .reg = { .register_index = 12, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r12", .reg = { .register_index = 12, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm12", .reg = { .register_index = 12, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr12", .reg = { .register_index = 12, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr12", .reg = { .register_index = 12, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r13b", .reg = { .register_index = 13, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r13w", .reg = { .register_index = 13, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r13d", .reg = { .register_index = 13, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r13", .reg = { .register_index = 13, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm13", .reg = { .register_index = 13, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr13", .reg = { .register_index = 13, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr13", .reg = { .register_index = 13, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r14b", .reg = { .register_index = 14, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r14w", .reg = { .register_index = 14, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r14d", .reg = { .register_index = 14, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r14", .reg = { .register_index = 14, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm14", .reg = { .register_index = 14, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr14", .reg = { .register_index = 14, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr14", .reg = { .register_index = 14, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
+    {.name = "r15b", .reg = { .register_index = 15, .register_size = 8, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r15w", .reg = { .register_index = 15, .register_size = 16, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r15d", .reg = { .register_index = 15, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "r15", .reg = { .register_index = 15, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "xmm15", .reg = { .register_index = 15, .register_size = 128, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = false } },
+    {.name = "cr15", .reg = { .register_index = 15, .register_size = 32, .force_rex = false, .is_segment = false, .is_control = true, .is_debug = false } },
+    {.name = "dr15", .reg = { .register_index = 15, .register_size = 64, .force_rex = false, .is_segment = false, .is_control = false, .is_debug = true } },
 };
 
 #define ASM_REGISTER_COUNT (sizeof(asm_register_map) / sizeof(asm_register_map_t))
 
-boolean_t asm_parse_number(char_t* data, uint64_t* result);
+boolean_t asm_parse_number(const char_t* data, uint64_t* result);
 boolean_t asm_parse_instruction_param(const asm_token_t* tok, asm_instruction_param_t* param);
 boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruction_param_t* param);
 boolean_t asm_parse_immediate_param(char_t* data, asm_instruction_param_t* param);
@@ -138,7 +154,7 @@ boolean_t asm_encode_modrm_sib(asm_instruction_param_t op, boolean_t* need_sib, 
                                boolean_t* has_displacement, uint8_t* disp_size);
 boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* relocs);
 
-boolean_t asm_parse_number(char_t* data, uint64_t* result) {
+boolean_t asm_parse_number(const char_t* data, uint64_t* result) {
     boolean_t is_hex = false;
 
     if(data[0] == '0' && data[1] == 'x') {
@@ -285,6 +301,8 @@ boolean_t asm_parse_memory_param(char_t* data, asm_instruction_param_t* param) {
             }
 
             if(end_paran) {
+                // if we have no scale default is 1
+                param->scale = 1;
                 return true;
             }
 
@@ -367,6 +385,7 @@ boolean_t asm_parse_register_param(char_t* reg_str, uint8_t reg_idx, asm_instruc
 
     for(uint8_t i = 0; i < ASM_REGISTER_COUNT; i++) {
         if(strcmp(reg_str, asm_register_map[i].name) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_INFO, "Register found: %s", reg_str);
             param->registers[reg_idx] = asm_register_map[i].reg;
             return true;
         }
@@ -603,8 +622,27 @@ int8_t asm_encoder_dump(asm_encoder_ctx_t* ctx, buffer_t* outbuf) {
         return -1;
     }
 
+    // dump sections
 
-    NOTIMPLEMENTEDLOG(COMPILER_ASSEMBLER);
+    iterator_t* it = hashmap_iterator_create(ctx->sections);
+
+    if(!it) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to create iterator for sections");
+        return -1;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        const asm_section_t* section = it->get_item(it);
+
+        buffer_seek(section->data, 0, BUFFER_SEEK_DIRECTION_START);
+
+        buffer_append_buffer(outbuf, section->data);
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+
     return 0;
 }
 
@@ -791,6 +829,108 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
             PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid symbol type %s", type_tok->token_value);
             return -1;
         }
+    } else if(tok->directive_type == ASM_DIRECTIVE_TYPE_SIZE) {
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
+            return -1;
+        }
+
+        const asm_token_t* sym_tok = it->get_item(it);
+
+        if(!sym_tok) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token");
+            return -1;
+        }
+
+        if(!ctx->current_symbol) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "No current symbol");
+            return -1;
+        }
+
+        const char_t* sym_name = sym_tok->token_value;
+
+        if(strcmp(ctx->current_symbol->name, sym_name) != 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Symbol name mismatch %s %s", ctx->current_symbol->name, sym_name);
+            return -1;
+        }
+
+        it = it->next(it);
+
+        if(it->end_of_iterator(it) == 0) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Unexpected end of iterator");
+            return -1;
+        }
+
+        const asm_token_t* size_tok = it->get_item(it);
+
+        if(!size_tok) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid token");
+            return -1;
+        }
+
+        uint64_t size = 0;
+
+        const char_t* size_str = size_tok->token_value;
+
+        if(size_str[0] == '.') {
+            // relative size
+            size_str++;
+
+            // remove space until - or +
+            while(*size_str && (*size_str == ' ' || *size_str == '\t')) {
+                size_str++;
+            }
+
+            boolean_t is_add = false;
+
+            size = buffer_get_position(ctx->current_section->data);
+
+            if(*size_str == '+') {
+                is_add = true;
+                size_str++;
+            } else if(*size_str == '-') {
+                size_str++;
+            }
+
+            // remove space until number or label
+            while(*size_str && (*size_str == ' ' || *size_str == '\t')) {
+                size_str++;
+            }
+
+            uint64_t tmp_size = 0;
+
+            if(isdigit(*size_str)) {
+                if(!asm_parse_number(size_str, &tmp_size)) {
+                    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid size %s", size_str);
+                    return -1;
+                }
+            } else {
+                // it is label
+                if(!hashmap_exists(ctx->current_section->symbols, size_str)) {
+                    PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid label %s", size_str);
+                    return -1;
+                }
+
+                asm_symbol_t* symbol = (asm_symbol_t*)hashmap_get(ctx->current_section->symbols, size_str);
+
+                tmp_size = symbol->offset;
+            }
+
+            if(is_add) {
+                size += tmp_size;
+            } else {
+                size -= tmp_size;
+            }
+
+
+        } else if(!asm_parse_number(size_tok->token_value, &size)) {
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid size %s", size_tok->token_value);
+            return -1;
+        }
+
+        ctx->current_symbol->size = size;
     } else {
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid directive type");
         return -1;
@@ -1117,7 +1257,18 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
         modrm |= 0xc0;
     }
 
-    if(instr->has_modrm) {
+    uint8_t op_codes[4] = {0};
+
+    memory_memcopy(instr->opcodes, op_codes, instr->opcode_length);
+
+    if(instr->merge_modrm) {
+        op_codes[0] |= (op_regs[0].registers[0].register_index & 0x07);
+
+        if(op_regs[0].registers[0].register_index > 7) {
+            need_rex = true;
+            rex |= 0x01;
+        }
+    } else if(instr->has_modrm) {
         if(instr->modrm != 'r') {
             modrm |= (instr->modrm & 0x07) << 3;
 
@@ -1129,6 +1280,8 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
                     rex |= 0x01;
                 }
             }
+
+            PRINTLOG(COMPILER_ASSEMBLER, LOG_INFO, "has mem operand %i need sib %i", has_mem_operand, need_sib);
 
             if(has_mem_operand && need_sib) {
                 modrm |= 0x04;
@@ -1193,7 +1346,11 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
             need_rex = true;
             rex |= 0x04;
         }
-    } else if(instr->instruction_length > 1) {
+    } else if(instr->operand_encode == ASM_INSTRUCTION_OPERAND_ENCODE_IMM && !has_imm_operand) {
+        PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Instruction requires immediate operand");
+
+        return false;
+    } else if(instr->instruction_length > 1 && instr->operand_encode != ASM_INSTRUCTION_OPERAND_ENCODE_IMM) {
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Instruction does not support register operand");
 
         return false;
@@ -1204,7 +1361,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
         buffer_append_byte(outbuf, rex);
     }
 
-    buffer_append_bytes(outbuf, (uint8_t*)instr->opcodes, instr->opcode_length);
+    buffer_append_bytes(outbuf, op_codes, instr->opcode_length);
 
     if(instr->has_modrm) {
         buffer_append_byte(outbuf, modrm);
