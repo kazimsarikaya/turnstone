@@ -646,6 +646,9 @@ int8_t asm_encoder_dump(asm_encoder_ctx_t* ctx, buffer_t* outbuf) {
     return 0;
 }
 
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
     if(!ctx) {
         PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Invalid context");
@@ -764,6 +767,8 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
                 PRINTLOG(COMPILER_ASSEMBLER, LOG_ERROR, "Failed to allocate memory for symbol");
                 return -1;
             }
+        } else {
+            symbol = ctx->current_symbol;
         }
 
         symbol->name = strdup(label_tok->token_value);
@@ -940,6 +945,7 @@ static int8_t asm_encode_directive(asm_encoder_ctx_t* ctx, iterator_t* it) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 boolean_t asm_encode_instructions(asm_encoder_ctx_t* ctx) {
     if(!ctx) {
