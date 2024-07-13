@@ -44,6 +44,9 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
     if(!network_ethernet_is_mac_address_eq(recv_eth_packet->destination, our_mac) &&
        !network_ethernet_is_mac_address_eq(recv_eth_packet->destination, BROADCAST_MAC)) {
         PRINTLOG(NETWORK, LOG_TRACE, "destination is not this machine, discarding packet");
+        PRINTLOG(NETWORK, LOG_TRACE, "destination mac: %02x:%02x:%02x:%02x:%02x:%02x",
+                 recv_eth_packet->destination[0], recv_eth_packet->destination[1], recv_eth_packet->destination[2],
+                 recv_eth_packet->destination[3], recv_eth_packet->destination[4], recv_eth_packet->destination[5]);
 
         return NULL;
     }

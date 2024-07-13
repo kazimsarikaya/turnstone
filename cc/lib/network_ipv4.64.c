@@ -266,12 +266,16 @@ list_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, voi
     }
 
     if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_ICMPV4) {
+        PRINTLOG(NETWORK, LOG_TRACE, "icmp packet received");
+
         if(!ni) {
+            PRINTLOG(NETWORK, LOG_TRACE, "network info not found for mac address");
             memory_free(packet_data);
             return NULL;
         }
 
         if(ni && !ni->is_ipv4_address_set) {
+            PRINTLOG(NETWORK, LOG_TRACE, "ip address is not set, discarding packet");
             memory_free(packet_data);
             return NULL;
         }
@@ -332,6 +336,10 @@ list_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, voi
 }
 
 list_t* network_ipv4_create_packet_from_icmp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len) {
+    if(icmp_hdr == NULL) { // empty packet
+        return NULL;
+    }
+
     uint16_t packet_len = sizeof(network_ipv4_header_t) + icmp_packet_len;
 
     network_ipv4_header_t* ipv4_packet = memory_malloc(packet_len);

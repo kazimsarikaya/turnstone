@@ -39,21 +39,25 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
     const network_info_t* ni = map_get(network_info_map, mac);
 
     if(!ni) {
+        PRINTLOG(NETWORK, LOG_TRACE, "network info not found for mac address");
         return NULL;
     }
 
     if(!ni->is_ipv4_address_set) {
+        PRINTLOG(NETWORK, LOG_TRACE, "ip address is not set, discarding packet");
         return NULL;
     }
 
 
     if(!network_ipv4_is_address_eq(ni->ipv4_address, src_arp_packet->target_ip)) {
+        PRINTLOG(NETWORK, LOG_TRACE, "target ip address is not this machine, discarding packet");
         return NULL;
     }
 
     network_arp_t* arp_packet = memory_malloc(sizeof(network_arp_t));
 
     if(arp_packet == NULL) {
+        PRINTLOG(NETWORK, LOG_ERROR, "failed to allocate memory for arp packet");
         return NULL;
     }
 
