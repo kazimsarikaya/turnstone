@@ -390,6 +390,7 @@ int8_t kmain64(size_t entry_point) {
         usb_driver_t* usb_ms = usb_mass_storage_get_disk_by_id(0);
 
         if(usb_ms) {
+            PRINTLOG(KERNEL, LOG_INFO, "usb mass storage disk 0 found");
             disk_t* usb0 = gpt_get_or_create_gpt_disk(usb_mass_storage_disk_impl_open(usb_ms, 0));
 
             if(usb0) {

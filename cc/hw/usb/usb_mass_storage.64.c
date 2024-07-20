@@ -428,18 +428,33 @@ usb_driver_t* usb_mass_storage_get_disk_by_id(uint64_t id) {
 }
 
 typedef struct usb_mass_storage_disk_impl_context_t {
-    usb_driver_t* usb_mass_storage;
-    uint64_t      block_size;
-    uint8_t       lun;
+    memory_heap_t* heap;
+    usb_driver_t*  usb_mass_storage;
+    uint64_t       block_size;
+    uint8_t        lun;
 } usb_mass_storage_disk_impl_context_t;
 
-uint64_t usb_mass_storage_disk_impl_get_size(const disk_or_partition_t* d);
-uint64_t usb_mass_storage_disk_impl_get_block_size(const disk_or_partition_t* d);
-int8_t   usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
-int8_t   usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
-int8_t   usb_mass_storage_disk_impl_flush(const disk_or_partition_t* d);
-int8_t   usb_mass_storage_disk_impl_close(const disk_or_partition_t* d);
+memory_heap_t* usb_mass_storage_disk_impl_get_heap(const disk_or_partition_t* d);
+uint64_t       usb_mass_storage_disk_impl_get_size(const disk_or_partition_t* d);
+uint64_t       usb_mass_storage_disk_impl_get_block_size(const disk_or_partition_t* d);
+int8_t         usb_mass_storage_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data);
+int8_t         usb_mass_storage_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data);
+int8_t         usb_mass_storage_disk_impl_flush(const disk_or_partition_t* d);
+int8_t         usb_mass_storage_disk_impl_close(const disk_or_partition_t* d);
 
+memory_heap_t* usb_mass_storage_disk_impl_get_heap(const disk_or_partition_t* d){
+    if(d == NULL) {
+        return NULL;
+    }
+
+    usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
+
+    if(ctx == NULL) {
+        return NULL;
+    }
+
+    return ctx->heap;
+}
 
 uint64_t usb_mass_storage_disk_impl_get_size(const disk_or_partition_t* d){
     usb_mass_storage_disk_impl_context_t* ctx = (usb_mass_storage_disk_impl_context_t*)d->context;
@@ -641,6 +656,7 @@ disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_mass_storage, uint8_t 
     }
 
     d->disk.context = ctx;
+    d->disk.get_heap = usb_mass_storage_disk_impl_get_heap;
     d->disk.get_size = usb_mass_storage_disk_impl_get_size;
     d->disk.get_block_size = usb_mass_storage_disk_impl_get_block_size;
     d->disk.write = usb_mass_storage_disk_impl_write;
