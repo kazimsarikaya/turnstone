@@ -1703,8 +1703,8 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     uint64_t padding_after_relocations = 0;
 
-    if(relocation_size % 0x20 != 0) {
-        padding_after_relocations = 0x20 - (relocation_size % 0x20);
+    if(relocation_size % 0x1000 != 0) {
+        padding_after_relocations = 0x1000 - (relocation_size % 0x1000);
     }
 
     efi_image_section_header_t reloc_section = {
@@ -1745,7 +1745,7 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
         .address_of_entrypoint = ctx->entrypoint_address_virtual,
         .base_of_code = 0x1000,
         .section_alignment = 0x1000,
-        .file_alignment = 0x20,
+        .file_alignment = 0x1000,
         .subsystem = EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION,
         .number_of_rva_nd_sizes = 16,
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
@@ -1864,8 +1864,8 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     tmp_buf_len = buffer_get_length(program_buffer);
 
-    if(tmp_buf_len % 0x20) {
-        uint64_t padding_size = 0x20 - (tmp_buf_len % 0x20);
+    if(tmp_buf_len % 0x1000) {
+        uint64_t padding_size = 0x1000 - (tmp_buf_len % 0x1000);
 
         int8_t zero = 0;
 
