@@ -17,9 +17,8 @@ MODULE("turnstone.kernel.db");
 
 boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, list_t* st_list, tosdb_memtable_index_item_t* item, uint64_t index_id);
 boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstable_list_item_t* sli, tosdb_memtable_index_item_t* item, uint64_t index_id);
-int8_t    tosdb_sstable_index_comparator(const void* i1, const void* i2);
 
-int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
+static int8_t tosdb_sstable_index_comparator(const void* i1, const void* i2) {
     const tosdb_memtable_index_item_t* ti1 = (tosdb_memtable_index_item_t*)*((void**)i1);
     const tosdb_memtable_index_item_t* ti2 = (tosdb_memtable_index_item_t*)*((void**)i2);
 
@@ -76,7 +75,7 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         if(index_id == sli->indexes[i].index_id) {
             idx_loc = sli->indexes[i].index_location;
             idx_size = sli->indexes[i].index_size;
-
+            break;
         }
     }
 
