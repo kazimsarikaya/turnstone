@@ -302,10 +302,11 @@ static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t
     return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
 }
 
-static int8_t virtio_gpu_queue_context_create_buffer_resource(uint32_t queue_no, lock_t** lock,
-                                                              uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
-                                                              uint32_t resource_size,
-                                                              virgl_bind_t bind) {
+static int8_t virtio_gpu_queue_context_create_resource_internal(uint32_t queue_no, lock_t** lock,
+                                                                uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
+                                                                uint32_t resource_width, uint32_t resource_height,
+                                                                virgl_bind_t bind,
+                                                                uint32_t format, uint32_t target, uint32_t flags) {
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
@@ -324,59 +325,43 @@ static int8_t virtio_gpu_queue_context_create_buffer_resource(uint32_t queue_no,
     // create_hdr->hdr.padding = 0;
 
     create_hdr->resource_id = resource_id;
-    create_hdr->target = VIRGL_TEXTURE_TARGET_BUFFER;
-    create_hdr->format = VIRGL_FORMAT_R8_UNORM;
+    create_hdr->target = target;
     create_hdr->bind = bind;
-    create_hdr->width = resource_size;
-    create_hdr->height = 1;
-    create_hdr->depth = 1;
-    create_hdr->array_size = 1;
-    create_hdr->last_level = 0;
-    create_hdr->nr_samples = 0;
-    create_hdr->flags = 0;
-
-    descs[desc_index].length = sizeof(virtio_gpu_resource_create_3d_t);
-
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
-}
-
-static int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, lock_t** lock,
-                                                          uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
-                                                          uint32_t resource_width, uint32_t resource_height,
-                                                          boolean_t is_y_0_top) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
-
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
-
-
-    virtio_gpu_resource_create_3d_t* create_hdr = (virtio_gpu_resource_create_3d_t*)offset;
-
-    create_hdr->hdr.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_3D;
-    create_hdr->hdr.flags = fence_id?VIRTIO_GPU_FLAG_FENCE:0;
-    create_hdr->hdr.fence_id = fence_id;
-    create_hdr->hdr.ctx_id = context_id;
-    // create_hdr->hdr.padding = 0;
-
-    create_hdr->resource_id = resource_id;
-    create_hdr->target = VIRGL_TEXTURE_TARGET_2D;
-    create_hdr->format = VIRGL_FORMAT_B8G8R8A8_UNORM;
-    create_hdr->bind = VIRGL_BIND_RENDER_TARGET;
+    create_hdr->format = format;
     create_hdr->width = resource_width;
     create_hdr->height = resource_height;
     create_hdr->depth = 1;
     create_hdr->array_size = 1;
     create_hdr->last_level = 0;
     create_hdr->nr_samples = 0;
-    create_hdr->flags = is_y_0_top?VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP:0;
+    create_hdr->flags = flags;
 
     descs[desc_index].length = sizeof(virtio_gpu_resource_create_3d_t);
 
     return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+}
+
+static inline int8_t virtio_gpu_queue_context_create_buffer_resource(uint32_t queue_no, lock_t** lock,
+                                                                     uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
+                                                                     uint32_t resource_size,
+                                                                     virgl_bind_t bind) {
+    return virtio_gpu_queue_context_create_resource_internal(queue_no, lock,
+                                                             context_id, resource_id, fence_id,
+                                                             resource_size, 1,
+                                                             bind,
+                                                             VIRGL_FORMAT_R8_UNORM, VIRGL_TEXTURE_TARGET_BUFFER, 0);
+}
+
+static inline int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_no, lock_t** lock,
+                                                                 uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
+                                                                 uint32_t resource_width, uint32_t resource_height,
+                                                                 boolean_t is_y_0_top) {
+    return virtio_gpu_queue_context_create_resource_internal(queue_no, lock,
+                                                             context_id, resource_id, fence_id,
+                                                             resource_width, resource_height,
+                                                             VIRGL_BIND_RENDER_TARGET,
+                                                             VIRGL_FORMAT_B8G8R8A8_UNORM, VIRGL_TEXTURE_TARGET_2D,
+                                                             is_y_0_top?VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP:0);
 }
 
 static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
@@ -1134,14 +1119,14 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
 
     if((copy_region.src_box.x + copy_region.src_box.w) > font_pallete_width ||
        (copy_region.src_box.y + copy_region.src_box.h) > font_pallete_height) {
-        video_text_print("invalid glyph: out of bounds of font pallete");
+        video_text_print("invalid glyph: out of bounds of font pallete\n");
         return;
     }
 
     copy_region.dst_resource_id = virtio_gpu_wrapper->resource_ids[0];
 
     if(!copy_region.dst_resource_id) {
-        video_text_print("invalid glyph: no screen resource");
+        video_text_print("invalid glyph: no screen resource\n");
         return;
     }
 
@@ -1152,7 +1137,11 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
 
     if((copy_region.dst_x + copy_region.src_box.w) > virtio_gpu_wrapper->screen_width ||
        (copy_region.dst_y + copy_region.src_box.h) > virtio_gpu_wrapper->screen_height) {
-        video_text_print("invalid glyph: out of bounds of screen");
+        char_t* err_msg = sprintf("invalid glyph: out of bounds of screen: %d %d %d %d %d %d\n",
+                                  copy_region.dst_x, copy_region.dst_y, copy_region.src_box.w, copy_region.src_box.h,
+                                  virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
+        video_text_print(err_msg);
+        memory_free(err_msg);
         return;
     }
 
