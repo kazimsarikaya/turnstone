@@ -483,7 +483,12 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
                         res = network_tcpv4_create_psh_ack_packet_from_connection(connection, data, data_length);
                         extra_data_length = data_length;
                     } else if(dest_port == 80) {
-                        const char* http_response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 12\r\n\r\nHello World!";
+                        const char* http_response = "HTTP/1.1 200 OK\r\n" \
+                                                    "Content-Type: text/plain\r\n" \
+                                                    "Content-Length: 13\r\n" \
+                                                    "X-Operating-System: Turnstone OS\r\n" \
+                                                    "\r\n" \
+                                                    "Hello World!\n";
                         extra_data_length = strlen(http_response);
                         res = network_tcpv4_create_psh_ack_packet_from_connection(connection, (uint8_t*)http_response, strlen(http_response));
                     } else {
