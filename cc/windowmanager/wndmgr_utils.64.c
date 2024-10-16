@@ -441,7 +441,7 @@ list_t* windowmanager_get_input_values(const window_t* window) {
 }
 #pragma GCC diagnostic pop
 
-void windowmanager_move_cursor_to_next_input(window_t* window) {
+void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reverse) {
     if(!window) {
         return;
     }
@@ -470,9 +470,22 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
 
     boolean_t input_found = false;
     const window_input_value_t* first = list_get_data_at_position(inputs, 0);
+    const window_input_value_t* last = list_get_data_at_position(inputs, list_size(inputs) - 1);
     const window_input_value_t* next = NULL;
 
-    for(size_t i = 0; i < list_size(inputs); i++) {
+    size_t end = list_size(inputs) - 1;
+    size_t start = 0;
+    int32_t inc = 1;
+
+    if(is_reverse) {
+        start = end;
+        end = 0;
+        inc = -1;
+    }
+
+    for(size_t i = start;
+        is_reverse ? i >= end : i <= end;
+        i += inc) {
         window_input_value_t* value = (window_input_value_t*)list_get_data_at_position(inputs, i);
 
         if(!input_found && windowmanager_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
@@ -487,7 +500,11 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
     }
 
     if(!input_found || !next) {
-        next = first;
+        if(is_reverse) {
+            next = last;
+        } else {
+            next = first;
+        }
     }
 
     if(!next) {

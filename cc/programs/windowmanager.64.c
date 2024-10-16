@@ -128,7 +128,13 @@ static int8_t windowmanager_main(void) {
                     if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
                         windowmanager_current_window->on_enter(windowmanager_current_window);
                     } else if(kbd_data[i].key == '\t'){
-                        windowmanager_move_cursor_to_next_input(windowmanager_current_window);
+                        boolean_t is_reverse = false;
+
+                        if(kbd_data[i].state.is_shift_pressed) {
+                            is_reverse = true;
+                        }
+
+                        windowmanager_move_cursor_to_next_input(windowmanager_current_window, is_reverse);
                     }else {
                         data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
                     }

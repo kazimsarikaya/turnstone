@@ -74,7 +74,7 @@ boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint3
 boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** result);
 int8_t    windowmanager_set_window_text(window_t* window, const char_t* text);
 list_t*   windowmanager_get_input_values(const window_t* window);
-void      windowmanager_move_cursor_to_next_input(window_t* window);
+void      windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reverse);
 int8_t    windowmanager_destroy_inputs(list_t* inputs);
 
 void      windowmanager_destroy_window(window_t* window);
@@ -88,6 +88,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos);
 window_t* windowmanager_create_greater_window(void);
 window_t* windowmanager_create_primary_options_window(void);
 int8_t    windowmanager_create_and_show_spool_browser_window(void);
+int8_t    windowmanager_create_and_show_virtual_machine_manager_window(void);
 int8_t    windowmanager_create_and_show_editor(const char_t* title, const char_t* text, boolean_t is_text_readonly);
 
 int8_t    windowmanager_init(void);
