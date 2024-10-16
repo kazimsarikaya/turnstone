@@ -95,6 +95,12 @@ static __attribute__((interrupt, no_stack_protector, target("general-regs-only")
     asm volatile ("cli");
     interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)VMX_GUEST_IFEXT_BASE_VALUE;
     vm_guest_interrupt_handler_t handler = vm_guest_interrupt_handlers[frame->interrupt_number];
+
+    if(!handler) {
+        vm_guest_printf("Unhandled interrupt: 0x%llx\n", frame->interrupt_number);
+        vm_guest_exit();
+    }
+
     handler(frame);
     asm volatile ("sti");
 }
