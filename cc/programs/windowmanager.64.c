@@ -58,6 +58,8 @@ static int8_t windowmanager_main(void) {
     windowmanager_clear_screen(windowmanager_current_window);
     SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
 
+    text_cursor_enable(true);
+
     windowmanager_initialized = true;
 
     while(true) {
