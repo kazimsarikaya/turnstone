@@ -46,6 +46,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 NUMCPUS=4 
+RAMSIZE=4
 
 SERIALS=""
 
@@ -55,7 +56,7 @@ done
 
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
-  -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
+  -M q35 -m ${RAMSIZE}g -smp cpus=4 -name osdev-hda-boot \
   -cpu max \
   -accel $ACCEL -d guest_errors \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
