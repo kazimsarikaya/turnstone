@@ -58,10 +58,8 @@ static int8_t wndmgr_spool_item_on_enter(const window_t* window) {
             }
 
             if(strcmp(buffer_text, "s") == 0) {
-                // TODO: Show buffer details
-                video_text_print("--------------------\n");
-                video_text_print((char_t*)buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer)));
-                video_text_print("\n--------------------\n");
+                const char_t* buffer_data = (const char_t*)buffer_get_view_at_position(buffer, 0, buffer_get_length(buffer));
+                windowmanager_create_and_show_editor("Spool Data", buffer_data, true);
                 break;
             }
         }

@@ -12,6 +12,7 @@
 
 MODULE("turnstone.windowmanager");
 
+void video_text_print(const char_t* text);
 
 extern char_t tos_logo_data_start;
 
@@ -33,9 +34,13 @@ window_t* windowmanager_create_greater_window(void) {
 
     char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
-    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, 2000);
+    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, screen_info.width);
     rect.x = (screen_info.width - rect.width) / 2;
     rect.y = (screen_info.height - rect.height) / 2;
+
+    char_t* msg = sprintf("rect.x=%d, rect.y=%d, rect.width=%d, rect.height=%d\n", rect.x, rect.y, rect.width, rect.height);
+    video_text_print(msg);
+    memory_free(msg);
 
     window_t* child = windowmanager_create_window(window,
                                                   windowmanager_turnstone_ascii_art,
@@ -57,7 +62,7 @@ window_t* windowmanager_create_greater_window(void) {
 
     char_t* text = strdup("Press F2 to open panel");
 
-    rect = windowmanager_calc_text_rect(text, 2000);
+    rect = windowmanager_calc_text_rect(text, screen_info.width);
     rect.x = old_x;
     rect.y = old_y + old_height + 4 * font_height;
 

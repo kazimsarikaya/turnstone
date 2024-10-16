@@ -88,6 +88,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos);
 window_t* windowmanager_create_greater_window(void);
 window_t* windowmanager_create_primary_options_window(void);
 int8_t    windowmanager_create_and_show_spool_browser_window(void);
+int8_t    windowmanager_create_and_show_editor(const char_t* title, const char_t* text, boolean_t is_text_readonly);
 
 int8_t    windowmanager_init(void);
 boolean_t windowmanager_is_initialized(void);
