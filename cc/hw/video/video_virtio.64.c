@@ -1137,7 +1137,7 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
 
     if((copy_region.dst_x + copy_region.src_box.w) > virtio_gpu_wrapper->screen_width ||
        (copy_region.dst_y + copy_region.src_box.h) > virtio_gpu_wrapper->screen_height) {
-        char_t* err_msg = sprintf("invalid glyph: out of bounds of screen: %d %d %d %d %d %d\n",
+        char_t* err_msg = sprintf("invalid glyph: out of bounds of screen: x: %d y: %d w: %d h: %d sw: %d sh: %d\n",
                                   copy_region.dst_x, copy_region.dst_y, copy_region.src_box.w, copy_region.src_box.h,
                                   virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
         video_text_print(err_msg);

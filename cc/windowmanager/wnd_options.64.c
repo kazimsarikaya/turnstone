@@ -29,9 +29,6 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
 
     font_get_font_dimension(&font_width, &font_height);
 
-    window->is_visible = true;
-    window->is_dirty = true;
-
     char_t* title_str = strdup(title);
 
     rect_t rect = windowmanager_calc_text_rect(title, 2000);
@@ -49,9 +46,6 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
         windowmanager_destroy_window(window);
         return NULL;
     }
-
-    title_window->is_visible = true;
-    title_window->is_dirty = true;
 
     window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
 
@@ -74,9 +68,6 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
         return NULL;
     }
 
-    option_list->is_visible = true;
-    option_list->is_dirty = true;
-
     int32_t option_list_height = 0;
 
     for(size_t i = 0; options_list[i]; i++) {
@@ -97,9 +88,6 @@ static window_t* windowmanager_create_options_window(const char_t* title, const 
             windowmanager_destroy_window(window);
             return NULL;
         }
-
-        option_number_area->is_visible = true;
-        option_number_area->is_dirty = true;
 
         char_t* option_text = sprintf("%s", options_list[i]);
 
@@ -201,6 +189,7 @@ static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
     case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER:
         break;
     case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER:
+        // ret = windowmanager_create_and_show_virtual_machine_manager_window();
         break;
     case WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER:
         break;

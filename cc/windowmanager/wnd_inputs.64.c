@@ -34,10 +34,6 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
         return NULL;
     }
 
-    option_input_row->is_visible = true;
-    option_input_row->is_dirty = true;
-
-
     char_t* input_label_text = strdup("Option ===> ");
 
     rect_t rect = windowmanager_calc_text_rect(input_label_text, 2000);
@@ -51,9 +47,6 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
     if(option_input_label == NULL) {
         return NULL;
     }
-
-    option_input_label->is_visible = true;
-    option_input_label->is_dirty = true;
 
     char_t* input_text = strdup("____________________");
 
@@ -71,8 +64,6 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
         return NULL;
     }
 
-    option_input_text->is_visible = true;
-    option_input_text->is_dirty = true;
     option_input_text->is_writable = true;
     option_input_text->input_length = strlen(input_text);
     option_input_text->input_id = "option";

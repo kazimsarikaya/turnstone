@@ -39,6 +39,12 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
         return;
     }
 
+    screen_info_t screen_info = screen_get_info();
+
+    if(window->rect.x + (int64_t)x >= screen_info.width || window->rect.y + (int64_t)y >= screen_info.height) {
+        return;
+    }
+
     uint32_t font_width = 0, font_height = 0;
 
     font_get_font_dimension(&font_width, &font_height);
@@ -52,6 +58,10 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
     uint32_t max_cur_x = (window->rect.x + window->rect.width) / font_width;
     uint32_t max_cur_y = (window->rect.y + window->rect.height) / font_height;
 
+    if(cur_x >= max_cur_x || cur_y >= max_cur_y) {
+        return;
+    }
+
     int64_t i = 0;
 
     while(text[i]) {
@@ -60,7 +70,7 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
         if(wc == '\n') {
             cur_y += 1;
 
-            if(cur_y > max_cur_y) {
+            if(cur_y >= max_cur_y) {
                 break;
             }
 
@@ -69,10 +79,10 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
             windowmanager_print_glyph(window, cur_x, cur_y, wc);
             cur_x += 1;
 
-            if(cur_x > max_cur_x) {
+            if(cur_x >= max_cur_x && text[i + 1] && text[i + 1] != '\n') {
                 cur_y += 1;
 
-                if(cur_y > max_cur_y) {
+                if(cur_y >= max_cur_y) {
                     break;
                 }
 
@@ -80,7 +90,7 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
             }
         }
 
-        text++;
+        i++;
     }
 }
 

@@ -41,6 +41,8 @@ window_t* windowmanager_create_top_window(void) {
     window->buffer = VIDEO_BASE_ADDRESS;
     window->background_color.color = 0x00000000;
     window->foreground_color.color = 0xFFFFFFFF;
+    window->is_visible = true;
+    window->is_dirty = true;
 
     return window;
 }
@@ -62,6 +64,8 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     window->buffer = VIDEO_BASE_ADDRESS; // + (abs_y * VIDEO_PIXELS_PER_SCANLINE) + abs_x;
     window->background_color = background_color;
     window->foreground_color = foreground_color;
+    window->is_visible = true;
+    window->is_dirty = true;
 
     if(parent->children == NULL) {
         parent->children = list_create_queue();
@@ -107,8 +111,6 @@ static int8_t wndmgr_create_footer(window_t* parent) {
         return -1;
     }
 
-    footer->is_visible = true;
-
     timeparsed_t tp = {0};
 
     timeparsed(&tp);
@@ -128,7 +130,6 @@ static int8_t wndmgr_create_footer(window_t* parent) {
     }
 
     time_wnd->on_redraw = wndmgr_footer_time_on_redraw;
-    time_wnd->is_visible = true;
 
     return 0;
 }
