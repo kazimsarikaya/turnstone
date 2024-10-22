@@ -1,5 +1,5 @@
 /**
- * @file data.64.c
+ * @file data_bson.64.c
  * @brief data store implementation interface
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -13,17 +13,6 @@
 #include <utils.h>
 
 MODULE("turnstone.lib");
-
-
-data_t* data_json_serialize(data_t* data) {
-    UNUSED(data);
-    return NULL;
-}
-
-data_t* data_json_deserialize(data_t* data) {
-    UNUSED(data);
-    return NULL;
-}
 
 int8_t  data_bson_serialize_with_buffer(buffer_t* buf, data_t* data, uint64_t* sub_len);
 data_t* data_bson_deserialize_with_processed(data_t* data, uint64_t* processed);
@@ -43,9 +32,7 @@ data_t* data_bson_serialize(data_t* data) {
     }
 
     uint64_t obuflen = 0;
-    uint8_t* obuf = buffer_get_all_bytes(buf, &obuflen);
-
-    buffer_destroy(buf);
+    uint8_t* obuf = buffer_get_all_bytes_and_destroy(buf, &obuflen);
 
     if(!obuflen || !obuf) {
         return NULL;
@@ -69,8 +56,6 @@ data_t* data_bson_serialize(data_t* data) {
 
     return res;
 }
-
-int8_t depth = 0;
 
 int8_t data_bson_serialize_with_buffer(buffer_t* buf, data_t* data, uint64_t* sub_len) {
     uint64_t len = 0;
