@@ -76,7 +76,8 @@ boolean_t windowmanager_draw_window(window_t* window) {
         text_cursor_hide();
 
         if(window->on_redraw) {
-            window->on_redraw(window);
+            window_event_t event = {.type = WINDOW_EVENT_TYPE_REDRAW, .window = window};
+            window->on_redraw(&event);
         }
 
         gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);

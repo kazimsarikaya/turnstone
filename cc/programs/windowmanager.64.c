@@ -126,7 +126,10 @@ static int8_t windowmanager_main(void) {
             if(kbd_data[i].is_pressed) {
                 if(kbd_data[i].is_printable) {
                     if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
-                        windowmanager_current_window->on_enter(windowmanager_current_window);
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_ENTER;
+                        event.window = windowmanager_current_window;
+                        windowmanager_current_window->on_enter(&event);
                     } else if(kbd_data[i].key == '\t'){
                         boolean_t is_reverse = false;
 
@@ -169,6 +172,34 @@ static int8_t windowmanager_main(void) {
                         text_cursor_hide();
                         text_cursor_move_relative(1, 0);
                         text_cursor_show();
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F5) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_LEFT;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F6 || kbd_data[i].key == KBD_SCANCODE_PAGEUP) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F7 || kbd_data[i].key == KBD_SCANCODE_PAGEDOWN) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F8) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_RIGHT;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
                     }
                 }
             }

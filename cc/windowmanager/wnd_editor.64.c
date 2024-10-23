@@ -184,6 +184,138 @@ static window_t* wnd_create_numbered_line(int64_t line_number, const char_t* lin
     return window;
 }
 
+typedef struct wnd_editor_extra_data_t {
+    window_t*     ruler_window;
+    int64_t       rect_ruler_top;
+    window_t*     editor_window;
+    const char_t* text;
+    boolean_t     is_text_readonly;
+    int64_t       row_start;
+    int64_t       col_start;
+} wnd_editor_extra_data_t;
+
+static int8_t wnd_editor_on_redraw(const window_event_t* event) {
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
+    window_t* window = event->window;
+
+    wnd_editor_extra_data_t* extra_data = window->extra_data;
+
+    const char_t* text = extra_data->text;
+
+    int64_t rect_ruler_top = extra_data->rect_ruler_top;
+
+    int64_t col_start = extra_data->col_start;
+
+    window_t* ruler_window = wnd_create_editor_ruler(window, col_start + 1, rect_ruler_top, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
+
+    if(ruler_window == NULL) {
+        windowmanager_destroy_window(window);
+        return -1;
+    }
+
+    int64_t top = ruler_window->rect.y + ruler_window->rect.height;
+    int64_t max_height = window->rect.height - font_height; // remove footer line
+
+    rect_t rect_editor = {0, top, window->rect.width, max_height - top};
+
+    if(extra_data->editor_window != NULL) {
+        windowmanager_destroy_window(extra_data->editor_window);
+    }
+
+    window_t* editor_window = windowmanager_create_window(window,
+                                                          NULL,
+                                                          rect_editor,
+                                                          (color_t){.color = 0x00000000},
+                                                          (color_t){.color = 0xFFFFFFFF});
+
+    if(editor_window == NULL) {
+        return -1;
+    }
+
+    extra_data->editor_window = editor_window;
+
+    int64_t* line_lengths = NULL;
+    int64_t line_count = 0;
+
+    char_t** lines = strsplit(text, '\n', &line_lengths, &line_count);
+
+    top = 0;
+
+    int64_t max_lines = editor_window->rect.height / font_height;
+
+    int64_t print_line_count = MIN(line_count, max_lines);
+
+    int64_t row_start = extra_data->row_start;
+
+    for(int64_t i = 0; i < print_line_count; i++) {
+        char_t* line = NULL;
+        int64_t line_length = 0;
+
+        if(row_start + i < line_count) {
+            line = lines[row_start + i];
+            line_length = line_lengths[row_start + i];
+
+            if(col_start > line_length) {
+                col_start = line_length;
+            } else if(col_start < 0) {
+                col_start = 0;
+            }
+
+            line += col_start;
+            line_length -= col_start;
+        }
+
+
+        window_t* line_window = wnd_create_numbered_line(row_start + i + 1, line, line_length, top, editor_window);
+
+        if(line_window == NULL) {
+            memory_free(line_lengths);
+            memory_free(lines);
+            return -1;
+        }
+
+        top += line_window->rect.height;
+    }
+
+    memory_free(line_lengths);
+    memory_free(lines);
+    return 0;
+}
+
+static int8_t wnd_editor_on_scroll(const window_event_t* event) {
+    window_t* window = event->window;
+
+    wnd_editor_extra_data_t* extra_data = window->extra_data;
+
+    int64_t row_start = extra_data->row_start;
+    int64_t col_start = extra_data->col_start;
+
+    if(event->type == WINDOW_EVENT_TYPE_SCROLL_UP) {
+        if(row_start > 0) {
+            row_start--;
+        }
+    } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_DOWN) {
+        row_start++;
+    } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_LEFT) {
+        if(col_start > 0) {
+            col_start--;
+        }
+    } else if(event->type == WINDOW_EVENT_TYPE_SCROLL_RIGHT) {
+        col_start++;
+    }
+
+    extra_data->row_start = row_start;
+    extra_data->col_start = col_start;
+
+    // window->on_redraw(event);
+    window->is_dirty = true;
+
+    return 0;
+}
+
 int8_t windowmanager_create_and_show_editor(const char_t* title, const char_t* text, boolean_t is_text_readonly) {
     window_t* window = windowmanager_create_top_window();
 
@@ -222,55 +354,28 @@ int8_t windowmanager_create_and_show_editor(const char_t* title, const char_t* t
         return NULL;
     }
 
-    window_t* ruler_window = wnd_create_editor_ruler(window, 1, option_input_row->rect.y + option_input_row->rect.height + font_height, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
+    int64_t rect_rule_top = option_input_row->rect.y + option_input_row->rect.height + font_height;
 
-    if(ruler_window == NULL) {
+
+    wnd_editor_extra_data_t* extra_data = memory_malloc(sizeof(wnd_editor_extra_data_t));
+
+    if(extra_data == NULL) {
         windowmanager_destroy_window(window);
         return -1;
     }
 
-    int64_t top = ruler_window->rect.y + ruler_window->rect.height;
-    int64_t max_height = window->rect.height - font_height; // remove footer line
+    extra_data->ruler_window = NULL;
+    extra_data->rect_ruler_top = rect_rule_top;
+    extra_data->editor_window = NULL;
+    extra_data->text = text;
+    extra_data->is_text_readonly = is_text_readonly;
+    extra_data->row_start = 0;
+    extra_data->col_start = 0;
 
-    rect_t rect_editor = {0, top, window->rect.width, max_height - top};
-
-    window_t* editor_window = windowmanager_create_window(window,
-                                                          NULL,
-                                                          rect_editor,
-                                                          (color_t){.color = 0x00000000},
-                                                          (color_t){.color = 0xFFFFFFFF});
-
-    if(editor_window == NULL) {
-        windowmanager_destroy_window(window);
-        return -1;
-    }
-
-    int64_t* line_lengths = NULL;
-    int64_t line_count = 0;
-
-    char_t** lines = strsplit(text, '\n', &line_lengths, &line_count);
-
-    top = 0;
-
-    int64_t max_lines = editor_window->rect.height / font_height;
-
-    int64_t print_line_count = MIN(line_count, max_lines);
-
-    for(int64_t i = 0; i < print_line_count; i++) {
-        window_t* line_window = wnd_create_numbered_line(i + 1, lines[i], line_lengths[i], top, editor_window);
-
-        if(line_window == NULL) {
-            memory_free(line_lengths);
-            memory_free(lines);
-            windowmanager_destroy_window(window);
-            return -1;
-        }
-
-        top += line_window->rect.height;
-    }
-
-    memory_free(line_lengths);
-    memory_free(lines);
+    window->extra_data = extra_data;
+    window->extra_data_is_allocated = true;
+    window->on_redraw = wnd_editor_on_redraw;
+    window->on_scroll = wnd_editor_on_scroll;
 
     windowmanager_insert_and_set_current_window(window);
 

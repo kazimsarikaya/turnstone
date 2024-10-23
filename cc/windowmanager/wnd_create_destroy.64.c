@@ -76,7 +76,13 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     return window;
 }
 
-static int8_t wndmgr_footer_time_on_redraw(const window_t* window) {
+static int8_t wndmgr_footer_time_on_redraw(const window_event_t* event) {
+    if(event == NULL) {
+        return -1;
+    }
+
+    window_t* window = event->window;
+
     if(window == NULL) {
         return -1;
     }

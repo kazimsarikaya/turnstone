@@ -26,7 +26,21 @@ struct rect_t {
     uint32_t height;
 };
 
-typedef int8_t (*window_event_f)(const window_t* window);
+typedef enum window_event_type_t {
+    WINDOW_EVENT_TYPE_ENTER,
+    WINDOW_EVENT_TYPE_REDRAW,
+    WINDOW_EVENT_TYPE_SCROLL_UP,
+    WINDOW_EVENT_TYPE_SCROLL_DOWN,
+    WINDOW_EVENT_TYPE_SCROLL_LEFT,
+    WINDOW_EVENT_TYPE_SCROLL_RIGHT,
+} window_event_type_t;
+
+typedef struct window_event_t {
+    window_event_type_t type;
+    window_t*           window;
+} window_event_t;
+
+typedef int8_t (*window_event_f)(const window_event_t* window);
 
 struct window_t {
     uint64_t       id;
@@ -49,6 +63,7 @@ struct window_t {
     list_t*        children;
     window_event_f on_enter;
     window_event_f on_redraw;
+    window_event_f on_scroll;
 };
 
 typedef struct window_input_value_t {

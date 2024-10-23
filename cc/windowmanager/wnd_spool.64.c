@@ -17,7 +17,13 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-static int8_t wndmgr_spool_item_on_enter(const window_t* window) {
+static int8_t wndmgr_spool_item_on_enter(const window_event_t* event) {
+    if(!event) {
+        return -1;
+    }
+
+    const window_t* window = event->window;
+
     if(!window) {
         return -1;
     }
@@ -75,7 +81,14 @@ typedef struct sposl_item_window_extra_data {
     const buffer_t* buffer;
 } spool_item_window_extra_data_t;
 
-static int8_t wndmgr_spool_item_on_redraw(const window_t* window) {
+static int8_t wndmgr_spool_item_on_redraw(const window_event_t* event) {
+    if(!event) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window event is NULL");
+        return -1;
+    }
+
+    const window_t* window = event->window;
+
     if(!window) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window is NULL");
         return -1;
@@ -229,7 +242,13 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
     return 0;
 }
 
-static int8_t wndmgr_spool_browser_on_enter(const window_t* window) {
+static int8_t wndmgr_spool_browser_on_enter(const window_event_t* event) {
+    if(!event) {
+        return -1;
+    }
+
+    const window_t* window = event->window;
+
     if(!window) {
         return -1;
     }
@@ -284,7 +303,14 @@ static int8_t wndmgr_spool_browser_on_enter(const window_t* window) {
     return 0;
 }
 
-static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_t* window) {
+static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_event_t* event) {
+    if(!event) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window event is NULL");
+        return -1;
+    }
+
+    const window_t* window = event->window;
+
     if(!window) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Window is NULL");
         return -1;

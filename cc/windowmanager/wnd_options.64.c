@@ -142,7 +142,13 @@ const char_t*const wnd_primary_options_list[] = {
 
 const char_t* wnd_primary_options_title = "tOS Primary Options Menu";
 
-static int8_t wndmgr_pri_opts_on_enter(const window_t* window) {
+static int8_t wndmgr_pri_opts_on_enter(const window_event_t* event) {
+    if(event == NULL) {
+        return -1;
+    }
+
+    window_t* window = event->window;
+
     if(window == NULL) {
         return -1;
     }
