@@ -143,14 +143,6 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
 
     PRINTLOG(LINKER, LOG_DEBUG, "found %llu symbols for section id 0x%llx", list_size(symbols), section_id);
 
-    iterator_t* it = list_iterator_create(symbols);
-
-    if(!it) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for symbols");
-
-        return -1;
-    }
-
     linker_global_offset_table_entry_t got_entry = {0};
     uint64_t symbol_id = 0;
     uint8_t symbol_type = 0;
@@ -159,8 +151,10 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
     uint64_t symbol_size = 0;
     char_t* symbol_name = NULL;
 
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sym_rec = (tosdb_record_t*)it->delete_item(it);
+    size_t sym_idx = 0;
+
+    for(sym_idx = 0; sym_idx < list_size(symbols); sym_idx++) {
+        tosdb_record_t* sym_rec = (tosdb_record_t*)list_get_data_at_position(symbols, sym_idx);
 
         if(!sym_rec) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get symbol record");
@@ -264,28 +258,22 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
         memory_free(symbol_name);
 
         sym_rec->destroy(sym_rec);
-
-        it = it->next(it);
     }
-
-    it->destroy(it);
 
     list_destroy(symbols);
 
     return res;
 
 clean_symbols_iter:
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sym_rec = (tosdb_record_t*)it->delete_item(it);
+    while(sym_idx < list_size(symbols)) {
+        tosdb_record_t* sym_rec = (tosdb_record_t*)list_get_data_at_position(symbols, sym_idx);
 
         if(sym_rec) {
             sym_rec->destroy(sym_rec);
         }
 
-        it = it->next(it);
+        sym_idx++;
     }
-
-    it->destroy(it);
 
     list_destroy(symbols);
 
@@ -390,14 +378,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
     PRINTLOG(LINKER, LOG_DEBUG, "relocations count of section 0x%llx: 0x%llx", section_id, list_size(relocations));
 
-    iterator_t* it = list_iterator_create(relocations);
-
-    if(!it) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for relocations");
-
-        return -1;
-    }
-
     linker_relocation_entry_t relocation = {0};
     int64_t reloc_id = 0;
     int64_t symbol_section_id = 0;
@@ -412,8 +392,10 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         reloc_section->section_data = buffer_new();
     }
 
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* reloc_rec = (tosdb_record_t*)it->delete_item(it);
+    size_t reloc_idx = 0;
+
+    for(reloc_idx = 0; reloc_idx < list_size(relocations); reloc_idx++) {
+        tosdb_record_t* reloc_rec = (tosdb_record_t*)list_get_data_at_position(relocations, reloc_idx);
         boolean_t is_got_symbol = false;
         boolean_t symbol_id_missing = false;
 
@@ -715,28 +697,22 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         }
 
         reloc_rec->destroy(reloc_rec);
-
-        it = it->next(it);
     }
-
-    it->destroy(it);
 
     list_destroy(relocations);
 
     return res;
 
 clean_relocs_iter:
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* reloc_rec = (tosdb_record_t*)it->delete_item(it);
+    while(reloc_idx < list_size(relocations)) {
+        tosdb_record_t* reloc_rec = (tosdb_record_t*)list_get_data_at_position(relocations, reloc_idx);
 
         if(reloc_rec) {
             reloc_rec->destroy(reloc_rec);
         }
 
-        it = it->next(it);
+        reloc_idx++;
     }
-
-    it->destroy(it);
 
     list_destroy(relocations);
 
@@ -854,10 +830,10 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
     uint64_t section_offset = 0;
 
-    iterator_t* it = list_iterator_create(sections);
+    size_t sec_idx = 0;
 
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sec_rec = (tosdb_record_t*)it->delete_item(it);
+    for(sec_idx = 0; sec_idx < list_size(sections); sec_idx++) {
+        tosdb_record_t* sec_rec = (tosdb_record_t*)list_get_data_at_position(sections, sec_idx);
 
         if(!sec_rec) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section record");
@@ -1007,10 +983,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         sec_rec->destroy(sec_rec);
 
-        it = it->next(it);
     }
-
-    it->destroy(it);
 
     list_destroy(sections);
 
@@ -1019,17 +992,15 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
     return res;
 
 clean_secs_iter:
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sec_rec = (tosdb_record_t*)it->delete_item(it);
+    while(sec_idx < list_size(sections)) {
+        tosdb_record_t* sec_rec = (tosdb_record_t*)list_get_data_at_position(sections, sec_idx);
 
         if(sec_rec) {
             sec_rec->destroy(sec_rec);
         }
 
-        it = it->next(it);
+        sec_idx++;
     }
-
-    it->destroy(it);
 
     list_destroy(sections);
 
