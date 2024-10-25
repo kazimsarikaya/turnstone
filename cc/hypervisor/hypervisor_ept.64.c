@@ -207,6 +207,114 @@ static int8_t hypervisor_ept_del_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
     return 0;
 }
 
+int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm) {
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "EPT Mapping Dump");
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "==================");
+
+    uint64_t ept_base_fa = vm->ept_pml4_base;
+    uint64_t ept_base_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(ept_base_fa);
+
+    hypervisor_ept_pml4e_t* pml4e = (hypervisor_ept_pml4e_t*)ept_base_va;
+
+    for(uint64_t pml4e_index = 0; pml4e_index < 512; pml4e_index++) {
+        if(pml4e[pml4e_index].read_access == 0 && pml4e[pml4e_index].write_access == 0 && pml4e[pml4e_index].execute_access == 0) {
+            continue;
+        }
+
+        uint64_t pdpte_fa = pml4e[pml4e_index].address;
+        pdpte_fa <<= 12;
+
+        uint64_t pdpte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pdpte_fa);
+
+        hypervisor_ept_pdpte_t* pdptes = (hypervisor_ept_pdpte_t*)pdpte_va;
+
+        for(uint64_t pdpte_index = 0; pdpte_index < 512; pdpte_index++) {
+            if(pdptes[pdpte_index].read_access == 0 && pdptes[pdpte_index].write_access == 0 && pdptes[pdpte_index].execute_access == 0) {
+                continue;
+            }
+
+            uint64_t pde_fa = pdptes[pdpte_index].address;
+            pde_fa <<= 12;
+
+            uint64_t pde_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pde_fa);
+
+            hypervisor_ept_pde_t* pdes = (hypervisor_ept_pde_t*)pde_va;
+            hypervisor_ept_pde_2mib_t* pdes_2mib = (hypervisor_ept_pde_2mib_t*)pde_va;
+
+            for(uint64_t pde_index = 0; pde_index < 512; pde_index++) {
+                if(pdes[pde_index].read_access == 0 && pdes[pde_index].write_access == 0 && pdes[pde_index].execute_access == 0) {
+                    continue;
+                }
+
+
+                if(pdes_2mib[pde_index].must_one) { // 2MiB page entry
+                    uint64_t guest_physical = (pml4e_index << 39) | (pdpte_index << 30) | (pde_index << 21);
+                    uint64_t host_physical = pdes_2mib[pde_index].address;
+                    host_physical <<= 21;
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx", guest_physical, host_physical);
+                    continue;
+                }
+
+                uint64_t pte_fa = pdes[pde_index].address;
+                pte_fa <<= 12;
+
+                uint64_t pte_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(pte_fa);
+
+                hypervisor_ept_pte_t* ptes = (hypervisor_ept_pte_t*)pte_va;
+
+                boolean_t need_flush = false;
+
+                uint64_t pte_guest_physical = 0;
+                uint64_t pte_host_physical = 0;
+                uint64_t expected_host_physical = 0;
+                uint64_t pte_size = 0;
+
+                for(uint64_t pte_index = 0; pte_index < 512; pte_index++) {
+                    if(ptes[pte_index].read_access == 0 && ptes[pte_index].write_access == 0 && ptes[pte_index].execute_access == 0) {
+
+                        if(need_flush) {
+                            need_flush = false;
+                            PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx 0x%016llx",
+                                     pte_guest_physical, pte_host_physical, pte_size);
+                        }
+
+                        continue;
+                    }
+
+                    uint64_t tmp_pte_guest_physical = (pml4e_index << 39) | (pdpte_index << 30) | (pde_index << 21) | (pte_index << 12);
+                    uint64_t tmp_pte_host_physical = ptes[pte_index].address;
+                    tmp_pte_host_physical <<= 12;
+
+                    if(expected_host_physical != tmp_pte_host_physical) {
+                        if(need_flush) {
+                            PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx 0x%016llx",
+                                     pte_guest_physical, pte_host_physical, pte_size);
+                        }
+
+                        pte_guest_physical = tmp_pte_guest_physical;
+                        pte_host_physical = tmp_pte_host_physical;
+                        pte_size = 0x1000;
+                        expected_host_physical = pte_host_physical + 0x1000;
+                        need_flush = true;
+                    } else {
+                        pte_size += 0x1000;
+                        expected_host_physical += 0x1000;
+                    }
+
+                } // pte_index
+
+                if(need_flush) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx 0x%016llx",
+                             pte_guest_physical, pte_host_physical, pte_size);
+                }
+
+            } // pde_index
+        } // pdpte_index
+    } // pml4e_index
+
+    return 0;
+}
+
 
 
 uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
@@ -386,6 +494,24 @@ static uint64_t hypervisor_ept_guest_to_host_ensured(hypervisor_vm_t* vm, uint64
     return host_physical;
 }
 
+static uint64_t hypervisor_ept_paging_get_next_page_address(hypervisor_vm_t* vm) {
+    if(list_size(vm->released_pages)) {
+        uint64_t next_page_address = (uint64_t)list_queue_pop(vm->released_pages);
+
+        return next_page_address;
+    }
+
+    vm->next_page_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+
+    uint64_t next_page_address = vm->next_page_address;
+
+    return next_page_address;
+}
+
+static void hypervisor_ept_paging_release_page(hypervisor_vm_t* vm, uint64_t page_address) {
+    list_queue_push(vm->released_pages, (void*)page_address);
+}
+
 static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
                                              uint64_t physical_address, uint64_t virtual_address,
                                              memory_paging_page_type_t type) {
@@ -399,8 +525,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
     uint64_t p3_fa = 0;
 
     if(!p4->pages[p4_index].present) {
-        uint64_t guest_new_pt_fa = vm->next_page_address;
-        vm->next_page_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+        uint64_t guest_new_pt_fa = hypervisor_ept_paging_get_next_page_address(vm);
 
         uint64_t host_new_pt_fa = hypervisor_ept_guest_to_host_ensured(vm, guest_new_pt_fa);
 
@@ -428,8 +553,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
     uint64_t p2_fa = 0;
 
     if(!p3->pages[p3_index].present) {
-        uint64_t guest_new_pt_fa = vm->next_page_address;
-        vm->next_page_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+        uint64_t guest_new_pt_fa = hypervisor_ept_paging_get_next_page_address(vm);
 
         uint64_t host_new_pt_fa = hypervisor_ept_guest_to_host_ensured(vm, guest_new_pt_fa);
 
@@ -457,8 +581,7 @@ static int8_t hypervisor_ept_paging_add_page(hypervisor_vm_t* vm,
     uint64_t p1_fa = 0;
 
     if(!p2->pages[p2_index].present) {
-        uint64_t guest_new_pt_fa = vm->next_page_address;
-        vm->next_page_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+        uint64_t guest_new_pt_fa = hypervisor_ept_paging_get_next_page_address(vm);
 
         uint64_t host_new_pt_fa = hypervisor_ept_guest_to_host_ensured(vm, guest_new_pt_fa);
 
@@ -575,6 +698,57 @@ static int8_t hypervisor_ept_paging_del_page(hypervisor_vm_t* vm,
         memory_memclean(&p1->pages[p1_index], sizeof(memory_page_entry_t));
     }
 
+    boolean_t p1_empty = true;
+
+    for(uint64_t i = 0; i < 512; i++) {
+        if(p1->pages[i].present) {
+            p1_empty = false;
+            break;
+        }
+    }
+
+    if(p1_empty) {
+        memory_memclean(p1, sizeof(memory_page_table_t));
+
+        hypervisor_ept_paging_release_page(vm, p1_fa);
+
+        memory_memclean(&p2->pages[p2_index], sizeof(memory_page_entry_t));
+
+        boolean_t p2_empty = true;
+
+        for(uint64_t i = 0; i < 512; i++) {
+            if(p2->pages[i].present) {
+                p2_empty = false;
+                break;
+            }
+        }
+
+        if(p2_empty) {
+            memory_memclean(p2, sizeof(memory_page_table_t));
+
+            hypervisor_ept_paging_release_page(vm, p2_fa);
+
+            memory_memclean(&p3->pages[p3_index], sizeof(memory_page_entry_t));
+
+            boolean_t p3_empty = true;
+
+            for(uint64_t i = 0; i < 512; i++) {
+                if(p3->pages[i].present) {
+                    p3_empty = false;
+                    break;
+                }
+            }
+
+            if(p3_empty) {
+                memory_memclean(p3, sizeof(memory_page_table_t));
+
+                hypervisor_ept_paging_release_page(vm, p3_fa);
+
+                memory_memclean(&p4->pages[p4_index], sizeof(memory_page_entry_t));
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -643,6 +817,110 @@ static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, ui
     if(p1->pages[p1_index].present) {
         return pte_address | (virtual_address & ((1ULL << 12) - 1));
     }
+
+    return 0;
+}
+
+int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm) {
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "Paging Mapping Dump");
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "==================");
+
+    uint64_t p4_fa = hypervisor_ept_guest_to_host_ensured(vm, VMX_GUEST_CR3_BASE_VALUE);
+    uint64_t p4_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p4_fa);
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "p4 host fa 0x%016llx", p4_fa);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "==================");
+
+    memory_page_table_t* p4 = (memory_page_table_t*)p4_va;
+
+    for(uint64_t p4_index = 0; p4_index < 512; p4_index++) {
+        if(!p4->pages[p4_index].present) {
+            continue;
+        }
+
+        uint64_t p3_fa = p4->pages[p4_index].physical_address;
+        p3_fa <<= 12;
+        p3_fa = hypervisor_ept_guest_to_host_ensured(vm, p3_fa);
+
+        uint64_t p3_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p3_fa);
+
+        memory_page_table_t* p3 = (memory_page_table_t*)p3_va;
+
+        for(uint64_t p3_index = 0; p3_index < 512; p3_index++) {
+            if(!p3->pages[p3_index].present) {
+                continue;
+            }
+
+            uint64_t p2_fa = p3->pages[p3_index].physical_address;
+            p2_fa <<= 12;
+            p2_fa = hypervisor_ept_guest_to_host_ensured(vm, p2_fa);
+
+            uint64_t p2_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p2_fa);
+
+            memory_page_table_t* p2 = (memory_page_table_t*)p2_va;
+
+            for(uint64_t p2_index = 0; p2_index < 512; p2_index++) {
+                if(!p2->pages[p2_index].present) {
+                    continue;
+                }
+
+                uint64_t p1_fa = p2->pages[p2_index].physical_address;
+                p1_fa <<= 12;
+                p1_fa = hypervisor_ept_guest_to_host_ensured(vm, p1_fa);
+
+                uint64_t p1_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(p1_fa);
+
+                memory_page_table_t* p1 = (memory_page_table_t*)p1_va;
+
+                boolean_t need_flush = false;
+                uint64_t pte_guest_virtual = 0;
+                uint64_t pte_guest_physical = 0;
+                uint64_t expected_guest_physical = 0;
+                uint64_t pte_host_physical = 0;
+                uint64_t pte_size = 0;
+
+                for(uint64_t p1_index = 0; p1_index < 512; p1_index++) {
+                    if(!p1->pages[p1_index].present) {
+
+                        if(need_flush) {
+                            need_flush = false;
+                            PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx 0x%016llx 0x%016llx",
+                                     pte_guest_virtual, pte_guest_physical, pte_host_physical, pte_size);
+                        }
+
+                        continue;
+                    }
+
+                    uint64_t tmp_pte_guest_virtual = (p4_index << 39) | (p3_index << 30) | (p2_index << 21) | (p1_index << 12);
+                    uint64_t tmp_pte_guest_physical = p1->pages[p1_index].physical_address;
+                    tmp_pte_guest_physical <<= 12;
+
+                    if(expected_guest_physical != tmp_pte_guest_physical) {
+                        if(need_flush) {
+                            PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx 0x%016llx 0x%016llx",
+                                     pte_guest_virtual, pte_guest_physical, pte_host_physical, pte_size);
+                        }
+
+                        pte_guest_virtual = tmp_pte_guest_virtual;
+                        pte_guest_physical = tmp_pte_guest_physical;
+                        pte_host_physical = hypervisor_ept_guest_to_host_ensured(vm, pte_guest_physical);
+                        pte_size = 0x1000;
+                        expected_guest_physical = pte_guest_physical + 0x1000;
+                        need_flush = true;
+                    } else {
+                        pte_size += 0x1000;
+                        expected_guest_physical += 0x1000;
+                    }
+
+                } // p1_index
+
+                if(need_flush) {
+                    PRINTLOG(HYPERVISOR, LOG_ERROR, "0x%016llx -> 0x%016llx 0x%016llx 0x%016llx",
+                             pte_guest_virtual, pte_guest_physical, pte_host_physical, pte_size);
+                }
+            } // p2_index
+        } // p3_index
+    } // p4_index
 
     return 0;
 }

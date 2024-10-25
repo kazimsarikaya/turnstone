@@ -74,6 +74,7 @@ typedef struct hypervisor_vm_t {
     uint64_t   guest_heap_size;
     uint64_t   ept_pml4_base;
     uint64_t   next_page_address;
+    list_t*    released_pages;
 } hypervisor_vm_t;
 
 

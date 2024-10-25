@@ -46,4 +46,6 @@ typedef struct hypervisor_vm_module_load_t {
     uint64_t metadata_size;
 } hypervisor_vm_module_load_t;
 
+int8_t hypervisor_dump_vmcs(vmcs_vmexit_info_t vmexit_info);
+
 #endif

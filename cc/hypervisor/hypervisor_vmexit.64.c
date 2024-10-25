@@ -691,24 +691,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Info: 0x%llx", vmexit_info.instruction_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Info: 0x%llx", vmexit_info.interrupt_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Error Code: 0x%llx", vmexit_info.interrupt_error_code);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
-             vmexit_info.guest_rip, vmexit_info.guest_rflags,
-             vmexit_info.guest_efer);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RAX: 0x%016llx RBX: 0x%016llx RCX: 0x%016llx RDX: 0x%016llx",
-             vmexit_info.registers->rax, vmexit_info.registers->rbx,
-             vmexit_info.registers->rcx, vmexit_info.registers->rdx);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RSI: 0x%016llx RDI: 0x%016llx RBP: 0x%016llx RSP: 0x%016llx",
-             vmexit_info.registers->rsi, vmexit_info.registers->rdi,
-             vmexit_info.registers->rbp, vmexit_info.guest_rsp);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R8:  0x%016llx R9:  0x%016llx R10: 0x%016llx R11: 0x%016llx",
-             vmexit_info.registers->r8, vmexit_info.registers->r9,
-             vmexit_info.registers->r10, vmexit_info.registers->r11);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R12: 0x%016llx R13: 0x%016llx R14: 0x%016llx R15: 0x%016llx\n",
-             vmexit_info.registers->r12, vmexit_info.registers->r13,
-             vmexit_info.registers->r14, vmexit_info.registers->r15);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    CR0: 0x%08llx CR2: 0x%016llx CR3: 0x%016llx CR4: 0x%08llx\n",
-             vmexit_info.guest_cr0, vmexit_info.registers->cr2,
-             vmexit_info.guest_cr3, vmexit_info.guest_cr4);
+    hypervisor_dump_vmcs(vmexit_info);
 
     while(true) {
         cpu_idle();
