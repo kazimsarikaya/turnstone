@@ -129,7 +129,9 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
     uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
     volatile virtio_gpu_ctrl_hdr_t* hdr = (volatile virtio_gpu_ctrl_hdr_t*)offset;
 
-    if(hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
+    uint32_t hdr_type = hdr->type;
+
+    if(hdr_type != VIRTIO_GPU_RESP_OK_NODATA) {
         /*
            int32_t tries = 10;
            while(hdr->type == 0 && tries-- > 0){
@@ -137,17 +139,15 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
            }
          */
 
-        if(hdr->type && hdr->type != VIRTIO_GPU_RESP_OK_NODATA) {
-            char_t buffer[64] = {0};
-            video_text_print((char_t*)"virtio gpu wait for queue failed: ");
-            utoh_with_buffer(buffer, hdr->type);
-            video_text_print(buffer);
-            video_text_print((char_t*)"\n");
+        if(hdr_type && hdr_type != VIRTIO_GPU_RESP_OK_NODATA) {
+            char_t* err_msg = sprintf("virtio gpu wait for queue failed: 0x%x\n", hdr_type);
+            video_text_print(err_msg);
+            memory_free(err_msg);
         }
 
         memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
 
-        return hdr->type == VIRTIO_GPU_RESP_OK_NODATA?0:hdr->type;
+        return hdr_type == VIRTIO_GPU_RESP_OK_NODATA?0:hdr_type;
     }
 
     memory_memclean(offset, sizeof(virtio_gpu_ctrl_hdr_t));
@@ -388,6 +388,13 @@ static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
     virgl_cmd_write_commands(cmd, offset + sizeof(virtio_gpu_cmd_submit_t));
 
     descs[desc_index].length = sizeof(virtio_gpu_cmd_submit_t) + submit_hdr->size;
+
+    if(descs[desc_index].length > VIRTIO_GPU_QUEUE_ITEM_SIZE) {
+        char_t* err_msg = sprintf("virtio gpu command too big: %d\n", descs[desc_index].length);
+        video_text_print(err_msg);
+        memory_free(err_msg);
+        return -1;
+    }
 
     return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
 }
@@ -1762,7 +1769,7 @@ uint64_t virtio_gpu_select_features(virtio_dev_t* dev, uint64_t avail_features) 
 int8_t virtio_gpu_create_queues(virtio_dev_t* vdev) {
     vdev->queues = memory_malloc(sizeof(virtio_queue_ext_t) * 2);
 
-    uint64_t item_size = 64 * 1024;
+    uint64_t item_size = VIRTIO_GPU_QUEUE_ITEM_SIZE;
 
     PRINTLOG(VIRTIOGPU, LOG_TRACE, "building virtio gpu control queue");
 

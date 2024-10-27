@@ -12,6 +12,7 @@
 #include <types.h>
 #include <memory.h>
 #include <cpu/sync.h>
+#include <driver/video_virtio_cross_constants.h>
 
 #define VIRGL_RSTR(...) #__VA_ARGS__
 
@@ -159,7 +160,7 @@ typedef enum virgl_bind_t {
 } virgl_bind_t;
 
 #define VIRGL_CMD(cmd, obj, len) ((cmd) | ((obj) << 8) | ((len) << 16))
-#define VIRGL_CMD_MAX_DWORDS ((64 * 1024 - 24 - 24) / 4)
+#define VIRGL_CMD_MAX_DWORDS ((VIRTIO_GPU_QUEUE_ITEM_SIZE - VIRTIO_GPU_CMD_SUBMIT_3D_HEADER_SIZE) / sizeof(uint32_t)) //
 
 typedef struct virgl_cmd_t      virgl_cmd_t;
 typedef struct virgl_renderer_t virgl_renderer_t;

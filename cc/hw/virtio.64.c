@@ -76,8 +76,11 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
 
         uint16_t avail_idx = 0;
 
+        uint64_t queue_item_fa = queue_fa;
+
         for(int32_t i = 0; i < vdev->queue_size; i++) {
-            descs[i].address = queue_fa + i * queue_item_size;
+            descs[i].address = queue_item_fa;
+            queue_item_fa += queue_item_size;
 
 
             if(do_not_init) {

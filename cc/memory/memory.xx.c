@@ -233,7 +233,7 @@ int8_t memory_memset(void* address, uint8_t value, size_t size){
 }
 #endif
 
-#if 0
+#if 1
 int8_t memory_memcopy(const void* source, void* destination, size_t size) {
     if((!source && !destination) || !size) {
         return 0;

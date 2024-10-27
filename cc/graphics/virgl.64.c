@@ -116,7 +116,14 @@ void virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer) {
         return;
     }
 
-    memory_memcopy(cmd->cmd_dws, buffer, virgl_cmd_get_size(cmd));
+    // memory_memcopy(cmd->cmd_dws, buffer, virgl_cmd_get_size(cmd));
+
+    uint32_t* typed_buffer = (uint32_t*)buffer;
+
+    for(uint32_t i = 0; i < cmd->cmd_dw_count; i++) {
+        typed_buffer[i] = cmd->cmd_dws[i];
+    }
+
     cmd->cmd_dw_count = 0;
 }
 
@@ -139,7 +146,7 @@ static void virgl_encode_rollback_cmd(virgl_cmd_t* cmd) {
 }
 
 static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
-    if(cmd->cmd_dw_count + 1 > VIRGL_CMD_MAX_DWORDS) {
+    if(cmd->cmd_dw_count + 1 >= VIRGL_CMD_MAX_DWORDS) {
         virgl_encode_rollback_cmd(cmd);
         return -1;
     }
@@ -151,7 +158,7 @@ static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
 }
 
 static int8_t virgl_encode_write_float64(virgl_cmd_t* cmd, float64_t qword) {
-    if(cmd->cmd_dw_count + 2 > VIRGL_CMD_MAX_DWORDS) {
+    if(cmd->cmd_dw_count + 2 >= VIRGL_CMD_MAX_DWORDS) {
         virgl_encode_rollback_cmd(cmd);
         return -1;
     }
@@ -184,7 +191,7 @@ static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type,
     }
 
 
-    if(cmd->cmd_dw_count + size + 1 > VIRGL_CMD_MAX_DWORDS) {
+    if(cmd->cmd_dw_count + size + 1 >= VIRGL_CMD_MAX_DWORDS) {
         int8_t ret = virgl_cmd_flush_commands(cmd);
 
         if(ret) {
@@ -460,7 +467,7 @@ int8_t virgl_encode_shader(virgl_cmd_t* cmd, virgl_shader_t* shader) {
         uint32_t length, offlen;
         int32_t hdr_len = base_hdr_size + (first_pass ? strm_hdr_size : 0);
 
-        if (cmd->cmd_dw_count + hdr_len + 1 > VIRGL_CMD_MAX_DWORDS) {
+        if (cmd->cmd_dw_count + hdr_len + 1 >= VIRGL_CMD_MAX_DWORDS) {
             if (virgl_cmd_flush_commands(cmd)) {
                 return -1;
             }
@@ -813,7 +820,7 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
     /* can we send it all in one cmdbuf? */
     if (length < VIRGL_CMD_MAX_DWORDS) {
         /* is there space in this cmdbuf? if not flush and use another one */
-        if ((cmd->cmd_dw_count + length + 1) > VIRGL_CMD_MAX_DWORDS) {
+        if ((cmd->cmd_dw_count + length + 1) >= VIRGL_CMD_MAX_DWORDS) {
             if (virgl_cmd_flush_commands(cmd)) {
                 return -1;
             }
@@ -842,7 +849,7 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
 
             left_bytes = res_iw->box.w * elsize;
             while (left_bytes) {
-                if (cmd->cmd_dw_count + 12 > VIRGL_CMD_MAX_DWORDS) {
+                if (cmd->cmd_dw_count + 12 >= VIRGL_CMD_MAX_DWORDS) {
                     if (virgl_cmd_flush_commands(cmd)) {
                         return -1;
                     }
