@@ -307,13 +307,14 @@ typedef struct pci_context_t {
 pci_context_t* pci_get_context(void);
 void           pci_set_context(pci_context_t* pci_context);
 
-uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no);
-uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no);
-int8_t   pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64_t bar_fa);
-int8_t   pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap);
-uint8_t  pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr);
-uint8_t  pci_msix_update_lapic(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
-int8_t   pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
+uint64_t  pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no);
+uint64_t  pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no);
+int8_t    pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64_t bar_fa);
+int8_t    pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap);
+uint8_t   pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr);
+uint8_t   pci_msix_update_lapic(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
+boolean_t pci_msix_is_pending_bit_set(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
+int8_t    pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector);
 
 void pci_disable_interrupt(pci_generic_device_t* pci_dev);
 void pci_enable_interrupt(pci_generic_device_t* pci_dev);
