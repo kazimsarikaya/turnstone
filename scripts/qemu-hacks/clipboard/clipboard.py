@@ -13,9 +13,39 @@ import signal
 # Set uvloop as the event loop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-logging.basicConfig(level=logging.DEBUG)
+class ColorFormatter(logging.Formatter):
+    # Define colors for each log level
+    COLORS = {
+        "DEBUG": "\033[90m",     # Gray
+        "INFO": "\033[0m",       # Default color
+        "WARNING": "\033[33m",   # Orange (Yellow)
+        "ERROR": "\033[31m",     # Red
+        "CRITICAL": "\033[41m"   # Red background for critical messages
+    }
+    RESET = "\033[0m"  # Reset color
 
-logging.debug("Starting clipboard server")
+    def format(self, record):
+        # Use the color associated with the log level
+        color = self.COLORS.get(record.levelname, self.RESET)
+
+        # Customize the log format to include file name and line number
+        log_format = f"{color}%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d: %(message)s{self.RESET}"
+
+        # Update the formatter with the custom format
+        formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
+
+        # Use the formatter to format the record
+        return formatter.format(record)
+
+# Configure the root logger to use the ColorFormatter
+handler = logging.StreamHandler()
+handler.setFormatter(ColorFormatter())
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)  # Set to the lowest level you want to capture
+logger.addHandler(handler)
+
+logging.info("Starting clipboard server")
 
 HOST = 'localhost'
 PORT = 4444
@@ -25,6 +55,24 @@ INTERNAL_SOCKET_PATH = '/tmp/virtio-vdagent-clipboard'
 # Global variable to store the last clipboard data
 clipboard_data = ""
 
+try:
+    logging.debug("Getting clipboard data")
+    process = subprocess.Popen(["wl-paste",  "-n", "-t", "text"], stdout=subprocess.PIPE)
+    # wait for the process to finish and get the output and store it in clipboard_data
+    output, _ = process.communicate()
+
+    clipboard_data = output
+
+    logging.debug(f"Clipboard data: {clipboard_data}")
+    logging.info("Default Clipboard data retrieved successfully")
+except Exception as e:
+    logging.critical(f"Exception in getting clipboard data: {e}")
+    exit(1)
+
+
+# connected clients
+clients =  {}
+
 stop_event = threading.Event()
 async_stop_event = asyncio.Event()
 
@@ -32,13 +80,14 @@ def clipboard_watcher():
     while not stop_event.is_set():
         # wait until internal socket is created
         while not os.path.exists(INTERNAL_SOCKET_PATH):
+            logging.debug("Waiting for internal socket to be created")
             time.sleep(1)
 
             if stop_event.is_set():
                 return
 
         try:
-            logging.debug("Starting clipboard watcher")
+            logging.info("Starting clipboard watcher")
             # Run wl-paste with `-w` to monitor clipboard changes
             process = subprocess.Popen(
                 ["wl-paste", "-t", "text", "-w", "nc", "-q", "1", "-U", INTERNAL_SOCKET_PATH]
@@ -58,7 +107,7 @@ def clipboard_watcher():
             logging.error(f"Exception in clipboard watcher: {e}")
             continue
 
-    logging.debug("Clipboard watcher stopped")
+    logging.info("Clipboard watcher stopped")
 
 # Function to handle graceful shutdown on app exit
 def shutdown(signum, frame):
@@ -94,6 +143,18 @@ VD_AGENT_CAP_GUEST_LINEEND_LF = 1 << 8
 VD_AGENT_CAP_MAX_CLIPBOARD = 1 << 10
 VD_AGENT_CAP_CLIPBOARD_NO_RELEASE_ON_REGRAB = 1 << 16
 VD_AGENT_CAP_CLIPBOARD_GRAB_SERIAL = 1 << 17
+
+VD_AGENT_CLIPBOARD_NONE = 0,
+VD_AGENT_CLIPBOARD_UTF8_TEXT = 1
+VD_AGENT_CLIPBOARD_IMAGE_PNG = 2
+VD_AGENT_CLIPBOARD_IMAGE_BMP = 3
+VD_AGENT_CLIPBOARD_IMAGE_TIFF = 4
+VD_AGENT_CLIPBOARD_IMAGE_JPG = 5
+VD_AGENT_CLIPBOARD_FILE_LIST = 6
+
+VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD = 0
+VD_AGENT_CLIPBOARD_SELECTION_PRIMARY = 1
+VD_AGENT_CLIPBOARD_SELECTION_SECONDARY = 2
 
 class PackabeleData:
     def pack(self):
@@ -138,12 +199,40 @@ class VDAgentAnnounceCapabilities(PackabeleData):
         return struct.pack("<II", self.request, self.caps)
 
 class VDAgentRequestClipboard(PackabeleData):
-    def __init__(self, selection, cb_type):
+    def __init__(self, cb_type=VD_AGENT_CLIPBOARD_UTF8_TEXT, selection=VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD):
         self.selection = selection
         self.cb_type = cb_type
 
     def pack(self):
         return struct.pack("<II", self.selection, self.cb_type)
+
+class VDAgentGrap(PackabeleData):
+    def __init__(self, types=[VD_AGENT_CLIPBOARD_UTF8_TEXT], selection=VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD, serial=0):
+        self.selection = selection
+        self.serial = serial
+        self.types = types
+
+    def pack(self):
+        return struct.pack("<II" + "I" * len(self.types), self.selection, self.serial, *self.types)
+
+class VDAgentClipboard(PackabeleData):
+    def __init__(self, data, selection=VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD, content_type=VD_AGENT_CLIPBOARD_UTF8_TEXT):
+        self.selection = selection
+        self.content_type = content_type
+        self.data = data
+
+    def pack(self):
+        return struct.pack("<II", self.selection, self.content_type) + self.data
+
+async def send_grab_message():
+    global clients
+    grab = VDAgentGrap()
+    grab_msg = VDAgentMessage(VD_AGENT_CLIPBOARD_GRAB, grab)
+
+    for port, writer in clients.items():
+        await grab_msg.send(writer)
+        logging.debug(f"Clipboard grab message sent to {port}")
+
 
 async def handle_announce_capabilities(data, writer):
     request, caps = struct.unpack("<II", data)
@@ -153,34 +242,37 @@ async def handle_announce_capabilities(data, writer):
 
     logging.debug(f"Announce capabilities: {caps}, need resopnse: {request}")
 
+    checks = 0
+
     if caps & VD_AGENT_CAP_CLIPBOARD:
-        print("Clipboard supported")
+        logging.debug("Clipboard supported")
     if caps & VD_AGENT_CAP_CLIPBOARD_BY_DEMAND:
-        print("Clipboard by demand supported")
+        checks += 1
+        logging.debug("Clipboard by demand supported")
     if caps & VD_AGENT_CAP_CLIPBOARD_SELECTION:
-        print("Clipboard selection supported")
+        checks += 1
+        logging.debug("Clipboard selection supported")
     if caps & VD_AGENT_CAP_GUEST_LINEEND_LF:
-        print("Guest lineend LF supported")
+        logging.debug("Guest lineend LF supported")
     if caps & VD_AGENT_CAP_MAX_CLIPBOARD:
-        print("Max clipboard supported")
+        logging.debug("Max clipboard supported")
     if caps & VD_AGENT_CAP_CLIPBOARD_NO_RELEASE_ON_REGRAB:
-        print("Clipboard no release on regrab supported")
+        logging.debug("Clipboard no release on regrab supported")
     if caps & VD_AGENT_CAP_CLIPBOARD_GRAB_SERIAL:
-        print("Clipboard grab serial supported")
+        checks += 1
+        logging.debug("Clipboard grab serial supported")
+
+    if checks < 3:
+        logging.warning("Not all required capabilities supported")
 
     if request:
         resp_cap = VDAgentAnnounceCapabilities(0, VD_AGENT_CAP_CLIPBOARD_BY_DEMAND | VD_AGENT_CAP_CLIPBOARD_SELECTION | VD_AGENT_CAP_CLIPBOARD_GRAB_SERIAL)
         resp_msg = VDAgentMessage(VD_AGENT_ANNOUNCE_CAPABILITIES, resp_cap)
         await resp_msg.send(writer)
+        logging.debug("Capabilities response sent")
 
+    logging.debug("Capabilities announce handled")
 
-VD_AGENT_CLIPBOARD_NONE = 0,
-VD_AGENT_CLIPBOARD_UTF8_TEXT = 1
-VD_AGENT_CLIPBOARD_IMAGE_PNG = 2
-VD_AGENT_CLIPBOARD_IMAGE_BMP = 3
-VD_AGENT_CLIPBOARD_IMAGE_TIFF = 4
-VD_AGENT_CLIPBOARD_IMAGE_JPG = 5
-VD_AGENT_CLIPBOARD_FILE_LIST = 6
 
 async def handle_clipboard(data, writer):
     global clipboard_data
@@ -204,7 +296,22 @@ async def handle_clipboard(data, writer):
         logging.warning(f"Unsupported content type: {content_type}")
 
 async def handle_clipboard_request(data, writer):
-    logging.warning("Clipboard request not implemented")
+    selection, cb_type = struct.unpack("<II", data)
+
+    logging.debug(f"Clipboard request: selection: {selection}, type: {cb_type}")
+
+    if cb_type != VD_AGENT_CLIPBOARD_UTF8_TEXT:
+        logging.warning("Unsupported clipboard type")
+        return
+
+    global clipboard_data
+
+    if clipboard_data:
+        logging.debug("Clipboard data found, sending")
+        clip = VDAgentClipboard(clipboard_data, selection=selection)
+        clip_msg = VDAgentMessage(VD_AGENT_CLIPBOARD, clip)
+        await clip_msg.send(writer)
+        logging.debug("Clipboard data sent")
 
 async def handle_clipboard_grab(data, writer):
     # 4 bytes selection 4 bytes serial and n times 4 bytes type
@@ -219,9 +326,10 @@ async def handle_clipboard_grab(data, writer):
 
     if found:
         logging.debug("Supported type found, sending clipboard request")
-        reqclip = VDAgentRequestClipboard(selection, VD_AGENT_CLIPBOARD_UTF8_TEXT)
+        reqclip = VDAgentRequestClipboard(selection=selection)
         reqclip_msg = VDAgentMessage(VD_AGENT_CLIPBOARD_REQUEST, reqclip)
         await reqclip_msg.send(writer)
+        logging.debug("Clipboard request sent")
     else:
         logging.warning("No supported type found")
 
@@ -281,8 +389,13 @@ async def read_message_header(reader):
 
 
 async def handle_client(reader, writer):
+    global clients
     client_address = writer.get_extra_info('peername')
-    logging.debug(f"Connection established with {client_address}")
+    logging.info(f"Connection established with {client_address}")
+
+    client_port = client_address[1]
+
+    clients[client_port] = writer
 
     try:
         buffer = b''
@@ -292,7 +405,7 @@ async def handle_client(reader, writer):
         while True:
            port,chunk_size = await read_chunk_header(reader)
 
-           print(f"Port: {port}, Size: {chunk_size}")
+           logging.debug(f"Port: {port}, Size: {chunk_size}")
 
            if chunk_size == -1:
                break
@@ -334,14 +447,16 @@ async def handle_client(reader, writer):
                message_header_read = False
                message_size = 0
 
-        logging.debug(f"Connection with {client_address} was closed.")
-
     except asyncio.CancelledError:
         logging.debug(f"Connection with {client_address} was cancelled.")
     finally:
         # Close the writer when done
         writer.close()
         await writer.wait_closed()
+
+        del clients[client_port]
+
+        logging.info(f"Connection with {client_address} was closed.")
 
 async def handle_clipboard_watch(reader, writer):
     global clipboard_data
@@ -366,6 +481,8 @@ async def handle_clipboard_watch(reader, writer):
     if len(buffer) and buffer != clipboard_data:
         clipboard_data = buffer
         logging.debug(f"Clipboard updated:\n{clipboard_data}")
+        await send_grab_message()
+        logging.debug("Clipboard grab message sent to all clients")
 
     logging.debug("Closing clipboard watch connection")
     writer.close()
@@ -383,6 +500,7 @@ async def start_server(server):
 
 
 async def tcp_server():
+    logging.info("Starting Clipboard TCP Server")
     server = await asyncio.start_server(
         handle_client, HOST, PORT)
 
@@ -391,16 +509,22 @@ async def tcp_server():
 
     await start_server(server) # Start the server and keep it running
 
-async def tcp_internal_server():
-    server = await asyncio.start_server(
-        handle_clipboard_watch, HOST, INTERNAL_PORT)
+    logging.info("Clipboard TCP Server stopped")
 
-    addr = server.sockets[0].getsockname()
-    logging.info(f'Serving on {addr}')
-
-    await start_server(server) # Start the server and keep it running 
+#async def tcp_internal_server():
+#    logging.info("Starting internal clipboard server")
+#    server = await asyncio.start_server(
+#        handle_clipboard_watch, HOST, INTERNAL_PORT)
+#
+#    addr = server.sockets[0].getsockname()
+#    logging.info(f'Serving on {addr}')
+#
+#    await start_server(server) # Start the server and keep it running 
+#
+#    logging.info("Clipboard Internal TCP Server stopped")
 
 async def unix_server():
+    logging.info("Starting Internal Clipboard Server")
     if os.path.exists(INTERNAL_SOCKET_PATH):
         os.unlink(INTERNAL_SOCKET_PATH)
 
@@ -413,6 +537,8 @@ async def unix_server():
     await start_server(server) # Start the server and keep it running
 
     os.unlink(INTERNAL_SOCKET_PATH)
+
+    logging.info("Clipboard Internal Clipboard Server stopped")
 
 async def main():
     tcp_task = asyncio.create_task(tcp_server())
@@ -434,4 +560,7 @@ try:
     asyncio.run(main())
 except KeyboardInterrupt:
     shutdown(None, None)
-    logging.info("\nServer shut down.")
+    logging.info("\nServer shut down events sended")
+
+watcher_thread.join()
+logging.info("Clipboard server stopped")
