@@ -72,7 +72,10 @@ qemu-system-x86_64 \
   -device virtio-keyboard,id=kbd \
   -device virtio-mouse,id=mouse \
   -device virtio-tablet,id=tablet \
-  -device edu,dma_mask=0xFFFFFFFFFFFFFFFF \
+  -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
+  -device virtio-serial,id=vser0,packed=on,ioeventfd=on,vectors=64 \
+  -device virtserialport,name=clipboard.0,chardev=vdagent0 \
+  -chardev socket,id=vdagent0,port=4444,host=localhost,server=off,reconnect=5 \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -display sdl,gl=on,show-cursor=on 

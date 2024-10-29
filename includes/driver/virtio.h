@@ -209,6 +209,7 @@ typedef struct {
     virtio_queue_t              vq;
     uint16_t                    last_used_index;
     virtio_notification_data_t* nd;
+    uint8_t                     isr_number;
 }virtio_queue_ext_t;
 
 typedef struct {
