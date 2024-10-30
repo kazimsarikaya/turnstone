@@ -42,6 +42,10 @@ typedef struct virtio_console_control_t {
     uint16_t value;
 }__attribute__((packed)) virtio_console_control_t;
 
+#define VIRTIO_CONSOLE_MAX_PORT_NAME 63
+#define VIRTIO_CONSOLE_CONTROL_VQ_SIZE (sizeof(virtio_console_control_t) + VIRTIO_CONSOLE_MAX_PORT_NAME + 1)
+#define VIRTIO_CONSOLE_DATA_VQ_SIZE 4096
+
 typedef struct virtio_console_resize_t {
     uint16_t cols;
     uint16_t rows;
@@ -50,6 +54,8 @@ typedef struct virtio_console_resize_t {
 int8_t console_virtio_init(void);
 
 // vdagent protocol types and signatures
+
+#define VIRTIO_CONSOLE_VDAGENT_PORT_NAME "com.turnstoneos.clipboard.0"
 
 typedef enum vdp_port_t {
     VDP_CLIENT_PORT = 1,

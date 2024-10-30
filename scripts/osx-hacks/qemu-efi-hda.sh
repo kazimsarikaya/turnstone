@@ -76,7 +76,7 @@ qemu-system-x86_64 \
   -device virtio-tablet,id=tablet \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device virtio-serial,id=vser0,packed=on,ioeventfd=on,max_ports=4,vectors=64 \
-  -device virtserialport,name=clipboard.0,chardev=vdagent0 \
+  -device virtserialport,name=com.turnstoneos.clipboard.0,chardev=vdagent0 \
   -chardev socket,id=vdagent0,port=4444,host=localhost,server=off,reconnect=5 \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \

@@ -38,12 +38,28 @@ typedef struct virtio_console_t {
     uint64_t               rx_task_id;
 } virtio_console_t;
 
+static int16_t virtio_console_get_rx_queue_number(uint16_t port_no) {
+    if(port_no == 0) {
+        return 0;
+    }
+
+    return 2 * port_no + 2;
+}
+
+static int16_t virtio_console_get_tx_queue_number(uint16_t port_no) {
+    if(port_no == 0) {
+        return 1;
+    }
+
+    return 2 * port_no + 3;
+}
+
 static int8_t vdagent_send_caps(const virtio_console_t* vconsole, uint8_t port_no) {
     if(port_no != 1) {
         return -1;
     }
 
-    int32_t queue_index = 2 * port_no + 3;
+    int32_t queue_index = virtio_console_get_tx_queue_number(port_no);
 
     virtio_dev_t* vdev = vconsole->vdev;
 
@@ -85,6 +101,8 @@ static int8_t vdagent_send_caps(const virtio_console_t* vconsole, uint8_t port_n
     avail->index++;
     vq_tx->nd->vqn = 1;
 
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Caps sent");
+
     return 0;
 }
 
@@ -93,7 +111,7 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
         return -1;
     }
 
-    int32_t queue_index = 2 * port_no + 3;
+    int32_t queue_index = virtio_console_get_tx_queue_number(port_no);
 
     virtio_dev_t* vdev = vconsole->vdev;
 
@@ -130,6 +148,8 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
     avail->index++;
     vq_tx->nd->vqn = 1;
 
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data sent");
+
     return 0;
 }
 
@@ -141,8 +161,12 @@ int8_t clipboard_send_text(const char_t* text_message) {
             continue;
         }
 
-        if(vdagent_send_clipboard_data(vconsole, 1, text_message) != 0) {
-            video_text_print("Failed to send clipboard data\n");
+        for(uint16_t port_no = 0; port_no < vconsole->port_count; port_no++) {
+            if(vconsole->ports[port_no].open && strcmp(vconsole->ports[port_no].name, VIRTIO_CONSOLE_VDAGENT_PORT_NAME) == 0){
+                if(vdagent_send_clipboard_data(vconsole, port_no, text_message) != 0) {
+                    PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send clipboard data");
+                }
+            }
         }
     }
 
@@ -154,7 +178,7 @@ static int8_t vdagent_request_clipboard_data(const virtio_console_t* vconsole, u
         return -1;
     }
 
-    int32_t queue_index = 2 * port_no + 3;
+    int32_t queue_index = virtio_console_get_tx_queue_number(port_no);
 
     virtio_dev_t* vdev = vconsole->vdev;
 
@@ -190,6 +214,8 @@ static int8_t vdagent_request_clipboard_data(const virtio_console_t* vconsole, u
     avail->index++;
     vq_tx->nd->vqn = 1;
 
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Request clipboard data sent");
+
     return 0;
 }
 
@@ -198,7 +224,7 @@ static int8_t vdagent_send_grab_clipboard(const virtio_console_t* vconsole, uint
         return -1;
     }
 
-    int32_t queue_index = 2 * port_no + 3;
+    int32_t queue_index = virtio_console_get_tx_queue_number(port_no);
 
     virtio_dev_t* vdev = vconsole->vdev;
 
@@ -234,6 +260,8 @@ static int8_t vdagent_send_grab_clipboard(const virtio_console_t* vconsole, uint
     avail->index++;
     vq_tx->nd->vqn = 1;
 
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Grab clipboard sent");
+
     return 0;
 }
 
@@ -245,18 +273,23 @@ static int8_t vdagent_check_message(uint8_t* data, uint64_t len, const virtio_co
     vdi_chunk_header_t* chunk_header = (vdi_chunk_header_t*)data;
 
     if(chunk_header->size + sizeof(vdi_chunk_header_t) > len) {
+        PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Invalid chunk size");
         return -1;
     }
 
     vdagent_message_t* message = (vdagent_message_t*)(data + sizeof(vdi_chunk_header_t));
 
     if(message->protocol != VD_AGENT_PROTOCOL) {
+        PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Invalid protocol");
         return -1;
     }
 
     if(message->size + sizeof(vdagent_message_t) > chunk_header->size) {
+        PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Invalid message size");
         return -1;
     }
+
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Message type: %d", message->type);
 
     if(message->type == VD_AGENT_ANNOUNCE_CAPABILITIES) {
         vdagent_cap_announce_t* cap_announce = (vdagent_cap_announce_t*)(data + sizeof(vdi_chunk_header_t) + sizeof(vdagent_message_t));
@@ -284,7 +317,7 @@ static int8_t vdagent_check_message(uint8_t* data, uint64_t len, const virtio_co
         }
 
         if(vdagent_send_grab_clipboard(vconsole, port_no) != 0) {
-            video_text_print("Failed to send grab clipboard\n");
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send grab clipboard");
         }
     } else if(message->type == VD_AGENT_CLIPBOARD_REQUEST) {
         vdagent_clipboard_request_t* clipboard_request = (vdagent_clipboard_request_t*)(data + sizeof(vdi_chunk_header_t) + sizeof(vdagent_message_t));
@@ -302,7 +335,7 @@ static int8_t vdagent_check_message(uint8_t* data, uint64_t len, const virtio_co
         }
 
         if(vdagent_send_clipboard_data(vconsole, port_no, "Clipboard data") != 0) {
-            video_text_print("Failed to send clipboard data\n");
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send clipboard data");
         }
     } else if(message->type == VD_AGENT_CLIPBOARD) {
         vdagent_clipboard_t* clipboard = (vdagent_clipboard_t*)(data + sizeof(vdi_chunk_header_t) + sizeof(vdagent_message_t));
@@ -317,11 +350,17 @@ static int8_t vdagent_check_message(uint8_t* data, uint64_t len, const virtio_co
 
         char_t buf[1025] = {0};
 
-        memory_memcopy(clipboard->data, buf, message->size - sizeof(vdagent_clipboard_t));
+        uint64_t buf_len = message->size - sizeof(vdagent_clipboard_t);
 
-        buf[message->size - sizeof(vdagent_clipboard_t)] = '\0';
+        if(buf_len > 1024) {
+            buf_len = 1024;
+        }
 
-        video_text_print(buf);
+        memory_memcopy(clipboard->data, buf, buf_len);
+
+        buf[buf_len] = '\0';
+
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data: %s", buf);
     } else if(message->type == VD_AGENT_CLIPBOARD_GRAB) {
         vdagent_clipboard_grab_t* clipboard_grab = (vdagent_clipboard_grab_t*)(data + sizeof(vdi_chunk_header_t) + sizeof(vdagent_message_t));
 
@@ -338,10 +377,10 @@ static int8_t vdagent_check_message(uint8_t* data, uint64_t len, const virtio_co
         }
 
         if(vdagent_request_clipboard_data(vconsole, port_no) != 0) {
-            video_text_print("Failed to request clipboard data\n");
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to request clipboard data");
         }
     } else {
-        video_text_print("Unknown message\n");
+        PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Unknown message");
         return -1;
     }
 
@@ -377,6 +416,91 @@ static uint64_t virtio_console_select_features(virtio_dev_t* vdev, uint64_t avai
     return selected_features;
 }
 
+static int8_t virtio_console_vdagent_loop(const virtio_console_t * vconsole, uint64_t port_no) {
+    virtio_dev_t* vdev = vconsole->vdev;
+
+    uint16_t queue_index = virtio_console_get_rx_queue_number(port_no);
+
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Vdagent loop for port %lli, queue %d",
+             port_no, queue_index);
+
+    virtio_queue_ext_t* vq_rx = &vdev->queues[queue_index];
+
+    virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
+    virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
+    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
+
+    while(vq_rx->last_used_index < used->index) {
+
+        uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
+        uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
+
+        uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
+
+        if(vdagent_check_message(offset, packet_len, vconsole, port_no) != 0) {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Invalid message");
+        } else {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Valid message");
+        }
+
+        avail->ring[avail->index % vdev->queue_size] = packet_desc_id;
+        avail->index++;
+        vq_rx->nd->vqn = 0;
+
+        vq_rx->last_used_index++;
+    }
+
+    return 0;
+}
+
+static int8_t virtio_console_vdagent_rx(uint64_t args_cnt, void** args) {
+    if(args_cnt != 2) {
+        return -1;
+    }
+
+    virtio_console_t* vconsole = (virtio_console_t*)args[0];
+    uint64_t port_no = (uint64_t)args[1];
+
+    uint16_t queue_index = virtio_console_get_rx_queue_number(port_no);
+
+
+    virtio_dev_t* vdev = vconsole->vdev;
+    pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)vdev->pci_dev->pci_header;
+    pci_capability_msix_t* msix = vdev->msix_cap;
+
+    PRINTLOG(VIRTIO_CONSOLE, LOG_TRACE, "clear pending bit send set interruptible");
+    cpu_cli();
+    pci_msix_update_lapic(pci_gen_dev, msix, queue_index);
+    pci_msix_clear_pending_bit(pci_gen_dev, msix, queue_index);
+    task_set_interruptible();
+    cpu_sti();
+
+    virtio_queue_ext_t* vq_rx = &vdev->queues[queue_index];
+
+    virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
+
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Starting vdagent");
+
+    while(true) {
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Checking message queue %d for port %lli", queue_index, port_no);
+        if(!vconsole->ports[port_no].open) {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %lli closed. Ending vdagent", port_no);
+            break;
+        }
+
+        if(vq_rx->last_used_index < used->index) {
+            virtio_console_vdagent_loop(vconsole, port_no);
+        }
+
+        pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_index);
+
+        task_set_message_waiting();
+        task_yield();
+    }
+
+    return 0;
+}
+
 static int8_t virtio_console_isr_data_receive(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
     video_text_print("virtio_console_isr_data_receive\n");
@@ -392,37 +516,24 @@ static int8_t virtio_console_isr_data_receive(interrupt_frame_ext_t* frame) {
         pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)vdev->pci_dev->pci_header;
         pci_capability_msix_t* msix = vdev->msix_cap;
 
-        virtio_queue_ext_t* vq_rx = &vdev->queues[4]; // TODO: clipboard at port 1 fix to all ports
+        for(uint16_t port_no = 0; port_no < vconsole->port_count; port_no++) {
+            uint16_t queue_index = virtio_console_get_rx_queue_number(port_no);
 
-        if(vq_rx->isr_number != frame->interrupt_number - INTERRUPT_IRQ_BASE) {
-            continue;
-        }
+            virtio_queue_ext_t* vq_rx = &vdev->queues[queue_index];
 
-        virtio_queue_used_t* used = virtio_queue_get_used(vdev, vq_rx->vq);
-        virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_rx->vq);
-        virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_rx->vq);
-
-        while(vq_rx->last_used_index < used->index) {
-
-            uint64_t packet_len = used->ring[vq_rx->last_used_index % vdev->queue_size].length;
-            uint16_t packet_desc_id = used->ring[vq_rx->last_used_index % vdev->queue_size].id;
-
-            uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
-
-            if(vdagent_check_message(offset, packet_len, vconsole, 1) != 0) {
-                video_text_print("Invalid message\n");
-            } else {
-                video_text_print("Valid message\n");
+            if(vq_rx->isr_number != frame->interrupt_number - INTERRUPT_IRQ_BASE) {
+                continue;
             }
 
-            avail->ring[avail->index % vdev->queue_size] = packet_desc_id;
-            avail->index++;
-            vq_rx->nd->vqn = 0;
 
-            vq_rx->last_used_index++;
+            if(vconsole->rx_task_id) {
+                video_text_print("set interrupt received\n");
+                task_set_interrupt_received(vconsole->ports[port_no].rx_task_id);
+            } else {
+                video_text_print("no task, clear pending bit\n");
+                pci_msix_clear_pending_bit(pci_gen_dev, msix, queue_index);
+            }
         }
-
-        pci_msix_clear_pending_bit(pci_gen_dev, msix, 2);
     }
 
     apic_eoi();
@@ -570,6 +681,33 @@ static int8_t virtio_console_isr_control_receive(interrupt_frame_ext_t* frame) {
    }
  */
 
+static int8_t virtio_console_start_vdagent(const virtio_console_t* vconsole, uint8_t port_no) {
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Starting vdagent");
+
+    if(port_no >= vconsole->port_count) {
+        PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Invalid port number");
+        return -1;
+    }
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    void** rx_args = memory_malloc_ext(heap, sizeof(void*) * 2, 0);
+
+    if(rx_args == NULL) {
+        PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "cannot allocate memory for rx task args");
+
+        return -1;
+    }
+
+    rx_args[0] = (void*)vconsole;
+    rx_args[1] = (void*)((uint64_t)port_no);
+
+    uint64_t rx_task_id = task_create_task(heap, 16 << 20, 64 << 10, virtio_console_vdagent_rx, 2, rx_args, "vdagent");
+    vconsole->ports[port_no].rx_task_id = rx_task_id;
+
+    return 0;
+}
+
 static void virtio_console_control_queue_loop(const virtio_console_t* vconsole) {
     virtio_dev_t* vdev = vconsole->vdev;
 
@@ -595,9 +733,24 @@ static void virtio_console_control_queue_loop(const virtio_console_t* vconsole) 
             PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d ready", control->id);
         }
         break;
-        case VIRTIO_CONSOLE_DEVICE_REMOVE:
-            PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Virtio console device removed not implemented");
-            break;
+        case VIRTIO_CONSOLE_DEVICE_REMOVE: {
+            vconsole->ports[control->id].attached = false;
+            vconsole->ports[control->id].open = false;
+
+            if(vconsole->ports[control->id].rx_task_id) {
+                // port console should stop task, however still it is running, we should kill it forcefully
+                task_kill_task(vconsole->ports[control->id].rx_task_id, true);
+                vconsole->ports[control->id].rx_task_id = 0;
+            }
+
+            memory_free(vconsole->ports[control->id].name);
+            vconsole->ports[control->id].name = NULL;
+
+            memory_memclean(&vconsole->ports[control->id], sizeof(virtio_console_port_t)); // ensure that all fields are zero
+
+            PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d removed", control->id);
+        }
+        break;
         case VIRTIO_CONSOLE_CONSOLE_PORT:
             PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Virtio console port not implemented");
             break;
@@ -606,18 +759,38 @@ static void virtio_console_control_queue_loop(const virtio_console_t* vconsole) 
             break;
         case VIRTIO_CONSOLE_PORT_OPEN: {
             if(control->value) {
-                vconsole->ports[control->id].open = true;
-                virtio_console_send_port_open(vconsole, control->id);
-                PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d open", control->id);
+                if(strcmp(vconsole->ports[control->id].name, VIRTIO_CONSOLE_VDAGENT_PORT_NAME) == 0) {
+                    vconsole->ports[control->id].open = true;
+
+                    if(virtio_console_start_vdagent(vconsole, control->id) != 0) {
+                        PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to start vdagent");
+                        vconsole->ports[control->id].open = false;
+                    } else {
+                        virtio_console_send_port_open(vconsole, control->id);
+                        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d open", control->id);
+                    }
+                } else {
+                    PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Unknown port %d", control->id);
+                }
             } else {
                 vconsole->ports[control->id].open = false;
                 PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d closed", control->id);
+                if(vconsole->ports[control->id].rx_task_id) {
+                    task_set_interrupt_received(vconsole->ports[control->id].rx_task_id);
+                    vconsole->ports[control->id].rx_task_id = 0;
+                }
             }
         }
         break;
         case VIRTIO_CONSOLE_PORT_NAME: {
             uint8_t* name_offset = offset + sizeof(virtio_console_control_t);
             uint64_t name_len = packet_len - sizeof(virtio_console_control_t);
+
+            if(name_len > VIRTIO_CONSOLE_MAX_PORT_NAME) {
+                name_len = VIRTIO_CONSOLE_MAX_PORT_NAME;
+            }
+
+            PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d name len %lli", control->id, name_len);
 
             vconsole->ports[control->id].name = memory_malloc(name_len + 1);
 
@@ -666,10 +839,12 @@ static int32_t virtio_console_control_rx(uint64_t args_cnt, void** args) {
     pci_generic_device_t* pci_gen_dev = (pci_generic_device_t*)vdev->pci_dev->pci_header;
     pci_capability_msix_t* msix = vdev->msix_cap;
 
+    uint16_t queue_index = 2;
+
     PRINTLOG(VIRTIO_CONSOLE, LOG_TRACE, "clear pending bit send set interruptible");
     cpu_cli();
-    pci_msix_update_lapic(pci_gen_dev, msix, 0);
-    pci_msix_clear_pending_bit(pci_gen_dev, msix, 0);
+    pci_msix_update_lapic(pci_gen_dev, msix, queue_index);
+    pci_msix_clear_pending_bit(pci_gen_dev, msix, queue_index);
     task_set_interruptible();
     cpu_sti();
 
@@ -682,7 +857,7 @@ static int32_t virtio_console_control_rx(uint64_t args_cnt, void** args) {
             virtio_console_control_queue_loop(vconsole);
         }
 
-        pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, 0);
+        pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_index);
 
         task_set_message_waiting();
         task_yield();
@@ -714,36 +889,36 @@ static int8_t virtio_console_create_queues(virtio_dev_t* vdev) {
 
     PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Creating queues for port 0");
 
-    if(virtio_create_queue(vdev, 0, 4096, true, false, NULL, virtio_console_isr_data_receive, NULL) != 0) {
+    if(virtio_create_queue(vdev, 0, VIRTIO_CONSOLE_DATA_VQ_SIZE, true, false, NULL, virtio_console_isr_data_receive, NULL) != 0) {
         PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to create virtio queues");
         return -1;
     }
 
-    if(virtio_create_queue(vdev, 1, 4096, false, false, NULL, NULL, NULL) != 0) {
+    if(virtio_create_queue(vdev, 1, VIRTIO_CONSOLE_DATA_VQ_SIZE, false, false, NULL, NULL, NULL) != 0) {
         PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to create virtio queues");
         return -1;
     }
 
     if(has_multiport) {
         PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Creating queues for control");
-        if(virtio_create_queue(vdev, 2, 4096, true, false, NULL, virtio_console_isr_control_receive, NULL) != 0) {
+        if(virtio_create_queue(vdev, 2, VIRTIO_CONSOLE_CONTROL_VQ_SIZE, true, false, NULL, virtio_console_isr_control_receive, NULL) != 0) {
             PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to create virtio queues");
             return -1;
         }
 
-        if(virtio_create_queue(vdev, 3, 4096, false, false, NULL, NULL, NULL) != 0) {
+        if(virtio_create_queue(vdev, 3, VIRTIO_CONSOLE_CONTROL_VQ_SIZE, false, false, NULL, NULL, NULL) != 0) {
             PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to create virtio queues");
             return -1;
         }
 
         for(uint64_t i = 1; i < nr_ports; i++) {
             PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Creating queues for port %lli", i);
-            if(virtio_create_queue(vdev, 2 * i + 2, 4096, true, false, NULL, virtio_console_isr_data_receive, NULL) != 0) {
+            if(virtio_create_queue(vdev, 2 * i + 2, VIRTIO_CONSOLE_DATA_VQ_SIZE, true, false, NULL, virtio_console_isr_data_receive, NULL) != 0) {
                 PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to create virtio queues");
                 return -1;
             }
 
-            if(virtio_create_queue(vdev, 2 * i + 3, 4096, false, false, NULL, NULL, NULL) != 0) {
+            if(virtio_create_queue(vdev, 2 * i + 3, VIRTIO_CONSOLE_DATA_VQ_SIZE, false, false, NULL, NULL, NULL) != 0) {
                 PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to create virtio queues");
                 return -1;
             }
