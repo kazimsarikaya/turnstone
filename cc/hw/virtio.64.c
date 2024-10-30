@@ -174,7 +174,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
             time_timer_spinsleep(1000);
 
             if(vdev->common_config->queue_size != vdev->queue_size) {
-                PRINTLOG(VIRTIO, LOG_ERROR, "queue size missmatch 0x%x", vdev->common_config->queue_size);
+                PRINTLOG(VIRTIO, LOG_ERROR, "for queue %i queue size missmatch 0x%x 0x%x",
+                         queue_no, vdev->common_config->queue_size, vdev->queue_size);
 
                 return -1;
             }

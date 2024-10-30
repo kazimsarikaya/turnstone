@@ -50,6 +50,8 @@ RAMSIZE=4
 
 SERIALS=""
 
+TRACE_OPTS="guest_errors,trace:virtio_console_*"
+
 for i in `seq 0 $((NUMCPUS-1))`; do
   SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
 done
@@ -58,7 +60,7 @@ qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
   -M q35 -m ${RAMSIZE}g -smp cpus=4 -name osdev-hda-efi-boot \
   -cpu max \
-  -accel $ACCEL -d guest_errors \
+  -accel $ACCEL -d "${TRACE_OPTS}" \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive id=system,if=none,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
@@ -73,7 +75,7 @@ qemu-system-x86_64 \
   -device virtio-mouse,id=mouse \
   -device virtio-tablet,id=tablet \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
-  -device virtio-serial,id=vser0,packed=on,ioeventfd=on,vectors=64 \
+  -device virtio-serial,id=vser0,packed=on,ioeventfd=on,max_ports=4,vectors=64 \
   -device virtserialport,name=clipboard.0,chardev=vdagent0 \
   -chardev socket,id=vdagent0,port=4444,host=localhost,server=off,reconnect=5 \
   $SERIALS \
