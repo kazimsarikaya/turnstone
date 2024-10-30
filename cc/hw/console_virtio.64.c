@@ -592,6 +592,7 @@ static void virtio_console_control_queue_loop(const virtio_console_t* vconsole) 
         case VIRTIO_CONSOLE_DEVICE_ADD: {
             vconsole->ports[control->id].attached = true;
             virtio_console_send_port_ready(vconsole, control->id);
+            PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d ready", control->id);
         }
         break;
         case VIRTIO_CONSOLE_DEVICE_REMOVE:
@@ -601,12 +602,17 @@ static void virtio_console_control_queue_loop(const virtio_console_t* vconsole) 
             PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Virtio console port not implemented");
             break;
         case VIRTIO_CONSOLE_RESIZE:
-            video_text_print("VIRTIO_CONSOLE_RESIZE\n");
             PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Virtio console resize not implemented");
             break;
         case VIRTIO_CONSOLE_PORT_OPEN: {
-            vconsole->ports[control->id].open = true;
-            virtio_console_send_port_open(vconsole, control->id);
+            if(control->value) {
+                vconsole->ports[control->id].open = true;
+                virtio_console_send_port_open(vconsole, control->id);
+                PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d open", control->id);
+            } else {
+                vconsole->ports[control->id].open = false;
+                PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Port %d closed", control->id);
+            }
         }
         break;
         case VIRTIO_CONSOLE_PORT_NAME: {
