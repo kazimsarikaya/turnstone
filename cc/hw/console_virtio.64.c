@@ -134,24 +134,6 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
     virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_tx->vq);
     virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_tx->vq);
 
-    uint16_t avail_tx_id = avail->index;
-
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[avail_tx_id % vdev->queue_size].address);
-
-    vdi_chunk_header_t* chunk_header = (vdi_chunk_header_t*)offset;
-
-    chunk_header->port = VDP_CLIENT_PORT;
-
-    vdagent_message_t* message = (vdagent_message_t*)(offset + sizeof(vdi_chunk_header_t));
-
-    message->protocol = VD_AGENT_PROTOCOL;
-    message->type = VD_AGENT_CLIPBOARD;
-
-
-    vdagent_clipboard_t* clipboard = (vdagent_clipboard_t*)(offset + sizeof(vdi_chunk_header_t) + sizeof(vdagent_message_t));
-    clipboard->type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
-    clipboard->selection = VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD;
-
     lock_acquire(clipboard_data->lock);
 
     if(clipboard_data->size == 0) {
@@ -160,20 +142,62 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
         return 0;
     }
 
-    uint64_t clipboard_data_size = clipboard_data->size;
+    uint64_t data_size = clipboard_data->size;
+    uint64_t data_offset = 0;
+    uint64_t data_size_with_header = sizeof(vdagent_clipboard_t) + data_size;
+    uint64_t data_size_with_header_and_message = sizeof(vdagent_message_t) + data_size_with_header;
+    uint64_t max_chunk_size = VD_AGENT_MAX_DATA_SIZE - sizeof(vdi_chunk_header_t);
 
-    memory_memcopy(clipboard_data->data, clipboard->data, clipboard_data_size);
+    uint64_t remaining = data_size_with_header_and_message;
+    boolean_t header_sent = false;
+
+    uint8_t* dest = NULL;
+
+    while(remaining) {
+        uint64_t chunk_size = remaining > max_chunk_size ? max_chunk_size : remaining;
+
+        uint16_t avail_tx_id = avail->index;
+
+        uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[avail_tx_id % vdev->queue_size].address);
+
+        vdi_chunk_header_t* chunk_header = (vdi_chunk_header_t*)offset;
+
+        chunk_header->port = VDP_CLIENT_PORT;
+        chunk_header->size = chunk_size;
+
+        dest = offset + sizeof(vdi_chunk_header_t);
+
+        if(!header_sent) {
+            vdagent_message_t* message = (vdagent_message_t*)chunk_header->data;
+
+            message->protocol = VD_AGENT_PROTOCOL;
+            message->type = VD_AGENT_CLIPBOARD;
+            message->size = data_size_with_header;
+
+            vdagent_clipboard_t* clipboard = (vdagent_clipboard_t*)message->data;
+            clipboard->type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
+            clipboard->selection = VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD;
+
+            chunk_size -= sizeof(vdagent_message_t) + sizeof(vdagent_clipboard_t);
+
+            dest += sizeof(vdagent_message_t) + sizeof(vdagent_clipboard_t);
+
+            header_sent = true;
+        }
+
+        memory_memcopy(clipboard_data->data + data_offset, dest, chunk_size);
+
+        data_offset += chunk_size;
+
+        descs[avail_tx_id % vdev->queue_size].length = sizeof(vdi_chunk_header_t) + chunk_header->size;
+
+        avail->index++;
+        vq_tx->nd->vqn = 1;
+
+        remaining -= chunk_header->size;
+    }
 
     lock_release(clipboard_data->lock);
-
-    message->size = sizeof(vdagent_clipboard_t) + clipboard_data_size;
-
-    chunk_header->size = sizeof(vdagent_message_t) + message->size;
-
-    descs[avail_tx_id % vdev->queue_size].length = sizeof(vdi_chunk_header_t) + chunk_header->size;
-
-    avail->index++;
-    vq_tx->nd->vqn = 1;
 
     PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data sent");
 
