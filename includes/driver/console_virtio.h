@@ -149,6 +149,8 @@ typedef struct vdagent_clipboard_t {
     uint8_t  data[];
 }__attribute__((packed)) vdagent_clipboard_t;
 
+#define VD_AGENT_CLIPBOARD_MAX_DATA_SIZE (1 << 20) // 1MB
+
 typedef struct vdagent_clipboard_grab_t {
     uint8_t  selection;
     uint8_t  reserved[3];

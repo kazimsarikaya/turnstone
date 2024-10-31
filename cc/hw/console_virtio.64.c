@@ -12,10 +12,12 @@
 #include <list.h>
 #include <apic.h>
 #include <memory/paging.h>
+#include <memory/frame.h>
 #include <utils.h>
 #include <strings.h>
 #include <cpu.h>
 #include <cpu/task.h>
+#include <cpu/sync.h>
 #include <buffer.h>
 
 MODULE ("turnstone.kernel.hw.console.virtio");
@@ -38,6 +40,14 @@ typedef struct virtio_console_t {
     virtio_console_port_t* ports;
     uint64_t               rx_task_id;
 } virtio_console_t;
+
+typedef struct clipboard_data_t {
+    lock_t*  lock;
+    uint8_t* data;
+    uint64_t size;
+} clipboard_data_t;
+
+static clipboard_data_t* vdagent_clipboard_data = NULL;
 
 static int16_t virtio_console_get_rx_queue_number(uint16_t port_no) {
     if(port_no == 0) {
@@ -107,9 +117,13 @@ static int8_t vdagent_send_caps(const virtio_console_t* vconsole, uint8_t port_n
     return 0;
 }
 
-static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint8_t port_no, const char_t* text_message) {
+static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint8_t port_no, clipboard_data_t* clipboard_data) {
     if(port_no != 1) {
         return -1;
+    }
+
+    if(clipboard_data == NULL) {
+        return 0;
     }
 
     int32_t queue_index = virtio_console_get_tx_queue_number(port_no);
@@ -138,9 +152,21 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
     clipboard->type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
     clipboard->selection = VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD;
 
-    memory_memcopy(text_message, clipboard->data, strlen(text_message));
+    lock_acquire(clipboard_data->lock);
 
-    message->size = sizeof(vdagent_clipboard_t) + strlen(text_message);
+    if(clipboard_data->size == 0) {
+        lock_release(clipboard_data->lock);
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data empty");
+        return 0;
+    }
+
+    uint64_t clipboard_data_size = clipboard_data->size;
+
+    memory_memcopy(clipboard_data->data, clipboard->data, clipboard_data_size);
+
+    lock_release(clipboard_data->lock);
+
+    message->size = sizeof(vdagent_clipboard_t) + clipboard_data_size;
 
     chunk_header->size = sizeof(vdagent_message_t) + message->size;
 
@@ -150,26 +176,6 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
     vq_tx->nd->vqn = 1;
 
     PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data sent");
-
-    return 0;
-}
-
-int8_t clipboard_send_text(const char_t* text_message) {
-    for(uint64_t i = 0; i < list_size(virtio_console_list); i++) {
-        const virtio_console_t* vconsole = list_get_data_at_position(virtio_console_list, i);
-
-        if(vconsole == NULL) {
-            continue;
-        }
-
-        for(uint16_t port_no = 0; port_no < vconsole->port_count; port_no++) {
-            if(vconsole->ports[port_no].open && strcmp(vconsole->ports[port_no].name, VIRTIO_CONSOLE_VDAGENT_PORT_NAME) == 0){
-                if(vdagent_send_clipboard_data(vconsole, port_no, text_message) != 0) {
-                    PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send clipboard data");
-                }
-            }
-        }
-    }
 
     return 0;
 }
@@ -266,6 +272,44 @@ static int8_t vdagent_send_grab_clipboard(const virtio_console_t* vconsole, uint
     return 0;
 }
 
+int8_t clipboard_send_text(const char_t* text_message) {
+    if(vdagent_clipboard_data == NULL) {
+        return -1;
+    }
+
+    uint64_t text_len = strlen(text_message);
+
+    if(text_len > VD_AGENT_CLIPBOARD_MAX_DATA_SIZE) {
+        text_len = VD_AGENT_CLIPBOARD_MAX_DATA_SIZE;
+    }
+
+    lock_acquire(vdagent_clipboard_data->lock);
+
+    memory_memcopy(text_message, vdagent_clipboard_data->data, text_len);
+
+    vdagent_clipboard_data->size = text_len;
+
+    lock_release(vdagent_clipboard_data->lock);
+
+    for(uint64_t i = 0; i < list_size(virtio_console_list); i++) {
+        const virtio_console_t* vconsole = list_get_data_at_position(virtio_console_list, i);
+
+        if(vconsole == NULL) {
+            continue;
+        }
+
+        for(uint16_t port_no = 0; port_no < vconsole->port_count; port_no++) {
+            if(vconsole->ports[port_no].open && strcmp(vconsole->ports[port_no].name, VIRTIO_CONSOLE_VDAGENT_PORT_NAME) == 0){
+                if(vdagent_send_grab_clipboard(vconsole, port_no) != 0) {
+                    PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send clipboard data");
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int8_t vdagent_check_message(vdagent_message_t* message, const virtio_console_t* vconsole, uint8_t port_no) {
     if(message->protocol != VD_AGENT_PROTOCOL) {
         PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Invalid protocol");
@@ -317,7 +361,7 @@ static int8_t vdagent_check_message(vdagent_message_t* message, const virtio_con
             return -1;
         }
 
-        if(vdagent_send_clipboard_data(vconsole, port_no, "Clipboard data") != 0) {
+        if(vdagent_send_clipboard_data(vconsole, port_no, vdagent_clipboard_data) != 0) {
             PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send clipboard data");
         }
     } else if(message->type == VD_AGENT_CLIPBOARD) {
@@ -331,19 +375,26 @@ static int8_t vdagent_check_message(vdagent_message_t* message, const virtio_con
             return -1;
         }
 
-        char_t buf[1025] = {0};
+        if(vdagent_clipboard_data == NULL) {
+            return -1;
+        }
 
         uint64_t buf_len = message->size - sizeof(vdagent_clipboard_t);
 
-        if(buf_len > 1024) {
-            buf_len = 1024;
+        if(buf_len > VD_AGENT_CLIPBOARD_MAX_DATA_SIZE) {
+            buf_len = VD_AGENT_CLIPBOARD_MAX_DATA_SIZE;
         }
 
-        memory_memcopy(clipboard->data, buf, buf_len);
+        lock_acquire(vdagent_clipboard_data->lock);
 
-        buf[buf_len] = '\0';
+        memory_memcopy(clipboard->data, vdagent_clipboard_data->data, buf_len);
 
-        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data: %s", buf);
+        vdagent_clipboard_data->size = buf_len;
+        vdagent_clipboard_data->data[buf_len] = '\0';
+
+        lock_release(vdagent_clipboard_data->lock);
+
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard length: %lli data: %s", buf_len, (char_t*)vdagent_clipboard_data->data);
     } else if(message->type == VD_AGENT_CLIPBOARD_GRAB) {
         vdagent_clipboard_grab_t* clipboard_grab = (vdagent_clipboard_grab_t*)message->data;
 
@@ -478,6 +529,7 @@ static int8_t virtio_console_vdagent_loop(const virtio_console_t * vconsole, uin
 
         if(message->size + sizeof(vdagent_message_t) != message_data_remaining) {
             PRINTLOG(VIRTIO_CONSOLE, LOG_WARNING, "Invalid message message size %d != collected %lli", message->size, message_data_remaining);
+            memory_free(message);
             virtio_console_vdagent_advance_queue(vdev, vq_rx, avail, packet_desc_id);
             continue;
         }
@@ -487,6 +539,8 @@ static int8_t virtio_console_vdagent_loop(const virtio_console_t * vconsole, uin
         } else {
             PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Valid message");
         }
+
+        memory_free(message);
 
         virtio_console_vdagent_advance_queue(vdev, vq_rx, avail, packet_desc_id);
     }
@@ -725,6 +779,41 @@ static int8_t virtio_console_isr_control_receive(interrupt_frame_ext_t* frame) {
 
 static int8_t virtio_console_start_vdagent(const virtio_console_t* vconsole, uint8_t port_no) {
     PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Starting vdagent");
+
+    if(!vdagent_clipboard_data) {
+        frame_allocator_t* fa = frame_get_allocator();
+
+        uint64_t frm_cnt = VD_AGENT_CLIPBOARD_MAX_DATA_SIZE / FRAME_SIZE + 1;
+
+        frame_t* frms = NULL;
+
+        if(fa->allocate_frame_by_count(fa, frm_cnt, FRAME_ALLOCATION_TYPE_BLOCK, &frms, NULL) != 0) {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Cannot allocate frames for clipboard data");
+            return -1;
+        }
+
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Frames allocated for clipboard data.");
+
+        uint64_t fa_addr =  frms->frame_address;
+        uint64_t va_addr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(fa_addr);
+
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Frames allocated for clipboard data. FA: 0x%llx VA: 0x%llx count 0x%llx",
+                 fa_addr, va_addr, frms->frame_count);
+
+        if(memory_paging_add_va_for_frame(va_addr, frms, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0){
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Cannot add va for clipboard data");
+            return -1;
+        }
+
+        clipboard_data_t* tmp = (clipboard_data_t*)va_addr;
+        tmp->lock = (lock_t*)(va_addr + sizeof(clipboard_data_t));
+        tmp->data = (uint8_t*)(va_addr + sizeof(clipboard_data_t) + SYNC_LOCK_SIZE);
+        tmp->size = 0;
+
+        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data allocated 0x%p 0x%p 0x%p", tmp, tmp->lock, tmp->data);
+
+        vdagent_clipboard_data = tmp;
+    }
 
     if(port_no >= vconsole->port_count) {
         PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Invalid port number");
