@@ -31,8 +31,10 @@ struct virgl_cmd_t {
     volatile uint64_t in_use;
     uint32_t          cmd_old_dw_count;
     uint32_t          cmd_dw_count;
-    uint32_t          cmd_dws[VIRGL_CMD_MAX_DWORDS];
+    uint32_t          cmd_dws[VIRGL_CMD_MAX_DWORDS] __attribute__((aligned(16)));
 };
+
+_Static_assert(offsetof_field(virgl_cmd_t, cmd_dws) % 16 == 0, "virgl_cmd_t::cmd_dws is not aligned to 16 bytes");
 
 static inline uint32_t fui(float32_t f) {
     union {
@@ -118,10 +120,23 @@ void virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer) {
 
     // memory_memcopy(cmd->cmd_dws, buffer, virgl_cmd_get_size(cmd));
 
-    uint32_t* typed_buffer = (uint32_t*)buffer;
+    uint64_t u128_count = cmd->cmd_dw_count / 4;
+    uint64_t rem = cmd->cmd_dw_count % 4;
 
-    for(uint32_t i = 0; i < cmd->cmd_dw_count; i++) {
-        typed_buffer[i] = cmd->cmd_dws[i];
+    uint128_t* typed128_buffer = (uint128_t*)buffer;
+    uint128_t* typed128_cmd_dws = (uint128_t*)cmd->cmd_dws;
+
+    for(uint64_t i = 0; i < u128_count; i++) {
+        typed128_buffer[i] = typed128_cmd_dws[i];
+    }
+
+    if(rem) {
+        uint32_t* typed_buffer = (uint32_t*)&typed128_buffer[u128_count];
+        uint32_t* typed_cmd_dws = (uint32_t*)&typed128_cmd_dws[u128_count];
+
+        for(uint64_t i = 0; i < rem; i++) {
+            typed_buffer[i] = typed_cmd_dws[i];
+        }
     }
 
     cmd->cmd_dw_count = 0;
