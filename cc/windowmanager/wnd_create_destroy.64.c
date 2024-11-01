@@ -190,6 +190,20 @@ void windowmanager_destroy_window(window_t* window) {
     memory_free(window);
 }
 
+void windowmanager_destroy_child_window(window_t* window, window_t* child) {
+    if(window == NULL || child == NULL) {
+        return;
+    }
+
+    if(window->children == NULL) {
+        return;
+    }
+
+    list_list_delete(window->children, child);
+
+    windowmanager_destroy_window(child);
+}
+
 void windowmanager_remove_and_set_current_window(window_t* window) {
     if(window == NULL) {
         return;

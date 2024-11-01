@@ -209,12 +209,17 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
 
     int64_t col_start = extra_data->col_start;
 
+    if(extra_data->ruler_window != NULL) {
+        windowmanager_destroy_child_window(window, extra_data->ruler_window);
+    }
+
     window_t* ruler_window = wnd_create_editor_ruler(window, col_start + 1, rect_ruler_top, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
 
     if(ruler_window == NULL) {
-        windowmanager_destroy_window(window);
         return -1;
     }
+
+    extra_data->ruler_window = ruler_window;
 
     int64_t top = ruler_window->rect.y + ruler_window->rect.height;
     int64_t max_height = window->rect.height - font_height; // remove footer line
@@ -222,7 +227,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
     rect_t rect_editor = {0, top, window->rect.width, max_height - top};
 
     if(extra_data->editor_window != NULL) {
-        windowmanager_destroy_window(extra_data->editor_window);
+        windowmanager_destroy_child_window(window, extra_data->editor_window);
     }
 
     window_t* editor_window = windowmanager_create_window(window,

@@ -93,6 +93,7 @@ void      windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is
 int8_t    windowmanager_destroy_inputs(list_t* inputs);
 
 void      windowmanager_destroy_window(window_t* window);
+void      windowmanager_destroy_child_window(window_t* window, window_t* child);
 void      windowmanager_insert_and_set_current_window(window_t* window);
 void      windowmanager_remove_and_set_current_window(window_t* window);
 window_t* windowmanager_create_top_window(void);
