@@ -283,6 +283,10 @@ async def handle_clipboard(data, writer):
     logging.debug(f"Clipboard data received. selection: {selection}, content type: {content_type}")
 
     if content_type == VD_AGENT_CLIPBOARD_UTF8_TEXT:
+        if len(data) == 0:
+            logging.debug("Empty clipboard data received")
+            return
+
         # send data to wl-copy with content type text/plain;charset=utf-8
         # wl-copy -t text/plain;charset=utf-8 <payload>
         if data == clipboard_data:

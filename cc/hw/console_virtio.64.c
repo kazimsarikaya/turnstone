@@ -117,12 +117,61 @@ static int8_t vdagent_send_caps(const virtio_console_t* vconsole, uint8_t port_n
     return 0;
 }
 
+static int8_t vdagent_send_empty_clipboard_data(const virtio_console_t* vconsole, uint8_t port_no) {
+    if(port_no != 1) {
+        return -1;
+    }
+
+    int32_t queue_index = virtio_console_get_tx_queue_number(port_no);
+
+    virtio_dev_t* vdev = vconsole->vdev;
+
+    virtio_queue_ext_t* vq_tx = &vdev->queues[queue_index];
+    virtio_queue_avail_t* avail = virtio_queue_get_avail(vdev, vq_tx->vq);
+    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(vdev, vq_tx->vq);
+
+    uint16_t avail_tx_id = avail->index;
+
+    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[avail_tx_id % vdev->queue_size].address);
+
+    vdi_chunk_header_t* chunk_header = (vdi_chunk_header_t*)offset;
+
+    chunk_header->port = VDP_CLIENT_PORT;
+
+    vdagent_message_t* message = (vdagent_message_t*)(offset + sizeof(vdi_chunk_header_t));
+
+    message->protocol = VD_AGENT_PROTOCOL;
+    message->type = VD_AGENT_CLIPBOARD;
+
+    vdagent_clipboard_t* clipboard = (vdagent_clipboard_t*)(offset + sizeof(vdi_chunk_header_t) + sizeof(vdagent_message_t));
+
+    clipboard->type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
+    clipboard->selection = VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD;
+
+    message->size = sizeof(vdagent_clipboard_t);
+
+    chunk_header->size = sizeof(vdagent_message_t) + message->size;
+
+    descs[avail_tx_id % vdev->queue_size].length = sizeof(vdi_chunk_header_t) + chunk_header->size;
+
+    avail->index++;
+    vq_tx->nd->vqn = 1;
+
+    PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Empty clipboard data sent");
+
+    return 0;
+}
+
 static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint8_t port_no, clipboard_data_t* clipboard_data) {
     if(port_no != 1) {
         return -1;
     }
 
     if(clipboard_data == NULL) {
+        if(vdagent_send_empty_clipboard_data(vconsole, port_no) != 0) {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send empty clipboard data");
+        }
+
         return 0;
     }
 
@@ -138,7 +187,11 @@ static int8_t vdagent_send_clipboard_data(const virtio_console_t* vconsole, uint
 
     if(clipboard_data->size == 0) {
         lock_release(clipboard_data->lock);
-        PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Clipboard data empty");
+
+        if(vdagent_send_empty_clipboard_data(vconsole, port_no) != 0) {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_ERROR, "Failed to send empty clipboard data");
+        }
+
         return 0;
     }
 
@@ -404,6 +457,11 @@ static int8_t vdagent_check_message(vdagent_message_t* message, const virtio_con
         }
 
         uint64_t buf_len = message->size - sizeof(vdagent_clipboard_t);
+
+        if(!buf_len) {
+            PRINTLOG(VIRTIO_CONSOLE, LOG_DEBUG, "Empty clipboard data");
+            return 0;
+        }
 
         if(buf_len > VD_AGENT_CLIPBOARD_MAX_DATA_SIZE) {
             buf_len = VD_AGENT_CLIPBOARD_MAX_DATA_SIZE;
