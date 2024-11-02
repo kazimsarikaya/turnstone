@@ -6,7 +6,9 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <windowmanager.h>
+#include <windowmanager/wnd_greater.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_utils.h>
 #include <strings.h>
 #include <graphics/screen.h>
 

@@ -7,6 +7,8 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_utils.h>
 #include <hashmap.h>
 #include <buffer.h>
 #include <graphics/screen.h>

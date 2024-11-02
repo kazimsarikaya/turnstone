@@ -7,6 +7,8 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_types.h>
+#include <windowmanager/wnd_utils.h>
 #include <utils.h>
 #include <strings.h>
 #include <buffer.h>
@@ -16,87 +18,6 @@
 void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
-
-extern pixel_t* VIDEO_BASE_ADDRESS;
-
-void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
-    screen_info_t screen_info = screen_get_info();
-
-    SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
-                                   window->foreground_color, window->background_color,
-                                   VIDEO_BASE_ADDRESS,
-                                   x, y,
-                                   screen_info.pixels_per_scanline);
-
-}
-
-void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text) {
-    if(window == NULL) {
-        return;
-    }
-
-    if(text == NULL) {
-        return;
-    }
-
-    screen_info_t screen_info = screen_get_info();
-
-    if(window->rect.x + (int64_t)x >= screen_info.width || window->rect.y + (int64_t)y >= screen_info.height) {
-        return;
-    }
-
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
-
-    uint32_t abs_x = (window->rect.x + x) / font_width;
-    uint32_t abs_y = (window->rect.y + y) / font_height;
-
-    uint32_t cur_x = abs_x;
-    uint32_t cur_y = abs_y;
-
-    uint32_t max_cur_x = (window->rect.x + window->rect.width) / font_width;
-    uint32_t max_cur_y = (window->rect.y + window->rect.height) / font_height;
-
-    if(cur_x >= max_cur_x || cur_y >= max_cur_y) {
-        return;
-    }
-
-    int64_t i = 0;
-
-    while(text[i]) {
-        wchar_t wc = font_get_wc(text + i, &i);
-
-        if(wc == '\n') {
-            cur_y += 1;
-
-            if(cur_y >= max_cur_y) {
-                break;
-            }
-
-            cur_x = abs_x;
-        } else {
-            windowmanager_print_glyph(window, cur_x, cur_y, wc);
-            cur_x += 1;
-
-            if(cur_x >= max_cur_x && text[i + 1] && text[i + 1] != '\n') {
-                cur_y += 1;
-
-                if(cur_y >= max_cur_y) {
-                    break;
-                }
-
-                cur_x = abs_x;
-            }
-        }
-
-        i++;
-    }
-}
-
-void windowmanager_clear_screen(window_t* window) {
-    SCREEN_CLEAR_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
-}
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     if(text == NULL) {

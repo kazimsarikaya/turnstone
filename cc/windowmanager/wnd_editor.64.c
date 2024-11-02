@@ -7,6 +7,11 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_editor.h>
+#include <windowmanager/wnd_types.h>
+#include <windowmanager/wnd_utils.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_options.h>
 #include <strings.h>
 #include <spool.h>
 #include <argumentparser.h>
@@ -321,7 +326,7 @@ static int8_t wnd_editor_on_scroll(const window_event_t* event) {
     return 0;
 }
 
-int8_t windowmanager_create_and_show_editor(const char_t* title, const char_t* text, boolean_t is_text_readonly) {
+int8_t windowmanager_create_and_show_editor_window(const char_t* title, const char_t* text, boolean_t is_text_readonly) {
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {

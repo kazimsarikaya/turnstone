@@ -7,6 +7,12 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_types.h>
+#include <windowmanager/wnd_utils.h>
+#include <windowmanager/wnd_gfx.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_greater.h>
+#include <windowmanager/wnd_options.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
