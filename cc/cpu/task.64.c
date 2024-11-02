@@ -62,6 +62,8 @@ volatile boolean_t task_tasking_initialized = false;
 memory_heap_t* task_map_heap = NULL;
 memory_heap_t** task_queue_and_cleanup_heaps = NULL;
 list_t** task_queues = NULL;
+list_t** task_sleep_queues; ///< task sleep lists
+list_t** task_wait_queues; ///< task wait lists
 list_t** task_cleanup_queues = NULL;
 hashmap_t* task_map = NULL;
 uint32_t task_mxcsr_mask = 0;
@@ -85,6 +87,19 @@ extern boolean_t local_apic_id_is_valid;
 extern volatile cpu_state_t __seg_gs * cpu_state;
 
 lock_t * task_find_next_task_lock = NULL;
+
+static int8_t task_sleep_queue_comparator(const void* item1, const void* item2) {
+    const task_t* t1 = (const task_t*)item1;
+    const task_t* t2 = (const task_t*)item2;
+
+    if(t1->wake_tick < t2->wake_tick) {
+        return -1;
+    } else if(t1->wake_tick > t2->wake_tick) {
+        return 1;
+    }
+
+    return 0;
+}
 
 task_t* task_get_current_task(void){
     if(!task_tasking_initialized) {
@@ -184,6 +199,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     task_queue_and_cleanup_heaps = memory_malloc_ext(heap, sizeof(memory_heap_t*) * cpu_count, 0x0);
     task_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
+    task_sleep_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
+    task_wait_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
     task_cleanup_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
 
 
@@ -211,6 +228,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
         task_queue_and_cleanup_heaps[i] = task_related_heap;
         task_queues[i] = list_create_queue_with_heap(task_related_heap);
+        task_sleep_queues[i] = list_create_sortedlist_with_heap(task_related_heap, &task_sleep_queue_comparator);
+        task_wait_queues[i] = list_create_queue_with_heap(task_related_heap);
         task_cleanup_queues[i] = list_create_queue_with_heap(task_related_heap);
     }
 
@@ -241,6 +260,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
 
     current_cpu_state->task_queue = task_queues[0];
+    current_cpu_state->task_sleep_queue = task_sleep_queues[0];
+    current_cpu_state->task_wait_queue = task_wait_queues[0];
     current_cpu_state->task_cleanup_queue = task_cleanup_queues[0];
 
     interrupt_irq_set_handler(0xde, &task_task_switch_isr);
@@ -365,6 +386,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     }
 
     cpu_state->task_queue = task_queues[apic_id];
+    cpu_state->task_sleep_queue = task_sleep_queues[apic_id];
+    cpu_state->task_wait_queue = task_wait_queues[apic_id];
     cpu_state->task_cleanup_queue = task_cleanup_queues[apic_id];
 
     task_t* current_task = memory_malloc_ext(heap, sizeof(task_t), 0x0);
@@ -552,6 +575,11 @@ static void task_cleanup_task(task_t* task) {
 
     hashmap_delete(task_map, (void*)task->task_id);
 
+    // ensure task is not in any queue
+    // TODO: improve this
+    list_list_delete(cpu_state->task_sleep_queue, task);
+    list_list_delete(cpu_state->task_wait_queue, task);
+
     uint64_t stack_va = (uint64_t)task->stack;
     uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
@@ -666,75 +694,64 @@ boolean_t task_idle_check_need_yield(void) {
 task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
-    // lock_acquire(task_find_next_task_lock);
+    if(list_size(cpu_state->task_sleep_queue)) {
+        task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, 0);
 
-    uint64_t found_index = -1;
-
-    for(uint64_t i = 0; i < list_size(cpu_state->task_queue); i++) {
-        task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_queue, i);
-
-        if(t->state == TASK_STATE_ENDED) {
-            found_index = i;
-            break; // trick to remove ended task from queue
+        if(t->wake_tick < time_timer_get_tick_count()) {
+            tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, 0);
         }
+    }
 
-        if(t->wait_for_future) {
-            continue;
-        } else if(t->sleeping) {
-            if(t->wake_tick < time_timer_get_tick_count()) {
-                t->sleeping = false;
+    if(!tmp_task && list_size(cpu_state->task_wait_queue)) {
+        uint64_t found_index = -1;
+
+        for(uint64_t i = 0; i < list_size(cpu_state->task_wait_queue); i++) {
+            task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_wait_queue, i);
+
+            if(t->state == TASK_STATE_FUTURE_WAITING) {
+                continue;
+            } else if(t->state == TASK_STATE_INTERRUPT_RECEIVED) {
+                found_index = i;
+                break;
+            } else if(t->state == TASK_STATE_MESSAGE_WAITING) {
+                if(t->message_queues) {
+                    for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
+                        list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
+
+                        if(list_size(q)) {
+                            found_index = i;
+                            break;
+                        }
+                    }
+                }
+
+            } else { // wait status cleared task
+                if(t->state != TASK_STATE_SUSPENDED) {
+                    video_text_print("task_find_next_task: task state is not suspended\n");
+                }
+
                 found_index = i;
                 break;
             }
-        } else if(t->message_waiting) {
-            if(t->interruptible) {
-                if(t->interrupt_received) {
-                    t->interrupt_received = false;
-                    t->message_waiting = false;
-                    found_index = i;
-                    break;
-                }
-            }
+        }
 
-            if(t->message_queues) {
-                for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
-                    list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
-
-                    if(list_size(q)) {
-                        t->message_waiting = false;
-                        found_index = i;
-                        break;
-                    }
-                }
-            }
-        } else {
-            found_index = i;
-            break;
+        if(found_index != -1ULL) {
+            tmp_task = (task_t*)list_delete_at_position(cpu_state->task_wait_queue, found_index);
         }
     }
 
-    if(found_index != -1ULL) {
-        tmp_task = (task_t*)list_delete_at_position(cpu_state->task_queue, found_index);
-
-        // need check it is ended?
-        if(tmp_task->state == TASK_STATE_ENDED) {
-            // it is already task clear queue so find next
-            list_queue_push(cpu_state->task_cleanup_queue, tmp_task);
-            tmp_task = (task_t*)cpu_state->idle_task;
-        }
-    } else {
-        tmp_task = (task_t*)cpu_state->idle_task;
+    if(!tmp_task && list_size(cpu_state->task_queue)) {
+        tmp_task = (task_t*)list_queue_pop(cpu_state->task_queue);
     }
 
     if(!tmp_task) {
-        video_text_print("no task found. why?");
         tmp_task = (task_t*)cpu_state->idle_task;
     }
 
-    // lock_release(task_find_next_task_lock);
-
-
-    // PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx selected for execution. queue size %lli", tmp_task->task_id, list_size(task_queue));
+    if(tmp_task->state == TASK_STATE_ENDED) {
+        list_queue_push(cpu_state->task_cleanup_queue, tmp_task);
+        tmp_task = (task_t*)cpu_state->idle_task;
+    }
 
     return tmp_task;
 }
@@ -769,9 +786,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     uint64_t current_tick = rdtsc();
 
     if(current_task != cpu_state->idle_task &&
-       current_task->state != TASK_STATE_ENDED &&
-       !current_task->message_waiting &&
-       !current_task->sleeping &&
+       current_task->state == TASK_STATE_RUNNING &&
        (current_tick - current_task->last_tick_count) < task_max_tick_count_limit &&
        current_tick > current_task->last_tick_count) {
 
@@ -792,17 +807,26 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
     task_save_registers(current_task->registers);
 
-    switch(current_task->state) {
-    case TASK_STATE_CREATED:
-    case TASK_STATE_ENDED:
-        break;
-    default:
+    if(current_task->state == TASK_STATE_RUNNING) {
         current_task->state = TASK_STATE_SUSPENDED;
-        break;
     }
 
     if(current_task != cpu_state->idle_task) {
-        list_queue_push(cpu_state->task_queue, current_task);
+        switch(current_task->state) {
+        case TASK_STATE_SUSPENDED:
+        case TASK_STATE_STARTING:
+            list_queue_push(cpu_state->task_queue, current_task);
+            break;
+        case TASK_STATE_ENDED:
+            list_queue_push(cpu_state->task_cleanup_queue, current_task);
+            break;
+        case TASK_STATE_SLEEPING:
+            list_sortedlist_insert(cpu_state->task_sleep_queue, current_task);
+            break;
+        default:
+            list_queue_push(cpu_state->task_wait_queue, current_task);
+            break;
+        }
     }
 
     if(current_task == cpu_state->idle_task && list_size(cpu_state->task_cleanup_queue) > 0) {
@@ -868,17 +892,7 @@ void task_end_task(void) {
         }
     }
 
-    current_task->message_waiting = false;
-    current_task->interruptible = false;
-    current_task->wait_for_future = false;
-
     current_task->state = TASK_STATE_ENDED;
-
-// list_queue_push(task_cleaner_queue, current_task);
-
-// cpu_state->current_task =  NULL;
-
-// video_text_print("task ended");
 
     task_yield();
 }
@@ -905,12 +919,7 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
         }
     }
 
-    task->message_waiting = false;
-    task->interruptible = false;
-    task->wait_for_future = false;
-
     task->state = TASK_STATE_ENDED;
-
 
     PRINTLOG(TASKING, LOG_INFO, "task 0x%llx will be ended", task->task_id);
 }
@@ -1251,10 +1260,6 @@ void task_remove_task_after_fault(uint64_t task_id) {
             PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
         }
     }
-
-    task->message_waiting = false;
-    task->interruptible = false;
-    task->wait_for_future = false;
 
     task_t* current_task = (task_t*)cpu_state->idle_task;
     current_task->last_tick_count = time_timer_get_tick_count();

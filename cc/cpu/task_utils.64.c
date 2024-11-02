@@ -51,7 +51,7 @@ void task_current_task_sleep(uint64_t wake_tick) {
 
     if(current_task) {
         current_task->wake_tick = wake_tick;
-        current_task->sleeping = true;
+        current_task->state = TASK_STATE_SLEEPING;
         task_yield();
     }
 }
@@ -60,7 +60,7 @@ void task_clear_message_waiting(uint64_t tid) {
     task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 
     if(task) {
-        task->message_waiting = false;
+        task->state = TASK_STATE_SUSPENDED;
     } else {
         PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
     }
@@ -71,7 +71,7 @@ void task_set_interrupt_received(uint64_t tid) {
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
-        task->interrupt_received = true;
+        task->state = TASK_STATE_INTERRUPT_RECEIVED;
 
         if(current_task->cpu_id != task->cpu_id) {
             apic_send_ipi(task->cpu_id, 0xFE, false);
@@ -87,7 +87,7 @@ void task_set_message_received(uint64_t tid) {
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
-        task->message_waiting = false;
+        task->state = TASK_STATE_SUSPENDED;
 
         if(current_task->cpu_id != task->cpu_id) {
             apic_send_ipi(task->cpu_id, 0xFE, false);
@@ -102,7 +102,7 @@ void task_set_interruptible(void) {
     task_t* current_task = task_get_current_task();
 
     if(current_task) {
-        current_task->interruptible = true;
+        current_task->attributes |= TASK_ATTRIBUTE_INTERRUPTIBLE;
     }
 }
 
@@ -129,14 +129,13 @@ void task_print_all(buffer_t* buffer) {
         buffer_printf(buffer,
                       "\ttask %s 0x%llx 0x%p on cpu 0x%llx switched 0x%llx\n"
                       "\t\tstack at 0x%llx-0x%llx heap at 0x%p[0x%llx] stack 0x%p[0x%llx]\n"
-                      "\t\tinterruptible %d sleeping %d message_waiting %d interrupt_received %d future waiting %d state %d\n"
+                      "\t\tstate %d attributes 0x%x\n"
                       "\t\tmessage queues %lli messages %lli\n"
                       "\t\theap malloc 0x%llx free 0x%llx diff 0x%llx\n",
                       task->task_name, task->task_id, task, task->cpu_id, task->task_switch_count,
                       task->registers->rsp, task->registers->rbp, task->heap, task->heap_size,
                       task->stack, task->stack_size,
-                      task->interruptible, task->sleeping, task->message_waiting, task->interrupt_received,
-                      task->wait_for_future, task->state, list_size(task->message_queues), msgcount,
+                      task->state, task->attributes, list_size(task->message_queues), msgcount,
                       stat.malloc_count, stat.free_count, stat.malloc_count - stat.free_count
                       );
 
@@ -332,7 +331,7 @@ void task_set_message_waiting(void){
     task_t* current_task = task_get_current_task();
 
     if(current_task) {
-        current_task->message_waiting = 1;
+        current_task->state = TASK_STATE_MESSAGE_WAITING;
     }
 }
 
@@ -349,9 +348,9 @@ void task_toggle_wait_for_future(uint64_t tid) {
         video_text_print("task id: ");
         video_text_print(buf);
         video_text_print(" wait for future: ");
-        video_text_print(!task->wait_for_future ? "true" : "false");
+        video_text_print(task->state == TASK_STATE_FUTURE_WAITING ? "true" : "false");
         video_text_print("\n");
 
-        task->wait_for_future = !task->wait_for_future;
+        task->state = task->state == TASK_STATE_FUTURE_WAITING ? TASK_STATE_SUSPENDED : TASK_STATE_FUTURE_WAITING;
     }
 }
