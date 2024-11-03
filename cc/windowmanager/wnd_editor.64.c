@@ -333,6 +333,8 @@ int8_t windowmanager_create_and_show_editor_window(const char_t* title, const ch
         return -1;
     }
 
+    screen_info_t screen_info = screen_get_info();
+
     uint32_t font_width = 0, font_height = 0;
 
     font_get_font_dimension(&font_width, &font_height);
@@ -341,7 +343,7 @@ int8_t windowmanager_create_and_show_editor_window(const char_t* title, const ch
 
     char_t* title_str = strdup(title);
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
+    rect_t rect = windowmanager_calc_text_rect(title_str, screen_info.width);
     rect.x = (window->rect.width - rect.width) / 2;
     rect.y = font_height;
 

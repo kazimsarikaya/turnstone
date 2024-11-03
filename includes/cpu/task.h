@@ -262,7 +262,29 @@ void task_current_task_sleep(uint64_t wake_tick);
 void task_end_task(void);
 void task_kill_task(uint64_t task_id, boolean_t force);
 
-void task_print_all(buffer_t* buffer);
+typedef struct task_list_item_t {
+    const char_t* task_name;
+    uint64_t      task_id;
+    uint64_t      task_address;
+    uint64_t      cpu_id;
+    uint64_t      task_switch_count;
+    uint64_t      rsp;
+    uint64_t      rbp;
+    uint64_t      heap_address;
+    uint64_t      heap_size;
+    uint64_t      stack_address;
+    uint64_t      stack_size;
+    uint64_t      state;
+    uint64_t      attributes;
+    uint64_t      message_queues;
+    uint64_t      messages;
+    uint64_t      malloc_count;
+    uint64_t      free_count;
+    uint64_t      heap_diff;
+} task_list_item_t;
+
+void      task_print_all(buffer_t* buffer);
+buffer_t* task_build_task_list(void);
 
 buffer_t* task_get_task_input_buffer(uint64_t tid);
 buffer_t* task_get_task_output_buffer(uint64_t tid);

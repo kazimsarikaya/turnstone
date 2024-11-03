@@ -1,6 +1,6 @@
 /**
- * @file 117.c
- * @brief
+ * @file wnd_options.64.c
+ * @brief Window Manager Options Window
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
@@ -12,6 +12,7 @@
 #include <windowmanager/wnd_utils.h>
 #include <windowmanager/wnd_vmmgr.h>
 #include <windowmanager/wnd_spool_browser.h>
+#include <windowmanager/wnd_task_manager.h>
 #include <windowmanager/wnd_misc.h>
 #include <strings.h>
 #include <argumentparser.h>
@@ -57,7 +58,7 @@ typedef enum wnd_task_manager_list_item_type_t {
 const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_MANAGER_LIST_ITEM_TYPE_END] = {
     [WND_TASK_MANAGER_LIST_ITEM_TYPE_TASK_LIST] =    {
         .text = "Task List",
-        .action = NULL,
+        .action = windowmanager_create_and_show_task_list_window,
     },
 };
 

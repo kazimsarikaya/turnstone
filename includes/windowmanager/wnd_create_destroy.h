@@ -13,6 +13,7 @@
 
 void      windowmanager_destroy_window(window_t* window);
 void      windowmanager_destroy_child_window(window_t* window, window_t* child);
+void      windowmanager_destroy_all_child_windows(window_t* window);
 void      windowmanager_insert_and_set_current_window(window_t* window);
 void      windowmanager_remove_and_set_current_window(window_t* window);
 window_t* windowmanager_create_top_window(void);

@@ -236,7 +236,7 @@ uint64_t windowmanager_task_id = 0;
 int8_t windowmanager_init(void) {
     memory_heap_t* heap = memory_get_default_heap();
 
-    windowmanager_task_id = task_create_task(heap, 32 << 20, 64 << 10, windowmanager_main, 0, NULL, "windowmanager");
+    windowmanager_task_id = task_create_task(heap, 64 << 20, 2 << 20, windowmanager_main, 0, NULL, "windowmanager");
 
     while(!windowmanager_initialized) {
         cpu_sti();

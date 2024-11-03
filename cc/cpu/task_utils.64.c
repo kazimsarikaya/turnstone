@@ -145,6 +145,75 @@ void task_print_all(buffer_t* buffer) {
     it->destroy(it);
 }
 
+buffer_t* task_build_task_list(void) {
+    uint64_t task_count = hashmap_size(task_map) + 1;
+
+    buffer_t* buffer = buffer_new_with_capacity(NULL, task_count * sizeof(task_list_item_t));
+
+    if(!buffer) {
+        return NULL;
+    }
+
+    iterator_t* it = hashmap_iterator_create(task_map);
+
+    if(!it) {
+        buffer_destroy(buffer);
+        return NULL;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        const task_t* task = it->get_item(it);
+
+
+        uint64_t msgcount = 0;
+
+        if(task->message_queues) {
+            for(uint64_t q_idx = 0; q_idx < list_size(task->message_queues); q_idx++) {
+                list_t* q = (list_t*)list_get_data_at_position(task->message_queues, q_idx);
+
+                msgcount += list_size(q);
+            }
+        }
+
+        memory_heap_stat_t stat = {0};
+
+        memory_get_heap_stat_ext(task->heap, &stat);
+
+        task_list_item_t item = {
+            .task_name = task->task_name,
+            .task_address = (uint64_t)task,
+            .task_id = task->task_id,
+            .cpu_id = task->cpu_id,
+            .task_switch_count = task->task_switch_count,
+            .rsp = task->registers->rsp,
+            .rbp = task->registers->rbp,
+            .heap_address = (uint64_t)task->heap,
+            .heap_size = task->heap_size,
+            .stack_address = (uint64_t)task->stack,
+            .stack_size = task->stack_size,
+            .state = task->state,
+            .attributes = task->attributes,
+            .message_queues = list_size(task->message_queues),
+            .messages = msgcount,
+            .malloc_count = stat.malloc_count,
+            .free_count = stat.free_count,
+            .heap_diff = stat.malloc_count - stat.free_count,
+        };
+
+        if(buffer_append_bytes(buffer, (uint8_t*)&item, sizeof(task_list_item_t)) == NULL) {
+            buffer_destroy(buffer);
+            it->destroy(it);
+            return NULL;
+        }
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+
+    return buffer;
+}
+
 buffer_t* task_get_task_input_buffer(uint64_t tid) {
     task_t* task = (task_t*)hashmap_get(task_map, (void*)tid);
 

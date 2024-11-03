@@ -206,6 +206,25 @@ void windowmanager_destroy_child_window(window_t* window, window_t* child) {
     windowmanager_destroy_window(child);
 }
 
+void windowmanager_destroy_all_child_windows(window_t* window) {
+    if(window == NULL) {
+        return;
+    }
+
+    if(window->children == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < list_size(window->children); i++) {
+        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+        windowmanager_destroy_window(child);
+    }
+
+    list_destroy(window->children);
+
+    window->children = NULL;
+}
+
 void windowmanager_remove_and_set_current_window(window_t* window) {
     if(window == NULL) {
         return;

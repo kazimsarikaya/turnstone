@@ -256,6 +256,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         }
 
         task_map_heap = task_related_heap;
+
+        PRINTLOG(TASKING, LOG_INFO, "task map heap 0x%p", task_map_heap);
     }
 
 
@@ -727,7 +729,11 @@ task_t* task_find_next_task(void) {
 
             } else { // wait status cleared task
                 if(t->state != TASK_STATE_SUSPENDED) {
-                    video_text_print("task_find_next_task: task state is not suspended\n");
+                    video_text_print("task_find_next_task: task state is not suspended: 0x");
+                    char_t buf[16] = {0};
+                    utoh_with_buffer(buf, t->state);
+                    video_text_print(buf);
+                    video_text_print("\n");
                 }
 
                 found_index = i;
