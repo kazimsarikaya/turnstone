@@ -229,10 +229,18 @@ async def send_grab_message():
     grab = VDAgentGrap()
     grab_msg = VDAgentMessage(VD_AGENT_CLIPBOARD_GRAB, grab)
 
-    for port, writer in clients.items():
-        await grab_msg.send(writer)
-        logging.debug(f"Clipboard grab message sent to {port}")
+    clients_to_remove = []
 
+    for port, writer in clients.items():
+        try:
+            await grab_msg.send(writer)
+            logging.debug(f"Clipboard grab message sent to {port}")
+        except Exception as e:
+            logging.error(f"Error sending clipboard grab message to {port}: {e}")
+            clients_to_remove.append(port)
+
+    for port in clients_to_remove:
+        del clients[port]
 
 async def handle_announce_capabilities(data, writer):
     request, caps = struct.unpack("<II", data)
