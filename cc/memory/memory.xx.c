@@ -62,8 +62,12 @@ void* memory_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         return NULL;
     }
 
-    if(size % 8) {
+    if(size % 8) { // may implementation has other size requirement
         size = size + (8 - (size % 8));
+    }
+
+    if(align && (align & (align - 1))) { // check if align is power of 2
+        return NULL;
     }
 
     void* res = NULL;

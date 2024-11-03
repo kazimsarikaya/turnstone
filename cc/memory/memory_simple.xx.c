@@ -56,6 +56,8 @@ typedef struct heapinfo_t {
     uint32_t           padding; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapinfo_t; ///< short hand for struct
 
+_Static_assert(sizeof(heapinfo_t) == 0x20, "heapinfo_t size is not correct");
+
 /**
  * @struct heapmetainfo_t
  * @brief heap info struct
@@ -63,6 +65,7 @@ typedef struct heapinfo_t {
 typedef struct heapmetainfo_t {
     uint16_t    magic; ///< magic value of heap for protection
     uint16_t    flags; ///< flags of hi
+    uint32_t    padding1; ///< for 8 byte align for protection
     heapinfo_t* first; ///< next hi node
     heapinfo_t* last; ///< previous hi node
     heapinfo_t* first_empty; ///< next hi node
@@ -77,8 +80,11 @@ typedef struct heapmetainfo_t {
     uint64_t free_size;
     uint64_t fast_hit;
     uint64_t header_count;
-    uint32_t padding; ///< for 8 byte align for protection
+    uint32_t padding2; ///< for 8 byte align for protection
+    uint32_t padding3; ///< for 8 byte align for protection
 }__attribute__ ((packed)) heapmetainfo_t; ///< short hand for struct
+
+_Static_assert(sizeof(heapmetainfo_t) % 0x20 == 0, "heapmetainfo_t size is not correct");
 
 /**
  * @brief simple heap malloc implementation
@@ -162,7 +168,9 @@ memory_heap_t* memory_create_heap_simple(size_t start, size_t end){
 
     metadata->flags = HEAP_INFO_FLAG_HEAP;
     metadata->magic = HEAP_INFO_MAGIC;
-    metadata->padding = HEAP_INFO_PADDING;
+    metadata->padding1 = HEAP_INFO_PADDING;
+    metadata->padding2 = HEAP_INFO_PADDING;
+    metadata->padding3 = HEAP_INFO_PADDING;
     metadata->first = hibottom;
     metadata->last = hitop;
     metadata->first_empty = hibottom;
@@ -272,6 +280,14 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
         PRINTLOG(SIMPLEHEAP, LOG_ERROR, "heap is NULL");
 
         return NULL;
+    }
+
+    if(size % sizeof(heapinfo_t)) {
+        size += sizeof(heapinfo_t) - (size % sizeof(heapinfo_t));
+    }
+
+    if(align && align % sizeof(heapinfo_t)) {
+        align += sizeof(heapinfo_t) - (align % sizeof(heapinfo_t));
     }
 
     PRINTLOG(SIMPLEHEAP, LOG_TRACE, "requesting memory with size 0x%llx and align 0x%llx", size, align);
@@ -653,6 +669,11 @@ void* memory_simple_malloc_ext(memory_heap_t* heap, size_t size, size_t align){
 
 int8_t memory_simple_free(memory_heap_t* heap, void* address){
     if(address == NULL) {
+        return -1;
+    }
+
+    if((uint64_t)address % sizeof(heapinfo_t)) {
+        PRINTLOG(SIMPLEHEAP, LOG_FATAL, "memory 0x%p not malloced address", address);
         return -1;
     }
 
