@@ -82,10 +82,10 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
         if(shell_task_id != 0) {
             task_set_interrupt_received(shell_task_id);
-        }
-
-        if(windowmanager_task_id != 0) {
+        } else if(windowmanager_task_id != 0) {
             task_set_interrupt_received(windowmanager_task_id);
+        } else {
+            video_text_print("no shell or wm\n");
         }
     }
 

@@ -78,6 +78,7 @@ void task_set_interrupt_received(uint64_t tid) {
         }
 
     } else {
+        video_text_print("int recv: task not found\n");
         PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
     }
 }
@@ -94,6 +95,7 @@ void task_set_message_received(uint64_t tid) {
         }
 
     } else {
+        video_text_print("msg recv: task not found\n");
         PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
     }
 }
