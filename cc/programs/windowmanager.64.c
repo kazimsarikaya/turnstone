@@ -69,6 +69,8 @@ static int8_t windowmanager_main(void) {
 
     windowmanager_initialized = true;
 
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Window Manager initialized, waiting events\n");
+
     while(true) {
         boolean_t flush_needed = windowmanager_draw_window(windowmanager_current_window);
 
