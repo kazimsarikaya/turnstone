@@ -207,7 +207,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     for(uint32_t i = 0; i < cpu_count; i++) {
         frame_t* task_related_heap_frames = NULL;
 
-        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0x200, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
+        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 0x1000, FRAME_ALLOCATION_TYPE_USED | FRAME_ALLOCATION_TYPE_BLOCK, &task_related_heap_frames, NULL) != 0) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot allocate task related heap frames of count 0x200");
 
             return -1;
@@ -218,13 +218,15 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         memory_paging_add_va_for_frame(task_related_heap_va, task_related_heap_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
 
         memory_heap_t* task_related_heap = memory_create_heap_simple(task_related_heap_va,
-                                                                     task_related_heap_va + 0x200 * FRAME_SIZE);
+                                                                     task_related_heap_va + 0x1000 * FRAME_SIZE);
 
         if(task_related_heap == NULL) {
             PRINTLOG(TASKING, LOG_FATAL, "cannot create task related heap");
 
             return -1;
         }
+
+        PRINTLOG(TASKING, LOG_INFO, "cpu 0x%x task related heap 0x%p", i, task_related_heap);
 
         task_queue_and_cleanup_heaps[i] = task_related_heap;
         task_queues[i] = list_create_queue_with_heap(task_related_heap);
@@ -577,11 +579,6 @@ static void task_cleanup_task(task_t* task) {
 
     hashmap_delete(task_map, (void*)task->task_id);
 
-    // ensure task is not in any queue
-    // TODO: improve this
-    list_list_delete(cpu_state->task_sleep_queue, task);
-    list_list_delete(cpu_state->task_wait_queue, task);
-
     uint64_t stack_va = (uint64_t)task->stack;
     uint64_t stack_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA(stack_va);
 
@@ -875,6 +872,16 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
         if(vmclear(task->vmcs_physical_address) != 0) {
             PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
         }
+    }
+
+    if(task->state == TASK_STATE_SLEEPING) {
+        list_list_delete(cpu_state->task_sleep_queue, task);
+        list_queue_push(cpu_state->task_queue, task);
+    } else if(task->state == TASK_STATE_FUTURE_WAITING ||
+              task->state == TASK_STATE_INTERRUPT_RECEIVED ||
+              task->state == TASK_STATE_MESSAGE_WAITING) {
+        list_list_delete(cpu_state->task_wait_queue, task);
+        list_queue_push(cpu_state->task_queue, task);
     }
 
     task->state = TASK_STATE_ENDED;
@@ -1210,6 +1217,14 @@ int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
 
 void task_remove_task_after_fault(uint64_t task_id) {
     task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
+
+    char_t task_id_buf[100] = {0};
+    utoh_with_buffer(task_id_buf, task_id);
+    video_text_print("task_remove_task_after_fault: task 0x");
+    video_text_print(task_id_buf);
+    video_text_print("\n");
+
+    PRINTLOG(TASKING, LOG_WARNING, "task_remove_task_after_fault: task 0x%llx", task_id);
 
     task->state = TASK_STATE_ENDED;
 
