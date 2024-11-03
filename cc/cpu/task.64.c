@@ -280,7 +280,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->heap = heap;
     kernel_task->heap_size = kernel->program_heap_size;
     kernel_task->task_id = cpu_count + 1;
-    kernel_task->state = TASK_STATE_CREATED;
+    kernel_task->state = TASK_STATE_RUNNING;
     kernel_task->entry_point = kmain64;
     kernel_task->page_table = memory_paging_get_table();
     kernel_task->registers = memory_malloc_ext(task_map_heap, sizeof(task_registers_t), 0x10);
@@ -645,54 +645,6 @@ void task_cleanup(void){
     lock_release(task_find_next_task_lock);
 }
 
-#if 0
-boolean_t task_idle_check_need_yield(void) {
-    boolean_t need_yield = false;
-
-    for(uint64_t i = 0; i < list_size(task_queue); i++) {
-        task_t* t = (task_t*)list_get_data_at_position(task_queue, i);
-
-        if(!t) {
-            continue;
-        }
-
-        if(t->state == TASK_STATE_ENDED) {
-            continue;
-        }
-
-        if(t->message_waiting) {
-            if(t->interruptible && t->interrupt_received) {
-                // t->interrupt_received = false;
-                need_yield = true;
-                break;
-            }
-
-            if(t->message_queues) {
-                for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
-                    list_t* q = (list_t*)list_get_data_at_position(t->message_queues, q_idx);
-
-                    if(list_size(q)) {
-                        // t->message_waiting = false;
-                        need_yield = true;
-                        break;
-                    }
-                }
-            }
-        } else if(t->sleeping) {
-            if(t->wake_tick < time_timer_get_tick_count()) {
-                // t->sleeping = false;
-                need_yield = true;
-                break;
-            }
-        } else if(t->wait_for_future) {
-            break;
-        }
-    }
-
-    return need_yield;
-}
-#endif
-
 task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
@@ -821,7 +773,6 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
         switch(current_task->state) {
         case TASK_STATE_SUSPENDED:
         case TASK_STATE_STARTING:
-        case TASK_STATE_CREATED: // FIXME: why?
             list_queue_push(cpu_state->task_queue, current_task);
             break;
         case TASK_STATE_ENDED:
@@ -887,11 +838,11 @@ void task_end_task(void) {
 
     if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
         task_task_switch_exit();
-        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx", current_task->task_name, current_task->task_id);
+        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx", current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
     }
 
-    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx", current_task->task_id, ret);
+    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx", current_task->task_id, ret, cpu_state->local_apic_id);
 
     if(current_task->vmcs_physical_address) {
         if(vmclear(current_task->vmcs_physical_address) != 0) {
