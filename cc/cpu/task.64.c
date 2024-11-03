@@ -821,6 +821,7 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
         switch(current_task->state) {
         case TASK_STATE_SUSPENDED:
         case TASK_STATE_STARTING:
+        case TASK_STATE_CREATED: // FIXME: why?
             list_queue_push(cpu_state->task_queue, current_task);
             break;
         case TASK_STATE_ENDED:
