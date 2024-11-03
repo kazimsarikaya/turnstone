@@ -463,8 +463,11 @@ async def handle_client(reader, writer):
         logging.debug(f"Connection with {client_address} was cancelled.")
     finally:
         # Close the writer when done
-        writer.close()
-        await writer.wait_closed()
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except Exception as e:
+            logging.error(f"Error closing connection with {client_address}: {e}")
 
         del clients[client_port]
 
