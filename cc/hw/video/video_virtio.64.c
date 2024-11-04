@@ -101,12 +101,14 @@ int8_t virtio_gpu_cursorq_isr(interrupt_frame_ext_t* frame) {
     return 0;
 }
 
-static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock, uint16_t desc_index) {
+static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock, uint16_t desc_index, uint32_t desc_length) {
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
     virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
     virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
+
+    descs[desc_index].length = desc_length;
 
     future_t* fut = NULL;
 
@@ -155,20 +157,31 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
     return 0;
 }
 
-static int8_t virtio_gpu_queue_send_transfer3d(uint32_t queue_no, lock_t** lock,
-                                               uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
-                                               uint64_t buf_offset,
-                                               uint32_t x, uint32_t y, uint32_t width, uint32_t height,
-                                               uint32_t stride, uint32_t layer_stride, uint32_t level) {
+static uint8_t* virtio_gpu_queue_get_offset_and_desc_index(uint32_t queue_no, uint16_t* desc_index) {
+    virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
+
+    if(virgl_cmd_get_size(cmd)) {
+        virgl_cmd_flush_commands(cmd);
+    }
+
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
 
     virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
     virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
     virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
 
+    *desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
 
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+    return (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[*desc_index].address);
+}
+
+static int8_t virtio_gpu_queue_send_transfer3d(uint32_t queue_no, lock_t** lock,
+                                               uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
+                                               uint64_t buf_offset,
+                                               uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+                                               uint32_t stride, uint32_t layer_stride, uint32_t level) {
+    uint16_t desc_index;
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(queue_no, &desc_index);
 
     virtio_gpu_transfer_host_3d_t* transfer_hdr = (virtio_gpu_transfer_host_3d_t*)offset;
 
@@ -200,23 +213,16 @@ static int8_t virtio_gpu_queue_send_transfer3d(uint32_t queue_no, lock_t** lock,
     transfer_hdr->layer_stride = layer_stride; // width * height * sizeof(pixel_t);
 
 
-    descs[desc_index].length = sizeof(virtio_gpu_transfer_host_3d_t);
+    uint32_t desc_length = sizeof(virtio_gpu_transfer_host_3d_t);
 
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index, desc_length);
 }
 
 static int8_t virtio_gpu_queue_send_flush(uint32_t queue_no, lock_t** lock,
                                           uint32_t context_id, uint32_t resource_id, uint32_t fence_id,
                                           uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
-
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
-
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+    uint16_t desc_index;
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(queue_no, &desc_index);
 
     virtio_gpu_resource_flush_t* flush_hdr = (virtio_gpu_resource_flush_t*)offset;
 
@@ -241,23 +247,18 @@ static int8_t virtio_gpu_queue_send_flush(uint32_t queue_no, lock_t** lock,
     flush_hdr->resource_id = resource_id;
     flush_hdr->padding = 0;
 
-    descs[desc_index].length = sizeof(virtio_gpu_resource_flush_t);
+    uint32_t desc_length = sizeof(virtio_gpu_resource_flush_t);
 
 
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index, desc_length);
 }
 
 static int8_t virtio_gpu_queue_attach_backing(uint32_t queue_no, lock_t** lock,
                                               uint32_t context_id, uint32_t fence_id,
                                               uint32_t resource_id, uint64_t resource_physical_address, uint64_t resource_size) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
+    uint16_t desc_index;
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(queue_no, &desc_index);
 
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
     virtio_gpu_resource_attach_backing_t* attach_hdr = (virtio_gpu_resource_attach_backing_t*)offset;
 
     attach_hdr->hdr.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING;
@@ -271,22 +272,16 @@ static int8_t virtio_gpu_queue_attach_backing(uint32_t queue_no, lock_t** lock,
     attach_hdr->entries[0].addr = resource_physical_address;
     attach_hdr->entries[0].length = resource_size;
 
-    descs[desc_index].length = sizeof(virtio_gpu_resource_attach_backing_t) +
-                               sizeof(virtio_gpu_mem_entry_t) * attach_hdr->nr_entries;
+    uint32_t desc_length = sizeof(virtio_gpu_resource_attach_backing_t) +
+                           sizeof(virtio_gpu_mem_entry_t) * attach_hdr->nr_entries;
 
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index, desc_length);
 }
 
 static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t** lock,
                                                        uint32_t context_id, uint32_t resource_id) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
-
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+    uint16_t desc_index;
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(queue_no, &desc_index);
 
     virtio_gpu_ctx_resource_t* ctx_attach_hdr = (virtio_gpu_ctx_resource_t*)offset;
 
@@ -297,9 +292,9 @@ static int8_t virtio_gpu_queue_context_attach_resource(uint32_t queue_no, lock_t
     // ctx_attach_hdr->hdr.padding = 0;
     ctx_attach_hdr->resource_id = resource_id;
 
-    descs[desc_index].length = sizeof(virtio_gpu_ctx_resource_t);
+    uint32_t desc_length = sizeof(virtio_gpu_ctx_resource_t);
 
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index, desc_length);
 }
 
 static int8_t virtio_gpu_queue_context_create_resource_internal(uint32_t queue_no, lock_t** lock,
@@ -307,14 +302,8 @@ static int8_t virtio_gpu_queue_context_create_resource_internal(uint32_t queue_n
                                                                 uint32_t resource_width, uint32_t resource_height,
                                                                 virgl_bind_t bind,
                                                                 uint32_t format, uint32_t target, uint32_t flags) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
-
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+    uint16_t desc_index;
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(queue_no, &desc_index);
 
     virtio_gpu_resource_create_3d_t* create_hdr = (virtio_gpu_resource_create_3d_t*)offset;
 
@@ -336,9 +325,9 @@ static int8_t virtio_gpu_queue_context_create_resource_internal(uint32_t queue_n
     create_hdr->nr_samples = 0;
     create_hdr->flags = flags;
 
-    descs[desc_index].length = sizeof(virtio_gpu_resource_create_3d_t);
+    uint32_t desc_length = sizeof(virtio_gpu_resource_create_3d_t);
 
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index, desc_length);
 }
 
 static inline int8_t virtio_gpu_queue_context_create_buffer_resource(uint32_t queue_no, lock_t** lock,
@@ -364,16 +353,18 @@ static inline int8_t virtio_gpu_queue_context_create_3d_resource(uint32_t queue_
                                                              is_y_0_top?VIRTIO_GPU_RESOURCE_FLAG_Y_0_TOP:0);
 }
 
+static uint8_t* virtio_gpu_queue_get_cmd_offset_and_desc_index(uint32_t queue_no, uint16_t* desc_index) {
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(queue_no, desc_index);
+
+    return offset + sizeof(virtio_gpu_cmd_submit_t);
+}
+
 static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
                                            uint32_t fence_id, virgl_cmd_t* cmd) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
+    uint16_t desc_index;
+    uint8_t* offset = virgl_cmd_get_offset_and_desc_index(cmd, &desc_index);
 
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[queue_no];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
-    uint16_t desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    uint8_t* offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+    offset -= sizeof(virtio_gpu_cmd_submit_t);
 
     virtio_gpu_cmd_submit_t* submit_hdr = (virtio_gpu_cmd_submit_t*)offset;
 
@@ -385,23 +376,19 @@ static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
     submit_hdr->size = virgl_cmd_get_size(cmd);
     submit_hdr->padding = 0;
 
-    virgl_cmd_write_commands(cmd, offset + sizeof(virtio_gpu_cmd_submit_t));
+    uint32_t desc_length = sizeof(virtio_gpu_cmd_submit_t) + submit_hdr->size;
 
-    descs[desc_index].length = sizeof(virtio_gpu_cmd_submit_t) + submit_hdr->size;
-
-    if(descs[desc_index].length > VIRTIO_GPU_QUEUE_ITEM_SIZE) {
-        char_t* err_msg = sprintf("virtio gpu command too big: %d\n", descs[desc_index].length);
+    if(desc_length > VIRTIO_GPU_QUEUE_ITEM_SIZE) {
+        char_t* err_msg = sprintf("virtio gpu command too big: %d\n", desc_length);
         video_text_print(err_msg);
         memory_free(err_msg);
         return -1;
     }
 
-    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index);
+    return virtio_gpu_wait_for_queue_command(queue_no, lock, desc_index, desc_length);
 }
 
 static int8_t virtio_gpu_create_surface(uint32_t resource_id, boolean_t is_texture,
-                                        uint32_t fence_id,
-                                        lock_t** lock,
                                         uint32_t* surface_id) {
     virgl_cmd_t* cmd = virgl_renderer_get_cmd(virtio_gpu_wrapper->renderer);
 
@@ -429,7 +416,7 @@ static int8_t virtio_gpu_create_surface(uint32_t resource_id, boolean_t is_textu
         return -1;
     }
 
-    if(virtio_gpu_queue_send_commad(0, lock, fence_id, cmd) != 0) {
+    if(virgl_cmd_flush_commands(cmd) != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to send command");
         return -1;
     }
@@ -494,6 +481,7 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
                                                          0,
                                                          &virtio_gpu_wrapper->lock,
                                                          &virtio_gpu_wrapper->fence_ids[0],
+                                                         virtio_gpu_queue_get_cmd_offset_and_desc_index,
                                                          virtio_gpu_queue_send_commad);
 
     virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
@@ -622,9 +610,9 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
     // ctx_create_hdr->hdr.padding = 0;
     ctx_create_hdr->nlen = 0;
 
-    descs[desc_index].length = sizeof(virtio_gpu_ctx_create_t);
+    uint32_t desc_length = sizeof(virtio_gpu_ctx_create_t);
 
-    res = virtio_gpu_wait_for_queue_command(0, &virtio_gpu_wrapper->lock, desc_index);
+    res = virtio_gpu_wait_for_queue_command(0, &virtio_gpu_wrapper->lock, desc_index, desc_length);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu context create failed");
@@ -715,8 +703,6 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
     /* start create surface */
 
     res = virtio_gpu_create_surface(screen_resource_id, true,
-                                    virtio_gpu_wrapper->fence_ids[scanout]++,
-                                    &virtio_gpu_wrapper->lock,
                                     &virtio_gpu_wrapper->surface_ids[scanout]);
 
     if(res != 0) {
@@ -747,9 +733,9 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
     scanout_hdr->scanout_id = scanout;
     scanout_hdr->resource_id = screen_resource_id;
 
-    descs[desc_index].length = sizeof(virtio_gpu_set_scanout_t);
+    desc_length = sizeof(virtio_gpu_set_scanout_t);
 
-    res = virtio_gpu_wait_for_queue_command(0, &virtio_gpu_wrapper->lock, desc_index);
+    res = virtio_gpu_wait_for_queue_command(0, &virtio_gpu_wrapper->lock, desc_index, desc_length);
 
     if(res != 0) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "virtio gpu set scanout failed");
@@ -780,16 +766,8 @@ int8_t virtio_gpu_display_init(uint32_t scanout) {
 }
 
 static void mouse_move_internal(virtio_gpu_ctrl_type_t type, uint32_t x, uint32_t y) {
-    virtio_dev_t* virtio_gpu_dev = virtio_gpu_wrapper->vgpu;
-
-    virtio_queue_ext_t* vq_control = &virtio_gpu_dev->queues[1];
-    virtio_queue_avail_t* avail = virtio_queue_get_avail(virtio_gpu_dev, vq_control->vq);
-    virtio_queue_descriptor_t* descs = virtio_queue_get_desc(virtio_gpu_dev, vq_control->vq);
-
     uint16_t desc_index;
-    uint8_t* offset;
-    desc_index = avail->ring[avail->index % virtio_gpu_dev->queue_size];
-    offset = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[desc_index].address);
+    uint8_t* offset = virtio_gpu_queue_get_offset_and_desc_index(1, &desc_index);
 
     virtio_gpu_update_cursor_t* update_cursor_hdr = (virtio_gpu_update_cursor_t*)offset;
 
@@ -805,11 +783,11 @@ static void mouse_move_internal(virtio_gpu_ctrl_type_t type, uint32_t x, uint32_
     update_cursor_hdr->hot_x = 0;
     update_cursor_hdr->hot_y = 0;
 
-    descs[desc_index].length = sizeof(virtio_gpu_update_cursor_t);
+    uint32_t desc_length = sizeof(virtio_gpu_update_cursor_t);
 
     int8_t res = 0;
 
-    res = virtio_gpu_wait_for_queue_command(1, &virtio_gpu_wrapper->cursor_lock, desc_index);
+    res = virtio_gpu_wait_for_queue_command(1, &virtio_gpu_wrapper->cursor_lock, desc_index, desc_length);
 
     if(res != 0) {
         // TODO: handle error
@@ -1635,13 +1613,6 @@ int8_t virtio_gpu_font_init(void) {
         PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to init font empty line");
         return -1;
     }
-
-#if 0
-    if(virtio_gpu_create_font_colored() != 0) {
-        PRINTLOG(VIRTIOGPU, LOG_ERROR, "failed to build font colored resource");
-        return -1;
-    }
-#endif
 
     virtio_gpu_dont_transfer_on_flush = true;
     SCREEN_PRINT_GLYPH_WITH_STRIDE = virtio_gpu_print_glyph_with_stride;

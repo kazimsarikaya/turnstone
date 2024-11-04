@@ -23,18 +23,18 @@ struct virgl_renderer_t {
 };
 
 struct virgl_cmd_t {
-    uint32_t          context_id;
-    uint16_t          queue_no;
-    lock_t**          lock;
-    uint64_t*         fence_id;
-    virgl_send_cmd_f  send_cmd;
-    volatile uint64_t in_use;
-    uint32_t          cmd_old_dw_count;
-    uint32_t          cmd_dw_count;
-    uint32_t          cmd_dws[VIRGL_CMD_MAX_DWORDS] __attribute__((aligned(16)));
+    uint32_t           context_id;
+    uint16_t           queue_no;
+    lock_t**           lock;
+    uint64_t*          fence_id;
+    uint16_t           desc_index;
+    virgl_get_buffer_f get_buffer;
+    virgl_send_cmd_f   send_cmd;
+    volatile uint64_t  in_use;
+    uint32_t           cmd_old_dw_count;
+    uint32_t           cmd_dw_count;
+    uint32_t*          cmd_dws;
 };
-
-_Static_assert(offsetof_field(virgl_cmd_t, cmd_dws) % 16 == 0, "virgl_cmd_t::cmd_dws is not aligned to 16 bytes");
 
 static inline uint32_t fui(float32_t f) {
     union {
@@ -45,7 +45,9 @@ static inline uint32_t fui(float32_t f) {
     return u.i;
 }
 
-virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd) {
+virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no,
+                                        lock_t** lock, uint64_t* fence_id,
+                                        virgl_get_buffer_f get_buffer, virgl_send_cmd_f send_cmd) {
     if(!heap || !lock || !fence_id || !send_cmd) {
         return NULL;
     }
@@ -68,6 +70,7 @@ virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id
     renderer->cmd->queue_no = queue_no;
     renderer->cmd->lock = lock;
     renderer->cmd->fence_id = fence_id;
+    renderer->cmd->get_buffer = get_buffer;
     renderer->cmd->send_cmd = send_cmd;
 
     return renderer;
@@ -113,33 +116,13 @@ uint32_t virgl_cmd_get_size(virgl_cmd_t * cmd) {
     return cmd->cmd_dw_count * sizeof(uint32_t);
 }
 
-void virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer) {
-    if(!cmd || !buffer) {
-        return;
+uint8_t* virgl_cmd_get_offset_and_desc_index(virgl_cmd_t * cmd, uint16_t* desc_index) {
+    if(!cmd || !desc_index) {
+        return NULL;
     }
 
-    // memory_memcopy(cmd->cmd_dws, buffer, virgl_cmd_get_size(cmd));
-
-    uint64_t u128_count = cmd->cmd_dw_count / 4;
-    uint64_t rem = cmd->cmd_dw_count % 4;
-
-    uint128_t* typed128_buffer = (uint128_t*)buffer;
-    uint128_t* typed128_cmd_dws = (uint128_t*)cmd->cmd_dws;
-
-    for(uint64_t i = 0; i < u128_count; i++) {
-        typed128_buffer[i] = typed128_cmd_dws[i];
-    }
-
-    if(rem) {
-        uint32_t* typed_buffer = (uint32_t*)&typed128_buffer[u128_count];
-        uint32_t* typed_cmd_dws = (uint32_t*)&typed128_cmd_dws[u128_count];
-
-        for(uint64_t i = 0; i < rem; i++) {
-            typed_buffer[i] = typed_cmd_dws[i];
-        }
-    }
-
-    cmd->cmd_dw_count = 0;
+    *desc_index = cmd->desc_index;
+    return (uint8_t*)cmd->cmd_dws;
 }
 
 int8_t virgl_cmd_flush_commands(virgl_cmd_t * cmd) {
@@ -147,12 +130,18 @@ int8_t virgl_cmd_flush_commands(virgl_cmd_t * cmd) {
         return 0;
     }
 
-    if(cmd->cmd_dw_count == 0) {
+    if(cmd->cmd_dws == NULL) {
         return 0;
     }
 
     uint32_t fence_id = (*cmd->fence_id)++;
-    return cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
+
+    int8_t ret = cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
+
+    cmd->cmd_dw_count = 0;
+    cmd->cmd_dws = NULL;
+
+    return ret;
 }
 
 static void virgl_encode_rollback_cmd(virgl_cmd_t* cmd) {
@@ -212,6 +201,20 @@ static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type,
         if(ret) {
             video_text_print("virgl_encode_write_cmd_header: failed to flush commands\n");
             virgl_encode_rollback_cmd(cmd);
+            return -1;
+        }
+    }
+
+    if(!cmd->cmd_dws && cmd->cmd_dw_count) {
+        video_text_print("virgl_encode_write_cmd_header: cmd_dws is broken\n");
+        return -1;
+    }
+
+    if(!cmd->cmd_dws) {
+        cmd->cmd_dws = (uint32_t*)cmd->get_buffer(cmd->queue_no, &cmd->desc_index);
+
+        if(!cmd->cmd_dws) {
+            video_text_print("virgl_encode_write_cmd_header: failed to get buffer\n");
             return -1;
         }
     }
