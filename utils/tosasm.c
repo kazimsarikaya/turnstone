@@ -3,7 +3,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#define RAM_SIZE 0x1000000 // 16 MB
+#define RAMSIZE 0x1000000 // 16 MB
 #include "setup.h"
 #include <compiler/asm_parser.h>
 #include <compiler/asm_encoder.h>
