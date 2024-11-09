@@ -12,8 +12,10 @@
 
 #include <types.h>
 
-/*! pixel type */
+#ifndef ___PIXEL_T
+#define ___PIXEL_T
 typedef uint32_t pixel_t;
+#endif
 
 typedef union color_t color_t;
 

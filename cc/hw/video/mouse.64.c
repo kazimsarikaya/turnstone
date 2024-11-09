@@ -9,7 +9,7 @@
 
 #include <types.h>
 #include <utils.h>
-#include <graphics/image.h>
+#include <graphics/tga.h>
 #include <device/mouse.h>
 #include <buffer.h>
 #include <cpu/task.h>
