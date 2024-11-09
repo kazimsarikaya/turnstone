@@ -434,6 +434,22 @@ uint64_t buffer_peek_ints(buffer_t* buffer, uint8_t bc) {
     return buffer_peek_ints_at_position(buffer, buffer->position, bc);
 }
 
+uint64_t buffer_read_ints(buffer_t* buffer, uint8_t bc) {
+    if(!buffer) {
+        return 0;
+    }
+
+    lock_acquire(buffer->lock);
+
+    uint64_t res = buffer_peek_ints(buffer, bc);
+
+    buffer->position += bc;
+
+    lock_release(buffer->lock);
+
+    return res;
+}
+
 uint64_t buffer_remaining(buffer_t* buffer) {
     lock_acquire(buffer->lock);
 
