@@ -610,7 +610,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             char_t fto_buf[128];
             // float128_t fval = 0; // TODO: float128_t ops
             float64_t fval = 0;
-            number_t prec = 6;
+            number_t prec = 0;
             char_t filler = ' ';
 
             while(1) {
@@ -638,6 +638,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     fmt++;
                     prec = *fmt - 0x30;
                     fmt++;
+                    if(*fmt >= '0' && *fmt <= '9') {
+                        prec = prec * 10 + *fmt - 0x30;
+                        fmt++;
+                    }
                     wfmtb = 0;
                     break;
                 case 'c':
@@ -650,6 +654,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                 case 's':
                     str = va_arg(args, char_t*);
                     slen = strlen(str);
+
+                    if(prec && slen > prec) {
+                        slen = prec;
+                    }
 
                     if(val > slen){
                         val -= slen;
@@ -824,6 +832,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         // fval = va_arg(args, float128_t); // TODO: float128_t ops
                     } else  {
                         fval = va_arg(args, float64_t);
+                    }
+
+                    if(prec == 0) {
+                        prec = 6;
                     }
 
                     ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format

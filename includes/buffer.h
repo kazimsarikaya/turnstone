@@ -114,6 +114,17 @@ buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length);
  */
 buffer_t* buffer_append_buffer(buffer_t* buffer, buffer_t* appenden);
 
+#define buffer_append_with_int_type(b, d, t) buffer_append_bytes(b, (uint8_t*)&d, sizeof(t ## _t))
+
+#define buffer_append_int8(b, d) buffer_append_with_int_type(b, d, int8)
+#define buffer_append_int16(b, d) buffer_append_with_int_type(b, d, int16)
+#define buffer_append_int32(b, d) buffer_append_with_int_type(b, d, int32)
+#define buffer_append_int64(b, d) buffer_append_with_int_type(b, d, int64)
+#define buffer_append_uint8(b, d) buffer_append_with_int_type(b, d, uint8)
+#define buffer_append_uint16(b, d) buffer_append_with_int_type(b, d, uint16)
+#define buffer_append_uint32(b, d) buffer_append_with_int_type(b, d, uint32)
+#define buffer_append_uint64(b, d) buffer_append_with_int_type(b, d, uint64)
+
 /**
  * @brief returns a byte array from buffer with length, byte array is copied, position is advanced with length
  * @param[in] buffer buffer to get bytes
