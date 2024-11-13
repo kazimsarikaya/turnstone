@@ -10,4 +10,4 @@
 
 MODULE("turnstone.lib");
 
-int32_t errno = 0;
+int64_t errno = 0;

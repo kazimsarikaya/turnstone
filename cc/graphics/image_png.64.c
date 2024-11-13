@@ -615,7 +615,26 @@ static uint8_t png_filter_paeth(uint8_t* dst, int64_t dst_idx,
     return png_paeth_predictor(left, up, up_left);
 }
 
-static int8_t png_decoder_apply_filter(png_decoder_t* png_decoder, const uint8_t* img_data, const graphics_raw_image_t* res) {
+static png_filter_t png_get_filter_func(png_filter_type_t filter_type) {
+    switch(filter_type) {
+    case PNG_FILTER_TYPE_NONE:
+        return png_filter_none;
+    case PNG_FILTER_TYPE_SUB:
+        return png_filter_sub;
+    case PNG_FILTER_TYPE_UP:
+        return png_filter_up;
+    case PNG_FILTER_TYPE_AVERAGE:
+        return png_filter_average;
+    case PNG_FILTER_TYPE_PAETH:
+        return png_filter_paeth;
+    default:
+        break;
+    }
+
+    return NULL;
+}
+
+static int8_t png_decoder_apply_defilter(png_decoder_t* png_decoder, const uint8_t* img_data, const graphics_raw_image_t* res) {
     const uint8_t* src = img_data;
     uint8_t* dst = (uint8_t*)res->data;
     int64_t src_idx = 0;
@@ -628,27 +647,7 @@ static int8_t png_decoder_apply_filter(png_decoder_t* png_decoder, const uint8_t
     for(int64_t y = 0; y < res->height; y++) {
         uint8_t filter = src[src_idx++];
 
-        png_filter_t filter_func = NULL;
-
-        switch(filter) {
-        case PNG_FILTER_TYPE_NONE:
-            filter_func = png_filter_none;
-            break;
-        case PNG_FILTER_TYPE_SUB:
-            filter_func = png_filter_sub;
-            break;
-        case PNG_FILTER_TYPE_UP:
-            filter_func = png_filter_up;
-            break;
-        case PNG_FILTER_TYPE_AVERAGE:
-            filter_func = png_filter_average;
-            break;
-        case PNG_FILTER_TYPE_PAETH:
-            filter_func = png_filter_paeth;
-            break;
-        default:
-            break;
-        }
+        png_filter_t filter_func = png_get_filter_func(filter);
 
         if(!filter_func) {
             PRINTLOG(PNG, LOG_TRACE, "invalid filter type %u", filter);
@@ -785,7 +784,7 @@ static graphics_raw_image_t* png_decoder_get_image(png_decoder_t* png_decoder) {
         return NULL;
     }
 
-    if(png_decoder_apply_filter(png_decoder, img_data, res) != 0) {
+    if(png_decoder_apply_defilter(png_decoder, img_data, res) != 0) {
         PRINTLOG(PNG, LOG_TRACE, "apply filter failed");
         memory_free(img_data);
         memory_free(res->data);
@@ -827,4 +826,350 @@ graphics_raw_image_t* graphics_load_png_image(const uint8_t* data, uint32_t size
     buffer_destroy(buffer);
 
     return image;
+}
+
+typedef struct png_encoder_t png_encoder_t;
+
+struct png_encoder_t {
+    graphics_raw_image_t* image;
+    compression_t*        compression;
+    uint8_t*              encoded_data;
+    buffer_t*             compressed_image_buffer;
+    uint8_t*              png_data;
+    uint64_t              png_data_len;
+};
+
+static int8_t png_encoder_init(png_encoder_t* png_encoder, graphics_raw_image_t* image) {
+    if(!png_encoder || !image) {
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    png_encoder->image = image;
+
+    png_encoder->compression = (compression_t*)compression_get(COMPRESSION_TYPE_DEFLATE);
+
+    if(!png_encoder->compression) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint64_t capacity = (sizeof(pixel_t) * image->width + 1) * image->height;
+    png_encoder->encoded_data = memory_malloc(capacity);
+
+    if(!png_encoder->encoded_data) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    return PNG_SUCCESS;
+}
+
+static int8_t png_encoder_find_and_apply_filter(png_encoder_t* png_encoder) {
+    if(!png_encoder) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint8_t* src = (uint8_t*)png_encoder->image->data;
+    uint8_t* dst = png_encoder->encoded_data;
+    int64_t src_idx = 0;
+    int64_t dst_idx = 0;
+
+    // bbp for R8G8B8A8
+    int32_t bpp = sizeof(pixel_t);
+    int64_t scanline_len = png_encoder->image->width * bpp;
+
+    png_filter_type_t selected_filter_type = PNG_FILTER_TYPE_NONE;
+    uint8_t* filter_applied_scanlines[PNG_FILTER_TYPE_MAX] = {0};
+
+    for(int32_t ft = 0; ft < PNG_FILTER_TYPE_MAX; ft++) {
+        filter_applied_scanlines[ft] = memory_malloc(scanline_len);
+
+        if(!filter_applied_scanlines[ft]) {
+            for(int32_t i = 0; i < ft; i++) {
+                memory_free(filter_applied_scanlines[i]);
+            }
+
+            memory_free(png_encoder->encoded_data);
+
+            errno = -PNG_DECODER_MEMORY_ERROR;
+            return -PNG_DECODER_MEMORY_ERROR;
+        }
+    }
+
+    for(int64_t y = 0; y < png_encoder->image->height; y++) {
+        int64_t min_scanline_value = 0x7FFFFFFFFFFFFFFFULL;
+
+        for(int32_t ft = 0; ft < PNG_FILTER_TYPE_MAX; ft++) {
+            png_filter_t filter_func = png_get_filter_func(ft);
+
+            int64_t scanline_value = 0;
+
+            int64_t tmp_src_idx = src_idx;
+
+            for(int64_t x = 0; x < scanline_len; x++) {
+                int16_t fv = src[tmp_src_idx] - filter_func(src, tmp_src_idx, scanline_len, bpp, x, y);
+
+                filter_applied_scanlines[ft][x] = fv;
+
+                scanline_value += ABS(fv);
+
+                tmp_src_idx++;
+            }
+
+            if(scanline_value < min_scanline_value) {
+                min_scanline_value = scanline_value;
+                selected_filter_type = ft;
+            }
+        }
+
+
+        dst[dst_idx++] = selected_filter_type;
+
+        memory_memcopy(filter_applied_scanlines[selected_filter_type], dst + dst_idx, scanline_len);
+
+        src_idx += scanline_len;
+        dst_idx += scanline_len;
+    }
+
+    for(int32_t i = 0; i < PNG_FILTER_TYPE_MAX; i++) {
+        memory_free(filter_applied_scanlines[i]);
+    }
+
+    return PNG_SUCCESS;
+}
+
+static int8_t png_encoder_compress(png_encoder_t * png_encoder) {
+    if(!png_encoder) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint64_t capacity = (sizeof(pixel_t) * png_encoder->image->width + 1) * png_encoder->image->height;
+
+    buffer_t* in = buffer_encapsulate(png_encoder->encoded_data, capacity);
+
+    if(!in) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    buffer_t* out = buffer_new_with_capacity(NULL, capacity);
+
+    if(!out) {
+        buffer_destroy(in);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint16_t zlib_header = 0x78DA;
+    zlib_header = BYTE_SWAP16(zlib_header);
+
+    if(!buffer_append_uint16(out, zlib_header)) {
+        buffer_destroy(in);
+        buffer_destroy(out);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    if(png_encoder->compression->pack(in, out) != 0) {
+        buffer_destroy(in);
+        buffer_destroy(out);
+        errno = -PNG_ERROR_UNKNOWN;
+        return -PNG_ERROR_UNKNOWN;
+    }
+
+    buffer_destroy(in);
+
+    uint32_t adler32 = adler32_sum(png_encoder->encoded_data, capacity, ADLER32_SEED);
+    adler32 = BYTE_SWAP32(adler32);
+
+    if(!buffer_append_uint32(out, adler32)) {
+        buffer_destroy(out);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    png_encoder->compressed_image_buffer = out;
+
+    memory_free(png_encoder->encoded_data); // no longer needed
+
+    return PNG_SUCCESS;
+}
+
+static int8_t png_encoder_build_png(png_encoder_t* png_encoder) {
+    if(!png_encoder) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    buffer_t* out = buffer_new();
+
+    if(!out) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint64_t png_header = PNG_SIGNATURE;
+    if(!buffer_append_uint64(out, png_header)) {
+        buffer_destroy(out);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    // write IHDR chunk
+    struct __attribute__((packed)) _ihdr_chunk_t {
+        uint32_t width;
+        uint32_t height;
+        uint8_t  bit_depth;
+        uint8_t  color_type;
+        uint8_t  compression_method;
+        uint8_t  filter_method;
+        uint8_t  interlace_method;
+    } ihdr_chunk = {
+        .width = BYTE_SWAP32(png_encoder->image->width),
+        .height = BYTE_SWAP32(png_encoder->image->height),
+        .bit_depth = 8,
+        .color_type = 6,
+        .compression_method = 0,
+        .filter_method = 0,
+        .interlace_method = 0,
+    };
+
+    uint32_t ihdr_length = sizeof(ihdr_chunk);
+    uint32_t ihdr_length_be = BYTE_SWAP32(ihdr_length);
+    uint32_t ihdr_type = png_chunk_type_strings[PNG_CHUNK_TYPE_IHDR];
+
+    if(!buffer_append_uint32(out, ihdr_length_be) ||
+       !buffer_append_uint32(out, ihdr_type) ||
+       !buffer_append_bytes(out, (uint8_t*)&ihdr_chunk, ihdr_length)) {
+        buffer_destroy(out);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint32_t crc32 = CRC32_SEED;
+    crc32 = crc32_sum((uint8_t*)&ihdr_type, sizeof(ihdr_type), crc32);
+    crc32 = crc32_sum((uint8_t*)&ihdr_chunk, ihdr_length, crc32);
+    crc32 = crc32_finalize(crc32);
+
+    crc32 = BYTE_SWAP32(crc32);
+
+    if(!buffer_append_uint32(out, crc32)) {
+        buffer_destroy(out);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    // write IDAT chunk max 32KB from compressed image buffer
+    if(!buffer_seek(png_encoder->compressed_image_buffer, 0, BUFFER_SEEK_DIRECTION_START)) {
+        buffer_destroy(out);
+        errno = -PNG_ERROR_UNKNOWN;
+        return -PNG_ERROR_UNKNOWN;
+    }
+
+    uint64_t total_idat_length =  0;
+
+    uint8_t* idat_data = buffer_get_all_bytes_and_destroy(png_encoder->compressed_image_buffer, &total_idat_length);
+
+    if(!idat_data) {
+        buffer_destroy(out);
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    uint32_t idat_type = png_chunk_type_strings[PNG_CHUNK_TYPE_IDAT];
+
+    uint64_t pos = 0;
+
+    while(pos < total_idat_length) {
+        uint32_t idat_length = MIN(total_idat_length - pos, 32768);
+        uint32_t idat_length_be = BYTE_SWAP32(idat_length);
+
+        if(!buffer_append_uint32(out, idat_length_be) ||
+           !buffer_append_uint32(out, idat_type) ||
+           !buffer_append_bytes(out, idat_data + pos, idat_length)) {
+            memory_free(idat_data);
+            buffer_destroy(out);
+            errno = -PNG_DECODER_MEMORY_ERROR;
+            return -PNG_DECODER_MEMORY_ERROR;
+        }
+
+        crc32 = CRC32_SEED;
+        crc32 = crc32_sum((uint8_t*)&idat_type, sizeof(idat_type), crc32);
+        crc32 = crc32_sum(idat_data + pos, idat_length, crc32);
+        crc32 = crc32_finalize(crc32);
+
+        crc32 = BYTE_SWAP32(crc32);
+
+        if(!buffer_append_uint32(out, crc32)) {
+            memory_free(idat_data);
+            buffer_destroy(out);
+            errno = -PNG_DECODER_MEMORY_ERROR;
+            return -PNG_DECODER_MEMORY_ERROR;
+        }
+
+        pos += idat_length;
+    }
+
+    memory_free(idat_data);
+
+    // write IEND chunk
+    uint32_t iend_length = 0;
+    uint32_t iend_type = png_chunk_type_strings[PNG_CHUNK_TYPE_IEND];
+
+    if(!buffer_append_uint32(out, iend_length) ||
+       !buffer_append_uint32(out, iend_type)) {
+        buffer_destroy(out);
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    crc32 = CRC32_SEED;
+    crc32 = crc32_sum((uint8_t*)&iend_type, sizeof(iend_type), crc32);
+    crc32 = crc32_finalize(crc32);
+
+    crc32 = BYTE_SWAP32(crc32);
+
+    if(!buffer_append_uint32(out, crc32)) {
+        buffer_destroy(out);
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    png_encoder->png_data = buffer_get_all_bytes_and_destroy(out, &png_encoder->png_data_len);
+
+    if(!png_encoder->png_data) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
+
+    return PNG_SUCCESS;
+}
+
+
+uint8_t* graphics_save_png_image(const graphics_raw_image_t* image, uint64_t* size) {
+    if(!image || !size) {
+        return NULL;
+    }
+
+    png_encoder_t png_encoder = {0};
+
+    if(png_encoder_init(&png_encoder, (graphics_raw_image_t*)image) != 0) {
+        return NULL;
+    }
+
+    if(png_encoder_find_and_apply_filter(&png_encoder) != 0) {
+        return NULL;
+    }
+
+    if(png_encoder_compress(&png_encoder) != 0) {
+        return NULL;
+    }
+
+    if(png_encoder_build_png(&png_encoder) != 0) {
+        return NULL;
+    }
+
+    *size = png_encoder.png_data_len;
+
+    return png_encoder.png_data;
 }

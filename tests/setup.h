@@ -14,6 +14,7 @@
 #include <utils.h>
 #include <time.h>
 #include <random.h>
+#include <errno.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -45,12 +46,13 @@ void __attribute__((constructor)) start_ram(void);
 void __attribute__((destructor))  stop_ram(void);
 void                              on_sigabrt(int32_t sig);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-unsafe-call-within-signal-handler"
 void on_sigabrt(int32_t sig) {
     UNUSED(sig);
     exit(-1);
 }
-
-extern int64_t errno;
+#pragma GCC diagnostic pop
 
 void print_success(const char* msg, ...){
     va_list args;

@@ -11,6 +11,6 @@
 
 #include <types.h>
 
-extern int32_t errno;
+extern int64_t errno;
 
 #endif // ___ERROR_H
