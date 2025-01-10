@@ -26,7 +26,7 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-CCXXFLAGS += -std=gnu11 -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+CCXXFLAGS += -std=gnu18 -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
     -Wshadow -Wpointer-arith -Wcast-align \

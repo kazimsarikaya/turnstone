@@ -19,7 +19,7 @@ CC = gcc
 endif
 
 
-CFLAGS = -D___BITS=64 -D___EFIBUILD=1 -D___KERNELBUILD=0 -std=gnu11 -O3 -I../includes -I./
+CFLAGS = -D___BITS=64 -D___EFIBUILD=1 -D___KERNELBUILD=0 -std=gnu18 -O3 -I../includes -I./
 CFLAGS += -ffreestanding -nostdlib -nostdinc -fno-builtin -Wall -Werror -Wextra
 CFLAGS += -fno-omit-frame-pointer -msse4.2 
 CFLAGS += -fno-pic -fno-PIC -fplt -fno-ident -fno-asynchronous-unwind-tables 
