@@ -293,6 +293,7 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
 
         ctx->sstable_id = sli->sstable_id;
         ctx->level = sli->level;
+        ctx->record_id = ii->record_id;
 
         uint64_t len = ii->key_length;
         void* value = (void*)ii->key;
@@ -350,16 +351,8 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
 boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, list_t* st_list, set_t* pks, list_t* old_pks) {
     boolean_t error = false;
 
-    iterator_t* iter = list_iterator_create(st_list);
-
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot create sstables list items iterator");
-
-        return false;
-    }
-
-    while(iter->end_of_iterator(iter) != 0) {
-        tosdb_block_sstable_list_item_t* sli = (tosdb_block_sstable_list_item_t*) iter->get_item(iter);
+    for(uint64_t i = 0; i < list_size(st_list); i++) {
+        tosdb_block_sstable_list_item_t* sli = (tosdb_block_sstable_list_item_t*)list_get_data_at_position(st_list, i);
 
         if(tbl->primary_index_id <= sli->index_count) {
             if(!tosdb_primary_key_sstable_get_on_index(tbl, sli, pks, old_pks)) {
@@ -369,11 +362,7 @@ boolean_t tosdb_primary_key_sstable_get_on_list(const tosdb_table_t* tbl, list_t
                 break;
             }
         }
-
-        iter = iter->next(iter);
     }
-
-    iter->destroy(iter);
 
     return !error;
 }
@@ -388,16 +377,8 @@ boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t*
     uint64_t pk_idx_id = tbl->primary_index_id;
 
     if(tbl->memtables) {
-        iterator_t* iter = list_iterator_create(tbl->memtables);
-
-        if(!iter) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator for memtables");
-
-            return false;
-        }
-
-        while(iter->end_of_iterator(iter) != 0) {
-            const tosdb_memtable_t* mt = iter->get_item(iter);
+        for(uint64_t i = 0; i < list_size(tbl->memtables); i++) {
+            const tosdb_memtable_t* mt = (tosdb_memtable_t*)list_get_data_at_position(tbl->memtables, i);
 
             const tosdb_memtable_index_t* idx = hashmap_get(mt->indexes, (void*)pk_idx_id);
 
@@ -418,10 +399,7 @@ boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t*
                 break;
             }
 
-            iter = iter->next(iter);
         }
-
-        iter->destroy(iter);
     }
 
     if(!error && tbl->sstable_list_items) {

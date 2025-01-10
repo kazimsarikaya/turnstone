@@ -204,7 +204,7 @@ boolean_t linkerdb_close(linkerdb_t* ldb) {
 
     int32_t mss = msync(ldb->mmap_res, ldb->capacity, MS_SYNC);
     if(mss) {
-        printf("msync res %i\n", mss);
+        PRINTLOG(LINKER, LOG_INFO, "msync res %i", mss);
         print_error("cannot sync contents");
     }
 
@@ -984,7 +984,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
     uint8_t* sections  = memory_malloc(e_shsize);
 
     if(!sections) {
-        printf("cannot allocate sections for file %s", filename);
+        PRINTLOG(LINKER, LOG_INFO, "cannot allocate sections for file %s", filename);
         fclose(fp);
         hashmap_destroy(section_ids);
         hashmap_destroy(symbol_ids);
@@ -1377,7 +1377,7 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
             }
 
             if(strlen(reloc_sym_name) == 0) {
-                printf("!!! at file %s at sec %s symbol name of reloc %llx unknown", filename, sec_name, reloc_idx);
+                PRINTLOG(LINKER, LOG_INFO, "!!! at file %s at sec %s symbol name of reloc %llx unknown", filename, sec_name, reloc_idx);
                 print_error("cannot countinue");
 
                 if(free_reloc_sym_name) {
@@ -1963,7 +1963,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     linkerdb_stats_t is = {0};
 
-    printf("%lli\n", time_ns(NULL));
+    PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
     while(argc) {
         if(!linkerdb_parse_object_file(ldb, *argv, &is)) {
@@ -1977,10 +1977,10 @@ int32_t main(int32_t argc, char_t** argv) {
         argv++;
     }
 
-    printf("added\n\tmodules: %lli\n\timplementations: %lli\n\tsections: %lli\n\tsymbols: %lli\n\trelocations: %lli\n",
-           is.nm_count, is.implementation_count, is.sec_count, is.sym_count, is.reloc_count);
+    PRINTLOG(LINKER, LOG_INFO, "added\n\tmodules: %lli\n\timplementations: %lli\n\tsections: %lli\n\tsymbols: %lli\n\trelocations: %lli",
+             is.nm_count, is.implementation_count, is.sec_count, is.sym_count, is.reloc_count);
 
-    printf("%lli\n", time_ns(NULL));
+    PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
     if(!linkerdb_fix_reloc_symbol_section_ids(ldb)) {
         print_error("cannot fix relocations missing symbol sections");
@@ -1989,17 +1989,10 @@ int32_t main(int32_t argc, char_t** argv) {
         goto close;
     }
 
-    printf("%lli\n", time_ns(NULL));
+    PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
 #if 1
-    tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
-    tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
-
-    tosdb_table_close(tbl_relocations);
-
-    tbl_relocations = tosdb_table_create_or_open(db_system, "relocations", 8 << 10, 1 << 20, 8);
-
-    if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
+    if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
         print_error("cannot compact linker db");
     }
 #endif
@@ -2016,7 +2009,7 @@ close:
         memory_free((void*)entry_point);
     }
 
-    printf("%lli\n", time_ns(NULL));
+    PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
     return exit_code;
 
