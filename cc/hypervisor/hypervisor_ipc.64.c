@@ -169,23 +169,7 @@ static void hypervisor_ipc_handle_interrupts(vmcs_vmexit_info_t * vmexit_info) {
     if(list_size(mq)) {
         interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_peek(mq);
 
-        uint32_t vector_byte = frame->interrupt_number / 64;
-        uint32_t vector_bit = frame->interrupt_number % 64;
-
-        vm->lapic.in_request_vectors[vector_byte] |= (1 << vector_bit);
-
-        vm->need_to_notify = true;
-
-        uint64_t rflags = vmexit_info->guest_rflags;
-
-        if(rflags & 0x200) {
-            // enable interrupt window exiting if IF is set
-            vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, vmx_read(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION) | (1 << 2));
-
-            if(vm->is_halted) {
-                vm->is_halt_need_next_instruction = true;
-            }
-        }
+        hypervisor_ipc_handle_irq(vmexit_info, vm, frame->interrupt_number);
     }
 }
 

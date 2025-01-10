@@ -12,6 +12,7 @@
 #include <types.h>
 #include <memory.h>
 #include <cpu/sync.h>
+#include <driver/video_virtio_cross_constants.h>
 
 #define VIRGL_RSTR(...) #__VA_ARGS__
 
@@ -159,12 +160,7 @@ typedef enum virgl_bind_t {
 } virgl_bind_t;
 
 #define VIRGL_CMD(cmd, obj, len) ((cmd) | ((obj) << 8) | ((len) << 16))
-#define VIRGL_CMD_MAX_DWORDS ((64 * 1024 - 24 - 24) / 4)
-
-typedef struct virgl_cmd_t      virgl_cmd_t;
-typedef struct virgl_renderer_t virgl_renderer_t;
-
-typedef int8_t (*virgl_send_cmd_f)(uint32_t queue_no, lock_t** lock, uint32_t fence_id, virgl_cmd_t * cmd);
+#define VIRGL_CMD_MAX_DWORDS ((VIRTIO_GPU_QUEUE_ITEM_SIZE - VIRTIO_GPU_CMD_SUBMIT_3D_HEADER_SIZE) / sizeof(uint32_t)) //
 
 typedef union virgl_color_t {
     int32_t   i32[4];
@@ -774,7 +770,15 @@ typedef struct virgl_vertex_buffer_t {
 
 #define VIRGL_SET_VERTEX_BUFFERS_CCMD_PAYLOAD_SIZE(num_buffers) ((num_buffers * 3))
 
-virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd);
+typedef struct virgl_cmd_t      virgl_cmd_t;
+typedef struct virgl_renderer_t virgl_renderer_t;
+
+typedef uint8_t * (*virgl_get_buffer_f)(uint32_t queue_no, uint16_t* desc_index);
+typedef int8_t  (*virgl_send_cmd_f)(uint32_t queue_no, lock_t** lock, uint32_t fence_id, virgl_cmd_t * cmd);
+
+virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no,
+                                        lock_t** lock, uint64_t* fence_id,
+                                        virgl_get_buffer_f get_buffer, virgl_send_cmd_f send_cmd);
 
 uint32_t       virgl_renderer_get_next_resource_id(virgl_renderer_t* renderer);
 memory_heap_t* virgl_renderer_get_heap(virgl_renderer_t* renderer);
@@ -782,7 +786,7 @@ virgl_cmd_t*   virgl_renderer_get_cmd(virgl_renderer_t* renderer);
 
 uint32_t virgl_cmd_get_context_id(virgl_cmd_t * cmd);
 uint32_t virgl_cmd_get_size(virgl_cmd_t * cmd);
-void     virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer);
+uint8_t* virgl_cmd_get_offset_and_desc_index(virgl_cmd_t * cmd, uint16_t* desc_index);
 int8_t   virgl_cmd_flush_commands(virgl_cmd_t * cmd);
 
 int8_t virgl_encode_clear(virgl_cmd_t * cmd, virgl_cmd_clear_t * clear);

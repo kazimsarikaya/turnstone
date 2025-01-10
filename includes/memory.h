@@ -64,6 +64,10 @@ memory_heap_t* memory_create_heap_hash(size_t start, size_t end);
  */
 memory_heap_t* memory_set_default_heap(memory_heap_t* heap);
 
+/**
+ * @brief returns default heap
+ * @return default heap
+ */
 memory_heap_t* memory_get_default_heap(void);
 
 /**

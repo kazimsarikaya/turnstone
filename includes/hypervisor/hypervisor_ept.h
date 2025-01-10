@@ -113,4 +113,7 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
 
 uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info);
 
+int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm);
+int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm);
+
 #endif

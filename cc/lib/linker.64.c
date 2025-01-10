@@ -143,14 +143,6 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
 
     PRINTLOG(LINKER, LOG_DEBUG, "found %llu symbols for section id 0x%llx", list_size(symbols), section_id);
 
-    iterator_t* it = list_iterator_create(symbols);
-
-    if(!it) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for symbols");
-
-        return -1;
-    }
-
     linker_global_offset_table_entry_t got_entry = {0};
     uint64_t symbol_id = 0;
     uint8_t symbol_type = 0;
@@ -159,8 +151,10 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
     uint64_t symbol_size = 0;
     char_t* symbol_name = NULL;
 
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sym_rec = (tosdb_record_t*)it->delete_item(it);
+    size_t sym_idx = 0;
+
+    for(sym_idx = 0; sym_idx < list_size(symbols); sym_idx++) {
+        tosdb_record_t* sym_rec = (tosdb_record_t*)list_get_data_at_position(symbols, sym_idx);
 
         if(!sym_rec) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get symbol record");
@@ -264,28 +258,22 @@ int8_t linker_build_symbols(linker_context_t* ctx, uint64_t module_id, uint64_t 
         memory_free(symbol_name);
 
         sym_rec->destroy(sym_rec);
-
-        it = it->next(it);
     }
-
-    it->destroy(it);
 
     list_destroy(symbols);
 
     return res;
 
 clean_symbols_iter:
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sym_rec = (tosdb_record_t*)it->delete_item(it);
+    while(sym_idx < list_size(symbols)) {
+        tosdb_record_t* sym_rec = (tosdb_record_t*)list_get_data_at_position(symbols, sym_idx);
 
         if(sym_rec) {
             sym_rec->destroy(sym_rec);
         }
 
-        it = it->next(it);
+        sym_idx++;
     }
-
-    it->destroy(it);
 
     list_destroy(symbols);
 
@@ -390,14 +378,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
     PRINTLOG(LINKER, LOG_DEBUG, "relocations count of section 0x%llx: 0x%llx", section_id, list_size(relocations));
 
-    iterator_t* it = list_iterator_create(relocations);
-
-    if(!it) {
-        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for relocations");
-
-        return -1;
-    }
-
     linker_relocation_entry_t relocation = {0};
     int64_t reloc_id = 0;
     int64_t symbol_section_id = 0;
@@ -412,8 +392,10 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         reloc_section->section_data = buffer_new();
     }
 
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* reloc_rec = (tosdb_record_t*)it->delete_item(it);
+    size_t reloc_idx = 0;
+
+    for(reloc_idx = 0; reloc_idx < list_size(relocations); reloc_idx++) {
+        tosdb_record_t* reloc_rec = (tosdb_record_t*)list_get_data_at_position(relocations, reloc_idx);
         boolean_t is_got_symbol = false;
         boolean_t symbol_id_missing = false;
 
@@ -427,7 +409,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
         if(!reloc_rec->get_int64(reloc_rec, "id", &reloc_id)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation id");
-            reloc_rec->destroy(reloc_rec);
 
             goto clean_relocs_iter;
         }
@@ -438,14 +419,12 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
         if(!reloc_rec->get_int64(reloc_rec, "symbol_section_id", &symbol_section_id)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation symbol section id for relocation id 0x%llx", reloc_id);
-            reloc_rec->destroy(reloc_rec);
 
             goto clean_relocs_iter;
         }
 
         if(!reloc_rec->get_string(reloc_rec, "symbol_name", &symbol_name)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation symbol name for relocation id 0x%llx", reloc_id);
-            reloc_rec->destroy(reloc_rec);
 
             goto clean_relocs_iter;
         }
@@ -461,7 +440,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
         if(symbol_id_missing && !is_got_symbol) {
             PRINTLOG(LINKER, LOG_ERROR, "symbol id is missing for symbol %s, relocation at section 0x%llx relocation id 0x%llx", symbol_name, section_id, reloc_id);
-            reloc_rec->destroy(reloc_rec);
             memory_free(symbol_name);
 
             goto clean_relocs_iter;
@@ -471,8 +449,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
             if(!is_got_symbol) {
                 PRINTLOG(LINKER, LOG_ERROR, "symbol section id is missing for symbol %s(%lli), relocation at section 0x%llx relocation id 0x%llx", symbol_name, symbol_id, section_id, reloc_id);
                 PRINTLOG(LINKER, LOG_ERROR, "relocation record deleted? %s", reloc_rec->is_deleted(reloc_rec) ? "yes" : "no");
-
-                reloc_rec->destroy(reloc_rec);
 
                 memory_free(symbol_name);
 
@@ -486,21 +462,18 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
         if(!reloc_rec->get_int8(reloc_rec, "type", &reloc_type)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation type for relocation id 0x%llx", reloc_id);
-            reloc_rec->destroy(reloc_rec);
 
             goto clean_relocs_iter;
         }
 
         if(!reloc_rec->get_int64(reloc_rec, "offset", &reloc_offset)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation offset for relocation id 0x%llx", reloc_id);
-            reloc_rec->destroy(reloc_rec);
 
             goto clean_relocs_iter;
         }
 
         if(!reloc_rec->get_int64(reloc_rec, "addend", &reloc_addend)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get relocation addend for relocation id 0x%llx", reloc_id);
-            reloc_rec->destroy(reloc_rec);
 
             goto clean_relocs_iter;
         }
@@ -510,14 +483,12 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
             if(!s_sec_rec) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot create record for searching section");
-                reloc_rec->destroy(reloc_rec);
 
                 goto clean_relocs_iter;
             }
 
             if(!s_sec_rec->set_uint64(s_sec_rec, "id", symbol_section_id)) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot set search key for records id column for section id 0x%llx", symbol_section_id);
-                reloc_rec->destroy(reloc_rec);
                 s_sec_rec->destroy(s_sec_rec);
 
                 goto clean_relocs_iter;
@@ -525,7 +496,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
             if(!s_sec_rec->get_record(s_sec_rec)) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot get section record for section id 0x%llx for relocation 0x%llx", symbol_section_id, reloc_id);
-                reloc_rec->destroy(reloc_rec);
                 s_sec_rec->destroy(s_sec_rec);
 
                 goto clean_relocs_iter;
@@ -533,7 +503,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
             if(!s_sec_rec->get_int64(s_sec_rec, "module_id", &module_id)) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot get section module id, is deleted? %d", s_sec_rec->is_deleted(s_sec_rec));
-                reloc_rec->destroy(reloc_rec);
                 s_sec_rec->destroy(s_sec_rec);
 
                 goto clean_relocs_iter;
@@ -553,7 +522,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                 if(!module->plt_offsets) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot create plt offsets hashmap");
-                    reloc_rec->destroy(reloc_rec);
 
                     goto clean_relocs_iter;
                 }
@@ -565,7 +533,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                 if(!plt_section->section_data) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot create plt section data buffer");
-                    reloc_rec->destroy(reloc_rec);
 
                     goto clean_relocs_iter;
                 }
@@ -679,7 +646,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                     if( recursive_res == -1) {
                         PRINTLOG(LINKER, LOG_ERROR, "cannot build module for got symbol 0x%llx module 0x%llx", symbol_id, module_id);
-                        reloc_rec->destroy(reloc_rec);
 
                         goto clean_relocs_iter;
                     } else if(recursive_res == -2) {
@@ -689,7 +655,6 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
 
                         if(!got_index) {
                             PRINTLOG(LINKER, LOG_ERROR, "cannot get got index for symbol 0x%llx after recursive loading", symbol_id);
-                            reloc_rec->destroy(reloc_rec);
 
                             goto clean_relocs_iter;
                         } else {
@@ -715,28 +680,22 @@ int8_t linker_build_relocations(linker_context_t* ctx, uint64_t section_id, uint
         }
 
         reloc_rec->destroy(reloc_rec);
-
-        it = it->next(it);
     }
-
-    it->destroy(it);
 
     list_destroy(relocations);
 
     return res;
 
 clean_relocs_iter:
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* reloc_rec = (tosdb_record_t*)it->delete_item(it);
+    while(reloc_idx < list_size(relocations)) {
+        tosdb_record_t* reloc_rec = (tosdb_record_t*)list_get_data_at_position(relocations, reloc_idx);
 
         if(reloc_rec) {
             reloc_rec->destroy(reloc_rec);
         }
 
-        it = it->next(it);
+        reloc_idx++;
     }
-
-    it->destroy(it);
 
     list_destroy(relocations);
 
@@ -854,10 +813,10 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
     uint64_t section_offset = 0;
 
-    iterator_t* it = list_iterator_create(sections);
+    size_t sec_idx = 0;
 
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sec_rec = (tosdb_record_t*)it->delete_item(it);
+    for(sec_idx = 0; sec_idx < list_size(sections); sec_idx++) {
+        tosdb_record_t* sec_rec = (tosdb_record_t*)list_get_data_at_position(sections, sec_idx);
 
         if(!sec_rec) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section record");
@@ -867,28 +826,24 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         if(!sec_rec->get_uint64(sec_rec, "id", &section_id)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section id");
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
 
         if(!sec_rec->get_uint8(sec_rec, "type", &section_type)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section type");
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
 
         if(!sec_rec->get_uint64(sec_rec, "size", &section_size)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section size");
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
 
         if(!sec_rec->get_int64(sec_rec, "alignment", &section_alignment)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section aligment");
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
@@ -906,14 +861,12 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
             if(!sec_rec->get_bytearray(sec_rec, "value", &tmp_section_size, &section_data)) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot get section data");
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
 
             if(!section_data) {
                 PRINTLOG(LINKER, LOG_ERROR, "section data is NULL");
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
@@ -921,7 +874,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             if(tmp_section_size != section_size) {
                 PRINTLOG(LINKER, LOG_ERROR, "section size mismatch");
                 memory_free(section_data);
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
@@ -941,7 +893,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             if(section_offset % section_alignment) {
                 PRINTLOG(LINKER, LOG_ERROR, "section offset alignment mismatch");
                 memory_free(section_data);
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
@@ -949,7 +900,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             if(section_offset != module->sections[section_type].size) {
                 PRINTLOG(LINKER, LOG_ERROR, "section offset mismatch");
                 memory_free(section_data);
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
@@ -957,7 +907,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             if(!buffer_append_bytes(module->sections[section_type].section_data, section_data, section_size)) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot append section data");
                 memory_free(section_data);
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
@@ -967,7 +916,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
             if(section_end != section_offset + section_size) {
                 PRINTLOG(LINKER, LOG_ERROR, "section end mismatch");
                 memory_free(section_data);
-                sec_rec->destroy(sec_rec);
 
                 goto clean_secs_iter;
             }
@@ -979,7 +927,6 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         if(!sec_rec->get_string(sec_rec, "name", &section_name)) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot get section name");
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
@@ -991,14 +938,12 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         if(linker_build_symbols(ctx, module_id, section_id, section_type, section_offset) != 0) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot build symbols for section id 0x%llx", section_id);
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
 
         if(linker_build_relocations(ctx,  section_id, section_type, section_offset, module, recursive) != 0) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot build relocations for section id 0x%llx", section_id);
-            sec_rec->destroy(sec_rec);
 
             goto clean_secs_iter;
         }
@@ -1007,10 +952,7 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
 
         sec_rec->destroy(sec_rec);
 
-        it = it->next(it);
     }
-
-    it->destroy(it);
 
     list_destroy(sections);
 
@@ -1019,17 +961,15 @@ int8_t linker_build_module(linker_context_t* ctx, uint64_t module_id, boolean_t 
     return res;
 
 clean_secs_iter:
-    while(it->end_of_iterator(it) != 0) {
-        tosdb_record_t* sec_rec = (tosdb_record_t*)it->delete_item(it);
+    while(sec_idx < list_size(sections)) {
+        tosdb_record_t* sec_rec = (tosdb_record_t*)list_get_data_at_position(sections, sec_idx);
 
         if(sec_rec) {
             sec_rec->destroy(sec_rec);
         }
 
-        it = it->next(it);
+        sec_idx++;
     }
-
-    it->destroy(it);
 
     list_destroy(sections);
 

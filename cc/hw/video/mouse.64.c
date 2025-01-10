@@ -9,13 +9,15 @@
 
 #include <types.h>
 #include <utils.h>
-#include <graphics/image.h>
+#include <graphics/tga.h>
 #include <device/mouse.h>
 #include <buffer.h>
 #include <cpu/task.h>
 
 
 MODULE("turnstone.kernel.hw.video");
+
+void video_text_print(const char_t* string);
 
 extern uint8_t mouse_icon_data_start;
 extern uint8_t mouse_icon_data_end;
@@ -44,10 +46,10 @@ int8_t mouse_report(mouse_report_t * report) {
 
         if(shell_task_id != 0) {
             task_set_interrupt_received(shell_task_id);
-        }
-
-        if(windowmanager_task_id != 0) {
+        } else if(windowmanager_task_id != 0) {
             task_set_interrupt_received(windowmanager_task_id);
+        } else {
+            video_text_print("no task to notify\n");
         }
     }
 

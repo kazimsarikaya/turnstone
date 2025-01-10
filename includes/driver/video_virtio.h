@@ -308,6 +308,8 @@ typedef struct virtio_gpu_cmd_submit_t {
     uint32_t              padding;
 } __attribute__((packed)) virtio_gpu_cmd_submit_t;
 
+_Static_assert(sizeof(virtio_gpu_cmd_submit_t) == 32, "virtio_gpu_cmd_submit_t size is not correct");
+
 typedef struct virtio_gpu_resource_map_blob_t {
     virtio_gpu_ctrl_hdr_t hdr;
     uint32_t              resource_id;

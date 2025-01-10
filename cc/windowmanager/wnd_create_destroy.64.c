@@ -7,6 +7,8 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_utils.h>
 #include <hashmap.h>
 #include <buffer.h>
 #include <graphics/screen.h>
@@ -41,6 +43,8 @@ window_t* windowmanager_create_top_window(void) {
     window->buffer = VIDEO_BASE_ADDRESS;
     window->background_color.color = 0x00000000;
     window->foreground_color.color = 0xFFFFFFFF;
+    window->is_visible = true;
+    window->is_dirty = true;
 
     return window;
 }
@@ -62,6 +66,8 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     window->buffer = VIDEO_BASE_ADDRESS; // + (abs_y * VIDEO_PIXELS_PER_SCANLINE) + abs_x;
     window->background_color = background_color;
     window->foreground_color = foreground_color;
+    window->is_visible = true;
+    window->is_dirty = true;
 
     if(parent->children == NULL) {
         parent->children = list_create_queue();
@@ -72,7 +78,13 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     return window;
 }
 
-static int8_t wndmgr_footer_time_on_redraw(const window_t* window) {
+static int8_t wndmgr_footer_time_on_redraw(const window_event_t* event) {
+    if(event == NULL) {
+        return -1;
+    }
+
+    window_t* window = event->window;
+
     if(window == NULL) {
         return -1;
     }
@@ -107,8 +119,6 @@ static int8_t wndmgr_create_footer(window_t* parent) {
         return -1;
     }
 
-    footer->is_visible = true;
-
     timeparsed_t tp = {0};
 
     timeparsed(&tp);
@@ -128,7 +138,6 @@ static int8_t wndmgr_create_footer(window_t* parent) {
     }
 
     time_wnd->on_redraw = wndmgr_footer_time_on_redraw;
-    time_wnd->is_visible = true;
 
     return 0;
 }
@@ -181,6 +190,39 @@ void windowmanager_destroy_window(window_t* window) {
     }
 
     memory_free(window);
+}
+
+void windowmanager_destroy_child_window(window_t* window, window_t* child) {
+    if(window == NULL || child == NULL) {
+        return;
+    }
+
+    if(window->children == NULL) {
+        return;
+    }
+
+    list_list_delete(window->children, child);
+
+    windowmanager_destroy_window(child);
+}
+
+void windowmanager_destroy_all_child_windows(window_t* window) {
+    if(window == NULL) {
+        return;
+    }
+
+    if(window->children == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < list_size(window->children); i++) {
+        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+        windowmanager_destroy_window(child);
+    }
+
+    list_destroy(window->children);
+
+    window->children = NULL;
 }
 
 void windowmanager_remove_and_set_current_window(window_t* window) {

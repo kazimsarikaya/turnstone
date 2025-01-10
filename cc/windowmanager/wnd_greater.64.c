@@ -6,21 +6,23 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <windowmanager.h>
+#include <windowmanager/wnd_greater.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_utils.h>
 #include <strings.h>
 #include <graphics/screen.h>
 
 MODULE("turnstone.windowmanager");
-
 
 extern char_t tos_logo_data_start;
 
 window_t* windowmanager_create_greater_window(void) {
     screen_info_t screen_info = screen_get_info();
 
+    uint32_t font_width = 0;
     uint32_t font_height = 0;
 
-    font_get_font_dimension(NULL, &font_height);
+    font_get_font_dimension(&font_width, &font_height);
 
     window_t* window = windowmanager_create_top_window();
 
@@ -28,14 +30,14 @@ window_t* windowmanager_create_greater_window(void) {
         return NULL;
     }
 
-    window->is_visible = true;
-    window->is_dirty = true;
-
     char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
-    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, 2000);
+    rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, screen_info.width);
     rect.x = (screen_info.width - rect.width) / 2;
     rect.y = (screen_info.height - rect.height) / 2;
+    // align x to font width, y to font height
+    rect.x = (rect.x / font_width) * font_width;
+    rect.y = (rect.y / font_height) * font_height;
 
     window_t* child = windowmanager_create_window(window,
                                                   windowmanager_turnstone_ascii_art,
@@ -48,16 +50,13 @@ window_t* windowmanager_create_greater_window(void) {
         return NULL;
     }
 
-    child->is_visible = true;
-    child->is_dirty = true;
-
     int32_t old_x = rect.x;
     int32_t old_y = rect.y;
     int32_t old_height = rect.height;
 
     char_t* text = strdup("Press F2 to open panel");
 
-    rect = windowmanager_calc_text_rect(text, 2000);
+    rect = windowmanager_calc_text_rect(text, screen_info.width);
     rect.x = old_x;
     rect.y = old_y + old_height + 4 * font_height;
 
@@ -71,9 +70,6 @@ window_t* windowmanager_create_greater_window(void) {
         memory_free(window);
         return NULL;
     }
-
-    child->is_visible = true;
-    child->is_dirty = true;
 
     return window;
 }

@@ -86,17 +86,31 @@ typedef struct tss_s {
 }__attribute__((packed)) tss_t; ///< short hand for struct
 
 /**
- * @enum task_state_e
+ * @enum task_state_t
  * @brief task states
  */
-typedef enum task_state_e {
+typedef enum task_state_t {
     TASK_STATE_NULL, ///< task state not known
     TASK_STATE_CREATED, ///< task created but never runned
     TASK_STATE_STARTING, ///< task is starting
     TASK_STATE_RUNNING, ///< task is running
     TASK_STATE_SUSPENDED, ///< task is at wait queue
+    TASK_STATE_SLEEPING, ///< task is sleeping
+    TASK_STATE_MESSAGE_WAITING, ///< task is waiting for message
+    TASK_STATE_INTERRUPT_RECEIVED, ///< task is waiting for interrupt received
+    TASK_STATE_FUTURE_WAITING, ///< task is waiting for future event
+    TASK_STATE_LOCKED, ///< task is locked
     TASK_STATE_ENDED, ///< task is ended
 } task_state_t; ///< short hand for enum
+
+/**
+ * @enum task_attribute_t
+ * @brief task attributes
+ */
+typedef enum task_attribute_t {
+    TASK_ATTRIBUTE_NONE = 0x0, ///< no attribute
+    TASK_ATTRIBUTE_INTERRUPTIBLE = 0x1, ///< task is interruptible
+} task_attribute_t; ///< short hand for enum
 
 typedef struct task_registers_t {
     uint64_t rax; ///< register
@@ -132,17 +146,13 @@ typedef struct task_t {
     uint64_t                     last_tick_count; ///< tick count when task removes from executing, used for scheduling
     uint64_t                     task_switch_count; ///< task switch count
     task_state_t                 state; ///< task state
+    task_attribute_t             attributes; ///< task attributes
     void*                        entry_point; ///< entry point address
     uint64_t                     arguments_count; ///< argument count
     void**                       arguments; ///< argument list
     void*                        stack; ///< stack pointer
     uint64_t                     stack_size; ///< stack size of task
     list_t*                      message_queues; ///< task's listining queues.
-    boolean_t                    message_waiting; ///< task state for sleeping should move @ref task_state_e
-    boolean_t                    sleeping; ///< task state for sleeping should move @ref task_state_e
-    boolean_t                    interruptible; ///< task state for interruptible should move @ref task_state_e
-    boolean_t                    interrupt_received; ///< task state for interrupt received should move @ref task_state_e
-    boolean_t                    wait_for_future; ///< task state for waiting future event should move @ref task_state_e
     uint64_t                     wake_tick; ///< tick value when task wakes up
     const char*                  task_name; ///< task name
     memory_page_table_context_t* page_table; ///< page table
@@ -252,7 +262,29 @@ void task_current_task_sleep(uint64_t wake_tick);
 void task_end_task(void);
 void task_kill_task(uint64_t task_id, boolean_t force);
 
-void task_print_all(buffer_t* buffer);
+typedef struct task_list_item_t {
+    const char_t* task_name;
+    uint64_t      task_id;
+    uint64_t      task_address;
+    uint64_t      cpu_id;
+    uint64_t      task_switch_count;
+    uint64_t      rsp;
+    uint64_t      rbp;
+    uint64_t      heap_address;
+    uint64_t      heap_size;
+    uint64_t      stack_address;
+    uint64_t      stack_size;
+    uint64_t      state;
+    uint64_t      attributes;
+    uint64_t      message_queues;
+    uint64_t      messages;
+    uint64_t      malloc_count;
+    uint64_t      free_count;
+    uint64_t      heap_diff;
+} task_list_item_t;
+
+void      task_print_all(buffer_t* buffer);
+buffer_t* task_build_task_list(void);
 
 buffer_t* task_get_task_input_buffer(uint64_t tid);
 buffer_t* task_get_task_output_buffer(uint64_t tid);

@@ -7,6 +7,12 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_types.h>
+#include <windowmanager/wnd_utils.h>
+#include <windowmanager/wnd_gfx.h>
+#include <windowmanager/wnd_create_destroy.h>
+#include <windowmanager/wnd_greater.h>
+#include <windowmanager/wnd_options.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
@@ -21,6 +27,7 @@
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
 #include <graphics/font.h>
+#include <driver/console_virtio.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -58,7 +65,11 @@ static int8_t windowmanager_main(void) {
     windowmanager_clear_screen(windowmanager_current_window);
     SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
 
+    text_cursor_enable(true);
+
     windowmanager_initialized = true;
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Window Manager initialized, waiting events\n");
 
     while(true) {
         boolean_t flush_needed = windowmanager_draw_window(windowmanager_current_window);
@@ -124,9 +135,18 @@ static int8_t windowmanager_main(void) {
             if(kbd_data[i].is_pressed) {
                 if(kbd_data[i].is_printable) {
                     if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
-                        windowmanager_current_window->on_enter(windowmanager_current_window);
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_ENTER;
+                        event.window = windowmanager_current_window;
+                        windowmanager_current_window->on_enter(&event);
                     } else if(kbd_data[i].key == '\t'){
-                        windowmanager_move_cursor_to_next_input(windowmanager_current_window);
+                        boolean_t is_reverse = false;
+
+                        if(kbd_data[i].state.is_shift_pressed) {
+                            is_reverse = true;
+                        }
+
+                        windowmanager_move_cursor_to_next_input(windowmanager_current_window, is_reverse);
                     }else {
                         data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
                     }
@@ -161,7 +181,38 @@ static int8_t windowmanager_main(void) {
                         text_cursor_hide();
                         text_cursor_move_relative(1, 0);
                         text_cursor_show();
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F5) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_LEFT;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F6 || kbd_data[i].key == KBD_SCANCODE_PAGEUP) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F7 || kbd_data[i].key == KBD_SCANCODE_PAGEDOWN) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_F8) {
+                        window_event_t event = {0};
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_RIGHT;
+                        event.window = windowmanager_current_window;
+                        if(windowmanager_current_window->on_scroll) {
+                            windowmanager_current_window->on_scroll(&event);
+                        }
+                    } else if(kbd_data[i].key == KBD_SCANCODE_PRINTSCREEN) {
+                        clipboard_send_text("hello world from turnstone os!");
                     }
+
                 }
             }
         }
@@ -187,7 +238,7 @@ uint64_t windowmanager_task_id = 0;
 int8_t windowmanager_init(void) {
     memory_heap_t* heap = memory_get_default_heap();
 
-    windowmanager_task_id = task_create_task(heap, 32 << 20, 64 << 10, windowmanager_main, 0, NULL, "windowmanager");
+    windowmanager_task_id = task_create_task(heap, 64 << 20, 2 << 20, windowmanager_main, 0, NULL, "windowmanager");
 
     while(!windowmanager_initialized) {
         cpu_sti();

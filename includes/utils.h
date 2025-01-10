@@ -19,7 +19,7 @@
  * @param[in]  y first number
  * @return  minimum of x or y
  */
-#define MIN(x, y)  (x < y ? x : y)
+#define MIN(x, y)  ((x) < (y) ? (x) : (y))
 
 /**
  * find max of two numbers
@@ -27,9 +27,9 @@
  * @param[in]  y first number
  * @return  maximum of x or y
  */
-#define MAX(x, y)  (x > y ? x : y)
+#define MAX(x, y)  ((x) > (y) ? (x) : (y))
 
-#define ABS(x)  (x >= 0?x:-1 * x)
+#define ABS(x)  ((x) >= 0?(x):-1 * (x))
 
 /**
  * @brief power base with p

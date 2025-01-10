@@ -27,6 +27,36 @@ void crc32_init_table(void);
  * @param[in] init @ref CRC32_SEED or previous sum
  * @return pre crc32 sum, for finishing it should be xor'ed with @ref CRC32_SEED
  */
-uint32_t crc32_sum(uint8_t* p, uint32_t bytelength, uint32_t init);
+uint32_t crc32_sum(const void* p, uint32_t bytelength, uint32_t init);
+
+/**
+ * @brief calculates crc32c sum
+ * @param[in] data input data
+ * @param[in] size input length
+ * @param[in] init @ref CRC32_SEED or previous sum
+ * @return pre crc32 sum, for finishing it should be xor'ed with @ref CRC32_SEED
+ */
+uint32_t crc32c_sum(const void* data, uint64_t size, uint32_t init);
+
+/**
+ * @brief finalize crc32 sum
+ * @param[in] crc pre crc32 sum
+ * @return crc32 sum
+ */
+static inline uint32_t crc32_finalize(uint32_t crc) {
+    return crc ^ CRC32_SEED;
+}
+
+/*! adler32 seed*/
+#define ADLER32_SEED 1
+
+/**
+ * @brief calculates adler32 sum
+ * @param[in] data input data
+ * @param[in] size input length
+ * @param[in] init seed/previous sum
+ * @return crc32 sum
+ */
+uint32_t adler32_sum(const void* data, uint64_t size, uint32_t init);
 
 #endif

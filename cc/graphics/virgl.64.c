@@ -23,15 +23,17 @@ struct virgl_renderer_t {
 };
 
 struct virgl_cmd_t {
-    uint32_t          context_id;
-    uint16_t          queue_no;
-    lock_t**          lock;
-    uint64_t*         fence_id;
-    virgl_send_cmd_f  send_cmd;
-    volatile uint64_t in_use;
-    uint32_t          cmd_old_dw_count;
-    uint32_t          cmd_dw_count;
-    uint32_t          cmd_dws[VIRGL_CMD_MAX_DWORDS];
+    uint32_t           context_id;
+    uint16_t           queue_no;
+    lock_t**           lock;
+    uint64_t*          fence_id;
+    uint16_t           desc_index;
+    virgl_get_buffer_f get_buffer;
+    virgl_send_cmd_f   send_cmd;
+    volatile uint64_t  in_use;
+    uint32_t           cmd_old_dw_count;
+    uint32_t           cmd_dw_count;
+    uint32_t*          cmd_dws;
 };
 
 static inline uint32_t fui(float32_t f) {
@@ -43,7 +45,9 @@ static inline uint32_t fui(float32_t f) {
     return u.i;
 }
 
-virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no, lock_t** lock, uint64_t* fence_id, virgl_send_cmd_f send_cmd) {
+virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id, uint16_t queue_no,
+                                        lock_t** lock, uint64_t* fence_id,
+                                        virgl_get_buffer_f get_buffer, virgl_send_cmd_f send_cmd) {
     if(!heap || !lock || !fence_id || !send_cmd) {
         return NULL;
     }
@@ -66,6 +70,7 @@ virgl_renderer_t* virgl_renderer_create(memory_heap_t* heap, uint32_t context_id
     renderer->cmd->queue_no = queue_no;
     renderer->cmd->lock = lock;
     renderer->cmd->fence_id = fence_id;
+    renderer->cmd->get_buffer = get_buffer;
     renderer->cmd->send_cmd = send_cmd;
 
     return renderer;
@@ -111,13 +116,13 @@ uint32_t virgl_cmd_get_size(virgl_cmd_t * cmd) {
     return cmd->cmd_dw_count * sizeof(uint32_t);
 }
 
-void virgl_cmd_write_commands(virgl_cmd_t * cmd, void* buffer) {
-    if(!cmd || !buffer) {
-        return;
+uint8_t* virgl_cmd_get_offset_and_desc_index(virgl_cmd_t * cmd, uint16_t* desc_index) {
+    if(!cmd || !desc_index) {
+        return NULL;
     }
 
-    memory_memcopy(cmd->cmd_dws, buffer, virgl_cmd_get_size(cmd));
-    cmd->cmd_dw_count = 0;
+    *desc_index = cmd->desc_index;
+    return (uint8_t*)cmd->cmd_dws;
 }
 
 int8_t virgl_cmd_flush_commands(virgl_cmd_t * cmd) {
@@ -125,12 +130,18 @@ int8_t virgl_cmd_flush_commands(virgl_cmd_t * cmd) {
         return 0;
     }
 
-    if(cmd->cmd_dw_count == 0) {
+    if(cmd->cmd_dws == NULL) {
         return 0;
     }
 
     uint32_t fence_id = (*cmd->fence_id)++;
-    return cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
+
+    int8_t ret = cmd->send_cmd(cmd->queue_no, cmd->lock, fence_id, cmd);
+
+    cmd->cmd_dw_count = 0;
+    cmd->cmd_dws = NULL;
+
+    return ret;
 }
 
 static void virgl_encode_rollback_cmd(virgl_cmd_t* cmd) {
@@ -139,7 +150,7 @@ static void virgl_encode_rollback_cmd(virgl_cmd_t* cmd) {
 }
 
 static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
-    if(cmd->cmd_dw_count + 1 > VIRGL_CMD_MAX_DWORDS) {
+    if(cmd->cmd_dw_count + 1 >= VIRGL_CMD_MAX_DWORDS) {
         virgl_encode_rollback_cmd(cmd);
         return -1;
     }
@@ -151,7 +162,7 @@ static int8_t virgl_encode_write_dword(virgl_cmd_t* cmd, uint32_t dword) {
 }
 
 static int8_t virgl_encode_write_float64(virgl_cmd_t* cmd, float64_t qword) {
-    if(cmd->cmd_dw_count + 2 > VIRGL_CMD_MAX_DWORDS) {
+    if(cmd->cmd_dw_count + 2 >= VIRGL_CMD_MAX_DWORDS) {
         virgl_encode_rollback_cmd(cmd);
         return -1;
     }
@@ -184,12 +195,26 @@ static int8_t virgl_encode_write_cmd_header(virgl_cmd_t* cmd, uint16_t cmd_type,
     }
 
 
-    if(cmd->cmd_dw_count + size + 1 > VIRGL_CMD_MAX_DWORDS) {
+    if(cmd->cmd_dw_count + size + 1 >= VIRGL_CMD_MAX_DWORDS) {
         int8_t ret = virgl_cmd_flush_commands(cmd);
 
         if(ret) {
             video_text_print("virgl_encode_write_cmd_header: failed to flush commands\n");
             virgl_encode_rollback_cmd(cmd);
+            return -1;
+        }
+    }
+
+    if(!cmd->cmd_dws && cmd->cmd_dw_count) {
+        video_text_print("virgl_encode_write_cmd_header: cmd_dws is broken\n");
+        return -1;
+    }
+
+    if(!cmd->cmd_dws) {
+        cmd->cmd_dws = (uint32_t*)cmd->get_buffer(cmd->queue_no, &cmd->desc_index);
+
+        if(!cmd->cmd_dws) {
+            video_text_print("virgl_encode_write_cmd_header: failed to get buffer\n");
             return -1;
         }
     }
@@ -460,7 +485,7 @@ int8_t virgl_encode_shader(virgl_cmd_t* cmd, virgl_shader_t* shader) {
         uint32_t length, offlen;
         int32_t hdr_len = base_hdr_size + (first_pass ? strm_hdr_size : 0);
 
-        if (cmd->cmd_dw_count + hdr_len + 1 > VIRGL_CMD_MAX_DWORDS) {
+        if (cmd->cmd_dw_count + hdr_len + 1 >= VIRGL_CMD_MAX_DWORDS) {
             if (virgl_cmd_flush_commands(cmd)) {
                 return -1;
             }
@@ -813,7 +838,7 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
     /* can we send it all in one cmdbuf? */
     if (length < VIRGL_CMD_MAX_DWORDS) {
         /* is there space in this cmdbuf? if not flush and use another one */
-        if ((cmd->cmd_dw_count + length + 1) > VIRGL_CMD_MAX_DWORDS) {
+        if ((cmd->cmd_dw_count + length + 1) >= VIRGL_CMD_MAX_DWORDS) {
             if (virgl_cmd_flush_commands(cmd)) {
                 return -1;
             }
@@ -842,7 +867,7 @@ int8_t virgl_encode_inline_write(virgl_cmd_t* cmd, virgl_res_iw_t* res_iw, const
 
             left_bytes = res_iw->box.w * elsize;
             while (left_bytes) {
-                if (cmd->cmd_dw_count + 12 > VIRGL_CMD_MAX_DWORDS) {
+                if (cmd->cmd_dw_count + 12 >= VIRGL_CMD_MAX_DWORDS) {
                     if (virgl_cmd_flush_commands(cmd)) {
                         return -1;
                     }

@@ -114,6 +114,17 @@ buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length);
  */
 buffer_t* buffer_append_buffer(buffer_t* buffer, buffer_t* appenden);
 
+#define buffer_append_with_int_type(b, d, t) buffer_append_bytes(b, (uint8_t*)&d, sizeof(t ## _t))
+
+#define buffer_append_int8(b, d) buffer_append_with_int_type(b, d, int8)
+#define buffer_append_int16(b, d) buffer_append_with_int_type(b, d, int16)
+#define buffer_append_int32(b, d) buffer_append_with_int_type(b, d, int32)
+#define buffer_append_int64(b, d) buffer_append_with_int_type(b, d, int64)
+#define buffer_append_uint8(b, d) buffer_append_with_int_type(b, d, uint8)
+#define buffer_append_uint16(b, d) buffer_append_with_int_type(b, d, uint16)
+#define buffer_append_uint32(b, d) buffer_append_with_int_type(b, d, uint32)
+#define buffer_append_uint64(b, d) buffer_append_with_int_type(b, d, uint64)
+
 /**
  * @brief returns a byte array from buffer with length, byte array is copied, position is advanced with length
  * @param[in] buffer buffer to get bytes
@@ -217,6 +228,25 @@ uint64_t buffer_peek_ints_at_position(buffer_t* buffer, uint64_t position, uint8
 uint64_t buffer_peek_ints(buffer_t* buffer, uint8_t bc);
 
 /**
+ * @brief returns an int from buffer with byte count, int is copied, position is advanced with byte count
+ * @param[in] buffer buffer to get int
+ * @param[in] bc byte count of int
+ * @return uint64_t int
+ */
+uint64_t buffer_read_ints(buffer_t* buffer, uint8_t bc);
+
+#define buffer_read_with_int_type(b, t) ((t ## _t)buffer_read_ints(b, sizeof(t ## _t)))
+
+#define buffer_read_int8(b) buffer_read_with_int_type(b, int8)
+#define buffer_read_int16(b) buffer_read_with_int_type(b, int16)
+#define buffer_read_int32(b) buffer_read_with_int_type(b, int32)
+#define buffer_read_int64(b) buffer_read_with_int_type(b, int64)
+#define buffer_read_uint8(b) buffer_read_with_int_type(b, uint8)
+#define buffer_read_uint16(b) buffer_read_with_int_type(b, uint16)
+#define buffer_read_uint32(b) buffer_read_with_int_type(b, uint32)
+#define buffer_read_uint64(b) buffer_read_with_int_type(b, uint64)
+
+/**
  * @brief sets readonly flag of buffer
  * @param[in] buffer buffer to set readonly
  * @param[in] ro readonly flag
@@ -245,6 +275,9 @@ boolean_t buffer_write_slice_into(buffer_t* buffer, uint64_t pos, uint64_t len, 
  * @return uint8_t* pointer to byte array, or null if position + length > buffer length
  */
 uint8_t* buffer_get_view_at_position(const buffer_t* buffer, uint64_t position, uint64_t length);
+
+/*! macro to get view from buffer from current position @see buffer_get_view_at_position */
+#define buffer_get_view(b, l) buffer_get_view_at_position(b, buffer_get_position(b), l)
 
 /*! default io buffer id for stdin */
 #define BUFFER_IO_INPUT 0

@@ -434,6 +434,22 @@ uint64_t buffer_peek_ints(buffer_t* buffer, uint8_t bc) {
     return buffer_peek_ints_at_position(buffer, buffer->position, bc);
 }
 
+uint64_t buffer_read_ints(buffer_t* buffer, uint8_t bc) {
+    if(!buffer) {
+        return 0;
+    }
+
+    lock_acquire(buffer->lock);
+
+    uint64_t res = buffer_peek_ints(buffer, bc);
+
+    buffer->position += bc;
+
+    lock_release(buffer->lock);
+
+    return res;
+}
+
 uint64_t buffer_remaining(buffer_t* buffer) {
     lock_acquire(buffer->lock);
 
@@ -594,7 +610,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             char_t fto_buf[128] = {0};
             // float128_t fval = 0; // TODO: float128_t ops
             float64_t fval = 0;
-            number_t prec = 6;
+            number_t prec = 0;
             char_t filler = ' ';
 
             while(1) {
@@ -638,6 +654,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                 case 's':
                     str = va_arg(args, char_t*);
                     slen = strlen(str);
+
+                    if(prec && slen > prec) {
+                        slen = prec;
+                    }
 
                     if(val > slen){
                         val -= slen;
@@ -812,6 +832,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         // fval = va_arg(args, float128_t); // TODO: float128_t ops
                     } else  {
                         fval = va_arg(args, float64_t);
+                    }
+
+                    if(prec == 0) {
+                        prec = 6;
                     }
 
                     ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format

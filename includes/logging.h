@@ -54,6 +54,8 @@ typedef enum logging_modules_t {
     COMPILER_PASCAL,
     HYPERVISOR,
     WINDOWMANAGER,
+    VIRTIO_CONSOLE,
+    PNG,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -253,6 +255,16 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_WINDOWMANAGER
 /*! default log level for window manager module */
 #define LOG_LEVEL_WINDOWMANAGER LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_VIRTIO_CONSOLE
+/*! default log level for virtio console module */
+#define LOG_LEVEL_VIRTIO_CONSOLE LOG_DEBUG
+#endif
+
+#ifndef LOG_LEVEL_PNG
+/*! default log level for png module */
+#define LOG_LEVEL_PNG LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

@@ -51,6 +51,8 @@ typedef struct hypervisor_vm_t {
     uint64_t   last_tsc;
     boolean_t  lapic_timer_pending;
     boolean_t  lapic_timer_enabled;
+    boolean_t  vid_enabled;
+    boolean_t  vapic_register_access_enabled;
     boolean_t  need_to_notify;
     boolean_t  is_halted;
     boolean_t  is_halt_need_next_instruction;
@@ -72,6 +74,7 @@ typedef struct hypervisor_vm_t {
     uint64_t   guest_heap_size;
     uint64_t   ept_pml4_base;
     uint64_t   next_page_address;
+    list_t*    released_pages;
 } hypervisor_vm_t;
 
 

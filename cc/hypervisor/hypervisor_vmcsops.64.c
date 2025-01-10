@@ -266,6 +266,10 @@ int8_t hypervisor_vmcs_prepare_pinbased_control(void){
                                                          pinbased_msr_eax);
     pinbased_vm_execution_ctrl = vmx_fix_reserved_0_bits(pinbased_vm_execution_ctrl,
                                                          pinbased_msr_edx);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pinbased_vm_execution_ctrl: 0x%08x resv 1: 0x%08x resv 0: 0x%08x",
+             pinbased_vm_execution_ctrl, pinbased_msr_eax, pinbased_msr_edx);
+
     vmx_write(VMX_CTLS_PIN_BASED_VM_EXECUTION, pinbased_vm_execution_ctrl);
 
     return 0;
@@ -329,10 +333,13 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
     pri_procbase_ctls = vmx_fix_reserved_1_bits(pri_procbase_ctls, pri_procbased_msr_eax);
     pri_procbase_ctls = vmx_fix_reserved_0_bits(pri_procbase_ctls, pri_procbased_msr_edx);
 
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "pri_procbase_ctls: 0x%08x resv 1: 0x%08x resv 0: 0x%08x",
+             pri_procbase_ctls, pri_procbased_msr_eax, pri_procbased_msr_edx);
+
     vmx_write(VMX_CTLS_PRI_PROC_BASED_VM_EXECUTION, pri_procbase_ctls);
 
     uint32_t sec_procbase_ctls = 0;
-    // sec_procbase_ctls |= 1 << 0; // virtualize APIC access
+    // sec_procbase_ctls |= 1 << 0; // virtualize APIC access cannot be enabled when x2APIC mode is enabled
     sec_procbase_ctls |= 1 << 1; // use EPT
     sec_procbase_ctls |= 1 << 2; // descriptor-table exiting:GDT/LDT/IDT/TR
     sec_procbase_ctls |= 1 << 3; // enable RDTSCP
@@ -344,6 +351,9 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
 
     sec_procbase_ctls = vmx_fix_reserved_1_bits(sec_procbase_ctls, sec_procbased_msr_eax);
     sec_procbase_ctls = vmx_fix_reserved_0_bits(sec_procbase_ctls, sec_procbased_msr_edx);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "sec_procbase_ctls: 0x%08x resv 1: 0x%08x resv 0: 0x%08x",
+             sec_procbase_ctls, sec_procbased_msr_eax, sec_procbased_msr_edx);
 
     vmx_write(VMX_CTLS_SEC_PROC_BASED_VM_EXECUTION, sec_procbase_ctls);
 
@@ -381,10 +391,31 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
 
     uint8_t * msr_bitmap = (uint8_t*)msr_bitmap_region_va;
 
-    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
+#if 0
+    if(!(sec_procbase_ctls & (1 << 8))) { // if vapic register access is not enabled ensure vapic register access is intercepted
+        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
+        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
+        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
+        vm->vapic_register_access_enabled = false;
+        PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic register access intercepted, no vapic register access.");
+    } else {
+        vm->vapic_register_access_enabled = true;
+        PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic register access not intercepted, vapic register access enabled.");
+    }
+#else // do we need always watching these registers for write access?
     hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
     hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
     hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
+#endif
+
+    if(!(sec_procbase_ctls & (1 << 9))) { // if virtual-interrupt delivery is not enabled ensure EOI MSR is intercepted
+        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
+        vm->vid_enabled = false;
+        PRINTLOG(HYPERVISOR, LOG_DEBUG, "EOI MSR intercepted, no VID support.");
+    } else {
+        vm->vid_enabled = true;
+        PRINTLOG(HYPERVISOR, LOG_DEBUG, "EOI MSR not intercepted, VID enabled.");
+    }
 
     uint64_t msr_bitmap_region_pa = msr_bitmap_frame->frame_address;
 
@@ -455,7 +486,8 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     vm_exit_ctls = vmx_fix_reserved_1_bits(vm_exit_ctls, vm_exit_msr_eax);
     vm_exit_ctls = vmx_fix_reserved_0_bits(vm_exit_ctls, vm_exit_msr_edx);
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_exit_ctls:0x%x", vm_exit_ctls);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_exit_ctls:0x%08x resv 1:0x%08x resv 0:0x%08x",
+             vm_exit_ctls, vm_exit_msr_eax, vm_exit_msr_edx);
 
     vmx_write(VMX_CTLS_VM_EXIT, vm_exit_ctls);
 
@@ -518,7 +550,8 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     vm_entry_ctls = vmx_fix_reserved_1_bits(vm_entry_ctls, vm_entry_msr_eax);
     vm_entry_ctls = vmx_fix_reserved_0_bits(vm_entry_ctls, vm_entry_msr_edx);
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_entry_ctls:0x%x", vm_entry_ctls);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm_entry_ctls:0x%08x resv 1:0x%08x resv 0:0x%08x",
+             vm_entry_ctls, vm_entry_msr_eax, vm_entry_msr_edx);
 
     vmx_write(VMX_CTLS_VM_ENTRY, vm_entry_ctls);
     vmx_write(VMX_CTLS_VM_ENTRY_MSR_LOAD_COUNT, vm_exit_store_msr_count);

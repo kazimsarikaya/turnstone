@@ -7,6 +7,8 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_types.h>
+#include <windowmanager/wnd_utils.h>
 #include <utils.h>
 #include <strings.h>
 #include <buffer.h>
@@ -16,77 +18,6 @@
 void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
-
-extern pixel_t* VIDEO_BASE_ADDRESS;
-
-void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
-    screen_info_t screen_info = screen_get_info();
-
-    SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
-                                   window->foreground_color, window->background_color,
-                                   VIDEO_BASE_ADDRESS,
-                                   x, y,
-                                   screen_info.pixels_per_scanline);
-
-}
-
-void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text) {
-    if(window == NULL) {
-        return;
-    }
-
-    if(text == NULL) {
-        return;
-    }
-
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
-
-    uint32_t abs_x = window->rect.x + x;
-    uint32_t abs_y = window->rect.y + y;
-
-    uint32_t cur_x = abs_x / font_width;
-    uint32_t cur_y = abs_y / font_height;
-
-    uint32_t max_cur_x = window->rect.x + window->rect.width / font_width;
-    uint32_t max_cur_y = window->rect.y + window->rect.height / font_height;
-
-    int64_t i = 0;
-
-    while(text[i]) {
-        wchar_t wc = font_get_wc(text + i, &i);
-
-        if(wc == '\n') {
-            cur_y += 1;
-
-            if(cur_y >= max_cur_y) {
-                break;
-            }
-
-            cur_x = abs_x / font_width;
-        } else {
-            windowmanager_print_glyph(window, cur_x, cur_y, wc);
-            cur_x += 1;
-
-            if(cur_x >= max_cur_x) {
-                cur_y += 1;
-
-                if(cur_y >= max_cur_y) {
-                    break;
-                }
-
-                cur_x = abs_x / font_width;
-            }
-        }
-
-        text++;
-    }
-}
-
-void windowmanager_clear_screen(window_t* window) {
-    SCREEN_CLEAR_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
-}
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     if(text == NULL) {
@@ -441,7 +372,7 @@ list_t* windowmanager_get_input_values(const window_t* window) {
 }
 #pragma GCC diagnostic pop
 
-void windowmanager_move_cursor_to_next_input(window_t* window) {
+void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reverse) {
     if(!window) {
         return;
     }
@@ -470,9 +401,22 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
 
     boolean_t input_found = false;
     const window_input_value_t* first = list_get_data_at_position(inputs, 0);
+    const window_input_value_t* last = list_get_data_at_position(inputs, list_size(inputs) - 1);
     const window_input_value_t* next = NULL;
 
-    for(size_t i = 0; i < list_size(inputs); i++) {
+    size_t end = list_size(inputs) - 1;
+    size_t start = 0;
+    int32_t inc = 1;
+
+    if(is_reverse) {
+        start = end;
+        end = 0;
+        inc = -1;
+    }
+
+    for(size_t i = start;
+        is_reverse ? i >= end : i <= end;
+        i += inc) {
         window_input_value_t* value = (window_input_value_t*)list_get_data_at_position(inputs, i);
 
         if(!input_found && windowmanager_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
@@ -487,7 +431,11 @@ void windowmanager_move_cursor_to_next_input(window_t* window) {
     }
 
     if(!input_found || !next) {
-        next = first;
+        if(is_reverse) {
+            next = last;
+        } else {
+            next = first;
+        }
     }
 
     if(!next) {

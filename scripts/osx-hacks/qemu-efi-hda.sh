@@ -46,6 +46,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 NUMCPUS=4 
+RAMSIZE=4
 
 SERIALS=""
 
@@ -53,11 +54,22 @@ for i in `seq 0 $((NUMCPUS-1))`; do
   SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
 done
 
+VIRTIO_SERIAL_ENABLED="yes"
+VIRTIO_SERIAL=""
+
+if [[ "${VIRTIO_SERIAL_ENABLED}x" == "yesx" ]]; then
+    VIRTIO_SERIAL="${VIRTIO_SERIAL} -device virtio-serial,id=vser0,packed=on,ioeventfd=on,max_ports=4,vectors=64"
+    VIRTIO_SERIAL="${VIRTIO_SERIAL} -device virtserialport,name=com.turnstoneos.clipboard.0,chardev=vdagent0"
+    VIRTIO_SERIAL="${VIRTIO_SERIAL} -chardev socket,id=vdagent0,port=4444,host=localhost,server=off,reconnect=5"
+fi
+
+TRACE_OPTS="guest_errors,trace:virtio_console_*"
+
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
-  -M q35 -m 1g -smp cpus=4 -name osdev-hda-boot \
+  -M q35 -m ${RAMSIZE}g -smp cpus=4 -name osdev-hda-efi-boot \
   -cpu max \
-  -accel $ACCEL -d guest_errors \
+  -accel $ACCEL -d "${TRACE_OPTS}" \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive id=system,if=none,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
@@ -71,7 +83,8 @@ qemu-system-x86_64 \
   -device virtio-keyboard,id=kbd \
   -device virtio-mouse,id=mouse \
   -device virtio-tablet,id=tablet \
-  -device edu,dma_mask=0xFFFFFFFF \
+  -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
+  $VIRTIO_SERIAL \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -display sdl,gl=on,show-cursor=on 

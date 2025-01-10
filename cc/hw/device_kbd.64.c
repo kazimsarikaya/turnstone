@@ -82,10 +82,10 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
         if(shell_task_id != 0) {
             task_set_interrupt_received(shell_task_id);
-        }
-
-        if(windowmanager_task_id != 0) {
+        } else if(windowmanager_task_id != 0) {
             task_set_interrupt_received(windowmanager_task_id);
+        } else {
+            video_text_print("no shell or wm\n");
         }
     }
 
@@ -144,7 +144,7 @@ int8_t dev_virtio_kbd_isr(interrupt_frame_ext_t* frame){
 
         virtio_input_event_t* ev = (virtio_input_event_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
 
-        if(ev->type == 1) {
+        if(ev->type == 1) { // key event
             kbd_handle_key(ev->code, ev->value);
         }
 
@@ -229,31 +229,31 @@ int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
         virtio_input_event_t* ev = (virtio_input_event_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(descs[packet_desc_id].address);
 
 
-        if(ev->type == 1) {
+        if(ev->type == 1) { // key event
             if(ev->code == MOUSE_BUTTON_LEFT_VIRTIO) {
-                if(ev->value == 1) {
+                if(ev->value == 1) { // pressed
                     mouse_buttons |= MOUSE_BUTTON_LEFT;
                 } else {
                     mouse_buttons &= ~MOUSE_BUTTON_LEFT;
                 }
             } else if(ev->code == MOUSE_BUTTON_RIGHT_VIRTIO) {
-                if(ev->value == 1) {
+                if(ev->value == 1) { // pressed
                     mouse_buttons |= MOUSE_BUTTON_RIGHT;
                 } else {
                     mouse_buttons &= ~MOUSE_BUTTON_RIGHT;
                 }
             } else if(ev->code == MOUSE_BUTTON_MIDDLE_VIRTIO) {
-                if(ev->value == 1) {
+                if(ev->value == 1) { // pressed
                     mouse_buttons |= MOUSE_BUTTON_MIDDLE;
                 } else {
                     mouse_buttons &= ~MOUSE_BUTTON_MIDDLE;
                 }
             }
-        } else if(ev->type == 2) {
+        } else if(ev->type == 2) { // relative
             if(ev->code == 8) {
                 mouse_wheel += (int32_t)ev->value;
             }
-        } else if(ev->type == 3) {
+        } else if(ev->type == 3) { // absolute
             float32_t val = (float32_t)ev->value / 32767.0f;
 
             if(ev->code == 0) {
@@ -261,7 +261,7 @@ int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
             } else if(ev->code == 1) {
                 mouse_y = val * screen_info.height;
             }
-        } else if(ev->type == 0) {
+        } else if(ev->type == 0) { // sync
             report_finished = true;
         }
 

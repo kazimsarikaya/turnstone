@@ -7,6 +7,7 @@
  */
 
 #include <windowmanager.h>
+#include <windowmanager/wnd_gfx.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
 
@@ -14,7 +15,9 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-int8_t gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color) {
+extern pixel_t* VIDEO_BASE_ADDRESS;
+
+int8_t wnd_gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color) {
     UNUSED(buffer);
     UNUSED(area_width);
 
@@ -23,7 +26,7 @@ int8_t gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, col
     return 0;
 }
 
-color_t gfx_blend_colors(color_t fg_color, color_t bg_color) {
+color_t wnd_gfx_blend_colors(color_t fg_color, color_t bg_color) {
     if(bg_color.color == 0) {
         return fg_color;
     }
@@ -76,10 +79,11 @@ boolean_t windowmanager_draw_window(window_t* window) {
         text_cursor_hide();
 
         if(window->on_redraw) {
-            window->on_redraw(window);
+            window_event_t event = {.type = WINDOW_EVENT_TYPE_REDRAW, .window = window};
+            window->on_redraw(&event);
         }
 
-        gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);
+        wnd_gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);
 
         windowmanager_print_text(window, 0, 0, window->text);
 
@@ -97,6 +101,85 @@ boolean_t windowmanager_draw_window(window_t* window) {
     }
 
     return flush_needed;
+}
+
+void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
+    screen_info_t screen_info = screen_get_info();
+
+    SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
+                                   window->foreground_color, window->background_color,
+                                   VIDEO_BASE_ADDRESS,
+                                   x, y,
+                                   screen_info.pixels_per_scanline);
+
+}
+
+void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text) {
+    if(window == NULL) {
+        return;
+    }
+
+    if(text == NULL) {
+        return;
+    }
+
+    screen_info_t screen_info = screen_get_info();
+
+    if(window->rect.x + (int64_t)x >= screen_info.width || window->rect.y + (int64_t)y >= screen_info.height) {
+        return;
+    }
+
+    uint32_t font_width = 0, font_height = 0;
+
+    font_get_font_dimension(&font_width, &font_height);
+
+    uint32_t abs_x = (window->rect.x + x) / font_width;
+    uint32_t abs_y = (window->rect.y + y) / font_height;
+
+    uint32_t cur_x = abs_x;
+    uint32_t cur_y = abs_y;
+
+    uint32_t max_cur_x = (window->rect.x + window->rect.width) / font_width;
+    uint32_t max_cur_y = (window->rect.y + window->rect.height) / font_height;
+
+    if(cur_x >= max_cur_x || cur_y >= max_cur_y) {
+        return;
+    }
+
+    int64_t i = 0;
+
+    while(text[i]) {
+        wchar_t wc = font_get_wc(text + i, &i);
+
+        if(wc == '\n') {
+            cur_y += 1;
+
+            if(cur_y >= max_cur_y) {
+                break;
+            }
+
+            cur_x = abs_x;
+        } else {
+            windowmanager_print_glyph(window, cur_x, cur_y, wc);
+            cur_x += 1;
+
+            if(cur_x >= max_cur_x && text[i + 1] && text[i + 1] != '\n') {
+                cur_y += 1;
+
+                if(cur_y >= max_cur_y) {
+                    break;
+                }
+
+                cur_x = abs_x;
+            }
+        }
+
+        i++;
+    }
+}
+
+void windowmanager_clear_screen(window_t* window) {
+    SCREEN_CLEAR_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
 }
 
 

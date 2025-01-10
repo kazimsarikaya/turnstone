@@ -90,6 +90,7 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     vm->ept_frames = list_create_list();
     vm->loaded_module_ids = hashmap_integer(128);
     vm->read_only_frames = list_create_list();
+    vm->released_pages = list_create_queue();
 
     list_set_equality_comparator(vm->read_only_frames, hypervisor_vm_readonly_section_cmp);
 
@@ -127,6 +128,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
     hypervisor_vmcall_cleanup_mapped_interrupts(vm);
     list_destroy(vm->mapped_interrupts);
     list_destroy(vm->interrupt_queue);
+    list_destroy(vm->released_pages);
 
     frame_t self_frame = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF];
 

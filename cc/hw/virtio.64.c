@@ -76,8 +76,11 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
 
         uint16_t avail_idx = 0;
 
+        uint64_t queue_item_fa = queue_fa;
+
         for(int32_t i = 0; i < vdev->queue_size; i++) {
-            descs[i].address = queue_fa + i * queue_item_size;
+            descs[i].address = queue_item_fa;
+            queue_item_fa += queue_item_size;
 
 
             if(do_not_init) {
@@ -171,7 +174,8 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
             time_timer_spinsleep(1000);
 
             if(vdev->common_config->queue_size != vdev->queue_size) {
-                PRINTLOG(VIRTIO, LOG_ERROR, "queue size missmatch 0x%x", vdev->common_config->queue_size);
+                PRINTLOG(VIRTIO, LOG_ERROR, "for queue %i queue size missmatch 0x%x 0x%x",
+                         queue_no, vdev->common_config->queue_size, vdev->queue_size);
 
                 return -1;
             }
@@ -201,7 +205,10 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
                         time_timer_spinsleep(1000);
                     }
 
-                    pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
+                    uint8_t isrnum = pci_msix_set_isr((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no, modern);
+
+                    vdev->queues[queue_no].isr_number = isrnum;
+
                     pci_msix_clear_pending_bit((pci_generic_device_t*)vdev->pci_dev->pci_header, vdev->msix_cap, queue_no);
 
                 }

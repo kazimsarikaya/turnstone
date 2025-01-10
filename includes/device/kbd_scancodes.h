@@ -51,6 +51,11 @@
 #define KBD_KEYPAD_START          0x47
 #define KBD_KEYPAD_END            0x53
 
+#define KBD_SCANCODE_SYSRQ        0x63
+#define KBD_SCANCODE_PRINTSCREEN  KBD_SCANCODE_SYSRQ
+#define KBD_SCANCODE_BREAK        0x77
+#define KBD_SCANCODE_PAUSE        KBD_SCANCODE_BREAK
+
 #define KBD_SCANCODE_HOME         0x66
 #define KBD_SCANCODE_UP           0x67
 #define KBD_SCANCODE_PAGEUP       0x68

@@ -7,7 +7,7 @@
  */
 
 
-#include <graphics/image.h>
+#include <graphics/tga.h>
 #include <memory.h>
 
 MODULE("turnstone.kernel.graphics.image");

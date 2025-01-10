@@ -80,6 +80,10 @@ lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_futu
 }
 
 int8_t lock_destroy(lock_t* lock){
+    if(lock == NULL) {
+        return -1;
+    }
+
     return memory_free_ext(lock->heap, lock);
 }
 

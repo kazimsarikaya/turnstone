@@ -49,6 +49,7 @@
 #include <spool.h>
 #include <graphics/screen.h>
 #include <driver/video.h>
+#include <driver/console_virtio.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -227,7 +228,7 @@ int8_t kmain64(size_t entry_point) {
         frame_t spool_frames = {SYSTEM_INFO->spool_physical_start, SYSTEM_INFO->spool_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
 
         if(fa->allocate_frame(fa, &spool_frames) != 0) {
-            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default stack frames");
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default spool frames");
             cpu_hlt();
         }
 
@@ -357,6 +358,11 @@ int8_t kmain64(size_t entry_point) {
 
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
+        cpu_hlt();
+    }
+
+    if(console_virtio_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init virtio console. Halting...");
         cpu_hlt();
     }
 

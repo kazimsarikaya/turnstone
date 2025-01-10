@@ -336,9 +336,56 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
     return (uint64_t)vmexit_info->registers;
 }
 
+static void hypervisor_vapic_set_irr(hypervisor_vm_t* vm, uint32_t vector, boolean_t clear) {
+    uint64_t vapic_fa = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address;
+    uint64_t vapic_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vapic_fa);
+    uint8_t* vapic = (uint8_t*)vapic_va;
+
+    uint32_t bit_pos = vector & 0x1F;
+    uint32_t byte_pos = 0x200 | ((vector & 0xE0) >> 1);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Set IRR (before): clear: %i 0x%02x byte: 0x%02x bit: 0x%02x value: 0x%08x",
+             clear, vector, byte_pos, bit_pos, vapic[byte_pos]);
+
+    if(clear) {
+        vapic[byte_pos] &= ~(1 << bit_pos);
+    } else {
+        vapic[byte_pos] |= (1 << bit_pos);
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Set IRR (after): 0x%02x byte: 0x%02x bit: 0x%02x value: 0x%08x",
+             vector, byte_pos, bit_pos, vapic[byte_pos]);
+}
+
+static void hypervisor_vapic_set_isr(hypervisor_vm_t* vm, uint32_t vector, boolean_t clear) {
+    uint64_t vapic_fa = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address;
+    uint64_t vapic_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vapic_fa);
+    uint8_t* vapic = (uint8_t*)vapic_va;
+
+    uint32_t bit_pos = vector & 0x1F;
+    uint32_t byte_pos = 0x100 | ((vector & 0xE0) >> 1);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Set ISR (before): clear: %i 0x%02x byte: 0x%02x bit: 0x%02x value: 0x%08x",
+             clear, vector, byte_pos, bit_pos, vapic[byte_pos]);
+
+    if(clear) {
+        vapic[byte_pos] &= ~(1 << bit_pos);
+    } else {
+        vapic[byte_pos] |= (1 << bit_pos);
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Set ISR (after): 0x%02x byte: 0x%02x bit: 0x%02x value: 0x%08x",
+             vector, byte_pos, bit_pos, vapic[byte_pos]);
+}
+
 static void hypervisor_vmcs_find_next_x2apic_interrupt(vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, boolean_t iterate, boolean_t for_eoi) {
     uint32_t interrupt_vector = 0;
     boolean_t found = false;
+
+    if(for_eoi) {
+        hypervisor_vapic_set_irr(vm, vm->lapic.in_service_vector, true);
+        hypervisor_vapic_set_isr(vm, vm->lapic.in_service_vector, true);
+    }
 
     if(for_eoi && vm->lapic.in_service_vector == vm->lapic.timer_vector && vm->lapic_timer_pending) {
         vm->lapic_timer_pending = false;
@@ -356,6 +403,7 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(vmcs_vmexit_info_t* vmexi
 
             if(iterate) {
                 vm->lapic.in_request_vectors[vector_byte] &= ~(1 << vector_bit);
+                hypervisor_vapic_set_irr(vm, vector, false);
             }
         }
 
@@ -424,6 +472,8 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
                 PRINTLOG(HYPERVISOR, LOG_TRACE, "injected instruction length: %llx", vmexit_info->instruction_length);
                 vmx_write(VMX_CTLS_VM_ENTRY_INSTRUCTION_LENGTH, vmexit_info->instruction_length);
             }
+
+            hypervisor_vapic_set_isr(vm, vm->lapic.in_service_vector, false);
 
             vmx_write(VMX_CTLS_VM_ENTRY_INTERRUPT_INFORMATION_FIELD, interrupt_info);
 
@@ -641,24 +691,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Info: 0x%llx", vmexit_info.instruction_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Info: 0x%llx", vmexit_info.interrupt_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Error Code: 0x%llx", vmexit_info.interrupt_error_code);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
-             vmexit_info.guest_rip, vmexit_info.guest_rflags,
-             vmexit_info.guest_efer);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RAX: 0x%016llx RBX: 0x%016llx RCX: 0x%016llx RDX: 0x%016llx",
-             vmexit_info.registers->rax, vmexit_info.registers->rbx,
-             vmexit_info.registers->rcx, vmexit_info.registers->rdx);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RSI: 0x%016llx RDI: 0x%016llx RBP: 0x%016llx RSP: 0x%016llx",
-             vmexit_info.registers->rsi, vmexit_info.registers->rdi,
-             vmexit_info.registers->rbp, vmexit_info.guest_rsp);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R8:  0x%016llx R9:  0x%016llx R10: 0x%016llx R11: 0x%016llx",
-             vmexit_info.registers->r8, vmexit_info.registers->r9,
-             vmexit_info.registers->r10, vmexit_info.registers->r11);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R12: 0x%016llx R13: 0x%016llx R14: 0x%016llx R15: 0x%016llx\n",
-             vmexit_info.registers->r12, vmexit_info.registers->r13,
-             vmexit_info.registers->r14, vmexit_info.registers->r15);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "    CR0: 0x%08llx CR2: 0x%016llx CR3: 0x%016llx CR4: 0x%08llx\n",
-             vmexit_info.guest_cr0, vmexit_info.registers->cr2,
-             vmexit_info.guest_cr3, vmexit_info.guest_cr4);
+    hypervisor_dump_vmcs(vmexit_info);
 
     while(true) {
         cpu_idle();
