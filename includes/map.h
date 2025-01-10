@@ -26,6 +26,7 @@ map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key
 #define map_new(mke) map_new_with_heap_with_factor(NULL, 128, mke)
 
 #define map_integer() map_new(&map_default_key_extractor)
+#define map_integer_with_heap(h) map_new_with_heap_with_factor(h, 128, &map_default_key_extractor)
 #define map_string() map_new(&map_string_key_extractor)
 #define map_data() map_new(&map_data_key_extractor)
 

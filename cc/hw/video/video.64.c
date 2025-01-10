@@ -8,11 +8,50 @@
 
 #include <list.h>
 #include <pci.h>
+#include <driver/video.h>
 #include <driver/video_virtio.h>
 #include <driver/video_vmwaresvga.h>
 #include <logging.h>
+#include <apic.h>
+#include <ports.h>
+#include <graphics/text_cursor.h>
 
-MODULE("turnstone.kernel.hw.video.init");
+MODULE("turnstone.kernel.hw.video");
+
+boolean_t GRAPHICS_MODE = false;
+
+lock_t* video_lock = NULL;
+
+video_graphics_print_f VIDEO_GRAPHICS_PRINT = NULL;
+
+void video_print(const char_t* string) {
+    lock_acquire(video_lock);
+
+    video_text_print(string);
+
+    if(GRAPHICS_MODE) {
+        text_cursor_hide();
+        VIDEO_GRAPHICS_PRINT(string);
+        text_cursor_show();
+    }
+
+    lock_release(video_lock);
+}
+
+static const int32_t serial_ports[] = {0x3F8, 0x2F8, 0x3E8, 0x2E8};
+
+void video_text_print(const char_t* string) {
+    if(string == NULL) {
+        return;
+    }
+    size_t i = 0;
+    uint32_t apic_id = apic_get_local_apic_id();
+
+    while(string[i] != '\0') {
+        write_serial(serial_ports[apic_id], string[i]);
+        i++;
+    }
+}
 
 int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers) {
     iterator_t* iter = list_iterator_create(display_controllers);

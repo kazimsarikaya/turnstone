@@ -110,6 +110,18 @@ int8_t virtio_create_queue(virtio_dev_t* vdev, uint16_t queue_no, uint64_t queue
 
         }
 
+        if(iter_rw && avail_idx < vdev->queue_size) {
+            PRINTLOG(VIRTIO, LOG_TRACE, "queue 0x%x avail ring (%d/%d) should fill descs from start 0 with step 2",
+                     queue_no, avail_idx, vdev->queue_size);
+
+            uint16_t start = 0;
+
+            for(int32_t i = avail_idx; i < vdev->queue_size; i++) {
+                avail->ring[i] = start;
+                start += 2;
+            }
+        }
+
         if(do_not_init) {
             avail->index = 0;
         } else {

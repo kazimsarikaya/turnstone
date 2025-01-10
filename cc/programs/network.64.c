@@ -113,6 +113,8 @@ static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_pack
 }
 #pragma GCC diagnostic pop
 
+extern uint64_t network_vnet_tx_task_id;
+
 int8_t network_process_rx(void){
     network_received_packets = list_create_queue_with_heap(NULL);
 
@@ -147,12 +149,19 @@ int8_t network_process_rx(void){
 
                 if(return_list) {
                     if(return_queue) {
+                        boolean_t notify_vnet_tx = list_size(return_list) > 0;
+
                         while(list_size(return_list)) {
                             network_transmit_packet_t* tx_packet = (network_transmit_packet_t*)list_queue_pop(return_list);
 
                             if(tx_packet) {
                                 if(network_send_packet_to_nic(tx_packet, return_queue) == -1) {
                                     break;
+                                }
+
+                                if(notify_vnet_tx && network_vnet_tx_task_id) {
+                                    task_set_message_received(network_vnet_tx_task_id);
+                                    notify_vnet_tx = false;
                                 }
                             }
                         }
@@ -179,6 +188,7 @@ int8_t network_process_rx(void){
     return 0;
 }
 
+uint64_t network_rx_task_id = 0;
 
 int8_t network_init(void) {
     PRINTLOG(NETWORK, LOG_INFO, "network devices starting");
@@ -209,7 +219,7 @@ int8_t network_init(void) {
 
     iter->destroy(iter);
 
-    task_create_task(NULL, 2 << 20, 64 << 10, &network_process_rx, 0, NULL, "network rx task");
+    network_rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_process_rx, 0, NULL, "network rx task");
 
     PRINTLOG(NETWORK, LOG_INFO, "network devices started");
 

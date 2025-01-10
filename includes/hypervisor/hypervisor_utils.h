@@ -31,16 +31,18 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 void     hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info);
 uint64_t hypervisor_vmcs_vmcalls_handler(vmcs_vmexit_info_t* vmexit_info);
 void     hypervisor_vmcall_cleanup_mapped_interrupts(hypervisor_vm_t* vm);
+int8_t   hypervisor_vmcall_init_interrupt_mapped_vms(void);
 
 typedef struct hypervisor_vm_module_load_t {
     uint64_t old_got_physical_address;
     uint64_t old_got_size;
     uint64_t new_got_physical_address;
     uint64_t new_got_size;
-    uint64_t module_dump_physical_address;
     uint64_t module_physical_address;
+    uint64_t module_virtual_address;
     uint64_t module_size;
     uint64_t metadata_physical_address;
+    uint64_t metadata_virtual_address;
     uint64_t metadata_size;
 } hypervisor_vm_module_load_t;
 

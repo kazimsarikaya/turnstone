@@ -13,6 +13,7 @@
 #include <driver/virtio.h>
 #include <memory.h>
 #include <pci.h>
+#include <graphics/virgl.h>
 
 #define VIRTIO_GPU_F_VIRGL 0
 #define VIRTIO_GPU_F_EDID 1
@@ -85,6 +86,8 @@ typedef struct virtio_gpu_ctrl_hdr_t {
     uint8_t           padding[3];
 } __attribute__((packed)) virtio_gpu_ctrl_hdr_t;
 
+_Static_assert(sizeof(virtio_gpu_ctrl_hdr_t) == 24, "virtio_gpu_ctrl_hdr_t size is not correct");
+
 #define VIRTIO_GPU_MAX_SCANOUTS 16
 
 typedef struct virtio_gpu_rect_t {
@@ -117,17 +120,6 @@ typedef struct virtio_gpu_resp_edid_t {
     uint32_t              padding;
     uint8_t               edid[1024];
 } __attribute__((packed)) virtio_gpu_resp_edid_t;
-
-typedef enum virtio_gpu_formats_t {
-    VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM = 1,
-    VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM = 2,
-    VIRTIO_GPU_FORMAT_A8R8G8B8_UNORM = 3,
-    VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM = 4,
-    VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM = 67,
-    VIRTIO_GPU_FORMAT_X8B8G8R8_UNORM = 68,
-    VIRTIO_GPU_FORMAT_A8B8G8R8_UNORM = 121,
-    VIRTIO_GPU_FORMAT_R8G8B8X8_UNORM = 134,
-} virtio_gpu_formats_t;
 
 typedef struct virtio_gpu_resource_create_2d_t {
     virtio_gpu_ctrl_hdr_t hdr;
@@ -358,11 +350,22 @@ typedef struct virtio_gpu_update_cursor_t {
 } __attribute__((packed)) virtio_gpu_update_cursor_t;
 
 typedef struct virtio_gpu_wrapper_t {
-    virtio_dev_t* vgpu;
-    uint32_t      num_scanouts;
-    uint64_t*     fence_ids;
-    uint32_t*     resource_ids;
-    uint32_t      mouse_resource_id;
+    virtio_dev_t*     vgpu;
+    uint32_t          num_scanouts;
+    uint64_t*         fence_ids;
+    uint32_t*         resource_ids;
+    uint32_t*         surface_ids;
+    uint32_t          mouse_resource_id;
+    uint32_t          font_resource_id;
+    uint32_t          font_empty_line_resource_id;
+    uint32_t          screen_width;
+    uint32_t          screen_height;
+    uint32_t          mouse_width;
+    uint32_t          mouse_height;
+    lock_t*           lock;
+    lock_t*           cursor_lock;
+    lock_t*           flush_lock;
+    virgl_renderer_t* renderer;
 } virtio_gpu_wrapper_t;
 
 int8_t virtio_video_init(memory_heap_t* heap, const pci_dev_t* device);

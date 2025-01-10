@@ -28,6 +28,10 @@ int32_t mem_backend_fd = 0;
 uint64_t mmmap_address = 4ULL << 30;
 uint64_t mmap_size = RAMSIZE;
 boolean_t windowmanager_initialized = false;
+boolean_t windowmanager_is_initialized(void);
+boolean_t windowmanager_is_initialized(void) {
+    return windowmanager_initialized;
+}
 
 // int                               printf(const char* format, ...);
 // int                               vprintf ( const char* format, va_list arg );
@@ -129,7 +133,7 @@ int8_t setup_ram2(void) {
         return -3;
     }
 
-    logging_module_levels[HEAP_HASH] = LOG_INFO;
+    logging_set_level(HEAP_HASH, LOG_INFO);
     d_heap = memory_create_heap_hash(mmmap_address, mmmap_address + mmap_size);
 
     if(d_heap == NULL) {

@@ -7,7 +7,6 @@
  */
 
 #include <shell.h>
-#include <video.h>
 #include <cpu/task.h>
 #include <logging.h>
 #include <strings.h>
@@ -26,6 +25,8 @@
 #include <list.h>
 #include <tosdb/tosdb_manager.h>
 #include <linker.h>
+#include <argumentparser.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.user.programs.shell");
 
@@ -35,69 +36,10 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 buffer_t* shell_buffer = NULL;
 buffer_t* mouse_buffer = NULL;
 
-typedef struct shell_argument_parser_t {
-    char_t*  arguments;
-    uint32_t idx;
-} shell_argument_parser_t;
-
-static char_t* shell_argument_parser_advance(shell_argument_parser_t* parser) {
-    if(parser == NULL) {
-        return NULL;
-    }
-
-    if(parser->arguments == NULL) {
-        return NULL;
-    }
-
-    if(parser->arguments[parser->idx] == NULL) {
-        return NULL;
-    }
-
-    uint32_t i = parser->idx;
-
-    while(parser->arguments[i] == ' ') { // trim spaces
-        i++;
-    }
-
-    char_t* start = &parser->arguments[i]; // save start
-
-    if(start[0] == '\'' || start[0] == '\"'){
-        char_t quote = start[0];
-        start++;
-        i++;
-
-        while(parser->arguments[i] != quote && parser->arguments[i] != NULL) { // find end
-            i++;
-        }
-
-        if(parser->arguments[i] == quote) {
-            parser->arguments[i] = NULL;
-            i++;
-        } else {
-            printf("Cannot parse argument: -%s-\n", start);
-            return NULL;
-        }
-    } else {
-        while(parser->arguments[i] != ' ' && parser->arguments[i] != NULL) { // find end
-            i++;
-        }
-
-        if(parser->arguments[i] == ' ') { // replace space with null
-            parser->arguments[i] = NULL;
-            i++;
-        }
-    }
-
-    parser->idx = i; // save new index
-
-    return start;
-}
-
-
 static int8_t shell_handle_module_command(char_t* arguments) {
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
-    char_t* command = shell_argument_parser_advance(&parser);
+    char_t* command = argument_parser_advance(&parser);
 
     if(strncmp("list", command, 6) == 0) {
         linker_print_modules_at_memory();
@@ -113,7 +55,7 @@ static int8_t shell_handle_module_command(char_t* arguments) {
         return -1;
     }
 
-    command = shell_argument_parser_advance(&parser);
+    command = argument_parser_advance(&parser);
 
     if(strncmp(command, "info", 4) == 0){
         linker_print_module_info_at_memory(module_id);
@@ -128,9 +70,9 @@ static int8_t shell_handle_module_command(char_t* arguments) {
 }
 
 static int8_t shell_handle_tosdb_command(char_t* arguments) {
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
-    char_t* command = shell_argument_parser_advance(&parser);
+    char_t* command = argument_parser_advance(&parser);
 
 
     if(strncmp("close", command, 5) == 0) {
@@ -139,7 +81,7 @@ static int8_t shell_handle_tosdb_command(char_t* arguments) {
         return tosdb_manager_init();
     } else if(strncmp("clear", command, 5) == 0) {
         // clear takes a force argument
-        char_t* force = shell_argument_parser_advance(&parser);
+        char_t* force = argument_parser_advance(&parser);
 
         if(strncmp(force, "force", 5) == 0) {
             return tosdb_manager_clear();
@@ -156,12 +98,12 @@ static int8_t shell_handle_tosdb_command(char_t* arguments) {
 }
 
 static int8_t shell_handle_vm_command(char_t* arguments) {
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
-    char_t* command = shell_argument_parser_advance(&parser);
+    char_t* command = argument_parser_advance(&parser);
 
     if(strncmp("create", command, 6) == 0) {
-        char_t* entrypoint = shell_argument_parser_advance(&parser);
+        char_t* entrypoint = argument_parser_advance(&parser);
 
         if(entrypoint == NULL) {
             printf("Usage: vm create <entrypoint_name>\n");
@@ -182,7 +124,7 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
         return -1;
     }
 
-    command = shell_argument_parser_advance(&parser);
+    command = argument_parser_advance(&parser);
 
     if(strncmp(command, "output", 6) == 0) {
 
@@ -287,7 +229,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
 
     char_t* arguments = (char_t*)buffer_get_all_bytes_and_reset(argument_buffer, NULL);
 
-    shell_argument_parser_t parser = {arguments, 0};
+    argument_parser_t parser = {arguments, 0};
 
     int8_t res = -1;
 
@@ -308,18 +250,19 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
                "\ttosdb\t\t: tosdb commands\n"
                "\tkill\t\t: kills a process with pid\n"
                "\tmodule\t\t: module(library) utils\n"
+               "\tlog\t\t: configures the log level\n"
                );
         res = 0;
     } else if(strcmp(command, "clear") == 0) {
-        video_clear_screen();
+        screen_clear();
         res = 0;
     } else if(strcmp(command, "poweroff") == 0 || strcmp(command, "shutdown") == 0) {
         acpi_poweroff();
     } else if(strcmp(command, "reboot") == 0) {
         acpi_reset();
     } else if(strcmp(command, "color") == 0) {
-        char_t* foreground_str = shell_argument_parser_advance(&parser);
-        char_t* background_str = shell_argument_parser_advance(&parser);
+        char_t* foreground_str = argument_parser_advance(&parser);
+        char_t* background_str = argument_parser_advance(&parser);
 
         if(foreground_str == NULL && background_str == NULL) {
             printf("Usage: color <foreground> [<background>]\n");
@@ -328,11 +271,15 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
             uint32_t foreground = atoh(foreground_str);
             uint32_t background = atoh(background_str);
 
-            video_set_color(foreground, background);
+            screen_set_color((color_t){.color = foreground}, (color_t){.color = background});
             res = 0;
         }
     } else if(strcmp(command, "ps") == 0) {
-        task_print_all();
+        buffer_t* buffer = buffer_new();
+        task_print_all(buffer);
+        char_t* buffer_data = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);
+        printf("%s", buffer_data);
+        memory_free(buffer_data);
         res = 0;
     } else if(strcmp(command, "date") == 0 || strcmp(command, "time") == 0) {
         timeparsed_t tp;
@@ -361,8 +308,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("rdtsc: 0x%llx\n", rdtsc());
         res = 0;
     } else if(strcmp(command, "kill") == 0) {
-        uint64_t pid = atoh(shell_argument_parser_advance(&parser));
-        char_t* force_str = shell_argument_parser_advance(&parser);
+        uint64_t pid = atoh(argument_parser_advance(&parser));
+        char_t* force_str = argument_parser_advance(&parser);
         boolean_t force = false;
 
         if(strncmp(force_str, "force", 5) == 0) {
@@ -376,6 +323,16 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         } else {
             task_kill_task(pid, force);
             res = 0;
+        }
+    } else if(strcmp(command, "log") == 0) {
+        char_t* log_module = argument_parser_advance(&parser);
+        char_t* log_level = argument_parser_advance(&parser);
+
+        if(!log_module || !log_level) {
+            printf("Usage: log <module> <level>\n");
+            res = -1;
+        } else {
+            res = logging_set_level_by_string_values(log_module, log_level);
         }
     } else {
         printf("Unknown command: %s\n", command);
@@ -444,10 +401,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
         if(mouse_length) {
             mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
-
-            if(VIDEO_MOVE_CURSOR) {
-                VIDEO_MOVE_CURSOR(mouse_data[mouse_ev_cnt - 1].x, mouse_data[mouse_ev_cnt - 1].y);
-            }
+            UNUSED(mouse_ev_cnt);
         }
 
         memory_free(mouse_data);

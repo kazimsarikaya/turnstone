@@ -20,6 +20,8 @@
 #include <logging.h>
 #include <list.h>
 #include <apic.h>
+#include <ports.h>
+#include <strings.h>
 
 MODULE("turnstone.hypervisor");
 
@@ -81,7 +83,7 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
     uint64_t instruction_info = vmexit_info->instruction_info;
     uint64_t instruction_length = vmexit_info->instruction_length;
 
-    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+    uint64_t guest_rip = vmexit_info->guest_rip;
     uint64_t guest_cs = vmx_read(VMX_GUEST_CS_SELECTOR);
     uint64_t eptp = vmx_read(VMX_CTLS_EPTP);
 
@@ -97,7 +99,7 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
 }
 
 static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
     vm->is_halted = true;
 
     task_set_message_waiting();
@@ -116,7 +118,7 @@ static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
 }
 
 static uint64_t hypervisor_vmcs_pause_handler(vmcs_vmexit_info_t* vmexit_info) {
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
     vm->is_halted = true;
 
     task_yield();
@@ -128,12 +130,52 @@ static uint64_t hypervisor_vmcs_pause_handler(vmcs_vmexit_info_t* vmexit_info) {
     return (uint64_t)vmexit_info->registers;
 }
 
+static void hypervisor_vmcs_io_fast_string_printf_io(vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t rsi = vmexit_info->registers->rsi;
+    uint64_t rcx = vmexit_info->registers->rcx;
+
+    uint64_t port = 0x3f8;
+
+    hypervisor_vm_t * vm = vmexit_info->vm;
+
+    uint64_t data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, rsi);
+    uint64_t data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE,
+             "IO Instruction String: port 0x%llx size: 0x%llx, rsi 0x%llx, data ptr fa 0x%llx va 0x%llx",
+             port, rcx, rsi, data_ptr_fa, data_ptr_va);
+
+    char_t* data_ptr = (char_t*)data_ptr_va;
+
+    uint64_t data_len = strlen(data_ptr);
+
+    if(rcx != data_len) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "IO Instruction String Length Mismatch: 0x%llx 0x%llx", rcx, data_len);
+    }
+
+    char_t tmp = data_ptr[data_len];
+    data_ptr[data_len] = 0;
+
+    printf("%s", data_ptr);
+
+    data_ptr[data_len] = tmp;
+
+    vmexit_info->registers->rsi += data_len;
+    vmexit_info->registers->rcx -= data_len;
+}
+
 static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t exit_qualification = vmexit_info->exit_qualification;
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
-    uint16_t port = (exit_qualification >> 16) & 0xFFFF;
+    uint64_t port = (exit_qualification >> 16) & 0xFFFF;
     uint8_t size = exit_qualification & 0x7;
     uint8_t direction = (exit_qualification >> 3) & 0x1;
+    boolean_t is_string = (exit_qualification >> 4) & 0x1;
+    boolean_t is_rep = (exit_qualification >> 5) & 0x1;
+    boolean_t is_port_imm = (exit_qualification >> 6) & 0x1;
+
+    UNUSED(is_port_imm);
 
     switch(size) {
     case 0:
@@ -150,7 +192,14 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x", port, size, direction);
+    uint64_t count = 1;
+
+    if(is_rep) {
+        count = vmexit_info->registers->rcx;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "IO Instruction: Port: 0x%llx, Size: 0x%x, Direction: 0x%x String %i Rep %i",
+             port, size, direction, is_string, is_rep);
 
     uint64_t mask = 0xFFFFFFFFFFFFFFFF >> (64 - (size * 8));
 
@@ -160,16 +209,126 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
 
     data &= mask;
 
-    uint8_t* data_ptr = (uint8_t*)&data;
+    boolean_t decrement = (vmexit_info->guest_rflags >> 10) & 0x1;
 
-    if(port == 0x3f8 && direction == 0) {
-        for(uint8_t i = 0; i < size; i++) {
-            printf("%c", data_ptr[i]);
+    uint64_t data_ptr_fa = 0;
+    uint64_t data_ptr_va = 0;
+
+    if(is_string) {
+        if(direction == 0){ // out from rsi
+            data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rsi);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+        } else {
+            data_ptr_fa = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
+            data_ptr_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr_fa);
+        }
+
+
+
+    }
+
+    if(list_contains(vm->mapped_io_ports, (void*)port) == 0){
+        for(uint64_t i = 0; i < count; i++) {
+            if(direction == 0) {
+                if(is_string) {
+                    char_t* data_ptr = (char_t*)data_ptr_va;
+
+                    if(size == 1) {
+                        data = data_ptr[0];
+                    } else if(size == 2) {
+                        data = *((uint16_t*)data_ptr);
+                    } else {
+                        data = *((uint32_t*)data_ptr);
+                    }
+
+                    if(decrement) {
+                        data_ptr_va -= size;
+                    } else {
+                        data_ptr_va += size;
+                    }
+                }
+
+
+                if(size == 1) {
+                    outb(port, data);
+                } else if(size == 2) {
+                    outw(port, data);
+                } else {
+                    outl(port, data);
+                }
+            } else {
+                uint64_t value = 0;
+
+                if(size == 1) {
+                    value = inb(port);
+                } else if(size == 2) {
+                    value = inw(port);
+                } else {
+                    value = inl(port);
+                }
+
+                if(is_string) {
+                    char_t* data_ptr = (char_t*)data_ptr_va;
+
+                    if(size == 1) {
+                        data_ptr[0] = value;
+                    } else if(size == 2) {
+                        *((uint16_t*)data_ptr) = value;
+                    } else {
+                        *((uint32_t*)data_ptr) = value;
+                    }
+
+                    if(decrement) {
+                        data_ptr_va -= size;
+                    } else {
+                        data_ptr_va += size;
+                    }
+
+                } else {
+                    vmexit_info->registers->rax = (vmexit_info->registers->rax & ~mask) | (value & mask);
+                }
+            }
+        }
+
+        if(is_rep){
+            vmexit_info->registers->rcx = 0;
+        }
+
+        if(is_string) {
+            if(decrement) {
+                if(direction == 0) {
+                    vmexit_info->registers->rsi -= count * size;
+                } else {
+                    vmexit_info->registers->rdi -= count * size;
+                }
+            } else {
+                if(direction == 0) {
+                    vmexit_info->registers->rsi += count * size;
+                } else {
+                    vmexit_info->registers->rdi += count * size;
+                }
+            }
         }
     } else {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled IO Instruction: Port: 0x%x, Size: 0x%x, Direction: 0x%x Data 0x%llx",
-                 port, size, direction, data);
-        return -1;
+
+        if(port == 0x3f8 && direction == 0) {
+            if(is_string && is_rep) {
+                if(!decrement) {
+                    hypervisor_vmcs_io_fast_string_printf_io(vmexit_info);
+                } else {
+                    // TODO: Implement decrement
+                }
+            } else {
+                uint8_t* data_ptr = (uint8_t*)&data;
+                for(uint8_t i = 0; i < size; i++) {
+                    printf("%c", data_ptr[i]);
+                }
+            }
+        } else {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled IO Instruction: Port: 0x%llx, Size: 0x%x, Direction: 0x%x Data 0x%llx",
+                     port, size, direction, data);
+            return -1;
+        }
     }
 
     hypervisor_vmcs_goto_next_instruction(vmexit_info);
@@ -177,7 +336,7 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
     return (uint64_t)vmexit_info->registers;
 }
 
-static void hypervisor_vmcs_find_next_x2apic_interrupt(hypervisor_vm_t* vm, boolean_t iterate, boolean_t for_eoi) {
+static void hypervisor_vmcs_find_next_x2apic_interrupt(vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, boolean_t iterate, boolean_t for_eoi) {
     uint32_t interrupt_vector = 0;
     boolean_t found = false;
 
@@ -224,7 +383,7 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(hypervisor_vm_t* vm, bool
             }
         }
 
-        uint64_t rflags = vmx_read(VMX_GUEST_RFLAGS);
+        uint64_t rflags = vmexit_info->guest_rflags;
 
         if((rflags & (1 << 9)) && waiting_int_count) {
             vm->need_to_notify = true;
@@ -243,13 +402,13 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
 
     uint32_t interuptibility_state = vmx_read(VMX_GUEST_INTERRUPTIBILITY_STATE);
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "Interruptibility State: 0x%x rip: %llx", interuptibility_state, vmx_read(VMX_GUEST_RIP));
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Interruptibility State: 0x%x rip: %llx", interuptibility_state, vmexit_info->guest_rip);
 
 
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
     if(vm->need_to_notify) {
-        hypervisor_vmcs_find_next_x2apic_interrupt(vm, true, false);
+        hypervisor_vmcs_find_next_x2apic_interrupt(vmexit_info, vm, true, false);
 
         if(vm->need_to_notify) { // if there is an interrupt need_to_notify still true
             uint32_t interrupt_info = 0;
@@ -261,7 +420,7 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
 
                 vmx_write(VMX_CTLS_VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
 
-                PRINTLOG(HYPERVISOR, LOG_TRACE, "guest rip: 0x%llx", vmx_read(VMX_GUEST_RIP));
+                PRINTLOG(HYPERVISOR, LOG_TRACE, "guest rip: 0x%llx", vmexit_info->guest_rip);
                 PRINTLOG(HYPERVISOR, LOG_TRACE, "injected instruction length: %llx", vmexit_info->instruction_length);
                 vmx_write(VMX_CTLS_VM_ENTRY_INSTRUCTION_LENGTH, vmexit_info->instruction_length);
             }
@@ -284,13 +443,13 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
 static uint64_t hypervisor_vmcs_rdmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t msr = vmexit_info->registers->rcx;
 
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
     uint64_t value = 0;
 
     switch(msr) {
     case CPU_MSR_EFER:
-        value = vmx_read(VMX_GUEST_IA32_EFER);
+        value = vmexit_info->guest_efer;
         break;
     case APIC_X2APIC_MSR_TIMER_INITIAL_VALUE:
         value = vm->lapic.timer_initial_value;
@@ -321,7 +480,7 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
     uint64_t msr = vmexit_info->registers->rcx;
     uint64_t value = vmexit_info->registers->rax | (vmexit_info->registers->rdx << 32);
 
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
 
     switch(msr) {
     case CPU_MSR_EFER:
@@ -374,7 +533,7 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
         vm->lapic.timer_masked = (value >> 16) & 0x1;
         break;
     case APIC_X2APIC_MSR_EOI:
-        hypervisor_vmcs_find_next_x2apic_interrupt(vm, false, true);
+        hypervisor_vmcs_find_next_x2apic_interrupt(vmexit_info, vm, false, true);
         vm->lapic.apic_eoi_pending = false;
         break;
     default:
@@ -406,7 +565,7 @@ static uint64_t hypervisor_vmcs_control_register_access_handler(vmcs_vmexit_info
         uint64_t value = vmexit_info->registers->r15;
         vmx_write(VMX_GUEST_CR3, value);
     } else if(access_type == 1) {
-        vmexit_info->registers->r15 = vmx_read(VMX_GUEST_CR3);
+        vmexit_info->registers->r15 = vmexit_info->guest_cr3;
     } else {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "Unhandled Control Register Access: 0x%llx", exit_qualification);
         return -1;
@@ -453,6 +612,14 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
         .instruction_info = vmx_read(VMX_VMEXIT_INSTRUCTION_INFO),
         .interrupt_info = vmx_read(VMX_VMEXIT_INTERRUPT_INFO),
         .interrupt_error_code = vmx_read(VMX_VMEXIT_INTERRUPT_ERROR_CODE),
+        .guest_rflags = vmx_read(VMX_GUEST_RFLAGS),
+        .guest_rip = vmx_read(VMX_GUEST_RIP),
+        .guest_rsp = vmx_read(VMX_GUEST_RSP),
+        .guest_efer = vmx_read(VMX_GUEST_IA32_EFER),
+        .guest_cr0 = vmx_read(VMX_GUEST_CR0),
+        .guest_cr3 = vmx_read(VMX_GUEST_CR3),
+        .guest_cr4 = vmx_read(VMX_GUEST_CR4),
+        .vm = task_get_vm(),
     };
 
     if (vmexit_info.reason < VMX_VMEXIT_REASON_COUNT) {
@@ -475,14 +642,14 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Info: 0x%llx", vmexit_info.interrupt_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Error Code: 0x%llx", vmexit_info.interrupt_error_code);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
-             vmx_read(VMX_GUEST_RIP), vmx_read(VMX_GUEST_RFLAGS),
-             vmx_read(VMX_GUEST_IA32_EFER));
+             vmexit_info.guest_rip, vmexit_info.guest_rflags,
+             vmexit_info.guest_efer);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    RAX: 0x%016llx RBX: 0x%016llx RCX: 0x%016llx RDX: 0x%016llx",
              vmexit_info.registers->rax, vmexit_info.registers->rbx,
              vmexit_info.registers->rcx, vmexit_info.registers->rdx);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    RSI: 0x%016llx RDI: 0x%016llx RBP: 0x%016llx RSP: 0x%016llx",
              vmexit_info.registers->rsi, vmexit_info.registers->rdi,
-             vmexit_info.registers->rbp, vmx_read(VMX_GUEST_RSP));
+             vmexit_info.registers->rbp, vmexit_info.guest_rsp);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    R8:  0x%016llx R9:  0x%016llx R10: 0x%016llx R11: 0x%016llx",
              vmexit_info.registers->r8, vmexit_info.registers->r9,
              vmexit_info.registers->r10, vmexit_info.registers->r11);
@@ -490,8 +657,8 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
              vmexit_info.registers->r12, vmexit_info.registers->r13,
              vmexit_info.registers->r14, vmexit_info.registers->r15);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    CR0: 0x%08llx CR2: 0x%016llx CR3: 0x%016llx CR4: 0x%08llx\n",
-             vmx_read(VMX_GUEST_CR0), vmexit_info.registers->cr2,
-             vmx_read(VMX_GUEST_CR3), vmx_read(VMX_GUEST_CR4));
+             vmexit_info.guest_cr0, vmexit_info.registers->cr2,
+             vmexit_info.guest_cr3, vmexit_info.guest_cr4);
 
     while(true) {
         cpu_idle();

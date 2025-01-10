@@ -131,8 +131,8 @@ cache_t* cache_new (cache_config_t * config) {
 
     memory_memcopy(config, cache, sizeof(cache_config_t));
 
-    cache->mru_map = hashmap_new_with_hkg_with_hkc(128, cache->config.key_generator, cache->config.key_comparator);
-    cache->lru_map = hashmap_new_with_hkg_with_hkc(128, cache->config.key_generator, cache->config.key_comparator);
+    cache->mru_map = hashmap_new_with_hkg_with_hkc(NULL, 128, cache->config.key_generator, cache->config.key_comparator);
+    cache->lru_map = hashmap_new_with_hkg_with_hkc(NULL, 128, cache->config.key_generator, cache->config.key_comparator);
 
     if(!cache->mru_map || !cache->lru_map) {
         hashmap_destroy(cache->mru_map);

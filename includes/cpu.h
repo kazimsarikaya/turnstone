@@ -31,8 +31,8 @@ static inline boolean_t cpu_cli(void) {
     boolean_t old_value;
     __asm__ __volatile__ ("pushf\n"
                           "pop %%rax\n"
-                          "test $0x200, %%rax\n"
-                          "setz %0\n"
+                          "bt $0x9, %%rax\n"
+                          "setc %0\n"
                           "cli"
                           : "=r" (old_value)
                           :

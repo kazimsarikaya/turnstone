@@ -195,6 +195,19 @@ static inline boolean_t bit_set(uint64_t* data, uint8_t bitloc) {
 }
 
 /**
+ * @brief sets bit value of given data at bitloc with lock prefix
+ * @param[in] data bit array
+ * @param[in] bitloc bit location at data
+ * @return old value
+ *
+ **/
+static inline boolean_t bit_locked_set(volatile uint64_t* data, uint64_t bitloc) {
+    boolean_t res = false;
+    asm volatile ("lock bts %[bitloc], %[data]\n" : "=@ccc" (res), [data] "+m" (*data), [bitloc] "+r" (bitloc) : : "memory");
+    return res;
+}
+
+/**
  * @brief changes bit value of given data at bitloc
  * @param[in] data bit array
  * @param[in] bitloc bit location at data

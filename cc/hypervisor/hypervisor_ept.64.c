@@ -210,13 +210,8 @@ static int8_t hypervisor_ept_del_ept_page(hypervisor_vm_t* vm, uint64_t host_phy
 
 
 uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
-    uint64_t program_page_count = vm->program_size / MEMORY_PAGING_PAGE_LENGTH_4K;
-    uint64_t got_page_count = vm->got_size / MEMORY_PAGING_PAGE_LENGTH_4K;
     uint64_t stack_page_count = vm->guest_stack_size / MEMORY_PAGING_PAGE_LENGTH_4K;
     uint64_t heap_page_count = vm->guest_heap_size / MEMORY_PAGING_PAGE_LENGTH_4K;
-
-    uint64_t program_dump_frame_address = vm->program_dump_frame_address;
-    uint64_t program_physical_address = vm->program_physical_address;
 
     frame_t* ept_frames = NULL;
     hypervisor_allocate_region(&ept_frames, FRAME_SIZE);
@@ -272,29 +267,6 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
     }
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "stack pages added.");
-
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "got pyhsical address: 0x%llx", vm->got_physical_address);
-
-    uint64_t got_frame_address = vm->got_physical_address;
-
-    for(uint64_t i = 0; i < got_page_count; i++) {
-        uint64_t got_base = got_frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K;
-        if(hypervisor_ept_add_ept_page(vm, got_base, got_base, true) != 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add EPT page for GOT");
-            return -1;
-        }
-    }
-
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "GOT pages added.");
-
-    for(uint64_t i = 0; i < program_page_count; i++) {
-        if(hypervisor_ept_add_ept_page(vm, program_dump_frame_address + i * MEMORY_PAGING_PAGE_LENGTH_4K, program_physical_address + i * MEMORY_PAGING_PAGE_LENGTH_4K, true) != 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add EPT page for program");
-            return -1;
-        }
-    }
-
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "Program pages added.");
 
     return ept_frames->frame_address;
 }
@@ -669,7 +641,7 @@ static uint64_t hypervisor_ept_paging_get_guest_physical(hypervisor_vm_t* vm, ui
     pte_address <<= 12;
 
     if(p1->pages[p1_index].present) {
-        return pte_address;
+        return pte_address | (virtual_address & ((1ULL << 12) - 1));
     }
 
     return 0;
@@ -706,16 +678,6 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
     uint64_t stack_page_count = vm->guest_stack_size / MEMORY_PAGING_PAGE_LENGTH_4K;
     uint64_t heap_page_count = vm->guest_heap_size / MEMORY_PAGING_PAGE_LENGTH_4K;
 
-    uint64_t program_dump_frame_address = vm->program_dump_frame_address;
-    uint64_t metadata_offset = vm->metadata_physical_address - vm->program_physical_address;
-    uint64_t program_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(program_dump_frame_address);
-    uint64_t metadata_address = program_va + metadata_offset;
-
-    PRINTLOG(HYPERVISOR, LOG_TRACE, " program physical address 0x%llx metadata physical address 0x%llx",
-             vm->program_physical_address, vm->metadata_physical_address);
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "program va 0x%llx metadata offset 0x%llx metadata_address: 0x%llx",
-             program_va, metadata_offset, metadata_address);
-
     uint64_t heap_v_base = VMX_GUEST_HEAP_BASE_VALUE;
     uint64_t heap_p_base = vm->guest_heap_physical_base;
 
@@ -750,42 +712,6 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "GOT pages added to guest page table. page count 0x%llx", got_page_count);
 
-    linker_metadata_at_memory_t* metadata = (linker_metadata_at_memory_t*)metadata_address;
-    metadata++;
-
-    while(true) {
-        if(metadata->section.size == 0) {
-            break;
-        }
-
-        linker_section_type_t section_type = metadata->section.section_type;
-        // section size real size so we need to calculate page count
-        uint64_t section_page_count = (metadata->section.size + MEMORY_PAGING_PAGE_LENGTH_4K - 1) / MEMORY_PAGING_PAGE_LENGTH_4K;
-        memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_READONLY;
-
-        PRINTLOG(HYPERVISOR, LOG_TRACE, "section start 0x%llx section type: %d, section_page_count: 0x%llx",
-                 metadata->section.physical_start, section_type, section_page_count);
-
-        if(!(section_type == LINKER_SECTION_TYPE_TEXT || section_type == LINKER_SECTION_TYPE_PLT)) {
-            page_type |= MEMORY_PAGING_PAGE_TYPE_NOEXEC;
-        }
-
-        if(section_type == LINKER_SECTION_TYPE_BSS ||
-           section_type == LINKER_SECTION_TYPE_DATA ||
-           section_type == LINKER_SECTION_TYPE_DATARELOC) {
-            list_list_insert(vm->read_only_frames, metadata);
-        }
-
-        uint64_t section_v_base = metadata->section.virtual_start;
-        uint64_t section_p_base = metadata->section.physical_start;
-
-        for(uint64_t i = 0; i < section_page_count; i++) {
-            hypervisor_ept_paging_add_page(vm, section_p_base, section_v_base, page_type);
-        }
-
-        metadata++;
-    }
-
     PRINTLOG(HYPERVISOR, LOG_TRACE, "program pages added to guest page table.");
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "next page address: 0x%llx", vm->next_page_address);
@@ -815,56 +741,61 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     uint64_t old_got_size = vm->got_size;
     uint64_t old_got_page_count = old_got_size / MEMORY_PAGING_PAGE_LENGTH_4K;
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "old got physical address: 0x%llx, old got size: 0x%llx, old got page count: 0x%llx",
-             old_got_physical_address, old_got_size, old_got_page_count);
+    if(old_got_size) {
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "old got physical address: 0x%llx, old got size: 0x%llx, old got page count: 0x%llx",
+                 old_got_physical_address, old_got_size, old_got_page_count);
 
-    uint64_t got_v_base = VMX_GUEST_GOT_BASE_VALUE;
+        uint64_t got_v_base = VMX_GUEST_GOT_BASE_VALUE;
 
-    for(uint64_t i = 0; i < old_got_page_count; i++) {
-        if(hypervisor_ept_paging_del_page(vm, old_got_physical_address, got_v_base) != 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to remove old got pages from page table");
+        for(uint64_t i = 0; i < old_got_page_count; i++) {
+            if(hypervisor_ept_paging_del_page(vm, old_got_physical_address, got_v_base) != 0) {
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to remove old got pages from page table");
+                return -1;
+            }
+
+            got_v_base += MEMORY_PAGING_PAGE_LENGTH_4K;
+            old_got_physical_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+        }
+
+        old_got_physical_address = vm->got_physical_address;
+
+        for(uint64_t i = 0; i < old_got_page_count; i++) {
+            if(hypervisor_ept_del_ept_page(vm, old_got_physical_address, old_got_physical_address) != 0) {
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to remove old got pages from ept");
+                return -1;
+            }
+
+            old_got_physical_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+        }
+
+        old_got_physical_address = vm->got_physical_address;
+
+        frame_t got_frame = {.frame_address = old_got_physical_address, .frame_count = old_got_page_count};
+
+        uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_frame.frame_address);
+
+        memory_memclean((void*)frame_va, FRAME_SIZE * got_frame.frame_count);
+
+        if(memory_paging_delete_va_for_frame_ext(NULL, frame_va, &got_frame) != 0 ) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
             return -1;
         }
 
-        got_v_base += MEMORY_PAGING_PAGE_LENGTH_4K;
-        old_got_physical_address += MEMORY_PAGING_PAGE_LENGTH_4K;
-    }
-
-    old_got_physical_address = vm->got_physical_address;
-
-    for(uint64_t i = 0; i < old_got_page_count; i++) {
-        if(hypervisor_ept_del_ept_page(vm, old_got_physical_address, old_got_physical_address) != 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to remove old got pages from ept");
+        if(frame_get_allocator()->release_frame(frame_get_allocator(), &got_frame) != 0) {
+            PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
+                     got_frame.frame_address, got_frame.frame_count);
             return -1;
         }
 
-        old_got_physical_address += MEMORY_PAGING_PAGE_LENGTH_4K;
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "released 0x%llx 0x%llx", got_frame.frame_address, got_frame.frame_count);
     }
-
-    old_got_physical_address = vm->got_physical_address;
-
-    frame_t got_frame = {.frame_address = old_got_physical_address, .frame_count = old_got_page_count};
-
-    uint64_t frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_frame.frame_address);
-
-    memory_memclean((void*)frame_va, FRAME_SIZE * got_frame.frame_count);
-
-    if(memory_paging_delete_va_for_frame_ext(NULL, frame_va, &got_frame) != 0 ) {
-        PRINTLOG(TASKING, LOG_ERROR, "cannot remove pages for stack at va 0x%llx", frame_va);
-        return -1;
-    }
-
-    if(frame_get_allocator()->release_frame(frame_get_allocator(), &got_frame) != 0) {
-        PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
-                 got_frame.frame_address, got_frame.frame_count);
-        return -1;
-    }
-
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "released 0x%llx 0x%llx", got_frame.frame_address, got_frame.frame_count);
 
     uint64_t new_got_physical_address = module_load->new_got_physical_address;
     uint64_t new_got_size = module_load->new_got_size;
     uint64_t new_got_page_count = new_got_size / MEMORY_PAGING_PAGE_LENGTH_4K;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "new got physical address: 0x%llx, new got size: 0x%llx, new got page count: 0x%llx",
+             new_got_physical_address, new_got_size, new_got_page_count);
 
     for(uint64_t i = 0; i < new_got_page_count; i++) {
         if(hypervisor_ept_add_ept_page(vm, new_got_physical_address, new_got_physical_address, MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
@@ -890,29 +821,29 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "got pages switched on ept and page table.");
 
-    uint64_t module_dump_frame_address = module_load->module_dump_physical_address;
     uint64_t module_physical_address = module_load->module_physical_address;
     uint64_t module_size = module_load->module_size;
     uint64_t module_page_count = module_size / MEMORY_PAGING_PAGE_LENGTH_4K;
 
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "module physical address: 0x%llx, module size: 0x%llx, module page count: 0x%llx",
+             module_physical_address, module_size, module_page_count);
+
     for(uint64_t i = 0; i < module_page_count; i++) {
-        if(hypervisor_ept_add_ept_page(vm, module_dump_frame_address, module_physical_address, true) != 0) {
+        if(hypervisor_ept_add_ept_page(vm, module_physical_address, module_physical_address, true) != 0) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add new module pages to ept");
             return -1;
         }
 
-        module_dump_frame_address += MEMORY_PAGING_PAGE_LENGTH_4K;
         module_physical_address += MEMORY_PAGING_PAGE_LENGTH_4K;
     }
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "module pages added to ept.");
 
-    module_dump_frame_address = module_load->module_dump_physical_address;
-    uint64_t metadata_offset = module_load->metadata_physical_address - module_load->module_dump_physical_address;
-    uint64_t module_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(module_dump_frame_address);
-    uint64_t metadata_address = module_va + metadata_offset;
+    uint64_t metadata_virtual_address = module_load->metadata_virtual_address;
 
-    linker_metadata_at_memory_t* metadata = (linker_metadata_at_memory_t*)metadata_address;
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "metadata virtual address: 0x%llx", metadata_virtual_address);
+
+    linker_metadata_at_memory_t* metadata = (linker_metadata_at_memory_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(metadata_virtual_address);
     metadata++;
 
     while(true) {
@@ -1106,7 +1037,7 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
     PRINTLOG(HYPERVISOR, LOG_TRACE, "frame address: 0x%llx frame_count: 0x%llx", frame->frame_address, frame->frame_count);
 
     uint64_t frame_address = pci_header_fa; // frame->frame_address;
-    uint64_t frame_count = 1; // frame->frame_count; // TODO: check frame count
+    uint64_t frame_count = 1; // in spec MCFG table only 1 page is used for pci header, bar registers and capabilities
 
     for(uint64_t i = 0; i < frame_count; i++) {
         if(hypervisor_ept_add_ept_page(vm, frame_address, frame_address, false) != 0) {
@@ -1181,8 +1112,25 @@ uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci
                 bar_no++;
             }
         } else if(bar->bar_type.type == 1) {
-            // TODO: io space bar add update IOBITMAP_A and IOBITMAP_B at vmcs
+            uint64_t port_base = pci_get_bar_address(pci_gen_dev, bar_no);
+            uint64_t port_count = pci_get_bar_size(pci_gen_dev, bar_no);
 
+            uint8_t* io_bitmap_a = (uint8_t*)vmx_read(VMX_CTLS_IO_BITMAP_A);
+            uint8_t* io_bitmap_b = (uint8_t*)vmx_read(VMX_CTLS_IO_BITMAP_B);
+
+            for(uint64_t i = 0; i < port_count; i++) {
+                uint64_t port = port_base + i;
+                uint64_t bitmap_index = port / 8;
+                uint64_t bitmap_bit = port % 8;
+
+                if(port < 0x8000) {
+                    io_bitmap_a[bitmap_index] |= (1 << bitmap_bit);
+                } else {
+                    io_bitmap_b[bitmap_index] |= (1 << bitmap_bit);
+                }
+
+                list_list_insert(vm->mapped_io_ports, (void*)port);
+            }
 
             bar++;
             bar_no++;

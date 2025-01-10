@@ -239,6 +239,24 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
                 t_p3->pages[p3idx].user_accessible = 0;
             }
 
+            if(type & MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) {
+                t_p3->pages[p3idx].write_through_caching = 1;
+            } else {
+                t_p3->pages[p3idx].write_through_caching = 0;
+            }
+
+            if(type & MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) {
+                t_p3->pages[p3idx].disable_cache = 1;
+            } else {
+                t_p3->pages[p3idx].disable_cache = 0;
+            }
+
+            if(type & MEMORY_PAGING_PAGE_TYPE_GLOBAL) {
+                t_p3->pages[p3idx].global = 1;
+            } else {
+                t_p3->pages[p3idx].global = 0;
+            }
+
             t_p3->pages[p3idx].physical_address = (frame_address >> 12) & 0xFFFFFC0000;
 
             return 0;
@@ -297,6 +315,24 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
                 t_p2->pages[p2idx].user_accessible = 0;
             }
 
+            if(type & MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) {
+                t_p2->pages[p2idx].write_through_caching = 1;
+            } else {
+                t_p2->pages[p2idx].write_through_caching = 0;
+            }
+
+            if(type & MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) {
+                t_p2->pages[p2idx].disable_cache = 1;
+            } else {
+                t_p2->pages[p2idx].disable_cache = 0;
+            }
+
+            if(type & MEMORY_PAGING_PAGE_TYPE_GLOBAL) {
+                t_p2->pages[p2idx].global = 1;
+            } else {
+                t_p2->pages[p2idx].global = 0;
+            }
+
             t_p2->pages[p2idx].physical_address = (frame_address >> 12) & 0xFFFFFFFE00;
 
             return 0;
@@ -350,6 +386,24 @@ int8_t memory_paging_add_page_ext(memory_page_table_context_t* table_context,
             t_p1->pages[p1idx].user_accessible = 1;
         } else {
             t_p1->pages[p1idx].user_accessible = 0;
+        }
+
+        if(type & MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) {
+            t_p1->pages[p1idx].write_through_caching = 1;
+        } else {
+            t_p1->pages[p1idx].write_through_caching = 0;
+        }
+
+        if(type & MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) {
+            t_p1->pages[p1idx].disable_cache = 1;
+        } else {
+            t_p1->pages[p1idx].disable_cache = 0;
+        }
+
+        if(type & MEMORY_PAGING_PAGE_TYPE_GLOBAL) {
+            t_p1->pages[p1idx].global = 1;
+        } else {
+            t_p1->pages[p1idx].global = 0;
         }
 
         t_p1->pages[p1idx].physical_address = frame_address >> 12;
@@ -691,6 +745,18 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                 t_p3->pages[p3_idx].user_accessible = ~t_p3->pages[p3_idx].user_accessible;
             }
 
+            if(type & MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) {
+                t_p3->pages[p3_idx].write_through_caching = ~t_p3->pages[p3_idx].write_through_caching;
+            }
+
+            if(type & MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) {
+                t_p3->pages[p3_idx].disable_cache = ~t_p3->pages[p3_idx].disable_cache;
+            }
+
+            if(type & MEMORY_PAGING_PAGE_TYPE_GLOBAL) {
+                t_p3->pages[p3_idx].global = ~t_p3->pages[p3_idx].global;
+            }
+
             cpu_tlb_invalidate(t_p3);
             cpu_tlb_invalidate((void*)virtual_address);
 
@@ -726,6 +792,18 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
                     t_p2->pages[p2_idx].user_accessible = ~t_p2->pages[p2_idx].user_accessible;
                 }
 
+                if(type & MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) {
+                    t_p2->pages[p2_idx].write_through_caching = ~t_p2->pages[p2_idx].write_through_caching;
+                }
+
+                if(type & MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) {
+                    t_p2->pages[p2_idx].disable_cache = ~t_p2->pages[p2_idx].disable_cache;
+                }
+
+                if(type & MEMORY_PAGING_PAGE_TYPE_GLOBAL) {
+                    t_p2->pages[p2_idx].global = ~t_p2->pages[p2_idx].global;
+                }
+
                 cpu_tlb_invalidate(t_p2);
                 cpu_tlb_invalidate((void*)virtual_address);
 
@@ -758,6 +836,18 @@ int8_t memory_paging_toggle_attributes_ext(memory_page_table_context_t* table_co
 
                 if(type & MEMORY_PAGING_PAGE_TYPE_USER_ACCESSIBLE) {
                     t_p1->pages[p1_idx].user_accessible = ~t_p1->pages[p1_idx].user_accessible;
+                }
+
+                if(type & MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH) {
+                    t_p1->pages[p1_idx].write_through_caching = ~t_p1->pages[p1_idx].write_through_caching;
+                }
+
+                if(type & MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE) {
+                    t_p1->pages[p1_idx].disable_cache = ~t_p1->pages[p1_idx].disable_cache;
+                }
+
+                if(type & MEMORY_PAGING_PAGE_TYPE_GLOBAL) {
+                    t_p1->pages[p1_idx].global = ~t_p1->pages[p1_idx].global;
                 }
 
                 cpu_tlb_invalidate(t_p1);

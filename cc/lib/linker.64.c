@@ -1109,7 +1109,7 @@ int8_t linker_calculate_program_size(linker_context_t* ctx) {
         }
     }
 
-    PRINTLOG(LINKER, LOG_INFO, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx symbol table size 0x%llx",
+    PRINTLOG(LINKER, LOG_DEBUG, "program size 0x%llx got size 0x%llx relocation table size 0x%llx metadata size 0x%llx symbol table size 0x%llx",
              ctx->program_size, ctx->global_offset_table_size, ctx->relocation_table_size, ctx->metadata_size, ctx->symbol_table_size);
 
     return 0;
@@ -1703,8 +1703,8 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     uint64_t padding_after_relocations = 0;
 
-    if(relocation_size % 0x20 != 0) {
-        padding_after_relocations = 0x20 - (relocation_size % 0x20);
+    if(relocation_size % 0x1000 != 0) {
+        padding_after_relocations = 0x1000 - (relocation_size % 0x1000);
     }
 
     efi_image_section_header_t reloc_section = {
@@ -1745,7 +1745,7 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
         .address_of_entrypoint = ctx->entrypoint_address_virtual,
         .base_of_code = 0x1000,
         .section_alignment = 0x1000,
-        .file_alignment = 0x20,
+        .file_alignment = 0x1000,
         .subsystem = EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION,
         .number_of_rva_nd_sizes = 16,
         .base_relocation_table.virtual_address = reloc_section.virtual_address,
@@ -1864,8 +1864,8 @@ buffer_t*  linker_build_efi(linker_context_t* ctx) {
 
     tmp_buf_len = buffer_get_length(program_buffer);
 
-    if(tmp_buf_len % 0x20) {
-        uint64_t padding_size = 0x20 - (tmp_buf_len % 0x20);
+    if(tmp_buf_len % 0x1000) {
+        uint64_t padding_size = 0x1000 - (tmp_buf_len % 0x1000);
 
         int8_t zero = 0;
 
@@ -1985,6 +1985,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                   program_header->header_virtual_address,
                                                   &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                   MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot add header page to page table");
 
@@ -1994,6 +1995,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
             if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                   program_header->header_physical_address,
                                                   &frame,
+                                                  MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                   MEMORY_PAGING_PAGE_TYPE_READONLY) != 0) {
                 PRINTLOG(LINKER, LOG_ERROR, "cannot add header page to page table");
 
@@ -2050,7 +2052,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                         .frame_count = section_size / FRAME_SIZE,
                     };
 
-                    memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_UNKNOWN;
+                    memory_paging_page_type_t page_type = MEMORY_PAGING_PAGE_TYPE_GLOBAL;
 
                     if(i == LINKER_SECTION_TYPE_TEXT || i == LINKER_SECTION_TYPE_PLT) {
                         page_type |= MEMORY_PAGING_PAGE_TYPE_READONLY;
@@ -2117,6 +2119,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->got_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add got to page table");
 
@@ -2164,6 +2167,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->relocation_table_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add relocation table to page table");
 
@@ -2214,6 +2218,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->metadata_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add metadata to page table");
 
@@ -2260,6 +2265,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
                 if(memory_paging_add_va_for_frame_ext(page_table_ctx,
                                                       program_header->symbol_table_virtual_address,
                                                       &frame,
+                                                      MEMORY_PAGING_PAGE_TYPE_GLOBAL |
                                                       MEMORY_PAGING_PAGE_TYPE_READONLY | MEMORY_PAGING_PAGE_TYPE_NOEXEC) != 0) {
                     PRINTLOG(LINKER, LOG_ERROR, "cannot add symbol table to page table");
 

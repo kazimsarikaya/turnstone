@@ -177,24 +177,40 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
         return -1;
     }
 
-    vm->program_dump_frame_address = ipc.program_build.program_dump_frame_address;
     vm->program_entry_point_virtual_address = ipc.program_build.program_entry_point_virtual_address;
-    vm->program_size = ipc.program_build.program_size;
-    vm->program_physical_address = ipc.program_build.program_physical_address;
-    vm->program_virtual_address = ipc.program_build.program_virtual_address;
-    vm->metadata_physical_address = ipc.program_build.metadata_physical_address;
-    vm->got_size = ipc.program_build.got_size;
-    vm->got_physical_address = ipc.program_build.got_physical_address;
 
     vm->guest_stack_size = 2ULL << 20; // 2MiB
     vm->guest_heap_size = 16ULL << 20; // 16MiB
 
-    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.program_handle, (void*)true);
+    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.module.module_handle, (void*)true);
 
     hypervisor_cleanup_unused_modules(vm, ipc.program_build.got_physical_address, ipc.program_build.got_size);
 
     if(hypervisor_vmcs_prepare_ept(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
+        return -1;
+    }
+
+    hypervisor_vm_module_load_t ml = {0};
+
+    ml.old_got_physical_address = vm->got_physical_address;
+    ml.old_got_size = vm->got_size;
+    ml.new_got_physical_address = ipc.program_build.got_physical_address;
+    ml.new_got_size = ipc.program_build.got_size;
+    ml.module_physical_address = ipc.program_build.module.module_physical_address;
+    ml.module_virtual_address = ipc.program_build.module.module_virtual_address;
+    ml.module_size = ipc.program_build.module.module_size;
+    ml.metadata_physical_address = ipc.program_build.module.metadata_physical_address;
+    ml.metadata_virtual_address = ipc.program_build.module.metadata_virtual_address;
+    ml.metadata_size = ipc.program_build.module.metadata_size;
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", ipc.program_build.module.module_handle);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "new got 0x%llx 0x%llx", ml.new_got_physical_address, ml.new_got_size);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "module 0x%llx 0x%llx", ml.module_physical_address, ml.module_size);
+
+    if(hypervisor_ept_merge_module(vm, &ml) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot merge module");
         return -1;
     }
 
@@ -207,7 +223,7 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 }
 
 void hypervisor_vmcs_goto_next_instruction(vmcs_vmexit_info_t* vmexit_info) {
-    uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+    uint64_t guest_rip = vmexit_info->guest_rip;
     guest_rip += vmexit_info->instruction_length;
     vmx_write(VMX_GUEST_RIP, guest_rip);
 }
@@ -266,7 +282,7 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
     tosdb_manager_ipc_t ipc = {0};
 
     ipc.type = TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD;
-    ipc.program_build.program_handle = module_id;
+    ipc.program_build.module.module_handle = module_id;
     ipc.program_build.for_vm = true;
 
     if(tosdb_manager_ipc_send_and_wait(&ipc) != 0) {
@@ -284,7 +300,7 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
         return -1;
     }
 
-    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.program_handle, (void*)true);
+    hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.module.module_handle, (void*)true);
 
     hypervisor_cleanup_unused_modules(vm, ipc.program_build.got_physical_address, ipc.program_build.got_size);
 
@@ -294,18 +310,17 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
     ml.old_got_size = vm->got_size;
     ml.new_got_physical_address = ipc.program_build.got_physical_address;
     ml.new_got_size = ipc.program_build.got_size;
-    ml.module_dump_physical_address = ipc.program_build.program_dump_frame_address;
-    ml.module_physical_address = ipc.program_build.program_physical_address;
-    ml.module_size = ipc.program_build.program_size;
-    ml.metadata_physical_address = ipc.program_build.metadata_physical_address;
-    ml.metadata_size = ipc.program_build.metadata_size;
+    ml.module_physical_address = ipc.program_build.module.module_physical_address;
+    ml.module_virtual_address = ipc.program_build.module.module_virtual_address;
+    ml.module_size = ipc.program_build.module.module_size;
+    ml.metadata_physical_address = ipc.program_build.module.metadata_physical_address;
+    ml.metadata_virtual_address = ipc.program_build.module.metadata_virtual_address;
+    ml.metadata_size = ipc.program_build.module.metadata_size;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "module id 0x%llx loaded", module_id);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "old got 0x%llx 0x%llx", ml.old_got_physical_address, ml.old_got_size);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "new got 0x%llx 0x%llx", ml.new_got_physical_address, ml.new_got_size);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "module 0x%llx 0x%llx", ml.module_physical_address, ml.module_size);
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "module dump 0x%llx", ml.module_dump_physical_address);
-
 
     if(hypervisor_ept_merge_module(vm, &ml) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot merge module");
@@ -317,26 +332,63 @@ int8_t hypervisor_vmcall_load_module(hypervisor_vm_t* vm, vmcs_vmexit_info_t* vm
 
 void video_text_print(const char* str);
 
-list_t* hypervisor_vmcall_interrupt_mapped_vms[256] = {0};
+list_t** hypervisor_vmcall_interrupt_mapped_vms = NULL;
 
-static int8_t hypervisor_vmcall_intterupt_mapped_isr(interrupt_frame_ext_t* frame) {
+int8_t hypervisor_vmcall_init_interrupt_mapped_vms(void) {
+    if(hypervisor_vmcall_interrupt_mapped_vms != NULL) {
+        return 0;
+    }
+
+    hypervisor_vmcall_interrupt_mapped_vms = memory_malloc_ext(NULL, 256 * sizeof(list_t*), 0);
+
+    if(hypervisor_vmcall_interrupt_mapped_vms == NULL) {
+        return -1;
+    }
+
+    for(uint64_t i = 0; i < 256; i++) {
+        hypervisor_vmcall_interrupt_mapped_vms[i] = list_create_list();
+
+        if(hypervisor_vmcall_interrupt_mapped_vms[i] == NULL) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int8_t hypervisor_vmcall_interrupt_mapped_isr(interrupt_frame_ext_t* frame) {
     uint8_t interrupt_number = frame->interrupt_number;
 
     list_t* vms = hypervisor_vmcall_interrupt_mapped_vms[interrupt_number];
 
     if(list_size(vms)) {
         for(size_t i = 0; i < list_size(vms); i++) {
+            video_text_print("interrupt mapped\n");
             hypervisor_vm_t* vm = (hypervisor_vm_t*)list_get_data_at_position(vms, i);
 
             interrupt_frame_ext_t* cloned_frame = memory_malloc_ext(vm->heap, sizeof(interrupt_frame_ext_t), 0);
             memory_memcopy(frame, cloned_frame, sizeof(interrupt_frame_ext_t));
 
             list_queue_push(vm->interrupt_queue, cloned_frame);
+
+            task_set_interrupt_received(vm->task_id);
         }
 
         apic_eoi();
 
         return 0;
+    } else {
+        char_t buf[64] = {0};
+        utoh_with_buffer(buf, interrupt_number);
+        video_text_print("interrupt not mapped: 0x");
+        video_text_print(buf);
+        video_text_print("list size 0x");
+        utoh_with_buffer(buf, list_size(vms));
+        video_text_print(buf);
+        video_text_print(" list 0x");
+        utoh_with_buffer(buf, (uint64_t)vms);
+        video_text_print(buf);
+        video_text_print("\n");
     }
 
     return -1;
@@ -382,42 +434,53 @@ static int16_t hypervisor_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmcs_vmex
     uint8_t intnum = 0;
 
     if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSI) {
-        intnum = interrupt_get_next_empty_interrupt();
-
         uint32_t msg_addr = 0xFEE00000;
         uint32_t apic_id = apic_get_local_apic_id();
         apic_id <<= 12;
         msg_addr |= apic_id;
 
-
         if(msi_cap->ma64_support) {
             msi_cap->ma64.message_address = msg_addr; // | (1 << 3) | (0 << 2);
-            msi_cap->ma64.message_data = intnum;
+
+            if(!msi_cap->ma64.message_data){
+                intnum = interrupt_get_next_empty_interrupt();
+                msi_cap->ma64.message_data = intnum;
+            } else {
+                intnum = msi_cap->ma64.message_data;
+            }
+
         } else {
             msi_cap->ma32.message_address = msg_addr; // | (1 << 3) | (0 << 2);
-            msi_cap->ma32.message_data = intnum;
+
+            if(!msi_cap->ma32.message_data){
+                intnum = interrupt_get_next_empty_interrupt();
+                msi_cap->ma32.message_data = intnum;
+            } else {
+                intnum = msi_cap->ma32.message_data;
+            }
         }
 
         uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
-        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
+        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_interrupt_mapped_isr);
 
         msi_cap->enable = 1;
     } else if(interrupt_type == VM_GUEST_INTERRUPT_TYPE_MSIX) {
-        intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_intterupt_mapped_isr);
+        intnum = pci_msix_set_isr(pci_dev, msix_cap, interrupt_number, &hypervisor_vmcall_interrupt_mapped_isr);
         intnum += INTERRUPT_IRQ_BASE;
     } else {
-        intnum = interrupt_number;
+        intnum = INTERRUPT_IRQ_BASE + pci_dev->interrupt_line;
+        apic_ioapic_enable_irq(pci_dev->interrupt_line);
         uint8_t isrnum = intnum - INTERRUPT_IRQ_BASE;
-        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_intterupt_mapped_isr);
+        interrupt_irq_set_handler(isrnum, &hypervisor_vmcall_interrupt_mapped_isr);
     }
 
     interrupt_number = intnum;
 
-    if(!hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]) {
-        hypervisor_vmcall_interrupt_mapped_vms[interrupt_number] = list_create_list();
-    }
-
     list_list_insert(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number], vm);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "interrupt number 0x%x mapped. list size 0x%llx list 0x%p",
+             interrupt_number, list_size(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]),
+             hypervisor_vmcall_interrupt_mapped_vms[interrupt_number]);
 
     list_list_insert(vm->mapped_interrupts, (void*)(uint64_t)(interrupt_number));
 
@@ -430,7 +493,7 @@ void hypervisor_vmcall_cleanup_mapped_interrupts(hypervisor_vm_t* vm) {
         list_list_delete(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number], vm);
 
         if(!list_size(hypervisor_vmcall_interrupt_mapped_vms[interrupt_number])) {
-            interrupt_irq_remove_handler(interrupt_number - INTERRUPT_IRQ_BASE, &hypervisor_vmcall_intterupt_mapped_isr);
+            interrupt_irq_remove_handler(interrupt_number - INTERRUPT_IRQ_BASE, &hypervisor_vmcall_interrupt_mapped_isr);
         }
     }
 
@@ -441,7 +504,7 @@ void hypervisor_vmcall_cleanup_mapped_interrupts(hypervisor_vm_t* vm) {
 }
 
 uint64_t hypervisor_vmcs_vmcalls_handler(vmcs_vmexit_info_t* vmexit_info) {
-    hypervisor_vm_t* vm = task_get_vm();
+    hypervisor_vm_t* vm = vmexit_info->vm;
     uint64_t rax = vmexit_info->registers->rax;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcall rax 0x%llx", rax);

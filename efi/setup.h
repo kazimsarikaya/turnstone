@@ -17,6 +17,12 @@
 #include <memory.h>
 
 /**
+ * @brief prints string to console with efi system table's console output protocol.
+ * @param[in] string string to print.
+ */
+void video_print(const char_t* string);
+
+/**
  * @brief opens an efi protocol based disk
  * @param[in] bio efi block io protocol
  * @return a disk implementation based on efi protocols.
@@ -41,5 +47,10 @@ typedef uint64_t time_t;
  * @return current time in nanoseconds
  */
 time_t time_ns(time_t* t);
+
+/**
+ * @brief clears screen with efi system table's console output protocol.
+ */
+void screen_clear(void);
 
 #endif

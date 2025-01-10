@@ -74,7 +74,7 @@ buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data);
  * @param[in] buffer buffer to get length
  * @return uint64_t length of buffer
  */
-uint64_t buffer_get_length(buffer_t* buffer);
+uint64_t buffer_get_length(const buffer_t* buffer);
 
 /**
  * @brief resets buffer, sets length and position to 0 and all bytes to 0, capacity stays same
@@ -244,7 +244,7 @@ boolean_t buffer_write_slice_into(buffer_t* buffer, uint64_t pos, uint64_t len, 
  * @param[in] length length of bytes
  * @return uint8_t* pointer to byte array, or null if position + length > buffer length
  */
-uint8_t* buffer_get_view_at_position(buffer_t* buffer, uint64_t position, uint64_t length);
+uint8_t* buffer_get_view_at_position(const buffer_t* buffer, uint64_t position, uint64_t length);
 
 /*! default io buffer id for stdin */
 #define BUFFER_IO_INPUT 0

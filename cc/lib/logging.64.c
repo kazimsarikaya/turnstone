@@ -9,6 +9,7 @@
 
 #include <logging.h>
 #include <windowmanager.h>
+#include <strings.h>
 
 MODULE("turnstone.lib.logging");
 
@@ -47,6 +48,7 @@ const char_t*const logging_module_names[] = {
     "COMPILER_ASSEMBLER",
     "COMPILER_PASCAL",
     "HYPERVISOR",
+    "WINDOWMANAGER",
 };
 
 
@@ -97,6 +99,7 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_COMPILER_ASSEMBLER,
     LOG_LEVEL_COMPILER_PASCAL,
     LOG_LEVEL_HYPERVISOR,
+    LOG_LEVEL_WINDOWMANAGER,
 };
 
 boolean_t logging_need_logging(logging_modules_t module, logging_level_t level) {
@@ -143,4 +146,39 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
     if(using_tmp_printf_buffer) {
         buffer_reset_tmp_buffer_for_printf();
     }
+}
+
+int8_t logging_set_level_by_string_values(const char_t* module, const char_t* level) {
+    char_t* mnu = struppercopy(module);
+    char_t* lvl = struppercopy(level);
+
+    int32_t module_index = -1;
+    int32_t level_index = -1;
+
+    for(uint32_t i = 0; i < sizeof(logging_module_names) / sizeof(logging_module_names[0]); i++) {
+        if(strcmp(mnu, logging_module_names[i]) == 0) {
+            module_index = i;
+            break;
+        }
+    }
+
+    for(uint32_t i = 0; i < sizeof(logging_level_names) / sizeof(logging_level_names[0]); i++) {
+        if(strcmp(lvl, logging_level_names[i]) == 0) {
+            level_index = i;
+            break;
+        }
+    }
+
+    if(module_index == -1 || level_index == -1) {
+        memory_free(mnu);
+        memory_free(lvl);
+        return -1;
+    }
+
+    logging_module_levels[module_index] = level_index;
+
+    memory_free(mnu);
+    memory_free(lvl);
+
+    return 0;
 }

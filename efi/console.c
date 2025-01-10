@@ -18,18 +18,7 @@ MODULE("turnstone.efi");
 /*! EFI system table  global variable */
 extern efi_system_table_t* ST;
 
-/**
- * @brief prints string to console with efi system table's console output protocol.
- * @param[in] string string to print.
- */
-void video_print(const char_t* string);
-
-/**
- * @brief clears screen with efi system table's console output protocol.
- */
-void video_clear_screen(void);
-
-void video_clear_screen(void) {
+void screen_clear(void) {
     ST->console_output->clear_screen(ST->console_output);
 }
 

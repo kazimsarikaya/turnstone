@@ -22,6 +22,7 @@
 #include <time.h>
 #include <shell.h>
 #include <utils.h>
+#include <graphics/screen.h>
 
 MODULE("turnstone.kernel.hw.kbd");
 
@@ -32,6 +33,7 @@ boolean_t kbd_is_usb = false;
 
 volatile wchar_t kbd_ps2_tmp = NULL;
 extern uint64_t shell_task_id;
+extern uint64_t windowmanager_task_id;
 
 kbd_state_t kbd_state = {0, 0, 0, 0, 0};
 
@@ -80,6 +82,10 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 
         if(shell_task_id != 0) {
             task_set_interrupt_received(shell_task_id);
+        }
+
+        if(windowmanager_task_id != 0) {
+            task_set_interrupt_received(windowmanager_task_id);
         }
     }
 
@@ -201,11 +207,10 @@ int8_t dev_virtio_mouse_isr(interrupt_frame_ext_t* frame){
     return 0;
 }
 
-extern int32_t VIDEO_GRAPHICS_WIDTH;
-extern int32_t VIDEO_GRAPHICS_HEIGHT;
-
 int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
+
+    screen_info_t screen_info = screen_get_info();
 
     virtio_queue_ext_t* vq_ev = &virtio_tablet->queues[0];
     virtio_queue_used_t* used = virtio_queue_get_used(virtio_tablet, vq_ev->vq);
@@ -252,9 +257,9 @@ int8_t dev_virtio_tablet_isr(interrupt_frame_ext_t* frame){
             float32_t val = (float32_t)ev->value / 32767.0f;
 
             if(ev->code == 0) {
-                mouse_x = val * VIDEO_GRAPHICS_WIDTH;
+                mouse_x = val * screen_info.width;
             } else if(ev->code == 1) {
-                mouse_y = val * VIDEO_GRAPHICS_HEIGHT;
+                mouse_y = val * screen_info.height;
             }
         } else if(ev->type == 0) {
             report_finished = true;

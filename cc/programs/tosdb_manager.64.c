@@ -67,8 +67,26 @@ static uint64_t tosdb_manager_clone_global_offset_table(uint64_t* got_return_siz
 
     return got_physical_address;
 }
+static uint64_t tosdb_manager_get_entrypoint_virtual_address(uint64_t sym_id) {
+    if(sym_id == -1ULL) {
+        return 0;
+    }
 
-static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
+    uint64_t got_buffer_size = buffer_get_length(tosdb_manager_global_offset_table_buffer);
+    uint8_t* got = buffer_get_view_at_position(tosdb_manager_global_offset_table_buffer, 0, got_buffer_size);
+
+    uint64_t entrypoint_got_index = (uint64_t)hashmap_get(tosdb_manager_got_symbol_index_map, (void*)sym_id);
+
+    if(!entrypoint_got_index) {
+        return 0;
+    }
+
+    linker_global_offset_table_entry_t* got_entry = (linker_global_offset_table_entry_t*)(got + entrypoint_got_index * sizeof(linker_global_offset_table_entry_t));
+
+    return got_entry->entry_value;
+}
+
+static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
     int8_t exit_code = 0;
 
     tosdb_database_t* db_system = tosdb_database_create_or_open(tdb, "system");
@@ -110,16 +128,10 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
             goto exit;
         }
 
-        ipc->program_build.program_handle = mod_id;
-        ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
-        ipc->program_build.program_size = deployed_module->program_size;
-        ipc->program_build.program_physical_address = deployed_module->program_physical_address;
-        ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
-        ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
+        ipc->program_build.module = *deployed_module;
+        ipc->program_build.program_entry_point_virtual_address = tosdb_manager_get_entrypoint_virtual_address(sym_id);
         ipc->program_build.got_physical_address = got_physical_address;
         ipc->program_build.got_size = got_size;
-        ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
-        ipc->program_build.metadata_size = deployed_module->metadata_size;
 
         ipc->is_response_success = (exit_code == 0);
         ipc->is_response_done = true;
@@ -282,27 +294,20 @@ static void tosdb_manger_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, ui
         goto exit_with_destroy_context;
     }
 
-    deployed_module->program_handle = mod_id;
-    deployed_module->program_dump_frame_address = program_dump_frame->frame_address;
-    deployed_module->program_size = ctx->program_size;
-    deployed_module->program_physical_address = ctx->program_start_physical;
-    deployed_module->program_virtual_address = ctx->program_start_virtual;
-    deployed_module->program_entry_point_virtual_address = ctx->entrypoint_address_virtual;
+    deployed_module->module_handle = mod_id;
+    deployed_module->module_size = ctx->program_size;
+    deployed_module->module_physical_address = ctx->program_start_physical;
+    deployed_module->module_virtual_address = ctx->program_start_virtual;
     deployed_module->metadata_physical_address = ctx->metadata_address_physical;
+    deployed_module->metadata_virtual_address = ctx->metadata_address_virtual;
     deployed_module->metadata_size = ctx->metadata_size;
 
     hashmap_put(tosdb_manager_deployed_modules, (void*)mod_id, deployed_module);
 
-    ipc->program_build.program_handle = deployed_module->program_handle;
-    ipc->program_build.program_dump_frame_address = deployed_module->program_dump_frame_address;
-    ipc->program_build.program_size = deployed_module->program_size;
-    ipc->program_build.program_physical_address = deployed_module->program_physical_address;
-    ipc->program_build.program_virtual_address = deployed_module->program_virtual_address;
-    ipc->program_build.program_entry_point_virtual_address = deployed_module->program_entry_point_virtual_address;
+    ipc->program_build.module = *deployed_module;
+    ipc->program_build.program_entry_point_virtual_address = ctx->entrypoint_address_virtual;
     ipc->program_build.got_physical_address = got_physical_address;
     ipc->program_build.got_size = got_size;
-    ipc->program_build.metadata_physical_address = deployed_module->metadata_physical_address;
-    ipc->program_build.metadata_size = deployed_module->metadata_size;
 
 exit_with_destroy_context:
     linker_destroy_context(ctx);
@@ -312,7 +317,7 @@ exit:
     task_set_interrupt_received(ipc->sender_task_id);
 }
 
-static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
+static void tosdb_manager_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     // logging_module_levels[LINKER] = LOG_DEBUG;
 
     int8_t exit_code = 0;
@@ -443,7 +448,7 @@ static void tosdb_manger_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
 
     PRINTLOG(LINKER, LOG_TRACE, "module id: 0x%llx", mod_id);
 
-    return tosdb_manger_build_module(tdb, ipc, mod_id, sym_id);
+    return tosdb_manager_build_module(tdb, ipc, mod_id, sym_id);
 
 exit:
     ipc->is_response_success = (exit_code == 0);
@@ -612,11 +617,11 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
             break;
         case TOSDB_MANAGER_IPC_TYPE_PROGRAM_LOAD:
             PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received program load message");
-            tosdb_manger_build_program(tdb, ipc);
+            tosdb_manager_build_program(tdb, ipc);
             break;
         case TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD:
             PRINTLOG(TOSDB, LOG_DEBUG, "tosdb_manager_main: received program load message");
-            tosdb_manger_build_module(tdb, ipc, ipc->program_build.program_handle, -1);
+            tosdb_manager_build_module(tdb, ipc, ipc->program_build.module.module_handle, -1);
             break;
         default:
             PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_main: unknown message type");
@@ -627,6 +632,9 @@ int32_t tosdb_manager_main(int32_t argc, char_t** argv) {
     tosdb_close(tdb);
 
     tosdb_manager_is_initialized = false;
+    tosdb_manager_deployed_modules = NULL;
+    tosdb_manager_global_offset_table_buffer = NULL;
+    tosdb_manager_got_symbol_index_map = NULL;
 
     return 0;
 }
@@ -679,6 +687,8 @@ int8_t tosdb_manager_clear(void) {
     tosdb_manager_is_initialized = false;
     tosdb_manager_task_id = 0;
     tosdb_manager_deployed_modules = NULL;
+    tosdb_manager_global_offset_table_buffer = NULL;
+    tosdb_manager_got_symbol_index_map = NULL;
 
     return 0;
 }

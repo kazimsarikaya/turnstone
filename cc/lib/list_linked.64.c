@@ -12,7 +12,7 @@
 #include <strings.h>
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.list.linked");
 
 /**
  * @struct linkedlist_item_internal

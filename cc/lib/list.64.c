@@ -12,7 +12,7 @@
 #include <strings.h>
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.list");
 
 typedef struct list_item_t {
     const void* data; ///< the data inside list item

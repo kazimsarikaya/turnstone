@@ -53,6 +53,7 @@ typedef enum logging_modules_t {
     COMPILER_ASSEMBLER,
     COMPILER_PASCAL,
     HYPERVISOR,
+    WINDOWMANAGER,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -249,6 +250,11 @@ extern logging_level_t logging_module_levels[];
 #define LOG_LEVEL_HYPERVISOR LOG_INFO
 #endif
 
+#ifndef LOG_LEVEL_WINDOWMANAGER
+/*! default log level for window manager module */
+#define LOG_LEVEL_WINDOWMANAGER LOG_INFO
+#endif
+
 #ifndef LOG_LOCATION
 /*! file and line no will be logged? */
 #define LOG_LOCATION 1
@@ -287,5 +293,6 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
 
 #define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
 
+int8_t logging_set_level_by_string_values(const char_t* module, const char_t* level);
 
 #endif

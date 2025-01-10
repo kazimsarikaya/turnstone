@@ -11,7 +11,6 @@
 
 #include <types.h>
 #include <pci.h>
-#include <video.h>
 #include <memory.h>
 
 

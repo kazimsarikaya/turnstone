@@ -31,7 +31,7 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices);
  * @brief nvme \ref nvme_controller_registers_t nvme cap field
  */
 typedef union nvme_controller_cap_t {
-    struct nvme_controller_cap_fields_t {
+    struct {
         uint64_t mqes      : 16; ///< maximum queue entries supported
         uint64_t cqr       : 1; ///< contiguous queues required
         uint64_t ams       : 2; ///< arbitration mechanism supported
@@ -51,44 +51,61 @@ typedef union nvme_controller_cap_t {
     uint64_t bits; ///< bit group
 } __attribute__((packed)) nvme_controller_cap_t; ///< union shorthand
 
+_Static_assert(sizeof(nvme_controller_cap_t) == 8, "nvme_controller_cap_t size mismatch");
+
 /**
  * @struct nvme_controller_version_t
  * @brief nvme \ref nvme_controller_registers_t version field
  */
-typedef struct nvme_controller_version_t {
-    uint32_t reserved_or_ter : 8; ///< for >=1.2.1 it is tertiary version otherwise reserved
-    uint32_t minor           : 8; ///<minor version
-    uint32_t major           : 16; ///< major version
+typedef union nvme_controller_version_t {
+    struct {
+        uint32_t reserved_or_ter : 8; ///< for >=1.2.1 it is tertiary version otherwise reserved
+        uint32_t minor           : 8; ///<minor version
+        uint32_t major           : 16; ///< major version
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_version_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_version_t) == 4, "nvme_controller_version_t size mismatch");
 
 /**
  * @struct nvme_controller_cfg_t
  * @brief nvme controller configuration
  */
-typedef struct nvme_controller_cfg_t {
-    uint32_t enable    : 1; ///< enable controller
-    uint32_t reserved0 : 3; ///< reserved
-    uint32_t css       : 3; ///< io command set selected
-    uint32_t mps       : 4; ///< memory page size
-    uint32_t ams       : 3; ///< arbitration mechanism selected
-    uint32_t shn       : 2; ///< shutdown notification
-    uint32_t iosqes    : 4; ///< io submission queue entry size
-    uint32_t iocqes    : 4; ///< io completion queue entry size
-    uint32_t reserved1 : 8; ///< reserved
+typedef union nvme_controller_cfg_t {
+    struct {
+        uint32_t enable    : 1; ///< enable controller
+        uint32_t reserved0 : 3; ///< reserved
+        uint32_t css       : 3; ///< io command set selected
+        uint32_t mps       : 4; ///< memory page size
+        uint32_t ams       : 3; ///< arbitration mechanism selected
+        uint32_t shn       : 2; ///< shutdown notification
+        uint32_t iosqes    : 4; ///< io submission queue entry size
+        uint32_t iocqes    : 4; ///< io completion queue entry size
+        uint32_t reserved1 : 8; ///< reserved
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_cfg_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_cfg_t) == 4, "nvme_controller_cfg_t size mismatch");
 
 /**
  * @struct nvme_controller_sts_t
  * @brief nvme controller status filed
  */
-typedef struct nvme_controller_sts_t {
-    uint32_t ready    : 1; ///< controller is ready
-    uint32_t cfs      : 1; ///< controller fatal status
-    uint32_t shst     : 2; ///< shutdown status
-    uint32_t nssro    : 1; ///< nvme subsystem reset occurred
-    uint32_t pp       : 1; ///< processing paused
-    uint32_t reserved : 26; ///< reserved
+typedef union nvme_controller_sts_t {
+    struct {
+        uint32_t ready    : 1; ///< controller is ready
+        uint32_t cfs      : 1; ///< controller fatal status
+        uint32_t shst     : 2; ///< shutdown status
+        uint32_t nssro    : 1; ///< nvme subsystem reset occurred
+        uint32_t pp       : 1; ///< processing paused
+        uint32_t reserved : 26; ///< reserved
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_sts_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_sts_t) == 4, "nvme_controller_sts_t size mismatch");
 
 /**
  * @struct nvme_controller_aqa_t
@@ -104,112 +121,143 @@ typedef union nvme_controller_aqa_t {
     uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_aqa_t; ///< shorthand for struct
 
+_Static_assert(sizeof(nvme_controller_aqa_t) == 4, "nvme_controller_aqa_t size mismatch");
+
 /**
  * @struct nvme_controller_cmbloc_t
  * @brief controller memory buffer location
  */
-typedef struct nvme_controller_cmbloc_t {
-    uint32_t bir      : 2; ///< base indicator support
-    uint32_t cqmms    : 1; ///< cmb queue mixed memory support
-    uint32_t cqpds    : 1; ///< cmb physical discontiguous support
-    uint32_t cdpmls   : 1; ///< cmb data pointer mixed locations support
-    uint32_t cdpcils  : 1; ///< cmb data pointer andi command independent locations support
-    uint32_t cdmmms   : 1; ///< cmd data metadata mixed memory support
-    uint32_t cqda     : 1; ///< cmd data dword alignment
-    uint32_t reserved : 3; ///< reserved
-    uint32_t offset   : 20; ///< offset
+typedef union nvme_controller_cmbloc_t {
+    struct {
+        uint32_t bir      : 2; ///< base indicator support
+        uint32_t cqmms    : 1; ///< cmb queue mixed memory support
+        uint32_t cqpds    : 1; ///< cmb physical discontiguous support
+        uint32_t cdpmls   : 1; ///< cmb data pointer mixed locations support
+        uint32_t cdpcils  : 1; ///< cmb data pointer andi command independent locations support
+        uint32_t cdmmms   : 1; ///< cmd data metadata mixed memory support
+        uint32_t cqda     : 1; ///< cmd data dword alignment
+        uint32_t reserved : 3; ///< reserved
+        uint32_t offset   : 20; ///< offset
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_cmbloc_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_cmbloc_t) == 4, "nvme_controller_cmbloc_t size mismatch");
 
 /**
  * @struct nvme_controller_cmbsz_t
  * @brief nvme controller memory buffer size field
  */
-typedef struct nvme_controller_cmbsz_t {
-    uint32_t sqs      : 1; ///< submission queue support
-    uint32_t cqs      : 1; ///< completion queue support
-    uint32_t lists    : 1; ///< prp sgl lis support
-    uint32_t rds      : 1; ///< read data support
-    uint32_t wds      : 1; ///< write data support
-    uint32_t reserved : 3; ///<reserved
-    uint32_t szu      : 4; ///< size unit
-    uint32_t size     : 20; ///< size
+typedef union nvme_controller_cmbsz_t {
+    struct {
+        uint32_t sqs      : 1; ///< submission queue support
+        uint32_t cqs      : 1; ///< completion queue support
+        uint32_t lists    : 1; ///< prp sgl lis support
+        uint32_t rds      : 1; ///< read data support
+        uint32_t wds      : 1; ///< write data support
+        uint32_t reserved : 3; ///<reserved
+        uint32_t szu      : 4; ///< size unit
+        uint32_t size     : 20; ///< size
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_cmbsz_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_cmbsz_t) == 4, "nvme_controller_cmbsz_t size mismatch");
 
 /**
  * @struct nvme_controller_bpinfo_t
  * @brief nvme controller boot partition information
  */
-typedef struct nvme_controller_bpinfo_t {
-    uint32_t bpsz      : 15; ///< boot partition size
-    uint32_t reserved0 : 9; ///< reserved
-    uint32_t brs       : 2; ///< boot read status
-    uint32_t reserved1 : 5; ///< reserved
-    uint32_t abpid     : 1; ///< active boot partition id
+typedef union nvme_controller_bpinfo_t {
+    struct {
+        uint32_t bpsz      : 15; ///< boot partition size
+        uint32_t reserved0 : 9; ///< reserved
+        uint32_t brs       : 2; ///< boot read status
+        uint32_t reserved1 : 5; ///< reserved
+        uint32_t abpid     : 1; ///< active boot partition id
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_bpinfo_t; ///<shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_bpinfo_t) == 4, "nvme_controller_bpinfo_t size mismatch");
 
 /**
  * @struct nvme_controller_bprsel_t
  * @brief nvme controller boot partition read select field
  */
-typedef struct nvme_controller_bprsel_t {
-    uint32_t bprsz    : 10; ///< boot partition read size
-    uint32_t bprof    : 20; ///< boot partition read offset
-    uint32_t reserved : 1; ///< reserved
-    uint32_t bpid     : 1; ///< boot partition id
+typedef union nvme_controller_bprsel_t {
+    struct {
+        uint32_t bprsz    : 10; ///< boot partition read size
+        uint32_t bprof    : 20; ///< boot partition read offset
+        uint32_t reserved : 1; ///< reserved
+        uint32_t bpid     : 1; ///< boot partition id
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_bprsel_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_bprsel_t) == 4, "nvme_controller_bprsel_t size mismatch");
 
 /**
  * @struct nvme_controller_cmbmsc_t
  * @brief nvme controller controller memory buffer memory space control field
  */
-typedef struct nvme_controller_cmbmsc_t {
-    uint64_t cre      : 1; ///< capabilities register enable
-    uint64_t cmse     : 1; ///< controller memory space enable
-    uint64_t reserved : 10; ///< reserved
-    uint64_t cba      : 52; ///< controller base address
+typedef union nvme_controller_cmbmsc_t {
+    struct {
+        uint64_t cre      : 1; ///< capabilities register enable
+        uint64_t cmse     : 1; ///< controller memory space enable
+        uint64_t reserved : 10; ///< reserved
+        uint64_t cba      : 52; ///< controller base address
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint64_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_cmbmsc_t; ///< shorthand for struct
+
+_Static_assert(sizeof(nvme_controller_cmbmsc_t) == 8, "nvme_controller_cmbmsc_t size mismatch");
 
 /**
  * @struct nvme_controller_cmbsts_t
  * @brief nvme controller controller memory buffer status field
  */
-typedef struct nvme_controller_cmbsts_t {
-    uint32_t cbai     : 1; ///< controller base address invalid
-    uint32_t reserved : 31; ///< reserved
+typedef union nvme_controller_cmbsts_t {
+    struct {
+        uint32_t cbai     : 1; ///< controller base address invalid
+        uint32_t reserved : 31; ///< reserved
+    }__attribute__((packed)) fields; ///< detailed fields
+    uint32_t bits; ///< bit group
 }__attribute__((packed)) nvme_controller_cmbsts_t;
 
+_Static_assert(sizeof(nvme_controller_cmbsts_t) == 4, "nvme_controller_cmbsts_t size mismatch");
 
 /**
  * @struct nvme_controller_registers_t
  * @brief nvme controller register at bar0 and bar1
  */
 typedef struct nvme_controller_registers_t {
-    nvme_controller_cap_t     capabilities; ///< capabilities of nvme controller
-    nvme_controller_version_t version; ///< version
-    uint32_t                  intms; ///< interrupt mask set
-    uint32_t                  intmc; ///< interrupt mask clear
-    nvme_controller_cfg_t     config; ///< controller configuration
-    uint8_t                   reserved0[0x1B - 0x18 + 1]; ///< reserved
-    nvme_controller_sts_t     status; ///< controller status
-    uint32_t                  nssr; ///< nvm subsystem reset
-    nvme_controller_aqa_t     aqa; ///< admin queue attributes
-    uint64_t                  asq; ///< admin submission queue base address
-    uint64_t                  acq; ///< admin completion queue base address
-    nvme_controller_cmbloc_t  cmbloc; ///< controller memory buffer location
-    nvme_controller_cmbsz_t   cmbsz; ///< controller memory buffer size
-    nvme_controller_bpinfo_t  bpinfo; ///< boot partition information
-    nvme_controller_bprsel_t  bprsel; ///< boot partition read select
-    uint64_t                  bpmbl; ///< boot partition memory buffer location
-    nvme_controller_cmbmsc_t  cmbmsc; ///< controller memory buffer memory space control
-    nvme_controller_cmbsts_t  cmbsts; ///< controller memory buffer status
-    uint8_t                   reserved1[0xDFF - 0x5C + 1]; ///< reserved
-    uint32_t                  pmrcap; ///< persistent memory capabilities
-    uint32_t                  pmrctl; ///< persistent memory region control
-    uint32_t                  pmrsts; ///< persistent memory region status
-    uint32_t                  pmrebs; ///< persistent memory region elasticity buffer size
-    uint32_t                  pmrswtp; ///< persistent memory region sustained write throughput
-    uint64_t                  pmrmsc; ///< persistent memory region controller memory space control
-    uint8_t                   reserved2[0xFFF - 0xE1C + 1]; ///< reserved command set specific
+    uint64_t capabilities; ///< capabilities of nvme controller
+    uint32_t version; ///< version
+    uint32_t intms; ///< interrupt mask set
+    uint32_t intmc; ///< interrupt mask clear
+    uint32_t config; ///< controller configuration
+    uint8_t  reserved0[0x1B - 0x18 + 1]; ///< reserved
+    uint32_t status; ///< controller status
+    uint32_t nssr; ///< nvm subsystem reset
+    uint32_t aqa; ///< admin queue attributes
+    uint64_t asq; ///< admin submission queue base address
+    uint64_t acq; ///< admin completion queue base address
+    uint32_t cmbloc; ///< controller memory buffer location
+    uint32_t cmbsz; ///< controller memory buffer size
+    uint32_t bpinfo; ///< boot partition information
+    uint32_t bprsel; ///< boot partition read select
+    uint64_t bpmbl; ///< boot partition memory buffer location
+    uint64_t cmbmsc; ///< controller memory buffer memory space control
+    uint32_t cmbsts; ///< controller memory buffer status
+    uint8_t  reserved1[0xDFF - 0x5C + 1]; ///< reserved
+    uint32_t pmrcap; ///< persistent memory capabilities
+    uint32_t pmrctl; ///< persistent memory region control
+    uint32_t pmrsts; ///< persistent memory region status
+    uint32_t pmrebs; ///< persistent memory region elasticity buffer size
+    uint32_t pmrswtp; ///< persistent memory region sustained write throughput
+    uint64_t pmrmsc; ///< persistent memory region controller memory space control
+    uint8_t  reserved2[0xFFF - 0xE1C + 1]; ///< reserved command set specific
 }__attribute__((packed)) nvme_controller_registers_t; ///<shorthand for struct
 
 /**

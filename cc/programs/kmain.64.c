@@ -37,7 +37,7 @@
 #include <network.h>
 #include <crc.h>
 #include <device/hpet.h>
-#include <shell.h>
+#include <windowmanager.h>
 #include <driver/usb.h>
 #include <driver/usb_mass_storage_disk.h>
 #include <stdbufs.h>
@@ -46,6 +46,9 @@
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
 #include <tosdb/tosdb_manager.h>
+#include <spool.h>
+#include <graphics/screen.h>
+#include <driver/video.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -125,10 +128,15 @@ int8_t kmain64(size_t entry_point) {
 
     srand(SYSTEM_INFO->random_seed);
 
+    if(spool_init(SYSTEM_INFO->spool_size, SYSTEM_INFO->spool_virtual_start) != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init spool. Halting...");
+        cpu_hlt();
+    }
+
     stdbufs_init_buffers(video_print);
 
-    video_init();
-    video_clear_screen();
+    video_fb_init();
+    screen_clear();
 
     PRINTLOG(KERNEL, LOG_INFO, "Initializing TURNSTONE OS");
     PRINTLOG(KERNEL, LOG_INFO, "new heap created at 0x%p", heap);
@@ -215,6 +223,15 @@ int8_t kmain64(size_t entry_point) {
         }
 
         PRINTLOG(KERNEL, LOG_DEBUG, "kernel stack frames allocated");
+
+        frame_t spool_frames = {SYSTEM_INFO->spool_physical_start, SYSTEM_INFO->spool_size / FRAME_SIZE, FRAME_TYPE_USED, 0};
+
+        if(fa->allocate_frame(fa, &spool_frames) != 0) {
+            PRINTLOG(KERNEL, LOG_PANIC, "cannot allocate kernel default stack frames");
+            cpu_hlt();
+        }
+
+        PRINTLOG(KERNEL, LOG_DEBUG, "spool frames allocated");
 
         if(memory_paging_reserve_current_page_table_frames() != 0) {
             PRINTLOG(KERNEL, LOG_PANIC, "cannot reserve current page table frames");
@@ -311,6 +328,11 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    if(hpet_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init hpet. Halting...");
+        cpu_hlt();
+    }
+
     if(acpi_setup_events() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot setup acpi events");
         cpu_hlt();
@@ -333,8 +355,8 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "tasking initialized");
 
-    if(hpet_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init hpet. Halting...");
+    if(smp_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
         cpu_hlt();
     }
 
@@ -343,8 +365,8 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
-    if(smp_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
+    if(windowmanager_init() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init window manager. Halting...");
         cpu_hlt();
     }
 
@@ -368,6 +390,7 @@ int8_t kmain64(size_t entry_point) {
         usb_driver_t* usb_ms = usb_mass_storage_get_disk_by_id(0);
 
         if(usb_ms) {
+            PRINTLOG(KERNEL, LOG_INFO, "usb mass storage disk 0 found");
             disk_t* usb0 = gpt_get_or_create_gpt_disk(usb_mass_storage_disk_impl_open(usb_ms, 0));
 
             if(usb0) {
@@ -390,11 +413,6 @@ int8_t kmain64(size_t entry_point) {
         } else {
             PRINTLOG(KERNEL, LOG_WARNING, "usb mass storage disk 0 not found");
         }
-    }
-
-    if(shell_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init shell. Halting...");
-        cpu_hlt();
     }
 
     if(kbd_init() != 0) {

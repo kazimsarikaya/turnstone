@@ -12,7 +12,7 @@
 #include <strings.h>
 #include <logging.h>
 
-MODULE("turnstone.lib");
+MODULE("turnstone.lib.list.array");
 
 
 typedef struct list_item_t {

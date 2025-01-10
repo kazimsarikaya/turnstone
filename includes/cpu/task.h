@@ -214,6 +214,9 @@ void task_set_interruptible(void);
  */
 void task_set_interrupt_received(uint64_t task_id);
 
+
+void task_set_message_received(uint64_t tid);
+
 /**
  * @brief adds a queue to task
  * @param[in] queue queue which task will have. tasks consumes these queues
@@ -249,7 +252,7 @@ void task_current_task_sleep(uint64_t wake_tick);
 void task_end_task(void);
 void task_kill_task(uint64_t task_id, boolean_t force);
 
-void task_print_all(void);
+void task_print_all(buffer_t* buffer);
 
 buffer_t* task_get_task_input_buffer(uint64_t tid);
 buffer_t* task_get_task_output_buffer(uint64_t tid);
@@ -269,5 +272,7 @@ void*    task_get_vm(void);
 void task_remove_task_after_fault(uint64_t task_id);
 
 int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size);
+
+void task_toggle_wait_for_future(uint64_t task_id);
 
 #endif

@@ -7,9 +7,6 @@
  */
 
 #include <windowmanager.h>
-#include <video.h>
-#include <logging.h>
-#include <memory.h>
 
 MODULE("turnstone.user.programs.windowmanager.init");
 

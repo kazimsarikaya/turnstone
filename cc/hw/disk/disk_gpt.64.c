@@ -13,7 +13,7 @@
 #include <memory.h>
 #include <random.h>
 
-MODULE("turnstone.kernel.hw.disk");
+MODULE("turnstone.kernel.hw.disk.gpt");
 
 typedef struct gpt_parts_iter_metadata_t {
     gpt_disk_t* disk;

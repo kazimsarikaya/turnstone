@@ -22,6 +22,16 @@ typedef enum tosdb_manager_ipc_type_t {
     TOSDB_MANAGER_IPC_TYPE_MODULE_LOAD,
 } tosdb_manager_ipc_type_t;
 
+typedef struct tosdb_manager_deployed_module_t {
+    uint64_t module_handle;
+    uint64_t module_physical_address;
+    uint64_t module_virtual_address;
+    uint64_t module_size;
+    uint64_t metadata_physical_address;
+    uint64_t metadata_virtual_address;
+    uint8_t  metadata_size;
+} tosdb_manager_deployed_module_t;
+
 typedef struct tosdb_manager_ipc_t {
     tosdb_manager_ipc_type_t type;
     uint64_t                 sender_task_id;
@@ -31,33 +41,16 @@ typedef struct tosdb_manager_ipc_t {
 
     union {
         struct {
-            const char_t* entry_point_name;
-            boolean_t     for_vm;
-            uint64_t      program_handle;
-            uint64_t      program_dump_frame_address;
-            uint64_t      program_physical_address;
-            uint64_t      program_virtual_address;
-            uint64_t      program_size;
-            uint64_t      program_entry_point_virtual_address;
-            uint64_t      got_physical_address;
-            uint64_t      got_size;
-            uint64_t      metadata_physical_address;
-            uint8_t       metadata_size;
+            const char_t*                   entry_point_name;
+            boolean_t                       for_vm;
+            uint64_t                        program_entry_point_virtual_address;
+            tosdb_manager_deployed_module_t module;
+            uint64_t                        got_physical_address;
+            uint64_t                        got_size;
         } program_build;
     };
 
 } tosdb_manager_ipc_t;
-
-typedef struct tosdb_manager_deployed_module_t {
-    uint64_t program_handle;
-    uint64_t program_dump_frame_address;
-    uint64_t program_physical_address;
-    uint64_t program_virtual_address;
-    uint64_t program_size;
-    uint64_t program_entry_point_virtual_address;
-    uint64_t metadata_physical_address;
-    uint8_t  metadata_size;
-} tosdb_manager_deployed_module_t;
 
 int8_t tosdb_manager_close(void);
 int8_t tosdb_manager_clear(void);

@@ -30,9 +30,9 @@ __volatile__ uint64_t time_timer_tick_count = 0;
 __volatile__ uint64_t time_timer_old_tick_count = 0;
 __volatile__ uint64_t time_timer_ap1_tick_count = 0;
 
-__volatile__ uint64_t time_timer_spinsleep_counter_value = 0;
-__volatile__ uint8_t time_timer_start_spinsleep_counter = 0;
-volatile uint64_t time_timer_rdtsc_delta = 0;
+
+extern volatile uint64_t time_timer_spinsleep_counter_value;
+extern volatile uint8_t time_timer_start_spinsleep_counter;
 
 void time_timer_reset_tick_count(void) {
     time_timer_tick_count = 0;
@@ -150,15 +150,6 @@ void time_timer_configure_spinsleep(void) {
     }
 
     PRINTLOG(TIMER, LOG_TRACE, "spinsleep counter is 0x%llx", time_timer_spinsleep_counter_value);
-}
-
-void time_timer_spinsleep(uint64_t usecs) {
-    PRINTLOG(TIMER, LOG_TRACE, "spinsleep for 0x%llx", usecs);
-    while(usecs--) {
-        uint64_t spinsleep_counter = time_timer_spinsleep_counter_value;
-        while(spinsleep_counter--);
-    }
-    PRINTLOG(TIMER, LOG_TRACE, "spinsleep finished");
 }
 
 void time_timer_sleep(uint64_t secs) {

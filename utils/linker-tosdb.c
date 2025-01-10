@@ -51,6 +51,83 @@ linkerdb_t* linkerdb_open(const char_t* file);
 boolean_t   linkerdb_close(linkerdb_t* ldb);
 int8_t      linker_print_context(linker_context_t* ctx);
 
+static void linker_print_unresolved_modules(linker_context_t* ctx, set_t* unresolved_modules) {
+    tosdb_database_t* db_system = tosdb_database_create_or_open(ctx->tdb, "system");
+
+    if(!db_system) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot open system database");
+
+        return;
+    }
+
+    tosdb_table_t* tbl_modules = tosdb_table_create_or_open(db_system, "modules", 1 << 10, 512 << 10, 8);
+
+    if(!tbl_modules) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot open modules table");
+
+        return;
+    }
+
+
+    PRINTLOG(LINKER, LOG_ERROR, "unresolved modules:");
+
+    iterator_t* it = set_create_iterator(unresolved_modules);
+
+    if(!it) {
+        PRINTLOG(LINKER, LOG_ERROR, "cannot create iterator for unresolved modules");
+
+        return;
+    }
+
+    while(it->end_of_iterator(it) != 0) {
+        uint64_t module_id = (uint64_t)it->get_item(it);
+
+        if(!module_id) {
+            it = it->next(it);
+
+            continue;
+        }
+
+        tosdb_record_t* s_mod_rec = tosdb_table_create_record(tbl_modules);
+
+        if(!s_mod_rec) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot create record for search");
+
+            return;
+        }
+
+        s_mod_rec->set_int64(s_mod_rec, "id", module_id);
+
+        if(!s_mod_rec->get_record(s_mod_rec)) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot get record for search");
+
+            s_mod_rec->destroy(s_mod_rec);
+            it->destroy(it);
+
+            return;
+        }
+
+        char_t* module_name = NULL;
+
+        if(!s_mod_rec->get_string(s_mod_rec, "name", &module_name)) {
+            PRINTLOG(LINKER, LOG_ERROR, "cannot get module name");
+
+            s_mod_rec->destroy(s_mod_rec);
+
+            return;
+        }
+
+        PRINTLOG(LINKER, LOG_WARNING, "module id: 0x%llx name: %s", module_id, module_name);
+
+        s_mod_rec->destroy(s_mod_rec);
+        memory_free(module_name);
+
+        it = it->next(it);
+    }
+
+    it->destroy(it);
+}
+
 int8_t linker_print_context(linker_context_t* ctx) {
     if(!ctx) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot print linker context, context is null");
@@ -120,6 +197,7 @@ int8_t linker_print_context(linker_context_t* ctx) {
     linker_global_offset_table_entry_t* got_table = (linker_global_offset_table_entry_t*)buffer_get_view_at_position(ctx->got_table_buffer, 0, got_table_size);
 
     uint64_t unresolved_symbol_count = 0;
+    set_t* unresolved_modules = set_integer();
 
     printf("     module id      symbol id section type    entry value resolved symbol value symbol type symbol scope symbol size\n");
     printf("-------------- -------------- ------------ -------------- -------- ------------ ----------- ------------ -----------\n");
@@ -133,6 +211,7 @@ int8_t linker_print_context(linker_context_t* ctx) {
 
         if(got_table[i].resolved == 0) {
             unresolved_symbol_count++;
+            set_append(unresolved_modules, (void*)got_table[i].module_id);
         }
     }
 
@@ -140,9 +219,13 @@ int8_t linker_print_context(linker_context_t* ctx) {
 
     if(unresolved_symbol_count != 2) {
         print_error("unresolved symbol count is not 2 (got itself and null symbol): %llu", unresolved_symbol_count);
+
+        linker_print_unresolved_modules(ctx, unresolved_modules);
     } else {
         print_success("all symbols resolved");
     }
+
+    set_destroy(unresolved_modules);
 
     printf("\n\n");
 

@@ -11,6 +11,7 @@
 #define ___HASHMAP_H 0
 
 #include <types.h>
+#include <memory.h>
 #include <iterator.h>
 
 /**
@@ -38,12 +39,13 @@ typedef int8_t (*hashmap_key_comparator_f)(const void* item1, const void* item2)
 
 /**
  * @brief create hashmap with key generator and key comparator
+ * @param[in] heap memory heap
  * @param[in] capacity capacity of hashmap
  * @param[in] hkg key generator function
  * @param[in] hkc key comparator function
  * @return hashmap
  */
-hashmap_t* hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generator_f hkg, hashmap_key_comparator_f hkc);
+hashmap_t* hashmap_new_with_hkg_with_hkc(memory_heap_t* heap, uint64_t capacity, hashmap_key_generator_f hkg, hashmap_key_comparator_f hkc);
 
 /**
  * @brief create hashmap with key generator, uses default key comparator
@@ -51,7 +53,7 @@ hashmap_t* hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generato
  * @param[in] hkg key generator function
  * @return hashmap
  */
-#define hashmap_new_with_hkg(c, hkg) hashmap_new_with_hkg_with_hkc(c, hkg, NULL)
+#define hashmap_new_with_hkg(c, hkg) hashmap_new_with_hkg_with_hkc(NULL, c, hkg, NULL)
 
 /**
  * @brief create hashmap with key comparator, uses default key generator
@@ -59,21 +61,37 @@ hashmap_t* hashmap_new_with_hkg_with_hkc(uint64_t capacity, hashmap_key_generato
  * @param[in] hkc key comparator function
  * @return hashmap
  */
-#define hashmap_new_with_hkc(c, hkc) hashmap_new_with_hkg_with_hkc(c, NULL, hkc)
+#define hashmap_new_with_hkc(c, hkc) hashmap_new_with_hkg_with_hkc(NULL, c, NULL, hkc)
+
+/**
+ * @brief create hashmap with key generator and key comparator, uses default memory heap
+ * @param[in] heap memory heap
+ * @param[in] c capacity of hashmap
+ * @return hashmap
+ */
+#define hashmap_new_with_heap(heap, c) hashmap_new_with_hkg_with_hkc(heap, c, NULL, NULL)
 
 /**
  * @brief create hashmap, uses default key generator and key comparator
  * @param[in] c capacity of hashmap
  * @return hashmap
  */
-#define hashmap_new(c) hashmap_new_with_hkg_with_hkc(c, NULL, NULL)
+#define hashmap_new(c) hashmap_new_with_heap(NULL, c)
 
 /**
  * @brief create hashmap with string key, uses string key generator and key comparator
+ * @param[in] heap memory heap
  * @param[in] capacity capacity of hashmap
  * @return hashmap
  */
-hashmap_t* hashmap_string(uint64_t capacity);
+hashmap_t* hashmap_string_with_heap(memory_heap_t* heap, uint64_t capacity);
+
+/**
+ * @brief create hashmap with string key, uses string key generator and key comparator
+ * @param[in] c capacity of hashmap
+ * @return hashmap
+ */
+#define hashmap_string(c) hashmap_string_with_heap(NULL, c)
 
 /**
  * @brief create hashmap with integer key, uses integer key generator and key comparator
@@ -81,6 +99,14 @@ hashmap_t* hashmap_string(uint64_t capacity);
  * @return hashmap
  */
 #define hashmap_integer(c) hashmap_new(c)
+
+/**
+ * @brief create hashmap with integer key, uses integer key generator and key comparator
+ * @param[in] heap memory heap
+ * @param[in] c capacity of hashmap
+ * @return hashmap
+ */
+#define hashmap_integer_with_heap(heap, c) hashmap_new_with_heap(heap, c)
 
 /**
  * @brief destroy hashmap
