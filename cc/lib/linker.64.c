@@ -1432,13 +1432,21 @@ buffer_t* linker_build_efi_image_relocations(linker_context_t* ctx) {
 
                 efi_reloc_entry->entries[efi_reloc_entry_count].offset = er_offset;
 
-                if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32 || reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32S) {
+                if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32 ||
+                   reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_32S) {
                     efi_reloc_entry->entries[efi_reloc_entry_count].type = EFI_IMAGE_REL_BASED_HIGHLOW;
                 } else if(reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_64) {
                     efi_reloc_entry->entries[efi_reloc_entry_count].type = EFI_IMAGE_REL_BASED_DIR64;
                 }
 
                 efi_reloc_entry_count++;
+            } else if (reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_PC32 ||
+                       reloc_entries[i].relocation_type == LINKER_RELOCATION_TYPE_64_PC64) {
+                PRINTLOG(LINKER, LOG_TRACE, "PC relative relocations does not need relocation table");
+            } else {
+                PRINTLOG(LINKER, LOG_ERROR, "invalid relocation type");
+
+                goto error;
             }
         }
 

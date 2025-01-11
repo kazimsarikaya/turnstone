@@ -143,14 +143,17 @@
  * P: current offset
  * S: symbol value
  * L: plt entry offset
+ * R_X86_64_32 S+A
+ * R_X86_64_32S S+A
  * R_X86_64_64 S+A
+ * R_X86_64_PC32 S+A-P
+ * R_X86_64_PLT32 L+A-P
  * R_X86_64_GOT64 G+A
  * R_X86_64_GOTOFF64 S+A-GOT
  * R_X86_64_GOTPC64 GOT-P+A
- * R_X86_64_PC32 S+A-P
- * R_X86_64_PLT32 L+A-P
- * R_X86_64_32 S+A
- * R_X86_64_32S S+A
+ * R_X86_64_GOTPCREL G+GOT+A-P
+ * R_X86_64_GOTPCRELX G+GOT+A-P
+ * R_X8664_REX_GOTPCRELX G+GOT+A-P
  **/
 
 #define R_X86_64_NONE            0 /* No reloc */

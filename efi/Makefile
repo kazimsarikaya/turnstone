@@ -22,7 +22,8 @@ endif
 CFLAGS = -D___BITS=64 -D___EFIBUILD=1 -D___KERNELBUILD=0 -std=gnu18 -O3 -I../includes -I./
 CFLAGS += -ffreestanding -nostdlib -nostdinc -fno-builtin -Wall -Werror -Wextra
 CFLAGS += -fno-omit-frame-pointer -msse4.2 
-CFLAGS += -fno-pic -fno-PIC -fplt -fno-ident -fno-asynchronous-unwind-tables 
+CFLAGS += -fno-pic -fno-PIC -fno-plt -mcmodel=large
+CFLAGS += -fno-ident -fno-asynchronous-unwind-tables
 CFLAGS += -ffunction-sections -fdata-sections -c ${CCXXEXTRAFLAGS}
 CFLAGS += -Wshadow -Wpointer-arith -Wcast-align \
           -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \

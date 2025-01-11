@@ -1410,7 +1410,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                     reloc_type = LINKER_RELOCATION_TYPE_32_PC32;
                     break;
                 default:
-                    print_error("unknown 32 bit reloc");
+                    PRINTLOG(LINKER, LOG_ERROR, "unknown 32 bit reloc type 0x%x at file %s",
+                             reloc_type, filename);
                     error = true;
                     break;
                 }
@@ -1445,7 +1446,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                     reloc_type = LINKER_RELOCATION_TYPE_64_PLTOFF64;
                     break;
                 default:
-                    PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x", reloc_type);
+                    PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x at file %s",
+                             reloc_type, filename);
                     error = true;
                     break;
                 }

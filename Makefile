@@ -33,7 +33,7 @@ CCXXFLAGS += -std=gnu18 -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -
 	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
     -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
     -Wstrict-prototypes \
-	-fPIC -fplt -mcmodel=large -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
+	-fPIC -fpic -fplt -mcmodel=large -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
 	-D___KERNELBUILD=1
 
 CXXTESTFLAGS= -D___TESTMODE=1

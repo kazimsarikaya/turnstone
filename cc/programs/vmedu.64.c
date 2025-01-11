@@ -25,7 +25,7 @@ MODULE("turnstone.user.programs.vmedu");
 
 _Noreturn void vmedu(void);
 
-volatile edu_t* edu = NULL;
+static volatile edu_t* edu = NULL;
 
 static void edu_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
