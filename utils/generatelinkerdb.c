@@ -1838,6 +1838,7 @@ int32_t main(int32_t argc, char_t** argv) {
     uint64_t stack_size = 0x10000;
     uint64_t program_base = 0x200000; // 2MB
     uint64_t spool_size = 16 << 20; // 16MB
+    boolean_t compact = false;
 
     while(argc > 0) {
         if(strstarts(*argv, "-") != 0) {
@@ -1935,6 +1936,14 @@ int32_t main(int32_t argc, char_t** argv) {
                 return -1;
             }
         }
+
+        if(strcmp(*argv, "-compact") == 0) {
+            compact = true;
+
+            argc--;
+            argv++;
+            continue;
+        }
     }
 
     int32_t exit_code = 0;
@@ -1993,11 +2002,11 @@ int32_t main(int32_t argc, char_t** argv) {
 
     PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
-#if 1
-    if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
-        print_error("cannot compact linker db");
+    if(compact) {
+        if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
+            print_error("cannot compact linker db");
+        }
     }
-#endif
 
 close:
     if(!linkerdb_close(ldb)) {
