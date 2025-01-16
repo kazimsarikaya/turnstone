@@ -65,14 +65,14 @@ static int8_t wnd_task_list_on_redraw(const window_event_t* event) {
     for(int64_t i = 0; i < task_list_item_count; i++) {
         task_list_item_t* item = &task_list_items[i];
 
-        char_t* task_str = sprintf("      % 15llx% 15lli% 20llx% 10d% 10lli% 20lli %s",
-                                   item->task_id,
-                                   item->cpu_id,
-                                   item->task_switch_count,
-                                   item->state,
-                                   item->message_queues,
-                                   item->messages,
-                                   item->task_name);
+        char_t* task_str = strprintf("      % 15llx% 15lli% 20llx% 10d% 10lli% 20lli %s",
+                                     item->task_id,
+                                     item->cpu_id,
+                                     item->task_switch_count,
+                                     item->state,
+                                     item->message_queues,
+                                     item->messages,
+                                     item->task_name);
 
         if(i % 2) {
             bg_color.color = 0xFF181818;
@@ -159,9 +159,9 @@ int8_t windowmanager_create_and_show_task_list_window(void) {
         return -1;
     }
 
-    char_t* header_text = sprintf(" %- 5s% 15s% 15s% 20s% 10s% 10s% 20s %s",
-                                  "Cmd", "Task ID", "Cpu ID", "Switch Count",
-                                  "State", "MQ Count", "Message Count", "Name");
+    char_t* header_text = strprintf(" %- 5s% 15s% 15s% 20s% 10s% 10s% 20s %s",
+                                    "Cmd", "Task ID", "Cpu ID", "Switch Count",
+                                    "State", "MQ Count", "Message Count", "Name");
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,

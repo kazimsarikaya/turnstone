@@ -1553,16 +1553,16 @@ buffer_t* linker_build_efi_image_section_headers_without_relocations(linker_cont
 
 
             if(i == LINKER_SECTION_TYPE_TEXT) {
-                strcpy(".text", efi_section_header->name);
+                strcopy(".text", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_TEXT;
             } else if(i == LINKER_SECTION_TYPE_DATA || i == LINKER_SECTION_TYPE_DATARELOC) {
-                strcpy(".data", efi_section_header->name);
+                strcopy(".data", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_DATA;
             } else if(i == LINKER_SECTION_TYPE_RODATA || i == LINKER_SECTION_TYPE_RODATARELOC) {
-                strcpy(".rdata", efi_section_header->name);
+                strcopy(".rdata", efi_section_header->name);
                 efi_section_header->characteristics =  EFI_IMAGE_SECTION_FLAGS_RODATA;
             } else if(i == LINKER_SECTION_TYPE_BSS) {
-                strcpy(".bss", efi_section_header->name);
+                strcopy(".bss", efi_section_header->name);
                 efi_section_header->characteristics = EFI_IMAGE_SECTION_FLAGS_BSS;
             }
 
@@ -1898,7 +1898,7 @@ int8_t linker_dump_program_to_array(linker_context_t* ctx, linker_program_dump_t
         program_header->trampoline_address_pc_relative = offsetof_field(program_header_t, trampoline_code) - 5;
         memory_memcopy(linker_program_header_trampoline_code, program_header->trampoline_code, sizeof(linker_program_header_trampoline_code));
 
-        strcpy(TOS_EXECUTABLE_OR_LIBRARY_MAGIC, (char_t*)program_header->magic);
+        strcopy(TOS_EXECUTABLE_OR_LIBRARY_MAGIC, (char_t*)program_header->magic);
 
         program_header->header_physical_address = ctx->program_start_physical - 0x1000;
         program_header->header_virtual_address = ctx->program_start_virtual - 0x1000;

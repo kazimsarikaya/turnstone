@@ -167,7 +167,7 @@ int8_t acpi_aml_parse_const_data(acpi_aml_parser_context_t* ctx, void** data, ui
             return -1;
         }
 
-        strcpy((char_t*)ctx->data, str);
+        strcopy((char_t*)ctx->data, str);
 
         obj->type = ACPI_AML_OT_STRING;
         obj->string = str;

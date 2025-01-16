@@ -189,7 +189,7 @@ int8_t compiler_define_symbol(compiler_t* compiler, compiler_symbol_t* symbol, s
     const char_t* symbol_name = symbol->name;
 
     if(symbol->is_local && symbol->hidden_type == COMPILER_SYMBOL_TYPE_STRING) {
-        symbol_name = sprintf("%s_string", symbol->name);
+        symbol_name = strprintf("%s_string", symbol->name);
     }
 
     buffer_printf(buffer, ".section .%s.%s\n", sec_name_prefix, symbol_name);

@@ -142,7 +142,7 @@ static int8_t virtio_gpu_wait_for_queue_command(uint32_t queue_no, lock_t** lock
          */
 
         if(hdr_type && hdr_type != VIRTIO_GPU_RESP_OK_NODATA) {
-            char_t* err_msg = sprintf("virtio gpu wait for queue failed: 0x%x\n", hdr_type);
+            char_t* err_msg = strprintf("virtio gpu wait for queue failed: 0x%x\n", hdr_type);
             video_text_print(err_msg);
             memory_free(err_msg);
         }
@@ -379,7 +379,7 @@ static int8_t virtio_gpu_queue_send_commad(uint32_t queue_no, lock_t** lock,
     uint32_t desc_length = sizeof(virtio_gpu_cmd_submit_t) + submit_hdr->size;
 
     if(desc_length > VIRTIO_GPU_QUEUE_ITEM_SIZE) {
-        char_t* err_msg = sprintf("virtio gpu command too big: %d\n", desc_length);
+        char_t* err_msg = strprintf("virtio gpu command too big: %d\n", desc_length);
         video_text_print(err_msg);
         memory_free(err_msg);
         return -1;
@@ -1122,9 +1122,9 @@ static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
 
     if((copy_region.dst_x + copy_region.src_box.w) > virtio_gpu_wrapper->screen_width ||
        (copy_region.dst_y + copy_region.src_box.h) > virtio_gpu_wrapper->screen_height) {
-        char_t* err_msg = sprintf("invalid glyph: out of bounds of screen: x: %d y: %d w: %d h: %d sw: %d sh: %d\n",
-                                  copy_region.dst_x, copy_region.dst_y, copy_region.src_box.w, copy_region.src_box.h,
-                                  virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
+        char_t* err_msg = strprintf("invalid glyph: out of bounds of screen: x: %d y: %d w: %d h: %d sw: %d sh: %d\n",
+                                    copy_region.dst_x, copy_region.dst_y, copy_region.src_box.w, copy_region.src_box.h,
+                                    virtio_gpu_wrapper->screen_width, virtio_gpu_wrapper->screen_height);
         video_text_print(err_msg);
         memory_free(err_msg);
         return;

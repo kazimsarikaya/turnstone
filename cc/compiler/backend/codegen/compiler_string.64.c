@@ -25,7 +25,7 @@ int8_t compiler_execute_string_const(compiler_t* compiler, compiler_ast_node_t* 
         return -1;
     }
 
-    symbol->name = sprintf(".L%i", compiler->next_label_id++);
+    symbol->name = strprintf(".L%i", compiler->next_label_id++);
     symbol->type = COMPILER_SYMBOL_TYPE_STRING;
     symbol->size = strlen(node->token->text) + 1;
     symbol->is_const = true;

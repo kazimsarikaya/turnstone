@@ -93,9 +93,9 @@ static int8_t wndmgr_footer_time_on_redraw(const window_event_t* event) {
 
     timeparsed(&tp);
 
-    char_t* time_str = sprintf("%02d:%02d:%02d %04d-%02d-%02d",
-                               tp.hours, tp.minutes, tp.seconds,
-                               tp.year, tp.month, tp.day);
+    char_t* time_str = strprintf("%02d:%02d:%02d %04d-%02d-%02d",
+                                 tp.hours, tp.minutes, tp.seconds,
+                                 tp.year, tp.month, tp.day);
 
     memory_free(window->text);
 
@@ -123,9 +123,9 @@ static int8_t wndmgr_create_footer(window_t* parent) {
 
     timeparsed(&tp);
 
-    char_t* time_str = sprintf("%02d:%02d:%02d %04d-%02d-%02d",
-                               tp.hours, tp.minutes, tp.seconds,
-                               tp.year, tp.month, tp.day);
+    char_t* time_str = strprintf("%02d:%02d:%02d %04d-%02d-%02d",
+                                 tp.hours, tp.minutes, tp.seconds,
+                                 tp.year, tp.month, tp.day);
 
     rect = windowmanager_calc_text_rect(time_str, 2000);
 

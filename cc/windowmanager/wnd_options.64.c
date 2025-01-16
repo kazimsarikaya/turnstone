@@ -355,7 +355,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
     for(int64_t i = 0; i < options_list->items_count; i++) {
 
-        char_t* option_number = sprintf("% 8d.", i);
+        char_t* option_number = strprintf("% 8d.", i);
 
         rect = windowmanager_calc_text_rect(option_number, 2000);
 
@@ -372,7 +372,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
             return NULL;
         }
 
-        char_t* option_text = sprintf("%s", options_list->items[i].text);
+        char_t* option_text = strprintf("%s", options_list->items[i].text);
 
         rect = windowmanager_calc_text_rect(option_text, screen_info.width - option_number_area->rect.width - font_width);
 

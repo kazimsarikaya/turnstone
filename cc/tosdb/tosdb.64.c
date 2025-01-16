@@ -401,7 +401,7 @@ uint64_t tosdb_block_write(tosdb_t* tdb, tosdb_block_header_t* block) {
         return 0;
     }
 
-    strcpy(TOSDB_SUPERBLOCK_SIGNATURE, block->signature);
+    strcopy(TOSDB_SUPERBLOCK_SIGNATURE, block->signature);
     block->version_major = TOSDB_VERSION_MAJOR;
     block->version_minor = TOSDB_VERSION_MINOR;
 
@@ -479,7 +479,7 @@ boolean_t tosdb_persist(tosdb_t* tdb) {
         }
 
         block->databases[db_idx].id = db->id;
-        strcpy(db->name, block->databases[db_idx].name);
+        strcopy(db->name, block->databases[db_idx].name);
         block->databases[db_idx].deleted = db->is_deleted;
 
         if(!db->is_deleted) {

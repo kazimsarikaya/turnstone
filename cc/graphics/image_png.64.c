@@ -631,7 +631,9 @@ static png_filter_t png_get_filter_func(png_filter_type_t filter_type) {
         break;
     }
 
-    return NULL;
+    PRINTLOG(PNG, LOG_WARNING, "invalid filter type %u, failback to none filter", filter_type);
+
+    return png_filter_none;
 }
 
 static int8_t png_decoder_apply_defilter(png_decoder_t* png_decoder, const uint8_t* img_data, const graphics_raw_image_t* res) {
@@ -880,7 +882,12 @@ static int8_t png_encoder_find_and_apply_filter(png_encoder_t* png_encoder) {
     int64_t scanline_len = png_encoder->image->width * bpp;
 
     png_filter_type_t selected_filter_type = PNG_FILTER_TYPE_NONE;
-    uint8_t* filter_applied_scanlines[PNG_FILTER_TYPE_MAX] = {0};
+    uint8_t** filter_applied_scanlines = memory_malloc(sizeof(uint8_t*) * PNG_FILTER_TYPE_MAX);
+
+    if(!filter_applied_scanlines) {
+        errno = -PNG_DECODER_MEMORY_ERROR;
+        return -PNG_DECODER_MEMORY_ERROR;
+    }
 
     for(int32_t ft = 0; ft < PNG_FILTER_TYPE_MAX; ft++) {
         filter_applied_scanlines[ft] = memory_malloc(scanline_len);
@@ -891,6 +898,7 @@ static int8_t png_encoder_find_and_apply_filter(png_encoder_t* png_encoder) {
             }
 
             memory_free(png_encoder->encoded_data);
+            memory_free(filter_applied_scanlines);
 
             errno = -PNG_DECODER_MEMORY_ERROR;
             return -PNG_DECODER_MEMORY_ERROR;
@@ -935,6 +943,8 @@ static int8_t png_encoder_find_and_apply_filter(png_encoder_t* png_encoder) {
     for(int32_t i = 0; i < PNG_FILTER_TYPE_MAX; i++) {
         memory_free(filter_applied_scanlines[i]);
     }
+
+    memory_free(filter_applied_scanlines);
 
     return PNG_SUCCESS;
 }
@@ -1146,6 +1156,8 @@ static int8_t png_encoder_build_png(png_encoder_t* png_encoder) {
 }
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 uint8_t* graphics_save_png_image(const graphics_raw_image_t* image, uint64_t* size) {
     if(!image || !size) {
         return NULL;
@@ -1173,3 +1185,4 @@ uint8_t* graphics_save_png_image(const graphics_raw_image_t* image, uint64_t* si
 
     return png_encoder.png_data;
 }
+#pragma GCC diagnostic pop

@@ -47,7 +47,7 @@ int8_t strcmp(const char_t* string1, const char_t* string2) {
     return (minlen == len1) ? -1 : 1;
 }
 
-int8_t strcpy(const char_t* source, char_t* destination){
+int8_t strcopy(const char_t* source, char_t* destination){
     if(source == NULL || destination == NULL) {
         return -1;
     }
@@ -143,7 +143,7 @@ char_t* ito_base(number_t number, number_t base){
         return NULL;
     }
 
-    strcpy(buf, ret);
+    strcopy(buf, ret);
 
     return ret;
 }
@@ -164,7 +164,7 @@ char_t* uto_base(unumber_t number, number_t base){
         return NULL;
     }
 
-    strcpy(buf, ret);
+    strcopy(buf, ret);
 
     return ret;
 }
@@ -257,8 +257,8 @@ char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t*
         return res;
     }
 
-    strcpy(string1, res);
-    strcpy(string2, res + strlen(string1));
+    strcopy(string1, res);
+    strcopy(string2, res + strlen(string1));
 
     return res;
 }
@@ -647,15 +647,15 @@ uint64_t strhash(const char_t* input) {
     return res;
 }
 
-char_t* sprintf(const char_t* format, ...) {
+char_t* strprintf(const char_t* format, ...) {
     va_list args;
     va_start(args, format);
-    char_t* res = vsprintf(format, args);
+    char_t* res = vstrprintf(format, args);
     va_end(args);
     return res;
 }
 
-char_t* vsprintf(const char_t* format, va_list args) {
+char_t* vstrprintf(const char_t* format, va_list args) {
     buffer_t* buffer = buffer_new_with_capacity(NULL, 1024);
     buffer_vprintf(buffer, format, args);
     char_t* res = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);

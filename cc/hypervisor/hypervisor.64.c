@@ -285,7 +285,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 
     args[0] = vm;
 
-    char_t* vm_name = sprintf("vm%08llx", ++hypervisor_next_vm_id);
+    char_t* vm_name = strprintf("vm%08llx", ++hypervisor_next_vm_id);
 
     if(task_create_task(heap, 2 << 20, 16 << 10, hypervisor_vm_task, 1, args, vm_name) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");

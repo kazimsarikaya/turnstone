@@ -73,7 +73,7 @@ tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend, compression_t
         return NULL;
     }
 
-    strcpy(TOSDB_SUPERBLOCK_SIGNATURE, sb->header.signature);
+    strcopy(TOSDB_SUPERBLOCK_SIGNATURE, sb->header.signature);
     sb->header.block_type = TOSDB_BLOCK_TYPE_SUPERBLOCK;
     sb->header.block_size = sizeof(tosdb_superblock_t);
     sb->header.version_major = TOSDB_VERSION_MAJOR;

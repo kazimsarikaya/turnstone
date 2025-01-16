@@ -293,7 +293,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init", apic_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "kernel-init", apic_id);
     kernel_task->task_name = strdup_at_heap(task_map_heap, tmp_task_name);
     memory_free(tmp_task_name);
 
@@ -408,7 +408,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->cpu_id = apic_id;
 
-    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init", current_task->cpu_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "kernel-init", current_task->cpu_id);
 
     current_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -1150,7 +1150,7 @@ int8_t task_create_idle_task(void) {
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
 
-    char_t* tmp_task_name = sprintf("%s-%d", "idle", new_task->task_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "idle", new_task->task_id);
 
     new_task->task_name = strdup_at_heap(heap, tmp_task_name);
 

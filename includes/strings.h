@@ -105,7 +105,7 @@ char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t*
  * NULL will not be copied. destination should be equal or greater then source.
  * destination should have space for NULL.
  */
-int8_t strcpy(const char_t* source, char_t* destination);
+int8_t strcopy(const char_t* source, char_t* destination);
 
 /**
  * @brief reverse a string
@@ -240,8 +240,8 @@ lchar_t* char_to_lchar(char_t* str);
 
 uint64_t strhash(const char_t* input);
 
-char_t* sprintf(const char_t* format, ...);
-char_t* vsprintf(const char_t* format, va_list args);
+char_t* strprintf(const char_t* format, ...);
+char_t* vstrprintf(const char_t* format, va_list args);
 
 
 #endif

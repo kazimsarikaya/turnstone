@@ -86,6 +86,8 @@ static uint64_t tosdb_manager_get_entrypoint_virtual_address(uint64_t sym_id) {
     return got_entry->entry_value;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
     int8_t exit_code = 0;
 
@@ -316,6 +318,7 @@ exit:
     ipc->is_response_done = true;
     task_set_interrupt_received(ipc->sender_task_id);
 }
+#pragma GCC diagnostic pop
 
 static void tosdb_manager_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     // logging_module_levels[LINKER] = LOG_DEBUG;

@@ -644,6 +644,7 @@ efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
                         if(res == EFI_SUCCESS) {
                             memory_free(buffer);
+                            memory_free(blk_dev);
                             break;
                         }
 

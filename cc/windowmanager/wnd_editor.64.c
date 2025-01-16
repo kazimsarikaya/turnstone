@@ -52,7 +52,7 @@ static window_t* wnd_create_editor_ruler(window_t* parent, int64_t start, int64_
     int64_t ruler_col_count = max_ruler;
     max_ruler += start;
 
-    char_t* max_ruler_str = sprintf("%i", max_ruler);
+    char_t* max_ruler_str = strprintf("%i", max_ruler);
 
     int64_t ruler_line_count = strlen(max_ruler_str);
 
@@ -165,7 +165,7 @@ static window_t* wnd_create_numbered_line(int64_t line_number, const char_t* lin
         return NULL;
     }
 
-    char_t* line_number_str = sprintf("%08i ", line_number);
+    char_t* line_number_str = strprintf("%08i ", line_number);
 
     window_t* line_number_window = wnd_create_textbox(line_number_str, window, 0, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
 

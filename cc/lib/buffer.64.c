@@ -672,7 +672,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                             buf[idx + 1] = '\0';
                         }
 
-                        strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                        strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                         buffer_vprintf_buffer_idx += idx;
                     }
 
@@ -687,7 +687,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         slen -= BUFFER_PRINTF_BUFFER_SIZE - 1;
                     }
 
-                    strcpy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(str, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
@@ -703,7 +703,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                             buffer_vprintf_buffer_idx = 0;
                         }
 
-                        strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                        strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                         buffer_vprintf_buffer_idx += idx;
                     }
 
@@ -739,11 +739,11 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         buf[0] = '-';
                     }
 
-                    strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += idx;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
-                    strcpy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
@@ -770,11 +770,11 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         cnt++;
                     }
 
-                    strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += idx;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
-                    strcpy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
@@ -809,11 +809,11 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         cnt++;
                     }
 
-                    strcpy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += idx;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
-                    strcpy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(ito_buf + sign, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
@@ -841,7 +841,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     ftoa_with_buffer_and_prec(fto_buf, fval, prec); // TODO: floating point prec format
                     slen = strlen(fto_buf);
 
-                    strcpy(fto_buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
+                    strcopy(fto_buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
                     buffer_vprintf_buffer_idx += slen;
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 

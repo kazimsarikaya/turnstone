@@ -10,6 +10,7 @@
 #include "setup.h"
 #include <zpack.h>
 #include <xxhash.h>
+#include <strings.h>
 
 int32_t main(int32_t argc, char_t** argv) {
 

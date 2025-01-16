@@ -1079,7 +1079,7 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, const char_t* pr
     }
 
     if(acpi_aml_is_root_char((uint8_t*)name) == 0) {
-        strcpy(name, dst_name);
+        strcopy(name, dst_name);
     } else {
         uint64_t prefix_cnt = 0;
         const char_t* tmp = name;
@@ -1096,7 +1096,7 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, const char_t* pr
 
         uint64_t src_len = strlen(prefix) - (prefix_cnt * 4);
         memory_memcopy(prefix, dst_name, src_len);
-        strcpy(name + prefix_cnt, dst_name + src_len);
+        strcopy(name + prefix_cnt, dst_name + src_len);
     }
 
     char_t* nomname = memory_malloc_ext(ctx->heap, sizeof(char_t) * strlen(dst_name) + 1, 0x0);
@@ -1106,7 +1106,7 @@ char_t* acpi_aml_normalize_name(acpi_aml_parser_context_t* ctx, const char_t* pr
         return NULL;
     }
 
-    strcpy(dst_name, nomname);
+    strcopy(dst_name, nomname);
 
     memory_free_ext(ctx->heap, dst_name);
 
@@ -1218,7 +1218,7 @@ acpi_aml_object_t* acpi_aml_symbol_lookup_at_table(acpi_aml_parser_context_t* ct
         return NULL;
     }
 
-    strcpy(prefix, tmp_prefix);
+    strcopy(prefix, tmp_prefix);
 
     while(1) {
         PRINTLOG(ACPIAML, LOG_TRACE, "searching symbol current prefix %s", tmp_prefix);

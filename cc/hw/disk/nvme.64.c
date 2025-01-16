@@ -72,10 +72,12 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
 
         if(status_code != 0) {
             // TODO: handle error
+            break;
         }
 
         if(nvme_disk->current_phase != phase) {
             // TODO: handle error phase
+            break;
         } else {
             lock_t* lock = (lock_t*)hashmap_get(nvme_disk->command_lock_map, (void*)(uint64_t)cid);
             hashmap_delete(nvme_disk->command_lock_map, (void*)(uint64_t)cid);

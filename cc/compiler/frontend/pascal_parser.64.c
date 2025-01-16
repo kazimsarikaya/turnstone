@@ -1385,7 +1385,7 @@ int8_t pascal_parser_repeat_statement(pascal_parser_t * parser, compiler_ast_nod
     not_condition->right = condition;
 
     const char_t* rstr = randstr(10);
-    char_t* repeat_label = sprintf("repeat_%s", rstr);
+    char_t* repeat_label = strprintf("repeat_%s", rstr);
     memory_free((void*)rstr);
 
     compiler_ast_node_t* goto_node = memory_malloc(sizeof(compiler_ast_node_t));

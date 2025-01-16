@@ -103,7 +103,7 @@ _Noreturn void vmedu(void) {
 
     const char_t* str = "this is a test of dma transfer";
 
-    strcpy(str, source);
+    strcopy(str, source);
 
     printf("DMA transfer starting\n");
     edu->dma_source = source_hpa;

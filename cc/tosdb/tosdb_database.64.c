@@ -428,7 +428,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
             }
 
             block->tables[tbl_idx].id = tbl->id;
-            strcpy(tbl->name, block->tables[tbl_idx].name);
+            strcopy(tbl->name, block->tables[tbl_idx].name);
             block->tables[tbl_idx].deleted = tbl->is_deleted;
 
             if(!tbl->is_deleted) {
@@ -489,7 +489,7 @@ boolean_t tosdb_database_persist(tosdb_database_t* db) {
         block->header.previous_block_size = db->metadata_size;
 
         block->id = db->id;
-        strcpy(db->name, block->name);
+        strcopy(db->name, block->name);
         block->table_next_id = db->table_next_id;
         block->table_list_location = db->table_list_location;
         block->table_list_size = db->table_list_size;
