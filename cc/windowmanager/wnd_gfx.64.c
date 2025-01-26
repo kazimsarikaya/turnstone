@@ -103,7 +103,7 @@ boolean_t windowmanager_draw_window(window_t* window) {
     return flush_needed;
 }
 
-void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc) {
+void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, char16_t wc) {
     screen_info_t screen_info = screen_get_info();
 
     SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
@@ -149,7 +149,7 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
     int64_t i = 0;
 
     while(text[i]) {
-        wchar_t wc = font_get_wc(text + i, &i);
+        char16_t wc = font_get_wc(text + i, &i);
 
         if(wc == '\n') {
             cur_y += 1;

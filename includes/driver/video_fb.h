@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @struct video_frame_buffer_t
  * @brief video frame buffer information
@@ -35,5 +39,9 @@ void video_fb_init(void);
 void video_fb_refresh_frame_buffer_address(void);
 
 int8_t video_fb_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_width, uint64_t new_height, uint64_t new_pixels_per_scanline);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

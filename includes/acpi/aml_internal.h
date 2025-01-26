@@ -9,7 +9,11 @@
 /*! prevent duplicate header error macro */
 #define ___ACPI_AML_INTERNAL_H 0
 
-#include "aml.h"
+#include <acpi/aml.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 #define ACPI_AML_ZERO                0x00
@@ -331,5 +335,9 @@ CREATE_EXEC_F(to_bcd);
 CREATE_EXEC_F(method);
 
 #define EXEC_F_NAME(name) acpi_aml_exec_ ## name
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

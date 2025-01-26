@@ -15,8 +15,8 @@
 MODULE("turnstone.kernel.hw.usb");
 
 void      usb_device_print_desc(usb_device_desc_t device_desc);
-boolean_t usb_device_get_langs(usb_device_t* usb_device, wchar_t* langs);
-boolean_t usb_device_get_string(usb_device_t* usb_device, wchar_t lang_id, uint32_t str_index, wchar_t* str);
+boolean_t usb_device_get_langs(usb_device_t* usb_device, char16_t* langs);
+boolean_t usb_device_get_string(usb_device_t* usb_device, char16_t lang_id, uint32_t str_index, char16_t* str);
 void      usb_device_free(usb_device_t* usb_device);
 
 hashmap_t* usb_devices = NULL;
@@ -35,10 +35,10 @@ void usb_device_print_desc(usb_device_desc_t device_desc) {
 }
 
 
-boolean_t usb_device_get_langs(usb_device_t* usb_device, wchar_t* langs) {
+boolean_t usb_device_get_langs(usb_device_t* usb_device, char16_t* langs) {
     langs[0] = 0;
 
-    wchar_t buf[128] = {0};
+    char16_t buf[128] = {0};
 
     usb_string_desc_t* string_desc = (usb_string_desc_t*)buf;
 
@@ -67,7 +67,7 @@ boolean_t usb_device_get_langs(usb_device_t* usb_device, wchar_t* langs) {
     return true;
 }
 
-boolean_t usb_device_get_string(usb_device_t* usb_device, wchar_t lang_id, uint32_t str_index, wchar_t* str) {
+boolean_t usb_device_get_string(usb_device_t* usb_device, char16_t lang_id, uint32_t str_index, char16_t* str) {
 
     str[0] = '\0';
 
@@ -75,7 +75,7 @@ boolean_t usb_device_get_string(usb_device_t* usb_device, wchar_t lang_id, uint3
         return false;
     }
 
-    wchar_t buf[128] = {0};
+    char16_t buf[128] = {0};
 
     usb_string_desc_t* string_desc = (usb_string_desc_t*)buf;
 
@@ -279,7 +279,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     usb_device_print_desc(device_desc);
 
-    wchar_t lang_ids[128] = {0};
+    char16_t lang_ids[128] = {0};
 
     if(!usb_device_get_langs(usb_device, lang_ids)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get langs");
@@ -288,14 +288,14 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         return -1;
     }
 
-    wchar_t product[128] = {0};
-    wchar_t vendor[128] = {0};
-    wchar_t serial[128] = {0};
+    char16_t product[128] = {0};
+    char16_t vendor[128] = {0};
+    char16_t serial[128] = {0};
 
     if(!usb_device_get_string(usb_device, lang_ids[0], device_desc.product_string, product)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get product string");
     } else {
-        char_t* product_str = wchar_to_char(product);
+        char_t* product_str = char16_to_char(product);
         PRINTLOG(USB, LOG_INFO, "device product: %s", product_str);
         usb_device->product = product_str;
     }
@@ -303,7 +303,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
     if(!usb_device_get_string(usb_device, lang_ids[0], device_desc.vendor_string, vendor)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get vendor string");
     } else {
-        char_t* vendor_str = wchar_to_char(vendor);
+        char_t* vendor_str = char16_to_char(vendor);
         PRINTLOG(USB, LOG_INFO, "device vendor: %s", vendor_str);
         usb_device->vendor = vendor_str;
     }
@@ -311,7 +311,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
     if(!usb_device_get_string(usb_device, lang_ids[0], device_desc.serial_number_string, serial)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get serial string");
     } else {
-        char_t* serial_str = wchar_to_char(serial);
+        char_t* serial_str = char16_to_char(serial);
         PRINTLOG(USB, LOG_INFO, "device serial: %s", serial_str);
         usb_device->serial = serial_str;
     }

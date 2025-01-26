@@ -15,6 +15,10 @@
 #include <hashmap.h>
 #include <compiler/compiler.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct pascal_lexer_t {
     buffer_t * buffer;
     char_t     current_char;
@@ -66,6 +70,8 @@ int8_t pascal_parser_init(pascal_parser_t * parser, pascal_lexer_t * lexer);
 int8_t pascal_parser_destroy(pascal_parser_t * parser);
 int8_t pascal_parser_parse(pascal_parser_t * parser, compiler_ast_t * ast);
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif

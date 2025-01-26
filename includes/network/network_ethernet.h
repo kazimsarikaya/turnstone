@@ -13,6 +13,10 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum network_ethernet_type_t {
     NETWORK_ETHERNET_TYPE_ARP=NETWORK_PROTOCOL_ARP,
     NETWORK_ETHERNET_TYPE_IPV4=NETWORK_PROTOCOL_IPV4,
@@ -30,5 +34,9 @@ boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network
 list_t*   network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, void* network_info);
 
 uint8_t* network_ethernet_create_packet(network_mac_address_t dest, network_mac_address_t src, network_ethernet_type_t type, uint16_t data_len, uint8_t* data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

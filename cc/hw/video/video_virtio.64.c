@@ -1061,7 +1061,7 @@ static int8_t virtio_gpu_change_font_color(color_t foreground, color_t backgroun
     return res;
 }
 
-static void virtio_gpu_print_glyph_with_stride(wchar_t wc,
+static void virtio_gpu_print_glyph_with_stride(char16_t wc,
                                                color_t foreground, color_t background,
                                                pixel_t* destination_base_address,
                                                uint32_t x, uint32_t y,

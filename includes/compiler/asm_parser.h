@@ -10,6 +10,10 @@
 #include <buffer.h>
 #include <list.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum asm_token_type_t {
     ASM_TOKEN_TYPE_NULL,
     ASM_TOKEN_TYPE_DIRECTIVE,
@@ -50,5 +54,9 @@ typedef struct asm_token_t {
 list_t*   asm_parser_parse(buffer_t* buf);
 void      asm_parser_print_tokens(list_t* tokens);
 boolean_t asm_parser_destroy_tokens(list_t* tokens);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __COMPILER_ASM_PARSER_H */

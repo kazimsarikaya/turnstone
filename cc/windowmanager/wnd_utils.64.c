@@ -65,7 +65,7 @@ rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     return rect;
 }
 
-uint32_t windowmanager_append_wchar_to_buffer(wchar_t src, char_t* dst, uint32_t dst_idx) {
+uint32_t windowmanager_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
     if(dst == NULL) {
         return NULL;
     }

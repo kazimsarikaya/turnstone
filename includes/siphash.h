@@ -11,7 +11,15 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint128_t siphash128(const void* data, uint64_t len, uint128_t seed);
 uint64_t  siphash64(const void* data, uint64_t len, uint64_t seed);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

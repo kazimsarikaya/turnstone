@@ -11,7 +11,15 @@
 
 #include <windowmanager/wnd_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 window_t* windowmanager_add_option_window(window_t* parent, rect_t pos);
 window_t* windowmanager_create_primary_options_window(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___WND_OPTIONS_H

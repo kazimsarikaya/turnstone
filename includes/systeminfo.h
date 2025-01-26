@@ -14,6 +14,10 @@
 #include <efi.h>
 #include <driver/video_fb.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @enum system_info_boot_type_t
  * @brief system boot type
@@ -51,5 +55,9 @@ typedef struct system_info_t {
 
 /*! static location of system information */
 extern system_info_t* SYSTEM_INFO;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -12,6 +12,14 @@
 #include <types.h>
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 time_t rtc_get_time(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

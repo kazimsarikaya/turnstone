@@ -11,6 +11,10 @@
 
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define EXP    ((float64_t)(2.71828182845904523536L))
 #define LN2    ((float64_t)(0.69314718055994506418L))
 #define LN10   ((float64_t)(2.30258509299404590109L))
@@ -104,5 +108,9 @@ boolean_t math_isnan(float64_t number);
  * @return true if number is infinite
  */
 boolean_t math_isinf(float64_t number);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

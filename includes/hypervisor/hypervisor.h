@@ -12,9 +12,17 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int8_t hypervisor_init(void);
 int8_t hypervisor_stop(void);
 
 int8_t hypervisor_vm_create(const char_t* entry_point_name);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

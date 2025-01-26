@@ -13,6 +13,10 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef enum network_icmpv4_type_t {
     NETWORK_ICMP_ECHO_REQUEST=8,
@@ -37,5 +41,9 @@ typedef struct network_icmpv4_ping_header_t {
 }__attribute__((packed)) network_icmpv4_ping_header_t;
 
 uint8_t* network_icmpv4_process_packet(network_icmpv4_header_t* recv_icmpv4_packet, void* network_info, uint16_t* return_packet_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

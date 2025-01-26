@@ -14,6 +14,10 @@
 #include <cpu/sync.h>
 #include <driver/video_virtio_cross_constants.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VIRGL_RSTR(...) #__VA_ARGS__
 
 typedef enum virgl_format_t {
@@ -811,5 +815,9 @@ int8_t virgl_encode_dsa_state(virgl_cmd_t* cmd, uint32_t handle, virgl_depth_ste
 int8_t virgl_encode_rasterizer_state(virgl_cmd_t* cmd, uint32_t handle, virgl_rasterizer_state_t* rasterizer_state);
 int8_t virgl_encode_set_viewport_states(virgl_cmd_t* cmd, int32_t start_slot, int num_viewports, const virgl_viewport_state_t * states);
 int8_t virgl_encode_set_vertex_buffers(virgl_cmd_t* cmd, virgl_vertex_buffer_t* buffers);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___VIRGL_H

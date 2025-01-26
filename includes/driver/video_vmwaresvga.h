@@ -13,6 +13,10 @@
 #include <pci.h>
 #include <memory.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 
 
@@ -205,6 +209,9 @@ typedef struct vmware_svga2_t {
 
 int8_t vmware_svga2_init(memory_heap_t* heap, const pci_dev_t * dev);
 
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif

@@ -12,6 +12,10 @@
 #include <types.h>
 #include <device/kbd.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define KBD_PS2_EXTCODE_PREFIX    0xE0
 
 #define KBD_SCANCODE_NULL         0x00
@@ -71,14 +75,18 @@
 #define KBD_SCANCODE_KEYPAD_ENTER 0x60
 
 
-extern const wchar_t KBD_SCANCODES_NORMAL[];
-extern const wchar_t KBD_SCANCODES_CAPSON[];
-extern const wchar_t KBD_SCANCODES_SHIFT[];
-extern const wchar_t KBD_SCANCODES_SHIFTCAPSON[];
-extern const wchar_t KBD_SCANCODES_ALT[];
-extern const wchar_t KBD_SCANCODES_ALTSHIFT[];
+extern const char16_t KBD_SCANCODES_NORMAL[];
+extern const char16_t KBD_SCANCODES_CAPSON[];
+extern const char16_t KBD_SCANCODES_SHIFT[];
+extern const char16_t KBD_SCANCODES_SHIFTCAPSON[];
+extern const char16_t KBD_SCANCODES_ALT[];
+extern const char16_t KBD_SCANCODES_ALTSHIFT[];
 
-wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_printable);
-wchar_t kbd_scancode_fixcode(wchar_t ps2code);
+char16_t kbd_scancode_get_value(char16_t scancode, kbd_state_t* ks, boolean_t* is_printable);
+char16_t kbd_scancode_fixcode(char16_t ps2code);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

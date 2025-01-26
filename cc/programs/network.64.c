@@ -26,7 +26,7 @@ uint64_t network_info_mke(const void* key);
 
 list_t* network_received_packets = NULL;
 
-map_t network_info_map = NULL;
+map_t* network_info_map = NULL;
 
 uint64_t network_info_mke(const void* key) {
     uint64_t x = 0;

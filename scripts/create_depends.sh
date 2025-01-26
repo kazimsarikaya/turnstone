@@ -5,7 +5,20 @@
 
 for var in "$@"
 do
-  _depends=$(gcc -I../includes -MM ${var}.c | tr -d '\\\n'|cut -d':' -f2|sed 's/\.\.\/includes\///g')
+   also_cpp=0 
+   if [[ ! -f ${var}.c ]]; then
+        if [[ -f ${var}.cpp ]]; then
+            also_cpp=1
+            file=$(basename ${var}.cpp)
+        else
+            echo "File ${var}.c not found"
+            exit 1
+        fi
+   else 
+       file=$(basename ${var}.c)
+   fi
+
+  _depends=$(gcc -I../includes -MM ${file} | tr -d '\\\n'|cut -d':' -f2|sed 's/\.\.\/includes\///g')
   _sources=$(echo $_depends|sed 's/\.h//g')
   for _s in $_sources;
   do
@@ -14,8 +27,15 @@ do
     do
       _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
       echo -e "../output/$var.bin: ../output/cc-local/$_f"
-      echo -e "../output/$var.tosbin: ../output/cc-local/$_f"
     done
+
+    if [[ $also_cpp -eq 1 ]]; then
+      for _f in $(find ../cc -name "$_s*.cpp"|grep -v video);
+      do
+        _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.cpp-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
+        echo -e "../output/$var.bin: ../output/cc-local/$_f"
+      done
+    fi
   done
 
   _headers=$(echo $_depends|tr ' ' '\n'|grep -v ^$|grep -v ".c$"|sort|uniq)

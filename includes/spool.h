@@ -14,6 +14,10 @@
 #include <list.h>
 #include <buffer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct spool_item_t spool_item_t;
 
 int8_t         spool_init(size_t spool_size, uint64_t spool_start);
@@ -25,5 +29,9 @@ const char_t*   spool_get_name(const spool_item_t* item);
 size_t          spool_get_buffer_count(const spool_item_t* item);
 size_t          spool_get_total_buffer_size(const spool_item_t* item);
 const buffer_t* spool_get_buffer(const spool_item_t* item, size_t buf_idx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

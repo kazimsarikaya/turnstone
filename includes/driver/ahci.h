@@ -17,6 +17,10 @@
 #include <disk.h>
 #include <pci.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define AHCI_SATA_SIG_ATA    0x00000101 // SATA drive
 #define AHCI_SATA_SIG_ATAPI  0xEB140101 // SATAPI drive
 #define AHCI_SATA_SIG_SEMB   0xC33C0101 // Enclosure management bridge
@@ -708,5 +712,9 @@ future_t* ahci_flush(uint64_t disk_id);
 const ahci_sata_disk_t* ahci_get_disk_by_id(uint64_t disk_id);
 const ahci_sata_disk_t* ahci_get_first_inserted_disk(void);
 disk_t*                 ahci_disk_impl_open(ahci_sata_disk_t* sata_disk);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

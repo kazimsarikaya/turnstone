@@ -14,6 +14,10 @@
 #include <network/network_protocols.h>
 #include <hashmap.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef struct network_tcpv4_header_t {
     uint16_t source_port;
@@ -70,5 +74,9 @@ typedef struct network_tcpv4_listener_t {
 } network_tcpv4_listener_t;
 
 uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_address_t sip, network_tcpv4_header_t* recv_tcpv4_packet, void* network_info, uint16_t packet_len, uint16_t* return_packet_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

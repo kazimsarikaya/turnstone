@@ -13,6 +13,10 @@
 #include <types.h>
 #include <buffer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum compression_type_t {
     COMPRESSION_TYPE_NONE = 0,
     COMPRESSION_TYPE_ZPACK,
@@ -48,5 +52,8 @@ int8_t compression_null_unpack(buffer_t* in, buffer_t* out);
 
 const compression_t* compression_get(compression_type_t type);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

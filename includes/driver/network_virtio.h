@@ -16,6 +16,10 @@
 #include <driver/virtio.h>
 #include <list.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VIRTIO_NETWORK_F_CHEKCSUM         (1ULL <<  0)
 #define VIRTIO_NETWORK_F_GUEST_CHEKCSUM   (1ULL <<  1)
 #define VIRTIO_NETWORK_F_GUEST_OFFLOADS   (1ULL <<  2)
@@ -146,5 +150,9 @@ typedef struct {
 }__attribute__((packed)) virtio_network_control_notf_coalesce_rx_t;
 
 int8_t network_virtio_init(const pci_dev_t* pci_netdev);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

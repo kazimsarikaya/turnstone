@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief initialize random generator
  * @param[in] seed random generator seed
@@ -28,5 +32,9 @@ uint32_t rand(void);
  * @return 64 bit random number
  */
 uint64_t rand64(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

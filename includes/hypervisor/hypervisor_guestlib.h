@@ -15,6 +15,10 @@
 #include <cpu/interrupt.h>
 #include <pci.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum hypervisor_vmcall_number_t {
     HYPERVISOR_VMCALL_NUMBER_EXIT                     =    0x0,
     HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS=  0x100,
@@ -39,5 +43,9 @@ int16_t                                    vm_guest_attach_interrupt(pci_generic
 uint64_t                                   vm_guest_get_host_physical_address(uint64_t guest_virtual_address);
 _Noreturn void                             vm_guest_exit(void);
 void                                       vm_guest_apic_eoi(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___HYPERVISOR_GUESTLIB_H

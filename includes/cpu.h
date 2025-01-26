@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief stops cpu.
  *
@@ -173,5 +177,9 @@ boolean_t cpu_is_interrupt_enabled(void);
 
 uint64_t cpu_read_fs_base(void);
 uint64_t cpu_read_gs_base(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

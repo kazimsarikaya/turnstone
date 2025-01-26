@@ -13,6 +13,10 @@
 #include <types.h>
 #include <graphics/color.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! magic for psf2 fonts*/
 #define FONT_PSF2_MAGIC 0x864ab572
 /*! magic for psf1 fonts*/
@@ -58,7 +62,7 @@ typedef struct font_table_t {
     uint32_t  row_count; ///< number of rows
 } font_table_t; ///< short hand for struct @ref font_table_s
 
-void font_print_glyph_with_stride(wchar_t wc,
+void font_print_glyph_with_stride(char16_t wc,
                                   color_t foreground, color_t background,
                                   pixel_t* destination_base_address,
                                   uint32_t x, uint32_t y,
@@ -66,12 +70,16 @@ void font_print_glyph_with_stride(wchar_t wc,
 
 font_table_t* font_get_font_table(void);
 
-wchar_t font_get_wc(const char_t* string, int64_t* idx);
+char16_t font_get_wc(const char_t* string, int64_t* idx);
 
 int8_t font_init(void);
 
 void font_get_font_dimension(uint32_t* width, uint32_t* height);
 
 void font_dump_colored_font(pixel_t* dst, color_t background, color_t foreground);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* font.h */

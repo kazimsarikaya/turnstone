@@ -12,11 +12,19 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief syscall handler.
  */
 void syscall_handler(void);
 
 void syscall_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !___CPU_SYSCALL_H */

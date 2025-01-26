@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
@@ -31,24 +35,24 @@
 #define MAP_FAILED     ((void *) -1)
 
 typedef long FILE;
-FILE*   fopen(const char* filename, const char* mode);
-size_t  fwrite(const void* ptr, size_t size, size_t nmemb, FILE* stream);
-size_t  fread (void* ptr, size_t size, size_t count, FILE* stream);
-size_t  ftell(FILE* stream);
-int32_t fseek (FILE* stream, size_t offset, int32_t origin);
-size_t  fclose(FILE* stream);
-int32_t fflush(FILE* stream);
-int32_t fprintf(FILE* stream, const char* format, ...);
-int32_t fscanf(FILE* stream, const char* format, ...);
-int32_t putc(int32_t c, FILE* stream);
-int32_t getc(FILE* stream);
-int32_t fileno(FILE * stream);
-int32_t unlink(const char_t * pathname);
-FILE*   tmpfile(void);
-void*   mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd, int32_t offset);
-int     munmap(void * addr, size_t length);
-int     msync(void * addr, size_t length, int32_t flags);
-void    exit(int32_t status);
+FILE*          fopen(const char* filename, const char* mode);
+size_t         fwrite(const void* ptr, size_t size, size_t nmemb, FILE* stream);
+size_t         fread (void* ptr, size_t size, size_t count, FILE* stream);
+size_t         ftell(FILE* stream);
+int32_t        fseek (FILE* stream, size_t offset, int32_t origin);
+size_t         fclose(FILE* stream);
+int32_t        fflush(FILE* stream);
+int32_t        fprintf(FILE* stream, const char* format, ...);
+int32_t        fscanf(FILE* stream, const char* format, ...);
+int32_t        putc(int32_t c, FILE* stream);
+int32_t        getc(FILE* stream);
+int32_t        fileno(FILE * stream);
+int32_t        unlink(const char_t * pathname);
+FILE*          tmpfile(void);
+void*          mmap(void * addr, size_t length, int32_t prot, int32_t flags, int32_t fd, int32_t offset);
+int            munmap(void * addr, size_t length);
+int            msync(void * addr, size_t length, int32_t flags);
+_Noreturn void exit(int32_t status);
 
 
 #define SIGABRT 6
@@ -56,5 +60,9 @@ void    exit(int32_t status);
 typedef void (*sighandler_t)(int32_t);
 
 sighandler_t signal(int32_t signum, sighandler_t handler);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

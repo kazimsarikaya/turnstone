@@ -11,24 +11,34 @@ HOSTOS =$(shell uname -s)
 ifeq ($(HOSTOS),Darwin)
   
 CC = x86_64-elf-gcc
+CPP = x86_64-elf-g++
 
 else
 
 CC = gcc
+CPP = g++
 
 endif
 
 
-CFLAGS = -D___BITS=64 -D___EFIBUILD=1 -D___KERNELBUILD=0 -std=gnu18 -O3 -I../includes -I./
-CFLAGS += -ffreestanding -nostdlib -nostdinc -fno-builtin -Wall -Werror -Wextra
-CFLAGS += -fno-omit-frame-pointer -msse4.2 
-CFLAGS += -fno-pic -fno-PIC -fno-plt -mcmodel=large
-CFLAGS += -fno-ident -fno-asynchronous-unwind-tables
-CFLAGS += -ffunction-sections -fdata-sections -c ${CCXXEXTRAFLAGS}
-CFLAGS += -Wshadow -Wpointer-arith -Wcast-align \
-          -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
-          -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-          -Wstrict-prototypes
+BASEFLAGS = -D___BITS=64 -D___EFIBUILD=1 -D___KERNELBUILD=0 -O3 -I../includes -I./
+BASEFLAGS += -ffreestanding -nostdlib -nostdinc -fno-builtin -Wall -Werror -Wextra
+BASEFLAGS += -fno-omit-frame-pointer -msse4.2 
+BASEFLAGS += -fno-pic -fno-PIC -fno-plt -mcmodel=large
+BASEFLAGS += -fno-ident -fno-asynchronous-unwind-tables
+BASEFLAGS += -ffunction-sections -fdata-sections -c ${CCXXEXTRAFLAGS}
+BASEFLAGS += -Wshadow -Wpointer-arith -Wcast-align \
+          -Wwrite-strings -Wmissing-declarations \
+          -Wredundant-decls -Winline -Wno-long-long
+
+CCFLAGS = $(BASEFLAGS) \
+		  -std=gnu18 \
+          -Wnested-externs \
+		  -Wmissing-prototypes -Wstrict-prototypes
+
+CPPFLAGS = $(BASEFLAGS) \
+		   -std=gnu++17 \
+		   -fno-rtti -fno-exceptions
 
 CCSOURCEDIR = ../cc
 
@@ -59,13 +69,16 @@ gendirs:
 	find ../output/cc -type d |sed 's%../output/cc%../output/efi%' |xargs mkdir -p
 
 $(EFIOUTPUT)/%.o: %.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CCFLAGS) -o $@ $<
 
 $(EFIOUTPUT)/%.xx_64.o: $(CCSOURCEDIR)/%.xx.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CCFLAGS) -o $@ $<
 
 $(EFIOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CCFLAGS) -o $@ $<
+
+$(EFIOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.cpp
+	$(CPP) $(CPPFLAGS) -o $@ $<
 
 $(TOSDB_IMAGE): $(EFIOBJS) $(TOSDB_BUILDER)
 	$(TOSDB_BUILDER) $(TOSDB_BUILDER_FLAGS) -o $@ $(LASTCCOBJS)

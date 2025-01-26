@@ -14,6 +14,10 @@
 #include <list.h>
 #include <iterator.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief creates b+ tree index implementation
  * @param  heap          heap to use
@@ -87,5 +91,9 @@ typedef int8_t (*bplustree_key_cloner_f)(memory_heap_t* heap, const void* key, v
  * @return     0 if successed.
  */
 int8_t bplustree_set_key_cloner(index_t* idx, bplustree_key_cloner_f cloner);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

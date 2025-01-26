@@ -12,6 +12,10 @@
 #include <types.h>
 #include <cpu/interrupt.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define TIME_TIMER_PIT_HZ_FOR_1MS   1000
 
 void time_timer_reset_tick_count(void);
@@ -31,5 +35,9 @@ void time_timer_configure_spinsleep(void);
 void time_timer_spinsleep(uint64_t usecs);
 
 void time_timer_sleep(uint64_t secs);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

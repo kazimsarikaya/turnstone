@@ -17,6 +17,10 @@
 #include <set.h>
 #include <compression.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! tosdb backend struct type */
 typedef struct tosdb_backend_t tosdb_backend_t;
 
@@ -595,5 +599,9 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl);
  */
 set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl);
 
- #endif
+#ifdef __cplusplus
+}
+#endif
+
+#endif
 

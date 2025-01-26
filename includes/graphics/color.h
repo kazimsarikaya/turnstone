@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef ___PIXEL_T
 #define ___PIXEL_T
 typedef uint32_t pixel_t;
@@ -29,5 +33,8 @@ union color_t {
     uint32_t color;
 };
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___COLOR_H

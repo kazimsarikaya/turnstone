@@ -12,6 +12,10 @@
 #include <list.h>
 #include <linker.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ASM_INSTRUCTION_PREFIX_LOCK                  0xF0
 #define ASM_INSTRUCTION_PREFIX_REP                   0xF3
 #define ASM_INSTRUCTION_PREFIX_REPNE                 0xF2
@@ -90,5 +94,9 @@ void      asm_encoder_print_relocs(list_t* relocs);
 void      asm_encoder_destroy_relocs(list_t* relocs);
 int8_t    asm_encoder_destroy_context(asm_encoder_ctx_t* ctx);
 int8_t    asm_encoder_dump(asm_encoder_ctx_t* ctx, buffer_t* outbuf);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* asm_encoder.h */

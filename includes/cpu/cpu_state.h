@@ -14,6 +14,10 @@
 #include <list.h>
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct cpu_state_t {
     uint64_t  local_apic_id; ///< local apic id
     task_t*   current_task; ///< current task
@@ -26,5 +30,9 @@ typedef struct cpu_state_t {
     list_t*   task_wait_queue; ///< task wait list
     list_t*   task_cleanup_queue; ///< task cleanup list
 } cpu_state_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

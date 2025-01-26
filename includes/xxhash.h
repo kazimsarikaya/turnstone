@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @typedef xxhash64_context_t
  * @brief opaque xxhash64 context structure
@@ -105,5 +109,9 @@ uint32_t xxhash32_hash_with_seed(const void* input, uint64_t length, uint32_t se
  * @return xxhash32 value
  */
 #define xxhash32_hash(i, l) xxhash32_hash_with_seed(i, l, 0)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

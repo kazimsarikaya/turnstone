@@ -27,7 +27,7 @@ void video_print(const char_t* string) {
         return;
     }
 
-    wchar_t data[] = {0, 0};
+    char16_t data[] = {0, 0};
 
     size_t i = 0;
 

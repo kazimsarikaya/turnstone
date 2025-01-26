@@ -13,6 +13,10 @@
 #include <memory.h>
 #include <list.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VIDEO_PCI_DEVICE_VENDOR_VIRTIO 0x1AF4
 #define VIDEO_PCI_DEVICE_ID_VIRTIO_GPU 0x1050
 
@@ -33,5 +37,9 @@ void video_text_print(const char_t* string);
 typedef void (*video_graphics_print_f)(const char_t* str);
 
 extern video_graphics_print_f VIDEO_GRAPHICS_PRINT;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

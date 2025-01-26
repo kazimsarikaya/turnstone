@@ -148,7 +148,7 @@ static int8_t windowmanager_main(void) {
 
                         windowmanager_move_cursor_to_next_input(windowmanager_current_window, is_reverse);
                     }else {
-                        data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
+                        data_idx = windowmanager_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
                     }
                 } else {
                     if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {

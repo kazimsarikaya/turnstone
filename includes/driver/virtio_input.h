@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     VIRTIO_INPUT_CFG_UNSET = 0x00,
     VIRTIO_INPUT_CFG_ID_NAME = 0x01,
@@ -54,5 +58,9 @@ typedef struct virtio_input_event_s {
     uint16_t code;
     uint32_t value;
 } __attribute__((packed)) virtio_input_event_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

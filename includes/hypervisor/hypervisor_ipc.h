@@ -15,6 +15,10 @@
 #include <hypervisor/hypervisor_vmcsops.h>
 #include <hypervisor/hypervisor_vm.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum hypervisor_ipc_message_type_t {
     HYPERVISOR_IPC_MESSAGE_TYPE_UNKNOWN = 0,
     HYPERVISOR_IPC_MESSAGE_TYPE_DUMP = 1,
@@ -32,5 +36,9 @@ int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info);
 
 void   hypervisor_ipc_send_timer_interrupt(hypervisor_vm_t* vm);
 int8_t hypervisor_ipc_send_close(uint64_t vm_id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

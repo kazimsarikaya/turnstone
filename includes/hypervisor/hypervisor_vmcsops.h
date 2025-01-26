@@ -13,6 +13,10 @@
 #include <types.h>
 #include <hypervisor/hypervisor_vm.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct vmcs_msr_blob_t {
     uint32_t index;
     uint32_t reserved;
@@ -77,5 +81,9 @@ int8_t   hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm);
 int8_t   hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm);
 int8_t   hypervisor_vmcs_prepare_vmexit_handlers(void);
 uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp);
+
+#ifdef __cplusplus
+}
 #endif
 
+#endif

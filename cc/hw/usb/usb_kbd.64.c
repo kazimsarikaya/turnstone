@@ -39,8 +39,8 @@ typedef struct usb_driver_t {
     usb_transfer_t*  usb_transfer;
 } usb_driver_t;
 
-// we need to map usb keyboard to scancodes to ev codes here a wchar_t array
-const wchar_t KBD_USB_SCANCODE_MAP[] = {
+// we need to map usb keyboard to scancodes to ev codes here a char16_t array
+const char16_t KBD_USB_SCANCODE_MAP[] = {
     KBD_SCANCODE_NULL, // 0x00
     KBD_SCANCODE_NULL, // 0x01
     KBD_SCANCODE_NULL, // 0x02
@@ -401,8 +401,8 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
             }
 
             if(!found) {
-                //kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
-                wchar_t key = usb_keyboard->old_usb_kbd_report.key[i];
+                // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
+                char16_t key = usb_keyboard->old_usb_kbd_report.key[i];
                 key = KBD_USB_SCANCODE_MAP[key];
                 kbd_handle_key(key, false);
             }
@@ -422,8 +422,8 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
             }
 
             if(!found) {
-                //kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
-                wchar_t key = usb_keyboard->new_usb_kbd_report.key[i];
+                // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
+                char16_t key = usb_keyboard->new_usb_kbd_report.key[i];
                 key = KBD_USB_SCANCODE_MAP[key];
                 kbd_handle_key(key, true);
             }

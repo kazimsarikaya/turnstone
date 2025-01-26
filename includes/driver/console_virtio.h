@@ -13,6 +13,10 @@
 #include <pci.h>
 #include <driver/virtio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VIRTIO_CONSOLE_VENDOR_ID 0x1AF4
 #define VIRTIO_CONSOLE_DEVICE_ID 0x1003
 
@@ -174,5 +178,9 @@ typedef struct vdagent_max_clipboard_t {
 }__attribute__((packed)) vdagent_max_clipboard_t;
 
 int8_t clipboard_send_text(const char_t* text_message);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

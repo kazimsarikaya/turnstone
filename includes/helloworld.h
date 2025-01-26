@@ -11,10 +11,18 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief returns hello world string
  * @return "Hello World\r\n" string
  */
 const char_t* hello_world(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

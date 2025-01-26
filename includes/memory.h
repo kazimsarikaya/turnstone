@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! lock type preventing sync.h recursion*/
 typedef struct lock_t lock_t;
 
@@ -150,5 +154,26 @@ int8_t memory_memcopy(const void* source, void* destination, size_t size);
  * @return       <0 if mem1>mem2, 0 if mem1=mem2, >0 if mem1>mem2
  */
 int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size);
+
+#ifdef __cplusplus
+}
+
+_Nonnull void * operator new(size_t size) noexcept;
+_Nonnull void * operator new[](size_t size) noexcept;
+_Nonnull void * operator new(size_t size, size_t align) noexcept;
+_Nonnull void * operator new[](size_t size, size_t align) noexcept;
+
+inline void * operator new(size_t, void * p) noexcept {
+    return p;
+}
+inline void * operator new[](size_t, void * p) noexcept {
+    return p;
+}
+inline void operator delete(void *, void *) noexcept {
+};
+inline void operator delete[](void *, void *) noexcept {
+};
+
+#endif
 
 #endif

@@ -14,6 +14,10 @@
 #include <iterator.h>
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum fs_stat_type_t {
     FS_STAT_TYPE_NULL,
     FS_STAT_TYPE_FILE,
@@ -83,7 +87,7 @@ typedef struct directory_t {
     file_t* (* create_or_open_file)(struct directory_t* self, const path_t* p);
 } directory_t;
 
-typedef void * path_interface_context_t;
+typedef struct path_interface_context_t path_interface_context_t;
 
 typedef struct path_interface_t {
     path_interface_context_t* context;
@@ -111,5 +115,9 @@ typedef struct filesystem_t {
 
 path_t*           filesystem_new_path(filesystem_t* fs, const char_t* path_string);
 path_interface_t* filesystem_empty_path_interface(filesystem_t* fs, path_t* p, fs_stat_type_t type);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

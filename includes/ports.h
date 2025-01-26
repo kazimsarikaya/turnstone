@@ -13,6 +13,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * COM1 value
  */
@@ -100,5 +104,9 @@ uint8_t read_serial(uint16_t port);
  * @param[in] data data value to be writen
  */
 void write_serial(uint16_t port, uint8_t data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

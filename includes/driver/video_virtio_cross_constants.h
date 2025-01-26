@@ -9,7 +9,15 @@
 #ifndef ___VIRTIO_VIDEO_CROSS_CONSTANTS_H
 #define ___VIRTIO_VIDEO_CROSS_CONSTANTS_H 0
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VIRTIO_GPU_QUEUE_ITEM_SIZE (256 * 1024)
 #define VIRTIO_GPU_CMD_SUBMIT_3D_HEADER_SIZE 32
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

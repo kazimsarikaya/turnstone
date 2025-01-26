@@ -13,6 +13,10 @@
 #include <types.h>
 #include <disk.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! function call abi*/
 #define EFIAPI __attribute__((ms_abi))
 
@@ -84,7 +88,7 @@ typedef struct efi_partition_entry_s {
     uint64_t   starting_lba;
     uint64_t   ending_lba;
     uint64_t   attributes;
-    wchar_t    partition_name[36];
+    char16_t   partition_name[36];
 }__attribute__((packed))  efi_partition_entry_t;
 
 #define EFI_PART_TABLE_HEADER_SIGNATURE     0x5452415020494645ULL
@@ -332,7 +336,7 @@ typedef struct {
 
 typedef struct {
     uint16_t scan_code;
-    wchar_t  unicode_char;
+    char16_t unicode_char;
 } efi_input_key_t;
 
 
@@ -348,8 +352,8 @@ typedef struct {
 
 
 typedef efi_status_t (EFIAPI* efi_text_reset_t)(void* this, boolean_t extended_verification);
-typedef efi_status_t (EFIAPI* efi_text_output_string_t)(void* this, wchar_t* string);
-typedef efi_status_t (EFIAPI* efi_text_test_string_t)(void* this, wchar_t* string);
+typedef efi_status_t (EFIAPI* efi_text_output_string_t)(void* this, char16_t* string);
+typedef efi_status_t (EFIAPI* efi_text_test_string_t)(void* this, char16_t* string);
 typedef efi_status_t (EFIAPI* efi_text_query_mode_t)(void* this, uint64_t mode_number, uint64_t* column, uint64_t* row);
 typedef efi_status_t (EFIAPI* efi_text_set_mode_t)(void* this, uint64_t mode_number);
 typedef efi_status_t (EFIAPI* efi_text_set_attribute_t)(void* this, uint64_t attribute);
@@ -418,11 +422,11 @@ typedef efi_status_t (EFIAPI* efi_get_wakeup_time_t)(boolean_t* enable, boolean_
 typedef efi_status_t (EFIAPI* efi_set_wakeup_time_t)(boolean_t enable, efi_time_t* time);
 typedef efi_status_t (EFIAPI* efi_set_virtual_address_map_t)(uint64_t memory_map_size, uint64_t descriptor_size, uint32_t descriptor_version, efi_memory_descriptor_t* virtual_map);
 typedef efi_status_t (EFIAPI* efi_convert_pointer_t)(uint64_t debug_disposition, void** address);
-typedef efi_status_t (EFIAPI* efi_get_variable_t)(wchar_t* variable_name, efi_guid_t* vendor_guid, uint32_t* attributes, uint64_t* data_size, void* data);
-typedef efi_status_t (EFIAPI* efi_get_next_variable_name_t)(uint64_t* variable_name_size, wchar_t* variable_name, efi_guid_t* vendor_guid);
-typedef efi_status_t (EFIAPI* efi_set_variable_t)(wchar_t* variable_name, efi_guid_t* vendor_guid, uint32_t attributes, uint64_t data_size, void* data);
+typedef efi_status_t (EFIAPI* efi_get_variable_t)(char16_t* variable_name, efi_guid_t* vendor_guid, uint32_t* attributes, uint64_t* data_size, void* data);
+typedef efi_status_t (EFIAPI* efi_get_next_variable_name_t)(uint64_t* variable_name_size, char16_t* variable_name, efi_guid_t* vendor_guid);
+typedef efi_status_t (EFIAPI* efi_set_variable_t)(char16_t* variable_name, efi_guid_t* vendor_guid, uint32_t attributes, uint64_t data_size, void* data);
 typedef efi_status_t (EFIAPI* efi_get_next_high_mono_t)(uint64_t* count);
-typedef efi_status_t (EFIAPI* efi_reset_system_t)(efi_reset_type_t reset_type, efi_status_t reset_status, uint64_t data_size, wchar_t* reset_data);
+typedef efi_status_t (EFIAPI* efi_reset_system_t)(efi_reset_type_t reset_type, efi_status_t reset_status, uint64_t data_size, char16_t* reset_data);
 typedef efi_status_t (EFIAPI* efi_update_capsule_t)(efi_capsule_header_t** capsule_header_array, uint64_t capsule_count, efi_physical_address_t scatter_gather_list);
 typedef efi_status_t (EFIAPI* efi_query_capsule_capabilities_t)(efi_capsule_header_t** capsule_header_array, uint64_t capsule_count, uint64_t* maximum_capsule_size, efi_reset_type_t* reset_type);
 typedef efi_status_t (EFIAPI* efi_query_variable_info_t)(uint32_t attributes, uint64_t* maximum_variable_storage_size,  uint64_t* remaining_variable_storage_size, uint64_t* maximum_variable_size);
@@ -478,12 +482,12 @@ typedef efi_status_t (EFIAPI* efi_locate_handle_t)(efi_locate_search_type_t sear
 typedef efi_status_t (EFIAPI* efi_locate_device_path_t)(efi_guid_t* protocol, efi_device_path_t** device_path, efi_handle_t* device);
 typedef efi_status_t (EFIAPI* efi_install_configuration_table_t)(efi_guid_t* guid, void* table);
 typedef efi_status_t (EFIAPI* efi_image_load_t)(boolean_t BootPolicy, efi_handle_t parent_image_handle, efi_device_path_t* file_path, void* source_buffer, uint64_t source_size, efi_handle_t* image_handle);
-typedef efi_status_t (EFIAPI* efi_image_start_t)(efi_handle_t image_handle, uint64_t* exit_data_size, wchar_t** exit_data);
-typedef efi_status_t (EFIAPI* efi_exit_t)(efi_handle_t image_handle, efi_status_t exit_status, uint64_t exit_data_size, wchar_t* exit_data);
+typedef efi_status_t (EFIAPI* efi_image_start_t)(efi_handle_t image_handle, uint64_t* exit_data_size, char16_t** exit_data);
+typedef efi_status_t (EFIAPI* efi_exit_t)(efi_handle_t image_handle, efi_status_t exit_status, uint64_t exit_data_size, char16_t* exit_data);
 typedef efi_status_t (EFIAPI* efi_exit_boot_services_t)(efi_handle_t image_handle, uint64_t map_key);
 typedef efi_status_t (EFIAPI* efi_get_next_monotonic_t)(uint64_t* count);
 typedef efi_status_t (EFIAPI* efi_stall_t)(uint64_t microseconds);
-typedef efi_status_t (EFIAPI* efi_set_watchdog_timer_t)(uint64_t timeout, uint64_t watchdog_code, uint64_t data_size, wchar_t* watchdog_data);
+typedef efi_status_t (EFIAPI* efi_set_watchdog_timer_t)(uint64_t timeout, uint64_t watchdog_code, uint64_t data_size, char16_t* watchdog_data);
 typedef efi_status_t (EFIAPI* efi_connect_controller_t)(efi_handle_t controller_handle, efi_handle_t* driver_image_handle, efi_device_path_t* remaining_device_path, boolean_t recursive);
 typedef efi_status_t (EFIAPI* efi_disconnect_controller_t)(efi_handle_t controller_handle, efi_handle_t driver_image_handle, efi_handle_t child_handle);
 typedef efi_status_t (EFIAPI* efi_open_protocol_t)(efi_handle_t handle, efi_guid_t* protocol, void** interface, efi_handle_t agent_handle, efi_handle_t controller_handle, uint32_t attributes);
@@ -558,8 +562,8 @@ typedef struct {
 typedef struct {
     efi_table_header_t header;
 
-    wchar_t* firmware_vendor;
-    uint32_t firmware_revision;
+    char16_t* firmware_vendor;
+    uint32_t  firmware_revision;
 
     efi_handle_t              console_input_handle;
     simple_input_interface_t* console_input;
@@ -1093,5 +1097,9 @@ typedef struct efi_timestamp_protocol_t {
     efi_timestamp_get_f            get_timestamp;
     efi_timestamp_get_properties_f get_properties;
 } efi_timestamp_protocol_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

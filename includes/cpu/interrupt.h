@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief interrupt error code type
  */
@@ -140,4 +144,9 @@ typedef union interrupt_errorcode_pagefault_u {
 } interrupt_errorcode_pagefault_t; ///< union short hand for @ref interrupt_errorcode_pagefault_u
 
 void interrupt_generic_handler(interrupt_frame_ext_t* frame);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

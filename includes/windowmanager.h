@@ -12,6 +12,15 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int8_t    windowmanager_init(void);
 boolean_t windowmanager_is_initialized(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

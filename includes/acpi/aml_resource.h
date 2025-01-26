@@ -12,6 +12,10 @@
 #include <types.h>
 #include <acpi/aml.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     ACPI_AML_RESOURCE_SMALLITEM=0,
     ACPI_AML_RESOURCE_LARGEITEM,
@@ -353,5 +357,8 @@ typedef union {
 
 int32_t acpi_aml_resource_parse(acpi_aml_parser_context_t* ctx, acpi_aml_device_t* device, acpi_aml_object_t* buffer);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

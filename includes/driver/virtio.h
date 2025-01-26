@@ -13,6 +13,10 @@
 #include <pci.h>
 #include <cpu/interrupt.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     VIRTIO_DEVICE_STATUS_ACKKNOWLEDGE=1,
     VIRTIO_DEVICE_STATUS_DRIVER=2,
@@ -292,5 +296,9 @@ typedef uint64_t (* virtio_select_features_f)(virtio_dev_t* vdev, uint64_t avail
 typedef int8_t   (* virtio_create_queues_f)(virtio_dev_t* vdev);
 
 int8_t virtio_init_dev(virtio_dev_t* vdev, virtio_select_features_f select_features, virtio_create_queues_f create_queues);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

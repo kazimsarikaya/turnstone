@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 /**
@@ -270,5 +274,9 @@ boolean_t isascii(char_t c);
 boolean_t isalnumw(char_t c);
 
 const char_t* randstr(uint32_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

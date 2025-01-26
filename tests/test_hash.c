@@ -19,7 +19,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     argv++;
 
-    sha256_ctx_t ctx1 = sha256_init();
+    sha256_ctx_t* ctx1 = sha256_init();
 
     if(!ctx1) {
         print_error("cannot create sha256 ctx");
@@ -27,7 +27,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    sha512_ctx_t ctx2 = sha512_init();
+    sha512_ctx_t* ctx2 = sha512_init();
 
     if(!ctx2) {
         print_error("cannot create sha512 ctx");
@@ -35,7 +35,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    sha224_ctx_t ctx3 = sha224_init();
+    sha224_ctx_t* ctx3 = sha224_init();
 
     if(!ctx3) {
         print_error("cannot create sha224 ctx");
@@ -43,7 +43,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    sha384_ctx_t ctx4 = sha384_init();
+    sha384_ctx_t* ctx4 = sha384_init();
 
     if(!ctx4) {
         print_error("cannot create sha384 ctx");

@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CPU_MSR_EFER  0xC0000080 ///< extended feature register
 #define CPU_MSR_STAR  0xC0000081 ///< system call target address register
 #define CPU_MSR_LSTAR 0xC0000082 ///< system call target address register
@@ -128,5 +132,9 @@ void cpu_cr0_enable_wp(void);
  * @brief enables sse support, modifies cr4 register
  */
 void cpu_enable_sse(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

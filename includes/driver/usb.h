@@ -13,6 +13,10 @@
 #include <pci.h>
 #include <future.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define USB_EHCI 0x20
 #define USB_XHCI 0x30
 
@@ -399,5 +403,9 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
                              uint16_t                index,
                              uint16_t                length,
                              void*                   data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

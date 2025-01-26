@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define HYPERVISOR_ECX_HYPERVISOR_BIT 5
 
 #define FEATURE_CONTROL_VMXON_OUTSIDE_SMX (1 << 2)
@@ -252,5 +256,8 @@
 
 
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

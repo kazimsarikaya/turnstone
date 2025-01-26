@@ -635,13 +635,13 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
     if((ctx->dirents[cur_idx].attributes & FAT32_DIRENT_TYPE_LONGNAME) == FAT32_DIRENT_TYPE_LONGNAME) {
         list_t* name_parts = list_create_stack();
 
-        wchar_t* p;
+        char16_t* p;
 
         while((ctx->dirents[cur_idx].attributes & FAT32_DIRENT_TYPE_LONGNAME) == FAT32_DIRENT_TYPE_LONGNAME) {
             fat32_dirent_longname_t* ln = (fat32_dirent_longname_t*)&ctx->dirents[cur_idx];
 
-            p = memory_malloc(sizeof(wchar_t) * 3);
-            memory_memcopy(ln->name_part3, p, sizeof(wchar_t) * 2);
+            p = memory_malloc(sizeof(char16_t) * 3);
+            memory_memcopy(ln->name_part3, p, sizeof(char16_t) * 2);
 
             for(int16_t i = 0; i < 2; i++) {
                 if(p[i] == 0xffff) {
@@ -651,8 +651,8 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
 
             list_stack_push(name_parts, p);
 
-            p = memory_malloc(sizeof(wchar_t) * 7);
-            memory_memcopy(ln->name_part2, p, sizeof(wchar_t) * 6);
+            p = memory_malloc(sizeof(char16_t) * 7);
+            memory_memcopy(ln->name_part2, p, sizeof(char16_t) * 6);
 
             for(int16_t i = 0; i < 6; i++) {
                 if(p[i] == 0xffff) {
@@ -662,8 +662,8 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
 
             list_stack_push(name_parts, p);
 
-            p = memory_malloc(sizeof(wchar_t) * 6);
-            memory_memcopy(ln->name_part1, p, sizeof(wchar_t) * 5);
+            p = memory_malloc(sizeof(char16_t) * 6);
+            memory_memcopy(ln->name_part1, p, sizeof(char16_t) * 5);
 
             for(int16_t i = 0; i < 5; i++) {
                 if(p[i] == 0xffff) {
@@ -676,13 +676,13 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
             cur_idx++;
         }
 
-        wchar_t* wname = memory_malloc(sizeof(wchar_t) * 256);
+        char16_t* wname = memory_malloc(sizeof(char16_t) * 256);
         int64_t wname_idx = 0;
 
         while(list_size(name_parts)) {
-            p = (wchar_t*)list_stack_pop(name_parts);
+            p = (char16_t*)list_stack_pop(name_parts);
 
-            memory_memcopy(p, wname + wname_idx, sizeof(wchar_t) * wchar_size(p));
+            memory_memcopy(p, wname + wname_idx, sizeof(char16_t) * wchar_size(p));
             wname_idx += wchar_size(p);
 
             memory_free(p);
@@ -690,7 +690,7 @@ const void* fat32_dir_list_iter_get_item(iterator_t* iter){
 
         list_destroy(name_parts);
 
-        dirent_name = wchar_to_char(wname);
+        dirent_name = char16_to_char(wname);
 
         memory_free(wname);
     }

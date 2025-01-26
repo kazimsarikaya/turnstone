@@ -13,6 +13,10 @@
 #include <list.h>
 #include <acpi.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define APIC_MSR_ADDRESS        0x1B
 #define APIC_MSR_ENABLE_APIC    0x800UL
 #define APIC_MSR_ENABLE_X2APIC  0x400UL
@@ -176,5 +180,9 @@ uint8_t  apic_configure_lapic(void);
 uint64_t apic_get_ap_count(void);
 
 boolean_t apic_is_waiting_timer(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

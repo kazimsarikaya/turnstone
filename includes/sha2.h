@@ -11,45 +11,53 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SHA256_OUTPUT_SIZE  32
 #define SHA256_BLOCK_SIZE   64
 #define SHA256_STATE_SIZE    8
 
-typedef void * sha256_ctx_t;
+typedef struct sha256_ctx_t sha256_ctx_t;
 
-sha256_ctx_t sha256_init(void);
-int8_t       sha256_update(sha256_ctx_t ctx, const uint8_t* data, size_t len);
-uint8_t*     sha256_final(sha256_ctx_t ctx);
-uint8_t*     sha256_hash(uint8_t* data, size_t length);
+sha256_ctx_t* sha256_init(void);
+int8_t        sha256_update(sha256_ctx_t* ctx, const uint8_t* data, size_t len);
+uint8_t*      sha256_final(sha256_ctx_t* ctx);
+uint8_t*      sha256_hash(uint8_t* data, size_t length);
 
 
 #define SHA224_OUTPUT_SIZE  28
 
-typedef void * sha224_ctx_t;
+typedef struct sha256_ctx_t sha224_ctx_t;
 
-sha224_ctx_t sha224_init(void);
-int8_t       sha224_update(sha224_ctx_t ctx, const uint8_t* data, size_t len);
-uint8_t*     sha224_final(sha224_ctx_t ctx);
-uint8_t*     sha224_hash(uint8_t* data, size_t length);
+sha224_ctx_t* sha224_init(void);
+int8_t        sha224_update(sha224_ctx_t* ctx, const uint8_t* data, size_t len);
+uint8_t*      sha224_final(sha224_ctx_t* ctx);
+uint8_t*      sha224_hash(uint8_t* data, size_t length);
 
 #define SHA512_OUTPUT_SIZE   64
 #define SHA512_BLOCK_SIZE   128
 #define SHA512_STATE_SIZE     8
 
-typedef void * sha512_ctx_t;
+typedef struct sha512_ctx_t sha512_ctx_t;
 
-sha512_ctx_t sha512_init(void);
-int8_t       sha512_update(sha512_ctx_t ctx, const uint8_t* data, size_t len);
-uint8_t*     sha512_final(sha512_ctx_t ctx);
-uint8_t*     sha512_hash(uint8_t* data, size_t length);
+sha512_ctx_t* sha512_init(void);
+int8_t        sha512_update(sha512_ctx_t* ctx, const uint8_t* data, size_t len);
+uint8_t*      sha512_final(sha512_ctx_t* ctx);
+uint8_t*      sha512_hash(uint8_t* data, size_t length);
 
 #define SHA384_OUTPUT_SIZE  48
 
-typedef void * sha384_ctx_t;
+typedef struct sha512_ctx_t sha384_ctx_t;
 
-sha384_ctx_t sha384_init(void);
-int8_t       sha384_update(sha384_ctx_t ctx, const uint8_t* data, size_t len);
-uint8_t*     sha384_final(sha384_ctx_t ctx);
-uint8_t*     sha384_hash(uint8_t* data, size_t length);
+sha384_ctx_t* sha384_init(void);
+int8_t        sha384_update(sha384_ctx_t* ctx, const uint8_t* data, size_t len);
+uint8_t*      sha384_final(sha384_ctx_t* ctx);
+uint8_t*      sha384_hash(uint8_t* data, size_t length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

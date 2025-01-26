@@ -14,6 +14,10 @@
 #include <graphics/color.h>
 #include <graphics/font.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct window_t             window_t;
 typedef struct rect_t               rect_t;
 typedef struct window_event_t       window_event_t;
@@ -73,5 +77,9 @@ typedef struct window_input_value_t {
     rect_t        rect;
 } window_input_value_t;
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

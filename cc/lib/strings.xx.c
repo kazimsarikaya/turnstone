@@ -404,7 +404,7 @@ char_t* strlowercopy(const char_t* str) {
     return strlower(strdup(str));
 }
 
-int64_t wchar_size(const wchar_t* str){
+int64_t wchar_size(const char16_t* str){
 
     if(str == NULL) {
         return 0;
@@ -420,7 +420,7 @@ int64_t wchar_size(const wchar_t* str){
     return res;
 }
 
-char_t* wchar_to_char(wchar_t* src){
+char_t* char16_to_char(char16_t* src){
 
     if(src == NULL) {
         return NULL;
@@ -454,14 +454,14 @@ char_t* wchar_to_char(wchar_t* src){
     return dst;
 }
 
-wchar_t* char_to_wchar(const char_t* str){
+char16_t* char_to_wchar(const char_t* str){
 
     if(str == NULL) {
         return NULL;
     }
 
     int64_t len = strlen(str);
-    wchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+    char16_t* res = memory_malloc(sizeof(char16_t) * len + 1);
 
     if(res == NULL) {
         return NULL;
@@ -471,7 +471,7 @@ wchar_t* char_to_wchar(const char_t* str){
     int64_t j = 0;
 
     while(str[i]) {
-        wchar_t wc = str[i];
+        char16_t wc = str[i];
 
         if(wc & 128) {
             if((wc & 32) == 0 ) {
@@ -497,7 +497,7 @@ wchar_t* char_to_wchar(const char_t* str){
     return res;
 }
 
-int64_t lchar_size(const lchar_t* str){
+int64_t lchar_size(const char32_t* str){
     int64_t res = 0;
     int64_t i = 0;
 
@@ -508,7 +508,7 @@ int64_t lchar_size(const lchar_t* str){
     return res;
 }
 
-char_t* lchar_to_char(lchar_t* src){
+char_t* char32_to_char(char32_t* src){
 
     if(src == NULL) {
         return NULL;
@@ -547,14 +547,14 @@ char_t* lchar_to_char(lchar_t* src){
     return dst;
 }
 
-lchar_t* char_to_lchar(char_t* str){
+char32_t* char_to_lchar(char_t* str){
 
     if(str == NULL) {
         return NULL;
     }
 
     int64_t len = strlen(str);
-    lchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+    char32_t* res = memory_malloc(sizeof(char16_t) * len + 1);
 
     if(res == NULL) {
         return NULL;
@@ -564,7 +564,7 @@ lchar_t* char_to_lchar(char_t* str){
     int64_t j = 0;
 
     while(str[i]) {
-        wchar_t wc = str[i];
+        char16_t wc = str[i];
 
         if(wc & 128) {
             if((wc & 32) == 0 ) {

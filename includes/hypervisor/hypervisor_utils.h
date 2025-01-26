@@ -16,6 +16,10 @@
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_vmcsops.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef uint64_t (*vmexit_handler_t)(vmcs_vmexit_info_t* vmexit_info);
 
@@ -47,5 +51,9 @@ typedef struct hypervisor_vm_module_load_t {
 } hypervisor_vm_module_load_t;
 
 int8_t hypervisor_dump_vmcs(vmcs_vmexit_info_t vmexit_info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

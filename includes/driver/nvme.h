@@ -18,6 +18,10 @@
 #include <hashmap.h>
 #include <disk.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief initialize nvme devices
  * @param[in] heap the heap for storing data
@@ -550,4 +554,9 @@ future_t*          nvme_write(uint64_t disk_id, uint64_t lba, uint32_t size, uin
 future_t*          nvme_flush(uint64_t disk_id);
 disk_t*            nvme_disk_impl_open(nvme_disk_t* nvme_disk);
 const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define KBD_DATA_PORT 0x60
 #define KBD_STATUS_PORT 0x64
 #define KBD_CMD_PORT 0x64
@@ -32,7 +36,7 @@ typedef struct kbd_state_t {
 
 typedef struct kbd_report_t {
     kbd_state_t state;
-    wchar_t     key;
+    char16_t    key;
     boolean_t   is_pressed;
     boolean_t   is_printable;
 }kbd_report_t;
@@ -45,5 +49,10 @@ _Static_assert(sizeof(kbd_report_t) == 10, "kbd_report_t size is not 10 bytes");
 int8_t kbd_init(void);
 
 int8_t dev_virtio_kbd_init(void);
-int8_t kbd_handle_key(wchar_t key, boolean_t pressed);
+int8_t kbd_handle_key(char16_t key, boolean_t pressed);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

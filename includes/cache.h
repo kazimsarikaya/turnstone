@@ -12,6 +12,10 @@
 #include <types.h>
 #include <hashmap.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum cache_policy_t {
     CACHE_POLICY_COUNT,
     CACHE_POLICY_SIZE,
@@ -36,5 +40,9 @@ boolean_t cache_put(cache_t* cache, const void* key, const void* item, uint64_t 
 #define cache_put_by_count(c, k, i) cache_put(c, k, i, 1)
 #define cache_put_item_as_key(c, i, s) cache_put(c, i, i, s)
 const void* cache_get(cache_t* cache, const void* key);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

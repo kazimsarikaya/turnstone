@@ -10,6 +10,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define AES_ENCRYPT         1
 #define AES_DECRYPT         0
 
@@ -29,5 +33,8 @@ int aes_setkey(aes_context_t* ctx, int32_t mode, const uint8_t* key, uint32_t ke
 
 int aes_cipher(aes_context_t* ctx, const uint8_t input[16], uint8_t output[16]);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

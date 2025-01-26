@@ -13,15 +13,15 @@
 MODULE("turnstone.efi");
 
 /**
- * @struct efi_disk_impl_context_t
+ * @struct disk_context_t
  * @brief efi disk implementation context.
  * @details this structure contains context for efi disk implementation.
  */
-typedef struct efi_disk_impl_context_t {
+typedef struct disk_context_t {
     efi_block_io_t* bio; ///< efi block io protocol.
     uint64_t        disk_size; ///< disk size.
     uint64_t        block_size; ///< block size.
-} efi_disk_impl_context_t; ///< typedef for efi_disk_impl_context_t.
+} disk_context_t; ///< typedef for disk_context_t.
 
 /**
  * @brief returns heap.
@@ -84,17 +84,17 @@ memory_heap_t* efi_disk_impl_get_heap(const disk_or_partition_t* d) {
 }
 
 uint64_t efi_disk_impl_get_disk_size(const disk_or_partition_t* d){
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->disk_size;
 }
 
 uint64_t efi_disk_impl_get_block_size(const disk_or_partition_t* d){
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->block_size;
 }
 
 int8_t efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     ctx->bio->write(ctx->bio, ctx->bio->media->media_id, lba, count * ctx->block_size, data);
     ctx->bio->flush(ctx->bio);
@@ -103,7 +103,7 @@ int8_t efi_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 }
 
 int8_t efi_disk_impl_flush(const disk_or_partition_t* d) {
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     ctx->bio->flush(ctx->bio);
 
@@ -111,7 +111,7 @@ int8_t efi_disk_impl_flush(const disk_or_partition_t* d) {
 }
 
 int8_t efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     *data = memory_malloc(count * ctx->block_size);
 
@@ -121,7 +121,7 @@ int8_t efi_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t c
 }
 
 int8_t efi_disk_impl_close(const disk_or_partition_t* d) {
-    efi_disk_impl_context_t* ctx = (efi_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     memory_free(ctx);
 
@@ -132,7 +132,7 @@ int8_t efi_disk_impl_close(const disk_or_partition_t* d) {
 
 disk_t* efi_disk_impl_open(efi_block_io_t* bio) {
 
-    efi_disk_impl_context_t* ctx = memory_malloc(sizeof(efi_disk_impl_context_t));
+    disk_context_t* ctx = memory_malloc(sizeof(disk_context_t));
 
     if(ctx == NULL) {
         return NULL;

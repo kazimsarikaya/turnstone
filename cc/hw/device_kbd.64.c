@@ -31,7 +31,7 @@ virtio_dev_t* virtio_mouse = NULL;
 virtio_dev_t* virtio_tablet = NULL;
 boolean_t kbd_is_usb = false;
 
-volatile wchar_t kbd_ps2_tmp = NULL;
+volatile char16_t kbd_ps2_tmp = NULL;
 extern uint64_t shell_task_id;
 extern uint64_t windowmanager_task_id;
 
@@ -48,7 +48,7 @@ int8_t dev_virtio_tablet_create_queues(virtio_dev_t* vdev);
 int8_t dev_kbd_cleanup_isr(interrupt_frame_ext_t* frame);
 int8_t dev_kbd_isr(interrupt_frame_ext_t* frame);
 
-int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
+int8_t kbd_handle_key(char16_t key, boolean_t pressed){
     if(key == KBD_SCANCODE_CAPSLOCK && pressed == 0) {
         kbd_state.is_capson = !kbd_state.is_capson;
     }
@@ -95,7 +95,7 @@ int8_t kbd_handle_key(wchar_t key, boolean_t pressed){
 int8_t dev_kbd_isr(interrupt_frame_ext_t* frame){
     UNUSED(frame);
 
-    wchar_t tmp_key = inb(KBD_DATA_PORT);
+    char16_t tmp_key = inb(KBD_DATA_PORT);
 
     if(tmp_key == KBD_PS2_EXTCODE_PREFIX) {
         kbd_ps2_tmp = tmp_key << 8;

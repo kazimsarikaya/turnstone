@@ -16,6 +16,10 @@
 #include <pci.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef struct usb_ehci_controller_capabilties_t {
     volatile uint32_t caplength  : 8;
@@ -245,7 +249,7 @@ typedef struct usb_ehci_itd_t {
 
     volatile uint32_t ext_buffer_pages[6];
 
-    uint8_t           padding[15];          // count bytes below to the next 32 bytes boundary
+    uint8_t           padding[15]; // count bytes below to the next 32 bytes boundary
     volatile uint32_t this_raw;
     int16_t           last_transaction;
     int16_t           id;
@@ -451,5 +455,9 @@ typedef struct usb_ehci_qh_t {
 _Static_assert((sizeof(usb_ehci_qh_t) % 32) == 0, "usb_ehci_qh_t is not 32 bytes aligned");
 
 int8_t usb_ehci_init(usb_controller_t * usb_controller);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

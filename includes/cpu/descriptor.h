@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! cpu privilage level 0 for kernel space */
 #define DPL_RING0 0
 /*! cpu privilage level 1 for kernel additional space */
@@ -234,5 +238,9 @@ uint8_t descriptor_build_idt_register(void);
  * @return 0 at success.
  */
 uint8_t descriptor_build_ap_descriptors_register(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

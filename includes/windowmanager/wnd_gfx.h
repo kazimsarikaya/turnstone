@@ -11,11 +11,19 @@
 
 #include <windowmanager/wnd_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 boolean_t windowmanager_draw_window(window_t* window);
-void      windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, wchar_t wc);
+void      windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, char16_t wc);
 void      windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text);
 void      windowmanager_clear_screen(window_t* window);
 color_t   wnd_gfx_blend_colors(color_t color1, color_t color2);
 int8_t    wnd_gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___WND_GFX_H

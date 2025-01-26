@@ -13,6 +13,10 @@
 #include <memory.h>
 #include <cpu/sync.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct future_t future_t;
 
 future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data);
@@ -20,5 +24,9 @@ future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, vo
 #define future_create_with_data(l, d) future_create_with_heap_and_data(NULL, l, d)
 
 void* future_get_data_and_destroy(future_t* future);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

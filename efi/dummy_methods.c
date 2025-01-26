@@ -27,6 +27,7 @@
 #include <deflate.h>
 #include <compression.h>
 #include <quicksort.h>
+#include <assert.h>
 
 /*! module name */
 MODULE("turnstone.efi");

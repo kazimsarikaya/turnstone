@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief computes murmur hash 64 bit a version
  * @param[in] data data for hashing
@@ -29,5 +33,9 @@ uint64_t murmurhash64a(const void* data, uint64_t len, uint64_t seed);
  * @return hash value
  */
 uint128_t murmurhash3_128(const void* data, uint64_t len, uint64_t seed);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -16,6 +16,10 @@
 #include <pci.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct usb_xhci_capabilities_t {
     volatile uint8_t  capability_length;
     volatile uint8_t  reserved;
@@ -108,5 +112,9 @@ typedef union usb_xhci_hcc_params_2_t {
 _Static_assert(sizeof(usb_xhci_hcc_params_2_t) == 4, "usb_xhci_hcc_params_2_t is not 4 bytes");
 
 int8_t usb_xhci_init(usb_controller_t* usb_controller);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -30,7 +30,7 @@ typedef struct list_t {
     list_data_comparator_f comparator; ///< if the list is sorted, this is comparator function for data
     list_data_comparator_f equality_comparator; ///< if the list is sorted, this is comparator function for data
     size_t                 item_count; ///< item count at the list, for fast access.
-    indexer_t              indexer; ///< if the list is indexed, this is the indexer
+    indexer_t*             indexer; ///< if the list is indexed, this is the indexer
 } list_t;
 
 /**
@@ -131,12 +131,12 @@ const void* list_get_data_from_listitem(list_item_t* item) {
 }
 
 list_t* linkedlist_create_with_type(memory_heap_t* heap, list_type_t type,
-                                    list_data_comparator_f comparator, indexer_t indexer);
+                                    list_data_comparator_f comparator, indexer_t* indexer);
 list_t* arraylist_create_with_type(memory_heap_t* heap, list_type_t type,
-                                   list_data_comparator_f comparator, indexer_t indexer);
+                                   list_data_comparator_f comparator, indexer_t* indexer);
 
 list_t* list_create_with_type(memory_heap_t* heap, list_type_t type,
-                              list_data_comparator_f comparator, indexer_t indexer) {
+                              list_data_comparator_f comparator, indexer_t* indexer) {
     heap = memory_get_heap(heap);
 
     if(type & LIST_TYPE_LINKED) {

@@ -17,6 +17,10 @@
 #include <map.h>
 #include <hashmap.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum hypervisor_vm_frame_type_t {
     HYPERVISOR_VM_FRAME_TYPE_SELF,
     HYPERVISOR_VM_FRAME_TYPE_VMCS,
@@ -83,5 +87,9 @@ int8_t hypervisor_vm_init(void);
 int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm);
 void   hypervisor_vm_destroy(hypervisor_vm_t* vm);
 void   hypervisor_vm_notify_timers(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -12,6 +12,10 @@
 #include <types.h>
 #include <iterator.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief set comparator
  * @param[in] item1 item 1
@@ -96,5 +100,9 @@ boolean_t set_destroy_with_callback(set_t* s, set_destroy_callback_f cb);
  * @return iterator.
  */
 iterator_t* set_create_iterator(set_t* s);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

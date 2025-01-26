@@ -11,7 +11,7 @@
 
 MODULE("turnstone.kernel.hw.kbd");
 
-const wchar_t KBD_SCANCODES_NORMAL[] = {
+const char16_t KBD_SCANCODES_NORMAL[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', KBD_SCANCODE_BACKSPACE /*0x0e*/,
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`' /*0x29*/,
@@ -31,54 +31,54 @@ const wchar_t KBD_SCANCODES_NORMAL[] = {
     KBD_SCANCODE_LEFTMETA, KBD_SCANCODE_RIGHTMETA
 };
 
-#define KBD_SCANCODES_NORMAL_SIZE (sizeof(KBD_SCANCODES_NORMAL) / sizeof(wchar_t))
+#define KBD_SCANCODES_NORMAL_SIZE (sizeof(KBD_SCANCODES_NORMAL) / sizeof(char16_t))
 
-const wchar_t KBD_SCANCODES_CAPSON[] = {
+const char16_t KBD_SCANCODES_CAPSON[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', KBD_SCANCODE_BACKSPACE,
     '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '`' /*0x29*/,
     KBD_SCANCODE_LEFTSHIFT, '\\', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', KBD_SCANCODE_RIGHTSHIFT,
 };
 
-#define KBD_SCANCODES_CAPSON_SIZE (sizeof(KBD_SCANCODES_CAPSON) / sizeof(wchar_t))
+#define KBD_SCANCODES_CAPSON_SIZE (sizeof(KBD_SCANCODES_CAPSON) / sizeof(char16_t))
 
-const wchar_t KBD_SCANCODES_SHIFT[] = {
+const char16_t KBD_SCANCODES_SHIFT[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', KBD_SCANCODE_BACKSPACE,
     '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~' /*0x29*/,
     KBD_SCANCODE_LEFTSHIFT, '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', KBD_SCANCODE_RIGHTSHIFT,
 };
 
-#define KBD_SCANCODES_SHIFT_SIZE (sizeof(KBD_SCANCODES_SHIFT) / sizeof(wchar_t))
+#define KBD_SCANCODES_SHIFT_SIZE (sizeof(KBD_SCANCODES_SHIFT) / sizeof(char16_t))
 
-const wchar_t KBD_SCANCODES_SHIFTCAPSON[] = {
+const char16_t KBD_SCANCODES_SHIFTCAPSON[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', KBD_SCANCODE_BACKSPACE,
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '{', '}', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ':', '"', '~' /*0x29*/,
     KBD_SCANCODE_LEFTSHIFT, '|', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '<', '>', '?', KBD_SCANCODE_RIGHTSHIFT,
 };
 
-#define KBD_SCANCODES_SHIFTCAPSON_SIZE (sizeof(KBD_SCANCODES_SHIFTCAPSON) / sizeof(wchar_t))
+#define KBD_SCANCODES_SHIFTCAPSON_SIZE (sizeof(KBD_SCANCODES_SHIFTCAPSON) / sizeof(char16_t))
 
-const wchar_t KBD_SCANCODES_ALT[] = {
+const char16_t KBD_SCANCODES_ALT[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, L'¡', L'™', L'£', L'¢', L'∞', L'§', L'¶', L'•', L'ª', L'º', L'–', L'≠', KBD_SCANCODE_BACKSPACE,
     '\t', L'œ', L'´', L'´', L'®', L'†', L'¥', L'¨', L'ˆ', L'ø', L'π', L'“', L'‘', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, L'å', L'ß', L'∂', L'ƒ', L'©', L'˙', L'∆', L'˚', L'¬', L'…', L'æ', L'`' /*0x29*/,
     KBD_SCANCODE_LEFTSHIFT, L'«', L'Ω', L'≈', KBD_SCANCODE_NULL /*empty*/, L'√', L'∫', L'˜', L'µ', L'≤', L'≥', L'÷', KBD_SCANCODE_RIGHTSHIFT,
 };
 
-#define KBD_SCANCODES_ALT_SIZE (sizeof(KBD_SCANCODES_ALT) / sizeof(wchar_t))
+#define KBD_SCANCODES_ALT_SIZE (sizeof(KBD_SCANCODES_ALT) / sizeof(char16_t))
 
-const wchar_t KBD_SCANCODES_ALTSHIFT[] = {
+const char16_t KBD_SCANCODES_ALTSHIFT[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, L'⁄', L'€', L'‹', L'›', L'ﬁ', L'ﬂ', L'‡', L'°', L'·', L'‚', L'—', L'±', KBD_SCANCODE_BACKSPACE,
     '\t', L'Œ', L'„', L'´', L'‰', L'ˇ', L'Á', L'¨', L'ˆ', L'Ø', L'∏', L'”', L'’', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, L'Å', L'Í', L'Î', L'Ï', L'˝', L'Ó', L'Ô', L'', L'Ò', L'Ú', L'Æ', L'`' /*0x29*/,
     KBD_SCANCODE_LEFTSHIFT, L'»', L'¸', L'˛', L'Ç', L'◊', L'ı', L'˜', L'Â', L'¯', L'˘', L'¿', KBD_SCANCODE_RIGHTSHIFT,
 };
 
-#define KBD_SCANCODES_ALTSHIFT_SIZE (sizeof(KBD_SCANCODES_ALTSHIFT) / sizeof(wchar_t))
+#define KBD_SCANCODES_ALTSHIFT_SIZE (sizeof(KBD_SCANCODES_ALTSHIFT) / sizeof(char16_t))
 
-static inline boolean_t kbd_scancode_is_printable(wchar_t scancode){
+static inline boolean_t kbd_scancode_is_printable(char16_t scancode){
     return ((scancode > KBD_SCANCODE_ESC && scancode < KBD_SCANCODE_BACKSPACE) ||
             (scancode > KBD_SCANCODE_BACKSPACE && scancode < KBD_SCANCODE_LEFTCTRL) ||
             (scancode > KBD_SCANCODE_LEFTCTRL && scancode < KBD_SCANCODE_LEFTSHIFT) ||
@@ -88,7 +88,7 @@ static inline boolean_t kbd_scancode_is_printable(wchar_t scancode){
             (scancode >= KBD_KEYPAD_START && scancode <= KBD_KEYPAD_END));
 }
 
-wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_printable){
+char16_t kbd_scancode_get_value(char16_t scancode, kbd_state_t* ks, boolean_t* is_printable){
 
     if(is_printable) {
         *is_printable = kbd_scancode_is_printable(scancode);
@@ -127,7 +127,7 @@ wchar_t kbd_scancode_get_value(wchar_t scancode, kbd_state_t* ks, boolean_t* is_
     return KBD_SCANCODES_NORMAL[scancode];
 }
 
-wchar_t kbd_scancode_fixcode(wchar_t ps2code){
+char16_t kbd_scancode_fixcode(char16_t ps2code){
     if(((ps2code >> 8) & KBD_PS2_EXTCODE_PREFIX) == KBD_PS2_EXTCODE_PREFIX) {
         ps2code &= 0x7F; // msb bit is about press or release
 

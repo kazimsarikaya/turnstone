@@ -8,6 +8,7 @@ MAKE = make
 ifeq ($(HOSTOS),Darwin)
 
 CC64 = x86_64-elf-gcc
+CPP64 = x86_64-elf-g++
 OBJCOPY = x86_64-elf-objcopy
 
 SEDNOBAK = sed -i ''
@@ -15,6 +16,7 @@ SEDNOBAK = sed -i ''
 else
 
 CC64 = gcc
+CPP64 = g++
 OBJCOPY = objcopy
 
 SEDNOBAK = sed -i
@@ -26,20 +28,27 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-CCXXFLAGS += -std=gnu18 -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+BASEFLAGS += -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
     -Wshadow -Wpointer-arith -Wcast-align \
-	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
-    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes \
+	-Wwrite-strings -Wmissing-declarations \
+    -Wredundant-decls -Winline -Wno-long-long \
 	-fPIC -fpic -fplt -mcmodel=large -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
 	-D___KERNELBUILD=1
 
+CCFLAGS = $(BASEFLAGS) \
+		  -std=gnu18 \
+          -Wnested-externs \
+		  -Wmissing-prototypes -Wstrict-prototypes
+CPPFLAGS = $(BASEFLAGS) \
+		   -std=gnu++17 \
+		   -fno-rtti -fno-exceptions
+
 CXXTESTFLAGS= -D___TESTMODE=1
 
-CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 $(CCXXFLAGS)
-CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
+CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 $(CCFLAGS)
+CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCFLAGS)
 
 OBJDIR = output
 ASOBJDIR = $(OBJDIR)/asm
@@ -65,6 +74,7 @@ TOSDBIMG = $(OBJDIR)/$(TOSDBIMGNAME)
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.S)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
+CPP64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.cpp)
 CC64TESTSRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.test.c)
 
 CCXXSRCS = $(shell find $(CCSRCDIR) -type f -name \*.xx.c)
@@ -92,7 +102,9 @@ CC64GENASMOUTS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.
 CC64TESTOBJS = $(patsubst $(CCSRCDIR)/%.64.test.c,$(CCOBJDIR)/%.64.test.o,$(CC64TESTSRCS))
 CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(CCXXTESTSRCS))
 
-DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
+CPP64OBJS = $(patsubst $(CCSRCDIR)/%.64.cpp,$(CCOBJDIR)/%.64.o,$(CPP64SRCS))
+
+DOCSFILES += $(CC64SRCS) $(CCXXSRCS) $(CPP64SRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.c)
 DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.h)
@@ -102,11 +114,11 @@ DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.h)
 ASSETS = $(shell find $(ASSETSDIR) -type f)
 ASSETOBJS = $(patsubst %,$(OBJDIR)/%.data.o,$(ASSETS))
 
-OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS)
+OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS) $(CPP64OBJS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
 ifeq (,$(wildcard $(TOSDBIMG)))
-LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS)
+LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(CPP64OBJS)
 else
 LASTCCOBJS = $(shell find $(CCOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
 LASTCCOBJS += $(shell find $(ASSETOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
@@ -192,11 +204,14 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(CPP64OBJS)
 	$(TOSDBIMG_BUILDER) -o $@ $(LASTCCOBJS)
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
+	$(CPP64) $(CPPFLAGS) -o $@ $<
 
 $(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
@@ -248,10 +263,15 @@ cleandirs:
 
 print-%: ; @echo $* = $($*)
 
-depend: .depend64
+depend: .depend64c .depend64cpp
 
-.depend64: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
+.depend64c: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
 	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
 	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
+
+.depend64cpp: $(CPP64SRCS)
+	scripts/create-cc-deps.sh "$(CPP64) $(CPPFLAGS) -D___DEPEND_ANALYSIS -MM" "$^" >> .depend64
+	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
+
 
 -include .depend64

@@ -15,6 +15,10 @@
 #include <network/network_ethernet.h>
 #include <network/network_ipv4.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NETWORK_ARP_HARDWARE_TYPE_ETHERNET 1
 #define NETWORK_ARP_PROTOCOL_TYPE_IP 0x0800
 
@@ -38,5 +42,8 @@ typedef struct network_arp_t {
 
 uint8_t* network_arp_process_packet(network_arp_t* recv_arp_packet, void* network_info, uint16_t* return_packet_len);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

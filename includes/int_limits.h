@@ -8,6 +8,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define INT8_MIN  (-128)
 #define INT8_MAX  (127)
 
@@ -31,5 +35,9 @@
 
 #define UINT64_MIN (0)
 #define UINT64_MAX (18446744073709551615)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __INT_LIMITS_H */

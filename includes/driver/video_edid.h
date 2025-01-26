@@ -12,6 +12,10 @@
 #include <types.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct video_edid_standart_timing_t {
     uint8_t horizontal_active_pixels;
     uint8_t vertical_frequency : 6;
@@ -75,5 +79,9 @@ typedef struct video_edid_t {
 _Static_assert(sizeof(video_edid_t) == 128, "video_edid_t is not 128 bytes");
 
 void video_edid_get_max_resolution(uint8_t* edid_data, uint32_t* max_width, uint32_t* max_height);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __VIDEO_EDID_H */

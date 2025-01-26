@@ -21,14 +21,14 @@ MODULE("turnstone.lib.crypto");
 #define SIG1(x) (ROTRIGHT32(x, 17) ^ ROTRIGHT32(x, 19) ^ ((x) >> 10))
 
 
-typedef struct sha256_internal_ctx_t {
+typedef struct sha256_ctx_t {
     uint8_t  data[SHA256_BLOCK_SIZE];
     uint32_t datalen;
     uint64_t bitlen;
     uint32_t state[SHA256_STATE_SIZE];
-} sha256_internal_ctx_t;
+} sha256_ctx_t;
 
-void sha256_transform(sha256_internal_ctx_t* ctx, const uint8_t* data);
+void sha256_transform(sha256_ctx_t* ctx, const uint8_t* data);
 
 static const uint32_t sha256_k[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -42,12 +42,12 @@ static const uint32_t sha256_k[64] = {
 };
 
 uint8_t* sha256_hash(uint8_t* data, size_t length) {
-    sha256_ctx_t ctx = sha256_init();
+    sha256_ctx_t* ctx = sha256_init();
     sha256_update(ctx, data, length);
     return sha256_final(ctx);
 }
 
-void sha256_transform(sha256_internal_ctx_t* ctx, const uint8_t* data)
+void sha256_transform(sha256_ctx_t* ctx, const uint8_t* data)
 {
     uint32_t a, b, c, d, e, f, g, h, i, t1, t2, m[SHA256_BLOCK_SIZE];
 
@@ -94,10 +94,8 @@ void sha256_transform(sha256_internal_ctx_t* ctx, const uint8_t* data)
     ctx->state[7] += h;
 }
 
-
-
-sha256_ctx_t sha256_init(void) {
-    sha256_internal_ctx_t* ctx = memory_malloc(sizeof(sha256_internal_ctx_t));
+sha256_ctx_t* sha256_init(void) {
+    sha256_ctx_t* ctx = memory_malloc(sizeof(sha256_ctx_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -114,77 +112,72 @@ sha256_ctx_t sha256_init(void) {
     ctx->state[6] = 0x1f83d9ab;
     ctx->state[7] = 0x5be0cd19;
 
-    return (sha256_ctx_t)ctx;
+    return ctx;
 }
 
-int8_t sha256_update(sha256_ctx_t ctx, const uint8_t* data, size_t len) {
-
+int8_t sha256_update(sha256_ctx_t* ctx, const uint8_t* data, size_t len) {
     if(ctx == NULL) {
         return -1;
     }
 
-    sha256_internal_ctx_t* ictx = (sha256_internal_ctx_t*)ctx;
-
     for (uint32_t i = 0; i < len; ++i) {
-        ictx->data[ictx->datalen] = data[i];
-        ictx->datalen++;
+        ctx->data[ctx->datalen] = data[i];
+        ctx->datalen++;
 
-        if (ictx->datalen == SHA256_BLOCK_SIZE) {
-            sha256_transform(ictx, ictx->data);
+        if (ctx->datalen == SHA256_BLOCK_SIZE) {
+            sha256_transform(ctx, ctx->data);
 
-            ictx->bitlen += SHA256_BLOCK_SIZE * 8;
-            ictx->datalen = 0;
+            ctx->bitlen += SHA256_BLOCK_SIZE * 8;
+            ctx->datalen = 0;
         }
     }
 
     return 0;
 }
 
-uint8_t* sha256_final(sha256_ctx_t ctx) {
-
+uint8_t* sha256_final(sha256_ctx_t* ctx) {
     if(ctx == NULL) {
         return NULL;
     }
 
-    sha256_internal_ctx_t* ictx = (sha256_internal_ctx_t*)ctx;
     uint32_t i;
 
-    i = ictx->datalen;
+    i = ctx->datalen;
 
-    if (ictx->datalen < 56) {
-        ictx->data[i++] = 0x80;
+    if (ctx->datalen < 56) {
+        ctx->data[i++] = 0x80;
 
         while (i < 56) {
-            ictx->data[i++] = 0x00;
+            ctx->data[i++] = 0x00;
         }
     }
     else {
-        ictx->data[i++] = 0x80;
+        ctx->data[i++] = 0x80;
 
         while (i < SHA256_BLOCK_SIZE) {
-            ictx->data[i++] = 0x00;
+            ctx->data[i++] = 0x00;
         }
 
-        sha256_transform(ictx, ictx->data);
-        memory_memset(ictx->data, 0, SHA256_BLOCK_SIZE);
+        sha256_transform(ctx, ctx->data);
+        memory_memset(ctx->data, 0, SHA256_BLOCK_SIZE);
     }
 
-    ictx->bitlen += ictx->datalen * 8;
-    ictx->data[63] = ictx->bitlen;
-    ictx->data[62] = ictx->bitlen >> 8;
-    ictx->data[61] = ictx->bitlen >> 16;
-    ictx->data[60] = ictx->bitlen >> 24;
-    ictx->data[59] = ictx->bitlen >> 32;
-    ictx->data[58] = ictx->bitlen >> 40;
-    ictx->data[57] = ictx->bitlen >> 48;
-    ictx->data[56] = ictx->bitlen >> 56;
+    ctx->bitlen += ctx->datalen * 8;
+    ctx->data[63] = ctx->bitlen;
+    ctx->data[62] = ctx->bitlen >> 8;
+    ctx->data[61] = ctx->bitlen >> 16;
+    ctx->data[60] = ctx->bitlen >> 24;
+    ctx->data[59] = ctx->bitlen >> 32;
+    ctx->data[58] = ctx->bitlen >> 40;
+    ctx->data[57] = ctx->bitlen >> 48;
+    ctx->data[56] = ctx->bitlen >> 56;
 
-    sha256_transform(ictx, ictx->data);
+    sha256_transform(ctx, ctx->data);
 
     uint8_t* hash = memory_malloc(SHA256_OUTPUT_SIZE);
 
     if(hash == NULL) {
-        memory_free(ictx);
+        memory_free(ctx);
 
         return NULL;
     }
@@ -192,16 +185,16 @@ uint8_t* sha256_final(sha256_ctx_t ctx) {
     uint32_t* t_hash = (uint32_t*)hash;
 
     for (i = 0; i < 8; ++i) {
-        t_hash[i] = BYTE_SWAP32(ictx->state[i]);
+        t_hash[i] = BYTE_SWAP32(ctx->state[i]);
     }
 
-    memory_free(ictx);
+    memory_free(ctx);
 
     return hash;
 }
 
-sha224_ctx_t sha224_init(void) {
-    sha256_internal_ctx_t* ctx = memory_malloc(sizeof(sha256_internal_ctx_t));
+sha224_ctx_t* sha224_init(void) {
+    sha256_ctx_t* ctx = memory_malloc(sizeof(sha256_ctx_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -218,20 +211,20 @@ sha224_ctx_t sha224_init(void) {
     ctx->state[6] = 0x64f98fa7;
     ctx->state[7] = 0xbefa4fa4;
 
-    return (sha224_ctx_t)ctx;
+    return ctx;
 }
 
-int8_t  sha224_update(sha224_ctx_t ctx, const uint8_t* data, size_t len) {
-    return sha256_update((sha256_ctx_t)ctx, data, len);
+int8_t  sha224_update(sha224_ctx_t* ctx, const uint8_t* data, size_t len) {
+    return sha256_update(ctx, data, len);
 }
 
-uint8_t* sha224_final(sha224_ctx_t ctx) {
+uint8_t* sha224_final(sha224_ctx_t* ctx) {
 
     if(ctx == NULL) {
         return NULL;
     }
 
-    uint8_t* pre_hash = sha256_final((sha256_ctx_t)ctx);
+    uint8_t* pre_hash = sha256_final(ctx);
 
     if(pre_hash == NULL) {
         return NULL;
@@ -253,7 +246,7 @@ uint8_t* sha224_final(sha224_ctx_t ctx) {
 }
 
 uint8_t* sha224_hash(uint8_t* data, size_t length) {
-    sha224_ctx_t ctx = sha224_init();
+    sha224_ctx_t* ctx = sha224_init();
     sha224_update(ctx, data, length);
     return sha224_final(ctx);
 }

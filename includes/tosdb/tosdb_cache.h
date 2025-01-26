@@ -15,6 +15,10 @@
 #include <buffer.h>
 #include <bloomfilter.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @enum tosdb_cache_item_type_t
  * @brief tosdb cache item type
@@ -134,5 +138,9 @@ const tosdb_cache_key_t* tosdb_cache_get(tosdb_cache_t* cache, tosdb_cache_key_t
  * @return true if success, false otherwise
  */
 boolean_t tosdb_cache_put(tosdb_cache_t* cache, tosdb_cache_key_t* key);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -16,6 +16,10 @@
 #include <network/network_udpv4.h>
 #include <network/network_tcpv4.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NETWORK_IPV4_VERSION 4
 #define NETWORK_IPV4_TTL 128
 
@@ -58,5 +62,9 @@ list_t*   network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, v
 list_t*   network_ipv4_create_packet_from_icmp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_icmpv4_header_t* icmp_hdr, uint16_t icmp_packet_len);
 list_t*   network_ipv4_create_packet_from_udp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_udpv4_header_t* udp_hdr);
 list_t*   network_ipv4_create_packet_from_tcp_packet(const network_ipv4_address_t sip, network_ipv4_address_t dip, network_tcpv4_header_t* tcp_hdr, uint16_t packet_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

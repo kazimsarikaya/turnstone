@@ -17,6 +17,10 @@
 #include <buffer.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 10
 
@@ -306,5 +310,9 @@ void task_remove_task_after_fault(uint64_t task_id);
 int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size);
 
 void task_toggle_wait_for_future(uint64_t task_id);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -430,7 +430,7 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
 
-    wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    char16_t* var_name_boot_current = char_to_wchar("BootCurrent");
     efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
     uint32_t var_attrs = 0;
     uint64_t buffer_size = sizeof(uint16_t);

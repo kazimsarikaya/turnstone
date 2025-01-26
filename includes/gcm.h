@@ -12,6 +12,10 @@
 
 #include <aes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct gcm_context_t {
     int32_t       mode;
     uint64_t      len;
@@ -41,5 +45,8 @@ int gcm_finish(gcm_context_t* ctx, uint8_t* tag, size_t tag_len);
 
 void gcm_zero_ctx(gcm_context_t * ctx );
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

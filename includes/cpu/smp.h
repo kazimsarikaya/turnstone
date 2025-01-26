@@ -16,6 +16,10 @@
 #include <cpu/descriptor.h>
 #include <memory/paging.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct smp_data_t {
     uint64_t               stack_base;
     uint64_t               stack_size;
@@ -29,5 +33,9 @@ typedef struct smp_data_t {
 
 
 int8_t smp_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

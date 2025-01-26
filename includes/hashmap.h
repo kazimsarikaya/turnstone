@@ -14,6 +14,10 @@
 #include <memory.h>
 #include <iterator.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @typedef hashmap_t
  * @brief opaque hashmap type
@@ -169,5 +173,9 @@ uint64_t hashmap_size(hashmap_t* hm);
  * @return iterator of hashmap
  */
 iterator_t* hashmap_iterator_create(hashmap_t* hm);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

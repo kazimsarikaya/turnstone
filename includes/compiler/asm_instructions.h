@@ -10,6 +10,10 @@
 #include <types.h>
 #include <compiler/asm_encoder.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum asm_instruction_mnemonic_t {
     ASM_INSTRUCTION_MNEMONIC_NULL,
     ASM_INSTRUCTION_MNEMONIC_IMM_8,
@@ -393,5 +397,9 @@ asm_instruction_mnemonic_t            asm_instruction_mnemonic_get_by_param(asm_
 const asm_instruction_mnemonic_map_t* asm_instruction_mnemonic_get(const char_t* mnemonic_string);
 const asm_instruction_t*              asm_instruction_get(const asm_instruction_mnemonic_map_t* map, uint8_t instruction_length, asm_instruction_mnemonic_t mnemonics[5]);
 uint8_t                               asm_instruction_get_imm_size(const asm_instruction_t* instr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* asm_instructions.h */

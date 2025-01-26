@@ -14,6 +14,10 @@
 #include <network/network_protocols.h>
 #include <network/network_ethernet.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // mmio register offsets at bar0
 #define NETWORK_E1000_REG_CTRL      0x0000
 #define NETWORK_E1000_REG_STATUS    0x0008
@@ -199,5 +203,9 @@ typedef struct {
 }network_e1000_dev_t;
 
 int8_t network_e1000_init(const pci_dev_t* pci_netdev);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
