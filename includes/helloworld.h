@@ -21,6 +21,8 @@ extern "C" {
  */
 const char_t* hello_world(void);
 
+void hello_world_cpp_test(void);
+
 #ifdef __cplusplus
 }
 #endif
