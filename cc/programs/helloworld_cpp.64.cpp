@@ -8,52 +8,67 @@
  */
 
 #include <helloworld.h>
-#include <memory.h>
-#include <strings.h>
-#include <assert.h>
+#include <cppruntime/cppstring.hpp>
+#include <cppruntime/cppmemview.hpp>
 #include <stdbufs.h>
+#include <assert.h>
 
 /*! module name */
 MODULE("turnstone.user.programs.helloworld_cpp");
 
-class string {
-private:
-char * str;
-int    len;
-
-public:
-string(const char * s) {
-    len = strlen(s);
-    str = new char[len + 1];
-    assert(str != NULL && "Failed to allocate memory\n");
-    printf("Allocated memory %p\n", str);
-    strcopy(s, str);
-}
-~string() {
-    delete[] str;
-}
-
-int length() {
-    return len;
-}
-
-void print() {
-    printf("%s\n", str);
-}
-
-};
-
+using namespace tosccp;
 
 void hello_world_cpp_test(void) {
-    string * s = new string(hello_world());
+    string* s1 = new string("Hello, ");
+    assert(s1 != NULL && "Failed to allocate memory\n");
 
-    assert(s != NULL && "Failed to allocate memory\n");
+    string* s2 = new string("World!");
 
-    printf("String: %p\n", s);
+    if(s2 == NULL) {
+        delete s1;
+    }
 
-    s->print();
+    assert(s2 != NULL && "Failed to allocate memory\n");
 
-    printf("Length: %d\n", s->length());
+    string s = *s1 + *s2;
 
-    delete s;
+    printf("Length: %li String: %s first char: %c\n", s.size(), s.c_str(), s[0]);
+
+
+    string* sub = s.substr(7, 5);
+
+    delete s1;
+    delete s2;
+
+    printf("Substring: %s\n", sub->c_str());
+
+    delete sub;
+
+    string s3(64);
+
+    for(int64_t i = 0; i < 16; i++) {
+        s3[i] = 'A' + i;
+    }
+
+    printf("Length: %li String: %s\n", s3.size(), s3.c_str());
+
+    MemoryView<uint8_t> mv((uint8_t*)s3.c_str(), s3.size());
+
+    mv[63] = 'X';
+
+    for(int64_t i = 0; i < mv.size(); i++) {
+        if(i % 16 == 0) {
+            printf("%04llx: ", i);
+        }
+
+        printf("%02x ", mv[i]);
+
+        if(i % 16 == 15) {
+            printf("\n");
+        }
+    }
+    printf("\n");
+
+    // mv[100] = 'Y'; // This should fail
+
 }

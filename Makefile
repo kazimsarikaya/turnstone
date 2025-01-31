@@ -42,7 +42,7 @@ CCFLAGS = $(BASEFLAGS) \
           -Wnested-externs \
 		  -Wmissing-prototypes -Wstrict-prototypes
 CPPFLAGS = $(BASEFLAGS) \
-		   -std=gnu++17 \
+		   -std=gnu++26 \
 		   -fno-rtti -fno-exceptions
 
 CXXTESTFLAGS= -D___TESTMODE=1

@@ -157,6 +157,13 @@ int8_t memory_memcompare(const void* mem1, const void* mem2, size_t size);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+
+/**
+ * C++ new operator overloads
+ */
 
 _Nonnull void * operator new(size_t size) noexcept;
 _Nonnull void * operator new[](size_t size) noexcept;

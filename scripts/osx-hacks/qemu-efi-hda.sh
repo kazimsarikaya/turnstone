@@ -20,6 +20,10 @@ if [[ "${DEBUG}x" == "debugx" ]]; then
   PREVENTSHUTDOWN="--no-shutdown --no-reboot"
 fi
 
+if [[ "${DEBUG}x" == "pausedx" ]]; then
+  ACCEL="${ACCEL} -S"
+fi
+
 if [ `uname -s` == "Linux" ]; then
   UEFIBIOSCODE="/usr/share/OVMF/OVMF_CODE.fd"  
   UEFIBIOSVARS="/usr/share/OVMF/OVMF_VARS.fd"

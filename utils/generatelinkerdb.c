@@ -1248,7 +1248,12 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         }
 
         if(sym_sec_id == 0) {
-            print_error("unknown symbol");
+            if(ELF_SECTION_TYPE(e_class, sections, sym_shndx) == SHT_GROUP) {
+                PRINTLOG(LINKER, LOG_WARNING, "!!! at file %s symbol %s at section %llx is group", filename, sym_name, sym_shndx);
+                continue;
+            }
+
+            print_error("unknown symbol %s at file %s [%lli]", sym_name, filename, sym_shndx);
             error = true;
 
             break;

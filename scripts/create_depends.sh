@@ -19,11 +19,11 @@ do
    fi
 
   _depends=$(gcc -I../includes -MM ${file} | tr -d '\\\n'|cut -d':' -f2|sed 's/\.\.\/includes\///g')
-  _sources=$(echo $_depends|sed 's/\.h//g')
+  _sources=$(echo $_depends|sed -E 's/\.(h|hpp)//g')
   for _s in $_sources;
   do
     _s=$(basename $_s|tr -d ' ')
-    for _f in $(find ../cc -name "$_s*.c"|grep -v video);
+    for _f in $(find ../cc -name "$_s*.c"|grep -v video| grep -v '\.test\.c');
     do
       _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
       echo -e "../output/$var.bin: ../output/cc-local/$_f"

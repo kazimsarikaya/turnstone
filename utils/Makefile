@@ -21,7 +21,7 @@ CCFLAGS = $(BASEFLAGS) \
 		  -Wmissing-prototypes -Wstrict-prototypes
 
 CPPFLAGS = $(BASEFLAGS) \
-		   -std=gnu++17 \
+		   -std=gnu++26 \
 		   -fno-rtti -fno-exceptions
 
 ifeq ($(HOSTOS),Darwin)
