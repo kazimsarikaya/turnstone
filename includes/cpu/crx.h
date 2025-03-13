@@ -74,7 +74,7 @@ typedef union cpu_reg_cr4_u {
         uint8_t  reserved2                             : 1; ///< reserved
         uint8_t  fs_gs_base_enable                     : 1; ///< enables changing base address of fs and gs registers
         uint8_t  process_context_identifier_enable     : 1; ///< enables process context identifier at cr3
-        uint8_t  os_xsave_eable                        : 1; ///< enables xsave instruction
+        uint8_t  os_xsave_enable                       : 1; ///< enables xsave instruction
         uint8_t  reserved3                             : 1; ///< reserved
         uint8_t  supervisor_mode_execution_prevention  : 1; ///< enables kernel exection of user space code with rflags
         uint8_t  supervisor_mode_access_protection     : 1; ///< enables kernel memory access of user space with rflags

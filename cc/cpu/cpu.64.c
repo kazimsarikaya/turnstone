@@ -87,6 +87,15 @@ void cpu_cr0_enable_wp(void) {
     cpu_write_cr0(cr0);
 }
 
+static inline void cpu_enable_avx(void) {
+    asm volatile (
+        "xor %rcx, %rcx\n"
+        "xgetbv\n"
+        "or $0xe7, %rax\n"
+        "xsetbv\n"
+        );
+}
+
 void cpu_enable_sse(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
     cr0.fields.monitor_coprocessor = 1;
@@ -99,7 +108,10 @@ void cpu_enable_sse(void) {
     cpu_reg_cr4_t cr4 = cpu_read_cr4();
     cr4.fields.os_fx_support = 1;
     cr4.fields.os_unmasked_exception_support = 1;
+    cr4.fields.os_xsave_enable = 1;
     cpu_write_cr4(cr4);
+
+    cpu_enable_avx();
 }
 
 void cpu_clear_segments(void) {
