@@ -72,7 +72,7 @@ TRACE_OPTS="guest_errors,trace:virtio_console_*"
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
   -M q35 -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
-  -cpu max \
+  -cpu host \
   -accel $ACCEL -d "${TRACE_OPTS}" \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \

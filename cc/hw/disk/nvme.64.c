@@ -105,6 +105,463 @@ int8_t nvme_isr(interrupt_frame_ext_t* frame) {
     return 0;
 }
 
+static int8_t nvme_find_msix(nvme_disk_t* nvme_disk) {
+    pci_generic_device_t* pci_nvme = nvme_disk->pci_device;
+
+    pci_capability_msi_t* msi_cap = NULL;
+    pci_capability_msix_t* msix_cap = NULL;
+
+    if(pci_nvme->common_header.status.capabilities_list) {
+        pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pci_nvme) + pci_nvme->capabilities_pointer);
+
+
+        while(pci_cap->capability_id != 0xFF) {
+            if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSI) {
+                msi_cap = (pci_capability_msi_t*)pci_cap;
+                PRINTLOG(NVME, LOG_WARNING, "msi cap 0x%02x", msi_cap != NULL);
+            } if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSIX) {
+                msix_cap = (pci_capability_msix_t*)pci_cap;
+            }else {
+                PRINTLOG(NVME, LOG_WARNING, "not implemented cap 0x%02x", pci_cap->capability_id);
+            }
+
+            if(pci_cap->next_pointer == NULL) {
+                break;
+            }
+
+            pci_cap = (pci_capability_t*)(((uint8_t*)pci_nvme) + pci_cap->next_pointer);
+        }
+    }
+
+    if(msix_cap != NULL) {
+        if(pci_msix_configure(pci_nvme, msix_cap) != 0) {
+            PRINTLOG(VIRTIO, LOG_ERROR, "failed to configure msix");
+
+            return -1;
+        }
+    } else {
+        PRINTLOG(NVME, LOG_ERROR, "no msix cap");
+
+        return -1;
+    }
+
+    nvme_disk->msix_capability = msix_cap;
+
+    return 0;
+}
+
+static int8_t nvme_configure_bar_va(nvme_disk_t* nvme_disk) {
+    pci_generic_device_t* pci_nvme = nvme_disk->pci_device;
+
+    uint64_t bar_fa = pci_get_bar_address(pci_nvme, 0);
+
+    PRINTLOG(NVME, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
+
+    frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
+    uint64_t size = pci_get_bar_size(pci_nvme, 0);
+    PRINTLOG(NVME, LOG_TRACE, "bar size 0x%llx", size);
+    uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
+    frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
+
+    uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
+
+    if(bar_frames == NULL) {
+        PRINTLOG(NVME, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
+
+        if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame");
+
+            return -1;
+        }
+    }
+
+    memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+
+    nvme_disk->bar_va = bar_va;
+
+    return 0;
+}
+
+static int8_t nvme_configure_queues_address(nvme_disk_t* nvme_disk, nvme_controller_registers_t* nvme_regs) {
+    frame_t* queue_frames = NULL;
+
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 4, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for queues");
+
+        return -1;
+    }
+
+    uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
+    memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    memory_memclean((void*)queue_va, FRAME_SIZE * 4);
+
+    nvme_disk->queue_frames_address = queue_frames->frame_address;
+
+    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+
+    nvme_disk->admin_submission_queue = (nvme_submission_queue_entry_t*)queue_va;
+    nvme_disk->admin_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE);
+    nvme_disk->io_submission_queue = (nvme_submission_queue_entry_t*)(queue_va + FRAME_SIZE * 2);
+    nvme_disk->io_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE * 3);
+
+    nvme_disk->timeout = nvme_caps.fields.timeout + 1;
+    nvme_disk->nvme_registers = nvme_regs;
+
+    nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
+    nvme_config.fields.enable = 0;
+    nvme_regs->config = nvme_config.bits;
+
+    do {
+        time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
+
+        nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+        if(!nvme_status.fields.ready) {
+            break;
+        }
+
+    } while(true);
+
+    if(nvme_status.fields.cfs != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "error at disabling nvme: %i", nvme_status.fields.cfs);
+
+        return -1;
+    }
+
+
+    nvme_disk->admin_queue_size = 64;
+    nvme_disk->io_queue_size = 64;
+
+    PRINTLOG(NVME, LOG_TRACE, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
+
+    return 0;
+}
+
+static int8_t nvme_configure_queues(nvme_disk_t* nvme_disk) {
+    pci_generic_device_t* pci_nvme = nvme_disk->pci_device;
+
+    if(nvme_set_queue_count(nvme_disk, 1, 1) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot set queue count");
+
+        return -1;
+    }
+
+    PRINTLOG(NVME, LOG_TRACE, "creating io cq");
+
+    nvme_disk->io_queue_isr = pci_msix_set_isr(pci_nvme,  nvme_disk->msix_capability, 1, nvme_isr);
+    hashmap_put(nvme_disk_isr_map, (void*)nvme_disk->io_queue_isr, nvme_disk);
+
+    if(nvme_send_admin_command(nvme_disk,
+                               NVME_ADMIN_CMD_CREATE_CQ, // opcode
+                               0x0, // fuse
+                               0x0, // nsid
+                               0x0, // mptr
+                               nvme_disk->queue_frames_address + 3 * FRAME_SIZE, // prp1
+                               0x0, // prp2
+                               ((nvme_disk->io_queue_size - 1) << 16) | 1, // cdw10
+                               (1 << 16) | (1 << 1) | 1, // cdw11
+                               0x0, // cdw12
+                               0x0, // cdw13
+                               0x0, // cdw14
+                               0x0, // cdw15
+                               0x0 // sdw0
+                               ) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot create io cq");
+
+        return -1;
+    }
+
+    pci_msix_clear_pending_bit(pci_nvme, nvme_disk->msix_capability, 1);
+
+    PRINTLOG(NVME, LOG_TRACE, "io cq created");
+
+    PRINTLOG(NVME, LOG_TRACE, "creating io sq");
+
+    if(nvme_send_admin_command(nvme_disk,
+                               NVME_ADMIN_CMD_CREATE_SQ, // opcode
+                               0x0, // fuse
+                               0x0, // nsid
+                               0x0, // mptr
+                               nvme_disk->queue_frames_address + 2 * FRAME_SIZE, // prp1
+                               0x0, // prp2
+                               ((nvme_disk->io_queue_size - 1) << 16) | 1, // cdw10
+                               (1 << 16) | 1, // cdw11
+                               0x0, // cdw12
+                               0x0, // cdw13
+                               0x0, // cdw14
+                               0x0, // cdw15
+                               0x0 // sdw0
+                               ) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot create io sq");
+
+        return -1;
+    }
+
+    PRINTLOG(NVME, LOG_TRACE, "io sq created");
+
+    return 0;
+}
+
+static int8_t nvme_perform_identifies(nvme_disk_t* nvme_disk) {
+    frame_t* identify_frames = NULL;
+
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 3, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &identify_frames, NULL) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for identify");
+
+        return -1;
+    }
+
+    uint64_t identify_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(identify_frames->frame_address);
+    memory_paging_add_va_for_frame(identify_va, identify_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    memory_memclean((void*)identify_va, 3 * FRAME_SIZE);
+
+    nvme_disk->identify = (nvme_identify_t*)identify_va;
+    nvme_disk->ns_identify = (nvme_ns_identify_t*)(identify_va + 0x1000);
+    nvme_disk->active_ns_list = (uint32_t*)(identify_va + 0x2000);
+
+    uint64_t identify_fa = identify_frames->frame_address;
+
+    if(nvme_identify(nvme_disk, 1, 0, identify_fa) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot identify nvme controller");
+
+        return -1;
+    }
+
+    PRINTLOG(NVME, LOG_TRACE, "nvme controller has vwc? %x", nvme_disk->identify->vwc);
+    nvme_disk->flush_supported = nvme_disk->identify->vwc & 1;
+
+    if(nvme_disk->flush_supported && nvme_enable_cache(nvme_disk) == -1) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot enable nvme cache");
+
+        return -1;
+    }
+
+    if(nvme_identify(nvme_disk, 2, 0, identify_fa + 0x2000) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot identify nvme active ns list");
+
+        return -1;
+    }
+
+    PRINTLOG(NVME, LOG_TRACE, "mdts 0x%x", nvme_disk->identify->mdts);
+    nvme_disk->max_prp_entries = (1 << (nvme_disk->identify->mdts + 4)) / 16;
+
+    for(int32_t i = 0; i < 0x1000 / 4; i++) {
+        if(nvme_disk->active_ns_list[i] == 0) {
+            break;
+        }
+
+        PRINTLOG(NVME, LOG_DEBUG, "ns: %x", nvme_disk->active_ns_list[i]);
+
+        if(nvme_identify(nvme_disk, 0, nvme_disk->active_ns_list[i], identify_fa + 0x1000) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot identify nvme ns data");
+
+            continue;
+        }
+
+        PRINTLOG(NVME, LOG_DEBUG, "ns capacity %llx", nvme_disk->ns_identify->ncap);
+        PRINTLOG(NVME, LOG_TRACE, "ns size %llx", nvme_disk->ns_identify->nsze);
+        PRINTLOG(NVME, LOG_TRACE, "ns lba format count %x", nvme_disk->ns_identify->nlbaf);
+        PRINTLOG(NVME, LOG_TRACE, "ns lba format %x", nvme_disk->ns_identify->flbas);
+        PRINTLOG(NVME, LOG_TRACE, "ns lba format size %x %x %x",
+                 nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].ms,
+                 nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads,
+                 nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].rp);
+
+        nvme_disk->ns_id = nvme_disk->active_ns_list[i];
+        nvme_disk->lba_count = nvme_disk->ns_identify->nsze;
+        nvme_disk->lba_size = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads;
+
+        PRINTLOG(NVME, LOG_TRACE, "format types");
+        for(int32_t j = 0; j <= nvme_disk->ns_identify->nlbaf; j++) {
+            PRINTLOG(NVME, LOG_TRACE, "ns lba format size %x %x %x",
+                     nvme_disk->ns_identify->lbaf[j].ms,
+                     nvme_disk->ns_identify->lbaf[j].lbads,
+                     nvme_disk->ns_identify->lbaf[j].rp);
+        }
+    }
+
+    return 0;
+}
+
+// FIXME: this function brokes qemu
+__attribute__((noinline, target("no-mmx"), target("no-sse"))) static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
+    nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
+    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+
+    nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
+    nvme_config.fields.css = 0;
+
+    // FIXME: area brokes qemu
+    nvme_regs->asq = nvme_disk->queue_frames_address;
+    nvme_regs->acq = (nvme_disk->queue_frames_address + FRAME_SIZE);
+
+    nvme_controller_aqa_t nvme_aqa = (nvme_controller_aqa_t)nvme_regs->aqa;
+    nvme_aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
+    nvme_regs->aqa = nvme_aqa.bits;
+
+    nvme_config.fields.iosqes = 6;
+    nvme_config.fields.iocqes = 4;
+    nvme_config.fields.ams = 0;
+    nvme_config.fields.mps = 0;
+
+    nvme_config.fields.enable = 1;
+
+    nvme_regs->config = nvme_config.bits;
+
+    do {
+        time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
+
+        nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+        if(nvme_status.fields.cfs || nvme_status.fields.ready) {
+            break;
+        }
+    } while(true);
+
+    if(nvme_status.fields.ready != 1) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot enable nvme: %i", nvme_status.fields.cfs);
+
+        return -1;
+    }
+
+    uint64_t dstrd = nvme_caps.fields.dstrd;
+    uint64_t admin_sqtdb = nvme_disk->bar_va + 0x1000 + (2 * 0) * (4 << dstrd);
+    uint64_t admin_cqhdb = nvme_disk->bar_va + 0x1000 + (2 * 0 + 1) * (4 << dstrd);
+    uint64_t io_sqtdb = nvme_disk->bar_va + 0x1000 + (2 * 1) * (4 << dstrd);
+    uint64_t io_cqhdb = nvme_disk->bar_va + 0x1000 + (2 * 1 + 1) * (4 << dstrd);
+
+    PRINTLOG(NVME, LOG_TRACE, "nvme admin sqtdb %llx cqhdb %llx", admin_sqtdb, admin_cqhdb);
+    PRINTLOG(NVME, LOG_TRACE, "nvme io sqtdb %llx cqhdb %llx", io_sqtdb, io_cqhdb);
+
+    nvme_disk->admin_completion_queue_head_doorbell = (uint32_t*)admin_cqhdb;
+    nvme_disk->admin_submission_queue_tail_doorbell = (uint32_t*)admin_sqtdb;
+    nvme_disk->io_completion_queue_head_doorbell = (uint32_t*)io_cqhdb;
+    nvme_disk->io_submission_queue_tail_doorbell = (uint32_t*)io_sqtdb;
+
+    return 0;
+}
+
+static int8_t nvme_configure_prp_frames(nvme_disk_t* nvme_disk) {
+    frame_t* prp_frames = NULL;
+
+    if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &prp_frames, NULL) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for prp");
+
+        return -1;
+    }
+
+    nvme_disk->prp_frame_fa = prp_frames->frame_address;
+    nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(nvme_disk->prp_frame_fa);
+
+    memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
+    memory_memclean((void*)nvme_disk->prp_frame_va, 64 * FRAME_SIZE);
+
+    return 0;
+}
+
+static int8_t nvme_init_disk(memory_heap_t* heap, uint64_t disk_id, const pci_dev_t* p) {
+    pci_generic_device_t* pci_nvme = (pci_generic_device_t*)p->pci_header;
+
+    pci_disable_interrupt(pci_nvme);
+
+    nvme_disk_t* nvme_disk = memory_malloc_ext(heap, sizeof(nvme_disk_t), 0);
+
+    if(nvme_disk == NULL) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot allocate memory for nvme disk");
+
+        return -1;
+    }
+
+    nvme_disk->command_lock_map = hashmap_integer(64);
+
+    if(nvme_disk->command_lock_map == NULL) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot allocate memory for nvme command lock map");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    nvme_disk->heap = heap;
+    nvme_disk->disk_id = disk_id;
+    nvme_disk->pci_device = pci_nvme;
+    nvme_disk->current_phase = true; // when nvme controller is reset, phase is 1
+
+
+    if(nvme_find_msix(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot find msix");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    if(nvme_configure_bar_va(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot configure bar va");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
+
+    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_version_t nvme_version = (nvme_controller_version_t)nvme_regs->version;
+    nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+
+    PRINTLOG(NVME, LOG_TRACE, "nvme controller %lli ready? %i ", disk_id, nvme_status.fields.ready);
+    PRINTLOG(NVME, LOG_DEBUG, "nvme version %i.%i.%i", nvme_version.fields.major, nvme_version.fields.minor, nvme_version.fields.reserved_or_ter);
+    PRINTLOG(NVME, LOG_TRACE, "nvme queue size %i", nvme_caps.fields.mqes + 1);
+
+    if(nvme_configure_queues_address(nvme_disk, nvme_regs) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot configure queues");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    if(nvme_configure_queue_configs(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot configure queue configs");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    nvme_disk->next_cid = 1;
+
+    if(nvme_perform_identifies(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot perform identifies");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    /*
+       if(nvme_format(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot format nvme controller");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+       }
+     */
+
+    if(nvme_configure_queues(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot configure queues");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    if(nvme_configure_prp_frames(nvme_disk) != 0) {
+        PRINTLOG(NVME, LOG_ERROR, "cannot configure prp frames");
+        memory_free_ext(heap, nvme_disk);
+
+        return -1;
+    }
+
+    hashmap_put(nvme_disks, (void*)nvme_disk->disk_id, nvme_disk);
+
+    return 0;
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
@@ -133,383 +590,17 @@ int8_t nvme_init(memory_heap_t* heap, list_t* nvme_pci_devices) {
 
     uint64_t disk_id = 0;
 
-    iterator_t* iter = list_iterator_create(nvme_pci_devices);
+    for(size_t i = 0; i < list_size(nvme_pci_devices); i++) {
+        const pci_dev_t* p = list_get_data_at_position(nvme_pci_devices, i);
 
-    while(iter->end_of_iterator(iter) != 0) {
-        const pci_dev_t* p = iter->get_item(iter);
-        pci_generic_device_t* pci_nvme = (pci_generic_device_t*)p->pci_header;
-
-        pci_disable_interrupt(pci_nvme);
-
-        nvme_disk_t* nvme_disk = memory_malloc_ext(heap, sizeof(nvme_disk_t), 0);
-
-        if(nvme_disk == NULL) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot allocate memory for nvme disk");
-
-            iter->destroy(iter);
+        if(nvme_init_disk(heap, disk_id, p) != 0) {
+            PRINTLOG(NVME, LOG_ERROR, "cannot init nvme disk %lli", disk_id);
 
             return -1;
         }
-
-        nvme_disk->command_lock_map = hashmap_integer(64);
-
-        if(nvme_disk->command_lock_map == NULL) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot allocate memory for nvme command lock map");
-            memory_free_ext(heap, nvme_disk);
-            iter->destroy(iter);
-
-            return -1;
-        }
-
-        nvme_disk->heap = heap;
-        nvme_disk->disk_id = disk_id;
-        nvme_disk->pci_device = pci_nvme;
-        nvme_disk->current_phase = true; // when nvme controller is reset, phase is 1
-
-
-        pci_capability_msi_t* msi_cap = NULL;
-        pci_capability_msix_t* msix_cap = NULL;
-
-        if(pci_nvme->common_header.status.capabilities_list) {
-            pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pci_nvme) + pci_nvme->capabilities_pointer);
-
-
-            while(pci_cap->capability_id != 0xFF) {
-                if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSI) {
-                    msi_cap = (pci_capability_msi_t*)pci_cap;
-                } if(pci_cap->capability_id == PCI_DEVICE_CAPABILITY_MSIX) {
-                    msix_cap = (pci_capability_msix_t*)pci_cap;
-                }else {
-                    PRINTLOG(NVME, LOG_WARNING, "not implemented cap 0x%02x", pci_cap->capability_id);
-                }
-
-                if(pci_cap->next_pointer == NULL) {
-                    break;
-                }
-
-                pci_cap = (pci_capability_t*)(((uint8_t*)pci_nvme) + pci_cap->next_pointer);
-            }
-        }
-
-        if(msix_cap != NULL) {
-            if(pci_msix_configure(pci_nvme, msix_cap) != 0) {
-                PRINTLOG(VIRTIO, LOG_ERROR, "failed to configure msix");
-                memory_free_ext(heap, nvme_disk);
-
-                return -1;
-            }
-        } else {
-            PRINTLOG(NVME, LOG_ERROR, "no msix cap");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        nvme_disk->msix_capability = msix_cap;
-
-        uint64_t bar_fa = pci_get_bar_address(pci_nvme, 0);
-
-        PRINTLOG(NVME, LOG_TRACE, "frame address at bar 0x%llx", bar_fa);
-
-        frame_t* bar_frames = frame_get_allocator()->get_reserved_frames_of_address(frame_get_allocator(), (void*)bar_fa);
-        uint64_t size = pci_get_bar_size(pci_nvme, 0);
-        PRINTLOG(NVME, LOG_TRACE, "bar size 0x%llx", size);
-        uint64_t bar_frm_cnt = (size + FRAME_SIZE - 1) / FRAME_SIZE;
-        frame_t bar_req_frm = {bar_fa, bar_frm_cnt, FRAME_TYPE_RESERVED, 0};
-
-        uint64_t bar_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(bar_fa);
-
-        if(bar_frames == NULL) {
-            PRINTLOG(NVME, LOG_TRACE, "cannot find reserved frames for 0x%llx and try to reserve", bar_fa);
-
-            if(frame_get_allocator()->allocate_frame(frame_get_allocator(), &bar_req_frm) != 0) {
-                PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame");
-                memory_free_ext(heap, nvme_disk);
-
-                return -1;
-            }
-        }
-
-        memory_paging_add_va_for_frame(bar_va, &bar_req_frm, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-
-        nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)bar_va;
-
-        nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
-        nvme_controller_version_t nvme_version = (nvme_controller_version_t)nvme_regs->version;
-        nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
-
-        PRINTLOG(NVME, LOG_TRACE, "nvme controller %lli ready? %i has msi? %i has_msix? %i", disk_id, nvme_status.fields.ready, msi_cap != NULL, msix_cap != NULL);
-        PRINTLOG(NVME, LOG_DEBUG, "nvme version %i.%i.%i", nvme_version.fields.major, nvme_version.fields.minor, nvme_version.fields.reserved_or_ter);
-        PRINTLOG(NVME, LOG_TRACE, "nvme queue size %i", nvme_caps.fields.mqes + 1);
-
-        frame_t* queue_frames = NULL;
-
-        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 4, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &queue_frames, NULL) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for queues");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        uint64_t queue_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(queue_frames->frame_address);
-        memory_paging_add_va_for_frame(queue_va, queue_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-        memory_memclean((void*)queue_va, FRAME_SIZE * 4);
-
-        nvme_disk->admin_submission_queue = (nvme_submission_queue_entry_t*)queue_va;
-        nvme_disk->admin_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE);
-        nvme_disk->io_submission_queue = (nvme_submission_queue_entry_t*)(queue_va + FRAME_SIZE * 2);
-        nvme_disk->io_completion_queue = (nvme_completion_queue_entry_t*)(queue_va + FRAME_SIZE * 3);
-
-        nvme_disk->timeout = nvme_caps.fields.timeout + 1;
-        nvme_disk->nvme_registers = nvme_regs;
-
-        nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
-        nvme_config.fields.enable = 0;
-        nvme_regs->config = nvme_config.bits;
-
-        do {
-            time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
-
-            nvme_status = (nvme_controller_sts_t)nvme_regs->status;
-            if(!nvme_status.fields.ready) {
-                break;
-            }
-
-        } while(true);
-
-        if(nvme_status.fields.cfs != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "error at disabling nvme: %i", nvme_status.fields.cfs);
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-
-        nvme_disk->admin_queue_size = 64;
-        nvme_disk->io_queue_size = 64;
-
-        PRINTLOG(NVME, LOG_TRACE, "nvme asq %llx acq %llx", queue_frames->frame_address, queue_frames->frame_address + FRAME_SIZE);
-        nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
-        nvme_config.fields.css = 0;
-        nvme_regs->asq = queue_frames->frame_address;
-        nvme_regs->acq = queue_frames->frame_address + FRAME_SIZE;
-        nvme_controller_aqa_t nvme_aqa = (nvme_controller_aqa_t)nvme_regs->aqa;
-        nvme_aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
-        nvme_regs->aqa = nvme_aqa.bits;
-        nvme_config.fields.iosqes = 6;
-        nvme_config.fields.iocqes = 4;
-        nvme_config.fields.ams = 0;
-        nvme_config.fields.mps = 0;
-
-        nvme_config.fields.enable = 1;
-        nvme_regs->config = nvme_config.bits;
-
-        do {
-            time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
-
-            nvme_status = (nvme_controller_sts_t)nvme_regs->status;
-            if(nvme_status.fields.cfs || nvme_status.fields.ready) {
-                break;
-            }
-        } while(true);
-
-        if(nvme_status.fields.ready != 1) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot enable nvme: %i", nvme_status.fields.cfs);
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        uint64_t dstrd = nvme_caps.fields.dstrd;
-        uint64_t admin_sqtdb = bar_va + 0x1000 + (2 * 0) * (4 << dstrd);
-        uint64_t admin_cqhdb = bar_va + 0x1000 + (2 * 0 + 1) * (4 << dstrd);
-        uint64_t io_sqtdb = bar_va + 0x1000 + (2 * 1) * (4 << dstrd);
-        uint64_t io_cqhdb = bar_va + 0x1000 + (2 * 1 + 1) * (4 << dstrd);
-
-        PRINTLOG(NVME, LOG_TRACE, "nvme admin sqtdb %llx cqhdb %llx", admin_sqtdb, admin_cqhdb);
-        PRINTLOG(NVME, LOG_TRACE, "nvme io sqtdb %llx cqhdb %llx", io_sqtdb, io_cqhdb);
-
-        nvme_disk->admin_completion_queue_head_doorbell = (uint32_t*)admin_cqhdb;
-        nvme_disk->admin_submission_queue_tail_doorbell = (uint32_t*)admin_sqtdb;
-        nvme_disk->io_completion_queue_head_doorbell = (uint32_t*)io_cqhdb;
-        nvme_disk->io_submission_queue_tail_doorbell = (uint32_t*)io_sqtdb;
-
-        nvme_disk->next_cid = 1;
-
-        frame_t* identify_frames = NULL;
-
-        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 3, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &identify_frames, NULL) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for identify");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        uint64_t identify_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(identify_frames->frame_address);
-        memory_paging_add_va_for_frame(identify_va, identify_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-        memory_memclean((void*)identify_va, 3 * FRAME_SIZE);
-
-        nvme_disk->identify = (nvme_identify_t*)identify_va;
-        nvme_disk->ns_identify = (nvme_ns_identify_t*)(identify_va + 0x1000);
-        nvme_disk->active_ns_list = (uint32_t*)(identify_va + 0x2000);
-
-        uint64_t identify_fa = identify_frames->frame_address;
-
-        if(nvme_identify(nvme_disk, 1, 0, identify_fa) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot identify nvme controller");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        PRINTLOG(NVME, LOG_TRACE, "nvme controller has vwc? %x", nvme_disk->identify->vwc);
-        nvme_disk->flush_supported = nvme_disk->identify->vwc & 1;
-
-        if(nvme_disk->flush_supported && nvme_enable_cache(nvme_disk) == -1) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot enable nvme cache");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        if(nvme_identify(nvme_disk, 2, 0, identify_fa + 0x2000) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot identify nvme active ns list");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        PRINTLOG(NVME, LOG_TRACE, "mdts 0x%x", nvme_disk->identify->mdts);
-        nvme_disk->max_prp_entries = (1 << (nvme_disk->identify->mdts + 4)) / 16;
-
-        for(int32_t i = 0; i < 0x1000 / 4; i++) {
-            if(nvme_disk->active_ns_list[i] == 0) {
-                break;
-            }
-
-            PRINTLOG(NVME, LOG_DEBUG, "ns: %x", nvme_disk->active_ns_list[i]);
-
-            if(nvme_identify(nvme_disk, 0, nvme_disk->active_ns_list[i], identify_fa + 0x1000) != 0) {
-                PRINTLOG(NVME, LOG_ERROR, "cannot identify nvme ns data");
-
-                continue;
-            }
-
-            PRINTLOG(NVME, LOG_DEBUG, "ns capacity %llx", nvme_disk->ns_identify->ncap);
-            PRINTLOG(NVME, LOG_TRACE, "ns size %llx", nvme_disk->ns_identify->nsze);
-            PRINTLOG(NVME, LOG_TRACE, "ns lba format count %x", nvme_disk->ns_identify->nlbaf);
-            PRINTLOG(NVME, LOG_TRACE, "ns lba format %x", nvme_disk->ns_identify->flbas);
-            PRINTLOG(NVME, LOG_TRACE, "ns lba format size %x %x %x",
-                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].ms,
-                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads,
-                     nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].rp);
-
-            nvme_disk->ns_id = nvme_disk->active_ns_list[i];
-            nvme_disk->lba_count = nvme_disk->ns_identify->nsze;
-            nvme_disk->lba_size = 1 << nvme_disk->ns_identify->lbaf[nvme_disk->ns_identify->flbas & 0xF].lbads;
-
-            PRINTLOG(NVME, LOG_TRACE, "format types");
-            for(int32_t j = 0; j <= nvme_disk->ns_identify->nlbaf; j++) {
-                PRINTLOG(NVME, LOG_TRACE, "ns lba format size %x %x %x",
-                         nvme_disk->ns_identify->lbaf[j].ms,
-                         nvme_disk->ns_identify->lbaf[j].lbads,
-                         nvme_disk->ns_identify->lbaf[j].rp);
-            }
-        }
-
-        /*
-           if(nvme_format(nvme_disk) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot format nvme controller");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-           }
-         */
-
-        if(nvme_set_queue_count(nvme_disk, 1, 1) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot set queue count");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        PRINTLOG(NVME, LOG_TRACE, "creating io cq");
-
-        nvme_disk->io_queue_isr = pci_msix_set_isr(pci_nvme,  msix_cap, 1, nvme_isr);
-        hashmap_put(nvme_disk_isr_map, (void*)nvme_disk->io_queue_isr, nvme_disk);
-
-        if(nvme_send_admin_command(nvme_disk,
-                                   NVME_ADMIN_CMD_CREATE_CQ, // opcode
-                                   0x0, // fuse
-                                   0x0, // nsid
-                                   0x0, // mptr
-                                   queue_frames->frame_address + 3 * FRAME_SIZE, // prp1
-                                   0x0, // prp2
-                                   ((nvme_disk->io_queue_size - 1) << 16) | 1, // cdw10
-                                   (1 << 16) | (1 << 1) | 1, // cdw11
-                                   0x0, // cdw12
-                                   0x0, // cdw13
-                                   0x0, // cdw14
-                                   0x0, // cdw15
-                                   0x0 // sdw0
-                                   ) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot create io cq");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        pci_msix_clear_pending_bit(pci_nvme, msix_cap, 1);
-
-        PRINTLOG(NVME, LOG_TRACE, "io cq created");
-
-        PRINTLOG(NVME, LOG_TRACE, "creating io sq");
-
-        if(nvme_send_admin_command(nvme_disk,
-                                   NVME_ADMIN_CMD_CREATE_SQ, // opcode
-                                   0x0, // fuse
-                                   0x0, // nsid
-                                   0x0, // mptr
-                                   queue_frames->frame_address + 2 * FRAME_SIZE, // prp1
-                                   0x0, // prp2
-                                   ((nvme_disk->io_queue_size - 1) << 16) | 1, // cdw10
-                                   (1 << 16) | 1, // cdw11
-                                   0x0, // cdw12
-                                   0x0, // cdw13
-                                   0x0, // cdw14
-                                   0x0, // cdw15
-                                   0x0 // sdw0
-                                   ) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot create io sq");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        PRINTLOG(NVME, LOG_TRACE, "io sq created");
-
-        frame_t* prp_frames = NULL;
-
-        if(frame_get_allocator()->allocate_frame_by_count(frame_get_allocator(), 64, FRAME_ALLOCATION_TYPE_BLOCK | FRAME_ALLOCATION_TYPE_RESERVED, &prp_frames, NULL) != 0) {
-            PRINTLOG(NVME, LOG_ERROR, "cannot allocate frame for prp");
-            memory_free_ext(heap, nvme_disk);
-
-            return -1;
-        }
-
-        nvme_disk->prp_frame_fa = prp_frames->frame_address;
-        nvme_disk->prp_frame_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(nvme_disk->prp_frame_fa);
-
-        memory_paging_add_va_for_frame(nvme_disk->prp_frame_va, prp_frames, MEMORY_PAGING_PAGE_TYPE_NOEXEC);
-        memory_memclean((void*)nvme_disk->prp_frame_va, 64 * FRAME_SIZE);
-
-        hashmap_put(nvme_disks, (void*)nvme_disk->disk_id, nvme_disk);
 
         disk_id++;
-        iter = iter->next(iter);
     }
-
-    iter->destroy(iter);
 
     return hashmap_size(nvme_disks);
 }

@@ -514,6 +514,8 @@ typedef struct nvme_disk_t {
     pci_generic_device_t*          pci_device; ///< pci device
     nvme_controller_registers_t*   nvme_registers; ///< nvme registers
     pci_capability_msix_t*         msix_capability; ///< msix capability
+    uint64_t                       bar_va; ///< bar virtual address
+    uint64_t                       queue_frames_address; ///< queue frames address
     uint64_t                       admin_queue_size; ///< admin queue size
     uint64_t                       admin_s_queue_tail; ///< admin submission queue tail
     uint64_t                       admin_c_queue_head; ///< admin completion queue head
