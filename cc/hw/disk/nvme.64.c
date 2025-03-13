@@ -383,20 +383,25 @@ static int8_t nvme_perform_identifies(nvme_disk_t* nvme_disk) {
     return 0;
 }
 
-// FIXME: this function brokes qemu
-__attribute__((noinline, target("no-sse"))) static int8_t nvme_configure_queue_configs_ugly_fix(nvme_disk_t* nvme_disk) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+static int8_t nvme_configure_queue_configs_safe(nvme_disk_t* nvme_disk) {
     nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
-    nvme_regs->acq = (nvme_disk->queue_frames_address + FRAME_SIZE);
+
+    volatile uint64_t* asq_reg = (volatile uint64_t*)&nvme_regs->asq;
+    *asq_reg = nvme_disk->queue_frames_address;
+
+    volatile uint64_t* acq_reg = (volatile uint64_t*)&nvme_regs->acq;
+    *acq_reg = (nvme_disk->queue_frames_address + FRAME_SIZE);
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
     nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
 
-    nvme_regs->asq = nvme_disk->queue_frames_address;
-
-    nvme_configure_queue_configs_ugly_fix(nvme_disk);
+    nvme_configure_queue_configs_safe(nvme_disk);
 
     nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
 

@@ -264,6 +264,10 @@ typedef struct nvme_controller_registers_t {
     uint8_t  reserved2[0xFFF - 0xE1C + 1]; ///< reserved command set specific
 }__attribute__((packed)) nvme_controller_registers_t; ///<shorthand for struct
 
+_Static_assert((offsetof_field(nvme_controller_registers_t, asq) % 0x8) == 0, "nvme_controller_registers_t asq should be 8 byte aligned");
+_Static_assert((offsetof_field(nvme_controller_registers_t, acq) % 0x8) == 0, "nvme_controller_registers_t acq should be 8 byte aligned");
+
+
 /**
  * @struct nvme_submission_queue_entry_t
  * @brief nvme submission queue entry
