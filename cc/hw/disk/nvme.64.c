@@ -384,22 +384,27 @@ static int8_t nvme_perform_identifies(nvme_disk_t* nvme_disk) {
 }
 
 // FIXME: this function brokes qemu
-__attribute__((noinline, target("no-mmx"), target("no-sse"))) static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
+__attribute__((noinline, target("no-sse"))) static int8_t nvme_configure_queue_configs_ugly_fix(nvme_disk_t* nvme_disk) {
     nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
-    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
-    nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
+    nvme_regs->acq = (nvme_disk->queue_frames_address + FRAME_SIZE);
+
+    return 0;
+}
+
+static int8_t nvme_configure_queue_configs(nvme_disk_t* nvme_disk) {
+    nvme_controller_registers_t* nvme_regs = (nvme_controller_registers_t*)nvme_disk->bar_va;
+
+    nvme_regs->asq = nvme_disk->queue_frames_address;
+
+    nvme_configure_queue_configs_ugly_fix(nvme_disk);
 
     nvme_controller_cfg_t nvme_config = (nvme_controller_cfg_t)nvme_regs->config;
-    nvme_config.fields.css = 0;
-
-    // FIXME: area brokes qemu
-    nvme_regs->asq = nvme_disk->queue_frames_address;
-    nvme_regs->acq = (nvme_disk->queue_frames_address + FRAME_SIZE);
 
     nvme_controller_aqa_t nvme_aqa = (nvme_controller_aqa_t)nvme_regs->aqa;
     nvme_aqa.bits = (nvme_disk->admin_queue_size - 1) | ((nvme_disk->admin_queue_size - 1) << 16);
     nvme_regs->aqa = nvme_aqa.bits;
 
+    nvme_config.fields.css = 0;
     nvme_config.fields.iosqes = 6;
     nvme_config.fields.iocqes = 4;
     nvme_config.fields.ams = 0;
@@ -408,6 +413,9 @@ __attribute__((noinline, target("no-mmx"), target("no-sse"))) static int8_t nvme
     nvme_config.fields.enable = 1;
 
     nvme_regs->config = nvme_config.bits;
+
+    nvme_controller_cap_t nvme_caps = (nvme_controller_cap_t)nvme_regs->capabilities;
+    nvme_controller_sts_t nvme_status = (nvme_controller_sts_t)nvme_regs->status;
 
     do {
         time_timer_spinsleep(500 * (nvme_caps.fields.timeout + 1));
