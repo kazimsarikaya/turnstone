@@ -1,15 +1,15 @@
 /**
- * @file hypervisor_vmcsops.64.c
+ * @file hypervisor_vmcs_ops.64.c
  * @brief Hypervisor VMCS operations
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
-#include <hypervisor/hypervisor_vmcsops.h>
-#include <hypervisor/hypervisor_vmxops.h>
-#include <hypervisor/hypervisor_utils.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_vmcs_ops.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_vmx_utils.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_ept.h>
 #include <cpu.h>
 #include <cpu/crx.h>
@@ -20,116 +20,62 @@
 
 MODULE("turnstone.hypervisor");
 
-uint32_t hypervisor_vmcs_revision_id(void) {
+uint32_t hypervisor_vmx_vmcs_revision_id(void) {
     return cpu_read_msr(CPU_MSR_IA32_VMX_BASIC) & 0xffffffff;
 }
 
-void hypervisor_vmcs_exit_handler_error(int64_t error_code);
+#if 0
+static int8_t vmx_validate_capability(uint64_t target, uint32_t allowed0, uint32_t allowed1) {
+    int idx = 0;
 
-void hypervisor_vmcs_exit_handler_error(int64_t error_code) {
-    if(!error_code) {
-        task_end_task();
+    for (idx = 0; idx < 32; idx++) {
+        uint32_t mask = 1 << idx;
+        int target_is_set = !!(target & mask);
+        int allowed0_is_set = !!(allowed0 & mask);
+        int allowed1_is_set = !!(allowed1 & mask);
 
-        while(true) { // never reach here
-            cpu_idle();
+        if ((allowed0_is_set && !target_is_set) || (!allowed1_is_set && target_is_set)) {
+            return -1;
         }
     }
 
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error Code: 0x%llx", error_code);
+    return 0;
+}
+#endif
 
-    uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
+static uint32_t vmx_fix_reserved_1_bits(uint32_t target, uint32_t allowed0) {
+    int idx = 0;
 
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
-    PRINTLOG(HYPERVISOR, LOG_ERROR, "VM will be terminated");
+    for (idx = 0; idx < 32; idx++) {
+        uint32_t mask = 1 << idx;
+        int target_is_set = !!(target & mask);
+        int allowed0_is_set = !!(allowed0 & mask);
 
-    // hypervisor_vmcs_dump();
+        if (allowed0_is_set && !target_is_set) {
+            target |= mask;
+        }
+    }
 
-    task_end_task();
+    return target;
 }
 
-static __attribute__((naked)) void hypervisor_exit_handler(void) {
-    asm volatile (
-        "pushq %rbp\n"
-        "pushq %rsp\n"
-        "pushq %rax\n"
-        "pushq %rbx\n"
-        "pushq %rcx\n"
-        "pushq %rdx\n"
-        "pushq %rsi\n"
-        "pushq %rdi\n"
-        "pushq %r15\n"
-        "pushq %r14\n"
-        "pushq %r13\n"
-        "pushq %r12\n"
-        "pushq %r11\n"
-        "pushq %r10\n"
-        "pushq %r9\n"
-        "pushq %r8\n"
-        "sub $0x200, %rsp\n"
-        "fxsave (%rsp)\n"
-        "movq %cr2, %rax\n"
-        "pushq % rax\n"
-        "pushfq\n"
-        "movq %rsp, %rdi\n"
-        "lea 0x0(%rip), %rax\n"
-        "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
-        "add %rax, %r15\n"
-        "movabsq $hypervisor_vmcs_exit_handler_entry@GOT, %rax\n"
-        "call *(%r15, %rax, 1)\n"
-        "// Check return value may end vm task\n"
-        "// Restore the RSP and guest non-vmcs processor state\n"
-        "cmp %rsp, %rax\n"
-        "cmovne %rax, %rdi\n"
-        "jne ___vmexit_handler_entry_error\n"
-        "movq %rax, %rsp\n"
-        "popfq\n"
-        "popq %rax\n"
-        "movq %rax, %cr2\n"
-        "fxrstor (%rsp)\n"
-        "add $0x200, %rsp\n"
-        "popq %r8\n"
-        "popq %r9\n"
-        "popq %r10\n"
-        "popq %r11\n"
-        "popq %r12\n"
-        "popq %r13\n"
-        "popq %r14\n"
-        "popq %r15\n"
-        "popq %rdi\n"
-        "popq %rsi\n"
-        "popq %rdx\n"
-        "popq %rcx\n"
-        "popq %rbx\n"
-        "popq %rax\n"
-        "popq %rsp\n"
-        "popq %rbp\n"
-        "// resume the VM\n"
-        "vmresume\n"
-        "pushq %rax\n"
-        "pushq %rcx\n"
-        "movq $0x4400, %rcx\n"
-        "vmread %rcx, %rax\n"
-        "cmp $0x5, %rax\n"
-        "jne ___vmexit_handler_entry_error\n"
-        "popq %rcx\n"
-        "popq %rax\n"
-        "vmlaunch\n"
-        "___vmexit_handler_entry_error:\n"
-        "lea 0x0(%rip), %rax\n"
-        "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
-        "add %rax, %r15\n"
-        "movabsq $hypervisor_vmcs_exit_handler_error@GOT, %rax\n"
-        "call *(%r15, %rax, 1)\n"
-        "___vmexit_handler_entry_end:\n"
-        "cli\n"
-        "hlt\n"
-        "jmp ___vmexit_handler_entry_end\n");
+static uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1) {
+    int idx = 0;
+
+    for (idx = 0; idx < 32; idx++) {
+        uint32_t mask = 1 << idx;
+        int target_is_set = !!(target & mask);
+        int allowed1_is_set = !!(allowed1 & mask);
+
+        if (!allowed1_is_set && target_is_set) {
+            target &= ~mask;
+        }
+    }
+
+    return target;
 }
 
-_Static_assert(sizeof(vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch. Fix add rsp above");
-
-
-int8_t hypervisor_vmcs_prepare_host_state(hypervisor_vm_t* vm) {
+static int8_t hypervisor_vmx_vmcs_prepare_host_state(hypervisor_vm_t* vm) {
     uint64_t cr0 = cpu_read_cr0().bits;
     uint64_t cr3 = cpu_read_cr3();
     uint64_t cr4 = cpu_read_cr4().bits;
@@ -169,13 +115,12 @@ int8_t hypervisor_vmcs_prepare_host_state(hypervisor_vm_t* vm) {
 
 
     vmx_write(VMX_HOST_RSP, hypervisor_create_stack(vm, 64 << 10));
-    vmx_write(VMX_HOST_RIP, (uint64_t)hypervisor_exit_handler);
     vmx_write(VMX_HOST_EFER, efer);
 
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_guest_state(void) {
+static int8_t hypervisor_vmx_vmcs_prepare_guest_state(void) {
     // prepare guest state at long mode
     vmx_write(VMX_GUEST_ES_SELECTOR, 0x10);
     vmx_write(VMX_GUEST_CS_SELECTOR, 0x08);
@@ -253,7 +198,7 @@ int8_t hypervisor_vmcs_prepare_guest_state(void) {
 
 
 
-int8_t hypervisor_vmcs_prepare_pinbased_control(void){
+static int8_t hypervisor_vmx_vmcs_prepare_pinbased_control(void){
     uint32_t pinbased_msr_eax, pinbased_msr_edx;
     uint64_t pinbased_msr = cpu_read_msr(CPU_MSR_IA32_VMX_PINBASED_CTLS);
     pinbased_msr_eax = pinbased_msr & 0xffffffff;
@@ -275,7 +220,7 @@ int8_t hypervisor_vmcs_prepare_pinbased_control(void){
     return 0;
 }
 
-int8_t hypervisor_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read) {
+static int8_t hypervisor_vmx_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read) {
     if(read) {
         if(msr >= 0xC0000000) {
             bitmap += 1024;
@@ -295,7 +240,7 @@ int8_t hypervisor_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read)
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
+static int8_t hypervisor_vmx_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
     // uint32_t vpid_and_ept_msr_eax, vpid_and_ept_msr_edx;
     // uint64_t vpid_and_ept_msr = cpu_read_msr(CPU_MSR_IA32_VMX_EPT_VPID_CAP);
     // vpid_and_ept_msr_eax = vpid_and_ept_msr & 0xffffffff;
@@ -393,9 +338,9 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
 
 #if 0
     if(!(sec_procbase_ctls & (1 << 8))) { // if vapic register access is not enabled ensure vapic register access is intercepted
-        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
-        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
-        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
+        hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
+        hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
+        hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
         vm->vapic_register_access_enabled = false;
         PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic register access intercepted, no vapic register access.");
     } else {
@@ -403,13 +348,13 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
         PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic register access not intercepted, vapic register access enabled.");
     }
 #else // do we need always watching these registers for write access?
-    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
-    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
-    hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
+    hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
+    hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
+    hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
 #endif
 
     if(!(sec_procbase_ctls & (1 << 9))) { // if virtual-interrupt delivery is not enabled ensure EOI MSR is intercepted
-        hypervisor_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
+        hypervisor_vmx_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
         vm->vid_enabled = false;
         PRINTLOG(HYPERVISOR, LOG_DEBUG, "EOI MSR intercepted, no VID support.");
     } else {
@@ -424,14 +369,14 @@ int8_t hypervisor_vmcs_prepare_procbased_control(hypervisor_vm_t* vm) {
     return 0;
 }
 
-void hypervisor_io_bitmap_set_port(uint8_t * bitmap, uint16_t port) {
+static void hypervisor_vmx_io_bitmap_set_port(uint8_t * bitmap, uint16_t port) {
     uint16_t byte_index = port >> 3;
     uint8_t bit_index = port & 0x7;
     bitmap[byte_index] |= 1 << bit_index;
 }
 
 
-int8_t hypervisor_vmcs_prepare_io_bitmap(hypervisor_vm_t* vm) {
+static int8_t hypervisor_vmx_vmcs_prepare_io_bitmap(hypervisor_vm_t* vm) {
     frame_t* io_bitmap_frame = NULL;
 
     uint8_t * io_bitmap_region_va = (uint8_t*)hypervisor_allocate_region(&io_bitmap_frame, 0x2000);
@@ -444,15 +389,15 @@ int8_t hypervisor_vmcs_prepare_io_bitmap(hypervisor_vm_t* vm) {
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_IO_BITMAP] = *io_bitmap_frame;
 
     // Enable serial ports
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3f8);
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3f9);
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3fa);
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3fb);
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3fc);
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x3fd);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x3f8);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x3f9);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x3fa);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x3fb);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x3fc);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x3fd);
     // Enable keyboard ports
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x60);
-    hypervisor_io_bitmap_set_port(io_bitmap_region_va, 0x64);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x60);
+    hypervisor_vmx_io_bitmap_set_port(io_bitmap_region_va, 0x64);
 
 
     uint64_t io_bitmap_region_pa = io_bitmap_frame->frame_address;
@@ -464,15 +409,15 @@ int8_t hypervisor_vmcs_prepare_io_bitmap(hypervisor_vm_t* vm) {
 }
 
 
-int8_t hypervisor_vmcs_prepare_execution_control(hypervisor_vm_t* vm) {
-    hypervisor_vmcs_prepare_pinbased_control();
-    hypervisor_vmcs_prepare_io_bitmap(vm);
-    hypervisor_vmcs_prepare_procbased_control(vm);
+static int8_t hypervisor_vmx_vmcs_prepare_execution_control(hypervisor_vm_t* vm) {
+    hypervisor_vmx_vmcs_prepare_pinbased_control();
+    hypervisor_vmx_vmcs_prepare_io_bitmap(vm);
+    hypervisor_vmx_vmcs_prepare_procbased_control(vm);
 
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
+static int8_t hypervisor_vmx_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     uint32_t vm_exit_msr_eax, vm_exit_msr_edx;
     uint64_t vm_exit_msr = cpu_read_msr(CPU_MSR_IA32_VMX_VM_EXIT_CTLS);
     vm_exit_msr_eax = vm_exit_msr & 0xffffffff;
@@ -518,14 +463,14 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VM_EXIT_STORE_MSR] = *vm_exit_store_msr_region;
 
     for (uint32_t index = 0; index < nr_msrs; index++) {
-        vmcs_msr_blob_t * vmcs_msr = ((vmcs_msr_blob_t *)vm_exit_store_msr_region_va) + index;
+        vmx_vmcs_msr_blob_t * vmcs_msr = ((vmx_vmcs_msr_blob_t *)vm_exit_store_msr_region_va) + index;
         vmcs_msr->index = predefined_msrs[index];
         vmcs_msr->reserved = 0;
         uint64_t vmcs_msr_value = cpu_read_msr(vmcs_msr->index);
         vmcs_msr->msr_eax = vmcs_msr_value & 0xffffffff;
         vmcs_msr->msr_edx = vmcs_msr_value >> 32;
 
-        vmcs_msr = ((vmcs_msr_blob_t *)vm_exit_load_msr_region_va) + index;
+        vmcs_msr = ((vmx_vmcs_msr_blob_t *)vm_exit_load_msr_region_va) + index;
         vmcs_msr->index = predefined_msrs[index];
         vmcs_msr->reserved = 0;
         vmcs_msr_value = cpu_read_msr(vmcs_msr->index);
@@ -561,7 +506,7 @@ int8_t hypervisor_vmcs_prepare_vm_exit_and_entry_control(hypervisor_vm_t* vm) {
     return 0;
 }
 
-int8_t hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm) {
+int8_t hypervisor_vmx_vmcs_prepare_ept(hypervisor_vm_t* vm) {
     uint64_t ept_pml4_base = hypervisor_ept_setup(vm);
 
     if (ept_pml4_base == -1ULL) {
@@ -597,7 +542,7 @@ int8_t hypervisor_vmcs_prepare_ept(hypervisor_vm_t* vm) {
     return 0;
 }
 
-void hypervisor_vmcs_dump(void) {
+void hypervisor_vmx_vmcs_dump(void) {
 
     PRINTLOG(HYPERVISOR, LOG_ERROR, "VMCS DUMP Host State");
     PRINTLOG(HYPERVISOR, LOG_ERROR, "   RSP:0x%llx",
@@ -699,3 +644,101 @@ void hypervisor_vmcs_dump(void) {
              vmx_read(VMX_CTLS_VPID));
 
 }
+
+int8_t hypervisor_vmx_vmcs_prepare(hypervisor_vm_t** vm_out) {
+    if(!vm_out) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vm_out is NULL");
+        return -1;
+    }
+
+    frame_t* vm_frame = NULL;
+
+    uint64_t vm_frame_va = hypervisor_allocate_region(&vm_frame, FRAME_SIZE);
+
+    if(vm_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vm frame");
+        return -1;
+    }
+
+    hypervisor_vm_t* vm = (hypervisor_vm_t*)vm_frame_va;
+
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF] = *vm_frame;
+
+    frame_t* vmcs_frame = NULL;
+
+    uint64_t vmcs_frame_va = hypervisor_allocate_region(&vmcs_frame, FRAME_SIZE);
+
+    if(vmcs_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vmcs frame");
+        return -1;
+    }
+
+    vm->vmcs_frame_fa = vmcs_frame->frame_address;
+    vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMCS] = *vmcs_frame;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmcs frame va: 0x%llx", vmcs_frame_va);
+
+    uint32_t revision_id = hypervisor_vmx_vmcs_revision_id();
+
+    *(uint32_t*)vmcs_frame_va = revision_id;
+
+    uint8_t err = 0;
+
+    err = vmclear(vmcs_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmclear failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmclear success");
+
+    err = vmptrld(vmcs_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmptrld success");
+
+    if(hypervisor_vmx_vmcs_prepare_host_state(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare host state");
+        return -1;
+    }
+
+    if(hypervisor_vmx_vmcs_prepare_guest_state() != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare guest state");
+        return -1;
+    }
+
+    if(hypervisor_vmx_vmcs_prepare_execution_control(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare execution control");
+        return -1;
+    }
+
+    if(hypervisor_vmx_vmcs_prepare_vm_exit_and_entry_control(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm exit control");
+        return -1;
+    }
+
+    if(hypervisor_vmx_vmcs_prepare_vmexit_handlers() != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vmexit handlers");
+        return -1;
+    }
+
+    err = vmclear(vmcs_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmclear failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmclear success");
+
+
+    *vm_out = vm;
+
+    return 0;
+}
+

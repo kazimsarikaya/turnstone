@@ -23,9 +23,9 @@
 #include <utils.h>
 #include <hashmap.h>
 #include <stdbufs.h>
-#include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
 #include <hypervisor/hypervisor_vm.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <strings.h>
 #include <spool.h>
 

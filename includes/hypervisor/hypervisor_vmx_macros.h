@@ -1,14 +1,14 @@
 /**
- * @file hypervisor_macros.h
- * @brief defines hypervisor related macros
+ * @file hypervisor_vmx_macros.h
+ * @brief defines hypervisor vmx (intel) related macros
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
 
-#ifndef ___HYPERVISOR_MACROS_H
-#define ___HYPERVISOR_MACROS_H 0
+#ifndef ___HYPERVISOR_VMX_MACROS_H
+#define ___HYPERVISOR_VMX_MACROS_H 0
 
 #include <types.h>
 
@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-#define HYPERVISOR_ECX_HYPERVISOR_BIT 5
+#define HYPERVISOR_INTEL_ECX_HYPERVISOR_BIT 5
 
 #define FEATURE_CONTROL_VMXON_OUTSIDE_SMX (1 << 2)
 #define FEATURE_CONTROL_LOCKED        (1 << 0)

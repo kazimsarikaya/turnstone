@@ -9,9 +9,9 @@
 
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_ipc.h>
-#include <hypervisor/hypervisor_macros.h>
-#include <hypervisor/hypervisor_vmxops.h>
-#include <hypervisor/hypervisor_utils.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_vmx_utils.h>
 #include <list.h>
 #include <cpu/task.h>
 #include <cpu.h>
@@ -125,7 +125,7 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
     list_destroy(vm->mapped_pci_devices);
     list_destroy(vm->mapped_io_ports);
-    hypervisor_vmcall_cleanup_mapped_interrupts(vm);
+    hypervisor_cleanup_mapped_interrupts(vm);
     list_destroy(vm->mapped_interrupts);
     list_destroy(vm->interrupt_queue);
     list_destroy(vm->released_pages);

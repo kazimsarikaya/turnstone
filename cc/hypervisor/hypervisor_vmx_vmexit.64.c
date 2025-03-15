@@ -6,13 +6,14 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <hypervisor/hypervisor_vmcsops.h>
-#include <hypervisor/hypervisor_vmxops.h>
-#include <hypervisor/hypervisor_utils.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_vmcs_ops.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_vmx_utils.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_ept.h>
 #include <hypervisor/hypervisor_ipc.h>
 #include <hypervisor/hypervisor_vm.h>
+#include <hypervisor/hypervisor_guestlib.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/interrupt.h>
@@ -25,9 +26,120 @@
 
 MODULE("turnstone.hypervisor");
 
-vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
+static vmx_vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
 
-static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* vmexit_info) {
+uint64_t hypervisor_vmx_vmcs_exit_handler_entry(uint64_t rsp);
+void     hypervisor_vmx_vmcs_exit_handler_error(int64_t error_code);
+
+static __attribute__((naked)) void hypervisor_vmx_exit_handler(void) {
+    asm volatile (
+        "pushq %rbp\n"
+        "pushq %rsp\n"
+        "pushq %rax\n"
+        "pushq %rbx\n"
+        "pushq %rcx\n"
+        "pushq %rdx\n"
+        "pushq %rsi\n"
+        "pushq %rdi\n"
+        "pushq %r15\n"
+        "pushq %r14\n"
+        "pushq %r13\n"
+        "pushq %r12\n"
+        "pushq %r11\n"
+        "pushq %r10\n"
+        "pushq %r9\n"
+        "pushq %r8\n"
+        "sub $0x200, %rsp\n"
+        "fxsave (%rsp)\n"
+        "movq %cr2, %rax\n"
+        "pushq % rax\n"
+        "pushfq\n"
+        "movq %rsp, %rdi\n"
+        "lea 0x0(%rip), %rax\n"
+        "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
+        "add %rax, %r15\n"
+        "movabsq $hypervisor_vmx_vmcs_exit_handler_entry@GOT, %rax\n"
+        "call *(%r15, %rax, 1)\n"
+        "// Check return value may end vm task\n"
+        "// Restore the RSP and guest non-vmcs processor state\n"
+        "cmp %rsp, %rax\n"
+        "cmovne %rax, %rdi\n"
+        "jne ___vmexit_handler_entry_error\n"
+        "movq %rax, %rsp\n"
+        "popfq\n"
+        "popq %rax\n"
+        "movq %rax, %cr2\n"
+        "fxrstor (%rsp)\n"
+        "add $0x200, %rsp\n"
+        "popq %r8\n"
+        "popq %r9\n"
+        "popq %r10\n"
+        "popq %r11\n"
+        "popq %r12\n"
+        "popq %r13\n"
+        "popq %r14\n"
+        "popq %r15\n"
+        "popq %rdi\n"
+        "popq %rsi\n"
+        "popq %rdx\n"
+        "popq %rcx\n"
+        "popq %rbx\n"
+        "popq %rax\n"
+        "popq %rsp\n"
+        "popq %rbp\n"
+        "// resume the VM\n"
+        "vmresume\n"
+        "pushq %rax\n"
+        "pushq %rcx\n"
+        "movq $0x4400, %rcx\n"
+        "vmread %rcx, %rax\n"
+        "cmp $0x5, %rax\n"
+        "jne ___vmexit_handler_entry_error\n"
+        "popq %rcx\n"
+        "popq %rax\n"
+        "vmlaunch\n"
+        "___vmexit_handler_entry_error:\n"
+        "lea 0x0(%rip), %rax\n"
+        "movabs $_GLOBAL_OFFSET_TABLE_, %r15\n"
+        "add %rax, %r15\n"
+        "movabsq $hypervisor_vmx_vmcs_exit_handler_error@GOT, %rax\n"
+        "call *(%r15, %rax, 1)\n"
+        "___vmexit_handler_entry_end:\n"
+        "cli\n"
+        "hlt\n"
+        "jmp ___vmexit_handler_entry_end\n");
+}
+
+_Static_assert(sizeof(vmx_vmcs_registers_t) == 0x290, "vmcs_registers_t size mismatch. Fix add rsp above");
+
+void hypervisor_vmx_vmcs_exit_handler_error(int64_t error_code) {
+    if(!error_code) {
+        task_end_task();
+
+        while(true) { // never reach here
+            cpu_idle();
+        }
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error Code: 0x%llx", error_code);
+
+    uint64_t vm_instruction_error = vmx_read(VMX_VM_INSTRUCTION_ERROR);
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VMExit Handler Error 0x%lli", vm_instruction_error);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "VM will be terminated");
+
+    // hypervisor_vmcs_dump();
+
+    task_end_task();
+}
+
+static void hypervisor_vmx_goto_next_instruction(vmx_vmcs_vmexit_info_t* vmexit_info) {
+    uint64_t guest_rip = vmexit_info->guest_rip;
+    guest_rip += vmexit_info->instruction_length;
+    vmx_write(VMX_GUEST_RIP, guest_rip);
+}
+
+static uint64_t hypervisor_vmcs_external_interrupt_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t interrupt_info = vmexit_info->interrupt_info;
     uint64_t interrupt_vector = interrupt_info & 0xFF;
     uint64_t interrupt_type = (interrupt_info >> 8) & 0x7;
@@ -69,14 +181,14 @@ static uint64_t hypervisor_vmcs_external_interrupt_handler(vmcs_vmexit_info_t* v
 
     cpu_sti();
 
-    hypervisor_vmcs_check_ipc(vmexit_info);
+    hypervisor_check_ipc(vmexit_info);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Handler Returned: 0x%llx", (uint64_t)vmexit_info->registers);
 
     return (uint64_t)vmexit_info->registers;
 }
 
-static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t guest_linear_addr = vmexit_info->guest_linear_addr;
     uint64_t guest_physical_addr = vmexit_info->guest_physical_addr;
     uint64_t exit_qualification = vmexit_info->exit_qualification;
@@ -98,7 +210,7 @@ static uint64_t hypervisor_vmcs_ept_misconfig_handler(vmcs_vmexit_info_t* vmexit
     return -1;
 }
 
-static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_hlt_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     hypervisor_vm_t* vm = vmexit_info->vm;
     vm->is_halted = true;
 
@@ -106,31 +218,31 @@ static uint64_t hypervisor_vmcs_hlt_handler(vmcs_vmexit_info_t* vmexit_info) {
 
     task_yield();
 
-    hypervisor_vmcs_check_ipc(vmexit_info);
+    hypervisor_check_ipc(vmexit_info);
 
     if(vm->is_halt_need_next_instruction) {
         vm->is_halted = false;
         vm->is_halt_need_next_instruction = false;
-        hypervisor_vmcs_goto_next_instruction(vmexit_info);
+        hypervisor_vmx_goto_next_instruction(vmexit_info);
     }
 
     return (uint64_t)vmexit_info->registers;
 }
 
-static uint64_t hypervisor_vmcs_pause_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_pause_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     hypervisor_vm_t* vm = vmexit_info->vm;
     vm->is_halted = true;
 
     task_yield();
 
-    hypervisor_vmcs_check_ipc(vmexit_info);
+    hypervisor_check_ipc(vmexit_info);
 
-    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    hypervisor_vmx_goto_next_instruction(vmexit_info);
 
     return (uint64_t)vmexit_info->registers;
 }
 
-static void hypervisor_vmcs_io_fast_string_printf_io(vmcs_vmexit_info_t* vmexit_info) {
+static void hypervisor_vmcs_io_fast_string_printf_io(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t rsi = vmexit_info->registers->rsi;
     uint64_t rcx = vmexit_info->registers->rcx;
 
@@ -164,7 +276,7 @@ static void hypervisor_vmcs_io_fast_string_printf_io(vmcs_vmexit_info_t* vmexit_
     vmexit_info->registers->rcx -= data_len;
 }
 
-static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_io_instruction_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t exit_qualification = vmexit_info->exit_qualification;
     hypervisor_vm_t* vm = vmexit_info->vm;
 
@@ -331,7 +443,7 @@ static uint64_t hypervisor_vmcs_io_instruction_handler(vmcs_vmexit_info_t* vmexi
         }
     }
 
-    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    hypervisor_vmx_goto_next_instruction(vmexit_info);
 
     return (uint64_t)vmexit_info->registers;
 }
@@ -378,7 +490,7 @@ static void hypervisor_vapic_set_isr(hypervisor_vm_t* vm, uint32_t vector, boole
              vector, byte_pos, bit_pos, vapic[byte_pos]);
 }
 
-static void hypervisor_vmcs_find_next_x2apic_interrupt(vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, boolean_t iterate, boolean_t for_eoi) {
+static void hypervisor_vmcs_find_next_x2apic_interrupt(vmx_vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, boolean_t iterate, boolean_t for_eoi) {
     uint32_t interrupt_vector = 0;
     boolean_t found = false;
 
@@ -445,7 +557,7 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(vmcs_vmexit_info_t* vmexi
 
 }
 
-static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_interrupt_window_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window");
 
     uint32_t interuptibility_state = vmx_read(VMX_GUEST_INTERRUPTIBILITY_STATE);
@@ -490,7 +602,7 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmcs_vmexit_info_t* vme
     return (uint64_t)vmexit_info->registers;
 }
 
-static uint64_t hypervisor_vmcs_rdmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_rdmsr_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t msr = vmexit_info->registers->rcx;
 
     hypervisor_vm_t* vm = vmexit_info->vm;
@@ -521,12 +633,12 @@ static uint64_t hypervisor_vmcs_rdmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
     vmexit_info->registers->rax = value & 0xFFFFFFFF;
     vmexit_info->registers->rdx = (value >> 32) & 0xFFFFFFFF;
 
-    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    hypervisor_vmx_goto_next_instruction(vmexit_info);
 
     return (uint64_t)vmexit_info->registers;
 }
 
-static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_wrmsr_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t msr = vmexit_info->registers->rcx;
     uint64_t value = vmexit_info->registers->rax | (vmexit_info->registers->rdx << 32);
 
@@ -591,11 +703,11 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmcs_vmexit_info_t* vmexit_info) {
         break;
     }
 
-    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    hypervisor_vmx_goto_next_instruction(vmexit_info);
 
     return (uint64_t)vmexit_info->registers;
 }
-static uint64_t hypervisor_vmcs_control_register_access_handler(vmcs_vmexit_info_t* vmexit_info) {
+static uint64_t hypervisor_vmcs_control_register_access_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t exit_qualification = vmexit_info->exit_qualification;
     uint64_t reg = (exit_qualification >> 8) & 0xF;
     uint64_t access_type = (exit_qualification >> 4) & 0x3;
@@ -621,12 +733,12 @@ static uint64_t hypervisor_vmcs_control_register_access_handler(vmcs_vmexit_info
         return -1;
     }
 
-    hypervisor_vmcs_goto_next_instruction(vmexit_info);
+    hypervisor_vmx_goto_next_instruction(vmexit_info);
 
     return (uint64_t)vmexit_info->registers;
 }
 
-static uint64_t hypervisor_vmcs_exception_or_nmi_handler(vmcs_vmexit_info_t* exit_info) {
+static uint64_t hypervisor_vmcs_exception_or_nmi_handler(vmx_vmcs_vmexit_info_t* exit_info) {
     uint64_t interrupt_info = exit_info->interrupt_info;
 
     int8_t vector = interrupt_info & 0xFF;
@@ -644,15 +756,77 @@ static uint64_t hypervisor_vmcs_exception_or_nmi_handler(vmcs_vmexit_info_t* exi
     return -1;
 }
 
-uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
+static int8_t hypervisor_vmx_dump_vmcs(vmx_vmcs_vmexit_info_t vmexit_info) {
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
+             vmexit_info.guest_rip, vmexit_info.guest_rflags,
+             vmexit_info.guest_efer);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RAX: 0x%016llx RBX: 0x%016llx RCX: 0x%016llx RDX: 0x%016llx",
+             vmexit_info.registers->rax, vmexit_info.registers->rbx,
+             vmexit_info.registers->rcx, vmexit_info.registers->rdx);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RSI: 0x%016llx RDI: 0x%016llx RBP: 0x%016llx RSP: 0x%016llx",
+             vmexit_info.registers->rsi, vmexit_info.registers->rdi,
+             vmexit_info.registers->rbp, vmexit_info.guest_rsp);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R8:  0x%016llx R9:  0x%016llx R10: 0x%016llx R11: 0x%016llx",
+             vmexit_info.registers->r8, vmexit_info.registers->r9,
+             vmexit_info.registers->r10, vmexit_info.registers->r11);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R12: 0x%016llx R13: 0x%016llx R14: 0x%016llx R15: 0x%016llx\n",
+             vmexit_info.registers->r12, vmexit_info.registers->r13,
+             vmexit_info.registers->r14, vmexit_info.registers->r15);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    CR0: 0x%08llx CR2: 0x%016llx CR3: 0x%016llx CR4: 0x%08llx\n",
+             vmexit_info.guest_cr0, vmexit_info.registers->cr2,
+             vmexit_info.guest_cr3, vmexit_info.guest_cr4);
+    hypervisor_ept_dump_mapping(vmexit_info.vm);
+    hypervisor_ept_dump_paging_mapping(vmexit_info.vm);
+
+    return 0;
+}
+
+static uint64_t hypervisor_vmcs_vmcalls_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
+    hypervisor_vm_t* vm = vmexit_info->vm;
+    uint64_t rax = vmexit_info->registers->rax;
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcall rax 0x%llx", rax);
+
+    uint64_t ret = -1;
+
+    switch(rax) {
+    case HYPERVISOR_VMCALL_NUMBER_EXIT:
+        hypervisor_cleanup_mapped_interrupts(vm);
+        return 0;
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS:
+        ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV:
+        ret = hypervisor_vmx_vmcall_attach_pci_dev(vm, vmexit_info->registers->rdi);
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT:
+        ret = hypervisor_vmx_vmcall_attach_interrupt(vm, vmexit_info);
+        break;
+    case HYPERVISOR_VMCALL_NUMBER_LOAD_MODULE:
+        ret = hypervisor_vmx_vmcall_load_module(vm, vmexit_info);
+        break;
+    default:
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown vmcall rax 0x%llx", rax);
+        break;
+    }
+
+    vmexit_info->registers->rax = ret;
+
+    hypervisor_vmx_goto_next_instruction(vmexit_info);
+
+    return (uint64_t)vmexit_info->registers;
+}
+
+uint64_t hypervisor_vmx_vmcs_exit_handler_entry(uint64_t rsp) {
     cpu_sti();
 
-    vmcs_registers_t* registers = (vmcs_registers_t*)rsp;
+    vmx_vmcs_registers_t* registers = (vmx_vmcs_registers_t*)rsp;
     // registers->rsp = vmx_read(VMX_GUEST_RSP);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "VMExit RSP: 0x%llx", rsp);
 
-    vmcs_vmexit_info_t vmexit_info = {
+    vmx_vmcs_vmexit_info_t vmexit_info = {
         .registers = registers,
         .reason = vmx_read(VMX_VMEXIT_REASON),
         .exit_qualification = vmx_read(VMX_EXIT_QUALIFICATION),
@@ -691,7 +865,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Instruction Info: 0x%llx", vmexit_info.instruction_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Info: 0x%llx", vmexit_info.interrupt_info);
     PRINTLOG(HYPERVISOR, LOG_ERROR, "    Interrupt Error Code: 0x%llx", vmexit_info.interrupt_error_code);
-    hypervisor_dump_vmcs(vmexit_info);
+    hypervisor_vmx_dump_vmcs(vmexit_info);
 
     while(true) {
         cpu_idle();
@@ -699,7 +873,7 @@ uint64_t hypervisor_vmcs_exit_handler_entry(uint64_t rsp) {
     return -1;
 }
 
-int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
+int8_t hypervisor_vmx_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_EXTERNAL_INTERRUPT] = hypervisor_vmcs_external_interrupt_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_EPT_MISCONFIG] = hypervisor_vmcs_ept_misconfig_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_HLT] = hypervisor_vmcs_hlt_handler;
@@ -711,5 +885,7 @@ int8_t hypervisor_vmcs_prepare_vmexit_handlers(void) {
     vmexit_handlers[VMX_VMEXIT_REASON_VMCALL] = hypervisor_vmcs_vmcalls_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_CONTROL_REGISTER_ACCESS] = hypervisor_vmcs_control_register_access_handler;
     vmexit_handlers[VMX_VMEXIT_REASON_EXCEPTION_OR_NMI] = hypervisor_vmcs_exception_or_nmi_handler;
+
+    vmx_write(VMX_HOST_RIP, (uint64_t)hypervisor_vmx_exit_handler);
     return 0;
 }

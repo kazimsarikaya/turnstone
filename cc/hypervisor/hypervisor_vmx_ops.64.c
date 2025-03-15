@@ -1,13 +1,13 @@
 /**
- * @file hypervisor_vmxops.64.c
+ * @file hypervisor_vmx_ops.64.c
  * @brief VMX operations for 64-bit x86 architecture.
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
 
-#include <hypervisor/hypervisor_vmxops.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <logging.h>
 
 MODULE("turnstone.hypervisor");

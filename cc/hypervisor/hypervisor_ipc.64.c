@@ -8,9 +8,9 @@
 
 
 #include <hypervisor/hypervisor_ipc.h>
-#include <hypervisor/hypervisor_vmcsops.h>
-#include <hypervisor/hypervisor_vmxops.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_vmcs_ops.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_vm.h>
 #include <list.h>
 #include <cpu/task.h>
@@ -22,7 +22,7 @@ MODULE("turnstone.hypervisor");
 
 extern list_t* hypervisor_vm_list;
 
-static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
+static int8_t hypervisor_ipc_handle_dump(vmx_vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
     buffer_t* buffer = message->message_data;
 
     hypervisor_vm_t* vm = vmexit_info->vm;
@@ -117,7 +117,7 @@ static int8_t hypervisor_ipc_handle_dump(vmcs_vmexit_info_t* vmexit_info, hyperv
     return 0;
 }
 
-static int8_t hypervisor_ipc_handle_irq(vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, uint8_t vector) {
+static int8_t hypervisor_ipc_handle_irq(vmx_vmcs_vmexit_info_t* vmexit_info, hypervisor_vm_t* vm, uint8_t vector) {
     uint32_t vector_byte = vector / 64;
     uint32_t vector_bit = vector % 64;
 
@@ -139,7 +139,7 @@ static int8_t hypervisor_ipc_handle_irq(vmcs_vmexit_info_t* vmexit_info, hypervi
     return 0;
 }
 
-static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
+static int8_t hypervisor_ipc_handle_timer_int(vmx_vmcs_vmexit_info_t* vmexit_info, hypervisor_ipc_message_t* message) {
     UNUSED(message);
 
     hypervisor_vm_t* vm = vmexit_info->vm;
@@ -157,7 +157,7 @@ static int8_t hypervisor_ipc_handle_timer_int(vmcs_vmexit_info_t* vmexit_info, h
 
 
 
-static void hypervisor_ipc_handle_interrupts(vmcs_vmexit_info_t * vmexit_info) {
+static void hypervisor_ipc_handle_interrupts(vmx_vmcs_vmexit_info_t * vmexit_info) {
     hypervisor_vm_t* vm = vmexit_info->vm;
 
     if(!vm) {
@@ -174,7 +174,7 @@ static void hypervisor_ipc_handle_interrupts(vmcs_vmexit_info_t * vmexit_info) {
 }
 
 
-int8_t hypervisor_vmcs_check_ipc(vmcs_vmexit_info_t* vmexit_info) {
+int8_t hypervisor_check_ipc(vmx_vmcs_vmexit_info_t* vmexit_info) {
     hypervisor_ipc_handle_interrupts(vmexit_info);
 
     list_t* mq = task_get_current_task_message_queue(0);

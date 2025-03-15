@@ -1,5 +1,5 @@
 /**
- * @file hypervisor_vmxops.h
+ * @file hypervisor_vmx_ops.h
  * @brief vmx operations
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -23,7 +23,6 @@ int8_t   vmxon(uint64_t vmxon_pa);
 int8_t   vmptrld(uint64_t vmcs_pa);
 int8_t   vmclear(uint64_t vmcs_pa);
 int8_t   vmlaunch(void);
-void     hypervisor_vmcs_dump(void);
 
 #ifdef __cplusplus
 }

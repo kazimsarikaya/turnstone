@@ -67,13 +67,19 @@ if [[ "${VIRTIO_SERIAL_ENABLED}x" == "yesx" ]]; then
     VIRTIO_SERIAL="${VIRTIO_SERIAL} -chardev socket,id=vdagent0,port=4444,host=localhost,server=off,reconnect=5"
 fi
 
-TRACE_OPTS="guest_errors,trace:virtio_console_*"
+TRACE_OPTS="guest_errors,mmu,trace:amdvi_*"
+
+# if trace_opts is not empty, then enable tracing (prefix with -d)
+
+if [[ "${TRACE_OPTS}x" != "x" ]]; then
+  TRACE_OPTS="-d ${TRACE_OPTS}"
+fi
 
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
-  -M q35 -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
+  -M q35,kernel-irqchip=split -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
   -cpu host \
-  -accel $ACCEL -d "${TRACE_OPTS}" \
+  -accel $ACCEL ${TRACE_OPTS} \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${CURRENTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${CURRENTDIR}/edk2-i386-vars.fd \
   -drive id=system,if=none,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
@@ -88,6 +94,7 @@ qemu-system-x86_64 \
   -device virtio-mouse,id=mouse \
   -device virtio-tablet,id=tablet \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
+  -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on \
   $VIRTIO_SERIAL \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \

@@ -7,9 +7,9 @@
  */
 
 #include <hypervisor/hypervisor_ept.h>
-#include <hypervisor/hypervisor_utils.h>
-#include <hypervisor/hypervisor_macros.h>
-#include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vmx_utils.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
 #include <memory/paging.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
@@ -1180,7 +1180,7 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     return 0;
 }
 
-uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
+uint64_t hypervisor_ept_page_fault_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     uint64_t error_code = vmexit_info->interrupt_error_code;
     hypervisor_vm_t* vm = task_get_vm();
 
