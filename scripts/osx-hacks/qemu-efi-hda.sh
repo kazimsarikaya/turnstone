@@ -94,7 +94,6 @@ qemu-system-x86_64 \
   -device virtio-mouse,id=mouse \
   -device virtio-tablet,id=tablet \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
-  -device AMDVI-PCI,id=iommupci0 \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $VIRTIO_SERIAL \
   $SERIALS \
