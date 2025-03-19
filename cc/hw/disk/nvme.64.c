@@ -135,7 +135,7 @@ static int8_t nvme_find_msix(nvme_disk_t* nvme_disk) {
 
     if(msix_cap != NULL) {
         if(pci_msix_configure(pci_nvme, msix_cap) != 0) {
-            PRINTLOG(VIRTIO, LOG_ERROR, "failed to configure msix");
+            PRINTLOG(NVME, LOG_ERROR, "failed to configure msix");
 
             return -1;
         }
