@@ -50,7 +50,7 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
 fi
 
 NUMCPUS=4 
-RAMSIZE=4
+RAMSIZE=8
 
 SERIALS=""
 
@@ -58,16 +58,7 @@ for i in `seq 0 $((NUMCPUS-1))`; do
   SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
 done
 
-VIRTIO_SERIAL_ENABLED="yes"
-VIRTIO_SERIAL=""
-
-if [[ "${VIRTIO_SERIAL_ENABLED}x" == "yesx" ]]; then
-    VIRTIO_SERIAL="${VIRTIO_SERIAL} -device virtio-serial,id=vser0,packed=on,ioeventfd=on,max_ports=4,vectors=64"
-    VIRTIO_SERIAL="${VIRTIO_SERIAL} -device virtserialport,name=com.turnstoneos.clipboard.0,chardev=vdagent0"
-    VIRTIO_SERIAL="${VIRTIO_SERIAL} -chardev socket,id=vdagent0,port=4444,host=localhost,server=off,reconnect=5"
-fi
-
-TRACE_OPTS="guest_errors,mmu,trace:amdvi_*"
+TRACE_OPTS="guest_errors,mmu"
 
 # if trace_opts is not empty, then enable tracing (prefix with -d)
 
@@ -87,15 +78,14 @@ qemu-system-x86_64 \
   -drive id=cache,if=none,format=raw,file=${OUTPUTDIR}/qemu-nvme-cache,werror=report,rerror=report \
   -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096 \
   -monitor stdio \
-  -device virtio-vga-gl,id=gpu0 \
-  -device virtio-net,netdev=t0,id=nic0,host_mtu=1500 \
+  -device VGA,id=gpu0,vgamem_mb=256 \
+  -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
-  -device virtio-keyboard,id=kbd \
-  -device virtio-mouse,id=mouse \
-  -device virtio-tablet,id=tablet \
+  -device usb-ehci,id=ehci \
+  -device usb-mouse,bus=ehci.0 \
+  -device usb-kbd,bus=ehci.0 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
-  $VIRTIO_SERIAL \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -display sdl,gl=on,show-cursor=on 

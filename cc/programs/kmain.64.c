@@ -49,7 +49,6 @@
 #include <spool.h>
 #include <graphics/screen.h>
 #include <driver/video.h>
-#include <driver/console_virtio.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -358,11 +357,6 @@ int8_t kmain64(size_t entry_point) {
 
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
-        cpu_hlt();
-    }
-
-    if(console_virtio_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init virtio console. Halting...");
         cpu_hlt();
     }
 

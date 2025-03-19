@@ -27,7 +27,6 @@
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
 #include <graphics/font.h>
-#include <driver/console_virtio.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -210,7 +209,7 @@ static int8_t windowmanager_main(void) {
                             windowmanager_current_window->on_scroll(&event);
                         }
                     } else if(kbd_data[i].key == KBD_SCANCODE_PRINTSCREEN) {
-                        clipboard_send_text("hello world from turnstone os!");
+                        // clipboard_send_text("hello world from turnstone os!");
                     }
 
                 }

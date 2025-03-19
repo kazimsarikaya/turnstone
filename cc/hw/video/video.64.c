@@ -9,12 +9,12 @@
 #include <list.h>
 #include <pci.h>
 #include <driver/video.h>
-#include <driver/video_virtio.h>
 #include <driver/video_vmwaresvga.h>
 #include <logging.h>
 #include <apic.h>
 #include <ports.h>
 #include <graphics/text_cursor.h>
+#include <cpu/sync.h>
 
 MODULE("turnstone.kernel.hw.video");
 
@@ -63,9 +63,7 @@ int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers) {
     while(iter->end_of_iterator(iter) != 0) {
         const pci_dev_t* device = iter->get_item(iter);
 
-        if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VIRTIO && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VIRTIO_GPU) {
-            virtio_video_init(heap, device);
-        } else if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
+        if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
             vmware_svga2_init(heap, device);
         } else {
             PRINTLOG(KERNEL, LOG_WARNING, "Unknown video device: %x:%x", device->pci_header->vendor_id, device->pci_header->device_id);

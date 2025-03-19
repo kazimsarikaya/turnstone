@@ -41,14 +41,11 @@ typedef enum logging_modules_t {
     TIMER,
     AHCI,
     NETWORK,
-    VIRTIO,
-    VIRTIONET,
     E1000,
     FAT,
     NVME,
     TOSDB,
     HEAP_HASH,
-    VIRTIOGPU,
     HPET,
     VMWARESVGA,
     USB,
@@ -58,7 +55,6 @@ typedef enum logging_modules_t {
     COMPILER_PASCAL,
     HYPERVISOR,
     WINDOWMANAGER,
-    VIRTIO_CONSOLE,
     PNG,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
@@ -176,16 +172,6 @@ extern logging_level_t logging_module_levels[];
 #define LOG_LEVEL_NETWORK LOG_INFO
 #endif
 
-#ifndef LOG_LEVEL_VIRTIO
-/*! default log level for virtio module */
-#define LOG_LEVEL_VIRTIO LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_VIRTIONET
-/*! default log level for virtio net module */
-#define LOG_LEVEL_VIRTIONET LOG_INFO
-#endif
-
 #ifndef LOG_LEVEL_E1000
 /*! default log level for e1000 module */
 #define LOG_LEVEL_E1000 LOG_INFO
@@ -209,11 +195,6 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_HEAP_HASH
 /*! default log level for heap hash module */
 #define LOG_LEVEL_HEAP_HASH LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_VIRTIOGPU
-/*! default log level for vmware svga module */
-#define LOG_LEVEL_VIRTIOGPU LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_HPET
@@ -259,11 +240,6 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_WINDOWMANAGER
 /*! default log level for window manager module */
 #define LOG_LEVEL_WINDOWMANAGER LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_VIRTIO_CONSOLE
-/*! default log level for virtio console module */
-#define LOG_LEVEL_VIRTIO_CONSOLE LOG_DEBUG
 #endif
 
 #ifndef LOG_LEVEL_PNG

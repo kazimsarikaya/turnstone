@@ -23,9 +23,6 @@ extern "C" {
 #define KBD_CMD_DISABLE_KBD_PORT 0xAD
 #define KBD_CMD_DISABLE_MOUSE_PORT 0xA7
 
-#define KBD_DEVICE_VENDOR_ID_VIRTIO  0x1AF4
-#define KBD_DEVICE_DEVICE_ID_VIRTIO  0x1052
-
 typedef struct kbd_state_t {
     boolean_t is_capson;
     boolean_t is_shift_pressed;
@@ -44,11 +41,8 @@ typedef struct kbd_report_t {
 
 _Static_assert(sizeof(kbd_report_t) == 10, "kbd_report_t size is not 10 bytes");
 
-#undef strigify
-
 int8_t kbd_init(void);
 
-int8_t dev_virtio_kbd_init(void);
 int8_t kbd_handle_key(char16_t key, boolean_t pressed);
 
 #ifdef __cplusplus
