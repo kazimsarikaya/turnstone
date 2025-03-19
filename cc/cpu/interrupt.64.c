@@ -472,7 +472,6 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
     video_text_print(return_symbol_name);
-    video_text_print(" wtf\n");
 
     PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, tid);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
