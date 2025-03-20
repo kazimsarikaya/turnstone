@@ -404,9 +404,7 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
             if(!found) {
                 // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
                 char16_t key = usb_keyboard->old_usb_kbd_report.key[i];
-                PRINTLOG(USB, LOG_INFO, "key released: %x", key);
                 key = KBD_USB_SCANCODE_MAP[key];
-                PRINTLOG(USB, LOG_INFO, "key mapped: %x", key);
                 kbd_handle_key(key, false);
             }
         }
@@ -427,9 +425,7 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
             if(!found) {
                 // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
                 char16_t key = usb_keyboard->new_usb_kbd_report.key[i];
-                PRINTLOG(USB, LOG_INFO, "key pressed: %x", key);
                 key = KBD_USB_SCANCODE_MAP[key];
-                PRINTLOG(USB, LOG_INFO, "key mapped: %x", key);
                 kbd_handle_key(key, true);
             }
         }
