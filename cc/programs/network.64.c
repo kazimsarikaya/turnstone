@@ -7,7 +7,7 @@
  */
 
 #include <network.h>
-#include <driver/network_e1000.h>
+#include <driver/network_igb.h>
 #include <pci.h>
 #include <list.h>
 #include <memory.h>
@@ -200,8 +200,8 @@ int8_t network_init(void) {
 
         pci_common_header_t* pci_header = pci_netdev->pci_header;
 
-        if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_INTEL && pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_E1000) {
-            errors += network_e1000_init(pci_netdev);
+        if(pci_header->vendor_id == NETWORK_DEVICE_VENDOR_ID_INTEL && pci_header->device_id == NETWORK_DEVICE_DEVICE_ID_IGB) {
+            errors += network_igb_init(pci_netdev);
         } else {
             PRINTLOG(NETWORK, LOG_ERROR, "unknown net device vendor 0x%04x device 0x%04x", pci_header->vendor_id, pci_header->device_id);
             errors += -1;

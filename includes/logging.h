@@ -41,7 +41,7 @@ typedef enum logging_modules_t {
     TIMER,
     AHCI,
     NETWORK,
-    E1000,
+    IGB,
     FAT,
     NVME,
     TOSDB,
@@ -172,9 +172,9 @@ extern logging_level_t logging_module_levels[];
 #define LOG_LEVEL_NETWORK LOG_INFO
 #endif
 
-#ifndef LOG_LEVEL_E1000
+#ifndef LOG_LEVEL_IGB
 /*! default log level for e1000 module */
-#define LOG_LEVEL_E1000 LOG_INFO
+#define LOG_LEVEL_IGB LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_FAT
