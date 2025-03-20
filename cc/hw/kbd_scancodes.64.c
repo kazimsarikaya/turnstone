@@ -15,11 +15,11 @@ const char16_t KBD_SCANCODES_NORMAL[] = {
     KBD_SCANCODE_NULL, KBD_SCANCODE_ESC, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', KBD_SCANCODE_BACKSPACE /*0x0e*/,
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n' /* enter 0x1c*/,
     KBD_SCANCODE_LEFTCTRL, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`' /*0x29*/,
-    KBD_SCANCODE_LEFTSHIFT, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', KBD_SCANCODE_RIGHTSHIFT /*0x37*/,
-    '*', KBD_SCANCODE_LEFTALT, ' ', KBD_SCANCODE_CAPSLOCK /*0x3b*/,
+    KBD_SCANCODE_LEFTSHIFT, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', KBD_SCANCODE_RIGHTSHIFT /*0x36*/,
+    '*', KBD_SCANCODE_LEFTALT, ' ', KBD_SCANCODE_CAPSLOCK /*0x3a*/,
     KBD_SCANCODE_F1, KBD_SCANCODE_F2, KBD_SCANCODE_F3, KBD_SCANCODE_F4, KBD_SCANCODE_F5,
     KBD_SCANCODE_F6, KBD_SCANCODE_F7, KBD_SCANCODE_F8, KBD_SCANCODE_F9, KBD_SCANCODE_F10,
-    /*keypad start*/ KBD_SCANCODE_NUMLOCK, KBD_SCANCODE_SCROLLLOCK, '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.' /*keypad end 0x53*/,
+    /*keypad start*/ KBD_SCANCODE_NUMLOCK, KBD_SCANCODE_SCROLLLOCK /* 0x46 */, '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.' /*keypad end 0x53*/,
     KBD_SCANCODE_NULL /*0x54*/, KBD_SCANCODE_NULL /*0x55*/, KBD_SCANCODE_NULL /*0x56*/,
     KBD_SCANCODE_F11, KBD_SCANCODE_F12,
     KBD_SCANCODE_NULL /*0x59*/, KBD_SCANCODE_NULL /*0x5a*/, KBD_SCANCODE_NULL /*0x5b*/, KBD_SCANCODE_NULL /*0x5c*/, KBD_SCANCODE_NULL /*0x5d*/, KBD_SCANCODE_NULL /*0x5e*/,
@@ -85,7 +85,8 @@ static inline boolean_t kbd_scancode_is_printable(char16_t scancode){
             (scancode > KBD_SCANCODE_LEFTSHIFT && scancode < KBD_SCANCODE_RIGHTSHIFT) ||
             (scancode == KBD_SCANCODE_SPACE) ||
             (scancode == KBD_SCANCODE_KEYPAD_ENTER) ||
-            (scancode >= KBD_KEYPAD_START && scancode <= KBD_KEYPAD_END));
+            (scancode >= KBD_KEYPAD_START && scancode <= KBD_KEYPAD_END) ||
+            scancode == 0x37 /* Keypad * */);
 }
 
 char16_t kbd_scancode_get_value(char16_t scancode, kbd_state_t* ks, boolean_t* is_printable){

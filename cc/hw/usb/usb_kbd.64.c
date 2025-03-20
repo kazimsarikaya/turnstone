@@ -11,6 +11,7 @@
 #include <logging.h>
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
+#include <utils.h>
 
 MODULE("turnstone.kernel.hw.usb.kbd");
 
@@ -82,10 +83,10 @@ const char16_t KBD_USB_SCANCODE_MAP[] = {
     0x0a, // 0x26 9
     0x0b, // 0x27 0
     0x1c, // 0x28 Enter
-    0x01, // 0x29 Escape
-    0x0e, // 0x2a Backspace
+    KBD_SCANCODE_ESC, // 0x29 Escape
+    KBD_SCANCODE_BACKSPACE, // 0x2a Backspace
     0x0f, // 0x2b Tab
-    0x39, // 0x2c Space
+    KBD_SCANCODE_SPACE, // 0x2c Space
     0x0c, // 0x2d -
     0x0d, // 0x2e =
     0x1a, // 0x2f [
@@ -99,48 +100,48 @@ const char16_t KBD_USB_SCANCODE_MAP[] = {
     0x34, // 0x37 .
     0x35, // 0x38 /
     0x3a, // 0x39 Caps Lock
-    0x3b, // 0x3a F1
-    0x3c, // 0x3b F2
-    0x3d, // 0x3c F3
-    0x3e, // 0x3d F4
-    0x3f, // 0x3e F5
-    0x40, // 0x3f F6
-    0x41, // 0x40 F7
-    0x42, // 0x41 F8
-    0x43, // 0x42 F9
-    0x44, // 0x43 F10
-    0x57, // 0x44 F11
-    0x58, // 0x45 F12
-    0x64, // 0x46 Print Screen
-    0x46, // 0x47 Scroll Lock
-    0x45, // 0x48 Pause
-    0x48, // 0x49 Insert
-    0x49, // 0x4a Home
-    0x4a, // 0x4b Page Up
-    0x4e, // 0x4c Delete
-    0x4f, // 0x4d End
-    0x50, // 0x4e Page Down
-    0x4d, // 0x4f Right Arrow
-    0x4b, // 0x50 Left Arrow
-    0x4c, // 0x51 Down Arrow
-    0x48, // 0x52 Up Arrow
-    0x35, // 0x53 Num Lock
-    0x37, // 0x54 Keypad /
-    0x4a, // 0x55 Keypad *
-    0x4e, // 0x56 Keypad -
-    0x1c, // 0x57 Keypad +
-    0x1c, // 0x58 Keypad Enter
-    0x52, // 0x59 Keypad 1
-    0x4f, // 0x5a Keypad 2
-    0x50, // 0x5b Keypad 3
+    KBD_SCANCODE_F1, // 0x3a F1
+    KBD_SCANCODE_F2, // 0x3b F2
+    KBD_SCANCODE_F3, // 0x3c F3
+    KBD_SCANCODE_F4, // 0x3d F4
+    KBD_SCANCODE_F5, // 0x3e F5
+    KBD_SCANCODE_F6, // 0x3f F6
+    KBD_SCANCODE_F7, // 0x40 F7
+    KBD_SCANCODE_F8, // 0x41 F8
+    KBD_SCANCODE_F9, // 0x42 F9
+    KBD_SCANCODE_F10, // 0x43 F10
+    KBD_SCANCODE_F11, // 0x44 F11
+    KBD_SCANCODE_F12, // 0x45 F12
+    KBD_SCANCODE_PRINTSCREEN, // 0x46 Print Screen
+    KBD_SCANCODE_SCROLLLOCK, // 0x47 Scroll Lock
+    KBD_SCANCODE_PAUSE, // 0x48 Pause
+    KBD_SCANCODE_INSERT, // 0x49 Insert
+    KBD_SCANCODE_HOME, // 0x4a Home
+    KBD_SCANCODE_PAGEUP, // 0x4b Page Up
+    KBD_SCANCODE_DELETE, // 0x4c Delete
+    KBD_SCANCODE_END, // 0x4d End
+    KBD_SCANCODE_PAGEDOWN, // 0x4e Page Down
+    KBD_SCANCODE_RIGHT, // 0x4f Right Arrow
+    KBD_SCANCODE_LEFT, // 0x50 Left Arrow
+    KBD_SCANCODE_DOWN, // 0x51 Down Arrow
+    KBD_SCANCODE_UP, // 0x52 Up Arrow
+    KBD_SCANCODE_NUMLOCK, // 0x53 Num Lock
+    0x35, // 0x54 Keypad /
+    0x37, // 0x55 Keypad *
+    0x4a, // 0x56 Keypad -
+    0x4e, // 0x57 Keypad +
+    KBD_SCANCODE_KEYPAD_ENTER, // 0x58 Keypad Enter
+    0x4f, // 0x59 Keypad 1
+    0x50, // 0x5a Keypad 2
+    0x51, // 0x5b Keypad 3
     0x4b, // 0x5c Keypad 4
     0x4c, // 0x5d Keypad 5
     0x4d, // 0x5e Keypad 6
     0x47, // 0x5f Keypad 7
     0x48, // 0x60 Keypad 8
     0x49, // 0x61 Keypad 9
-    0x53, // 0x62 Keypad 0
-    0x37, // 0x63 Keypad .
+    0x52, // 0x62 Keypad 0
+    0x53, // 0x63 Keypad .
     0x56, // 0x64 Non-US \|
     0x62, // 0x65 Application
     0x65, // 0x66 Power
@@ -265,13 +266,13 @@ const char16_t KBD_USB_SCANCODE_MAP[] = {
     0xdc, // 0xdd Keypad Hexadecimal
     0xdd, // 0xde Reserved
     0xde, // 0xdf Reserved
-    0xdf, // 0xe0 Left Control
-    0xe0, // 0xe1 Left Shift
-    0xe1, // 0xe2 Left Alt
+    KBD_SCANCODE_LEFTCTRL, // 0xe0 Left Control
+    KBD_SCANCODE_LEFTSHIFT, // 0xe1 Left Shift
+    KBD_SCANCODE_LEFTALT, // 0xe2 Left Alt
     0xe2, // 0xe3 Left GUI
-    0xe3, // 0xe4 Right Control
-    0xe4, // 0xe5 Right Shift
-    0xe5, // 0xe6 Right Alt
+    KBD_SCANCODE_RIGHTCTRL, // 0xe4 Right Control
+    KBD_SCANCODE_RIGHTSHIFT, // 0xe5 Right Shift
+    KBD_SCANCODE_RIGHTALT, // 0xe6 Right Alt
     0xe6, // 0xe7 Right GUI
     0xe7, // 0xe8 Reserved
     0xe8, // 0xe9 Reserved
@@ -403,7 +404,9 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
             if(!found) {
                 // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
                 char16_t key = usb_keyboard->old_usb_kbd_report.key[i];
+                PRINTLOG(USB, LOG_INFO, "key released: %x", key);
                 key = KBD_USB_SCANCODE_MAP[key];
+                PRINTLOG(USB, LOG_INFO, "key mapped: %x", key);
                 kbd_handle_key(key, false);
             }
         }
@@ -424,7 +427,9 @@ int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t
             if(!found) {
                 // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
                 char16_t key = usb_keyboard->new_usb_kbd_report.key[i];
+                PRINTLOG(USB, LOG_INFO, "key pressed: %x", key);
                 key = KBD_USB_SCANCODE_MAP[key];
+                PRINTLOG(USB, LOG_INFO, "key mapped: %x", key);
                 kbd_handle_key(key, true);
             }
         }
