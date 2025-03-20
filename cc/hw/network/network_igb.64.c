@@ -602,7 +602,7 @@ static int8_t network_igb_rx_isr(interrupt_frame_ext_t* frame)  {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t network_igb_init(const pci_dev_t* pci_netdev) {
-    logging_set_level(IGB, LOG_TRACE);
+    // logging_set_level(IGB, LOG_TRACE);
     pci_common_header_t* pci_header = pci_netdev->pci_header;
 
     igb_net_devs = list_create_list_with_heap(NULL);
