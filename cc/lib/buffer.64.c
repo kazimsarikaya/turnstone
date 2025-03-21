@@ -724,11 +724,6 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     itoa_with_buffer(ito_buf, ival);
                     slen = strlen(ito_buf);
 
-                    if(ival < 0) {
-                        sign = 1;
-                        slen -= 2;
-                    }
-
                     for(idx = 0; idx < val - slen; idx++) {
                         buf[idx] = filler;
                         buf[idx + 1] = '\0';
@@ -737,6 +732,10 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
 
                     if(ival < 0) {
                         buf[0] = '-';
+
+                        if(val - slen > 0) {
+                            ito_buf[0] = filler; // replace - with filler
+                        }
                     }
 
                     strcopy(buf, buffer_vprintf_buffer + buffer_vprintf_buffer_idx);
