@@ -17,10 +17,6 @@
 extern "C" {
 #endif
 
-#define MOUSE_BUTTON_LEFT_VIRTIO   0x110
-#define MOUSE_BUTTON_RIGHT_VIRTIO  0x111
-#define MOUSE_BUTTON_MIDDLE_VIRTIO 0x112
-
 typedef enum mouse_buttons_t {
     MOUSE_BUTTON_LEFT   = 0x01,
     MOUSE_BUTTON_RIGHT  = 0x02,

@@ -491,6 +491,22 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
                     return -1;
                 }
+            } else if(usb_device->configurations[usb_device->selected_config]->interface->interface_protocol == USB_PROTOCOL_HID_MOUSE) {
+                if(usb_mouse_init(usb_device) != 0) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot initialize mouse");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+            }
+        }
+
+        if(strcmp(usb_device->vendor, "QEMU") == 0 && strcmp(usb_device->product, "QEMU USB Tablet") == 0) {
+            if(usb_qemu_tablet_init(usb_device) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot initialize mouse");
+                usb_device_free(usb_device);
+
+                return -1;
             }
         }
     }

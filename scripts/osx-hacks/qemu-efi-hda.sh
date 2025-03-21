@@ -82,7 +82,7 @@ qemu-system-x86_64 \
   -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
   -device usb-ehci,id=ehci \
-  -device usb-mouse,bus=ehci.0 \
+  -device usb-tablet,bus=ehci.0 \
   -device usb-kbd,bus=ehci.0 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \

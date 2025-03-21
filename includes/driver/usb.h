@@ -392,6 +392,9 @@ int8_t usb_probe_all_devices_all_ports(void);
 
 int8_t usb_keyboard_init(usb_device_t* device);
 
+int8_t usb_mouse_init(usb_device_t* device);
+int8_t usb_qemu_tablet_init(usb_device_t* device);
+
 int8_t usb_mass_storage_init(usb_device_t* device);
 
 boolean_t usb_device_request(usb_device_t*           usb_device,

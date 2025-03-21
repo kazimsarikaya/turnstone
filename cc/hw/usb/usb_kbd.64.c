@@ -301,10 +301,7 @@ const char16_t KBD_USB_SCANCODE_MAP[] = {
     0xff, // 0x100 Media Sleep
 };
 
-int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t* usb_transfer);
-
-
-int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t* usb_transfer) {
+static int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t* usb_transfer) {
     usb_driver_t* usb_keyboard = usb_transfer->device->driver;
 
 
