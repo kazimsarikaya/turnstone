@@ -45,6 +45,7 @@
 #include <debug.h>
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
+#include <hypervisor/hypervisor_iommu.h>
 #include <tosdb/tosdb_manager.h>
 #include <spool.h>
 #include <graphics/screen.h>
@@ -343,6 +344,10 @@ int8_t kmain64(size_t entry_point) {
     PRINTLOG(KERNEL, LOG_DEBUG, "tasking is initializing");
 
     syscall_init();
+
+    if(hypervisor_iommu_init() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor iommu.");
+    }
 
     if(hypervisor_init() != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");

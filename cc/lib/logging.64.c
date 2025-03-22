@@ -45,6 +45,7 @@ const char_t*const logging_module_names[] = {
     "COMPILER_ASSEMBLER",
     "COMPILER_PASCAL",
     "HYPERVISOR",
+    "HYPERVISOR_IOMMU",
     "WINDOWMANAGER",
     "PNG",
 };
@@ -94,6 +95,7 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_COMPILER_ASSEMBLER,
     LOG_LEVEL_COMPILER_PASCAL,
     LOG_LEVEL_HYPERVISOR,
+    LOG_LEVEL_HYPERVISOR_IOMMU,
     LOG_LEVEL_WINDOWMANAGER,
     LOG_LEVEL_PNG,
 };
