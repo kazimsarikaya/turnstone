@@ -13,6 +13,7 @@
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_greater.h>
 #include <windowmanager/wnd_options.h>
+#include <windowmanager/wnd_mouse.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
@@ -41,6 +42,12 @@ extern buffer_t* shell_buffer;
 extern buffer_t* mouse_buffer;
 
 static int8_t windowmanager_main(void) {
+    if(windowmanager_init_double_buffer() != 0) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize double buffer\n");
+        return -1;
+    }
+
+
     uint32_t font_width = 0, font_height = 0;
 
     font_get_font_dimension(&font_width, &font_height);
@@ -65,6 +72,10 @@ static int8_t windowmanager_main(void) {
     SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
 
     text_cursor_enable(true);
+
+    if(wndmgr_mouse_init() != 0) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize mouse\n");
+    }
 
     windowmanager_initialized = true;
 
@@ -114,6 +125,10 @@ static int8_t windowmanager_main(void) {
                 text_cursor_hide();
                 text_cursor_move(last->x / font_width, last->y / font_height);
                 text_cursor_show();
+            }
+
+            if(MOUSE_MOVE_CURSOR) {
+                MOUSE_MOVE_CURSOR(last->x, last->y);
             }
         }
 

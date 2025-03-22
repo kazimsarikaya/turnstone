@@ -15,8 +15,6 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-extern pixel_t* VIDEO_BASE_ADDRESS;
-
 int8_t wnd_gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color) {
     UNUSED(buffer);
     UNUSED(area_width);
@@ -108,7 +106,7 @@ void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, c
 
     SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
                                    window->foreground_color, window->background_color,
-                                   VIDEO_BASE_ADDRESS,
+                                   window->buffer,
                                    x, y,
                                    screen_info.pixels_per_scanline);
 

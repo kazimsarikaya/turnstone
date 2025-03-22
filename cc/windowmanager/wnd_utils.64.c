@@ -14,10 +14,118 @@
 #include <buffer.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
+#include <logging.h>
 
 void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
+
+static pixel_t* wndmgr_double_buffer = NULL;
+extern pixel_t* VIDEO_BASE_ADDRESS;
+
+static void windowmanager_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
+    uint32_t i = 0;
+    uint32_t j = 0;
+    uint32_t line = 0;
+    uint32_t bg = background.color;
+    screen_info_t screen_info = screen_get_info();
+
+    for(i = 0; i < height; i++) {
+        line = (y + i) * screen_info.pixels_per_scanline + x;
+
+        for(j = 0; j < width; j++) {
+            *((pixel_t*)(wndmgr_double_buffer + line)) = bg;
+            line++;
+        }
+    }
+
+    SCREEN_FLUSH(0, 0, x, y, width, height);
+}
+
+static void windowmanager_screen_flush(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+    UNUSED(scanout);
+    UNUSED(offset);
+
+    if(VIDEO_BASE_ADDRESS == NULL) {
+        return;
+    }
+    screen_info_t screen_info = screen_get_info();
+
+    uint32_t sw = screen_info.width;
+    uint32_t sh = screen_info.height;
+
+    if(x >= sw || y >= sh) {
+        return;
+    }
+
+    if(x + width > sw) {
+        width = sw - x;
+    }
+
+    if(y + height > sh) {
+        height = sh - y;
+    }
+
+    for(uint32_t i = 0; i < height; i++) {
+        uint32_t line = (y + i) * screen_info.pixels_per_scanline + x;
+
+        uint8_t* src = (uint8_t*)(wndmgr_double_buffer + line);
+        uint8_t* dst = (uint8_t*)(VIDEO_BASE_ADDRESS + line);
+
+        memory_memcopy(src, dst, width * sizeof(pixel_t));
+    }
+}
+
+static void windowmanager_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
+    screen_info_t screen_info = screen_get_info();
+
+    int32_t offs = (y * height * screen_info.pixels_per_scanline) + (x * width);
+    uint32_t orig_offs = offs;
+
+    int32_t lx, ly, line;
+
+    for(ly = 0; ly < height; ly++) {
+        line = offs;
+
+        for(lx = 0; lx < width; lx++) {
+
+            *((pixel_t*)(wndmgr_double_buffer + line)) = ~(*((pixel_t*)(wndmgr_double_buffer + line)));
+
+            line++;
+        }
+
+        offs  += screen_info.pixels_per_scanline;
+    }
+
+    if(flush) {
+        SCREEN_FLUSH(0, orig_offs * sizeof(pixel_t), x * width, y * height, width, height);
+    }
+}
+
+int8_t windowmanager_init_double_buffer(void) {
+    screen_info_t screen_info = screen_get_info();
+
+    uint64_t size = screen_info.pixels_per_scanline * screen_info.height * sizeof(pixel_t);
+
+    wndmgr_double_buffer = memory_malloc(size);
+
+    if(wndmgr_double_buffer == NULL) {
+        return -1;
+    }
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Double buffer initialized at 0x%p with size 0x%llx", wndmgr_double_buffer, size);
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Screen info: %dx%d, pixels per scanline: %d", screen_info.width, screen_info.height, screen_info.pixels_per_scanline);
+
+    SCREEN_FLUSH = windowmanager_screen_flush;
+    SCREEN_CLEAR_AREA = windowmanager_clear_screen_area;
+    TEXT_CURSOR_DRAW = windowmanager_text_cursor_draw;
+
+    return 0;
+}
+
+pixel_t* windowmanager_get_double_buffer(void) {
+    return wndmgr_double_buffer;
+}
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     if(text == NULL) {

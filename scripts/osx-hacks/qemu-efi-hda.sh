@@ -88,4 +88,4 @@ qemu-system-x86_64 \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
-  -display sdl,gl=on,show-cursor=on 
+  -display sdl,gl=on,show-cursor=off

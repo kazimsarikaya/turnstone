@@ -24,8 +24,6 @@ uint64_t windowmanager_next_window_id = 0;
 window_t* windowmanager_current_window = NULL;
 hashmap_t* windowmanager_windows = NULL;
 
-extern pixel_t* VIDEO_BASE_ADDRESS;
-
 window_t* windowmanager_create_top_window(void) {
     screen_info_t screen_info = screen_get_info();
 
@@ -40,7 +38,7 @@ window_t* windowmanager_create_top_window(void) {
     window->rect.y      = 0;
     window->rect.width  = screen_info.width;
     window->rect.height = screen_info.height;
-    window->buffer = VIDEO_BASE_ADDRESS;
+    window->buffer = windowmanager_get_double_buffer();
     window->background_color.color = 0x00000000;
     window->foreground_color.color = 0xFFFFFFFF;
     window->is_visible = true;
@@ -63,7 +61,7 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     window->id     = windowmanager_next_window_id++;
     window->text  = text;
     window->rect   = (rect_t){abs_x, abs_y, rect.width, rect.height};
-    window->buffer = VIDEO_BASE_ADDRESS; // + (abs_y * VIDEO_PIXELS_PER_SCANLINE) + abs_x;
+    window->buffer = windowmanager_get_double_buffer();
     window->background_color = background_color;
     window->foreground_color = foreground_color;
     window->is_visible = true;
