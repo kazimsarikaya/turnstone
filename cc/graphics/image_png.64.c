@@ -698,7 +698,7 @@ static graphics_raw_image_t* png_decoder_get_image(png_decoder_t* png_decoder) {
     uint16_t zlib_header = buffer_read_uint16(png_decoder->compressed_image_buffer);
     zlib_header = BYTE_SWAP16(zlib_header);
 
-    if(zlib_header != 0x78DA && zlib_header != 0x78D8) {
+    if(zlib_header != 0x78DA && zlib_header != 0x78D8 && zlib_header != 0x58C3) {
         PRINTLOG(PNG, LOG_TRACE, "invalid zlib header 0x%x", zlib_header);
         errno = -PNG_DECODER_INVALID_ZLIB_HEADER;
         buffer_destroy(png_decoder->compressed_image_buffer);
@@ -801,24 +801,32 @@ static graphics_raw_image_t* png_decoder_get_image(png_decoder_t* png_decoder) {
 
 graphics_raw_image_t* graphics_load_png_image(const uint8_t* data, uint32_t size) {
     if(!data || !size) {
+        PRINTLOG(PNG, LOG_TRACE, "invalid data %p size %u", data, size);
         return NULL;
     }
 
     buffer_t* buffer = buffer_encapsulate((uint8_t*)data, size);
 
     if(!buffer) {
+        PRINTLOG(PNG, LOG_TRACE, "buffer encapsulation failed");
         errno = -PNG_DECODER_MEMORY_ERROR;
         return NULL;
     }
 
     png_decoder_t png_decoder = {0};
 
-    if(png_decoder_init(&png_decoder, buffer) != 0) {
+    int8_t ret = png_decoder_init(&png_decoder, buffer);
+
+    if(ret != 0) {
+        PRINTLOG(PNG, LOG_TRACE, "png decoder init failed %d", ret);
         buffer_destroy(buffer);
         return NULL;
     }
 
-    if(png_decoder_parse_chunks(&png_decoder) != 0) {
+    ret = png_decoder_parse_chunks(&png_decoder);
+
+    if(ret != 0) {
+        PRINTLOG(PNG, LOG_TRACE, "parse chunks failed %d", ret);
         buffer_destroy(buffer);
         return NULL;
     }
@@ -826,6 +834,21 @@ graphics_raw_image_t* graphics_load_png_image(const uint8_t* data, uint32_t size
     graphics_raw_image_t* image = png_decoder_get_image(&png_decoder);
 
     buffer_destroy(buffer);
+
+    // at png alpha channel is first then big endian rgb channel
+    // we need to swap it to little endian
+    for(uint32_t i = 0; i < image->width * image->height; i++) {
+        pixel_t pixel = image->data[i];
+
+        uint8_t a = (pixel >> 24) & 0xFF;
+        uint8_t b = (pixel >> 16) & 0xFF;
+        uint8_t g = (pixel >> 8) & 0xFF;
+        uint8_t r = (pixel >> 0) & 0xFF;
+
+        pixel = (a << 24) | (r << 16) | (g << 8) | (b << 0);
+
+        image->data[i] = pixel;
+    }
 
     return image;
 }
@@ -1163,23 +1186,52 @@ uint8_t* graphics_save_png_image(const graphics_raw_image_t* image, uint64_t* si
         return NULL;
     }
 
+    // we need to duplicate image and re-enconde it
+    graphics_raw_image_t image_copy = {0};
+    image_copy.width = image->width;
+    image_copy.height = image->height;
+    image_copy.data = memory_malloc(image->width * image->height * sizeof(pixel_t));
+
+    if(!image_copy.data) {
+        return NULL;
+    }
+
+    for(uint32_t i = 0; i < image->width * image->height; i++) {
+        pixel_t pixel = image->data[i];
+
+        uint8_t a = (pixel >> 24) & 0xFF;
+        uint8_t r = (pixel >> 16) & 0xFF;
+        uint8_t g = (pixel >> 8) & 0xFF;
+        uint8_t b = (pixel >> 0) & 0xFF;
+
+        pixel = (a << 24) | (b << 16) | (g << 8) | (r << 0);
+
+        image_copy.data[i] = pixel;
+    }
+
     png_encoder_t png_encoder = {0};
 
-    if(png_encoder_init(&png_encoder, (graphics_raw_image_t*)image) != 0) {
+    if(png_encoder_init(&png_encoder, (graphics_raw_image_t*)&image_copy) != 0) {
+        memory_free(image_copy.data);
         return NULL;
     }
 
     if(png_encoder_find_and_apply_filter(&png_encoder) != 0) {
+        memory_free(image_copy.data);
         return NULL;
     }
 
     if(png_encoder_compress(&png_encoder) != 0) {
+        memory_free(image_copy.data);
         return NULL;
     }
 
     if(png_encoder_build_png(&png_encoder) != 0) {
+        memory_free(image_copy.data);
         return NULL;
     }
+
+    memory_free(image_copy.data);
 
     *size = png_encoder.png_data_len;
 
