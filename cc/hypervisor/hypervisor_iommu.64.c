@@ -78,7 +78,7 @@ int8_t hypervisor_iommu_init(void) {
 
 
         } else {
-            PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Unimplemented IVHD type: %d", ivhd->type_length.type);
+            PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Unimplemented IVHD type: 0x%02x", ivhd->type_length.type);
         }
 
 
@@ -106,19 +106,20 @@ int8_t hypervisor_iommu_init(void) {
 
             ivrs_4byte_device_info_t* device_info_4byte = (ivrs_4byte_device_info_t*)device_info;
 
-            PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device Info: Type: %d, BDF: %x:%02x:%02x, DTE: %d",
+            PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device Info: Type: 0x%02x, BDF: %x:%02x:%02x, DTE: 0x%02x",
                      device_info_4byte->type,
                      device_info_4byte->bdf.fields.bus, device_info_4byte->bdf.fields.device, device_info_4byte->bdf.fields.function,
                      device_info_4byte->dte);
 
             device_info += 4;
+            device_info_length -= 4;
         } else if(device_info_type < 128) {
             // 8 bytes
 
             if(device_info_type == 72) {
                 ivrs_8byte_device_info_72_t* device_info_8byte = (ivrs_8byte_device_info_72_t*)device_info;
 
-                PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device Info: Type: %d, BDF: %x:%02x:%02x, DTE: %d, Handle: %d, Variety: %d",
+                PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device Info: Type: 0x%02x, BDF: %x:%02x:%02x, DTE: 0x%02x, Handle: 0x%02x, Variety: %d",
                          device_info_8byte->type,
                          device_info_8byte->bdf.fields.bus, device_info_8byte->bdf.fields.device, device_info_8byte->bdf.fields.function,
                          device_info_8byte->dte, device_info_8byte->handle, device_info_8byte->variety);
@@ -129,20 +130,23 @@ int8_t hypervisor_iommu_init(void) {
 
 
             device_info += 8;
+            device_info_length -= 8;
         } else {
             // variable length
             if(device_info_type == 0xF0) {
                 ivrs_vbyte_device_info_f0_t* device_info_f0 = (ivrs_vbyte_device_info_f0_t*)device_info;
 
-                PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device Info: Type: %d, BDF: %x:%02x:%02x, DTE: %d, HID: 0x%llx, CID: 0x%llx, UID Format: %d, UID Length: %d",
+                PRINTLOG(HYPERVISOR_IOMMU, LOG_TRACE, "Device Info: Type: 0x%02x, BDF: %x:%02x:%02x, DTE: %d, HID: 0x%llx, CID: 0x%llx, UID Format: %d, UID Length: %d",
                          device_info_f0->type,
                          device_info_f0->bdf.fields.bus, device_info_f0->bdf.fields.device, device_info_f0->bdf.fields.function,
                          device_info_f0->dte, device_info_f0->hid, device_info_f0->cid, device_info_f0->uid_format, device_info_f0->uid_length);
 
                 device_info += sizeof(ivrs_vbyte_device_info_f0_t) + device_info_f0->uid_length;
+                device_info_length -= sizeof(ivrs_vbyte_device_info_f0_t) + device_info_f0->uid_length;
             } else {
-                PRINTLOG(HYPERVISOR_IOMMU, LOG_WARNING, "Unsupported device info type: %d", device_info_type);
-                return -1;
+                PRINTLOG(HYPERVISOR_IOMMU, LOG_WARNING, "Unsupported device info type: 0x%02x", device_info_type);
+                ret = -1;
+                goto out;
             }
         }
     }

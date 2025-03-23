@@ -58,7 +58,7 @@ for i in `seq 0 $((NUMCPUS-1))`; do
   SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
 done
 
-TRACE_OPTS="guest_errors,mmu"
+TRACE_OPTS="guest_errors,mmu,trace:amdvi*"
 
 # if trace_opts is not empty, then enable tracing (prefix with -d)
 
