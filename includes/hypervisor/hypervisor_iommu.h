@@ -244,6 +244,188 @@ typedef struct amdvi_pci_capability_t {
 
 _Static_assert(sizeof(amdvi_pci_capability_t) == sizeof(uint32_t) * 6, "amdvi_pci_capability_t size is not correct");
 
+
+#define AMDVI_REG_DEVICE_TABLE_BASE_BASE_ADDRESS          0x0000
+#define AMDVI_REG_COMMAND_BUFFER_BASE_ADDRESS             0x0008
+#define AMDVI_REG_EVENT_LOG_BASE_ADDRESS                  0x0010
+#define AMDVI_REG_CONTROL                                 0x0018
+#define AMDVI_REG_EXCLUSION_BASE_ADDRESS                  0x0020
+#define AMDVI_REG_EXCLUSION_RANGE_LIMIT_ADDRESS           0x0028
+#define AMDVI_REG_EXTENDED_FEATURES                       0x0030
+#define AMDVI_REG_PPR_LOG_BASE_ADDRESS                    0x0038
+#define AMDVI_REG_HARDWARE_EVENT_UPPER                    0x0040
+#define AMDVI_REG_HARDWARE_EVENT_LOWER                    0x0048
+#define AMDVI_REG_HARDWARE_EVENT_STATUS                   0x0050
+
+#define AMDVI_REG_SMI_FILTER_00                           0x0060
+#define AMDVI_REG_SMI_FILTER_01                           0x0068
+#define AMDVI_REG_SMI_FILTER_02                           0x0070
+#define AMDVI_REG_SMI_FILTER_03                           0x0078
+#define AMDVI_REG_SMI_FILTER_04                           0x0080
+#define AMDVI_REG_SMI_FILTER_05                           0x0088
+#define AMDVI_REG_SMI_FILTER_06                           0x0090
+#define AMDVI_REG_SMI_FILTER_07                           0x0098
+#define AMDVI_REG_SMI_FILTER_08                           0x00A0
+#define AMDVI_REG_SMI_FILTER_09                           0x00A8
+#define AMDVI_REG_SMI_FILTER_10                           0x00B0
+#define AMDVI_REG_SMI_FILTER_11                           0x00B8
+#define AMDVI_REG_SMI_FILTER_12                           0x00C0
+#define AMDVI_REG_SMI_FILTER_13                           0x00C8
+#define AMDVI_REG_SMI_FILTER_14                           0x00D0
+#define AMDVI_REG_SMI_FILTER_15                           0x00D8
+
+#define AMDVI_REG_GUEST_VIRTUAL_APIC_LOG_BASE_ADDRESS     0x00E0
+#define AMDVI_REG_GUEST_VIRTUAL_APIC_LOG_TAIL_ADDRESS     0x00E8
+
+#define AMDVI_REG_COMMAND_BUFFER_HEAD                     0x2000
+#define AMDVI_REG_COMMAND_BUFFER_TAIL                     0x2008
+#define AMDVI_REG_EVENT_LOG_HEAD                          0x2010
+#define AMDVI_REG_EVENT_LOG_TAIL                          0x2018
+#define AMDVI_REG_STATUS                                  0x2020
+#define AMDVI_REG_PPR_LOG_HEAD                            0x2030
+#define AMDVI_REG_PPR_LOG_TAIL                            0x2038
+#define AMDVI_REG_GA_LOG_HEAD                             0x2040
+#define AMDVI_REG_GA_LOG_TAIL                             0x2048
+
+#define AMDVI_REG_TOTAL_SIZE                              0x4000
+
+
+typedef union amdvi_device_table_base_t {
+    struct {
+        uint64_t size        :9;
+        uint64_t reserved0   :3;
+        uint64_t base_address:40;
+        uint64_t reserved1   :12;
+    } __attribute__((packed)) fields;
+    uint64_t bits;
+} __attribute__((packed)) amdvi_device_table_base_t;
+
+_Static_assert(sizeof(amdvi_device_table_base_t) == sizeof(uint64_t), "amdvi_device_table_base_t size is not correct");
+
+typedef union amdvi_command_buffer_base_t {
+    struct {
+        uint64_t reserved0   :12;
+        uint64_t base_address:40;
+        uint64_t reserved1   :4;
+        uint64_t size        :4;
+        uint64_t reserved2   :4;
+    } __attribute__((packed)) fields;
+    uint64_t bits;
+} __attribute__((packed)) amdvi_command_buffer_base_t;
+
+_Static_assert(sizeof(amdvi_command_buffer_base_t) == sizeof(uint64_t), "amdvi_command_buffer_base_t size is not correct");
+
+typedef amdvi_command_buffer_base_t amdvi_event_log_base_t;
+typedef amdvi_command_buffer_base_t amdvi_ppr_log_base_t;
+typedef amdvi_command_buffer_base_t amdvi_ga_log_base_t;
+
+typedef union amdvi_control_t {
+    struct {
+        uint64_t iommu_en             :1; ///< 0
+        uint64_t ht_tun_en            :1; ///< 1
+        uint64_t event_log_en         :1; ///< 2
+        uint64_t event_int_en         :1; ///< 3
+        uint64_t com_wait_int_en      :1; ///< 4
+        uint64_t inv_time_out         :3; ///< 5-7
+        uint64_t pass_pw              :1; ///< 8
+        uint64_t res_pass_pw          :1; ///< 9
+        uint64_t coherent             :1; ///< 10
+        uint64_t isoc                 :1; ///< 11
+        uint64_t cmd_buf_en           :1; ///< 12
+        uint64_t ppr_log_en           :1; ///< 13
+        uint64_t ppr_int_en           :1; ///< 14
+        uint64_t ppr_en               :1; ///< 15
+        uint64_t gt_en                :1; ///< 16
+        uint64_t ga_en                :1; ///< 17
+        uint64_t crw                  :4; ///< 18-21
+        uint64_t smi_f_en             :1; ///< 22
+        uint64_t self_wb_dis          :1; ///< 23
+        uint64_t smi_f_log_en         :1; ///< 24
+        uint64_t ga_mode_en           :3; ///< 25-27
+        uint64_t ga_log_en            :1; ///< 28
+        uint64_t ga_int_en            :1; ///< 29
+        uint64_t dual_ppr_log_en      :2; ///< 30-31
+        uint64_t dual_event_log_en    :2; ///< 32-33
+        uint64_t dev_table_seg_en     :3; ///< 34-36
+        uint64_t priv_abrt_en         :2; ///< 37-38
+        uint64_t ppr_auto_rsp_en      :1; ///< 39
+        uint64_t marc_en              :1; ///< 40
+        uint64_t blk_stop_mark_en     :1; ///< 41
+        uint64_t ppr_auto_rsp_a_on    :1; ///< 42
+        uint64_t num_int_remap_mode   :2; ///< 43-44
+        uint64_t eph_en               :1; ///< 45
+        uint64_t had_update           :2; ///< 46-47
+        uint64_t gd_update_dis        :1; ///< 48
+        uint64_t reserved0            :1; ///< 49
+        uint64_t xt_en                :1; ///< 50
+        uint64_t int_cap_xt_en        :1; ///< 51
+        uint64_t v_cmd_en             :1; ///< 52
+        uint64_t v_iommu_en           :1; ///< 53
+        uint64_t ga_update_dis        :1; ///< 54
+        uint64_t ga_ppi_en            :1; ///< 55
+        uint64_t tmpm_en              :1; ///< 56
+        uint64_t reserved1            :1; ///< 57
+        uint64_t gcr3_trp_mode        :1; ///< 58
+        uint64_t irt_cache_dis        :1; ///< 59
+        uint64_t guest_buffer_trp_mode:1; ///< 60
+        uint64_t snp_avic_en          :3; ///< 61-63
+    } __attribute__((packed)) fields;
+    uint64_t bits;
+} __attribute__((packed)) amdvi_control_t;
+
+_Static_assert(sizeof(amdvi_control_t) == sizeof(uint64_t), "amdvi_control_t size is not correct");
+
+typedef union amdvi_extended_feature_t {
+    struct {
+        uint64_t pref_sup              :1; ///< 0
+        uint64_t ppr_sup               :1; ///< 1
+        uint64_t xt_sup                :1; ///< 2
+        uint64_t nx_sup                :1; ///< 3
+        uint64_t gt_sup                :1; ///< 4
+        uint64_t gappi_sup             :1; ///< 5
+        uint64_t ia_sup                :1; ///< 6
+        uint64_t ga_sup                :1; ///< 7
+        uint64_t he_sup                :1; ///< 8
+        uint64_t pc_sup                :1; ///< 9
+        uint64_t hats                  :2; ///< 10-11
+        uint64_t gats                  :2; ///< 12-13
+        uint64_t glx_sup               :2; ///< 14-15
+        uint64_t smi_f_sup             :2; ///< 16-17
+        uint64_t smi_frc               :3; ///< 18-20
+        uint64_t gam_sup               :3; ///< 21-23
+        uint64_t dual_ppr_log_sup      :2; ///< 24-25
+        uint64_t reserved0             :2; ///< 26-27
+        uint64_t dual_event_log_sup    :2; ///< 28-29
+        uint64_t reserved1             :1; ///< 30
+        uint64_t sats_sup              :1; ///< 31
+        uint64_t pas_max               :5; ///< 32-36
+        uint64_t us_suo                :1; ///< 37
+        uint64_t dev_table_seg_sup     :2; ///< 38-39
+        uint64_t ppr_overflow_early_sup:1; ///< 40
+        uint64_t ppr_auto_rsp_sup      :1; ///< 41
+        uint64_t marc_sup              :2; ///< 42-43
+        uint64_t blk_stop_mark_sup     :1; ///< 44
+        uint64_t perf_opt_sup          :1; ///< 45
+        uint64_t msi_cap_mmio_sup      :1; ///< 46
+        uint64_t reserved2             :1; ///< 47
+        uint64_t gio_sup               :1; ///< 48
+        uint64_t ha_sup                :1; ///< 49
+        uint64_t eph_sup               :1; ///< 50
+        uint64_t attr_forward_sup      :1; ///< 51
+        uint64_t hd_sup                :1; ///< 52
+        uint64_t reserved3             :1; ///< 53
+        uint64_t inv_iotbl_type_sup    :1; ///< 54
+        uint64_t v_iommu_sup           :1; ///< 55
+        uint64_t reserved4             :5; ///< 56-60
+        uint64_t ga_update_dis_sup     :1; ///< 61
+        uint64_t force_phy_dest_sup    :1; ///< 62
+        uint64_t snp_sup               :1; ///< 63
+    } __attribute__((packed)) fields;
+    uint64_t bits;
+} __attribute__((packed)) amdvi_extended_feature_t;
+
+_Static_assert(sizeof(amdvi_extended_feature_t) == sizeof(uint64_t), "amdvi_extended_feature_t size is not correct");
+
 int8_t hypervisor_iommu_init(void);
 
 
