@@ -30,9 +30,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: make output dir
+      - name: make build dir
         run: |
-          mkdir -p output/docs
+          mkdir -p build/docs
       - name: Setup Pages
         uses: mattnotmitt/doxygen-action@1.9.5
         with:
@@ -42,12 +42,12 @@ jobs:
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
       - name: Setup sitemap.txt
         run: |
-          find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
+          find build/docs/html/ -name "*.html"|sed 's-build/docs/html-https://turnstoneos.com-' > build/docs/html/sitemap.txt
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
-          path: 'output/docs/html'
+          path: 'build/docs/html'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
