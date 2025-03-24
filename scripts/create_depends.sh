@@ -26,14 +26,14 @@ do
     for _f in $(find ../cc -name "$_s*.c"|grep -v video| grep -v '\.test\.c');
     do
       _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
-      echo -e "../output/$var.bin: ../output/cc-local/$_f"
+      echo -e "../build/$var.bin: ../build/cc-local/$_f"
     done
 
     if [[ $also_cpp -eq 1 ]]; then
       for _f in $(find ../cc -name "$_s*.cpp"|grep -v video);
       do
         _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.cpp-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
-        echo -e "../output/$var.bin: ../output/cc-local/$_f"
+        echo -e "../build/$var.bin: ../build/cc-local/$_f"
       done
     fi
   done
@@ -43,7 +43,7 @@ do
   do
    _f=$(find ../includes|grep $_h|tr '\n' ' ')
    if [[ "${_f}x" != "x" ]]; then
-     echo -e "../output/cc-local/$var.o: $_f"
+     echo -e "../build/cc-local/$var.o: $_f"
    fi
   done
   echo

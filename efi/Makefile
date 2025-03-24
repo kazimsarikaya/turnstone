@@ -3,7 +3,7 @@
 
 ARCH=x86_64
 
-OUTPUT = ../output
+OUTPUT = ../build
 EFIOUTPUT = $(OUTPUT)/efi
 
 HOSTOS =$(shell uname -s)
@@ -66,7 +66,7 @@ endif
 all: $(EFIAPP)
 
 gendirs:
-	find ../output/cc -type d |sed 's%../output/cc%../output/efi%' |xargs mkdir -p
+	find $(OUTPUT)/cc -type d |sed 's%'$(OUTPUT)'/cc%'$(OUTPUT)'/efi%' |xargs mkdir -p
 
 $(EFIOUTPUT)/%.o: %.c
 	$(CC) $(CCFLAGS) -o $@ $<

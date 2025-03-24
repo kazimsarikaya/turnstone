@@ -1,4 +1,4 @@
-output/
+build/
 tmp/
 .depend*
 .mkdirsdone

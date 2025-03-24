@@ -38,7 +38,7 @@ for _f in $DEPEND_OBJS; do
   if [ -z "$_hs" ]; then
     echo 
   else 
-    echo -e ../output/efi/$_f: $(find ../includes -name "$_s*.h") 
+    echo -e ../build/efi/$_f: $(find ../includes -name "$_s*.h") 
     echo 
   fi
  

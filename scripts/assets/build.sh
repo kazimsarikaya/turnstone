@@ -5,7 +5,7 @@
 
 CURRENTDIR=`dirname $0`
 BASEDIR="${CURRENTDIR}/../../"
-OUTPUTDIR="${BASEDIR}/output"
+OUTPUTDIR="${BASEDIR}/build"
 ASSETSDIR="${BASEDIR}/assets"
 OBJCOPY="objcopy"
 CCOUTPUTDIR="${OUTPUTDIR}/cc"
@@ -15,8 +15,8 @@ ASSETSDIR=$(readlink -f ${ASSETSDIR})
 OUTPUT_FILE=$1
 #remove .data.o at end
 INPUT_FILE=${OUTPUT_FILE%.data.o}
-#remove output/ at start
-INPUT_FILE=${INPUT_FILE#output/}
+#remove build/ at start
+INPUT_FILE=${INPUT_FILE#build/}
 
 echo "OUTPUT_FILE: ${OUTPUT_FILE}"
 echo "INPUT_FILE: ${INPUT_FILE}"

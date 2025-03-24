@@ -35,7 +35,7 @@ LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-l
 		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -Wl,-nostdlib -nostdlib -Wl,-e_tos_start -Wl,-pie 
 endif
 
-OUTPUT = ../output
+OUTPUT = ../build
 LDSRCDIR = ../lds
 TESTOUTPUT = $(OUTPUT)/cc-local
 NOSTDLIB_DIR = nostdlib
@@ -62,7 +62,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 all: $(OUTPUTS) 
 
 gendirs:
-	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
+	find $(OUTPUT)/cc -type d |sed 's%'$(OUTPUT)'/cc%'$(OUTPUT)'/cc-local%' |xargs mkdir -p
 	mkdir -p $(NOSTDLIB_OUTPUT)
 
 $(TESTOUTPUT)/%.o: %.c setup.h

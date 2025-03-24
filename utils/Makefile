@@ -36,7 +36,7 @@ LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-l
 endif
 
 
-OUTPUT = ../output
+OUTPUT = ../build
 UTILOUTPUT = $(OUTPUT)/cc-local
 
 CCSOURCEDIR = ../cc
@@ -56,7 +56,7 @@ OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
 all: $(OUTPUTS)
 
 gendirs:
-	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
+	find $(OUTPUT)/cc -type d |sed 's%'$(OUTPUT)'/cc%'$(OUTPUT)'/cc-local%' |xargs mkdir -p
 
 $(UTILOUTPUT)/%.o: %.c setup.h
 	$(CC) $(CCFLAGS) -o $@ $<

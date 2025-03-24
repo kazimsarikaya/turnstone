@@ -50,7 +50,7 @@ CXXTESTFLAGS= -D___TESTMODE=1
 CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 -mavx -mavx2 -mavx512f $(CCFLAGS)
 CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCFLAGS)
 
-OBJDIR = output
+OBJDIR = build
 ASOBJDIR = $(OBJDIR)/asm
 CCOBJDIR = $(OBJDIR)/cc
 DOCSOBJDIR = $(OBJDIR)/docs
@@ -172,8 +172,8 @@ asm:
 asm-internal: $(CC64ASMOUTS)
 
 bear:
-	bear --append -- make qemu
-	bear --append -- make -j $(shell nproc) -C tests
+	bear --output $(OBJDIR)/compile_commands.json --append -- make qemu
+	bear --output $(OBJDIR)/compile_commands.json --append -- make -j $(shell nproc) -C tests
 
 test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
@@ -188,7 +188,7 @@ gendirs:
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
-	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
+	find $(OBJDIR)/docs/html/ -name "*.html"|sed 's-'$(OBJDIR)'/docs/html-https://turnstoneos.com-' > $(OBJDIR)/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
 $(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
@@ -252,7 +252,7 @@ $(ASSETOBJS): $(ASSETS)
 clean:
 	rm -fr $(DOCSOBJDIR)/*
 	if [ -d $(OBJDIR) ]; then find $(OBJDIR) -type f -delete; fi
-	rm -f .depend*
+	find . -type f -name .depend\* -delete
 	if [ -d $(CCGENDIR) ]; then find $(CCGENDIR) -type f -delete; fi
 	if [ -d $(INCLUDESGENDIR) ]; then find $(INCLUDESGENDIR) -type f -delete; fi
 	rm -f $(MKDIRSDONE)
