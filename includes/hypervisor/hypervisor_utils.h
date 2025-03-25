@@ -14,14 +14,11 @@
 #include <types.h>
 #include <memory/paging.h>
 #include <hypervisor/hypervisor_vm.h>
-#include <hypervisor/hypervisor_vmx_vmcs_ops.h>
+#include <hypervisor/hypervisor_guestlib.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
-typedef uint64_t (*vmx_vmexit_handler_t)(vmx_vmcs_vmexit_info_t* vmexit_info);
 
 uint64_t hypervisor_allocate_region(frame_t** frame, uint64_t size);
 uint64_t hypervisor_create_stack(hypervisor_vm_t* vm, uint64_t stack_size);
@@ -42,10 +39,9 @@ typedef struct hypervisor_vm_module_load_t {
     uint64_t metadata_size;
 } hypervisor_vm_module_load_t;
 
-int8_t   hypervisor_vmx_vmcall_load_module(hypervisor_vm_t* vm, vmx_vmcs_vmexit_info_t* vmexit_info);
-uint64_t hypervisor_vmx_vmcall_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address);
-int16_t  hypervisor_vmx_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmx_vmcs_vmexit_info_t* vmexit_info);
-
+int8_t   hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address);
+uint64_t hypervisor_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address);
+int16_t  hypervisor_attach_interrupt(hypervisor_vm_t* vm, uint64_t pci_dev_address, vm_guest_interrupt_type_t interrupt_type, uint8_t interrupt_number);
 
 #ifdef __cplusplus
 }

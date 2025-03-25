@@ -1,5 +1,5 @@
 /**
- * @file hypervisor_vmx_utils.64.c
+ * @file hypervisor_utils.64.c
  * @brief Hypervisor Utilities
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -7,9 +7,7 @@
  */
 
 
-#include <hypervisor/hypervisor_vmx_utils.h>
-#include <hypervisor/hypervisor_vmx_macros.h>
-#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_ept.h>
 #include <hypervisor/hypervisor_guestlib.h>
 #include <memory/paging.h>
@@ -22,7 +20,7 @@
 #include <pci.h>
 #include <apic.h>
 
-MODULE("turnstone.hypervisor.vmx");
+MODULE("turnstone.hypervisor");
 
 
 
@@ -130,17 +128,9 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
 
     vm->program_entry_point_virtual_address = ipc.program_build.program_entry_point_virtual_address;
 
-    vm->guest_stack_size = 2ULL << 20; // 2MiB
-    vm->guest_heap_size = 16ULL << 20; // 16MiB
-
     hashmap_put(vm->loaded_module_ids, (void*)ipc.program_build.module.module_handle, (void*)true);
 
     hypervisor_cleanup_unused_modules(vm, ipc.program_build.got_physical_address, ipc.program_build.got_size);
-
-    if(hypervisor_vmx_vmcs_prepare_ept(vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
-        return -1;
-    }
 
     hypervisor_vm_module_load_t ml = {0};
 
@@ -165,47 +155,22 @@ int8_t hypevisor_deploy_program(hypervisor_vm_t* vm, const char_t* entry_point_n
         return -1;
     }
 
-    vmx_write(VMX_GUEST_RIP, ipc.program_build.program_entry_point_virtual_address);
-    vmx_write(VMX_GUEST_RSP, (VMX_GUEST_STACK_TOP_VALUE) -8); // we subtract 8 because sse needs 16 byte alignment
-
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "deployed program entry point is at 0x%llx", ipc.program_build.program_entry_point_virtual_address);
 
     return 0;
 }
 
-uint64_t hypervisor_vmx_vmcall_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address) {
-    uint8_t group = (pci_address >> 24) & 0xff;
-    uint8_t bus = (pci_address >> 16) & 0xff;
-    uint8_t device = (pci_address >> 8) & 0xff;
-    uint8_t function = pci_address & 0xff;
-
-    const pci_dev_t* pci_dev = pci_find_device_by_address(group, bus, device, function);
-
-    if(pci_dev == NULL) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot find pci device 0x%x 0x%x 0x%x 0x%x", group, bus, device, function);
-        return -1;
-    }
-
-    uint64_t pci_va = hypervisor_ept_map_pci_device(vm, pci_dev);
-
-    if(pci_va != -1ULL){
-        list_list_insert(vm->mapped_pci_devices, pci_dev);
-    }
-
-    return pci_va;
-}
-
-int8_t hypervisor_vmx_vmcall_load_module(hypervisor_vm_t* vm, vmx_vmcs_vmexit_info_t* vmexit_info) {
+int8_t hypervisor_load_module(hypervisor_vm_t* vm, uint64_t got_entry_address) {
     uint64_t got_fa = vm->got_physical_address;
     uint64_t got_size = vm->got_size;
     uint64_t got_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(got_fa);
 
-    if(vmexit_info->registers->r11 > got_size) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "module id 0x%llx is out of got size 0x%llx", vmexit_info->registers->r11, got_size);
+    if(got_entry_address > got_size) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "module id 0x%llx is out of got size 0x%llx", got_entry_address, got_size);
         return -1;
     }
 
-    got_va += vmexit_info->registers->r11;
+    got_va += got_entry_address;
 
     linker_global_offset_table_entry_t* got_entry = (linker_global_offset_table_entry_t*)got_va;
 
@@ -272,6 +237,28 @@ int8_t hypervisor_vmx_vmcall_load_module(hypervisor_vm_t* vm, vmx_vmcs_vmexit_in
     return 0;
 }
 
+uint64_t hypervisor_attach_pci_dev(hypervisor_vm_t* vm, uint32_t pci_address) {
+    uint8_t group = (pci_address >> 24) & 0xff;
+    uint8_t bus = (pci_address >> 16) & 0xff;
+    uint8_t device = (pci_address >> 8) & 0xff;
+    uint8_t function = pci_address & 0xff;
+
+    const pci_dev_t* pci_dev = pci_find_device_by_address(group, bus, device, function);
+
+    if(pci_dev == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot find pci device 0x%x 0x%x 0x%x 0x%x", group, bus, device, function);
+        return -1;
+    }
+
+    uint64_t pci_va = hypervisor_ept_map_pci_device(vm, pci_dev);
+
+    if(pci_va != -1ULL){
+        list_list_insert(vm->mapped_pci_devices, pci_dev);
+    }
+
+    return pci_va;
+}
+
 void video_text_print(const char* str);
 
 list_t** hypervisor_vmcall_interrupt_mapped_vms = NULL;
@@ -336,12 +323,8 @@ static int8_t hypervisor_vmcall_interrupt_mapped_isr(interrupt_frame_ext_t* fram
     return -1;
 }
 
-int16_t hypervisor_vmx_vmcall_attach_interrupt(hypervisor_vm_t* vm, vmx_vmcs_vmexit_info_t* vmexit_info) {
-    pci_generic_device_t* pci_dev = (pci_generic_device_t*)vmexit_info->registers->rdi;
-    vm_guest_interrupt_type_t interrupt_type = (vm_guest_interrupt_type_t)vmexit_info->registers->rsi;
-    uint8_t interrupt_number = (uint8_t)vmexit_info->registers->rdx;
-
-
+int16_t  hypervisor_attach_interrupt(hypervisor_vm_t* vm, uint64_t pci_dev_address, vm_guest_interrupt_type_t interrupt_type, uint8_t interrupt_number) {
+    pci_generic_device_t* pci_dev = (pci_generic_device_t*)pci_dev_address;
 
     pci_capability_msi_t* msi_cap = NULL;
     pci_capability_msix_t* msix_cap = NULL;

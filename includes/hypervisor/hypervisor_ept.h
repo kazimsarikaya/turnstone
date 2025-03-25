@@ -12,7 +12,7 @@
 
 #include <types.h>
 #include <hypervisor/hypervisor_vm.h>
-#include <hypervisor/hypervisor_vmx_utils.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <pci.h>
 
 #ifdef __cplusplus
@@ -115,7 +115,7 @@ int8_t   hypervisor_ept_build_tables(hypervisor_vm_t* vm);
 int8_t   hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_load_t* module_load);
 uint64_t hypervisor_ept_map_pci_device(hypervisor_vm_t* vm, const pci_dev_t* pci_dev);
 
-uint64_t hypervisor_ept_page_fault_handler(vmx_vmcs_vmexit_info_t* vmexit_info);
+uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_code, uint64_t error_address);
 
 int8_t hypervisor_ept_dump_mapping(hypervisor_vm_t* vm);
 int8_t hypervisor_ept_dump_paging_mapping(hypervisor_vm_t* vm);

@@ -9,10 +9,10 @@
 
 #include <hypervisor/hypervisor.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
-#include <hypervisor/hypervisor_vmx_utils.h>
 #include <hypervisor/hypervisor_vmx_vmcs_ops.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
 #include <hypervisor/hypervisor_vm.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_svm_macros.h>
 #include <hypervisor/hypervisor_svm_ops.h>
 #include <hypervisor/hypervisor_svm_vmcb_ops.h>
@@ -70,10 +70,18 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
+    if(hypervisor_vmx_vmcs_prepare_ept(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
+        return -1;
+    }
+
     if(hypevisor_deploy_program(vm, entry_point_name) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
         return -1;
     }
+
+    vmx_write(VMX_GUEST_RIP, vm->program_entry_point_virtual_address);
+    vmx_write(VMX_GUEST_RSP, (VMX_GUEST_STACK_TOP_VALUE) -8); // we subtract 8 because sse needs 16 byte alignment
 
     if(vmx_vmlaunch() != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch/vmresume failed");
@@ -324,6 +332,9 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
         return -1;
     }
+
+    vm->guest_stack_size = 2ULL << 20; // 2MiB
+    vm->guest_heap_size = 16ULL << 20; // 16MiB
 
     vm->entry_point_name = entry_point_name;
 

@@ -7,7 +7,7 @@
  */
 
 #include <hypervisor/hypervisor_iommu.h>
-#include <hypervisor/hypervisor_vmx_utils.h> // FIXME: move allocate_region to hypervisor_utils.h
+#include <hypervisor/hypervisor_utils.h>
 #include <logging.h>
 #include <acpi.h>
 #include <pci.h>

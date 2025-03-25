@@ -8,9 +8,9 @@
 
 #include <hypervisor/hypervisor_vmx_vmcs_ops.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
-#include <hypervisor/hypervisor_vmx_utils.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_ept.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>

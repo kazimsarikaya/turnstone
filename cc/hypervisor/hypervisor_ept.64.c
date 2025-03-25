@@ -7,7 +7,7 @@
  */
 
 #include <hypervisor/hypervisor_ept.h>
-#include <hypervisor/hypervisor_vmx_utils.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
 #include <memory/paging.h>
@@ -1180,15 +1180,12 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     return 0;
 }
 
-uint64_t hypervisor_ept_page_fault_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
-    uint64_t error_code = vmexit_info->interrupt_error_code;
+uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_code, uint64_t error_address) {
     hypervisor_vm_t* vm = task_get_vm();
 
     interrupt_errorcode_pagefault_t pagefault_error = {.bits = error_code};
 
     if(pagefault_error.fields.present && pagefault_error.fields.write) {
-        uint64_t error_address = vmexit_info->exit_qualification; // exit qualification is the address that caused the page fault
-
         linker_metadata_at_memory_t md = {.section = {.virtual_start = error_address, .size = 1}};
 
         uint64_t pos = 0;
@@ -1261,7 +1258,7 @@ uint64_t hypervisor_ept_page_fault_handler(vmx_vmcs_vmexit_info_t* vmexit_info) 
 
             hypervisor_ept_invept(1);
 
-            return (uint64_t)vmexit_info->registers;
+            return registers;
         } else {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Write access to unknown memory at 0x%llx", error_address);
             return -1;

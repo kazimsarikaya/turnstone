@@ -8,7 +8,7 @@
 
 #include <hypervisor/hypervisor_vmx_vmcs_ops.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
-#include <hypervisor/hypervisor_vmx_utils.h>
+#include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_ept.h>
 #include <hypervisor/hypervisor_ipc.h>
@@ -25,6 +25,8 @@
 #include <strings.h>
 
 MODULE("turnstone.hypervisor.vmx");
+
+typedef uint64_t (*vmx_vmexit_handler_t)(vmx_vmcs_vmexit_info_t* vmexit_info);
 
 static vmx_vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
 
@@ -744,7 +746,7 @@ static uint64_t hypervisor_vmcs_exception_or_nmi_handler(vmx_vmcs_vmexit_info_t*
     int8_t vector = interrupt_info & 0xFF;
 
     if(vector == 0xE) {
-        uint64_t ret = hypervisor_ept_page_fault_handler(exit_info);
+        uint64_t ret = hypervisor_ept_page_fault_handler((uint64_t)exit_info->registers, exit_info->interrupt_error_code, exit_info->exit_qualification);
 
         if(ret == -1ULL) {
             return -1;
@@ -798,14 +800,22 @@ static uint64_t hypervisor_vmcs_vmcalls_handler(vmx_vmcs_vmexit_info_t* vmexit_i
         ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
         break;
     case HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV:
-        ret = hypervisor_vmx_vmcall_attach_pci_dev(vm, vmexit_info->registers->rdi);
+        ret = hypervisor_attach_pci_dev(vm, vmexit_info->registers->rdi);
         break;
-    case HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT:
-        ret = hypervisor_vmx_vmcall_attach_interrupt(vm, vmexit_info);
+    case HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT: {
+        uint64_t pci_dev_address = vmexit_info->registers->rdi;
+        vm_guest_interrupt_type_t interrupt_type = (vm_guest_interrupt_type_t)vmexit_info->registers->rsi;
+        uint8_t interrupt_number = (uint8_t)vmexit_info->registers->rdx;
+
+        ret = hypervisor_attach_interrupt(vm, pci_dev_address, interrupt_type, interrupt_number);
         break;
-    case HYPERVISOR_VMCALL_NUMBER_LOAD_MODULE:
-        ret = hypervisor_vmx_vmcall_load_module(vm, vmexit_info);
+
+    }
+    case HYPERVISOR_VMCALL_NUMBER_LOAD_MODULE: {
+        uint64_t got_entry_address = vmexit_info->registers->r11;
+        ret = hypervisor_load_module(vm, got_entry_address);
         break;
+    }
     default:
         PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown vmcall rax 0x%llx", rax);
         break;
