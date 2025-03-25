@@ -14,6 +14,8 @@
 #include <hypervisor/hypervisor_vmx_ops.h>
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_svm_macros.h>
+#include <hypervisor/hypervisor_svm_ops.h>
+#include <hypervisor/hypervisor_svm_vmcb_ops.h>
 #include <cpu.h>
 #include <cpu/crx.h>
 #include <cpu/descriptor.h>
@@ -54,7 +56,7 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-    if(vmptrld(vmcs_frame_fa) != 0) {
+    if(vmx_vmptrld(vmcs_frame_fa) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
         return -1;
     }
@@ -73,12 +75,152 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-    if(vmlaunch() != 0) {
+    if(vmx_vmlaunch() != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxlaunch/vmresume failed");
         hypervisor_vmx_vmcs_dump();
 
         return -1;
     }
+
+    return 0;
+}
+
+static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
+    if(argc != 1) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid argument count");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "args pointer: 0x%llx", (uint64_t)args);
+
+    hypervisor_vm_t* vm = args[0];
+
+    const char_t* entry_point_name = vm->entry_point_name;
+
+    if(strlen(entry_point_name) == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
+        return -1;
+    }
+
+    uint64_t vmcb_frame_fa = vm->vmcb_frame_fa;
+
+    if(vmcb_frame_fa == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid vmcb frame fa");
+        return -1;
+    }
+
+    if(svm_vmload(vmcb_frame_fa) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmload failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmload success");
+    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
+
+    if(hypervisor_vm_create_and_attach_to_task(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm and attach to task");
+        return -1;
+    }
+
+    if(hypevisor_deploy_program(vm, entry_point_name) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
+        return -1;
+    }
+
+    if(svm_vmrun(vmcb_frame_fa) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmrun failed");
+        hypervisor_vmx_vmcs_dump();
+
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t hypervisor_init_intel(void) {
+    cpu_reg_cr4_t cr4;
+
+    cr4 = cpu_read_cr4();
+
+    cr4.fields.vmx_enable = 1;
+
+    cpu_write_cr4(cr4);
+
+    uint64_t feature_control = cpu_read_msr(CPU_MSR_IA32_FEATURE_CONTROL);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "Feature control: 0x%llx", feature_control);
+
+    uint64_t required = FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_OUTSIDE_SMX;
+
+    if((feature_control & required) != required) {
+        feature_control |= required;
+        cpu_write_msr(CPU_MSR_IA32_FEATURE_CONTROL, feature_control);
+    }
+
+    cpu_reg_cr0_t cr0 = cpu_read_cr0();
+
+    cr0.bits &= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED1);
+    cr0.bits |= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED0);
+
+    cpu_write_cr0(cr0);
+
+    cr4 = cpu_read_cr4();
+
+    cr4.bits &= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED0);
+    cr4.bits |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);
+
+    cpu_write_cr4(cr4);
+
+    frame_t* vmxon_frame = NULL;
+
+    uint64_t vmxon_frame_va = hypervisor_allocate_region(&vmxon_frame, FRAME_SIZE);
+
+    if(vmxon_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vmxon frame");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon frame va: 0x%llx", vmxon_frame_va);
+
+    uint32_t revision_id = hypervisor_vmx_vmcs_revision_id();
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "VMCS revision id: 0x%x", revision_id);
+
+    *(uint32_t*)vmxon_frame_va = revision_id;
+
+    uint8_t err = 0;
+
+    err = vmx_vmxon(vmxon_frame->frame_address);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxon failed");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon success");
+
+    return 0;
+}
+
+static int8_t hypervisor_init_amd(void) {
+    uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
+    msr_efer |= 1 << 12;
+    cpu_write_msr(CPU_MSR_EFER, msr_efer);
+
+    frame_t* svm_ha_frame = NULL;
+
+    uint64_t svm_ha_frame_va = hypervisor_allocate_region(&svm_ha_frame, FRAME_SIZE);
+
+    if(svm_ha_frame_va == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate svm ha frame");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm ha frame va: 0x%llx", svm_ha_frame_va);
+
+    cpu_write_msr(SVM_MSR_VM_HSAVE_PA, svm_ha_frame->frame_address);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm success");
 
     return 0;
 }
@@ -100,22 +242,10 @@ int8_t hypervisor_init(void) {
         return -1;
     }
 
-
-    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t query;
     cpu_cpuid_regs_t result;
 
-    query.eax = 0x0;
-    cpu_cpuid(query, &result);
-
-    char_t vendor_id[13] = {0};
-
-    *(uint32_t*)&vendor_id[0] = result.ebx;
-    *(uint32_t*)&vendor_id[4] = result.edx;
-    *(uint32_t*)&vendor_id[8] = result.ecx;
-
-    PRINTLOG(HYPERVISOR, LOG_INFO, "Vendor ID: %s", vendor_id);
-
-    if(strcmp(vendor_id, "GenuineIntel") == 0) {
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
         query.eax = 0x1;
         query.ebx = 0;
         query.ecx = 0;
@@ -127,7 +257,12 @@ int8_t hypervisor_init(void) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
             return -1;
         }
-    } else if(strcmp(vendor_id, "AuthenticAMD") == 0) {
+
+        if(hypervisor_init_intel() != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize intel hypervisor");
+            return -1;
+        }
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
         query.eax = 0x80000001;
         query.ebx = 0;
         query.ecx = 0;
@@ -139,6 +274,12 @@ int8_t hypervisor_init(void) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
             return -1;
         }
+
+        if(hypervisor_init_amd() != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize amd hypervisor");
+            return -1;
+        }
+
     } else {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
         return -1;
@@ -149,88 +290,6 @@ int8_t hypervisor_init(void) {
     if(hypervisor_vm_init() != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot initialize hypervisor vm");
         return -1;
-    }
-
-    cpu_reg_cr4_t cr4;
-
-    if(strcmp(vendor_id, "GenuineIntel") == 0) {
-        cr4 = cpu_read_cr4();
-
-        cr4.fields.vmx_enable = 1;
-
-        cpu_write_cr4(cr4);
-
-        uint64_t feature_control = cpu_read_msr(CPU_MSR_IA32_FEATURE_CONTROL);
-
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "Feature control: 0x%llx", feature_control);
-
-        uint64_t required = FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_OUTSIDE_SMX;
-
-        if((feature_control & required) != required) {
-            feature_control |= required;
-            cpu_write_msr(CPU_MSR_IA32_FEATURE_CONTROL, feature_control);
-        }
-
-        cpu_reg_cr0_t cr0 = cpu_read_cr0();
-
-        cr0.bits &= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED1);
-        cr0.bits |= cpu_read_msr(CPU_MSR_IA32_VMX_CR0_FIXED0);
-
-        cpu_write_cr0(cr0);
-
-        cr4 = cpu_read_cr4();
-
-        cr4.bits &= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED0);
-        cr4.bits |= cpu_read_msr(CPU_MSR_IA32_VMX_CR4_FIXED1);
-
-        cpu_write_cr4(cr4);
-
-        frame_t* vmxon_frame = NULL;
-
-        uint64_t vmxon_frame_va = hypervisor_allocate_region(&vmxon_frame, FRAME_SIZE);
-
-        if(vmxon_frame_va == 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate vmxon frame");
-            return -1;
-        }
-
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon frame va: 0x%llx", vmxon_frame_va);
-
-        uint32_t revision_id = hypervisor_vmx_vmcs_revision_id();
-
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "VMCS revision id: 0x%x", revision_id);
-
-        *(uint32_t*)vmxon_frame_va = revision_id;
-
-        uint8_t err = 0;
-
-        err = vmxon(vmxon_frame->frame_address);
-
-        if(err) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "vmxon failed");
-            return -1;
-        }
-
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmxon success");
-    } else if(strcmp(vendor_id, "AuthenticAMD") == 0) {
-        uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
-        msr_efer |= 1 << 12;
-        cpu_write_msr(CPU_MSR_EFER, msr_efer);
-
-        frame_t* svm_ha_frame = NULL;
-
-        uint64_t svm_ha_frame_va = hypervisor_allocate_region(&svm_ha_frame, FRAME_SIZE);
-
-        if(svm_ha_frame_va == 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate svm ha frame");
-            return -1;
-        }
-
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm ha frame va: 0x%llx", svm_ha_frame_va);
-
-        cpu_write_msr(SVM_MSR_VM_HSAVE_PA, svm_ha_frame->frame_address);
-
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm success");
     }
 
     return 0;
@@ -245,8 +304,24 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 
     hypervisor_vm_t* vm = NULL;
 
-    if(hypervisor_vmx_vmcs_prepare(&vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
+    void* entry_point = NULL;
+
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        entry_point = hypervisor_vmx_vm_task;
+
+        if(hypervisor_vmx_vmcs_prepare(&vm) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
+            return -1;
+        }
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        entry_point = hypervisor_svm_vm_task;
+
+        if(hypervisor_svm_vmcb_prepare(&vm) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
+            return -1;
+        }
+    } else {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
         return -1;
     }
 
@@ -266,7 +341,7 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 
     char_t* vm_name = strprintf("vm%08llx", ++hypervisor_next_vm_id);
 
-    if(task_create_task(heap, 2 << 20, 16 << 10, hypervisor_vmx_vm_task, 1, args, vm_name) == -1ULL) {
+    if(task_create_task(heap, 2 << 20, 16 << 10, entry_point, 1, args, vm_name) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         memory_free(args);
         memory_free(vm_name);
@@ -280,7 +355,18 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
 }
 
 int8_t hypervisor_stop(void) {
-    asm volatile ("vmxoff" ::: "cc");
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "vmxoff success");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        asm volatile ("vmxoff" ::: "cc");
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "vmxoff success");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        uint64_t msr_efer = cpu_read_msr(CPU_MSR_EFER);
+        msr_efer &= ~(1 << 12);
+        cpu_write_msr(CPU_MSR_EFER, msr_efer);
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "svm off success");
+    } else {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
+        return -1;
+    }
+
     return 0;
 }

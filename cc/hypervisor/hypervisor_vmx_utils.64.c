@@ -22,7 +22,7 @@
 #include <pci.h>
 #include <apic.h>
 
-MODULE("turnstone.hypervisor");
+MODULE("turnstone.hypervisor.vmx");
 
 
 

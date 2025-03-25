@@ -18,7 +18,7 @@
 #include <apic.h>
 #include <logging.h>
 
-MODULE("turnstone.hypervisor");
+MODULE("turnstone.hypervisor.vmx");
 
 uint32_t hypervisor_vmx_vmcs_revision_id(void) {
     return cpu_read_msr(CPU_MSR_IA32_VMX_BASIC) & 0xffffffff;
@@ -684,7 +684,7 @@ int8_t hypervisor_vmx_vmcs_prepare(hypervisor_vm_t** vm_out) {
 
     uint8_t err = 0;
 
-    err = vmclear(vmcs_frame->frame_address);
+    err = vmx_vmclear(vmcs_frame->frame_address);
 
     if(err) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmclear failed");
@@ -693,7 +693,7 @@ int8_t hypervisor_vmx_vmcs_prepare(hypervisor_vm_t** vm_out) {
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vmclear success");
 
-    err = vmptrld(vmcs_frame->frame_address);
+    err = vmx_vmptrld(vmcs_frame->frame_address);
 
     if(err) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmptrld failed");
@@ -727,7 +727,7 @@ int8_t hypervisor_vmx_vmcs_prepare(hypervisor_vm_t** vm_out) {
         return -1;
     }
 
-    err = vmclear(vmcs_frame->frame_address);
+    err = vmx_vmclear(vmcs_frame->frame_address);
 
     if(err) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "vmclear failed");

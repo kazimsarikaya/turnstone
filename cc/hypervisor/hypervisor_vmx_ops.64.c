@@ -10,7 +10,7 @@
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <logging.h>
 
-MODULE("turnstone.hypervisor");
+MODULE("turnstone.hypervisor.vmx");
 
 int8_t vmx_write(uint64_t field, uint64_t value) {
     uint8_t err = 0;
@@ -36,7 +36,7 @@ uint64_t vmx_read(uint64_t field) {
     return value;
 }
 
-int8_t vmxon(uint64_t vmxon_pa) {
+int8_t vmx_vmxon(uint64_t vmxon_pa) {
     uint8_t err = 0;
 
     asm volatile ("vmxon %[pa]\n"
@@ -48,7 +48,7 @@ int8_t vmxon(uint64_t vmxon_pa) {
     return err;
 }
 
-int8_t vmptrld(uint64_t vmcs_pa) {
+int8_t vmx_vmptrld(uint64_t vmcs_pa) {
     uint8_t err = 0;
 
     asm volatile ("vmptrld %[pa]\n"
@@ -60,7 +60,7 @@ int8_t vmptrld(uint64_t vmcs_pa) {
     return err;
 }
 
-int8_t vmclear(uint64_t vmcs_pa) {
+int8_t vmx_vmclear(uint64_t vmcs_pa) {
     uint8_t err = 0;
 
     asm volatile ("vmclear %[pa]\n"
@@ -72,7 +72,7 @@ int8_t vmclear(uint64_t vmcs_pa) {
     return err;
 }
 
-int8_t vmlaunch(void) {
+int8_t vmx_vmlaunch(void) {
     uint8_t err = 0;
 
     asm volatile ("vmlaunch\n"

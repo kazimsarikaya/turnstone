@@ -38,8 +38,11 @@ typedef struct hypervisor_vm_t {
     const char_t*  entry_point_name;
     uint64_t       task_id;
     list_t*        ipc_queue;
-    uint64_t       vmcs_frame_fa;
-    buffer_t*      output_buffer;
+    union {
+        uint64_t vmcs_frame_fa;
+        uint64_t vmcb_frame_fa;
+    };
+    buffer_t* output_buffer;
     struct {
         uint64_t  timer_initial_value;
         uint64_t  timer_current_value;

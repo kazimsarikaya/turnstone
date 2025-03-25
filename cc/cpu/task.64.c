@@ -24,6 +24,7 @@
 #include <hashmap.h>
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_svm_ops.h>
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <strings.h>
@@ -784,12 +785,16 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     }
 
     if(current_task->vmcs_physical_address) {
-        if(vmclear(current_task->vmcs_physical_address) != 0) {
-            utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
-            video_text_print("vmclear failed for task 0x");
-            video_text_print(task_switch_task_id_buf);
-            video_text_print("\n");
-            return;
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(current_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+                video_text_print("vmclear failed for task 0x");
+                video_text_print(task_switch_task_id_buf);
+                video_text_print("\n");
+                return;
+            }
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 
@@ -837,15 +842,20 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     cpu_state->current_task = current_task;
 
     if(current_task->vmcs_physical_address) {
-        if(vmptrld(current_task->vmcs_physical_address) != 0) {
-            utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
-            video_text_print("vmclear failed for task 0x");
-            video_text_print(task_switch_task_id_buf);
-            video_text_print("\n");
-        }
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmptrld(current_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+                video_text_print("vmptrld failed for task 0x");
+                video_text_print(task_switch_task_id_buf);
+                video_text_print("\n");
+                return;
+            }
 
-        vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
-        vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
+            vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+            vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
+        }
     }
 
     task_load_registers(current_task->registers);
@@ -875,8 +885,12 @@ void task_end_task(void) {
     PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx", current_task->task_id, ret, cpu_state->local_apic_id);
 
     if(current_task->vmcs_physical_address) {
-        if(vmclear(current_task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(current_task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+            }
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 
@@ -902,8 +916,12 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
     }
 
     if(task->vmcs_physical_address) {
-        if(vmclear(task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+            }
+        }  else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 
@@ -1268,8 +1286,12 @@ void task_remove_task_after_fault(uint64_t task_id) {
     task->state = TASK_STATE_ENDED;
 
     if(task->vmcs_physical_address) {
-        if(vmclear(task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+            }
+        }  else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 

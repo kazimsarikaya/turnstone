@@ -12,6 +12,7 @@
 
 #include <types.h>
 #include <utils.h>
+#include <hypervisor/hypervisor_vm.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -510,6 +511,8 @@ typedef struct svm_vmcb_t {
 
 _Static_assert(offsetof_field(svm_vmcb_t, save_state_area) == 0x400, "svm_vmcb_t save_state_area offset is not at 0x400 bytes");
 _Static_assert(sizeof(svm_vmcb_t) == 0x1000, "svm_vmcb_t size is not 0x1000 bytes");
+
+int8_t hypervisor_svm_vmcb_prepare(hypervisor_vm_t** vm_out);
 
 
 #ifdef __cplusplus

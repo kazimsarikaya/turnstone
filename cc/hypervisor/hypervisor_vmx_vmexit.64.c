@@ -24,7 +24,7 @@
 #include <ports.h>
 #include <strings.h>
 
-MODULE("turnstone.hypervisor");
+MODULE("turnstone.hypervisor.vmx");
 
 static vmx_vmexit_handler_t vmexit_handlers[VMX_VMEXIT_REASON_COUNT] = {0};
 
