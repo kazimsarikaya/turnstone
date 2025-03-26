@@ -43,3 +43,11 @@ _Noreturn void vmtpm(void) {
 
     vm_guest_halt();
 }
+
+_Noreturn void vmtpm2(void);
+
+_Noreturn void vmtpm2(void) {
+    while(1) {
+        asm volatile ("hlt");
+    }
+}
