@@ -48,3 +48,19 @@ int8_t svm_vmrun(uint64_t vmcb_frame_fa) {
 
     return 0;
 }
+
+void __attribute__((naked)) svm_vmrun_loop(uint64_t vmcb_frame_fa) {
+    UNUSED(vmcb_frame_fa);
+    asm volatile (
+        "movq %rdi, %rax\n"
+        "addq $0x1000, %rax\n"
+        "vmsave\n"
+        "movq %rdi, %rax\n"
+        "vmload\n"
+        "vmrun\n"
+        "vmsave\n"
+        "addq $0x1000, %rax\n"
+        "vmload\n"
+        "retq\n"
+        );
+}

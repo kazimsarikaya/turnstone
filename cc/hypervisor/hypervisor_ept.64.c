@@ -22,8 +22,12 @@
 MODULE("turnstone.hypervisor");
 
 static void hypervisor_ept_invept(uint64_t type) {
-    uint128_t eptp = vmx_read(VMX_CTLS_EPTP);
-    asm volatile ("invept (%0), %1" : : "r" (&eptp), "r" (type) : "memory");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        uint128_t eptp = vmx_read(VMX_CTLS_EPTP);
+        asm volatile ("invept (%0), %1" : : "r" (&eptp), "r" (type) : "memory");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        // TODO: AMD
+    }
 }
 
 static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_physical, uint64_t guest_physical, boolean_t wb) {
@@ -375,6 +379,22 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
     }
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "stack pages added.");
+
+    if(cpu_get_type() == CPU_TYPE_AMD) {
+        uint64_t avic_apic_backing_page_pointer = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address;
+
+        if(avic_apic_backing_page_pointer == 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "AVIC APIC backing page not found");
+            return -1;
+        }
+
+        if(hypervisor_ept_add_ept_page(vm, avic_apic_backing_page_pointer, 0xfee00000, true) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add EPT page for AVIC APIC backing page");
+            return -1;
+        }
+
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "avic apic backing page added.");
+    }
 
     return ept_frames->frame_address;
 }
@@ -938,7 +958,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
 
     gdt[0] = 0;
     gdt[1] = 0x00209b0000000000ULL;
-    gdt[2] = 0x0000930000000000ULL;
+    gdt[2] = 0x0020930000000000ULL;
     gdt[3] = 0x00008b0030000067ULL;
 
     vm->next_page_address = VMX_GUEST_CR3_BASE_VALUE;

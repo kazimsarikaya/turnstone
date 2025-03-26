@@ -20,6 +20,7 @@ extern "C" {
 int8_t svm_vmload(uint64_t vmcb_frame_fa);
 int8_t svm_vmsave(uint64_t vmcb_frame_fa);
 int8_t svm_vmrun(uint64_t vmcb_frame_fa);
+void   svm_vmrun_loop(uint64_t vmcb_frame_fa);
 
 #ifdef __cplusplus
 }

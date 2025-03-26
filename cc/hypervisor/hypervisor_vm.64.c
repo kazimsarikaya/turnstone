@@ -9,8 +9,6 @@
 
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_ipc.h>
-#include <hypervisor/hypervisor_vmx_macros.h>
-#include <hypervisor/hypervisor_vmx_ops.h>
 #include <hypervisor/hypervisor_utils.h>
 #include <list.h>
 #include <cpu/task.h>
@@ -104,9 +102,6 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vm->vmcs_frame_fa);
     task_set_vmcs_physical_address(vm->vmcs_frame_fa);
     task_set_vm(vm);
-
-    vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
-    vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
 
     return 0;
 }

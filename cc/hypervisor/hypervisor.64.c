@@ -70,6 +70,9 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
+    vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+    vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
+
     if(hypervisor_vmx_vmcs_prepare_ept(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
         return -1;
@@ -117,29 +120,55 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
-    if(svm_vmload(vmcb_frame_fa) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmload failed");
-        return -1;
-    }
-
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmload success");
-    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
-
     if(hypervisor_vm_create_and_attach_to_task(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm and attach to task");
         return -1;
     }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm attached to task");
+
+    if(hypervisor_svm_vmcb_prepare_ept(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare ept");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "ept prepared");
 
     if(hypevisor_deploy_program(vm, entry_point_name) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot deploy program");
         return -1;
     }
 
-    if(svm_vmrun(vmcb_frame_fa) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmrun failed");
-        hypervisor_vmx_vmcs_dump();
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s deployed", entry_point_name);
 
+    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
+
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vmcb_frame_fa);
+
+    vmcb->save_state_area.rip = vm->program_entry_point_virtual_address;
+    vmcb->save_state_area.rsp = (SVM_GUEST_STACK_TOP_VALUE) -8; // we subtract 8 because sse needs 16 byte alignment
+
+    asm volatile ("stgi");
+
+    if(hypervisor_svm_vmcb_set_running(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot set running");
         return -1;
+    }
+
+    svm_vmrun_loop(vmcb_frame_fa);
+
+    if(hypervisor_svm_vmcb_set_stopped(vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot set stopped");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx",
+             vmcb->control_area.exit_code, vmcb->control_area.exit_info_1, vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits);
+
+    cpu_sti();
+
+    while(true) {
+        asm volatile ("hlt");
     }
 
     return 0;
@@ -224,6 +253,9 @@ static int8_t hypervisor_init_amd(void) {
         return -1;
     }
 
+    uint64_t old_ha = cpu_read_msr(SVM_MSR_VM_HSAVE_PA);
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "old ha: 0x%llx new ha: 0x%llx", old_ha, svm_ha_frame->frame_address);
+
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "svm ha frame va: 0x%llx", svm_ha_frame_va);
 
     cpu_write_msr(SVM_MSR_VM_HSAVE_PA, svm_ha_frame->frame_address);
@@ -304,11 +336,12 @@ int8_t hypervisor_init(void) {
 }
 
 int8_t hypervisor_vm_create(const char_t* entry_point_name) {
-    return 0;
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
         return -1;
     }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s", entry_point_name);
 
     hypervisor_vm_t* vm = NULL;
 
@@ -333,6 +366,8 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm related configurations done");
+
     vm->guest_stack_size = 2ULL << 20; // 2MiB
     vm->guest_heap_size = 16ULL << 20; // 16MiB
 
@@ -351,6 +386,8 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
     args[0] = vm;
 
     char_t* vm_name = strprintf("vm%08llx", ++hypervisor_next_vm_id);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm name: %s", vm_name);
 
     if(task_create_task(heap, 2 << 20, 16 << 10, entry_point, 1, args, vm_name) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");

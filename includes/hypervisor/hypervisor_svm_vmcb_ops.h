@@ -98,6 +98,41 @@ typedef union svm_vmcb_intercept_drx_t {
 
 _Static_assert(sizeof(svm_vmcb_intercept_drx_t) == sizeof(uint32_t), "svm_vmcb_intercept_drx_t size is not 4 bytes");
 
+typedef union svm_vmcb_intercept_interrupt_t {
+    struct {
+        uint32_t divide_by_zero               :1; ///< 0
+        uint32_t debug_exception              :1; ///< 1
+        uint32_t nmi                          :1; ///< 2
+        uint32_t breakpoint                   :1; ///< 3
+        uint32_t overflow                     :1; ///< 4
+        uint32_t bound_range_exceeded         :1; ///< 5
+        uint32_t invalid_opcode               :1; ///< 6
+        uint32_t device_not_available         :1; ///< 7
+        uint32_t double_fault                 :1; ///< 8
+        uint32_t coprocessor_segment_overrun  :1; ///< 9
+        uint32_t invalid_tss                  :1; ///< 10
+        uint32_t segment_not_present          :1; ///< 11
+        uint32_t stack_segment_fault          :1; ///< 12
+        uint32_t general_protection           :1; ///< 13
+        uint32_t page_fault                   :1; ///< 14
+        uint32_t reserved_1                   :1; ///< 15
+        uint32_t x87_fpu_floating_point_error :1; ///< 16
+        uint32_t alignment_check              :1; ///< 17
+        uint32_t machine_check                :1; ///< 18
+        uint32_t simd_floating_point_exception:1; ///< 19
+        uint32_t reserved_2                   :1; ///< 20
+        uint32_t control_protection           :1; ///< 21
+        uint32_t reserved_3                   :6; ///< 22-27
+        uint32_t virtual_interrupt_pending    :1; ///< 28
+        uint32_t vmm_communication            :1; ///< 29
+        uint32_t security_exception           :1; ///< 30
+        uint32_t reserved_4                   :1; ///< 31
+    } __attribute__((packed)) fields;
+    uint32_t bits;
+} __attribute__((packed)) svm_vmcb_intercept_interrupt_t;
+
+_Static_assert(sizeof(svm_vmcb_intercept_interrupt_t) == sizeof(uint32_t), "svm_vmcb_intercept_interrupt_t size is not 4 bytes");
+
 typedef union svm_vmcb_intercept_control_1_t {
     struct {
         uint32_t intr       :1;
@@ -250,10 +285,15 @@ _Static_assert(sizeof(svm_vmcb_interrupt_shadow_t) == sizeof(uint64_t), "svm_vmc
 
 typedef union svm_vmcb_nested_page_control_t {
     struct {
-        uint64_t np_enable  :1;
-        uint64_t reserved1  :11;
-        uint64_t np_base_pa :40;
-        uint64_t reserved2  :12;
+        uint64_t np_enable                            :1;
+        uint64_t sev_enable                           :1;
+        uint64_t sev_encrypted_state                  :1;
+        uint64_t guest_mode_execution_trap            :1;
+        uint64_t sss_check_enable                     :1;
+        uint64_t virtual_transparent_encryption_enable:1;
+        uint64_t ro_guest_pages_enable                :1;
+        uint64_t invlpgb_tlbsync_enable               :1;
+        uint64_t reserved                             :56;
     } __attribute__((packed)) fields;
     uint64_t bits;
 } __attribute__((packed)) svm_vmcb_nested_page_control_t;
@@ -351,10 +391,11 @@ _Static_assert(sizeof(svm_exit_int_info_t) == sizeof(uint64_t), "svm_exit_int_in
 typedef struct svm_vmcb_control_area_t {
     svm_vmcb_intercept_crx_t              intercept_crx;
     svm_vmcb_intercept_drx_t              intercept_drx;
+    svm_vmcb_intercept_interrupt_t        intercept_interrupt;
     svm_vmcb_intercept_control_1_t        intercept_control_1;
     svm_vmcb_intercept_control_2_t        intercept_control_2;
     svm_vmcb_intercept_control_3_t        intercept_control_3;
-    uint8_t                               reserved_sbz0[40];
+    uint8_t                               reserved_sbz0[36];
     svm_vmcb_pause_control_t              pause_control;
     uint64_t                              iopm_base_pa;
     uint64_t                              msrpm_base_pa;
@@ -396,6 +437,7 @@ typedef struct svm_vmcb_control_area_t {
 
 
 _Static_assert(offsetof_field(svm_vmcb_control_area_t, pause_control) == 0x3c, "svm_vmcb_control_area_t pause_control offset is not at 0x3c bytes");
+_Static_assert(offsetof_field(svm_vmcb_control_area_t, nested_page_control) == 0x90, "svm_vmcb_control_area_t nested_page_control offset is not at 0x90 bytes");
 _Static_assert(offsetof_field(svm_vmcb_control_area_t, n_cr3) == 0xb0, "svm_vmcb_control_area_t n_cr3 offset is not at 0xb0 bytes");
 _Static_assert(offsetof_field(svm_vmcb_control_area_t, avic_logical_table_pointer) == 0xf0, "svm_vmcb_control_area_t avic_apic_backing_page_pointer offset is not at 0xe0 bytes");
 _Static_assert(offsetof_field(svm_vmcb_control_area_t, vmsa_pointer) == 0x108, "svm_vmcb_control_area_t vmsa_pointer offset is not at 0x108 bytes");
@@ -513,6 +555,9 @@ _Static_assert(offsetof_field(svm_vmcb_t, save_state_area) == 0x400, "svm_vmcb_t
 _Static_assert(sizeof(svm_vmcb_t) == 0x1000, "svm_vmcb_t size is not 0x1000 bytes");
 
 int8_t hypervisor_svm_vmcb_prepare(hypervisor_vm_t** vm_out);
+int8_t hypervisor_svm_vmcb_prepare_ept(hypervisor_vm_t* vm);
+int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm);
+int8_t hypervisor_svm_vmcb_set_stopped(hypervisor_vm_t* vm);
 
 
 #ifdef __cplusplus
