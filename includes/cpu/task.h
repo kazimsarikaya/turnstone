@@ -203,6 +203,12 @@ void task_yield(void);
 uint64_t task_get_id(void);
 
 /**
+ * @brief returns current task's cpu id
+ * @return cpu id
+ */
+uint64_t task_get_cpu_id(void);
+
+/**
  * @brief returns current task
  * @return current task
  */

@@ -46,6 +46,10 @@ uint64_t task_get_id(void) {
     return id;
 }
 
+uint64_t task_get_cpu_id(void) {
+    return apic_get_local_apic_id();
+}
+
 void task_current_task_sleep(uint64_t wake_tick) {
     task_t* current_task = task_get_current_task();
 
