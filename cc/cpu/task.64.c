@@ -88,7 +88,6 @@ int8_t task_create_idle_task(void);
 extern boolean_t local_apic_id_is_valid;
 extern volatile cpu_state_t __seg_gs * cpu_state;
 
-lock_t * task_find_next_task_lock = NULL;
 
 static int8_t task_sleep_queue_comparator(const void* item1, const void* item2) {
     const task_t* t1 = (const task_t*)item1;
@@ -364,15 +363,6 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    task_find_next_task_lock = lock_create();
-    PRINTLOG(TASKING, LOG_INFO, "tnt lock 0x%p", task_find_next_task_lock);
-
-    if(task_find_next_task_lock == NULL) {
-        PRINTLOG(TASKING, LOG_FATAL, "cannot create task find next task lock");
-
-        return -1;
-    }
-
     PRINTLOG(TASKING, LOG_INFO, "tasking system initialization ended, kernel task address 0x%p lapic id %d", kernel_task, apic_id);
 
     memory_set_current_task_getter(&task_get_current_task);
@@ -466,9 +456,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     cpu_state->current_task = current_task;
 
-    lock_acquire(task_find_next_task_lock);
     hashmap_put(task_map, (void*)current_task->task_id, current_task);
-    lock_release(task_find_next_task_lock);
 
     if(task_create_idle_task() != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");
@@ -668,12 +656,10 @@ static void task_cleanup_task(task_t* task) {
 }
 
 void task_cleanup(void){
-    lock_acquire(task_find_next_task_lock);
     while(list_size(cpu_state->task_cleanup_queue)) {
         task_t* task = (task_t*)list_queue_pop(cpu_state->task_cleanup_queue);
         task_cleanup_task(task);
     }
-    lock_release(task_find_next_task_lock);
 }
 
 task_t* task_find_next_task(void) {
@@ -1087,12 +1073,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         }
     }
 
-    lock_acquire(task_find_next_task_lock);
-    cpu_cli();
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
     list_stack_push(min_queue, new_task);
-    cpu_sti();
-    lock_release(task_find_next_task_lock);
 
 
     PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task->cpu_id);
@@ -1243,9 +1225,7 @@ int8_t task_create_idle_task(void) {
 
     spool_add(new_task->task_name, 2, new_task->output_buffer, new_task->error_buffer);
 
-    lock_acquire(task_find_next_task_lock);
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
-    lock_release(task_find_next_task_lock);
 
     return 0;
 }
