@@ -35,6 +35,7 @@ void time_timer_configure_spinsleep(void);
 void time_timer_spinsleep(uint64_t usecs);
 
 void time_timer_sleep(uint64_t secs);
+void time_timer_msleep(uint64_t msecs);
 
 #ifdef __cplusplus
 }

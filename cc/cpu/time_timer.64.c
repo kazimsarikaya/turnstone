@@ -155,3 +155,7 @@ void time_timer_configure_spinsleep(void) {
 void time_timer_sleep(uint64_t secs) {
     task_current_task_sleep(time_timer_get_tick_count() + secs * 1000);
 }
+
+void time_timer_msleep(uint64_t msecs) {
+    task_current_task_sleep(time_timer_get_tick_count() + msecs);
+}
