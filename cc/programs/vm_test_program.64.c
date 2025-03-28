@@ -47,6 +47,7 @@ _Noreturn void vmtpm(void) {
 _Noreturn void vmtpm2(void);
 
 _Noreturn void vmtpm2(void) {
+    asm volatile ("cli");
     while(1) {
         asm volatile ("hlt");
     }
