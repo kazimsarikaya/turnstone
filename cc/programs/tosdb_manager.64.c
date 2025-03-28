@@ -16,6 +16,7 @@
 #include <cpu/task.h>
 #include <memory.h>
 #include <linker.h>
+#include <time/timer.h>
 
 MODULE("turnstone.kernel.programs.tosdb_manager");
 
@@ -698,11 +699,22 @@ int8_t tosdb_manager_clear(void) {
 
 int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
     if(!tosdb_manager_is_initialized) {
-        PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_close: not initialized");
-        return -1;
+        int32_t retry = 60;
+
+        while(retry-- > 0 && !tosdb_manager_is_initialized) {
+            time_timer_sleep(1);
+        }
+
+        if(!tosdb_manager_is_initialized) {
+            PRINTLOG(TOSDB, LOG_ERROR, "tosdb manager is not initialized");
+            return -1;
+        }
+
+        PRINTLOG(TOSDB, LOG_DEBUG, "delayed initialized with %i retries", 60 - retry);
     }
 
     if(tosdb_manager_task_id == 0) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb manager task id is 0");
         return -1;
     }
 
