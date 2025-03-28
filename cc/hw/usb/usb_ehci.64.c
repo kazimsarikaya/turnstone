@@ -97,7 +97,7 @@ void usb_ehci_wait_for_transfer(usb_controller_t* usb_controller, usb_ehci_qh_t*
 void usb_ehci_poll(usb_controller_t* usb_controller, usb_ehci_qh_t* qh, usb_transfer_t* transfer);
 
 
-void video_text_print(char_t* string);
+void video_text_print(const char_t* string);
 
 int8_t usb_ehci_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
@@ -129,9 +129,9 @@ int8_t usb_ehci_isr(interrupt_frame_ext_t* frame) {
 
            utoh_with_buffer(buffer, usbsts);
 
-           video_text_print((char_t*)"EHCI ISR usb_sts: 0x");
+           video_text_print("EHCI ISR usb_sts: 0x");
            video_text_print(buffer);
-           video_text_print((char_t*)"\n");
+           video_text_print("\n");
          */
 
         usb_ehci_sts_reg_t sts_reg = { .raw = usbsts };
@@ -142,7 +142,7 @@ int8_t usb_ehci_isr(interrupt_frame_ext_t* frame) {
         }
 
         if(sts_reg.bits.frame_list_rollover && intr_reg.bits.frame_list_rollover_enable) {
-            video_text_print((char_t*)"EHCI frame list rollover\n");
+            video_text_print("EHCI frame list rollover\n");
         }
 
         if(sts_reg.bits.usb_interrupt && intr_reg.bits.usb_interrupt_enable) {
@@ -773,7 +773,6 @@ int8_t usb_ehci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* 
     }
 
     qtd->token.bits.interrupt_on_complete = 1;
-
 
     lock_acquire(metadata->async_list_lock);
     usb_ehci_qh_t* qh = usb_ehci_find_qh(usb_controller);
@@ -1504,9 +1503,9 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
     while(true) {
         uint64_t transfer_count = 0;
 
-        lock_acquire(metadata->periodic_list_lock);
+        lock_acquire(metadata->async_list_lock);
         transfer_count = metadata->current_async_transfer_count;
-        lock_release(metadata->periodic_list_lock);
+        lock_release(metadata->async_list_lock);
 
         if(transfer_count == 0 || need_yield) {
             task_set_message_waiting();
@@ -1600,12 +1599,15 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
 
             if(qh == async_list_head) {
                 PRINTLOG(USB, LOG_TRACE, "async list looped");
-                need_yield = true;
+                // need_yield = true;
+                time_timer_msleep(100);
                 break;
             }
         }
 
         lock_release(metadata->async_list_lock);
+
+        PRINTLOG(USB, LOG_TRACE, "transfer count: %llx yielding %i", transfer_count, need_yield);
     }
 
 }
