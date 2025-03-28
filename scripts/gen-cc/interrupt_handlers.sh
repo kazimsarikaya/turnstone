@@ -31,7 +31,6 @@ cat <<EOF
 void interrupt_naked_handler_int_0x${j}(void);
 __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
-        "cli\n"
         "push \$${i}\n" // push interrupt number
         "push %r15\n"
         "push %r14\n"
@@ -74,7 +73,6 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "pop %r14\n"
         "pop %r15\n"
         "add \$0x8, %rsp\n"
-        "sti\n"
         "iretq\n"
         );
 }
