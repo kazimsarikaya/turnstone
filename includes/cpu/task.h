@@ -188,6 +188,11 @@ int8_t task_init_tasking_ext(memory_heap_t* heap);
 void task_task_switch_set_parameters(boolean_t need_eoi);
 
 /**
+ * @brief applies task switch exit parameters
+ */
+void task_task_switch_exit(void);
+
+/**
  * @brief switches current task to a new one.
  */
 void task_switch_task(void);

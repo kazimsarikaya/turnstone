@@ -476,7 +476,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     return 0;
 }
 
-__attribute__((naked, no_stack_protector)) void task_save_registers(task_registers_t* registers) {
+__attribute__((naked, no_stack_protector, noinline)) void task_save_registers(task_registers_t* registers) {
     __asm__ __volatile__ (
         "mov %%rax, %[rax]\n"
         "mov %%rbx, %[rbx]\n"
@@ -538,7 +538,7 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_registe
         );
 }
 
-__attribute__((naked, no_stack_protector)) void task_load_registers(task_registers_t* registers) {
+__attribute__((naked, no_stack_protector, noinline)) void task_load_registers(task_registers_t* registers) {
     __asm__ __volatile__ (
         "mov %[rcx],  %%rcx\n"
         "mov %[r8],  %%r8\n"
@@ -740,12 +740,10 @@ task_t* task_find_next_task(void) {
 }
 
 void task_task_switch_set_parameters(boolean_t need_eoi) {
-    if(!cpu_state->task_switch_paramters_need_eoi) {
-        cpu_state->task_switch_paramters_need_eoi = need_eoi;
-    }
+    cpu_state->task_switch_paramters_need_eoi = need_eoi;
 }
 
-static __attribute__((noinline)) void task_task_switch_exit(void) {
+void task_task_switch_exit(void) {
     if(cpu_state->task_switch_paramters_need_eoi) {
         cpu_state->task_switch_paramters_need_eoi = false;
         apic_eoi();
@@ -763,8 +761,6 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
        current_task->state == TASK_STATE_RUNNING &&
        (current_tick - current_task->last_tick_count) < task_max_tick_count_limit &&
        current_tick > current_task->last_tick_count) {
-
-        task_task_switch_exit();
 
         return;
     }
@@ -845,10 +841,13 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
 
     task_load_registers(current_task->registers);
 
-    task_task_switch_exit();
+    asm volatile ("" ::: "memory"); // prevent compiler jmp directly to the task_load_registers
 }
 
 void task_end_task(void) {
+    task_task_switch_exit();
+    cpu_sti();
+
     task_t* current_task = cpu_state->current_task;
 
     if(current_task == NULL) {
@@ -862,8 +861,6 @@ void task_end_task(void) {
     int64_t ret = 0;
 
     if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
-        // task_task_switch_exit();
-        cpu_sti();
 
         PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
@@ -1242,6 +1239,7 @@ void task_yield(void) {
     cpu_cli();
     task_task_switch_set_parameters(false);
     task_switch_task();
+    task_task_switch_exit();
     cpu_sti();
 
     // asm volatile ("int $0xfe\n");
@@ -1252,6 +1250,7 @@ int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
 
     task_task_switch_set_parameters(true);
     task_switch_task();
+    task_task_switch_exit();
 
     return 0;
 }

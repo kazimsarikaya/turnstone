@@ -77,7 +77,6 @@ void time_timer_pit_sleep(uint64_t usecs) {
     while(time_timer_tick_count <= usecs);
 }
 
-boolean_t we_sended_nmi_to_bsp = false;
 extern volatile boolean_t task_tasking_initialized;
 
 int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
@@ -118,6 +117,7 @@ int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
     if(task_tasking_initialized && (time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
         task_task_switch_set_parameters(true);
         task_switch_task();
+        task_task_switch_exit();
     } else {
         apic_eoi();
     }
