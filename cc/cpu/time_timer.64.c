@@ -115,21 +115,8 @@ int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
         time_timer_ap1_tick_count++;
     }
 
-#if 0
-    if(apic_id == 1) {
-        if(time_timer_tick_count > time_timer_old_tick_count) {
-            time_timer_old_tick_count = time_timer_tick_count;
-            we_sended_nmi_to_bsp = false;
-        } else if(!we_sended_nmi_to_bsp && time_timer_ap1_tick_count > time_timer_old_tick_count + 0x5000) {
-            // bsp may be in stuck state, wake it up
-            we_sended_nmi_to_bsp = true;
-            // apic_send_nmi(0);
-        }
-    }
-#endif
-
     if(task_tasking_initialized && (time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
-        task_task_switch_set_parameters(true, false);
+        task_task_switch_set_parameters(true);
         task_switch_task();
     } else {
         apic_eoi();

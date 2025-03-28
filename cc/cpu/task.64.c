@@ -549,6 +549,7 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_registe
         "mov %[xsave_mask_hi], %%edx\n"
         "xrstor (%%rbx)\n"
         "mov %[rflags], %%rax\n"
+        "btr $0x9, %%rax\n" // clear interrupt flag
         "push %%rax\n"
         "popfq\n"
         "mov %%cr3, %%rax\n"
@@ -731,13 +732,9 @@ task_t* task_find_next_task(void) {
     return tmp_task;
 }
 
-void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti) {
+void task_task_switch_set_parameters(boolean_t need_eoi) {
     if(!cpu_state->task_switch_paramters_need_eoi) {
         cpu_state->task_switch_paramters_need_eoi = need_eoi;
-    }
-
-    if(!cpu_state->task_switch_paramters_need_sti) {
-        cpu_state->task_switch_paramters_need_sti = need_sti;
     }
 }
 
@@ -745,11 +742,6 @@ static __attribute__((noinline)) void task_task_switch_exit(void) {
     if(cpu_state->task_switch_paramters_need_eoi) {
         cpu_state->task_switch_paramters_need_eoi = false;
         apic_eoi();
-    }
-
-    if(cpu_state->task_switch_paramters_need_sti) {
-        cpu_state->task_switch_paramters_need_sti = false;
-        cpu_sti();
     }
 }
 
@@ -863,12 +855,16 @@ void task_end_task(void) {
     int64_t ret = 0;
 
     if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
-        task_task_switch_exit();
-        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx", current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
+        // task_task_switch_exit();
+        cpu_sti();
+
+        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
+                 current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
     }
 
-    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx", current_task->task_id, ret, cpu_state->local_apic_id);
+    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx",
+             current_task->task_id, ret, cpu_state->local_apic_id);
 
     if(current_task->vmcs_physical_address) {
         if(cpu_get_type() == CPU_TYPE_INTEL) {
@@ -1237,8 +1233,9 @@ void task_yield(void) {
     }
 
     cpu_cli();
-    task_task_switch_set_parameters(false, true);
+    task_task_switch_set_parameters(false);
     task_switch_task();
+    cpu_sti();
 
     // asm volatile ("int $0xfe\n");
 }
@@ -1246,7 +1243,7 @@ void task_yield(void) {
 int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
-    task_task_switch_set_parameters(true, false);
+    task_task_switch_set_parameters(true);
     task_switch_task();
 
     return 0;

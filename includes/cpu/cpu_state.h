@@ -24,7 +24,6 @@ typedef struct cpu_state_t {
     task_t*   idle_task; ///< idle task
     boolean_t tasking_enabled; ///< tasking enabled
     boolean_t task_switch_paramters_need_eoi; ///< task switch parameters need eoi
-    boolean_t task_switch_paramters_need_sti; ///< task switch parameters need sti
     list_t*   task_queue; ///< task list
     list_t*   task_sleep_queue; ///< task sleep list
     list_t*   task_wait_queue; ///< task wait list
