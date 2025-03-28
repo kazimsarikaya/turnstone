@@ -24,7 +24,6 @@
 #include <hashmap.h>
 #include <stdbufs.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
-#include <hypervisor/hypervisor_svm_ops.h>
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <strings.h>
@@ -87,6 +86,14 @@ int8_t task_create_idle_task(void);
 
 extern boolean_t local_apic_id_is_valid;
 extern volatile cpu_state_t __seg_gs * cpu_state;
+
+uint64_t task_get_task_xsave_mask(void) {
+    return task_xsave_mask;
+}
+
+uint32_t task_get_task_mxcsr_mask(void) {
+    return task_mxcsr_mask;
+}
 
 
 static int8_t task_sleep_queue_comparator(const void* item1, const void* item2) {

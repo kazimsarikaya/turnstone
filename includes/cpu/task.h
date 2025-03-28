@@ -320,6 +320,9 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
 void task_toggle_wait_for_future(uint64_t task_id);
 
+uint64_t task_get_task_xsave_mask(void);
+uint32_t task_get_task_mxcsr_mask(void);
+
 #ifdef __cplusplus
 }
 #endif
