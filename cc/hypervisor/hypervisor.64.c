@@ -148,8 +148,6 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     vmcb->save_state_area.rip = vm->program_entry_point_virtual_address;
     vmcb->save_state_area.rsp = (SVM_GUEST_STACK_TOP_VALUE) -8; // we subtract 8 because sse needs 16 byte alignment
 
-    asm volatile ("stgi");
-
     if(hypervisor_svm_vmcb_set_running(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot set running");
         return -1;
@@ -165,7 +163,6 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx",
              vmcb->control_area.exit_code, vmcb->control_area.exit_info_1, vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits);
 
-    cpu_sti();
 
     while(true) {
         asm volatile ("hlt");
