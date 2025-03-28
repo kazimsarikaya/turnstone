@@ -558,6 +558,7 @@ int8_t hypervisor_svm_vmcb_prepare(hypervisor_vm_t** vm_out);
 int8_t hypervisor_svm_vmcb_prepare_ept(hypervisor_vm_t* vm);
 int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm);
 int8_t hypervisor_svm_vmcb_set_stopped(hypervisor_vm_t* vm);
+int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr);
 
 
 #ifdef __cplusplus

@@ -16,6 +16,7 @@
 #include <buffer.h>
 #include <map.h>
 #include <hashmap.h>
+#include <cpu/task.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,34 +59,36 @@ typedef struct hypervisor_vm_t {
         uint8_t   in_service_vector;
         uint64_t  in_request_vectors[4];
         boolean_t apic_eoi_pending;
-    }          lapic;
-    uint64_t   last_tsc;
-    boolean_t  lapic_timer_pending;
-    boolean_t  lapic_timer_enabled;
-    boolean_t  vid_enabled;
-    boolean_t  vapic_register_access_enabled;
-    boolean_t  need_to_notify;
-    boolean_t  is_halted;
-    boolean_t  is_halt_need_next_instruction;
-    map_t*     msr_map;
-    frame_t    owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
-    list_t*    ept_frames;
-    hashmap_t* loaded_module_ids;
-    list_t*    read_only_frames;
-    list_t*    mapped_pci_devices;
-    list_t*    mapped_interrupts;
-    list_t*    interrupt_queue;
-    list_t*    mapped_io_ports;
-    uint64_t   program_entry_point_virtual_address;
-    uint64_t   got_physical_address;
-    uint64_t   got_size;
-    uint64_t   guest_stack_physical_base;
-    uint64_t   guest_stack_size;
-    uint64_t   guest_heap_physical_base;
-    uint64_t   guest_heap_size;
-    uint64_t   ept_pml4_base;
-    uint64_t   next_page_address;
-    list_t*    released_pages;
+    }                 lapic;
+    uint64_t          last_tsc;
+    boolean_t         lapic_timer_pending;
+    boolean_t         lapic_timer_enabled;
+    boolean_t         vid_enabled;
+    boolean_t         vapic_register_access_enabled;
+    boolean_t         need_to_notify;
+    boolean_t         is_halted;
+    boolean_t         is_halt_need_next_instruction;
+    map_t*            msr_map;
+    frame_t           owned_frames[HYPERVISOR_VM_FRAME_TYPE_NR];
+    list_t*           ept_frames;
+    hashmap_t*        loaded_module_ids;
+    list_t*           read_only_frames;
+    list_t*           mapped_pci_devices;
+    list_t*           mapped_interrupts;
+    list_t*           interrupt_queue;
+    list_t*           mapped_io_ports;
+    uint64_t          program_entry_point_virtual_address;
+    uint64_t          got_physical_address;
+    uint64_t          got_size;
+    uint64_t          guest_stack_physical_base;
+    uint64_t          guest_stack_size;
+    uint64_t          guest_heap_physical_base;
+    uint64_t          guest_heap_size;
+    uint64_t          ept_pml4_base;
+    uint64_t          next_page_address;
+    list_t*           released_pages;
+    task_registers_t* host_registers;
+    task_registers_t* guest_registers;
 } hypervisor_vm_t;
 
 

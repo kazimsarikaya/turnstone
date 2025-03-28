@@ -14,7 +14,6 @@
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_svm_macros.h>
-#include <hypervisor/hypervisor_svm_ops.h>
 #include <hypervisor/hypervisor_svm_vmcb_ops.h>
 #include <cpu.h>
 #include <cpu/crx.h>
@@ -141,6 +140,35 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s deployed", entry_point_name);
 
+    vm->host_registers = memory_malloc_ext(NULL, sizeof(task_registers_t), 0x40);
+
+    if(vm->host_registers == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate host registers");
+
+        return -1;
+    }
+
+    vm->guest_registers = memory_malloc_ext(NULL, sizeof(task_registers_t), 0x40);
+
+    if(vm->guest_registers == NULL) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot allocate guest registers");
+        memory_free_ext(NULL, vm->host_registers);
+
+        return -1;
+    }
+
+    task_registers_t* registers = vm->guest_registers;
+
+    uint64_t task_xsave_mask = task_get_task_xsave_mask();
+
+    registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
+    registers->xsave_mask_hi = task_xsave_mask >> 32;
+
+    uint32_t task_mxcsr_mask = task_get_task_mxcsr_mask();
+
+    *(uint16_t*)&registers->avx512f[0] = 0x37F;
+    *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
+
     PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) starting...", vmcb_frame_fa);
 
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vmcb_frame_fa);
@@ -148,24 +176,11 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
     vmcb->save_state_area.rip = vm->program_entry_point_virtual_address;
     vmcb->save_state_area.rsp = (SVM_GUEST_STACK_TOP_VALUE) -8; // we subtract 8 because sse needs 16 byte alignment
 
-    if(hypervisor_svm_vmcb_set_running(vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot set running");
+    int8_t err = hypervisor_svm_vm_run((uint64_t)vm);
+
+    if(err) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "svm vm run failed");
         return -1;
-    }
-
-    svm_vmrun_loop(vmcb_frame_fa);
-
-    if(hypervisor_svm_vmcb_set_stopped(vm) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot set stopped");
-        return -1;
-    }
-
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx",
-             vmcb->control_area.exit_code, vmcb->control_area.exit_info_1, vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits);
-
-
-    while(true) {
-        asm volatile ("hlt");
     }
 
     return 0;

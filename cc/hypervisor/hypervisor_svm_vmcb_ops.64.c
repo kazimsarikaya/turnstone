@@ -7,7 +7,6 @@
  */
 
 #include <hypervisor/hypervisor_svm_vmcb_ops.h>
-#include <hypervisor/hypervisor_svm_ops.h>
 #include <hypervisor/hypervisor_svm_macros.h>
 #include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_ept.h>
@@ -417,11 +416,6 @@ int8_t hypervisor_svm_vmcb_prepare(hypervisor_vm_t** vm_out) {
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VMCB] = *vmcb_frame;
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "vmcb frame va: 0x%llx", vmcb_frame_va);
-
-    if(svm_vmsave(vmcb_frame->frame_address) != 0) {
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "vmsave failed");
-        return -1;
-    }
 
     if(hypervisor_svm_vmcb_prepare_control_area(vm) != 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare host state");
