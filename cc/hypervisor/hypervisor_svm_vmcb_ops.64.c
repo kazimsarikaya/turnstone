@@ -140,6 +140,7 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
     vmcb->control_area.intercept_control_1.fields.rdtsc = 1;
     vmcb->control_area.intercept_control_1.fields.rdpmc = 1;
     vmcb->control_area.intercept_control_1.fields.cpuid = 1;
+    vmcb->control_area.intercept_control_1.fields.intn = 1;
     vmcb->control_area.intercept_control_1.fields.pause = 1;
     // vmcb->control_area.intercept_control_1.fields.hlt = 1;
     vmcb->control_area.intercept_control_1.fields.io = 1;
@@ -157,9 +158,10 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 
     vmcb->control_area.nested_page_control.fields.np_enable = 1;
 
-    // vmcb->control_area.vint_control.fields.v_gif = 1;
-    // vmcb->control_area.vint_control.fields.v_gif_enabled = 1;
-    // vmcb->control_area.vint_control.fields.v_nmi = 1;
+    vmcb->control_area.vint_control.fields.v_gif = 1;
+    vmcb->control_area.vint_control.fields.v_gif_enabled = 1;
+    vmcb->control_area.vint_control.fields.v_nmi_enabled = 1;
+    vmcb->control_area.vint_control.fields.v_intr_mask = 1;
     vmcb->control_area.vint_control.fields.vapic_apic = 1;
     vmcb->control_area.vint_control.fields.vapic_x2apic = 1;
 

@@ -139,7 +139,7 @@ typedef union svm_vmcb_intercept_control_1_t {
         uint32_t nmi        :1;
         uint32_t smi        :1;
         uint32_t init       :1;
-        uint32_t vinit      :1;
+        uint32_t vintr      :1;
         uint32_t cr0_write  :1;
         uint32_t read_idtr  :1;
         uint32_t read_gdtr  :1;
