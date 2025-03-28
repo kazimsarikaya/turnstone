@@ -371,25 +371,6 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
 
-    if(apic_id == 0 && apic_is_waiting_timer()) {
-        video_text_print("bsp stucked, recovering...\n");
-        video_text_print("return symbol name: ");
-        video_text_print(return_symbol_name);
-        video_text_print("\n");
-
-        stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-        PRINTLOG(KERNEL, LOG_ERROR, "bsp stucked, recovering...");
-        PRINTLOG(KERNEL, LOG_ERROR, "return symbol name: %s", return_symbol_name);
-        backtrace_print(s_frame);
-        KERNEL_PANIC_DISABLE_LOCKS = false;
-
-        frame->interrupt_number = 0x20;
-
-        interrupt_generic_handler(frame);
-
-        return 0;
-    }
-
     PRINTLOG(KERNEL, LOG_FATAL, "NMI interrupt occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, task_get_id());
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
@@ -397,6 +378,10 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
+
+    KERNEL_PANIC_DISABLE_LOCKS = false;
+
+    return 0;
 
     uint64_t tid = task_get_id();
 
