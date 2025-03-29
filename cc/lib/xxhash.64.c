@@ -101,8 +101,8 @@ static uint64_t xxhash64_final_without_free(xxhash64_context_t* ctx) {
 
     result += ctx->total_length;
 
-    const unsigned char* data = ctx->buffer;
-    const unsigned char* stop = data + ctx->buffer_size;
+    const uint8_t* data = ctx->buffer;
+    const uint8_t* stop = data + ctx->buffer_size;
 
     for (; data + 8 <= stop; data += 8) {
         result = ROTLEFT64(result ^ xxhash64_process_single(0, *(uint64_t*)data), 27) * XXHASH64_PRIME1 + XXHASH64_PRIME4;
@@ -172,7 +172,7 @@ int8_t xxhash64_update(xxhash64_context_t* ctx, const void* input, uint64_t leng
 
     ctx->total_length += length;
 
-    const unsigned char* data = (const unsigned char*)input;
+    const uint8_t* data = (const uint8_t*)input;
 
     if (ctx->buffer_size + length < XXHASH64_MAXBUFFERSIZE) {
         while (length-- > 0) {
@@ -309,8 +309,8 @@ uint32_t xxhash32_final(xxhash32_context_t* ctx) {
         result += ctx->state[2] + XXHASH32_PRIME5;
     }
 
-    const unsigned char* data = ctx->buffer;
-    const unsigned char* stop = data + ctx->buffer_size;
+    const uint8_t* data = ctx->buffer;
+    const uint8_t* stop = data + ctx->buffer_size;
 
     for (; data + 4 <= stop; data += 4) {
         result = ROTLEFT32(result + *(uint32_t*)data * XXHASH32_PRIME3, 17) * XXHASH32_PRIME4;
@@ -345,7 +345,7 @@ int8_t xxhash32_update(xxhash32_context_t* ctx, const void* input, uint64_t leng
 
     ctx->total_length += length;
 
-    const unsigned char* data = (const unsigned char*)input;
+    const uint8_t* data = (const uint8_t*)input;
 
     if (ctx->buffer_size + ctx->total_length < XXHASH32_MAXBUFFERSIZE) {
         while (length-- > 0) {
