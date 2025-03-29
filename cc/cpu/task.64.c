@@ -1154,7 +1154,7 @@ int8_t task_create_idle_task(void) {
         return -1;
     }
 
-    uint64_t stack_size = 0x1000;
+    uint64_t stack_size = 1 << 20;
 
 
     frame_t* stack_frames;
