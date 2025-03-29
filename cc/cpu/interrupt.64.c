@@ -280,8 +280,61 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "\tERROR: 0x%llx", frame->error_code);
 }
 
+static boolean_t interrupt_xsave_mask_memorized = false;
+static uint64_t interrupt_xsave_mask_lo = 0;
+static uint64_t interrupt_xsave_mask_hi = 0;
+
+static void interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t* frame) {
+    if(!interrupt_xsave_mask_memorized) {
+        cpu_cpuid_regs_t query = {0};
+        cpu_cpuid_regs_t result;
+
+        query.eax = 0xd;
+
+        cpu_cpuid(query, &result);
+
+        interrupt_xsave_mask_lo = result.eax;
+        interrupt_xsave_mask_hi = result.edx;
+
+        interrupt_xsave_mask_memorized = true;
+    }
+
+    uint64_t frame_base = (uint64_t)frame;
+    uint64_t avx512f_offset = frame_base + offsetof_field(interrupt_frame_ext_t, avx512f);
+    // align to 0x40
+    avx512f_offset = (avx512f_offset + 0x3F) & ~0x3F;
+
+    if(save) {
+        memory_memclean((void*)avx512f_offset, 0x2000);
+
+        asm volatile (
+            "mov %[avx512f_offset], %%rbx\n"
+            "xsave (%%rbx)\n"
+            :
+            :
+            [avx512f_offset] "r" (avx512f_offset),
+            "rax" (interrupt_xsave_mask_lo),
+            "rdx" (interrupt_xsave_mask_hi)
+            : "rbx"
+            );
+    } else {
+        asm volatile (
+            "mov %[avx512f_offset], %%rbx\n"
+            "xrstor (%%rbx)\n"
+            :
+            :
+            [avx512f_offset] "r" (avx512f_offset),
+            "rax" (interrupt_xsave_mask_lo),
+            "rdx" (interrupt_xsave_mask_hi)
+            : "rbx"
+            );
+    }
+}
+
 
 void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
+    interrupt_save_restore_avx512f(true, frame);
+
     uint8_t intnum = frame->interrupt_number;
 
     if(interrupt_irqs != NULL) {
@@ -315,6 +368,8 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
                 PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
             } else {
                 PRINTLOG(KERNEL, LOG_TRACE, "found shared irq for 0x%02x", intnum);
+
+                interrupt_save_restore_avx512f(false, frame);
 
                 return;
             }

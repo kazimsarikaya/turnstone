@@ -10,6 +10,7 @@
 #define ___CPU_INTERRUPT_H 0
 
 #include <types.h>
+#include <utils.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,6 +61,7 @@ typedef struct interrupt_frame_ext_t {
     uint64_t r13; ///< r13 register value
     uint64_t r14; ///< r14 register value
     uint64_t r15; ///< r15 register value
+    uint8_t  avx512f[0x2000 + 0x80]; ///< avx512f registers 0x40 bytes for dynamic alignment
     uint64_t interrupt_number; ///< interrupt number
     uint64_t error_code; ///< error code
     uint64_t return_rip; ///< the ip value after interrupt
@@ -70,6 +72,8 @@ typedef struct interrupt_frame_ext_t {
     uint64_t return_ss : 16; ///< the ss value aka stack segment after interrupt
     uint64_t empty2    : 48; ///< unused value
 } __attribute__((packed)) interrupt_frame_ext_t; ///< struct short hand
+
+_Static_assert(sizeof(interrupt_frame_ext_t) == 0x2138, "interrupt_frame_ext_t size must be 0x2138");
 
 /**
  * @brief interrupt table builder functions

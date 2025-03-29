@@ -151,37 +151,45 @@ static uint64_t hypervisor_vmcs_external_interrupt_handler(vmx_vmcs_vmexit_info_
     PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Vector: 0x%llx", interrupt_vector);
     PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Error Code: 0x%llx", error_code);
 
+
+    interrupt_frame_ext_t* frame = memory_malloc(sizeof(interrupt_frame_ext_t));
+
+    if(!frame) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Cannot allocate memory for interrupt frame");
+        return -1;
+    }
+
+    frame->return_rip = vmx_read(VMX_HOST_RIP),
+    frame->return_cs = vmx_read(VMX_HOST_CS_SELECTOR),
+    frame->return_rflags = vmexit_info->registers->rflags,
+    frame->return_rsp = (uint64_t)vmexit_info->registers,
+    frame->return_ss = vmx_read(VMX_HOST_SS_SELECTOR),
+    frame->error_code = error_code,
+    frame->interrupt_number = interrupt_vector,
+    frame->rax = vmexit_info->registers->rax,
+    frame->rbx = vmexit_info->registers->rbx,
+    frame->rcx = vmexit_info->registers->rcx,
+    frame->rdx = vmexit_info->registers->rdx,
+    frame->rsi = vmexit_info->registers->rsi,
+    frame->rdi = vmexit_info->registers->rdi,
+    frame->rbp = vmexit_info->registers->rbp,
+    frame->rsp = vmexit_info->registers->rsp,
+    frame->r8 = vmexit_info->registers->r8,
+    frame->r9 = vmexit_info->registers->r9,
+    frame->r10 = vmexit_info->registers->r10,
+    frame->r11 = vmexit_info->registers->r11,
+    frame->r12 = vmexit_info->registers->r12,
+    frame->r13 = vmexit_info->registers->r13,
+    frame->r14 = vmexit_info->registers->r14,
+    frame->r15 = vmexit_info->registers->r15,
+
     cpu_cli();
 
-    interrupt_frame_ext_t frame = {
-        .return_rip = vmx_read(VMX_HOST_RIP),
-        .return_cs = vmx_read(VMX_HOST_CS_SELECTOR),
-        .return_rflags = vmexit_info->registers->rflags,
-        .return_rsp = (uint64_t)vmexit_info->registers,
-        .return_ss = vmx_read(VMX_HOST_SS_SELECTOR),
-        .error_code = error_code,
-        .interrupt_number = interrupt_vector,
-        .rax = vmexit_info->registers->rax,
-        .rbx = vmexit_info->registers->rbx,
-        .rcx = vmexit_info->registers->rcx,
-        .rdx = vmexit_info->registers->rdx,
-        .rsi = vmexit_info->registers->rsi,
-        .rdi = vmexit_info->registers->rdi,
-        .rbp = vmexit_info->registers->rbp,
-        .rsp = vmexit_info->registers->rsp,
-        .r8 = vmexit_info->registers->r8,
-        .r9 = vmexit_info->registers->r9,
-        .r10 = vmexit_info->registers->r10,
-        .r11 = vmexit_info->registers->r11,
-        .r12 = vmexit_info->registers->r12,
-        .r13 = vmexit_info->registers->r13,
-        .r14 = vmexit_info->registers->r14,
-        .r15 = vmexit_info->registers->r15,
-    };
-
-    interrupt_generic_handler(&frame);
+    interrupt_generic_handler(frame);
 
     cpu_sti();
+
+    memory_free(frame);
 
     hypervisor_check_ipc(vmexit_info);
 

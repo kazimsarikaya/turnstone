@@ -137,10 +137,10 @@ typedef struct task_registers_t {
     uint64_t cr3; ///< register
     uint32_t xsave_mask_lo; ///< xsave mask low
     uint32_t xsave_mask_hi; ///< xsave mask high
-    uint8_t  avx512f[4096] __attribute__((aligned(0x40))); ///< register
+    uint8_t  avx512f[0x2000] __attribute__((aligned(0x40))); ///< register
 } task_registers_t;
 
-_Static_assert(sizeof(task_registers_t) == 0x10c0, "task_registers_t size must be 0x10c0");
+_Static_assert(sizeof(task_registers_t) == 0x20c0, "task_registers_t size must be 0x20c0");
 _Static_assert((offsetof_field(task_registers_t, avx512f) % 0x40) == 0x0, "task_registers_t sse offset must be aligned 0x40");
 
 typedef struct task_t {
