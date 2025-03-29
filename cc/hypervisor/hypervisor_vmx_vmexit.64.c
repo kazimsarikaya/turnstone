@@ -562,9 +562,9 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(vmx_vmcs_vmexit_info_t* v
 static uint64_t hypervisor_vmcs_interrupt_window_handler(vmx_vmcs_vmexit_info_t* vmexit_info) {
     PRINTLOG(HYPERVISOR, LOG_TRACE, "Interrupt Window");
 
-    uint32_t interuptibility_state = vmx_read(VMX_GUEST_INTERRUPTIBILITY_STATE);
+    uint32_t interruptibility_state = vmx_read(VMX_GUEST_INTERRUPTIBILITY_STATE);
 
-    PRINTLOG(HYPERVISOR, LOG_TRACE, "Interruptibility State: 0x%x rip: %llx", interuptibility_state, vmexit_info->guest_rip);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "Interruptibility State: 0x%x rip: %llx", interruptibility_state, vmexit_info->guest_rip);
 
 
     hypervisor_vm_t* vm = vmexit_info->vm;
