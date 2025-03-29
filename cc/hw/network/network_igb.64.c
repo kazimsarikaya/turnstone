@@ -794,7 +794,7 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
     dev->rx_task_id = rx_task_id;
 
 
-    task_create_task(NULL, 64 << 10, 1 << 20, &network_igb_process_tx, 0, NULL, "igb tx");
+    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb tx");
 
     list_list_insert(igb_net_devs, dev);
 
