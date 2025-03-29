@@ -110,10 +110,10 @@ uint32_t main(uint32_t argc, char_t** argv) {
     const char_t* xxhash_data = "Hello, world!";
 
     uint64_t xxhash64_result = xxhash64_hash(xxhash_data, strlen(xxhash_data)), xxhash64_verify = 17691043854468224118ULL;
-    printf("%llu %i\n", xxhash64_result, xxhash64_result == xxhash64_verify);
+    printf("%llx %i\n", xxhash64_result, xxhash64_result == xxhash64_verify);
 
     uint32_t xxhash32_result = xxhash32_hash(xxhash_data, strlen(xxhash_data)), xxhash32_verify = 834093149U;
-    printf("%u %i\n", xxhash32_result, xxhash32_result == xxhash32_verify);
+    printf("%x %i\n", xxhash32_result, xxhash32_result == xxhash32_verify);
 
     return 0;
 }
