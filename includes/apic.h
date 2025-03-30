@@ -32,6 +32,24 @@ extern "C" {
 #define APIC_REGISTER_OFFSET_LINT0_LVT             0x350
 #define APIC_REGISTER_OFFSET_LINT1_LVT             0x360
 
+#define APIC_REGISTER_OFFSET_ISR0                  0x100
+#define APIC_REGISTER_OFFSET_ISR1                  0x110
+#define APIC_REGISTER_OFFSET_ISR2                  0x120
+#define APIC_REGISTER_OFFSET_ISR3                  0x130
+#define APIC_REGISTER_OFFSET_ISR4                  0x140
+#define APIC_REGISTER_OFFSET_ISR5                  0x150
+#define APIC_REGISTER_OFFSET_ISR6                  0x160
+#define APIC_REGISTER_OFFSET_ISR7                  0x170
+
+#define APIC_REGISTER_OFFSET_IRR0                  0x200
+#define APIC_REGISTER_OFFSET_IRR1                  0x210
+#define APIC_REGISTER_OFFSET_IRR2                  0x220
+#define APIC_REGISTER_OFFSET_IRR3                  0x230
+#define APIC_REGISTER_OFFSET_IRR4                  0x240
+#define APIC_REGISTER_OFFSET_IRR5                  0x250
+#define APIC_REGISTER_OFFSET_IRR6                  0x260
+#define APIC_REGISTER_OFFSET_IRR7                  0x270
+
 #define APIC_REGISTER_OFFSET_ICR_LOW               0x300
 #define APIC_REGISTER_OFFSET_ICR_HIGH              0x310
 
@@ -79,6 +97,8 @@ extern "C" {
 #define APIC_X2APIC_MSR_TIMER_CURRENT_VALUE         0x839
 #define APIC_X2APIC_MSR_TIMER_DIVIDER               0x83E
 #define APIC_X2APIC_MSR_SELF_IPI                    0x83F
+#define APIC_X2APIC_MSR_EXTENDED_APIC_CONTROL       0x841
+#define APIC_X2APIC_MSR_SEOI                        0x842
 
 #define APIC_ICR_DESTINATION_MODE_PHYSICAL          (0 << 11)
 #define APIC_ICR_DESTINATION_MODE_LOGICAL           (1 << 11)
@@ -180,6 +200,9 @@ uint8_t  apic_configure_lapic(void);
 uint64_t apic_get_ap_count(void);
 
 boolean_t apic_is_waiting_timer(void);
+
+int32_t apic_get_first_irr_interrupt(void);
+int32_t apic_get_isr_interrupt(void);
 
 #ifdef __cplusplus
 }
