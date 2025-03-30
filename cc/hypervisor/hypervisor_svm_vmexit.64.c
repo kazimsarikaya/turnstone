@@ -331,13 +331,20 @@ static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) {
     switch(rax) {
     case HYPERVISOR_VMCALL_NUMBER_EXIT:
         hypervisor_cleanup_mapped_interrupts(vm);
-        return 0;
+
+        task_end_task();
+
+        hypervisor_svm_wait_idle(); // should never return
+
         break;
     case HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS:
         ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vm->guest_registers->rdi);
+
         break;
     case HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV:
         ret = hypervisor_attach_pci_dev(vm, vm->guest_registers->rdi);
+        vmcb->control_area.clean_bits.fields.np = 1;
+
         break;
     case HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT: {
         uint64_t pci_dev_address = vm->guest_registers->rdi;
@@ -345,16 +352,20 @@ static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) {
         uint8_t interrupt_number = (uint8_t)vm->guest_registers->rdx;
 
         ret = hypervisor_attach_interrupt(vm, pci_dev_address, interrupt_type, interrupt_number);
+
         break;
 
     }
     case HYPERVISOR_VMCALL_NUMBER_LOAD_MODULE: {
         uint64_t got_entry_address = vm->guest_registers->r11;
         ret = hypervisor_load_module(vm, got_entry_address);
+        vmcb->control_area.clean_bits.fields.np = 1;
+
         break;
     }
     default:
         PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown vmcall rax 0x%llx", rax);
+
         break;
     }
 
