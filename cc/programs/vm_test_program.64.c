@@ -36,9 +36,9 @@ _Noreturn void vmtpm(void) {
 
     stdbufs_init_buffers(vm_guest_print);
 
-    vm_guest_printf("Hello, World!\n");
-    vm_guest_printf("This is a test program for the VM\n");
-    vm_guest_printf("Now halting...\n");
+    printf("Hello, World!\n");
+    printf("This is a test program for the VM\n");
+    printf("Now halting...\n");
 
 
     vm_guest_halt();

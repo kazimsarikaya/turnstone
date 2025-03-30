@@ -10,6 +10,7 @@
 #include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_vmx_macros.h>
 #include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_svm_vmcb_ops.h>
 #include <memory/paging.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
@@ -1286,9 +1287,18 @@ uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_co
     }
 
     if(!pagefault_error.fields.present) {
-        uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+        uint64_t guest_rip = 0;
+
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            guest_rip = vmx_read(VMX_GUEST_RIP);
+        } else {
+            svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+            guest_rip = vmcb->save_state_area.rip;
+        }
+
         uint64_t guest_rip_at_host = hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_rip);
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip at host: 0x%llx", guest_rip_at_host);
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip at host: 0x%llx code 0x%llx address 0x%llx",
+                 guest_rip_at_host, error_code, error_address);
         return -1;
     }
 

@@ -388,6 +388,28 @@ typedef svm_exit_int_info_t svm_event_injection_t;
 
 _Static_assert(sizeof(svm_exit_int_info_t) == sizeof(uint64_t), "svm_exit_int_info_t size is not 8 bytes");
 
+typedef union svm_exit_ioio_t {
+    struct {
+        uint64_t type     :1;
+        uint64_t reserved0:1;
+        uint64_t str      :1;
+        uint64_t rep      :1;
+        uint64_t sz8      :1;
+        uint64_t sz16     :1;
+        uint64_t sz32     :1;
+        uint64_t a16      :1;
+        uint64_t a32      :1;
+        uint64_t a64      :1;
+        uint64_t seg      :3;
+        uint64_t reserved1:3;
+        uint64_t port     :16;
+        uint64_t mbz      :32;
+    } __attribute__((packed)) fields;
+    uint64_t bits;
+} __attribute__((packed)) svm_exit_ioio_t;
+
+_Static_assert(sizeof(svm_exit_ioio_t) == sizeof(uint64_t), "svm_exit_ioio_t size is not 8 bytes");
+
 typedef struct svm_vmcb_control_area_t {
     svm_vmcb_intercept_crx_t              intercept_crx;
     svm_vmcb_intercept_drx_t              intercept_drx;

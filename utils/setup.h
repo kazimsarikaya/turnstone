@@ -206,6 +206,7 @@ void      lock_release(lock_t* lock);
 lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id);
 void      dump_ram(char_t* fname);
 void      cpu_sti(void);
+void      cpu_get_type(void);
 void      apic_eoi(void);
 void      task_current_task_sleep(uint64_t when_tick);
 time_t    rtc_get_time(void);
@@ -242,6 +243,10 @@ void task_switch_task(void){
 }
 
 void cpu_sti(void){
+
+}
+
+void cpu_get_type(void){
 
 }
 
