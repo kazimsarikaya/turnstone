@@ -89,6 +89,7 @@ typedef struct hypervisor_vm_t {
     list_t*           released_pages;
     task_registers_t* host_registers;
     task_registers_t* guest_registers;
+    void*             extra_data;
 } hypervisor_vm_t;
 
 

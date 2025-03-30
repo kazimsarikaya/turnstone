@@ -206,20 +206,29 @@ extern "C" {
 #define SVM_VMEXIT_REASON_BUSLOCK             0x00a5
 #define SVM_VMEXIT_REASON_IDLE_HLT            0x00a6
 
-#define SVM_VMEXIT_REASON_NPF                 0x0400
-#define SVM_VMEXIT_REASON_AVIC_INCOMPLETE_IPI 0x0401
-#define SVM_VMEXIT_REASON_AVIC_NOACCEL        0x0402
-#define SVM_VMEXIT_REASON_VMGEXIT             0x0403
+#define SVM_VMEXIT_REASON_NPF                          0x0400
+#define SVM_VMEXIT_REASON_NPF_REMAPPED                 0x00a7
+#define SVM_VMEXIT_REASON_AVIC_INCOMPLETE_IPI          0x0401
+#define SVM_VMEXIT_REASON_AVIC_INCOMPLETE_IPI_REMAPPED 0x00a8
+#define SVM_VMEXIT_REASON_AVIC_NOACCEL                 0x0402
+#define SVM_VMEXIT_REASON_AVIC_NOACCEL_REMAPPED        0x00a9
+#define SVM_VMEXIT_REASON_VMGEXIT                      0x0403
+#define SVM_VMEXIT_REASON_VMGEXIT_REMAPPED             0x00aa
 
-#define SVM_VMEXIT_REASON_INVALID             -1
-#define SVM_VMEXIT_REASON_BUSY                -2
-#define SVM_VMEXIT_REASON_IDLE_REQUIRED       -3
+#define SVM_VMEXIT_REASON_INVALID                      -1
+#define SVM_VMEXIT_REASON_INVALID_REMAPPED             0x00ff
+#define SVM_VMEXIT_REASON_BUSY                         -2
+#define SVM_VMEXIT_REASON_BUSY_REMAPPED                0x00fe
+#define SVM_VMEXIT_REASON_IDLE_REQUIRED                -3
+#define SVM_VMEXIT_REASON_IDLE_REQUIRED_REMAPPED       0x00fd
 #define SVM_VMEXIT_REASON_INVALID_PMC         -4
+#define SVM_VMEXIT_REASON_INVALID_PMC_REMAPPED         0x00fc
 
-#define SVM_VMEXIT_REASON_UNUSED              0xF000_0000 // is it correct? docs say 0xF000_000 one zero is missing
+#define SVM_VMEXIT_REASON_UNUSED              0xF0000000 // is it correct? docs say 0xF000_000 one zero is missing
+#define SVM_VMEXIT_REASON_UNUSED_REMAPPED     0x00fb
 
 #define SVM_VMEXIT_REASON_COUNT               (0x00a7 + 4 + 4 + 1) // a7 for first group, 4 for second group, 4 for third group, 1 for last group
-
+#define SVM_VMEXIT_REASON_ARRAY_SIZE          (SVM_VMEXIT_REASON_INVALID_REMAPPED + 1)
 
 #ifdef __cplusplus
 }

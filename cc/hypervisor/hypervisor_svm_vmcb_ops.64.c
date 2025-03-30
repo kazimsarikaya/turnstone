@@ -66,7 +66,7 @@ int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm) {
 
     phy_apic_id_table[0] = (3ULL << 62) | vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address | task_get_cpu_id();
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "phy apic id table: 0x%llx", phy_apic_id_table[0]);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "phy apic id table: 0x%llx", phy_apic_id_table[0]);
 
     return 0;
 }
@@ -86,7 +86,7 @@ int8_t hypervisor_svm_vmcb_set_stopped(hypervisor_vm_t* vm) {
 
     phy_apic_id_table[0] = (1ULL << 63) | vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address | task_get_cpu_id();
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "phy apic id table: 0x%llx", phy_apic_id_table[0]);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "phy apic id table: 0x%llx", phy_apic_id_table[0]);
 
     return 0;
 }
@@ -141,16 +141,16 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
     vmcb->control_area.intercept_control_1.fields.cpuid = 1;
     vmcb->control_area.intercept_control_1.fields.intn = 1;
     vmcb->control_area.intercept_control_1.fields.pause = 1;
-    // vmcb->control_area.intercept_control_1.fields.hlt = 1;
+    vmcb->control_area.intercept_control_1.fields.hlt = 1;
     vmcb->control_area.intercept_control_1.fields.io = 1;
     vmcb->control_area.intercept_control_1.fields.msr = 1;
     vmcb->control_area.intercept_control_1.fields.shutdown = 1;
 
-    vmcb->control_area.intercept_control_2.fields.vmrun = 1; // why?
+    vmcb->control_area.intercept_control_2.fields.vmrun = 1; // amd requires this whenever we dont use nested vm inside vm, else invalid vmexit occurs.
     vmcb->control_area.intercept_control_2.fields.vmmcall = 1;
     vmcb->control_area.intercept_control_2.fields.rdtscp = 1;
 
-    // vmcb->control_area.intercept_control_3.fields.idle_hlt = 1;
+    vmcb->control_area.intercept_control_3.fields.idle_hlt = 1;
 
     vmcb->control_area.guest_asid.fields.asid = 1;
     vmcb->control_area.guest_asid.fields.tlb_control = 0x3;

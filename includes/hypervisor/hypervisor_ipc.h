@@ -12,7 +12,6 @@
 
 #include <types.h>
 #include <buffer.h>
-#include <hypervisor/hypervisor_vmx_vmcs_ops.h>
 #include <hypervisor/hypervisor_vm.h>
 
 #ifdef __cplusplus
@@ -32,10 +31,17 @@ typedef struct hypervisor_ipc_message_t {
     volatile boolean_t            message_data_completed;
 } hypervisor_ipc_message_t;
 
-int8_t hypervisor_check_ipc(vmx_vmcs_vmexit_info_t* vmexit_info);
+int8_t hypervisor_check_ipc(hypervisor_vm_t* vm);
 
 void   hypervisor_ipc_send_timer_interrupt(hypervisor_vm_t* vm);
 int8_t hypervisor_ipc_send_close(uint64_t vm_id);
+
+int8_t hypervisor_vmx_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_message_t* message);
+int8_t hypervisor_vmx_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector);
+
+
+int8_t hypervisor_svm_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_message_t* message);
+int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector);
 
 #ifdef __cplusplus
 }

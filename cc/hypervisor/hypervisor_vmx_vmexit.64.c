@@ -1,5 +1,5 @@
 /**
- * @file hypervisor_vmexit.64.c
+ * @file hypervisor_vmx_vmexit.64.c
  * @brief VMExit handler for 64-bit mode.
  *
  * This work is licensed under TURNSTONE OS Public License.
@@ -191,7 +191,7 @@ static uint64_t hypervisor_vmcs_external_interrupt_handler(vmx_vmcs_vmexit_info_
 
     memory_free(frame);
 
-    hypervisor_check_ipc(vmexit_info);
+    hypervisor_check_ipc(vmexit_info->vm);
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "External Interrupt Handler Returned: 0x%llx", (uint64_t)vmexit_info->registers);
 
@@ -228,7 +228,7 @@ static uint64_t hypervisor_vmcs_hlt_handler(vmx_vmcs_vmexit_info_t* vmexit_info)
 
     task_yield();
 
-    hypervisor_check_ipc(vmexit_info);
+    hypervisor_check_ipc(vmexit_info->vm);
 
     if(vm->is_halt_need_next_instruction) {
         vm->is_halted = false;
@@ -245,7 +245,7 @@ static uint64_t hypervisor_vmcs_pause_handler(vmx_vmcs_vmexit_info_t* vmexit_inf
 
     task_yield();
 
-    hypervisor_check_ipc(vmexit_info);
+    hypervisor_check_ipc(vmexit_info->vm);
 
     hypervisor_vmx_goto_next_instruction(vmexit_info);
 
@@ -863,6 +863,8 @@ uint64_t hypervisor_vmx_vmcs_exit_handler_entry(uint64_t rsp) {
         .guest_cr4 = vmx_read(VMX_GUEST_CR4),
         .vm = task_get_vm(),
     };
+
+    vmexit_info.vm->extra_data = &vmexit_info;
 
     if (vmexit_info.reason < VMX_VMEXIT_REASON_COUNT) {
         if (vmexit_handlers[vmexit_info.reason]) {

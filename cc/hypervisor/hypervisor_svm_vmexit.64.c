@@ -10,12 +10,14 @@
 #include <hypervisor/hypervisor_svm_macros.h>
 #include <hypervisor/hypervisor_utils.h>
 #include <hypervisor/hypervisor_ept.h>
+#include <hypervisor/hypervisor_ipc.h>
 #include <memory/paging.h>
 #include <cpu.h>
 #include <cpu/task.h>
 #include <apic.h>
 #include <cpu/crx.h>
 #include <logging.h>
+#include <apic.h>
 
 MODULE("turnstone.hypervisor.svm");
 
@@ -240,6 +242,109 @@ __attribute__((naked, no_stack_protector)) static void hypervisor_svm_vm_run_sin
         );
 }
 
+static void hypervisor_svm_wait_idle(void) {
+    while(true) {
+        asm volatile ("hlt");
+    }
+}
+
+typedef int8_t (*hypervisor_svm_vmexit_handler_f)(hypervisor_vm_t* vm);
+
+static void hypervisor_svm_goto_next_instruction(hypervisor_vm_t* vm) {
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+
+    vmcb->save_state_area.rip = vmcb->control_area.n_rip;
+}
+
+static int8_t hypervisor_svm_vmexit_handler_intr(hypervisor_vm_t* vm) { // external interrupt
+    UNUSED(vm);
+
+    int32_t interrupt_vector = apic_get_isr_interrupt();
+
+    if(interrupt_vector == -1) {
+        return 0;
+    }
+
+    interrupt_frame_ext_t* frame = memory_malloc(sizeof(interrupt_frame_ext_t));
+
+    if(!frame) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Cannot allocate memory for interrupt frame");
+        return -1;
+    }
+
+    frame->interrupt_number = interrupt_vector;
+
+    cpu_cli();
+
+    interrupt_generic_handler(frame);
+
+    cpu_sti();
+
+    memory_free(frame);
+
+    return 0;
+}
+
+static int8_t hypervisor_svm_vmexit_handler_hlt(hypervisor_vm_t* vm) { // halt
+    vm->is_halted = true;
+
+    task_set_message_waiting();
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "before halted");
+
+    task_yield();
+
+    hypervisor_check_ipc(vm);
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "after halted");
+
+    if(vm->is_halt_need_next_instruction) {
+        vm->is_halted = false;
+        vm->is_halt_need_next_instruction = false;
+        hypervisor_svm_goto_next_instruction(vm);
+    }
+
+    return 0;
+}
+
+hypervisor_svm_vmexit_handler_f hypervisor_svm_vmexit_handlers[SVM_VMEXIT_REASON_ARRAY_SIZE] = {
+    [SVM_VMEXIT_REASON_INTR] = hypervisor_svm_vmexit_handler_intr,
+    [SVM_VMEXIT_REASON_HLT] = hypervisor_svm_vmexit_handler_hlt,
+};
+
+static uint64_t hypervisor_svm_vmexit_remap_exit_code(uint64_t exit_code) {
+    if(exit_code <= SVM_VMEXIT_REASON_IDLE_HLT) {
+        return exit_code;
+    }
+
+    uint32_t narrowed_exit_code = exit_code & 0xFFFFFFFF;
+
+    switch(narrowed_exit_code) {
+    case SVM_VMEXIT_REASON_NPF:
+        return SVM_VMEXIT_REASON_NPF_REMAPPED;
+    case SVM_VMEXIT_REASON_AVIC_INCOMPLETE_IPI:
+        return SVM_VMEXIT_REASON_AVIC_INCOMPLETE_IPI_REMAPPED;
+    case SVM_VMEXIT_REASON_AVIC_NOACCEL:
+        return SVM_VMEXIT_REASON_AVIC_NOACCEL_REMAPPED;
+    case SVM_VMEXIT_REASON_VMGEXIT:
+        return SVM_VMEXIT_REASON_VMGEXIT_REMAPPED;
+    case SVM_VMEXIT_REASON_INVALID:
+        return SVM_VMEXIT_REASON_INVALID_REMAPPED;
+    case SVM_VMEXIT_REASON_BUSY:
+        return SVM_VMEXIT_REASON_BUSY_REMAPPED;
+    case SVM_VMEXIT_REASON_IDLE_REQUIRED:
+        return SVM_VMEXIT_REASON_IDLE_REQUIRED_REMAPPED;
+    case SVM_VMEXIT_REASON_INVALID_PMC:
+        return SVM_VMEXIT_REASON_INVALID_PMC_REMAPPED;
+    case SVM_VMEXIT_REASON_UNUSED:
+        return SVM_VMEXIT_REASON_UNUSED_REMAPPED;
+    default:
+        return SVM_VMEXIT_REASON_INVALID_REMAPPED;
+    }
+
+    return SVM_VMEXIT_REASON_INVALID_REMAPPED;
+}
+
 int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
     hypervisor_vm_t* vm = (hypervisor_vm_t*)hypervisor_vm_ptr;
 
@@ -252,6 +357,8 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_vmcb);
 
     while(true) {
+        asm volatile ("clgi");
+
         if(hypervisor_svm_vmcb_set_running(vm) != 0) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot set running");
             return -1;
@@ -264,15 +371,27 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
             return -1;
         }
 
-        PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx",
-                 vmcb->control_area.exit_code, vmcb->control_area.exit_info_1, vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits);
+        asm volatile ("stgi");
 
+        uint32_t exit_code = vmcb->control_area.exit_code;
 
-        while(true) {
-            asm volatile ("hlt");
+        exit_code = hypervisor_svm_vmexit_remap_exit_code(exit_code);
+
+        hypervisor_svm_vmexit_handler_f handler = hypervisor_svm_vmexit_handlers[exit_code];
+
+        if(handler == NULL) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "unhandled vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx",
+                     vmcb->control_area.exit_code, vmcb->control_area.exit_info_1, vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits);
+
+            hypervisor_svm_wait_idle();
+        } else {
+            if(handler(vm) != 0) {
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "vmexit handler failed");
+
+                hypervisor_svm_wait_idle();
+            }
         }
     }
 
-
-
+    return 0;
 }
