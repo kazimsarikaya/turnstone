@@ -249,23 +249,24 @@ _Static_assert(sizeof(svm_vmcb_guest_asid_t) == sizeof(uint64_t), "svm_vmcb_gues
 
 typedef union svm_vmcb_vint_control_t {
     struct {
-        uint64_t v_tpr        :8;
-        uint64_t v_irq        :1;
-        uint64_t v_gif        :1;
-        uint64_t v_nmi        :1;
-        uint64_t v_nmi_mask   :1;
-        uint64_t reserved_sbz0:3;
-        uint64_t v_intr_prio  :4;
-        uint64_t v_ign_tpr    :1;
-        uint64_t reserved_sbz1:3;
-        uint64_t v_intr_mask  :1;
-        uint64_t v_gif_enabled:1;
-        uint64_t v_nmi_enabled:1;
-        uint64_t reserved_sbz2:3;
-        uint64_t vapic_x2apic :1;
-        uint64_t vapic_apic   :1;
-        uint64_t v_intr_vector:8;
-        uint64_t reserved_sbz3:24;
+        uint64_t v_tpr        :8; // 0-7
+        uint64_t v_irq        :1; // 8
+        uint64_t v_gif        :1; // 9
+        uint64_t reserved_sbz0:1; // 10
+        uint64_t v_nmi        :1; // 11
+        uint64_t v_nmi_mask   :1; // 12
+        uint64_t reserved_sbz1:3; // 13-15
+        uint64_t v_intr_prio  :4; // 16-19
+        uint64_t v_ign_tpr    :1; // 20
+        uint64_t reserved_sbz2:3; // 21-23
+        uint64_t v_intr_mask  :1; // 24
+        uint64_t v_gif_enabled:1; // 25
+        uint64_t v_nmi_enabled:1; // 26
+        uint64_t reserved_sbz3:3; // 27-29
+        uint64_t vapic_x2apic :1; // 30
+        uint64_t vapic_apic   :1; // 31
+        uint64_t v_intr_vector:8; // 32-39
+        uint64_t reserved_sbz4:24; // 40-63
     } __attribute__((packed)) fields;
     uint64_t bits;
 } __attribute__((packed)) svm_vmcb_vint_control_t;
