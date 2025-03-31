@@ -27,10 +27,14 @@ _Noreturn void vmedu(void);
 
 static volatile edu_t* edu = NULL;
 
+static volatile boolean_t isr_done = false;
+
 static void edu_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
     printf("EDU ISR 0x%x\n", edu->interrupt_status);
     edu->interrupt_acknowledge = edu->interrupt_status;
+    isr_done = true;
+    printf("EDU ISR done 0x%x\n", edu->interrupt_status);
     vm_guest_apic_eoi();
 }
 
@@ -58,12 +62,17 @@ _Noreturn void vmedu(void) {
 
     if(hpa == -1ULL) {
         printf("hpa failed\n");
-        vm_guest_exit();
+        vm_guest_exit(-1);
     }
 
-    uint64_t edu_pci_va = vm_guest_attach_pci_dev(0, 0, 7, 0);
+    uint64_t edu_pci_va = vm_guest_attach_pci_dev(0, 0, 5, 0);
 
     printf("EDU PCI VA: 0x%llx\n", edu_pci_va);
+
+    if(edu_pci_va == -1ULL) {
+        printf("pci attach failed\n");
+        vm_guest_exit(-1);
+    }
 
     pci_generic_device_t* edu_pci_dev = (pci_generic_device_t*)edu_pci_va;
 
@@ -136,11 +145,47 @@ _Noreturn void vmedu(void) {
 
     cpu_sti();
 
-    printf("interrupt status before: 0x%x\n", edu->interrupt_status);
+    uint32_t interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status before: 0x%x\n", interrupt_status);
+
+    isr_done = false;
 
     edu->interrupt_raise = 0x5A5A5A5A;
 
-    printf("interrupt status after: 0x%x\n", edu->interrupt_status);
+    while(!isr_done) {
+        cpu_idle();
+    }
+
+    interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status after: 0x%x\n", interrupt_status);
+
+    if(interrupt_status) {
+        printf("interrupt not lowered\n");
+        // vm_guest_exit(-1);
+    }
+
+    interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status before: 0x%x\n", interrupt_status);
+
+    isr_done = false;
+
+    edu->interrupt_raise = 0x12345678;
+
+    while(!isr_done) {
+        cpu_idle();
+    }
+
+    interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status after: 0x%x\n", interrupt_status);
+
+    if(interrupt_status) {
+        printf("interrupt not lowered\n");
+        // vm_guest_exit(-1);
+    }
 
     printf("Test program complete\n");
 
@@ -148,6 +193,6 @@ _Noreturn void vmedu(void) {
         cpu_idle();
     }
 
-    vm_guest_exit();
+    vm_guest_exit(0);
 
 }

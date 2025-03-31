@@ -47,13 +47,20 @@ _Noreturn void vm_guest_halt(void) {
     cpu_hlt();
 }
 
-_Noreturn void vm_guest_exit(void) {
+_Noreturn void vm_guest_exit(int32_t status) {
     uint64_t result = 0;
 
-    asm volatile ("vmcall"
-                  : "=a" (result)
-                  : "a" (HYPERVISOR_VMCALL_NUMBER_EXIT)
-                  : "memory");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        asm volatile ("vmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_EXIT), "D" (status)
+                      : "memory");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        asm volatile ("vmmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_EXIT), "D" (status)
+                      : "memory");
+    }
 
     cpu_hlt();
 }
@@ -67,10 +74,17 @@ uint64_t vm_guest_attach_pci_dev(uint8_t group_number, uint8_t bus_number, uint8
 
     uint64_t result = 0;
 
-    asm volatile ("vmcall"
-                  : "=a" (result)
-                  : "a" (HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV), "D" (pci_address)
-                  : "memory");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        asm volatile ("vmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV), "D" (pci_address)
+                      : "memory");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        asm volatile ("vmmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_ATTACH_PCI_DEV), "D" (pci_address)
+                      : "memory");
+    }
 
     return result;
 }
@@ -78,10 +92,17 @@ uint64_t vm_guest_attach_pci_dev(uint8_t group_number, uint8_t bus_number, uint8
 uint64_t vm_guest_get_host_physical_address(uint64_t guest_virtual_address) {
     uint64_t result = 0;
 
-    asm volatile ("vmcall"
-                  : "=a" (result)
-                  : "a" (HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS), "D" (guest_virtual_address)
-                  : "memory");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        asm volatile ("vmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS), "D" (guest_virtual_address)
+                      : "memory");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        asm volatile ("vmmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS), "D" (guest_virtual_address)
+                      : "memory");
+    }
 
     return result;
 }
@@ -90,28 +111,88 @@ uint64_t vm_guest_get_host_physical_address(uint64_t guest_virtual_address) {
 
 vm_guest_interrupt_handler_t vm_guest_interrupt_handlers[256] = {0};
 
-static __attribute__((interrupt, no_stack_protector, target("general-regs-only"), no_caller_saved_registers)) void vm_guest_interrupt_handler(void* notused) {
-    UNUSED(notused);
-    asm volatile ("cli");
-    interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)VMX_GUEST_IFEXT_BASE_VALUE;
-    vm_guest_interrupt_handler_t handler = vm_guest_interrupt_handlers[frame->interrupt_number];
+void vm_guest_generic_interrupt_handler(interrupt_frame_ext_t* frame);
+void vm_guest_generic_interrupt_handler(interrupt_frame_ext_t* frame) {
+    UNUSED(frame);
+    cpu_cli();
+    uint64_t* data = (uint64_t*)VMX_GUEST_IFEXT_BASE_VALUE;
+
+    uint64_t vector = data[0];
+
+    vm_guest_interrupt_handler_t handler = vm_guest_interrupt_handlers[vector];
 
     if(!handler) {
-        vm_guest_printf("Unhandled interrupt: 0x%llx\n", frame->interrupt_number);
-        vm_guest_exit();
+        vm_guest_printf("Unhandled interrupt 0x%llx\n", vector);
+        vm_guest_exit(-vector + -0x1000);
     }
 
-    handler(frame);
-    asm volatile ("sti");
+    handler(NULL);
+}
+
+static __attribute__((naked, no_stack_protector)) void vm_guest_interrupt_handler(void) {
+    asm volatile (
+        "push $0\n" // push error code
+        "push $0\n" // push interrupt number
+        "subq $0x2080, %rsp\n"
+        "push %r15\n"
+        "push %r14\n"
+        "push %r13\n"
+        "push %r12\n"
+        "push %r11\n"
+        "push %r10\n"
+        "push %r9\n"
+        "push %r8\n"
+        "push %rbp\n"
+        "push %rdi\n"
+        "push %rsi\n"
+        "push %rdx\n"
+        "push %rcx\n"
+        "push %rbx\n"
+        "push %rax\n"
+        "push %rsp\n"
+        "mov %rsp, %rdi\n"
+        "sub $0x8, %rsp\n"
+        "lea 0x0(%rip), %rax\n"
+        "movabsq $_GLOBAL_OFFSET_TABLE_, %rbx\n"
+        "add %rax, %rbx\n"
+        "movabsq $vm_guest_generic_interrupt_handler@GOT, %rax\n"
+        "call *(%rbx, %rax, 1)\n"
+        "add $0x8, %rsp\n"
+        "pop %rsp\n"
+        "pop %rax\n"
+        "pop %rbx\n"
+        "pop %rcx\n"
+        "pop %rdx\n"
+        "pop %rsi\n"
+        "pop %rdi\n"
+        "pop %rbp\n"
+        "pop %r8\n"
+        "pop %r9\n"
+        "pop %r10\n"
+        "pop %r11\n"
+        "pop %r12\n"
+        "pop %r13\n"
+        "pop %r14\n"
+        "pop %r15\n"
+        "add $0x2090, %rsp\n"
+        "iretq\n"
+        );
 }
 
 int16_t vm_guest_attach_interrupt(pci_generic_device_t* pci_dev, vm_guest_interrupt_type_t interrupt_type, uint8_t interrupt_number, vm_guest_interrupt_handler_t irq) {
     int16_t result = 0;
 
-    asm volatile ("vmcall"
-                  : "=a" (result)
-                  : "a" (HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT), "D" (pci_dev), "S" (interrupt_type), "d" (interrupt_number)
-                  : "memory");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        asm volatile ("vmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT), "D" (pci_dev), "S" (interrupt_type), "d" (interrupt_number)
+                      : "memory");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        asm volatile ("vmmcall"
+                      : "=a" (result)
+                      : "a" (HYPERVISOR_VMCALL_NUMBER_ATTACH_INTERRUPT), "D" (pci_dev), "S" (interrupt_type), "d" (interrupt_number)
+                      : "memory");
+    }
 
     if(result != -1) {
         descriptor_idt_t* idt = (descriptor_idt_t*)0x1000;

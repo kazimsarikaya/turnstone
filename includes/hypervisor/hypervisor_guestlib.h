@@ -41,7 +41,7 @@ _Noreturn void                             vm_guest_halt(void);
 uint64_t                                   vm_guest_attach_pci_dev(uint8_t group_number, uint8_t bus_number, uint8_t device_number, uint8_t function_number);
 int16_t                                    vm_guest_attach_interrupt(pci_generic_device_t* pci_dev, vm_guest_interrupt_type_t interrupt_type, uint8_t interrupt_number, vm_guest_interrupt_handler_t irq);
 uint64_t                                   vm_guest_get_host_physical_address(uint64_t guest_virtual_address);
-_Noreturn void                             vm_guest_exit(void);
+_Noreturn void                             vm_guest_exit(int32_t status);
 void                                       vm_guest_apic_eoi(void);
 
 #ifdef __cplusplus
