@@ -287,6 +287,10 @@ int8_t strncmp(const char_t* string1, const char_t* string2, size_t n) {
 }
 
 char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int64_t* count) {
+    if(str == NULL) {
+        return NULL;
+    }
+
     char_t* tmp = (char_t*)str;
 
     if(count == NULL || lengths == NULL) {
