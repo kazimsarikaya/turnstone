@@ -1297,8 +1297,8 @@ uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_co
         }
 
         uint64_t guest_rip_at_host = hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_rip);
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip at host: 0x%llx code 0x%llx address 0x%llx",
-                 guest_rip_at_host, error_code, error_address);
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip 0x%llx(0x%llx) code 0x%llx address 0x%llx",
+                 guest_rip,  guest_rip_at_host, error_code, error_address);
         return -1;
     }
 

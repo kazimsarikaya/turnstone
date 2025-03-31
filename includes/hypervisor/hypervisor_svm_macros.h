@@ -20,6 +20,7 @@ extern "C" {
 
 #define SVM_MSR_VM_HSAVE_PA                 0xc0010117
 #define CPU_MSR_IA32_PAT                    0x00000277
+#define CPU_MSR_SVM_APIC_DOORBELL           0xc001011b
 
 #define SVM_DATA_ACCESS_RIGHTS 0x0093
 #define SVM_CODE_ACCESS_RIGHTS 0x029b

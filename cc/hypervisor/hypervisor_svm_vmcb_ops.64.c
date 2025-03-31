@@ -25,8 +25,8 @@ static inline void hypervisor_svm_io_bitmap_set_port(uint8_t * bitmap, uint16_t 
     bitmap[byte_index] |= 1 << bit_index;
 }
 
-/*
-   static int8_t hypervisor_svm_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read) {
+
+static int8_t hypervisor_svm_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read) {
     uint32_t msr_offset = msr & 0x1FFF;
 
     if(msr >= 0xC0000000 && msr <= 0xC0001FFF) {
@@ -48,8 +48,7 @@ static inline void hypervisor_svm_io_bitmap_set_port(uint8_t * bitmap, uint16_t 
     }
 
     return 0;
-   }
- */
+}
 
 int8_t hypervisor_svm_vmcb_set_running(hypervisor_vm_t* vm) {
     uint64_t vmcb_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
@@ -125,6 +124,27 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
     if(vmcb_va == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot get vmcb va");
         return -1;
+    }
+
+    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t result = {0};
+
+    query.eax = 0x8000000a;
+
+    if(cpu_cpuid(query, &result) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot get avic feature");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "eax: 0x%x, ebx: 0x%x, ecx: 0x%x, edx: 0x%x", result.eax, result.ebx, result.ecx, result.edx);
+
+    boolean_t avic = (result.edx >> 13) & 1;
+    boolean_t avic_x2apic = (result.edx >> 18) & 1;
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "avic: %i, avic_x2apic: %i", avic, avic_x2apic);
+
+    if(avic == 0 || avic_x2apic == 0) {
+        vm->vid_enabled = false;
     }
 
     svm_vmcb_t* vmcb = (svm_vmcb_t*)vmcb_va;
@@ -261,13 +281,17 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 
     vmcb->control_area.msrpm_base_pa = msr_bitmap_frame->frame_address;
 
-    /*
-       uint8_t* msr_bitmap = (uint8_t*)msr_bitmap_frame_va;
+    uint8_t* msr_bitmap = (uint8_t*)msr_bitmap_frame_va;
 
+    /*
        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
      */
+
+    if(!vm->vid_enabled) {
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
+    }
 
     return 0;
 }

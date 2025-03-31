@@ -184,6 +184,8 @@ static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
         return -1;
     }
 
+    PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) exited", vmcb_frame_fa);
+
     return 0;
 }
 

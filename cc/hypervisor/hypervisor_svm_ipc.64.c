@@ -9,7 +9,11 @@
 #include <hypervisor/hypervisor_ipc.h>
 #include <hypervisor/hypervisor_svm_vmcb_ops.h>
 #include <hypervisor/hypervisor_svm_macros.h>
+#include <hypervisor/hypervisor_ept.h>
 #include <logging.h>
+#include <apic.h>
+#include <cpu/task.h>
+#include <cpu.h>
 
 MODULE("turnstone.hypervisor.svm");
 
@@ -21,8 +25,47 @@ int8_t hypervisor_svm_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_messag
 }
 
 int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
-    UNUSED(vm);
-    UNUSED(vector);
-    NOTIMPLEMENTEDLOG(HYPERVISOR);
-    return -1;
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+
+    uint64_t guest_ifext_fa = hypervisor_ept_guest_to_host(vm->ept_pml4_base, SVM_GUEST_IFEXT_BASE_VALUE);
+    uint64_t guest_ifext_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_ifext_fa);
+
+    uint64_t* ifext = (uint64_t*)guest_ifext_va;
+
+    ifext[0] = vector;
+
+    if(vm->vid_enabled) {
+        uint64_t apic_bp_fa = vmcb->control_area.avic_apic_backing_page_pointer;
+        uint64_t apic_bp_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(apic_bp_fa);
+
+        int32_t irr_index = vector / 32; // 32 bits per ISR register
+        int32_t irr_bit = vector % 32;
+
+        irr_index *= 0x10; // irr step is 0x10
+
+        uint32_t* irr = (uint32_t*)(apic_bp_va + APIC_REGISTER_OFFSET_IRR0 + irr_index);
+
+        *irr |= 1 << irr_bit;
+
+        list_t* mq = vm->interrupt_queue;
+        interrupt_frame_ext_t* intfrm = (interrupt_frame_ext_t*)list_queue_pop(mq);
+        memory_free_ext(vm->heap, intfrm);
+
+#if 0
+        cpu_write_msr(CPU_MSR_SVM_APIC_DOORBELL, 1); // not working linux sucks.
+#endif
+
+    } else {
+        vm->lapic.in_service_vector = vector;
+        vmcb->control_area.vint_control.fields.v_irq = 1;
+        vmcb->control_area.vint_control.fields.v_ign_tpr = 1;
+        vmcb->control_area.vint_control.fields.v_intr_vector = vector;
+        vmcb->control_area.clean_bits.fields.tpr = 1;
+    }
+
+    if(vm->is_halted) {
+        vm->is_halt_need_next_instruction = true;
+    }
+
+    return 0;
 }

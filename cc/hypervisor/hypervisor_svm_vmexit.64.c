@@ -20,6 +20,7 @@
 #include <apic.h>
 #include <ports.h>
 #include <strings.h>
+#include <time/timer.h>
 
 MODULE("turnstone.hypervisor.svm");
 
@@ -259,13 +260,18 @@ static void hypervisor_svm_goto_next_instruction(hypervisor_vm_t* vm) {
 }
 
 static int8_t hypervisor_svm_vmexit_handler_intr(hypervisor_vm_t* vm) { // external interrupt
-    UNUSED(vm);
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa); // get vmcb
 
     int32_t interrupt_vector = apic_get_isr_interrupt();
 
     if(interrupt_vector == -1) {
         return 0;
     }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "intr vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx 0x%x",
+             vmcb->control_area.exit_code, vmcb->control_area.exit_info_1,
+             vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits,
+             interrupt_vector);
 
     interrupt_frame_ext_t* frame = memory_malloc(sizeof(interrupt_frame_ext_t));
 
@@ -278,7 +284,7 @@ static int8_t hypervisor_svm_vmexit_handler_intr(hypervisor_vm_t* vm) { // exter
 
     cpu_cli();
 
-    interrupt_generic_handler(frame);
+    // interrupt_generic_handler(frame);
 
     cpu_sti();
 
@@ -290,11 +296,14 @@ static int8_t hypervisor_svm_vmexit_handler_intr(hypervisor_vm_t* vm) { // exter
 static int8_t hypervisor_svm_vmexit_handler_hlt(hypervisor_vm_t* vm) { // halt
     vm->is_halted = true;
 
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm (0x%llx) is halted", vm->vmcb_frame_fa);
+
     task_set_message_waiting();
 
     task_yield();
 
-    hypervisor_check_ipc(vm);
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm (0x%llx) is resumed", vm->vmcb_frame_fa);
 
     if(vm->is_halt_need_next_instruction) {
         vm->is_halted = false;
@@ -310,8 +319,6 @@ static int8_t hypervisor_svm_vmexit_handler_pause(hypervisor_vm_t* vm) { // paus
 
     task_yield();
 
-    hypervisor_check_ipc(vm);
-
     vm->is_halted = false;
 
     hypervisor_svm_goto_next_instruction(vm);
@@ -319,7 +326,94 @@ static int8_t hypervisor_svm_vmexit_handler_pause(hypervisor_vm_t* vm) { // paus
     return 0;
 }
 
-static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) {
+static int8_t hypervisor_svm_vmexit_handler_cpuid(hypervisor_vm_t* vm) { // cpuid
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+
+    cpu_cpuid_regs_t query = {
+        .eax = vmcb->save_state_area.rax,
+        .ebx = vm->guest_registers->rbx,
+        .ecx = vm->guest_registers->rcx,
+        .edx = vm->guest_registers->rdx
+    };
+
+    cpu_cpuid_regs_t result = {0};
+
+    if(cpu_cpuid(query, &result) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to execute cpuid");
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "eax 0x%x ebx 0x%x ecx 0x%x edx 0x%x",
+                 query.eax, query.ebx, query.ecx, query.edx);
+        return -1;
+    }
+
+    vmcb->save_state_area.rax = result.eax;
+    vm->guest_registers->rbx = result.ebx;
+    vm->guest_registers->rcx = result.ecx;
+    vm->guest_registers->rdx = result.edx;
+
+    hypervisor_svm_goto_next_instruction(vm);
+
+    return 0;
+}
+
+static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+
+    list_t* mq = vm->interrupt_queue;
+    interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_peek(mq);
+
+    if(!frame) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "no interrupt frame");
+        return -1;
+    }
+
+    if(frame->interrupt_number != vm->lapic.in_service_vector) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "interrupt number mismatch");
+        return -1;
+    }
+
+    list_queue_pop(mq);
+    memory_free_ext(vm->heap, frame);
+
+    vm->lapic.in_service_vector = 0;
+    vmcb->control_area.vint_control.fields.v_irq = 0;
+    vmcb->control_area.vint_control.fields.v_ign_tpr = 0;
+    vmcb->control_area.vint_control.fields.v_intr_vector = 0;
+    vmcb->control_area.clean_bits.fields.tpr = 1;
+
+    return 0;
+}
+
+
+static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+
+    uint32_t msr = vm->guest_registers->rcx;
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "msr vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx msr 0x%x",
+             vmcb->control_area.exit_code, vmcb->control_area.exit_info_1,
+             vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits, msr);
+
+    int8_t ret = -1;
+
+    switch(msr) {
+    case APIC_X2APIC_MSR_EOI:
+        ret = hypervisor_svm_vmexit_handle_eoi(vm);
+        break;
+    default:
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown msr 0x%x", msr);
+        break;
+    }
+
+    if(ret != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "failed to handle msr 0x%x", msr);
+    } else {
+        hypervisor_svm_goto_next_instruction(vm);
+    }
+
+    return ret;
+}
+
+static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) { // vmmcall
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
     uint64_t rax = vmcb->save_state_area.rax;
@@ -331,10 +425,11 @@ static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) {
     switch(rax) {
     case HYPERVISOR_VMCALL_NUMBER_EXIT:
         hypervisor_cleanup_mapped_interrupts(vm);
+        int32_t exit_code = vm->guest_registers->rdi;
 
-        task_end_task();
+        PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) exiting with code %i", vm->vmcb_frame_fa, exit_code);
 
-        hypervisor_svm_wait_idle(); // should never return
+        return -2;
 
         break;
     case HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS:
@@ -412,6 +507,8 @@ static int8_t hypervisor_svm_vmexit_handler_ioio(hypervisor_vm_t* vm) {
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
     svm_exit_ioio_t ioio = (svm_exit_ioio_t)vmcb->control_area.exit_info_1;
+
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "IOIO 0x%llx", ioio.bits);
 
     uint8_t size = -1;
 
@@ -589,6 +686,8 @@ hypervisor_svm_vmexit_handler_f hypervisor_svm_vmexit_handlers[SVM_VMEXIT_REASON
     [SVM_VMEXIT_REASON_INTR] = hypervisor_svm_vmexit_handler_intr,
     [SVM_VMEXIT_REASON_HLT] = hypervisor_svm_vmexit_handler_hlt,
     [SVM_VMEXIT_REASON_PAUSE] = hypervisor_svm_vmexit_handler_pause,
+    [SVM_VMEXIT_REASON_CPUID] = hypervisor_svm_vmexit_handler_cpuid,
+    [SVM_VMEXIT_REASON_MSR] = hypervisor_svm_vmexit_handler_msr,
     [SVM_VMEXIT_REASON_VMMCALL] = hypervisor_svm_vmexit_handler_vmmcall,
     [SVM_VMEXIT_REASON_IOIO] = hypervisor_svm_vmexit_handler_ioio,
     [SVM_VMEXIT_REASON_EXCP14] = hypervisor_svm_vmexit_handler_excp14,
@@ -667,9 +766,35 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
 
             hypervisor_svm_wait_idle();
         } else {
-            if(handler(vm) != 0) {
+            int8_t ret;
+
+            ret = hypervisor_check_ipc(vm);
+
+            if(ret == -2) {
+                PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) is exiting", vm->vmcb_frame_fa);
+                return 0;
+            } else if(ret != 0) {
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "ipc check failed");
+                hypervisor_svm_wait_idle();
+            }
+
+            ret = handler(vm);
+
+            if(ret == -1) {
                 PRINTLOG(HYPERVISOR, LOG_ERROR, "vmexit handler failed");
 
+                hypervisor_svm_wait_idle();
+            } else if(ret == -2) { // exit
+                return 0;
+            }
+
+            ret = hypervisor_check_ipc(vm);
+
+            if(ret == -2) {
+                PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) is exiting", vm->vmcb_frame_fa);
+                return 0;
+            } else if(ret != 0) {
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "ipc check failed");
                 hypervisor_svm_wait_idle();
             }
         }

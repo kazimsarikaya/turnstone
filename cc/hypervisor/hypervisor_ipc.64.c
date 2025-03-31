@@ -94,7 +94,7 @@ int8_t hypervisor_check_ipc(hypervisor_vm_t* vm) {
             break;
         case HYPERVISOR_IPC_MESSAGE_TYPE_CLOSE:
             PRINTLOG(HYPERVISOR, LOG_INFO, "VM close message received. Close sequence started");
-            task_end_task();
+            return -2; // close
             break;
         default:
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Invalid IPC message type: 0x%x", message->message_type);
