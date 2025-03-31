@@ -356,6 +356,9 @@ static int8_t hypervisor_svm_vmexit_handler_cpuid(hypervisor_vm_t* vm) { // cpui
 }
 
 static int8_t hypervisor_svm_vmexit_handle_eoi(hypervisor_vm_t* vm) {
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "eoi should be automatically handled by avic");
+    return -1;
+
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
     list_t* mq = vm->interrupt_queue;

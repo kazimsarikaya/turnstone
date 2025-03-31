@@ -34,6 +34,10 @@ int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
 
     ifext[0] = vector;
 
+    list_t* mq = vm->interrupt_queue;
+    interrupt_frame_ext_t* intfrm = (interrupt_frame_ext_t*)list_queue_pop(mq);
+    memory_free_ext(vm->heap, intfrm);
+
     if(vm->vid_enabled) {
         uint64_t apic_bp_fa = vmcb->control_area.avic_apic_backing_page_pointer;
         uint64_t apic_bp_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(apic_bp_fa);
@@ -47,16 +51,12 @@ int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
 
         *irr |= 1 << irr_bit;
 
-        list_t* mq = vm->interrupt_queue;
-        interrupt_frame_ext_t* intfrm = (interrupt_frame_ext_t*)list_queue_pop(mq);
-        memory_free_ext(vm->heap, intfrm);
-
 #if 0
         cpu_write_msr(CPU_MSR_SVM_APIC_DOORBELL, 1); // not working linux sucks.
 #endif
 
     } else {
-        vm->lapic.in_service_vector = vector;
+        // vm->lapic.in_service_vector = vector;
         vmcb->control_area.vint_control.fields.v_irq = 1;
         vmcb->control_area.vint_control.fields.v_ign_tpr = 1;
         vmcb->control_area.vint_control.fields.v_intr_vector = vector;

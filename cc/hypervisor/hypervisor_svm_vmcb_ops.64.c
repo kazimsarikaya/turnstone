@@ -27,6 +27,11 @@ static inline void hypervisor_svm_io_bitmap_set_port(uint8_t * bitmap, uint16_t 
 
 
 static int8_t hypervisor_svm_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, boolean_t read) {
+    if(msr == APIC_X2APIC_MSR_EOI) { // we don't want to intercept EOI, it is handled by the avic
+        return 0;
+    }
+
+
     uint32_t msr_offset = msr & 0x1FFF;
 
     if(msr >= 0xC0000000 && msr <= 0xC0001FFF) {
