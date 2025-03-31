@@ -15,6 +15,7 @@
 #include <time.h>
 #include <random.h>
 #include <errno.h>
+#include <cpu.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -39,7 +40,6 @@ boolean_t windowmanager_is_initialized(void) {
 size_t                            video_printf(const char_t* fmt, ...);
 void                              print_success(const char* msg, ...);
 void                              print_error(const char* msg, ...);
-void                              cpu_hlt(void);
 int8_t                            setup_ram2(void);
 void                              remove_ram2(void);
 void __attribute__((constructor)) start_ram(void);
@@ -91,9 +91,6 @@ buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id) {
     }
 
     return default_buffer;
-}
-
-void cpu_hlt(void) {
 }
 
 memory_heap_t* d_heap = NULL;

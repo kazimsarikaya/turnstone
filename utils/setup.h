@@ -17,6 +17,7 @@
 #include <utils.h>
 #include <random.h>
 #include <xxhash.h>
+#include <cpu.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -35,7 +36,6 @@ size_t                            video_printf(const char_t* fmt, ...);
 void                              video_print(const char_t* string);
 void                              print_success(const char* msg, ...);
 void                              print_error(const char* msg, ...);
-void                              cpu_hlt(void);
 int8_t                            setup_ram2(void);
 void                              remove_ram2(void);
 void __attribute__((constructor)) start_ram(void);
@@ -205,8 +205,6 @@ void      lock_acquire(lock_t* lock);
 void      lock_release(lock_t* lock);
 lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id);
 void      dump_ram(char_t* fname);
-void      cpu_sti(void);
-void      cpu_get_type(void);
 void      apic_eoi(void);
 void      task_current_task_sleep(uint64_t when_tick);
 time_t    rtc_get_time(void);
@@ -240,14 +238,6 @@ size_t video_printf(const char_t* fmt, ...) {
 }
 
 void task_switch_task(void){
-}
-
-void cpu_sti(void){
-
-}
-
-void cpu_get_type(void){
-
 }
 
 void  apic_eoi(void){
