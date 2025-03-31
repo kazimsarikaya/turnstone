@@ -858,7 +858,7 @@ void task_end_task(void) {
     typedef int64_t (*entry_point_f)(uint64_t, void**);
     entry_point_f entry_point = current_task->entry_point;
 
-    int64_t ret = 0;
+    int64_t ret = -1;
 
     if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
 
