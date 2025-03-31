@@ -512,8 +512,8 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
     const window_input_value_t* last = list_get_data_at_position(inputs, list_size(inputs) - 1);
     const window_input_value_t* next = NULL;
 
-    size_t end = list_size(inputs) - 1;
-    size_t start = 0;
+    int64_t end = list_size(inputs) - 1;
+    int64_t start = 0;
     int32_t inc = 1;
 
     if(is_reverse) {
@@ -522,10 +522,15 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
         inc = -1;
     }
 
-    for(size_t i = start;
+    for(int64_t i = start;
         is_reverse ? i >= end : i <= end;
         i += inc) {
         window_input_value_t* value = (window_input_value_t*)list_get_data_at_position(inputs, i);
+
+        if(!value) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Invalid input value at position %lli", i);
+            break;
+        }
 
         if(!input_found && windowmanager_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
             input_found = true;
