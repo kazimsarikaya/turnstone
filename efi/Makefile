@@ -23,7 +23,7 @@ endif
 
 BASEFLAGS = -D___BITS=64 -D___EFIBUILD=1 -D___KERNELBUILD=0 -O3 -I../includes -I./
 BASEFLAGS += -ffreestanding -nostdlib -nostdinc -fno-builtin -Wall -Werror -Wextra
-BASEFLAGS += -fno-omit-frame-pointer -msse4.2 
+BASEFLAGS += -fno-omit-frame-pointer -march=native -mno-red-zone -fstack-protector-all
 BASEFLAGS += -fno-pic -fno-PIC -fno-plt -mcmodel=large
 BASEFLAGS += -fno-ident -fno-asynchronous-unwind-tables
 BASEFLAGS += -ffunction-sections -fdata-sections -c ${CCXXEXTRAFLAGS}

@@ -429,7 +429,8 @@ int8_t huffman_decode_table_decode(bit_buffer_t* bit_buffer, huffman_decode_tabl
     memory_memclean(huffman_lengths, sizeof(huffman_decode_table_t));
     memory_memclean(huffman_distances, sizeof(huffman_decode_table_t));
 
-    uint8_t lengths[320] = {0};
+    uint8_t lengths[320];
+    memory_memclean(lengths, sizeof(lengths));
 
     int32_t bit = 0;
 
@@ -467,7 +468,8 @@ int8_t huffman_decode_table_decode(bit_buffer_t* bit_buffer, huffman_decode_tabl
         lengths[huffman_code_lengths[i]] = bit;
     }
 
-    huffman_decode_table_t codes = {0};
+    huffman_decode_table_t codes;
+    memory_memclean(&codes, sizeof(huffman_decode_table_t));
 
     if(huffman_decode_table_build(lengths, 19, &codes, 7) < 0) {
         return -1;
@@ -1154,7 +1156,8 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
         goto exit;
     }
 
-    huffman_encode_freq_t code_lengths_freqs = {0};
+    huffman_encode_freq_t code_lengths_freqs;
+    memory_memclean(&code_lengths_freqs, sizeof(huffman_encode_freq_t));
 
     for(int32_t i = 0; i <= max_used_symbol; i++) {
         code_lengths[i] = (*symbols)->lengths[i];
@@ -1268,7 +1271,8 @@ static bit_buffer_t* huffman_encode_build_tables_and_code(huffman_encode_freq_t*
 
     code_lengths[out_idx] = 255;
 
-    huffman_encode_table_t code_lengths_table = {0};
+    huffman_encode_table_t code_lengths_table;
+    memory_memclean(&code_lengths_table, sizeof(huffman_encode_table_t));
 
     if(!huffman_encode_build_table(&code_lengths_freqs, true, &code_lengths_table, 7, &max_used_code_length)) {
         goto exit;
@@ -1587,9 +1591,9 @@ int8_t deflate_inflate(buffer_t* in, buffer_t* out) {
 
         uint8_t type = bit;
 
-        huffman_decode_table_t lengths = {0};
+        huffman_decode_table_t lengths;
         memory_memcopy(&huffman_decode_fixed_lengths, &lengths, sizeof(huffman_decode_table_t));
-        huffman_decode_table_t distances = {0};
+        huffman_decode_table_t distances;
         memory_memcopy(&huffman_decode_fixed_distances, &distances, sizeof(huffman_decode_table_t));
 
         switch(type) {

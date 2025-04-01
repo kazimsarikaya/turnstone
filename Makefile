@@ -47,8 +47,8 @@ CPPFLAGS = $(BASEFLAGS) \
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
-CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 -mavx -mavx2 -mavx512f $(CCFLAGS)
-CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCFLAGS)
+CC64FLAGS    = -m64 -march=native -D___BITS=64 $(CCFLAGS)
+CC64INTFLAGS = -m64 -march=native -mgeneral-regs-only -D___BITS=64 $(CCFLAGS)
 
 OBJDIR = build
 ASOBJDIR = $(OBJDIR)/asm

@@ -140,8 +140,9 @@ static int8_t windowmanager_main(void) {
             continue;
         }
 
-        char_t data[4096] = {0};
+        char_t data[4096];
         uint32_t data_idx = 0;
+        data[data_idx] = NULL;
 
         kbd_ev_cnt = kbd_length / sizeof(kbd_report_t);
 

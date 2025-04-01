@@ -7,7 +7,7 @@ CC = gcc
 CPP = g++
 
 BASEFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu18 \
-	-O0 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
+	-O3 -nostdlib -nostdinc -ffreestanding -c -m64 -march=native\
 	-fdata-sections -ffunction-sections \
 	-Wshadow -Wpointer-arith -Wcast-align \
 	-Wwrite-strings -Wmissing-declarations \

@@ -87,7 +87,7 @@ void cpu_cr0_enable_wp(void) {
     cpu_write_cr0(cr0);
 }
 
-static inline void cpu_enable_avx(void) {
+__attribute__((target("general-regs-only"))) static inline void cpu_enable_avx(void) {
     asm volatile (
         "xor %rcx, %rcx\n"
         "xgetbv\n"
@@ -96,7 +96,7 @@ static inline void cpu_enable_avx(void) {
         );
 }
 
-void cpu_enable_sse(void) {
+__attribute__((target("general-regs-only"))) void cpu_enable_sse(void) {
     cpu_reg_cr0_t cr0 = cpu_read_cr0();
     cr0.fields.monitor_coprocessor = 1;
     cr0.fields.emulation = 0;

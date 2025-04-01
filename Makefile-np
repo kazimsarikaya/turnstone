@@ -37,8 +37,8 @@ CCXXFLAGS += -std=gnu18 -O2 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
-CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 $(CCXXFLAGS)
-CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
+CC64FLAGS    = -m64 -march=native -D___BITS=64 $(CCXXFLAGS)
+CC64INTFLAGS = -m64 -march=native -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
 
 OBJDIR = build
 ASOBJDIR = $(OBJDIR)/asm

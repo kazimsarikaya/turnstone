@@ -12,6 +12,7 @@
 #include <linker.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/crx.h>
 #include <cpu/sync.h>
 #include <buffer.h>
 #include <data.h>
@@ -84,6 +85,15 @@ efi_status_t efi_print_variable_names(void);
  * @return EFI_SUCCESS if all goes well.
  */
 efi_status_t efi_is_pxe_boot(boolean_t* result);
+
+/**
+ * @brief EFI main function
+ * @details this function is wrapper for runnig after sse and avx enable.
+ * @param[in] image image handle
+ * @param[in] system_table system table
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table);
 
 /**
  * @brief EFI main function
@@ -793,7 +803,7 @@ catch_efi_error:
     return res;
 }
 
-EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+__attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table) {
     ST = system_table;
     BS = system_table->boot_services;
     RS = system_table->runtime_services;
@@ -1453,4 +1463,18 @@ catch_efi_error:
     cpu_hlt();
 
     return EFI_LOAD_ERROR;
+}
+
+__attribute__((target("general-regs-only")))
+EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+    cpu_enable_sse();
+
+    efi_status_t res = efi_main2(image, system_table);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "efi_main2 failed with code 0x%llx", res);
+        cpu_hlt();
+    }
+
+    return EFI_SUCCESS;
 }

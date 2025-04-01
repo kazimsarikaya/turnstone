@@ -582,8 +582,9 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
         return 0;
     }
 
-    char_t buffer_vprintf_buffer[BUFFER_PRINTF_BUFFER_SIZE + 128] = {0};
+    char_t buffer_vprintf_buffer[BUFFER_PRINTF_BUFFER_SIZE + 128];
     uint64_t buffer_vprintf_buffer_idx = 0;
+    buffer_vprintf_buffer[buffer_vprintf_buffer_idx] = '\0';
 
     while (*fmt) {
         if(buffer_vprintf_buffer_idx >= BUFFER_PRINTF_BUFFER_SIZE - 1) {
