@@ -184,7 +184,7 @@ typedef enum cpu_type_t {
     CPU_TYPE_INTEL,
 } cpu_type_t;
 
-cpu_type_t cpu_get_type(void);
+__attribute__((const)) cpu_type_t cpu_get_type(void);
 
 #ifdef __cplusplus
 }
