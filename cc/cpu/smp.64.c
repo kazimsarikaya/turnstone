@@ -351,7 +351,7 @@ int32_t smp_ap_boot(uint8_t cpu_id) {
         );
 #endif
 
-    task_end_task();
+    task_exit(0);
 
     while(true) { // never reach here
         cpu_hlt();

@@ -844,10 +844,20 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     asm volatile ("" ::: "memory"); // prevent compiler jmp directly to the task_load_registers
 }
 
-void task_end_task(void) {
-    task_task_switch_exit();
-    cpu_sti();
+void task_exit(int32_t exit_code) {
+    task_t* current_task = task_get_current_task();
 
+    if(!current_task) {
+        PRINTLOG(TASKING, LOG_ERROR, "current task not found");
+
+        return;
+    }
+
+    current_task->exit_code = exit_code;
+    task_end_task();
+}
+
+void task_end_task(void) {
     task_t* current_task = cpu_state->current_task;
 
     if(current_task == NULL) {
@@ -860,11 +870,19 @@ void task_end_task(void) {
 
     int64_t ret = -1;
 
-    if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
+    if(current_task->state == TASK_STATE_STARTING) {
+        task_task_switch_exit();
+        cpu_sti();
+
+        if(!entry_point) {
+            PRINTLOG(TASKING, LOG_ERROR, "no entry point for task 0x%llx", current_task->task_id);
+        }
 
         PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
+    } else {
+        ret = current_task->exit_code;
     }
 
     PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx",

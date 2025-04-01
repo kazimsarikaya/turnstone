@@ -106,7 +106,7 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
         }
     }
 
-    task_end_task();
+    task_exit(0);
 
     while(true){ // should not reach here
         cpu_hlt();

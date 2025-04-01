@@ -800,10 +800,13 @@ static uint64_t hypervisor_vmcs_vmcalls_handler(vmx_vmcs_vmexit_info_t* vmexit_i
     uint64_t ret = -1;
 
     switch(rax) {
-    case HYPERVISOR_VMCALL_NUMBER_EXIT:
-        hypervisor_cleanup_mapped_interrupts(vm);
+    case HYPERVISOR_VMCALL_NUMBER_EXIT: {
+        int32_t exit_code = (int32_t)vmexit_info->registers->rdi;
+        task_exit(exit_code);
         return 0;
+
         break;
+    }
     case HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS:
         ret = hypervisor_ept_guest_virtual_to_host_physical(vm, vmexit_info->registers->rdi);
         break;

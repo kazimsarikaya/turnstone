@@ -189,10 +189,6 @@ _Noreturn void vmedu(void) {
 
     printf("Test program complete\n");
 
-    while(true) {
-        cpu_idle();
-    }
-
     vm_guest_exit(0);
 
 }

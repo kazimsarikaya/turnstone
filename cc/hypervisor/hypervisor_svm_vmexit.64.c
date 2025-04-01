@@ -427,12 +427,10 @@ static int8_t hypervisor_svm_vmexit_handler_vmmcall(hypervisor_vm_t* vm) { // vm
 
     switch(rax) {
     case HYPERVISOR_VMCALL_NUMBER_EXIT:
-        hypervisor_cleanup_mapped_interrupts(vm);
-        int32_t exit_code = vm->guest_registers->rdi;
+        PRINTLOG(HYPERVISOR, LOG_INFO, "vmcall exit 0x%llx", vm->guest_registers->rdi);
+        task_exit((int32_t)vm->guest_registers->rdi);
 
-        PRINTLOG(HYPERVISOR, LOG_INFO, "vm (0x%llx) exiting with code %i", vm->vmcb_frame_fa, exit_code);
-
-        return -2;
+        return -2; // never reach here.
 
         break;
     case HYPERVISOR_VMCALL_NUMBER_GET_HOST_PHYSICAL_ADDRESS:

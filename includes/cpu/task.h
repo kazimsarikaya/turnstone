@@ -167,10 +167,11 @@ typedef struct task_t {
     buffer_t*                    error_buffer; ///< error buffer
     uint64_t                     vmcs_physical_address; ///< vmcs physical address
     void*                        vm; ///< vm
+    int32_t                      exit_code; ///< task exit code
     task_registers_t*            registers; ///< task registers
 } task_t; ///< short hand for struct
 
-_Static_assert(sizeof(task_t) == 0xb8, "task_t size must be 0xb8");
+_Static_assert(sizeof(task_t) == 0xc0, "task_t size must be 0xb8"); // why this assert? where we hardcoded task_t size?
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
@@ -278,6 +279,7 @@ boolean_t task_idle_check_need_yield(void);
 void task_current_task_sleep(uint64_t wake_tick);
 
 void task_end_task(void);
+void task_exit(int32_t exit_code);
 void task_kill_task(uint64_t task_id, boolean_t force);
 
 typedef struct task_list_item_t {
