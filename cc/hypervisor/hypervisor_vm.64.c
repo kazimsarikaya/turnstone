@@ -113,7 +113,6 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
     list_list_delete(hypervisor_vm_list, vm);
 
-    buffer_destroy(vm->output_buffer);
     list_destroy(vm->ipc_queue);
     map_destroy(vm->msr_map);
     hashmap_destroy(vm->loaded_module_ids);
@@ -124,6 +123,14 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
     list_destroy(vm->mapped_interrupts);
     list_destroy(vm->interrupt_queue);
     list_destroy(vm->released_pages);
+
+    if(vm->host_registers) {
+        memory_free_ext(vm->heap, vm->host_registers);
+    }
+
+    if(vm->guest_registers) {
+        memory_free_ext(vm->heap, vm->guest_registers);
+    }
 
     frame_t self_frame = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF];
 
