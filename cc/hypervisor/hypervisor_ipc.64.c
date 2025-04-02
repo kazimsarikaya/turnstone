@@ -53,9 +53,9 @@ static void hypervisor_ipc_handle_interrupts(hypervisor_vm_t* vm) {
     list_t* mq = vm->interrupt_queue;
 
     if(list_size(mq)) {
-        interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_peek(mq);
+        uint64_t interrupt_number = (uint64_t)list_queue_peek(mq);
 
-        hypervisor_ipc_handle_irq(vm, frame->interrupt_number);
+        hypervisor_ipc_handle_irq(vm, interrupt_number);
     }
 }
 

@@ -27,16 +27,8 @@ int8_t hypervisor_svm_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_messag
 int8_t hypervisor_svm_ipc_handle_irq(hypervisor_vm_t* vm, uint8_t vector) {
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
-    uint64_t guest_ifext_fa = hypervisor_ept_guest_to_host(vm->ept_pml4_base, SVM_GUEST_IFEXT_BASE_VALUE);
-    uint64_t guest_ifext_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_ifext_fa);
-
-    uint64_t* ifext = (uint64_t*)guest_ifext_va;
-
-    ifext[0] = vector;
-
     list_t* mq = vm->interrupt_queue;
-    interrupt_frame_ext_t* intfrm = (interrupt_frame_ext_t*)list_queue_pop(mq);
-    memory_free_ext(vm->heap, intfrm);
+    list_queue_pop(mq);
 
     if(vm->vid_enabled) {
         uint64_t apic_bp_fa = vmcb->control_area.avic_apic_backing_page_pointer;

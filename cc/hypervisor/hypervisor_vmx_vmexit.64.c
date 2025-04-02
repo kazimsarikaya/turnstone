@@ -542,14 +542,7 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(vmx_vmcs_vmexit_info_t* v
             vm->lapic.apic_eoi_pending = true;
 
             if(interrupt_vector != 0x20 && list_size(vm->interrupt_queue)){
-                interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_pop(vm->interrupt_queue);
-
-                uint64_t guest_ifext_fa = hypervisor_ept_guest_to_host(vm->ept_pml4_base, VMX_GUEST_IFEXT_BASE_VALUE);
-                uint64_t guest_ifext_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(guest_ifext_fa);
-
-                memory_memcopy(frame, (void*)guest_ifext_va, sizeof(interrupt_frame_ext_t));
-
-                memory_free_ext(vm->heap, frame);
+                list_queue_pop(vm->interrupt_queue);
             }
         }
 

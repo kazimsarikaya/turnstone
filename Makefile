@@ -48,7 +48,6 @@ CPPFLAGS = $(BASEFLAGS) \
 CXXTESTFLAGS= -D___TESTMODE=1
 
 CC64FLAGS    = -m64 -march=native -D___BITS=64 $(CCFLAGS)
-CC64INTFLAGS = -m64 -march=native -mgeneral-regs-only -D___BITS=64 $(CCFLAGS)
 
 OBJDIR = build
 ASOBJDIR = $(OBJDIR)/asm
@@ -135,19 +134,17 @@ PROGS = $(OBJDIR)/stage3.bin.pack
 
 TESTPROGS = $(OBJDIR)/stage3.test.bin
 
-.PHONY: all clean depend $(SUBDIRS) $(CC64GENOBJS) asm bear
+.PHONY: all clean $(SUBDIRS) asm bear
 .PRECIOUS:
 
 qemu-without-analyzer:
 	CCXXEXTRAFLAGS= make -j $(shell nproc) -C utils 
 	CCXXEXTRAFLAGS= make -j $(shell nproc) -C efi 
-	CCXXEXTRAFLAGS= make -j 1 -f Makefile-np 
 	CCXXEXTRAFLAGS= make -j $(shell nproc) -f Makefile qemu-internal
 
 qemu: 
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -C utils 
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -C efi 
-	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np 
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -f Makefile qemu-internal
 
 qemu-internal: $(QEMUDISK)
@@ -166,7 +163,6 @@ qemu-test: $(TESTQEMUDISK)
 virtualbox: $(VBBOXDISK)
 
 asm:
-	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np asm
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -f Makefile asm-internal
 
 asm-internal: $(CC64ASMOUTS)
@@ -191,10 +187,10 @@ $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	find $(OBJDIR)/docs/html/ -name "*.html"|sed 's-'$(OBJDIR)'/docs/html-https://turnstoneos.com-' > $(OBJDIR)/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
+$(VBBOXDISK): $(MKDIRSDONE) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
-$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
+$(QEMUDISK): $(MKDIRSDONE) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
 $(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)
@@ -234,14 +230,17 @@ $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.S
 $(ASOBJDIR)/%64.test.o: $(ASSRCDIR)/%64.S
 	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $^
 
-$(CCOBJDIR)/cpu/interrupt.64.o: $(CCSRCDIR)/cpu/interrupt.64.c
-	$(CC64) $(CC64INTFLAGS) -o $@ $<
-	
-$(CCOBJDIR)/cpu/interrupt.64.s: $(CCSRCDIR)/cpu/interrupt.64.c
-	$(CC64) $(CC64INTFLAGS) -S -o $@ $<
+$(CCGENDIR)/%.c: $(CCGENSCRIPTSDIR)/%.sh
+	if [[ ! -f $@ ]]; then $^ > $@; else $^ > $@.tmp; diff $@  $@.tmp  2>/dev/null && rm -f $@.tmp || mv $@.tmp $@; fi
 
 $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
-	$(CC64) $(CC64INTFLAGS) -o $@ $<
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/vm_guest_interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/vm_guest_interrupt_handlers.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
 
 $(SUBDIRS):
 	$(MAKE) -j $(nproc) -C $@
@@ -263,7 +262,9 @@ cleandirs:
 
 print-%: ; @echo $* = $($*)
 
-depend: .depend64c .depend64cpp
+.PHONY: depend $(UTILSSRCDIR)/.depend $(EFISRCDIR)/.depend
+depend: .depend64c .depend64cpp $(UTILSSRCDIR)/.depend $(EFISRCDIR)/.depend
+	@echo "Dependencies generated" 
 
 .depend64c: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
 	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
@@ -273,5 +274,12 @@ depend: .depend64c .depend64cpp
 	scripts/create-cc-deps.sh "$(CPP64) $(CPPFLAGS) -D___DEPEND_ANALYSIS -MM" "$^" >> .depend64
 	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
 
+$(UTILSSRCDIR)/.depend:
+	rm -f $(UTILSSRCDIR)/.depend
+	make -C utils -B depend 
+
+$(EFISRCDIR)/.depend:
+	rm -f $(EFISRCDIR)/.depend
+	make -C efi -B depend
 
 -include .depend64

@@ -111,13 +111,62 @@ uint64_t vm_guest_get_host_physical_address(uint64_t guest_virtual_address) {
 
 vm_guest_interrupt_handler_t vm_guest_interrupt_handlers[256] = {0};
 
-void vm_guest_generic_interrupt_handler(interrupt_frame_ext_t* frame);
-void vm_guest_generic_interrupt_handler(interrupt_frame_ext_t* frame) {
-    UNUSED(frame);
-    cpu_cli();
-    uint64_t* data = (uint64_t*)VMX_GUEST_IFEXT_BASE_VALUE;
+static boolean_t vm_guest_interrupt_xsave_mask_memorized = false;
+static uint64_t vm_guest_interrupt_xsave_mask_lo = 0;
+static uint64_t vm_guest_interrupt_xsave_mask_hi = 0;
 
-    uint64_t vector = data[0];
+static void vm_guest_interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t* frame) {
+    if(!vm_guest_interrupt_xsave_mask_memorized) {
+        cpu_cpuid_regs_t query = {0};
+        cpu_cpuid_regs_t result;
+
+        query.eax = 0xd;
+
+        cpu_cpuid(query, &result);
+
+        vm_guest_interrupt_xsave_mask_lo = result.eax;
+        vm_guest_interrupt_xsave_mask_hi = result.edx;
+
+        vm_guest_interrupt_xsave_mask_memorized = true;
+    }
+
+    uint64_t frame_base = (uint64_t)frame;
+    uint64_t avx512f_offset = frame_base + offsetof_field(interrupt_frame_ext_t, avx512f);
+    // align to 0x40
+    avx512f_offset = (avx512f_offset + 0x3F) & ~0x3F;
+
+    if(save) {
+        memory_memclean((void*)avx512f_offset, 0x2000);
+
+        asm volatile (
+            "mov %[avx512f_offset], %%rbx\n"
+            "xsave (%%rbx)\n"
+            :
+            :
+            [avx512f_offset] "r" (avx512f_offset),
+            "rax" (vm_guest_interrupt_xsave_mask_lo),
+            "rdx" (vm_guest_interrupt_xsave_mask_hi)
+            : "rbx"
+            );
+    } else {
+        asm volatile (
+            "mov %[avx512f_offset], %%rbx\n"
+            "xrstor (%%rbx)\n"
+            :
+            :
+            [avx512f_offset] "r" (avx512f_offset),
+            "rax" (vm_guest_interrupt_xsave_mask_lo),
+            "rdx" (vm_guest_interrupt_xsave_mask_hi)
+            : "rbx"
+            );
+    }
+}
+
+void vm_guest_interrupt_generic_handler(interrupt_frame_ext_t* frame);
+void vm_guest_interrupt_generic_handler(interrupt_frame_ext_t* frame) {
+    vm_guest_interrupt_save_restore_avx512f(true, frame);
+
+    uint64_t vector = frame->interrupt_number;
 
     vm_guest_interrupt_handler_t handler = vm_guest_interrupt_handlers[vector];
 
@@ -127,57 +176,12 @@ void vm_guest_generic_interrupt_handler(interrupt_frame_ext_t* frame) {
     }
 
     handler(NULL);
+
+    vm_guest_interrupt_save_restore_avx512f(false, frame);
 }
 
-static __attribute__((naked, no_stack_protector)) void vm_guest_interrupt_handler(void) {
-    asm volatile (
-        "push $0\n" // push error code
-        "push $0\n" // push interrupt number
-        "subq $0x2080, %rsp\n"
-        "push %r15\n"
-        "push %r14\n"
-        "push %r13\n"
-        "push %r12\n"
-        "push %r11\n"
-        "push %r10\n"
-        "push %r9\n"
-        "push %r8\n"
-        "push %rbp\n"
-        "push %rdi\n"
-        "push %rsi\n"
-        "push %rdx\n"
-        "push %rcx\n"
-        "push %rbx\n"
-        "push %rax\n"
-        "push %rsp\n"
-        "mov %rsp, %rdi\n"
-        "sub $0x8, %rsp\n"
-        "lea 0x0(%rip), %rax\n"
-        "movabsq $_GLOBAL_OFFSET_TABLE_, %rbx\n"
-        "add %rax, %rbx\n"
-        "movabsq $vm_guest_generic_interrupt_handler@GOT, %rax\n"
-        "call *(%rbx, %rax, 1)\n"
-        "add $0x8, %rsp\n"
-        "pop %rsp\n"
-        "pop %rax\n"
-        "pop %rbx\n"
-        "pop %rcx\n"
-        "pop %rdx\n"
-        "pop %rsi\n"
-        "pop %rdi\n"
-        "pop %rbp\n"
-        "pop %r8\n"
-        "pop %r9\n"
-        "pop %r10\n"
-        "pop %r11\n"
-        "pop %r12\n"
-        "pop %r13\n"
-        "pop %r14\n"
-        "pop %r15\n"
-        "add $0x2090, %rsp\n"
-        "iretq\n"
-        );
-}
+static boolean_t vm_guest_interrupt_dummy_handlers_registered = false;
+void vm_guest_interrupt_register_dummy_handlers(descriptor_idt_t*);
 
 int16_t vm_guest_attach_interrupt(pci_generic_device_t* pci_dev, vm_guest_interrupt_type_t interrupt_type, uint8_t interrupt_number, vm_guest_interrupt_handler_t irq) {
     int16_t result = 0;
@@ -195,9 +199,15 @@ int16_t vm_guest_attach_interrupt(pci_generic_device_t* pci_dev, vm_guest_interr
     }
 
     if(result != -1) {
-        descriptor_idt_t* idt = (descriptor_idt_t*)0x1000;
+        if(!vm_guest_interrupt_dummy_handlers_registered) {
 
-        DESCRIPTOR_BUILD_IDT_SEG(idt[result], (uint64_t)vm_guest_interrupt_handler, 0x08, 0x0, 0);
+            descriptor_idt_t* idt = (descriptor_idt_t*)0x1000;
+
+            vm_guest_interrupt_register_dummy_handlers(idt);
+
+            vm_guest_interrupt_dummy_handlers_registered = true;
+        }
+
         vm_guest_interrupt_handlers[result] = irq;
     } else {
         vm_guest_printf("Failed to attach interrupt\n");

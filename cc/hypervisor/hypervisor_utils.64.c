@@ -286,7 +286,7 @@ int8_t hypervisor_init_interrupt_mapped_vms(void) {
 }
 
 static int8_t hypervisor_vmcall_interrupt_mapped_isr(interrupt_frame_ext_t* frame) {
-    uint8_t interrupt_number = frame->interrupt_number;
+    uint64_t interrupt_number = frame->interrupt_number;
 
     list_t* vms = hypervisor_vmcall_interrupt_mapped_vms[interrupt_number];
 
@@ -295,10 +295,7 @@ static int8_t hypervisor_vmcall_interrupt_mapped_isr(interrupt_frame_ext_t* fram
             video_text_print("interrupt mapped\n");
             hypervisor_vm_t* vm = (hypervisor_vm_t*)list_get_data_at_position(vms, i);
 
-            interrupt_frame_ext_t* cloned_frame = memory_malloc_ext(vm->heap, sizeof(interrupt_frame_ext_t), 0);
-            memory_memcopy(frame, cloned_frame, sizeof(interrupt_frame_ext_t));
-
-            list_queue_push(vm->interrupt_queue, cloned_frame);
+            list_queue_push(vm->interrupt_queue, (void*)interrupt_number);
 
             task_set_interrupt_received(vm->task_id);
         }
@@ -423,7 +420,6 @@ void hypervisor_cleanup_mapped_interrupts(hypervisor_vm_t* vm) {
     }
 
     while(list_size(vm->interrupt_queue)) {
-        interrupt_frame_ext_t* frame = (interrupt_frame_ext_t*)list_queue_pop(vm->interrupt_queue);
-        memory_free_ext(vm->heap, frame);
+        list_queue_pop(vm->interrupt_queue);
     }
 }

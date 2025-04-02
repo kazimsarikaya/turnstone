@@ -15,11 +15,11 @@ cat <<EOF
 #include <cpu/descriptor.h>
 #include <cpu/interrupt.h>
 
-MODULE("turnstone.kernel.cpu.interrupt.handlers");
+MODULE("turnstone.hypervisor.guestlib.interrupt.handlers");
 
 #ifndef ___DEPEND_ANALYSIS
 
-void interrupt_register_dummy_handlers(descriptor_idt_t* idt);
+void vm_guest_interrupt_register_dummy_handlers(descriptor_idt_t* idt);
 
 EOF
 
@@ -28,8 +28,8 @@ for i in 8 $(seq 10 14) 17 21; do
 j=`printf "%02x" $i`
 
 cat <<EOF
-void interrupt_naked_handler_int_0x${j}(void);
-__attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
+void vm_guest_interrupt_naked_handler_int_0x${j}(void);
+__attribute__((naked, no_stack_protector)) void vm_guest_interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
         "push \$${i}\n" // push interrupt number
         "subq \$0x2080, %rsp\n"
@@ -54,7 +54,7 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "lea 0x0(%rip), %rax\n"
         "movabsq \$_GLOBAL_OFFSET_TABLE_, %rbx\n"
         "add %rax, %rbx\n"
-        "movabsq \$interrupt_generic_handler@GOT, %rax\n"
+        "movabsq \$vm_guest_interrupt_generic_handler@GOT, %rax\n"
         "call *(%rbx, %rax, 1)\n"
         "add \$0x8, %rsp\n"
         "pop %rsp\n"
@@ -86,8 +86,8 @@ for i in $(seq 0 7) 9 15 16 18 19 20 $(seq 22 31) $(seq 32 255); do
 j=`printf "%02x" $i`
 
 cat <<EOF
-void interrupt_naked_handler_int_0x${j}(void);
-__attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${j}(void) {
+void vm_guest_interrupt_naked_handler_int_0x${j}(void);
+__attribute__((naked, no_stack_protector)) void vm_guest_interrupt_naked_handler_int_0x${j}(void) {
     asm volatile (
         "push \$0\n" // push error code
         "push \$${i}\n" // push interrupt number
@@ -113,7 +113,7 @@ __attribute__((naked, no_stack_protector)) void interrupt_naked_handler_int_0x${
         "lea 0x0(%rip), %rax\n"
         "movabsq \$_GLOBAL_OFFSET_TABLE_, %rbx\n"
         "add %rax, %rbx\n"
-        "movabsq \$interrupt_generic_handler@GOT, %rax\n"
+        "movabsq \$vm_guest_interrupt_generic_handler@GOT, %rax\n"
         "call *(%rbx, %rax, 1)\n"
         "add \$0x8, %rsp\n"
         "pop %rsp\n"
@@ -141,9 +141,9 @@ EOF
 done
 
 cat <<EOF
-typedef void (*interrupt_dummy_noerrcode_int_ptr)(void);
+typedef void (*vm_guest_interrupt_dummy_noerrcode_int_ptr)(void);
 
-const interrupt_dummy_noerrcode_int_ptr interrupt_dummy_noerrcode_list[256] = {
+const vm_guest_interrupt_dummy_noerrcode_int_ptr vm_guest_interrupt_dummy_noerrcode_list[256] = {
 EOF
 
 for i in $(seq 0 255); do
@@ -151,17 +151,17 @@ for i in $(seq 0 255); do
 j=`printf "%02x" $i`
 
 cat <<EOF
-&interrupt_naked_handler_int_0x${j},
+&vm_guest_interrupt_naked_handler_int_0x${j},
 EOF
 done
 
 cat <<EOF
 };
 
-void interrupt_register_dummy_handlers(descriptor_idt_t* idt) {
+void vm_guest_interrupt_register_dummy_handlers(descriptor_idt_t* idt) {
   uint64_t fa;
   for(uint32_t i=0;i<256;i++){
-    fa=(uint64_t)interrupt_dummy_noerrcode_list[i];
+    fa=(uint64_t)vm_guest_interrupt_dummy_noerrcode_list[i];
     DESCRIPTOR_BUILD_IDT_SEG(idt[i], fa, KERNEL_CODE_SEG, 0, DPL_KERNEL)
   }
 }
