@@ -61,8 +61,6 @@ typedef struct hypervisor_vm_t {
         boolean_t apic_eoi_pending;
     }                 lapic;
     uint64_t          last_tsc;
-    boolean_t         lapic_timer_pending;
-    boolean_t         lapic_timer_enabled;
     boolean_t         vid_enabled;
     boolean_t         vapic_register_access_enabled;
     boolean_t         need_to_notify;

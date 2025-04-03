@@ -77,7 +77,7 @@ int8_t hypervisor_vmx_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_messag
 
     buffer_printf(buffer, "\n");
     buffer_printf(buffer, "lapic timer:\n");
-    buffer_printf(buffer, "\tenabled: %s\n", (vm->lapic_timer_enabled == 0) ? "no" : "yes");
+    buffer_printf(buffer, "\tenabled: %s\n", (vm->lapic.timer_masked) ? "no" : "yes");
     buffer_printf(buffer, "\tcurrent: 0x%016llx\n", vm->lapic.timer_current_value);
     buffer_printf(buffer, "\tinitial: 0x%016llx\n", vm->lapic.timer_initial_value);
     buffer_printf(buffer, "\tdivide:  0x%016llx\n", vm->lapic.timer_divider);

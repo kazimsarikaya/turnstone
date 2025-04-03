@@ -102,25 +102,27 @@ static void hypervisor_svm_vmcb_set_vapic_defaults(uint64_t vapic_address) {
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "apic version: 0x%llx", apic_vesion);
 
-    vapic[0x20 / 4] = 0x0; // id
-    vapic[0x30 / 4] = apic_vesion; // version
-    vapic[0xE0 / 4] = 0xffffffff; // dfr
-    vapic[0xF0 / 4] = 0x000000ff; // spurious interrupt vector
-    vapic[0x320 / 4] = 0x00010000; // timer local vector table entry
-    vapic[0x330 / 4] = 0x00010000; // thermal sensor local vector table entry
-    vapic[0x340 / 4] = 0x00010000; // performance counter local vector table entry
-    vapic[0x350 / 4] = 0x00010000; // local interrupt 0 local vector table entry
-    vapic[0x360 / 4] = 0x00010000; // local interrupt 1 local vector table entry
-    vapic[0x370 / 4] = 0x00010000; // error local vector table entry
+    vapic[APIC_REGISTER_OFFSET_ID / 4] = 0x0; // id
+    vapic[APIC_REGISTER_OFFSET_VERSION / 4] = apic_vesion; // version
+    vapic[APIC_REGISTER_OFFSET_DFR / 4] = 0xffffffff; // dfr
+    vapic[APIC_REGISTER_OFFSET_SPURIOUS_INTERRUPT / 4] = 0x0000010f; // spurious interrupt vector
+    vapic[APIC_REGISTER_OFFSET_TERMAL_SENSOR_LVT / 4] = 0x00010000; // thermal sensor local vector table entry
+    vapic[APIC_REGISTER_OFFSET_PERF_COUNTER_LVT / 4] = 0x00010000; // performance counter local vector table entry
+    vapic[APIC_REGISTER_OFFSET_LINT0_LVT / 4] = 0x00010000; // local interrupt 0 local vector table entry
+    vapic[APIC_REGISTER_OFFSET_LINT1_LVT / 4] = 0x00010000; // local interrupt 1 local vector table entry
+    vapic[APIC_REGISTER_OFFSET_ERROR_LVT / 4] = 0x00010000; // error local vector table entry
+
+
+    vapic[APIC_REGISTER_OFFSET_TIMER_LVT / 4] = 0x00020020; // timer local vector table entry
+    vapic[APIC_REGISTER_OFFSET_TIMER_INITIAL_VALUE / 4] = 0x00007b43; // timer initial count
+    vapic[APIC_REGISTER_OFFSET_TIMER_CURRENT_VALUE / 4] = 0x00000000; // timer current count
+    vapic[APIC_REGISTER_OFFSET_TIMER_DIVIDER / 4] = 0x00000003; // timer divide configuration
+
     vapic[0x400 / 4] = 0x00040007; // extended apic feature register
 
     for(uint32_t i = 0x480; i <= 0x4F0; i += 0x10) {
         vapic[i / 4] = 0xffffffff; // ier;
     }
-
-
-
-
 }
 
 static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
@@ -199,8 +201,6 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vapic frame: 0x%llx", vapic_frame->frame_address);
-
-    hypervisor_svm_vmcb_set_vapic_defaults(vapic_frame_va);
 
     vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC] = *vapic_frame;
 
@@ -288,14 +288,17 @@ static int8_t hypervisor_svm_vmcb_prepare_control_area(hypervisor_vm_t* vm) {
 
     uint8_t* msr_bitmap = (uint8_t*)msr_bitmap_frame_va;
 
-    /*
-       hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
-       hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
-       hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
-     */
-
-    if(!vm->vid_enabled) {
+    if(vm->vid_enabled) {
+        hypervisor_svm_vmcb_set_vapic_defaults(vapic_frame_va);
+    } else {
         hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_EOI, false);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, false);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_LVT_TIMER, true);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, false);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_DIVIDER, true);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, false);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, true);
+        hypervisor_svm_msr_bitmap_set(msr_bitmap, APIC_X2APIC_MSR_TIMER_CURRENT_VALUE, true);
     }
 
     return 0;

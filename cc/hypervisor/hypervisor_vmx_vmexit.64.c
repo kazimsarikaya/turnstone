@@ -509,10 +509,6 @@ static void hypervisor_vmcs_find_next_x2apic_interrupt(vmx_vmcs_vmexit_info_t* v
         hypervisor_vapic_set_isr(vm, vm->lapic.in_service_vector, true);
     }
 
-    if(for_eoi && vm->lapic.in_service_vector == vm->lapic.timer_vector && vm->lapic_timer_pending) {
-        vm->lapic_timer_pending = false;
-    }
-
     uint64_t waiting_int_count = 0;
 
     for(uint32_t vector = 0; vector < 256; vector++) {
@@ -654,7 +650,6 @@ static uint64_t hypervisor_vmcs_wrmsr_handler(vmx_vmcs_vmexit_info_t* vmexit_inf
     case APIC_X2APIC_MSR_TIMER_INITIAL_VALUE:
         vm->lapic.timer_initial_value = value;
         vm->lapic.timer_current_value = value;
-        vm->lapic_timer_enabled = true;
         break;
     case APIC_X2APIC_MSR_TIMER_CURRENT_VALUE:
         vm->lapic.timer_current_value = value;

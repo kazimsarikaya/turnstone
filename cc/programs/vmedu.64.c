@@ -38,6 +38,21 @@ static void edu_isr(interrupt_frame_ext_t* frame) {
     vm_guest_apic_eoi();
 }
 
+static uint64_t edu_timer_tick = 0;
+
+static void edu_timer_isr(interrupt_frame_ext_t* frame) {
+    UNUSED(frame);
+
+    edu_timer_tick++;
+
+    if(edu_timer_tick == 1000) {
+        printf("EDU Timer ISR\n");
+        edu_timer_tick = 0;
+    }
+
+    vm_guest_apic_eoi();
+}
+
 
 _Noreturn void vmedu(void) {
     vm_guest_print("VM EDU Passthrough Test Program\n");
@@ -55,6 +70,8 @@ _Noreturn void vmedu(void) {
     stdbufs_init_buffers(vm_guest_print);
 
     printf("base init done\n");
+
+    vm_guest_enable_timer(edu_timer_isr, 1000, 1);
 
     uint64_t hpa = vm_guest_get_host_physical_address((uint64_t)heap);
 

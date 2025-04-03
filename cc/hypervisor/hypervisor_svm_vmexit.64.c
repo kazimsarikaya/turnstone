@@ -297,13 +297,13 @@ static int8_t hypervisor_svm_vmexit_handler_hlt(hypervisor_vm_t* vm) { // halt
     vm->is_halted = true;
 
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm (0x%llx) is halted", vm->vmcb_frame_fa);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm (0x%llx) is halted", vm->vmcb_frame_fa);
 
     task_set_message_waiting();
 
     task_yield();
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm (0x%llx) is resumed", vm->vmcb_frame_fa);
+    PRINTLOG(HYPERVISOR, LOG_TRACE, "vm (0x%llx) is resumed", vm->vmcb_frame_fa);
 
     if(vm->is_halt_need_next_instruction) {
         vm->is_halted = false;
@@ -391,6 +391,9 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
     svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
 
     uint32_t msr = vm->guest_registers->rcx;
+    uint64_t value = vmcb->save_state_area.rax;
+    value |= ((uint64_t)vm->guest_registers->rdx << 32);
+    boolean_t is_write = vmcb->control_area.exit_info_1 & 0x1;
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "msr vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx msr 0x%x",
              vmcb->control_area.exit_code, vmcb->control_area.exit_info_1,
@@ -401,6 +404,79 @@ static int8_t hypervisor_svm_vmexit_handler_msr(hypervisor_vm_t* vm) { // msr
     switch(msr) {
     case APIC_X2APIC_MSR_EOI:
         ret = hypervisor_svm_vmexit_handle_eoi(vm);
+        break;
+    case APIC_X2APIC_MSR_TIMER_INITIAL_VALUE:
+        if(is_write) {
+            vm->lapic.timer_initial_value = value;
+            vm->lapic.timer_current_value = value;
+        } else {
+            vmcb->save_state_area.rax = vm->lapic.timer_initial_value & 0xFFFFFFFF;
+            vm->guest_registers->rdx = (vm->lapic.timer_initial_value >> 32) & 0xFFFFFFFF;
+        }
+
+        ret = 0;
+        break;
+    case APIC_X2APIC_MSR_TIMER_CURRENT_VALUE:
+        if(is_write) {
+            // cannot write current value
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot write timer current current value");
+        } else {
+            vmcb->save_state_area.rax = vm->lapic.timer_current_value & 0xFFFFFFFF;
+            vm->guest_registers->rdx = (vm->lapic.timer_current_value >> 32) & 0xFFFFFFFF;
+            ret = 0;
+        }
+
+        break;
+    case APIC_X2APIC_MSR_TIMER_DIVIDER:
+        if(is_write) {
+            vm->lapic.timer_divider = value;
+            switch(value) {
+            case 0x0:
+                vm->lapic.timer_divider_realvalue = 2;
+                break;
+            case 0x1:
+                vm->lapic.timer_divider_realvalue = 4;
+                break;
+            case 0x2:
+                vm->lapic.timer_divider_realvalue = 8;
+                break;
+            case 0x3:
+                vm->lapic.timer_divider_realvalue = 16;
+                break;
+            case 0x8:
+                vm->lapic.timer_divider_realvalue = 32;
+                break;
+            case 0x9:
+                vm->lapic.timer_divider_realvalue = 64;
+                break;
+            case 0xA:
+                vm->lapic.timer_divider_realvalue = 128;
+                break;
+            case 0xB:
+                vm->lapic.timer_divider_realvalue = 1;
+                break;
+            default:
+                PRINTLOG(HYPERVISOR, LOG_ERROR, "Invalid Timer Divider: 0x%llx", value);
+            }
+
+        } else {
+            vmcb->save_state_area.rax = vm->lapic.timer_divider & 0xFFFFFFFF;
+            vm->guest_registers->rdx = (vm->lapic.timer_divider >> 32) & 0xFFFFFFFF;
+        }
+
+        ret = 0;
+        break;
+    case APIC_X2APIC_MSR_LVT_TIMER:
+        if(is_write) {
+            vm->lapic.timer_vector = value & 0xFF;
+            vm->lapic.timer_periodic = (value >> 17) & 0x1;
+            vm->lapic.timer_masked = (value >> 16) & 0x1;
+        } else {
+            vmcb->save_state_area.rax = (vm->lapic.timer_periodic << 17) | (vm->lapic.timer_masked << 16) | (vm->lapic.timer_vector & 0xFF);
+            vm->guest_registers->rdx = 0;
+        }
+
+        ret = 0;
         break;
     default:
         PRINTLOG(HYPERVISOR, LOG_ERROR, "unknown msr 0x%x", msr);
@@ -764,6 +840,7 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
         if(handler == NULL) {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "unhandled vmexit occurred exit code: 0x%llx 0x%llx 0x%llx 0x%llx",
                      vmcb->control_area.exit_code, vmcb->control_area.exit_info_1, vmcb->control_area.exit_info_2, vmcb->control_area.exit_int_info.bits);
+            PRINTLOG(HYPERVISOR, LOG_ERROR, " guest rip 0x%llx(0x%llx)", vmcb->save_state_area.rip, hypervisor_ept_guest_virtual_to_host_physical(vm, vmcb->save_state_area.rip));
 
             hypervisor_svm_wait_idle();
         } else {

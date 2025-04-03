@@ -219,3 +219,19 @@ int16_t vm_guest_attach_interrupt(pci_generic_device_t* pci_dev, vm_guest_interr
 void vm_guest_apic_eoi(void) {
     cpu_write_msr(APIC_X2APIC_MSR_EOI, 0);
 }
+
+void vm_guest_enable_timer(vm_guest_interrupt_handler_t handler, uint32_t initial_value, uint32_t divider) {
+    if(!vm_guest_interrupt_dummy_handlers_registered) {
+
+        descriptor_idt_t* idt = (descriptor_idt_t*)0x1000;
+
+        vm_guest_interrupt_register_dummy_handlers(idt);
+
+        vm_guest_interrupt_dummy_handlers_registered = true;
+    }
+
+    cpu_write_msr(APIC_X2APIC_MSR_TIMER_INITIAL_VALUE, initial_value);
+    cpu_write_msr(APIC_X2APIC_MSR_TIMER_DIVIDER, divider);
+    cpu_write_msr(APIC_X2APIC_MSR_LVT_TIMER, APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
+    vm_guest_interrupt_handlers[0x20] = handler;
+}

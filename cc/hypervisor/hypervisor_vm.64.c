@@ -97,6 +97,8 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     vm->mapped_interrupts = list_create_list();
     vm->interrupt_queue = list_create_queue();
 
+    vm->lapic.timer_masked = true;
+
     list_list_insert(hypervisor_vm_list, vm);
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vm->vmcs_frame_fa);
@@ -226,7 +228,7 @@ void hypervisor_vm_notify_timers(void) {
             continue;
         }
 
-        if(!vm->lapic_timer_enabled) {
+        if(vm->lapic.timer_masked) {
             continue;
         }
 
@@ -247,8 +249,7 @@ void hypervisor_vm_notify_timers(void) {
             timer_expired = true;
         }
 
-        if(timer_expired && !vm->lapic.timer_masked && !vm->lapic_timer_pending) {
-            vm->lapic_timer_pending = true;
+        if(timer_expired && !vm->lapic.timer_masked) {
             hypervisor_ipc_send_timer_interrupt(vm);
         }
     }
