@@ -10,7 +10,6 @@
 #include <windowmanager/wnd_options.h>
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_utils.h>
-#include <windowmanager/wnd_vmmgr.h>
 #include <windowmanager/wnd_spool_browser.h>
 #include <windowmanager/wnd_task_manager.h>
 #include <windowmanager/wnd_misc.h>
@@ -27,9 +26,8 @@ typedef int8_t (*wndmgr_opt_action_f)(void);
 typedef enum wnd_options_windows_t {
     WND_OPTIONS_NONE,
     WND_OPTIONS_PRIMARY,
-    WND_OPTIONS_TASK_MANAGER,
+    WND_OPTIONS_TASK_VM_MANAGER,
     WND_OPTIONS_SPOOL_BROWSER,
-    WND_OPTIONS_VIRTUAL_MACHINE_MANAGER,
     WND_OPTIONS_NETWORK_MANAGER,
     WND_OPTIONS_TURNSTONE_DATABASE_MANAGER,
     WND_OPTIONS_END,
@@ -50,22 +48,21 @@ typedef struct wnd_options_list_t {
 } wnd_options_list_t;
 
 
-typedef enum wnd_task_manager_list_item_type_t {
-    WND_TASK_MANAGER_LIST_ITEM_TYPE_TASK_LIST,
-    WND_TASK_MANAGER_LIST_ITEM_TYPE_END,
-} wnd_task_manager_list_item_type_t;
+typedef enum wnd_task_vm_manager_list_item_type_t {
+    WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST,
+    WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
+} wnd_task_vm_manager_list_item_type_t;
 
-const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_MANAGER_LIST_ITEM_TYPE_END] = {
-    [WND_TASK_MANAGER_LIST_ITEM_TYPE_TASK_LIST] =    {
-        .text = "Task List",
-        .action = windowmanager_create_and_show_task_list_window,
+const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END] = {
+    [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST] =    {
+        .text = "Task and VM List",
+        .action = windowmanager_create_and_show_task_vm_list_window,
     },
 };
 
 typedef enum wnd_primary_options_list_item_type_t {
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER,
-    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER,
-    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_VM_MANAGER,
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER,
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER,
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT,
@@ -78,13 +75,9 @@ const wnd_options_list_item_t wnd_primary_options_item_list[WND_PRIMARY_OPTIONS_
         .text = "Spool Browser",
         .action = windowmanager_create_and_show_spool_browser_window,
     },
-    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER] =    {
-        .text = "Task Manager",
-        .next_options_window = WND_OPTIONS_TASK_MANAGER,
-        .action = NULL,
-    },
-    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER] =    {
-        .text = "Virtual Machine Manager",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_VM_MANAGER] =    {
+        .text = "Task and Virtual Machine Manager",
+        .next_options_window = WND_OPTIONS_TASK_VM_MANAGER,
         .action = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER] =    {
@@ -111,10 +104,10 @@ const wnd_options_list_t wnd_options_list[WND_OPTIONS_END] = {
         .items = wnd_primary_options_item_list,
         .items_count = WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END,
     },
-    [WND_OPTIONS_TASK_MANAGER] =    {
-        .title = "tOS Task Manager",
+    [WND_OPTIONS_TASK_VM_MANAGER] =    {
+        .title = "tOS Task and Virtual Machine Manager",
         .items = wnd_task_manager_item_list,
-        .items_count = WND_TASK_MANAGER_LIST_ITEM_TYPE_END,
+        .items_count = WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
     },
 };
 

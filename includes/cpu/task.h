@@ -301,6 +301,7 @@ typedef struct task_list_item_t {
     uint64_t      malloc_count;
     uint64_t      free_count;
     uint64_t      heap_diff;
+    boolean_t     has_virtual_machine;
 } task_list_item_t;
 
 void      task_print_all(buffer_t* buffer);

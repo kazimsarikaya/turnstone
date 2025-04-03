@@ -204,6 +204,7 @@ buffer_t* task_build_task_list(void) {
             .malloc_count = stat.malloc_count,
             .free_count = stat.free_count,
             .heap_diff = stat.malloc_count - stat.free_count,
+            .has_virtual_machine = task->vm != NULL,
         };
 
         if(buffer_append_bytes(buffer, (uint8_t*)&item, sizeof(task_list_item_t)) == NULL) {
