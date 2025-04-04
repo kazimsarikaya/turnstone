@@ -121,7 +121,7 @@ static int8_t windowmanager_main(void) {
 
             mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
 
-            if(last->buttons & MOUSE_BUTTON_LEFT) {
+            if((last->buttons & MOUSE_BUTTON_LEFT) && !windowmanager_current_window->has_alert) {
                 text_cursor_hide();
                 text_cursor_move(last->x / font_width, last->y / font_height);
                 text_cursor_show();
@@ -148,6 +148,11 @@ static int8_t windowmanager_main(void) {
 
         for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
             if(kbd_data[i].is_pressed) {
+
+                if(windowmanager_current_window->has_alert && kbd_data[i].key != '\n') {
+                    continue;
+                }
+
                 if(kbd_data[i].is_printable) {
                     if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
                         window_event_t event = {0};

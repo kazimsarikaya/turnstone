@@ -15,11 +15,18 @@
 extern "C" {
 #endif
 
+typedef enum windowmanager_alert_window_type {
+    WINDOWMANAGER_ALERT_WINDOW_TYPE_INFO,
+    WINDOWMANAGER_ALERT_WINDOW_TYPE_WARNING,
+    WINDOWMANAGER_ALERT_WINDOW_TYPE_ERROR,
+}windowmanager_alert_window_type_t;
+
 void      windowmanager_destroy_window(window_t* window);
 void      windowmanager_destroy_child_window(window_t* window, window_t* child);
 void      windowmanager_destroy_all_child_windows(window_t* window);
 void      windowmanager_insert_and_set_current_window(window_t* window);
 void      windowmanager_remove_and_set_current_window(window_t* window);
+void      windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_t type, const char_t* text);
 window_t* windowmanager_create_top_window(void);
 window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rect, color_t background_color, color_t foreground_color);
 

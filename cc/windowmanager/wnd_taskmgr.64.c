@@ -282,7 +282,11 @@ static int8_t wndmgr_create_vm_on_enter(const window_event_t* event) {
     memory_free(entry_point);
 
     if(ret != 0) {
-        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "cannot create vm");
+        windowmanager_create_and_show_alert_window(WINDOWMANAGER_ALERT_WINDOW_TYPE_ERROR,
+                                                   "Failed to create VM. Please check the parameters.");
+    } else {
+        windowmanager_create_and_show_alert_window(WINDOWMANAGER_ALERT_WINDOW_TYPE_INFO,
+                                                   "VM created successfully.");
     }
 
     return 0;

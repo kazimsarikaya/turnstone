@@ -53,6 +53,7 @@ struct window_t {
     boolean_t      is_dirty;
     boolean_t      is_visible;
     boolean_t      is_writable;
+    boolean_t      has_alert;
     int32_t        input_length;
     const char_t*  input_id;
     void*          extra_data;
