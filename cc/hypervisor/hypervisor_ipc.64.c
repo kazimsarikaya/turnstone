@@ -42,7 +42,15 @@ static int8_t hypervisor_ipc_handle_timer_int(hypervisor_vm_t* vm, hypervisor_ip
         return 0;
     }
 
-    return hypervisor_ipc_handle_irq(vm, vm->lapic.timer_vector);
+    int8_t result = hypervisor_ipc_handle_irq(vm, vm->lapic.timer_vector);
+
+    if(result != 0) {
+        return result;
+    }
+
+    vm->lapic.timer_exits = false;
+
+    return result;
 }
 
 static void hypervisor_ipc_handle_interrupts(hypervisor_vm_t* vm) {
@@ -82,6 +90,7 @@ int8_t hypervisor_check_ipc(hypervisor_vm_t* vm) {
         hypervisor_ipc_message_t* message = (hypervisor_ipc_message_t*)list_queue_pop(mq);
 
         if(!message) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Invalid IPC message");
             return -1;
         }
 
@@ -114,10 +123,27 @@ void hypervisor_ipc_send_timer_interrupt(hypervisor_vm_t* vm) {
         return;
     }
 
+    if(vm->lapic.timer_masked) {
+        return;
+    }
+
+    if(vm->lapic.timer_exits) {
+        return;
+    }
+
     list_t* mq = vm->ipc_queue;
 
     if(!mq) {
         return;
+    }
+
+    for(uint64_t i = 0; i < list_size(mq); i++) {
+        hypervisor_ipc_message_t* message = (hypervisor_ipc_message_t*)list_get_data_at_position(mq, i);
+
+        if(message->message_type == HYPERVISOR_IPC_MESSAGE_TYPE_TIMER_INT) {
+            vm->lapic.timer_exits = true;
+            return;
+        }
     }
 
     list_queue_push(mq, (void*)&hypervisor_ipc_message_timer_int);

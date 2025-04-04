@@ -214,6 +214,10 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                  self_frame.frame_address, self_frame.frame_count);
     }
+
+    memory_heap_t* dheap = memory_get_default_heap();
+
+    memory_free_ext(dheap, (void*)vm->entry_point_name);
 }
 
 void hypervisor_vm_notify_timers(void) {
@@ -249,7 +253,7 @@ void hypervisor_vm_notify_timers(void) {
             timer_expired = true;
         }
 
-        if(timer_expired && !vm->lapic.timer_masked) {
+        if(timer_expired && !vm->lapic.timer_masked && !vm->lapic.timer_exits) {
             hypervisor_ipc_send_timer_interrupt(vm);
         }
     }

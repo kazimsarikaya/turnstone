@@ -19,7 +19,9 @@ extern "C" {
 int8_t hypervisor_init(void);
 int8_t hypervisor_stop(void);
 
-int8_t hypervisor_vm_create(const char_t* entry_point_name);
+int8_t hypervisor_vm_create(const char_t* entry_point_name,
+                            uint64_t      heap_size,
+                            uint64_t      stack_size);
 
 #ifdef __cplusplus
 }

@@ -77,6 +77,9 @@ typedef struct window_input_value_t {
     rect_t        rect;
 } window_input_value_t;
 
+#define WINDOWMANAGER_COMMAND_TEXT "Command"
+#define WINDOWMANAGER_COMMAND_INPUT_TEXT "________________"
+
 
 #ifdef __cplusplus
 }

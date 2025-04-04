@@ -16,6 +16,7 @@ extern "C" {
 #endif
 
 int8_t windowmanager_create_and_show_task_vm_list_window(void);
+int8_t windowmanager_create_and_show_task_vm_create_window(void);
 
 #ifdef __cplusplus
 }

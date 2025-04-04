@@ -56,6 +56,7 @@ typedef struct hypervisor_vm_t {
         uint8_t   timer_vector;
         boolean_t timer_periodic;
         boolean_t timer_masked;
+        boolean_t timer_exits;
         uint8_t   in_service_vector;
         uint64_t  in_request_vectors[4];
         boolean_t apic_eoi_pending;

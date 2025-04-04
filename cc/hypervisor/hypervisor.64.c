@@ -33,21 +33,33 @@ uint64_t hypervisor_next_vm_id = 0;
 lock_t* hypervisor_vm_lock = NULL;
 
 static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
-    if(argc != 1) {
+    if(argc != 3) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid argument count");
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "args pointer: 0x%llx", (uint64_t)args);
-
-    hypervisor_vm_t* vm = args[0];
-
-    const char_t* entry_point_name = vm->entry_point_name;
+    const char_t* entry_point_name = (const char_t*)args[0];
+    uint64_t heap_size = (uint64_t)args[1];
+    uint64_t stack_size = (uint64_t)args[2];
 
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
         return -1;
     }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s heap size: 0x%llx stack size: 0x%llx",
+             entry_point_name, heap_size, stack_size);
+
+    hypervisor_vm_t* vm = NULL;
+
+    if(hypervisor_vmx_vmcs_prepare(&vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
+        return -1;
+    }
+
+    vm->entry_point_name = entry_point_name;
+    vm->guest_heap_size = heap_size;
+    vm->guest_stack_size = stack_size;
 
     uint64_t vmcs_frame_fa = vm->vmcs_frame_fa;
 
@@ -97,21 +109,33 @@ static int32_t hypervisor_vmx_vm_task(uint64_t argc, void** args) {
 }
 
 static int8_t hypervisor_svm_vm_task(uint64_t argc, void** args) {
-    if(argc != 1) {
+    if(argc != 3) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid argument count");
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "args pointer: 0x%llx", (uint64_t)args);
-
-    hypervisor_vm_t* vm = args[0];
-
-    const char_t* entry_point_name = vm->entry_point_name;
+    const char_t* entry_point_name = (const char_t*)args[0];
+    uint64_t heap_size = (uint64_t)args[1];
+    uint64_t stack_size = (uint64_t)args[2];
 
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
         return -1;
     }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s heap size: 0x%llx stack size: 0x%llx",
+             entry_point_name, heap_size, stack_size);
+
+    hypervisor_vm_t* vm = NULL;
+
+    if(hypervisor_svm_vmcb_prepare(&vm) != 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
+        return -1;
+    }
+
+    vm->entry_point_name = entry_point_name;
+    vm->guest_heap_size = heap_size;
+    vm->guest_stack_size = stack_size;
 
     uint64_t vmcb_frame_fa = vm->vmcb_frame_fa;
 
@@ -350,43 +374,38 @@ int8_t hypervisor_init(void) {
     return 0;
 }
 
-int8_t hypervisor_vm_create(const char_t* entry_point_name) {
+int8_t hypervisor_vm_create(const char_t* entry_point_name,
+                            uint64_t      heap_size,
+                            uint64_t      stack_size) {
     if(strlen(entry_point_name) == 0) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid entry point name");
         return -1;
     }
 
-    PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s", entry_point_name);
+    if(heap_size == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid heap size");
+        return -1;
+    }
 
-    hypervisor_vm_t* vm = NULL;
+    if(stack_size == 0) {
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "invalid stack size");
+        return -1;
+    }
+
+    PRINTLOG(HYPERVISOR, LOG_DEBUG, "entry point name: %s", entry_point_name);
 
     void* entry_point = NULL;
 
     if(cpu_get_type() == CPU_TYPE_INTEL) {
         entry_point = hypervisor_vmx_vm_task;
-
-        if(hypervisor_vmx_vmcs_prepare(&vm) != 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
-            return -1;
-        }
     } else if(cpu_get_type() == CPU_TYPE_AMD) {
         entry_point = hypervisor_svm_vm_task;
-
-        if(hypervisor_svm_vmcb_prepare(&vm) != 0) {
-            PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot prepare vm");
-            return -1;
-        }
     } else {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "Hypervisor not supported");
         return -1;
     }
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm related configurations done");
-
-    vm->guest_stack_size = 2ULL << 20; // 2MiB
-    vm->guest_heap_size = 16ULL << 20; // 16MiB
-
-    vm->entry_point_name = entry_point_name;
 
     memory_heap_t* heap = memory_get_default_heap();
 
@@ -398,13 +417,15 @@ int8_t hypervisor_vm_create(const char_t* entry_point_name) {
         return -1;
     }
 
-    args[0] = vm;
+    args[0] = (void*)strndup_at_heap(heap, entry_point_name, strlen(entry_point_name));
+    args[1] = (void*)heap_size;
+    args[2] = (void*)stack_size;
 
     char_t* vm_name = strprintf("vm%08llx", ++hypervisor_next_vm_id);
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vm name: %s", vm_name);
 
-    if(task_create_task(heap, 2 << 20, 1 << 20, entry_point, 1, args, vm_name) == -1ULL) {
+    if(task_create_task(heap, 2 << 20, 1 << 20, entry_point, 3, args, vm_name) == -1ULL) {
         PRINTLOG(HYPERVISOR, LOG_ERROR, "cannot create vm task");
         memory_free(args);
         memory_free(vm_name);

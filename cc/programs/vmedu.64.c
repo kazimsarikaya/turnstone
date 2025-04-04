@@ -39,6 +39,7 @@ static void edu_isr(interrupt_frame_ext_t* frame) {
 }
 
 static uint64_t edu_timer_tick = 0;
+static volatile uint64_t edu_timer_isr_test_end = 0;
 
 static void edu_timer_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
@@ -48,11 +49,11 @@ static void edu_timer_isr(interrupt_frame_ext_t* frame) {
     if(edu_timer_tick == 1000) {
         printf("EDU Timer ISR\n");
         edu_timer_tick = 0;
+        edu_timer_isr_test_end++;
     }
 
     vm_guest_apic_eoi();
 }
-
 
 _Noreturn void vmedu(void) {
     vm_guest_print("VM EDU Passthrough Test Program\n");
@@ -180,7 +181,7 @@ _Noreturn void vmedu(void) {
 
     if(interrupt_status) {
         printf("interrupt not lowered\n");
-        // vm_guest_exit(-1);
+        vm_guest_exit(-1);
     }
 
     interrupt_status = edu->interrupt_status;
@@ -201,7 +202,11 @@ _Noreturn void vmedu(void) {
 
     if(interrupt_status) {
         printf("interrupt not lowered\n");
-        // vm_guest_exit(-1);
+        vm_guest_exit(-1);
+    }
+
+    while(edu_timer_isr_test_end < 10) {
+        cpu_idle();
     }
 
     printf("Test program complete\n");

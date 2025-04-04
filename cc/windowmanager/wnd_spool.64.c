@@ -148,7 +148,11 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         return -1;
     }
 
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
+                                                                 WINDOWMANAGER_COMMAND_TEXT,
+                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                 "option",
+                                                                 NULL);
 
     if(!option_input_row) {
         windowmanager_destroy_window(window);
@@ -371,7 +375,11 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         return -1;
     }
 
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
+                                                                 WINDOWMANAGER_COMMAND_TEXT,
+                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                 "option",
+                                                                 NULL);
 
     if(!option_input_row) {
         windowmanager_destroy_window(window);

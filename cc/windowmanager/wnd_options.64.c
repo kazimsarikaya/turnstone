@@ -50,6 +50,7 @@ typedef struct wnd_options_list_t {
 
 typedef enum wnd_task_vm_manager_list_item_type_t {
     WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST,
+    WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_CREATE,
     WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
 } wnd_task_vm_manager_list_item_type_t;
 
@@ -57,6 +58,10 @@ const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_VM_MANAGER_LIS
     [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST] =    {
         .text = "Task and VM List",
         .action = windowmanager_create_and_show_task_vm_list_window,
+    },
+    [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_CREATE] =    {
+        .text = "Create Task and VM",
+        .action = windowmanager_create_and_show_task_vm_create_window,
     },
 };
 
@@ -121,7 +126,11 @@ window_t* windowmanager_create_primary_options_window(void) {
     return pri_opt_wnd;
 }
 
-window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
+window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
+                                          const char_t* label_text,
+                                          const char_t* input_text,
+                                          const char_t* input_text_id,
+                                          const char_t* tooltip_text) {
     screen_info_t screen_info = screen_get_info();
 
     uint32_t font_width = 0, font_height = 0;
@@ -141,7 +150,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
         return NULL;
     }
 
-    char_t* input_label_text = strdup("Option ===> ");
+    char_t* input_label_text = strprintf("%s ==> ", label_text);
 
     rect_t rect = windowmanager_calc_text_rect(input_label_text, 2000);
 
@@ -152,17 +161,18 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
                                                                (color_t){.color = 0xFF00FF00});
 
     if(option_input_label == NULL) {
+        windowmanager_destroy_window(option_input_row);
         return NULL;
     }
 
-    char_t* input_text = strdup("____________________");
+    char_t* wnd_input_text = strdup(input_text);
 
     rect = windowmanager_calc_text_rect(input_text, 2000);
 
     rect.x = option_input_label->rect.width + 2 * font_width;
 
     window_t* option_input_text = windowmanager_create_window(option_input_row,
-                                                              input_text,
+                                                              wnd_input_text,
                                                               rect,
                                                               (color_t){.color = 0x00000000},
                                                               (color_t){.color = 0xFFFF0000});
@@ -173,7 +183,28 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
 
     option_input_text->is_writable = true;
     option_input_text->input_length = strlen(input_text);
-    option_input_text->input_id = "option";
+    option_input_text->input_id = input_text_id;
+
+    if(tooltip_text == NULL) {
+        return option_input_row;
+    }
+
+    rect = windowmanager_calc_text_rect(tooltip_text, 2000);
+
+    rect.x = option_input_text->rect.x + option_input_text->rect.width  + 2 * font_width;
+
+    char_t* tooltip_text_str = strndup(tooltip_text, rect.width);
+
+    window_t* option_input_tooltip = windowmanager_create_window(option_input_row,
+                                                                 tooltip_text_str,
+                                                                 rect,
+                                                                 (color_t){.color = 0x00000000},
+                                                                 (color_t){.color = 0xFF00FF00});
+
+    if(option_input_tooltip == NULL) {
+        windowmanager_destroy_window(option_input_row);
+        return NULL;
+    }
 
     return option_input_row;
 }
@@ -323,7 +354,11 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
         return NULL;
     }
 
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
+                                                                 WINDOWMANAGER_COMMAND_TEXT,
+                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                 "option",
+                                                                 NULL);
 
     if(!option_input_row) {
         windowmanager_destroy_window(window);

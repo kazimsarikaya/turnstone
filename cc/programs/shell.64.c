@@ -112,7 +112,9 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
 
         printf("Creating VM with entrypoint: -%s-\n", entrypoint);
 
-        return hypervisor_vm_create(strdup(entrypoint));
+        return hypervisor_vm_create(strdup(entrypoint),
+                                    2 << 20,
+                                    1 << 20);
     }
 
     uint64_t vmid = atoh(command);

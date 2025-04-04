@@ -803,6 +803,33 @@ static uint64_t hypervisor_svm_vmexit_remap_exit_code(uint64_t exit_code) {
     return SVM_VMEXIT_REASON_INVALID_REMAPPED;
 }
 
+static int8_t hypervisor_svm_dump_vmcb(hypervisor_vm_t* vm) {
+    svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RIP: 0x%016llx RFLAGS: 0x%08llx EFER: 0x%08llx",
+             vmcb->save_state_area.rip, vmcb->save_state_area.rflags,
+             vmcb->save_state_area.efer);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RAX: 0x%016llx RBX: 0x%016llx RCX: 0x%016llx RDX: 0x%016llx",
+             vmcb->save_state_area.rax, vm->guest_registers->rbx,
+             vm->guest_registers->rcx, vm->guest_registers->rdx);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    RSI: 0x%016llx RDI: 0x%016llx RBP: 0x%016llx RSP: 0x%016llx",
+             vm->guest_registers->rsi, vm->guest_registers->rdi,
+             vm->guest_registers->rbp, vmcb->save_state_area.rsp);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R8:  0x%016llx R9:  0x%016llx R10: 0x%016llx R11: 0x%016llx",
+             vm->guest_registers->r8, vm->guest_registers->r9,
+             vm->guest_registers->r10, vm->guest_registers->r11);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    R12: 0x%016llx R13: 0x%016llx R14: 0x%016llx R15: 0x%016llx\n",
+             vm->guest_registers->r12, vm->guest_registers->r13,
+             vm->guest_registers->r14, vm->guest_registers->r15);
+    PRINTLOG(HYPERVISOR, LOG_ERROR, "    CR0: 0x%08llx CR2: 0x%016llx CR3: 0x%016llx CR4: 0x%08llx\n",
+             vmcb->save_state_area.cr0, vmcb->save_state_area.cr2,
+             vmcb->save_state_area.cr3, vmcb->save_state_area.cr4);
+    hypervisor_ept_dump_mapping(vm);
+    hypervisor_ept_dump_paging_mapping(vm);
+
+    return 0;
+}
+
 int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
     hypervisor_vm_t* vm = (hypervisor_vm_t*)hypervisor_vm_ptr;
 
@@ -860,6 +887,10 @@ int8_t hypervisor_svm_vm_run(uint64_t hypervisor_vm_ptr) {
 
             if(ret == -1) {
                 PRINTLOG(HYPERVISOR, LOG_ERROR, "vmexit handler failed");
+
+                hypervisor_svm_dump_vmcb(vm);
+
+                vm->lapic.timer_masked = true;
 
                 hypervisor_svm_wait_idle();
             } else if(ret == -2) { // exit

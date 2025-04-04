@@ -728,9 +728,20 @@ int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
 
     list_queue_push(ipc_mq, ipc);
 
+    int32_t yield_retry = 60;
+    uint32_t sleep_time = 10;
+
     while(!ipc->is_response_done) {
         task_set_message_waiting();
-        task_yield();
+
+        if(yield_retry > 0) {
+            task_yield();
+            yield_retry--;
+        } else {
+            time_timer_msleep(sleep_time);
+            sleep_time = sleep_time * 2;
+        }
+
     }
 
     return 0;
