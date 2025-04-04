@@ -62,10 +62,10 @@ if [[ "${TRACE_OPTS}x" != "x" ]]; then
   TRACE_OPTS="-d ${TRACE_OPTS}"
 fi
 
-qemu-system-x86_64 \
+/home/kazim/.local/qemu/bin/qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
   -M q35,kernel-irqchip=split -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
-  -cpu host \
+  -cpu host,topoext=on,x2apic=on \
   -accel $ACCEL ${TRACE_OPTS} \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${OUTPUTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${OUTPUTDIR}/edk2-i386-vars.fd \
