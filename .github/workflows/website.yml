@@ -29,12 +29,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: make build dir
         run: |
           mkdir -p build/docs
       - name: Setup Pages
-        uses: mattnotmitt/doxygen-action@1.9.5
+        uses: mattnotmitt/doxygen-action@1.12.0
         with:
           doxyfile-path: docs.doxygen
       - name: Chown user
@@ -44,11 +44,11 @@ jobs:
         run: |
           find build/docs/html/ -name "*.html"|sed 's-build/docs/html-https://turnstoneos.com-' > build/docs/html/sitemap.txt
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           # Upload entire repository
           path: 'build/docs/html'
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v3
     
