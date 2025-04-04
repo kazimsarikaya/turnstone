@@ -13,6 +13,10 @@
 #include <types.h>
 #include <data.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 ///! bloomfilter_t type
 typedef struct bloomfilter_t bloomfilter_t;
 
@@ -61,6 +65,10 @@ data_t* bloomfilter_serialize(bloomfilter_t* bf);
  * @return bloom filter
  */
 bloomfilter_t* bloomfilter_deserialize(data_t* data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

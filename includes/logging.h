@@ -15,6 +15,10 @@
 #include <buffer.h>
 #include <stdbufs.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @enum logging_modules_t
  * @brief logging module enums
@@ -37,14 +41,11 @@ typedef enum logging_modules_t {
     TIMER,
     AHCI,
     NETWORK,
-    VIRTIO,
-    VIRTIONET,
-    E1000,
+    IGB,
     FAT,
     NVME,
     TOSDB,
     HEAP_HASH,
-    VIRTIOGPU,
     HPET,
     VMWARESVGA,
     USB,
@@ -53,8 +54,8 @@ typedef enum logging_modules_t {
     COMPILER_ASSEMBLER,
     COMPILER_PASCAL,
     HYPERVISOR,
+    HYPERVISOR_IOMMU,
     WINDOWMANAGER,
-    VIRTIO_CONSOLE,
     PNG,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
@@ -172,19 +173,9 @@ extern logging_level_t logging_module_levels[];
 #define LOG_LEVEL_NETWORK LOG_INFO
 #endif
 
-#ifndef LOG_LEVEL_VIRTIO
-/*! default log level for virtio module */
-#define LOG_LEVEL_VIRTIO LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_VIRTIONET
-/*! default log level for virtio net module */
-#define LOG_LEVEL_VIRTIONET LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_E1000
+#ifndef LOG_LEVEL_IGB
 /*! default log level for e1000 module */
-#define LOG_LEVEL_E1000 LOG_INFO
+#define LOG_LEVEL_IGB LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_FAT
@@ -205,11 +196,6 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_HEAP_HASH
 /*! default log level for heap hash module */
 #define LOG_LEVEL_HEAP_HASH LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_VIRTIOGPU
-/*! default log level for vmware svga module */
-#define LOG_LEVEL_VIRTIOGPU LOG_INFO
 #endif
 
 #ifndef LOG_LEVEL_HPET
@@ -252,14 +238,14 @@ extern logging_level_t logging_module_levels[];
 #define LOG_LEVEL_HYPERVISOR LOG_INFO
 #endif
 
+#ifndef LOG_LEVEL_HYPERVISOR_IOMMU
+/*! default log level for hypervisor module */
+#define LOG_LEVEL_HYPERVISOR_IOMMU LOG_INFO
+#endif
+
 #ifndef LOG_LEVEL_WINDOWMANAGER
 /*! default log level for window manager module */
 #define LOG_LEVEL_WINDOWMANAGER LOG_INFO
-#endif
-
-#ifndef LOG_LEVEL_VIRTIO_CONSOLE
-/*! default log level for virtio console module */
-#define LOG_LEVEL_VIRTIO_CONSOLE LOG_DEBUG
 #endif
 
 #ifndef LOG_LEVEL_PNG
@@ -306,5 +292,9 @@ void logging_printlog(uint64_t module, uint64_t level, const char_t* file_name, 
 #define NOTIMPLEMENTEDLOG(M) PRINTLOG(M, LOG_ERROR, "not implemented: %s", __FUNCTION__)
 
 int8_t logging_set_level_by_string_values(const char_t* module, const char_t* level);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

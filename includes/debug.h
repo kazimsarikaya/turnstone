@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @union debug_register_dr6_t
  * @brief debug register dr6
@@ -139,5 +143,8 @@ void debug_remove_debug_for_address(uint64_t address);
  */
 void debug_put_debug_for_symbol(const char_t* function_name);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

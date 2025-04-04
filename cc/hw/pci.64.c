@@ -132,13 +132,13 @@ int8_t pci_setup(memory_heap_t* heap) {
                 PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            }  else if( p->pci_header->class_code == PCI_DEVICE_CLASS_INPUT_DEVICE) {
+            } else if( p->pci_header->class_code == PCI_DEVICE_CLASS_INPUT_DEVICE) {
 
                 list_list_insert(pci_context->input_controllers, p);
-                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as usb controller",
+                PRINTLOG(PCI, LOG_DEBUG, "pci dev %02x:%02x:%02x.%02x inserted as input controller",
                          p->group_number, p->bus_number, p->device_number, p->function_number);
 
-            }else {
+            } else {
                 PRINTLOG(PCI, LOG_WARNING, "pci dev %02x:%02x:%02x.%02x class %02x:%02x is not supported",
                          p->group_number, p->bus_number, p->device_number, p->function_number, p->pci_header->class_code, p->pci_header->subclass_code);
 
@@ -159,16 +159,21 @@ int8_t pci_setup(memory_heap_t* heap) {
                 if(pg->common_header.status.capabilities_list) {
                     pci_capability_t* pci_cap = (pci_capability_t*)(((uint8_t*)pg) + pg->capabilities_pointer);
 
+                    PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> cap pointer 0x%x",
+                             p->group_number, p->bus_number, p->device_number, p->function_number,
+                             pg->capabilities_pointer);
+
 
                     while(pci_cap->capability_id != 0xFF) {
-                        PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> cap 0x%x",
-                                 p->group_number, p->bus_number, p->device_number, p->function_number, pci_cap->capability_id);
+                        PRINTLOG(PCI, LOG_TRACE, "pci dev %02x:%02x:%02x.%02x -> cap 0x%x next 0x%x",
+                                 p->group_number, p->bus_number, p->device_number, p->function_number,
+                                 pci_cap->capability_id, pci_cap->next_pointer);
 
                         if(pci_cap->next_pointer == NULL) {
                             break;
                         }
 
-                        pci_cap = (pci_capability_t*)(((uint8_t*)pci_cap ) + pci_cap->next_pointer);
+                        pci_cap = (pci_capability_t*)(((uint8_t*)pg ) + pci_cap->next_pointer);
                     }
                 }
             }

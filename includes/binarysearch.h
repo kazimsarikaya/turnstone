@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief item comparator
  * @param[in] item1 first item
@@ -30,6 +34,10 @@ typedef int8_t (*binarysearch_comparator_f)(const void* item1, const void* item2
  * @return found item or null
  */
 void* binarysearch(void* list, uint64_t size, uint64_t item_size, void* key, binarysearch_comparator_f cmp);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

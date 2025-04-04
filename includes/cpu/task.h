@@ -17,6 +17,10 @@
 #include <buffer.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! maximum tick count of a task without yielding */
 #define TASK_MAX_TICK_COUNT 10
 
@@ -131,11 +135,13 @@ typedef struct task_registers_t {
     uint64_t rbp; ///< register
     uint64_t rflags; ///< register
     uint64_t cr3; ///< register
-    uint8_t  sse[512]; ///< register
+    uint32_t xsave_mask_lo; ///< xsave mask low
+    uint32_t xsave_mask_hi; ///< xsave mask high
+    uint8_t  avx512f[0x2000] __attribute__((aligned(0x40))); ///< register
 } task_registers_t;
 
-_Static_assert(sizeof(task_registers_t) == 0x290, "task_registers_t size must be 0x290");
-_Static_assert((offsetof_field(task_registers_t, sse) % 0x10) == 0x0, "task_registers_t sse offset must be aligned 0x10");
+_Static_assert(sizeof(task_registers_t) == 0x20c0, "task_registers_t size must be 0x20c0");
+_Static_assert((offsetof_field(task_registers_t, avx512f) % 0x40) == 0x0, "task_registers_t sse offset must be aligned 0x40");
 
 typedef struct task_t {
     memory_heap_t*               creator_heap; ///< the heap which task struct is at
@@ -161,8 +167,11 @@ typedef struct task_t {
     buffer_t*                    error_buffer; ///< error buffer
     uint64_t                     vmcs_physical_address; ///< vmcs physical address
     void*                        vm; ///< vm
+    int32_t                      exit_code; ///< task exit code
     task_registers_t*            registers; ///< task registers
 } task_t; ///< short hand for struct
+
+_Static_assert(sizeof(task_t) == 0xc0, "task_t size must be 0xb8"); // why this assert? where we hardcoded task_t size?
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
@@ -176,9 +185,13 @@ int8_t task_init_tasking_ext(memory_heap_t* heap);
 /**
  * @brief sets task switch parameters
  * @param[in] need_eoi if task switching needs notify local apic this field should be true
- * @param[in] need_sti if task switching needs enable interrupts this field should be true
  */
-void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti);
+void task_task_switch_set_parameters(boolean_t need_eoi);
+
+/**
+ * @brief applies task switch exit parameters
+ */
+void task_task_switch_exit(void);
 
 /**
  * @brief switches current task to a new one.
@@ -195,6 +208,12 @@ void task_yield(void);
  * @return task id
  */
 uint64_t task_get_id(void);
+
+/**
+ * @brief returns current task's cpu id
+ * @return cpu id
+ */
+uint64_t task_get_cpu_id(void);
 
 /**
  * @brief returns current task
@@ -260,6 +279,7 @@ boolean_t task_idle_check_need_yield(void);
 void task_current_task_sleep(uint64_t wake_tick);
 
 void task_end_task(void);
+void task_exit(int32_t exit_code);
 void task_kill_task(uint64_t task_id, boolean_t force);
 
 typedef struct task_list_item_t {
@@ -281,6 +301,7 @@ typedef struct task_list_item_t {
     uint64_t      malloc_count;
     uint64_t      free_count;
     uint64_t      heap_diff;
+    boolean_t     has_virtual_machine;
 } task_list_item_t;
 
 void      task_print_all(buffer_t* buffer);
@@ -306,5 +327,12 @@ void task_remove_task_after_fault(uint64_t task_id);
 int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, uint64_t stack_size);
 
 void task_toggle_wait_for_future(uint64_t task_id);
+
+uint64_t task_get_task_xsave_mask(void);
+uint32_t task_get_task_mxcsr_mask(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

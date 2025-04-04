@@ -24,7 +24,7 @@
 MODULE("turnstone.lib.network");
 
 
-map_t network_ipv4_packet_fragments = NULL;
+map_t* network_ipv4_packet_fragments = NULL;
 
 typedef struct network_ipv4_fragment_t {
     uint32_t offset;

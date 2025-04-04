@@ -18,7 +18,7 @@ int8_t compiler_execute_if(compiler_t* compiler, compiler_ast_node_t* node, int6
 
     compiler->cond_depth++;
 
-    char_t* label = sprintf(".L%d", compiler->next_label_id++);
+    char_t* label = strprintf(".L%d", compiler->next_label_id++);
 
     list_stack_push(compiler->cond_label_stack, label);
 
@@ -69,7 +69,7 @@ int8_t compiler_execute_if(compiler_t* compiler, compiler_ast_node_t* node, int6
     list_stack_pop(compiler->cond_label_stack);
 
     if(node->right) {
-        char_t* label2 = sprintf(".L%d", compiler->next_label_id++);
+        char_t* label2 = strprintf(".L%d", compiler->next_label_id++);
         buffer_printf(compiler->text_buffer, "\tjmp %s\n", label2);
         buffer_printf(compiler->text_buffer, "# end if body %lli\n", compiler->cond_depth);
 

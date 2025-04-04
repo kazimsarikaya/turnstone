@@ -10,6 +10,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct bigint_t bigint_t;
 
 
@@ -74,5 +78,9 @@ boolean_t bigint_is_even(const bigint_t* a);
 boolean_t bigint_is_int64(const bigint_t* a, int64_t value);
 boolean_t bigint_is_uint64(const bigint_t* a, uint64_t value);
 boolean_t bigint_is_prime(const bigint_t* a);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -11,6 +11,9 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum data_type_t {
     DATA_TYPE_NULL=0,
@@ -46,5 +49,9 @@ data_t* data_json_serialize(data_t* data);
 data_t* data_json_deserialize(data_t* data);
 
 void data_free(data_t* data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

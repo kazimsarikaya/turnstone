@@ -10,8 +10,16 @@
 
 #include <gcm.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int32_t aes_gcm_encrypt(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t* iv, const size_t iv_len);
 
 int32_t aes_gcm_decrypt(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t* iv, const size_t iv_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

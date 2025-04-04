@@ -19,7 +19,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     argv++;
 
-    sha256_ctx_t ctx1 = sha256_init();
+    sha256_ctx_t* ctx1 = sha256_init();
 
     if(!ctx1) {
         print_error("cannot create sha256 ctx");
@@ -27,7 +27,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    sha512_ctx_t ctx2 = sha512_init();
+    sha512_ctx_t* ctx2 = sha512_init();
 
     if(!ctx2) {
         print_error("cannot create sha512 ctx");
@@ -35,7 +35,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    sha224_ctx_t ctx3 = sha224_init();
+    sha224_ctx_t* ctx3 = sha224_init();
 
     if(!ctx3) {
         print_error("cannot create sha224 ctx");
@@ -43,7 +43,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
         return -1;
     }
 
-    sha384_ctx_t ctx4 = sha384_init();
+    sha384_ctx_t* ctx4 = sha384_init();
 
     if(!ctx4) {
         print_error("cannot create sha384 ctx");
@@ -110,10 +110,10 @@ uint32_t main(uint32_t argc, char_t** argv) {
     const char_t* xxhash_data = "Hello, world!";
 
     uint64_t xxhash64_result = xxhash64_hash(xxhash_data, strlen(xxhash_data)), xxhash64_verify = 17691043854468224118ULL;
-    printf("%llu %i\n", xxhash64_result, xxhash64_result == xxhash64_verify);
+    printf("%llx %i\n", xxhash64_result, xxhash64_result == xxhash64_verify);
 
     uint32_t xxhash32_result = xxhash32_hash(xxhash_data, strlen(xxhash_data)), xxhash32_verify = 834093149U;
-    printf("%u %i\n", xxhash32_result, xxhash32_result == xxhash32_verify);
+    printf("%x %i\n", xxhash32_result, xxhash32_result == xxhash32_verify);
 
     return 0;
 }

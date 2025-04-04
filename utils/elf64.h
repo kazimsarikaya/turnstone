@@ -53,15 +53,17 @@
 #define SHT_REL          9
 #define SHT_SHLIB        10
 #define SHT_DYNSYM       11
+#define SHT_GROUP        17
 #define SHT_LOOS         0x60000000
 #define SHT_HIOS         0x6FFFFFFF
 #define SHT_LOPROC       0x70000000
 #define SHT_HIPROC       0x7FFFFFFF
 
 #define SHF_NONE         0
-#define SHF_WRITE        1
-#define SHF_ALLOC        2
-#define SHF_EXECINSTR    4
+#define SHF_WRITE        (1 << 0)
+#define SHF_ALLOC        (1 << 1)
+#define SHF_EXECINSTR    (1 << 2)
+#define SHF_GROUP        (1 << 9)
 #define SHF_MASKOS       0x0F000000
 #define SHF_MASKPROC     0xF0000000
 
@@ -143,14 +145,17 @@
  * P: current offset
  * S: symbol value
  * L: plt entry offset
+ * R_X86_64_32 S+A
+ * R_X86_64_32S S+A
  * R_X86_64_64 S+A
+ * R_X86_64_PC32 S+A-P
+ * R_X86_64_PLT32 L+A-P
  * R_X86_64_GOT64 G+A
  * R_X86_64_GOTOFF64 S+A-GOT
  * R_X86_64_GOTPC64 GOT-P+A
- * R_X86_64_PC32 S+A-P
- * R_X86_64_PLT32 L+A-P
- * R_X86_64_32 S+A
- * R_X86_64_32S S+A
+ * R_X86_64_GOTPCREL G+GOT+A-P
+ * R_X86_64_GOTPCRELX G+GOT+A-P
+ * R_X8664_REX_GOTPCRELX G+GOT+A-P
  **/
 
 #define R_X86_64_NONE            0 /* No reloc */

@@ -12,6 +12,10 @@
 #include <types.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef enum scsi_command_opcode_t {
     SCSI_COMMAND_OPCODE_TEST_UNIT_READY = 0x00,
@@ -218,5 +222,8 @@ typedef struct scsi_command_sync_cache_10_t {
 
 _Static_assert(sizeof(scsi_command_sync_cache_10_t) == 10, "scsi_command_sync_cache_10_t size mismatch");
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ___SCSI_H */

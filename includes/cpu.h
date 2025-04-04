@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief stops cpu.
  *
@@ -173,5 +177,17 @@ boolean_t cpu_is_interrupt_enabled(void);
 
 uint64_t cpu_read_fs_base(void);
 uint64_t cpu_read_gs_base(void);
+
+typedef enum cpu_type_t {
+    CPU_TYPE_UNKNOWN,
+    CPU_TYPE_AMD,
+    CPU_TYPE_INTEL,
+} cpu_type_t;
+
+__attribute__((const)) cpu_type_t cpu_get_type(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

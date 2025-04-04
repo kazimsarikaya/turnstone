@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @struct smbios_entrypoint_32_t
  * @brief 32-bit SMBIOS entry point structure
@@ -310,7 +314,8 @@ typedef struct smbios_system_slots_t {
 
 
 
-
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif // smbios.h

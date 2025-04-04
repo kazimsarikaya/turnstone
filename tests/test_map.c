@@ -15,7 +15,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
 
-    map_t map = map_integer();
+    map_t* map = map_integer();
 
     if(map == NULL) {
         print_error("cannot create map");

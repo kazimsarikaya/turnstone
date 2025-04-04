@@ -9,7 +9,7 @@
 
 #include <types.h>
 #include <utils.h>
-#include <graphics/tga.h>
+#include <graphics/png.h>
 #include <device/mouse.h>
 #include <buffer.h>
 #include <cpu/task.h>
@@ -28,12 +28,12 @@ extern uint64_t windowmanager_task_id;
 mouse_move_cursor_f MOUSE_MOVE_CURSOR = NULL;
 
 graphics_raw_image_t* mouse_get_image(void) {
-    graphics_tga_image_t* tga_image = (graphics_tga_image_t*)&mouse_icon_data_start;
+    uint8_t* tga_image = (uint8_t*)&mouse_icon_data_start;
     uint64_t mouse_data_size = &mouse_icon_data_end - &mouse_icon_data_start;
 
     uint32_t size = mouse_data_size;
 
-    return graphics_load_tga_image(tga_image, size);
+    return graphics_load_png_image(tga_image, size);
 }
 
 int8_t mouse_report(mouse_report_t * report) {

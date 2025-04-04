@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct linker_module_at_memory_t {
     uint64_t id;
     uint64_t module_name_offset;
@@ -29,5 +33,9 @@ typedef union linker_metadata_at_memory_t {
     linker_module_at_memory_t  module;
     linker_section_at_memory_t section;
 } linker_metadata_at_memory_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

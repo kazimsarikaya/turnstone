@@ -21,14 +21,14 @@ MODULE("turnstone.lib.crypto");
 #define SIG1(x) (ROTRIGHT64(x, 19) ^ ROTRIGHT64(x, 61) ^ ((x) >> 6))
 
 
-typedef struct sha512_internal_ctx_t {
+typedef struct sha512_ctx_t {
     uint8_t  data[SHA512_BLOCK_SIZE];
     uint32_t datalen;
     uint64_t bitlen;
     uint64_t state[SHA512_STATE_SIZE];
-} sha512_internal_ctx_t;
+} sha512_ctx_t;
 
-void sha512_transform(sha512_internal_ctx_t* ctx, const uint8_t* data);
+void sha512_transform(sha512_ctx_t* ctx, const uint8_t* data);
 
 static const uint64_t sha512_k[80] = {
     0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL, 0x3956c25bf348b538ULL,
@@ -50,12 +50,12 @@ static const uint64_t sha512_k[80] = {
 };
 
 uint8_t* sha512_hash(uint8_t* data, size_t length) {
-    sha512_ctx_t ctx = sha512_init();
+    sha512_ctx_t* ctx = sha512_init();
     sha512_update(ctx, data, length);
     return sha512_final(ctx);
 }
 
-void sha512_transform(sha512_internal_ctx_t* ctx, const uint8_t* data)
+void sha512_transform(sha512_ctx_t* ctx, const uint8_t* data)
 {
     uint64_t a, b, c, d, e, f, g, h, i, t1, t2, m[SHA512_BLOCK_SIZE];
 
@@ -104,8 +104,8 @@ void sha512_transform(sha512_internal_ctx_t* ctx, const uint8_t* data)
 
 
 
-sha512_ctx_t sha512_init(void) {
-    sha512_internal_ctx_t* ctx = memory_malloc(sizeof(sha512_internal_ctx_t));
+sha512_ctx_t* sha512_init(void) {
+    sha512_ctx_t* ctx = memory_malloc(sizeof(sha512_ctx_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -122,77 +122,72 @@ sha512_ctx_t sha512_init(void) {
     ctx->state[6] = 0x1f83d9abfb41bd6bULL;
     ctx->state[7] = 0x5be0cd19137e2179ULL;
 
-    return (sha512_ctx_t)ctx;
+    return ctx;
 }
 
-int8_t sha512_update(sha512_ctx_t ctx, const uint8_t* data, size_t len) {
-
+int8_t sha512_update(sha512_ctx_t* ctx, const uint8_t* data, size_t len) {
     if(ctx == NULL) {
         return -1;
     }
 
-    sha512_internal_ctx_t* ictx = (sha512_internal_ctx_t*)ctx;
-
     for (uint32_t i = 0; i < len; ++i) {
-        ictx->data[ictx->datalen] = data[i];
-        ictx->datalen++;
+        ctx->data[ctx->datalen] = data[i];
+        ctx->datalen++;
 
-        if (ictx->datalen == SHA512_BLOCK_SIZE) {
-            sha512_transform(ictx, ictx->data);
+        if (ctx->datalen == SHA512_BLOCK_SIZE) {
+            sha512_transform(ctx, ctx->data);
 
-            ictx->bitlen += SHA512_BLOCK_SIZE * 8;
-            ictx->datalen = 0;
+            ctx->bitlen += SHA512_BLOCK_SIZE * 8;
+            ctx->datalen = 0;
         }
     }
 
     return 0;
 }
 
-uint8_t* sha512_final(sha512_ctx_t ctx) {
-
+uint8_t* sha512_final(sha512_ctx_t* ctx) {
     if(ctx == NULL) {
         return NULL;
     }
 
-    sha512_internal_ctx_t* ictx = (sha512_internal_ctx_t*)ctx;
     uint32_t i;
 
-    i = ictx->datalen;
+    i = ctx->datalen;
 
-    if (ictx->datalen < 120) {
-        ictx->data[i++] = 0x80;
+    if (ctx->datalen < 120) {
+        ctx->data[i++] = 0x80;
 
         while (i < 120) {
-            ictx->data[i++] = 0x00;
+            ctx->data[i++] = 0x00;
         }
     }
     else {
-        ictx->data[i++] = 0x80;
+        ctx->data[i++] = 0x80;
 
         while (i < SHA256_BLOCK_SIZE) {
-            ictx->data[i++] = 0x00;
+            ctx->data[i++] = 0x00;
         }
 
-        sha512_transform(ictx, ictx->data);
-        memory_memset(ictx->data, 0, SHA256_BLOCK_SIZE);
+        sha512_transform(ctx, ctx->data);
+        memory_memset(ctx->data, 0, SHA256_BLOCK_SIZE);
     }
 
-    ictx->bitlen += ictx->datalen * 8;
-    ictx->data[127] = ictx->bitlen;
-    ictx->data[126] = ictx->bitlen >> 8;
-    ictx->data[125] = ictx->bitlen >> 16;
-    ictx->data[124] = ictx->bitlen >> 24;
-    ictx->data[123] = ictx->bitlen >> 32;
-    ictx->data[122] = ictx->bitlen >> 40;
-    ictx->data[121] = ictx->bitlen >> 48;
-    ictx->data[120] = ictx->bitlen >> 56;
+    ctx->bitlen += ctx->datalen * 8;
+    ctx->data[127] = ctx->bitlen;
+    ctx->data[126] = ctx->bitlen >> 8;
+    ctx->data[125] = ctx->bitlen >> 16;
+    ctx->data[124] = ctx->bitlen >> 24;
+    ctx->data[123] = ctx->bitlen >> 32;
+    ctx->data[122] = ctx->bitlen >> 40;
+    ctx->data[121] = ctx->bitlen >> 48;
+    ctx->data[120] = ctx->bitlen >> 56;
 
-    sha512_transform(ictx, ictx->data);
+    sha512_transform(ctx, ctx->data);
 
     uint8_t* hash = memory_malloc(SHA512_OUTPUT_SIZE);
 
     if(hash == NULL) {
-        memory_free(ictx);
+        memory_free(ctx);
 
         return NULL;
     }
@@ -200,16 +195,16 @@ uint8_t* sha512_final(sha512_ctx_t ctx) {
     uint64_t* t_hash = (uint64_t*)hash;
 
     for (i = 0; i < 8; ++i) {
-        t_hash[i] = BYTE_SWAP64(ictx->state[i]);
+        t_hash[i] = BYTE_SWAP64(ctx->state[i]);
     }
 
-    memory_free(ictx);
+    memory_free(ctx);
 
     return hash;
 }
 
-sha384_ctx_t sha384_init(void) {
-    sha512_internal_ctx_t* ctx = memory_malloc(sizeof(sha512_internal_ctx_t));
+sha384_ctx_t* sha384_init(void) {
+    sha512_ctx_t* ctx = memory_malloc(sizeof(sha512_ctx_t));
 
     if(ctx == NULL) {
         return NULL;
@@ -226,15 +221,15 @@ sha384_ctx_t sha384_init(void) {
     ctx->state[6] = 0xdb0c2e0d64f98fa7ULL;
     ctx->state[7] = 0x47b5481dbefa4fa4ULL;
 
-    return (sha384_ctx_t)ctx;
+    return ctx;
 }
 
-int8_t  sha384_update(sha384_ctx_t ctx, const uint8_t* data, size_t len) {
-    return sha512_update((sha512_ctx_t)ctx, data, len);
+int8_t  sha384_update(sha384_ctx_t* ctx, const uint8_t* data, size_t len) {
+    return sha512_update(ctx, data, len);
 }
 
-uint8_t* sha384_final(sha384_ctx_t ctx) {
-    uint8_t* pre_hash = sha512_final((sha512_ctx_t)ctx);
+uint8_t* sha384_final(sha384_ctx_t* ctx) {
+    uint8_t* pre_hash = sha512_final(ctx);
 
     if(pre_hash == NULL) {
         return NULL;
@@ -256,7 +251,7 @@ uint8_t* sha384_final(sha384_ctx_t ctx) {
 }
 
 uint8_t* sha384_hash(uint8_t* data, size_t length) {
-    sha384_ctx_t ctx = sha384_init();
+    sha384_ctx_t* ctx = sha384_init();
     sha384_update(ctx, data, length);
     return sha384_final(ctx);
 }

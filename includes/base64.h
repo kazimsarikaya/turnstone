@@ -10,7 +10,15 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 size_t base64_encode(const uint8_t* in, size_t len, boolean_t add_newline, uint8_t** out);
 size_t base64_decode(const uint8_t* in, size_t len, uint8_t** out);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

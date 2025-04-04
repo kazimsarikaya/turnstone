@@ -12,12 +12,16 @@
 #include <types.h>
 #include <list.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NETWORK_DEVICE_VENDOR_ID_VIRTIO  0x1AF4
 #define NETWORK_DEVICE_DEVICE_ID_VIRTNET1 0x1000
 #define NETWORK_DEVICE_DEVICE_ID_VIRTNET2 0x1041
 
 #define NETWORK_DEVICE_VENDOR_ID_INTEL  0x8086
-#define NETWORK_DEVICE_DEVICE_ID_E1000  0x100F
+#define NETWORK_DEVICE_DEVICE_ID_IGB  0x10C9
 
 typedef enum network_type_t {
     NETWORK_TYPE_ETHERNET=0
@@ -41,5 +45,9 @@ extern list_t* network_received_packets;
 int8_t network_transmit_packet_destroyer(memory_heap_t* heap, void* data);
 
 int8_t network_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

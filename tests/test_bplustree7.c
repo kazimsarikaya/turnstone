@@ -274,6 +274,12 @@ int32_t main(int32_t argc, char_t** argv){
         tosdb_memtable_index_item_t* deleted = NULL;
 
         tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t));
+
+        if(!item) {
+            print_error("item can not created");
+            return -1;
+        }
+
         item->key_hash = test_data[i];
 
         idx->insert(idx, item, item, (void**)&deleted);

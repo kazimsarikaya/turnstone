@@ -17,8 +17,8 @@ int8_t compiler_execute_while(compiler_t* compiler, compiler_ast_node_t* node, i
 
     compiler->loop_depth++;
 
-    char_t* while_label = sprintf(".L%d", compiler->next_label_id++);
-    char_t* end_label = sprintf(".L%d", compiler->next_label_id++);
+    char_t* while_label = strprintf(".L%d", compiler->next_label_id++);
+    char_t* end_label = strprintf(".L%d", compiler->next_label_id++);
 
     buffer_printf(compiler->text_buffer, "# begin while %lli\n", compiler->loop_depth);
     buffer_printf(compiler->text_buffer, "%s:\n", while_label);

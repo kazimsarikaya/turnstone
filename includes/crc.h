@@ -12,6 +12,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! crc32 seed*/
 #define CRC32_SEED  0xffffffff
 
@@ -58,5 +62,9 @@ static inline uint32_t crc32_finalize(uint32_t crc) {
  * @return crc32 sum
  */
 uint32_t adler32_sum(const void* data, uint64_t size, uint32_t init);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

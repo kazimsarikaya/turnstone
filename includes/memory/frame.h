@@ -13,6 +13,10 @@
 #include <types.h>
 #include <memory.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! frame size (4K) */
 #define FRAME_SIZE 4096
 
@@ -186,5 +190,9 @@ void frame_allocator_map_page_of_acpi_code_data_frames(frame_allocator_t * fa);
 
 frame_allocator_t* frame_get_allocator(void);
 void               frame_set_allocator(frame_allocator_t* fa);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

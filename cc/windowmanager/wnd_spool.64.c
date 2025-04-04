@@ -106,9 +106,9 @@ static int8_t wndmgr_spool_item_on_redraw(const window_event_t* event) {
         return -1;
     }
 
-    char_t* spool_text = sprintf("% 12i% 15lli",
-                                 sied->buffer_id,
-                                 buffer_get_length(sied->buffer));
+    char_t* spool_text = strprintf("% 12i% 15lli",
+                                   sied->buffer_id,
+                                   buffer_get_length(sied->buffer));
 
     memory_free(window->text);
 
@@ -130,7 +130,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     font_get_font_dimension(&font_width, &font_height);
 
-    char_t* title_str = sprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
+    char_t* title_str = strprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
     rect.x = (screen_info.width - rect.width) / 2;
@@ -148,7 +148,11 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         return -1;
     }
 
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
+                                                                 WINDOWMANAGER_COMMAND_TEXT,
+                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                 "option",
+                                                                 NULL);
 
     if(!option_input_row) {
         windowmanager_destroy_window(window);
@@ -169,8 +173,8 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         return -1;
     }
 
-    char_t* header_text = sprintf("%- 5s% 12s% 15s",
-                                  "Cmd", "Buffer Id", "Buffer Size");
+    char_t* header_text = strprintf("%- 5s% 12s% 15s",
+                                    "Cmd", "Buffer Id", "Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
@@ -208,9 +212,9 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
         wnd_spool_input->input_id = "buffer";
         wnd_spool_input->extra_data = (void*)buffer;
 
-        char_t* spool_text = sprintf("% 12i% 15lli",
-                                     i,
-                                     buffer_get_length(buffer));
+        char_t* spool_text = strprintf("% 12i% 15lli",
+                                       i,
+                                       buffer_get_length(buffer));
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
@@ -328,10 +332,10 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_event_t* eve
         return -1;
     }
 
-    char_t* spool_text = sprintf("%- 30s% 15lli% 20lli",
-                                 spool_get_name(spool),
-                                 spool_get_buffer_count(spool),
-                                 spool_get_total_buffer_size(spool));
+    char_t* spool_text = strprintf("%- 30s% 15lli% 20lli",
+                                   spool_get_name(spool),
+                                   spool_get_buffer_count(spool),
+                                   spool_get_total_buffer_size(spool));
 
     memory_free(window->text);
 
@@ -371,7 +375,11 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         return -1;
     }
 
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
+                                                                 WINDOWMANAGER_COMMAND_TEXT,
+                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                 "option",
+                                                                 NULL);
 
     if(!option_input_row) {
         windowmanager_destroy_window(window);
@@ -392,8 +400,8 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         return -1;
     }
 
-    char_t* header_text = sprintf("%- 5s%- 30s% 15s% 20s",
-                                  "Cmd", "Name", "Buffer Count", "Total Buffer Size");
+    char_t* header_text = strprintf("%- 5s%- 30s% 15s% 20s",
+                                    "Cmd", "Name", "Buffer Count", "Total Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
@@ -431,10 +439,10 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         wnd_spool_input->input_id = "spool";
         wnd_spool_input->extra_data = (void*)spool;
 
-        char_t* spool_text = sprintf("%- 30s% 15lli% 20lli",
-                                     spool_get_name(spool),
-                                     spool_get_buffer_count(spool),
-                                     spool_get_total_buffer_size(spool));
+        char_t* spool_text = strprintf("%- 30s% 15lli% 20lli",
+                                       spool_get_name(spool),
+                                       spool_get_buffer_count(spool),
+                                       spool_get_total_buffer_size(spool));
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,

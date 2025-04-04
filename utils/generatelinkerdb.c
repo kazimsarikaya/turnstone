@@ -1248,7 +1248,12 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
         }
 
         if(sym_sec_id == 0) {
-            print_error("unknown symbol");
+            if(ELF_SECTION_TYPE(e_class, sections, sym_shndx) == SHT_GROUP) {
+                PRINTLOG(LINKER, LOG_WARNING, "!!! at file %s symbol %s at section %llx is group", filename, sym_name, sym_shndx);
+                continue;
+            }
+
+            print_error("unknown symbol %s at file %s [%lli]", sym_name, filename, sym_shndx);
             error = true;
 
             break;
@@ -1410,7 +1415,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                     reloc_type = LINKER_RELOCATION_TYPE_32_PC32;
                     break;
                 default:
-                    print_error("unknown 32 bit reloc");
+                    PRINTLOG(LINKER, LOG_ERROR, "unknown 32 bit reloc type 0x%x at file %s",
+                             reloc_type, filename);
                     error = true;
                     break;
                 }
@@ -1445,7 +1451,8 @@ boolean_t linkerdb_parse_object_file(linkerdb_t*       ldb,
                     reloc_type = LINKER_RELOCATION_TYPE_64_PLTOFF64;
                     break;
                 default:
-                    PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x", reloc_type);
+                    PRINTLOG(LINKER, LOG_ERROR, "unknown 64 bit reloc type 0x%x at file %s",
+                             reloc_type, filename);
                     error = true;
                     break;
                 }
@@ -1836,6 +1843,7 @@ int32_t main(int32_t argc, char_t** argv) {
     uint64_t stack_size = 0x10000;
     uint64_t program_base = 0x200000; // 2MB
     uint64_t spool_size = 16 << 20; // 16MB
+    boolean_t compact = false;
 
     while(argc > 0) {
         if(strstarts(*argv, "-") != 0) {
@@ -1933,6 +1941,14 @@ int32_t main(int32_t argc, char_t** argv) {
                 return -1;
             }
         }
+
+        if(strcmp(*argv, "-compact") == 0) {
+            compact = true;
+
+            argc--;
+            argv++;
+            continue;
+        }
     }
 
     int32_t exit_code = 0;
@@ -1991,11 +2007,11 @@ int32_t main(int32_t argc, char_t** argv) {
 
     PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
-#if 1
-    if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
-        print_error("cannot compact linker db");
+    if(compact) {
+        if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
+            print_error("cannot compact linker db");
+        }
     }
-#endif
 
 close:
     if(!linkerdb_close(ldb)) {

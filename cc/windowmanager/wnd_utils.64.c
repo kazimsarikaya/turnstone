@@ -14,10 +14,118 @@
 #include <buffer.h>
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
+#include <logging.h>
 
 void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
+
+static pixel_t* wndmgr_double_buffer = NULL;
+extern pixel_t* VIDEO_BASE_ADDRESS;
+
+static void windowmanager_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
+    uint32_t i = 0;
+    uint32_t j = 0;
+    uint32_t line = 0;
+    uint32_t bg = background.color;
+    screen_info_t screen_info = screen_get_info();
+
+    for(i = 0; i < height; i++) {
+        line = (y + i) * screen_info.pixels_per_scanline + x;
+
+        for(j = 0; j < width; j++) {
+            *((pixel_t*)(wndmgr_double_buffer + line)) = bg;
+            line++;
+        }
+    }
+
+    SCREEN_FLUSH(0, 0, x, y, width, height);
+}
+
+static void windowmanager_screen_flush(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+    UNUSED(scanout);
+    UNUSED(offset);
+
+    if(VIDEO_BASE_ADDRESS == NULL) {
+        return;
+    }
+    screen_info_t screen_info = screen_get_info();
+
+    uint32_t sw = screen_info.width;
+    uint32_t sh = screen_info.height;
+
+    if(x >= sw || y >= sh) {
+        return;
+    }
+
+    if(x + width > sw) {
+        width = sw - x;
+    }
+
+    if(y + height > sh) {
+        height = sh - y;
+    }
+
+    for(uint32_t i = 0; i < height; i++) {
+        uint32_t line = (y + i) * screen_info.pixels_per_scanline + x;
+
+        uint8_t* src = (uint8_t*)(wndmgr_double_buffer + line);
+        uint8_t* dst = (uint8_t*)(VIDEO_BASE_ADDRESS + line);
+
+        memory_memcopy(src, dst, width * sizeof(pixel_t));
+    }
+}
+
+static void windowmanager_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
+    screen_info_t screen_info = screen_get_info();
+
+    int32_t offs = (y * height * screen_info.pixels_per_scanline) + (x * width);
+    uint32_t orig_offs = offs;
+
+    int32_t lx, ly, line;
+
+    for(ly = 0; ly < height; ly++) {
+        line = offs;
+
+        for(lx = 0; lx < width; lx++) {
+
+            *((pixel_t*)(wndmgr_double_buffer + line)) = ~(*((pixel_t*)(wndmgr_double_buffer + line)));
+
+            line++;
+        }
+
+        offs  += screen_info.pixels_per_scanline;
+    }
+
+    if(flush) {
+        SCREEN_FLUSH(0, orig_offs * sizeof(pixel_t), x * width, y * height, width, height);
+    }
+}
+
+int8_t windowmanager_init_double_buffer(void) {
+    screen_info_t screen_info = screen_get_info();
+
+    uint64_t size = screen_info.pixels_per_scanline * screen_info.height * sizeof(pixel_t);
+
+    wndmgr_double_buffer = memory_malloc(size);
+
+    if(wndmgr_double_buffer == NULL) {
+        return -1;
+    }
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Double buffer initialized at 0x%p with size 0x%llx", wndmgr_double_buffer, size);
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Screen info: %dx%d, pixels per scanline: %d", screen_info.width, screen_info.height, screen_info.pixels_per_scanline);
+
+    SCREEN_FLUSH = windowmanager_screen_flush;
+    SCREEN_CLEAR_AREA = windowmanager_clear_screen_area;
+    TEXT_CURSOR_DRAW = windowmanager_text_cursor_draw;
+
+    return 0;
+}
+
+pixel_t* windowmanager_get_double_buffer(void) {
+    return wndmgr_double_buffer;
+}
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     if(text == NULL) {
@@ -65,7 +173,7 @@ rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
     return rect;
 }
 
-uint32_t windowmanager_append_wchar_to_buffer(wchar_t src, char_t* dst, uint32_t dst_idx) {
+uint32_t windowmanager_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
     if(dst == NULL) {
         return NULL;
     }
@@ -404,8 +512,8 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
     const window_input_value_t* last = list_get_data_at_position(inputs, list_size(inputs) - 1);
     const window_input_value_t* next = NULL;
 
-    size_t end = list_size(inputs) - 1;
-    size_t start = 0;
+    int64_t end = list_size(inputs) - 1;
+    int64_t start = 0;
     int32_t inc = 1;
 
     if(is_reverse) {
@@ -414,10 +522,15 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
         inc = -1;
     }
 
-    for(size_t i = start;
+    for(int64_t i = start;
         is_reverse ? i >= end : i <= end;
         i += inc) {
         window_input_value_t* value = (window_input_value_t*)list_get_data_at_position(inputs, i);
+
+        if(!value) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Invalid input value at position %lli", i);
+            break;
+        }
 
         if(!input_found && windowmanager_is_point_in_rect(&value->rect, cursor_x, cursor_y)) {
             input_found = true;

@@ -15,6 +15,10 @@
 #include <tosdb/tosdb.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @enum linker_section_type_t
  * @brief linker section types.
@@ -249,4 +253,9 @@ int8_t    linker_dump_program_to_array(linker_context_t* ctx, linker_program_dum
 void linker_build_modules_at_memory(void);
 void linker_print_modules_at_memory(void);
 void linker_print_module_info_at_memory(uint64_t module_id);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

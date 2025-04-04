@@ -27,9 +27,9 @@ static const uint32_t FONT_TABLE_COLUMNS = 32;
 static uint32_t FONT_TABLE_GLYPH_COUNT = 0;
 static font_table_t* font_table = NULL;
 
-static wchar_t* font_unicode_table = NULL;
+static char16_t* font_unicode_table = NULL;
 
-static wchar_t font_lookup_unicode(wchar_t wc) {
+static char16_t font_lookup_unicode(char16_t wc) {
     if(wc == 0) {
         return 0;
     }
@@ -45,7 +45,7 @@ static wchar_t font_lookup_unicode(wchar_t wc) {
     return font_unicode_table[wc];
 }
 
-static void font_print_glyph_with_stride_raw(wchar_t wc,
+static void font_print_glyph_with_stride_raw(char16_t wc,
                                              color_t foreground, color_t background,
                                              uint8_t* font_address,
                                              pixel_t* base_address,
@@ -82,7 +82,7 @@ static void font_print_glyph_with_stride_raw(wchar_t wc,
     }
 }
 
-void font_print_glyph_with_stride(wchar_t wc,
+void font_print_glyph_with_stride(char16_t wc,
                                   color_t foreground, color_t background,
                                   pixel_t* destination_base_address,
                                   uint32_t x, uint32_t y,
@@ -158,12 +158,12 @@ int8_t font_init(void) {
             FONT_BYTES_PER_GLYPH = font2->bytes_per_glyph;
 
             if(font2->flags) {
-                wchar_t glyph = 0;
-                font_unicode_table = memory_malloc(sizeof(wchar_t) * ((wchar_t)-1));
+                char16_t glyph = 0;
+                font_unicode_table = memory_malloc(sizeof(char16_t) * ((char16_t)-1));
                 uint8_t* font_loc = FONT_ADDRESS + font2->glyph_count * font2->bytes_per_glyph;
 
                 while(font_loc < (uint8_t*)&font_psf2_data_end) {
-                    wchar_t wc = *font_loc;
+                    char16_t wc = *font_loc;
 
                     if(wc == 0xFF) {
                         glyph++;
@@ -211,12 +211,12 @@ int8_t font_init(void) {
                 FONT_BYTES_PER_GLYPH = font1->bytes_per_glyph;
 
                 if(font1->mode) {
-                    wchar_t glyph = 0;
-                    font_unicode_table = memory_malloc(sizeof(wchar_t) * ((wchar_t)-1));
+                    char16_t glyph = 0;
+                    font_unicode_table = memory_malloc(sizeof(char16_t) * ((char16_t)-1));
                     uint8_t* font_loc = FONT_ADDRESS + 512 * font1->bytes_per_glyph;
 
                     while(font_loc < (uint8_t*)&font_psf2_data_end) {
-                        wchar_t wc = *font_loc;
+                        char16_t wc = *font_loc;
 
                         if(wc == 0xFF) {
                             glyph++;
@@ -261,12 +261,12 @@ int8_t font_init(void) {
     return 0;
 }
 
-wchar_t font_get_wc(const char_t* string, int64_t * idx) {
+char16_t font_get_wc(const char_t* string, int64_t * idx) {
     if(string == NULL || idx == NULL) {
         return NULL;
     }
 
-    wchar_t wc = string[0];
+    char16_t wc = string[0];
 
     if(wc & 128) {
         if((wc & 32) == 0) {

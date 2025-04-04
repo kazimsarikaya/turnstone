@@ -45,11 +45,11 @@
 #include <debug.h>
 #include <cpu/syscall.h>
 #include <hypervisor/hypervisor.h>
+#include <hypervisor/hypervisor_iommu.h>
 #include <tosdb/tosdb_manager.h>
 #include <spool.h>
 #include <graphics/screen.h>
 #include <driver/video.h>
-#include <driver/console_virtio.h>
 
 MODULE("turnstone.kernel.programs.kmain");
 
@@ -106,7 +106,7 @@ __attribute__((noreturn)) void  ___kstart64(system_info_t* sysinfo) {
         }
     }
 
-    task_end_task();
+    task_exit(0);
 
     while(true){ // should not reach here
         cpu_hlt();
@@ -345,6 +345,10 @@ int8_t kmain64(size_t entry_point) {
 
     syscall_init();
 
+    if(hypervisor_iommu_init() != 0) {
+        PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor iommu.");
+    }
+
     if(hypervisor_init() != 0) {
         PRINTLOG(KERNEL, LOG_ERROR, "cannot init hypervisor.");
     }
@@ -358,11 +362,6 @@ int8_t kmain64(size_t entry_point) {
 
     if(smp_init() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot init smp. Halting...");
-        cpu_hlt();
-    }
-
-    if(console_virtio_init() != 0) {
-        PRINTLOG(KERNEL, LOG_FATAL, "cannot init virtio console. Halting...");
         cpu_hlt();
     }
 
@@ -430,7 +429,7 @@ int8_t kmain64(size_t entry_point) {
 
     PRINTLOG(KERNEL, LOG_INFO, "system table %p %li %li", SYSTEM_INFO->efi_system_table, sizeof(efi_system_table_t), sizeof(efi_table_header_t));
 
-    wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    char16_t* var_name_boot_current = char_to_wchar("BootCurrent");
     efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
     uint32_t var_attrs = 0;
     uint64_t buffer_size = sizeof(uint16_t);
@@ -447,6 +446,8 @@ int8_t kmain64(size_t entry_point) {
     }
 
     PRINTLOG(KERNEL, LOG_INFO, "smbios version 0x%llx smbios data address 0x%p", SYSTEM_INFO->smbios_version, SYSTEM_INFO->smbios_table);
+
+    hello_world_cpp_test();
 
     PRINTLOG(KERNEL, LOG_INFO, "current time %lli", time_ns(NULL));
 

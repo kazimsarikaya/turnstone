@@ -23,9 +23,9 @@
 #include <utils.h>
 #include <hashmap.h>
 #include <stdbufs.h>
-#include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
 #include <hypervisor/hypervisor_vm.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <strings.h>
 #include <spool.h>
 
@@ -66,6 +66,7 @@ list_t** task_sleep_queues; ///< task sleep lists
 list_t** task_wait_queues; ///< task wait lists
 list_t** task_cleanup_queues = NULL;
 hashmap_t* task_map = NULL;
+uint64_t task_xsave_mask = 0;
 uint32_t task_mxcsr_mask = 0;
 
 uint64_t task_max_tick_count_limit = 0;
@@ -86,7 +87,14 @@ int8_t task_create_idle_task(void);
 extern boolean_t local_apic_id_is_valid;
 extern volatile cpu_state_t __seg_gs * cpu_state;
 
-lock_t * task_find_next_task_lock = NULL;
+uint64_t task_get_task_xsave_mask(void) {
+    return task_xsave_mask;
+}
+
+uint32_t task_get_task_mxcsr_mask(void) {
+    return task_mxcsr_mask;
+}
+
 
 static int8_t task_sleep_queue_comparator(const void* item1, const void* item2) {
     const task_t* t1 = (const task_t*)item1;
@@ -285,7 +293,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->state = TASK_STATE_RUNNING;
     kernel_task->entry_point = kmain64;
     kernel_task->page_table = memory_paging_get_table();
-    kernel_task->registers = memory_malloc_ext(task_map_heap, sizeof(task_registers_t), 0x10);
+    kernel_task->registers = memory_malloc_ext(task_map_heap, sizeof(task_registers_t), 0x40);
 
     if(kernel_task->registers == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot allocate memory for kernel task fx registers");
@@ -293,7 +301,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
         return -1;
     }
 
-    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init", apic_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "kernel-init", apic_id);
     kernel_task->task_name = strdup_at_heap(task_map_heap, tmp_task_name);
     memory_free(tmp_task_name);
 
@@ -303,10 +311,24 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
     kernel_task->output_buffer = stdbufs_default_output_buffer;
     kernel_task->error_buffer = stdbufs_default_error_buffer;
 
+    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t result;
+
+    query.eax = 0xd;
+
+    cpu_cpuid(query, &result);
+
+    task_xsave_mask = ((uint64_t)result.edx << 32) | result.eax;
+
+    kernel_task->registers->xsave_mask_lo = result.eax;
+    kernel_task->registers->xsave_mask_hi = result.edx;
+
+    PRINTLOG(TASKING, LOG_INFO, "xsave mask 0x%llx", task_xsave_mask);
+
     // get mxcsr
     task_save_registers(kernel_task->registers);
 
-    task_mxcsr_mask = *(uint32_t*)&kernel_task->registers->sse[28];
+    task_mxcsr_mask = *(uint32_t*)&kernel_task->registers->avx512f[28];
 
     PRINTLOG(TASKING, LOG_INFO, "mxcsr mask 0x%x", task_mxcsr_mask);
 
@@ -344,15 +366,6 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     if(task_create_idle_task() != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");
-
-        return -1;
-    }
-
-    task_find_next_task_lock = lock_create();
-    PRINTLOG(TASKING, LOG_INFO, "tnt lock 0x%p", task_find_next_task_lock);
-
-    if(task_find_next_task_lock == NULL) {
-        PRINTLOG(TASKING, LOG_FATAL, "cannot create task find next task lock");
 
         return -1;
     }
@@ -408,7 +421,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     current_task->cpu_id = apic_id;
 
-    char_t* tmp_task_name = sprintf("%s-%d", "kernel-init", current_task->cpu_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "kernel-init", current_task->cpu_id);
 
     current_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -420,7 +433,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     current_task->state = TASK_STATE_RUNNING;
     current_task->entry_point = entry_point;
     current_task->page_table = memory_paging_get_table();
-    current_task->registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
+    current_task->registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x40);
 
     if(current_task->registers == NULL) {
         memory_free_ext(heap, current_task);
@@ -428,6 +441,12 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
         return -1;
     }
+
+    current_task->registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
+    current_task->registers->xsave_mask_hi = task_xsave_mask >> 32;
+
+    *(uint16_t*)&current_task->registers->avx512f[0] = 0x37F;
+    *(uint32_t*)&current_task->registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     memory_heap_t* sheap = spool_get_heap();
 
@@ -444,9 +463,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     cpu_state->current_task = current_task;
 
-    lock_acquire(task_find_next_task_lock);
     hashmap_put(task_map, (void*)current_task->task_id, current_task);
-    lock_release(task_find_next_task_lock);
 
     if(task_create_idle_task() != 0) {
         PRINTLOG(TASKING, LOG_FATAL, "cannot create idle task");
@@ -459,7 +476,7 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
     return 0;
 }
 
-__attribute__((naked, no_stack_protector)) void task_save_registers(task_registers_t* registers) {
+__attribute__((naked, no_stack_protector, noinline)) void task_save_registers(task_registers_t* registers) {
     __asm__ __volatile__ (
         "mov %%rax, %[rax]\n"
         "mov %%rbx, %[rbx]\n"
@@ -477,8 +494,14 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_registe
         "mov %%rsi, %[rsi]\n"
         "mov %%rbp, %[rbp]\n"
         "push %%rbx\n"
-        "lea %[sse], %%rbx\n"
-        "fxsave (%%rbx)\n"
+        "push %%rax\n"
+        "push %%rdx\n"
+        "mov %[xsave_mask_lo], %%eax\n"
+        "mov %[xsave_mask_hi], %%edx\n"
+        "lea %[avx512f], %%rbx\n"
+        "xsave (%%rbx)\n"
+        "pop %%rdx\n"
+        "pop %%rax\n"
         "pop %%rbx\n"
         "push %%rax\n"
         "pushfq\n"
@@ -506,18 +529,18 @@ __attribute__((naked, no_stack_protector)) void task_save_registers(task_registe
         [rdi]    "m" (registers->rdi),
         [rsi]    "m" (registers->rsi),
         [rbp]    "m" (registers->rbp),
-        [sse]    "m" (registers->sse),
+        [avx512f]    "m" (registers->avx512f),
         [rflags] "m" (registers->rflags),
         [rsp]    "m" (registers->rsp),
-        [cr3]     "m" (registers->cr3)
+        [cr3]     "m" (registers->cr3),
+        [xsave_mask_lo] "m" (registers->xsave_mask_lo),
+        [xsave_mask_hi] "m" (registers->xsave_mask_hi)
         );
 }
 
-__attribute__((naked, no_stack_protector)) void task_load_registers(task_registers_t* registers) {
+__attribute__((naked, no_stack_protector, noinline)) void task_load_registers(task_registers_t* registers) {
     __asm__ __volatile__ (
-        "mov %[rbx],  %%rbx\n"
         "mov %[rcx],  %%rcx\n"
-        "mov %[rdx],  %%rdx\n"
         "mov %[r8],  %%r8\n"
         "mov %[r9],  %%r9\n"
         "mov %[r10],  %%r10\n"
@@ -528,9 +551,12 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_registe
         "mov %[r15], %%r15\n"
         "mov %[rsi], %%rsi\n"
         "mov %[rbp], %%rbp\n"
-        "lea %[sse], %%rax\n"
-        "fxrstor (%%rax)\n"
+        "lea %[avx512f], %%rbx\n"
+        "mov %[xsave_mask_lo], %%eax\n"
+        "mov %[xsave_mask_hi], %%edx\n"
+        "xrstor (%%rbx)\n"
         "mov %[rflags], %%rax\n"
+        "btr $0x9, %%rax\n" // clear interrupt flag
         "push %%rax\n"
         "popfq\n"
         "mov %%cr3, %%rax\n"
@@ -540,6 +566,8 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_registe
         "mov %%rax, %%cr3\n"
         "1:\n"
         "mov %[rax],  %%rax\n"
+        "mov %[rbx],  %%rbx\n"
+        "mov %[rdx],  %%rdx\n"
         "mov %[rsp], %%rsp\n"
         "mov %[rdi], %%rdi\n"
         "retq\n"
@@ -559,10 +587,12 @@ __attribute__((naked, no_stack_protector)) void task_load_registers(task_registe
         [rdi]     "m" (registers->rdi),
         [rsi]     "m" (registers->rsi),
         [rbp]     "m" (registers->rbp),
-        [sse]     "m" (registers->sse),
+        [avx512f]     "m" (registers->avx512f),
         [rflags]  "m" (registers->rflags),
         [rsp]     "m" (registers->rsp),
-        [cr3]     "m" (registers->cr3)
+        [cr3]     "m" (registers->cr3),
+        [xsave_mask_lo] "m" (registers->xsave_mask_lo),
+        [xsave_mask_hi] "m" (registers->xsave_mask_hi)
         );
 }
 
@@ -634,12 +664,10 @@ static void task_cleanup_task(task_t* task) {
 }
 
 void task_cleanup(void){
-    lock_acquire(task_find_next_task_lock);
     while(list_size(cpu_state->task_cleanup_queue)) {
         task_t* task = (task_t*)list_queue_pop(cpu_state->task_cleanup_queue);
         task_cleanup_task(task);
     }
-    lock_release(task_find_next_task_lock);
 }
 
 task_t* task_find_next_task(void) {
@@ -711,25 +739,14 @@ task_t* task_find_next_task(void) {
     return tmp_task;
 }
 
-void task_task_switch_set_parameters(boolean_t need_eoi, boolean_t need_sti) {
-    if(!cpu_state->task_switch_paramters_need_eoi) {
-        cpu_state->task_switch_paramters_need_eoi = need_eoi;
-    }
-
-    if(!cpu_state->task_switch_paramters_need_sti) {
-        cpu_state->task_switch_paramters_need_sti = need_sti;
-    }
+void task_task_switch_set_parameters(boolean_t need_eoi) {
+    cpu_state->task_switch_paramters_need_eoi = need_eoi;
 }
 
-static __attribute__((noinline)) void task_task_switch_exit(void) {
+void task_task_switch_exit(void) {
     if(cpu_state->task_switch_paramters_need_eoi) {
         cpu_state->task_switch_paramters_need_eoi = false;
         apic_eoi();
-    }
-
-    if(cpu_state->task_switch_paramters_need_sti) {
-        cpu_state->task_switch_paramters_need_sti = false;
-        cpu_sti();
     }
 }
 
@@ -745,18 +762,20 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
        (current_tick - current_task->last_tick_count) < task_max_tick_count_limit &&
        current_tick > current_task->last_tick_count) {
 
-        task_task_switch_exit();
-
         return;
     }
 
     if(current_task->vmcs_physical_address) {
-        if(vmclear(current_task->vmcs_physical_address) != 0) {
-            utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
-            video_text_print("vmclear failed for task 0x");
-            video_text_print(task_switch_task_id_buf);
-            video_text_print("\n");
-            return;
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(current_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+                video_text_print("vmclear failed for task 0x");
+                video_text_print(task_switch_task_id_buf);
+                video_text_print("\n");
+                return;
+            }
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 
@@ -804,20 +823,38 @@ __attribute__((no_stack_protector)) void task_switch_task(void) {
     cpu_state->current_task = current_task;
 
     if(current_task->vmcs_physical_address) {
-        if(vmptrld(current_task->vmcs_physical_address) != 0) {
-            utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
-            video_text_print("vmclear failed for task 0x");
-            video_text_print(task_switch_task_id_buf);
-            video_text_print("\n");
-        }
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmptrld(current_task->vmcs_physical_address) != 0) {
+                utoh_with_buffer(task_switch_task_id_buf, current_task->task_id);
+                video_text_print("vmptrld failed for task 0x");
+                video_text_print(task_switch_task_id_buf);
+                video_text_print("\n");
+                return;
+            }
 
-        vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
-        vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
+            vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
+            vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
+        }
     }
 
     task_load_registers(current_task->registers);
 
-    task_task_switch_exit();
+    asm volatile ("" ::: "memory"); // prevent compiler jmp directly to the task_load_registers
+}
+
+void task_exit(int32_t exit_code) {
+    task_t* current_task = task_get_current_task();
+
+    if(!current_task) {
+        PRINTLOG(TASKING, LOG_ERROR, "current task not found");
+
+        return;
+    }
+
+    current_task->exit_code = exit_code;
+    task_end_task();
 }
 
 void task_end_task(void) {
@@ -831,19 +868,33 @@ void task_end_task(void) {
     typedef int64_t (*entry_point_f)(uint64_t, void**);
     entry_point_f entry_point = current_task->entry_point;
 
-    int64_t ret = 0;
+    int64_t ret = -1;
 
-    if(current_task->state == TASK_STATE_STARTING && entry_point != NULL) {
+    if(current_task->state == TASK_STATE_STARTING) {
         task_task_switch_exit();
-        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx", current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
+        cpu_sti();
+
+        if(!entry_point) {
+            PRINTLOG(TASKING, LOG_ERROR, "no entry point for task 0x%llx", current_task->task_id);
+        }
+
+        PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
+                 current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
+    } else {
+        ret = current_task->exit_code;
     }
 
-    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx", current_task->task_id, ret, cpu_state->local_apic_id);
+    PRINTLOG(TASKING, LOG_INFO, "ending task 0x%llx return code 0x%llx on cpu 0x%llx",
+             current_task->task_id, ret, cpu_state->local_apic_id);
 
     if(current_task->vmcs_physical_address) {
-        if(vmclear(current_task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(current_task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", current_task->task_id);
+            }
+        } else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 
@@ -869,8 +920,12 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
     }
 
     if(task->vmcs_physical_address) {
-        if(vmclear(task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+            }
+        }  else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 
@@ -900,7 +955,7 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     new_task->creator_heap = heap;
 
-    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
+    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x40);
 
     if(registers == NULL) {
         memory_free_ext(heap, new_task);
@@ -994,8 +1049,11 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
 
     registers->cr3 = cr3_fa;
 
-    *(uint16_t*)&registers->sse[0] = 0x37F;
-    *(uint32_t*)&registers->sse[24] = 0x1F80 & task_mxcsr_mask;
+    registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
+    registers->xsave_mask_hi = task_xsave_mask >> 32;
+
+    *(uint16_t*)&registers->avx512f[0] = 0x37F;
+    *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
@@ -1033,12 +1091,8 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
         }
     }
 
-    lock_acquire(task_find_next_task_lock);
-    cpu_cli();
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
     list_stack_push(min_queue, new_task);
-    cpu_sti();
-    lock_release(task_find_next_task_lock);
 
 
     PRINTLOG(TASKING, LOG_INFO, "task %s 0x%llx added to task queue on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task->cpu_id);
@@ -1110,7 +1164,7 @@ int8_t task_create_idle_task(void) {
     new_task->heap = heap;
     new_task->heap_size = kernel->program_heap_size;
 
-    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x10);
+    task_registers_t* registers = memory_malloc_ext(heap, sizeof(task_registers_t), 0x40);
 
     if(registers == NULL) {
         memory_free_ext(heap, new_task);
@@ -1118,7 +1172,7 @@ int8_t task_create_idle_task(void) {
         return -1;
     }
 
-    uint64_t stack_size = 0x1000;
+    uint64_t stack_size = 1 << 20;
 
 
     frame_t* stack_frames;
@@ -1150,7 +1204,7 @@ int8_t task_create_idle_task(void) {
     new_task->stack_size = stack_size;
     new_task->stack = (void*)stack_va;
 
-    char_t* tmp_task_name = sprintf("%s-%d", "idle", new_task->task_id);
+    char_t* tmp_task_name = strprintf("%s-%d", "idle", new_task->task_id);
 
     new_task->task_name = strdup_at_heap(heap, tmp_task_name);
 
@@ -1163,8 +1217,11 @@ int8_t task_create_idle_task(void) {
 
     registers->cr3 = cr3_fa;
 
-    *(uint16_t*)&registers->sse[0] = 0x37F;
-    *(uint32_t*)&registers->sse[24] = 0x1F80 & task_mxcsr_mask;
+    registers->xsave_mask_lo = task_xsave_mask & 0xFFFFFFFF;
+    registers->xsave_mask_hi = task_xsave_mask >> 32;
+
+    *(uint16_t*)&registers->avx512f[0] = 0x37F;
+    *(uint32_t*)&registers->avx512f[24] = 0x1F80 & task_mxcsr_mask;
 
     uint64_t rbp = (uint64_t)new_task->stack;
     rbp += stack_size - 16;
@@ -1186,9 +1243,7 @@ int8_t task_create_idle_task(void) {
 
     spool_add(new_task->task_name, 2, new_task->output_buffer, new_task->error_buffer);
 
-    lock_acquire(task_find_next_task_lock);
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
-    lock_release(task_find_next_task_lock);
 
     return 0;
 }
@@ -1200,8 +1255,10 @@ void task_yield(void) {
     }
 
     cpu_cli();
-    task_task_switch_set_parameters(false, true);
+    task_task_switch_set_parameters(false);
     task_switch_task();
+    task_task_switch_exit();
+    cpu_sti();
 
     // asm volatile ("int $0xfe\n");
 }
@@ -1209,8 +1266,9 @@ void task_yield(void) {
 int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
-    task_task_switch_set_parameters(true, false);
+    task_task_switch_set_parameters(true);
     task_switch_task();
+    task_task_switch_exit();
 
     return 0;
 }
@@ -1229,8 +1287,12 @@ void task_remove_task_after_fault(uint64_t task_id) {
     task->state = TASK_STATE_ENDED;
 
     if(task->vmcs_physical_address) {
-        if(vmclear(task->vmcs_physical_address) != 0) {
-            PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            if(vmx_vmclear(task->vmcs_physical_address) != 0) {
+                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
+            }
+        }  else if(cpu_get_type() == CPU_TYPE_AMD) {
+
         }
     }
 

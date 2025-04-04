@@ -13,6 +13,10 @@
 #include <types.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     uint32_t identification;
     uint32_t liveness_check;
@@ -39,5 +43,9 @@ _Static_assert(offsetof_field(edu_t, dma_source) == 0x80, "EDU: interrupt_raise 
 _Static_assert(sizeof(edu_t) == 0xA0, "EDU: size is not correct");
 
 #define EDU_DMA_TRANSFER_ADDRESS 0x40000
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

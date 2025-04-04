@@ -8,8 +8,9 @@
 
 #include <hypervisor/hypervisor_ept.h>
 #include <hypervisor/hypervisor_utils.h>
-#include <hypervisor/hypervisor_macros.h>
-#include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
+#include <hypervisor/hypervisor_svm_vmcb_ops.h>
 #include <memory/paging.h>
 #include <cpu/interrupt.h>
 #include <cpu/task.h>
@@ -22,8 +23,12 @@
 MODULE("turnstone.hypervisor");
 
 static void hypervisor_ept_invept(uint64_t type) {
-    uint128_t eptp = vmx_read(VMX_CTLS_EPTP);
-    asm volatile ("invept (%0), %1" : : "r" (&eptp), "r" (type) : "memory");
+    if(cpu_get_type() == CPU_TYPE_INTEL) {
+        uint128_t eptp = vmx_read(VMX_CTLS_EPTP);
+        asm volatile ("invept (%0), %1" : : "r" (&eptp), "r" (type) : "memory");
+    } else if(cpu_get_type() == CPU_TYPE_AMD) {
+        // TODO: AMD
+    }
 }
 
 static int8_t hypervisor_ept_add_ept_page(hypervisor_vm_t* vm, uint64_t host_physical, uint64_t guest_physical, boolean_t wb) {
@@ -375,6 +380,22 @@ uint64_t hypervisor_ept_setup(hypervisor_vm_t* vm) {
     }
 
     PRINTLOG(HYPERVISOR, LOG_TRACE, "stack pages added.");
+
+    if(cpu_get_type() == CPU_TYPE_AMD) {
+        uint64_t avic_apic_backing_page_pointer = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_VAPIC].frame_address;
+
+        if(avic_apic_backing_page_pointer == 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "AVIC APIC backing page not found");
+            return -1;
+        }
+
+        if(hypervisor_ept_add_ept_page(vm, avic_apic_backing_page_pointer, 0xfee00000, true) != 0) {
+            PRINTLOG(HYPERVISOR, LOG_ERROR, "Failed to add EPT page for AVIC APIC backing page");
+            return -1;
+        }
+
+        PRINTLOG(HYPERVISOR, LOG_TRACE, "avic apic backing page added.");
+    }
 
     return ept_frames->frame_address;
 }
@@ -938,7 +959,7 @@ int8_t hypervisor_ept_build_tables(hypervisor_vm_t* vm) {
 
     gdt[0] = 0;
     gdt[1] = 0x00209b0000000000ULL;
-    gdt[2] = 0x0000930000000000ULL;
+    gdt[2] = 0x0020930000000000ULL;
     gdt[3] = 0x00008b0030000067ULL;
 
     vm->next_page_address = VMX_GUEST_CR3_BASE_VALUE;
@@ -1180,15 +1201,12 @@ int8_t hypervisor_ept_merge_module(hypervisor_vm_t* vm, hypervisor_vm_module_loa
     return 0;
 }
 
-uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
-    uint64_t error_code = vmexit_info->interrupt_error_code;
+uint64_t hypervisor_ept_page_fault_handler(uint64_t registers, uint64_t error_code, uint64_t error_address) {
     hypervisor_vm_t* vm = task_get_vm();
 
     interrupt_errorcode_pagefault_t pagefault_error = {.bits = error_code};
 
     if(pagefault_error.fields.present && pagefault_error.fields.write) {
-        uint64_t error_address = vmexit_info->exit_qualification; // exit qualification is the address that caused the page fault
-
         linker_metadata_at_memory_t md = {.section = {.virtual_start = error_address, .size = 1}};
 
         uint64_t pos = 0;
@@ -1261,7 +1279,7 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
 
             hypervisor_ept_invept(1);
 
-            return (uint64_t)vmexit_info->registers;
+            return registers;
         } else {
             PRINTLOG(HYPERVISOR, LOG_ERROR, "Write access to unknown memory at 0x%llx", error_address);
             return -1;
@@ -1269,9 +1287,18 @@ uint64_t hypervisor_ept_page_fault_handler(vmcs_vmexit_info_t* vmexit_info) {
     }
 
     if(!pagefault_error.fields.present) {
-        uint64_t guest_rip = vmx_read(VMX_GUEST_RIP);
+        uint64_t guest_rip = 0;
+
+        if(cpu_get_type() == CPU_TYPE_INTEL) {
+            guest_rip = vmx_read(VMX_GUEST_RIP);
+        } else {
+            svm_vmcb_t* vmcb = (svm_vmcb_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(vm->vmcb_frame_fa);
+            guest_rip = vmcb->save_state_area.rip;
+        }
+
         uint64_t guest_rip_at_host = hypervisor_ept_guest_to_host(vm->ept_pml4_base, guest_rip);
-        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip at host: 0x%llx", guest_rip_at_host);
+        PRINTLOG(HYPERVISOR, LOG_ERROR, "Page fault rip 0x%llx(0x%llx) code 0x%llx address 0x%llx",
+                 guest_rip,  guest_rip_at_host, error_code, error_address);
         return -1;
     }
 

@@ -12,6 +12,10 @@
 
 #include <indexer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief create rbtree index
  * @param[in] heap memory heap to use
@@ -29,5 +33,9 @@ index_t* rbtree_create_index_with_heap(memory_heap_t* heap, index_key_comparator
  * @return 0 if success
  */
 int8_t rbtree_destroy_index(index_t* idx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

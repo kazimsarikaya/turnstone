@@ -12,6 +12,10 @@
 
 #include <compression.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief packs data at input buffer to output buffer with z77 algorithm
  * @param[in] in input buffer
@@ -27,5 +31,9 @@ int8_t zpack_pack(buffer_t* in, buffer_t* out);
  * @return size of output buffer
  */
 int8_t zpack_unpack(buffer_t* in, buffer_t* out);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

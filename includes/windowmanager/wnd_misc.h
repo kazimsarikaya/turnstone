@@ -11,7 +11,15 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int8_t wndmgr_reboot(void);
 int8_t wndmgr_power_off(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___WND_MISC_H

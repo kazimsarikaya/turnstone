@@ -11,6 +11,14 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int64_t errno;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___ERROR_H

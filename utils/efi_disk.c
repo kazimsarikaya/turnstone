@@ -19,11 +19,11 @@
 #include <time.h>
 
 
-typedef struct disk_file_context_t {
+typedef struct disk_context_t {
     FILE*    fp_disk;
     uint64_t file_size;
     uint64_t block_size;
-} disk_file_context_t;
+} disk_context_t;
 
 memory_heap_t* disk_file_get_heap(const disk_or_partition_t* d);
 uint64_t       disk_file_get_disk_size(const disk_or_partition_t* d);
@@ -39,17 +39,17 @@ memory_heap_t* disk_file_get_heap(const disk_or_partition_t* d) {
 }
 
 uint64_t disk_file_get_disk_size(const disk_or_partition_t* d){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->file_size;
 }
 
 uint64_t disk_file_get_block_size(const disk_or_partition_t* d){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->block_size;
 }
 
 int8_t disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
@@ -60,7 +60,7 @@ int8_t disk_file_write(const disk_or_partition_t* d, uint64_t lba, uint64_t coun
 }
 
 int8_t disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
-    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     fseek(ctx->fp_disk, lba * ctx->block_size, SEEK_SET);
 
@@ -71,7 +71,7 @@ int8_t disk_file_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count
 }
 
 int8_t disk_file_close(const disk_or_partition_t* d) {
-    disk_file_context_t* ctx = (disk_file_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     fclose(ctx->fp_disk);
 
     memory_free(ctx);
@@ -97,7 +97,7 @@ disk_t* disk_file_open(char_t* file_name, int64_t size) {
     fseek(fp_disk, 0, SEEK_END);
     size = ftell(fp_disk);
 
-    disk_file_context_t* ctx = memory_malloc(sizeof(disk_file_context_t));
+    disk_context_t* ctx = memory_malloc(sizeof(disk_context_t));
 
     if(ctx == NULL) {
         fclose(fp_disk);

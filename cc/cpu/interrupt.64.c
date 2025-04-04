@@ -280,8 +280,61 @@ static void interrupt_print_frame_ext(interrupt_frame_ext_t* frame) {
     PRINTLOG(KERNEL, LOG_ERROR, "\tERROR: 0x%llx", frame->error_code);
 }
 
+static boolean_t interrupt_xsave_mask_memorized = false;
+static uint64_t interrupt_xsave_mask_lo = 0;
+static uint64_t interrupt_xsave_mask_hi = 0;
+
+static void interrupt_save_restore_avx512f(boolean_t save, interrupt_frame_ext_t* frame) {
+    if(!interrupt_xsave_mask_memorized) {
+        cpu_cpuid_regs_t query = {0};
+        cpu_cpuid_regs_t result;
+
+        query.eax = 0xd;
+
+        cpu_cpuid(query, &result);
+
+        interrupt_xsave_mask_lo = result.eax;
+        interrupt_xsave_mask_hi = result.edx;
+
+        interrupt_xsave_mask_memorized = true;
+    }
+
+    uint64_t frame_base = (uint64_t)frame;
+    uint64_t avx512f_offset = frame_base + offsetof_field(interrupt_frame_ext_t, avx512f);
+    // align to 0x40
+    avx512f_offset = (avx512f_offset + 0x3F) & ~0x3F;
+
+    if(save) {
+        memory_memclean((void*)avx512f_offset, 0x2000);
+
+        asm volatile (
+            "mov %[avx512f_offset], %%rbx\n"
+            "xsave (%%rbx)\n"
+            :
+            :
+            [avx512f_offset] "r" (avx512f_offset),
+            "rax" (interrupt_xsave_mask_lo),
+            "rdx" (interrupt_xsave_mask_hi)
+            : "rbx"
+            );
+    } else {
+        asm volatile (
+            "mov %[avx512f_offset], %%rbx\n"
+            "xrstor (%%rbx)\n"
+            :
+            :
+            [avx512f_offset] "r" (avx512f_offset),
+            "rax" (interrupt_xsave_mask_lo),
+            "rdx" (interrupt_xsave_mask_hi)
+            : "rbx"
+            );
+    }
+}
+
 
 void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
+    interrupt_save_restore_avx512f(true, frame);
+
     uint8_t intnum = frame->interrupt_number;
 
     if(interrupt_irqs != NULL) {
@@ -315,6 +368,8 @@ void interrupt_generic_handler(interrupt_frame_ext_t* frame) {
                 PRINTLOG(KERNEL, LOG_WARNING, "cannot find shared irq for 0x%02x miss count 0x%x", intnum, miss_count);
             } else {
                 PRINTLOG(KERNEL, LOG_TRACE, "found shared irq for 0x%02x", intnum);
+
+                interrupt_save_restore_avx512f(false, frame);
 
                 return;
             }
@@ -371,25 +426,6 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
 
-    if(apic_id == 0 && apic_is_waiting_timer()) {
-        video_text_print("bsp stucked, recovering...\n");
-        video_text_print("return symbol name: ");
-        video_text_print(return_symbol_name);
-        video_text_print("\n");
-
-        stackframe_t* s_frame = (stackframe_t*)frame->rbp;
-        PRINTLOG(KERNEL, LOG_ERROR, "bsp stucked, recovering...");
-        PRINTLOG(KERNEL, LOG_ERROR, "return symbol name: %s", return_symbol_name);
-        backtrace_print(s_frame);
-        KERNEL_PANIC_DISABLE_LOCKS = false;
-
-        frame->interrupt_number = 0x20;
-
-        interrupt_generic_handler(frame);
-
-        return 0;
-    }
-
     PRINTLOG(KERNEL, LOG_FATAL, "NMI interrupt occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, task_get_id());
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);
 
@@ -397,6 +433,10 @@ int8_t interrupt_int02_nmi_interrupt(interrupt_frame_ext_t* frame) {
     backtrace_print_location_and_stackframe_by_rip(frame->return_rip, s_frame);
 
     interrupt_print_frame_ext(frame);
+
+    KERNEL_PANIC_DISABLE_LOCKS = false;
+
+    return 0;
 
     uint64_t tid = task_get_id();
 
@@ -472,7 +512,6 @@ int8_t interrupt_int0E_page_fault_exception(interrupt_frame_ext_t* frame){
 
     const char_t* return_symbol_name = backtrace_get_symbol_name_by_rip(frame->return_rip);
     video_text_print(return_symbol_name);
-    video_text_print(" wtf\n");
 
     PRINTLOG(KERNEL, LOG_FATAL, "page fault occured at 0x%x:0x%llx %s task 0x%llx", frame->return_cs, frame->return_rip, return_symbol_name, tid);
     PRINTLOG(KERNEL, LOG_FATAL, "return stack at 0x%x:0x%llx frm ptr 0x%p", frame->return_ss, frame->return_rsp, frame);

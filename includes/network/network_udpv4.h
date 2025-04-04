@@ -13,6 +13,10 @@
 #include <network.h>
 #include <network/network_protocols.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define NETWORK_APPLICATION_PORT_ECHO_SERVER 7
 #define NETWORK_APPLICATION_PORT_DHCP_CLIENT 68
 
@@ -26,5 +30,9 @@ typedef struct network_udpv4_header_t {
 
 uint8_t*                network_udpv4_process_packet(network_ipv4_address_t dip, network_ipv4_address_t sip, network_udpv4_header_t* recv_udpv4_packet, void* network_info, uint16_t* return_packet_len);
 network_udpv4_header_t* network_udpv4_create_packet_from_data(uint16_t sp, uint16_t dp, uint16_t len, uint8_t* data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -14,6 +14,10 @@
 #include <acpi.h>
 #include <utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @struct hpet_address_t
  * @brief  HPET address structure
@@ -142,5 +146,9 @@ extern boolean_t hpet_enabled;
  * @return 0 if hpet was initialized, -1 otherwise
  */
 int8_t hpet_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

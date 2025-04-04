@@ -11,6 +11,10 @@
 
 #include <graphics/image.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef struct graphics_tga_image_t {
     uint8_t  magic;
@@ -29,5 +33,9 @@ typedef struct graphics_tga_image_t {
 } __attribute__((packed)) graphics_tga_image_t;
 
 graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_t size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___GRAPHICS_TGA_H

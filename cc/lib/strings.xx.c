@@ -47,7 +47,7 @@ int8_t strcmp(const char_t* string1, const char_t* string2) {
     return (minlen == len1) ? -1 : 1;
 }
 
-int8_t strcpy(const char_t* source, char_t* destination){
+int8_t strcopy(const char_t* source, char_t* destination){
     if(source == NULL || destination == NULL) {
         return -1;
     }
@@ -143,7 +143,7 @@ char_t* ito_base(number_t number, number_t base){
         return NULL;
     }
 
-    strcpy(buf, ret);
+    strcopy(buf, ret);
 
     return ret;
 }
@@ -164,7 +164,7 @@ char_t* uto_base(unumber_t number, number_t base){
         return NULL;
     }
 
-    strcpy(buf, ret);
+    strcopy(buf, ret);
 
     return ret;
 }
@@ -257,8 +257,8 @@ char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t*
         return res;
     }
 
-    strcpy(string1, res);
-    strcpy(string2, res + strlen(string1));
+    strcopy(string1, res);
+    strcopy(string2, res + strlen(string1));
 
     return res;
 }
@@ -287,6 +287,10 @@ int8_t strncmp(const char_t* string1, const char_t* string2, size_t n) {
 }
 
 char_t** strsplit(const char_t* str, const char_t token, int64_t** lengths, int64_t* count) {
+    if(str == NULL) {
+        return NULL;
+    }
+
     char_t* tmp = (char_t*)str;
 
     if(count == NULL || lengths == NULL) {
@@ -404,7 +408,7 @@ char_t* strlowercopy(const char_t* str) {
     return strlower(strdup(str));
 }
 
-int64_t wchar_size(const wchar_t* str){
+int64_t wchar_size(const char16_t* str){
 
     if(str == NULL) {
         return 0;
@@ -420,7 +424,7 @@ int64_t wchar_size(const wchar_t* str){
     return res;
 }
 
-char_t* wchar_to_char(wchar_t* src){
+char_t* char16_to_char(char16_t* src){
 
     if(src == NULL) {
         return NULL;
@@ -454,14 +458,14 @@ char_t* wchar_to_char(wchar_t* src){
     return dst;
 }
 
-wchar_t* char_to_wchar(const char_t* str){
+char16_t* char_to_wchar(const char_t* str){
 
     if(str == NULL) {
         return NULL;
     }
 
     int64_t len = strlen(str);
-    wchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+    char16_t* res = memory_malloc(sizeof(char16_t) * len + 1);
 
     if(res == NULL) {
         return NULL;
@@ -471,7 +475,7 @@ wchar_t* char_to_wchar(const char_t* str){
     int64_t j = 0;
 
     while(str[i]) {
-        wchar_t wc = str[i];
+        char16_t wc = str[i];
 
         if(wc & 128) {
             if((wc & 32) == 0 ) {
@@ -497,7 +501,7 @@ wchar_t* char_to_wchar(const char_t* str){
     return res;
 }
 
-int64_t lchar_size(const lchar_t* str){
+int64_t lchar_size(const char32_t* str){
     int64_t res = 0;
     int64_t i = 0;
 
@@ -508,7 +512,7 @@ int64_t lchar_size(const lchar_t* str){
     return res;
 }
 
-char_t* lchar_to_char(lchar_t* src){
+char_t* char32_to_char(char32_t* src){
 
     if(src == NULL) {
         return NULL;
@@ -547,14 +551,14 @@ char_t* lchar_to_char(lchar_t* src){
     return dst;
 }
 
-lchar_t* char_to_lchar(char_t* str){
+char32_t* char_to_lchar(char_t* str){
 
     if(str == NULL) {
         return NULL;
     }
 
     int64_t len = strlen(str);
-    lchar_t* res = memory_malloc(sizeof(wchar_t) * len + 1);
+    char32_t* res = memory_malloc(sizeof(char16_t) * len + 1);
 
     if(res == NULL) {
         return NULL;
@@ -564,7 +568,7 @@ lchar_t* char_to_lchar(char_t* str){
     int64_t j = 0;
 
     while(str[i]) {
-        wchar_t wc = str[i];
+        char16_t wc = str[i];
 
         if(wc & 128) {
             if((wc & 32) == 0 ) {
@@ -647,15 +651,15 @@ uint64_t strhash(const char_t* input) {
     return res;
 }
 
-char_t* sprintf(const char_t* format, ...) {
+char_t* strprintf(const char_t* format, ...) {
     va_list args;
     va_start(args, format);
-    char_t* res = vsprintf(format, args);
+    char_t* res = vstrprintf(format, args);
     va_end(args);
     return res;
 }
 
-char_t* vsprintf(const char_t* format, va_list args) {
+char_t* vstrprintf(const char_t* format, va_list args) {
     buffer_t* buffer = buffer_new_with_capacity(NULL, 1024);
     buffer_vprintf(buffer, format, args);
     char_t* res = (char_t*)buffer_get_all_bytes_and_destroy(buffer, NULL);

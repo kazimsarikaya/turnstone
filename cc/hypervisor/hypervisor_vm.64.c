@@ -9,8 +9,6 @@
 
 #include <hypervisor/hypervisor_vm.h>
 #include <hypervisor/hypervisor_ipc.h>
-#include <hypervisor/hypervisor_macros.h>
-#include <hypervisor/hypervisor_vmxops.h>
 #include <hypervisor/hypervisor_utils.h>
 #include <list.h>
 #include <cpu/task.h>
@@ -99,14 +97,13 @@ int8_t hypervisor_vm_create_and_attach_to_task(hypervisor_vm_t* vm) {
     vm->mapped_interrupts = list_create_list();
     vm->interrupt_queue = list_create_queue();
 
+    vm->lapic.timer_masked = true;
+
     list_list_insert(hypervisor_vm_list, vm);
 
     PRINTLOG(HYPERVISOR, LOG_DEBUG, "vmcs frame fa: 0x%llx", vm->vmcs_frame_fa);
     task_set_vmcs_physical_address(vm->vmcs_frame_fa);
     task_set_vm(vm);
-
-    vmx_write(VMX_HOST_FS_BASE, cpu_read_fs_base());
-    vmx_write(VMX_HOST_GS_BASE, cpu_read_gs_base());
 
     return 0;
 }
@@ -118,17 +115,24 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
 
     list_list_delete(hypervisor_vm_list, vm);
 
-    buffer_destroy(vm->output_buffer);
     list_destroy(vm->ipc_queue);
     map_destroy(vm->msr_map);
     hashmap_destroy(vm->loaded_module_ids);
 
     list_destroy(vm->mapped_pci_devices);
     list_destroy(vm->mapped_io_ports);
-    hypervisor_vmcall_cleanup_mapped_interrupts(vm);
+    hypervisor_cleanup_mapped_interrupts(vm);
     list_destroy(vm->mapped_interrupts);
     list_destroy(vm->interrupt_queue);
     list_destroy(vm->released_pages);
+
+    if(vm->host_registers) {
+        memory_free_ext(vm->heap, vm->host_registers);
+    }
+
+    if(vm->guest_registers) {
+        memory_free_ext(vm->heap, vm->guest_registers);
+    }
 
     frame_t self_frame = vm->owned_frames[HYPERVISOR_VM_FRAME_TYPE_SELF];
 
@@ -210,6 +214,10 @@ void hypervisor_vm_destroy(hypervisor_vm_t* vm) {
         PRINTLOG(TASKING, LOG_ERROR, "cannot release stack with frames at 0x%llx with count 0x%llx",
                  self_frame.frame_address, self_frame.frame_count);
     }
+
+    memory_heap_t* dheap = memory_get_default_heap();
+
+    memory_free_ext(dheap, (void*)vm->entry_point_name);
 }
 
 void hypervisor_vm_notify_timers(void) {
@@ -224,7 +232,7 @@ void hypervisor_vm_notify_timers(void) {
             continue;
         }
 
-        if(!vm->lapic_timer_enabled) {
+        if(vm->lapic.timer_masked) {
             continue;
         }
 
@@ -245,8 +253,7 @@ void hypervisor_vm_notify_timers(void) {
             timer_expired = true;
         }
 
-        if(timer_expired && !vm->lapic.timer_masked && !vm->lapic_timer_pending) {
-            vm->lapic_timer_pending = true;
+        if(timer_expired && !vm->lapic.timer_masked && !vm->lapic.timer_exits) {
             hypervisor_ipc_send_timer_interrupt(vm);
         }
     }

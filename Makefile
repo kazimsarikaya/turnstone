@@ -8,6 +8,7 @@ MAKE = make
 ifeq ($(HOSTOS),Darwin)
 
 CC64 = x86_64-elf-gcc
+CPP64 = x86_64-elf-g++
 OBJCOPY = x86_64-elf-objcopy
 
 SEDNOBAK = sed -i ''
@@ -15,6 +16,7 @@ SEDNOBAK = sed -i ''
 else
 
 CC64 = gcc
+CPP64 = g++
 OBJCOPY = objcopy
 
 SEDNOBAK = sed -i
@@ -26,22 +28,28 @@ DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
 
-CCXXFLAGS += -std=gnu11 -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+BASEFLAGS += -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
     -Wshadow -Wpointer-arith -Wcast-align \
-	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
-    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes \
-	-fPIC -fplt -mcmodel=large -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
+	-Wwrite-strings -Wmissing-declarations \
+    -Wredundant-decls -Winline -Wno-long-long \
+	-fPIC -fpic -fplt -mcmodel=large -fno-ident -fno-asynchronous-unwind-tables ${CCXXEXTRAFLAGS} \
 	-D___KERNELBUILD=1
+
+CCFLAGS = $(BASEFLAGS) \
+		  -std=gnu18 \
+          -Wnested-externs \
+		  -Wmissing-prototypes -Wstrict-prototypes
+CPPFLAGS = $(BASEFLAGS) \
+		   -std=gnu++26 \
+		   -fno-rtti -fno-exceptions
 
 CXXTESTFLAGS= -D___TESTMODE=1
 
-CC64FLAGS    = -m64 -march=x86-64 -D___BITS=64 -msse4.2 $(CCXXFLAGS)
-CC64INTFLAGS = -m64 -march=x86-64 -mgeneral-regs-only -D___BITS=64 $(CCXXFLAGS)
+CC64FLAGS    = -m64 -march=native -D___BITS=64 $(CCFLAGS)
 
-OBJDIR = output
+OBJDIR = build
 ASOBJDIR = $(OBJDIR)/asm
 CCOBJDIR = $(OBJDIR)/cc
 DOCSOBJDIR = $(OBJDIR)/docs
@@ -65,6 +73,7 @@ TOSDBIMG = $(OBJDIR)/$(TOSDBIMGNAME)
 
 AS64SRCS = $(shell find $(ASSRCDIR) -type f -name \*64.S)
 CC64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.c)
+CPP64SRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.cpp)
 CC64TESTSRCS = $(shell find $(CCSRCDIR) -type f -name \*.64.test.c)
 
 CCXXSRCS = $(shell find $(CCSRCDIR) -type f -name \*.xx.c)
@@ -92,7 +101,9 @@ CC64GENASMOUTS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.
 CC64TESTOBJS = $(patsubst $(CCSRCDIR)/%.64.test.c,$(CCOBJDIR)/%.64.test.o,$(CC64TESTSRCS))
 CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(CCXXTESTSRCS))
 
-DOCSFILES += $(CC64SRCS) $(CCXXSRCS)
+CPP64OBJS = $(patsubst $(CCSRCDIR)/%.64.cpp,$(CCOBJDIR)/%.64.o,$(CPP64SRCS))
+
+DOCSFILES += $(CC64SRCS) $(CCXXSRCS) $(CPP64SRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
 DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.c)
 DOCSFILES += $(shell find $(EFISRCDIR) -type f -name \*.h)
@@ -102,11 +113,11 @@ DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.h)
 ASSETS = $(shell find $(ASSETSDIR) -type f)
 ASSETOBJS = $(patsubst %,$(OBJDIR)/%.data.o,$(ASSETS))
 
-OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS)
+OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS) $(CPP64OBJS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
 ifeq (,$(wildcard $(TOSDBIMG)))
-LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS)
+LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(CPP64OBJS)
 else
 LASTCCOBJS = $(shell find $(CCOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
 LASTCCOBJS += $(shell find $(ASSETOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
@@ -123,19 +134,17 @@ PROGS = $(OBJDIR)/stage3.bin.pack
 
 TESTPROGS = $(OBJDIR)/stage3.test.bin
 
-.PHONY: all clean depend $(SUBDIRS) $(CC64GENOBJS) asm bear
+.PHONY: all clean $(SUBDIRS) asm bear
 .PRECIOUS:
 
 qemu-without-analyzer:
 	CCXXEXTRAFLAGS= make -j $(shell nproc) -C utils 
 	CCXXEXTRAFLAGS= make -j $(shell nproc) -C efi 
-	CCXXEXTRAFLAGS= make -j 1 -f Makefile-np 
 	CCXXEXTRAFLAGS= make -j $(shell nproc) -f Makefile qemu-internal
 
 qemu: 
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -C utils 
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -C efi 
-	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np 
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -f Makefile qemu-internal
 
 qemu-internal: $(QEMUDISK)
@@ -154,14 +163,13 @@ qemu-test: $(TESTQEMUDISK)
 virtualbox: $(VBBOXDISK)
 
 asm:
-	CCXXEXTRAFLAGS=-fanalyzer make -j 1 -f Makefile-np asm
 	CCXXEXTRAFLAGS=-fanalyzer make -j $(shell nproc) -f Makefile asm-internal
 
 asm-internal: $(CC64ASMOUTS)
 
 bear:
-	bear --append -- make qemu
-	bear --append -- make -j $(shell nproc) -C tests
+	bear --output $(OBJDIR)/compile_commands.json --append -- make qemu
+	bear --output $(OBJDIR)/compile_commands.json --append -- make -j $(shell nproc) -C tests
 
 test: qemu-test
 	scripts/osx-hacks/qemu-hda-test.sh
@@ -176,13 +184,13 @@ gendirs:
 
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
-	find output/docs/html/ -name "*.html"|sed 's-output/docs/html-https://turnstoneos.com-' > output/docs/html/sitemap.txt
+	find $(OBJDIR)/docs/html/ -name "*.html"|sed 's-'$(OBJDIR)'/docs/html-https://turnstoneos.com-' > $(OBJDIR)/docs/html/sitemap.txt
 	touch $(OBJDIR)/docs
 
-$(VBBOXDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
+$(VBBOXDISK): $(MKDIRSDONE) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(VBBOXDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
-$(QEMUDISK): $(MKDIRSDONE) $(CC64GENOBJS) $(TOSDBIMG)
+$(QEMUDISK): $(MKDIRSDONE) $(TOSDBIMG)
 	$(EFIDISKTOOL) $(QEMUDISK) $(EFIBOOTFILE) $(TOSDBIMG)
 
 $(TESTQEMUDISK): $(TESTDISK) $(TOSDBIMG)
@@ -192,11 +200,14 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(CPP64OBJS)
 	$(TOSDBIMG_BUILDER) -o $@ $(LASTCCOBJS)
 
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
+	$(CPP64) $(CPPFLAGS) -o $@ $<
 
 $(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(CC64FLAGS) -o $@ $<
@@ -219,14 +230,17 @@ $(ASOBJDIR)/%64.o: $(ASSRCDIR)/%64.S
 $(ASOBJDIR)/%64.test.o: $(ASSRCDIR)/%64.S
 	$(CC64) $(CC64FLAGS) $(CXXTESTFLAGS) -o $@ $^
 
-$(CCOBJDIR)/cpu/interrupt.64.o: $(CCSRCDIR)/cpu/interrupt.64.c
-	$(CC64) $(CC64INTFLAGS) -o $@ $<
-	
-$(CCOBJDIR)/cpu/interrupt.64.s: $(CCSRCDIR)/cpu/interrupt.64.c
-	$(CC64) $(CC64INTFLAGS) -S -o $@ $<
+$(CCGENDIR)/%.c: $(CCGENSCRIPTSDIR)/%.sh
+	if [[ ! -f $@ ]]; then $^ > $@; else $^ > $@.tmp; diff $@  $@.tmp  2>/dev/null && rm -f $@.tmp || mv $@.tmp $@; fi
 
 $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
-	$(CC64) $(CC64INTFLAGS) -o $@ $<
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/vm_guest_interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/vm_guest_interrupt_handlers.c
+	$(CC64) $(CC64FLAGS) -o $@ $<
 
 $(SUBDIRS):
 	$(MAKE) -j $(nproc) -C $@
@@ -237,7 +251,7 @@ $(ASSETOBJS): $(ASSETS)
 clean:
 	rm -fr $(DOCSOBJDIR)/*
 	if [ -d $(OBJDIR) ]; then find $(OBJDIR) -type f -delete; fi
-	rm -f .depend*
+	find . -type f -name .depend\* -delete
 	if [ -d $(CCGENDIR) ]; then find $(CCGENDIR) -type f -delete; fi
 	if [ -d $(INCLUDESGENDIR) ]; then find $(INCLUDESGENDIR) -type f -delete; fi
 	rm -f $(MKDIRSDONE)
@@ -248,10 +262,24 @@ cleandirs:
 
 print-%: ; @echo $* = $($*)
 
-depend: .depend64
+.PHONY: depend $(UTILSSRCDIR)/.depend $(EFISRCDIR)/.depend
+depend: .depend64c .depend64cpp $(UTILSSRCDIR)/.depend $(EFISRCDIR)/.depend
+	@echo "Dependencies generated" 
 
-.depend64: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
+.depend64c: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
 	scripts/create-cc-deps.sh "$(CC64) $(CC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
 	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
+
+.depend64cpp: $(CPP64SRCS)
+	scripts/create-cc-deps.sh "$(CPP64) $(CPPFLAGS) -D___DEPEND_ANALYSIS -MM" "$^" >> .depend64
+	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
+
+$(UTILSSRCDIR)/.depend:
+	rm -f $(UTILSSRCDIR)/.depend
+	make -C utils -B depend 
+
+$(EFISRCDIR)/.depend:
+	rm -f $(EFISRCDIR)/.depend
+	make -C efi -B depend
 
 -include .depend64

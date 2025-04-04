@@ -231,17 +231,10 @@ static network_tcpv4_header_t* network_tcpv4_create_psh_ack_packet_from_connecti
     return res;
 }
 
-uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_address_t sip, network_tcpv4_header_t* recv_tcpv4_packet, void* network_info, uint16_t packet_len, uint16_t* return_packet_len) {
-    UNUSED(network_info);
-    UNUSED(return_packet_len);
-
-    if (recv_tcpv4_packet == NULL || return_packet_len == NULL) {
-        PRINTLOG(NETWORK, LOG_ERROR, "recv_tcpv4_packet/return_packet_len is NULL");
-        return NULL;
-    }
-
-    PRINTLOG(NETWORK, LOG_TRACE, "Processing TCPv4 packet");
-
+static int8_t network_tcpv4_dump_packet(network_ipv4_address_t        dip,
+                                        network_ipv4_address_t        sip,
+                                        const network_tcpv4_header_t* recv_tcpv4_packet,
+                                        uint16_t                      packet_len) {
     uint16_t header_length = recv_tcpv4_packet->header_length * 4;
     uint16_t data_length = packet_len - header_length;
 
@@ -321,7 +314,7 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
                 } else {
                     PRINTLOG(NETWORK, LOG_TRACE, "Invalid MSS option length");
 
-                    return NULL;
+                    return -1;
                 }
 
                 i += 4;
@@ -346,7 +339,7 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
                 } else {
                     PRINTLOG(NETWORK, LOG_TRACE, "Invalid SACK permitted option length");
 
-                    return NULL;
+                    return -1;
                 }
 
                 i += 2;
@@ -370,7 +363,7 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
                 } else {
                     PRINTLOG(NETWORK, LOG_TRACE, "Invalid SACK option length");
 
-                    return NULL;
+                    return -1;
                 }
 
                 i += options[i + 1];
@@ -385,217 +378,79 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
                 } else {
                     PRINTLOG(NETWORK, LOG_TRACE, "Invalid timestamp option length");
 
-                    return NULL;
+                    return -1;
                 }
 
                 i += 10;
             } else {
                 PRINTLOG(NETWORK, LOG_TRACE, "Invalid/Unsupported option: %i", options[i]);
 
-                return NULL;
+                return -1;
             }
         }
+    }
+
+    return 0;
+}
+
+static uint8_t* network_tcpv4_process_syn_packet(network_ipv4_address_t dip,
+                                                 network_ipv4_address_t sip,
+                                                 uint16_t               dest_port,
+                                                 uint16_t               source_port,
+                                                 uint32_t               ack_num,
+                                                 uint32_t               seq_num,
+                                                 uint16_t               window_size,
+                                                 uint16_t*              return_packet_len) {
+
+    network_tcpv4_listener_t* listener = network_tcpv4_listener_get(dip, dest_port);
+
+    if(listener == NULL) {
+        return NULL;
     }
 
     network_tcpv4_header_t* res = NULL;
 
     network_tcpv4_connection_t* connection = network_tcpv4_connection_get(dip, dest_port, sip, source_port);
 
+    if(connection) {
+        // SYN received on an existing connection
+        // send RST
+        res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
 
-    if(recv_tcpv4_packet->syn) {
-        if(connection) {
-            // SYN received on an existing connection
-            // send RST
-            res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
+        if(res != NULL) {
+            *return_packet_len = sizeof(network_tcpv4_header_t);
+            PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
 
-            if(res != NULL) {
-                *return_packet_len = sizeof(network_tcpv4_header_t);
-                PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
-
-                return (uint8_t*)res;
-            }
-
-            return NULL;
-        } else {
-            // new connection
-            connection = memory_malloc(sizeof(network_tcpv4_connection_t));
-
-            if(connection == NULL) {
-                return NULL;
-            }
-
-            connection->local_ip = dip;
-            connection->local_port = dest_port;
-            connection->remote_ip = sip;
-            connection->remote_port = source_port;
-            connection->state = NETWORK_TCP_CONNECTION_STATE_SYN_RECEIVED;
-
-            connection->local_sequence_number = rand();
-            connection->remote_sequence_number = seq_num + 1;
-
-            connection->local_acknowledgement_number = ack_num;
-            connection->remote_acknowledgement_number = 0;
-
-            connection->window_size = window_size;
-
-            network_tcpv4_connection_add(connection);
-
-            res = network_tcpv4_create_syn_ack_packet_from_connection(connection);
-
-            if(res != NULL) {
-                *return_packet_len = sizeof(network_tcpv4_header_t);
-                PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
-
-                return (uint8_t*)res;
-            }
+            return (uint8_t*)res;
         }
+
+        return NULL;
     }
 
-    if(recv_tcpv4_packet->ack) {
-        if(connection) {
-            if(connection->state == NETWORK_TCP_CONNECTION_STATE_SYN_RECEIVED) {
-                if(ack_num == connection->local_sequence_number + 1) {
-                    connection->state = NETWORK_TCP_CONNECTION_STATE_ESTABLISHED;
-                }
-            }
+    // new connection
+    connection = memory_malloc(sizeof(network_tcpv4_connection_t));
 
-            connection->remote_sequence_number = seq_num;
-            connection->remote_acknowledgement_number = ack_num;
-
-            if(connection->state == NETWORK_TCP_CONNECTION_STATE_ESTABLISHED) {
-                if(recv_tcpv4_packet->psh) {
-                    // data received
-                    PRINTLOG(NETWORK, LOG_TRACE, "Data received");
-
-                    uint8_t* data = (uint8_t*)recv_tcpv4_packet;
-                    data += header_length;
-
-                    PRINTLOG(NETWORK, LOG_INFO, "Data(%i): %s", data_length, data);
-
-                    // send ACK
-
-                    connection->local_sequence_number = connection->remote_acknowledgement_number;
-                    connection->remote_sequence_number = connection->remote_sequence_number + data_length;
-
-                    uint16_t extra_data_length = 0;
-
-                    if(dest_port == 7) {
-                        res = network_tcpv4_create_psh_ack_packet_from_connection(connection, data, data_length);
-                        extra_data_length = data_length;
-                    } else if(dest_port == 80) {
-                        const char* http_response = "HTTP/1.1 200 OK\r\n" \
-                                                    "Content-Type: text/plain\r\n" \
-                                                    "Content-Length: 13\r\n" \
-                                                    "X-Operating-System: Turnstone OS\r\n" \
-                                                    "\r\n" \
-                                                    "Hello World!\n";
-                        extra_data_length = strlen(http_response);
-                        res = network_tcpv4_create_psh_ack_packet_from_connection(connection, (uint8_t*)http_response, strlen(http_response));
-                    } else {
-                        res = network_tcpv4_create_ack_packet_from_connection(connection);
-                    }
-
-                    if(res != NULL) {
-                        *return_packet_len = sizeof(network_tcpv4_header_t) + extra_data_length;
-                        PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
-
-                        return (uint8_t*)res;
-                    }
-
-                    return NULL;
-                } else if(recv_tcpv4_packet->fin && connection->state == NETWORK_TCP_CONNECTION_STATE_ESTABLISHED) {
-                    // connection closed
-                    PRINTLOG(NETWORK, LOG_INFO, "Connection closed");
-
-                    connection->local_sequence_number = connection->remote_acknowledgement_number;
-                    connection->remote_sequence_number = seq_num + 1;
-
-                    connection->state = NETWORK_TCP_CONNECTION_STATE_CLOSE_WAIT;
-
-                    res = network_tcpv4_create_ack_packet_from_connection(connection);
-
-                    if(res != NULL) {
-                        *return_packet_len = sizeof(network_tcpv4_header_t);
-                        PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
-
-                        return (uint8_t*)res;
-                    }
-
-                    return NULL;
-                } else if(recv_tcpv4_packet->rst) {
-                    // connection reset
-                    PRINTLOG(NETWORK, LOG_TRACE, "Connection reset");
-
-                    network_tcpv4_connection_del(connection);
-
-                    return NULL;
-                }
-            } else if(connection->state == NETWORK_TCP_CONNECTION_STATE_CLOSE_WAIT) {
-                network_tcpv4_connection_del(connection);
-            }
-
-            return NULL;
-        } else {
-            // send RST
-            res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
-
-            if(res != NULL) {
-                *return_packet_len = sizeof(network_tcpv4_header_t);
-                PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
-
-                return (uint8_t*)res;
-            }
-
-            return NULL;
-        }
+    if(connection == NULL) {
+        return NULL;
     }
 
-    if(recv_tcpv4_packet->rst) {
-        if(connection) {
-            // connection reset
-            PRINTLOG(NETWORK, LOG_TRACE, "Connection reset");
+    connection->local_ip = dip;
+    connection->local_port = dest_port;
+    connection->remote_ip = sip;
+    connection->remote_port = source_port;
+    connection->state = NETWORK_TCP_CONNECTION_STATE_SYN_RECEIVED;
 
-            network_tcpv4_connection_del(connection);
+    connection->local_sequence_number = rand();
+    connection->remote_sequence_number = seq_num + 1;
 
-            return NULL;
-        } else {
-            // send RST
-            res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
+    connection->local_acknowledgement_number = ack_num;
+    connection->remote_acknowledgement_number = 0;
 
-            if(res != NULL) {
-                *return_packet_len = sizeof(network_tcpv4_header_t);
-                PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
+    connection->window_size = window_size;
 
-                return (uint8_t*)res;
-            }
+    network_tcpv4_connection_add(connection);
 
-            return NULL;
-        }
-    }
-
-    if(recv_tcpv4_packet->fin) {
-        if(connection) {
-            // connection closed
-            PRINTLOG(NETWORK, LOG_TRACE, "Connection closed");
-
-            return NULL;
-        } else {
-            // send RST
-            res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
-
-            if(res != NULL) {
-                *return_packet_len = sizeof(network_tcpv4_header_t);
-                PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
-
-                return (uint8_t*)res;
-            }
-
-            return NULL;
-        }
-    }
-
-
-    res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
+    res = network_tcpv4_create_syn_ack_packet_from_connection(connection);
 
     if(res != NULL) {
         *return_packet_len = sizeof(network_tcpv4_header_t);
@@ -604,6 +459,173 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
         return (uint8_t*)res;
     }
 
+    return NULL;
+}
+
+static uint8_t* network_tcpv4_process_fin_packet(network_tcpv4_connection_t* connection, uint32_t seq_num, uint16_t* return_packet_len) {
+    // connection closed
+    PRINTLOG(NETWORK, LOG_TRACE, "Connection closed");
+
+    if(connection->state == NETWORK_TCP_CONNECTION_STATE_ESTABLISHED) {
+        connection->local_sequence_number = connection->remote_acknowledgement_number;
+        connection->remote_sequence_number = seq_num + 1;
+
+        connection->state = NETWORK_TCP_CONNECTION_STATE_CLOSE_WAIT;
+
+        network_tcpv4_header_t* res = NULL;
+
+        res = network_tcpv4_create_ack_packet_from_connection(connection);
+
+        if(res != NULL) {
+            *return_packet_len = sizeof(network_tcpv4_header_t);
+            PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
+
+            return (uint8_t*)res;
+        }
+    }
+
+    return NULL;
+
+}
+
+uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_address_t sip, network_tcpv4_header_t* recv_tcpv4_packet, void* network_info, uint16_t packet_len, uint16_t* return_packet_len) {
+    UNUSED(network_info);
+    UNUSED(return_packet_len);
+
+    if (recv_tcpv4_packet == NULL || return_packet_len == NULL) {
+        PRINTLOG(NETWORK, LOG_ERROR, "recv_tcpv4_packet/return_packet_len is NULL");
+        return NULL;
+    }
+
+    PRINTLOG(NETWORK, LOG_TRACE, "Processing TCPv4 packet");
+
+    if(network_tcpv4_dump_packet(dip, sip, recv_tcpv4_packet, packet_len) < 0) {
+        return NULL;
+    }
+
+    uint16_t header_length = recv_tcpv4_packet->header_length * 4;
+    uint16_t data_length = packet_len - header_length;
+
+    uint16_t source_port = recv_tcpv4_packet->source_port;
+    source_port = BYTE_SWAP16(source_port);
+
+    uint16_t dest_port = recv_tcpv4_packet->destination_port;
+    dest_port = BYTE_SWAP16(dest_port);
+
+    uint32_t seq_num = recv_tcpv4_packet->sequence_number;
+    seq_num = BYTE_SWAP32(seq_num);
+
+
+    uint32_t ack_num = recv_tcpv4_packet->acknowledgement_number;
+    ack_num = BYTE_SWAP32(ack_num);
+
+    uint16_t window_size = recv_tcpv4_packet->window_size;
+    window_size = BYTE_SWAP16(window_size);
+
+
+    if(recv_tcpv4_packet->syn) {
+        return network_tcpv4_process_syn_packet(dip, sip, dest_port, source_port, ack_num, seq_num, window_size, return_packet_len);
+    }
+
+    network_tcpv4_header_t* res = NULL;
+
+    network_tcpv4_connection_t* connection = network_tcpv4_connection_get(dip, dest_port, sip, source_port);
+
+    if(!connection) {
+        // send RST
+        res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
+
+        if(res != NULL) {
+            *return_packet_len = sizeof(network_tcpv4_header_t);
+            PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
+
+            return (uint8_t*)res;
+        }
+
+        return NULL;
+    }
+
+    if(recv_tcpv4_packet->rst) {
+        // connection reset
+        PRINTLOG(NETWORK, LOG_TRACE, "Connection reset");
+
+        network_tcpv4_connection_del(connection);
+
+        return NULL;
+    }
+
+    if(recv_tcpv4_packet->fin) {
+        return network_tcpv4_process_fin_packet(connection, seq_num, return_packet_len);
+    }
+
+    if(connection->state == NETWORK_TCP_CONNECTION_STATE_CLOSE_WAIT) {
+        network_tcpv4_connection_del(connection);
+
+        return NULL;
+    }
+
+    if(connection->state == NETWORK_TCP_CONNECTION_STATE_SYN_RECEIVED) {
+        if(ack_num != connection->local_sequence_number + 1) {
+            // send RST
+            res = network_tcpv4_create_reset_packet(source_port, dest_port, 0, seq_num + 1);
+
+            if(res != NULL) {
+                *return_packet_len = sizeof(network_tcpv4_header_t);
+                PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
+
+                return (uint8_t*)res;
+            }
+
+            return NULL;
+        }
+
+        connection->state = NETWORK_TCP_CONNECTION_STATE_ESTABLISHED;
+    }
+
+    connection->remote_sequence_number = seq_num;
+    connection->remote_acknowledgement_number = ack_num;
+
+    if(!recv_tcpv4_packet->psh) {
+        return NULL;
+    }
+
+    // data received
+    PRINTLOG(NETWORK, LOG_TRACE, "Data received");
+
+    uint8_t* data = (uint8_t*)recv_tcpv4_packet;
+    data += header_length;
+
+    PRINTLOG(NETWORK, LOG_INFO, "Data(%i): %s", data_length, data);
+
+    // send ACK
+
+    connection->local_sequence_number = connection->remote_acknowledgement_number;
+    connection->remote_sequence_number = connection->remote_sequence_number + data_length;
+
+    uint16_t extra_data_length = 0;
+
+    if(dest_port == 7) {
+        res = network_tcpv4_create_psh_ack_packet_from_connection(connection, data, data_length);
+        extra_data_length = data_length;
+    } else if(dest_port == 80) {
+        const char* http_response = "HTTP/1.1 200 OK\r\n" \
+                                    "Content-Type: text/plain\r\n" \
+                                    "Content-Length: 13\r\n" \
+                                    "X-Operating-System: Turnstone OS\r\n" \
+                                    "\r\n" \
+                                    "Hello World!\n";
+        extra_data_length = strlen(http_response);
+        res = network_tcpv4_create_psh_ack_packet_from_connection(connection, (uint8_t*)http_response, strlen(http_response));
+    } else {
+        res = network_tcpv4_create_ack_packet_from_connection(connection);
+    }
+
+    if(res != NULL) {
+        *return_packet_len = sizeof(network_tcpv4_header_t) + extra_data_length;
+        PRINTLOG(NETWORK, LOG_TRACE, "return packet len: %i", *return_packet_len);
+
+        return (uint8_t*)res;
+    }
 
     return NULL;
 }

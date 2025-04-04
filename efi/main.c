@@ -12,6 +12,7 @@
 #include <linker.h>
 #include <systeminfo.h>
 #include <cpu.h>
+#include <cpu/crx.h>
 #include <cpu/sync.h>
 #include <buffer.h>
 #include <data.h>
@@ -84,6 +85,15 @@ efi_status_t efi_print_variable_names(void);
  * @return EFI_SUCCESS if all goes well.
  */
 efi_status_t efi_is_pxe_boot(boolean_t* result);
+
+/**
+ * @brief EFI main function
+ * @details this function is wrapper for runnig after sse and avx enable.
+ * @param[in] image image handle
+ * @param[in] system_table system table
+ * @return EFI_SUCCESS if all goes well
+ */
+efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table);
 
 /**
  * @brief EFI main function
@@ -644,6 +654,7 @@ efi_status_t efi_load_local_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
                         if(res == EFI_SUCCESS) {
                             memory_free(buffer);
+                            memory_free(blk_dev);
                             break;
                         }
 
@@ -668,7 +679,7 @@ catch_efi_error:
 efi_status_t efi_print_variable_names(void) {
     efi_status_t res;
 
-    wchar_t buffer[256];
+    char16_t buffer[256];
     memory_memclean(buffer, 256);
     efi_guid_t var_ven_guid;
     uint64_t var_size = 0;
@@ -687,7 +698,7 @@ efi_status_t efi_print_variable_names(void) {
             goto catch_efi_error;
         }
 
-        char_t* var_name = wchar_to_char(buffer);
+        char_t* var_name = char16_to_char(buffer);
         PRINTLOG(EFI, LOG_DEBUG, "variable size %lli name: %s", var_size, var_name);
         memory_free(var_name);
     }
@@ -705,7 +716,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
         goto catch_efi_error;
     }
 
-    wchar_t* var_name_boot_current = char_to_wchar("BootCurrent");
+    char16_t* var_name_boot_current = char_to_wchar("BootCurrent");
     efi_guid_t var_global = EFI_GLOBAL_VARIABLE;
     uint32_t var_attrs = 0;
     uint64_t buffer_size = sizeof(uint16_t);
@@ -736,7 +747,7 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
 
     PRINTLOG(EFI, LOG_DEBUG, "current boot order: %i %s", boot_order_idx, boot_value);
 
-    wchar_t* var_val_boot_current = char_to_wchar(boot_value);
+    char16_t* var_val_boot_current = char_to_wchar(boot_value);
 
     memory_free(boot_value);
 
@@ -761,12 +772,12 @@ efi_status_t efi_is_pxe_boot(boolean_t* result){
     memory_free(var_val_boot_current);
 
     uint16_t lo_len = *((uint16_t*)(var_val_boot + sizeof(uint32_t)));
-    wchar_t* lo_desc = (wchar_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
-    char_t* boot_desc = wchar_to_char(lo_desc);
+    char16_t* lo_desc = (char16_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t));
+    char_t* boot_desc = char16_to_char(lo_desc);
 
     PRINTLOG(EFI, LOG_DEBUG, "boot len %i desc: %s dl %lli", lo_len, boot_desc, wchar_size(lo_desc));
 
-    efi_device_path_t* lo_fp = (efi_device_path_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t) + wchar_size(lo_desc) * sizeof(wchar_t) + sizeof(wchar_t));
+    efi_device_path_t* lo_fp = (efi_device_path_t*)(var_val_boot +  sizeof(uint32_t) + sizeof(uint16_t) + wchar_size(lo_desc) * sizeof(char16_t) + sizeof(char16_t));
 
     while(lo_len > 0) {
         PRINTLOG(EFI, LOG_DEBUG, "boot fp type %i subtype %i len %i", lo_fp->type, lo_fp->sub_type, lo_fp->length);
@@ -792,7 +803,7 @@ catch_efi_error:
     return res;
 }
 
-EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+__attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_table_t* system_table) {
     ST = system_table;
     BS = system_table->boot_services;
     RS = system_table->runtime_services;
@@ -1452,4 +1463,18 @@ catch_efi_error:
     cpu_hlt();
 
     return EFI_LOAD_ERROR;
+}
+
+__attribute__((target("general-regs-only")))
+EFIAPI efi_status_t efi_main(efi_handle_t image, efi_system_table_t* system_table) {
+    cpu_enable_sse();
+
+    efi_status_t res = efi_main2(image, system_table);
+
+    if(res != EFI_SUCCESS) {
+        PRINTLOG(EFI, LOG_FATAL, "efi_main2 failed with code 0x%llx", res);
+        cpu_hlt();
+    }
+
+    return EFI_SUCCESS;
 }

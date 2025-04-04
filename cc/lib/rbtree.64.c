@@ -28,19 +28,7 @@ struct rbtree_node_t {
     const void*    data;
 };
 
-boolean_t      rbtree_node_is_on_left(rbtree_node_t* rbn);
-boolean_t      rbtree_node_has_red_child(rbtree_node_t* rbn);
-rbtree_node_t* rbtree_node_uncle(rbtree_node_t* rbn);
-rbtree_node_t* rbtree_node_sibling(rbtree_node_t* rbn);
-void           rbtree_node_move_down(rbtree_node_t* rbn, rbtree_node_t* new_parent);
-rbtree_node_t* rbtree_node_new(memory_heap_t* heap, const void* key, const void* data);
-void           rbtree_node_swap_colors(rbtree_node_t* rbn1, rbtree_node_t* rbn2);
-void           rbtree_node_swap_values(rbtree_node_t* rbn1, rbtree_node_t* rbn2);
-rbtree_node_t* rbtree_node_successor(rbtree_node_t* x);
-rbtree_node_t* rbtree_node_bst_replace(rbtree_node_t* x);
-
-
-rbtree_node_t* rbtree_node_new(memory_heap_t* heap, const void* key, const void* data) {
+static rbtree_node_t* rbtree_node_new(memory_heap_t* heap, const void* key, const void* data) {
     rbtree_node_t* res = memory_malloc_ext(heap, sizeof(rbtree_node_t), 0);
 
     if(!res) {
@@ -54,7 +42,7 @@ rbtree_node_t* rbtree_node_new(memory_heap_t* heap, const void* key, const void*
     return res;
 }
 
-boolean_t rbtree_node_is_on_left(rbtree_node_t* rbn) {
+static boolean_t rbtree_node_is_on_left(rbtree_node_t* rbn) {
     if(!rbn->parent) {
         return false;
     }
@@ -62,11 +50,11 @@ boolean_t rbtree_node_is_on_left(rbtree_node_t* rbn) {
     return rbn == rbn->parent->left;
 }
 
-boolean_t rbtree_node_has_red_child(rbtree_node_t* rbn) {
+static boolean_t rbtree_node_has_red_child(rbtree_node_t* rbn) {
     return (rbn->left && rbn->left->color == RBTREE_COLOR_RED) || (rbn->right && rbn->right->color == RBTREE_COLOR_RED);
 }
 
-rbtree_node_t* rbtree_node_uncle(rbtree_node_t* rbn) {
+static rbtree_node_t* rbtree_node_uncle(rbtree_node_t* rbn) {
     if(rbn->parent == NULL || rbn->parent->parent == NULL) {
         return NULL;
     }
@@ -78,7 +66,7 @@ rbtree_node_t* rbtree_node_uncle(rbtree_node_t* rbn) {
     return rbn->parent->parent->left;
 }
 
-rbtree_node_t* rbtree_node_sibling(rbtree_node_t* rbn) {
+static rbtree_node_t* rbtree_node_sibling(rbtree_node_t* rbn) {
     if(!rbn || rbn->parent == NULL) {
         return NULL;
     }
@@ -90,7 +78,7 @@ rbtree_node_t* rbtree_node_sibling(rbtree_node_t* rbn) {
     return rbn->parent->left;
 }
 
-void rbtree_node_move_down(rbtree_node_t* rbn, rbtree_node_t* new_parent) {
+static void rbtree_node_move_down(rbtree_node_t* rbn, rbtree_node_t* new_parent) {
     if(rbn->parent) {
         if(rbtree_node_is_on_left(rbn)) {
             rbn->parent->left = new_parent;
@@ -102,14 +90,15 @@ void rbtree_node_move_down(rbtree_node_t* rbn, rbtree_node_t* new_parent) {
     new_parent->parent = rbn->parent;
     rbn->parent = new_parent;
 }
-void rbtree_node_swap_colors(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
+
+static void rbtree_node_swap_colors(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
     rbtree_color_t temp;
     temp = rbn1->color;
     rbn1->color = rbn2->color;
     rbn2->color = temp;
 }
 
-void rbtree_node_swap_values(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
+static void rbtree_node_swap_values(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
     const void* temp;
     temp = rbn1->key;
     rbn1->key = rbn2->key;
@@ -120,7 +109,7 @@ void rbtree_node_swap_values(rbtree_node_t* rbn1, rbtree_node_t* rbn2) {
     rbn2->data = temp;
 }
 
-rbtree_node_t* rbtree_node_successor(rbtree_node_t* x) {
+static rbtree_node_t* rbtree_node_successor(rbtree_node_t* x) {
     rbtree_node_t* temp = x;
 
     while(temp->left != NULL) {
@@ -130,7 +119,7 @@ rbtree_node_t* rbtree_node_successor(rbtree_node_t* x) {
     return temp;
 }
 
-rbtree_node_t* rbtree_node_bst_replace(rbtree_node_t* x) {
+static rbtree_node_t* rbtree_node_bst_replace(rbtree_node_t* x) {
     if(x->left != NULL && x->right != NULL) {
         return rbtree_node_successor(x->right);
     }
@@ -155,22 +144,7 @@ struct rbtree_t {
     rbtree_node_t* root;
 };
 
-void        rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
-void        rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn);
-void        rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn);
-void        rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn);
-void        rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v);
-boolean_t   rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res);
-uint64_t    rbtree_size(index_t* idx);
-int8_t      rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data);
-int8_t      rbtree_delete(index_t* idx, const void* key, void** removed_data);
-const void* rbtree_find(index_t* idx, const void* key);
-iterator_t* rbtree_search(index_t* idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
-iterator_t* rbtree_create_iterator(index_t* idx);
-boolean_t   rbtree_contains(index_t* idx, const void* key);
-list_t*     rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria);
-
-void rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
+static void rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
     rbtree_node_t* new_parent = rbn->right;
 
     if(rbn == rbt->root) {
@@ -188,7 +162,7 @@ void rbtree_left_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
     new_parent->left = rbn;
 }
 
-void rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
+static void rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
     rbtree_node_t* new_parent = rbn->left;
 
     if(rbn == rbt->root) {
@@ -206,7 +180,7 @@ void rbtree_right_rotate(rbtree_t* rbt, rbtree_node_t* rbn) {
     new_parent->right = rbn;
 }
 
-void rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn) {
+static void rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn) {
     while(true) {
         if(rbn == rbt->root) {
             rbn->color = RBTREE_COLOR_BLACK;
@@ -254,7 +228,7 @@ void rbtree_fix_redred(rbtree_t* rbt, rbtree_node_t* rbn) {
     }
 }
 
-void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
+static void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
     while(true) {
         if (rbn == rbt->root) {
             break;
@@ -322,7 +296,7 @@ void rbtree_fix_blackblack(rbtree_t* rbt, rbtree_node_t* rbn) {
     }
 }
 
-void rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v) {
+static void rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v) {
     while(true) {
         rbtree_node_t* u = rbtree_node_bst_replace(v);
 
@@ -390,7 +364,7 @@ void rbtree_delete_node(rbtree_t* rbt, rbtree_node_t* v) {
     }
 }
 
-boolean_t rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res) {
+static boolean_t rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparator_f cmp, rbtree_node_t** res) {
     rbtree_node_t* temp = rbt->root;
 
     boolean_t found = false;
@@ -424,7 +398,7 @@ boolean_t rbtree_search_node(rbtree_t* rbt, const void* key, index_key_comparato
     return found;
 }
 
-uint64_t rbtree_size(index_t* idx) {
+static uint64_t rbtree_size(index_t* idx) {
     if(!idx) {
         return 0;
     }
@@ -435,7 +409,7 @@ uint64_t rbtree_size(index_t* idx) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data) {
+static int8_t rbtree_insert(index_t* idx, const void* key, const void* data, void** removed_data) {
     if(!idx) {
         return -1;
     }
@@ -503,7 +477,7 @@ int8_t rbtree_insert(index_t* idx, const void* key, const void* data, void** rem
 }
 #pragma GCC diagnostic pop
 
-int8_t rbtree_delete(index_t* idx, const void* key, void** removed_data) {
+static int8_t rbtree_delete(index_t* idx, const void* key, void** removed_data) {
     if(!idx) {
         return -1;
     }
@@ -528,11 +502,13 @@ int8_t rbtree_delete(index_t* idx, const void* key, void** removed_data) {
     return 0;
 }
 
-iterator_t* rbtree_create_iterator(index_t* idx) {
+static iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria);
+
+static iterator_t* rbtree_create_iterator(index_t* idx) {
     return rbtree_search(idx, NULL, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_NULL);
 }
 
-boolean_t rbtree_contains(index_t* idx, const void* key) {
+static boolean_t rbtree_contains(index_t* idx, const void* key) {
     if(!idx) {
         return false;
     }
@@ -548,7 +524,7 @@ boolean_t rbtree_contains(index_t* idx, const void* key) {
     return res;
 }
 
-const void* rbtree_find(index_t* idx, const void* key) {
+static const void* rbtree_find(index_t* idx, const void* key) {
     if(!idx) {
         return false;
     }
@@ -570,7 +546,7 @@ const void* rbtree_find(index_t* idx, const void* key) {
     return res->data;
 }
 
-list_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
+static list_t* rbtree_inorder(index_t* idx, const void* key1, const void* key2, index_key_search_criteria_t criteria) {
     if(!idx) {
         return NULL;
     }
@@ -788,13 +764,60 @@ typedef struct rbtree_iterator_t {
     list_t*        items;
 } rbtree_iterator_t;
 
-int8_t      rbtree_iterator_destroy(iterator_t * iterator);
-int8_t      rbtree_iterator_end_of_index(iterator_t * iterator);
-iterator_t* rbtree_iterator_next (iterator_t * iterator);
-const void* rbtree_iterator_get_key(iterator_t * iterator);
-const void* rbtree_iterator_get_data(iterator_t* iterator);
+static int8_t rbtree_iterator_destroy(iterator_t * iterator){
+    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
+    memory_heap_t* heap = iter->heap;
 
-iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
+    list_destroy(iter->items);
+    memory_free_ext(heap, iter);
+    memory_free_ext(heap, iterator);
+
+    return 0;
+}
+
+static int8_t rbtree_iterator_end_of_index(iterator_t * iterator) {
+    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
+
+    return iter->current_index == iter->size?0:1;
+}
+
+static iterator_t* rbtree_iterator_next (iterator_t * iterator){
+    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
+
+    iter->current_index++;
+
+    if(iter->current_index >= iter->size) {
+        iter->current_index = iter->size;
+    }
+
+    return iterator;
+}
+
+static const void* rbtree_iterator_get_key(iterator_t * iterator) {
+    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
+
+    if(iter->current_index == iter->size) {
+        return NULL;
+    }
+
+    rbtree_node_t* cn = (rbtree_node_t*)list_get_data_at_position(iter->items, iter->current_index);
+
+    return cn->key;
+}
+
+static const void* rbtree_iterator_get_data(iterator_t* iterator) {
+    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
+
+    if(iter->current_index == iter->size) {
+        return NULL;
+    }
+
+    rbtree_node_t* cn = (rbtree_node_t*)list_get_data_at_position(iter->items, iter->current_index);
+
+    return cn->data;
+}
+
+static iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
     if(idx == NULL) {
         return NULL;
     }
@@ -841,59 +864,5 @@ iterator_t* rbtree_search(index_t * idx, const void* key1, const void* key2, con
     return iterator;
 }
 
-
-
-int8_t rbtree_iterator_destroy(iterator_t * iterator){
-    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
-    memory_heap_t* heap = iter->heap;
-
-    list_destroy(iter->items);
-    memory_free_ext(heap, iter);
-    memory_free_ext(heap, iterator);
-
-    return 0;
-}
-
-int8_t rbtree_iterator_end_of_index(iterator_t * iterator) {
-    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
-
-    return iter->current_index == iter->size?0:1;
-}
-
-iterator_t* rbtree_iterator_next (iterator_t * iterator){
-    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
-
-    iter->current_index++;
-
-    if(iter->current_index >= iter->size) {
-        iter->current_index = iter->size;
-    }
-
-    return iterator;
-}
-
-const void* rbtree_iterator_get_key(iterator_t * iterator) {
-    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
-
-    if(iter->current_index == iter->size) {
-        return NULL;
-    }
-
-    rbtree_node_t* cn = (rbtree_node_t*)list_get_data_at_position(iter->items, iter->current_index);
-
-    return cn->key;
-}
-
-const void* rbtree_iterator_get_data(iterator_t* iterator) {
-    rbtree_iterator_t* iter = (rbtree_iterator_t*) iterator->metadata;
-
-    if(iter->current_index == iter->size) {
-        return NULL;
-    }
-
-    rbtree_node_t* cn = (rbtree_node_t*)list_get_data_at_position(iter->items, iter->current_index);
-
-    return cn->data;
-}
 
 

@@ -13,6 +13,10 @@
 #include <types.h>
 #include <buffer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int8_t tosdb_manager_init(void);
 
 typedef enum tosdb_manager_ipc_type_t {
@@ -55,5 +59,9 @@ typedef struct tosdb_manager_ipc_t {
 int8_t tosdb_manager_close(void);
 int8_t tosdb_manager_clear(void);
 int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

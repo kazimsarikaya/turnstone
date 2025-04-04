@@ -18,6 +18,10 @@
 #include <hashmap.h>
 #include <disk.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief initialize nvme devices
  * @param[in] heap the heap for storing data
@@ -259,6 +263,10 @@ typedef struct nvme_controller_registers_t {
     uint64_t pmrmsc; ///< persistent memory region controller memory space control
     uint8_t  reserved2[0xFFF - 0xE1C + 1]; ///< reserved command set specific
 }__attribute__((packed)) nvme_controller_registers_t; ///<shorthand for struct
+
+_Static_assert((offsetof_field(nvme_controller_registers_t, asq) % 0x8) == 0, "nvme_controller_registers_t asq should be 8 byte aligned");
+_Static_assert((offsetof_field(nvme_controller_registers_t, acq) % 0x8) == 0, "nvme_controller_registers_t acq should be 8 byte aligned");
+
 
 /**
  * @struct nvme_submission_queue_entry_t
@@ -510,6 +518,8 @@ typedef struct nvme_disk_t {
     pci_generic_device_t*          pci_device; ///< pci device
     nvme_controller_registers_t*   nvme_registers; ///< nvme registers
     pci_capability_msix_t*         msix_capability; ///< msix capability
+    uint64_t                       bar_va; ///< bar virtual address
+    uint64_t                       queue_frames_address; ///< queue frames address
     uint64_t                       admin_queue_size; ///< admin queue size
     uint64_t                       admin_s_queue_tail; ///< admin submission queue tail
     uint64_t                       admin_c_queue_head; ///< admin completion queue head
@@ -550,4 +560,9 @@ future_t*          nvme_write(uint64_t disk_id, uint64_t lba, uint32_t size, uin
 future_t*          nvme_flush(uint64_t disk_id);
 disk_t*            nvme_disk_impl_open(nvme_disk_t* nvme_disk);
 const nvme_disk_t* nvme_get_disk_by_id(uint64_t disk_id);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -469,6 +469,12 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
 
     tosdb_record_context_t* ctx = record->context;
 
+    if(!ctx->table) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return NULL;
+    }
+
     if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record search supports only one key");
 
@@ -565,6 +571,14 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
     }
 
     tosdb_record_context_t* r_ctx = record->context;
+
+    if(!r_ctx || !r_ctx->table) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record context/table is null");
+        set_destroy_with_callback(results, tosdb_record_search_set_destroy_mii_cb);
+        memory_free(search_key);
+
+        return NULL;
+    }
 
     list_t* recs = list_create_list();
 

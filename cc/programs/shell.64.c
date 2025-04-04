@@ -112,7 +112,9 @@ static int8_t shell_handle_vm_command(char_t* arguments) {
 
         printf("Creating VM with entrypoint: -%s-\n", entrypoint);
 
-        return hypervisor_vm_create(strdup(entrypoint));
+        return hypervisor_vm_create(strdup(entrypoint),
+                                    2 << 20,
+                                    1 << 20);
     }
 
     uint64_t vmid = atoh(command);
@@ -346,7 +348,7 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
     return res;
 }
 
-static uint32_t shell_append_wchar_to_buffer(wchar_t src, char_t* dst, uint32_t dst_idx) {
+static uint32_t shell_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx) {
     if(dst == NULL) {
         return NULL;
     }
@@ -414,15 +416,16 @@ int32_t shell_main(int32_t argc, char* argv[]) {
             continue;
         }
 
-        char_t data[4096] = {0};
+        char_t data[4096];
         uint32_t data_idx = 0;
+        data[data_idx] = NULL;
 
         kbd_ev_cnt = kbd_length / sizeof(kbd_report_t);
 
         for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
             if(kbd_data[i].is_pressed) {
                 if(kbd_data[i].is_printable) {
-                    data_idx = shell_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
+                    data_idx = shell_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
                 } else {
                     if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
                         data[data_idx++] = '\b';

@@ -12,6 +12,10 @@
 #include <types.h>
 #include <ports.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define QEMU_ISA_DEBUG_EXIT  0xf4
 
 #define _TEST_PASTE(a, b) a ## b
@@ -29,5 +33,9 @@ typedef int8_t (* test_func)(size_t test_no);
 void test_init_output(void);
 void test_print(char_t* data);
 void test_exit_qemu(uint32_t exit_code);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -15,12 +15,12 @@
 
 MODULE("turnstone.lib");
 
-typedef struct map_internal_t {
+typedef struct map_t {
     memory_heap_t*      heap;
     lock_t*             lock;
     map_key_extractor_f mke;
     index_t*            store;
-} map_internal_t;
+} map_t;
 
 int8_t map_key_comparator(const void* data1, const void* data2);
 
@@ -55,60 +55,56 @@ int8_t map_key_comparator(const void* data1, const void* data2){
     return 0;
 }
 
-map_t map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key_extractor_f mke) {
+map_t* map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_key_extractor_f mke) {
     heap = memory_get_heap(heap);
 
-    map_internal_t * mi = memory_malloc_ext(heap, sizeof(map_internal_t), 0);
+    map_t * map = memory_malloc_ext(heap, sizeof(map_t), 0);
 
-    if(mi == NULL) {
+    if(map == NULL) {
         return NULL;
     }
 
-    mi->heap = heap;
-    mi->lock = lock_create_with_heap(mi->heap);
+    map->heap = heap;
+    map->lock = lock_create_with_heap(map->heap);
 
-    if(mi->lock == NULL) {
-        memory_free(mi);
-
-        return NULL;
-    }
-
-    mi->mke = mke;
-    mi->store = bplustree_create_index_with_heap_and_unique(mi->heap, factor, &map_key_comparator, true);
-
-    if(mi->store == NULL) {
-        lock_destroy(mi->lock);
-        memory_free(mi);
+    if(map->lock == NULL) {
+        memory_free(map);
 
         return NULL;
     }
 
-    return (map_t)mi;
+    map->mke = mke;
+    map->store = bplustree_create_index_with_heap_and_unique(map->heap, factor, &map_key_comparator, true);
+
+    if(map->store == NULL) {
+        lock_destroy(map->lock);
+        memory_free(map);
+
+        return NULL;
+    }
+
+    return map;
 }
 
-void* map_insert(map_t map, const void* key, const void* data) {
-    map_internal_t* mi = (map_internal_t*)map;
-
-    lock_acquire(mi->lock);
+void* map_insert(map_t* map, const void* key, const void* data) {
+    lock_acquire(map->lock);
 
 
-    uint64_t ckey = mi->mke(key);
+    uint64_t ckey = map->mke(key);
 
     void* old_data = NULL;
 
-    mi->store->insert(mi->store, (void*)ckey, data, &old_data);
+    map->store->insert(map->store, (void*)ckey, data, &old_data);
 
-    lock_release(mi->lock);
+    lock_release(map->lock);
 
     return old_data;
 }
 
-const void* map_get_with_default(map_t map, const void* key, void* def) {
-    map_internal_t* mi = (map_internal_t*)map;
+const void* map_get_with_default(map_t* map, const void* key, void* def) {
+    uint64_t ckey = map->mke(key);
 
-    uint64_t ckey = mi->mke(key);
-
-    const void* res = mi->store->find(mi->store, (void*)ckey);
+    const void* res = map->store->find(map->store, (void*)ckey);
 
     if(res == NULL) {
         res = def;
@@ -117,49 +113,41 @@ const void* map_get_with_default(map_t map, const void* key, void* def) {
     return res;
 }
 
-const void* map_delete(map_t map, const void* key) {
-    map_internal_t* mi = (map_internal_t*)map;
-
-    uint64_t ckey = mi->mke(key);
+const void* map_delete(map_t* map, const void* key) {
+    uint64_t ckey = map->mke(key);
 
     void* old_data = NULL;
 
-    lock_acquire(mi->lock);
+    lock_acquire(map->lock);
 
-    mi->store->delete(mi->store, (void*)ckey, &old_data);
+    map->store->delete(map->store, (void*)ckey, &old_data);
 
-    lock_release(mi->lock);
+    lock_release(map->lock);
 
     return old_data;
 }
 
-int8_t map_destroy(map_t map) {
-    map_internal_t* mi = (map_internal_t*)map;
+int8_t map_destroy(map_t* map) {
 
-
-    lock_destroy(mi->lock);
-    bplustree_destroy_index(mi->store);
-    memory_free_ext(mi->heap, mi);
+    lock_destroy(map->lock);
+    bplustree_destroy_index(map->store);
+    memory_free_ext(map->heap, map);
 
     return 0;
 }
 
-iterator_t* map_create_iterator(map_t map) {
+iterator_t* map_create_iterator(map_t* map) {
     if(!map) {
         return NULL;
     }
 
-    map_internal_t* mi = (map_internal_t*)map;
-
-    return mi->store->create_iterator(mi->store);
+    return map->store->create_iterator(map->store);
 }
 
-uint64_t map_size(map_t map) {
+uint64_t map_size(map_t* map) {
     if(!map) {
         return 0;
     }
 
-    map_internal_t* mi = (map_internal_t*)map;
-
-    return mi->store->size(mi->store);
+    return map->store->size(map->store);
 }

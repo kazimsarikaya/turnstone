@@ -6,9 +6,17 @@
  * Please read and understand latest version of Licence.
  */
 
+#ifndef ___TOKENIZER_H
+/*! prevent duplicate header error */
+#define ___TOKENIZER_H 0
+
 #include <types.h>
 #include <buffer.h>
 #include <iterator.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum token_type_t {
     TOKEN_TYPE_NULL,
@@ -64,4 +72,8 @@ typedef struct token_t {
 
 iterator_t* tokenizer_new(buffer_t* buf, const token_delimiter_type_t* delimeters, const token_delimiter_type_t* whitespaces);
 
+#ifdef __cplusplus
+}
+#endif
 
+#endif

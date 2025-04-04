@@ -17,6 +17,7 @@
 #include <utils.h>
 #include <random.h>
 #include <xxhash.h>
+#include <cpu.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -26,26 +27,40 @@
 #define GREENCOLOR "\033[1;32m"
 #define RESETCOLOR "\033[0m"
 
-FILE* mem_backend = NULL;
-int32_t mem_backend_fd = 0;
-uint64_t mmmap_address = 4ULL << 30;
-uint64_t mmap_size = RAMSIZE;
-boolean_t windowmanager_initialized = false;
-boolean_t windowmanager_is_initialized(void);
-boolean_t windowmanager_is_initialized(void) {
-    return windowmanager_initialized;
-}
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 size_t                            video_printf(const char_t* fmt, ...);
 void                              video_print(const char_t* string);
 void                              print_success(const char* msg, ...);
 void                              print_error(const char* msg, ...);
-void                              cpu_hlt(void);
 int8_t                            setup_ram2(void);
 void                              remove_ram2(void);
 void __attribute__((constructor)) start_ram(void);
 void __attribute__((destructor))  stop_ram(void);
 void                              on_sigabrt(int32_t sig);
+boolean_t                         windowmanager_is_initialized(void);
+
+
+FILE* mem_backend = NULL;
+int32_t mem_backend_fd = 0;
+uint64_t mmmap_address = 4ULL << 30;
+uint64_t mmap_size = RAMSIZE;
+boolean_t windowmanager_initialized = false;
+
+buffer_t* default_buffer = NULL;
+
+memory_heap_t* d_heap = NULL;
+
+#ifdef __cplusplus
+}
+#endif
+
+boolean_t windowmanager_is_initialized(void) {
+    return windowmanager_initialized;
+}
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-unsafe-call-within-signal-handler"
@@ -77,8 +92,6 @@ void video_print(const char_t* string) {
     printf("%s", string);
 }
 
-buffer_t* default_buffer = NULL;
-
 buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id) {
     UNUSED(buffer_io_id);
 
@@ -88,8 +101,6 @@ buffer_t* buffer_get_io_buffer(uint64_t buffer_io_id) {
 
     return default_buffer;
 }
-
-memory_heap_t* d_heap = NULL;
 
 int8_t setup_ram2(void) {
 
@@ -181,6 +192,11 @@ void __attribute__((destructor)) stop_ram(void) {
 }
 
 #ifdef ___TESTMODE
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct future_t future_t;
 
 lock_t*   lock_create_with_heap(memory_heap_t* heap);
@@ -189,7 +205,6 @@ void      lock_acquire(lock_t* lock);
 void      lock_release(lock_t* lock);
 lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id);
 void      dump_ram(char_t* fname);
-void      cpu_sti(void);
 void      apic_eoi(void);
 void      task_current_task_sleep(uint64_t when_tick);
 time_t    rtc_get_time(void);
@@ -198,9 +213,20 @@ void      task_switch_task(void);
 future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, void* data);
 void*     future_get_data_and_destroy(future_t* fut);
 
+struct timespec {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+} ts;
+
+struct timespec clock_gettime(int, struct timespec* ts);
+
 void* SYSTEM_INFO;
 void* KERNEL_FRAME_ALLOCATOR = NULL;
 uint64_t __kheap_bottom = 0;
+
+#ifdef __cplusplus
+}
+#endif
 
 size_t video_printf(const char_t* fmt, ...) {
     va_list args;
@@ -212,10 +238,6 @@ size_t video_printf(const char_t* fmt, ...) {
 }
 
 void task_switch_task(void){
-}
-
-void cpu_sti(void){
-
 }
 
 void  apic_eoi(void){
@@ -235,14 +257,14 @@ void* task_get_current_task(void){
 
 lock_t* lock_create_with_heap(memory_heap_t* heap){
     UNUSED(heap);
-    return (void*)0xdeadbeaf;
+    return (lock_t*)0xdeadbeaf;
 }
 
 lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id){
     UNUSED(heap);
     UNUSED(for_future);
     UNUSED(task_id);
-    return (void*)0xdeadbeaf;
+    return (lock_t*)0xdeadbeaf;
 }
 
 int8_t lock_destroy(lock_t* lock){
@@ -263,10 +285,10 @@ future_t* future_create_with_heap_and_data(memory_heap_t* heap, lock_t* lock, vo
     UNUSED(lock);
 
     if(data) {
-        return data;
+        return (future_t*)data;
     }
 
-    return (void*)0xdeadbeaf;
+    return (future_t*)0xdeadbeaf;
 }
 
 void* future_get_data_and_destroy(future_t* fut) {
@@ -281,11 +303,6 @@ void* future_get_data_and_destroy(future_t* fut) {
     return fut;
 }
 
-struct timespec {
-    int64_t tv_sec;
-    int64_t tv_nsec;
-} ts;
-struct timespec clock_gettime(int, struct timespec* ts);
 time_t time_ns(time_t* t) {
     UNUSED(t);
     clock_gettime(0, &ts);

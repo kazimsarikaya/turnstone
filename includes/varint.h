@@ -11,7 +11,15 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint8_t* varint_encode(uint64_t num, int8_t* size);
 uint64_t varint_decode(uint8_t* data, int8_t* size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

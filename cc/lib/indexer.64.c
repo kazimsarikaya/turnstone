@@ -22,54 +22,50 @@ typedef struct indexer_idx_kc_internal_t {
     void*                 keyarg;
 }indexer_idx_kc_internal_t;
 
-typedef struct indexer_internal_t {
+typedef struct indexer_t {
     memory_heap_t* heap;
     list_t*        indexes;
-} indexer_internal_t;
+} indexer_t;
 
-indexer_t indexer_create_with_heap(memory_heap_t* heap){
-    indexer_internal_t* l_idxer = memory_malloc_ext(heap, sizeof(indexer_internal_t), 0x0);
+indexer_t* indexer_create_with_heap(memory_heap_t* heap){
+    indexer_t* idxer = memory_malloc_ext(heap, sizeof(indexer_t), 0x0);
 
-    if(l_idxer == NULL) {
+    if(idxer == NULL) {
         return NULL;
     }
 
-    l_idxer->heap = heap;
-    l_idxer->indexes = list_create_list_with_heap(heap);
+    idxer->heap = heap;
+    idxer->indexes = list_create_list_with_heap(heap);
 
-    if(l_idxer->indexes == NULL) {
-        list_destroy(l_idxer->indexes);
-        memory_free_ext(heap, l_idxer);
+    if(idxer->indexes == NULL) {
+        list_destroy(idxer->indexes);
+        memory_free_ext(heap, idxer);
 
         return NULL;
     }
 
-    return l_idxer;
+    return idxer;
 }
 
-int8_t indexer_destroy(indexer_t idxer){
-    indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
-
-    if(l_idxer == NULL) {
+int8_t indexer_destroy(indexer_t* idxer){
+    if(idxer == NULL) {
         return 0;
     }
 
-    list_destroy(l_idxer->indexes);
-    memory_free_ext(l_idxer->heap, idxer);
+    list_destroy(idxer->indexes);
+    memory_free_ext(idxer->heap, idxer);
 
     return 0;
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, indexer_key_creator_f key_creator, void* keyarg){
-    indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
-
-    if(l_idxer == NULL) {
+int8_t indexer_register_index(indexer_t* idxer, uint64_t idx_id, index_t* idx, indexer_key_creator_f key_creator, void* keyarg){
+    if(idxer == NULL) {
         return -1;
     }
 
-    indexer_idx_kc_internal_t* pair = memory_malloc_ext(l_idxer->heap, sizeof(indexer_idx_kc_internal_t), 0x0);
+    indexer_idx_kc_internal_t* pair = memory_malloc_ext(idxer->heap, sizeof(indexer_idx_kc_internal_t), 0x0);
 
     if(pair == NULL) {
         return -1;
@@ -79,19 +75,17 @@ int8_t indexer_register_index(indexer_t idxer, uint64_t idx_id, index_t* idx, in
     pair->idx = idx;
     pair->key_creator = key_creator;
     pair->keyarg = keyarg;
-    list_list_insert(l_idxer->indexes, pair);
+    list_list_insert(idxer->indexes, pair);
     return 0;
 }
 #pragma GCC diagnostic pop
 
-int8_t indexer_index(indexer_t idxer, const void* key, const void* data){
-    indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
-
-    if(l_idxer == NULL) {
+int8_t indexer_index(indexer_t* idxer, const void* key, const void* data){
+    if(idxer == NULL) {
         return 0;
     }
 
-    iterator_t* iter = list_iterator_create(l_idxer->indexes);
+    iterator_t* iter = list_iterator_create(idxer->indexes);
 
     if(iter == NULL) {
         return -1;
@@ -113,15 +107,13 @@ int8_t indexer_index(indexer_t idxer, const void* key, const void* data){
     return 0;
 }
 
-const void* indexer_delete(indexer_t idxer, const void* key){
-    indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
-
-    if(l_idxer == NULL) {
+const void* indexer_delete(indexer_t* idxer, const void* key){
+    if(idxer == NULL) {
         return NULL;
     }
 
     void* data = NULL;
-    iterator_t* iter = list_iterator_create(l_idxer->indexes);
+    iterator_t* iter = list_iterator_create(idxer->indexes);
 
     if(iter == NULL) {
         return NULL;
@@ -148,16 +140,14 @@ const void* indexer_delete(indexer_t idxer, const void* key){
     return data;
 }
 
-iterator_t* indexer_search(indexer_t idxer, uint64_t idx_id, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
-    indexer_internal_t* l_idxer = (indexer_internal_t*)idxer;
-
-    if(l_idxer == NULL) {
+iterator_t* indexer_search(indexer_t* idxer, uint64_t idx_id, const void* key1, const void* key2, const index_key_search_criteria_t criteria){
+    if(idxer == NULL) {
         return NULL;
     }
 
     const indexer_idx_kc_internal_t* idx_pair = NULL;
 
-    iterator_t* iter = list_iterator_create(l_idxer->indexes);
+    iterator_t* iter = list_iterator_create(idxer->indexes);
 
     if(iter == NULL) {
         return NULL;

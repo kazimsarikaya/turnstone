@@ -20,6 +20,11 @@ for _param in $@; do
       DEPEND_OBJS="$DEPEND_OBJS\n$_f"
     done
 
+    for _f in $(find ../cc -name "$_s*.cpp"|grep -v video|grep -v graphics); do
+      _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.cpp-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
+      DEPEND_OBJS="$DEPEND_OBJS\n$_f"
+    done
+
   done
 
 done
@@ -33,7 +38,7 @@ for _f in $DEPEND_OBJS; do
   if [ -z "$_hs" ]; then
     echo 
   else 
-    echo -e ../output/efi/$_f: $(find ../includes -name "$_s*.h") 
+    echo -e ../build/efi/$_f: $(find ../includes -name "$_s*.h") 
     echo 
   fi
  

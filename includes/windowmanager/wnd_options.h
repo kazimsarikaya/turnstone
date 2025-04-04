@@ -11,7 +11,18 @@
 
 #include <windowmanager/wnd_types.h>
 
-window_t* windowmanager_add_option_window(window_t* parent, rect_t pos);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
+                                          const char_t* label_text,
+                                          const char_t* input_text, const char_t* input_text_id,
+                                          const char_t* tooltip_text);
 window_t* windowmanager_create_primary_options_window(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___WND_OPTIONS_H

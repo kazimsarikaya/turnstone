@@ -16,6 +16,10 @@
 #include <indexer.h>
 #include <acpi.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // types
 
 typedef enum {
@@ -242,5 +246,9 @@ void acpi_aml_print_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
 
 void acpi_aml_destroy_symbol_table(acpi_aml_parser_context_t*, uint8_t);
 void acpi_aml_destroy_object(acpi_aml_parser_context_t*, acpi_aml_object_t*);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

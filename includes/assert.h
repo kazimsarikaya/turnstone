@@ -13,8 +13,16 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define assert(expr) ((void)((expr) || (__assert(#expr, __FILE__, __LINE__, __func__), 0)))
 
 _Noreturn void __assert(const char_t * expr, const char_t * file, size_t line, const char_t * func);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___ASSERT_H

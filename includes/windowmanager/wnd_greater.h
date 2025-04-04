@@ -11,6 +11,14 @@
 
 #include <windowmanager/wnd_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 window_t* windowmanager_create_greater_window(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___WND_GREATER_H

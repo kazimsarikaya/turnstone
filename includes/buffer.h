@@ -13,6 +13,10 @@
 #include <types.h>
 #include <memory.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @typedef buffer_t
  * @brief opaque buffer_t struct
@@ -337,4 +341,9 @@ char_t* buffer_read_line_ext(buffer_t* buffer, char_t line_continuation_char, ch
 
 uint64_t  buffer_get_mark_position(buffer_t* buffer);
 boolean_t buffer_set_mark_position(buffer_t* buffer, uint64_t position);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

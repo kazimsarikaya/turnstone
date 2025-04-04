@@ -12,6 +12,10 @@
 #include <types.h>
 #include <memory.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! memory size for lock*/
 #define SYNC_LOCK_SIZE 0x28
 
@@ -111,5 +115,9 @@ int8_t semaphore_release_with_count(semaphore_t* semaphore, uint64_t count);
  * @param[in] s semaphore to release
  */
 #define semaphore_release(s) semaphore_release_with_count(s, 1)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

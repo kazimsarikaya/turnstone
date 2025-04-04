@@ -68,7 +68,9 @@ uint32_t main(uint32_t argc, char_t** argv) {
     }
 
     float64_t pi = 3.14159265359;
-    uint64_t picast = *(uint64_t*)&pi;
+    float64_t* piptr = &pi;
+    uint64_t piptradr = (uint64_t)piptr;
+    uint64_t picast = *((uint64_t*)piptradr);
     ret = test_ser_deser_primitive("test", DATA_TYPE_FLOAT64, 0, (void*)picast);
     if(ret != 0) {
         print_error("TESTS FAILED");

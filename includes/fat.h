@@ -12,6 +12,10 @@
 #include <types.h>
 #include <fs.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define FAT32_BOOT_SIGNATURE 0xAA55
 #define FAT32_IDENTIFIER "FAT32   "
 #define FAT32_SIGNATURE 0x29
@@ -119,15 +123,19 @@ typedef struct fat32_dirent_shortname_t {
 
 typedef struct fat32_dirent_longname_t {
     uint8_t  order;
-    wchar_t  name_part1[5];
+    char16_t name_part1[5];
     uint8_t  attributes;
     uint8_t  longentry_type_zero;
     uint8_t  checksum;
-    wchar_t  name_part2[6];
+    char16_t name_part2[6];
     uint16_t zero;
-    wchar_t  name_part3[2];
+    char16_t name_part3[2];
 }__attribute__((packed)) fat32_dirent_longname_t;
 
 filesystem_t* fat32_get_or_create_fs(disk_or_partition_t* d, const char_t* volname);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

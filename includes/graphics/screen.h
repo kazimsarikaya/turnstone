@@ -12,6 +12,10 @@
 #include <types.h>
 #include <graphics/color.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct screen_info_t {
     int32_t width;
     int32_t height;
@@ -32,7 +36,7 @@ typedef void (*screen_flush_f)(uint32_t scanout, uint64_t offset, uint32_t x, ui
 
 extern screen_flush_f SCREEN_FLUSH;
 
-typedef void (*screen_print_glyph_with_stride_f)(wchar_t wc,
+typedef void (*screen_print_glyph_with_stride_f)(char16_t wc,
                                                  color_t foreground, color_t background,
                                                  pixel_t* destination_base_address,
                                                  uint32_t x, uint32_t y,
@@ -47,5 +51,9 @@ extern screen_scroll_f SCREEN_SCROLL;
 typedef void (*screen_clear_area_f)(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background);
 
 extern screen_clear_area_f SCREEN_CLEAR_AREA;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___SCREEN_H

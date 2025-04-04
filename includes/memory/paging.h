@@ -12,6 +12,10 @@
 #include <memory.h>
 #include <memory/frame.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! how many index has a page */
 #define MEMORY_PAGING_INDEX_COUNT 512
 /*! page size (4K) */
@@ -203,4 +207,9 @@ int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_
 
 memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_frame_address);
 int8_t                       memory_paging_reserve_current_page_table_frames(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

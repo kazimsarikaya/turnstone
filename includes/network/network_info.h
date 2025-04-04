@@ -13,6 +13,10 @@
 #include <list.h>
 #include <map.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct network_info_t {
     network_mac_address_t  mac;
     list_t*                return_queue;
@@ -30,6 +34,10 @@ typedef struct network_info_t {
     uint32_t               ipv4_address_next_request_time;
 } network_info_t;
 
-extern map_t network_info_map;
+extern map_t* network_info_map;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

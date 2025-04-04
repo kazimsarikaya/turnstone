@@ -414,8 +414,8 @@ disk_partition_context_t* gpt_create_partition_context(efi_guid_t* type, const c
     ic->starting_lba = start;
     ic->ending_lba = end;
 
-    wchar_t* pname = char_to_wchar(name);
-    memory_memcopy(pname, ic->partition_name, strlen(name) * sizeof(wchar_t));
+    char16_t* pname = char_to_wchar(name);
+    memory_memcopy(pname, ic->partition_name, strlen(name) * sizeof(char16_t));
     memory_free(pname);
 
     res->internal_context = ic;
@@ -455,10 +455,10 @@ disk_t* gpt_get_or_create_gpt_disk(disk_t* underlaying_disk){
     return d;
 }
 
-typedef struct disk_partition_ctx_t {
+typedef struct disk_context_t {
     const disk_t*                   disk;
     const disk_partition_context_t* ctx;
-} disk_partition_ctx_t;
+} disk_context_t;
 
 memory_heap_t*                  disk_partition_get_heap(const disk_or_partition_t* d);
 uint64_t                        disk_partition_get_size(const disk_or_partition_t* d);
@@ -481,7 +481,7 @@ disk_partition_t* gpt_get_partition(const disk_t* d, uint8_t partno) {
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = memory_malloc_ext(heap, sizeof(disk_partition_ctx_t), 0);
+    disk_context_t* dctx = memory_malloc_ext(heap, sizeof(disk_context_t), 0);
 
     if(!dctx) {
         memory_free_ext(heap, ctx);
@@ -556,7 +556,7 @@ disk_partition_t* gpt_get_partition_by_type_data(const disk_t* d, const void* da
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = memory_malloc_ext(heap, sizeof(disk_partition_ctx_t), 0);
+    disk_context_t* dctx = memory_malloc_ext(heap, sizeof(disk_context_t), 0);
 
     if(!dctx) {
         memory_free_ext(heap, ctx);
@@ -595,7 +595,7 @@ const disk_partition_context_t* disk_partition_get_context(const disk_partition_
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = p->partition.context;
+    disk_context_t* dctx = p->partition.context;
 
     return dctx->ctx;
 }
@@ -605,7 +605,7 @@ const disk_t* disk_partition_get_disk(const disk_partition_t* p) {
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = p->partition.context;
+    disk_context_t* dctx = p->partition.context;
 
     return dctx->disk;
 }
@@ -616,7 +616,7 @@ memory_heap_t* disk_partition_get_heap(const disk_or_partition_t* d) {
         return NULL;
     }
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
 
     if(!dctx) {
         return NULL;
@@ -630,7 +630,7 @@ uint64_t disk_partition_get_size(const disk_or_partition_t* d) {
         return 0;
     }
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
 
     uint64_t bs = disk_partition_get_block_size(d);
 
@@ -642,7 +642,7 @@ uint64_t disk_partition_get_block_size(const disk_or_partition_t* d) {
         return 0;
     }
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
     uint64_t bs = ((disk_or_partition_t*)dctx->disk)->get_block_size((disk_or_partition_t*)dctx->disk);
 
     return bs;
@@ -653,7 +653,7 @@ int8_t disk_partition_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
         return 0;
     }
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
 
     return dctx->disk->disk.write((disk_or_partition_t*)dctx->disk, dctx->ctx->start_lba + lba, count, data);
 }
@@ -663,7 +663,7 @@ int8_t disk_partition_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
         return 0;
     }
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
 
     return dctx->disk->disk.read((disk_or_partition_t*)dctx->disk, dctx->ctx->start_lba + lba, count, data);
 }
@@ -674,7 +674,7 @@ int8_t disk_partition_flush(const disk_or_partition_t* d) {
         return 0;
     }
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
 
     return dctx->disk->disk.flush((disk_or_partition_t*)dctx->disk);
 }
@@ -686,7 +686,7 @@ int8_t disk_partition_close(const disk_or_partition_t* d) {
 
     memory_heap_t* heap = d->get_heap(d);
 
-    disk_partition_ctx_t* dctx = d->context;
+    disk_context_t* dctx = d->context;
 
     memory_free_ext(heap, (void*)dctx->ctx);
     memory_free_ext(heap, dctx);

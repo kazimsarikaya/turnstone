@@ -1,6 +1,6 @@
 /**
- * @file list.h
- * @brief linked list interface
+ * @file 188.cpp
+ * @brief
  *
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
@@ -13,6 +13,10 @@
 #include <memory.h>
 #include <indexer.h>
 #include <iterator.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief linked list operation enum
@@ -97,7 +101,7 @@ int8_t list_string_comprator(const void* data1, const void* data2);
  * if heap  is null then linked list created at default heap.
  */
 list_t* list_create_with_type(memory_heap_t* heap, list_type_t type,
-                              list_data_comparator_f comparator, indexer_t indexer);
+                              list_data_comparator_f comparator, indexer_t* indexer);
 
 /**
  * @brief returns list's heap
@@ -342,5 +346,9 @@ int8_t list_set_equality_comparator(list_t* list, list_data_comparator_f compara
  * @return      0 on success
  **/
 int8_t list_merge(list_t* self, list_t* list);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

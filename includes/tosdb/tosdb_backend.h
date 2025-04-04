@@ -12,6 +12,10 @@
 #include <types.h>
 #include <tosdb/tosdb.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum tosdb_backend_type_t {
     TOSDB_BACKEND_TYPE_NONE,
     TOSDB_BACKEND_TYPE_MEMORY,
@@ -40,5 +44,8 @@ typedef struct tosdb_superblock_t tosdb_superblock_t;
 tosdb_superblock_t* tosdb_backend_repair(tosdb_backend_t* backend);
 tosdb_superblock_t* tosdb_backend_format(tosdb_backend_t* backend, compression_type_t compression_type_if_not_exists);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

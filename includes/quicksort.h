@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef int8_t (*quicksort_comparator_f)(const void* a, const void* b);
 typedef void   (*quicksort_swap_f)(void* a, void* b, uint64_t item_size);
@@ -29,5 +33,8 @@ static inline void quicksort2(void** array, uint64_t size, quicksort_comparator_
     quicksort2_partial(array, 0, size - 1, comparator);
 }
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

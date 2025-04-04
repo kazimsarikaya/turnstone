@@ -13,6 +13,7 @@
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_greater.h>
 #include <windowmanager/wnd_options.h>
+#include <windowmanager/wnd_mouse.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
@@ -27,7 +28,6 @@
 #include <graphics/screen.h>
 #include <graphics/text_cursor.h>
 #include <graphics/font.h>
-#include <driver/console_virtio.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
@@ -42,6 +42,12 @@ extern buffer_t* shell_buffer;
 extern buffer_t* mouse_buffer;
 
 static int8_t windowmanager_main(void) {
+    if(windowmanager_init_double_buffer() != 0) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize double buffer\n");
+        return -1;
+    }
+
+
     uint32_t font_width = 0, font_height = 0;
 
     font_get_font_dimension(&font_width, &font_height);
@@ -66,6 +72,10 @@ static int8_t windowmanager_main(void) {
     SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
 
     text_cursor_enable(true);
+
+    if(wndmgr_mouse_init() != 0) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize mouse\n");
+    }
 
     windowmanager_initialized = true;
 
@@ -111,10 +121,14 @@ static int8_t windowmanager_main(void) {
 
             mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
 
-            if(last->buttons & MOUSE_BUTTON_LEFT) {
+            if((last->buttons & MOUSE_BUTTON_LEFT) && !windowmanager_current_window->has_alert) {
                 text_cursor_hide();
                 text_cursor_move(last->x / font_width, last->y / font_height);
                 text_cursor_show();
+            }
+
+            if(MOUSE_MOVE_CURSOR) {
+                MOUSE_MOVE_CURSOR(last->x, last->y);
             }
         }
 
@@ -126,13 +140,19 @@ static int8_t windowmanager_main(void) {
             continue;
         }
 
-        char_t data[4096] = {0};
+        char_t data[4096];
         uint32_t data_idx = 0;
+        data[data_idx] = NULL;
 
         kbd_ev_cnt = kbd_length / sizeof(kbd_report_t);
 
         for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
             if(kbd_data[i].is_pressed) {
+
+                if(windowmanager_current_window->has_alert && kbd_data[i].key != '\n') {
+                    continue;
+                }
+
                 if(kbd_data[i].is_printable) {
                     if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
                         window_event_t event = {0};
@@ -148,7 +168,7 @@ static int8_t windowmanager_main(void) {
 
                         windowmanager_move_cursor_to_next_input(windowmanager_current_window, is_reverse);
                     }else {
-                        data_idx = windowmanager_append_wchar_to_buffer(kbd_data[i].key, data, data_idx);
+                        data_idx = windowmanager_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
                     }
                 } else {
                     if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
@@ -210,7 +230,7 @@ static int8_t windowmanager_main(void) {
                             windowmanager_current_window->on_scroll(&event);
                         }
                     } else if(kbd_data[i].key == KBD_SCANCODE_PRINTSCREEN) {
-                        clipboard_send_text("hello world from turnstone os!");
+                        // clipboard_send_text("hello world from turnstone os!");
                     }
 
                 }

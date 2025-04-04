@@ -25,15 +25,36 @@ MODULE("turnstone.user.programs.vmedu");
 
 _Noreturn void vmedu(void);
 
-volatile edu_t* edu = NULL;
+static volatile edu_t* edu = NULL;
+
+static volatile boolean_t isr_done = false;
 
 static void edu_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
     printf("EDU ISR 0x%x\n", edu->interrupt_status);
     edu->interrupt_acknowledge = edu->interrupt_status;
+    isr_done = true;
+    printf("EDU ISR done 0x%x\n", edu->interrupt_status);
     vm_guest_apic_eoi();
 }
 
+static uint64_t edu_timer_tick = 0;
+static uint64_t edu_timer_isr_test_end = 0;
+
+static void edu_timer_isr(interrupt_frame_ext_t* frame) {
+    UNUSED(frame);
+
+    edu_timer_tick++;
+
+    if(edu_timer_tick == 100) {
+        printf("EDU Timer ISR\n");
+        edu_timer_tick = 0;
+        volatile uint64_t* ptr_edu_timer_isr_test_end = (volatile uint64_t*)&edu_timer_isr_test_end;
+        (*ptr_edu_timer_isr_test_end)++;
+    }
+
+    vm_guest_apic_eoi();
+}
 
 _Noreturn void vmedu(void) {
     vm_guest_print("VM EDU Passthrough Test Program\n");
@@ -43,7 +64,7 @@ _Noreturn void vmedu(void) {
 
     if(heap == NULL) {
         vm_guest_print("Failed to create heap\n");
-        vm_guest_halt();
+        vm_guest_exit(-1);
     }
 
     memory_set_default_heap(heap);
@@ -52,18 +73,25 @@ _Noreturn void vmedu(void) {
 
     printf("base init done\n");
 
+    vm_guest_enable_timer(edu_timer_isr, 0xF000, 0);
+
     uint64_t hpa = vm_guest_get_host_physical_address((uint64_t)heap);
 
     printf("Heap HPA: 0x%llx\n", hpa);
 
     if(hpa == -1ULL) {
         printf("hpa failed\n");
-        vm_guest_exit();
+        vm_guest_exit(-1);
     }
 
-    uint64_t edu_pci_va = vm_guest_attach_pci_dev(0, 0, 7, 0);
+    uint64_t edu_pci_va = vm_guest_attach_pci_dev(0, 0, 5, 0);
 
     printf("EDU PCI VA: 0x%llx\n", edu_pci_va);
+
+    if(edu_pci_va == -1ULL) {
+        printf("pci attach failed\n");
+        vm_guest_exit(-1);
+    }
 
     pci_generic_device_t* edu_pci_dev = (pci_generic_device_t*)edu_pci_va;
 
@@ -103,7 +131,7 @@ _Noreturn void vmedu(void) {
 
     const char_t* str = "this is a test of dma transfer";
 
-    strcpy(str, source);
+    strcopy(str, source);
 
     printf("DMA transfer starting\n");
     edu->dma_source = source_hpa;
@@ -136,18 +164,62 @@ _Noreturn void vmedu(void) {
 
     cpu_sti();
 
-    printf("interrupt status before: 0x%x\n", edu->interrupt_status);
+    uint32_t interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status before: 0x%x\n", interrupt_status);
+
+    isr_done = false;
 
     edu->interrupt_raise = 0x5A5A5A5A;
 
-    printf("interrupt status after: 0x%x\n", edu->interrupt_status);
-
-    printf("Test program complete\n");
-
-    while(true) {
+    while(!isr_done) {
         cpu_idle();
     }
 
-    vm_guest_exit();
+    interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status after: 0x%x\n", interrupt_status);
+
+    if(interrupt_status) {
+        printf("interrupt not lowered\n");
+        vm_guest_exit(-1);
+    }
+
+    interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status before: 0x%x\n", interrupt_status);
+
+    isr_done = false;
+
+    edu->interrupt_raise = 0x12345678;
+
+    while(!isr_done) {
+        cpu_idle();
+    }
+
+    interrupt_status = edu->interrupt_status;
+
+    printf("interrupt status after: 0x%x\n", interrupt_status);
+
+    if(interrupt_status) {
+        printf("interrupt not lowered\n");
+        vm_guest_exit(-1);
+    }
+
+    uint64_t previous_test_end = edu_timer_isr_test_end;
+
+    volatile uint64_t* ptr_edu_timer_isr_test_end = (volatile uint64_t*)&edu_timer_isr_test_end;
+
+    while(*ptr_edu_timer_isr_test_end < 10) {
+        cpu_idle();
+        if(*ptr_edu_timer_isr_test_end != previous_test_end) {
+            previous_test_end = *ptr_edu_timer_isr_test_end;
+            printf("Timer ISR Test: %llu\n", *ptr_edu_timer_isr_test_end);
+        }
+    }
+
+    printf("Test program complete\n");
+
+    vm_guest_exit(0);
 
 }

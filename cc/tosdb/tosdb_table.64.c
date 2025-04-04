@@ -826,7 +826,7 @@ boolean_t tosdb_table_column_persist(tosdb_table_t* tbl) {
         tosdb_column_t* col = (tosdb_column_t*)iter->delete_item(iter);
 
         block->columns[col_idx].id = col->id;
-        strcpy(col->name, block->columns[col_idx].name);
+        strcopy(col->name, block->columns[col_idx].name);
         block->columns[col_idx].deleted = col->is_deleted;
         block->columns[col_idx].type = col->type;
 
@@ -929,7 +929,7 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
 
         block->id = tbl->id;
         block->database_id = tbl->db->id;
-        strcpy(tbl->name, block->name);
+        strcopy(tbl->name, block->name);
         block->column_next_id = tbl->column_next_id;
         block->index_next_id = tbl->index_next_id;
         block->column_list_location = tbl->column_list_location;

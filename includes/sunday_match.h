@@ -11,6 +11,14 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int64_t sunday_match(const uint8_t* data, const int64_t data_len, const uint8_t* pattern, const int64_t pattern_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

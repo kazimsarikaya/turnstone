@@ -441,6 +441,8 @@ list_t* acpi_get_apic_table_entries_with_heap(memory_heap_t* heap, acpi_sdt_head
 }
 #pragma GCC diagnostic pop
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
     ACPI_CONTEXT = memory_malloc(sizeof(acpi_contex_t));
 
@@ -600,3 +602,4 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc) {
 
     return 0;
 }
+#pragma GCC diagnostic pop

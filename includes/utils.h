@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 /**
@@ -270,5 +274,26 @@ boolean_t isascii(char_t c);
 boolean_t isalnumw(char_t c);
 
 const char_t* randstr(uint32_t len);
+
+static inline boolean_t find_lsb(uint64_t search, uint64_t* location) {
+    uint64_t result;
+    boolean_t found;
+
+    __asm__ __volatile__ (
+        "bsfq %[src], %[dst]\n\t" // BSF instruction: scan for first set bit
+        "setnz %b[flag]" // Set flag to 1 if a bit was found (ZF=0), 0 if no bits found (ZF=1)
+        : [dst] "=r" (result), // Output: result register
+        [flag] "=r" (found) // Output: found flag
+        : [src] "r" (search) // Input: search value
+        : "cc" // Clobbered: condition codes
+        );
+
+    *location = result; // Store the bit position
+    return found; // Return whether a bit was found
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

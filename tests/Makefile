@@ -4,14 +4,25 @@
 HOSTOS=$(shell uname -s)
 
 CC = gcc
-CCFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu11 \
-	-O0 -nostdlib -nostdinc -ffreestanding -c -m64 -msse4.2\
+CPP = g++
+
+BASEFLAGS += -Wall -Werror -Wextra -D___BITS=64 -I../includes -I. -std=gnu18 \
+	-O3 -nostdlib -nostdinc -ffreestanding -c -m64 -march=native\
 	-fdata-sections -ffunction-sections \
 	-Wshadow -Wpointer-arith -Wcast-align \
-	-Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
-    -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-    -Wstrict-prototypes -fPIC -fplt -mcmodel=large \
+	-Wwrite-strings -Wmissing-declarations \
+    -Wredundant-decls -Winline -Wno-long-long \
+    -fPIC -fplt -mcmodel=large \
 	-D___TESTMODE=1 -g ${CCXXEXTRAFLAGS}
+
+CCFLAGS = $(BASEFLAGS) \
+		  -std=gnu18 \
+          -Wnested-externs \
+		  -Wmissing-prototypes -Wstrict-prototypes
+
+CPPFLAGS = $(BASEFLAGS) \
+		   -std=gnu++26 \
+		   -fno-rtti -fno-exceptions
 
 ifeq ($(HOSTOS),Darwin)
 CCFLAGS += $(shell pkg-config --cflags-only-I valgrind)
@@ -24,7 +35,7 @@ LDFLAGS = $(shell pkg-config --libs valgrind|cut -f1 -d " ") -lcoregrind-amd64-l
 		  -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-static -Wl,-nostdlib -nostdlib -Wl,-e_tos_start -Wl,-pie 
 endif
 
-OUTPUT = ../output
+OUTPUT = ../build
 LDSRCDIR = ../lds
 TESTOUTPUT = $(OUTPUT)/cc-local
 NOSTDLIB_DIR = nostdlib
@@ -32,22 +43,26 @@ NOSTDLIB_OUTPUT = $(TESTOUTPUT)/$(NOSTDLIB_DIR)
 
 CCSOURCEDIR = ../cc
 
-SOURCES = $(shell find . -maxdepth 1 -type f -name \*.c )
 NOSTDLIB_SOURCES = $(shell find nostdlib -maxdepth 1 -type f -name \*.c)
 
-PROGS = $(patsubst ./%.c,%,$(SOURCES))
+CCSOURCES = $(shell find . -maxdepth 1 -type f -name \*.c )
+CPPSOURCES = $(shell find . -maxdepth 1 -type f -name \*.cpp )
+
+CCPROGS = $(patsubst ./%.c,%,$(CCSOURCES))
+CPPPROGS = $(patsubst ./%.cpp,%,$(CPPSOURCES))
+
+PROGS = $(CCPROGS) $(CPPPROGS)
 
 NOSTDLIB_OBJECTS = $(patsubst $(NOSTDLIB_DIR)/%.c,$(NOSTDLIB_OUTPUT)/%.o,$(NOSTDLIB_SOURCES))
 
 OUTPUTS := $(patsubst %,$(OUTPUT)/%.bin,$(PROGS))
-TOSOUTPUTS := $(patsubst %,$(OUTPUT)/%.tosbin,$(PROGS))
 
 .PHONY: all clean depend
 .PRECIOUS: $(TESTOUTPUT)/%.o $(NOSTDLIB_OBJECTS)
 all: $(OUTPUTS) 
 
 gendirs:
-	find ../output/cc -type d |sed 's%../output/cc%../output/cc-local%' |xargs mkdir -p
+	find $(OUTPUT)/cc -type d |sed 's%'$(OUTPUT)'/cc%'$(OUTPUT)'/cc-local%' |xargs mkdir -p
 	mkdir -p $(NOSTDLIB_OUTPUT)
 
 $(TESTOUTPUT)/%.o: %.c setup.h
@@ -59,12 +74,11 @@ $(TESTOUTPUT)/%.xx_64.o: $(CCSOURCEDIR)/%.xx.c
 $(TESTOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.c
 	$(CC) $(CCFLAGS) -o $@ $<
 
+$(TESTOUTPUT)/%.64.o: $(CCSOURCEDIR)/%.64.cpp
+	$(CPP) $(CPPFLAGS) -o $@ $<
+
 $(OUTPUT)/%.bin: $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
 	$(LD) $(LDFLAGS) -o $@ $^
-
-$(OUTPUT)/%.tosbin: $(LINKER) $(LDSRCDIR)/local.ld $(NOSTDLIB_OBJECTS) $(TESTOUTPUT)/%.o
-	$(LINKER) --init-section --trim -o $@ -M $@.map -T $(filter-out $<,$^) 
-	chmod +x $@
 
 $(NOSTDLIB_OUTPUT)/%.o: $(NOSTDLIB_DIR)/%.c 
 	$(CC) $(CCFLAGS) -o $@ $<

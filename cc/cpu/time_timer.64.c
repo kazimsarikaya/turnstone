@@ -77,7 +77,6 @@ void time_timer_pit_sleep(uint64_t usecs) {
     while(time_timer_tick_count <= usecs);
 }
 
-boolean_t we_sended_nmi_to_bsp = false;
 extern volatile boolean_t task_tasking_initialized;
 
 int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
@@ -115,22 +114,10 @@ int8_t time_timer_apic_isr(interrupt_frame_ext_t* frame) {
         time_timer_ap1_tick_count++;
     }
 
-#if 0
-    if(apic_id == 1) {
-        if(time_timer_tick_count > time_timer_old_tick_count) {
-            time_timer_old_tick_count = time_timer_tick_count;
-            we_sended_nmi_to_bsp = false;
-        } else if(!we_sended_nmi_to_bsp && time_timer_ap1_tick_count > time_timer_old_tick_count + 0x5000) {
-            // bsp may be in stuck state, wake it up
-            we_sended_nmi_to_bsp = true;
-            // apic_send_nmi(0);
-        }
-    }
-#endif
-
     if(task_tasking_initialized && (time_timer_tick_count % TASK_MAX_TICK_COUNT) == 0) {
-        task_task_switch_set_parameters(true, false);
+        task_task_switch_set_parameters(true);
         task_switch_task();
+        task_task_switch_exit();
     } else {
         apic_eoi();
     }
@@ -154,4 +141,8 @@ void time_timer_configure_spinsleep(void) {
 
 void time_timer_sleep(uint64_t secs) {
     task_current_task_sleep(time_timer_get_tick_count() + secs * 1000);
+}
+
+void time_timer_msleep(uint64_t msecs) {
+    task_current_task_sleep(time_timer_get_tick_count() + msecs);
 }

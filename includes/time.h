@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define TIME_TIMESTAMP_START_YEAR  1970
 #define TIME_SECONDS_OF_MINUTE       60
 #define TIME_SECONDS_OF_HOUR       3600
@@ -43,5 +47,9 @@ time_t timeparsed_to_time(timeparsed_t* tp);
 timeparsed_t* time_to_timeparsed(time_t t);
 
 uint64_t rdtsc(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

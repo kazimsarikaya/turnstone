@@ -14,6 +14,10 @@
 #include <list.h>
 #include <hashmap.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @enum compiler_token_type_t **/
 typedef enum compiler_token_type_t {
@@ -302,5 +306,9 @@ int8_t                   compiler_add_external_symbol(compiler_t* compiler, cons
 
 #define SYS_exit 60ULL
 #define SYS_write 1ULL
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

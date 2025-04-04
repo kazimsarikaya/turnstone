@@ -20,7 +20,7 @@ uint64_t murmurhash64a(const void* data, uint64_t len, uint64_t seed) {
     const uint64_t* tmp_data = (const uint64_t*)data;
     const uint64_t* end = (len >> 3) + tmp_data;
 
-    while(data != end)
+    while(tmp_data != end)
     {
         uint64_t k = *tmp_data++;
 
@@ -118,7 +118,7 @@ uint128_t murmurhash3_128(const void* data, uint64_t len, uint64_t seed) {
         h2 = h2 * 5 + MURMURHASH3_128_4;
     }
 
-    //----------
+    // ----------
     // tail
 
     const uint8_t* tail = (const uint8_t*)(tmp_data + nblocks * 16);
@@ -184,7 +184,7 @@ uint128_t murmurhash3_128(const void* data, uint64_t len, uint64_t seed) {
         break;
     }
 
-    //----------
+    // ----------
     // finalization
 
     h1 ^= len; h2 ^= len;

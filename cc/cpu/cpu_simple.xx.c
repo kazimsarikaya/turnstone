@@ -7,6 +7,7 @@
  */
 #include <cpu.h>
 #include <logging.h>
+#include <strings.h>
 
 MODULE("turnstone.kernel.cpu");
 
@@ -68,4 +69,39 @@ boolean_t cpu_is_interrupt_enabled(void) {
                           );
 
     return (rflags & 0x200) == 0x200;
+}
+
+static cpu_type_t cpu_type = CPU_TYPE_UNKNOWN;
+static boolean_t cpu_type_initialized = false;
+
+cpu_type_t cpu_get_type(void) {
+    if(cpu_type_initialized) {
+        return cpu_type;
+    }
+
+    cpu_cpuid_regs_t query = {0};
+    cpu_cpuid_regs_t result;
+
+    query.eax = 0x0;
+    cpu_cpuid(query, &result);
+
+    char_t vendor_id[13] = {0};
+
+    *(uint32_t*)&vendor_id[0] = result.ebx;
+    *(uint32_t*)&vendor_id[4] = result.edx;
+    *(uint32_t*)&vendor_id[8] = result.ecx;
+
+    PRINTLOG(KERNEL, LOG_TRACE, "Vendor ID: %s", vendor_id);
+
+    if(strcmp(vendor_id, "GenuineIntel") == 0) {
+        cpu_type = CPU_TYPE_INTEL;
+    } else if(strcmp(vendor_id, "AuthenticAMD") == 0) {
+        cpu_type = CPU_TYPE_AMD;
+    } else {
+        cpu_type = CPU_TYPE_UNKNOWN;
+    }
+
+    cpu_type_initialized = true;
+
+    return cpu_type;
 }

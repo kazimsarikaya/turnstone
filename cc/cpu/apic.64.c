@@ -644,3 +644,90 @@ uint64_t apic_get_ap_count(void) {
 
     return ap_count;
 }
+
+int32_t apic_get_first_irr_interrupt(void) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            uint64_t irr = 0;
+            uint64_t intnum = 0;
+            uint64_t intbase = 0;
+            uint64_t msrbase = APIC_X2APIC_MSR_IRR7;
+
+            for(int32_t i = 0; i < 8; i++) {
+                irr = cpu_read_msr(msrbase);
+
+                if(find_lsb(irr, &intnum)) {
+                    return intbase + intnum;
+                }
+
+                intbase += 0x20;
+                msrbase--; // x2apic irr step is 1
+            }
+
+            return -1;
+        } else {
+            uint64_t intnum = 0;
+            uint64_t intbase = 0;
+            uint64_t irrbase = APIC_X2APIC_MSR_IRR7; // irr needs to be read from 7 to 0 bigger is higher priority
+
+            for(int32_t i = 0; i < 8; i++) {
+                volatile uint32_t* irr = (volatile uint32_t*)(lapic_addr + irrbase);
+
+                if(find_lsb(*irr, &intnum)) {
+                    return intbase + intnum;
+                }
+
+                intbase += 0x20;
+                irrbase -= 0x10; // apic irr step is 0x10
+            }
+
+            return -1;
+        }
+    }
+
+    return -1;
+}
+
+int32_t apic_get_isr_interrupt(void) {
+    if(apic_enabled) {
+        if(apic_x2apic) {
+            uint64_t irr = 0;
+            uint64_t intnum = 0;
+            uint64_t intbase = 0;
+            uint64_t msrbase = APIC_X2APIC_MSR_ISR0;
+
+
+            for(int32_t i = 0; i < 8; i++) {
+                irr = cpu_read_msr(msrbase);
+
+                if(find_lsb(irr, &intnum)) {
+                    return intbase + intnum;
+                }
+
+                intbase += 0x20;
+                msrbase++; // x2apic isr step is 1
+            }
+
+            return -1;
+        } else {
+            uint64_t intnum = 0;
+            uint64_t intbase = 0;
+            uint64_t isrbase = APIC_REGISTER_OFFSET_ISR0;
+
+            for(int32_t i = 0; i < 8; i++) {
+                volatile uint32_t* irr = (volatile uint32_t*)(lapic_addr + isrbase);
+
+                if(find_lsb(*irr, &intnum)) {
+                    return intbase + intnum;
+                }
+
+                intbase += 0x20;
+                isrbase += 0x10; // apic isr step is 0x10
+            }
+
+            return -1;
+        }
+    }
+
+    return -1;
+}

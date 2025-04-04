@@ -16,6 +16,7 @@
 #include <cpu/task.h>
 #include <memory.h>
 #include <linker.h>
+#include <time/timer.h>
 
 MODULE("turnstone.kernel.programs.tosdb_manager");
 
@@ -86,6 +87,8 @@ static uint64_t tosdb_manager_get_entrypoint_virtual_address(uint64_t sym_id) {
     return got_entry->entry_value;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static void tosdb_manager_build_module(tosdb_t* tdb, tosdb_manager_ipc_t* ipc, uint64_t mod_id, uint64_t sym_id) {
     int8_t exit_code = 0;
 
@@ -316,6 +319,7 @@ exit:
     ipc->is_response_done = true;
     task_set_interrupt_received(ipc->sender_task_id);
 }
+#pragma GCC diagnostic pop
 
 static void tosdb_manager_build_program(tosdb_t* tdb, tosdb_manager_ipc_t* ipc) {
     // logging_module_levels[LINKER] = LOG_DEBUG;
@@ -695,11 +699,22 @@ int8_t tosdb_manager_clear(void) {
 
 int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
     if(!tosdb_manager_is_initialized) {
-        PRINTLOG(TOSDB, LOG_ERROR, "tosdb_manager_close: not initialized");
-        return -1;
+        int32_t retry = 60;
+
+        while(retry-- > 0 && !tosdb_manager_is_initialized) {
+            time_timer_sleep(1);
+        }
+
+        if(!tosdb_manager_is_initialized) {
+            PRINTLOG(TOSDB, LOG_ERROR, "tosdb manager is not initialized");
+            return -1;
+        }
+
+        PRINTLOG(TOSDB, LOG_DEBUG, "delayed initialized with %i retries", 60 - retry);
     }
 
     if(tosdb_manager_task_id == 0) {
+        PRINTLOG(TOSDB, LOG_ERROR, "tosdb manager task id is 0");
         return -1;
     }
 
@@ -713,9 +728,20 @@ int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
 
     list_queue_push(ipc_mq, ipc);
 
+    int32_t yield_retry = 60;
+    uint32_t sleep_time = 10;
+
     while(!ipc->is_response_done) {
         task_set_message_waiting();
-        task_yield();
+
+        if(yield_retry > 0) {
+            task_yield();
+            yield_retry--;
+        } else {
+            time_timer_msleep(sleep_time);
+            sleep_time = sleep_time * 2;
+        }
+
     }
 
     return 0;

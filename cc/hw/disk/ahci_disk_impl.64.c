@@ -13,10 +13,10 @@
 
 MODULE("turnstone.kernel.hw.disk.ahci");
 
-typedef struct ahci_disk_impl_context_t {
+typedef struct disk_context_t {
     ahci_sata_disk_t* sata_disk;
     uint64_t          block_size;
-} ahci_disk_impl_context_t;
+} disk_context_t;
 
 memory_heap_t* ahci_disk_impl_get_heap(const disk_or_partition_t* d);
 uint64_t       ahci_disk_impl_get_size(const disk_or_partition_t* d);
@@ -28,22 +28,22 @@ int8_t         ahci_disk_impl_close(const disk_or_partition_t* d);
 
 
 memory_heap_t* ahci_disk_impl_get_heap(const disk_or_partition_t* d) {
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->sata_disk->heap;
 }
 
 uint64_t ahci_disk_impl_get_size(const disk_or_partition_t* d){
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->sata_disk->lba_count * ctx->block_size;
 }
 
 uint64_t ahci_disk_impl_get_block_size(const disk_or_partition_t* d){
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
     return ctx->block_size;
 }
 
 int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t* data) {
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     if(data == NULL) {
         return -1;
@@ -86,7 +86,7 @@ int8_t ahci_disk_impl_write(const disk_or_partition_t* d, uint64_t lba, uint64_t
 }
 
 int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t count, uint8_t** data){
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     PRINTLOG(AHCI, LOG_TRACE, "reading disk with lba: 0x%llx, count: 0x%llx\n", lba, count);
 
@@ -171,7 +171,7 @@ int8_t ahci_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_t 
 }
 
 int8_t ahci_disk_impl_flush(const disk_or_partition_t* d) {
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     future_t* f_fut = ahci_flush(ctx->sata_disk->disk_id);
 
@@ -181,7 +181,7 @@ int8_t ahci_disk_impl_flush(const disk_or_partition_t* d) {
 }
 
 int8_t ahci_disk_impl_close(const disk_or_partition_t* d) {
-    ahci_disk_impl_context_t* ctx = (ahci_disk_impl_context_t*)d->context;
+    disk_context_t* ctx = (disk_context_t*)d->context;
 
     d->flush(d);
 
@@ -204,7 +204,7 @@ disk_t* ahci_disk_impl_open(ahci_sata_disk_t* sata_disk) {
         return NULL;
     }
 
-    ahci_disk_impl_context_t* ctx = memory_malloc_ext(sata_disk->heap, sizeof(ahci_disk_impl_context_t), 0);
+    disk_context_t* ctx = memory_malloc_ext(sata_disk->heap, sizeof(disk_context_t), 0);
 
     if(ctx == NULL) {
         return NULL;

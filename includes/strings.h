@@ -13,12 +13,16 @@
 #include <memory.h>
 #include <sunday_match.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief calculates null ended string's length
  * @param[in]  string string to calculate length
  * @return length
  */
-size_t strlen(const char_t* string);
+size_t strlen(const char_t * string);
 
 /**
  * @brief compares two string
@@ -26,7 +30,7 @@ size_t strlen(const char_t* string);
  * @param  string2 second string
  * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
  */
-int8_t strcmp(const char_t* string1, const char_t* string2);
+int8_t strcmp(const char_t * string1, const char_t * string2);
 
 /**
  * @brief compares two string with first n bytes
@@ -35,7 +39,7 @@ int8_t strcmp(const char_t* string1, const char_t* string2);
  * @param  n first n bytes
  * @return <0 if string1>string2, 0 string1=string2, >0 string1<string2
  */
-int8_t strncmp(const char_t* string1, const char_t* string2, size_t n);
+int8_t strncmp(const char_t * string1, const char_t * string2, size_t n);
 
 /**
  * @brief checks str starts with prefix
@@ -43,7 +47,7 @@ int8_t strncmp(const char_t* string1, const char_t* string2, size_t n);
  * @param  prefix to compare
  * @return 0 if str starts with prefix, else -1
  */
-int8_t strstarts(const char_t* str, const char_t* prefix);
+int8_t strstarts(const char_t * str, const char_t * prefix);
 
 /**
  * @brief checks str ends with suffix
@@ -51,7 +55,7 @@ int8_t strstarts(const char_t* str, const char_t* prefix);
  * @param  suffix to compare
  * @return 0 if str ends with suffix, else -1
  */
-int8_t strends(const char_t* str, const char_t* suffix);
+int8_t strends(const char_t * str, const char_t * suffix);
 
 /**
  * @brief finds first occurance of char in string
@@ -105,7 +109,7 @@ char_t* strcat_at_heap(memory_heap_t* heap, const char_t* string1, const char_t*
  * NULL will not be copied. destination should be equal or greater then source.
  * destination should have space for NULL.
  */
-int8_t strcpy(const char_t* source, char_t* destination);
+int8_t strcopy(const char_t * source, char_t * destination);
 
 /**
  * @brief reverse a string
@@ -122,7 +126,7 @@ char* strrev(const char_t* source);
  * @param[in]  base   base of number inside string
  * @return number
  */
-number_t ato_base(const char_t* source, number_t base);
+number_t ato_base(const char_t * source, number_t base);
 
 /*! ato_base macro for base 10 */
 #define atoi(number) ato_base(number, 10)
@@ -133,7 +137,7 @@ number_t ato_base(const char_t* source, number_t base);
  * @param[in]  base   base of number inside string
  * @return number
  */
-unumber_t atou_base(const char_t* source, number_t base);
+unumber_t atou_base(const char_t * source, number_t base);
 
 
 /*! atou_base macro for base 10 */
@@ -228,20 +232,23 @@ char_t* strlowercopy(const char_t* str);
 
 char_t* strtrim_right(char_t* str);
 
-int8_t str_is_upper(char_t* str);
+int8_t str_is_upper(char_t * str);
 
-int64_t  wchar_size(const wchar_t* str);
-char_t*  wchar_to_char(wchar_t* src);
-wchar_t* char_to_wchar(const char_t* str);
+int64_t   wchar_size(const char16_t* str);
+char_t*   char16_to_char(char16_t* src);
+char16_t* char_to_wchar(const char_t* str);
 
-int64_t  lchar_size(const lchar_t* str);
-char_t*  lchar_to_char(lchar_t* src);
-lchar_t* char_to_lchar(char_t* str);
+int64_t   lchar_size(const char32_t * str);
+char_t*   char32_to_char(char32_t* src);
+char32_t* char_to_lchar(char_t* str);
 
-uint64_t strhash(const char_t* input);
+uint64_t strhash(const char_t * input);
 
-char_t* sprintf(const char_t* format, ...);
-char_t* vsprintf(const char_t* format, va_list args);
+char_t* strprintf(const char_t* format, ...);
+char_t* vstrprintf(const char_t* format, va_list args);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

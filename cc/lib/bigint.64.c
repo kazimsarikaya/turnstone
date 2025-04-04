@@ -502,18 +502,20 @@ static int8_t bigint_remove_leading_zeros(bigint_t* bigint) {
             item = prev;
         }
 
+        if (!item) {
+            bigint->sign = 0;
+            bigint->neged_with_sign = false;
+            bigint->lsb = NULL;
+
+            return 0;
+        }
+
         if(item == bigint->lsb) {
             item->next = NULL;
             item->prev = NULL;
         }
 
         bigint->msb = item;
-
-        if (!item) {
-            bigint->sign = 0;
-            bigint->neged_with_sign = false;
-            bigint->lsb = NULL;
-        }
     }
 
     return 0;
@@ -755,6 +757,8 @@ boolean_t bigint_is_uint64(const bigint_t* a, uint64_t value) {
     return item->value == high;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t bigint_sign_extend(bigint_t* bigint, uint64_t item_count) {
     if(!bigint) {
         return -1;
@@ -796,6 +800,7 @@ static int8_t bigint_sign_extend(bigint_t* bigint, uint64_t item_count) {
 
     return 0;
 }
+#pragma GCC diagnostic pop
 
 int8_t bigint_neg(bigint_t* result, const bigint_t* a) {
     if(!result || !a) {

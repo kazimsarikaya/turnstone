@@ -7,25 +7,25 @@
 #include <utils.h>
 
 typedef struct jump_registers_s {
-    uint64_t rax;  ///< register
-    uint64_t rbx;  ///< register
-    uint64_t rcx;  ///< register
-    uint64_t rdx;  ///< register
-    uint64_t r8;  ///< register
-    uint64_t r9;  ///< register
-    uint64_t r10;  ///< register
-    uint64_t r11;  ///< register
-    uint64_t r12;  ///< register
-    uint64_t r13;  ///< register
-    uint64_t r14;  ///< register
-    uint64_t r15;  ///< register
-    uint64_t rsi;  ///< register
-    uint64_t rdi;  ///< register
-    uint64_t rsp;  ///< register
-    uint64_t rbp;  ///< register
+    uint64_t rax; ///< register
+    uint64_t rbx; ///< register
+    uint64_t rcx; ///< register
+    uint64_t rdx; ///< register
+    uint64_t r8; ///< register
+    uint64_t r9; ///< register
+    uint64_t r10; ///< register
+    uint64_t r11; ///< register
+    uint64_t r12; ///< register
+    uint64_t r13; ///< register
+    uint64_t r14; ///< register
+    uint64_t r15; ///< register
+    uint64_t rsi; ///< register
+    uint64_t rdi; ///< register
+    uint64_t rsp; ///< register
+    uint64_t rbp; ///< register
     uint8_t  fx_registers[512]; ///< register
-    uint64_t rflags;  ///< register 0x280
-    uint64_t rip;  ///< program counter 0x288
+    uint64_t rflags; ///< register 0x280
+    uint64_t rip; ///< program counter 0x288
     int64_t  error; ///<error code 0x290
     uint64_t return_rip; ///< return rip 0x298
 } __attribute__((aligned(8))) jump_registers_t[1];
@@ -175,7 +175,7 @@ __attribute__((naked, no_stack_protector)) void jump_load_registers(jump_registe
 
 int32_t main(uint32_t argc, char_t** argv);
 
-#define TRY do{ jump_registers_t ___jr = {0}; switch( jump_set(___jr) ) { case 0: while(1) {
+#define TRY do{ jump_registers_t ___jr; memory_memclean(___jr, sizeof(jump_registers_t)); switch( jump_set(___jr) ) { case 0: while(1) {
 #define CATCH(x) break; case x:
 #define FINALLY break; } default:
 #define ETRY } } while(0)

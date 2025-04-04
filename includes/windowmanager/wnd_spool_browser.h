@@ -11,6 +11,14 @@
 
 #include <windowmanager/wnd_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int8_t windowmanager_create_and_show_spool_browser_window(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

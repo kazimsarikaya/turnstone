@@ -13,6 +13,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef ___PIXEL_T
 #define ___PIXEL_T
 typedef uint32_t pixel_t;
@@ -23,5 +27,9 @@ typedef struct graphics_raw_image_t {
     uint32_t height;
     pixel_t* data;
 } graphics_raw_image_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___GRAPHICS_IMAGE_H

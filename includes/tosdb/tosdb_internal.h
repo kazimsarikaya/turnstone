@@ -20,6 +20,10 @@
 #include <set.h>
 #include <compression.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define TOSDB_PAGE_SIZE 4096
 #define TOSDB_SUPERBLOCK_SIGNATURE "TURNSTONE OS DB\0"
@@ -525,5 +529,9 @@ typedef struct tosdb_sequence_t {
     int64_t         cache_current_size;
     lock_t*         lock;
 } tosdb_sequence_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

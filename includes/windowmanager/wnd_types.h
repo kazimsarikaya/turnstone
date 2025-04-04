@@ -14,6 +14,10 @@
 #include <graphics/color.h>
 #include <graphics/font.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct window_t             window_t;
 typedef struct rect_t               rect_t;
 typedef struct window_event_t       window_event_t;
@@ -49,6 +53,7 @@ struct window_t {
     boolean_t      is_dirty;
     boolean_t      is_visible;
     boolean_t      is_writable;
+    boolean_t      has_alert;
     int32_t        input_length;
     const char_t*  input_id;
     void*          extra_data;
@@ -73,5 +78,12 @@ typedef struct window_input_value_t {
     rect_t        rect;
 } window_input_value_t;
 
+#define WINDOWMANAGER_COMMAND_TEXT "Command"
+#define WINDOWMANAGER_COMMAND_INPUT_TEXT "________________"
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

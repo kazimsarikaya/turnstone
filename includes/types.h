@@ -25,19 +25,28 @@ typedef unsigned char uint8_t;
 /*! boolean type */
 #define true        1
 #define false       0
+// c and cpp has bool type
+#ifndef __cplusplus
 typedef _Bool boolean_t;
+#else
+typedef bool boolean_t;
+#endif
 /*! signed word (two bytes) type */
 typedef short int16_t;
+#ifndef __cplusplus
 /*! wide char (two bytes) type */
-typedef unsigned short wchar_t;
+typedef unsigned short char16_t;
+#endif
 /*! unsigned word (two bytes) type */
 typedef unsigned short uint16_t;
 /*! signed double word (four bytes) type */
 typedef int int32_t;
 /*! unsigned double word (four bytes) type */
 typedef unsigned int uint32_t;
+#ifndef __cplusplus
 /*! long char (four bytes) type */
-typedef unsigned int lchar_t;
+typedef unsigned int char32_t;
+#endif
 
 /*! signed quad word (eight bytes) type */
 typedef long long int64_t;
@@ -56,8 +65,12 @@ typedef unsigned long long uint64_t;
 typedef uint64_t reg_t;
 /*! cpu extended registery type at long mode*/
 typedef uint64_t regext_t;
+#ifndef __cplusplus
 /*! size of objects type at long mode */
 typedef uint64_t size_t;
+#else
+typedef unsigned long int size_t;
+#endif
 /*! alias for signed quad word at long mode */
 #define number_t int64_t
 /*! alias for signed quad word at long mode */
@@ -80,9 +93,21 @@ typedef __builtin_va_list va_list;
 #define va_end(v)       __builtin_va_end(v);
 #define va_arg(v, a)   __builtin_va_arg(v, a);
 
+#ifdef __cplusplus
 #define MODULE(m) \
-        __attribute__((section(".___module___"), visibility("internal"))) \
+        extern "C" __attribute__((section(".___module___"))) \
         const char_t ___module___[] = m;
+#else
+#define MODULE(m) \
+        __attribute__((section(".___module___"))) \
+        const char_t ___module___[] = m;
+#endif
 
 #define nobreak __attribute__((fallthrough))
+
+#ifdef __cplusplus
+#define _Noreturn __attribute__((noreturn))
+#define _Nonnull __attribute__((nonnull))
+#endif
+
 #endif

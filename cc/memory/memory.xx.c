@@ -158,7 +158,7 @@ int8_t memory_memset(void* address, uint8_t value, size_t size) {
 
     return 0;
 }
-#elif 0
+#elif 1
 int8_t __attribute__((naked)) memory_memset(register void* address, register uint8_t value, register size_t size) {
     // loop with rep stosq and rep stosb
     // move sil to al and move it %rdi until %rcx is zero
@@ -429,7 +429,7 @@ int8_t memory_memclean(void* address, size_t size) {
     return memory_memset(address, 0, size);
 }
 #pragma GCC diagnostic pop
-#elif 0
+#elif 1
 int8_t __attribute__((naked)) memory_memclean(register void* address, register size_t size) {
     // loop with rep stosq and rep stosb
     // move sil to al and move it %rdi until %rcx is zero

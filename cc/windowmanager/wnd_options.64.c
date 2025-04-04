@@ -10,7 +10,6 @@
 #include <windowmanager/wnd_options.h>
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_utils.h>
-#include <windowmanager/wnd_vmmgr.h>
 #include <windowmanager/wnd_spool_browser.h>
 #include <windowmanager/wnd_task_manager.h>
 #include <windowmanager/wnd_misc.h>
@@ -27,9 +26,8 @@ typedef int8_t (*wndmgr_opt_action_f)(void);
 typedef enum wnd_options_windows_t {
     WND_OPTIONS_NONE,
     WND_OPTIONS_PRIMARY,
-    WND_OPTIONS_TASK_MANAGER,
+    WND_OPTIONS_TASK_VM_MANAGER,
     WND_OPTIONS_SPOOL_BROWSER,
-    WND_OPTIONS_VIRTUAL_MACHINE_MANAGER,
     WND_OPTIONS_NETWORK_MANAGER,
     WND_OPTIONS_TURNSTONE_DATABASE_MANAGER,
     WND_OPTIONS_END,
@@ -50,22 +48,26 @@ typedef struct wnd_options_list_t {
 } wnd_options_list_t;
 
 
-typedef enum wnd_task_manager_list_item_type_t {
-    WND_TASK_MANAGER_LIST_ITEM_TYPE_TASK_LIST,
-    WND_TASK_MANAGER_LIST_ITEM_TYPE_END,
-} wnd_task_manager_list_item_type_t;
+typedef enum wnd_task_vm_manager_list_item_type_t {
+    WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST,
+    WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_CREATE,
+    WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
+} wnd_task_vm_manager_list_item_type_t;
 
-const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_MANAGER_LIST_ITEM_TYPE_END] = {
-    [WND_TASK_MANAGER_LIST_ITEM_TYPE_TASK_LIST] =    {
-        .text = "Task List",
-        .action = windowmanager_create_and_show_task_list_window,
+const wnd_options_list_item_t wnd_task_manager_item_list[WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END] = {
+    [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_LIST] =    {
+        .text = "Task and VM List",
+        .action = windowmanager_create_and_show_task_vm_list_window,
+    },
+    [WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_TASK_VM_CREATE] =    {
+        .text = "Create Task and VM",
+        .action = windowmanager_create_and_show_task_vm_create_window,
     },
 };
 
 typedef enum wnd_primary_options_list_item_type_t {
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_SPOOL_BROWSER,
-    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER,
-    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER,
+    WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_VM_MANAGER,
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER,
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TURNSTONE_DATABASE_MANAGER,
     WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_REBOOT,
@@ -78,13 +80,9 @@ const wnd_options_list_item_t wnd_primary_options_item_list[WND_PRIMARY_OPTIONS_
         .text = "Spool Browser",
         .action = windowmanager_create_and_show_spool_browser_window,
     },
-    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_MANAGER] =    {
-        .text = "Task Manager",
-        .next_options_window = WND_OPTIONS_TASK_MANAGER,
-        .action = NULL,
-    },
-    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_VIRTUAL_MACHINE_MANAGER] =    {
-        .text = "Virtual Machine Manager",
+    [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_TASK_VM_MANAGER] =    {
+        .text = "Task and Virtual Machine Manager",
+        .next_options_window = WND_OPTIONS_TASK_VM_MANAGER,
         .action = NULL,
     },
     [WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_NETWORK_MANAGER] =    {
@@ -111,10 +109,10 @@ const wnd_options_list_t wnd_options_list[WND_OPTIONS_END] = {
         .items = wnd_primary_options_item_list,
         .items_count = WND_PRIMARY_OPTIONS_LIST_ITEM_TYPE_END,
     },
-    [WND_OPTIONS_TASK_MANAGER] =    {
-        .title = "tOS Task Manager",
+    [WND_OPTIONS_TASK_VM_MANAGER] =    {
+        .title = "tOS Task and Virtual Machine Manager",
         .items = wnd_task_manager_item_list,
-        .items_count = WND_TASK_MANAGER_LIST_ITEM_TYPE_END,
+        .items_count = WND_TASK_VM_MANAGER_LIST_ITEM_TYPE_END,
     },
 };
 
@@ -128,7 +126,11 @@ window_t* windowmanager_create_primary_options_window(void) {
     return pri_opt_wnd;
 }
 
-window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
+window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
+                                          const char_t* label_text,
+                                          const char_t* input_text,
+                                          const char_t* input_text_id,
+                                          const char_t* tooltip_text) {
     screen_info_t screen_info = screen_get_info();
 
     uint32_t font_width = 0, font_height = 0;
@@ -148,7 +150,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
         return NULL;
     }
 
-    char_t* input_label_text = strdup("Option ===> ");
+    char_t* input_label_text = strprintf("%s ==> ", label_text);
 
     rect_t rect = windowmanager_calc_text_rect(input_label_text, 2000);
 
@@ -159,17 +161,18 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
                                                                (color_t){.color = 0xFF00FF00});
 
     if(option_input_label == NULL) {
+        windowmanager_destroy_window(option_input_row);
         return NULL;
     }
 
-    char_t* input_text = strdup("____________________");
+    char_t* wnd_input_text = strdup(input_text);
 
     rect = windowmanager_calc_text_rect(input_text, 2000);
 
     rect.x = option_input_label->rect.width + 2 * font_width;
 
     window_t* option_input_text = windowmanager_create_window(option_input_row,
-                                                              input_text,
+                                                              wnd_input_text,
                                                               rect,
                                                               (color_t){.color = 0x00000000},
                                                               (color_t){.color = 0xFFFF0000});
@@ -180,7 +183,28 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos) {
 
     option_input_text->is_writable = true;
     option_input_text->input_length = strlen(input_text);
-    option_input_text->input_id = "option";
+    option_input_text->input_id = input_text_id;
+
+    if(tooltip_text == NULL) {
+        return option_input_row;
+    }
+
+    rect = windowmanager_calc_text_rect(tooltip_text, 2000);
+
+    rect.x = option_input_text->rect.x + option_input_text->rect.width  + 2 * font_width;
+
+    char_t* tooltip_text_str = strndup(tooltip_text, rect.width);
+
+    window_t* option_input_tooltip = windowmanager_create_window(option_input_row,
+                                                                 tooltip_text_str,
+                                                                 rect,
+                                                                 (color_t){.color = 0x00000000},
+                                                                 (color_t){.color = 0xFF00FF00});
+
+    if(option_input_tooltip == NULL) {
+        windowmanager_destroy_window(option_input_row);
+        return NULL;
+    }
 
     return option_input_row;
 }
@@ -330,7 +354,11 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
         return NULL;
     }
 
-    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect);
+    window_t* option_input_row = windowmanager_add_option_window(window, title_window->rect,
+                                                                 WINDOWMANAGER_COMMAND_TEXT,
+                                                                 WINDOWMANAGER_COMMAND_INPUT_TEXT,
+                                                                 "option",
+                                                                 NULL);
 
     if(!option_input_row) {
         windowmanager_destroy_window(window);
@@ -355,7 +383,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
     for(int64_t i = 0; i < options_list->items_count; i++) {
 
-        char_t* option_number = sprintf("% 8d.", i);
+        char_t* option_number = strprintf("% 8d.", i);
 
         rect = windowmanager_calc_text_rect(option_number, 2000);
 
@@ -372,7 +400,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
             return NULL;
         }
 
-        char_t* option_text = sprintf("%s", options_list->items[i].text);
+        char_t* option_text = strprintf("%s", options_list->items[i].text);
 
         rect = windowmanager_calc_text_rect(option_text, screen_info.width - option_number_area->rect.width - font_width);
 

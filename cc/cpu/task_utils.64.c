@@ -22,9 +22,9 @@
 #include <utils.h>
 #include <hashmap.h>
 #include <stdbufs.h>
-#include <hypervisor/hypervisor_vmxops.h>
+#include <hypervisor/hypervisor_vmx_ops.h>
 #include <hypervisor/hypervisor_vm.h>
-#include <hypervisor/hypervisor_macros.h>
+#include <hypervisor/hypervisor_vmx_macros.h>
 #include <strings.h>
 
 MODULE("turnstone.kernel.cpu.task.utils");
@@ -44,6 +44,10 @@ uint64_t task_get_id(void) {
     }
 
     return id;
+}
+
+uint64_t task_get_cpu_id(void) {
+    return apic_get_local_apic_id();
 }
 
 void task_current_task_sleep(uint64_t wake_tick) {
@@ -200,6 +204,7 @@ buffer_t* task_build_task_list(void) {
             .malloc_count = stat.malloc_count,
             .free_count = stat.free_count,
             .heap_diff = stat.malloc_count - stat.free_count,
+            .has_virtual_machine = task->vm != NULL,
         };
 
         if(buffer_append_bytes(buffer, (uint8_t*)&item, sizeof(task_list_item_t)) == NULL) {

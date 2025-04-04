@@ -12,9 +12,17 @@
 #include <types.h>
 #include <buffer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 extern buffer_t* shell_buffer;
 
 int8_t shell_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __SHELL_H */

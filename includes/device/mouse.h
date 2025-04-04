@@ -13,9 +13,9 @@
 #include <types.h>
 #include <graphics/image.h>
 
-#define MOUSE_BUTTON_LEFT_VIRTIO   0x110
-#define MOUSE_BUTTON_RIGHT_VIRTIO  0x111
-#define MOUSE_BUTTON_MIDDLE_VIRTIO 0x112
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum mouse_buttons_t {
     MOUSE_BUTTON_LEFT   = 0x01,
@@ -39,5 +39,9 @@ typedef void (*mouse_move_cursor_f)(uint32_t x, uint32_t y);
 extern mouse_move_cursor_f MOUSE_MOVE_CURSOR;
 
 graphics_raw_image_t* mouse_get_image(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // ___MOUSE_H

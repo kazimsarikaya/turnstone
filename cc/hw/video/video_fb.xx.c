@@ -141,7 +141,7 @@ static void video_fb_graphics_print(const char_t* string) {
     }
 
     while(string[i]) {
-        wchar_t wc = font_get_wc(string + i, &i);
+        char16_t wc = font_get_wc(string + i, &i);
 
         if(wc == '\r') {
             cursor_graphics_x = 0;

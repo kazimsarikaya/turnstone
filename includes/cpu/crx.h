@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CPU_MSR_EFER  0xC0000080 ///< extended feature register
 #define CPU_MSR_STAR  0xC0000081 ///< system call target address register
 #define CPU_MSR_LSTAR 0xC0000082 ///< system call target address register
@@ -70,7 +74,7 @@ typedef union cpu_reg_cr4_u {
         uint8_t  reserved2                             : 1; ///< reserved
         uint8_t  fs_gs_base_enable                     : 1; ///< enables changing base address of fs and gs registers
         uint8_t  process_context_identifier_enable     : 1; ///< enables process context identifier at cr3
-        uint8_t  os_xsave_eable                        : 1; ///< enables xsave instruction
+        uint8_t  os_xsave_enable                       : 1; ///< enables xsave instruction
         uint8_t  reserved3                             : 1; ///< reserved
         uint8_t  supervisor_mode_execution_prevention  : 1; ///< enables kernel exection of user space code with rflags
         uint8_t  supervisor_mode_access_protection     : 1; ///< enables kernel memory access of user space with rflags
@@ -128,5 +132,9 @@ void cpu_cr0_enable_wp(void);
  * @brief enables sse support, modifies cr4 register
  */
 void cpu_enable_sse(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

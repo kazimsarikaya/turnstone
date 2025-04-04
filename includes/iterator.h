@@ -11,6 +11,10 @@
 
 #include <types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @struct iterator_t
  * @brief iterator interface struct
@@ -26,5 +30,9 @@ typedef struct iterator_t {
     const void* (* delete_item)(struct iterator_t* iter); ///< deletes current item and moves to next
     const void* (* get_extra_data)(struct iterator_t* iter); ///< if underlaying iterable has extra data for current item, returns them
 }iterator_t; ///< short hand for struct
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

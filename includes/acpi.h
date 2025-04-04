@@ -12,6 +12,10 @@
 #include <types.h>
 #include <list.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! acpi rsdp signature at memory. spaces are important */
 #define ACPI_RSDP_SIGNATURE "RSD PTR "
 
@@ -214,5 +218,9 @@ int8_t acpi_setup(acpi_xrsdp_descriptor_t* desc);
 int8_t acpi_reset(void);
 int8_t acpi_poweroff(void);
 int8_t acpi_setup_events(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
