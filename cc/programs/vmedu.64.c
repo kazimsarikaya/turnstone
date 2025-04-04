@@ -46,7 +46,7 @@ static void edu_timer_isr(interrupt_frame_ext_t* frame) {
 
     edu_timer_tick++;
 
-    if(edu_timer_tick == 1000) {
+    if(edu_timer_tick == 100) {
         printf("EDU Timer ISR\n");
         edu_timer_tick = 0;
         volatile uint64_t* ptr_edu_timer_isr_test_end = (volatile uint64_t*)&edu_timer_isr_test_end;
@@ -73,7 +73,7 @@ _Noreturn void vmedu(void) {
 
     printf("base init done\n");
 
-    vm_guest_enable_timer(edu_timer_isr, 1000, 1);
+    vm_guest_enable_timer(edu_timer_isr, 0xF000, 0);
 
     uint64_t hpa = vm_guest_get_host_physical_address((uint64_t)heap);
 
