@@ -77,9 +77,9 @@ fi
   -device VGA,id=gpu0,vgamem_mb=256 \
   -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
-  -device usb-ehci,id=ehci \
-  -device usb-tablet,bus=ehci.0 \
-  -device usb-kbd,bus=ehci.0 \
+  -device nec-usb-xhci,id=xhci \
+  -device usb-tablet,bus=xhci.0 \
+  -device usb-kbd,bus=xhci.0 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \
