@@ -130,10 +130,6 @@ EFIBOOTFILE = $(OBJDIR)/BOOTX64.EFI
 TOSDBIMG_BUILDER = $(OBJDIR)/generatelinkerdb.bin
 PXECONFGEN = $(OBJDIR)/pxeconfgen.bin
 
-PROGS = $(OBJDIR)/stage3.bin.pack
-
-TESTPROGS = $(OBJDIR)/stage3.test.bin
-
 .PHONY: all clean $(SUBDIRS) asm bear
 .PRECIOUS:
 
