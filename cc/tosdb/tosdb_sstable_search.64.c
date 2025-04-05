@@ -410,11 +410,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         res->is_deleted = s_idx_item->is_primary_key_deleted;
         res->key_hash = s_idx_item->primary_key_hash;
         res->key_length = s_idx_item->primary_key_length;
+        res->offset = s_idx_item->offset;
+        res->length = s_idx_item->length;
+        res->level = s_idx_item->level;
+        res->sstable_id = s_idx_item->sstable_id;
         memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
-
-        if(res->key_hash == 7083) {
-            PRINTLOG(TOSDB, LOG_TRACE, "found item: %s deleted? %i", res->key, res->is_deleted);
-        }
 
         if(!set_append(results, res)) {
             memory_free(res);
@@ -448,13 +448,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             res->is_deleted = s_idx_item->is_primary_key_deleted;
             res->key_hash = s_idx_item->primary_key_hash;
             res->key_length = s_idx_item->primary_key_length;
+            res->offset = s_idx_item->offset;
+            res->length = s_idx_item->length;
+            res->level = s_idx_item->level;
+            res->sstable_id = s_idx_item->sstable_id;
             memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
-
-            if(res->key_hash == 7083) {
-                PRINTLOG(TOSDB, LOG_TRACE, "found item: %s deleted? %i", res->key, res->is_deleted);
-            }
-
-
 
             if(!set_append(results, res)) {
                 memory_free(res);

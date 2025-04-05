@@ -547,6 +547,8 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
             idx_item->key_hash = r_key->key_hash;
             idx_item->length = length;
             idx_item->offset = offset;
+            idx_item->level = mt->level;
+            idx_item->sstable_id = mt->id;
             idx_item->record_id = r_ctx->record_id;
 
             uint8_t* u8_key = r_key->key;
@@ -606,6 +608,10 @@ boolean_t tosdb_memtable_upsert_internal(tosdb_memtable_t* mt, tosdb_record_t * 
             sec_idx_item->primary_key_hash = pri_r_key->key_hash;
             sec_idx_item->primary_key_length = pri_r_key->key_length;
             sec_idx_item->is_primary_key_deleted = del;
+            sec_idx_item->length = length;
+            sec_idx_item->offset = offset;
+            sec_idx_item->level = mt->level;
+            sec_idx_item->sstable_id = mt->id;
             sec_idx_item->record_id = r_ctx->record_id;
 
             memory_memcopy(r_key->key, sec_idx_item->data, r_key->key_length);
@@ -1282,6 +1288,8 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     if(found_item->is_deleted) {
         ctx->is_deleted = true;
         ctx->record_id = found_item->record_id;
+        ctx->level = found_item->level;
+        ctx->sstable_id = found_item->sstable_id;
 
         return true;
     }
@@ -1309,6 +1317,8 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     }
 
     ctx->record_id = found_item->record_id;
+    ctx->level = found_item->level;
+    ctx->sstable_id = found_item->sstable_id;
 
     data_t* tmp = r_d->value;
 
