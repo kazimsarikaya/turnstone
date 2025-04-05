@@ -1269,8 +1269,8 @@ boolean_t tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t 
         return false;
     }
 
-    if(!tbl->is_open) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is closed");
+    if(!tbl->is_open || tbl->is_deleted) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed or deleted");
 
         return false;
     }
@@ -1303,8 +1303,8 @@ const tosdb_index_t*  tosdb_table_get_index_by_column_id(tosdb_table_t* tbl, uin
         return NULL;
     }
 
-    if(!tbl->is_open) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is closed");
+    if(!tbl->is_open || tbl->is_deleted) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed or deleted");
 
         return NULL;
     }
@@ -1327,8 +1327,8 @@ boolean_t tosdb_table_set_compaction_index_id_hint_by_column_name(tosdb_table_t*
         return false;
     }
 
-    if(!tbl->is_open) {
-        PRINTLOG(TOSDB, LOG_ERROR, "table is closed");
+    if(!tbl->is_open || tbl->is_deleted) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed or deleted");
 
         return false;
     }
