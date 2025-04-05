@@ -378,6 +378,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
+    if(!tosdb_table_set_compaction_index_id_hint_by_column_name(tbl_sections, "module_id")) {
+        return false;
+    }
+
     tosdb_sequence_create_or_open(db, "sections_section_id", 1, 10);
 
     tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
@@ -434,6 +438,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
+    if(!tosdb_table_set_compaction_index_id_hint_by_column_name(tbl_symbols, "section_id")) {
+        return false;
+    }
+
     tosdb_sequence_create_or_open(db, "symbols_symbol_id", 1, 10);
 
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, "relocations", 8 << 10, 1 << 20, 8);
@@ -487,6 +495,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
     }
 
     if(!tosdb_table_index_create(tbl_relocations, "symbol_section_id", TOSDB_INDEX_SECONDARY)) {
+        return false;
+    }
+
+    if(!tosdb_table_set_compaction_index_id_hint_by_column_name(tbl_relocations, "section_id")) {
         return false;
     }
 

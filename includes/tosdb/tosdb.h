@@ -204,6 +204,14 @@ typedef enum tosdb_index_type_t {
 boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, tosdb_index_type_t type);
 
 /**
+ * @brief sets the compaction index id hint
+ * @param[in] tbl table interface
+ * @param[in] colname column name
+ * @return true if succeed.
+ */
+boolean_t tosdb_table_set_compaction_index_id_hint_by_column_name(tosdb_table_t* tbl, const char_t* colname);
+
+/**
  * @brief closes a table
  * @param[in] tbl the table to close
  * @return true if succeed.
