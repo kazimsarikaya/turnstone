@@ -141,9 +141,9 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
         memory_memcopy(t_first, first, first_key_length);
 
-        tosdb_memtable_secondary_index_item_t* t_last = (tosdb_memtable_secondary_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_index_item_t) + first->secondary_key_length + first->primary_key_length);
+        tosdb_memtable_secondary_index_item_t* t_last = (tosdb_memtable_secondary_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_secondary_index_item_t) + first->secondary_key_length + first->primary_key_length);
 
-        uint64_t last_key_length = t_last->secondary_key_length + t_last->primary_key_length + sizeof(tosdb_memtable_index_item_t);
+        uint64_t last_key_length = t_last->secondary_key_length + t_last->primary_key_length + sizeof(tosdb_memtable_secondary_index_item_t);
         last = memory_malloc(last_key_length);
 
         if(!last) {
