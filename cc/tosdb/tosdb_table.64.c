@@ -344,6 +344,7 @@ tosdb_table_t* tosdb_table_load_table(tosdb_table_t* tbl) {
     tbl->primary_column_id = tbl_block->primary_column_id;
     tbl->primary_index_id = tbl_block->primary_index_id;
     tbl->primary_column_type = tbl_block->primary_column_type;
+    tbl->compaction_index_id_hint = tbl_block->compaction_index_id_hint;
 
     tbl->memtable_next_id = tbl_block->memtable_next_id;
     tbl->sstable_list_location = tbl_block->sstable_list_location;
@@ -447,6 +448,8 @@ tosdb_table_t* tosdb_table_create_or_open(tosdb_database_t* db, const char_t* na
     tbl->max_record_count = max_record_count;
     tbl->max_valuelog_size = max_valuelog_size;
     tbl->max_memtable_count = max_memtable_count;
+
+    tbl->compaction_index_id_hint = -1ULL;
 
 
     hashmap_put(db->tables, name, tbl);
@@ -943,6 +946,13 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         block->primary_index_id = tbl->primary_index_id;
         block->primary_column_type = tbl->primary_column_type;
 
+        // if compaction index id hint is not set, use primary index id
+        if(tbl->compaction_index_id_hint != -1ULL) {
+            block->compaction_index_id_hint = tbl->compaction_index_id_hint;
+        } else {
+            block->compaction_index_id_hint = tbl->primary_index_id;
+        }
+
         uint64_t loc = tosdb_block_write(tbl->db->tdb, (tosdb_block_header_t*)block);
 
         if(loc == 0) {
@@ -1250,4 +1260,106 @@ set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl) {
     }
 
     return res;
+}
+
+boolean_t tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t index_id) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return false;
+    }
+
+    if(!tbl->is_open) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed");
+
+        return false;
+    }
+
+    if(!hashmap_exists(tbl->indexes, (void*)index_id)) {
+        PRINTLOG(TOSDB, LOG_ERROR, "index %lli is not exists for table %s", index_id, tbl->name);
+
+        return false;
+    }
+
+    if(tbl->compaction_index_id_hint == index_id) {
+        PRINTLOG(TOSDB, LOG_DEBUG, "index %lli is already set as compaction index id hint for table %s", index_id, tbl->name);
+
+        return true;
+    }
+
+    tbl->compaction_index_id_hint = index_id;
+
+    tbl->is_dirty = true;
+
+    PRINTLOG(TOSDB, LOG_DEBUG, "index %lli is set as compaction index id hint for table %s", index_id, tbl->name);
+
+    return true;
+}
+
+const tosdb_index_t*  tosdb_table_get_index_by_column_id(tosdb_table_t* tbl, uint64_t id) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return NULL;
+    }
+
+    if(!tbl->is_open) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed");
+
+        return NULL;
+    }
+
+    const tosdb_index_t* idx = hashmap_get(tbl->index_column_map, (void*)id);
+
+    if(!idx) {
+        PRINTLOG(TOSDB, LOG_ERROR, "index for column %lli not found", id);
+
+        return NULL;
+    }
+
+    return idx;
+}
+
+boolean_t tosdb_table_set_compaction_index_id_hint_by_column_name(tosdb_table_t* tbl, const char_t* colname) {
+    if(!tbl) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is null");
+
+        return false;
+    }
+
+    if(!tbl->is_open) {
+        PRINTLOG(TOSDB, LOG_ERROR, "table is closed");
+
+        return false;
+    }
+
+    if(strlen(colname) == 0 || strlen(colname) > TOSDB_NAME_MAX_LEN) {
+        PRINTLOG(TOSDB, LOG_ERROR, "col name size error");
+
+        return false;
+    }
+
+    const tosdb_column_t* col = hashmap_get(tbl->columns, colname);
+
+    if(!col) {
+        PRINTLOG(TOSDB, LOG_ERROR, "column %s is not at table %s", colname, tbl->name);
+
+        return false;
+    }
+
+    const tosdb_index_t* idx = hashmap_get(tbl->index_column_map, (void*)col->id);
+
+    if(!idx) {
+        PRINTLOG(TOSDB, LOG_ERROR, "index for column %s not found", colname);
+
+        return false;
+    }
+
+    if(tbl->compaction_index_id_hint == idx->id) {
+        PRINTLOG(TOSDB, LOG_DEBUG, "index %lli is already set as compaction index id hint for table %s", idx->id, tbl->name);
+
+        return true;
+    }
+
+    return tosdb_table_set_compaction_index_id_hint(tbl, idx->id);
 }

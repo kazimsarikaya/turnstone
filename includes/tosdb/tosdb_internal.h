@@ -170,6 +170,7 @@ typedef struct tosdb_block_table_t {
     uint64_t             primary_index_id; ///< primary index id
     uint64_t             primary_column_id; ///< primary column id
     data_type_t          primary_column_type; ///< primary column type
+    uint64_t             compaction_index_id_hint; ///< compaction index id hint
 }__attribute__((packed, aligned(8))) tosdb_block_table_t; ///< tosdb table
 
 /**
@@ -401,6 +402,7 @@ struct tosdb_table_t {
     list_t*           sstable_list_items;
     hashmap_t*        sstable_levels;
     uint64_t          sstable_max_level;
+    uint64_t          compaction_index_id_hint;
 };
 
 boolean_t      tosdb_table_persist(tosdb_table_t* tbl);
@@ -428,6 +430,8 @@ typedef struct tosdb_index_t {
 boolean_t             tosdb_table_index_persist(tosdb_table_t* tbl);
 boolean_t             tosdb_table_memtable_persist(tosdb_table_t* tbl);
 const tosdb_column_t* tosdb_table_get_column_by_index_id(tosdb_table_t* tbl, uint64_t id);
+const tosdb_index_t*  tosdb_table_get_index_by_column_id(tosdb_table_t* tbl, uint64_t id);
+boolean_t             tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t index_id);
 
 typedef struct tosdb_memtable_index_item_t {
     uint128_t record_id;
