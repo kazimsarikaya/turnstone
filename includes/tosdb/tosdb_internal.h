@@ -437,8 +437,10 @@ typedef struct tosdb_memtable_index_item_t {
     uint128_t record_id;
     uint64_t  key_hash;
     boolean_t is_deleted;
-    uint64_t  offset;
-    uint64_t  length;
+    uint64_t  offset; // offset in valuelog
+    uint64_t  length; // length of data
+    uint64_t  level;
+    uint64_t  sstable_id;
     uint64_t  key_length;
     uint8_t   key[];
 }__attribute__((packed, aligned(8))) tosdb_memtable_index_item_t;
@@ -450,6 +452,10 @@ typedef struct tosdb_memtable_secondary_index_item_t {
     boolean_t is_primary_key_deleted;
     uint64_t  primary_key_hash;
     uint64_t  primary_key_length;
+    uint64_t  offset; // offset in valuelog
+    uint64_t  length; // length of data
+    uint64_t  level;
+    uint64_t  sstable_id;
     uint8_t   data[];
 }__attribute__((packed, aligned(8))) tosdb_memtable_secondary_index_item_t;
 
@@ -506,6 +512,15 @@ typedef struct tosdb_record_key_t {
 data_t*   tosdb_record_serialize(tosdb_record_t* record);
 boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t len, const void* value);
 boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t* len, void** value);
+
+/**
+ * @brief sets record's level and sstable id
+ * @param[in] record record
+ * @param[in] level level
+ * @param[in] sstable_id sstable id
+ * @return true if succeed
+ */
+boolean_t tosdb_record_set_cached_level_and_sstable_id(tosdb_record_t* record, uint64_t level, uint64_t sstable_id);
 
 boolean_t tosdb_memtable_get(tosdb_record_t* record);
 boolean_t tosdb_sstable_get(tosdb_record_t* record);

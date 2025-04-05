@@ -567,6 +567,11 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
 #pragma GCC diagnostic pop
 
 boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, list_t* st_list, tosdb_memtable_index_item_t* item, uint64_t index_id) {
+    tosdb_record_context_t* ctx = record->context;
+
+    uint64_t cached_level = ctx->level;
+    uint64_t cached_sstable_id = ctx->sstable_id;
+
     boolean_t found = false;
 
     iterator_t* iter = list_iterator_create(st_list);
@@ -583,11 +588,28 @@ boolean_t tosdb_sstable_get_on_list(tosdb_record_t * record, list_t* st_list, to
         if(index_id <= sli->index_count) {
             PRINTLOG(TOSDB, LOG_TRACE, "found sstable 0x%llx list item with index id 0x%llx, searching", sli->sstable_id, index_id);
 
-            if(tosdb_sstable_get_on_index(record, sli, item, index_id)) {
-                found = true;
+            if(cached_level != -1ULL && cached_sstable_id != -1ULL) {
+                // we have cached sstable id and level check sstable id and level
+                // if it is the same, we search on it. otherwise we iterate next one
 
-                break;
+                if(cached_level == sli->level && cached_sstable_id == sli->sstable_id) {
+
+                    if(tosdb_sstable_get_on_index(record, sli, item, index_id)) {
+                        found = true;
+                    } else {
+                        PRINTLOG(TOSDB, LOG_ERROR, "record not found in known sstable 0x%llx level 0x%llx", sli->sstable_id, sli->level);
+                    }
+
+                    break; // regardless of found, we break the loop because record cannot be other than this sstable
+                }
+            } else { // no cached sstable id and level so search on all sstables
+                if(tosdb_sstable_get_on_index(record, sli, item, index_id)) {
+                    found = true;
+
+                    break;
+                }
             }
+
         } else {
             PRINTLOG(TOSDB, LOG_TRACE, "skipping sstable 0x%llx list item with index id 0x%llx max index count 0x%llx", sli->sstable_id, index_id, sli->index_count);
         }
@@ -606,6 +628,11 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
     }
 
     tosdb_record_context_t* ctx = record->context;
+
+    uint64_t cached_level = ctx->level;
+    uint64_t cached_sstable_id = ctx->sstable_id;
+
+    PRINTLOG(TOSDB, LOG_TRACE, "sstable get level 0x%llx sstable id 0x%llx", cached_level, cached_sstable_id);
 
     if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
@@ -645,6 +672,30 @@ boolean_t tosdb_sstable_get(tosdb_record_t* record) {
 
 
     if(ctx->table->sstable_levels) {
+        if(cached_level != -1ULL && cached_sstable_id != -1ULL) {
+            PRINTLOG(TOSDB, LOG_TRACE, "searching on known sstable level 0x%llx", cached_level);
+
+            list_t* st_lvl_l = (list_t*)hashmap_get(ctx->table->sstable_levels, (void*)cached_level);
+
+            if(st_lvl_l) {
+                if(tosdb_sstable_get_on_list(record, st_lvl_l, item, r_key->index_id)) {
+                    memory_free(item);
+
+                    return true;
+                }
+
+                PRINTLOG(TOSDB, LOG_ERROR, "record not found in known sstable level 0x%llx", cached_level);
+                memory_free(item);
+
+                return false;
+            }
+
+            PRINTLOG(TOSDB, LOG_ERROR, "sstable level 0x%llx not found", cached_level);
+            memory_free(item);
+
+            return false;
+        }
+
         PRINTLOG(TOSDB, LOG_TRACE, "searching on sstable levels");
 
         for(uint64_t i = 1; i <= ctx->table->sstable_max_level; i++) {

@@ -630,6 +630,12 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
                     PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
                     dont_add = true;
                     rec->destroy(rec);
+                } else if(!tosdb_record_set_cached_level_and_sstable_id(rec,
+                                                                        item->level,
+                                                                        item->sstable_id)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot set level and sstable id");
+                    dont_add = true;
+                    rec->destroy(rec);
                 } else if(rec->get_record(rec)) {
                     uint8_t* res_key_data = NULL;
                     uint64_t res_key_len = 0;
@@ -923,6 +929,8 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec_id |= hash;
 
     ctx->record_id = rec_id;
+    ctx->level = -1ULL;
+    ctx->sstable_id = -1ULL;
 
     rec->context = ctx;
     rec->set_boolean = tosdb_record_set_boolean;
@@ -963,4 +971,19 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec->is_deleted = tosdb_record_is_deleted;
 
     return rec;
+}
+
+boolean_t tosdb_record_set_cached_level_and_sstable_id(tosdb_record_t* record, uint64_t level, uint64_t sstable_id) {
+    if(!record || !record->context) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record is null");
+
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    ctx->level = level;
+    ctx->sstable_id = sstable_id;
+
+    return true;
 }
