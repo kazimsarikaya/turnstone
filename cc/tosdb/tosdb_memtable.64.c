@@ -153,7 +153,7 @@ static int8_t tosdb_memtable_secondary_index_key_cloner(memory_heap_t* heap, con
 
     tosdb_memtable_secondary_index_item_t* src = (tosdb_memtable_secondary_index_item_t*)key;
 
-    uint64_t key_size = sizeof(tosdb_memtable_index_item_t) + src->secondary_key_length + src->primary_key_length;
+    uint64_t key_size = sizeof(tosdb_memtable_secondary_index_item_t) + src->secondary_key_length + src->primary_key_length;
 
     *cloned_key = memory_malloc_ext(heap, key_size, 0);
 
