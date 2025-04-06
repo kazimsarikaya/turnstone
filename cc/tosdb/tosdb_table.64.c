@@ -917,6 +917,10 @@ boolean_t tosdb_table_persist(tosdb_table_t* tbl) {
         need_persist = true;
     }
 
+    if(tbl->compaction_index_id_hint_is_set) {
+        need_persist = true;
+    }
+
     if(need_persist) {
         tosdb_block_table_t* block = memory_malloc(TOSDB_PAGE_SIZE);
 
@@ -1268,6 +1272,7 @@ boolean_t tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t 
     }
 
     tbl->compaction_index_id_hint = index_id;
+    tbl->compaction_index_id_hint_is_set = true;
 
     tbl->is_dirty = true;
 
@@ -1327,7 +1332,7 @@ boolean_t tosdb_table_set_compaction_index_id_hint_by_column_name(tosdb_table_t*
         return false;
     }
 
-    const tosdb_index_t* idx = hashmap_get(tbl->index_column_map, (void*)col->id);
+    const tosdb_index_t* idx = tosdb_table_get_index_by_column_id(tbl, col->id);
 
     if(!idx) {
         PRINTLOG(TOSDB, LOG_ERROR, "index for column %s not found", colname);
