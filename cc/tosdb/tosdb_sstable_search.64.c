@@ -284,17 +284,17 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     uint8_t* idx_data = NULL;
     uint8_t* org_idx_data = NULL;
 
-    tosdb_cached_secondary_index_data_t* c_id = NULL;
+    tosdb_cached_index_data_t* c_id = NULL;
 
 
-    cache_key.type = TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA;
+    cache_key.type = TOSDB_CACHE_ITEM_TYPE_INDEX_DATA;
 
     if(tdb_cache) {
-        c_id = (tosdb_cached_secondary_index_data_t*)tosdb_cache_get(tdb_cache, &cache_key);
+        c_id = (tosdb_cached_index_data_t*)tosdb_cache_get(tdb_cache, &cache_key);
     }
 
     if(c_id) {
-        st_idx_items = c_id->index_items;
+        st_idx_items = c_id->secondary_index_items;
         record_count = c_id->record_count;
 
     } else {
@@ -358,7 +358,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         }
 
         if(tdb_cache) {
-            c_id = memory_malloc(sizeof(tosdb_cached_secondary_index_data_t));
+            c_id = memory_malloc(sizeof(tosdb_cached_index_data_t));
 
             if(!c_id) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate cached secondary index data");
@@ -369,9 +369,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             }
 
             memory_memcopy(&cache_key, c_id, sizeof(tosdb_cache_key_t));
-            c_id->index_items = st_idx_items;
+            c_id->secondary_index_items = st_idx_items;
             c_id->record_count = record_count;
-            c_id->cache_key.data_size = sizeof(tosdb_cached_secondary_index_data_t) + index_data_unpacked_size + sizeof(tosdb_memtable_secondary_index_item_t*) * record_count;
+            c_id->valuelog_location = sli->valuelog_location;
+            c_id->valuelog_size = sli->valuelog_size;
+            c_id->cache_key.data_size = sizeof(tosdb_cached_index_data_t) + index_data_unpacked_size + sizeof(tosdb_memtable_secondary_index_item_t*) * record_count;
 
             tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_id);
         }

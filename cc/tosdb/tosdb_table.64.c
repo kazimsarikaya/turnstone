@@ -14,7 +14,7 @@
 MODULE("turnstone.kernel.db");
 
 
-const tosdb_column_t* tosdb_table_get_column_by_index_id(tosdb_table_t* tbl, uint64_t id) {
+const tosdb_column_t* tosdb_table_get_column_by_index_id(const tosdb_table_t* tbl, uint64_t id) {
     if(!tbl || !tbl->columns || !tbl->indexes) {
         PRINTLOG(TOSDB, LOG_ERROR, "table/coumns/indexes is null");
 
@@ -1247,13 +1247,13 @@ set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl) {
         return NULL;
     }
 
-    set_t* res = set_create(tosdb_record_primary_key_comparator);
+    set_t* res = set_create(tosdb_record_key_comparator);
 
     if(!res) {
         return NULL;
     }
 
-    if(!tosdb_table_get_primary_keys_internal(tbl, res, NULL)) {
+    if(!tosdb_table_get_keys_internal(tbl, tbl->primary_index_id, res, NULL)) {
         set_destroy_with_callback(res, tosdb_record_search_set_destroy_cb);
 
         return NULL;
@@ -1296,7 +1296,7 @@ boolean_t tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t 
     return true;
 }
 
-const tosdb_index_t*  tosdb_table_get_index_by_column_id(tosdb_table_t* tbl, uint64_t id) {
+const tosdb_index_t* tosdb_table_get_index_by_column_id(const tosdb_table_t* tbl, uint64_t id) {
     if(!tbl) {
         PRINTLOG(TOSDB, LOG_ERROR, "table is null");
 

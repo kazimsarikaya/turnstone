@@ -458,8 +458,7 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
+    cc.index_data_size = 8 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
@@ -552,8 +551,7 @@ efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
+    cc.index_data_size = 8 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {

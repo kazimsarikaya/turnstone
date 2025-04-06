@@ -429,6 +429,8 @@ boolean_t tosdb_sstable_get_on_index(tosdb_record_t * record, tosdb_block_sstabl
         ctx->level = sli->level;
         ctx->sstable_id = sli->sstable_id;
         ctx->record_id = found_item->record_id;
+        ctx->offset = -1ULL;
+        ctx->length = 0;
 
         return true;
     }

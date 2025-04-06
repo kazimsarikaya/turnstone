@@ -1198,6 +1198,53 @@ boolean_t tosdb_memtable_is_deleted(tosdb_record_t* record) {
     return false;
 }
 
+#if 0
+static boolean_t tosdb_memtable_get_from_known_offset(tosdb_record_t* record, const tosdb_memtable_t* mt) {
+    // TODO: we need to find real record id. it is stored at index
+    tosdb_record_context_t* ctx = record->context;
+
+    lock_acquire(mt->tbl->lock);
+    uint64_t old_pos = buffer_get_position(mt->values);
+    buffer_seek(mt->values, ctx->offset, BUFFER_SEEK_DIRECTION_START);
+    uint8_t* f_d = buffer_get_bytes(mt->values, ctx->length);
+    buffer_seek(mt->values, old_pos, BUFFER_SEEK_DIRECTION_START);
+    lock_release(mt->tbl->lock);
+
+    data_t s_d = {0};
+    s_d.length = ctx->length;
+    s_d.type = DATA_TYPE_INT8_ARRAY;
+    s_d.value = f_d;
+
+    data_t* r_d = data_bson_deserialize(&s_d);
+
+    memory_free(f_d);
+
+    if(!r_d) {
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot deserialize data");
+
+        return false;
+    }
+
+    data_t* tmp = r_d->value;
+
+    for(uint64_t i = 0; i < r_d->length; i++) {
+        uint64_t tmp_col_id = (uint64_t)tmp[i].name->value;
+
+        if(tmp_col_id == ctx->search_key->column_id) {
+            continue;
+        }
+
+        if(!tosdb_record_set_data_with_colid(record, tmp_col_id, tmp[i].type, tmp[i].length, tmp[i].value)) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot populate record");
+        }
+    }
+
+    data_free(r_d);
+
+    return true;
+}
+#endif
+
 boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     if(!record || !record->context) {
         return false;
@@ -1205,23 +1252,45 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
 
     tosdb_record_context_t* ctx = record->context;
 
+    const tosdb_memtable_t* mt = NULL;
+
+    if(ctx->level == 1 && ctx->sstable_id != -1ULL) {
+        // known memtable
+
+        for(uint64_t i = 0; i < list_size(ctx->table->memtables); i++) {
+            mt = list_get_data_at_position(ctx->table->memtables, i);
+
+            if(mt->id == ctx->sstable_id) {
+                break;
+            }
+        }
+
+        if(!mt) {
+            // not at memory record getter will search at sstables, we will not handle this case
+            PRINTLOG(TOSDB, LOG_TRACE, "cannot find memtable with id %lli at memory.", ctx->sstable_id);
+            return false;
+        }
+
+        if(ctx->offset != -1ULL && ctx->length > 0) {
+            // known offset
+            // return tosdb_memtable_get_from_known_offset(record, mt);
+        }
+    }
+
     if(hashmap_size(ctx->keys) != 1) {
         PRINTLOG(TOSDB, LOG_ERROR, "record get supports only one key");
 
         return false;
     }
 
-    iterator_t* iter = hashmap_iterator_create(ctx->keys);
-
-    if(!iter) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot get key");
+    if(!ctx->search_key) {
+        PRINTLOG(TOSDB, LOG_ERROR, "search key is null");
 
         return false;
     }
 
-    const tosdb_record_key_t* r_key = iter->get_item(iter);
+    const tosdb_record_key_t* r_key = ctx->search_key;
 
-    iter->destroy(iter);
 
     tosdb_memtable_index_item_t* item = memory_malloc(sizeof(tosdb_memtable_index_item_t) + r_key->key_length);
 
@@ -1235,45 +1304,71 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     item->key_length = r_key->key_length;
     memory_memcopy(r_key->key, item->key, item->key_length);
 
-    list_t* mts = ctx->table->memtables;
-
-    if(list_size(mts) == 0) {
-        memory_free(item);
-
-        return false;
-    }
-
     boolean_t found = false;
     const tosdb_memtable_index_item_t* found_item = NULL;
-    const tosdb_memtable_t* mt = NULL;
 
-    iter = list_iterator_create(mts);
+    uint64_t col_id = r_key->column_id;
 
-    uint64_t col_id = 0;
-
-    while(iter->end_of_iterator(iter) != 0) {
-        mt = iter->get_item(iter);
-
+    if(mt) {
         const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
 
-        col_id = mt_idx->ti->column_id;
-
         iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+        if(!s_iter) {
+            PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator");
+
+            memory_free(item);
+
+            return false;
+        }
 
         if(s_iter->end_of_iterator(s_iter) != 0) {
             found_item = s_iter->get_item(s_iter);
             found = true;
-            s_iter->destroy(s_iter);
-
-            break;
         }
 
         s_iter->destroy(s_iter);
 
-        iter = iter->next(iter);
-    }
+    } else {
+        list_t* mts = ctx->table->memtables;
 
-    iter->destroy(iter);
+        if(list_size(mts) == 0) {
+            memory_free(item);
+
+            return false;
+        }
+        iterator_t* iter = list_iterator_create(mts);
+
+        while(iter->end_of_iterator(iter) != 0) {
+            mt = iter->get_item(iter);
+
+            const tosdb_memtable_index_t* mt_idx = hashmap_get(mt->indexes, (void*)r_key->index_id);
+
+            iterator_t* s_iter = mt_idx->index->search(mt_idx->index, item, NULL, INDEXER_KEY_COMPARATOR_CRITERIA_EQUAL);
+
+            if(!s_iter) {
+                PRINTLOG(TOSDB, LOG_ERROR, "cannot create iterator");
+
+                memory_free(item);
+
+                return false;
+            }
+
+            if(s_iter->end_of_iterator(s_iter) != 0) {
+                found_item = s_iter->get_item(s_iter);
+                found = true;
+                s_iter->destroy(s_iter);
+
+                break;
+            }
+
+            s_iter->destroy(s_iter);
+
+            iter = iter->next(iter);
+        }
+
+        iter->destroy(iter);
+    }
 
     memory_free(item);
 
@@ -1290,6 +1385,8 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
         ctx->record_id = found_item->record_id;
         ctx->level = found_item->level;
         ctx->sstable_id = found_item->sstable_id;
+        ctx->offset = -1ULL;
+        ctx->length = 0;
 
         return true;
     }
@@ -1319,6 +1416,8 @@ boolean_t tosdb_memtable_get(tosdb_record_t* record) {
     ctx->record_id = found_item->record_id;
     ctx->level = found_item->level;
     ctx->sstable_id = found_item->sstable_id;
+    ctx->offset = found_item->offset;
+    ctx->length = found_item->length;
 
     data_t* tmp = r_d->value;
 
@@ -1414,6 +1513,10 @@ boolean_t tosdb_memtable_search(tosdb_record_t* record, set_t* results) {
             res->is_deleted = s_idx_item->is_primary_key_deleted;
             res->key_hash = s_idx_item->primary_key_hash;
             res->key_length = s_idx_item->primary_key_length;
+            res->offset = s_idx_item->offset;
+            res->length = s_idx_item->length;
+            res->level = s_idx_item->level;
+            res->sstable_id = s_idx_item->sstable_id;
             memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
 
             if(!set_append(results, res)) {
