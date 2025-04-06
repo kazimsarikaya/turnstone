@@ -294,6 +294,8 @@ boolean_t tosdb_primary_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb
         ctx->sstable_id = sli->sstable_id;
         ctx->level = sli->level;
         ctx->record_id = ii->record_id;
+        ctx->offset = ii->offset;
+        ctx->length = ii->length;
 
         uint64_t len = ii->key_length;
         void* value = (void*)ii->key;

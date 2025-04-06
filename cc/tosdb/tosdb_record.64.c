@@ -931,6 +931,8 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     ctx->record_id = rec_id;
     ctx->level = -1ULL;
     ctx->sstable_id = -1ULL;
+    ctx->offset = -1ULL;
+    ctx->length = 0;
 
     rec->context = ctx;
     rec->set_boolean = tosdb_record_set_boolean;

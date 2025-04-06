@@ -499,6 +499,8 @@ typedef struct tosdb_record_context_t {
     hashmap_t*     keys;
     uint64_t       level;
     uint64_t       sstable_id;
+    uint64_t       offset; // offset in valuelog
+    uint64_t       length; // length of data
     boolean_t      is_deleted;
 } tosdb_record_context_t;
 
