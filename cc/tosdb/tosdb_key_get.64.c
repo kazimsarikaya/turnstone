@@ -34,34 +34,15 @@ int8_t tosdb_record_key_comparator(const void* item1, const void* item2) {
         return 1;
     }
 
-    const tosdb_record_key_t* key1 = ctx1->search_key;
-    const tosdb_record_key_t* key2 = ctx2->search_key;
-
-    if(key1->key_hash < key2->key_hash) {
+    if(ctx1->record_id < ctx2->record_id) {
         return -1;
     }
 
-    if(key1->key_hash > key2->key_hash) {
+    if(ctx1->record_id > ctx2->record_id) {
         return 1;
     }
 
-    uint64_t min = MIN(key1->key_length, key2->key_length);
-
-    int8_t res = memory_memcompare(key1->key, key2->key, min);
-
-    if(res) {
-        return res;
-    }
-
-    if(key1->key_length == key2->key_length) {
-        return res;
-    }
-
-    if(key1->key_length == min) {
-        return -1;
-    }
-
-    return 1;
+    return 0;
 }
 
 
@@ -97,9 +78,6 @@ static boolean_t tosdb_key_memtable_get(const tosdb_table_t* tbl, const tosdb_me
         }
 
         tosdb_record_context_t* ctx = rec->context;
-        uint64_t len = 0;
-        uint64_t key_hash = 0;
-        void* value = NULL;
 
         if(idx_type == TOSDB_INDEX_PRIMARY || idx_type == TOSDB_INDEX_UNIQUE) {
             const tosdb_memtable_index_item_t* ii = not_typed_ii;
@@ -109,9 +87,6 @@ static boolean_t tosdb_key_memtable_get(const tosdb_table_t* tbl, const tosdb_me
             ctx->offset = ii->offset;
             ctx->length = ii->length;
 
-            len = ii->key_length;
-            value = (void*)ii->key;
-            key_hash = ii->key_hash;
         } else if(idx_type == TOSDB_INDEX_SECONDARY) {
             const tosdb_memtable_secondary_index_item_t* ii = not_typed_ii;
             ctx->sstable_id = ii->sstable_id;
@@ -120,42 +95,6 @@ static boolean_t tosdb_key_memtable_get(const tosdb_table_t* tbl, const tosdb_me
             ctx->offset = ii->offset;
             ctx->length = ii->length;
 
-            len = ii->secondary_key_length;
-            value = (void*)ii->data;
-            key_hash = ii->secondary_key_hash;
-        }
-
-
-        if(len == 0) {
-            switch(col->type) {
-            case DATA_TYPE_CHAR:
-            case DATA_TYPE_INT8:
-            case DATA_TYPE_BOOLEAN:
-                len = 1;
-                break;
-            case DATA_TYPE_INT16:
-                len = 2;
-                break;
-            case DATA_TYPE_INT32:
-                len = 4;
-                break;
-            case DATA_TYPE_INT64:
-                len = 8;
-                break;
-            default:
-                break;
-            }
-
-            value = (void*)key_hash;
-        }
-
-        error = !tosdb_record_set_data_with_colid(rec, col->id, col->type, len, value);
-
-        if(error) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
-            rec->destroy(rec);
-
-            break;
         }
 
         if(!set_append(keys, rec)) {
@@ -201,7 +140,7 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
     }
 
     if(!idx_loc || !idx_size) {
-        PRINTLOG(TOSDB, LOG_ERROR, "cannot find index %lli", tbl->primary_index_id);
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot find index %lli", key_index);
 
         return false;
     }
@@ -373,9 +312,6 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
         }
 
         tosdb_record_context_t* ctx = rec->context;
-        uint64_t len = 0;
-        uint64_t key_hash = 0;
-        void* value = NULL;
 
         if(idx_type == TOSDB_INDEX_PRIMARY || idx_type == TOSDB_INDEX_UNIQUE) {
             const tosdb_memtable_index_item_t* ii = st_idx_items[i];
@@ -385,9 +321,6 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
             ctx->offset = ii->offset;
             ctx->length = ii->length;
 
-            len = ii->key_length;
-            value = (void*)ii->key;
-            key_hash = ii->key_hash;
         } else if(idx_type == TOSDB_INDEX_SECONDARY) {
             const tosdb_memtable_secondary_index_item_t* ii = st_idx_items[i];
             ctx->sstable_id = sli->sstable_id;
@@ -396,42 +329,6 @@ static boolean_t tosdb_key_sstable_get_on_index(const tosdb_table_t* tbl, tosdb_
             ctx->offset = ii->offset;
             ctx->length = ii->length;
 
-            len = ii->secondary_key_length;
-            value = (void*)ii->data;
-            key_hash = ii->secondary_key_hash;
-        }
-
-
-        if(len == 0) {
-            switch(col->type) {
-            case DATA_TYPE_CHAR:
-            case DATA_TYPE_INT8:
-            case DATA_TYPE_BOOLEAN:
-                len = 1;
-                break;
-            case DATA_TYPE_INT16:
-                len = 2;
-                break;
-            case DATA_TYPE_INT32:
-                len = 4;
-                break;
-            case DATA_TYPE_INT64:
-                len = 8;
-                break;
-            default:
-                break;
-            }
-
-            value = (void*)key_hash;
-        }
-
-        error = !tosdb_record_set_data_with_colid(rec, col->id, col->type, len, value);
-
-        if(error) {
-            PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
-            rec->destroy(rec);
-
-            break;
         }
 
         if(!set_append(keys, rec)) {
