@@ -403,6 +403,7 @@ struct tosdb_table_t {
     hashmap_t*        sstable_levels;
     uint64_t          sstable_max_level;
     uint64_t          compaction_index_id_hint;
+    boolean_t         compaction_index_id_hint_is_set;
 };
 
 boolean_t      tosdb_table_persist(tosdb_table_t* tbl);
