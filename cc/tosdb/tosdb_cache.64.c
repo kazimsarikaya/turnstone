@@ -165,6 +165,7 @@ tosdb_cache_t* tosdb_cache_new(tosdb_cache_config_t* config) {
 
     if(!cache->bloomfilter_cache) {
         memory_free(cache);
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create bloomfilter cache");
 
         return NULL;
     }
@@ -176,6 +177,7 @@ tosdb_cache_t* tosdb_cache_new(tosdb_cache_config_t* config) {
     if(!cache->index_data_cache) {
         cache_destroy(cache->bloomfilter_cache);
         memory_free(cache);
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create index data cache");
 
         return NULL;
     }
@@ -188,6 +190,7 @@ tosdb_cache_t* tosdb_cache_new(tosdb_cache_config_t* config) {
         cache_destroy(cache->index_data_cache);
         cache_destroy(cache->bloomfilter_cache);
         memory_free(cache);
+        PRINTLOG(TOSDB, LOG_ERROR, "cannot create valuelog cache");
 
         return NULL;
     }
