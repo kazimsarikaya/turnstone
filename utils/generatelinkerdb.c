@@ -2019,7 +2019,11 @@ int32_t main(int32_t argc, char_t** argv) {
     PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
     if(compact) {
-        if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
+        tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+        tosdb_database_close(db_system);
+
+
+        if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
             print_error("cannot compact linker db");
         }
     }
