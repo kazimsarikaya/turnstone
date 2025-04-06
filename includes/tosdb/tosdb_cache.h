@@ -26,7 +26,6 @@ extern "C" {
 typedef enum tosdb_cache_item_type_t {
     TOSDB_CACHE_ITEM_TYPE_BLOOMFILTER, ///< bloomfilter
     TOSDB_CACHE_ITEM_TYPE_INDEX_DATA, ///< index data
-    TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA, ///< secondary index data
     TOSDB_CACHE_ITEM_TYPE_VALUELOG, ///< valuelog
 } tosdb_cache_item_type_t; ///< tosdb cache item type
 
@@ -76,22 +75,15 @@ typedef struct tosdb_cached_bloomfilter_t {
  * @brief tosdb index data cache item it is for primary/unique index
  */
 typedef struct tosdb_cached_index_data_t {
-    tosdb_cache_key_t             cache_key; ///< cache key
-    uint64_t                      record_count; ///< record count at index data
-    tosdb_memtable_index_item_t** index_items; ///< index items
-    uint64_t                      valuelog_location; ///< valuelog location index data belongs to
-    uint64_t                      valuelog_size; ///< valuelog size index data belongs to
+    tosdb_cache_key_t cache_key; ///< cache key
+    uint64_t          record_count; ///< record count at index data
+    union {
+        tosdb_memtable_index_item_t**           index_items; ///< index items
+        tosdb_memtable_secondary_index_item_t** secondary_index_items; ///< secondary index items
+    };
+    uint64_t valuelog_location; ///< valuelog location index data belongs to
+    uint64_t valuelog_size; ///< valuelog size index data belongs to
 } tosdb_cached_index_data_t; ///< tosdb index data cache item
-
-/**
- * @struct tosdb_cached_secondary_index_data_t
- * @brief tosdb secondary index data cache item
- */
-typedef struct tosdb_cached_secondary_index_data_t {
-    tosdb_cache_key_t                       cache_key; ///< cache key
-    uint64_t                                record_count; ///< record count at secondary index data
-    tosdb_memtable_secondary_index_item_t** index_items; ///< index items
-} tosdb_cached_secondary_index_data_t; ///< tosdb secondary index data cache item
 
 /**
  * @struct tosdb_cached_valuelog_t

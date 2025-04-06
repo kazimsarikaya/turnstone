@@ -90,7 +90,6 @@ boolean_t tosdb_free(tosdb_t* tdb);
 typedef struct tosdb_cache_config_t {
     uint64_t bloomfilter_size; ///< bloom filter cache max size
     uint64_t index_data_size; ///< index data cache max size
-    uint64_t secondary_index_data_size; ///< index data cache max size
     uint64_t valuelog_size; ///< value log cache max size
 } tosdb_cache_config_t; ///< shorthand for struct
 

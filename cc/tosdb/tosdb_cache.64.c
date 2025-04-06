@@ -24,7 +24,6 @@ struct tosdb_cache_t {
     tosdb_cache_config_t config; ///< cache configuration
     cache_t*             bloomfilter_cache; ///< bloomfilter cache
     cache_t*             index_data_cache; ///< index data cache
-    cache_t*             secondary_index_data_cache; ///< secondary index data cache
     cache_t*             valuelog_cache; ///< valuelog cache
 };
 
@@ -127,7 +126,7 @@ boolean_t tosdb_cache_item_key_destroyer(const void* key, const void* item) {
         memory_free(c_bf->secondary_last_key);
         bloomfilter_destroy(c_bf->bloomfilter);
         memory_free(c_bf);
-    } else if(ckey->type == TOSDB_CACHE_ITEM_TYPE_INDEX_DATA || ckey->type == TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA) {
+    } else if(ckey->type == TOSDB_CACHE_ITEM_TYPE_INDEX_DATA) {
         tosdb_cached_index_data_t* c_id = (tosdb_cached_index_data_t*)item;
 
         memory_free(c_id->index_items[0]);
@@ -181,24 +180,11 @@ tosdb_cache_t* tosdb_cache_new(tosdb_cache_config_t* config) {
         return NULL;
     }
 
-    cc.hard_limit = config->secondary_index_data_size;
-    cc.soft_limit = cc.hard_limit / 2;
-    cache->secondary_index_data_cache = cache_new(&cc);
-
-    if(!cache->secondary_index_data_cache) {
-        cache_destroy(cache->index_data_cache);
-        cache_destroy(cache->bloomfilter_cache);
-        memory_free(cache);
-
-        return NULL;
-    }
-
     cc.hard_limit = config->valuelog_size;
     cc.soft_limit = cc.hard_limit / 2;
     cache->valuelog_cache = cache_new(&cc);
 
     if(!cache->valuelog_cache) {
-        cache_destroy(cache->secondary_index_data_cache);
         cache_destroy(cache->index_data_cache);
         cache_destroy(cache->bloomfilter_cache);
         memory_free(cache);
@@ -216,7 +202,6 @@ boolean_t tosdb_cache_close(tosdb_cache_t* cache) {
 
     cache_destroy(cache->bloomfilter_cache);
     cache_destroy(cache->index_data_cache);
-    cache_destroy(cache->secondary_index_data_cache);
     cache_destroy(cache->valuelog_cache);
 
     memory_free(cache);
@@ -234,8 +219,6 @@ const tosdb_cache_key_t* tosdb_cache_get(tosdb_cache_t* cache, tosdb_cache_key_t
         return cache_get(cache->bloomfilter_cache, key);
     case TOSDB_CACHE_ITEM_TYPE_INDEX_DATA:
         return cache_get(cache->index_data_cache, key);
-    case TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA:
-        return cache_get(cache->secondary_index_data_cache, key);
     case TOSDB_CACHE_ITEM_TYPE_VALUELOG:
         return cache_get(cache->valuelog_cache, key);
         break;
@@ -256,8 +239,6 @@ boolean_t tosdb_cache_put(tosdb_cache_t* cache, tosdb_cache_key_t* key) {
         return cache_put_item_as_key(cache->bloomfilter_cache, key, key->data_size);
     case TOSDB_CACHE_ITEM_TYPE_INDEX_DATA:
         return cache_put_item_as_key(cache->index_data_cache, key, key->data_size);
-    case TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA:
-        return cache_put_item_as_key(cache->secondary_index_data_cache, key, key->data_size);
     case TOSDB_CACHE_ITEM_TYPE_VALUELOG:
         return cache_put_item_as_key(cache->valuelog_cache, key, key->data_size);
         break;
