@@ -112,12 +112,22 @@ hashmap_t* hashmap_string_with_heap(memory_heap_t* heap, uint64_t capacity);
  */
 #define hashmap_integer_with_heap(heap, c) hashmap_new_with_heap(heap, c)
 
+typedef void (*hashmap_item_destroyer_f)(const memory_heap_t* heap, const void* item);
+
 /**
  * @brief destroy hashmap
  * @param[in] hm hashmap to destroy
+ * @param[in] item_destroyer item destroy function
  * @return true if hashmap is destroyed successfully, false otherwise
  */
-boolean_t hashmap_destroy(hashmap_t* hm);
+boolean_t hashmap_destroy_with_item_destroyer(hashmap_t* hm, hashmap_item_destroyer_f item_destroyer);
+
+/**
+ * @brief destroy hashmap, uses default item destroyer
+ * @param[in] hm hashmap to destroy
+ * @return true if hashmap is destroyed successfully, false otherwise
+ */
+#define hashmap_destroy(hm) hashmap_destroy_with_item_destroyer(hm, NULL)
 
 /**
  * @brief put item to hashmap
