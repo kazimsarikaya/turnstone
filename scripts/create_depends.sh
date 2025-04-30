@@ -9,31 +9,31 @@ do
    if [[ ! -f ${var}.c ]]; then
         if [[ -f ${var}.cpp ]]; then
             also_cpp=1
-            file=$(basename ${var}.cpp)
+            file=${var}.cpp
         else
             echo "File ${var}.c not found"
             exit 1
         fi
    else 
-       file=$(basename ${var}.c)
+       file=${var}.c
    fi
 
-  _depends=$(gcc -I../includes -MM ${file} | tr -d '\\\n'|cut -d':' -f2|sed 's/\.\.\/includes\///g')
+  _depends=$(gcc -Iincludes -Iincludes-local -MM ${file} | tr -d '\\\n'|cut -d':' -f2|sed 's/includes\///g')
   _sources=$(echo $_depends|sed -E 's/\.(h|hpp)//g')
   for _s in $_sources;
   do
     _s=$(basename $_s|tr -d ' ')
-    for _f in $(find ../cc -name "$_s*.c"|grep -v video| grep -v '\.test\.c');
+    for _f in $(find cc -name "$_s*.c"|grep -v video| grep -v '\.test\.c');
     do
-      _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
-      echo -e "../build/$var.bin: ../build/cc-local/$_f"
+      _f=$(echo $_f|sed 's-cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
+      echo -e "build/$(basename $var).bin: build/cc-local/$_f"
     done
 
     if [[ $also_cpp -eq 1 ]]; then
-      for _f in $(find ../cc -name "$_s*.cpp"|grep -v video);
+      for _f in $(find cc -name "$_s*.cpp"|grep -v video);
       do
-        _f=$(echo $_f|sed 's-\.\./cc/--g'|sed 's-\.cpp-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
-        echo -e "../build/$var.bin: ../build/cc-local/$_f"
+        _f=$(echo $_f|sed 's-cc/--g'|sed 's-\.cpp-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
+        echo -e "build/$(basename $var).bin: build/cc-local/$_f"
       done
     fi
   done
@@ -41,9 +41,9 @@ do
   _headers=$(echo $_depends|tr ' ' '\n'|grep -v ^$|grep -v ".c$"|sort|uniq)
   for _h in $_headers;
   do
-   _f=$(find ../includes|grep $_h|tr '\n' ' ')
+   _f=$(find includes|grep $_h|tr '\n' ' ')
    if [[ "${_f}x" != "x" ]]; then
-     echo -e "../build/cc-local/$var.o: $_f"
+       echo -e "build/cc-local/$(basename $var).o: $_f"
    fi
   done
   echo
