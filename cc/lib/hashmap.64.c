@@ -159,7 +159,7 @@ hashmap_t* hashmap_string_with_heap(memory_heap_t* heap, uint64_t capacity) {
     return hashmap_new_with_hkg_with_hkc(heap, capacity, hashmap_string_kg, hashmap_string_kc);
 }
 
-boolean_t   hashmap_destroy(hashmap_t* hm) {
+boolean_t   hashmap_destroy_with_item_destroyer(hashmap_t* hm, hashmap_item_destroyer_f item_destroyer) {
     if(!hm) {
         return false;
     }
@@ -170,6 +170,14 @@ boolean_t   hashmap_destroy(hashmap_t* hm) {
 
     while(seg) {
         hashmap_segment_t* t_seg = seg->next;
+
+        if(item_destroyer) {
+            for(uint64_t i = 0; i < seg->size; i++) {
+                if(seg->items[i].exists) {
+                    item_destroyer(heap, seg->items[i].value);
+                }
+            }
+        }
 
         memory_free_ext(heap, seg->items);
         memory_free_ext(heap, seg);
