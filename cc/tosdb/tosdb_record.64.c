@@ -276,6 +276,7 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
             return false;
         }
 
+        r_key->column_id = col_id;
         r_key->index_id = idx_id;
         r_key->key_hash = key_hash;
         r_key->key_length = len;
@@ -290,6 +291,8 @@ boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64
 
             memory_free(old_r_key);
         }
+
+        ctx->search_key = r_key;
     }
 
     data_t* old_col_value = (data_t*)hashmap_put(ctx->columns, (void*)col_id, col_value);
@@ -630,6 +633,14 @@ list_t* tosdb_record_search(tosdb_record_t* record) {
                     PRINTLOG(TOSDB, LOG_ERROR, "cannot set pk");
                     dont_add = true;
                     rec->destroy(rec);
+                } else if(!tosdb_record_set_cached_level_and_sstable_id_offset_length(rec,
+                                                                                      item->level,
+                                                                                      item->sstable_id,
+                                                                                      item->offset,
+                                                                                      item->length)) {
+                    PRINTLOG(TOSDB, LOG_ERROR, "cannot set level and sstable id");
+                    dont_add = true;
+                    rec->destroy(rec);
                 } else if(rec->get_record(rec)) {
                     uint8_t* res_key_data = NULL;
                     uint64_t res_key_len = 0;
@@ -923,6 +934,10 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec_id |= hash;
 
     ctx->record_id = rec_id;
+    ctx->level = -1ULL;
+    ctx->sstable_id = -1ULL;
+    ctx->offset = -1ULL;
+    ctx->length = 0;
 
     rec->context = ctx;
     rec->set_boolean = tosdb_record_set_boolean;
@@ -963,4 +978,25 @@ tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl) {
     rec->is_deleted = tosdb_record_is_deleted;
 
     return rec;
+}
+
+boolean_t tosdb_record_set_cached_level_and_sstable_id_offset_length(tosdb_record_t* record,
+                                                                     uint64_t        level,
+                                                                     uint64_t        sstable_id,
+                                                                     uint64_t        offset,
+                                                                     uint64_t        length) {
+    if(!record || !record->context) {
+        PRINTLOG(TOSDB, LOG_ERROR, "record is null");
+
+        return false;
+    }
+
+    tosdb_record_context_t* ctx = record->context;
+
+    ctx->level = level;
+    ctx->sstable_id = sstable_id;
+    ctx->offset = offset;
+    ctx->length = length;
+
+    return true;
 }

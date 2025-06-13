@@ -90,7 +90,6 @@ boolean_t tosdb_free(tosdb_t* tdb);
 typedef struct tosdb_cache_config_t {
     uint64_t bloomfilter_size; ///< bloom filter cache max size
     uint64_t index_data_size; ///< index data cache max size
-    uint64_t secondary_index_data_size; ///< index data cache max size
     uint64_t valuelog_size; ///< value log cache max size
 } tosdb_cache_config_t; ///< shorthand for struct
 
@@ -202,6 +201,14 @@ typedef enum tosdb_index_type_t {
  * @return true if succeed.
  */
 boolean_t tosdb_table_index_create(tosdb_table_t* tbl, const char_t* colname, tosdb_index_type_t type);
+
+/**
+ * @brief sets the compaction index id hint
+ * @param[in] tbl table interface
+ * @param[in] colname column name
+ * @return true if succeed.
+ */
+boolean_t tosdb_table_set_compaction_index_id_hint_by_column_name(tosdb_table_t* tbl, const char_t* colname);
 
 /**
  * @brief closes a table
@@ -591,13 +598,6 @@ struct tosdb_record_t {
  * @return record
  */
 tosdb_record_t* tosdb_table_create_record(tosdb_table_t* tbl);
-
-/**
- * @brief get all primary keys in terms of record
- * @param[in] tbl table
- * @return set of record with only contains primary key
- */
-set_t* tosdb_table_get_primary_keys(tosdb_table_t* tbl);
 
 #ifdef __cplusplus
 }

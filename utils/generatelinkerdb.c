@@ -141,8 +141,7 @@ linkerdb_t* linkerdb_open(const char_t* file, uint64_t capacity) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 8 << 20;
-    cc.index_data_size = 16 << 20;
-    cc.secondary_index_data_size = 16 << 20;
+    cc.index_data_size = 32 << 20;
     cc.valuelog_size = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
@@ -378,6 +377,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
+    if(!tosdb_table_set_compaction_index_id_hint_by_column_name(tbl_sections, "module_id")) {
+        return false;
+    }
+
     tosdb_sequence_create_or_open(db, "sections_section_id", 1, 10);
 
     tosdb_table_t* tbl_symbols = tosdb_table_create_or_open(db, "symbols", 1 << 10, 512 << 10, 8);
@@ -434,6 +437,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
         return false;
     }
 
+    if(!tosdb_table_set_compaction_index_id_hint_by_column_name(tbl_symbols, "section_id")) {
+        return false;
+    }
+
     tosdb_sequence_create_or_open(db, "symbols_symbol_id", 1, 10);
 
     tosdb_table_t* tbl_relocations = tosdb_table_create_or_open(db, "relocations", 8 << 10, 1 << 20, 8);
@@ -487,6 +494,10 @@ boolean_t linkerdb_create_tables(linkerdb_t* ldb) {
     }
 
     if(!tosdb_table_index_create(tbl_relocations, "symbol_section_id", TOSDB_INDEX_SECONDARY)) {
+        return false;
+    }
+
+    if(!tosdb_table_set_compaction_index_id_hint_by_column_name(tbl_relocations, "section_id")) {
         return false;
     }
 
@@ -2008,7 +2019,11 @@ int32_t main(int32_t argc, char_t** argv) {
     PRINTLOG(LINKER, LOG_INFO, "%lli", time_ns(NULL));
 
     if(compact) {
-        if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MINOR)) {
+        tosdb_database_t* db_system = tosdb_database_create_or_open(ldb->tdb, "system");
+        tosdb_database_close(db_system);
+
+
+        if(!tosdb_compact(ldb->tdb, TOSDB_COMPACTION_TYPE_MAJOR)) {
             print_error("cannot compact linker db");
         }
     }

@@ -141,9 +141,9 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
 
         memory_memcopy(t_first, first, first_key_length);
 
-        tosdb_memtable_secondary_index_item_t* t_last = (tosdb_memtable_secondary_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_index_item_t) + first->secondary_key_length + first->primary_key_length);
+        tosdb_memtable_secondary_index_item_t* t_last = (tosdb_memtable_secondary_index_item_t*)(st_idx->data + sizeof(tosdb_memtable_secondary_index_item_t) + first->secondary_key_length + first->primary_key_length);
 
-        uint64_t last_key_length = t_last->secondary_key_length + t_last->primary_key_length + sizeof(tosdb_memtable_index_item_t);
+        uint64_t last_key_length = t_last->secondary_key_length + t_last->primary_key_length + sizeof(tosdb_memtable_secondary_index_item_t);
         last = memory_malloc(last_key_length);
 
         if(!last) {
@@ -284,17 +284,17 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
     uint8_t* idx_data = NULL;
     uint8_t* org_idx_data = NULL;
 
-    tosdb_cached_secondary_index_data_t* c_id = NULL;
+    tosdb_cached_index_data_t* c_id = NULL;
 
 
-    cache_key.type = TOSDB_CACHE_ITEM_TYPE_SECONDARY_INDEX_DATA;
+    cache_key.type = TOSDB_CACHE_ITEM_TYPE_INDEX_DATA;
 
     if(tdb_cache) {
-        c_id = (tosdb_cached_secondary_index_data_t*)tosdb_cache_get(tdb_cache, &cache_key);
+        c_id = (tosdb_cached_index_data_t*)tosdb_cache_get(tdb_cache, &cache_key);
     }
 
     if(c_id) {
-        st_idx_items = c_id->index_items;
+        st_idx_items = c_id->secondary_index_items;
         record_count = c_id->record_count;
 
     } else {
@@ -358,7 +358,7 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         }
 
         if(tdb_cache) {
-            c_id = memory_malloc(sizeof(tosdb_cached_secondary_index_data_t));
+            c_id = memory_malloc(sizeof(tosdb_cached_index_data_t));
 
             if(!c_id) {
                 PRINTLOG(TOSDB, LOG_ERROR, "cannot allocate cached secondary index data");
@@ -369,9 +369,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             }
 
             memory_memcopy(&cache_key, c_id, sizeof(tosdb_cache_key_t));
-            c_id->index_items = st_idx_items;
+            c_id->secondary_index_items = st_idx_items;
             c_id->record_count = record_count;
-            c_id->cache_key.data_size = sizeof(tosdb_cached_secondary_index_data_t) + index_data_unpacked_size + sizeof(tosdb_memtable_secondary_index_item_t*) * record_count;
+            c_id->valuelog_location = sli->valuelog_location;
+            c_id->valuelog_size = sli->valuelog_size;
+            c_id->cache_key.data_size = sizeof(tosdb_cached_index_data_t) + index_data_unpacked_size + sizeof(tosdb_memtable_secondary_index_item_t*) * record_count;
 
             tosdb_cache_put(tdb_cache, (tosdb_cache_key_t*)c_id);
         }
@@ -410,11 +412,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
         res->is_deleted = s_idx_item->is_primary_key_deleted;
         res->key_hash = s_idx_item->primary_key_hash;
         res->key_length = s_idx_item->primary_key_length;
+        res->offset = s_idx_item->offset;
+        res->length = s_idx_item->length;
+        res->level = s_idx_item->level;
+        res->sstable_id = s_idx_item->sstable_id;
         memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
-
-        if(res->key_hash == 7083) {
-            PRINTLOG(TOSDB, LOG_TRACE, "found item: %s deleted? %i", res->key, res->is_deleted);
-        }
 
         if(!set_append(results, res)) {
             memory_free(res);
@@ -448,13 +450,11 @@ boolean_t tosdb_sstable_search_on_index(tosdb_record_t * record, set_t* results,
             res->is_deleted = s_idx_item->is_primary_key_deleted;
             res->key_hash = s_idx_item->primary_key_hash;
             res->key_length = s_idx_item->primary_key_length;
+            res->offset = s_idx_item->offset;
+            res->length = s_idx_item->length;
+            res->level = s_idx_item->level;
+            res->sstable_id = s_idx_item->sstable_id;
             memory_memcopy(s_idx_item->data + s_idx_item->secondary_key_length, res->key, res->key_length);
-
-            if(res->key_hash == 7083) {
-                PRINTLOG(TOSDB, LOG_TRACE, "found item: %s deleted? %i", res->key, res->is_deleted);
-            }
-
-
 
             if(!set_append(results, res)) {
                 memory_free(res);

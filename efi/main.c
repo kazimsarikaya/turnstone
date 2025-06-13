@@ -183,7 +183,7 @@ efi_status_t efi_setup_heap(void){
     efi_status_t res;
 
     efi_physical_address_t heap_area = NULL;
-    int64_t heap_size = 1024 * 1024 * 64; // 64 MiB
+    int64_t heap_size = 1024 * 1024 * 256;
 
     res = BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, heap_size / FRAME_SIZE, &heap_area);
 
@@ -457,10 +457,9 @@ efi_status_t efi_load_pxe_tosdb(efi_tosdb_context_t** tdb_ctx) {
     PRINTLOG(EFI, LOG_DEBUG, "tosdb created");
 
     tosdb_cache_config_t cc = {0};
-    cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.bloomfilter_size = 8 << 20;
+    cc.index_data_size = 32 << 20;
+    cc.valuelog_size = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot set tosdb cache config");
@@ -551,10 +550,9 @@ efi_status_t efi_open_local_tosdb(efi_block_io_t* bio, efi_tosdb_context_t** tdb
     PRINTLOG(EFI, LOG_DEBUG, "tosdb created");
 
     tosdb_cache_config_t cc = {0};
-    cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
-    cc.valuelog_size = 16 << 20;
+    cc.bloomfilter_size = 8 << 20;
+    cc.index_data_size = 32 << 20;
+    cc.valuelog_size = 32 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
         PRINTLOG(EFI, LOG_ERROR, "cannot set tosdb cache config");

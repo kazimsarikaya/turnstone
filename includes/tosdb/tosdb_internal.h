@@ -170,6 +170,7 @@ typedef struct tosdb_block_table_t {
     uint64_t             primary_index_id; ///< primary index id
     uint64_t             primary_column_id; ///< primary column id
     data_type_t          primary_column_type; ///< primary column type
+    uint64_t             compaction_index_id_hint; ///< compaction index id hint
 }__attribute__((packed, aligned(8))) tosdb_block_table_t; ///< tosdb table
 
 /**
@@ -401,6 +402,8 @@ struct tosdb_table_t {
     list_t*           sstable_list_items;
     hashmap_t*        sstable_levels;
     uint64_t          sstable_max_level;
+    uint64_t          compaction_index_id_hint;
+    boolean_t         compaction_index_id_hint_is_set;
 };
 
 boolean_t      tosdb_table_persist(tosdb_table_t* tbl);
@@ -427,14 +430,18 @@ typedef struct tosdb_index_t {
 
 boolean_t             tosdb_table_index_persist(tosdb_table_t* tbl);
 boolean_t             tosdb_table_memtable_persist(tosdb_table_t* tbl);
-const tosdb_column_t* tosdb_table_get_column_by_index_id(tosdb_table_t* tbl, uint64_t id);
+const tosdb_column_t* tosdb_table_get_column_by_index_id(const tosdb_table_t* tbl, uint64_t id);
+const tosdb_index_t*  tosdb_table_get_index_by_column_id(const tosdb_table_t* tbl, uint64_t id);
+boolean_t             tosdb_table_set_compaction_index_id_hint(tosdb_table_t* tbl, uint64_t index_id);
 
 typedef struct tosdb_memtable_index_item_t {
     uint128_t record_id;
     uint64_t  key_hash;
     boolean_t is_deleted;
-    uint64_t  offset;
-    uint64_t  length;
+    uint64_t  offset; // offset in valuelog
+    uint64_t  length; // length of data
+    uint64_t  level;
+    uint64_t  sstable_id;
     uint64_t  key_length;
     uint8_t   key[];
 }__attribute__((packed, aligned(8))) tosdb_memtable_index_item_t;
@@ -446,6 +453,10 @@ typedef struct tosdb_memtable_secondary_index_item_t {
     boolean_t is_primary_key_deleted;
     uint64_t  primary_key_hash;
     uint64_t  primary_key_length;
+    uint64_t  offset; // offset in valuelog
+    uint64_t  length; // length of data
+    uint64_t  level;
+    uint64_t  sstable_id;
     uint8_t   data[];
 }__attribute__((packed, aligned(8))) tosdb_memtable_secondary_index_item_t;
 
@@ -482,26 +493,43 @@ boolean_t         tosdb_memtable_persist(tosdb_memtable_t* mt);
 boolean_t         tosdb_memtable_index_persist(tosdb_memtable_t* mt, tosdb_block_sstable_list_item_t* stli, uint64_t idx, tosdb_memtable_index_t* mt_idx);
 boolean_t         tosdb_memtable_is_deleted(tosdb_record_t* record);
 
-typedef struct tosdb_record_context_t {
-    tosdb_table_t* table;
-    uint128_t      record_id;
-    hashmap_t*     columns;
-    hashmap_t*     keys;
-    uint64_t       level;
-    uint64_t       sstable_id;
-    boolean_t      is_deleted;
-} tosdb_record_context_t;
-
 typedef struct tosdb_record_key_t {
+    uint64_t column_id;
     uint64_t index_id;
     uint64_t key_hash;
     uint64_t key_length;
     uint8_t* key;
 }tosdb_record_key_t;
 
+typedef struct tosdb_record_context_t {
+    tosdb_table_t*      table;
+    uint128_t           record_id;
+    hashmap_t*          columns;
+    hashmap_t*          keys;
+    uint64_t            level;
+    uint64_t            sstable_id;
+    uint64_t            offset; // offset in valuelog
+    uint64_t            length; // length of data
+    boolean_t           is_deleted;
+    tosdb_record_key_t* search_key;
+} tosdb_record_context_t;
+
 data_t*   tosdb_record_serialize(tosdb_record_t* record);
 boolean_t tosdb_record_set_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t len, const void* value);
 boolean_t tosdb_record_get_data_with_colid(tosdb_record_t * record, const uint64_t col_id, data_type_t type, uint64_t* len, void** value);
+
+/**
+ * @brief sets record's level and sstable id
+ * @param[in] record record
+ * @param[in] level level
+ * @param[in] sstable_id sstable id
+ * @return true if succeed
+ */
+boolean_t tosdb_record_set_cached_level_and_sstable_id_offset_length(tosdb_record_t* record,
+                                                                     uint64_t        level,
+                                                                     uint64_t        sstable_id,
+                                                                     uint64_t        offset,
+                                                                     uint64_t        length);
 
 boolean_t tosdb_memtable_get(tosdb_record_t* record);
 boolean_t tosdb_sstable_get(tosdb_record_t* record);
@@ -516,8 +544,8 @@ boolean_t tosdb_database_compact(const tosdb_database_t* db, tosdb_compaction_ty
 boolean_t tosdb_table_compact(const tosdb_table_t* tbl, tosdb_compaction_type_t type);
 boolean_t tosdb_sstable_level_minor_compact(const tosdb_table_t* tbl, uint64_t level);
 boolean_t tosdb_sstable_level_major_compact(const tosdb_table_t* tbl, uint64_t level);
-int8_t    tosdb_record_primary_key_comparator(const void* item1, const void* item2);
-boolean_t tosdb_table_get_primary_keys_internal(const tosdb_table_t* tbl, set_t* pks, list_t* old_pks);
+int8_t    tosdb_record_key_comparator(const void* item1, const void* item2);
+boolean_t tosdb_table_get_keys_internal(const tosdb_table_t* tbl, uint64_t key_index, set_t* keys, list_t* old_keys);
 
 #define TOSDB_SEQUENCE_TABLE_NAME ".sequences"
 

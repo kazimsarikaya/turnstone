@@ -294,8 +294,7 @@ linkerdb_t* linkerdb_open(const char_t* file) {
 
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
-    cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
+    cc.index_data_size = 8 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tdb, &cc)) {
