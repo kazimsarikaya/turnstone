@@ -26,6 +26,7 @@ typedef enum usb_endpoint_speed_t {
     USB_ENDPOINT_SPEED_FULL = 0,
     USB_ENDPOINT_SPEED_LOW  = 1,
     USB_ENDPOINT_SPEED_HIGH = 2,
+    USB_ENDPOINT_SPEED_SUPER = 3,
 } usb_endpoint_speed_t;
 
 
