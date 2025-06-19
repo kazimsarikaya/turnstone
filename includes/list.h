@@ -143,6 +143,19 @@ list_data_comparator_f list_set_comparator(list_t* list, list_data_comparator_f 
 #define list_create_list() list_create_with_type(memory_get_heap(NULL), LIST_TYPE_LIST, NULL, NULL)
 
 /**
+ * @brief creates a array list at heap
+ * @param[in] h @ref memory_heap_t the heap of linked list.
+ * @return @ref list_t
+ */
+#define list_create_arraylist_with_heap(h) list_create_with_type(memory_get_heap(h), LIST_TYPE_ARRAY, NULL, NULL)
+
+/**
+ * @brief creates a array list at default heap heap
+ * @return @ref list_t
+ */
+#define list_create_arraylist() list_create_with_type(memory_get_heap(NULL), LIST_TYPE_ARRAY, NULL, NULL)
+
+/**
  * @brief creates a sorted linked list at heap
  * @param[in] h @ref memory_heap_t the heap of linked list.
  * @param[in] c @ref list_data_comparator_f comparator used sorting list.
