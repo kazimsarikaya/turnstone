@@ -112,6 +112,15 @@ void task_set_interruptible(void) {
     }
 }
 
+void task_set_custom_has_message_func(task_custom_has_message_func_t func, void* args) {
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        current_task->custom_has_message_func = func;
+        current_task->custom_has_message_func_args = args;
+    }
+}
+
 void task_print_all(buffer_t* buffer) {
     iterator_t* it = hashmap_iterator_create(task_map);
 

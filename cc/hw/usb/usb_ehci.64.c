@@ -1476,6 +1476,46 @@ int8_t usb_ehci_init(usb_controller_t* usb_controller) {
     return 0;
 }
 
+#if 0
+static boolean_t usb_ehci_asynclist_has_pending_transfers(void* args) {
+    usb_controller_t* usb_controller = (usb_controller_t*)args;
+
+    if(usb_controller == NULL || usb_controller->metadata == NULL) {
+        video_text_print("err: null\n");
+        return false;
+    }
+
+    usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
+
+    boolean_t has_pending = metadata->current_async_transfer_count > 0;
+
+    if(has_pending) {
+        uint64_t mem_hi = 0;
+
+        if(metadata->addr64) {
+            mem_hi = metadata->op_regs->ctrl_ds_segment;
+            mem_hi <<= 32;
+        }
+
+        uint64_t async_list_head_fa = mem_hi | metadata->op_regs->async_list_addr;
+        uint64_t async_list_head_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(async_list_head_fa);
+
+        usb_ehci_qh_t* async_list_head = (usb_ehci_qh_t*)async_list_head_va;
+        usb_ehci_qh_t* qh = async_list_head;
+
+        if(!qh->transfer) {
+            has_pending = false;
+        }
+
+        if(qh->transfer && qh->token.bits.active) {
+            has_pending = false;
+        }
+    }
+
+    return has_pending;
+}
+#endif
+
 int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
     if(argc != 1 || argv == NULL || argv[0] == NULL) {
         PRINTLOG(USB, LOG_ERROR, "invalid argument count");
@@ -1483,13 +1523,13 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
         return -1;
     }
 
-    cpu_sti();
-    task_set_interruptible();
-    cpu_cli();
-
-
     usb_controller_t* usb_controller = (usb_controller_t*)argv[0];
     usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
+
+    cpu_sti();
+    task_set_interruptible();
+    // task_set_custom_has_message_func(usb_ehci_asynclist_has_pending_transfers, usb_controller);
+    cpu_cli();
 
     uint64_t mem_hi = 0;
 

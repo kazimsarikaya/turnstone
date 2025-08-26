@@ -704,6 +704,13 @@ task_t* task_find_next_task(void) {
                     }
                 }
 
+                if(found_index != i && t->custom_has_message_func) {
+                    if(t->custom_has_message_func(t->custom_has_message_func_args)) {
+                        found_index = i;
+                        break;
+                    }
+                }
+
             } else { // wait status cleared task
                 if(t->state != TASK_STATE_SUSPENDED) {
                     video_text_print("task_find_next_task: task state is not suspended: 0x");
