@@ -324,6 +324,7 @@ typedef struct usb_device_t {
     uint32_t          port;
     uint32_t          speed;
     uint32_t          address;
+    uint32_t          slot_id;
     uint32_t          max_packet_size;
     uint32_t          num_configurations;
     usb_config_t**    configurations;

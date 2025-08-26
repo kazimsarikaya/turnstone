@@ -150,6 +150,10 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
         return false;
     }
 
+    if(request == USB_REQUEST_SET_ADDRESS) {
+        usb_device->address = usb_request.value;
+    }
+
     return usb_transfer.success;
 };
 
@@ -229,6 +233,29 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     hashmap_put(usb_devices, (void*)usb_device->device_id, usb_device);
 
+    uint32_t requested_address = 0;
+
+    if(controller->controller_type == USB_CONTROLLER_TYPE_EHCI) {
+        requested_address = usb_device->device_id + 1;
+    }
+
+    if(!usb_device_request(usb_device,
+                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
+                           USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_ADDRESS,
+                           requested_address, 0,
+                           0, 0)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot set device address");
+        usb_device_free(usb_device);
+
+        return -1;
+    }
+
+    // usb_device->address = usb_device->device_id + 1;
+
+    PRINTLOG(USB, LOG_DEBUG, "device address: %x", usb_device->address);
+
+    time_timer_spinsleep(5000);
+
     usb_device->max_packet_size = 8;
 
     usb_device_desc_t device_desc = {0};
@@ -247,21 +274,6 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
     PRINTLOG(USB, LOG_DEBUG, "max packet size: 0x%x", device_desc.max_packet_size);
 
     usb_device->max_packet_size = device_desc.max_packet_size;
-
-    if(!usb_device_request(usb_device,
-                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
-                           USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_ADDRESS,
-                           usb_device->device_id + 1, 0,
-                           0, 0)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot set device address");
-        usb_device_free(usb_device);
-
-        return -1;
-    }
-
-    usb_device->address = usb_device->device_id + 1;
-
-    PRINTLOG(USB, LOG_TRACE, "device address: %x", usb_device->address);
 
     time_timer_spinsleep(5000);
 
