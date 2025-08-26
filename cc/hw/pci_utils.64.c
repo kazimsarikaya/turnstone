@@ -28,7 +28,13 @@ void pci_set_context(pci_context_t* pci_context) {
 }
 
 
-int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix_t* msix_cap) {
+int8_t pci_msix_configure(const pci_generic_device_t* pci_gen_dev, const pci_capability_msix_t* _msix_cap) {
+    if(pci_gen_dev == NULL || _msix_cap == NULL) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return -1;
+    }
+
+    pci_capability_msix_t* msix_cap = (pci_capability_msix_t*)_msix_cap;
 
     msix_cap->enable = 1;
     msix_cap->function_mask = 0;
@@ -89,7 +95,12 @@ int8_t pci_msix_configure(pci_generic_device_t* pci_gen_dev, pci_capability_msix
     return 0;
 }
 
-uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr) {
+uint8_t pci_msix_set_isr(const pci_generic_device_t* pci_dev, const pci_capability_msix_t* msix_cap, uint16_t msix_vector, interrupt_irq isr) {
+    if(pci_dev == NULL || msix_cap == NULL || isr == NULL) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return 0xFF;
+    }
+
     uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);
 
     msix_table_address += (msix_cap->table_offset << 3);
@@ -122,7 +133,12 @@ uint8_t pci_msix_set_isr(pci_generic_device_t* pci_dev, pci_capability_msix_t* m
     return isrnum;
 }
 
-uint8_t pci_msix_update_lapic(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+uint8_t pci_msix_update_lapic(const pci_generic_device_t* pci_dev, const pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+    if(pci_dev == NULL || msix_cap == NULL) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return 0xFF;
+    }
+
     uint64_t msix_table_address = pci_get_bar_address(pci_dev, msix_cap->bir);
 
     msix_table_address += (msix_cap->table_offset << 3);
@@ -140,7 +156,12 @@ uint8_t pci_msix_update_lapic(pci_generic_device_t* pci_dev, pci_capability_msix
     return 0;
 }
 
-boolean_t pci_msix_is_pending_bit_set(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+boolean_t pci_msix_is_pending_bit_set(const pci_generic_device_t* pci_dev, const pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+    if(pci_dev == NULL || msix_cap == NULL) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return false;
+    }
+
     uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
 
     msix_pendind_bit_table_address += (msix_cap->pending_bit_offset << 3);
@@ -161,7 +182,7 @@ boolean_t pci_msix_is_pending_bit_set(pci_generic_device_t* pci_dev, pci_capabil
     return (pending_bit & (1ULL << bit_idx)) != 0;
 }
 
-int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+int8_t pci_msix_clear_pending_bit(const pci_generic_device_t* pci_dev, const pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
     UNUSED(pci_dev);
     UNUSED(msix_cap);
     UNUSED(msix_vector);
@@ -189,7 +210,14 @@ int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_
 #endif
 }
 
-uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
+uint64_t pci_get_bar_size(const pci_generic_device_t* _pci_dev, uint8_t bar_no){
+    if(_pci_dev == NULL || bar_no > 5) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return 0;
+    }
+
+    pci_generic_device_t* pci_dev = (pci_generic_device_t*)_pci_dev;
+
     uint64_t old_address = pci_get_bar_address(pci_dev, bar_no);
     uint64_t mask = -1ULL;
     pci_set_bar_address(pci_dev, bar_no, mask);
@@ -212,7 +240,14 @@ uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
     return size;
 }
 
-uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no){
+uint64_t pci_get_bar_address(const pci_generic_device_t* _pci_dev, uint8_t bar_no){
+    if(_pci_dev == NULL || bar_no > 5) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return 0;
+    }
+
+    pci_generic_device_t* pci_dev = (pci_generic_device_t*)_pci_dev;
+
     pci_bar_register_t* bar = &pci_dev->bar0;
     bar += bar_no;
 
@@ -238,7 +273,14 @@ uint64_t pci_get_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no){
     return bar_fa;
 }
 
-int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64_t bar_fa){
+int8_t pci_set_bar_address(const pci_generic_device_t* _pci_dev, uint8_t bar_no, uint64_t bar_fa){
+    if(_pci_dev == NULL || bar_no > 5) {
+        PRINTLOG(PCI, LOG_ERROR, "invalid args");
+        return -1;
+    }
+
+    pci_generic_device_t* pci_dev = (pci_generic_device_t*)_pci_dev;
+
     pci_bar_register_t* bar = &pci_dev->bar0;
     bar += bar_no;
 
@@ -260,7 +302,7 @@ int8_t pci_set_bar_address(pci_generic_device_t* pci_dev, uint8_t bar_no, uint64
     return 0;
 }
 
-void pci_disable_interrupt(pci_generic_device_t* pci_dev) {
+void pci_disable_interrupt(const pci_generic_device_t* pci_dev) {
     if(pci_dev == NULL) {
         return;
     }
@@ -287,7 +329,7 @@ void pci_disable_interrupt(pci_generic_device_t* pci_dev) {
     }
 }
 
-void pci_enable_interrupt(pci_generic_device_t* pci_dev) {
+void pci_enable_interrupt(const pci_generic_device_t* pci_dev) {
     if(pci_dev == NULL) {
         return;
     }
