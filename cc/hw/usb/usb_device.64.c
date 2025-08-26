@@ -525,7 +525,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
         if(strcmp(usb_device->vendor, "QEMU") == 0 && strcmp(usb_device->product, "QEMU USB Tablet") == 0) {
             if(usb_qemu_tablet_init(usb_device) != 0) {
-                PRINTLOG(USB, LOG_ERROR, "cannot initialize mouse");
+                PRINTLOG(USB, LOG_ERROR, "cannot initialize tablet");
                 usb_device_free(usb_device);
 
                 return -1;

@@ -123,6 +123,7 @@ static int8_t usb_qemu_tablet_transfer_cb(usb_controller_t* usb_controller, usb_
 }
 
 int8_t usb_mouse_init(usb_device_t* usb_device) {
+    PRINTLOG(USB, LOG_INFO, "initializing usb mouse");
     usb_driver_t* usb_mouse = memory_malloc(sizeof(usb_driver_t));
 
     if(!usb_mouse) {
@@ -178,6 +179,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device) {
 }
 
 int8_t usb_qemu_tablet_init(usb_device_t* usb_device) {
+    PRINTLOG(USB, LOG_INFO, "initializing usb qemu_tablet");
     usb_driver_t* usb_qemu_tablet = memory_malloc(sizeof(usb_driver_t));
 
     if(!usb_qemu_tablet) {

@@ -449,6 +449,7 @@ static int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_tra
 
 
 int8_t usb_keyboard_init(usb_device_t* usb_device) {
+    PRINTLOG(USB, LOG_INFO, "initializing usb keyboard");
     usb_driver_t* usb_keyboard = memory_malloc(sizeof(usb_driver_t));
 
     if(!usb_keyboard) {
