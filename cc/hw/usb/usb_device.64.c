@@ -158,6 +158,10 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
 };
 
 void usb_device_free(usb_device_t* usb_device) {
+    if(!usb_device) {
+        return;
+    }
+
     hashmap_delete(usb_devices, (void*)usb_device->device_id);
 
     if(usb_device->serial) {
@@ -198,6 +202,12 @@ void usb_device_free(usb_device_t* usb_device) {
         }
 
         memory_free(usb_device->configurations);
+    }
+
+    if(usb_device->controller && usb_device->controller_device_context) {
+        if(usb_device->controller->destroy_controller_device_context) {
+            usb_device->controller->destroy_controller_device_context(usb_device->controller, usb_device);
+        }
     }
 
     memory_free(usb_device);

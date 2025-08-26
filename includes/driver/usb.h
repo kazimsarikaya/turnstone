@@ -302,6 +302,7 @@ typedef struct usb_controller_t {
     int8_t (*control_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*isochronous_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*bulk_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
+    int8_t (*destroy_controller_device_context)(usb_controller_t* controller, usb_device_t* device);
 } usb_controller_t;
 
 typedef struct usb_device_t usb_device_t;
@@ -317,22 +318,25 @@ typedef struct usb_config_t {
     usb_hid_desc_t*       hid;
 } usb_config_t;
 
+typedef struct usb_device_controller_context_t usb_device_controller_context_t;
+
 typedef struct usb_device_t {
-    uint64_t          device_id;
-    usb_device_t*     parent;
-    usb_controller_t* controller;
-    uint32_t          port;
-    uint32_t          speed;
-    uint32_t          address;
-    uint32_t          slot_id;
-    uint32_t          max_packet_size;
-    uint32_t          num_configurations;
-    usb_config_t**    configurations;
-    uint32_t          selected_config;
-    char_t*           vendor;
-    char_t*           product;
-    char_t*           serial;
-    usb_driver_t*     driver;
+    uint64_t                         device_id;
+    usb_device_t*                    parent;
+    usb_controller_t*                controller;
+    usb_device_controller_context_t* controller_device_context;
+    uint32_t                         port;
+    uint32_t                         speed;
+    uint32_t                         address;
+    uint32_t                         slot_id;
+    uint32_t                         max_packet_size;
+    uint32_t                         num_configurations;
+    usb_config_t**                   configurations;
+    uint32_t                         selected_config;
+    char_t*                          vendor;
+    char_t*                          product;
+    char_t*                          serial;
+    usb_driver_t*                    driver;
 } usb_device_t;
 
 typedef enum usb_class_t {
