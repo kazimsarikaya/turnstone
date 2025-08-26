@@ -462,27 +462,7 @@ static int8_t network_igb_other_isr(interrupt_frame_ext_t* frame)  {
         return -1;
     }
 
-    uint32_t eicr = network_igb_read_mmio(dev, NETWORK_IGB_REG_EICR);
     uint32_t isr = network_igb_read_mmio(dev, NETWORK_IGB_REG_ICR);
-
-    char_t buffer1[64] = {0};
-    char_t buffer2[64] = {0};
-
-    utoh_with_buffer(buffer1, eicr);
-    utoh_with_buffer(buffer2, isr);
-
-    video_text_print("other isr eicr 0x");
-    video_text_print(buffer1);
-    video_text_print(" isr 0x");
-    video_text_print(buffer2);
-
-    boolean_t is_other = eicr & (1 << 2);
-
-    if(!is_other) {
-        video_text_print(" not other");
-    }
-
-    video_text_print("\n");
 
     // clearing the pending interrupts
     // never clear 0. and 7. bit set them 0 on isr
@@ -507,28 +487,6 @@ static int8_t network_igb_tx_isr(interrupt_frame_ext_t* frame)  {
         video_text_print("no dev\n");
         return -1;
     }
-
-    uint32_t eicr = network_igb_read_mmio(dev, NETWORK_IGB_REG_EICR);
-    uint32_t isr = network_igb_read_mmio(dev, NETWORK_IGB_REG_ICR);
-
-    char_t buffer1[64] = {0};
-    char_t buffer2[64] = {0};
-
-    utoh_with_buffer(buffer1, eicr);
-    utoh_with_buffer(buffer2, isr);
-
-    video_text_print("tx isr eicr 0x");
-    video_text_print(buffer1);
-    video_text_print(" isr 0x");
-    video_text_print(buffer2);
-
-    boolean_t is_tx = eicr & (1 << 1);
-
-    if(!is_tx) {
-        video_text_print(" not tx");
-    }
-
-    video_text_print("\n");
 
     // clearing the pending interrupts
     network_igb_write_mmio(dev, NETWORK_IGB_REG_EICR, 1 << 1);
@@ -560,28 +518,6 @@ static int8_t network_igb_rx_isr(interrupt_frame_ext_t* frame)  {
         video_text_print("no dev\n");
         return -1;
     }
-
-    uint32_t eicr = network_igb_read_mmio(dev, NETWORK_IGB_REG_EICR);
-    uint32_t isr = network_igb_read_mmio(dev, NETWORK_IGB_REG_ICR);
-
-    char_t buffer1[64] = {0};
-    char_t buffer2[64] = {0};
-
-    utoh_with_buffer(buffer1, eicr);
-    utoh_with_buffer(buffer2, isr);
-
-    boolean_t is_rx = eicr & (1 << 0);
-
-    video_text_print("rx isr eicr 0x");
-    video_text_print(buffer1);
-    video_text_print(" isr 0x");
-    video_text_print(buffer2);
-
-    if(!is_rx) {
-        video_text_print(" not rx");
-    }
-
-    video_text_print("\n");
 
     if(dev->rx_task_id) {
         task_set_interrupt_received(dev->rx_task_id);
