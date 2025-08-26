@@ -162,6 +162,11 @@ boolean_t pci_msix_is_pending_bit_set(pci_generic_device_t* pci_dev, pci_capabil
 }
 
 int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_msix_t* msix_cap, uint16_t msix_vector) {
+    UNUSED(pci_dev);
+    UNUSED(msix_cap);
+    UNUSED(msix_vector);
+    return 0;
+#if 0
     uint64_t msix_pendind_bit_table_address = pci_get_bar_address(pci_dev, msix_cap->pending_bit_bir);
 
     msix_pendind_bit_table_address += (msix_cap->pending_bit_offset << 3);
@@ -181,6 +186,7 @@ int8_t pci_msix_clear_pending_bit(pci_generic_device_t* pci_dev, pci_capability_
     PRINTLOG(PCI, LOG_TRACE, "pending bit cleared %i 0x%llx",  msix_vector, *pending_bit_table_entry);
 
     return 0;
+#endif
 }
 
 uint64_t pci_get_bar_size(pci_generic_device_t* pci_dev, uint8_t bar_no){
