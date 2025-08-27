@@ -150,7 +150,7 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
         return false;
     }
 
-    if(request == USB_REQUEST_SET_ADDRESS) {
+    if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE && request == USB_REQUEST_SET_ADDRESS) {
         usb_device->address = usb_request.value;
     }
 
@@ -489,31 +489,56 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     PRINTLOG(USB, LOG_TRACE, "picked config: 0x%x", usb_device->selected_config);
 
+    usb_config_t* selected_config = usb_device->configurations[usb_device->selected_config];
 
+    int32_t interface_class = selected_config->interface->interface_class;
+    int32_t interface_subclass = selected_config->interface->interface_subclass;
+    int32_t interface_protocol = selected_config->interface->interface_protocol;
+    int32_t num_endpoints = selected_config->interface->num_endpoints;
 
 
     PRINTLOG(USB, LOG_DEBUG, "selected interface class: 0x%x subclass: 0x%x protocol: 0x%x endpoint count 0x%x",
-             usb_device->configurations[usb_device->selected_config]->interface->interface_class,
-             usb_device->configurations[usb_device->selected_config]->interface->interface_subclass,
-             usb_device->configurations[usb_device->selected_config]->interface->interface_protocol,
-             usb_device->configurations[usb_device->selected_config]->interface->num_endpoints);
+             interface_class,
+             interface_subclass,
+             interface_protocol,
+             num_endpoints);
 
-    for(uint32_t i = 0; i < usb_device->configurations[usb_device->selected_config]->interface->num_endpoints; i++) {
+    usb_endpoint_t** endpoints = selected_config->endpoints;
+
+    for(int32_t i = 0; i < num_endpoints; i++) {
+        uint32_t ep_address = endpoints[i]->desc->endpoint_address;
+        uint32_t ep_max_packet_size = endpoints[i]->desc->max_packet_size;
         PRINTLOG(USB, LOG_DEBUG, "selected endpoint address: 0x%x 0x%x",
-                 usb_device->configurations[usb_device->selected_config]->endpoints[i]->desc->endpoint_address,
-                 usb_device->configurations[usb_device->selected_config]->endpoints[i]->desc->max_packet_size);
+                 ep_address, ep_max_packet_size);
+
+        if(controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
+            if(!usb_device_request(usb_device,
+                                   USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
+                                   USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_ENDPOINT,
+                                   ep_max_packet_size, ep_address,
+                                   0, 0)) {
+                PRINTLOG(USB, LOG_ERROR, "cannot set endpoint 0x%x max packet size 0x%x",
+                         ep_address, ep_max_packet_size);
+                usb_device_free(usb_device);
+
+                return -1;
+            }
+
+            PRINTLOG(USB, LOG_DEBUG, "set endpoint 0x%x max packet size 0x%x",
+                     ep_address, ep_max_packet_size);
+        }
     }
 
-    if(usb_device->configurations[usb_device->selected_config]->interface->interface_class == USB_CLASS_HID) {
-        if(usb_device->configurations[usb_device->selected_config]->interface->interface_subclass == USB_SUBCLASS_HID_BOOT_INTERFACE_SUBCLASS) {
-            if(usb_device->configurations[usb_device->selected_config]->interface->interface_protocol == USB_PROTOCOL_HID_KEYBOARD) {
+    if(interface_class == USB_CLASS_HID) {
+        if(interface_subclass == USB_SUBCLASS_HID_BOOT_INTERFACE_SUBCLASS) {
+            if(interface_protocol == USB_PROTOCOL_HID_KEYBOARD) {
                 if(usb_keyboard_init(usb_device) != 0) {
                     PRINTLOG(USB, LOG_ERROR, "cannot initialize keyboard");
                     usb_device_free(usb_device);
 
                     return -1;
                 }
-            } else if(usb_device->configurations[usb_device->selected_config]->interface->interface_protocol == USB_PROTOCOL_HID_MOUSE) {
+            } else if(interface_protocol == USB_PROTOCOL_HID_MOUSE) {
                 if(usb_mouse_init(usb_device) != 0) {
                     PRINTLOG(USB, LOG_ERROR, "cannot initialize mouse");
                     usb_device_free(usb_device);
@@ -533,9 +558,9 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         }
     }
 
-    if(usb_device->configurations[usb_device->selected_config]->interface->interface_class == USB_CLASS_MASS_STORAGE) {
-        if(usb_device->configurations[usb_device->selected_config]->interface->interface_subclass == USB_SUBCLASS_MASS_STORAGE_SCSI_TRANSPARENT_COMMAND_SET) {
-            if(usb_device->configurations[usb_device->selected_config]->interface->interface_protocol == USB_PROTOCOL_MASS_STORAGE_BULK_ONLY) {
+    if(interface_class == USB_CLASS_MASS_STORAGE) {
+        if(interface_subclass == USB_SUBCLASS_MASS_STORAGE_SCSI_TRANSPARENT_COMMAND_SET) {
+            if(interface_protocol == USB_PROTOCOL_MASS_STORAGE_BULK_ONLY) {
                 if(usb_mass_storage_init(usb_device) != 0) {
                     PRINTLOG(USB, LOG_ERROR, "cannot initialize mass storage");
                     usb_device_free(usb_device);

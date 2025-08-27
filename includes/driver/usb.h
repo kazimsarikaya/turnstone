@@ -230,6 +230,11 @@ typedef enum usb_request_interface_t {
     USB_REQUEST_SET_PROTOCOL = 0x0B,
 } usb_request_interface_t;
 
+typedef enum usb_request_endpoint_t {
+    USB_ENDPOINT_SETUP_ENDPOINT = 0x01,
+    USB_ENDPOINT_CLEAR_ENDPOINT = 0x02,
+} usb_request_endpoint_t;
+
 typedef enum usb_standart_feature_selector_t {
     USB_FEATURE_DEVICE_REMOTE_WAKEUP = 0x01,
     USB_FEATURE_ENDPOINT_HALT = 0x00,
