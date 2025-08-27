@@ -368,9 +368,6 @@ typedef struct usb_xhci_doorbell_t {
 
 _Static_assert(sizeof(usb_xhci_doorbell_t) == 4, "usb_xhci_doorbell_t is not 4 bytes");
 
-#define USB_XHCI_CMD_RING_SIZE 16
-#define USB_XHCI_EVENT_RING_SIZE 16
-
 typedef enum usb_xhci_trb_type_t {
     USB_XHCI_TRB_TYPE_TRB_RESERVED = 0,
     USB_XHCI_TRB_TYPE_TR_NORMAL,
