@@ -11,6 +11,7 @@
 #include <logging.h>
 #include <time/timer.h>
 #include <strings.h>
+#include <pipeline.h>
 
 MODULE("turnstone.kernel.hw.usb");
 
@@ -512,11 +513,20 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                  ep_address, ep_max_packet_size);
 
         if(controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
+            pipeline_t* pipeline = pipeline_create(ep_max_packet_size * 1024);
+
+            if(!pipeline) {
+                PRINTLOG(USB, LOG_ERROR, "cannot create pipeline for endpoint 0x%x", ep_address);
+                usb_device_free(usb_device);
+
+                return -1;
+            }
+
             if(!usb_device_request(usb_device,
                                    USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                                    USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_ENDPOINT,
                                    ep_max_packet_size, ep_address,
-                                   0, 0)) {
+                                   0, (uint8_t*)pipeline)) {
                 PRINTLOG(USB, LOG_ERROR, "cannot set endpoint 0x%x max packet size 0x%x",
                          ep_address, ep_max_packet_size);
                 usb_device_free(usb_device);

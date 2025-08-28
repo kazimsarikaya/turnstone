@@ -1526,10 +1526,10 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
     usb_controller_t* usb_controller = (usb_controller_t*)argv[0];
     usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
 
-    cpu_sti();
+    cpu_cli();
     task_set_interruptible();
     // task_set_custom_has_message_func(usb_ehci_asynclist_has_pending_transfers, usb_controller);
-    cpu_cli();
+    cpu_sti();
 
     uint64_t mem_hi = 0;
 
@@ -1659,9 +1659,9 @@ int8_t usb_ehci_periodiclist_lookup_task(int32_t argc, void** argv) {
         return -1;
     }
 
-    cpu_sti();
-    task_set_interruptible();
     cpu_cli();
+    task_set_interruptible();
+    cpu_sti();
 
 
     usb_controller_t* usb_controller = (usb_controller_t*)argv[0];
