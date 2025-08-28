@@ -159,11 +159,12 @@ void lock_release(lock_t* lock) {
 typedef struct semaphore_t {
     memory_heap_t* heap;
     lock_t*        lock;
+    boolean_t      check_initial_count;
     uint64_t       initial_count;
     uint64_t       current_count;
 }semaphore_t;
 
-semaphore_t* semaphore_create_with_heap(memory_heap_t* heap, uint64_t count){
+semaphore_t* semaphore_create_with_heap_and_check_initial_count(memory_heap_t* heap, uint64_t count, boolean_t check_initial_count) {
     semaphore_t* semaphore = memory_malloc_ext(heap, sizeof(semaphore_t), 0x0);
 
     if(semaphore == NULL) {
@@ -172,6 +173,13 @@ semaphore_t* semaphore_create_with_heap(memory_heap_t* heap, uint64_t count){
 
     semaphore->heap = heap;
     semaphore->lock = lock_create_with_heap(heap);
+
+    if(semaphore->lock == NULL) {
+        memory_free_ext(heap, semaphore);
+        return NULL;
+    }
+
+    semaphore->check_initial_count = check_initial_count;
     semaphore->initial_count = count;
     semaphore->current_count = count;
 
@@ -191,10 +199,12 @@ int8_t semaphore_acquire_with_count(semaphore_t* semaphore, uint64_t count){
 
     lock_acquire(semaphore->lock);
 
-    if(semaphore->initial_count < count) {
-        lock_release(semaphore->lock);
+    if(semaphore->check_initial_count) {
+        if(semaphore->initial_count < count) {
+            lock_release(semaphore->lock);
 
-        return -1;
+            return -1;
+        }
     }
 
     while(true) {
@@ -221,13 +231,29 @@ int8_t semaphore_release_with_count(semaphore_t* semaphore, uint64_t count){
 
     lock_acquire(semaphore->lock);
 
-    if(semaphore->current_count + count > semaphore->initial_count) {
-        lock_release(semaphore->lock);
+    if(semaphore->check_initial_count) {
+        if(semaphore->current_count + count > semaphore->initial_count) {
+            lock_release(semaphore->lock);
 
-        return -1;
+            return -1;
+        }
     }
 
     semaphore->current_count += count;
+
+    lock_release(semaphore->lock);
+
+    return 0;
+}
+
+int8_t semaphore_reset(semaphore_t* semaphore) {
+    if(semaphore == NULL) {
+        return -1;
+    }
+
+    lock_acquire(semaphore->lock);
+
+    semaphore->current_count = semaphore->initial_count;
 
     lock_release(semaphore->lock);
 

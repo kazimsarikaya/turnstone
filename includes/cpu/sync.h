@@ -72,9 +72,10 @@ typedef struct semaphore_t semaphore_t;
  * @brief create semaphore
  * @param[in] heap heap where semaphore resides
  * @param[in] count semaphore count value
+ * @param[in] check_initial_count if true, semaphore_acquire will fail if initial count by current count is less than acquire count
  * @return semaphore
  */
-semaphore_t* semaphore_create_with_heap(memory_heap_t* heap, uint64_t count);
+semaphore_t* semaphore_create_with_heap_and_check_initial_count(memory_heap_t* heap, uint64_t count, boolean_t check_initial_count);
 
 /**
  * @brief destroys semaphore
@@ -86,7 +87,15 @@ int8_t semaphore_destroy(semaphore_t* semaphore);
  * @brief creats sempahore at default heap with count
  * @param[in] c count
  */
-#define semaphore_create(c) semaphore_create_with_heap(NULL, c)
+#define semaphore_create(c) semaphore_create_with_heap(NULL, c, true)
+
+/**
+ * @brief creats sempahore at default heap with count without checking initial count
+ * @param[in h heap
+ * @param[in] c count
+ * @return semaphore
+ */
+ #define semaphore_create_with_heap(h, c) semaphore_create_with_heap_and_check_initial_count(h, c, true)
 
 /**
  * @brief acquires slots at semaphore
@@ -115,6 +124,13 @@ int8_t semaphore_release_with_count(semaphore_t* semaphore, uint64_t count);
  * @param[in] s semaphore to release
  */
 #define semaphore_release(s) semaphore_release_with_count(s, 1)
+
+/**
+ * @brief resets semaphore current count to initial count
+ * @param[in] semaphore semaphore to reset
+ * @return 0 if succeed
+ */
+int8_t semaphore_reset(semaphore_t* semaphore);
 
 #ifdef __cplusplus
 }
