@@ -444,6 +444,8 @@ typedef enum usb_xhci_trb_ccode_t {
     USB_XHCI_TRB_CCODE_CC_SPLIT_TRANSACTION_ERROR
 } usb_xhci_trb_ccode_t;
 
+#define USB_XHCI_MAX_ENDPOINTS 31
+
 int8_t usb_xhci_init(usb_controller_t* usb_controller);
 
 #ifdef __cplusplus

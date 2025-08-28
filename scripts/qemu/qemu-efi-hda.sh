@@ -45,6 +45,10 @@ if [ ! -f ${OUTPUTDIR}/qemu-nvme-cache ]; then
   dd if=/dev/zero of=${OUTPUTDIR}/qemu-nvme-cache bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
 fi
 
+if [ ! -f ${OUTPUTDIR}/qemu-usb-uas ]; then
+  dd if=/dev/zero of=${OUTPUTDIR}/qemu-usb-uas bs=1 count=0 seek=$((1024*1024*1024)) >/dev/null 2>&1
+fi
+
 NUMCPUS=4
 RAMSIZE=8
 
@@ -70,18 +74,21 @@ fi
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${OUTPUTDIR}/edk2-x86_64-code.fd \
   -drive if=pflash,readonly=off,format=raw,unit=1,file=${OUTPUTDIR}/edk2-i386-vars.fd \
   -drive id=system,if=none,format=raw,file=${OUTPUTDIR}/qemu-hda,werror=report,rerror=report \
-  -device ide-hd,drive=system,bootindex=1 \
   -drive id=cache,if=none,format=raw,file=${OUTPUTDIR}/qemu-nvme-cache,werror=report,rerror=report \
+  -drive id=usbuas,if=none,format=raw,file=${OUTPUTDIR}/qemu-usb-uas,werror=report,rerror=report \
+  -device ide-hd,drive=system,bootindex=1 \
   -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096 \
-  -monitor stdio \
   -device VGA,id=gpu0,vgamem_mb=256 \
   -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
   -device nec-usb-xhci,id=xhci \
   -device usb-tablet,bus=xhci.0 \
   -device usb-kbd,bus=xhci.0 \
+  -device usb-uas,bus=xhci.0,id=uas0 \
+  -device scsi-hd,bus=uas0.0,scsi-id=0,lun=0,drive=usbuas \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
+  -monitor stdio \
   -display sdl,gl=on,show-cursor=off

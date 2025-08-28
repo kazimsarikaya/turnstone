@@ -56,7 +56,7 @@ typedef struct usb_device_controller_context_t {
         frame_t*    ep_trb_frame;
         pipeline_t* ep_pipeline;
         uint64_t    max_packet_size_aligned;
-    } endpoints[31];
+    } endpoints[USB_XHCI_MAX_ENDPOINTS];
 } usb_device_controller_context_t;
 
 typedef struct usb_driver_t {
@@ -75,9 +75,11 @@ static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* contr
 
     usb_device_controller_context_t* context = device->controller_device_context;
 
+    PRINTLOG(USB, LOG_DEBUG, "destroying device controller context 0x%p for device 0x%p", context, device);
+
     frame_allocator_t* fa = frame_get_allocator();
 
-    for(int32_t i = 0; i < 32; i++) {
+    for(int32_t i = 0; i < USB_XHCI_MAX_ENDPOINTS; i++) {
         if(context->endpoints[i].ep_trb_frame) {
             if(memory_paging_delete_va_for_frame(context->endpoints[i].ep_trb_va,
                                                  context->endpoints[i].ep_trb_frame) != 0) {
@@ -672,8 +674,9 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
 
     usb_device_controller_context_t* context = device->controller_device_context;
 
-    uint32_t max_packet_size = request->value & 0x3FF;
+    uint32_t max_packet_size = request->value & 0x1FFFF;
     if(max_packet_size == 0) {
+        PRINTLOG(USB, LOG_ERROR, "invalid max packet size 0, real request value 0x%04x", request->value);
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -912,10 +915,9 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 
         // Data Stage TRB (if length > 0)
         while (remaining_length > 0) {
-
-            PRINTLOG(USB, LOG_TRACE, "data fa: 0x%llx length 0x%x", data_fa, length);
-
             uint32_t curr_length = MIN(remaining_length, max_packet_size);
+
+            PRINTLOG(USB, LOG_TRACE, "data fa: 0x%llx length 0x%x", data_fa, curr_length);
 
             transfer_ring[trb_index].parameter = data_fa;
             transfer_ring[trb_index].status = curr_length;

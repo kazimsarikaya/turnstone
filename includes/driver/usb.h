@@ -89,9 +89,18 @@ typedef enum usb_hid_desc_type_t {
     USB_HID_DESC_TYPE_PHYSICAL = 0x23,
 } usb_hid_desc_type_t;
 
+typedef enum usb_class_desc_type_t {
+    USB_CLASS_DESC_TYPE_CS_INTERFACE = 0x24,
+    USB_CLASS_DESC_TYPE_CS_ENDPOINT = 0x25,
+} usb_class_desc_type_t;
+
 typedef enum usb_hub_desc_type_t {
     USB_HUB_DESC_TYPE_HUB = 0x29,
 } usb_hub_desc_type_t;
+
+typedef enum usb_endpoint_companion_desc_type_t {
+    USB_ENDPOINT_COMPANION_DESC_TYPE = 0x30,
+} usb_endpoint_companion_desc_type_t;
 
 typedef enum usb_hub_characteristic_t {
     USB_HUB_CHARACTERISTIC_POWER_MASK = 0x03,
@@ -179,6 +188,21 @@ typedef struct usb_string_desc_t {
     uint8_t  type;
     uint16_t string[];
 }__attribute__((packed)) usb_string_desc_t;
+
+typedef struct usb_cs_interface_desc_t {
+    uint8_t length;
+    uint8_t type;
+    uint8_t interface_number;
+    uint8_t extra_data[];
+}__attribute__((packed)) usb_cs_interface_desc_t;
+
+typedef struct usb_endpoint_companion_desc_t {
+    uint8_t  length;
+    uint8_t  type;
+    uint8_t  max_burst;
+    uint8_t  attributes;
+    uint16_t bytes_per_interval;
+}__attribute__((packed)) usb_endpoint_companion_desc_t;
 
 typedef enum usb_request_type_t {
     USB_REQUEST_TYPE_STANDARD = 0x00,
@@ -320,12 +344,15 @@ typedef struct usb_driver_t usb_driver_t;
 typedef struct usb_config_t usb_config_t;
 
 typedef struct usb_config_t {
-    uint32_t              config_id;
-    uint8_t*              config_buffer;
-    usb_interface_desc_t* interface;
-    uint32_t              num_endpoints;
-    usb_endpoint_t**      endpoints;
-    usb_hid_desc_t*       hid;
+    uint32_t                       config_id;
+    uint8_t*                       config_buffer;
+    usb_interface_desc_t*          interface;
+    uint32_t                       num_endpoints;
+    usb_endpoint_t**               endpoints;
+    usb_hid_desc_t*                hid;
+    usb_hub_desc_t*                hub;
+    usb_cs_interface_desc_t*       cs_interface;
+    usb_endpoint_companion_desc_t* endpoint_companion;
 } usb_config_t;
 
 typedef struct usb_device_controller_context_t usb_device_controller_context_t;
