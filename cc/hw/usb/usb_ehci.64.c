@@ -1639,8 +1639,8 @@ int8_t usb_ehci_asynclist_lookup_task(int32_t argc, void** argv) {
 
             if(qh == async_list_head) {
                 PRINTLOG(USB, LOG_TRACE, "async list looped");
-                // need_yield = true;
-                time_timer_msleep(100);
+                need_yield = true;
+                // time_timer_msleep(100);
                 break;
             }
         }
