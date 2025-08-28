@@ -223,7 +223,6 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
 
     while(true) {
         if(!metadata->enable_sending_interrupter_task) {
-            video_text_print("not enabled\n");
             task_set_message_waiting();
             task_yield();
             continue;
@@ -319,9 +318,9 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
         erdp = event_ring_fa + event_index * sizeof(usb_xhci_trb_t);
         metadata->runtime->interrupters[0].erdp = (erdp & ~0xFULL) | (1ULL << 3);
 
-        // task_set_message_waiting();
-        // task_yield();
-        time_timer_msleep(100);
+        task_set_message_waiting();
+        task_yield();
+        // time_timer_msleep(100);
     }
 
     return 0;
