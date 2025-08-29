@@ -75,12 +75,13 @@ void task_set_interrupt_received(uint64_t tid) {
     task_t* current_task = cpu_state->current_task;
 
     if(task) {
-        task->state = TASK_STATE_INTERRUPT_RECEIVED;
+        if(task->attributes & TASK_ATTRIBUTE_INTERRUPTIBLE) {
+            task->state = TASK_STATE_INTERRUPT_RECEIVED;
 
-        if(current_task->cpu_id != task->cpu_id) {
-            apic_send_ipi(task->cpu_id, 0xFE, false);
+            if(current_task->cpu_id != task->cpu_id) {
+                apic_send_ipi(task->cpu_id, 0xFE, false);
+            }
         }
-
     } else {
         video_text_print("int recv: task not found\n");
         PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);

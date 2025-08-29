@@ -889,6 +889,8 @@ void task_end_task(void) {
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
     } else {
+        PRINTLOG(TASKING, LOG_WARNING, "ending task %s with pid 0x%llx on cpu 0x%llx that is not in starting state but in state 0x%x",
+                 current_task->task_name, current_task->task_id, cpu_state->local_apic_id, current_task->state);
         ret = current_task->exit_code;
     }
 
