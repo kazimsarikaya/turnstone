@@ -125,7 +125,7 @@ static int8_t usb_xhci_pool_event (void) {
             return 0;
         }
 
-        time_timer_spinsleep(100);
+        time_timer_msleep(100);
     }
 
     PRINTLOG(USB, LOG_ERROR, "cannot find event for trb 0x%llx of type %d",
@@ -167,7 +167,6 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
     while(true) {
         task_set_message_waiting();
         task_yield();
-        video_text_print("X");
 
         usb_xhci_trb_t* event_rings = metadata->event_ring;
         uint64_t event_ring_fa = metadata->erst[0];
@@ -188,14 +187,6 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
 
             usb_xhci_trb_type_t trb_type = (event_trb->control >> 10) & 0x3F;
             uint32_t cc = (event_trb->status >> 24) & 0xFF;
-
-            PRINTLOG(USB, LOG_DEBUG, "event trb index %llx fa 0x%llx type %d cc %d cycle %d expected cycle %d",
-                     event_index,
-                     event_ring_fa + event_index * sizeof(usb_xhci_trb_t),
-                     trb_type,
-                     cc,
-                     event_trb->control & 1,
-                     metadata->cycle_bit);
 
             if(trb_type == USB_XHCI_TRB_TYPE_TRB_RESERVED) {
                 break;
@@ -243,20 +234,26 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
                         if(ep_pipeline && driver && driver->pipeline_callback) {
                             if(cc == USB_XHCI_TRB_CCODE_CC_SUCCESS || cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
                                 uint64_t data_ptr = ep_trbs[ep_trb_index].parameter;
-                                uint32_t data_len = ep_trbs[ep_trb_index].status & 0xFFFFFF;
-                                data_ptr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr);
-                                uint8_t* data = (uint8_t*)(uintptr_t)data_ptr;
 
-                                if(cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
-                                    uint32_t remaining_length = event_trb->status & 0xFFFFFF;
-                                    data_len -= remaining_length;
-                                }
+                                if(data_ptr) {
+                                    uint32_t data_len = ep_trbs[ep_trb_index].status & 0xFFFFFF;
+                                    data_ptr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr);
+                                    uint8_t* data = (uint8_t*)(uintptr_t)data_ptr;
 
-                                if(data_len == driver->expected_packet_size) {
-                                    pipeline_write(ep_pipeline, data_len, data);
-                                    driver->pipeline_callback(device, ep_id, ep_pipeline);
+                                    if(cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
+                                        uint32_t remaining_length = event_trb->status & 0xFFFFFF;
+                                        data_len -= remaining_length;
+                                    }
+
+                                    if(data_len == driver->expected_packet_size) {
+                                        pipeline_write(ep_pipeline, data_len, data);
+                                        driver->pipeline_callback(device, ep_id, ep_pipeline);
+                                    } else {
+                                        PRINTLOG(USB, LOG_WARNING, "data length %d does not match expected %d", data_len, driver->expected_packet_size);
+                                    }
+
                                 } else {
-                                    PRINTLOG(USB, LOG_WARNING, "data length %d does not match expected %d", data_len, driver->expected_packet_size);
+                                    PRINTLOG(USB, LOG_WARNING, "no data ptr for trb");
                                 }
 
                             }
@@ -505,6 +502,19 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         return -1;
     }
 
+    uint8_t cc = (usb_xhci_pool_event_result.out_trb.status >> 24) & 0xFF;
+
+    if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+        PRINTLOG(USB, LOG_ERROR, "cannot enable slot, completion code: %d", cc);
+        memory_paging_delete_va_for_frame(ep0_trb_va, ep_ctrl_frame);
+        fa->release_frame(fa, ep_ctrl_frame);
+        memory_free(device->controller_device_context);
+        device->controller_device_context = NULL;
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
     device->slot_id = usb_xhci_pool_event_result.out_trb.control >> 24;
 
     hashmap_put(metadata->slot_id_device_mapping, (void*)(uintptr_t)device->slot_id, device);
@@ -519,8 +529,14 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     ictx[1] = 0x3;
 
     uint32_t* slot_ctx = &ictx[8]; // + metadata->context_size / 8;
-    slot_ctx[0] = (1 << 27) | (device->speed << 20) | ((device->port + 1) << 16);
-    slot_ctx[1] = (device->port + 1) << 16;
+
+    if(device->parent) {
+        slot_ctx[0] = (1 << 27) | (device->speed << 20) | ((device->port + 1));
+        slot_ctx[1] |= (device->parent->port + 1) << 16;
+    } else {
+        slot_ctx[0] = (1 << 27) | (device->speed << 20) | ((device->port + 1) << 16);
+        slot_ctx[1] = (device->port + 1) << 16;
+    }
 
     uint32_t* ep0_ctx = &ictx[16]; // + 2 * metadata->context_size / 8;
     ep0_ctx[0] = 0;
@@ -563,6 +579,142 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         device->slot_id = 0;
         memory_free(device->controller_device_context);
         device->controller_device_context = NULL;
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    cc = (usb_xhci_pool_event_result.out_trb.status >> 24) & 0xFF;
+
+    if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+        PRINTLOG(USB, LOG_ERROR, "cannot address device, completion code: %d", cc);
+        memory_paging_delete_va_for_frame(ep0_trb_va, ep_ctrl_frame);
+        fa->release_frame(fa, ep_ctrl_frame);
+        hashmap_delete(metadata->slot_id_device_mapping, (void*)(uintptr_t)device->slot_id);
+        device->slot_id = 0;
+        memory_free(device->controller_device_context);
+        device->controller_device_context = NULL;
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    device->address = ictx[3] & 0xFF;
+    transfer->request->value = device->address;
+    PRINTLOG(USB, LOG_TRACE, "new device address: %d", device->address);
+
+    transfer->complete = true;
+    transfer->success = true;
+
+    return 0;
+}
+
+static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+    usb_xhci_trb_t* cmd_rings = metadata->cmd_ring;
+    usb_xhci_doorbell_t* doorbells = metadata->doorbells;
+    usb_device_t* device = transfer->device;
+    usb_device_request_t* request = transfer->request;
+
+    if(!device) {
+        PRINTLOG(USB, LOG_ERROR, "no device for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(!device->slot_id) {
+        PRINTLOG(USB, LOG_ERROR, "device has no slot id");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    uint64_t* dbcbaa = metadata->dcbaa;
+    uint64_t dcb_fa = dbcbaa[device->slot_id];
+    uint64_t* dcb = (uint64_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dcb_fa);
+
+    uint32_t* ictx = (uint32_t*)dcb;
+    ictx[0] = 0;
+    ictx[1] = request->index; // bitmask of contexts to evaluate
+
+    if(ictx[1] == 0) {
+        PRINTLOG(USB, LOG_ERROR, "no context to evaluate");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(ictx[1] & 1) { // slot context
+        uint32_t* slot_ctx = &ictx[8]; // + metadata->context_size / 8;
+
+        if(device->parent) {
+            slot_ctx[0] = (1 << 27) | (device->speed << 20) | ((device->port + 1));
+            slot_ctx[1] |= (device->parent->port + 1) << 16;
+        } else {
+            slot_ctx[0] = (1 << 27) | (device->speed << 20) | ((device->port + 1) << 16);
+            slot_ctx[1] = (device->port + 1) << 16;
+        }
+
+        if(device->is_hub) {
+            slot_ctx[0] |= (1 << 26); // set hub flag
+            slot_ctx[1] |= (device->hub_num_ports & 0xFF) << 24;
+        }
+
+    }
+
+    if(ictx[1] & 2) { // endpoint 0 context
+        if(!device->controller_device_context) {
+            PRINTLOG(USB, LOG_ERROR, "device has no controller device context");
+            transfer->complete = true;
+            transfer->success = false;
+            return -1;
+        }
+
+        usb_device_controller_context_t* context = device->controller_device_context;
+
+        uint32_t* ep0_ctx = &ictx[16]; // + 2 * metadata->context_size / 8;
+        ep0_ctx[0] = 0;
+        ep0_ctx[1] = 0x00400026; // Max Packet Size = 64, Endpoint Type = Control
+        ep0_ctx[2] = context->endpoints[0].ep_trb_fa | 1;
+        ep0_ctx[3] = context->endpoints[0].ep_trb_fa >> 32;
+        ep0_ctx[4] = 8;
+    }
+
+    // Set Address
+    usb_xhci_trb_t* cur_cmd_ring = &cmd_rings[metadata->current_cmd_index];
+    uint64_t cur_cmd_ring_fa = MEMORY_PAGING_GET_FA_FOR_RESERVED_VA((uint64_t)cur_cmd_ring);
+    uint64_t dev_ctx = metadata->dcbaa[device->slot_id];
+    if(!dev_ctx) {
+        PRINTLOG(USB, LOG_ERROR, "Device context not allocated for slot %d", device->slot_id);
+
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+    cur_cmd_ring->parameter = dcb_fa;
+    cur_cmd_ring->status = 0;
+    cur_cmd_ring->control = ((uint64_t)USB_XHCI_TRB_TYPE_CR_EVALUATE_CONTEXT << 10) | (device->slot_id << 24) | (1 << 5) | 1;
+
+    usb_xhci_pool_event_init(cur_cmd_ring_fa, USB_XHCI_TRB_TYPE_ER_COMMAND_COMPLETE);
+
+    doorbells[0].db = 0; // ring doorbell for slot 0 (command ring)
+
+    metadata->current_cmd_index = (metadata->current_cmd_index + 1) % metadata->cmd_ring_size;
+
+    if(usb_xhci_pool_event() != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot get event for command");
+
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    uint8_t cc = (usb_xhci_pool_event_result.out_trb.status >> 24) & 0xFF;
+
+    if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+        PRINTLOG(USB, LOG_ERROR, "cannot address device, completion code: %d", cc);
+
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -775,6 +927,26 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         return -1;
     }
 
+    int8_t cc = (usb_xhci_pool_event_result.out_trb.status >> 24) & 0xFF;
+
+    if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+        PRINTLOG(USB, LOG_ERROR, "cannot configure endpoint, completion code: %d", cc);
+        memory_paging_delete_va_for_frame(ep_trb_va, ep_trb_frame);
+        fa->release_frame(fa, ep_trb_frame);
+        context->endpoints[ep_index - 1].ep_trb_frame = NULL;
+        context->endpoints[ep_index - 1].ep_trb_fa = 0;
+        context->endpoints[ep_index - 1].ep_trb_va = 0;
+        context->endpoints[ep_index - 1].ep_trb_index = 0;
+        context->endpoints[ep_index - 1].ep_pipeline = NULL;
+        memory_paging_delete_va_for_frame(data_buffer_va, data_buffer_frame);
+        fa->release_frame(fa, data_buffer_frame);
+        transfer->data = NULL;
+        transfer->length = 0;
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
     PRINTLOG(USB, LOG_TRACE, "endpoint %d setup complete", ep_index);
     transfer->complete = true;
     transfer->success = true;
@@ -792,6 +964,11 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE && request->request == USB_REQUEST_SET_ADDRESS) {
         PRINTLOG(USB, LOG_TRACE, "SET_ADDRESS request");
         return usb_xhci_set_slot_and_address(usb_controller, transfer);
+    }
+
+    if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE && request->request == USB_REQUEST_EVALUATE_CONTEXT) {
+        PRINTLOG(USB, LOG_TRACE, "EVALUATE_CONTEXT request");
+        return usb_xhci_evalutate_context(usb_controller, transfer);
     }
 
     if(request_recipient == USB_REQUEST_RECIPIENT_ENDPOINT && request->request == USB_ENDPOINT_SETUP_ENDPOINT) {
@@ -885,6 +1062,57 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     // Ring doorbell for transfer (Endpoint 0, DCI = 1)
     usb_xhci_doorbell_t* doorbell = metadata->doorbells;
 
+    PRINTLOG(USB, LOG_TRACE, "control transfer: bmRequestType=0x%02x bRequest=0x%02x wValue=0x%04x wIndex=0x%04x wLength=0x%04x",
+             request->type, request->request, request->value, request->index, request->length);
+
+    if(transfer->device->is_hub &&
+       (transfer->request->request == USB_REQUEST_SET_FEATURE ||
+        transfer->request->request == USB_REQUEST_CLEAR_FEATURE
+       ) &&
+       transfer->request->value == USB_HUB_FEATURE_PORT_RESET) {
+
+        uint32_t ep_index = transfer->device->hub_status_endpoint_address;
+        uint8_t ep_direction = (ep_index >> 7) & 0x01;
+        ep_index = 2 * (ep_index & 0x0F) + ep_direction;
+
+        usb_device_controller_context_t* hub_dc_ctx = transfer->device->controller_device_context;
+
+        if(!hub_dc_ctx) {
+            PRINTLOG(USB, LOG_ERROR, "cannot get hub controller device context");
+            transfer->complete = true;
+            transfer->success = false;
+            return -1;
+        }
+
+        usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)hub_dc_ctx->endpoints[ep_index - 1].ep_trb_va;
+
+        if(!ep_trbs) {
+            PRINTLOG(USB, LOG_ERROR, "cannot get hub endpoint %d trb", ep_index);
+            transfer->complete = true;
+            transfer->success = false;
+            return -1;
+        }
+
+        uint32_t hub_ep_trb_index = hub_dc_ctx->endpoints[ep_index - 1].ep_trb_index;
+
+        PRINTLOG(USB, LOG_TRACE, "Adding TRBs to hub status endpoint %d (ep_index %d) trb_index %d",
+                 transfer->device->hub_status_endpoint_address, ep_index, hub_ep_trb_index);
+
+
+        ep_trbs[hub_ep_trb_index].parameter = hub_dc_ctx->endpoints[ep_index - 1].ep_trb_fa + hub_dc_ctx->endpoints[ep_index].max_packet_size_aligned * hub_ep_trb_index;
+        ep_trbs[hub_ep_trb_index].status = transfer->device->max_packet_size;
+        ep_trbs[hub_ep_trb_index].control = (USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5) | 1;
+
+        hub_ep_trb_index = (hub_ep_trb_index + 1) % metadata->cmd_ring_size;
+
+        ep_trbs[hub_ep_trb_index].parameter = 0;
+        ep_trbs[hub_ep_trb_index].status = 0;
+        ep_trbs[hub_ep_trb_index].control = 0;
+
+        hub_dc_ctx->endpoints[ep_index - 1].ep_trb_index = hub_ep_trb_index;
+
+    }
+
     usb_xhci_pool_event_init(cur_trb_fa, USB_XHCI_TRB_TYPE_ER_TRANSFER);
 
     doorbell[device->slot_id].db = 1; // DCI = 1 for Endpoint 0
@@ -893,6 +1121,15 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 
     if(usb_xhci_pool_event() != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get event for command");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    int8_t cc = (usb_xhci_pool_event_result.out_trb.status >> 24) & 0xFF;
+
+    if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+        PRINTLOG(USB, LOG_ERROR, "control transfer failed, completion code: %d", cc);
         transfer->complete = true;
         transfer->success = false;
         return -1;

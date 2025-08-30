@@ -82,9 +82,10 @@ fi
   -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
   -device nec-usb-xhci,id=xhci \
-  -device usb-tablet,bus=xhci.0 \
-  -device usb-kbd,bus=xhci.0 \
-  -device usb-uas,bus=xhci.0,id=uas0 \
+  -device usb-hub,bus=xhci.0,id=hub0,port=1 \
+  -device usb-tablet,bus=xhci.0,port=1.1 \
+  -device usb-kbd,bus=xhci.0,port=1.2 \
+  -device usb-uas,bus=xhci.0,id=uas0,port=2 \
   -device scsi-hd,bus=uas0.0,scsi-id=0,lun=0,drive=usbuas \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \

@@ -169,8 +169,7 @@ typedef struct usb_hub_desc_t {
     uint16_t characteristics;
     uint8_t  power_on_to_good;
     uint8_t  hub_control_current;
-    uint8_t  device_removable_mask;
-    uint8_t  port_pwr_ctrl_mask;
+    uint8_t  data[];
 }__attribute__((packed)) usb_hub_desc_t;
 
 typedef struct usb_hid_desc_t {
@@ -231,6 +230,7 @@ typedef enum usb_request_device_t {
     USB_REQUEST_GET_INTERFACE = 0x0A,
     USB_REQUEST_SET_INTERFACE = 0x0B,
     USB_REQUEST_SYNCH_FRAME = 0x0C,
+    USB_REQUEST_EVALUATE_CONTEXT = 0x0D, // TODO: usb3.0 should be checked
 } usb_request_device_t;
 
 typedef enum usb_request_direction_t {
@@ -266,22 +266,22 @@ typedef enum usb_standart_feature_selector_t {
 } usb_standart_feature_selector_t;
 
 typedef enum usb_hub_feature_selector_t {
-    USB_FEATURE_C_HUB_LOCAL_POWER = 0x00,
-    USB_FEATURE_C_HUB_OVER_CURRENT = 0x01,
-    USB_FEATURE_PORT_CONNECTION = 0x00,
-    USB_FEATURE_PORT_ENABLE = 0x01,
-    USB_FEATURE_PORT_SUSPEND = 0x02,
-    USB_FEATURE_PORT_OVER_CURRENT = 0x03,
-    USB_FEATURE_PORT_RESET = 0x04,
-    USB_FEATURE_PORT_POWER = 0x08,
-    USB_FEATURE_PORT_LOW_SPEED = 0x09,
-    USB_FEATURE_C_PORT_CONNECTION = 0x10,
-    USB_FEATURE_C_PORT_ENABLE = 0x11,
-    USB_FEATURE_C_PORT_SUSPEND = 0x12,
-    USB_FEATURE_C_PORT_OVER_CURRENT = 0x13,
-    USB_FEATURE_C_PORT_RESET = 0x14,
-    USB_FEATURE_PORT_TEST = 0x15,
-    USB_FEATURE_PORT_INDICATOR = 0x16,
+    USB_HUB_FEATURE_C_HUB_LOCAL_POWER = 0x00,
+    USB_HUB_FEATURE_C_HUB_OVER_CURRENT = 0x01,
+    USB_HUB_FEATURE_PORT_CONNECTION = 0x00,
+    USB_HUB_FEATURE_PORT_ENABLE = 0x01,
+    USB_HUB_FEATURE_PORT_SUSPEND = 0x02,
+    USB_HUB_FEATURE_PORT_OVER_CURRENT = 0x03,
+    USB_HUB_FEATURE_PORT_RESET = 0x04,
+    USB_HUB_FEATURE_PORT_POWER = 0x08,
+    USB_HUB_FEATURE_PORT_LOW_SPEED = 0x09,
+    USB_HUB_FEATURE_C_PORT_CONNECTION = 0x10,
+    USB_HUB_FEATURE_C_PORT_ENABLE = 0x11,
+    USB_HUB_FEATURE_C_PORT_SUSPEND = 0x12,
+    USB_HUB_FEATURE_C_PORT_OVER_CURRENT = 0x13,
+    USB_HUB_FEATURE_C_PORT_RESET = 0x14,
+    USB_HUB_FEATURE_PORT_TEST = 0x15,
+    USB_HUB_FEATURE_PORT_INDICATOR = 0x16,
 } usb_hub_feature_selector_t;
 
 typedef struct usb_device_request_t {
@@ -293,9 +293,11 @@ typedef struct usb_device_request_t {
 }__attribute__((packed)) usb_device_request_t;
 
 typedef struct usb_endpoint_t {
-    usb_endpoint_desc_t* desc;
-    uint32_t             toggle;
-    boolean_t            in;
+    usb_endpoint_desc_t*           desc;
+    uint32_t                       toggle;
+    boolean_t                      in;
+    usb_endpoint_companion_desc_t* endpoint_companion;
+    usb_cs_interface_desc_t*       cs_interface;
 } usb_endpoint_t;
 
 typedef struct usb_device_t     usb_device_t;
@@ -344,15 +346,13 @@ typedef struct usb_driver_t usb_driver_t;
 typedef struct usb_config_t usb_config_t;
 
 typedef struct usb_config_t {
-    uint32_t                       config_id;
-    uint8_t*                       config_buffer;
-    usb_interface_desc_t*          interface;
-    uint32_t                       num_endpoints;
-    usb_endpoint_t**               endpoints;
-    usb_hid_desc_t*                hid;
-    usb_hub_desc_t*                hub;
-    usb_cs_interface_desc_t*       cs_interface;
-    usb_endpoint_companion_desc_t* endpoint_companion;
+    uint32_t              config_id;
+    uint8_t*              config_buffer;
+    usb_interface_desc_t* interface;
+    uint32_t              num_endpoints;
+    usb_endpoint_t**      endpoints;
+    usb_hid_desc_t*       hid;
+    usb_hub_desc_t*       hub;
 } usb_config_t;
 
 typedef struct usb_device_controller_context_t usb_device_controller_context_t;
@@ -374,6 +374,9 @@ typedef struct usb_device_t {
     char_t*                          product;
     char_t*                          serial;
     usb_driver_t*                    driver;
+    boolean_t                        is_hub;
+    uint8_t                          hub_num_ports;
+    uint32_t                         hub_status_endpoint_address;
 } usb_device_t;
 
 typedef enum usb_class_t {
@@ -439,6 +442,8 @@ int8_t usb_mouse_init(usb_device_t* device);
 int8_t usb_qemu_tablet_init(usb_device_t* device);
 
 int8_t usb_mass_storage_init(usb_device_t* device);
+
+int8_t usb_hub_init(usb_device_t* device);
 
 boolean_t usb_device_request(usb_device_t*           usb_device,
                              usb_request_type_t      request_type,

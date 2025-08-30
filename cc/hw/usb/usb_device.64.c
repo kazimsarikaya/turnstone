@@ -465,11 +465,52 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
             } else if(type == USB_HID_DESC_TYPE_HID) {
                 config->hid = (usb_hid_desc_t*)(config->config_buffer + idx);
             } else if(type == USB_HUB_DESC_TYPE_HUB) {
+                PRINTLOG(USB, LOG_TRACE, "hub descriptor found");
                 config->hub = (usb_hub_desc_t*)(config->config_buffer + idx);
             } else if(type == USB_CLASS_DESC_TYPE_CS_INTERFACE) {
-                config->cs_interface = (usb_cs_interface_desc_t*)(config->config_buffer + idx);
+                if(ep_idx == 0) {
+                    PRINTLOG(USB, LOG_ERROR, "no endpoint for cs interface descriptor");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+                if(!config->endpoints) {
+                    PRINTLOG(USB, LOG_ERROR, "no endpoints for cs interface descriptor");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+                if(!config->endpoints[ep_idx - 1]) {
+                    PRINTLOG(USB, LOG_ERROR, "no endpoint for cs interface descriptor");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+                PRINTLOG(USB, LOG_TRACE, "cs interface descriptor for endpoint index 0x%x",
+                         config->endpoints[ep_idx - 1]->desc->endpoint_address);
+                config->endpoints[ep_idx - 1]->cs_interface = (usb_cs_interface_desc_t*)(config->config_buffer + idx);
             } else if(type == USB_ENDPOINT_COMPANION_DESC_TYPE) {
-                config->endpoint_companion = (usb_endpoint_companion_desc_t*)(config->config_buffer + idx);
+                if(ep_idx == 0) {
+                    PRINTLOG(USB, LOG_ERROR, "no endpoint for endpoint companion descriptor");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+                if(!config->endpoints) {
+                    PRINTLOG(USB, LOG_ERROR, "no endpoints for endpoint companion descriptor");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+                if(!config->endpoints[ep_idx - 1]) {
+                    PRINTLOG(USB, LOG_ERROR, "no endpoint for endpoint companion descriptor");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+                PRINTLOG(USB, LOG_TRACE, "endpoint companion descriptor for endpoint index 0x%x",
+                         config->endpoints[ep_idx - 1]->desc->endpoint_address);
+                config->endpoints[ep_idx - 1]->endpoint_companion = (usb_endpoint_companion_desc_t*)(config->config_buffer + idx);
             }else {
                 PRINTLOG(USB, LOG_TRACE, "unknown descriptor type: 0x%x length 0x%x idx 0x%x", type, length, idx);
             }
@@ -571,6 +612,16 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
                 return -1;
             }
+        }
+    }
+
+    if(interface_class == USB_CLASS_HUB) {
+        PRINTLOG(USB, LOG_INFO, "hub device detected");
+        if(usb_hub_init(usb_device) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot initialize hub");
+            usb_device_free(usb_device);
+
+            return -1;
         }
     }
 
