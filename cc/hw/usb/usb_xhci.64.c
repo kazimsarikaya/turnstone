@@ -53,16 +53,18 @@ typedef struct usb_device_controller_context_t {
         uint64_t    ep_trb_va;
         uint32_t    ep_trb_index;
         frame_t*    ep_trb_frame;
+        uint64_t    data_buffer_fa;
+        uint64_t    data_buffer_va;
+        frame_t*    data_buffer_frame;
         pipeline_t* ep_pipeline;
         uint64_t    max_packet_size_aligned;
+        uint64_t    expected_packet_size;
     } endpoints[USB_XHCI_MAX_ENDPOINTS];
 } usb_device_controller_context_t;
 
 typedef struct usb_driver_t {
     usb_device_t*           usb_device;
-    usb_transfer_callback_f transfer_callback;
     usb_pipeline_callback_f pipeline_callback;
-    uint32_t                expected_packet_size;
 } usb_driver_t;
 
 hashmap_t* usb_xhci_interrupt_controller_mapping = NULL;
@@ -85,6 +87,14 @@ static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* contr
                 PRINTLOG(USB, LOG_ERROR, "cannot delete ep trb va for frame");
             }
             fa->release_frame(fa, context->endpoints[i].ep_trb_frame);
+        }
+
+        if(context->endpoints[i].data_buffer_frame) {
+            if(memory_paging_delete_va_for_frame(context->endpoints[i].data_buffer_va,
+                                                 context->endpoints[i].data_buffer_frame) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot delete data buffer va for frame");
+            }
+            fa->release_frame(fa, context->endpoints[i].data_buffer_frame);
         }
 
         if(context->endpoints[i].ep_pipeline) {
@@ -234,6 +244,7 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
                         pipeline_t* ep_pipeline = context->endpoints[ep_id - 1].ep_pipeline;
                         uint64_t ep_trb_fa = context->endpoints[ep_id - 1].ep_trb_fa;
                         uint64_t ep_trb_va = context->endpoints[ep_id - 1].ep_trb_va;
+                        uint64_t expected_packet_size = context->endpoints[ep_id - 1].expected_packet_size;
                         uint64_t ep_trb_index = (event_trb->parameter - ep_trb_fa) / sizeof(usb_xhci_trb_t);
                         usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)ep_trb_va;
 
@@ -251,11 +262,11 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
                                         data_len -= remaining_length;
                                     }
 
-                                    if(data_len == driver->expected_packet_size) {
+                                    if(data_len == expected_packet_size) {
                                         pipeline_write(ep_pipeline, data_len, data);
                                         driver->pipeline_callback(device, ep_id, ep_pipeline);
                                     } else {
-                                        PRINTLOG(USB, LOG_WARNING, "data length %d does not match expected %d", data_len, driver->expected_packet_size);
+                                        PRINTLOG(USB, LOG_WARNING, "data length %d does not match expected %lli", data_len, expected_packet_size);
                                     }
 
                                 } else {
@@ -772,6 +783,25 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         return -1;
     }
 
+    usb_config_t* config = device->configurations[device->selected_config];
+
+    for(uint32_t i = 0; i < config->num_endpoints; i++) {
+        if(config->endpoints[i]->desc->endpoint_address == request->index &&
+           config->endpoints[i]->endpoint_companion) {
+            max_packet_size *= (config->endpoints[i]->endpoint_companion->max_burst + 1);
+            break;
+        }
+    }
+
+    if(max_packet_size > 0x1FFFF) {
+        PRINTLOG(USB, LOG_ERROR, "invalid max packet size %d", max_packet_size);
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_TRACE, "max packet size with burst: %d", max_packet_size);
+
     uint8_t ep_direction = (request->index >> 7) & 0x01;
     uint8_t ep_index = 2 * (request->index & 0x0F) + ep_direction;
 
@@ -820,26 +850,6 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
     }
 
     uint64_t max_packet_size_aligned = (max_packet_size + 15) & ~15;
-    uint64_t data_buffer_size = max_packet_size_aligned * metadata->cmd_ring_size;
-    uint64_t data_buffer_frame_count = (data_buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
-    frame_t* data_buffer_frame = NULL;
-    if(fa->allocate_frame_by_count(fa, data_buffer_frame_count, fa_type, &data_buffer_frame, NULL) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for ep%d data buffer", ep_index);
-        transfer->complete = true;
-        transfer->success = false;
-        return -1;
-    }
-
-    uint64_t data_buffer_fa = data_buffer_frame->frame_address;
-    uint64_t data_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_buffer_fa);
-    memory_paging_add_va_for_frame(data_buffer_va, data_buffer_frame,
-                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
-                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
-                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE);
-    memory_memclean((void*)data_buffer_va, data_buffer_size);
-
-    PRINTLOG(USB, LOG_TRACE, "ep%d,%d data buffer fa 0x%llx va 0x%llx", ep_index, device->slot_id, data_buffer_fa, data_buffer_va);
-
 
     uint64_t ep_frame_size = (metadata->cmd_ring_size + 1) * sizeof(usb_xhci_trb_t);
     ep_frame_size = (ep_frame_size + FRAME_SIZE - 1) & ~(FRAME_SIZE - 1);
@@ -868,16 +878,9 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
     context->endpoints[ep_index - 1].ep_trb_va = ep_trb_va;
     context->endpoints[ep_index - 1].ep_trb_index = 0;
     context->endpoints[ep_index - 1].ep_trb_frame = ep_trb_frame;
-    context->endpoints[ep_index - 1].ep_pipeline = (pipeline_t*)transfer->data;
     context->endpoints[ep_index - 1].max_packet_size_aligned = max_packet_size_aligned;
 
     usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)ep_trb_va;
-
-    for(uint64_t i = 0; i < metadata->cmd_ring_size; i++) {
-        ep_trbs[i].parameter = data_buffer_fa + i * max_packet_size_aligned;
-        ep_trbs[i].status = max_packet_size;
-        ep_trbs[i].control = ((uint64_t)USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5) | 1;
-    }
 
     ep_trbs[metadata->cmd_ring_size].parameter = ep_trb_fa;
     ep_trbs[metadata->cmd_ring_size].status = 0;
@@ -923,9 +926,6 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         context->endpoints[ep_index - 1].ep_trb_fa = 0;
         context->endpoints[ep_index - 1].ep_trb_va = 0;
         context->endpoints[ep_index - 1].ep_trb_index = 0;
-        context->endpoints[ep_index - 1].ep_pipeline = NULL;
-        memory_paging_delete_va_for_frame(data_buffer_va, data_buffer_frame);
-        fa->release_frame(fa, data_buffer_frame);
         transfer->data = NULL;
         transfer->length = 0;
         transfer->complete = true;
@@ -943,9 +943,6 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         context->endpoints[ep_index - 1].ep_trb_fa = 0;
         context->endpoints[ep_index - 1].ep_trb_va = 0;
         context->endpoints[ep_index - 1].ep_trb_index = 0;
-        context->endpoints[ep_index - 1].ep_pipeline = NULL;
-        memory_paging_delete_va_for_frame(data_buffer_va, data_buffer_frame);
-        fa->release_frame(fa, data_buffer_frame);
         transfer->data = NULL;
         transfer->length = 0;
         transfer->complete = true;
@@ -957,6 +954,118 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
     transfer->complete = true;
     transfer->success = true;
 
+    return 0;
+}
+
+static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+    usb_device_t* device = transfer->device;
+    usb_device_request_t* request = transfer->request;
+
+    if(!device) {
+        PRINTLOG(USB, LOG_ERROR, "no device for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(!device->slot_id) {
+        PRINTLOG(USB, LOG_ERROR, "device has no slot id");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(!device->controller_device_context) {
+        PRINTLOG(USB, LOG_ERROR, "device has no controller device context");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_controller_context_t* context = device->controller_device_context;
+
+    uint32_t expected_packet_size = request->value & 0x1FFFF;
+    if(expected_packet_size == 0) {
+        PRINTLOG(USB, LOG_ERROR, "invalid expected packet size 0, real request value 0x%04x", request->value);
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    uint8_t ep_direction = (request->index >> 7) & 0x01;
+    uint8_t ep_index = 2 * (request->index & 0x0F) + ep_direction;
+
+    if(ep_index == 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint 0");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(ep_index > 31) {
+        PRINTLOG(USB, LOG_ERROR, "invalid endpoint index %d", ep_index);
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    pipeline_t* pipeline = (pipeline_t*)transfer->data;
+
+    if(!pipeline) {
+        PRINTLOG(USB, LOG_ERROR, "no pipeline for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    frame_allocator_t* fa = frame_get_allocator();
+
+    frame_allocation_type_t fa_type = FRAME_ALLOCATION_TYPE_BLOCK;
+
+    if(!metadata->addr64) {
+        fa_type |= FRAME_ALLOCATION_TYPE_UNDER_4G;
+    }
+
+    uint64_t max_packet_size_aligned = context->endpoints[ep_index - 1].max_packet_size_aligned;
+    uint64_t data_buffer_size = max_packet_size_aligned * metadata->cmd_ring_size;
+    uint64_t data_buffer_frame_count = (data_buffer_size + FRAME_SIZE - 1) / FRAME_SIZE;
+    frame_t* data_buffer_frame = NULL;
+    if(fa->allocate_frame_by_count(fa, data_buffer_frame_count, fa_type, &data_buffer_frame, NULL) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for ep%d data buffer", ep_index);
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    uint64_t data_buffer_fa = data_buffer_frame->frame_address;
+    uint64_t data_buffer_va = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_buffer_fa);
+    memory_paging_add_va_for_frame(data_buffer_va, data_buffer_frame,
+                                   MEMORY_PAGING_PAGE_TYPE_NOEXEC |
+                                   MEMORY_PAGING_PAGE_TYPE_WRITE_THROUGH |
+                                   MEMORY_PAGING_PAGE_TYPE_DISABLE_CACHE);
+    memory_memclean((void*)data_buffer_va, data_buffer_size);
+
+    PRINTLOG(USB, LOG_TRACE, "ep%d,%d data buffer fa 0x%llx va 0x%llx", ep_index, device->slot_id, data_buffer_fa, data_buffer_va);
+
+    usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)context->endpoints[ep_index - 1].ep_trb_va;
+
+    for(uint64_t i = 0; i < metadata->cmd_ring_size; i++) {
+        ep_trbs[i].parameter = data_buffer_fa + i * max_packet_size_aligned;
+        ep_trbs[i].status = expected_packet_size;
+        ep_trbs[i].control = ((uint64_t)USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5) | 1;
+    }
+
+    context->endpoints[ep_index - 1].ep_trb_index = 0;
+    context->endpoints[ep_index - 1].expected_packet_size = expected_packet_size;
+    context->endpoints[ep_index - 1].ep_pipeline = pipeline;
+    context->endpoints[ep_index - 1].data_buffer_fa = data_buffer_fa;
+    context->endpoints[ep_index - 1].data_buffer_va = data_buffer_va;
+    context->endpoints[ep_index - 1].data_buffer_frame = data_buffer_frame;
+
+
+    transfer->complete = true;
+    transfer->success = true;
     return 0;
 }
 
@@ -980,6 +1089,11 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     if(request_recipient == USB_REQUEST_RECIPIENT_ENDPOINT && request->request == USB_ENDPOINT_SETUP_ENDPOINT) {
         PRINTLOG(USB, LOG_TRACE, "SETUP_ENDPOINT request");
         return usb_xhci_setup_endpoint(usb_controller, transfer);
+    }
+
+    if(request_recipient == USB_REQUEST_RECIPIENT_ENDPOINT && request->request == USB_ENDPOINT_SETUP_PIPELINE) {
+        PRINTLOG(USB, LOG_TRACE, "SETUP_ENDPOINT_PIPELINE request");
+        return usb_xhci_setup_endpoint_pipeline(usb_controller, transfer);
     }
 
     uint64_t dbc_fa = metadata->dcbaa[device->slot_id];
@@ -1148,43 +1262,13 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 }
 
 static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
-    usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_device_t* device = transfer->device;
-    usb_device_controller_context_t* context = device->controller_device_context;
-    usb_endpoint_desc_t* endpoint = transfer->endpoint->desc;
+    UNUSED(usb_controller);
+    UNUSED(transfer);
 
-    uintptr_t data_ptr = (uintptr_t)transfer->data;
-    uintptr_t data_ptr_fa = 0;
+    NOTIMPLEMENTEDLOG(USB);
 
-    if(memory_paging_get_physical_address(data_ptr, &data_ptr_fa) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot get data buffer physical address 0x%p", transfer->data);
-        transfer->complete = true;
-        transfer->success = false;
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_TRACE, "XHCI bulk transfer for slot %d, ep 0x%02x, data 0x%p (fa 0x%llx) length 0x%x",
-             device->slot_id, endpoint->endpoint_address, transfer->data, data_ptr_fa, transfer->length);
-
-    uint8_t ep_direction = (endpoint->endpoint_address >> 7) & 0x01;
-    uint8_t ep_index = 2 * (endpoint->endpoint_address & 0x0F) + ep_direction;
-
-    uint64_t transfer_ring_va = context->endpoints[ep_index].ep_trb_va;
-
-    usb_xhci_trb_t* transfer_ring = (usb_xhci_trb_t*)transfer_ring_va;
-    uint32_t trb_index = context->endpoints[ep_index].ep_trb_index;
-
-    transfer_ring[trb_index].parameter = data_ptr_fa;
-    transfer_ring[trb_index].status = transfer->length;
-    transfer_ring[trb_index].control = ((uint64_t)USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5) | 1;
-    trb_index = (trb_index + 1) % metadata->cmd_ring_size;
-    context->endpoints[ep_index].ep_trb_index = trb_index;
-
-    // metadata->doorbells[device->slot_id].db = ep_index; // ring doorbell for the endpoint
-
-    return 0;
+    return -1;
 }
-
 
 int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     PRINTLOG(USB, LOG_INFO, "initializing XHCI controller");

@@ -257,6 +257,7 @@ typedef enum usb_request_interface_t {
 typedef enum usb_request_endpoint_t {
     USB_ENDPOINT_SETUP_ENDPOINT = 0x01,
     USB_ENDPOINT_CLEAR_ENDPOINT = 0x02,
+    USB_ENDPOINT_SETUP_PIPELINE = 0x03,
 } usb_request_endpoint_t;
 
 typedef enum usb_standart_feature_selector_t {
@@ -336,7 +337,6 @@ typedef struct usb_controller_t {
     int8_t (*probe_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*reset_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*control_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
-    int8_t (*isochronous_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*bulk_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*destroy_controller_device_context)(usb_controller_t* controller, usb_device_t* device);
 } usb_controller_t;

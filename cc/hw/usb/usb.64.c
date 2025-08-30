@@ -7,7 +7,6 @@
  */
 
 #include <driver/usb.h>
-#include <driver/usb_ehci.h>
 #include <driver/usb_xhci.h>
 #include <pci.h>
 #include <logging.h>
@@ -123,13 +122,7 @@ int8_t usb_init(void) {
         }
 
         if(pci_header->prog_if == USB_EHCI) {
-            usb_controller->controller_type = USB_CONTROLLER_TYPE_EHCI;
-
-            if(usb_ehci_init(usb_controller) != 0) {
-                PRINTLOG(USB, LOG_ERROR, "failed to initialize EHCI");
-
-                return -1;
-            }
+            PRINTLOG(USB, LOG_ERROR, "EHCI is not supported");
         } else if(pci_header->prog_if == USB_XHCI) {
             usb_controller->controller_type = USB_CONTROLLER_TYPE_XHCI;
 

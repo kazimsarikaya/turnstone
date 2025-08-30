@@ -244,16 +244,10 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     hashmap_put(usb_devices, (void*)usb_device->device_id, usb_device);
 
-    uint32_t requested_address = 0;
-
-    if(controller->controller_type == USB_CONTROLLER_TYPE_EHCI) {
-        requested_address = usb_device->device_id + 1;
-    }
-
     if(!usb_device_request(usb_device,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_ADDRESS,
-                           requested_address, 0,
+                           0, 0,
                            0, 0)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set device address");
         usb_device_free(usb_device);
@@ -559,31 +553,20 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         PRINTLOG(USB, LOG_DEBUG, "selected endpoint address: 0x%x 0x%x",
                  ep_address, ep_max_packet_size);
 
-        if(controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
-            pipeline_t* pipeline = pipeline_create(ep_max_packet_size * 1024);
-
-            if(!pipeline) {
-                PRINTLOG(USB, LOG_ERROR, "cannot create pipeline for endpoint 0x%x", ep_address);
-                usb_device_free(usb_device);
-
-                return -1;
-            }
-
-            if(!usb_device_request(usb_device,
-                                   USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
-                                   USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_ENDPOINT,
-                                   ep_max_packet_size, ep_address,
-                                   0, (uint8_t*)pipeline)) {
-                PRINTLOG(USB, LOG_ERROR, "cannot set endpoint 0x%x max packet size 0x%x",
-                         ep_address, ep_max_packet_size);
-                usb_device_free(usb_device);
-
-                return -1;
-            }
-
-            PRINTLOG(USB, LOG_DEBUG, "set endpoint 0x%x max packet size 0x%x",
+        if(!usb_device_request(usb_device,
+                               USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
+                               USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_ENDPOINT,
+                               ep_max_packet_size, ep_address,
+                               0, 0)) {
+            PRINTLOG(USB, LOG_ERROR, "cannot set endpoint 0x%x max packet size 0x%x",
                      ep_address, ep_max_packet_size);
+            usb_device_free(usb_device);
+
+            return -1;
         }
+
+        PRINTLOG(USB, LOG_DEBUG, "set endpoint 0x%x max packet size 0x%x",
+                 ep_address, ep_max_packet_size);
     }
 
     if(interface_class == USB_CLASS_HID) {

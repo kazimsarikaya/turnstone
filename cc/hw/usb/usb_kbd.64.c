@@ -36,7 +36,6 @@ typedef struct usb_kbd_report_t {
 
 typedef struct usb_driver_t {
     usb_device_t*           usb_device;
-    usb_transfer_callback_f transfer_callback;
     usb_pipeline_callback_f pipeline_callback;
     uint32_t                expected_packet_size;
     usb_kbd_report_t        old_usb_kbd_report;
@@ -432,31 +431,6 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
 
 }
 
-static int8_t usb_keyboard_transfer_cb(usb_controller_t* usb_controller, usb_transfer_t* usb_transfer) {
-    usb_driver_t* usb_keyboard = usb_transfer->device->driver;
-
-
-    if(usb_transfer->success) {
-        usb_keyboard_handle_keys(usb_keyboard);
-    } else {
-        PRINTLOG(USB, LOG_ERROR, "transfer failed");
-    }
-
-
-
-    memory_memclean(&usb_keyboard->new_usb_kbd_report, sizeof(usb_kbd_report_t));
-    usb_transfer->complete = false;
-    usb_transfer->success = false;
-
-    if(usb_controller->bulk_transfer(usb_controller, usb_transfer) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot start bulk transfer");
-
-        return -1;
-    }
-
-    return 0;
-}
-
 static int8_t usb_keyboard_pipeline_callback(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline) {
     UNUSED(endpoint);
     usb_driver_t* usb_keyboard = device->driver;
@@ -503,11 +477,32 @@ int8_t usb_keyboard_init(usb_device_t* usb_device) {
 
     usb_keyboard->usb_transfer->device = usb_device;
     usb_keyboard->usb_transfer->endpoint = usb_device->configurations[usb_device->selected_config]->endpoints[0];
-    usb_keyboard->usb_transfer->transfer_callback = usb_keyboard_transfer_cb;
 
     usb_keyboard->max_packet_size = usb_keyboard->usb_transfer->endpoint->desc->max_packet_size;
     usb_keyboard->expected_packet_size = sizeof(usb_kbd_report_t);
 
+    pipeline_t* pipeline = pipeline_create(usb_keyboard->expected_packet_size * 1024);
+
+    if(!pipeline) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
+        memory_free(usb_keyboard->usb_transfer);
+        memory_free(usb_keyboard);
+
+        return -1;
+    }
+
+    if(!usb_device_request(usb_device,
+                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
+                           USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_PIPELINE,
+                           usb_keyboard->expected_packet_size, usb_keyboard->usb_transfer->endpoint->desc->endpoint_address,
+                           0, pipeline)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
+        memory_free(usb_keyboard->usb_transfer);
+        memory_free(usb_keyboard);
+
+
+        return -1;
+    }
 
     if (!usb_device_request(usb_device,
                             USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_INTERFACE,
@@ -520,19 +515,7 @@ int8_t usb_keyboard_init(usb_device_t* usb_device) {
         return -1;
     }
 
-    if(usb_device->controller->controller_type == USB_CONTROLLER_TYPE_EHCI) {
-        usb_keyboard->usb_transfer->data = (uint8_t*)&usb_keyboard->new_usb_kbd_report;
-        usb_keyboard->usb_transfer->length = sizeof(usb_kbd_report_t);
-
-
-        if(usb_device->controller->bulk_transfer(usb_device->controller, usb_keyboard->usb_transfer) != 0) {
-            PRINTLOG(USB, LOG_ERROR, "cannot start bulk transfer");
-            memory_free(usb_keyboard->usb_transfer);
-            memory_free(usb_keyboard);
-
-            return -1;
-        }
-    } else if(usb_device->controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
+    if(usb_device->controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
         memory_free(usb_keyboard->usb_transfer);
         usb_keyboard->usb_transfer = NULL;
         usb_keyboard->pipeline_callback = usb_keyboard_pipeline_callback;

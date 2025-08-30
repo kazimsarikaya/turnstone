@@ -22,7 +22,6 @@ typedef struct usb_hub_status_t {
 
 typedef struct usb_driver_t {
     usb_device_t*           usb_device;
-    usb_transfer_callback_f transfer_callback;
     usb_pipeline_callback_f pipeline_callback;
     uint32_t                expected_packet_size;
     usb_hub_status_t        old_status;
@@ -276,7 +275,6 @@ int8_t usb_hub_init(usb_device_t* usb_device) {
     }
     usb_device->is_hub = true;
     hub_driver->usb_device = usb_device;
-    hub_driver->transfer_callback = NULL;
     hub_driver->pipeline_callback = usb_hub_pipeline_callback;
     hub_driver->expected_packet_size = sizeof(uint16_t);
 
