@@ -1262,12 +1262,149 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 }
 
 static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
-    UNUSED(usb_controller);
-    UNUSED(transfer);
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+    usb_device_t* device = transfer->device;
 
-    NOTIMPLEMENTEDLOG(USB);
+    usb_xhci_doorbell_t* doorbell = &metadata->doorbells[device->slot_id];
 
-    return -1;
+    usb_device_controller_context_t* context = device->controller_device_context;
+
+    if(!context) {
+        PRINTLOG(USB, LOG_ERROR, "device has no controller device context");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_endpoint_t* endpoint = transfer->endpoint;
+
+    if(!endpoint) {
+        PRINTLOG(USB, LOG_ERROR, "no endpoint for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    uint8_t ep_addr = endpoint->desc->endpoint_address;
+    PRINTLOG(USB, LOG_TRACE, "bulk transfer on endpoint 0x%02x", ep_addr);
+    uint8_t ep_direction = (ep_addr >> 7) & 0x01;
+    uint8_t ep_index = 2 * (ep_addr & 0x0F) + ep_direction;
+
+    if(ep_index == 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot do bulk transfer on endpoint 0");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(ep_index > 31) {
+        PRINTLOG(USB, LOG_ERROR, "invalid endpoint index %d", ep_index);
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    uint64_t transfer_ring_fa = context->endpoints[ep_index - 1].ep_trb_fa;
+    uint64_t transfer_ring_va = context->endpoints[ep_index - 1].ep_trb_va;
+
+    usb_xhci_trb_t* transfer_ring = (usb_xhci_trb_t*)transfer_ring_va;
+    uint32_t trb_index = context->endpoints[ep_index - 1].ep_trb_index;
+
+
+    uint32_t dir_bit = endpoint->in ? (1 << 16) : 0;
+
+    uint32_t length = transfer->length;
+    void* data = transfer->data;
+
+    PRINTLOG(USB, LOG_TRACE, "XHCI bulk transfer for slot %d, ep_index %d, transfer_ring=0x%llx trb_index %d",
+             device->slot_id, ep_index, transfer_ring_fa, trb_index);
+
+    if(length) {
+        uint32_t remaining_length = length;
+        uint32_t max_packet_size = endpoint->desc->max_packet_size;
+
+        if(max_packet_size == 0) {
+            PRINTLOG(USB, LOG_ERROR, "invalid max packet size 0");
+            transfer->complete = true;
+            transfer->success = false;
+            return -1;
+        }
+
+        if(endpoint->endpoint_companion) {
+            max_packet_size *= (endpoint->endpoint_companion->max_burst + 1);
+        }
+
+        if(max_packet_size > 0x1FFFF) {
+            PRINTLOG(USB, LOG_ERROR, "invalid max packet size %d", max_packet_size);
+            transfer->complete = true;
+            transfer->success = false;
+            return -1;
+        }
+
+        uint64_t data_fa = 0;
+        if(memory_paging_get_physical_address((uint64_t)data, &data_fa) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot get data buffer physical address 0x%p", data);
+
+            // Clean up the transfer ring TRB we just added
+            trb_index = (trb_index + metadata->cmd_ring_size - 1) % metadata->cmd_ring_size;
+            context->endpoints[ep_index - 1].ep_trb_index = trb_index;
+
+            memory_memclean(&transfer_ring[trb_index], sizeof(usb_xhci_trb_t));
+
+            transfer->complete = true;
+            transfer->success = false;
+            return -1;
+        }
+
+        while (remaining_length > 0) {
+            uint32_t curr_length = MIN(remaining_length, max_packet_size);
+
+            PRINTLOG(USB, LOG_TRACE, "data fa: 0x%llx length 0x%x", data_fa, curr_length);
+
+            transfer_ring[trb_index].parameter = data_fa;
+            transfer_ring[trb_index].status = curr_length;
+            transfer_ring[trb_index].control = dir_bit | (USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5)  | 1;
+
+
+            uint64_t cur_trb_fa = transfer_ring_fa + trb_index * sizeof(usb_xhci_trb_t);
+
+            usb_xhci_pool_event_init(cur_trb_fa, USB_XHCI_TRB_TYPE_ER_TRANSFER);
+
+            doorbell->db = ep_index; // DCI = ep_index
+
+            trb_index = (trb_index + 1) % metadata->cmd_ring_size;
+            context->endpoints[ep_index - 1].ep_trb_index = trb_index;
+
+            if(usb_xhci_pool_event() != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot get event for command");
+                transfer->complete = true;
+                transfer->success = false;
+                return -1;
+            }
+
+            int8_t cc = (usb_xhci_pool_event_result.out_trb.status >> 24) & 0xFF;
+
+            if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+                PRINTLOG(USB, LOG_ERROR, "bulk transfer failed, completion code: %d", cc);
+                transfer->complete = true;
+                transfer->success = false;
+                return -1;
+            }
+
+            data_fa += curr_length;
+            remaining_length -= curr_length;
+        }
+    } else {
+        PRINTLOG(USB, LOG_ERROR, "zero-length bulk transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    transfer->complete = true;
+    transfer->success = true;
+
+    return 0;
 }
 
 int8_t usb_xhci_init(usb_controller_t* usb_controller) {

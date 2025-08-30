@@ -15,13 +15,16 @@
 #include <disk.h>
 #include <driver/usb_mass_storage_disk.h>
 #include <hashmap.h>
+#include <utils.h>
 
 
 MODULE("turnstone.kernel.hw.usb.mass_storage");
 
 typedef struct usb_driver_t {
-    uint64_t                      id;
     usb_device_t *                device;
+    usb_pipeline_callback_f       pipeline_callback;
+    uint32_t                      expected_packet_size;
+    uint64_t                      id;
     uint8_t                       interface_number;
     uint8_t                       in_endpoint;
     uint8_t                       out_endpoint;
@@ -79,22 +82,17 @@ boolean_t usb_mass_storage_read_write(usb_driver_t* usb_driver, boolean_t read, 
     }
 
 
-    ut.is_async = true;
-    ut.need_future = true;
     ut.length = dtl;
     ut.data = data;
 
     int8_t res =  usb_driver->device->controller->bulk_transfer(usb_driver->device->controller, &ut);
 
-    if(res != 0 || ut.transfer_future == NULL) {
+    if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get inquiry data from mass storage device");
         lock_release(usb_driver->lock);
 
         return false;
     }
-
-    future_get_data_and_destroy(ut.transfer_future);
-
 
     return ut.complete && ut.success;
 }
@@ -117,21 +115,17 @@ boolean_t usb_mass_storage_send_cbw(usb_driver_t* usb_driver, uint32_t dtl, uint
 
     ut.device = usb_driver->device;
     ut.endpoint = usb_driver->device->configurations[usb_driver->device->selected_config]->endpoints[usb_driver->out_endpoint];
-    ut.is_async = true;
-    ut.need_future = true;
     ut.length = sizeof(usb_mass_storage_cbw_t);
     ut.data = (uint8_t*)&cbw;
 
     int8_t res =  usb_driver->device->controller->bulk_transfer(usb_driver->device->controller, &ut);
 
-    if(res != 0 || ut.transfer_future == NULL) {
+    if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send command to mass storage device");
         lock_release(usb_driver->lock);
 
         return false;
     }
-
-    future_get_data_and_destroy(ut.transfer_future);
 
     return ut.complete && ut.success;
 }
@@ -142,21 +136,17 @@ boolean_t usb_mass_storage_get_csw(usb_driver_t* usb_driver) {
 
     ut.device = usb_driver->device;
     ut.endpoint = usb_driver->device->configurations[usb_driver->device->selected_config]->endpoints[usb_driver->in_endpoint];
-    ut.is_async = true;
-    ut.need_future = true;
     ut.length = sizeof(usb_mass_storage_csw_t);
     ut.data = (uint8_t*)&csw;
 
     int8_t res =  usb_driver->device->controller->bulk_transfer(usb_driver->device->controller, &ut);
 
-    if(res != 0 || ut.transfer_future == NULL) {
+    if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device");
         lock_release(usb_driver->lock);
 
         return false;
     }
-
-    future_get_data_and_destroy(ut.transfer_future);
 
     if(!ut.complete || !ut.success) {
         PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device");
@@ -190,6 +180,61 @@ boolean_t usb_mass_storage_get_csw(usb_driver_t* usb_driver) {
     lock_release(usb_driver->lock);
 
     return true;
+}
+
+static int8_t usb_mass_storage_sense(usb_driver_t* usb_ms, scsi_sense_data_t* sense) {
+    // send request sense
+    scsi_command_request_sense_t request_sense = {0};
+    request_sense.opcode = SCSI_COMMAND_OPCODE_REQUEST_SENSE;
+    request_sense.allocation_length = sizeof(scsi_sense_data_t);
+    request_sense.control = 0;
+
+    if (!usb_mass_storage_send_cbw(usb_ms, sizeof(scsi_sense_data_t), USB_MASS_STORAGE_CBW_FLAG_DATA_IN, 0, sizeof(scsi_command_request_sense_t), (uint8_t*)&request_sense)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot send request sense command to mass storage device");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_read_write(usb_ms, true, sizeof(scsi_sense_data_t), (uint8_t*)sense)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read request sense data from mass storage device");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(usb_ms)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, request sense failed");
+
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_TRACE, "sense response_code: 0x%x sense key: 0x%x information: 0x%04llx asc: 0x%x ascq: 0x%x additional_length: 0x%x",
+             sense->response_code,
+             sense->sense_key,
+             BYTE_SWAP32((uint64_t)sense->information),
+             sense->asc,
+             sense->ascq,
+             sense->additional_length);
+
+    return 0;
+}
+
+static int8_t usb_mass_storage_test_unit_ready(usb_driver_t* usb_ms) {
+    scsi_command_test_unit_ready_t test_unit_ready = {0};
+    test_unit_ready.opcode = SCSI_COMMAND_OPCODE_TEST_UNIT_READY;
+
+    if (!usb_mass_storage_send_cbw(usb_ms, 0, USB_MASS_STORAGE_CBW_FLAG_NO_DATA, 0, sizeof(scsi_command_test_unit_ready_t), (uint8_t*)&test_unit_ready)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot send test unit ready command to mass storage device");
+
+        return -1;
+    }
+
+    if(!usb_mass_storage_get_csw(usb_ms)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, test unit ready failed");
+
+        return -1;
+    }
+
+    return 0;
 }
 
 
@@ -249,7 +294,7 @@ int8_t usb_mass_storage_init(usb_device_t * usb_device)
 
         if (!usb_device_request(usb_device,
                                 USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_INTERFACE,
-                                USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_MASS_STORAGE_REQUEST_GET_MAX_LUN,
+                                USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_MASS_STORAGE_REQUEST_GET_MAX_LUN,
                                 0, usb_ms->interface_number, 1, &usb_ms->max_lun)) {
             PRINTLOG(USB, LOG_ERROR, "cannot get max lun of mass storage device");
         } else {
@@ -314,24 +359,37 @@ int8_t usb_mass_storage_init(usb_device_t * usb_device)
              usb_ms->inquiry_data->additional_length,
              usb_ms->inquiry_data->protect);
 
+    if(usb_mass_storage_test_unit_ready(usb_ms) != 0) {
+        PRINTLOG(USB, LOG_WARNING, "mass storage device not ready");
 
-    scsi_command_test_unit_ready_t test_unit_ready = {0};
-    test_unit_ready.opcode = SCSI_COMMAND_OPCODE_TEST_UNIT_READY;
+        scsi_sense_data_t sense = {0};
 
-    if (!usb_mass_storage_send_cbw(usb_ms, 0, USB_MASS_STORAGE_CBW_FLAG_NO_DATA, 0, sizeof(scsi_command_test_unit_ready_t), (uint8_t*)&test_unit_ready)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot send test unit ready command to mass storage device");
-        memory_free(usb_ms->inquiry_data);
-        memory_free(usb_ms);
+        if(usb_mass_storage_sense(usb_ms, &sense) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot get sense data from mass storage device");
+            memory_free(usb_ms->inquiry_data);
+            memory_free(usb_ms);
 
-        return -1;
-    }
+            return -1;
+        }
 
-    if(!usb_mass_storage_get_csw(usb_ms)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot get csw from mass storage device, test unit ready failed");
-        memory_free(usb_ms->inquiry_data);
-        memory_free(usb_ms);
+        if(sense.sense_key == 0 && sense.asc == 0x29 && sense.ascq == 0) {
+            PRINTLOG(USB, LOG_ERROR, "power on, reset or bus device reset occurred");
 
-        return -1;
+            // test unit ready again
+            if(usb_mass_storage_test_unit_ready(usb_ms) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "mass storage device not ready after power on, reset or bus device reset occurred");
+                memory_free(usb_ms->inquiry_data);
+                memory_free(usb_ms);
+
+                return -1;
+            }
+        } else {
+            PRINTLOG(USB, LOG_ERROR, "unhandled sense key: 0x%x asc: 0x%x ascq: 0x%x", sense.sense_key, sense.asc, sense.ascq);
+            memory_free(usb_ms->inquiry_data);
+            memory_free(usb_ms);
+
+            return -1;
+        }
     }
 
     scsi_command_read_capacity_16_t read_capacity_16 = {0};

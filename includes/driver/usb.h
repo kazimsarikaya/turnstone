@@ -311,19 +311,14 @@ typedef int8_t (*usb_transfer_callback_f)(usb_controller_t* controller, usb_tran
 typedef int8_t (*usb_pipeline_callback_f)(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline);
 
 typedef struct usb_transfer_t {
-    usb_device_t*           device;
-    usb_endpoint_t*         endpoint;
-    usb_device_request_t*   request;
-    uint8_t*                data;
-    uint32_t                length;
-    boolean_t               is_async;
-    lock_t*                 async_lock;
-    boolean_t               complete;
-    boolean_t               success;
-    uint64_t                error_count;
-    boolean_t               need_future;
-    future_t*               transfer_future;
-    usb_transfer_callback_f transfer_callback;
+    usb_device_t*         device;
+    usb_endpoint_t*       endpoint;
+    usb_device_request_t* request;
+    uint8_t*              data;
+    uint32_t              length;
+    boolean_t             complete;
+    boolean_t             success;
+    uint64_t              error_count;
 } usb_transfer_t;
 
 typedef struct usb_controller_t {
