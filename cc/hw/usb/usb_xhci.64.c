@@ -111,21 +111,24 @@ static usb_xhci_pool_event_result_t usb_xhci_pool_event_result = {0, 0, {0}, fal
 
 static void usb_xhci_pool_event_init(uint64_t trb_fa, usb_xhci_trb_type_t wanted_type) {
     PRINTLOG(USB, LOG_DEBUG, "init pool event wait for trb fa 0x%llx type %d", trb_fa, wanted_type);
+    memory_memset(&usb_xhci_pool_event_result.out_trb, 0, sizeof(usb_xhci_trb_t));
     usb_xhci_pool_event_result.trb_fa = trb_fa;
     usb_xhci_pool_event_result.wanted_type = wanted_type;
     usb_xhci_pool_event_result.found = false;
+
+    asm volatile ("" ::: "memory");
+
     usb_xhci_pool_event_result.search = true;
-    memory_memset(&usb_xhci_pool_event_result.out_trb, 0, sizeof(usb_xhci_trb_t));
 }
 
 static int8_t usb_xhci_pool_event (void) {
-    uint64_t timeout = 1000000;
+    uint64_t timeout = 1000;
     while(timeout--) {
         if(usb_xhci_pool_event_result.found) {
             return 0;
         }
 
-        time_timer_msleep(100);
+        time_timer_msleep(5);
     }
 
     PRINTLOG(USB, LOG_ERROR, "cannot find event for trb 0x%llx of type %d",
@@ -212,6 +215,9 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
                event_trb->parameter == usb_xhci_pool_event_result.trb_fa) {
                 usb_xhci_pool_event_result.search = false;
                 usb_xhci_pool_event_result.out_trb = *event_trb;
+
+                asm volatile ("" ::: "memory");
+
                 usb_xhci_pool_event_result.found = true;
             }
 
