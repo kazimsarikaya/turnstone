@@ -187,6 +187,10 @@ semaphore_t* semaphore_create_with_heap_and_check_initial_count(memory_heap_t* h
 }
 
 int8_t semaphore_destroy(semaphore_t* semaphore){
+    if(semaphore == NULL) {
+        return -1;
+    }
+
     lock_destroy(semaphore->lock);
 
     return memory_free_ext(semaphore->heap, semaphore);
