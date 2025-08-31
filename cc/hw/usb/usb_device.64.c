@@ -245,7 +245,7 @@ static void usb_device_free(usb_device_t* usb_device) {
         memory_free(usb_device->configurations);
     }
 
-    if(usb_device->controller && usb_device->controller_device_context) {
+    if(usb_device->controller && usb_device->controller_context) {
         if(usb_device->controller->destroy_controller_device_context) {
             usb_device->controller->destroy_controller_device_context(usb_device->controller, usb_device);
         }
@@ -972,6 +972,8 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
             return -1;
         }
 
+        interface->interface_id = i;
+
         int32_t interface_number = interface->desc->interface_number;
         int32_t interface_class = interface->desc->interface_class;
         int32_t interface_subclass = interface->desc->interface_subclass;
@@ -979,7 +981,8 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         uint32_t num_endpoints = interface->num_endpoints;
 
 
-        PRINTLOG(USB, LOG_DEBUG, "interface 0x%x class: 0x%x subclass: 0x%x protocol: 0x%x endpoint count 0x%x",
+        PRINTLOG(USB, LOG_DEBUG, "interface 0%x (0x%x) class: 0x%x subclass: 0x%x protocol: 0x%x endpoint count 0x%x",
+                 i,
                  interface_number,
                  interface_class,
                  interface_subclass,

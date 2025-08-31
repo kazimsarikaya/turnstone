@@ -290,7 +290,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
 
     usb_ms->device = usb_device;
     usb_ms->interface = interface;
-    usb_device->driver = usb_ms;
+    interface->driver = usb_ms;
 
     usb_ms->lock = lock_create();
 

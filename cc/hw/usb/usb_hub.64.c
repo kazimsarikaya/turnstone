@@ -147,9 +147,9 @@ static int8_t usb_hub_get_status(usb_device_t* usb_device, uint8_t port, usb_hub
     return 0;
 }
 
-static int8_t usb_hub_pipeline_callback(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline) {
+static int8_t usb_hub_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
     UNUSED(endpoint);
-    usb_driver_t* usb_driver = device->driver;
+    usb_driver_t* usb_driver = (usb_driver_t*)driver;
 
     if(!usb_driver) {
         PRINTLOG(USB, LOG_ERROR, "invalid hub driver");
@@ -288,7 +288,7 @@ int8_t usb_hub_init(usb_device_t* usb_device, usb_interface_t* interface) {
     hub_driver->pipeline_callback = usb_hub_pipeline_callback;
     hub_driver->expected_packet_size = sizeof(uint16_t);
 
-    usb_device->driver = hub_driver;
+    interface->driver = hub_driver;
 
     if(usb_hub_get_descriptor(usb_device) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get hub descriptor");

@@ -432,13 +432,13 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
 
 }
 
-static int8_t usb_keyboard_pipeline_callback(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline) {
+static int8_t usb_keyboard_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
     UNUSED(endpoint);
-    usb_driver_t* usb_keyboard = device->driver;
+    usb_driver_t* usb_keyboard = (usb_driver_t*)driver;
 
     uint64_t rc = pipeline_read(pipeline,
                                 sizeof(usb_kbd_report_t),
-                                (uint8_t*)&usb_keyboard->new_usb_kbd_report);
+                                (uint8_t*)&driver->new_usb_kbd_report);
 
     if(rc == sizeof(usb_kbd_report_t)) {
         usb_keyboard_handle_keys(usb_keyboard);
@@ -466,7 +466,7 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
 
     usb_keyboard->usb_device = usb_device;
     usb_keyboard->interface = interface;
-    usb_device->driver = usb_keyboard;
+    interface->driver = usb_keyboard;
 
     usb_keyboard->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
 

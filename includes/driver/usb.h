@@ -293,17 +293,16 @@ typedef struct usb_device_request_t {
     uint16_t length;
 }__attribute__((packed)) usb_device_request_t;
 
-typedef struct usb_device_t     usb_device_t;
-typedef struct usb_driver_t     usb_driver_t;
-typedef struct usb_config_t     usb_config_t;
-typedef struct usb_controller_t usb_controller_t;
-typedef struct usb_transfer_t   usb_transfer_t;
-typedef struct pipeline_t       pipeline_t;
-typedef struct usb_endpoint_t   usb_endpoint_t;
+typedef struct usb_device_t                    usb_device_t;
+typedef struct usb_driver_t                    usb_driver_t;
+typedef struct usb_config_t                    usb_config_t;
+typedef struct usb_controller_t                usb_controller_t;
+typedef struct usb_transfer_t                  usb_transfer_t;
+typedef struct pipeline_t                      pipeline_t;
+typedef struct usb_endpoint_t                  usb_endpoint_t;
+typedef struct usb_device_controller_context_t usb_device_controller_context_t;
 
-typedef int8_t (*usb_transfer_callback_f)(usb_controller_t* controller, usb_transfer_t* transfer);
-
-typedef int8_t (*usb_pipeline_callback_f)(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline);
+typedef int8_t (*usb_pipeline_callback_f)(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline);
 
 typedef struct usb_transfer_t {
     usb_driver_t*         driver;
@@ -343,12 +342,14 @@ typedef struct usb_endpoint_t {
 } usb_endpoint_t;
 
 typedef struct usb_interface_t {
+    uint32_t                  interface_id;
     usb_interface_desc_t*     desc;
     uint32_t                  num_endpoints;
     usb_endpoint_t**          endpoints;
     uint32_t                  num_cs_interfaces;
     usb_cs_interface_desc_t** cs_interfaces;
     usb_hid_desc_t*           hid;
+    usb_driver_t*             driver;
 } usb_interface_t;
 
 typedef struct usb_config_t {
@@ -359,13 +360,10 @@ typedef struct usb_config_t {
     usb_hub_desc_t*   hub;
 } usb_config_t;
 
-typedef struct usb_device_controller_context_t usb_device_controller_context_t;
-
 typedef struct usb_device_t {
     uint64_t                         device_id;
     usb_device_t*                    parent;
     usb_controller_t*                controller;
-    usb_device_controller_context_t* controller_device_context;
     uint32_t                         port;
     uint32_t                         speed;
     uint32_t                         address;
@@ -377,10 +375,10 @@ typedef struct usb_device_t {
     char_t*                          vendor;
     char_t*                          product;
     char_t*                          serial;
-    usb_driver_t*                    driver;
     boolean_t                        is_hub;
     uint8_t                          hub_num_ports;
     uint32_t                         hub_status_endpoint_address;
+    usb_device_controller_context_t* controller_context;
 } usb_device_t;
 
 typedef enum usb_class_t {

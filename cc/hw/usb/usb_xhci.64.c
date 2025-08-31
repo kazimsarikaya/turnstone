@@ -76,11 +76,11 @@ typedef struct usb_driver_t {
 hashmap_t* usb_xhci_interrupt_controller_mapping = NULL;
 
 static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* controller, usb_device_t* device) {
-    if(!controller || !device || !device->controller_device_context) {
+    if(!controller || !device || !device->controller_context) {
         return -1;
     }
 
-    usb_device_controller_context_t* context = device->controller_device_context;
+    usb_device_controller_context_t* context = device->controller_context;
 
     PRINTLOG(USB, LOG_DEBUG, "destroying device controller context 0x%p for device 0x%p", context, device);
 
@@ -118,7 +118,7 @@ static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* contr
 
     memory_free(context);
 
-    device->controller_device_context = NULL;
+    device->controller_context = NULL;
 
     return 0;
 }
@@ -189,18 +189,57 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
         return;
     }
 
-    if(!device->driver) {
+    if(!device->configurations) {
+        // PRINTLOG(USB, LOG_WARNING, "no configurations for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
+        return;
+    }
+
+    uint32_t ep_id_at_interface = (ep_id >> 1) | ((ep_id & 1) << 7);
+
+    if(ep_id_at_interface == 0x80) {
+        ep_id_at_interface = 0; // control endpoint
+    }
+
+    usb_config_t* config = device->configurations[device->selected_config];
+
+    if(!config) {
+        // PRINTLOG(USB, LOG_WARNING, "no config for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
+        return;
+    }
+
+    usb_driver_t* driver = NULL; // TODO: find driver from trb and device
+
+    for(uint32_t i = 0; i < config->num_interfaces; i++) {
+        usb_interface_t* interface = config->interfaces[i];
+
+        if(!interface || !interface->driver) {
+            continue;
+        }
+
+        for(uint32_t j = 0; j < interface->num_endpoints; j++) {
+            usb_endpoint_t* ep = interface->endpoints[j];
+
+            if(!ep || !ep->desc) {
+                continue;
+            }
+
+            if(ep->desc->endpoint_address == ep_id_at_interface) {
+                driver = interface->driver;
+                break;
+            }
+        }
+
+        if(driver) {
+            break;
+        }
+    }
+
+    if(!driver) {
         // PRINTLOG(USB, LOG_TRACE, "no driver for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
         return;
     }
 
-    if(!device->controller_device_context) {
-        // PRINTLOG(USB, LOG_TRACE, "no controller device context for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
-        return;
-    }
-
-    usb_device_controller_context_t* context = device->controller_device_context;
-    usb_driver_t* driver = device->driver;
+    usb_device_controller_context_t* context = device->controller_context;
     pipeline_t* ep_pipeline = context->endpoints[ep_id - 1].ep_pipeline;
     uint64_t ep_trb_fa = context->endpoints[ep_id - 1].ep_trb_fa;
     uint64_t ep_trb_va = context->endpoints[ep_id - 1].ep_trb_va;
@@ -237,7 +276,7 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
         }
 
         pipeline_write(ep_pipeline, data_len, data);
-        driver->pipeline_callback(device, ep_id, ep_pipeline);
+        driver->pipeline_callback(driver, ep_id, ep_pipeline);
     }
 }
 
@@ -500,7 +539,7 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         return -1;
     }
 
-    if(device->controller_device_context) {
+    if(device->controller_context) {
         PRINTLOG(USB, LOG_ERROR, "device already has controller device context");
         transfer->complete = true;
         transfer->success = false;
@@ -508,7 +547,7 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
     }
 
     usb_device_controller_context_t* context =  memory_malloc(sizeof(usb_device_controller_context_t));
-    device->controller_device_context = context;
+    device->controller_context = context;
 
     if(!context) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for device controller context");
@@ -532,8 +571,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
 
     if(fa->allocate_frame_by_count(fa, ep0_frame_count, fa_type, &ep_ctrl_frame, NULL) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate frame for ep0 trb");
-        memory_free(device->controller_device_context);
-        device->controller_device_context = NULL;
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -580,8 +619,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         PRINTLOG(USB, LOG_ERROR, "cannot get event for command");
         memory_paging_delete_va_for_frame(ep0_trb_va, ep_ctrl_frame);
         fa->release_frame(fa, ep_ctrl_frame);
-        memory_free(device->controller_device_context);
-        device->controller_device_context = NULL;
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -593,8 +632,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         PRINTLOG(USB, LOG_ERROR, "cannot enable slot, completion code: %d", cc);
         memory_paging_delete_va_for_frame(ep0_trb_va, ep_ctrl_frame);
         fa->release_frame(fa, ep_ctrl_frame);
-        memory_free(device->controller_device_context);
-        device->controller_device_context = NULL;
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -640,8 +679,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         fa->release_frame(fa, ep_ctrl_frame);
         hashmap_delete(metadata->slot_id_device_mapping, (void*)(uintptr_t)device->slot_id);
         device->slot_id = 0;
-        memory_free(device->controller_device_context);
-        device->controller_device_context = NULL;
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -662,8 +701,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         fa->release_frame(fa, ep_ctrl_frame);
         hashmap_delete(metadata->slot_id_device_mapping, (void*)(uintptr_t)device->slot_id);
         device->slot_id = 0;
-        memory_free(device->controller_device_context);
-        device->controller_device_context = NULL;
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -677,8 +716,8 @@ static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, us
         fa->release_frame(fa, ep_ctrl_frame);
         hashmap_delete(metadata->slot_id_device_mapping, (void*)(uintptr_t)device->slot_id);
         device->slot_id = 0;
-        memory_free(device->controller_device_context);
-        device->controller_device_context = NULL;
+        memory_free(device->controller_context);
+        device->controller_context = NULL;
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -707,6 +746,7 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
     }
 
     usb_device_t* device = transfer->driver->usb_device;
+    usb_driver_t* driver = transfer->driver;
     usb_device_request_t* request = transfer->request;
 
     if(!device) {
@@ -718,6 +758,13 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
 
     if(!device->slot_id) {
         PRINTLOG(USB, LOG_ERROR, "device has no slot id");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(!driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -757,14 +804,14 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
     }
 
     if(ictx[1] & 2) { // endpoint 0 context
-        if(!device->controller_device_context) {
+        if(!device->controller_context) {
             PRINTLOG(USB, LOG_ERROR, "device has no controller device context");
             transfer->complete = true;
             transfer->success = false;
             return -1;
         }
 
-        usb_device_controller_context_t* context = device->controller_device_context;
+        usb_device_controller_context_t* context = device->controller_context;
 
         uint32_t* ep0_ctx = &ictx[16]; // + 2 * metadata->context_size / 8;
         ep0_ctx[0] = 0;
@@ -851,14 +898,14 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         return -1;
     }
 
-    if(!device->controller_device_context) {
+    if(!device->controller_context) {
         PRINTLOG(USB, LOG_ERROR, "device has no controller device context");
         transfer->complete = true;
         transfer->success = false;
         return -1;
     }
 
-    usb_device_controller_context_t* context = device->controller_device_context;
+    usb_device_controller_context_t* context = device->controller_context;
 
     uint32_t max_packet_size = request->value & 0x1FFFF;
     if(max_packet_size == 0) {
@@ -1103,10 +1150,18 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
     }
 
     usb_device_t* device = transfer->driver->usb_device;
+    usb_driver_t* driver = transfer->driver;
     usb_device_request_t* request = transfer->request;
 
     if(!device) {
         PRINTLOG(USB, LOG_ERROR, "no device for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    if(!driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -1119,14 +1174,14 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
         return -1;
     }
 
-    if(!device->controller_device_context) {
+    if(!device->controller_context) {
         PRINTLOG(USB, LOG_ERROR, "device has no controller device context");
         transfer->complete = true;
         transfer->success = false;
         return -1;
     }
 
-    usb_device_controller_context_t* context = device->controller_device_context;
+    usb_device_controller_context_t* context = device->controller_context;
 
     uint32_t expected_packet_size = request->value & 0x1FFFF;
     if(expected_packet_size == 0) {
@@ -1231,6 +1286,15 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
         return -1;
     }
 
+    usb_driver_t* driver = transfer->driver;
+
+    if(!driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
     usb_device_request_t* request = transfer->request;
 
     usb_request_recipient_t request_recipient = (usb_request_recipient_t)(request->type & USB_REQUEST_RECIPIENT_MASK);
@@ -1257,7 +1321,7 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 
     uint64_t dbc_fa = metadata->dcbaa[device->slot_id];
 
-    usb_device_controller_context_t* context = device->controller_device_context;
+    usb_device_controller_context_t* context = device->controller_context;
 
     uint64_t transfer_ring_fa = context->endpoints[0].ep_trb_fa;
     uint64_t transfer_ring_va = context->endpoints[0].ep_trb_va;
@@ -1354,7 +1418,7 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
         uint8_t ep_direction = (ep_index >> 7) & 0x01;
         ep_index = 2 * (ep_index & 0x0F) + ep_direction;
 
-        usb_device_controller_context_t* hub_dc_ctx = device->controller_device_context;
+        usb_device_controller_context_t* hub_dc_ctx = device->controller_context;
 
         if(!hub_dc_ctx) {
             PRINTLOG(USB, LOG_ERROR, "cannot get hub controller device context");
@@ -1434,7 +1498,7 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
 
     usb_xhci_doorbell_t* doorbell = &metadata->doorbells[device->slot_id];
 
-    usb_device_controller_context_t* context = device->controller_device_context;
+    usb_device_controller_context_t* context = device->controller_context;
 
     if(!context) {
         PRINTLOG(USB, LOG_ERROR, "device has no controller device context");

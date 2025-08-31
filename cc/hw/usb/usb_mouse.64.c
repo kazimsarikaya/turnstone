@@ -66,9 +66,9 @@ static void usb_mouse_handle_report(usb_driver_t* usb_mouse) {
     return;
 }
 
-static int8_t usb_mouse_pipeline_callback(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline) {
+static int8_t usb_mouse_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
     UNUSED(endpoint);
-    usb_driver_t* usb_mouse = device->driver;
+    usb_driver_t* usb_mouse = (usb_driver_t*)driver;
 
     uint64_t rc = pipeline_read(pipeline,
                                 sizeof(usb_mouse_report_t),
@@ -119,9 +119,9 @@ static void usb_qemu_tablet_handle_report(usb_driver_t* usb_qemu_tablet) {
     memory_memcopy(&usb_qemu_tablet->new_usb_qemu_tablet_report, &usb_qemu_tablet->old_usb_qemu_tablet_report, sizeof(usb_qemu_tablet_report_t));
 }
 
-static int8_t usb_qemu_tablet_pipeline_callback(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline) {
+static int8_t usb_qemu_tablet_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
     UNUSED(endpoint);
-    usb_driver_t* usb_qemu_tablet = device->driver;
+    usb_driver_t* usb_qemu_tablet = (usb_driver_t*)driver;
 
     uint64_t rc = pipeline_read(pipeline,
                                 sizeof(usb_qemu_tablet_report_t),
@@ -151,7 +151,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
     }
 
     usb_mouse->usb_device = usb_device;
-    usb_device->driver = usb_mouse;
+    interface->driver = usb_mouse;
 
     usb_mouse->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
 
@@ -235,7 +235,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
 
     usb_qemu_tablet->usb_device = usb_device;
     usb_qemu_tablet->interface = interface;
-    usb_device->driver = usb_qemu_tablet;
+    interface->driver = usb_qemu_tablet;
 
     usb_qemu_tablet->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
 
