@@ -368,6 +368,14 @@ typedef struct usb_xhci_doorbell_t {
 
 _Static_assert(sizeof(usb_xhci_doorbell_t) == 4, "usb_xhci_doorbell_t is not 4 bytes");
 
+typedef struct usb_xhci_stream_context_t {
+    volatile uint64_t dequeu_address; ///< Dequeue Pointe
+    volatile uint32_t stopped_edtla; ///< Stopped Endpoint Dequeue Logical Address
+    volatile uint32_t reserved;
+} __attribute__((packed)) usb_xhci_stream_context_t;
+
+_Static_assert(sizeof(usb_xhci_stream_context_t) == 16, "usb_xhci_stream_context_t is not 16 bytes");
+
 typedef enum usb_xhci_trb_type_t {
     USB_XHCI_TRB_TYPE_TRB_RESERVED = 0,
     USB_XHCI_TRB_TYPE_TR_NORMAL,
@@ -447,6 +455,8 @@ typedef enum usb_xhci_trb_ccode_t {
 #define USB_XHCI_MAX_ENDPOINTS 31
 
 int8_t usb_xhci_init(usb_controller_t* usb_controller);
+
+uint32_t usb_xhci_get_max_psa_size(usb_controller_t* usb_controller);
 
 #ifdef __cplusplus
 }

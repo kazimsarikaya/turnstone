@@ -319,6 +319,8 @@ typedef struct usb_transfer_t {
     boolean_t             complete;
     boolean_t             success;
     uint64_t              error_count;
+    uint32_t              stream_id;
+    boolean_t             is_async;
 } usb_transfer_t;
 
 typedef struct usb_controller_t {

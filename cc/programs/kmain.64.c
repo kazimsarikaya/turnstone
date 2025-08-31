@@ -39,7 +39,7 @@
 #include <device/hpet.h>
 #include <windowmanager.h>
 #include <driver/usb.h>
-#include <driver/usb_mass_storage_disk.h>
+#include <driver/usb_ms.h>
 #include <stdbufs.h>
 #include <backtrace.h>
 #include <debug.h>

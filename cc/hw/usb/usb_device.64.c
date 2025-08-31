@@ -7,6 +7,7 @@
  */
 
 #include <driver/usb.h>
+#include <driver/usb_xhci.h>
 #include <hashmap.h>
 #include <logging.h>
 #include <time/timer.h>
@@ -483,6 +484,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                 PRINTLOG(USB, LOG_TRACE, "cs interface descriptor for endpoint index 0x%x",
                          config->endpoints[ep_idx - 1]->desc->endpoint_address);
                 config->endpoints[ep_idx - 1]->cs_interface = (usb_cs_interface_desc_t*)(config->config_buffer + idx);
+                PRINTLOG(USB, LOG_TRACE, "cs interface number 0x%x", config->endpoints[ep_idx - 1]->cs_interface->interface_number);
             } else if(type == USB_ENDPOINT_COMPANION_DESC_TYPE) {
                 if(ep_idx == 0) {
                     PRINTLOG(USB, LOG_ERROR, "no endpoint for endpoint companion descriptor");
@@ -553,11 +555,17 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         PRINTLOG(USB, LOG_DEBUG, "selected endpoint address: 0x%x 0x%x",
                  ep_address, ep_max_packet_size);
 
+        uint32_t stream_count = 0;
+
+        if(interface_protocol == USB_PROTOCOL_MASS_STORAGE_UAS) {
+            stream_count = 2; // usb_xhci_get_max_psa_size(controller) / sizeof(usb_xhci_stream_context_t);
+        }
+
         if(!usb_device_request(usb_device,
                                USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                                USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_ENDPOINT,
                                ep_max_packet_size, ep_address,
-                               0, 0)) {
+                               stream_count, 0)) {
             PRINTLOG(USB, LOG_ERROR, "cannot set endpoint 0x%x max packet size 0x%x",
                      ep_address, ep_max_packet_size);
             usb_device_free(usb_device);
@@ -617,6 +625,18 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
                     return -1;
                 }
+            } else if(interface_protocol == USB_PROTOCOL_MASS_STORAGE_UAS) {
+                if(usb_mass_storage_init(usb_device) != 0) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot initialize mass storage uas");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+            } else {
+                PRINTLOG(USB, LOG_ERROR, "unknown mass storage protocol 0x%x", interface_protocol);
+                usb_device_free(usb_device);
+
+                return -1;
             }
         }
     }
