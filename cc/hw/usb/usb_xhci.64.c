@@ -133,7 +133,7 @@ typedef struct usb_xhci_pool_event_result_t {
 static usb_xhci_pool_event_result_t usb_xhci_pool_event_result = {0, 0, {0}, false, false};
 
 static void usb_xhci_pool_event_init(uint64_t trb_fa, usb_xhci_trb_type_t wanted_type) {
-    PRINTLOG(USB, LOG_DEBUG, "init pool event wait for trb fa 0x%llx type %d", trb_fa, wanted_type);
+    PRINTLOG(USB, LOG_TRACE, "init pool event wait for trb fa 0x%llx type %d", trb_fa, wanted_type);
     memory_memset(&usb_xhci_pool_event_result.out_trb, 0, sizeof(usb_xhci_trb_t));
     usb_xhci_pool_event_result.trb_fa = trb_fa;
     usb_xhci_pool_event_result.wanted_type = wanted_type;
@@ -165,6 +165,143 @@ void video_text_print(const char_t* str);
 
 static boolean_t usb_xhci_interrupter_task_initialized = false;
 
+static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata_t* metadata,
+                                                         usb_xhci_trb_t*            event_trb) {
+    uint32_t cc = (event_trb->status >> 24) & 0xFF;
+    uint32_t ep_id = (event_trb->control >> 16) & 0x1F;
+    uint32_t slot_id = (event_trb->control >> 24) & 0xFF;
+
+    if(slot_id == 0) {
+        PRINTLOG(USB, LOG_WARNING, "invalid slot id 0 for ep id %d", ep_id);
+        return;
+    }
+
+    if(ep_id == 0 || ep_id > USB_XHCI_MAX_ENDPOINTS) {
+        PRINTLOG(USB, LOG_WARNING, "invalid ep id %d for slot id %d", ep_id, slot_id);
+        return;
+    }
+
+    const usb_device_t* device = hashmap_get(metadata->slot_id_device_mapping, (void*)(uint64_t)slot_id);
+
+    if(!device) {
+        PRINTLOG(USB, LOG_TRACE, "no device for slot id %d ep id %d", slot_id, ep_id);
+        return;
+    }
+
+    if(!device->driver) {
+        PRINTLOG(USB, LOG_TRACE, "no driver for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
+        return;
+    }
+
+    if(!device->controller_device_context) {
+        PRINTLOG(USB, LOG_TRACE, "no controller device context for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
+        return;
+    }
+
+    usb_device_controller_context_t* context = device->controller_device_context;
+    usb_driver_t* driver = device->driver;
+    pipeline_t* ep_pipeline = context->endpoints[ep_id - 1].ep_pipeline;
+    uint64_t ep_trb_fa = context->endpoints[ep_id - 1].ep_trb_fa;
+    uint64_t ep_trb_va = context->endpoints[ep_id - 1].ep_trb_va;
+    uint64_t expected_packet_size = context->endpoints[ep_id - 1].expected_packet_size;
+    uint64_t ep_trb_index = (event_trb->parameter - ep_trb_fa) / sizeof(usb_xhci_trb_t);
+    usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)ep_trb_va;
+
+    if(!ep_pipeline || !driver->pipeline_callback) {
+        PRINTLOG(USB, LOG_TRACE, "no pipeline or driver callback for device 0x%p ep %d,%d index %lli parameter 0x%llx",
+                 device, ep_id, slot_id, ep_trb_index, event_trb->parameter);
+        return;
+    }
+
+    if(cc == USB_XHCI_TRB_CCODE_CC_SUCCESS || cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
+        uint64_t data_ptr = ep_trbs[ep_trb_index].parameter;
+
+        if(!data_ptr) {
+            PRINTLOG(USB, LOG_WARNING, "no data ptr for trb");
+            return;
+        }
+
+        uint32_t data_len = ep_trbs[ep_trb_index].status & 0xFFFFFF;
+        data_ptr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr);
+        uint8_t* data = (uint8_t*)(uintptr_t)data_ptr;
+
+        if(cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
+            uint32_t remaining_length = event_trb->status & 0xFFFFFF;
+            data_len -= remaining_length;
+        }
+
+        if(data_len != expected_packet_size) {
+            PRINTLOG(USB, LOG_TRACE, "data length %d does not match expected %lli",
+                     data_len, expected_packet_size);
+        }
+
+        pipeline_write(ep_pipeline, data_len, data);
+        driver->pipeline_callback(device, ep_id, ep_pipeline);
+    }
+}
+
+static uint64_t usb_xhci_interrupter_task_handle_events(usb_controller_metadata_t* metadata,
+                                                        uint64_t                   event_index) {
+    usb_xhci_trb_t* event_rings = metadata->event_ring;
+
+    while(true) {
+        usb_xhci_trb_t* event_trb = &event_rings[event_index];
+
+        usb_xhci_trb_type_t trb_type = (event_trb->control >> 10) & 0x3F;
+        uint32_t cc = (event_trb->status >> 24) & 0xFF;
+
+        if(trb_type == USB_XHCI_TRB_TYPE_TRB_RESERVED) {
+            break;
+        }
+
+        if((event_trb->control & 1) != metadata->cycle_bit &&
+           cc != USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR) {
+            break;
+        }
+
+        if(cc == USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR) {
+            PRINTLOG(USB, LOG_WARNING, "event ring full error at index %lli, trb type %d",
+                     event_index, trb_type);
+            event_index++;
+            if(event_index >= metadata->event_ring_size) {
+                event_index = 0;
+                metadata->cycle_bit ^= 1;
+            }
+            continue;
+        }
+
+        if(usb_xhci_pool_event_result.search &&
+           trb_type == usb_xhci_pool_event_result.wanted_type &&
+           event_trb->parameter == usb_xhci_pool_event_result.trb_fa) {
+            usb_xhci_pool_event_result.search = false;
+            usb_xhci_pool_event_result.out_trb = *event_trb;
+
+            asm volatile ("" ::: "memory");
+
+            usb_xhci_pool_event_result.found = true;
+        }
+
+        if(trb_type == USB_XHCI_TRB_TYPE_ER_TRANSFER) {
+            usb_xhci_interrupter_task_handle_er_transfer(metadata, event_trb);
+        } else {
+            if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS &&
+               cc != USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
+                PRINTLOG(USB, LOG_WARNING, "unhandled event trb type %d cc %d param 0x%llx status 0x%x control 0x%x",
+                         trb_type, cc, event_trb->parameter, event_trb->status, event_trb->control);
+            }
+        }
+
+
+        event_index++;
+        if(event_index >= metadata->event_ring_size) {
+            event_index = 0;
+            metadata->cycle_bit ^= 1;
+        }
+    }
+
+    return event_index;
+}
+
 static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
     PRINTLOG(USB, LOG_DEBUG, "xhci interrupter task 0x%p started", usb_xhci_interrupter_task);
     if(argc != 1 || argv == NULL || argv[0] == NULL) {
@@ -194,7 +331,6 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
         task_set_message_waiting();
         task_yield();
 
-        usb_xhci_trb_t* event_rings = metadata->event_ring;
         uint64_t event_ring_fa = metadata->erst[0];
 
         uint64_t erdp = metadata->runtime->interrupters[0].erdp;
@@ -207,105 +343,7 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
             event_index = 0;
         }
 
-
-        while(true) {
-            usb_xhci_trb_t* event_trb = &event_rings[event_index];
-
-            usb_xhci_trb_type_t trb_type = (event_trb->control >> 10) & 0x3F;
-            uint32_t cc = (event_trb->status >> 24) & 0xFF;
-
-            if(trb_type == USB_XHCI_TRB_TYPE_TRB_RESERVED) {
-                break;
-            }
-
-            if((event_trb->control & 1) != metadata->cycle_bit &&
-               cc != USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR) {
-                break;
-            }
-
-            if(cc == USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR) {
-                video_text_print("event ring full error\n");
-                event_index++;
-                if(event_index >= metadata->event_ring_size) {
-                    event_index = 0;
-                    metadata->cycle_bit ^= 1;
-                }
-                continue;
-            }
-
-            if(usb_xhci_pool_event_result.search &&
-               trb_type == usb_xhci_pool_event_result.wanted_type &&
-               event_trb->parameter == usb_xhci_pool_event_result.trb_fa) {
-                usb_xhci_pool_event_result.search = false;
-                usb_xhci_pool_event_result.out_trb = *event_trb;
-
-                asm volatile ("" ::: "memory");
-
-                usb_xhci_pool_event_result.found = true;
-            }
-
-            if(trb_type == USB_XHCI_TRB_TYPE_ER_TRANSFER) {
-                uint32_t ep_id = (event_trb->control >> 16) & 0x1F;
-                uint32_t slot_id = (event_trb->control >> 24) & 0xFF;
-
-                if(slot_id != 0 && ep_id > 1) {
-                    const usb_device_t* device = hashmap_get(metadata->slot_id_device_mapping, (void*)(uint64_t)slot_id);
-
-                    if(device && device->controller_device_context) {
-                        usb_device_controller_context_t* context = device->controller_device_context;
-                        usb_driver_t* driver = device->driver;
-                        pipeline_t* ep_pipeline = context->endpoints[ep_id - 1].ep_pipeline;
-                        uint64_t ep_trb_fa = context->endpoints[ep_id - 1].ep_trb_fa;
-                        uint64_t ep_trb_va = context->endpoints[ep_id - 1].ep_trb_va;
-                        uint64_t expected_packet_size = context->endpoints[ep_id - 1].expected_packet_size;
-                        uint64_t ep_trb_index = (event_trb->parameter - ep_trb_fa) / sizeof(usb_xhci_trb_t);
-                        usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)ep_trb_va;
-
-                        if(ep_pipeline && driver && driver->pipeline_callback) {
-                            if(cc == USB_XHCI_TRB_CCODE_CC_SUCCESS || cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
-                                uint64_t data_ptr = ep_trbs[ep_trb_index].parameter;
-
-                                if(data_ptr) {
-                                    uint32_t data_len = ep_trbs[ep_trb_index].status & 0xFFFFFF;
-                                    data_ptr = MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(data_ptr);
-                                    uint8_t* data = (uint8_t*)(uintptr_t)data_ptr;
-
-                                    if(cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
-                                        uint32_t remaining_length = event_trb->status & 0xFFFFFF;
-                                        data_len -= remaining_length;
-                                    }
-
-                                    if(data_len != expected_packet_size) {
-                                        PRINTLOG(USB, LOG_TRACE, "data length %d does not match expected %lli",
-                                                 data_len, expected_packet_size);
-                                    }
-
-                                    pipeline_write(ep_pipeline, data_len, data);
-                                    driver->pipeline_callback(device, ep_id, ep_pipeline);
-
-                                } else {
-                                    PRINTLOG(USB, LOG_WARNING, "no data ptr for trb");
-                                }
-
-                            }
-                        } else {
-                            PRINTLOG(USB, LOG_TRACE, "no pipeline or driver callback for device 0x%p ep %d,%d index %lli parameter 0x%llx",
-                                     device, ep_id, slot_id, ep_trb_index, event_trb->parameter);
-                        }
-                    }
-                }
-            } else {
-                PRINTLOG(USB, LOG_TRACE, "unhandled event trb type %d cc %d param 0x%llx status 0x%x control 0x%x",
-                         trb_type, cc, event_trb->parameter, event_trb->status, event_trb->control);
-            }
-
-
-            event_index++;
-            if(event_index >= metadata->event_ring_size) {
-                event_index = 0;
-                metadata->cycle_bit ^= 1;
-            }
-        }
+        event_index = usb_xhci_interrupter_task_handle_events(metadata, event_index);
 
         erdp = event_ring_fa + event_index * sizeof(usb_xhci_trb_t);
         metadata->runtime->interrupters[0].erdp = (erdp & ~0xFULL) | (1ULL << 3);
@@ -1837,6 +1875,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     PRINTLOG(USB, LOG_INFO, "XHCI controller initialized successfully with %d ports", port_count);
 
     usb_controller->probe_all_ports(usb_controller);
+
+    PRINTLOG(USB, LOG_INFO, "USB XHCI initialization complete");
 
     return 0;
 }

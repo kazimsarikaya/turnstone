@@ -36,6 +36,7 @@ boolean_t usb_ms_get_status(usb_driver_t* usb_driver);
 int8_t usb_ms_inquiry(usb_driver_t* usb_ms);
 int8_t usb_ms_sense(usb_driver_t* usb_ms, scsi_sense_data_t* sense);
 int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms);
+int8_t usb_ms_test_unit_ready_with_retry(usb_driver_t* usb_ms);
 
 
 usb_driver_t* usb_ms_bulk_only_init(usb_device_t* usb_device);

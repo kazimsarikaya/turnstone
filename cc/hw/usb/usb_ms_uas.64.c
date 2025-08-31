@@ -238,8 +238,6 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
     }
 
     if(iu.hdr.id != USB_UAS_UI_RESPONSE) {
-        PRINTLOG(USB, LOG_WARNING, "invalid iu id: 0x%x != 0x%x", iu.hdr.id, USB_UAS_UI_RESPONSE);
-
         if(iu.hdr.id == USB_UAS_UI_SENSE) {
             if(iu.sense.status != 0 || iu.sense.sense_length != 0){
                 PRINTLOG(USB, LOG_TRACE, "sense status: 0x%x", iu.sense.status);
@@ -248,7 +246,7 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
                 PRINTLOG(USB, LOG_TRACE, "sense data: ");
 
                 for(uint32_t i = 0; i < sizeof(iu.sense.sense_data); i++) {
-                    PRINTLOG(USB, LOG_ERROR, "0x%02x ", iu.sense.sense_data[i]);
+                    PRINTLOG(USB, LOG_TRACE, "0x%02x ", iu.sense.sense_data[i]);
                 }
 
                 lock_release(usb_driver->lock);
@@ -256,6 +254,11 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
                 return false;
 
             }
+        } else {
+            PRINTLOG(USB, LOG_ERROR, "invalid iu id: 0x%x", iu.hdr.id);
+            lock_release(usb_driver->lock);
+
+            return false;
         }
     } else {
         if(iu.response.response_code != 0) {
@@ -344,43 +347,15 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device)
         return NULL;
     }
 
+    if(usb_ms_test_unit_ready_with_retry(usb_ms) != 0) {
+        memory_free(usb_ms->inquiry_data);
+        memory_free(usb_ms);
 
-    if(usb_ms_test_unit_ready(usb_ms) != 0) {
-        PRINTLOG(USB, LOG_WARNING, "mass storage device not ready");
-
-        scsi_sense_data_t sense = {0};
-
-        if(usb_ms_sense(usb_ms, &sense) != 0) {
-            PRINTLOG(USB, LOG_ERROR, "cannot get sense data from mass storage device");
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return NULL;
-        }
-        if(sense.sense_key == 0 && sense.asc == 0x0 && sense.ascq == 0) {
-            PRINTLOG(USB, LOG_TRACE, "no sense, device is ready");
-        } else if(sense.sense_key == 0 && sense.asc == 0x29 && sense.ascq == 0) {
-            PRINTLOG(USB, LOG_ERROR, "power on, reset or bus device reset occurred");
-
-            // test unit ready again
-            if(usb_ms_test_unit_ready(usb_ms) != 0) {
-                PRINTLOG(USB, LOG_ERROR, "mass storage device not ready after power on, reset or bus device reset occurred");
-                memory_free(usb_ms->inquiry_data);
-                memory_free(usb_ms);
-
-                return NULL;
-            }
-        } else {
-            PRINTLOG(USB, LOG_ERROR, "unhandled sense key: 0x%x asc: 0x%x ascq: 0x%x", sense.sense_key, sense.asc, sense.ascq);
-            memory_free(usb_ms->inquiry_data);
-            memory_free(usb_ms);
-
-            return NULL;
-        }
+        return NULL;
     }
 
     if(!usb_ms_get_status(usb_ms)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot get initial status from mass storage device");
+        PRINTLOG(USB, LOG_ERROR, "cannot send pre-status for may failed capacity 16 command");
         memory_free(usb_ms->inquiry_data);
         memory_free(usb_ms);
 
