@@ -22,6 +22,7 @@ typedef struct usb_hub_status_t {
 
 typedef struct usb_driver_t {
     usb_device_t*           usb_device;
+    usb_interface_t*        interface;
     usb_pipeline_callback_f pipeline_callback;
     uint32_t                expected_packet_size;
     usb_hub_status_t        old_status;
@@ -38,6 +39,7 @@ static int8_t usb_hub_clear_feature (usb_device_t * usb_device, uint8_t port, us
     if(port > 0) {
         // port feature
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_OTHER,
                                USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_CLEAR_FEATURE,
                                feature, port,
@@ -49,6 +51,7 @@ static int8_t usb_hub_clear_feature (usb_device_t * usb_device, uint8_t port, us
     } else {
         // device feature
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_DEVICE,
                                USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_CLEAR_FEATURE,
                                feature, 0,
@@ -73,6 +76,7 @@ static int8_t usb_hub_set_feature(usb_device_t* usb_device, uint8_t port, usb_hu
         // port feature
         PRINTLOG(USB, LOG_TRACE, "setting feature %d on port %d", feature, port);
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_OTHER,
                                USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_FEATURE,
                                feature, port,
@@ -85,6 +89,7 @@ static int8_t usb_hub_set_feature(usb_device_t* usb_device, uint8_t port, usb_hu
         // device feature
         PRINTLOG(USB, LOG_TRACE, "setting feature %d on device", feature);
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_DEVICE,
                                USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_FEATURE,
                                feature, 0,
@@ -115,6 +120,7 @@ static int8_t usb_hub_get_status(usb_device_t* usb_device, uint8_t port, usb_hub
         // port status
         PRINTLOG(USB, LOG_TRACE, "getting status on port %d", port);
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_OTHER,
                                USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_STATUS,
                                0, port,
@@ -127,6 +133,7 @@ static int8_t usb_hub_get_status(usb_device_t* usb_device, uint8_t port, usb_hub
         // device status
         PRINTLOG(USB, LOG_TRACE, "getting status on device");
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_DEVICE,
                                USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_STATUS,
                                0, 0,
@@ -192,6 +199,7 @@ static int8_t usb_hub_get_descriptor(usb_device_t* usb_device) {
         }
 
         if(!usb_device_request(usb_device,
+                               NULL,
                                USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_DEVICE,
                                USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                                USB_HUB_DESC_TYPE_HUB << 8, 0,
@@ -219,6 +227,7 @@ static int8_t usb_hub_get_descriptor(usb_device_t* usb_device) {
             }
 
             if(!usb_device_request(usb_device,
+                                   NULL,
                                    USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_DEVICE,
                                    USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                                    USB_HUB_DESC_TYPE_HUB << 8, 0,
@@ -259,7 +268,7 @@ static int8_t usb_hub_power_on_ports(usb_device_t* usb_device) {
     return 0;
 }
 
-int8_t usb_hub_init(usb_device_t* usb_device) {
+int8_t usb_hub_init(usb_device_t* usb_device, usb_interface_t* interface) {
     if(!usb_device) {
         PRINTLOG(USB, LOG_ERROR, "invalid device");
 
@@ -275,6 +284,7 @@ int8_t usb_hub_init(usb_device_t* usb_device) {
     }
     usb_device->is_hub = true;
     hub_driver->usb_device = usb_device;
+    hub_driver->interface = interface;
     hub_driver->pipeline_callback = usb_hub_pipeline_callback;
     hub_driver->expected_packet_size = sizeof(uint16_t);
 
@@ -290,7 +300,7 @@ int8_t usb_hub_init(usb_device_t* usb_device) {
     usb_config_t* config = usb_device->configurations[usb_device->selected_config];
 
     usb_device->hub_num_ports = config->hub->num_ports;
-    usb_device->hub_status_endpoint_address = config->endpoints[0]->desc->endpoint_address;
+    usb_device->hub_status_endpoint_address = interface->endpoints[0]->desc->endpoint_address;
 
     PRINTLOG(USB, LOG_INFO, "initializing hub device with %d ports", config->hub->num_ports);
     PRINTLOG(USB, LOG_DEBUG, "hub characteristics: 0x%04x", config->hub->characteristics);
@@ -298,6 +308,7 @@ int8_t usb_hub_init(usb_device_t* usb_device) {
     PRINTLOG(USB, LOG_DEBUG, "hub control current: %d", config->hub->hub_control_current);
 
     if(!usb_device_request(usb_device,
+                           NULL,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_EVALUATE_CONTEXT,
                            0, 1,

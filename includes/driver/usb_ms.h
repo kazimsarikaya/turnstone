@@ -39,13 +39,13 @@ int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms);
 int8_t usb_ms_test_unit_ready_with_retry(usb_driver_t* usb_ms);
 
 
-usb_driver_t* usb_ms_bulk_only_init(usb_device_t* usb_device);
+usb_driver_t* usb_ms_bulk_only_init(usb_device_t* usb_device, usb_interface_t* interface);
 boolean_t     usb_ms_bulk_only_read_write(usb_driver_t* usb_driver, boolean_t read, uint32_t dtl, uint8_t* data);
 boolean_t     usb_ms_bulk_only_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_t flags, uint8_t lun, uint8_t command_length, uint8_t* command);
 boolean_t     usb_ms_bulk_only_get_status(usb_driver_t* usb_driver);
 
 
-usb_driver_t* usb_ms_uas_init(usb_device_t* usb_device);
+usb_driver_t* usb_ms_uas_init(usb_device_t* usb_device, usb_interface_t* interface);
 boolean_t     usb_ms_uas_read_write(usb_driver_t* usb_driver, boolean_t read, uint32_t dtl, uint8_t* data);
 boolean_t     usb_ms_uas_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_t flags, uint8_t lun, uint8_t command_length, uint8_t* command);
 boolean_t     usb_ms_uas_get_status(usb_driver_t* usb_driver);

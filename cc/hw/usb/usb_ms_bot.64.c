@@ -39,6 +39,7 @@ typedef struct usb_mass_storage_csw_t {
 
 typedef struct usb_driver_t {
     usb_device_t *                device;
+    usb_interface_t*              interface;
     usb_pipeline_callback_f       pipeline_callback;
     uint32_t                      expected_packet_size;
     uint64_t                      id;
@@ -66,12 +67,12 @@ boolean_t usb_ms_bulk_only_read_write(usb_driver_t* usb_driver, boolean_t read, 
         stream_id = 1;
     }
 
-    ut.device = usb_driver->device;
+    ut.driver = usb_driver;
 
     if(read) {
-        ut.endpoint = usb_driver->config->endpoints[usb_driver->in_endpoint];
+        ut.endpoint = usb_driver->interface->endpoints[usb_driver->in_endpoint];
     } else {
-        ut.endpoint = usb_driver->config->endpoints[usb_driver->out_endpoint];
+        ut.endpoint = usb_driver->interface->endpoints[usb_driver->out_endpoint];
     }
 
 
@@ -108,8 +109,8 @@ boolean_t usb_ms_bulk_only_send_command(usb_driver_t* usb_driver, uint32_t dtl, 
 
     usb_transfer_t ut = {0};
 
-    ut.device = usb_driver->device;
-    ut.endpoint = usb_driver->config->endpoints[usb_driver->out_endpoint];
+    ut.driver = usb_driver;
+    ut.endpoint = usb_driver->interface->endpoints[usb_driver->out_endpoint];
     ut.length = sizeof(usb_mass_storage_cbw_t);
     ut.data = (uint8_t*)&cbw;
 
@@ -130,8 +131,8 @@ boolean_t usb_ms_bulk_only_get_status(usb_driver_t* usb_driver) {
 
     usb_mass_storage_csw_t csw = {0};
 
-    ut.device = usb_driver->device;
-    ut.endpoint = usb_driver->config->endpoints[usb_driver->in_endpoint];
+    ut.driver = usb_driver;
+    ut.endpoint = usb_driver->interface->endpoints[usb_driver->in_endpoint];
     ut.length = sizeof(usb_mass_storage_csw_t);
     ut.data = (uint8_t*)&csw;
 
@@ -180,7 +181,7 @@ boolean_t usb_ms_bulk_only_get_status(usb_driver_t* usb_driver) {
     return true;
 }
 
-usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device)
+usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* interface)
 {
     usb_driver_t* usb_ms = memory_malloc(sizeof(usb_driver_t));
 
@@ -191,6 +192,7 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device)
     }
 
     usb_ms->device = usb_device;
+    usb_ms->interface = interface;
     usb_device->driver = usb_ms;
 
     usb_ms->lock = lock_create();
@@ -206,10 +208,10 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device)
 
     usb_ms->config = config;
 
-    usb_ms->interface_number = config->interface->interface_number;
+    usb_ms->interface_number = interface->desc->interface_number;
 
 
-    if(config->endpoints[0]->in) {
+    if(interface->endpoints[0]->in) {
         usb_ms->in_endpoint = 0;
         usb_ms->out_endpoint = 1;
     } else {
@@ -221,6 +223,7 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device)
     PRINTLOG(USB, LOG_DEBUG, "in endpoint: 0x%x out endpoint 0x%x", usb_ms->in_endpoint, usb_ms->out_endpoint);
 
     if (!usb_device_request(usb_device,
+                            NULL,
                             USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_INTERFACE,
                             USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_MASS_STORAGE_REQUEST_RESET,
                             0, usb_ms->interface_number, 0, NULL)) {
@@ -237,6 +240,7 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device)
         time_timer_spinsleep(1000);
 
         if (!usb_device_request(usb_device,
+                                NULL,
                                 USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_INTERFACE,
                                 USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_MASS_STORAGE_REQUEST_GET_MAX_LUN,
                                 0, usb_ms->interface_number, 1, &usb_ms->max_lun)) {

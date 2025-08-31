@@ -18,6 +18,7 @@ MODULE("turnstone.kernel.hw.usb.ms");
 
 typedef struct usb_driver_t {
     usb_device_t *                device;
+    usb_interface_t*              interface;
     usb_pipeline_callback_f       pipeline_callback;
     uint32_t                      expected_packet_size;
     uint64_t                      id;
@@ -198,7 +199,7 @@ int8_t usb_ms_test_unit_ready_with_retry(usb_driver_t* usb_ms) {
 }
 
 
-int8_t usb_mass_storage_init(usb_device_t * usb_device)
+int8_t usb_mass_storage_init(usb_device_t * usb_device, usb_interface_t* interface)
 {
     if(usb_ms_disks == NULL) {
         usb_ms_disks = hashmap_integer(64);
@@ -210,16 +211,14 @@ int8_t usb_mass_storage_init(usb_device_t * usb_device)
         }
     }
 
-    usb_config_t* config = usb_device->configurations[usb_device->selected_config];
-
     usb_driver_t* usb_ms = NULL;
 
-    if(config->interface->interface_protocol == USB_PROTOCOL_MASS_STORAGE_UAS) {
+    if(interface->desc->interface_protocol == USB_PROTOCOL_MASS_STORAGE_UAS) {
         PRINTLOG(USB, LOG_DEBUG, "mass storage device is uas");
-        usb_ms = usb_ms_uas_init(usb_device);
+        usb_ms = usb_ms_uas_init(usb_device, interface);
     } else {
         PRINTLOG(USB, LOG_DEBUG, "mass storage device is bulk only");
-        usb_ms = usb_ms_bulk_only_init(usb_device);
+        usb_ms = usb_ms_bulk_only_init(usb_device, interface);
     }
 
 

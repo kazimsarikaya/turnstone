@@ -45,6 +45,7 @@ _Static_assert(sizeof(usb_qemu_tablet_report_t) == 6, "usb_qemu_tablet_report_t 
 
 typedef struct usb_driver_t {
     usb_device_t*            usb_device;
+    usb_interface_t*         interface;
     usb_pipeline_callback_f  pipeline_callback;
     uint32_t                 expected_packet_size;
     usb_mouse_report_t       old_usb_mouse_report;
@@ -139,7 +140,7 @@ static int8_t usb_qemu_tablet_pipeline_callback(const usb_device_t* device, uint
     return 0;
 }
 
-int8_t usb_mouse_init(usb_device_t* usb_device) {
+int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
     PRINTLOG(USB, LOG_INFO, "initializing usb mouse");
     usb_driver_t* usb_mouse = memory_malloc(sizeof(usb_driver_t));
 
@@ -161,8 +162,9 @@ int8_t usb_mouse_init(usb_device_t* usb_device) {
         return -1;
     }
 
-    usb_mouse->usb_transfer->device = usb_device;
-    usb_mouse->usb_transfer->endpoint = usb_device->configurations[usb_device->selected_config]->endpoints[0];
+    usb_mouse->usb_transfer->driver = usb_mouse;
+    usb_mouse->interface = interface;
+    usb_mouse->usb_transfer->endpoint = interface->endpoints[0];
 
     usb_mouse->max_packet_size = usb_mouse->usb_transfer->endpoint->desc->max_packet_size;
     usb_mouse->expected_packet_size = sizeof(usb_mouse_report_t);
@@ -178,6 +180,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device) {
     }
 
     if(!usb_device_request(usb_device,
+                           interface,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_PIPELINE,
                            usb_mouse->expected_packet_size, usb_mouse->usb_transfer->endpoint->desc->endpoint_address,
@@ -192,9 +195,10 @@ int8_t usb_mouse_init(usb_device_t* usb_device) {
 
 
     if (!usb_device_request(usb_device,
+                            NULL,
                             USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_INTERFACE,
                             USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_IDLE,
-                            0, usb_device->configurations[usb_device->selected_config]->interface->interface_number, 0, NULL)) {
+                            0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
         memory_free(usb_mouse->usb_transfer);
         memory_free(usb_mouse);
@@ -219,7 +223,7 @@ int8_t usb_mouse_init(usb_device_t* usb_device) {
     return 0;
 }
 
-int8_t usb_qemu_tablet_init(usb_device_t* usb_device) {
+int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface) {
     PRINTLOG(USB, LOG_INFO, "initializing usb qemu_tablet");
     usb_driver_t* usb_qemu_tablet = memory_malloc(sizeof(usb_driver_t));
 
@@ -230,6 +234,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device) {
     }
 
     usb_qemu_tablet->usb_device = usb_device;
+    usb_qemu_tablet->interface = interface;
     usb_device->driver = usb_qemu_tablet;
 
     usb_qemu_tablet->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
@@ -241,8 +246,8 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device) {
         return -1;
     }
 
-    usb_qemu_tablet->usb_transfer->device = usb_device;
-    usb_qemu_tablet->usb_transfer->endpoint = usb_device->configurations[usb_device->selected_config]->endpoints[0];
+    usb_qemu_tablet->usb_transfer->driver = usb_qemu_tablet;
+    usb_qemu_tablet->usb_transfer->endpoint = interface->endpoints[0];
 
     usb_qemu_tablet->max_packet_size = usb_qemu_tablet->usb_transfer->endpoint->desc->max_packet_size;
     usb_qemu_tablet->expected_packet_size = sizeof(usb_qemu_tablet_report_t);
@@ -258,6 +263,7 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device) {
     }
 
     if(!usb_device_request(usb_device,
+                           interface,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_PIPELINE,
                            usb_qemu_tablet->expected_packet_size, usb_qemu_tablet->usb_transfer->endpoint->desc->endpoint_address,
@@ -272,9 +278,10 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device) {
 
 
     if (!usb_device_request(usb_device,
+                            NULL,
                             USB_REQUEST_TYPE_CLASS, USB_REQUEST_RECIPIENT_INTERFACE,
                             USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_IDLE,
-                            0, usb_device->configurations[usb_device->selected_config]->interface->interface_number, 0, NULL)) {
+                            0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
         memory_free(usb_qemu_tablet->usb_transfer);
         memory_free(usb_qemu_tablet);

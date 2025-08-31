@@ -69,6 +69,7 @@ typedef struct usb_device_controller_context_t {
 
 typedef struct usb_driver_t {
     usb_device_t*           usb_device;
+    usb_interface_t*        interface;
     usb_pipeline_callback_f pipeline_callback;
 } usb_driver_t;
 
@@ -184,17 +185,17 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
     const usb_device_t* device = hashmap_get(metadata->slot_id_device_mapping, (void*)(uint64_t)slot_id);
 
     if(!device) {
-        PRINTLOG(USB, LOG_TRACE, "no device for slot id %d ep id %d", slot_id, ep_id);
+        // PRINTLOG(USB, LOG_TRACE, "no device for slot id %d ep id %d", slot_id, ep_id);
         return;
     }
 
     if(!device->driver) {
-        PRINTLOG(USB, LOG_TRACE, "no driver for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
+        // PRINTLOG(USB, LOG_TRACE, "no driver for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
         return;
     }
 
     if(!device->controller_device_context) {
-        PRINTLOG(USB, LOG_TRACE, "no controller device context for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
+        // PRINTLOG(USB, LOG_TRACE, "no controller device context for device 0x%p slot id %d ep id %d", device, slot_id, ep_id);
         return;
     }
 
@@ -208,8 +209,8 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
     usb_xhci_trb_t* ep_trbs = (usb_xhci_trb_t*)ep_trb_va;
 
     if(!ep_pipeline || !driver->pipeline_callback) {
-        PRINTLOG(USB, LOG_TRACE, "no pipeline or driver callback for device 0x%p ep %d,%d index %lli parameter 0x%llx",
-                 device, ep_id, slot_id, ep_trb_index, event_trb->parameter);
+        // PRINTLOG(USB, LOG_TRACE, "no pipeline or driver callback for device 0x%p ep %d,%d index %lli parameter 0x%llx",
+        // device, ep_id, slot_id, ep_trb_index, event_trb->parameter);
         return;
     }
 
@@ -466,7 +467,15 @@ static int8_t usb_xhci_probe_all_ports(usb_controller_t* usb_controller) {
 
 static int8_t usb_xhci_set_slot_and_address(usb_controller_t* usb_controller, usb_transfer_t* transfer){
     usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_device_t* device = transfer->device;
+
+    if(!transfer->driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_t* device = transfer->driver->usb_device;
     usb_xhci_trb_t* cmd_rings = metadata->cmd_ring;
     usb_xhci_doorbell_t* doorbells = metadata->doorbells;
 
@@ -689,7 +698,15 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
     usb_controller_metadata_t* metadata = usb_controller->metadata;
     usb_xhci_trb_t* cmd_rings = metadata->cmd_ring;
     usb_xhci_doorbell_t* doorbells = metadata->doorbells;
-    usb_device_t* device = transfer->device;
+
+    if(!transfer->driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_t* device = transfer->driver->usb_device;
     usb_device_request_t* request = transfer->request;
 
     if(!device) {
@@ -808,7 +825,16 @@ static int8_t usb_xhci_evalutate_context(usb_controller_t* usb_controller, usb_t
 
 static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_device_t* device = transfer->device;
+    usb_driver_t* driver = transfer->driver;
+
+    if(!driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_t* device = driver->usb_device;
     usb_device_request_t* request = transfer->request;
 
     if(!device) {
@@ -842,12 +868,19 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
         return -1;
     }
 
-    usb_config_t* config = device->configurations[device->selected_config];
+    usb_interface_t* interface = driver->interface;
 
-    for(uint32_t i = 0; i < config->num_endpoints; i++) {
-        if(config->endpoints[i]->desc->endpoint_address == request->index &&
-           config->endpoints[i]->endpoint_companion) {
-            max_packet_size *= (config->endpoints[i]->endpoint_companion->max_burst + 1);
+    if(!interface) {
+        PRINTLOG(USB, LOG_ERROR, "no interface for driver");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    for(uint32_t i = 0; i < interface->num_endpoints; i++) {
+        if(interface->endpoints[i]->desc->endpoint_address == request->index &&
+           interface->endpoints[i]->endpoint_companion) {
+            max_packet_size *= (interface->endpoints[i]->endpoint_companion->max_burst + 1);
             break;
         }
     }
@@ -1061,7 +1094,15 @@ static int8_t usb_xhci_setup_endpoint(usb_controller_t* usb_controller, usb_tran
 
 static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_device_t* device = transfer->device;
+
+    if(!transfer->driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_t* device = transfer->driver->usb_device;
     usb_device_request_t* request = transfer->request;
 
     if(!device) {
@@ -1173,7 +1214,23 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
 
 static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_device_t* device = transfer->device;
+
+    if(!transfer->driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_t* device = transfer->driver->usb_device;
+
+    if(!device) {
+        PRINTLOG(USB, LOG_ERROR, "no device for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
     usb_device_request_t* request = transfer->request;
 
     usb_request_recipient_t request_recipient = (usb_request_recipient_t)(request->type & USB_REQUEST_RECIPIENT_MASK);
@@ -1287,17 +1344,17 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     PRINTLOG(USB, LOG_TRACE, "control transfer: bmRequestType=0x%02x bRequest=0x%02x wValue=0x%04x wIndex=0x%04x wLength=0x%04x",
              request->type, request->request, request->value, request->index, request->length);
 
-    if(transfer->device->is_hub &&
+    if(device->is_hub &&
        (transfer->request->request == USB_REQUEST_SET_FEATURE ||
         transfer->request->request == USB_REQUEST_CLEAR_FEATURE
        ) &&
        transfer->request->value == USB_HUB_FEATURE_PORT_RESET) {
 
-        uint32_t ep_index = transfer->device->hub_status_endpoint_address;
+        uint32_t ep_index = device->hub_status_endpoint_address;
         uint8_t ep_direction = (ep_index >> 7) & 0x01;
         ep_index = 2 * (ep_index & 0x0F) + ep_direction;
 
-        usb_device_controller_context_t* hub_dc_ctx = transfer->device->controller_device_context;
+        usb_device_controller_context_t* hub_dc_ctx = device->controller_device_context;
 
         if(!hub_dc_ctx) {
             PRINTLOG(USB, LOG_ERROR, "cannot get hub controller device context");
@@ -1318,11 +1375,11 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
         uint32_t hub_ep_trb_index = hub_dc_ctx->endpoints[ep_index - 1].ep_trb_index;
 
         PRINTLOG(USB, LOG_TRACE, "Adding TRBs to hub status endpoint %d (ep_index %d) trb_index %d",
-                 transfer->device->hub_status_endpoint_address, ep_index, hub_ep_trb_index);
+                 device->hub_status_endpoint_address, ep_index, hub_ep_trb_index);
 
 
         ep_trbs[hub_ep_trb_index].parameter = hub_dc_ctx->endpoints[ep_index - 1].ep_trb_fa + hub_dc_ctx->endpoints[ep_index].max_packet_size_aligned * hub_ep_trb_index;
-        ep_trbs[hub_ep_trb_index].status = transfer->device->max_packet_size;
+        ep_trbs[hub_ep_trb_index].status = device->max_packet_size;
         ep_trbs[hub_ep_trb_index].control = (USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5) | 1;
 
         hub_ep_trb_index = (hub_ep_trb_index + 1) % metadata->cmd_ring_size;
@@ -1365,7 +1422,15 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 
 static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
-    usb_device_t* device = transfer->device;
+
+    if(!transfer->driver) {
+        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
+    usb_device_t* device = transfer->driver->usb_device;
 
     usb_xhci_doorbell_t* doorbell = &metadata->doorbells[device->slot_id];
 

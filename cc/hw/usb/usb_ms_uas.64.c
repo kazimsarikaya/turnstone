@@ -75,6 +75,7 @@ typedef struct usb_uas_iu_t {
 
 typedef struct usb_driver_t {
     usb_device_t *                device;
+    usb_interface_t*              interface;
     usb_pipeline_callback_f       pipeline_callback;
     uint32_t                      expected_packet_size;
     uint64_t                      id;
@@ -102,12 +103,12 @@ boolean_t usb_ms_uas_read_write(usb_driver_t* usb_driver, boolean_t read, uint32
 
     uint32_t stream_id = 1;
 
-    ut.device = usb_driver->device;
+    ut.driver = usb_driver;
 
     if(read) {
-        ut.endpoint = usb_driver->config->endpoints[usb_driver->in_endpoint];
+        ut.endpoint = usb_driver->interface->endpoints[usb_driver->in_endpoint];
     } else {
-        ut.endpoint = usb_driver->config->endpoints[usb_driver->out_endpoint];
+        ut.endpoint = usb_driver->interface->endpoints[usb_driver->out_endpoint];
     }
 
 
@@ -149,8 +150,8 @@ boolean_t usb_ms_uas_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_
 
     usb_transfer_t ut = {0};
 
-    ut.device = usb_driver->device;
-    ut.endpoint = usb_driver->config->endpoints[usb_driver->cmd_endpoint];
+    ut.driver = usb_driver;
+    ut.endpoint = usb_driver->interface->endpoints[usb_driver->cmd_endpoint];
     ut.length = length;
     ut.data = data;
     ut.stream_id = stream_id;
@@ -199,8 +200,8 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
         data = (uint8_t*)usb_driver->async_iu;
     }
 
-    ut.device = usb_driver->device;
-    ut.endpoint = usb_driver->config->endpoints[usb_driver->status_endpoint];
+    ut.driver = usb_driver;
+    ut.endpoint = usb_driver->interface->endpoints[usb_driver->status_endpoint];
     ut.length = length;
     ut.data = data;
     ut.stream_id = stream_id;
@@ -277,7 +278,7 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
     return true;
 }
 
-usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device)
+usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interface)
 {
     usb_driver_t* usb_ms = memory_malloc(sizeof(usb_driver_t));
 
@@ -288,6 +289,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device)
     }
 
     usb_ms->device = usb_device;
+    usb_ms->interface = interface;
     usb_device->driver = usb_ms;
 
     usb_ms->lock = lock_create();
@@ -304,17 +306,17 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device)
     usb_ms->config = config;
     usb_ms->is_uas = true;
 
-    usb_ms->interface_number = config->interface->interface_number;
+    usb_ms->interface_number = interface->desc->interface_number;
 
-    for(uint32_t i = 0; i < config->num_endpoints; i++) {
-        if(!config->endpoints[i]->cs_interface || !config->endpoints[i]->endpoint_companion) {
+    for(uint32_t i = 0; i < interface->num_endpoints; i++) {
+        if(!interface->endpoints[0]->num_cs_interfaces || !interface->endpoints[i]->cs_interfaces || !interface->endpoints[i]->endpoint_companion) {
             PRINTLOG(USB, LOG_ERROR, "invalid endpoint companion or cs interface for uas");
             memory_free(usb_ms);
 
             return NULL;
         }
 
-        switch(config->endpoints[i]->cs_interface->interface_number) {
+        switch(interface->endpoints[i]->cs_interfaces[0]->interface_number) {
         case USB_UAS_PIPE_ID_COMMAND:
             usb_ms->cmd_endpoint = i;
             break;
@@ -328,7 +330,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device)
             usb_ms->out_endpoint = i;
             break;
         default:
-            PRINTLOG(USB, LOG_ERROR, "unknown uas pipe id: 0x%x", config->endpoints[i]->cs_interface->interface_number);
+            PRINTLOG(USB, LOG_ERROR, "unknown uas pipe id: 0x%x", interface->endpoints[i]->cs_interfaces[0]->interface_number);
             memory_free(usb_ms);
 
             return NULL;

@@ -293,25 +293,20 @@ typedef struct usb_device_request_t {
     uint16_t length;
 }__attribute__((packed)) usb_device_request_t;
 
-typedef struct usb_endpoint_t {
-    usb_endpoint_desc_t*           desc;
-    uint32_t                       toggle;
-    boolean_t                      in;
-    usb_endpoint_companion_desc_t* endpoint_companion;
-    usb_cs_interface_desc_t*       cs_interface;
-} usb_endpoint_t;
-
 typedef struct usb_device_t     usb_device_t;
+typedef struct usb_driver_t     usb_driver_t;
+typedef struct usb_config_t     usb_config_t;
 typedef struct usb_controller_t usb_controller_t;
 typedef struct usb_transfer_t   usb_transfer_t;
 typedef struct pipeline_t       pipeline_t;
+typedef struct usb_endpoint_t   usb_endpoint_t;
 
 typedef int8_t (*usb_transfer_callback_f)(usb_controller_t* controller, usb_transfer_t* transfer);
 
 typedef int8_t (*usb_pipeline_callback_f)(const usb_device_t* device, uint8_t endpoint, pipeline_t* pipeline);
 
 typedef struct usb_transfer_t {
-    usb_device_t*         device;
+    usb_driver_t*         driver;
     usb_endpoint_t*       endpoint;
     usb_device_request_t* request;
     uint8_t*              data;
@@ -338,18 +333,30 @@ typedef struct usb_controller_t {
     int8_t (*destroy_controller_device_context)(usb_controller_t* controller, usb_device_t* device);
 } usb_controller_t;
 
-typedef struct usb_device_t usb_device_t;
-typedef struct usb_driver_t usb_driver_t;
-typedef struct usb_config_t usb_config_t;
+typedef struct usb_endpoint_t {
+    usb_endpoint_desc_t*           desc;
+    uint32_t                       toggle;
+    boolean_t                      in;
+    usb_endpoint_companion_desc_t* endpoint_companion;
+    uint32_t                       num_cs_interfaces;
+    usb_cs_interface_desc_t**      cs_interfaces;
+} usb_endpoint_t;
+
+typedef struct usb_interface_t {
+    usb_interface_desc_t*     desc;
+    uint32_t                  num_endpoints;
+    usb_endpoint_t**          endpoints;
+    uint32_t                  num_cs_interfaces;
+    usb_cs_interface_desc_t** cs_interfaces;
+    usb_hid_desc_t*           hid;
+} usb_interface_t;
 
 typedef struct usb_config_t {
-    uint32_t              config_id;
-    uint8_t*              config_buffer;
-    usb_interface_desc_t* interface;
-    uint32_t              num_endpoints;
-    usb_endpoint_t**      endpoints;
-    usb_hid_desc_t*       hid;
-    usb_hub_desc_t*       hub;
+    uint32_t          config_id;
+    uint8_t*          config_buffer;
+    uint32_t          num_interfaces;
+    usb_interface_t** interfaces;
+    usb_hub_desc_t*   hub;
 } usb_config_t;
 
 typedef struct usb_device_controller_context_t usb_device_controller_context_t;
@@ -433,16 +440,17 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
 int8_t usb_probe_all_devices_all_ports(void);
 
-int8_t usb_keyboard_init(usb_device_t* device);
+int8_t usb_keyboard_init(usb_device_t* device, usb_interface_t* interface);
 
-int8_t usb_mouse_init(usb_device_t* device);
-int8_t usb_qemu_tablet_init(usb_device_t* device);
+int8_t usb_mouse_init(usb_device_t* device, usb_interface_t* interface);
+int8_t usb_qemu_tablet_init(usb_device_t* device, usb_interface_t* interface);
 
-int8_t usb_mass_storage_init(usb_device_t* device);
+int8_t usb_mass_storage_init(usb_device_t* device, usb_interface_t* interface);
 
-int8_t usb_hub_init(usb_device_t* device);
+int8_t usb_hub_init(usb_device_t* device, usb_interface_t* interface);
 
 boolean_t usb_device_request(usb_device_t*           usb_device,
+                             usb_interface_t*        interface,
                              usb_request_type_t      request_type,
                              usb_request_recipient_t request_recipient,
                              usb_request_direction_t request_direction,
