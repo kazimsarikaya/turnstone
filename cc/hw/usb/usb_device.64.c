@@ -24,20 +24,21 @@ typedef struct usb_driver_t {
     usb_pipeline_callback_f pipeline_callback;
 } usb_driver_t;
 
-static void usb_device_print_desc(usb_device_desc_t device_desc, usb_device_t* device) {
-    PRINTLOG(USB, LOG_TRACE, "device class: %x", device_desc.device_class);
-    PRINTLOG(USB, LOG_TRACE, "device subclass: %x", device_desc.device_subclass);
-    PRINTLOG(USB, LOG_TRACE, "device protocol: %x", device_desc.device_protocol);
-    PRINTLOG(USB, LOG_TRACE, "max packet size: 0x%x", device_desc.max_packet_size);
+static void usb_device_print_desc(usb_device_t* usb_device) {
+    PRINTLOG(USB, LOG_TRACE, "device class: %x", usb_device->desc->device_class);
+    PRINTLOG(USB, LOG_TRACE, "device subclass: %x", usb_device->desc->device_subclass);
+    PRINTLOG(USB, LOG_TRACE, "device protocol: %x", usb_device->desc->device_protocol);
+    PRINTLOG(USB, LOG_TRACE, "max packet size: 0x%x", usb_device->desc->max_packet_size);
     PRINTLOG(USB, LOG_TRACE, "vendor id: %x vendor name: %s",
-             device_desc.vendor_id, device->vendor ? device->vendor : "unknown");
+             usb_device->desc->vendor_id, usb_device->vendor ? usb_device->vendor : "unknown");
     PRINTLOG(USB, LOG_TRACE, "product id: %x product: %s",
-             device_desc.product_id, device->product ? device->product : "unknown");
+             usb_device->desc->product_id, usb_device->product ? usb_device->product : "unknown");
     PRINTLOG(USB, LOG_TRACE, "serial number string index: %x serial number: %s",
-             device_desc.serial_number_string, device->serial ? device->serial : "unknown");
-    PRINTLOG(USB, LOG_TRACE, "number of configuration: %x", device_desc.num_configurations);
-    PRINTLOG(USB, LOG_TRACE, "type: %x", device_desc.type);
-    PRINTLOG(USB, LOG_TRACE, "length: 0x%x", device_desc.length);
+             usb_device->desc->serial_number_string, usb_device->serial ? usb_device->serial : "unknown");
+    PRINTLOG(USB, LOG_TRACE, "device version: %x", usb_device->desc->device_version);
+    PRINTLOG(USB, LOG_TRACE, "number of configuration: %x", usb_device->desc->num_configurations);
+    PRINTLOG(USB, LOG_TRACE, "type: %x", usb_device->desc->type);
+    PRINTLOG(USB, LOG_TRACE, "length: 0x%x", usb_device->desc->length);
 }
 
 
@@ -191,6 +192,10 @@ static void usb_device_free(usb_device_t* usb_device) {
         memory_free(usb_device->product);
     }
 
+    if(usb_device->descriptor_buffer) {
+        memory_free(usb_device->descriptor_buffer);
+    }
+
     if(usb_device->configurations) {
         for(uint32_t i = 0; i < usb_device->num_configurations; i++) {
             usb_config_t* config = usb_device->configurations[i];
@@ -254,7 +259,7 @@ static void usb_device_free(usb_device_t* usb_device) {
     memory_free(usb_device);
 }
 
-static int8_t usb_device_get_descriptor_strings(usb_device_t* usb_device, usb_device_desc_t device_desc) {
+static int8_t usb_device_get_descriptor_strings(usb_device_t* usb_device) {
     char16_t lang_ids[128] = {0};
 
     if(!usb_device_get_langs(usb_device, lang_ids)) {
@@ -267,21 +272,21 @@ static int8_t usb_device_get_descriptor_strings(usb_device_t* usb_device, usb_de
     char16_t vendor[128] = {0};
     char16_t serial[128] = {0};
 
-    if(!usb_device_get_string(usb_device, lang_ids[0], device_desc.product_string, product)) {
+    if(!usb_device_get_string(usb_device, lang_ids[0], usb_device->desc->product_string, product)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get product string");
     } else {
         char_t* product_str = char16_to_char(product);
         usb_device->product = product_str;
     }
 
-    if(!usb_device_get_string(usb_device, lang_ids[0], device_desc.vendor_string, vendor)) {
+    if(!usb_device_get_string(usb_device, lang_ids[0], usb_device->desc->vendor_string, vendor)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get vendor string");
     } else {
         char_t* vendor_str = char16_to_char(vendor);
         usb_device->vendor = vendor_str;
     }
 
-    if(!usb_device_get_string(usb_device, lang_ids[0], device_desc.serial_number_string, serial)) {
+    if(!usb_device_get_string(usb_device, lang_ids[0], usb_device->desc->serial_number_string, serial)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get serial string");
     } else {
         char_t* serial_str = char16_to_char(serial);
@@ -593,8 +598,6 @@ static uint32_t usb_device_count_real_interfaces(usb_config_t* config) {
     return interface_count;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint32_t port, uint32_t speed) {
     if(usb_devices == NULL) {
         usb_devices = hashmap_integer(64);
@@ -643,25 +646,14 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     usb_device->max_packet_size = 8;
 
-    usb_device_desc_t device_desc = {0};
+    usb_device->descriptor_buffer = memory_malloc(usb_device->max_packet_size);
 
-    if(!usb_device_request(usb_device,
-                           NULL,
-                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
-                           USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
-                           USB_BASE_DESC_TYPE_DEVICE << 8, 0,
-                           8, &device_desc)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot get device descriptor");
+    if(!usb_device->descriptor_buffer) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for descriptor buffer");
         usb_device_free(usb_device);
 
         return -1;
     }
-
-    PRINTLOG(USB, LOG_DEBUG, "max packet size: 0x%x", device_desc.max_packet_size);
-
-    usb_device->max_packet_size = device_desc.max_packet_size;
-
-    time_timer_spinsleep(5000);
 
 
     if(!usb_device_request(usb_device,
@@ -669,24 +661,61 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                            USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                            USB_BASE_DESC_TYPE_DEVICE << 8, 0,
-                           sizeof(usb_device_desc_t), &device_desc)) {
+                           8, usb_device->descriptor_buffer)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get device descriptor");
         usb_device_free(usb_device);
 
         return -1;
     }
 
-    if(usb_device_get_descriptor_strings(usb_device, device_desc) != 0) {
+    usb_device->desc = (usb_device_desc_t*)usb_device->descriptor_buffer;
+
+    PRINTLOG(USB, LOG_DEBUG, "max packet size: 0x%x", usb_device->desc->max_packet_size);
+
+    usb_device->max_packet_size = usb_device->desc->max_packet_size;
+
+    uint32_t desc_size = usb_device->desc->length;
+
+    memory_free(usb_device->descriptor_buffer);
+    usb_device->descriptor_buffer = memory_malloc(desc_size);
+
+    if(!usb_device->descriptor_buffer) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for descriptor buffer");
+        usb_device_free(usb_device);
+
+        return -1;
+    }
+
+
+    if(!usb_device_request(usb_device,
+                           NULL,
+                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
+                           USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
+                           USB_BASE_DESC_TYPE_DEVICE << 8, 0,
+                           desc_size, usb_device->descriptor_buffer)) {
+        PRINTLOG(USB, LOG_ERROR, "cannot get device descriptor");
+        usb_device_free(usb_device);
+
+        return -1;
+    }
+
+    usb_device->desc = (usb_device_desc_t*)usb_device->descriptor_buffer;
+
+    if(usb_device_get_descriptor_strings(usb_device) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get descriptor strings");
         usb_device_free(usb_device);
 
         return -1;
     }
 
-    usb_device_print_desc(device_desc, usb_device);
+    usb_device->vendor_id = usb_device->desc->vendor_id;
+    usb_device->product_id = usb_device->desc->product_id;
+    usb_device->device_version = usb_device->desc->device_version;
 
-    usb_device->num_configurations = device_desc.num_configurations;
-    usb_device->configurations = memory_malloc(sizeof(usb_config_desc_t*) * device_desc.num_configurations);
+    usb_device_print_desc(usb_device);
+
+    usb_device->num_configurations = usb_device->desc->num_configurations;
+    usb_device->configurations = memory_malloc(sizeof(usb_config_desc_t*) * usb_device->num_configurations);
 
     if(!usb_device->configurations) {
         PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for configurations");
@@ -695,7 +724,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
         return -1;
     }
 
-    for(int32_t i = 0; i < device_desc.num_configurations; i++) {
+    for(uint32_t i = 0; i < usb_device->num_configurations; i++) {
         usb_device->configurations[i] = memory_malloc(sizeof(usb_config_t));
 
         if(!usb_device->configurations[i]) {
@@ -1119,4 +1148,3 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     return 0;
 }
-#pragma GCC diagnostic pop

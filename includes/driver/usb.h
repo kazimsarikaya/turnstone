@@ -374,9 +374,14 @@ typedef struct usb_device_t {
     uint32_t                         num_configurations;
     usb_config_t**                   configurations;
     uint32_t                         selected_config;
+    uint16_t                         vendor_id;
+    uint16_t                         product_id;
+    uint16_t                         device_version;
     char_t*                          vendor;
     char_t*                          product;
     char_t*                          serial;
+    uint8_t*                         descriptor_buffer;
+    usb_device_desc_t*               desc;
     boolean_t                        is_hub;
     uint8_t                          hub_num_ports;
     uint32_t                         hub_status_endpoint_address;
