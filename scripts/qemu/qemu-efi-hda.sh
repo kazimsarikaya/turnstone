@@ -90,14 +90,15 @@ fi
   -device usb-hub,bus=xhci.0,id=hub0,port=1 \
   -device usb-tablet,bus=xhci.0,port=1.1 \
   -device usb-kbd,bus=xhci.0,port=1.2 \
+  -device usb-audio,bus=xhci.0,port=1.3 \
   -device usb-storage,bus=xhci.0,id=bot0,port=2,removable=on,drive=usbbot \
   -device usb-uas,bus=xhci.0,id=uas0,port=3 \
   -device scsi-hd,bus=uas0.0,lun=0,removable=on,drive=usbuas \
-  -device usb-audio,bus=xhci.0,port=4 \
-  -audio pipewire \
+  -device usb-host,vendorid=0x2357,productid=0x0601,bus=xhci.0,port=4 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \
   -debugcon file:${BASEDIR}/tmp/qemu-acpi-debug.log -global isa-debugcon.iobase=0x402 \
   -monitor stdio \
+  -audio pipewire \
   -display sdl,gl=on,show-cursor=off
