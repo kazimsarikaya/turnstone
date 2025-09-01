@@ -717,6 +717,8 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
         usb_config_desc_t* config_desc = (usb_config_desc_t*)config->config_buffer;
 
+        config->configuration_value = config_desc->configuration_value;
+
         uint32_t idx = config_desc->length;
 
         PRINTLOG(USB, LOG_TRACE, "config data between 0x%x-0x%x", config_desc->length, config_desc->total_length);
@@ -930,21 +932,22 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
     usb_device->selected_config = 0;
 
+    uint8_t selected_config_value = usb_device->configurations[usb_device->selected_config]->configuration_value;
 
     if(!usb_device_request(usb_device,
                            NULL,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_CONFIGURATION,
-                           usb_device->selected_config, 0,
+                           selected_config_value, 0,
                            0, 0)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot set selected config 0x%x", usb_device->selected_config);
+        PRINTLOG(USB, LOG_ERROR, "cannot set selected config 0x%x and value 0x%x", usb_device->selected_config, selected_config_value);
         usb_device_free(usb_device);
 
         return -1;
     }
 
 
-    PRINTLOG(USB, LOG_TRACE, "picked config: 0x%x", usb_device->selected_config);
+    PRINTLOG(USB, LOG_TRACE, "picked config: 0x%x and value 0x%x", usb_device->selected_config, selected_config_value);
 
     usb_config_t* selected_config = usb_device->configurations[usb_device->selected_config];
 

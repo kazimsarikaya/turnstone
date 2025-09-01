@@ -354,6 +354,7 @@ typedef struct usb_interface_t {
 
 typedef struct usb_config_t {
     uint32_t          config_id;
+    uint8_t           configuration_value;
     uint8_t*          config_buffer;
     uint32_t          num_interfaces;
     usb_interface_t** interfaces;
