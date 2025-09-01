@@ -1484,7 +1484,19 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     return 0;
 }
 
-static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
+static uint32_t usb_xhci_get_microframe_index(usb_controller_t* usb_controller) {
+    usb_controller_metadata_t* metadata = usb_controller->metadata;
+
+    uint32_t mfindex = 0;
+
+    // MFIndex is supported
+    mfindex = (metadata->runtime->mfindex & 0x7FF);
+    mfindex = mfindex >> 3;
+
+    return mfindex;
+}
+
+static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
 
     if(!transfer->driver) {
@@ -1517,12 +1529,12 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
     }
 
     uint8_t ep_addr = endpoint->desc->endpoint_address;
-    PRINTLOG(USB, LOG_TRACE, "bulk transfer on endpoint 0x%02x", ep_addr);
+    PRINTLOG(USB, LOG_TRACE, "data transfer on endpoint 0x%02x", ep_addr);
     uint8_t ep_direction = (ep_addr >> 7) & 0x01;
     uint8_t ep_index = 2 * (ep_addr & 0x0F) + ep_direction;
 
     if(ep_index == 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot do bulk transfer on endpoint 0");
+        PRINTLOG(USB, LOG_ERROR, "cannot do data transfer on endpoint 0");
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -1541,13 +1553,10 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
     usb_xhci_trb_t* transfer_ring = (usb_xhci_trb_t*)transfer_ring_va;
     uint32_t trb_index = context->endpoints[ep_index - 1].ep_trb_index;
 
-
-    uint32_t dir_bit = endpoint->in ? (1 << 16) : 0;
-
     uint32_t length = transfer->length;
     void* data = transfer->data;
 
-    PRINTLOG(USB, LOG_TRACE, "XHCI bulk transfer for slot %d, ep_index %d, transfer_ring=0x%llx trb_index %d",
+    PRINTLOG(USB, LOG_TRACE, "XHCI data transfer for slot %d, ep_index %d, transfer_ring=0x%llx trb_index %d",
              device->slot_id, ep_index, transfer_ring_fa, trb_index);
 
     if(length) {
@@ -1587,14 +1596,38 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
             return -1;
         }
 
+        PRINTLOG(USB, LOG_TRACE, "data buffer fa 0x%llx and length 0x%x", data_fa, length);
+
+        uint32_t mfindex = 0;
+
+        uint32_t ioc = 1;
+        uint32_t mfindex_inc = 0;
+
+        if(transfer->is_isochronous) {
+            mfindex = usb_xhci_get_microframe_index(usb_controller);
+            PRINTLOG(USB, LOG_TRACE, "current microframe index: %d", mfindex);
+            ioc = 0;
+        }
+
         while (remaining_length > 0) {
             uint32_t curr_length = MIN(remaining_length, max_packet_size);
 
-            PRINTLOG(USB, LOG_TRACE, "data fa: 0x%llx length 0x%x", data_fa, curr_length);
+            // PRINTLOG(USB, LOG_TRACE, "data fa: 0x%llx length 0x%x", data_fa, curr_length);
+
+            usb_xhci_trb_type_t trb_type = USB_XHCI_TRB_TYPE_TR_NORMAL;
+
+            if(transfer->is_isochronous) {
+                trb_type = USB_XHCI_TRB_TYPE_TR_ISOCH;
+                mfindex_inc++;
+                if(mfindex_inc == 8) {
+                    mfindex = (mfindex + 1); // % 8;
+                    mfindex_inc = 0;
+                }
+            }
 
             transfer_ring[trb_index].parameter = data_fa;
             transfer_ring[trb_index].status = curr_length;
-            transfer_ring[trb_index].control = dir_bit | (USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5)  | 1;
+            transfer_ring[trb_index].control = (mfindex << 20) | (trb_type << 10) | (ioc << 5)  | 1;
 
 
             uint64_t cur_trb_fa = transfer_ring_fa + trb_index * sizeof(usb_xhci_trb_t);
@@ -1602,6 +1635,10 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
             if(!transfer->is_async) {
                 usb_xhci_pool_event_init(cur_trb_fa, USB_XHCI_TRB_TYPE_ER_TRANSFER);
 
+                doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
+            }
+
+            if(transfer->is_isochronous) {
                 doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
             }
 
@@ -1620,7 +1657,7 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
 
                 if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS &&
                    cc != USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
-                    PRINTLOG(USB, LOG_ERROR, "bulk transfer failed, completion code: %d", cc);
+                    PRINTLOG(USB, LOG_ERROR, "data transfer failed, completion code: %d", cc);
                     transfer->complete = true;
                     transfer->success = false;
                     return -1;
@@ -1631,13 +1668,13 @@ static int8_t usb_xhci_bulk_transfer(usb_controller_t* usb_controller, usb_trans
             remaining_length -= curr_length;
         }
     } else {
-        PRINTLOG(USB, LOG_ERROR, "zero-length bulk transfer");
+        PRINTLOG(USB, LOG_ERROR, "zero-length data transfer");
         transfer->complete = true;
         transfer->success = false;
         return -1;
     }
 
-    PRINTLOG(USB, LOG_TRACE, "XHCI bulk transfer complete for slot %d", device->slot_id);
+    PRINTLOG(USB, LOG_TRACE, "XHCI data transfer complete for slot %d", device->slot_id);
 
     transfer->complete = true;
     transfer->success = true;
@@ -1827,7 +1864,7 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     PRINTLOG(USB, LOG_DEBUG, "XHCI DCBAA initialized at 0x%016llx", dcbaa_va);
 
     // Allocate Command Ring
-    metadata->cmd_ring_size = 255;
+    metadata->cmd_ring_size = 1023;
     uint64_t cmd_ring_size = (metadata->cmd_ring_size + 1) * sizeof(usb_xhci_trb_t);
     uint64_t cmd_ring_fa_count = (cmd_ring_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t* cmd_ring_frames = NULL;
@@ -1886,7 +1923,7 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     metadata->erst_size = FRAME_SIZE;
     metadata->erst_frame = erst_frame;
 
-    metadata->event_ring_size = 255;
+    metadata->event_ring_size = 1023;
     uint64_t event_ring_size = (metadata->event_ring_size + 1) * sizeof(usb_xhci_trb_t);
     uint64_t event_ring_fa_count = (event_ring_size + FRAME_SIZE - 1) / FRAME_SIZE;
     frame_t* event_ring_frames = NULL;
@@ -1991,7 +2028,7 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     usb_controller->probe_port = usb_xhci_probe_port;
     usb_controller->probe_all_ports = usb_xhci_probe_all_ports;
     usb_controller->control_transfer = usb_xhci_control_transfer;
-    usb_controller->bulk_transfer = usb_xhci_bulk_transfer;
+    usb_controller->data_transfer = usb_xhci_data_transfer;
     usb_controller->controller_type = USB_CONTROLLER_TYPE_XHCI;
     usb_controller->destroy_controller_device_context = usb_xhci_destroy_device_controller_context;
 

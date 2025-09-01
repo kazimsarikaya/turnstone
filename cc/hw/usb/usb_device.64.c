@@ -1080,6 +1080,39 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                 }
             }
         }
+
+        if(interface_class == USB_CLASS_AUDIO) {
+            if(interface_subclass == USB_SUBCLASS_AUDIO_CONTROL) {
+                if(usb_audio_control_init(usb_device, interface) != 0) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot initialize audio");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+            } else if(interface_subclass == USB_SUBCLASS_AUDIO_STREAMING) {
+                if(num_endpoints >= 1) {
+                    if(!usb_device_request(usb_device,
+                                           NULL,
+                                           USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_INTERFACE,
+                                           USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_INTERFACE,
+                                           interface->desc->alternate_setting, interface->desc->interface_number,
+                                           0, 0)) {
+                        PRINTLOG(USB, LOG_ERROR, "cannot set selected config 0x%x", usb_device->selected_config);
+                        usb_device_free(usb_device);
+
+                        return -1;
+                    }
+
+                    if(usb_audio_streaming_init(usb_device, interface) != 0) {
+                        PRINTLOG(USB, LOG_ERROR, "cannot initialize audio");
+                        usb_device_free(usb_device);
+
+                        return -1;
+                    }
+
+                }
+            }
+        }
     }
 
     PRINTLOG(USB, LOG_INFO, "device %s is ready", usb_device->product);

@@ -315,6 +315,7 @@ typedef struct usb_transfer_t {
     uint64_t              error_count;
     uint32_t              stream_id;
     boolean_t             is_async;
+    boolean_t             is_isochronous;
 } usb_transfer_t;
 
 typedef struct usb_controller_t {
@@ -328,7 +329,7 @@ typedef struct usb_controller_t {
     int8_t (*probe_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*reset_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*control_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
-    int8_t (*bulk_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
+    int8_t (*data_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*destroy_controller_device_context)(usb_controller_t* controller, usb_device_t* device);
 } usb_controller_t;
 
@@ -405,6 +406,12 @@ typedef enum usb_class_t {
     USB_CLASS_VENDOR_SPECIFIC = 0xFF,
 } usb_interface_class_t;
 
+typedef enum usb_subclass_audio_t {
+    USB_SUBCLASS_AUDIO_CONTROL = 0x01,
+    USB_SUBCLASS_AUDIO_STREAMING = 0x02,
+    USB_SUBCLASS_MIDI_STREAMING = 0x03,
+} usb_interface_subclass_audio_t;
+
 typedef enum usb_subclass_hid_t {
     USB_SUBCLASS_HID_NO_SUBCLASS = 0x00,
     USB_SUBCLASS_HID_BOOT_INTERFACE_SUBCLASS = 0x01,
@@ -447,6 +454,9 @@ int8_t usb_qemu_tablet_init(usb_device_t* device, usb_interface_t* interface);
 int8_t usb_mass_storage_init(usb_device_t* device, usb_interface_t* interface);
 
 int8_t usb_hub_init(usb_device_t* device, usb_interface_t* interface);
+
+int8_t usb_audio_control_init(usb_device_t* device, usb_interface_t* interface);
+int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface);
 
 boolean_t usb_device_request(usb_device_t*           usb_device,
                              usb_interface_t*        interface,

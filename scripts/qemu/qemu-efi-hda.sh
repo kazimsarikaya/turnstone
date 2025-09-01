@@ -93,6 +93,8 @@ fi
   -device usb-storage,bus=xhci.0,id=bot0,port=2,removable=on,drive=usbbot \
   -device usb-uas,bus=xhci.0,id=uas0,port=3 \
   -device scsi-hd,bus=uas0.0,lun=0,removable=on,drive=usbuas \
+  -device usb-audio,bus=xhci.0,port=4 \
+  -audio pipewire \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \
