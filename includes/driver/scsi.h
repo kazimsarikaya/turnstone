@@ -19,6 +19,7 @@ extern "C" {
 
 typedef enum scsi_command_opcode_t {
     SCSI_COMMAND_OPCODE_TEST_UNIT_READY = 0x00,
+    SCSI_COMMAND_OPCODE_REQUEST_SENSE = 0x03,
     SCSI_COMMAND_OPCODE_INQUIRY = 0x12,
     SCSI_COMMAND_OPCODE_READ_CAPACITY_16 = 0x9E,
     SCSI_COMMAND_OPCODE_READ_CAPACITY_10 = 0x25,
@@ -88,6 +89,37 @@ typedef struct scsi_standard_inquiry_data_t {
 }__attribute__((packed)) scsi_standard_inquiry_data_t;
 
 _Static_assert(sizeof(scsi_standard_inquiry_data_t) == 512, "scsi_standard_inquiry_data_t size mismatch");
+
+typedef struct scsi_command_request_sense_t {
+    uint8_t opcode;
+    uint8_t desc      : 1;
+    uint8_t reserved1 : 7;
+    uint8_t reserved2[2];
+    uint8_t allocation_length;
+    uint8_t control;
+}__attribute__((packed)) scsi_command_request_sense_t;
+
+_Static_assert(sizeof(scsi_command_request_sense_t) == 6, "scsi_command_request_sense_t size mismatch");
+
+typedef struct scsi_sense_data_t {
+    uint8_t  response_code : 7; // 0x70 = current errors, 0x71 = deferred errors
+    uint8_t  valid         : 1;
+    uint8_t  obsolete;
+    uint8_t  filemark  : 1;
+    uint8_t  eom       : 1;
+    uint8_t  ili       : 1;
+    uint8_t  reserved  : 1;
+    uint8_t  sense_key : 4; // low 4 bits
+    uint32_t information; // 4 bytes (big-endian!)
+    uint8_t  additional_length; // usually 10
+    uint32_t command_specific; // 4 bytes
+    uint8_t  asc; // additional sense code
+    uint8_t  ascq; // additional sense code qualifier
+    uint8_t  fru; // field replaceable unit
+    uint8_t  sense_key_specific[3]; // optional / vendor-specific
+}__attribute__((packed))  scsi_sense_data_t;
+
+_Static_assert(sizeof(scsi_sense_data_t) == 18, "scsi_sense_data_t size mismatch");
 
 typedef struct scsi_command_read_capacity_16_t {
     uint8_t opcode;

@@ -23,6 +23,7 @@
 #include <apic.h>
 #include <utils.h>
 #include <cpu/task.h>
+#include <strings.h>
 
 MODULE("turnstone.kernel.hw.network.igb");
 
@@ -92,14 +93,18 @@ static int8_t network_igb_process_tx(void) {
             return -1;
         }
 
+        char_t* dhcp_task_name = strprintf("dhcp-%02x%02x%02x%02x%02x%02x",
+                                           dev->mac[0], dev->mac[1], dev->mac[2],
+                                           dev->mac[3], dev->mac[4], dev->mac[5]);
+
         args[0] = (void*)dev->mac;
         args[1] = dev->return_queue;
 
-        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, "dhcp");
+        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
     }
 
     while(1) {
-        boolean_t packet_exists = 0;
+        boolean_t packet_exists = false;
 
         for(uint64_t dev_idx = 0; dev_idx < list_size(igb_net_devs); dev_idx++) {
             network_igb_dev_t* dev = (network_igb_dev_t*)list_get_data_at_position(igb_net_devs, dev_idx);
@@ -109,7 +114,7 @@ static int8_t network_igb_process_tx(void) {
 
                 if(packet) {
                     PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
-                    packet_exists = 1;
+                    packet_exists = true;
 
                     uint8_t* buffer = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dev->tx_desc[dev->tx_tail].address);
 
@@ -117,6 +122,7 @@ static int8_t network_igb_process_tx(void) {
 
                     dev->tx_desc[dev->tx_tail].length = packet->packet_len;
                     dev->tx_desc[dev->tx_tail].cmd = 3;
+                    dev->tx_desc[dev->tx_tail].vlan = packet->is_vlan_tagged ? (packet->vlan_id & 0x0FFF) : 0;
 
                     memory_free(packet->packet_data);
                     memory_free((void*)packet);
@@ -134,7 +140,7 @@ static int8_t network_igb_process_tx(void) {
 
         }
 
-        if(packet_exists == 0) {
+        if(!packet_exists) {
             task_set_message_waiting();
             task_yield();
         }
@@ -344,7 +350,8 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                 // advance the tail pointer
                 ((network_igb_dev_t*)dev)->rx_tail = (dev->rx_tail + 1) % NETWORK_IGB_NUM_RX_DESCRIPTORS;
                 // check if the next descriptor is ready
-                uint32_t status_error = dev->rx_desc[dev->rx_tail].wb.upper.status_error;
+                network_igb_rx_desc_t* desc = (network_igb_rx_desc_t*)&dev->rx_desc[dev->rx_tail];
+                uint32_t status_error = desc->wb.upper.status_error;
                 // first 20bits are status, last 12 bits are error
                 uint32_t status = status_error & 0xFFFFF;
                 uint32_t error = status_error >> 20;
@@ -359,7 +366,8 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
 
                 // we get packet address with calculated offset
                 uint8_t* pkt = (uint8_t*)(dev->rx_packet_buffer_va + dev->rx_tail * NETWORK_IGB_RX_BUFFER_SIZE);
-                uint16_t pktlen = dev->rx_desc[dev->rx_tail].wb.upper.length;
+                uint16_t pktlen = desc->wb.upper.length;
+                uint16_t vlan_id = desc->wb.upper.vlan;
                 boolean_t dropflag = 0;
 
                 if( pktlen < 60 ) {
@@ -393,6 +401,8 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                     packet->return_queue = dev->return_queue;
                     packet->network_info = (void*)dev->mac;
                     packet->network_type = NETWORK_TYPE_ETHERNET;
+                    packet->is_vlan_tagged = vlan_id ? true : false;
+                    packet->vlan_id = vlan_id;
 
                     packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
 
@@ -462,27 +472,7 @@ static int8_t network_igb_other_isr(interrupt_frame_ext_t* frame)  {
         return -1;
     }
 
-    uint32_t eicr = network_igb_read_mmio(dev, NETWORK_IGB_REG_EICR);
     uint32_t isr = network_igb_read_mmio(dev, NETWORK_IGB_REG_ICR);
-
-    char_t buffer1[64] = {0};
-    char_t buffer2[64] = {0};
-
-    utoh_with_buffer(buffer1, eicr);
-    utoh_with_buffer(buffer2, isr);
-
-    video_text_print("other isr eicr 0x");
-    video_text_print(buffer1);
-    video_text_print(" isr 0x");
-    video_text_print(buffer2);
-
-    boolean_t is_other = eicr & (1 << 2);
-
-    if(!is_other) {
-        video_text_print(" not other");
-    }
-
-    video_text_print("\n");
 
     // clearing the pending interrupts
     // never clear 0. and 7. bit set them 0 on isr
@@ -507,28 +497,6 @@ static int8_t network_igb_tx_isr(interrupt_frame_ext_t* frame)  {
         video_text_print("no dev\n");
         return -1;
     }
-
-    uint32_t eicr = network_igb_read_mmio(dev, NETWORK_IGB_REG_EICR);
-    uint32_t isr = network_igb_read_mmio(dev, NETWORK_IGB_REG_ICR);
-
-    char_t buffer1[64] = {0};
-    char_t buffer2[64] = {0};
-
-    utoh_with_buffer(buffer1, eicr);
-    utoh_with_buffer(buffer2, isr);
-
-    video_text_print("tx isr eicr 0x");
-    video_text_print(buffer1);
-    video_text_print(" isr 0x");
-    video_text_print(buffer2);
-
-    boolean_t is_tx = eicr & (1 << 1);
-
-    if(!is_tx) {
-        video_text_print(" not tx");
-    }
-
-    video_text_print("\n");
 
     // clearing the pending interrupts
     network_igb_write_mmio(dev, NETWORK_IGB_REG_EICR, 1 << 1);
@@ -560,28 +528,6 @@ static int8_t network_igb_rx_isr(interrupt_frame_ext_t* frame)  {
         video_text_print("no dev\n");
         return -1;
     }
-
-    uint32_t eicr = network_igb_read_mmio(dev, NETWORK_IGB_REG_EICR);
-    uint32_t isr = network_igb_read_mmio(dev, NETWORK_IGB_REG_ICR);
-
-    char_t buffer1[64] = {0};
-    char_t buffer2[64] = {0};
-
-    utoh_with_buffer(buffer1, eicr);
-    utoh_with_buffer(buffer2, isr);
-
-    boolean_t is_rx = eicr & (1 << 0);
-
-    video_text_print("rx isr eicr 0x");
-    video_text_print(buffer1);
-    video_text_print(" isr 0x");
-    video_text_print(buffer2);
-
-    if(!is_rx) {
-        video_text_print(" not rx");
-    }
-
-    video_text_print("\n");
 
     if(dev->rx_task_id) {
         task_set_interrupt_received(dev->rx_task_id);
@@ -790,11 +736,15 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     rx_args[0] = (void*)dev;
 
-    uint64_t rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_rx, 1, rx_args, "igb rx");
+    char_t* rx_task_name = strprintf("igb-rx-%02x%02x%02x%02x%02x%02x",
+                                     dev->mac[0], dev->mac[1], dev->mac[2],
+                                     dev->mac[3], dev->mac[4], dev->mac[5]);
+
+    uint64_t rx_task_id = task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_rx, 1, rx_args, rx_task_name);
     dev->rx_task_id = rx_task_id;
 
 
-    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb tx");
+    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb-tx");
 
     list_list_insert(igb_net_devs, dev);
 

@@ -18,6 +18,7 @@
 #include <random.h>
 #include <xxhash.h>
 #include <cpu.h>
+#include <strings.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000

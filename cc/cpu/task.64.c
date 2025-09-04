@@ -704,6 +704,13 @@ task_t* task_find_next_task(void) {
                     }
                 }
 
+                if(found_index != i && t->custom_has_message_func) {
+                    if(t->custom_has_message_func(t->custom_has_message_func_args)) {
+                        found_index = i;
+                        break;
+                    }
+                }
+
             } else { // wait status cleared task
                 if(t->state != TASK_STATE_SUSPENDED) {
                     video_text_print("task_find_next_task: task state is not suspended: 0x");
@@ -882,6 +889,8 @@ void task_end_task(void) {
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
     } else {
+        PRINTLOG(TASKING, LOG_WARNING, "ending task %s with pid 0x%llx on cpu 0x%llx that is not in starting state but in state 0x%x",
+                 current_task->task_name, current_task->task_id, cpu_state->local_apic_id, current_task->state);
         ret = current_task->exit_code;
     }
 

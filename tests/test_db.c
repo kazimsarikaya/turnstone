@@ -65,7 +65,6 @@ int32_t test_step1(uint32_t argc, char_t** argv) {
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
     cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
@@ -354,7 +353,6 @@ int32_t test_step2(uint32_t argc, char_t** argv) {
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
     cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
@@ -679,7 +677,6 @@ int32_t test_step3(uint32_t argc, char_t** argv) {
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
     cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {
@@ -1119,7 +1116,6 @@ int32_t test_step4(uint32_t argc, char_t** argv) {
     tosdb_cache_config_t cc = {0};
     cc.bloomfilter_size = 2 << 20;
     cc.index_data_size = 4 << 20;
-    cc.secondary_index_data_size = 4 << 20;
     cc.valuelog_size = 16 << 20;
 
     if(!tosdb_cache_config_set(tosdb, &cc)) {

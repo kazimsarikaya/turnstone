@@ -88,6 +88,9 @@ typedef __int128 int128_t;
 /*! alias for 128-bit signed integer */
 typedef unsigned __int128 uint128_t;
 
+/*! pointer difference type */
+typedef uint64_t uintptr_t;
+
 typedef __builtin_va_list va_list;
 #define va_start(v, f) __builtin_va_start(v, f);
 #define va_end(v)       __builtin_va_end(v);

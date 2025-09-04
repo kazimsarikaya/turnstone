@@ -224,7 +224,7 @@ typedef union usb_xhci_portsc_t {
         volatile uint32_t pr        :1; ///< Port Reset
         volatile uint32_t pls       :4; ///< Port Link State
         volatile uint32_t pp        :1; ///< Port Power
-        volatile uint32_t port_speed:4; ///< Port Speed
+        volatile uint32_t ps        :4; ///< Port Speed
         volatile uint32_t pic       :2; ///< Port Indicator Control
         volatile uint32_t lws       :1; ///< Port Link State Write Strobe
         volatile uint32_t csc       :1; ///< Port Connect Status Change
@@ -337,8 +337,126 @@ typedef union usb_xhci_porthlpmc_t {
 
 _Static_assert(sizeof(usb_xhci_porthlpmc_t) == 4, "usb_xhci_porthlpmc_t is not 4 bytes");
 
+typedef struct usb_xhci_trb_t {
+    volatile uint64_t parameter; ///< TRB-specific parameter
+    volatile uint32_t status; ///< Status field
+    volatile uint32_t control; ///< Control field (TRB type, cycle bit)
+} __attribute__((packed)) usb_xhci_trb_t;
+
+_Static_assert(sizeof(usb_xhci_trb_t) == 16, "usb_xhci_trb_t is not 16 bytes");
+
+typedef struct usb_xhci_interrupter_t {
+    volatile uint32_t iman; ///< Interrupter Management
+    volatile uint32_t imod; ///< Interrupter Moderation
+    volatile uint32_t erstsz; ///< Event Ring Segment Table Size
+    volatile uint32_t reserved;
+    volatile uint64_t erstba; ///< Event Ring Segment Table Base Address
+    volatile uint64_t erdp; ///< Event Ring Dequeue Pointer
+} __attribute__((packed)) usb_xhci_interrupter_t;
+
+_Static_assert(sizeof(usb_xhci_interrupter_t) == 0x20, "usb_xhci_interrupter_t is not 32 bytes");
+
+typedef struct usb_xhci_runtime_registers_t {
+    volatile uint32_t               mfindex; ///< Microframe Index
+    volatile uint32_t               reserved[7];
+    volatile usb_xhci_interrupter_t interrupters[0]; ///< Array of interrupters
+} __attribute__((packed)) usb_xhci_runtime_registers_t;
+
+typedef struct usb_xhci_doorbell_t {
+    volatile uint32_t db; ///< Doorbell Register
+} __attribute__((packed)) usb_xhci_doorbell_t;
+
+_Static_assert(sizeof(usb_xhci_doorbell_t) == 4, "usb_xhci_doorbell_t is not 4 bytes");
+
+typedef struct usb_xhci_stream_context_t {
+    volatile uint64_t dequeu_address; ///< Dequeue Pointe
+    volatile uint32_t stopped_edtla; ///< Stopped Endpoint Dequeue Logical Address
+    volatile uint32_t reserved;
+} __attribute__((packed)) usb_xhci_stream_context_t;
+
+_Static_assert(sizeof(usb_xhci_stream_context_t) == 16, "usb_xhci_stream_context_t is not 16 bytes");
+
+typedef enum usb_xhci_trb_type_t {
+    USB_XHCI_TRB_TYPE_TRB_RESERVED = 0,
+    USB_XHCI_TRB_TYPE_TR_NORMAL,
+    USB_XHCI_TRB_TYPE_TR_SETUP,
+    USB_XHCI_TRB_TYPE_TR_DATA,
+    USB_XHCI_TRB_TYPE_TR_STATUS,
+    USB_XHCI_TRB_TYPE_TR_ISOCH, ///< 5
+    USB_XHCI_TRB_TYPE_TR_LINK,
+    USB_XHCI_TRB_TYPE_TR_EVDATA,
+    USB_XHCI_TRB_TYPE_TR_NOOP,
+    USB_XHCI_TRB_TYPE_CR_ENABLE_SLOT,
+    USB_XHCI_TRB_TYPE_CR_DISABLE_SLOT, ///< 10
+    USB_XHCI_TRB_TYPE_CR_ADDRESS_DEVICE,
+    USB_XHCI_TRB_TYPE_CR_CONFIGURE_ENDPOINT,
+    USB_XHCI_TRB_TYPE_CR_EVALUATE_CONTEXT,
+    USB_XHCI_TRB_TYPE_CR_RESET_ENDPOINT,
+    USB_XHCI_TRB_TYPE_CR_STOP_ENDPOINT, ///< 15
+    USB_XHCI_TRB_TYPE_CR_SET_TR_DEQUEUE,
+    USB_XHCI_TRB_TYPE_CR_RESET_DEVICE,
+    USB_XHCI_TRB_TYPE_CR_FORCE_EVENT,
+    USB_XHCI_TRB_TYPE_CR_NEGOTIATE_BW,
+    USB_XHCI_TRB_TYPE_CR_SET_LATENCY_TOLERANCE, ///< 20
+    USB_XHCI_TRB_TYPE_CR_GET_PORT_BANDWIDTH,
+    USB_XHCI_TRB_TYPE_CR_FORCE_HEADER,
+    USB_XHCI_TRB_TYPE_CR_NOOP,
+    USB_XHCI_TRB_TYPE_ER_TRANSFER = 32,
+    USB_XHCI_TRB_TYPE_ER_COMMAND_COMPLETE,
+    USB_XHCI_TRB_TYPE_ER_PORT_STATUS_CHANGE,
+    USB_XHCI_TRB_TYPE_ER_BANDWIDTH_REQUEST,
+    USB_XHCI_TRB_TYPE_ER_DOORBELL,
+    USB_XHCI_TRB_TYPE_ER_HOST_CONTROLLER,
+    USB_XHCI_TRB_TYPE_ER_DEVICE_NOTIFICATION,
+    USB_XHCI_TRB_TYPE_ER_MFINDEX_WRAP,
+    /* vendor specific bits */
+    USB_XHCI_TRB_TYPE_CR_VENDOR_NEC_FIRMWARE_REVISION  = 49,
+    USB_XHCI_TRB_TYPE_CR_VENDOR_NEC_CHALLENGE_RESPONSE = 50,
+} usb_xhci_trb_type_t;
+
+typedef enum usb_xhci_trb_ccode_t {
+    USB_XHCI_TRB_CCODE_CC_INVALID = 0,
+    USB_XHCI_TRB_CCODE_CC_SUCCESS,
+    USB_XHCI_TRB_CCODE_CC_DATA_BUFFER_ERROR,
+    USB_XHCI_TRB_CCODE_CC_BABBLE_DETECTED,
+    USB_XHCI_TRB_CCODE_CC_USB_TRANSACTION_ERROR,
+    USB_XHCI_TRB_CCODE_CC_TRB_ERROR, ///< 5
+    USB_XHCI_TRB_CCODE_CC_STALL_ERROR,
+    USB_XHCI_TRB_CCODE_CC_RESOURCE_ERROR,
+    USB_XHCI_TRB_CCODE_CC_BANDWIDTH_ERROR,
+    USB_XHCI_TRB_CCODE_CC_NO_SLOTS_ERROR,
+    USB_XHCI_TRB_CCODE_CC_INVALID_STREAM_TYPE_ERROR, ///< 10
+    USB_XHCI_TRB_CCODE_CC_SLOT_NOT_ENABLED_ERROR,
+    USB_XHCI_TRB_CCODE_CC_EP_NOT_ENABLED_ERROR,
+    USB_XHCI_TRB_CCODE_CC_SHORT_PACKET,
+    USB_XHCI_TRB_CCODE_CC_RING_UNDERRUN,
+    USB_XHCI_TRB_CCODE_CC_RING_OVERRUN, ///< 15
+    USB_XHCI_TRB_CCODE_CC_VF_ER_FULL,
+    USB_XHCI_TRB_CCODE_CC_PARAMETER_ERROR,
+    USB_XHCI_TRB_CCODE_CC_BANDWIDTH_OVERRUN,
+    USB_XHCI_TRB_CCODE_CC_CONTEXT_STATE_ERROR,
+    USB_XHCI_TRB_CCODE_CC_NO_PING_RESPONSE_ERROR, ///< 20
+    USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR,
+    USB_XHCI_TRB_CCODE_CC_INCOMPATIBLE_DEVICE_ERROR,
+    USB_XHCI_TRB_CCODE_CC_MISSED_SERVICE_ERROR,
+    USB_XHCI_TRB_CCODE_CC_COMMAND_RING_STOPPED,
+    USB_XHCI_TRB_CCODE_CC_COMMAND_ABORTED, ///< 25
+    USB_XHCI_TRB_CCODE_CC_STOPPED,
+    USB_XHCI_TRB_CCODE_CC_STOPPED_LENGTH_INVALID,
+    USB_XHCI_TRB_CCODE_CC_MAX_EXIT_LATENCY_TOO_LARGE_ERROR = 29,
+    USB_XHCI_TRB_CCODE_CC_ISOCH_BUFFER_OVERRUN = 31,
+    USB_XHCI_TRB_CCODE_CC_EVENT_LOST_ERROR,
+    USB_XHCI_TRB_CCODE_CC_UNDEFINED_ERROR,
+    USB_XHCI_TRB_CCODE_CC_INVALID_STREAM_ID_ERROR,
+    USB_XHCI_TRB_CCODE_CC_SECONDARY_BANDWIDTH_ERROR, ///< 35
+    USB_XHCI_TRB_CCODE_CC_SPLIT_TRANSACTION_ERROR
+} usb_xhci_trb_ccode_t;
+
+#define USB_XHCI_MAX_ENDPOINTS 31
 
 int8_t usb_xhci_init(usb_controller_t* usb_controller);
+
+uint32_t usb_xhci_get_max_psa_size(usb_controller_t* usb_controller);
 
 #ifdef __cplusplus
 }

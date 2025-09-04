@@ -203,7 +203,7 @@ int8_t memory_paging_add_va_for_frame_ext(memory_page_table_context_t* table_con
 #define memory_paging_add_va_for_frame(vas, f, t) memory_paging_add_va_for_frame_ext(NULL, vas, f, t)
 
 int8_t memory_paging_delete_va_for_frame_ext(memory_page_table_context_t* table_context, uint64_t va_start, frame_t* frm);
-#define memory_paging_delete_va_for_frame(vas, f) memory_paging_add_va_for_frame_ext(NULL, vas, f)
+#define memory_paging_delete_va_for_frame(vas, f) memory_paging_delete_va_for_frame_ext(NULL, vas, f)
 
 memory_page_table_context_t* memory_paging_build_empty_table(uint64_t internal_frame_address);
 int8_t                       memory_paging_reserve_current_page_table_frames(void);

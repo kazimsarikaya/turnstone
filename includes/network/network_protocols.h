@@ -18,6 +18,8 @@ extern "C" {
 
 #define NETWORK_PROTOCOL_ARP 0x0806
 #define NETWORK_PROTOCOL_IPV4  0x0800
+#define NETWORK_PROTOCOL_IPV6  0x86DD
+#define NETWORK_PROTOCOL_VLAN  0x8100
 
 
 typedef union network_ipv4_address_t {

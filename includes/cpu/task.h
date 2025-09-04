@@ -143,35 +143,41 @@ typedef struct task_registers_t {
 _Static_assert(sizeof(task_registers_t) == 0x20c0, "task_registers_t size must be 0x20c0");
 _Static_assert((offsetof_field(task_registers_t, avx512f) % 0x40) == 0x0, "task_registers_t sse offset must be aligned 0x40");
 
-typedef struct task_t {
-    memory_heap_t*               creator_heap; ///< the heap which task struct is at
-    memory_heap_t*               heap; ///< task's heap
-    uint64_t                     heap_size; ///< task's heap size
-    uint64_t                     task_id; ///< task's id
-    uint64_t                     cpu_id; ///< cpu id which task is running
-    uint64_t                     last_tick_count; ///< tick count when task removes from executing, used for scheduling
-    uint64_t                     task_switch_count; ///< task switch count
-    task_state_t                 state; ///< task state
-    task_attribute_t             attributes; ///< task attributes
-    void*                        entry_point; ///< entry point address
-    uint64_t                     arguments_count; ///< argument count
-    void**                       arguments; ///< argument list
-    void*                        stack; ///< stack pointer
-    uint64_t                     stack_size; ///< stack size of task
-    list_t*                      message_queues; ///< task's listining queues.
-    uint64_t                     wake_tick; ///< tick value when task wakes up
-    const char*                  task_name; ///< task name
-    memory_page_table_context_t* page_table; ///< page table
-    buffer_t*                    input_buffer; ///< input buffer
-    buffer_t*                    output_buffer; ///< output buffer
-    buffer_t*                    error_buffer; ///< error buffer
-    uint64_t                     vmcs_physical_address; ///< vmcs physical address
-    void*                        vm; ///< vm
-    int32_t                      exit_code; ///< task exit code
-    task_registers_t*            registers; ///< task registers
-} task_t; ///< short hand for struct
+/** @brief function prototype for custom message availability check function
+ * @param[in] args arguments for custom function
+ * @return true if there is a message, false otherwise
+ */
+typedef boolean_t (*task_custom_has_message_func_t)(void*);
 
-_Static_assert(sizeof(task_t) == 0xc0, "task_t size must be 0xb8"); // why this assert? where we hardcoded task_t size?
+typedef struct task_t {
+    memory_heap_t*                 creator_heap; ///< the heap which task struct is at
+    memory_heap_t*                 heap; ///< task's heap
+    uint64_t                       heap_size; ///< task's heap size
+    uint64_t                       task_id; ///< task's id
+    uint64_t                       cpu_id; ///< cpu id which task is running
+    uint64_t                       last_tick_count; ///< tick count when task removes from executing, used for scheduling
+    uint64_t                       task_switch_count; ///< task switch count
+    task_state_t                   state; ///< task state
+    task_attribute_t               attributes; ///< task attributes
+    void*                          entry_point; ///< entry point address
+    uint64_t                       arguments_count; ///< argument count
+    void**                         arguments; ///< argument list
+    void*                          stack; ///< stack pointer
+    uint64_t                       stack_size; ///< stack size of task
+    list_t*                        message_queues; ///< task's listining queues.
+    task_custom_has_message_func_t custom_has_message_func; ///< custom function to check message availability
+    void*                          custom_has_message_func_args; ///< arguments for custom function to check message availability
+    uint64_t                       wake_tick; ///< tick value when task wakes up
+    const char*                    task_name; ///< task name
+    memory_page_table_context_t*   page_table; ///< page table
+    buffer_t*                      input_buffer; ///< input buffer
+    buffer_t*                      output_buffer; ///< output buffer
+    buffer_t*                      error_buffer; ///< error buffer
+    uint64_t                       vmcs_physical_address; ///< vmcs physical address
+    void*                          vm; ///< vm
+    int32_t                        exit_code; ///< task exit code
+    task_registers_t*              registers; ///< task registers
+} task_t; ///< short hand for struct
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
@@ -244,7 +250,18 @@ void task_set_interruptible(void);
 void task_set_interrupt_received(uint64_t task_id);
 
 
+/**
+ * @brief sets task's message received flag
+ * @param[in] tid task id
+ */
 void task_set_message_received(uint64_t tid);
+
+/**
+ * @brief sets custom function to check message availability for current task
+ * @param[in] func custom function
+ * @param[in] args arguments for custom function
+ */
+void task_set_custom_has_message_func(task_custom_has_message_func_t func, void* args);
 
 /**
  * @brief adds a queue to task
