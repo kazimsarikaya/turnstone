@@ -86,6 +86,7 @@ int8_t backtrace_init(void) {
             // PRINTLOG(KERNEL, LOG_INFO, "Adding symbol: 0x%llx 0x%llx 0x%llx 0x%llx %s",
             // got[i].entry_value, got[i].symbol_value, got[i].symbol_size, got[i].symbol_name_offset, symbol_name);
             if(backtrace_symbol_table->insert(backtrace_symbol_table, &got[i], &got[i], NULL) != 0) {
+                PRINTLOG(KERNEL, LOG_ERROR, "cannot insert symbol into symbol table");
                 return -1;
             }
         }
@@ -113,6 +114,8 @@ int8_t backtrace_init(void) {
  */
 
     memory_heap_backtrace_func = backtrace;
+
+    PRINTLOG(KERNEL, LOG_INFO, "Backtrace initialized");
 
     return 0;
 }
