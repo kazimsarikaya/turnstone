@@ -148,7 +148,36 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
 }
 #pragma GCC diagnostic pop
 
-uint8_t* network_ethernet_create_packet(network_mac_address_t dst, network_mac_address_t src, network_ethernet_type_t type, uint16_t data_len, uint8_t* data) {
+uint8_t* network_ethernet_create_packet_with_vlan_tag(network_mac_address_t dst, network_mac_address_t src,
+                                                      network_ethernet_type_t type,
+                                                      boolean_t is_vlan_tagged, uint16_t vlan_id,
+                                                      uint16_t data_len, uint8_t* data) {
+    if(data == NULL || data_len == 0) {
+        return NULL;
+    }
+
+    if(is_vlan_tagged) {
+        uint8_t* res = memory_malloc(sizeof(network_ethernet_with_vlan_t) + data_len);
+
+        if(res == NULL) {
+            return NULL;
+        }
+
+        network_ethernet_with_vlan_t* eth_packet = (network_ethernet_with_vlan_t*)res;
+
+        eth_packet->type = BYTE_SWAP16(NETWORK_PROTOCOL_VLAN);
+        eth_packet->vlan_tag = BYTE_SWAP16(vlan_id & 0x0FFF); // priority 0, cfi 0
+        eth_packet->inner_type = BYTE_SWAP16(type);
+
+        memory_memcopy(dst, eth_packet->destination, sizeof(network_mac_address_t));
+        memory_memcopy(src, eth_packet->source, sizeof(network_mac_address_t));
+        memory_memcopy(data, res + sizeof(network_ethernet_with_vlan_t), data_len);
+
+        memory_free(data);
+
+        return res;
+    }
+
     uint8_t* res = memory_malloc(sizeof(network_ethernet_t) + data_len);
 
     if(res == NULL) {

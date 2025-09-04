@@ -40,6 +40,8 @@ typedef struct network_arp_t {
     network_ipv4_address_t target_ip;
 }__attribute__((packed)) network_arp_t;
 
+_Static_assert(sizeof(network_arp_t) == 28, "invalid network_arp_t size");
+
 uint8_t* network_arp_process_packet(network_arp_t* recv_arp_packet, void* network_info, uint16_t* return_packet_len);
 
 #ifdef __cplusplus
