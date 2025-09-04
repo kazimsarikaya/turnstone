@@ -11,6 +11,7 @@
 #include <logging.h>
 #include <random.h>
 #include <time/timer.h>
+#include <cpu/sync.h>
 
 MODULE("turnstone.kernel.hw.usb.mass_storage");
 

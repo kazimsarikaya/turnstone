@@ -455,10 +455,10 @@ int8_t usb_hub_init(usb_device_t* usb_device, usb_interface_t* interface) {
 
 
             if(can_init_device) {
-                if(!usb_device_init(usb_device, usb_device->controller, port - 1,
-                                    (status.hub_status & (1 << 4)) ?
-                                    USB_ENDPOINT_SPEED_LOW : USB_ENDPOINT_SPEED_FULL
-                                    )) {
+                if(usb_device_init(usb_device, usb_device->controller, port - 1,
+                                   (status.hub_status & (1 << 4)) ?
+                                   USB_ENDPOINT_SPEED_LOW : USB_ENDPOINT_SPEED_FULL
+                                   ) != 0) {
                     PRINTLOG(USB, LOG_ERROR, "cannot initialize device on port %d", port);
                 } else {
                     PRINTLOG(USB, LOG_INFO, "device on port %d initialized", port);

@@ -8,6 +8,7 @@
 
 #include <driver/usb.h>
 #include <driver/usb_xhci.h>
+#include <driver/usb_vendor.h>
 #include <hashmap.h>
 #include <logging.h>
 #include <time/timer.h>
@@ -29,9 +30,9 @@ static void usb_device_print_desc(usb_device_t* usb_device) {
     PRINTLOG(USB, LOG_TRACE, "device subclass: %x", usb_device->desc->device_subclass);
     PRINTLOG(USB, LOG_TRACE, "device protocol: %x", usb_device->desc->device_protocol);
     PRINTLOG(USB, LOG_TRACE, "max packet size: 0x%x", usb_device->desc->max_packet_size);
-    PRINTLOG(USB, LOG_TRACE, "vendor id: %x vendor name: %s",
+    PRINTLOG(USB, LOG_TRACE, "vendor id: 0x%04x vendor name: %s",
              usb_device->desc->vendor_id, usb_device->vendor ? usb_device->vendor : "unknown");
-    PRINTLOG(USB, LOG_TRACE, "product id: %x product: %s",
+    PRINTLOG(USB, LOG_TRACE, "product id: 0x%04x product: %s",
              usb_device->desc->product_id, usb_device->product ? usb_device->product : "unknown");
     PRINTLOG(USB, LOG_TRACE, "serial number string index: %x serial number: %s",
              usb_device->desc->serial_number_string, usb_device->serial ? usb_device->serial : "unknown");
@@ -54,7 +55,7 @@ static boolean_t usb_device_get_langs(usb_device_t* usb_device, char16_t* langs)
                             USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                             USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                             (USB_BASE_DESC_TYPE_STRING << 8) | 0, 0,
-                            1, string_desc)) {
+                            usb_device->max_packet_size, string_desc)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get string descriptor length");
 
         return false;
@@ -93,7 +94,7 @@ static boolean_t usb_device_get_string(usb_device_t* usb_device, char16_t lang_i
                             USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                             USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                             (USB_BASE_DESC_TYPE_STRING << 8) | str_index, lang_id,
-                            1, string_desc)) {
+                            usb_device->max_packet_size, string_desc)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get string descriptor length");
 
         return false;
@@ -166,7 +167,10 @@ boolean_t usb_device_request(usb_device_t*           usb_device,
         return false;
     }
 
-    if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE && request == USB_REQUEST_SET_ADDRESS) {
+    if(request_type == USB_REQUEST_TYPE_STANDARD &&
+       request_direction == USB_REQUEST_DIRECTION_HOST_TO_DEVICE &&
+       request_recipient == USB_REQUEST_RECIPIENT_DEVICE &&
+       request == USB_REQUEST_SET_ADDRESS) {
         usb_device->address = usb_request.value;
     }
 
@@ -313,7 +317,7 @@ static int8_t usb_device_get_config(usb_device_t* usb_device, usb_config_t* conf
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                            USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                            (USB_BASE_DESC_TYPE_CONFIG << 8) | i, 0,
-                           4, config->config_buffer)) {
+                           usb_device->max_packet_size, config->config_buffer)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get config descriptor");
 
         return -1;
@@ -661,7 +665,7 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_DEVICE,
                            USB_REQUEST_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR,
                            USB_BASE_DESC_TYPE_DEVICE << 8, 0,
-                           8, usb_device->descriptor_buffer)) {
+                           usb_device->max_packet_size, usb_device->descriptor_buffer)) {
         PRINTLOG(USB, LOG_ERROR, "cannot get device descriptor");
         usb_device_free(usb_device);
 
@@ -813,6 +817,11 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
             interface->desc = (usb_interface_desc_t*)&config->config_buffer[idx];
             interface->num_endpoints = interface->desc->num_endpoints;
+
+            PRINTLOG(USB, LOG_DEBUG, "interface number: 0x%x alt setting: 0x%x num endpoints: 0x%x",
+                     interface->desc->interface_number, interface->desc->alternate_setting, interface->num_endpoints);
+            PRINTLOG(USB, LOG_DEBUG, "interface class: 0x%x subclass: 0x%x protocol: 0x%x",
+                     interface->desc->interface_class, interface->desc->interface_subclass, interface->desc->interface_protocol);
 
             idx += length;
 
@@ -1126,7 +1135,9 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_INTERFACE,
                                            interface->desc->alternate_setting, interface->desc->interface_number,
                                            0, 0)) {
-                        PRINTLOG(USB, LOG_ERROR, "cannot set selected config 0x%x", usb_device->selected_config);
+                        PRINTLOG(USB, LOG_ERROR, "cannot set interface 0x%x for config 0x%x",
+                                 interface->desc->interface_number,
+                                 usb_device->selected_config);
                         usb_device_free(usb_device);
 
                         return -1;
@@ -1142,6 +1153,25 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
                 }
             }
         }
+
+
+        if(interface_class == USB_CLASS_VENDOR_SPECIFIC && interface_subclass == USB_SUBCLASS_VENDOR_SPECIFIC) {
+            if(usb_device->vendor_id == USB_VENDOR_ID_TP_LINK && usb_device->product_id == USB_PRODUCT_ID_TP_LINK_UE300) {
+                if(usb_device_rtl815x_init(usb_device, interface) != 0) {
+                    PRINTLOG(USB, LOG_ERROR, "cannot initialize tp-link ue300c");
+                    usb_device_free(usb_device);
+
+                    return -1;
+                }
+            } else {
+                PRINTLOG(USB, LOG_WARNING, "unknown vendor specific device 0x%x:0x%x",
+                         usb_device->vendor_id, usb_device->product_id);
+            }
+
+
+        }
+
+
     }
 
     PRINTLOG(USB, LOG_INFO, "device %s is ready", usb_device->product);

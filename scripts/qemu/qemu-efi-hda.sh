@@ -62,7 +62,7 @@ for i in `seq 0 $((NUMCPUS-1))`; do
   SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
 done
 
-TRACE_OPTS="guest_errors,mmu,trace:usb*,trace:scsi*"
+TRACE_OPTS="guest_errors,mmu,trace:usb*"
 
 # if trace_opts is not empty, then enable tracing (prefix with -d)
 
@@ -94,7 +94,7 @@ fi
   -device usb-storage,bus=xhci.0,id=bot0,port=2,removable=on,drive=usbbot \
   -device usb-uas,bus=xhci.0,id=uas0,port=3 \
   -device scsi-hd,bus=uas0.0,lun=0,removable=on,drive=usbuas \
-  -device usb-host,vendorid=0x2357,productid=0x0601,bus=xhci.0,port=4 \
+  -device usb-host,hostbus=6,bus=xhci.0,port=4,guest-reset=true,guest-resets-all=true,loglevel=10 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \

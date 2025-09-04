@@ -1191,6 +1191,8 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
         return -1;
     }
 
+    PRINTLOG(USB, LOG_DEBUG, "expected packet size: %d", expected_packet_size);
+
     uint8_t ep_direction = (request->index >> 7) & 0x01;
     uint8_t ep_index = 2 * (request->index & 0x0F) + ep_direction;
 
@@ -1254,6 +1256,9 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
         ep_trbs[i].control = ((uint64_t)USB_XHCI_TRB_TYPE_TR_NORMAL << 10) | (1 << 5) | 1;
     }
 
+    usb_xhci_doorbell_t* doorbells = metadata->doorbells;
+    doorbells[ep_index].db = ep_index; // ring doorbell for the endpoint
+
     context->endpoints[ep_index - 1].ep_trb_index = 0;
     context->endpoints[ep_index - 1].expected_packet_size = expected_packet_size;
     context->endpoints[ep_index - 1].ep_pipeline = pipeline;
@@ -1270,22 +1275,6 @@ static int8_t usb_xhci_setup_endpoint_pipeline(usb_controller_t* usb_controller,
 static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_transfer_t* transfer) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
 
-    if(!transfer->driver) {
-        PRINTLOG(USB, LOG_ERROR, "no driver for transfer");
-        transfer->complete = true;
-        transfer->success = false;
-        return -1;
-    }
-
-    usb_device_t* device = transfer->driver->usb_device;
-
-    if(!device) {
-        PRINTLOG(USB, LOG_ERROR, "no device for transfer");
-        transfer->complete = true;
-        transfer->success = false;
-        return -1;
-    }
-
     usb_driver_t* driver = transfer->driver;
 
     if(!driver) {
@@ -1295,28 +1284,45 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
         return -1;
     }
 
+    usb_device_t* device = driver->usb_device;
+
+    if(!device) {
+        PRINTLOG(USB, LOG_ERROR, "no device for transfer");
+        transfer->complete = true;
+        transfer->success = false;
+        return -1;
+    }
+
     usb_device_request_t* request = transfer->request;
 
     usb_request_recipient_t request_recipient = (usb_request_recipient_t)(request->type & USB_REQUEST_RECIPIENT_MASK);
+    usb_request_type_t request_type = (usb_request_type_t)(request->type & USB_REQUEST_TYPE_MASK);
 
-    if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE && request->request == USB_REQUEST_SET_ADDRESS) {
-        PRINTLOG(USB, LOG_TRACE, "SET_ADDRESS request");
-        return usb_xhci_set_slot_and_address(usb_controller, transfer);
-    }
+    // special handling for some standard requests
+    if(request_type == USB_REQUEST_TYPE_STANDARD) {
+        if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE) {
+            if(request->request == USB_REQUEST_SET_ADDRESS) {
+                PRINTLOG(USB, LOG_TRACE, "SET_ADDRESS request");
+                return usb_xhci_set_slot_and_address(usb_controller, transfer);
+            }
 
-    if(request_recipient == USB_REQUEST_RECIPIENT_DEVICE && request->request == USB_REQUEST_EVALUATE_CONTEXT) {
-        PRINTLOG(USB, LOG_TRACE, "EVALUATE_CONTEXT request");
-        return usb_xhci_evalutate_context(usb_controller, transfer);
-    }
+            if(request->request == USB_REQUEST_EVALUATE_CONTEXT) {
+                PRINTLOG(USB, LOG_TRACE, "EVALUATE_CONTEXT request");
+                return usb_xhci_evalutate_context(usb_controller, transfer);
+            }
+        }
 
-    if(request_recipient == USB_REQUEST_RECIPIENT_ENDPOINT && request->request == USB_ENDPOINT_SETUP_ENDPOINT) {
-        PRINTLOG(USB, LOG_TRACE, "SETUP_ENDPOINT request");
-        return usb_xhci_setup_endpoint(usb_controller, transfer);
-    }
+        if(request_recipient == USB_REQUEST_RECIPIENT_ENDPOINT) {
+            if(request->request == USB_ENDPOINT_SETUP_ENDPOINT) {
+                PRINTLOG(USB, LOG_TRACE, "SETUP_ENDPOINT request");
+                return usb_xhci_setup_endpoint(usb_controller, transfer);
+            }
 
-    if(request_recipient == USB_REQUEST_RECIPIENT_ENDPOINT && request->request == USB_ENDPOINT_SETUP_PIPELINE) {
-        PRINTLOG(USB, LOG_TRACE, "SETUP_ENDPOINT_PIPELINE request");
-        return usb_xhci_setup_endpoint_pipeline(usb_controller, transfer);
+            if(request->request == USB_ENDPOINT_SETUP_PIPELINE) {
+                PRINTLOG(USB, LOG_TRACE, "SETUP_ENDPOINT_PIPELINE request");
+                return usb_xhci_setup_endpoint_pipeline(usb_controller, transfer);
+            }
+        }
     }
 
     uint64_t dbc_fa = metadata->dcbaa[device->slot_id];

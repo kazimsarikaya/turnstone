@@ -11,7 +11,6 @@
 
 #include <types.h>
 #include <pci.h>
-#include <future.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -417,6 +416,21 @@ typedef enum usb_subclass_audio_t {
     USB_SUBCLASS_MIDI_STREAMING = 0x03,
 } usb_interface_subclass_audio_t;
 
+typedef enum usb_subclass_communication_t {
+    USB_SUBCLASS_DIRECT_LINE_CONTROL_MODEL = 0x01,
+    USB_SUBCLASS_ABSTRACT_CONTROL_MODEL = 0x02,
+    USB_SUBCLASS_TELEPHONE_CONTROL_MODEL = 0x03,
+    USB_SUBCLASS_MULTI_CHANNEL_CONTROL_MODEL = 0x04,
+    USB_SUBCLASS_CAPI_CONTROL_MODEL = 0x05,
+    USB_SUBCLASS_ETHERNET_NETWORKING_CONTROL_MODEL = 0x06,
+    USB_SUBCLASS_ATM_NETWORKING_CONTROL_MODEL = 0x07,
+    USB_SUBCLASS_WIRELESS_HANDSET_CONTROL_MODEL = 0x08,
+    USB_SUBCLASS_DEVICE_MANAGEMENT = 0x09,
+    USB_SUBCLASS_MOBILE_DIRECT_LINE_MODEL = 0x0A,
+    USB_SUBCLASS_OBEX = 0x0B,
+    USB_SUBCLASS_ETHERNET_EMULATION_MODEL = 0x0C,
+} usb_interface_subclass_communication_t;
+
 typedef enum usb_subclass_hid_t {
     USB_SUBCLASS_HID_NO_SUBCLASS = 0x00,
     USB_SUBCLASS_HID_BOOT_INTERFACE_SUBCLASS = 0x01,
@@ -431,6 +445,10 @@ typedef enum usb_subclass_mass_storage_t {
     USB_SUBCLASS_MASS_STORAGE_IEEE1667 = 0x08,
     USB_SUBCLASS_MASS_STORAGE_VENDOR_SPECIFIC = 0xFF,
 } usb_interface_subclass_mass_storage_t;
+
+typedef enum usb_subclass_vendor_specific_t {
+    USB_SUBCLASS_VENDOR_SPECIFIC = 0xFF,
+} usb_interface_subclass_vendor_specific_t;
 
 typedef enum usb_protocol_hid_t {
     USB_PROTOCOL_HID_NO_PROTOCOL = 0x00,
