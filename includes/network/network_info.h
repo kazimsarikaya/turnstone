@@ -32,6 +32,8 @@ typedef struct network_info_t {
     boolean_t              is_ipv4_address_set;
     boolean_t              is_ipv4_address_requested;
     uint32_t               ipv4_address_next_request_time;
+    boolean_t              is_vlan_tagged;
+    uint16_t               vlan_id;
 } network_info_t;
 
 extern map_t* network_info_map;

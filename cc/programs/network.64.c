@@ -47,8 +47,8 @@ int8_t network_transmit_packet_destroyer(memory_heap_t* heap, void* data) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-static int8_t network_set_return_queue(const network_mac_address_t* mac, list_t* return_queue) {
-    network_info_t* ni = (network_info_t*)map_get(network_info_map, mac);
+static int8_t network_set_return_queue(const network_received_packet_t* packet, list_t* return_queue) {
+    network_info_t* ni = (network_info_t*)map_get(network_info_map, packet->network_info);
 
     if(!ni) {
         ni = memory_malloc(sizeof(network_info_t));
@@ -57,7 +57,9 @@ static int8_t network_set_return_queue(const network_mac_address_t* mac, list_t*
             return -1;
         }
 
-        memory_memcopy(mac, ni->mac, sizeof(network_mac_address_t));
+        memory_memcopy(packet->network_info, ni->mac, sizeof(network_mac_address_t));
+        ni->is_vlan_tagged = packet->is_vlan_tagged;
+        ni->vlan_id = packet->vlan_id;
         map_insert(network_info_map, ni->mac, ni);
     }
 
@@ -74,8 +76,6 @@ static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_pack
     if(tx_packet == NULL) {
         network_transmit_packet_destroyer(NULL, orginal_packet);
 
-        task_yield();
-
         return -1;
     }
 
@@ -84,8 +84,6 @@ static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_pack
     if(tx_packet_data == NULL) {
         network_transmit_packet_destroyer(NULL, orginal_packet);
         memory_free_ext(list_get_heap(return_queue), tx_packet);
-
-        task_yield();
 
         return -1;
     }
@@ -100,8 +98,6 @@ static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_pack
     if(list_queue_push(return_queue, tx_packet) == -1ULL) {
         memory_free_ext(list_get_heap(return_queue), tx_packet_data);
         memory_free_ext(list_get_heap(return_queue), tx_packet);
-
-        task_yield();
 
         return -1;
     } else {
@@ -134,7 +130,7 @@ int8_t network_process_rx(void){
 
                 if(packet->network_type == NETWORK_TYPE_ETHERNET) {
 
-                    network_set_return_queue(packet->network_info, packet->return_queue);
+                    network_set_return_queue(packet, packet->return_queue);
 
                     return_list = network_ethernet_process_packet((network_ethernet_t*)packet->packet_data, packet->network_info);
                 }

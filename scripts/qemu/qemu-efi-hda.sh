@@ -62,7 +62,7 @@ for i in `seq 0 $((NUMCPUS-1))`; do
   SERIALS="${SERIALS} -serial file:${BASEDIR}/tmp/qemu-serial${i}.log"
 done
 
-TRACE_OPTS="guest_errors,mmu,trace:usb*"
+TRACE_OPTS="guest_errors,mmu"
 
 # if trace_opts is not empty, then enable tracing (prefix with -d)
 
@@ -70,7 +70,7 @@ if [[ "${TRACE_OPTS}x" != "x" ]]; then
   TRACE_OPTS="-d ${TRACE_OPTS}"
 fi
 
-/home/kazim/.local/qemu/bin/qemu-system-x86_64 \
+qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
   -M q35,kernel-irqchip=split -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
   -cpu host,topoext=on,x2apic=on \

@@ -33,11 +33,15 @@ typedef struct network_received_packet_t {
     list_t*        return_queue;
     network_type_t network_type;
     void*          network_info;
+    boolean_t      is_vlan_tagged;
+    uint16_t       vlan_id;
 } network_received_packet_t;
 
 typedef struct network_transmit_packet_t {
-    uint64_t packet_len;
-    uint8_t* packet_data;
+    uint64_t  packet_len;
+    uint8_t*  packet_data;
+    boolean_t is_vlan_tagged;
+    uint16_t  vlan_id;
 } network_transmit_packet_t;
 
 extern list_t* network_received_packets;

@@ -21,7 +21,6 @@ uint8_t*       network_arp_create_reply_from_packet(network_arp_t* src_arp_packe
 network_arp_t* network_arp_create_request(network_mac_address_t src_mac, network_ipv4_address_t src_ip, network_ipv4_address_t tgt_ip);
 
 uint8_t* network_arp_process_packet(network_arp_t* recv_arp_packet, void* network_info, uint16_t* return_packet_len) {
-    UNUSED(network_info);
 
     if(BYTE_SWAP16(recv_arp_packet->operation_code) == NETWORK_ARP_OPERATION_CODE_REQUEST) {
         return network_arp_create_reply_from_packet(recv_arp_packet, network_info, return_packet_len);
@@ -39,7 +38,7 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
     const network_info_t* ni = map_get(network_info_map, mac);
 
     if(!ni) {
-        PRINTLOG(NETWORK, LOG_TRACE, "network info not found for mac address");
+        PRINTLOG(NETWORK, LOG_ERROR, "network info not found for mac address");
         return NULL;
     }
 

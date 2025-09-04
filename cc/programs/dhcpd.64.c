@@ -124,7 +124,10 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
 
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 
-        uint8_t* eth = (uint8_t*)network_ethernet_create_packet(BROADCAST_MAC, mac, NETWORK_PROTOCOL_IPV4, tl, (uint8_t*)ip);
+        uint8_t* eth = (uint8_t*)network_ethernet_create_packet_with_vlan_tag(BROADCAST_MAC, mac,
+                                                                              NETWORK_PROTOCOL_IPV4,
+                                                                              ni->is_vlan_tagged, ni->vlan_id,
+                                                                              tl, (uint8_t*)ip);
 
         if(eth == NULL) {
             PRINTLOG(NETWORK, LOG_ERROR, "eth packet is null, re trying...");
@@ -142,7 +145,9 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             continue;
         }
 
-        res->packet_len = sizeof(network_ethernet_t) + tl;
+        uint32_t eth_packet_size = ni->is_vlan_tagged ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
+
+        res->packet_len = eth_packet_size + tl;
 
         uint8_t* packet_data = memory_malloc_ext(list_get_heap(ni->return_queue), res->packet_len, 0);
 

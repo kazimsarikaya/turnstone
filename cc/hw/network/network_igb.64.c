@@ -117,6 +117,7 @@ static int8_t network_igb_process_tx(void) {
 
                     dev->tx_desc[dev->tx_tail].length = packet->packet_len;
                     dev->tx_desc[dev->tx_tail].cmd = 3;
+                    dev->tx_desc[dev->tx_tail].vlan = packet->is_vlan_tagged ? (packet->vlan_id & 0x0FFF) : 0;
 
                     memory_free(packet->packet_data);
                     memory_free((void*)packet);
@@ -344,7 +345,8 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                 // advance the tail pointer
                 ((network_igb_dev_t*)dev)->rx_tail = (dev->rx_tail + 1) % NETWORK_IGB_NUM_RX_DESCRIPTORS;
                 // check if the next descriptor is ready
-                uint32_t status_error = dev->rx_desc[dev->rx_tail].wb.upper.status_error;
+                network_igb_rx_desc_t* desc = (network_igb_rx_desc_t*)&dev->rx_desc[dev->rx_tail];
+                uint32_t status_error = desc->wb.upper.status_error;
                 // first 20bits are status, last 12 bits are error
                 uint32_t status = status_error & 0xFFFFF;
                 uint32_t error = status_error >> 20;
@@ -359,7 +361,7 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
 
                 // we get packet address with calculated offset
                 uint8_t* pkt = (uint8_t*)(dev->rx_packet_buffer_va + dev->rx_tail * NETWORK_IGB_RX_BUFFER_SIZE);
-                uint16_t pktlen = dev->rx_desc[dev->rx_tail].wb.upper.length;
+                uint16_t pktlen = desc->wb.upper.length;
                 boolean_t dropflag = 0;
 
                 if( pktlen < 60 ) {
