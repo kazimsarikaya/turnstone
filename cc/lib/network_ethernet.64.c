@@ -64,9 +64,6 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
 
         data = (uint8_t*)recv_eth_packet;
         data_inner_packet = (data + sizeof(network_ethernet_with_vlan_t));
-
-        ni->is_vlan_tagged = true;
-        ni->vlan_id = BYTE_SWAP16(vlan_packet->vlan_tag) & 0x0FFF;
     } else {
         data = (uint8_t*)recv_eth_packet;
         data_inner_packet = (data + sizeof(network_ethernet_t));
@@ -84,9 +81,15 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
             return NULL;
         }
 
+        boolean_t need_vlan_frame = false;
+
+        if(!ni->has_hw_vlan_support && ni->is_vlan_tagged) {
+            need_vlan_frame = true;
+        }
+
         uint8_t* eth_packet = network_ethernet_create_packet_with_vlan_tag(recv_eth_packet->source, our_mac,
                                                                            NETWORK_PROTOCOL_ARP,
-                                                                           ni->is_vlan_tagged, ni->vlan_id,
+                                                                           need_vlan_frame, ni->vlan_id,
                                                                            return_data_len, return_data);
 
         if(eth_packet == NULL) {
@@ -113,7 +116,7 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
         transmit_packet->is_vlan_tagged = ni->is_vlan_tagged;
         transmit_packet->vlan_id = ni->vlan_id;
         transmit_packet->packet_data = eth_packet;
-        transmit_packet->packet_len = (ni->is_vlan_tagged ?
+        transmit_packet->packet_len = (need_vlan_frame ?
                                        sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t))
                                       + return_data_len;
 
@@ -140,9 +143,16 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
             network_transmit_packet_t* ip_pckt = (network_transmit_packet_t*)list_queue_pop(ip_pckts);
 
             if(ip_pckt) {
+
+                boolean_t need_vlan_frame = false;
+
+                if(!ni->has_hw_vlan_support && ni->is_vlan_tagged) {
+                    need_vlan_frame = true;
+                }
+
                 uint8_t* eth_packet = network_ethernet_create_packet_with_vlan_tag(recv_eth_packet->source, our_mac,
                                                                                    NETWORK_PROTOCOL_IPV4,
-                                                                                   ni->is_vlan_tagged, ni->vlan_id,
+                                                                                   need_vlan_frame, ni->vlan_id,
                                                                                    ip_pckt->packet_len, ip_pckt->packet_data);
 
                 if(eth_packet == NULL) {
@@ -162,7 +172,7 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
                 transmit_packet->is_vlan_tagged = ni->is_vlan_tagged;
                 transmit_packet->vlan_id = ni->vlan_id;
                 transmit_packet->packet_data = eth_packet;
-                transmit_packet->packet_len = (ni->is_vlan_tagged ?
+                transmit_packet->packet_len = (need_vlan_frame ?
                                                sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t))
                                               + ip_pckt->packet_len;
 

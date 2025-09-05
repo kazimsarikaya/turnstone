@@ -26,6 +26,9 @@ typedef struct usb_driver_t {
     uint16_t                ocp_base;
     list_t*                 return_queue;
     network_mac_address_t   mac;
+    usb_endpoint_t*         bulk_in;
+    usb_endpoint_t*         bulk_out;
+    usb_endpoint_t*         intr;
 } usb_driver_t;
 
 typedef struct usb_rtl815x_tx_t {
@@ -796,7 +799,7 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
     }
 
     if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RCR,
-                                RTL815X_RCR_APM | RTL815X_RCR_AM | RTL815X_RCR_AB) != 0) {
+                                RTL815X_RCR_ACPT_ALL) != 0) {
         return -1;
     }
 
@@ -937,7 +940,12 @@ extern uint64_t network_rx_task_id;
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
     UNUSED(driver);
-    UNUSED(endpoint);
+
+    if(endpoint == driver->intr->desc->endpoint_address) {
+        PRINTLOG(USB, LOG_TRACE, "interupt endpoint 0x%02x data received, ignoring", endpoint);
+        pipeline_clear(pipeline);
+        return 0;
+    }
 
     uint8_t __attribute__((aligned(128))) buffer[16 << 10];
 
@@ -946,67 +954,104 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
     while(pipeline_available_data(pipeline) > 0) {
         // Process all available packets
 
-        uint64_t pkt_size = pipeline_available_data(pipeline);
+        uint64_t available_data = pipeline_available_data(pipeline);
 
-        if(!pkt_size) {
+        PRINTLOG(USB, LOG_TRACE, "pipeline available data: 0x%llx", available_data);
+
+        if(available_data < sizeof(usb_rtl815x_rx_t)) {
+            PRINTLOG(USB, LOG_DEBUG, "not enough data for RX header available_data=%llu", available_data);
             break;
         }
 
-        uint64_t rc = pipeline_read(pipeline,
-                                    pkt_size > sizeof(buffer) ? sizeof(buffer) : pkt_size,
-                                    buffer);
+        usb_rtl815x_rx_t rx_hdr;
 
-        if(rc > 0) {
-            usb_rtl815x_rx_t* rx = (usb_rtl815x_rx_t*)buffer;
+        uint64_t rc = pipeline_read(pipeline, sizeof(usb_rtl815x_rx_t), (uint8_t*)&rx_hdr);
 
-            uint32_t pktlen = rx->length & 0x7FFFU;
+        if(rc == -1ULL || rc != sizeof(usb_rtl815x_rx_t)) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read full RX header rc=%llu", rc);
+            pipeline_clear(pipeline);
+            return -1;
+        }
 
-            boolean_t is_vlan_tagged = (rx->flags1 & BIT(16)) != 0;
-            uint16_t vlan_id = rx->flags1 & 0x0FFFU;
-            vlan_id = BYTE_SWAP16(vlan_id);
-            uint8_t* pkt = buffer + sizeof(usb_rtl815x_rx_t);
+        available_data -= sizeof(usb_rtl815x_rx_t);
 
+        uint32_t pktlen = rx_hdr.length & 0x7FFFU;
 
-            network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
+        PRINTLOG(USB, LOG_TRACE, "rx header: length=0x%08x flags1=0x%08x pktlen=0x%08x",
+                 rx_hdr.length, rx_hdr.flags1, pktlen);
 
-            if(!packet) {
-                PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for received packet");
-                continue;
+        if(available_data < pktlen) {
+            PRINTLOG(USB, LOG_ERROR, "not enough data for full RX packet available_data=%llu pktlen=%u", available_data, pktlen);
+            pipeline_clear(pipeline);
+            return -1;
+        }
+
+        rc = pipeline_read(pipeline, pktlen, buffer);
+
+        if(rc == -1ULL || rc != pktlen) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read full RX packet rc=%llu pktlen=%u", rc, pktlen);
+            pipeline_clear(pipeline);
+            return -1;
+        }
+
+        boolean_t is_vlan_tagged = (rx_hdr.flags1 & BIT(16)) != 0;
+        uint16_t vlan_id = rx_hdr.flags1 & 0x0FFFU;
+        vlan_id = BYTE_SWAP16(vlan_id);
+
+        network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
+
+        if(!packet) {
+            PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for received packet");
+            continue;
+        }
+
+        packet->packet_len = pktlen;
+        packet->return_queue = driver->return_queue;
+        packet->network_info = (void*)driver->mac;
+        packet->network_type = NETWORK_TYPE_ETHERNET;
+        packet->is_vlan_tagged = is_vlan_tagged;
+        packet->vlan_id = vlan_id;
+
+        packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
+
+        if(packet->packet_data == NULL) {
+            PRINTLOG(USB, LOG_ERROR, "failed to allocate packet");
+            memory_free_ext(list_get_heap(network_received_packets), packet);
+            notify_network_rx = true;
+
+            continue;
+        }
+
+        memory_memcopy(buffer, packet->packet_data, pktlen);
+
+        if(list_queue_push(network_received_packets, packet) == -1ULL) {
+            PRINTLOG(USB, LOG_ERROR, "failed to queue packet");
+            memory_free_ext(list_get_heap(network_received_packets), packet->packet_data);
+            memory_free_ext(list_get_heap(network_received_packets), packet);
+        } else {
+            PRINTLOG(USB, LOG_TRACE, "packet queued");
+
+            if(notify_network_rx && network_rx_task_id) {
+                task_set_message_received(network_rx_task_id);
+                PRINTLOG(USB, LOG_TRACE, "cleared message waiting for rx task 0x%llx", network_rx_task_id);
+                notify_network_rx = false;
             }
+        }
 
-            packet->packet_len = pktlen;
-            packet->return_queue = driver->return_queue;
-            packet->network_info = (void*)driver->mac;
-            packet->network_type = NETWORK_TYPE_ETHERNET;
-            packet->is_vlan_tagged = is_vlan_tagged;
-            packet->vlan_id = vlan_id;
+        PRINTLOG(USB, LOG_TRACE, "pipeline available data after processing: %llu", pipeline_available_data(pipeline));
 
-            packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
+        char_t junk[8];
 
-            if(packet->packet_data == NULL) {
-                PRINTLOG(USB, LOG_ERROR, "failed to allocate packet");
-                memory_free_ext(list_get_heap(network_received_packets), packet);
-                notify_network_rx = true;
+        available_data = pipeline_available_data(pipeline);
 
-                continue;
-            }
+        uint64_t junk_size = pktlen % 8;
 
-            memory_memcopy(pkt, packet->packet_data, pktlen);
+        if(junk_size) {
+            junk_size = 8 - junk_size;
+        }
 
-            if(list_queue_push(network_received_packets, packet) == -1ULL) {
-                PRINTLOG(USB, LOG_ERROR, "failed to queue packet");
-                memory_free_ext(list_get_heap(network_received_packets), packet->packet_data);
-                memory_free_ext(list_get_heap(network_received_packets), packet);
-            } else {
-                PRINTLOG(USB, LOG_TRACE, "packet queued");
-
-                if(notify_network_rx && network_rx_task_id) {
-                    task_set_message_received(network_rx_task_id);
-                    PRINTLOG(USB, LOG_TRACE, "cleared message waiting for rx task 0x%llx", network_rx_task_id);
-                    notify_network_rx = false;
-                }
-            }
-
+        if(junk_size && available_data >= junk_size) {
+            pipeline_read(pipeline, junk_size, (uint8_t*)junk);
         }
     }
 
@@ -1019,7 +1064,7 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
 
 
     ut.driver = usb_driver;
-    ut.endpoint = usb_driver->interface->endpoints[1];
+    ut.endpoint = usb_driver->bulk_out;
 
 
     ut.length = sizeof(usb_rtl815x_tx_t) + (tx->length & 0x3FFFFU);
@@ -1034,7 +1079,7 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
         return false;
     }
 
-    PRINTLOG(USB, LOG_DEBUG, "sent %d bytes", ut.length);
+    PRINTLOG(USB, LOG_TRACE, "sent %d bytes", ut.length);
 
     return ut.complete && ut.success;
 }
@@ -1046,6 +1091,15 @@ static int8_t usb_rtl815x_process_tx(void) {
 
         drv->return_queue = list_create_queue_with_heap(NULL);
         task_add_message_queue(drv->return_queue);
+
+        network_info_t ni = {0};
+        memory_memcopy(&drv->mac, &ni.mac, 6);
+        ni.has_hw_vlan_support = true;
+        ni.is_vlan_tagged = true;
+        ni.vlan_id = 12;
+        ni.return_queue = drv->return_queue;
+
+        network_register_network_info(&ni);
 
         void** args = memory_malloc(sizeof(void*) * 2);
 
@@ -1069,6 +1123,8 @@ static int8_t usb_rtl815x_process_tx(void) {
         for(uint64_t drv_idx = 0; drv_idx < list_size(usb_rtl815x_drivers); drv_idx++) {
             usb_driver_t* drv = (usb_driver_t*)list_get_data_at_position(usb_rtl815x_drivers, drv_idx);
 
+            const network_info_t* ni = map_get(network_info_map, &drv->mac);
+
             while(list_size(drv->return_queue)) {
                 const network_transmit_packet_t* packet = list_queue_pop(drv->return_queue);
 
@@ -1089,8 +1145,8 @@ static int8_t usb_rtl815x_process_tx(void) {
                     tx->length = BIT(31) | BIT(30) | packet_len;
                     tx->flags = 0;
 
-                    if(packet->is_vlan_tagged) {
-                        tx->flags |= BIT(16) | (packet->vlan_id & 0x0FFFU);
+                    if(ni->has_hw_vlan_support && packet->is_vlan_tagged) {
+                        tx->flags |= BIT(16) | BYTE_SWAP16(packet->vlan_id & 0x0FFFU);
                     }
 
                     memory_memcopy(packet->packet_data, (uint8_t*)tx + sizeof(usb_rtl815x_tx_t), packet_len);
@@ -1151,6 +1207,22 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
 
     interface->driver = drv;
 
+    for(uint32_t i = 0; i < interface->num_endpoints; i++) {
+        usb_endpoint_t* ep = interface->endpoints[i];
+
+        if(ep->desc->attributes == USB_ENDPOINT_TYPE_BULK) {
+            if(USB_ENDPOINT_DIRECTION_IS_IN(ep->desc->endpoint_address)) {
+                drv->bulk_in = ep;
+            } else {
+                drv->bulk_out = ep;
+            }
+        } else if(ep->desc->attributes == USB_ENDPOINT_TYPE_INTERRUPT) {
+            drv->intr = ep;
+        }
+
+
+    }
+
     // Get version
     uint16_t version = 0;
     if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_VERSION, &version) != 0) {
@@ -1180,17 +1252,17 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
              drv->mac[0], drv->mac[1], drv->mac[2],
              drv->mac[3], drv->mac[4], drv->mac[5]);
 
-    uint16_t rx_ep_size = interface->endpoints[0]->desc->max_packet_size;
+    uint16_t rx_ep_size = drv->bulk_in->desc->max_packet_size;
 
-    if(interface->endpoints[0]->endpoint_companion) {
-        rx_ep_size *= interface->endpoints[0]->endpoint_companion->max_burst + 1;
+    if(drv->bulk_in->endpoint_companion) {
+        rx_ep_size *= drv->bulk_in->endpoint_companion->max_burst + 1;
     }
 
 
     drv->expected_packet_size = rx_ep_size;
     drv->pipeline_callback = usb_rtl815x_pipeline_callback;
 
-    uint8_t rx_ep_address = interface->endpoints[0]->desc->endpoint_address;
+    uint8_t rx_ep_address = drv->bulk_in->desc->endpoint_address;
 
     pipeline_t* rx_pipeline = pipeline_create(drv->expected_packet_size * 4);
 
@@ -1207,8 +1279,8 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
         return -1;
     }
 
-    uint8_t int_ep_address = interface->endpoints[2]->desc->endpoint_address;
-    uint16_t int_ep_size = interface->endpoints[2]->desc->max_packet_size;
+    uint8_t int_ep_address = drv->intr->desc->endpoint_address;
+    uint16_t int_ep_size = drv->intr->desc->max_packet_size;
 
     pipeline_t* int_pipeline = pipeline_create(int_ep_size * 32);
 

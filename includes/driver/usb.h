@@ -161,6 +161,11 @@ typedef struct usb_endpoint_desc_t {
     uint8_t  interval;
 }__attribute__((packed)) usb_endpoint_desc_t;
 
+#define USB_ENDPOINT_DIRECTION_IS_IN(a) (((a) & 0x80) != 0)
+#define USB_ENDPOINT_DIRECTION_IS_OUT(a) (((a) & 0x80) == 0)
+#define USB_ENDPOINT_TYPE_BULK 0x02
+#define USB_ENDPOINT_TYPE_INTERRUPT 0x03
+
 typedef struct usb_hub_desc_t {
     uint8_t  length;
     uint8_t  type;
@@ -254,9 +259,9 @@ typedef enum usb_request_interface_t {
 } usb_request_interface_t;
 
 typedef enum usb_request_endpoint_t {
-    USB_ENDPOINT_SETUP_ENDPOINT = 0x01,
-    USB_ENDPOINT_CLEAR_ENDPOINT = 0x02,
-    USB_ENDPOINT_SETUP_PIPELINE = 0x03,
+    USB_ENDPOINT_SETUP_ENDPOINT = 0x81,
+    USB_ENDPOINT_CLEAR_ENDPOINT = 0x82,
+    USB_ENDPOINT_SETUP_PIPELINE = 0x83,
 } usb_request_endpoint_t;
 
 typedef enum usb_standart_feature_selector_t {

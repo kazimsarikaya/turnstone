@@ -87,6 +87,15 @@ static int8_t network_igb_process_tx(void) {
         dev->return_queue = list_create_queue_with_heap(NULL);
         task_add_message_queue(dev->return_queue);
 
+        network_info_t ni = {0};
+        memory_memcopy(&dev->mac, &ni.mac, 6);
+        ni.has_hw_vlan_support = true;
+        ni.is_vlan_tagged = true;
+        ni.vlan_id = 122;
+        ni.return_queue = dev->return_queue;
+
+        network_register_network_info(&ni);
+
         void** args = memory_malloc(sizeof(void*) * 2);
 
         if(args == NULL) {
@@ -120,7 +129,6 @@ static int8_t network_igb_process_tx(void) {
 
                     dev->tx_desc[dev->tx_tail].context.vlan_macip_lens = packet->is_vlan_tagged ?
                                                                          (packet->vlan_id << NETWORK_IGB_TX_FLAGS_VLAN_SHIFT) : 0;
-                    dev->tx_desc[dev->tx_tail].context.mss_l4len_idx = 1 << 4;
                     dev->tx_desc[dev->tx_tail].transmit.read.cmd_type_len = NETWORK_IGB_ADVTXD_DCMD_DEXT |
                                                                             NETWORK_IGB_ADVTXD_DTYP_CTXT;
 

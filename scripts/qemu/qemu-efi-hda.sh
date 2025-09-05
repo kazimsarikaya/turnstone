@@ -86,15 +86,16 @@ qemu-system-x86_64 \
   -device VGA,id=gpu0,vgamem_mb=256 \
   -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
-  -device nec-usb-xhci,id=xhci \
-  -device usb-hub,bus=xhci.0,id=hub0,port=1 \
-  -device usb-tablet,bus=xhci.0,port=1.1 \
-  -device usb-kbd,bus=xhci.0,port=1.2 \
-  -device usb-audio,bus=xhci.0,port=1.3 \
-  -device usb-storage,bus=xhci.0,id=bot0,port=2,removable=on,drive=usbbot \
-  -device usb-uas,bus=xhci.0,id=uas0,port=3 \
+  -device nec-usb-xhci,id=xhci0 \
+  -device nec-usb-xhci,id=xhci1 \
+  -device usb-hub,bus=xhci0.0,id=hub0,port=1 \
+  -device usb-tablet,bus=xhci0.0,port=1.1 \
+  -device usb-kbd,bus=xhci0.0,port=1.2 \
+  -device usb-audio,bus=xhci0.0,port=1.3 \
+  -device usb-storage,bus=xhci0.0,id=bot0,port=2,removable=on,drive=usbbot \
+  -device usb-uas,bus=xhci0.0,id=uas0,port=3 \
   -device scsi-hd,bus=uas0.0,lun=0,removable=on,drive=usbuas \
-  -device usb-host,hostbus=6,bus=xhci.0,port=4,guest-reset=true,guest-resets-all=true,loglevel=10 \
+  -device usb-host,hostbus=6,bus=xhci1.0,port=1,guest-reset=true,guest-resets-all=true,loglevel=4 \
   -device edu,id=edu,dma_mask=0xFFFFFFFFFFFFFFFF \
   -device amd-iommu,id=amdiommu,device-iotlb=on,intremap=on,xtsup=on,pt=on \
   $SERIALS \

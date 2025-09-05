@@ -58,12 +58,7 @@ static int8_t network_set_return_queue(const network_received_packet_t* packet, 
         }
 
         memory_memcopy(packet->network_info, ni->mac, sizeof(network_mac_address_t));
-        ni->is_vlan_tagged = packet->is_vlan_tagged;
-        ni->vlan_id = packet->vlan_id;
         map_insert(network_info_map, ni->mac, ni);
-    } else {
-        ni->is_vlan_tagged = packet->is_vlan_tagged;
-        ni->vlan_id = packet->vlan_id;
     }
 
     if(!ni->return_queue) {
@@ -186,13 +181,45 @@ int8_t network_process_rx(void){
     return 0;
 }
 
+int8_t network_register_network_info(network_info_t* ni) {
+    if(!ni) {
+        return -1;
+    }
+
+    if(!network_info_map) {
+        network_info_map = map_new(&network_info_mke);
+    }
+
+    if(map_get(network_info_map, ni->mac)) {
+        return -1;
+    }
+
+    network_info_t* new_ni = memory_malloc(sizeof(network_info_t));
+
+    if(!new_ni) {
+        return -1;
+    }
+
+    memory_memcopy(ni, new_ni, sizeof(network_info_t));
+
+    map_insert(network_info_map, new_ni->mac, new_ni);
+
+    PRINTLOG(NETWORK, LOG_INFO, "network info registered for mac %02x:%02x:%02x:%02x:%02x:%02x",
+             ni->mac[0], ni->mac[1], ni->mac[2],
+             ni->mac[3], ni->mac[4], ni->mac[5]);
+
+    return 0;
+}
+
 uint64_t network_rx_task_id = 0;
 
 int8_t network_init(void) {
     PRINTLOG(NETWORK, LOG_INFO, "network devices starting");
     int8_t errors = 0;
 
-    network_info_map = map_new(&network_info_mke);
+    if(!network_info_map) {
+        network_info_map = map_new(&network_info_mke);
+    }
 
     iterator_t* iter = list_iterator_create(pci_get_context()->network_controllers);
 

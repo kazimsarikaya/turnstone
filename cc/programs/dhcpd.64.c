@@ -27,6 +27,9 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
     uint8_t* mac_data = args[0];
     memory_memcopy(mac_data, mac, sizeof(network_mac_address_t));
 
+    PRINTLOG(NETWORK, LOG_INFO, "dhcp task started for mac %02x:%02x:%02x:%02x:%02x:%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
     network_info_t* ni = NULL;
 
     int32_t req_try = 3;
@@ -47,7 +50,7 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
                         xid = rand();
                     }
                 } else if (ni->is_ipv4_address_requested) {
-                    if(req_try) {
+                    if(req_try > 0) {
                         req_try--;
                         time_timer_sleep(5);
                         continue;
@@ -57,16 +60,18 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
                     }
                 }
             } else {
-                ni = memory_malloc(sizeof(network_info_t));
+                PRINTLOG(NETWORK, LOG_WARNING, "no network info for mac %02x:%02x:%02x:%02x:%02x:%02x",
+                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                time_timer_sleep(5);
 
-                if(ni == NULL) {
-                    continue;
-                }
-
-                memory_memcopy(mac, ni->mac, sizeof(network_mac_address_t));
-                ni->return_queue = args[1];
-                map_insert(network_info_map, ni->mac, ni);
+                continue;
             }
+
+        } else {
+            PRINTLOG(NETWORK, LOG_WARNING, "no network info map");
+            time_timer_sleep(5);
+
+            continue;
         }
 
         if(ni == NULL || ni->return_queue == NULL) {
@@ -124,9 +129,15 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
 
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 
+        boolean_t need_vlan_frame = false;
+
+        if(!ni->has_hw_vlan_support && ni->is_vlan_tagged) {
+            need_vlan_frame = true;
+        }
+
         uint8_t* eth = (uint8_t*)network_ethernet_create_packet_with_vlan_tag(BROADCAST_MAC, mac,
                                                                               NETWORK_PROTOCOL_IPV4,
-                                                                              ni->is_vlan_tagged, ni->vlan_id,
+                                                                              need_vlan_frame, ni->vlan_id,
                                                                               tl, (uint8_t*)ip);
 
         if(eth == NULL) {
@@ -145,7 +156,7 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             continue;
         }
 
-        uint32_t eth_packet_size = ni->is_vlan_tagged ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
+        uint32_t eth_packet_size = need_vlan_frame ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
 
         res->packet_len = eth_packet_size + tl;
 

@@ -520,7 +520,7 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
 
         // maybe there is a endpoint companion descriptor
         if(tmp_type == USB_ENDPOINT_COMPANION_DESC_TYPE) {
-            PRINTLOG(USB, LOG_TRACE, "endpoint companion descriptor for endpoint address 0x%x",
+            PRINTLOG(USB, LOG_DEBUG, "endpoint companion descriptor for endpoint address 0x%x",
                      endpoint->desc->endpoint_address);
             endpoint->endpoint_companion = (usb_endpoint_companion_desc_t*)(config->config_buffer + idx);
             idx += tmp_length;

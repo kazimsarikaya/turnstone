@@ -192,9 +192,15 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 
+        boolean_t need_vlan_frame = false;
+
+        if(!ni->has_hw_vlan_support && ni->is_vlan_tagged) {
+            need_vlan_frame = true;
+        }
+
         uint8_t* eth = network_ethernet_create_packet_with_vlan_tag(BROADCAST_MAC, network_info,
                                                                     NETWORK_PROTOCOL_IPV4,
-                                                                    ni->is_vlan_tagged, ni->vlan_id,
+                                                                    need_vlan_frame, ni->vlan_id,
                                                                     tl, (uint8_t*)ip);
 
         network_transmit_packet_t* res = memory_malloc_ext(list_get_heap(ni->return_queue), sizeof(network_transmit_packet_t), 0);
@@ -207,7 +213,7 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
             return NULL;
         }
 
-        uint32_t eth_packet_size = ni->is_vlan_tagged ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
+        uint32_t eth_packet_size = need_vlan_frame ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
 
         res->packet_len = eth_packet_size + tl;
 
