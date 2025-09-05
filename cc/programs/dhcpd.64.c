@@ -165,6 +165,8 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
         memory_free(eth);
 
         res->packet_data = packet_data;
+        res->is_vlan_tagged = ni->is_vlan_tagged;
+        res->vlan_id = ni->vlan_id;
 
         ni->is_ipv4_address_requested = true;
 

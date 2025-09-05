@@ -61,6 +61,9 @@ static int8_t network_set_return_queue(const network_received_packet_t* packet, 
         ni->is_vlan_tagged = packet->is_vlan_tagged;
         ni->vlan_id = packet->vlan_id;
         map_insert(network_info_map, ni->mac, ni);
+    } else {
+        ni->is_vlan_tagged = packet->is_vlan_tagged;
+        ni->vlan_id = packet->vlan_id;
     }
 
     if(!ni->return_queue) {
@@ -92,6 +95,8 @@ static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_pack
 
     tx_packet->packet_len = orginal_packet->packet_len;
     tx_packet->packet_data = tx_packet_data;
+    tx_packet->is_vlan_tagged = orginal_packet->is_vlan_tagged;
+    tx_packet->vlan_id = orginal_packet->vlan_id;
 
     network_transmit_packet_destroyer(NULL, orginal_packet);
 

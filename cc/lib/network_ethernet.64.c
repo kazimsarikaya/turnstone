@@ -84,8 +84,6 @@ list_t* network_ethernet_process_packet(network_ethernet_t* recv_eth_packet, voi
             return NULL;
         }
 
-        PRINTLOG(NETWORK, LOG_INFO, "returning arp reply with length 0x%x", return_data_len);
-
         uint8_t* eth_packet = network_ethernet_create_packet_with_vlan_tag(recv_eth_packet->source, our_mac,
                                                                            NETWORK_PROTOCOL_ARP,
                                                                            ni->is_vlan_tagged, ni->vlan_id,

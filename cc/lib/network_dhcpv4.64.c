@@ -227,6 +227,8 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         memory_free(eth);
 
         res->packet_data = packet_data;
+        res->is_vlan_tagged = ni->is_vlan_tagged;
+        res->vlan_id = ni->vlan_id;
 
         list_queue_push(ni->return_queue, res);
 

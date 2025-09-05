@@ -116,13 +116,28 @@ static int8_t network_igb_process_tx(void) {
                     PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
                     packet_exists = true;
 
-                    uint8_t* buffer = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dev->tx_desc[dev->tx_tail].address);
+                    // first context
+
+                    dev->tx_desc[dev->tx_tail].context.vlan_macip_lens = packet->is_vlan_tagged ?
+                                                                         (packet->vlan_id << NETWORK_IGB_TX_FLAGS_VLAN_SHIFT) : 0;
+                    dev->tx_desc[dev->tx_tail].context.mss_l4len_idx = 1 << 4;
+                    dev->tx_desc[dev->tx_tail].transmit.read.cmd_type_len = NETWORK_IGB_ADVTXD_DCMD_DEXT |
+                                                                            NETWORK_IGB_ADVTXD_DTYP_CTXT;
+
+
+                    dev->tx_tail = (dev->tx_tail + 1) % NETWORK_IGB_NUM_TX_DESCRIPTORS;
+
+                    // then transmit
+
+                    uint8_t* buffer = (uint8_t*)MEMORY_PAGING_GET_VA_FOR_RESERVED_FA(dev->tx_desc[dev->tx_tail].transmit.read.buffer_addr);
 
                     memory_memcopy(packet->packet_data, buffer, packet->packet_len);
 
-                    dev->tx_desc[dev->tx_tail].length = packet->packet_len;
-                    dev->tx_desc[dev->tx_tail].cmd = 3;
-                    dev->tx_desc[dev->tx_tail].vlan = packet->is_vlan_tagged ? (packet->vlan_id & 0x0FFF) : 0;
+                    dev->tx_desc[dev->tx_tail].transmit.read.cmd_type_len = NETWORK_IGB_ADVTXD_DCMD_EOP |
+                                                                            NETWORK_IGB_ADVTXD_DCMD_DEXT |
+                                                                            NETWORK_IGB_ADVTXD_DTYP_DATA |
+                                                                            (packet->is_vlan_tagged ? NETWORK_IGB_ADVTXD_DCMD_VLE : 0) |
+                                                                            packet->packet_len;
 
                     memory_free(packet->packet_data);
                     memory_free((void*)packet);
@@ -293,8 +308,17 @@ static int8_t network_igb_tx_init(network_igb_dev_t* dev) {
     PRINTLOG(IGB, LOG_TRACE, "filling tx queue at 0x%llx", queue_meta_va);
 
     for(int32_t i = 0; i < NETWORK_IGB_NUM_TX_DESCRIPTORS; i++ ) {
-        dev->tx_desc[i].address = queue_fa + i * (8192 + 16);
-        dev->tx_desc[i].cmd = 0;
+        if(i % 2 == 0) {
+            dev->tx_desc[i].context.vlan_macip_lens = 0;
+            dev->tx_desc[i].context.seqnum_seed = 0;
+            dev->tx_desc[i].context.type_tucmd_mlhl = 0;
+            dev->tx_desc[i].context.mss_l4len_idx = 0;
+            continue;
+        } else {
+            dev->tx_desc[i].transmit.read.buffer_addr = queue_fa + i * (8192 + 16);
+            dev->tx_desc[i].transmit.read.cmd_type_len = 0;
+            dev->tx_desc[i].transmit.read.olinfo_status = 0;
+        }
     }
 
     // receive buffer length; NETWORK_IGB_NUM_RX_DESCRIPTORS 16-byte descriptors
@@ -358,7 +382,7 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
 
                 PRINTLOG(IGB, LOG_TRACE, "rx status 0x%x error 0x%x", status, error);
 
-                if( !(status & 1) ) { // descriptor is not ready
+                if( !(status & NETWORK_IGB_RXD_STAT_DD) ) { // descriptor is not ready
                     ((network_igb_dev_t*)dev)->rx_tail = (dev->rx_tail - 1) % NETWORK_IGB_NUM_RX_DESCRIPTORS;
                     PRINTLOG(IGB, LOG_TRACE, "rx descriptor is not ready");
                     break;
@@ -401,7 +425,7 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                     packet->return_queue = dev->return_queue;
                     packet->network_info = (void*)dev->mac;
                     packet->network_type = NETWORK_TYPE_ETHERNET;
-                    packet->is_vlan_tagged = vlan_id ? true : false;
+                    packet->is_vlan_tagged = status & NETWORK_IGB_RXD_STAT_VD ? true : false;
                     packet->vlan_id = vlan_id;
 
                     packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
@@ -682,8 +706,12 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
 
     PRINTLOG(IGB, LOG_TRACE, "device has mac %02x:%02x:%02x:%02x:%02x:%02x", mac_tmp[0], mac_tmp[1], mac_tmp[2], mac_tmp[3], mac_tmp[4], mac_tmp[5]);
 
+    uint32_t igb_ctrl = network_igb_read_mmio(dev, NETWORK_IGB_REG_CTRL);
+
+    igb_ctrl |= NETWORK_IGB_CTRL_SLU | NETWORK_IGB_CTRL_VME;
+
     // set the LINK UP
-    network_igb_write_mmio(dev, NETWORK_IGB_REG_CTRL, network_igb_read_mmio(dev, NETWORK_IGB_REG_CTRL) | NETWORK_IGB_CTRL_SLU);
+    network_igb_write_mmio(dev, NETWORK_IGB_REG_CTRL, igb_ctrl);
 
     for(int32_t i = 0; i < 128; i++) {
         network_igb_write_mmio(dev, NETWORK_IGB_REG_MTA + i * 4, 0);

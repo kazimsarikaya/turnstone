@@ -89,6 +89,7 @@ extern "C" {
 #define NETWORK_IGB_CTRL_RST      (1 << 26)
 #define NETWORK_IGB_CTRL_RFCE     (1 << 27)
 #define NETWORK_IGB_CTRL_TFCE     (1 << 28)
+#define NETWORK_IGB_CTRL_VME      (1 << 30)
 
 #define NETWORK_IGB_MDIC_PHYADD     (1 << 21)
 #define NETWORK_IGB_MDIC_OP_WRITE   (1 << 26)
@@ -112,6 +113,22 @@ extern "C" {
 #define NETWORK_IGB_TCTL_EN       (1 << 1)
 #define NETWORK_IGB_TCTL_PSP      (1 << 3)
 #define NETWORK_IGB_TXDCTL_ENABLE (1 << 25)
+
+#define NETWORK_IGB_RXD_STAT_DD    (1 << 0)
+#define NETWORK_IGB_RXD_STAT_VD    (1 << 3)
+
+#define NETWORK_IGB_TX_FLAGS_VLAN_SHIFT 16
+
+#define NETWORK_IGB_ADVTXD_MAC_TSTAMP   0x00080000 /* IEEE1588 Timestamp packet */
+#define NETWORK_IGB_ADVTXD_DTYP_CTXT    0x00200000 /* Advanced Context Descriptor */
+#define NETWORK_IGB_ADVTXD_DTYP_DATA    0x00300000 /* Advanced Data Descriptor */
+#define NETWORK_IGB_ADVTXD_DCMD_EOP     0x01000000 /* End of Packet */
+#define NETWORK_IGB_ADVTXD_DCMD_IFCS    0x02000000 /* Insert FCS (Ethernet CRC) */
+#define NETWORK_IGB_ADVTXD_DCMD_RS      0x08000000 /* Report Status */
+#define NETWORK_IGB_ADVTXD_DCMD_DEXT    0x20000000 /* Descriptor extension (1=Adv) */
+#define NETWORK_IGB_ADVTXD_DCMD_VLE     0x40000000 /* VLAN pkt enable */
+#define NETWORK_IGB_ADVTXD_DCMD_TSE     0x80000000 /* TCP Seg enable */
+#define NETWORK_IGB_ADVTXD_PAYLEN_SHIFT    14 /* Adv desc PAYLEN shift */
 
 typedef union network_igb_rx_desc_t {
     struct {
@@ -142,17 +159,34 @@ typedef union network_igb_rx_desc_t {
 
 _Static_assert(sizeof(network_igb_rx_desc_t) == 2 * sizeof(uint64_t), "network_igb_rx_desc_t size is not 16");
 
-typedef struct network_igb_tx_desc_t {
-    volatile uint64_t address;
-    volatile uint16_t length;
-    volatile uint8_t  cso;
-    volatile uint8_t  cmd;
-    volatile uint8_t  status;
-    volatile uint8_t  css;
-    volatile uint16_t vlan;
+/* Context Descriptor */
+typedef struct network_igb_adv_tx_context_desc_t {
+    uint32_t vlan_macip_lens;
+    uint32_t seqnum_seed;
+    uint32_t type_tucmd_mlhl;
+    uint32_t mss_l4len_idx;
+} __attribute__((packed)) network_igb_adv_tx_context_desc_t;
+
+/* Advanced Transmit Descriptor */
+typedef union network_igb_adv_tx_desc_t {
+    struct {
+        uint64_t buffer_addr; /* Address of descriptor's data buffer */
+        uint32_t cmd_type_len;
+        uint32_t olinfo_status;
+    } read;
+    struct {
+        uint64_t rsvd; /* Reserved */
+        uint32_t nxtseq_seed;
+        uint32_t status;
+    } wb;
+} __attribute__((packed)) network_igb_adv_tx_desc_t;
+
+typedef union network_igb_tx_desc_t {
+    network_igb_adv_tx_context_desc_t context;
+    network_igb_adv_tx_desc_t         transmit;
 } __attribute__((packed)) network_igb_tx_desc_t;
 
-typedef struct {
+typedef struct network_igb_dev_t {
     const pci_dev_t*       pci_netdev;
     pci_capability_msix_t* msix_cap;
     network_mac_address_t  mac;
