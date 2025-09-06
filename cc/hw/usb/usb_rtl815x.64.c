@@ -29,6 +29,7 @@ typedef struct usb_driver_t {
     usb_endpoint_t*         bulk_in;
     usb_endpoint_t*         bulk_out;
     usb_endpoint_t*         intr;
+    uint16_t                intr_value;
 } usb_driver_t;
 
 typedef struct usb_rtl815x_tx_t {
@@ -939,15 +940,23 @@ extern uint64_t network_rx_task_id;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
-    UNUSED(driver);
 
     if(endpoint == driver->intr->desc->endpoint_address) {
-        PRINTLOG(USB, LOG_TRACE, "interupt endpoint 0x%02x data received, ignoring", endpoint);
-        pipeline_clear(pipeline);
+        usb_driver_t* drv = (usb_driver_t*)driver;
+        while(pipeline_available_data(pipeline) > 0) {
+            uint16_t new_intr_value;
+            pipeline_read(pipeline, 2, (uint8_t*)&new_intr_value);
+
+            if(driver->intr_value != new_intr_value) {
+                PRINTLOG(USB, LOG_DEBUG, "interrupt value changed: 0x%04x -> 0x%04x", driver->intr_value, new_intr_value);
+                drv->intr_value = new_intr_value;
+            } else {
+                PRINTLOG(USB, LOG_TRACE, "interrupt value unchanged: 0x%04x", driver->intr_value);
+            }
+        }
+
         return 0;
     }
-
-    uint8_t __attribute__((aligned(128))) buffer[16 << 10];
 
     boolean_t notify_network_rx = true;
 
@@ -986,14 +995,6 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
             return -1;
         }
 
-        rc = pipeline_read(pipeline, pktlen, buffer);
-
-        if(rc == -1ULL || rc != pktlen) {
-            PRINTLOG(USB, LOG_ERROR, "cannot read full RX packet rc=%llu pktlen=%u", rc, pktlen);
-            pipeline_clear(pipeline);
-            return -1;
-        }
-
         boolean_t is_vlan_tagged = (rx_hdr.flags1 & BIT(16)) != 0;
         uint16_t vlan_id = rx_hdr.flags1 & 0x0FFFU;
         vlan_id = BYTE_SWAP16(vlan_id);
@@ -1022,7 +1023,13 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
             continue;
         }
 
-        memory_memcopy(buffer, packet->packet_data, pktlen);
+        rc = pipeline_read(pipeline, pktlen, packet->packet_data);
+
+        if(rc == -1ULL || rc != pktlen) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read full RX packet rc=%llu pktlen=%u", rc, pktlen);
+            pipeline_clear(pipeline);
+            return -1;
+        }
 
         if(list_queue_push(network_received_packets, packet) == -1ULL) {
             PRINTLOG(USB, LOG_ERROR, "failed to queue packet");
@@ -1065,7 +1072,7 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
 
     ut.driver = usb_driver;
     ut.endpoint = usb_driver->bulk_out;
-
+    ut.is_async = true;
 
     ut.length = sizeof(usb_rtl815x_tx_t) + (tx->length & 0x3FFFFU);
 
