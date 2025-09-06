@@ -181,7 +181,7 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
 
         ni->is_ipv4_address_requested = true;
 
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet sending...");
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp request packet sending...");
 
         list_queue_push(ni->return_queue, res);
     }

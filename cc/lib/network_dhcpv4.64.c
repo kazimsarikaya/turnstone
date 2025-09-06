@@ -123,13 +123,23 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
     network_dhcpv4_opcode_t type = 0;
 
+    network_ipv4_address_t server_ip = {0};
+    boolean_t server_is_is_from_option = false;
+
     uint8_t* options = recv_dhcpv4_packet->options;
     uint16_t idx = 0;
 
     while(options[idx] != NETWORK_DHCPV4_OPTION_END) {
         if(options[idx] == NETWORK_DHCPV4_OPTION_MESSAGETYPE) {
             type = options[idx + 2];
-            break;
+        } else if(options[idx] == NETWORK_DHCPV4_OPTION_SERVERIP) {
+            memory_memcopy(&options[idx + 2], server_ip.as_bytes, sizeof(network_ipv4_address_t));
+            PRINTLOG(NETWORK, LOG_TRACE, "dhcp server ip at option %i.%i.%i.%i",
+                     server_ip.as_bytes[0],
+                     server_ip.as_bytes[1],
+                     server_ip.as_bytes[2],
+                     server_ip.as_bytes[3]);
+            server_is_is_from_option = true;
         }
 
         idx += options[idx + 1] + 2;
@@ -146,8 +156,23 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     }
 
     if(type == NETWORK_DHCPV4_OPCODE_OFFER) {
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp offer recevied");
         ni->ipv4_address = recv_dhcpv4_packet->your_ip;
-        ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        PRINTLOG(NETWORK, LOG_INFO, "offered ipaddr %i.%i.%i.%i",
+                 ni->ipv4_address.as_bytes[0],
+                 ni->ipv4_address.as_bytes[1],
+                 ni->ipv4_address.as_bytes[2],
+                 ni->ipv4_address.as_bytes[3]);
+        if(server_is_is_from_option) {
+            ni->ipv4_dhcpserver = server_ip;
+        } else {
+            ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        }
+        PRINTLOG(NETWORK, LOG_INFO, "by dhcp server ipaddr %i.%i.%i.%i",
+                 ni->ipv4_dhcpserver.as_bytes[0],
+                 ni->ipv4_dhcpserver.as_bytes[1],
+                 ni->ipv4_dhcpserver.as_bytes[2],
+                 ni->ipv4_dhcpserver.as_bytes[3]);
 
         uint16_t dhcp_packet_len = 0;
         network_dhcpv4_t* dhcp_packet = network_dhcpv4_create_request_packet(ni, recv_dhcpv4_packet->xid, &dhcp_packet_len);
@@ -238,45 +263,54 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
         list_queue_push(ni->return_queue, res);
 
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp request is send");
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp request is sending for ack...");
     } else if(type == NETWORK_DHCPV4_OPCODE_ACK) {
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp type is ack");
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp ack recevied");
 
         ni->ipv4_address = recv_dhcpv4_packet->your_ip;
-        PRINTLOG(NETWORK, LOG_TRACE, "ipaddr %i.%i.%i.%i",
+        PRINTLOG(NETWORK, LOG_INFO, "ipaddr %i.%i.%i.%i",
                  ni->ipv4_address.as_bytes[0],
                  ni->ipv4_address.as_bytes[1],
                  ni->ipv4_address.as_bytes[2],
                  ni->ipv4_address.as_bytes[3]);
-        ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        if(server_is_is_from_option) {
+            ni->ipv4_dhcpserver = server_ip;
+        } else {
+            ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        }
+        PRINTLOG(NETWORK, LOG_INFO, "by dhcp server ipaddr %i.%i.%i.%i",
+                 ni->ipv4_dhcpserver.as_bytes[0],
+                 ni->ipv4_dhcpserver.as_bytes[1],
+                 ni->ipv4_dhcpserver.as_bytes[2],
+                 ni->ipv4_dhcpserver.as_bytes[3]);
 
         idx = 0;
 
         while(options[idx] != NETWORK_DHCPV4_OPTION_END) {
             if(options[idx] == NETWORK_DHCPV4_OPTION_SUBNETMASK) {
                 memory_memcopy(options + idx + 2, ni->ipv4_subnetmask.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "subnet %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "subnet %i.%i.%i.%i",
                          ni->ipv4_subnetmask.as_bytes[0],
                          ni->ipv4_subnetmask.as_bytes[1],
                          ni->ipv4_subnetmask.as_bytes[2],
                          ni->ipv4_subnetmask.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_ROUTER) {
                 memory_memcopy(options + idx + 2, ni->ipv4_gateway.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "gw %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "gw %i.%i.%i.%i",
                          ni->ipv4_gateway.as_bytes[0],
                          ni->ipv4_gateway.as_bytes[1],
                          ni->ipv4_gateway.as_bytes[2],
                          ni->ipv4_gateway.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER) {
                 memory_memcopy(options + idx + 2, ni->ipv4_nameserver.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "ns %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "ns %i.%i.%i.%i",
                          ni->ipv4_nameserver.as_bytes[0],
                          ni->ipv4_nameserver.as_bytes[1],
                          ni->ipv4_nameserver.as_bytes[2],
                          ni->ipv4_nameserver.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_BROADCAST) {
                 memory_memcopy(options + idx + 2, ni->ipv4_broadcast.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "bcast %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "bcast %i.%i.%i.%i",
                          ni->ipv4_broadcast.as_bytes[0],
                          ni->ipv4_broadcast.as_bytes[1],
                          ni->ipv4_broadcast.as_bytes[2],
@@ -305,7 +339,7 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         ni->is_ipv4_address_set = true;
         ni->is_ipv4_address_requested = false;
 
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp conf completed");
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp conf completed");
     }
 
     return NULL;
