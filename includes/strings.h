@@ -10,6 +10,7 @@
 #define ___STRINGS_H 0
 
 #include <types.h>
+#include <int_limits.h>
 #include <memory.h>
 #include <sunday_match.h>
 
@@ -20,9 +21,13 @@ extern "C" {
 /**
  * @brief calculates null ended string's length
  * @param[in]  string string to calculate length
+ * @param[in]  max_len maximum length to check
  * @return length
  */
-size_t strlen(const char_t * string);
+size_t strlen_safe(const char_t * string, size_t max_len);
+
+/*! strlen macro with max size */
+#define strlen(s) strlen_safe(s, SIZE_MAX)
 
 /**
  * @brief compares two string

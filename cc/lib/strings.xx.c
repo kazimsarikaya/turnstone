@@ -14,7 +14,7 @@
 MODULE("turnstone.lib.strings");
 
 
-size_t strlen(const char_t* string) {
+size_t strlen_safe(const char_t* string, size_t max_len) {
     if(string == NULL) {
         return 0;
     }
@@ -22,6 +22,10 @@ size_t strlen(const char_t* string) {
     size_t ret = 0;
 
     while(string[ret]) {
+        if(ret == max_len) {
+            break;
+        }
+
         ret++;
     }
 

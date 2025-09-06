@@ -34,7 +34,9 @@ extern "C" {
 #define INT64_MAX (9223372036854775807)
 
 #define UINT64_MIN (0)
-#define UINT64_MAX (18446744073709551615)
+#define UINT64_MAX (18446744073709551615ULL)
+
+#define SIZE_MAX UINT64_MAX
 
 #ifdef __cplusplus
 }

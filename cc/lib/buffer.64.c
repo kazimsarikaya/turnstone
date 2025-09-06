@@ -601,8 +601,9 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             char_t ito_buf[64] = {0};
             int32_t val = 0;
             boolean_t fill_after = false;
-            char_t* str = NULL;
+            const char_t* str = NULL;
             int32_t slen = 0;
+            boolean_t is_slen_from_arg = false;
             number_t ival = 0;
             unumber_t uval = 0;
             int32_t idx = 0;
@@ -645,6 +646,16 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     }
                     wfmtb = 0;
                     break;
+                case '*':
+                    if(is_slen_from_arg) {
+                        // only one * is allowed
+                        break;
+                    }
+                    is_slen_from_arg = true;
+                    prec = va_arg(args, int32_t);
+                    fmt++;
+                    wfmtb = 0;
+                    break;
                 case 'c':
                     val = va_arg(args, int32_t);
                     buffer_vprintf_buffer[buffer_vprintf_buffer_idx++] = (char_t)val;
@@ -654,7 +665,19 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     break;
                 case 's':
                     str = va_arg(args, char_t*);
-                    slen = strlen(str);
+                    if(str == NULL) {
+                        str = "(null)";
+                    }
+
+                    if(is_slen_from_arg) {
+                        slen = prec;
+                        size_t slen_safe = strlen_safe(str, slen);
+                        if((int32_t)slen_safe < slen) {
+                            slen = slen_safe;
+                        }
+                    } else {
+                        slen = strlen(str);
+                    }
 
                     if(prec && slen > prec) {
                         slen = prec;
