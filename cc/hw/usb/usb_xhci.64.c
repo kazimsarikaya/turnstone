@@ -1448,13 +1448,9 @@ static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_trans
 
             if(!transfer->is_async) {
                 usb_xhci_pool_event_init(metadata->controller_id, cur_trb_fa, USB_XHCI_TRB_TYPE_ER_TRANSFER);
-
-                doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
             }
 
-            if(transfer->is_isochronous) {
-                doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
-            }
+            doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
 
             trb_index = (trb_index + 1) % metadata->cmd_ring_size;
             context->endpoints[ep_index - 1].ep_trb_index = trb_index;
@@ -1662,7 +1658,19 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
 
         if(cc == USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
             uint32_t remaining_length = event_trb->status & 0xFFFFFF;
+
+            if(remaining_length > data_len) {
+                PRINTLOG(USB, LOG_WARNING, "short packet remaining length %d greater than data length %d",
+                         remaining_length, data_len);
+                return;
+            }
+
             data_len -= remaining_length;
+
+            if(!data_len) {
+                PRINTLOG(USB, LOG_WARNING, "short packet with zero data length");
+                return;
+            }
         }
 
         if(data_len != expected_packet_size) {
@@ -1670,7 +1678,10 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
                      data_len, expected_packet_size);
         }
 
-        pipeline_write(ep_pipeline, data_len, data);
+        if(pipeline_write(ep_pipeline, data_len, data) != data_len) {
+            PRINTLOG(USB, LOG_WARNING, "cannot write all data to pipeline");
+        }
+
         driver->pipeline_callback(driver, ep_id_at_interface, ep_pipeline);
     }
 }
