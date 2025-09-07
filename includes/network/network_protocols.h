@@ -21,7 +21,6 @@ extern "C" {
 #define NETWORK_PROTOCOL_IPV6  0x86DD
 #define NETWORK_PROTOCOL_VLAN  0x8100
 
-
 typedef union network_ipv4_address_t {
     uint8_t  as_bytes[4];
     uint16_t as_words[2];

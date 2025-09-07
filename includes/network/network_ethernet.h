@@ -42,6 +42,8 @@ typedef struct network_ethernet_with_vlan_t {
 
 _Static_assert(sizeof(network_ethernet_with_vlan_t) == 18, "invalid network_ethernet_with_vlan_t size");
 
+#define NETWORK_ETHERNET_MIN_FRAME_SIZE 60
+
 extern network_mac_address_t BROADCAST_MAC;
 
 boolean_t network_ethernet_is_mac_address_eq(network_mac_address_t mac1, network_mac_address_t mac2);

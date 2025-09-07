@@ -196,6 +196,7 @@ typedef struct network_igb_dev_t {
     uint8_t                other_isr;
 
     uint64_t rx_task_id;
+    uint64_t tx_task_id;
 
     uint64_t rx_count;
     uint64_t tx_count;

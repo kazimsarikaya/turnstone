@@ -112,7 +112,7 @@ static int8_t network_igb_process_tx(void) {
         task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
     }
 
-    while(1) {
+    while(true) {
         boolean_t packet_exists = false;
 
         for(uint64_t dev_idx = 0; dev_idx < list_size(igb_net_devs); dev_idx++) {
@@ -435,6 +435,7 @@ static int32_t network_igb_process_rx(uint64_t args_cnt, void** args) {
                     packet->network_type = NETWORK_TYPE_ETHERNET;
                     packet->is_vlan_tagged = status & NETWORK_IGB_RXD_STAT_VD ? true : false;
                     packet->vlan_id = vlan_id;
+                    packet->tx_task_id = dev->tx_task_id;
 
                     packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
 
@@ -780,7 +781,8 @@ int8_t network_igb_init(const pci_dev_t* pci_netdev) {
     dev->rx_task_id = rx_task_id;
 
 
-    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb-tx");
+    uint64_t tx_task_id =    task_create_task(NULL, 2 << 20, 64 << 10, &network_igb_process_tx, 0, NULL, "igb-tx");
+    dev->tx_task_id = tx_task_id;
 
     list_list_insert(igb_net_devs, dev);
 

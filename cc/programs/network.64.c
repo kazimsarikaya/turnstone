@@ -96,6 +96,7 @@ static int8_t network_send_packet_to_nic(network_transmit_packet_t* orginal_pack
     network_transmit_packet_destroyer(NULL, orginal_packet);
 
     if(list_queue_push(return_queue, tx_packet) == -1ULL) {
+        PRINTLOG(NETWORK, LOG_ERROR, "failed to push packet to return queue");
         memory_free_ext(list_get_heap(return_queue), tx_packet_data);
         memory_free_ext(list_get_heap(return_queue), tx_packet);
 
@@ -126,6 +127,8 @@ int8_t network_process_rx(void){
             if(packet) {
                 PRINTLOG(NETWORK, LOG_TRACE, "network packet received with length 0x%llx", packet->packet_len);
 
+                uint64_t tx_task_id = packet->tx_task_id;
+
                 list_t* return_list = NULL;
 
                 if(packet->network_type == NETWORK_TYPE_ETHERNET) {
@@ -153,13 +156,15 @@ int8_t network_process_rx(void){
                                 }
 
                                 if(notify_tx_proc) {
-                                    // task_set_message_received(network_vnet_tx_task_id); //FIXME: notify task of return queue
+                                    task_set_message_received(tx_task_id); // FIXME: notify task of return queue
                                     notify_tx_proc = false;
                                 }
                             }
                         }
 
                         list_destroy_with_type(return_list, LIST_DESTROY_WITH_DATA, &network_transmit_packet_destroyer);
+
+                        task_set_message_received(tx_task_id);
 
                     } else {
                         PRINTLOG(NETWORK, LOG_TRACE, "there is no return queue");

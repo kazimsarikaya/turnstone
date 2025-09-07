@@ -243,15 +243,23 @@ list_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, voi
     }
 
     if(network_ipv4_header_checksum_verify(recv_ipv4_packet) != 0) {
-        PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet checksum failed");
+        PRINTLOG(NETWORK, LOG_WARNING, "ipv4 packet checksum failed");
 
         return NULL;
     }
 
     const network_info_t* ni = map_get(network_info_map, network_info);
 
-    if(ni && ni->is_ipv4_address_set && (!network_ipv4_is_address_eq(ni->ipv4_address, recv_ipv4_packet->destination_ip) && !network_ipv4_is_address_eq(ni->ipv4_broadcast, recv_ipv4_packet->destination_ip))) {
-        PRINTLOG(NETWORK, LOG_TRACE, "ipv4 packet destination isnot us");
+    if(ni->is_ipv4_address_set && (
+           !network_ipv4_is_address_eq(ni->ipv4_address, recv_ipv4_packet->destination_ip) &&
+           !network_ipv4_is_address_eq(ni->ipv4_broadcast, recv_ipv4_packet->destination_ip)
+           )
+       ) {
+        PRINTLOG(NETWORK, LOG_WARNING, "ipv4 packet destination %i.%i.%i.%i is not this machine, discarding packet",
+                 recv_ipv4_packet->destination_ip.as_bytes[0],
+                 recv_ipv4_packet->destination_ip.as_bytes[1],
+                 recv_ipv4_packet->destination_ip.as_bytes[2],
+                 recv_ipv4_packet->destination_ip.as_bytes[3]);
         return NULL;
     }
 
@@ -268,13 +276,7 @@ list_t* network_ipv4_process_packet(network_ipv4_header_t* recv_ipv4_packet, voi
     if(recv_ipv4_packet->protocol == NETWORK_IPV4_PROTOCOL_ICMPV4) {
         PRINTLOG(NETWORK, LOG_TRACE, "icmp packet received");
 
-        if(!ni) {
-            PRINTLOG(NETWORK, LOG_TRACE, "network info not found for mac address");
-            memory_free(packet_data);
-            return NULL;
-        }
-
-        if(ni && !ni->is_ipv4_address_set) {
+        if(!ni->is_ipv4_address_set) {
             PRINTLOG(NETWORK, LOG_TRACE, "ip address is not set, discarding packet");
             memory_free(packet_data);
             return NULL;

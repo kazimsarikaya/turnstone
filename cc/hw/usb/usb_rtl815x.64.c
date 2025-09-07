@@ -30,6 +30,7 @@ typedef struct usb_driver_t {
     usb_endpoint_t*         bulk_out;
     usb_endpoint_t*         intr;
     uint16_t                intr_value;
+    uint64_t                tx_task_id;
 } usb_driver_t;
 
 typedef struct usb_rtl815x_tx_t {
@@ -1305,7 +1306,14 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     }
 
 
-    task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 0, NULL, "usb-rtl815x-tx");
+    uint64_t tx_task_id =  task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 0, NULL, "usb-rtl815x-tx");
+
+    if(tx_task_id == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create tx task");
+        return -1;
+    }
+
+    drv->tx_task_id = tx_task_id;
 
     list_list_insert(usb_rtl815x_drivers, drv);
 

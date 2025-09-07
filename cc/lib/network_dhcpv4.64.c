@@ -108,14 +108,18 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     }
 
     if(!network_ethernet_is_mac_address_eq(network_info, recv_dhcpv4_packet->client_mac_address)) {
+        PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet is not for us");
         return NULL;
     }
 
     if(BYTE_SWAP32(recv_dhcpv4_packet->magic_cookie) != NETWORK_DHCPV4_MAGICCOOKIE) {
+        PRINTLOG(NETWORK, LOG_ERROR, "dhcp magic cookie is invalid");
         return NULL;
     }
 
-    if(recv_dhcpv4_packet->opcode != NETWORK_DHCPV4_OPCODE_OFFER) {
+    if(recv_dhcpv4_packet->opcode != NETWORK_DHCPV4_OPCODE_OFFER &&
+       recv_dhcpv4_packet->opcode != NETWORK_DHCPV4_OPCODE_ACK) {
+        PRINTLOG(NETWORK, LOG_ERROR, "dhcp packet is not offer or ack");
         return NULL;
     }
 
@@ -261,9 +265,18 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         res->is_vlan_tagged = ni->is_vlan_tagged;
         res->vlan_id = ni->vlan_id;
 
-        list_queue_push(ni->return_queue, res);
+        if(list_queue_push(ni->return_queue, res) == -1ULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "failed to push packet to return queue");
 
-        PRINTLOG(NETWORK, LOG_INFO, "dhcp request is sending for ack...");
+            memory_free_ext(list_get_heap(ni->return_queue), packet_data);
+            memory_free_ext(list_get_heap(ni->return_queue), res);
+
+            return NULL;
+        } else {
+            PRINTLOG(NETWORK, LOG_TRACE, "packet pushed to return queue");
+        }
+
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp request sending...");
     } else if(type == NETWORK_DHCPV4_OPCODE_ACK) {
         PRINTLOG(NETWORK, LOG_INFO, "dhcp ack recevied");
 

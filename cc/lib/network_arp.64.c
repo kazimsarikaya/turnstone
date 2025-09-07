@@ -49,7 +49,11 @@ uint8_t* network_arp_create_reply_from_packet(network_arp_t* src_arp_packet, net
 
 
     if(!network_ipv4_is_address_eq(ni->ipv4_address, src_arp_packet->target_ip)) {
-        PRINTLOG(NETWORK, LOG_TRACE, "target ip address is not this machine, discarding packet");
+        PRINTLOG(NETWORK, LOG_TRACE, "target ip address %i.%i.%i.%i is not this machine, discarding packet",
+                 src_arp_packet->target_ip.as_bytes[0],
+                 src_arp_packet->target_ip.as_bytes[1],
+                 src_arp_packet->target_ip.as_bytes[2],
+                 src_arp_packet->target_ip.as_bytes[3]);
         return NULL;
     }
 
