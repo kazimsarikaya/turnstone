@@ -108,7 +108,7 @@ static int8_t usb_rtl815x_read_reg8(usb_driver_t* drv, uint16_t type, uint16_t i
 static int8_t usb_rtl815x_read_reg16(usb_driver_t* drv, uint16_t type, uint16_t index, uint16_t* data) {
     uint32_t input;
     uint32_t output;
-    uint16_t byen = RTL815X_BYTEN_EN_WORD;
+    uint16_t byen = RTL815X_BYTE_EN_WORD;
     uint8_t shift = index & 2;
 
     index &= ~3;
@@ -157,7 +157,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
 
     byen = byteen_start | (byteen_start << 4);
 
-    if(byen != RTL815X_BYTEN_EN_DWORD) {
+    if(byen != RTL815X_BYTE_EN_DWORD) {
         ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | byen, buf, 4);
 
         if(ret != 0) {
@@ -175,14 +175,14 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
 
     byen = byteen_end | (byteen_end >> 4);
 
-    if(byen != RTL815X_BYTEN_EN_DWORD) {
+    if(byen != RTL815X_BYTE_EN_DWORD) {
         len -= 4;
     }
 
     while(len) {
         uint16_t chunk = len > limit ? limit : len;
 
-        ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | RTL815X_BYTEN_EN_DWORD, data, chunk);
+        ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | RTL815X_BYTE_EN_DWORD, data, chunk);
 
         if(ret != 0) {
             return ret;
@@ -193,7 +193,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
         data  += chunk;
     }
 
-    if(byen != RTL815X_BYTEN_EN_DWORD) {
+    if(byen != RTL815X_BYTE_EN_DWORD) {
         ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | byen, data, 4);
     }
 
@@ -203,7 +203,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
 static int8_t usb_rtl815x_write_reg8(usb_driver_t* drv, uint16_t type, uint16_t index, uint8_t data) {
     uint32_t input = data;
 
-    uint16_t byen = RTL815X_BYTEN_EN_BYTE;
+    uint16_t byen = RTL815X_BYTE_EN_BYTE;
     uint8_t shift = index & 3;
 
     if(index & 3) {
@@ -218,7 +218,7 @@ static int8_t usb_rtl815x_write_reg8(usb_driver_t* drv, uint16_t type, uint16_t 
 static int8_t usb_rtl815x_write_reg16(usb_driver_t* drv, uint16_t type, uint16_t index, uint16_t data) {
     uint32_t input = data;
 
-    uint16_t byen = RTL815X_BYTEN_EN_WORD;
+    uint16_t byen = RTL815X_BYTE_EN_WORD;
     uint8_t shift = index & 2;
 
     if(index & 2) {
@@ -231,7 +231,7 @@ static int8_t usb_rtl815x_write_reg16(usb_driver_t* drv, uint16_t type, uint16_t
 }
 
 static int8_t usb_rtl815x_write_reg32(usb_driver_t* drv, uint16_t type, uint16_t index, uint32_t data) {
-    return usb_rtl815x_write_reg(drv, RTL815X_BYTEN_EN_DWORD, type, index, &data, sizeof(uint32_t));
+    return usb_rtl815x_write_reg(drv, RTL815X_BYTE_EN_DWORD, type, index, &data, sizeof(uint32_t));
 }
 
 #if 0
@@ -336,6 +336,41 @@ static int8_t usb_rtl815x_aldps_en(usb_driver_t* drv, boolean_t enable) {
     return 0;
 }
 
+static int8_t usb_rtl815x_eee_disable(usb_driver_t* drv) {
+    uint16_t ocp_data;
+    uint16_t config;
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, &ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
+        return -1;
+    }
+
+    if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_EEE_CFG, &config) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read OCP_EEE_CFG");
+        return -1;
+    }
+
+    ocp_data &= ~(RTL815X_EEE_RX_EN | RTL815X_EEE_TX_EN);
+    config &= ~RTL815X_EEE10_EN;
+
+    if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
+        return -1;
+    }
+
+    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_CFG, config) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_CFG");
+        return -1;
+    }
+
+    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_ADV, 0) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_ADV");
+        return -1;
+    }
+
+    return 0;
+}
+
 static int8_t usb_rtl815x_wait_reset_clear(usb_driver_t* drv, uint32_t timeout_ms) {
     uint8_t cr = 0;
     const uint32_t interval_us = 1000; // 1 ms polling
@@ -377,7 +412,7 @@ static int8_t usb_rtl815x_reset(usb_driver_t* drv) {
 static int8_t usb_rtl815x_read_mac(usb_driver_t* drv, uint8_t mac[6]) {
     uint64_t __attribute__((aligned(128))) mac_64b = 0;
     if (usb_rtl815x_read_reg64(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC, &mac_64b) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read MAC low");
+        PRINTLOG(USB, LOG_ERROR, "cannot MAC low");
         return -1;
     }
 
@@ -449,41 +484,6 @@ static int8_t usb_rtl815x_configure_extra_status(usb_driver_t* drv) {
 
     if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EXTRA_STATUS, extra_status) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot write EXTRA_STATUS");
-        return -1;
-    }
-
-    return 0;
-}
-
-static int8_t usb_rtl815x_eee_disable(usb_driver_t* drv) {
-    uint16_t ocp_data;
-    uint16_t config;
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, &ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
-        return -1;
-    }
-
-    if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_EEE_CFG, &config) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read OCP_EEE_CFG");
-        return -1;
-    }
-
-    ocp_data &= ~(RTL815X_EEE_RX_EN | RTL815X_EEE_TX_EN);
-    config &= ~RTL815X_EEE10_EN;
-
-    if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
-        return -1;
-    }
-
-    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_CFG, config) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_CFG");
-        return -1;
-    }
-
-    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_ADV, 0) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_ADV");
         return -1;
     }
 
@@ -668,6 +668,8 @@ static int8_t usb_rtl815x_wait_oob_link_list_ready(usb_driver_t* drv, uint32_t t
     return -1;
 }
 
+#endif
+
 static int8_t usb_rtl815x_reset_bmu(usb_driver_t* drv) {
     uint8_t ocp_data = 0;
 
@@ -693,10 +695,119 @@ static int8_t usb_rtl815x_reset_bmu(usb_driver_t* drv) {
     return 0;
 }
 
-#endif
+static int8_t usb_rtl815x_read_status(usb_driver_t* drv) {
+    uint8_t ocp_data;
+
+    if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read CR");
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "CR: 0x%02x", ocp_data);
+
+    uint16_t speed = 0;
+
+    if (usb_rtl815x_get_speed(drv, &speed) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_INFO, "link status 0x%04x", speed);
+
+    PRINTLOG(USB, LOG_INFO, "connection speed: %s, %s-duplex",
+             (speed & RTL815X_1000BPS) ? "1000Mbps" :
+             (speed & RTL815X_100BPS) ? "100Mbps" : "10Mbps",
+             (speed & RTL815X_FULL_DUP) ? "full" : "half");
+
+    uint32_t txfifo = 0;
+
+    if(usb_rtl815x_read_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_TXFIFO_CTRL, &txfifo) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "TXFIFO_CTRL: 0x%08x", txfifo);
+
+    uint8_t oob_ctrl = 0;
+
+    if(usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_OOB_CTRL, &oob_ctrl) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "OOB_CTRL: 0x%02x", oob_ctrl);
+
+    uint16_t ocp_phy_status = 0;
+
+    if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_PHY_STATUS, &ocp_phy_status) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "OCP_PHY_STATUS: 0x%04x", ocp_phy_status);
+
+    uint16_t mac_pwr_ctrl, mac_pwr_ctrl2, mac_pwr_ctrl3, mac_pwr_ctrl4;
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL, &mac_pwr_ctrl) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL2, &mac_pwr_ctrl2) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL3, &mac_pwr_ctrl3) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL4, &mac_pwr_ctrl4) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL: 0x%04x", mac_pwr_ctrl);
+    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL2: 0x%04x", mac_pwr_ctrl2);
+    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL3: 0x%04x", mac_pwr_ctrl3);
+    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL4: 0x%04x", mac_pwr_ctrl4);
+
+    uint16_t phy_pwr;
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, &phy_pwr) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "PHY_PWR: 0x%04x", phy_pwr);
+
+    uint16_t cpcr;
+
+    if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_CPCR, &cpcr) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_CPCR, rx_vlan_en failed");
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "CPCR: 0x%04x", cpcr);
+
+    uint64_t mar = 0;
+
+    if (usb_rtl815x_read_reg64(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAR, &mar) != 0) {
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "MAR: 0x%016llx", mar);
+
+    uint16_t extra_status = 0;
+
+    if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EXTRA_STATUS, &extra_status) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read EXTRA_STATUS");
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_DEBUG, "EXTRA_STATUS: 0x%04x", extra_status);
+
+    return 0;
+}
 
 static int8_t usb_rtl815x_init(usb_driver_t* drv) {
     if(usb_rtl815x_reset(drv) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_reset_bmu(drv) != 0) {
         return -1;
     }
 
@@ -751,7 +862,8 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
     }
 
     if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_LPM_CTRL,
-                                RTL815X_FIFO_EMPTY_1FB | RTL815X_ROK_EXIT_LPM | RTL815X_LPM_TIMER_500US) != 0) {
+                                RTL815X_FIFO_EMPTY_1FB | RTL815X_ROK_EXIT_LPM | RTL815X_LPM_TIMER_500US
+                                ) != 0) {
         return -1;
     }
 
@@ -815,8 +927,6 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
         return -1;
     }
 
-    uint16_t speed = 0;
-
     if (usb_rtl815x_reset_packet_filer(drv) != 0) {
         return -1;
     }
@@ -836,102 +946,9 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
         return -1;
     }
 
-    if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read CR");
+    if(usb_rtl815x_read_status(drv) != 0) {
         return -1;
     }
-
-    PRINTLOG(USB, LOG_DEBUG, "CR: 0x%02x", ocp_data);
-
-    if (usb_rtl815x_get_speed(drv, &speed) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_INFO, "link status 0x%04x", speed);
-
-    PRINTLOG(USB, LOG_INFO, "connection speed: %s, %s-duplex",
-             (speed & RTL815X_1000BPS) ? "1000Mbps" :
-             (speed & RTL815X_100BPS) ? "100Mbps" : "10Mbps",
-             (speed & RTL815X_FULL_DUP) ? "full" : "half");
-
-    uint32_t txfifo = 0;
-
-    if(usb_rtl815x_read_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_TXFIFO_CTRL, &txfifo) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "TXFIFO_CTRL: 0x%08x", txfifo);
-
-    uint8_t oob_ctrl = 0;
-
-    if(usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_OOB_CTRL, &oob_ctrl) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "OOB_CTRL: 0x%02x", oob_ctrl);
-
-    uint16_t ocp_phy_status = 0;
-
-    if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_PHY_STATUS, &ocp_phy_status) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "OCP_PHY_STATUS: 0x%04x", ocp_phy_status);
-
-    uint16_t mac_pwr_ctrl, mac_pwr_ctrl2, mac_pwr_ctrl3, mac_pwr_ctrl4;
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL, &mac_pwr_ctrl) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL2, &mac_pwr_ctrl2) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL3, &mac_pwr_ctrl3) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC_PWR_CTRL4, &mac_pwr_ctrl4) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL: 0x%04x", mac_pwr_ctrl);
-    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL2: 0x%04x", mac_pwr_ctrl2);
-    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL3: 0x%04x", mac_pwr_ctrl3);
-    PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL4: 0x%04x", mac_pwr_ctrl4);
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, &phy_pwr) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "PHY_PWR: 0x%04x", phy_pwr);
-
-    uint16_t cpcr;
-
-    if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_CPCR, &cpcr) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_CPCR, rx_vlan_en failed");
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "CPCR: 0x%04x", cpcr);
-
-    uint64_t mar = 0;
-
-    if (usb_rtl815x_read_reg64(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAR, &mar) != 0) {
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "MAR: 0x%016llx", mar);
-
-    uint16_t extra_status = 0;
-
-    if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EXTRA_STATUS, &extra_status) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read EXTRA_STATUS");
-        return -1;
-    }
-
-    PRINTLOG(USB, LOG_DEBUG, "EXTRA_STATUS: 0x%04x", extra_status);
 
     return 0;
 }
@@ -951,6 +968,24 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
             if(driver->intr_value != new_intr_value) {
                 PRINTLOG(USB, LOG_DEBUG, "interrupt value changed: 0x%04x -> 0x%04x", driver->intr_value, new_intr_value);
                 drv->intr_value = new_intr_value;
+/*
+                uint16_t speed = 0;
+
+                if (usb_rtl815x_get_speed(drv, &speed) == 0) {
+                    PRINTLOG(USB, LOG_DEBUG, "link status 0x%04x", speed);
+
+                    PRINTLOG(USB, LOG_DEBUG, "connection speed: %s, %s-duplex",
+                             (speed & RTL815X_1000BPS) ? "1000Mbps" :
+                             (speed & RTL815X_100BPS) ? "100Mbps" : "10Mbps",
+                             (speed & RTL815X_FULL_DUP) ? "full" : "half");
+                }
+
+                uint16_t ocp_phy_status = 0;
+
+                if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_PHY_STATUS, &ocp_phy_status) == 0) {
+                    PRINTLOG(USB, LOG_DEBUG, "OCP_PHY_STATUS: 0x%04x", ocp_phy_status);
+                }
+ */
             } else {
                 PRINTLOG(USB, LOG_TRACE, "interrupt value unchanged: 0x%04x", driver->intr_value);
             }
@@ -1013,6 +1048,7 @@ static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t 
         packet->network_type = NETWORK_TYPE_ETHERNET;
         packet->is_vlan_tagged = is_vlan_tagged;
         packet->vlan_id = vlan_id;
+        packet->tx_task_id = driver->tx_task_id;
 
         packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
 
@@ -1073,7 +1109,7 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
 
     ut.driver = usb_driver;
     ut.endpoint = usb_driver->bulk_out;
-    ut.is_async = true;
+    ut.is_async = false;
 
     ut.length = sizeof(usb_rtl815x_tx_t) + (tx->length & 0x3FFFFU);
 
