@@ -51,6 +51,24 @@ typedef struct usb_rtl815x_rx_t {
 
 _Static_assert(sizeof(usb_rtl815x_rx_t) == 24, "invalid usb_rtl815x_tx_t size");
 
+typedef struct usb_rtl815x_tally_counter_t {
+    uint64_t tx_packets;
+    uint64_t rx_packets;
+    uint64_t tx_errors;
+    uint32_t rx_errors;
+    uint16_t rx_missed;
+    uint16_t align_errors;
+    uint32_t tx_one_collision;
+    uint32_t tx_multi_collision;
+    uint64_t rx_unicast;
+    uint64_t rx_broadcast;
+    uint32_t rx_multicast;
+    uint16_t tx_aborted;
+    uint16_t tx_underrun;
+} __attribute__((packed)) usb_rtl815x_tally_counter_t;
+
+_Static_assert(sizeof(usb_rtl815x_tally_counter_t) == 64, "invalid usb_rtl815x_tally_counter_t size");
+
 static list_t* usb_rtl815x_drivers = NULL;
 
 static int8_t usb_rtl815x_read_reg(usb_driver_t* drv, uint16_t type, uint16_t index, void* buf, uint16_t len) {
@@ -304,6 +322,26 @@ static inline int8_t usb_rtl815x_mdio_write(usb_driver_t* drv, uint32_t reg_addr
 
 static inline int usb_rtl815x_mdio_read(usb_driver_t* drv, uint32_t reg_addr, uint16_t* value) {
     return usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_BASE_MII + reg_addr * 2, value);
+}
+
+static int8_t usb_rtl815x_tally_reset(usb_driver_t* drv)
+
+{
+    uint32_t ocp_data;
+
+    if (usb_rtl815x_read_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RSTTALLY, &ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_RSTTALLY");
+        return -1;
+    }
+
+    ocp_data |= RTL815X_TALLY_RESET;
+
+    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RSTTALLY, ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write PLA_RSTTALLY");
+        return -1;
+    }
+
+    return 0;
 }
 
 static int8_t usb_rtl815x_aldps_en(usb_driver_t* drv, boolean_t enable) {
@@ -625,6 +663,31 @@ static int8_t usb_rtl815x_cfg_wdt11(usb_driver_t* drv) {
     return 0;
 }
 
+static int8_t usb_rtl815x_read_tally(usb_driver_t* drv) {
+    usb_rtl815x_tally_counter_t tally = {0};
+
+    if (usb_rtl815x_read_reg(drv, RTL815X_PLA_BASE, RTL815X_PLA_TALLY_CNT, &tally, sizeof(usb_rtl815x_tally_counter_t)) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read TALLY_CNT");
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_INFO, "tx_packets:        %llu", tally.tx_packets);
+    PRINTLOG(USB, LOG_INFO, "rx_packets:        %llu", tally.rx_packets);
+    PRINTLOG(USB, LOG_INFO, "tx_errors:         %llu", tally.tx_errors);
+    PRINTLOG(USB, LOG_INFO, "rx_errors:         %u", tally.rx_errors);
+    PRINTLOG(USB, LOG_INFO, "rx_missed:         %u", tally.rx_missed);
+    PRINTLOG(USB, LOG_INFO, "align_errors:      %u", tally.align_errors);
+    PRINTLOG(USB, LOG_INFO, "tx_one_collision:   %u", tally.tx_one_collision);
+    PRINTLOG(USB, LOG_INFO, "tx_multi_collision: %u", tally.tx_multi_collision);
+    PRINTLOG(USB, LOG_INFO, "rx_unicast:        %llu", tally.rx_unicast);
+    PRINTLOG(USB, LOG_INFO, "rx_broadcast:      %llu", tally.rx_broadcast);
+    PRINTLOG(USB, LOG_INFO, "rx_multicast:      %u", tally.rx_multicast);
+    PRINTLOG(USB, LOG_INFO, "tx_aborted:        %u", tally.tx_aborted);
+    PRINTLOG(USB, LOG_INFO, "tx_underrun:       %u", tally.tx_underrun);
+
+    return 0;
+}
+
 // may be needed at future
 #if 0
 
@@ -931,6 +994,10 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
         return -1;
     }
 
+    if (usb_rtl815x_tally_reset(drv) != 0) {
+        return -1;
+    }
+
     uint8_t ocp_data = 0;
 
     if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &ocp_data) != 0) {
@@ -1119,6 +1186,10 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send data");
+
+        if(usb_rtl815x_read_tally(usb_driver) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read tally after failed tx");
+        }
 
         return false;
     }
