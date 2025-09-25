@@ -33,6 +33,7 @@ void video_text_print(const char_t* str);
 
 extern volatile cpu_state_t __seg_gs * cpu_state;
 extern hashmap_t* task_map;
+extern volatile uint64_t time_timer_rdtsc_delta;
 
 uint64_t task_get_id(void) {
     uint64_t id = apic_get_local_apic_id() + 1;
@@ -76,16 +77,48 @@ void task_set_interrupt_received(uint64_t tid) {
 
     if(task) {
         if(task->attributes & TASK_ATTRIBUTE_INTERRUPTIBLE) {
-            task->state = TASK_STATE_INTERRUPT_RECEIVED;
+            int32_t newval = TASK_STATE_INTERRUPT_RECEIVED;
+            asm volatile (
+                "lock xchg %[val], %[state_ptr]"
+                : [state_ptr] "+m" (task->state)
+                : [val] "r" (newval)
+                : "memory"
+                );
 
             if(current_task->cpu_id != task->cpu_id) {
                 apic_send_ipi(task->cpu_id, 0xFE, false);
             }
+        } else {
+            video_text_print("int recv: task not interruptible\n");
         }
     } else {
         video_text_print("int recv: task not found\n");
         PRINTLOG(TASKING, LOG_ERROR, "task not found 0x%llx", tid);
     }
+}
+
+boolean_t task_set_message_waiting(void){
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        boolean_t changed = false;
+        asm volatile (
+            "movl %[expected], %%eax\n\t"
+            "movl %[newval], %%edx\n\t"
+            "lock cmpxchg %%edx, %[state_ptr]\n\t"
+            "sete %[changed]"
+            : [state_ptr] "+m" (current_task->state),
+            [changed] "=q" (changed)
+            : [expected] "r" (TASK_STATE_RUNNING),
+            [newval] "r" (TASK_STATE_MESSAGE_WAITING)
+            : "eax", "edx", "memory"
+            );
+        return changed;
+    } else {
+        video_text_print("msg wait: no current task\n");
+    }
+
+    return false;
 }
 
 void task_set_message_received(uint64_t tid) {
@@ -110,6 +143,15 @@ void task_set_interruptible(void) {
 
     if(current_task) {
         current_task->attributes |= TASK_ATTRIBUTE_INTERRUPTIBLE;
+    }
+}
+
+void task_set_interrupt_receive_workaround(uint64_t max_tick_wait_count) {
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        current_task->interrupt_receive_workaround = true;
+        current_task->interrupt_receive_workaround_max_tick_count = max_tick_wait_count * time_timer_rdtsc_delta;
     }
 }
 
@@ -411,14 +453,6 @@ list_t* task_get_message_queue(uint64_t task_id, uint64_t queue_number) {
     }
 
     return (list_t*)list_get_data_at_position(task->message_queues, queue_number);
-}
-
-void task_set_message_waiting(void){
-    task_t* current_task = task_get_current_task();
-
-    if(current_task) {
-        current_task->state = TASK_STATE_MESSAGE_WAITING;
-    }
 }
 
 void task_toggle_wait_for_future(uint64_t tid) {

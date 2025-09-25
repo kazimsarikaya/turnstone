@@ -159,6 +159,8 @@ typedef struct task_t {
     uint64_t                       task_switch_count; ///< task switch count
     task_state_t                   state; ///< task state
     task_attribute_t               attributes; ///< task attributes
+    boolean_t                      interrupt_receive_workaround; ///< interrupt receive workaround flag FIXME: remove this field
+    uint64_t                       interrupt_receive_workaround_max_tick_count; ///< max tick count for interrupt receive workaround
     void*                          entry_point; ///< entry point address
     uint64_t                       arguments_count; ///< argument count
     void**                         arguments; ///< argument list
@@ -229,8 +231,9 @@ task_t* task_get_current_task(void);
 
 /**
  * @brief sets current task's message waiting flag
+ * @return if message waiting state is set true, false otherwise
  */
-void task_set_message_waiting(void);
+boolean_t task_set_message_waiting(void);
 
 /**
  * @brief clears current task's message waiting flag
@@ -242,6 +245,11 @@ void task_clear_message_waiting(uint64_t task_id);
  * @brief sets current task's interruptible flag
  */
 void task_set_interruptible(void);
+
+/**
+ * @brief sets current task's interrupt receive workaround flag
+ */
+void task_set_interrupt_receive_workaround(uint64_t max_tick_wait_count);
 
 /**
  * @brief sets current task's interrupt received flag

@@ -689,9 +689,22 @@ task_t* task_find_next_task(void) {
 
             if(t->state == TASK_STATE_FUTURE_WAITING) {
                 continue;
-            } else if(t->state == TASK_STATE_INTERRUPT_RECEIVED) {
-                found_index = i;
-                break;
+            } else if(t->attributes & TASK_ATTRIBUTE_INTERRUPTIBLE) {
+                if(t->state == TASK_STATE_INTERRUPT_RECEIVED) {
+                    found_index = i;
+                    break;
+                }
+
+
+                if(t->interrupt_receive_workaround) {
+                    uint64_t current_tick = rdtsc();
+
+                    if((t->last_tick_count + t->interrupt_receive_workaround_max_tick_count) < current_tick) {
+                        found_index = i;
+                        break;
+                    }
+                }
+
             } else if(t->state == TASK_STATE_MESSAGE_WAITING) {
                 if(t->message_queues) {
                     for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
