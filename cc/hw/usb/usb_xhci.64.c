@@ -1139,8 +1139,8 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     usb_xhci_trb_t* transfer_ring = (usb_xhci_trb_t*)transfer_ring_va;
     uint32_t trb_index = context->endpoints[0].ep_trb_index;
 
-    PRINTLOG(USB, LOG_TRACE, "XHCI control transfer for slot %d, dev_ctx=0x%llx, transfer_ring=0x%llx",
-             device->slot_id, dbc_fa, transfer_ring_fa);
+    PRINTLOG(USB, LOG_TRACE, "XHCI control transfer for slot %d, dev_ctx=0x%llx, transfer_ring=0x%llx, trb_index=%d",
+             device->slot_id, dbc_fa, transfer_ring_fa, trb_index);
 
 
     void* data = transfer->data;
@@ -1176,8 +1176,6 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
             // Clean up the transfer ring TRB we just added
             trb_index = (trb_index + metadata->cmd_ring_size - 1) % metadata->cmd_ring_size;
             context->endpoints[0].ep_trb_index = trb_index;
-
-            memory_memclean(&transfer_ring[trb_index], sizeof(usb_xhci_trb_t));
 
             transfer->complete = true;
             transfer->success = false;
@@ -1221,10 +1219,6 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 
     trb_index = (trb_index + 1) % metadata->cmd_ring_size;
     context->endpoints[0].ep_trb_index = trb_index;
-
-    transfer_ring[trb_index].parameter = 0;
-    transfer_ring[trb_index].status = 0;
-    transfer_ring[trb_index].control = 0;
 
     // Ring doorbell for transfer (Endpoint 0, DCI = 1)
     usb_xhci_doorbell_t* doorbell = metadata->doorbells;
@@ -1276,10 +1270,6 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
 
         hub_ep_trb_index = (hub_ep_trb_index + 1) % metadata->cmd_ring_size;
 
-        ep_trbs[hub_ep_trb_index].parameter = 0;
-        ep_trbs[hub_ep_trb_index].status = 0;
-        ep_trbs[hub_ep_trb_index].control = 0;
-
         hub_dc_ctx->endpoints[ep_index - 1].ep_trb_index = hub_ep_trb_index;
 
     }
@@ -1299,7 +1289,7 @@ static int8_t usb_xhci_control_transfer(usb_controller_t* usb_controller, usb_tr
     }
 
     if(usb_xhci_pool_event(metadata->controller_id) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot get event for command");
+        PRINTLOG(USB, LOG_ERROR, "control transfer failed, cannot get event for command");
         transfer->complete = true;
         transfer->success = false;
         return -1;
@@ -1424,8 +1414,6 @@ static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_trans
             // Clean up the transfer ring TRB we just added
             trb_index = (trb_index + metadata->cmd_ring_size - 1) % metadata->cmd_ring_size;
             context->endpoints[ep_index - 1].ep_trb_index = trb_index;
-
-            memory_memclean(&transfer_ring[trb_index], sizeof(usb_xhci_trb_t));
 
             transfer->complete = true;
             transfer->success = false;
@@ -1730,7 +1718,7 @@ static void usb_xhci_interrupter_task_handle_er_transfer(usb_controller_metadata
     driver->pipeline_callback(driver, ep_id_at_interface, ep_pipeline);
 
     if(ep_trb_index == metadata->cmd_ring_size - 1) {
-        // last trb in the ring next one is the link trb so we need to set cycle bit of all trbs
+        // last trb in the ring next one is the link trb so we need to flip the cycle bit
         PRINTLOG(USB, LOG_TRACE, "toggling cycle bit to %i for all trbs in ring for ep id %d",
                  context->endpoints[ep_id - 1].cycle_bit ^ 1,
                  ep_id);
@@ -1754,25 +1742,50 @@ static uint64_t usb_xhci_interrupter_task_handle_events(usb_controller_metadata_
         uint32_t cc = (event_trb->status >> 24) & 0xFF;
         uint32_t event_trb_cycle_bit = (event_trb->control >> 0) & 0x01;
 
-        if(trb_type == USB_XHCI_TRB_TYPE_TRB_RESERVED) {
+        if(event_trb_cycle_bit != metadata->event_cycle_bit) {
+            // PRINTLOG(USB, LOG_TRACE, "no more events to process at index %lli, trb type %d",
+            // event_index, trb_type);
             break;
         }
 
-        if(trb_type == USB_XHCI_TRB_TYPE_ER_HOST_CONTROLLER && cc == USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR) {
-            PRINTLOG(USB, LOG_WARNING, "event ring full error at index %lli, trb type %d",
-                     event_index, trb_type);
+        if(trb_type == USB_XHCI_TRB_TYPE_TRB_RESERVED) {
+            PRINTLOG(USB, LOG_ERROR, "reserved trb type at index %lli, stopping event processing",
+                     event_index);
+
             event_index++;
             if(event_index >= metadata->event_ring_size) {
                 event_index = 0;
                 metadata->event_cycle_bit ^= 1;
             }
+
             continue;
         }
 
-        if(event_trb_cycle_bit != metadata->event_cycle_bit) {
-            // PRINTLOG(USB, LOG_DEBUG, "no more events to process at index %lli, trb type %d",
-            // event_index, trb_type);
-            break;
+        if(trb_type == USB_XHCI_TRB_TYPE_ER_HOST_CONTROLLER) {
+            if(cc == USB_XHCI_TRB_CCODE_CC_EVENT_RING_FULL_ERROR) {
+                PRINTLOG(USB, LOG_WARNING, "event ring full error at index %lli, trb type %d",
+                         event_index, trb_type);
+
+            } else if(cc == USB_XHCI_TRB_CCODE_CC_RING_UNDERRUN) {
+                PRINTLOG(USB, LOG_WARNING, "event ring underrun at index %lli, trb type %d",
+                         event_index, trb_type);
+
+            } else if(cc == USB_XHCI_TRB_CCODE_CC_RING_OVERRUN) {
+                PRINTLOG(USB, LOG_WARNING, "event ring overrun at index %lli, trb type %d",
+                         event_index, trb_type);
+
+            } else {
+                PRINTLOG(USB, LOG_WARNING, "unhandled host controller event at index %lli, trb type %d cc %d",
+                         event_index, trb_type, cc);
+            }
+
+            event_index++;
+            if(event_index >= metadata->event_ring_size) {
+                event_index = 0;
+                metadata->event_cycle_bit ^= 1;
+            }
+
+            continue;
         }
 
         if(usb_xhci_pool_event_result[metadata->controller_id].search &&
@@ -1826,6 +1839,7 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
     cpu_cli();
     pci_msix_update_lapic((pci_generic_device_t*)usb_controller->pci_dev->pci_header, usb_controller->msix_cap, 0);
     task_set_interruptible();
+    task_set_interrupt_receive_workaround(1000);
     cpu_sti();
 
     usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
@@ -1840,8 +1854,9 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
     usb_xhci_interrupter_task_initialized[metadata->controller_id] = true;
 
     while(true) {
-        task_set_message_waiting();
-        task_yield();
+        if(task_set_message_waiting()) {
+            task_yield();
+        }
 
         uint64_t event_ring_fa = metadata->erst[0];
 
