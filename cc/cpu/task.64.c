@@ -205,6 +205,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     uint32_t cpu_count = apic_get_ap_count() + 1;
 
+    PRINTLOG(TASKING, LOG_INFO, "cpu count 0x%x", cpu_count);
+
     task_queue_and_cleanup_heaps = memory_malloc_ext(heap, sizeof(memory_heap_t*) * cpu_count, 0x0);
     task_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
     task_sleep_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
@@ -234,13 +236,49 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
             return -1;
         }
 
-        PRINTLOG(TASKING, LOG_INFO, "cpu 0x%x task related heap 0x%p", i, task_related_heap);
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task related heap 0x%p", i, task_related_heap);
 
         task_queue_and_cleanup_heaps[i] = task_related_heap;
+
         task_queues[i] = list_create_queue_with_heap(task_related_heap);
+
+        if(task_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task queue 0x%p", i, task_queues[i]);
+
         task_sleep_queues[i] = list_create_sortedlist_with_heap(task_related_heap, &task_sleep_queue_comparator);
+
+        if(task_sleep_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task sleep queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task sleep queue 0x%p", i, task_sleep_queues[i]);
+
         task_wait_queues[i] = list_create_queue_with_heap(task_related_heap);
+
+        if(task_wait_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task wait queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task wait queue 0x%p", i, task_wait_queues[i]);
+
         task_cleanup_queues[i] = list_create_queue_with_heap(task_related_heap);
+
+        if(task_cleanup_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task cleanup queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task cleanup queue 0x%p", i, task_cleanup_queues[i]);
     }
 
     {
@@ -267,7 +305,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
         task_map_heap = task_related_heap;
 
-        PRINTLOG(TASKING, LOG_INFO, "task map heap 0x%p", task_map_heap);
+        PRINTLOG(TASKING, LOG_DEBUG, "task map heap 0x%p", task_map_heap);
     }
 
 
@@ -396,7 +434,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     uint32_t apic_id = apic_get_local_apic_id();
 
-    if(task_queues[apic_id] == NULL || task_cleanup_queues[apic_id] == NULL) {
+    if(task_queues[apic_id] == NULL || task_cleanup_queues[apic_id] == NULL ||
+       task_sleep_queues[apic_id] == NULL || task_wait_queues[apic_id] == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "task queues for apic id %d are null", apic_id);
 
         return -1;
@@ -1104,11 +1143,11 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     list_t* min_queue = NULL;
 
     for(uint64_t i = 0; i < cpu_count; i++) {
-        list_t* queue = task_queues[i];
+        size_t task_count = list_size(task_queues[i]) + list_size(task_sleep_queues[i]) + list_size(task_wait_queues[i]);
 
-        if(list_size(queue) < min_queue_size) {
-            min_queue_size = list_size(queue);
-            min_queue = queue;
+        if(task_count < min_queue_size) {
+            min_queue_size = task_count;
+            min_queue = task_queues[i];
             new_task->cpu_id = i;
         }
     }
