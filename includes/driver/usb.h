@@ -329,8 +329,7 @@ typedef struct usb_controller_t {
     const pci_capability_msix_t* msix_cap;
     usb_controller_metadata_t*   metadata;
     boolean_t                    initialized;
-    int8_t (*probe_all_ports)(usb_controller_t* controller);
-    int8_t (*probe_port)(usb_controller_t* controller, uint8_t port);
+    int8_t (*reset_all_ports)(usb_controller_t* controller);
     int8_t (*reset_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*control_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*data_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
@@ -472,7 +471,7 @@ int8_t usb_init(void);
 
 int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint32_t port, uint32_t speed);
 
-int8_t usb_probe_all_devices_all_ports(void);
+int8_t usb_reset_all_devices_all_ports(void);
 
 int8_t usb_keyboard_init(usb_device_t* device, usb_interface_t* interface);
 

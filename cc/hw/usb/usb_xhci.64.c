@@ -46,7 +46,11 @@ typedef struct usb_controller_metadata_t {
     uint32_t                                   event_cycle_bit;
     uint32_t                                   cycle_bit;
     hashmap_t*                                 slot_id_device_mapping;
+    boolean_t                                  interrupter_task_initialized;
     uint64_t                                   interrupter_tid;
+    boolean_t                                  port_status_listener_task_initialized;
+    uint64_t                                   port_status_listener_tid;
+    list_t*                                    port_status_listener_event_queue;
     uint32_t                                   max_psa_size;
 } usb_controller_metadata_t;
 
@@ -241,42 +245,14 @@ static int8_t usb_xhci_reset_port(usb_controller_t* usb_controller, uint8_t port
     return portsc.bits.ped ? 1 : 0;
 }
 
-static int8_t usb_xhci_probe_port(usb_controller_t* usb_controller, uint8_t port) {
-    // usb_controller_metadata_t* metadata = usb_controller->metadata;
-
-    int8_t res = usb_xhci_reset_port(usb_controller, port);
-
-    if(res < 0) {
-        return -1;
-    }
-
-    usb_controller_metadata_t* metadata = usb_controller->metadata;
-
-    volatile usb_xhci_port_register_set_t* portreg = &metadata->op_regs->portsc[port];
-    usb_xhci_portsc_t portsc = (usb_xhci_portsc_t)portreg->portsc;
-
-    if(res == 1) {
-        PRINTLOG(USB, LOG_TRACE, "port %d enabled. we will initialize driver", port);
-
-        if(usb_device_init(NULL, usb_controller, port, portsc.bits.ps) != 0) {
-            PRINTLOG(USB, LOG_ERROR, "cannot initialize device on port %d", port);
-
-            return -1;
-        }
-
-    }
-
-    return 0;
-}
-
-static int8_t usb_xhci_probe_all_ports(usb_controller_t* usb_controller) {
+static int8_t usb_xhci_reset_all_ports(usb_controller_t* usb_controller) {
     usb_controller_metadata_t* metadata = usb_controller->metadata;
 
     boolean_t failed = false;
 
     for(int16_t i = 0; i < metadata->port_count; i++) {
-        if(usb_xhci_probe_port(usb_controller, i) != 0) {
-            PRINTLOG(USB, LOG_ERROR, "cannot probe port %d", i);
+        if(usb_xhci_reset_port(usb_controller, i) < 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot reset port %d", i);
             failed = true;
         }
     }
@@ -1506,8 +1482,6 @@ static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_trans
     return 0;
 }
 
-static boolean_t usb_xhci_interrupter_task_initialized[10] = {false};
-
 static void usb_xhci_interrupter_task_handle_stall(usb_controller_metadata_t* metadata,
                                                    usb_xhci_trb_t*            event_trb) {
     uint32_t ep_id = (event_trb->control >> 16) & 0x1F;
@@ -1807,12 +1781,27 @@ static uint64_t usb_xhci_interrupter_task_handle_events(usb_controller_metadata_
 
         if(trb_type == USB_XHCI_TRB_TYPE_ER_TRANSFER) {
             usb_xhci_interrupter_task_handle_er_transfer(metadata, event_trb);
-        } else {
-            if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS &&
-               cc != USB_XHCI_TRB_CCODE_CC_SHORT_PACKET) {
-                PRINTLOG(USB, LOG_WARNING, "unhandled event trb type %d cc %d param 0x%llx status 0x%x control 0x%x",
-                         trb_type, cc, event_trb->parameter, event_trb->status, event_trb->control);
+        } else if(trb_type == USB_XHCI_TRB_TYPE_ER_PORT_STATUS_CHANGE) {
+            if(cc == USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+                uint64_t port_id = event_trb->parameter >> 24;;
+
+                if(port_id == 0 || port_id > metadata->port_count) {
+                    PRINTLOG(USB, LOG_WARNING, "invalid port id %lli in port status change event", port_id);
+                } else {
+                    PRINTLOG(USB, LOG_DEBUG, "port status change event on port id %lli", port_id);
+
+                    if(metadata->port_status_listener_task_initialized &&
+                       metadata->port_status_listener_event_queue) {
+                        list_queue_push(metadata->port_status_listener_event_queue, (void*)port_id);
+                    }
+                }
+            } else {
+                PRINTLOG(USB, LOG_WARNING, "port status change event with error cc %d", cc);
             }
+
+        } else {
+            PRINTLOG(USB, LOG_WARNING, "unhandled event trb type %d cc %d param 0x%llx status 0x%x control 0x%x",
+                     trb_type, cc, event_trb->parameter, event_trb->status, event_trb->control);
         }
 
 
@@ -1851,7 +1840,7 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
 
     PRINTLOG(USB, LOG_INFO, "interrupter task for controller-%lli 0x%p started",
              usb_controller->metadata->controller_id, usb_controller);
-    usb_xhci_interrupter_task_initialized[metadata->controller_id] = true;
+    metadata->interrupter_task_initialized = true;
 
     while(true) {
         if(task_set_message_waiting()) {
@@ -1879,6 +1868,81 @@ static int8_t usb_xhci_interrupter_task(int32_t argc, void** argv) {
     return 0;
 }
 
+
+static int8_t usb_xhci_port_status_listener_task(int32_t argc, void** argv) {
+    PRINTLOG(USB, LOG_DEBUG, "xhci port status listener task 0x%p started", usb_xhci_interrupter_task);
+    if(argc != 1 || argv == NULL || argv[0] == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "invalid argument count");
+
+        return -1;
+    }
+
+    usb_controller_t* usb_controller = (usb_controller_t*)argv[0];
+
+    usb_controller_metadata_t* metadata = (usb_controller_metadata_t*)usb_controller->metadata;
+
+    if(!metadata) {
+        PRINTLOG(USB, LOG_ERROR, "no metadata for controller");
+        return -1;
+    }
+
+    list_t* event_queue = list_create_queue();
+
+    if(!event_queue) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create event queue");
+        return -1;
+    }
+
+    task_add_message_queue(event_queue);
+
+    metadata->port_status_listener_event_queue = event_queue;
+
+    PRINTLOG(USB, LOG_INFO, "port status listener task for controller-%lli 0x%p started",
+             usb_controller->metadata->controller_id, usb_controller);
+    metadata->port_status_listener_task_initialized = true;
+
+    while(true) {
+        if(list_size(event_queue) == 0) {
+            task_set_message_waiting();
+            task_yield();
+        }
+
+        uint64_t port = (uint64_t)list_queue_pop(event_queue);
+
+        if(port == 0 || port > metadata->port_count) {
+            PRINTLOG(USB, LOG_WARNING, "invalid port id %lli in port status change event", port);
+            continue;
+        }
+
+        PRINTLOG(USB, LOG_DEBUG, "handling port status change event on port id %lli", port);
+
+        port--; // port numbers are 1-based
+
+        volatile usb_xhci_port_register_set_t* portreg = &metadata->op_regs->portsc[port];
+        usb_xhci_portsc_t portsc = (usb_xhci_portsc_t)portreg->portsc;
+
+        PRINTLOG(USB, LOG_DEBUG, "port %lli status: 0x%08x", port, portsc.raw);
+
+        if(!portsc.bits.csc) {
+            PRINTLOG(USB, LOG_DEBUG, "no connect status change on port %lli", port);
+            // TODO: maybe we should check other status change bits
+            // like psc (port status change) or prc (port reset change)
+        }
+
+        if(portsc.bits.ped) {
+            PRINTLOG(USB, LOG_DEBUG, "port %lli enabled. we will initialize driver", port);
+
+            if(usb_device_init(NULL, usb_controller, port, portsc.bits.ps) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot initialize device on port %lli", port);
+            }
+        } else {
+            PRINTLOG(USB, LOG_DEBUG, "port %lli disabled. we will remove driver", port);
+        }
+
+    }
+
+    return 0;
+}
 
 
 uint32_t usb_xhci_get_max_psa_size(usb_controller_t* usb_controller) {
@@ -1942,6 +2006,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
 
     usb_xhci_capabilities_t* xhci_cap = (usb_xhci_capabilities_t*)bar_va;
 
+    metadata->cap = xhci_cap;
+
     usb_xhci_caplen_rev_t caplen_rev  = (usb_xhci_caplen_rev_t)xhci_cap->caplength_and_revision;
 
     PRINTLOG(USB, LOG_DEBUG, "XHCI capability length: %d", caplen_rev.bits.capability_length);
@@ -1952,6 +2018,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     PRINTLOG(USB, LOG_DEBUG, "XHCI number of device slots: %d", hcs_params1.bits.max_slots);
     PRINTLOG(USB, LOG_DEBUG, "XHCI number of interrupter: %d", hcs_params1.bits.max_interrupts);
     PRINTLOG(USB, LOG_DEBUG, "XHCI number of ports: %d", hcs_params1.bits.max_ports);
+
+    metadata->port_count = hcs_params1.bits.max_ports;
 
     usb_xhci_hcs_params_2_t hcs_params2 = (usb_xhci_hcs_params_2_t)xhci_cap->hcs_params_2;
 
@@ -1980,6 +2048,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     uint64_t opregs_va = bar_va + caplen_rev.bits.capability_length;
 
     usb_xhci_operational_registers_t* opregs = (usb_xhci_operational_registers_t*)opregs_va;
+
+    metadata->op_regs = opregs;
 
     // Stop the controller if running
     usb_xhci_usbcmd_t usbcmd = (usb_xhci_usbcmd_t)opregs->usbcmd;
@@ -2173,6 +2243,9 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     usbcmd.bits.int_enable = 1;
     opregs->usbcmd = usbcmd.raw;
 
+    metadata->event_cycle_bit = 1;
+    metadata->cycle_bit = 1;
+
     // Wait for controller to start
     timeout = 1000000;
     while (((usb_xhci_usbsts_t)opregs->usbsts).bits.hch && timeout--) {
@@ -2186,10 +2259,47 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     }
     PRINTLOG(USB, LOG_DEBUG, "XHCI controller started");
 
+    void** pslt_args = memory_malloc(sizeof(void*) * 2);
+
+    if(pslt_args == NULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for port status listener task args");
+        memory_free(metadata);
+
+        return -1;
+    }
+
+    pslt_args[0] = usb_controller;
+
+    char_t* pslt_task_name = strprintf("usb_xhci_port_status_listener_task-%lli", metadata->controller_id);
+
+    if(!pslt_task_name) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for port status listener task name");
+        memory_free(pslt_args);
+        memory_free(metadata);
+
+        return -1;
+    }
+
+    metadata->port_status_listener_tid = task_create_task(NULL, 128 << 10, 64 << 10,
+                                                          usb_xhci_port_status_listener_task, 1, pslt_args,
+                                                          pslt_task_name);
+
+    if(metadata->port_status_listener_tid == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create port status listener task");
+        memory_free(pslt_args);
+        memory_free(metadata);
+
+        return -1;
+    }
+
+    while(!metadata->port_status_listener_task_initialized) {
+        time_timer_msleep(1000);
+    }
+
     void** plt_args = memory_malloc(sizeof(void*) * 2);
 
     if(plt_args == NULL) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for periodic list task args");
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for interrupter task args");
         memory_free(metadata);
 
         return -1;
@@ -2229,16 +2339,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
 
     PRINTLOG(USB, LOG_DEBUG, "XHCI ISR vector %d registered", vector);
 
-    uint32_t port_count = hcs_params1.bits.max_ports;
-
-    metadata->cap = xhci_cap;
-    metadata->op_regs = opregs;
-    metadata->port_count = port_count;
-    metadata->event_cycle_bit = 1;
-    metadata->cycle_bit = 1;
     usb_controller->reset_port = usb_xhci_reset_port;
-    usb_controller->probe_port = usb_xhci_probe_port;
-    usb_controller->probe_all_ports = usb_xhci_probe_all_ports;
+    usb_controller->reset_all_ports = usb_xhci_reset_all_ports;
     usb_controller->control_transfer = usb_xhci_control_transfer;
     usb_controller->data_transfer = usb_xhci_data_transfer;
     usb_controller->controller_type = USB_CONTROLLER_TYPE_XHCI;
@@ -2246,13 +2348,13 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
 
     usb_controller->initialized = true;
 
-    while(!usb_xhci_interrupter_task_initialized[metadata->controller_id]) {
+    while(!metadata->interrupter_task_initialized) {
         time_timer_msleep(1000);
     }
 
-    PRINTLOG(USB, LOG_INFO, "XHCI controller initialized successfully with %d ports", port_count);
+    PRINTLOG(USB, LOG_INFO, "XHCI controller initialized successfully with %d ports", metadata->port_count);
 
-    usb_controller->probe_all_ports(usb_controller);
+    usb_controller->reset_all_ports(usb_controller);
 
     PRINTLOG(USB, LOG_INFO, "USB XHCI initialization complete");
 

@@ -146,15 +146,15 @@ int8_t usb_init(void) {
 #pragma GCC diagnostic pop
 
 
-int8_t usb_probe_all_devices_all_ports(void) {
+int8_t usb_reset_all_devices_all_ports(void) {
     iterator_t* it = hashmap_iterator_create(usb_controllers);
 
     while(it->end_of_iterator(it) != 0) {
         usb_controller_t* usb_controller = (usb_controller_t*)it->get_item(it);
 
         if(usb_controller->initialized) {
-            if(usb_controller->probe_all_ports(usb_controller) != 0) {
-                PRINTLOG(USB, LOG_ERROR, "failed to probe all ports on %llx", usb_controller->controller_id);
+            if(usb_controller->reset_all_ports(usb_controller) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "failed to reset all ports on %llx", usb_controller->controller_id);
             }
         }
 

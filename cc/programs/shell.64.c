@@ -290,8 +290,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("\t%04i-%02i-%02i %02i:%02i:%02i\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds);
 
         res = 0;
-    } else if(strcmp(command, "usbprobe") == 0) {
-        res = usb_probe_all_devices_all_ports();
+    } else if(strcmp(command, "usbreset") == 0) {
+        res = usb_reset_all_devices_all_ports();
     } else if(strcmp(command, "free") == 0) {
         printf("\tfree frames: 0x%llx\n\tallocated frames: 0x%llx\n\ttotal frames: 0x%llx\n",
                frame_get_allocator()->get_free_frame_count(frame_get_allocator()),
