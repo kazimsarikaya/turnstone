@@ -332,7 +332,7 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_event_t* eve
         return -1;
     }
 
-    char_t* spool_text = strprintf("%- 30s% 15lli% 20lli",
+    char_t* spool_text = strprintf("%- 60s% 15lli% 20lli",
                                    spool_get_name(spool),
                                    spool_get_buffer_count(spool),
                                    spool_get_total_buffer_size(spool));
@@ -400,7 +400,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         return -1;
     }
 
-    char_t* header_text = strprintf("%- 5s%- 30s% 15s% 20s",
+    char_t* header_text = strprintf("%- 5s%- 60s% 15s% 20s",
                                     "Cmd", "Name", "Buffer Count", "Total Buffer Size");
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
@@ -439,7 +439,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         wnd_spool_input->input_id = "spool";
         wnd_spool_input->extra_data = (void*)spool;
 
-        char_t* spool_text = strprintf("%- 30s% 15lli% 20lli",
+        char_t* spool_text = strprintf("%- 60s% 15lli% 20lli",
                                        spool_get_name(spool),
                                        spool_get_buffer_count(spool),
                                        spool_get_total_buffer_size(spool));
