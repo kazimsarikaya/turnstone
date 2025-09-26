@@ -41,7 +41,6 @@ typedef struct usb_driver_t {
     uint32_t                expected_packet_size;
     usb_kbd_report_t        old_usb_kbd_report;
     usb_kbd_report_t        new_usb_kbd_report;
-    usb_transfer_t*         usb_transfer;
     uint32_t                max_packet_size;
 } usb_driver_t;
 
@@ -468,26 +467,13 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
     usb_keyboard->interface = interface;
     interface->driver = usb_keyboard;
 
-    usb_keyboard->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
-
-    if(!usb_keyboard->usb_transfer) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for usb transfer");
-        memory_free(usb_keyboard);
-
-        return -1;
-    }
-
-    usb_keyboard->usb_transfer->driver = usb_keyboard;
-    usb_keyboard->usb_transfer->endpoint = interface->endpoints[0];
-
-    usb_keyboard->max_packet_size = usb_keyboard->usb_transfer->endpoint->desc->max_packet_size;
+    usb_keyboard->max_packet_size = interface->endpoints[0]->desc->max_packet_size;
     usb_keyboard->expected_packet_size = sizeof(usb_kbd_report_t);
 
     pipeline_t* pipeline = pipeline_create(usb_keyboard->expected_packet_size * 1024);
 
     if(!pipeline) {
         PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
-        memory_free(usb_keyboard->usb_transfer);
         memory_free(usb_keyboard);
 
         return -1;
@@ -497,12 +483,10 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
                            interface,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_PIPELINE,
-                           usb_keyboard->expected_packet_size, usb_keyboard->usb_transfer->endpoint->desc->endpoint_address,
+                           usb_keyboard->expected_packet_size, interface->endpoints[0]->desc->endpoint_address,
                            0, pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
-        memory_free(usb_keyboard->usb_transfer);
         memory_free(usb_keyboard);
-
 
         return -1;
     }
@@ -513,19 +497,15 @@ int8_t usb_keyboard_init(usb_device_t* usb_device, usb_interface_t* interface) {
                             USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_IDLE,
                             0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
-        memory_free(usb_keyboard->usb_transfer);
         memory_free(usb_keyboard);
 
         return -1;
     }
 
     if(usb_device->controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
-        memory_free(usb_keyboard->usb_transfer);
-        usb_keyboard->usb_transfer = NULL;
         usb_keyboard->pipeline_callback = usb_keyboard_pipeline_callback;
     } else {
         PRINTLOG(USB, LOG_ERROR, "unknown controller type %d", usb_device->controller->controller_type);
-        memory_free(usb_keyboard->usb_transfer);
         memory_free(usb_keyboard);
 
         return -1;
