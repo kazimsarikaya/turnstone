@@ -20,9 +20,7 @@ MODULE("turnstone.kernel.hw.usb");
 hashmap_t* usb_devices = NULL;
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS
 } usb_driver_t;
 
 static void usb_device_print_desc(usb_device_t* usb_device) {
@@ -236,6 +234,14 @@ static void usb_device_free(usb_device_t* usb_device) {
                         }
 
                         memory_free(interface->endpoints);
+                    }
+
+                    if(interface->driver) {
+                        if(interface->driver->free) {
+                            interface->driver->free(interface->driver);
+                        } else {
+                            memory_free(interface->driver);
+                        }
                     }
 
                     memory_free(interface);

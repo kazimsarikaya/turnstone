@@ -44,9 +44,7 @@ _Static_assert(sizeof(usb_mouse_report_t) == 4, "usb_mouse_report_t is not 4 byt
 _Static_assert(sizeof(usb_qemu_tablet_report_t) == 6, "usb_qemu_tablet_report_t is not 6 bytes");
 
 typedef struct usb_driver_t {
-    usb_device_t*            usb_device;
-    usb_interface_t*         interface;
-    usb_pipeline_callback_f  pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS
     uint32_t                 expected_packet_size;
     usb_mouse_report_t       old_usb_mouse_report;
     usb_mouse_report_t       new_usb_mouse_report;

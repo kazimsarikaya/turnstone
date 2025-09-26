@@ -19,18 +19,16 @@
 MODULE("turnstone.kernel.hw.usb");
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
-    uint32_t                expected_packet_size;
-    uint16_t                ocp_base;
-    list_t*                 return_queue;
-    network_mac_address_t   mac;
-    usb_endpoint_t*         bulk_in;
-    usb_endpoint_t*         bulk_out;
-    usb_endpoint_t*         intr;
-    uint16_t                intr_value;
-    uint64_t                tx_task_id;
+    USB_DRIVER_COMMON_FIELDS
+    uint32_t              expected_packet_size;
+    uint16_t              ocp_base;
+    list_t*               return_queue;
+    network_mac_address_t mac;
+    usb_endpoint_t*       bulk_in;
+    usb_endpoint_t*       bulk_out;
+    usb_endpoint_t*       intr;
+    uint16_t              intr_value;
+    uint64_t              tx_task_id;
 } usb_driver_t;
 
 typedef struct usb_rtl815x_tx_t {

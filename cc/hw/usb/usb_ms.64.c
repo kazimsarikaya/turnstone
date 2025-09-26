@@ -17,9 +17,7 @@
 MODULE("turnstone.kernel.hw.usb.ms");
 
 typedef struct usb_driver_t {
-    usb_device_t *                device;
-    usb_interface_t*              interface;
-    usb_pipeline_callback_f       pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS
     uint32_t                      expected_packet_size;
     uint64_t                      id;
     boolean_t                     is_uas;

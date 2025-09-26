@@ -35,13 +35,11 @@ typedef struct usb_kbd_report_t {
 
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
-    uint32_t                expected_packet_size;
-    usb_kbd_report_t        old_usb_kbd_report;
-    usb_kbd_report_t        new_usb_kbd_report;
-    uint32_t                max_packet_size;
+    USB_DRIVER_COMMON_FIELDS
+    uint32_t         expected_packet_size;
+    usb_kbd_report_t old_usb_kbd_report;
+    usb_kbd_report_t new_usb_kbd_report;
+    uint32_t         max_packet_size;
 } usb_driver_t;
 
 // we need to map usb keyboard to scancodes to ev codes here a char16_t array

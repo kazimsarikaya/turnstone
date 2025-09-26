@@ -75,9 +75,7 @@ typedef struct usb_uas_iu_t {
 } __attribute__((packed)) usb_uas_iu_t;
 
 typedef struct usb_driver_t {
-    usb_device_t *                device;
-    usb_interface_t*              interface;
-    usb_pipeline_callback_f       pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS
     uint32_t                      expected_packet_size;
     uint64_t                      id;
     boolean_t                     is_uas;
@@ -117,7 +115,7 @@ boolean_t usb_ms_uas_read_write(usb_driver_t* usb_driver, boolean_t read, uint32
     ut.data = data;
     ut.stream_id = stream_id;
 
-    int8_t res =  usb_driver->device->controller->data_transfer(usb_driver->device->controller, &ut);
+    int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot %s from mass storage device", read ? "read" : "write");
@@ -157,7 +155,7 @@ boolean_t usb_ms_uas_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_
     ut.data = data;
     ut.stream_id = stream_id;
 
-    int8_t res =  usb_driver->device->controller->data_transfer(usb_driver->device->controller, &ut);
+    int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send command to mass storage device");
@@ -208,7 +206,7 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
     ut.stream_id = stream_id;
     ut.is_async = is_async;
 
-    int8_t res =  usb_driver->device->controller->data_transfer(usb_driver->device->controller, &ut);
+    int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get status from mass storage device");
@@ -289,7 +287,7 @@ usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interf
         return NULL;
     }
 
-    usb_ms->device = usb_device;
+    usb_ms->usb_device = usb_device;
     usb_ms->interface = interface;
     interface->driver = usb_ms;
 

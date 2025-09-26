@@ -21,12 +21,10 @@ typedef struct usb_hub_status_t {
 } __attribute__((packed)) usb_hub_status_t;
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
-    uint32_t                expected_packet_size;
-    usb_hub_status_t        old_status;
-    usb_hub_status_t        new_status;
+    USB_DRIVER_COMMON_FIELDS
+    uint32_t         expected_packet_size;
+    usb_hub_status_t old_status;
+    usb_hub_status_t new_status;
 } usb_driver_t;
 
 static int8_t usb_hub_clear_feature (usb_device_t * usb_device, uint8_t port, usb_hub_feature_selector_t feature) {
