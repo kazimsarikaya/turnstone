@@ -219,13 +219,15 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
     int32_t retry_sleep = 5;
     int32_t backoff = 1;
 
+    boolean_t failed = false;
+
     while(true) {
 
         if(ni->is_ipv4_address_set && !ni->is_ipv4_address_requested) {
             network_dhcpv4_wait_for_renewal(ni);
         }
 
-        if (ni->is_ipv4_address_requested) {
+        if (failed || ni->is_ipv4_address_requested) {
             int32_t sleep_time = retry_sleep * backoff;
 
             if(sleep_time >= 300) {
@@ -238,7 +240,12 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
             time_timer_sleep(sleep_time);
         }
 
-        network_dhcpv4_send_dhcpv4_discover_or_request_packet(ni);
+        if(network_dhcpv4_send_dhcpv4_discover_or_request_packet(ni) == -1) {
+            failed = true;
+            PRINTLOG(NETWORK, LOG_ERROR, "failed to send dhcp discover/request packet");
+        } else {
+            failed = false;
+        }
     }
 
     return 0;
