@@ -67,8 +67,6 @@ typedef struct usb_rtl815x_tally_counter_t {
 
 _Static_assert(sizeof(usb_rtl815x_tally_counter_t) == 64, "invalid usb_rtl815x_tally_counter_t size");
 
-static list_t* usb_rtl815x_drivers = NULL;
-
 static int8_t usb_rtl815x_read_reg(usb_driver_t* drv, uint16_t type, uint16_t index, void* buf, uint16_t len) {
     if((len & 3) || !len || (index & 3) || !buf) {
         PRINTLOG(USB, LOG_ERROR, "invalid parameters");
@@ -1197,87 +1195,86 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
     return ut.complete && ut.success;
 }
 
-static int8_t usb_rtl815x_process_tx(void) {
-
-    for(uint64_t drv_idx = 0; drv_idx < list_size(usb_rtl815x_drivers); drv_idx++) {
-        usb_driver_t* drv = (usb_driver_t*)list_get_data_at_position(usb_rtl815x_drivers, drv_idx);
-
-        drv->return_queue = list_create_queue_with_heap(NULL);
-        task_add_message_queue(drv->return_queue);
-
-        network_info_t ni = {0};
-        memory_memcopy(&drv->mac, &ni.mac, 6);
-        ni.has_hw_vlan_support = true;
-        ni.is_vlan_tagged = true;
-        ni.vlan_id = 12;
-        ni.return_queue = drv->return_queue;
-
-        network_register_network_info(&ni);
-
-        void** args = memory_malloc(sizeof(void*) * 2);
-
-        if(args == NULL) {
-            return -1;
-        }
-
-        char_t* dhcp_task_name = strprintf("dhcp-%02x%02x%02x%02x%02x%02x",
-                                           drv->mac[0], drv->mac[1], drv->mac[2],
-                                           drv->mac[3], drv->mac[4], drv->mac[5]);
-
-        args[0] = (void*)drv->mac;
-        args[1] = drv->return_queue;
-
-        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
+static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
+    if(arg_cnt != 1 || !args || !args[0]) {
+        PRINTLOG(USB, LOG_ERROR, "invalid parameters");
+        return -1;
     }
 
-    while(1) {
+    usb_driver_t* drv = args[0];
+
+    drv->return_queue = list_create_queue_with_heap(NULL);
+    task_add_message_queue(drv->return_queue);
+
+    network_info_t ni_reg = {0};
+    memory_memcopy(&drv->mac, &ni_reg.mac, 6);
+    ni_reg.has_hw_vlan_support = true;
+    ni_reg.is_vlan_tagged = true;
+    ni_reg.vlan_id = 12;
+    ni_reg.return_queue = drv->return_queue;
+
+    network_register_network_info(&ni_reg);
+
+    void** dhcp_args = memory_malloc(sizeof(void*) * 2);
+
+    if(dhcp_args == NULL) {
+        return -1;
+    }
+
+    char_t* dhcp_task_name = strprintf("dhcp-%02x%02x%02x%02x%02x%02x",
+                                       drv->mac[0], drv->mac[1], drv->mac[2],
+                                       drv->mac[3], drv->mac[4], drv->mac[5]);
+
+    dhcp_args[0] = (void*)drv->mac;
+    dhcp_args[1] = drv->return_queue;
+
+    task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, dhcp_args, dhcp_task_name);
+
+    while(true) {
         boolean_t packet_exists = false;
 
-        for(uint64_t drv_idx = 0; drv_idx < list_size(usb_rtl815x_drivers); drv_idx++) {
-            usb_driver_t* drv = (usb_driver_t*)list_get_data_at_position(usb_rtl815x_drivers, drv_idx);
 
-            const network_info_t* ni = map_get(network_info_map, &drv->mac);
+        const network_info_t* ni = map_get(network_info_map, &drv->mac);
 
-            while(list_size(drv->return_queue)) {
-                const network_transmit_packet_t* packet = list_queue_pop(drv->return_queue);
+        while(list_size(drv->return_queue)) {
+            const network_transmit_packet_t* packet = list_queue_pop(drv->return_queue);
 
-                if(packet) {
-                    PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
-                    packet_exists = true;
+            if(packet) {
+                PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
+                packet_exists = true;
 
-                    uint32_t packet_len = packet->packet_len & 0x3FFFFU;
+                uint32_t packet_len = packet->packet_len & 0x3FFFFU;
 
-                    usb_rtl815x_tx_t* tx = memory_malloc(sizeof(usb_rtl815x_tx_t) + packet_len);
+                usb_rtl815x_tx_t* tx = memory_malloc(sizeof(usb_rtl815x_tx_t) + packet_len);
 
-                    if(!tx) {
-                        PRINTLOG(NETWORK, LOG_ERROR, "cannot allocate memory for tx packet");
-                        memory_free((void*)packet);
-                        continue;
-                    }
-
-                    tx->length = BIT(31) | BIT(30) | packet_len;
-                    tx->flags = 0;
-
-                    if(ni->has_hw_vlan_support && packet->is_vlan_tagged) {
-                        tx->flags |= BIT(16) | BYTE_SWAP16(packet->vlan_id & 0x0FFFU);
-                    }
-
-                    memory_memcopy(packet->packet_data, (uint8_t*)tx + sizeof(usb_rtl815x_tx_t), packet_len);
-
-                    if(!usb_rtl815x_write(drv, tx)) {
-                        PRINTLOG(NETWORK, LOG_ERROR, "cannot send packet");
-                    }
-
-                    memory_free(tx);
-
-                    memory_free(packet->packet_data);
+                if(!tx) {
+                    PRINTLOG(NETWORK, LOG_ERROR, "cannot allocate memory for tx packet");
                     memory_free((void*)packet);
+                    continue;
                 }
 
-                PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", list_size(drv->return_queue));
+                tx->length = BIT(31) | BIT(30) | packet_len;
+                tx->flags = 0;
+
+                if(ni->has_hw_vlan_support && packet->is_vlan_tagged) {
+                    tx->flags |= BIT(16) | BYTE_SWAP16(packet->vlan_id & 0x0FFFU);
+                }
+
+                memory_memcopy(packet->packet_data, (uint8_t*)tx + sizeof(usb_rtl815x_tx_t), packet_len);
+
+                if(!usb_rtl815x_write(drv, tx)) {
+                    PRINTLOG(NETWORK, LOG_ERROR, "cannot send packet");
+                }
+
+                memory_free(tx);
+
+                memory_free(packet->packet_data);
+                memory_free((void*)packet);
             }
 
+            PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", list_size(drv->return_queue));
         }
+
 
         if(!packet_exists) {
             task_set_message_waiting();
@@ -1296,16 +1293,6 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     }
 
     PRINTLOG(USB, LOG_INFO, "initializing RTL8152/RTL8153 device");
-
-    if(!usb_rtl815x_drivers) {
-        usb_rtl815x_drivers = list_create_list_with_heap(NULL);
-
-        if(!usb_rtl815x_drivers) {
-            PRINTLOG(USB, LOG_ERROR, "cannot create rtl815x drivers list");
-            return -1;
-        }
-    }
-
 
     usb_driver_t* drv = memory_malloc(sizeof(usb_driver_t));
 
@@ -1410,8 +1397,26 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
         return -1;
     }
 
+    void** args = memory_malloc(sizeof(void*) * 2);
 
-    uint64_t tx_task_id =  task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 0, NULL, "usb-rtl815x-tx");
+    if(!args) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for task args");
+        return -1;
+    }
+
+    args[0] = drv;
+
+    char_t* task_name = strprintf("usb-rtl815x-tx-%02x%02x%02x%02x%02x%02x",
+                                  drv->mac[0], drv->mac[1], drv->mac[2],
+                                  drv->mac[3], drv->mac[4], drv->mac[5]);
+
+    if(!task_name) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for task name");
+        memory_free(args);
+        return -1;
+    }
+
+    uint64_t tx_task_id =  task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 1, args, task_name);
 
     if(tx_task_id == -1ULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot create tx task");
@@ -1419,8 +1424,6 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     }
 
     drv->tx_task_id = tx_task_id;
-
-    list_list_insert(usb_rtl815x_drivers, drv);
 
     PRINTLOG(USB, LOG_INFO, "RTL8152/RTL8153 device initialized");
 
