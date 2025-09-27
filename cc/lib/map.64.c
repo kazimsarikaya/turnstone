@@ -86,6 +86,14 @@ map_t* map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_ke
     return map;
 }
 
+memory_heap_t* map_get_heap(map_t* map) {
+    if(!map) {
+        return NULL;
+    }
+
+    return map->heap;
+}
+
 void* map_insert(map_t* map, const void* key, const void* data) {
     lock_acquire(map->lock);
 
