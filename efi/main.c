@@ -1262,8 +1262,8 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     efi_guid_t acpi_table_v1_guid = EFI_ACPI_TABLE_GUID;
     efi_guid_t smbios_table_v2_guild = EFI_SMBIOS_2_TABLE_GUID;
     efi_guid_t smbios_table_v3_guild = EFI_SMBIOS_3_TABLE_GUID;
-    uint64_t smbios_version = 0;
-    void* smbios_table = NULL;
+    void* smbios_table_v2 = NULL;
+    void* smbios_table_v3 = NULL;
 
     void* acpi_rsdp = NULL;
     void* acpi_xrsdp = NULL;
@@ -1274,13 +1274,11 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
         } else if(efi_guid_equal(acpi_table_v1_guid, system_table->configuration_table[i].vendor_guid) == 0) {
             acpi_rsdp = system_table->configuration_table[i].vendor_table;
         } else if(efi_guid_equal(smbios_table_v2_guild, system_table->configuration_table[i].vendor_guid) == 0) {
-            smbios_version = 2;
-            smbios_table = system_table->configuration_table[i].vendor_table;
-            PRINTLOG(EFI, LOG_INFO, "smbios v2 table 0x%p", smbios_table);
+            smbios_table_v2 = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v2 table 0x%p", smbios_table_v2);
         } else if(efi_guid_equal(smbios_table_v3_guild, system_table->configuration_table[i].vendor_guid) == 0) {
-            smbios_version = 3;
-            smbios_table = system_table->configuration_table[i].vendor_table;
-            PRINTLOG(EFI, LOG_INFO, "smbios v3 table 0x%p", smbios_table);
+            smbios_table_v3 = system_table->configuration_table[i].vendor_table;
+            PRINTLOG(EFI, LOG_INFO, "smbios v3 table 0x%p", smbios_table_v3);
         }
     }
 
@@ -1332,8 +1330,8 @@ __attribute__((noinline)) efi_status_t efi_main2(efi_handle_t image, efi_system_
     sysinfo->frame_buffer = vfb;
     sysinfo->acpi_version = acpi_xrsdp != NULL?2:1;
     sysinfo->acpi_table = acpi_xrsdp != NULL?acpi_xrsdp:acpi_rsdp;
-    sysinfo->smbios_version = smbios_version;
-    sysinfo->smbios_table = smbios_table;
+    sysinfo->smbios_table_v2 = smbios_table_v2;
+    sysinfo->smbios_table_v3 = smbios_table_v3;
     sysinfo->efi_system_table = system_table;
     sysinfo->program_header_physical_start = requested_program_base;
     sysinfo->program_header_virtual_start = (2 << 20);

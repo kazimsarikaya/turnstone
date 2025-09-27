@@ -72,7 +72,7 @@ fi
 
 qemu-system-x86_64 \
   -nodefaults -no-user-config $PREVENTSHUTDOWN \
-  -M q35,kernel-irqchip=split -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
+  -M q35,kernel-irqchip=split,smbios-entry-point-type=64 -m ${RAMSIZE}g -smp cpus=${NUMCPUS} -name osdev-hda-efi-boot \
   -cpu host,topoext=on,x2apic=on \
   -accel $ACCEL ${TRACE_OPTS} \
   -drive if=pflash,readonly=on,format=raw,unit=0,file=${OUTPUTDIR}/edk2-x86_64-code.fd \
