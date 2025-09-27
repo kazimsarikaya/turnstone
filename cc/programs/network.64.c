@@ -199,7 +199,9 @@ int8_t network_register_network_info(network_info_t* ni) {
         return -1;
     }
 
-    network_info_t* new_ni = memory_malloc(sizeof(network_info_t));
+    memory_heap_t* heap = map_get_heap(network_info_map);
+
+    network_info_t* new_ni = memory_malloc_ext(heap, sizeof(network_info_t), 0);
 
     if(!new_ni) {
         return -1;
@@ -210,6 +212,34 @@ int8_t network_register_network_info(network_info_t* ni) {
     map_insert(network_info_map, new_ni->mac, new_ni);
 
     PRINTLOG(NETWORK, LOG_INFO, "network info registered for mac %02x:%02x:%02x:%02x:%02x:%02x",
+             ni->mac[0], ni->mac[1], ni->mac[2],
+             ni->mac[3], ni->mac[4], ni->mac[5]);
+
+    return 0;
+}
+
+int8_t network_unregister_network_info(network_info_t* ni) {
+    if(!ni) {
+        return -1;
+    }
+
+    if(!network_info_map) {
+        return -1;
+    }
+
+    network_info_t* existing_ni = (network_info_t*)map_get(network_info_map, ni->mac);
+
+    if(!existing_ni) {
+        return -1;
+    }
+
+    map_delete(network_info_map, ni->mac);
+
+    memory_heap_t* heap = map_get_heap(network_info_map);
+
+    memory_free_ext(heap, existing_ni);
+
+    PRINTLOG(NETWORK, LOG_INFO, "network info unregistered for mac %02x:%02x:%02x:%02x:%02x:%02x",
              ni->mac[0], ni->mac[1], ni->mac[2],
              ni->mac[3], ni->mac[4], ni->mac[5]);
 

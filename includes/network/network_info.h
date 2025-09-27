@@ -40,6 +40,7 @@ typedef struct network_info_t {
 extern map_t* network_info_map;
 
 int8_t network_register_network_info(network_info_t* ni);
+int8_t network_unregister_network_info(network_info_t* ni);
 
 #ifdef __cplusplus
 }
