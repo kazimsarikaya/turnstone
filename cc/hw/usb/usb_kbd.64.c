@@ -35,7 +35,7 @@ typedef struct usb_kbd_report_t {
 
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
+    USB_DRIVER_COMMON_FIELDS;
     uint32_t         expected_packet_size;
     usb_kbd_report_t old_usb_kbd_report;
     usb_kbd_report_t new_usb_kbd_report;

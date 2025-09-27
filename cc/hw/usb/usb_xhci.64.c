@@ -75,7 +75,7 @@ typedef struct usb_device_controller_context_t {
 } usb_device_controller_context_t;
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
+    USB_DRIVER_COMMON_FIELDS;
 } usb_driver_t;
 
 static hashmap_t* usb_xhci_interrupt_controller_mapping = NULL;

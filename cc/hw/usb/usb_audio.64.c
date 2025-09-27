@@ -108,7 +108,7 @@ typedef struct usb_audio_channel_volume_t {
 } usb_audio_channel_volume_t;
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
+    USB_DRIVER_COMMON_FIELDS;
     usb_audio_driver_type_t              driver_type;
     int32_t                              num_channels;
     boolean_t                            is_muted;

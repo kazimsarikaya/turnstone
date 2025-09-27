@@ -20,7 +20,7 @@ MODULE("turnstone.kernel.hw.usb");
 hashmap_t* usb_devices = NULL;
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
+    USB_DRIVER_COMMON_FIELDS;
 } usb_driver_t;
 
 static void usb_device_print_desc(usb_device_t* usb_device) {

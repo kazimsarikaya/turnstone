@@ -75,25 +75,18 @@ typedef struct usb_uas_iu_t {
 } __attribute__((packed)) usb_uas_iu_t;
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
-    uint32_t                      expected_packet_size;
-    uint64_t                      id;
-    boolean_t                     is_uas;
-    boolean_t                     command_size_16_supported;
-    uint32_t                      max_lun;
-    uint64_t                      lba_count;
-    uint32_t                      block_size;
-    scsi_standard_inquiry_data_t* inquiry_data;
-    usb_config_t*                 config;
-    uint8_t                       interface_number;
-    uint8_t                       cmd_endpoint;
-    uint8_t                       status_endpoint;
-    uint8_t                       in_endpoint;
-    uint8_t                       out_endpoint;
-    uint32_t                      command_tag;
-    lock_t*                       lock;
-    boolean_t                     is_uas_cmd_sended;
-    usb_uas_iu_t*                 async_iu;
+    USB_DRIVER_COMMON_FIELDS;
+    USB_MS_COMMON_FIELDS;
+    usb_config_t* config;
+    uint8_t       interface_number;
+    uint8_t       cmd_endpoint;
+    uint8_t       status_endpoint;
+    uint8_t       in_endpoint;
+    uint8_t       out_endpoint;
+    uint32_t      command_tag;
+    lock_t*       lock;
+    boolean_t     is_uas_cmd_sended;
+    usb_uas_iu_t* async_iu;
 } usb_driver_t;
 
 
@@ -277,8 +270,7 @@ boolean_t usb_ms_uas_get_status(usb_driver_t* usb_driver) {
     return true;
 }
 
-usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interface)
-{
+usb_driver_t* usb_ms_uas_init(usb_device_t * usb_device, usb_interface_t* interface) {
     usb_driver_t* usb_ms = memory_malloc(sizeof(usb_driver_t));
 
     if (!usb_ms) {

@@ -21,7 +21,7 @@ typedef struct usb_hub_status_t {
 } __attribute__((packed)) usb_hub_status_t;
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
+    USB_DRIVER_COMMON_FIELDS;
     uint32_t         expected_packet_size;
     usb_hub_status_t old_status;
     usb_hub_status_t new_status;
