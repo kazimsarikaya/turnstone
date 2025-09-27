@@ -98,7 +98,9 @@ static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* contr
                                                  context->endpoints[i].ep_trb_frame) != 0) {
                 PRINTLOG(USB, LOG_ERROR, "cannot delete ep trb va for frame");
             }
-            fa->release_frame(fa, context->endpoints[i].ep_trb_frame);
+            if(fa->release_frame(fa, context->endpoints[i].ep_trb_frame) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot release ep trb frame");
+            }
         }
 
         if(context->endpoints[i].data_buffer_frame) {
@@ -106,7 +108,9 @@ static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* contr
                                                  context->endpoints[i].data_buffer_frame) != 0) {
                 PRINTLOG(USB, LOG_ERROR, "cannot delete data buffer va for frame");
             }
-            fa->release_frame(fa, context->endpoints[i].data_buffer_frame);
+            if(fa->release_frame(fa, context->endpoints[i].data_buffer_frame) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot release data buffer frame");
+            }
         }
 
         if(context->endpoints[i].stream_context_frame) {
@@ -114,17 +118,23 @@ static int8_t usb_xhci_destroy_device_controller_context(usb_controller_t* contr
                                                  context->endpoints[i].stream_context_frame) != 0) {
                 PRINTLOG(USB, LOG_ERROR, "cannot delete stream context va for frame");
             }
-            fa->release_frame(fa, context->endpoints[i].stream_context_frame);
+            if(fa->release_frame(fa, context->endpoints[i].stream_context_frame) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot release stream context frame");
+            }
         }
 
         if(context->endpoints[i].ep_pipeline) {
-            pipeline_destroy(context->endpoints[i].ep_pipeline);
+            if(pipeline_destroy(context->endpoints[i].ep_pipeline) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot destroy ep pipeline");
+            }
         }
     }
 
     memory_free(context);
 
     device->controller_context = NULL;
+
+    PRINTLOG(USB, LOG_DEBUG, "device controller context destroyed");
 
     return 0;
 }
@@ -1797,6 +1807,10 @@ static uint64_t usb_xhci_interrupter_task_handle_events(usb_controller_metadata_
                 PRINTLOG(USB, LOG_WARNING, "port status change event with error cc %d", cc);
             }
 
+        } else if(trb_type == USB_XHCI_TRB_TYPE_ER_COMMAND_COMPLETE) {
+            if(cc != USB_XHCI_TRB_CCODE_CC_SUCCESS) {
+                PRINTLOG(USB, LOG_WARNING, "command complete event with error cc %d", cc);
+            }
         } else {
             PRINTLOG(USB, LOG_WARNING, "unhandled event trb type %d cc %d param 0x%llx status 0x%x control 0x%x",
                      trb_type, cc, event_trb->parameter, event_trb->status, event_trb->control);
@@ -1935,6 +1949,10 @@ static int8_t usb_xhci_port_status_listener_task(int32_t argc, void** argv) {
             }
         } else {
             PRINTLOG(USB, LOG_DEBUG, "port %lli disabled. we will remove driver", port);
+
+            if(usb_device_deinit(NULL, usb_controller, port) != 0) {
+                PRINTLOG(USB, LOG_ERROR, "cannot deinitialize device on port %lli", port);
+            }
         }
 
     }
@@ -2278,9 +2296,11 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
         return -1;
     }
 
-    metadata->port_status_listener_tid = task_create_task(NULL, 128 << 10, 64 << 10,
+    metadata->port_status_listener_tid = task_create_task(NULL, 2 << 20, 128 << 10,
                                                           usb_xhci_port_status_listener_task, 1, pslt_args,
                                                           pslt_task_name);
+
+    memory_free(pslt_task_name);
 
     if(metadata->port_status_listener_tid == -1ULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot create port status listener task");
@@ -2318,6 +2338,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     metadata->interrupter_tid = task_create_task(NULL, 128 << 10, 64 << 10,
                                                  usb_xhci_interrupter_task, 1, plt_args,
                                                  task_name);
+
+    memory_free(task_name);
 
     if(metadata->interrupter_tid == -1ULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot create interrupter task");

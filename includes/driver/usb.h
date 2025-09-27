@@ -478,6 +478,7 @@ typedef enum usb_protocol_mass_storage_t {
 int8_t usb_init(void);
 
 int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint32_t port, uint32_t speed);
+int8_t usb_device_deinit(usb_device_t* parent, usb_controller_t* controller, uint32_t port);
 
 int8_t usb_reset_all_devices_all_ports(void);
 

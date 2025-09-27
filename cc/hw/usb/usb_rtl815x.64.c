@@ -19,7 +19,7 @@
 MODULE("turnstone.kernel.hw.usb");
 
 typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS
+    USB_DRIVER_COMMON_FIELDS;
     uint32_t              expected_packet_size;
     uint16_t              ocp_base;
     list_t*               return_queue;
@@ -29,6 +29,7 @@ typedef struct usb_driver_t {
     usb_endpoint_t*       intr;
     uint16_t              intr_value;
     uint64_t              tx_task_id;
+    uint64_t              dhcp_task_id;
 } usb_driver_t;
 
 typedef struct usb_rtl815x_tx_t {
@@ -1228,7 +1229,17 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
     dhcp_args[0] = (void*)drv->mac;
     dhcp_args[1] = drv->return_queue;
 
-    task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, dhcp_args, dhcp_task_name);
+    drv->dhcp_task_id = task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, dhcp_args, dhcp_task_name);
+
+    memory_free(dhcp_task_name);
+
+    if(drv->dhcp_task_id == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create dhcp task");
+        memory_free(dhcp_args);
+        memory_free(drv->return_queue);
+        network_unregister_network_info(&ni_reg);
+        return -1;
+    }
 
     while(true) {
         boolean_t packet_exists = false;
@@ -1286,6 +1297,50 @@ static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
     return 0;
 }
 
+static int8_t usb_device_rtl815x_free_returned_packet(memory_heap_t* heap, void* data) {
+    if(!data) {
+        return 0;
+    }
+
+    network_transmit_packet_t* packet = (network_transmit_packet_t*)data;
+
+    if(packet->packet_data) {
+        memory_free_ext(heap, packet->packet_data);
+    }
+
+    memory_free_ext(heap, packet);
+
+    return 0;
+}
+
+static int8_t usb_device_rtl815x_free(usb_driver_t* drv) {
+    if(!drv) {
+        PRINTLOG(USB, LOG_ERROR, "invalid parameters");
+        return -1;
+    }
+
+    if(drv->tx_task_id) {
+        task_kill_task(drv->tx_task_id, false);
+    }
+
+    if(drv->dhcp_task_id) {
+        task_kill_task(drv->dhcp_task_id, false);
+    }
+
+    if(drv->return_queue) {
+        list_destroy_with_type(drv->return_queue, LIST_DESTROY_WITH_DATA, usb_device_rtl815x_free_returned_packet);
+    }
+
+    network_info_t ni = {0};
+    memory_memcopy(&drv->mac, &ni.mac, sizeof(ni.mac));
+
+    network_unregister_network_info(&ni);
+
+    memory_free(drv);
+
+    return 0;
+}
+
 int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface) {
     if(!device || !interface) {
         PRINTLOG(USB, LOG_ERROR, "invalid parameters");
@@ -1304,6 +1359,7 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     drv->usb_device = device;
     drv->interface = interface;
     drv->pipeline_callback = NULL;
+    drv->free = usb_device_rtl815x_free;
 
     interface->driver = drv;
 
@@ -1417,6 +1473,8 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     }
 
     uint64_t tx_task_id =  task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 1, args, task_name);
+
+    memory_free(task_name);
 
     if(tx_task_id == -1ULL) {
         PRINTLOG(USB, LOG_ERROR, "cannot create tx task");
