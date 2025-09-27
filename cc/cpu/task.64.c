@@ -1306,6 +1306,8 @@ int8_t task_create_idle_task(void) {
 
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
 
+    PRINTLOG(TASKING, LOG_INFO, "created idle task %s 0x%llx 0x%p stack at 0x%llx-0x%llx on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->cpu_id);
+
     return 0;
 }
 #pragma GCC diagnostic pop
@@ -1335,7 +1337,17 @@ int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
 }
 
 void task_remove_task_after_fault(uint64_t task_id) {
+    if(task_id == 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "task_remove_task_after_fault: task id is 0");
+        return;
+    }
+
     task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
+
+    if(task == NULL) {
+        PRINTLOG(TASKING, LOG_ERROR, "task_remove_task_after_fault: task 0x%llx not found", task_id);
+        return;
+    }
 
     char_t task_id_buf[100] = {0};
     utoh_with_buffer(task_id_buf, task_id);
@@ -1363,6 +1375,11 @@ void task_remove_task_after_fault(uint64_t task_id) {
 
     cpu_state->current_task = current_task;
     current_task->state = TASK_STATE_RUNNING;
+
+    PRINTLOG(TASKING, LOG_WARNING, "switching to %s task 0x%p (0x%p) 0x%llx on cpu 0x%llx",
+             current_task->task_name,
+             current_task, cpu_state->idle_task,
+             current_task->task_id, cpu_state->local_apic_id);
 
     task_load_registers(current_task->registers);
 

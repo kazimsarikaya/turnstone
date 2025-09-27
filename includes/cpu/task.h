@@ -141,7 +141,7 @@ typedef struct task_registers_t {
 } task_registers_t;
 
 _Static_assert(sizeof(task_registers_t) == 0x20c0, "task_registers_t size must be 0x20c0");
-_Static_assert((offsetof_field(task_registers_t, avx512f) % 0x40) == 0x0, "task_registers_t sse offset must be aligned 0x40");
+_Static_assert((offsetof_field(task_registers_t, avx512f) % 0x40) == 0x0, "task_registers_t avx512f offset must be aligned 0x40");
 
 /** @brief function prototype for custom message availability check function
  * @param[in] args arguments for custom function
@@ -180,6 +180,8 @@ typedef struct task_t {
     int32_t                        exit_code; ///< task exit code
     task_registers_t*              registers; ///< task registers
 } task_t; ///< short hand for struct
+
+_Static_assert(offsetof_field(task_t, registers) == 0xD8, "task_t registers offset is at 0xD8");
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
