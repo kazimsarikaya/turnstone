@@ -713,10 +713,21 @@ task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
     if(list_size(cpu_state->task_sleep_queue)) {
-        task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, 0);
+        for(uint64_t i = 0; i < list_size(cpu_state->task_sleep_queue); i++) {
+            task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, i);
 
-        if(t->wake_tick < time_timer_get_tick_count()) {
-            tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, 0);
+            if(t->state == TASK_STATE_ENDED) {
+                tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, i);
+                break;
+            }
+        }
+
+        if(!tmp_task && list_size(cpu_state->task_sleep_queue)) {
+            task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, 0);
+
+            if(t->wake_tick < time_timer_get_tick_count()) {
+                tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, 0);
+            }
         }
     }
 
@@ -763,6 +774,9 @@ task_t* task_find_next_task(void) {
                     }
                 }
 
+            } else if(t->state == TASK_STATE_ENDED) {
+                found_index = i;
+                break;
             } else { // wait status cleared task
                 if(t->state != TASK_STATE_SUSPENDED) {
                     video_text_print("task_find_next_task: task state is not suspended: 0x");
@@ -787,6 +801,15 @@ task_t* task_find_next_task(void) {
     }
 
     if(!tmp_task) {
+        tmp_task = (task_t*)cpu_state->idle_task;
+    }
+
+    if(!tmp_task->registers) {
+        video_text_print("task_find_next_task: task registers null : 0x");
+        char_t buf[32] = {0};
+        utoh_with_buffer(buf, (uintptr_t)tmp_task);
+        video_text_print(buf);
+        video_text_print("\n");
         tmp_task = (task_t*)cpu_state->idle_task;
     }
 
@@ -969,6 +992,7 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
 
     if(task == NULL) {
         PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx not found", task_id);
+
         return;
     }
 
@@ -980,29 +1004,9 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
         return;
     }
 
-    if(task->vmcs_physical_address) {
-        if(cpu_get_type() == CPU_TYPE_INTEL) {
-            if(vmx_vmclear(task->vmcs_physical_address) != 0) {
-                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
-            }
-        }  else if(cpu_get_type() == CPU_TYPE_AMD) {
-
-        }
-    }
-
-    if(task->state == TASK_STATE_SLEEPING) {
-        list_list_delete(cpu_state->task_sleep_queue, task);
-        list_queue_push(cpu_state->task_queue, task);
-    } else if(task->state == TASK_STATE_FUTURE_WAITING ||
-              task->state == TASK_STATE_INTERRUPT_RECEIVED ||
-              task->state == TASK_STATE_MESSAGE_WAITING) {
-        list_list_delete(cpu_state->task_wait_queue, task);
-        list_queue_push(cpu_state->task_queue, task);
-    }
+    PRINTLOG(TASKING, LOG_INFO, "killing task 0x%llx (0x%p) state: %d", task->task_id, task, task->state);
 
     task->state = TASK_STATE_ENDED;
-
-    PRINTLOG(TASKING, LOG_INFO, "task 0x%llx will be ended", task->task_id);
 }
 
 uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
