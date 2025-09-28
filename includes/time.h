@@ -38,6 +38,7 @@ typedef struct timeparsed_t {
 } timeparsed_t;
 
 time_t time(time_t* t);
+time_t time_ms(time_t* t);
 time_t time_ns(time_t* t);
 
 timeparsed_t* timeparsed(timeparsed_t* tp);
