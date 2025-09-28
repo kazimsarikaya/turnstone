@@ -119,6 +119,22 @@ static int8_t windowmanager_main(void) {
         if(mouse_length) {
             mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
 
+            for(uint32_t i = 0; i < mouse_ev_cnt; i++) {
+
+                if(mouse_data[i].wheel != 0 && windowmanager_current_window->on_scroll) {
+                    window_event_t event = {0};
+                    event.window = windowmanager_current_window;
+
+                    if(mouse_data[i].wheel > 0) {
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
+                    } else {
+                        event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
+                    }
+
+                    windowmanager_current_window->on_scroll(&event);
+                }
+            }
+
             mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
 
             if((last->buttons & MOUSE_BUTTON_LEFT) && !windowmanager_current_window->has_alert) {
