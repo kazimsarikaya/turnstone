@@ -13,34 +13,11 @@
 #include <device/kbd_scancodes.h>
 #include <utils.h>
 #include <pipeline.h>
+#include <time.h>
 
 MODULE("turnstone.kernel.hw.usb.kbd");
 
 extern boolean_t kbd_is_usb;
-
-typedef struct usb_kbd_report_t {
-    struct {
-        boolean_t left_ctrl   : 1;
-        boolean_t left_shift  : 1;
-        boolean_t left_alt    : 1;
-        boolean_t left_meta   : 1;
-        boolean_t right_ctrl  : 1;
-        boolean_t right_shift : 1;
-        boolean_t right_alt   : 1;
-        boolean_t right_meta  : 1;
-    } __attribute__((packed)) modifiers;
-    uint8_t reserved;
-    uint8_t key[6];
-} __attribute__((packed)) usb_kbd_report_t;
-
-
-typedef struct usb_driver_t {
-    USB_DRIVER_COMMON_FIELDS;
-    uint32_t         expected_packet_size;
-    usb_kbd_report_t old_usb_kbd_report;
-    usb_kbd_report_t new_usb_kbd_report;
-    uint32_t         max_packet_size;
-} usb_driver_t;
 
 // we need to map usb keyboard to scancodes to ev codes here a char16_t array
 const char16_t KBD_USB_SCANCODE_MAP[] = {
@@ -303,6 +280,32 @@ const char16_t KBD_USB_SCANCODE_MAP[] = {
     0xff, // 0x100 Media Sleep
 };
 
+typedef struct usb_kbd_report_t {
+    struct {
+        boolean_t left_ctrl   : 1;
+        boolean_t left_shift  : 1;
+        boolean_t left_alt    : 1;
+        boolean_t left_meta   : 1;
+        boolean_t right_ctrl  : 1;
+        boolean_t right_shift : 1;
+        boolean_t right_alt   : 1;
+        boolean_t right_meta  : 1;
+    } __attribute__((packed)) modifiers;
+    uint8_t reserved;
+    uint8_t key[6];
+} __attribute__((packed)) usb_kbd_report_t;
+
+
+typedef struct usb_driver_t {
+    USB_DRIVER_COMMON_FIELDS;
+    uint32_t         expected_packet_size;
+    usb_kbd_report_t old_usb_kbd_report;
+    usb_kbd_report_t new_usb_kbd_report;
+    uint64_t         last_report_time[ARRAY_SIZE(KBD_USB_SCANCODE_MAP)];
+    boolean_t        is_not_first_repeat[ARRAY_SIZE(KBD_USB_SCANCODE_MAP)];
+    uint32_t         max_packet_size;
+} usb_driver_t;
+
 static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
     boolean_t phantoms = false;
 
@@ -397,8 +400,9 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
         }
 
         if(!found) {
-            // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
             char16_t key = usb_keyboard->old_usb_kbd_report.key[i];
+            usb_keyboard->last_report_time[key] = 0;
+            usb_keyboard->is_not_first_repeat[key] = false;
             key = KBD_USB_SCANCODE_MAP[key];
             kbd_handle_key(key, false);
         }
@@ -409,19 +413,36 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
             continue;
         }
 
-        boolean_t found = false;
+        boolean_t is_key_new = true;
 
         for(uint8_t j = 0; j < 6; j++) {
             if(usb_keyboard->new_usb_kbd_report.key[i] == usb_keyboard->old_usb_kbd_report.key[j]) {
-                found = true;
+                is_key_new = false;
             }
         }
 
-        if(!found) {
-            // kbd_release_key(usb_keyboard->old_usb_kbd_report.key[i]);
-            char16_t key = usb_keyboard->new_usb_kbd_report.key[i];
-            key = KBD_USB_SCANCODE_MAP[key];
+        char16_t key = usb_keyboard->new_usb_kbd_report.key[i];
+        char16_t original_key = key;
+        uint64_t old_time = usb_keyboard->last_report_time[original_key];
+        uint64_t current_time = time_ms(NULL);
+        usb_keyboard->last_report_time[original_key] = current_time;
+        key = KBD_USB_SCANCODE_MAP[key];
+
+        if(is_key_new) {
             kbd_handle_key(key, true);
+        } else {
+            uint64_t delay = 50;
+
+            if(!usb_keyboard->is_not_first_repeat[original_key]) {
+                usb_keyboard->is_not_first_repeat[original_key] = true;
+                delay = 500;
+            }
+
+            boolean_t send_report = (current_time - old_time) >= delay;
+
+            if(send_report) {
+                kbd_handle_key(key, true);
+            }
         }
     }
 
