@@ -47,7 +47,7 @@ static uint32_t vmx_fix_reserved_1_bits(uint32_t target, uint32_t allowed0) {
     int idx = 0;
 
     for (idx = 0; idx < 32; idx++) {
-        uint32_t mask = 1 << idx;
+        uint32_t mask = BIT(idx);
         int target_is_set = !!(target & mask);
         int allowed0_is_set = !!(allowed0 & mask);
 
@@ -63,7 +63,7 @@ static uint32_t vmx_fix_reserved_0_bits(uint32_t target, uint32_t allowed1) {
     int idx = 0;
 
     for (idx = 0; idx < 32; idx++) {
-        uint32_t mask = 1 << idx;
+        uint32_t mask = BIT(idx);
         int target_is_set = !!(target & mask);
         int allowed1_is_set = !!(allowed1 & mask);
 
@@ -236,7 +236,7 @@ static int8_t hypervisor_vmx_msr_bitmap_set(uint8_t * bitmap, uint32_t msr, bool
 
     uint32_t byte_index = msr / 8;
     uint8_t bit_index = msr % 8;
-    bitmap[byte_index] |= 1 << bit_index;
+    bitmap[byte_index] |= BIT(bit_index);
     return 0;
 }
 
@@ -260,20 +260,20 @@ static int8_t hypervisor_vmx_vmcs_prepare_procbased_control(hypervisor_vm_t* vm)
 
 
     uint32_t pri_procbase_ctls = 0;
-    pri_procbase_ctls |= 1 << 2; // enable interrupt-window exit
-    pri_procbase_ctls |= 1 << 7; // Hlt causes vm exit
-    pri_procbase_ctls |= 1 << 9; // INVLPG causes vm exit
-    pri_procbase_ctls |= 1 << 12; // RDTSC exiting
-    pri_procbase_ctls |= 1 << 15; // CR3-load causes vm exit
-    pri_procbase_ctls |= 1 << 16; // CR3-store causes vm exit
-    pri_procbase_ctls |= 1 << 19; // CR8-load causes vm exit
-    pri_procbase_ctls |= 1 << 20; // CR8-store causes vm exit
-    pri_procbase_ctls |= 1 << 21; // Use TPR shadow
-    pri_procbase_ctls |= 1 << 24; // Unconditional IO exiting
-    pri_procbase_ctls |= 1 << 25; // Use IO bitmap
-    pri_procbase_ctls |= 1 << 28; // Use MSR bitmap
-    pri_procbase_ctls |= 1 << 30; // PAUSE causes vm exit
-    pri_procbase_ctls |= 1 << 31; // activate secondary controls
+    pri_procbase_ctls |= BIT(2); // enable interrupt-window exit
+    pri_procbase_ctls |= BIT(7); // Hlt causes vm exit
+    pri_procbase_ctls |= BIT(9); // INVLPG causes vm exit
+    pri_procbase_ctls |= BIT(12); // RDTSC exiting
+    pri_procbase_ctls |= BIT(15); // CR3-load causes vm exit
+    pri_procbase_ctls |= BIT(16); // CR3-store causes vm exit
+    pri_procbase_ctls |= BIT(19); // CR8-load causes vm exit
+    pri_procbase_ctls |= BIT(20); // CR8-store causes vm exit
+    pri_procbase_ctls |= BIT(21); // Use TPR shadow
+    pri_procbase_ctls |= BIT(24); // Unconditional IO exiting
+    pri_procbase_ctls |= BIT(25); // Use IO bitmap
+    pri_procbase_ctls |= BIT(28); // Use MSR bitmap
+    pri_procbase_ctls |= BIT(30); // PAUSE causes vm exit
+    pri_procbase_ctls |= BIT(31); // activate secondary controls
 
     pri_procbase_ctls = vmx_fix_reserved_1_bits(pri_procbase_ctls, pri_procbased_msr_eax);
     pri_procbase_ctls = vmx_fix_reserved_0_bits(pri_procbase_ctls, pri_procbased_msr_edx);
@@ -285,14 +285,14 @@ static int8_t hypervisor_vmx_vmcs_prepare_procbased_control(hypervisor_vm_t* vm)
 
     uint32_t sec_procbase_ctls = 0;
     // sec_procbase_ctls |= 1 << 0; // virtualize APIC access cannot be enabled when x2APIC mode is enabled
-    sec_procbase_ctls |= 1 << 1; // use EPT
-    sec_procbase_ctls |= 1 << 2; // descriptor-table exiting:GDT/LDT/IDT/TR
-    sec_procbase_ctls |= 1 << 3; // enable RDTSCP
-    sec_procbase_ctls |= 1 << 4; // enable virtualize APIC access x2APIC mode
-    sec_procbase_ctls |= 1 << 5; // enable VPID
-    sec_procbase_ctls |= 1 << 7; // unrestricted guest
-    sec_procbase_ctls |= 1 << 8; // enable virtualize APIC register access
-    sec_procbase_ctls |= 1 << 9; // virtual-interrupt delivery
+    sec_procbase_ctls |= BIT(1); // use EPT
+    sec_procbase_ctls |= BIT(2); // descriptor-table exiting:GDT/LDT/IDT/TR
+    sec_procbase_ctls |= BIT(3); // enable RDTSCP
+    sec_procbase_ctls |= BIT(4); // enable virtualize APIC access x2APIC mode
+    sec_procbase_ctls |= BIT(5); // enable VPID
+    sec_procbase_ctls |= BIT(7); // unrestricted guest
+    sec_procbase_ctls |= BIT(8); // enable virtualize APIC register access
+    sec_procbase_ctls |= BIT(9); // virtual-interrupt delivery
 
     sec_procbase_ctls = vmx_fix_reserved_1_bits(sec_procbase_ctls, sec_procbased_msr_eax);
     sec_procbase_ctls = vmx_fix_reserved_0_bits(sec_procbase_ctls, sec_procbased_msr_edx);
