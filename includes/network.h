@@ -35,6 +35,7 @@ typedef struct network_received_packet_t {
     void*          network_info;
     boolean_t      is_vlan_tagged;
     uint16_t       vlan_id;
+    uint64_t       tx_task_id;
 } network_received_packet_t;
 
 typedef struct network_transmit_packet_t {

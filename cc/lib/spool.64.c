@@ -20,8 +20,8 @@ struct spool_item_t {
 };
 
 
-list_t* spool_list = NULL;
-memory_heap_t* spool_heap = NULL;
+static list_t* spool_list = NULL;
+static memory_heap_t* spool_heap = NULL;
 
 int8_t spool_init(size_t spool_size, uint64_t spool_start) {
     spool_heap = memory_create_heap_hash(spool_start, spool_start + spool_size);
@@ -60,7 +60,7 @@ int8_t spool_add(const char_t* name, size_t buf_cnt, ...) {
         return -1;
     }
 
-    item->buffers = list_create_queue();
+    item->buffers = list_create_queue_with_heap(spool_heap);
 
     if(item->buffers == NULL) {
         memory_free_ext(spool_heap, item->name);

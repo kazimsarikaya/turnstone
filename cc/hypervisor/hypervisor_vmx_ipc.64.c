@@ -95,7 +95,7 @@ int8_t hypervisor_vmx_ipc_handle_dump(hypervisor_vm_t* vm, hypervisor_ipc_messag
         uint32_t vector_byte = vector / 64;
         uint32_t vector_bit = vector % 64;
 
-        if(vm->lapic.in_request_vectors[vector_byte] & (1 << vector_bit)) {
+        if(vm->lapic.in_request_vectors[vector_byte] & BIT(vector_bit)) {
             buffer_printf(buffer, "0x%02x ", vector);
         }
     }

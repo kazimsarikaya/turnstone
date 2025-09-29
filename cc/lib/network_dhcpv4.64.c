@@ -108,14 +108,18 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     }
 
     if(!network_ethernet_is_mac_address_eq(network_info, recv_dhcpv4_packet->client_mac_address)) {
+        PRINTLOG(NETWORK, LOG_TRACE, "dhcp packet is not for us");
         return NULL;
     }
 
     if(BYTE_SWAP32(recv_dhcpv4_packet->magic_cookie) != NETWORK_DHCPV4_MAGICCOOKIE) {
+        PRINTLOG(NETWORK, LOG_ERROR, "dhcp magic cookie is invalid");
         return NULL;
     }
 
-    if(recv_dhcpv4_packet->opcode != NETWORK_DHCPV4_OPCODE_OFFER) {
+    if(recv_dhcpv4_packet->opcode != NETWORK_DHCPV4_OPCODE_OFFER &&
+       recv_dhcpv4_packet->opcode != NETWORK_DHCPV4_OPCODE_ACK) {
+        PRINTLOG(NETWORK, LOG_ERROR, "dhcp packet is not offer or ack");
         return NULL;
     }
 
@@ -123,13 +127,23 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
     network_dhcpv4_opcode_t type = 0;
 
+    network_ipv4_address_t server_ip = {0};
+    boolean_t server_is_is_from_option = false;
+
     uint8_t* options = recv_dhcpv4_packet->options;
     uint16_t idx = 0;
 
     while(options[idx] != NETWORK_DHCPV4_OPTION_END) {
         if(options[idx] == NETWORK_DHCPV4_OPTION_MESSAGETYPE) {
             type = options[idx + 2];
-            break;
+        } else if(options[idx] == NETWORK_DHCPV4_OPTION_SERVERIP) {
+            memory_memcopy(&options[idx + 2], server_ip.as_bytes, sizeof(network_ipv4_address_t));
+            PRINTLOG(NETWORK, LOG_TRACE, "dhcp server ip at option %i.%i.%i.%i",
+                     server_ip.as_bytes[0],
+                     server_ip.as_bytes[1],
+                     server_ip.as_bytes[2],
+                     server_ip.as_bytes[3]);
+            server_is_is_from_option = true;
         }
 
         idx += options[idx + 1] + 2;
@@ -146,8 +160,23 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
     }
 
     if(type == NETWORK_DHCPV4_OPCODE_OFFER) {
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp offer recevied");
         ni->ipv4_address = recv_dhcpv4_packet->your_ip;
-        ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        PRINTLOG(NETWORK, LOG_INFO, "offered ipaddr %i.%i.%i.%i",
+                 ni->ipv4_address.as_bytes[0],
+                 ni->ipv4_address.as_bytes[1],
+                 ni->ipv4_address.as_bytes[2],
+                 ni->ipv4_address.as_bytes[3]);
+        if(server_is_is_from_option) {
+            ni->ipv4_dhcpserver = server_ip;
+        } else {
+            ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        }
+        PRINTLOG(NETWORK, LOG_INFO, "by dhcp server ipaddr %i.%i.%i.%i",
+                 ni->ipv4_dhcpserver.as_bytes[0],
+                 ni->ipv4_dhcpserver.as_bytes[1],
+                 ni->ipv4_dhcpserver.as_bytes[2],
+                 ni->ipv4_dhcpserver.as_bytes[3]);
 
         uint16_t dhcp_packet_len = 0;
         network_dhcpv4_t* dhcp_packet = network_dhcpv4_create_request_packet(ni, recv_dhcpv4_packet->xid, &dhcp_packet_len);
@@ -192,9 +221,15 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
 
         uint16_t tl = BYTE_SWAP16(ip->total_length);
 
+        boolean_t need_vlan_frame = false;
+
+        if(!ni->has_hw_vlan_support && ni->is_vlan_tagged) {
+            need_vlan_frame = true;
+        }
+
         uint8_t* eth = network_ethernet_create_packet_with_vlan_tag(BROADCAST_MAC, network_info,
                                                                     NETWORK_PROTOCOL_IPV4,
-                                                                    ni->is_vlan_tagged, ni->vlan_id,
+                                                                    need_vlan_frame, ni->vlan_id,
                                                                     tl, (uint8_t*)ip);
 
         network_transmit_packet_t* res = memory_malloc_ext(list_get_heap(ni->return_queue), sizeof(network_transmit_packet_t), 0);
@@ -207,7 +242,7 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
             return NULL;
         }
 
-        uint32_t eth_packet_size = ni->is_vlan_tagged ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
+        uint32_t eth_packet_size = need_vlan_frame ? sizeof(network_ethernet_with_vlan_t) : sizeof(network_ethernet_t);
 
         res->packet_len = eth_packet_size + tl;
 
@@ -227,48 +262,68 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         memory_free(eth);
 
         res->packet_data = packet_data;
+        res->is_vlan_tagged = ni->is_vlan_tagged;
+        res->vlan_id = ni->vlan_id;
 
-        list_queue_push(ni->return_queue, res);
+        if(list_queue_push(ni->return_queue, res) == -1ULL) {
+            PRINTLOG(NETWORK, LOG_ERROR, "failed to push packet to return queue");
 
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp request is send");
+            memory_free_ext(list_get_heap(ni->return_queue), packet_data);
+            memory_free_ext(list_get_heap(ni->return_queue), res);
+
+            return NULL;
+        } else {
+            PRINTLOG(NETWORK, LOG_TRACE, "packet pushed to return queue");
+        }
+
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp request sending...");
     } else if(type == NETWORK_DHCPV4_OPCODE_ACK) {
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp type is ack");
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp ack recevied");
 
         ni->ipv4_address = recv_dhcpv4_packet->your_ip;
-        PRINTLOG(NETWORK, LOG_TRACE, "ipaddr %i.%i.%i.%i",
+        PRINTLOG(NETWORK, LOG_INFO, "ipaddr %i.%i.%i.%i",
                  ni->ipv4_address.as_bytes[0],
                  ni->ipv4_address.as_bytes[1],
                  ni->ipv4_address.as_bytes[2],
                  ni->ipv4_address.as_bytes[3]);
-        ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        if(server_is_is_from_option) {
+            ni->ipv4_dhcpserver = server_ip;
+        } else {
+            ni->ipv4_dhcpserver = recv_dhcpv4_packet->server_ip;
+        }
+        PRINTLOG(NETWORK, LOG_INFO, "by dhcp server ipaddr %i.%i.%i.%i",
+                 ni->ipv4_dhcpserver.as_bytes[0],
+                 ni->ipv4_dhcpserver.as_bytes[1],
+                 ni->ipv4_dhcpserver.as_bytes[2],
+                 ni->ipv4_dhcpserver.as_bytes[3]);
 
         idx = 0;
 
         while(options[idx] != NETWORK_DHCPV4_OPTION_END) {
             if(options[idx] == NETWORK_DHCPV4_OPTION_SUBNETMASK) {
                 memory_memcopy(options + idx + 2, ni->ipv4_subnetmask.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "subnet %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "subnet %i.%i.%i.%i",
                          ni->ipv4_subnetmask.as_bytes[0],
                          ni->ipv4_subnetmask.as_bytes[1],
                          ni->ipv4_subnetmask.as_bytes[2],
                          ni->ipv4_subnetmask.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_ROUTER) {
                 memory_memcopy(options + idx + 2, ni->ipv4_gateway.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "gw %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "gw %i.%i.%i.%i",
                          ni->ipv4_gateway.as_bytes[0],
                          ni->ipv4_gateway.as_bytes[1],
                          ni->ipv4_gateway.as_bytes[2],
                          ni->ipv4_gateway.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_DOMAINNAMESERVER) {
                 memory_memcopy(options + idx + 2, ni->ipv4_nameserver.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "ns %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "ns %i.%i.%i.%i",
                          ni->ipv4_nameserver.as_bytes[0],
                          ni->ipv4_nameserver.as_bytes[1],
                          ni->ipv4_nameserver.as_bytes[2],
                          ni->ipv4_nameserver.as_bytes[3]);
             } else if(options[idx] == NETWORK_DHCPV4_OPTION_BROADCAST) {
                 memory_memcopy(options + idx + 2, ni->ipv4_broadcast.as_bytes, sizeof(network_ipv4_address_t));
-                PRINTLOG(NETWORK, LOG_TRACE, "bcast %i.%i.%i.%i",
+                PRINTLOG(NETWORK, LOG_INFO, "bcast %i.%i.%i.%i",
                          ni->ipv4_broadcast.as_bytes[0],
                          ni->ipv4_broadcast.as_bytes[1],
                          ni->ipv4_broadcast.as_bytes[2],
@@ -297,7 +352,7 @@ uint8_t* network_dhcpv4_process_packet(network_dhcpv4_t* recv_dhcpv4_packet, voi
         ni->is_ipv4_address_set = true;
         ni->is_ipv4_address_requested = false;
 
-        PRINTLOG(NETWORK, LOG_TRACE, "dhcp conf completed");
+        PRINTLOG(NETWORK, LOG_INFO, "dhcp conf completed");
     }
 
     return NULL;

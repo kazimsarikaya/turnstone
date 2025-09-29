@@ -41,9 +41,10 @@
 #define RTL815X_PLA_RSTTALLY        0xe800
 #define RTL815X_PLA_CR              0xe813
 #define RTL815X_PLA_PHY_PWR         0xe84c
-#define RTL815X_PLA_OCP_GPHY_BASE   0xe86c
 #define RTL815X_PLA_OOB_CTRL        0xe84f
 #define RTL815X_PLA_CPCR            0xe854
+#define RTL815X_PLA_OCP_GPHY_BASE   0xe86c
+#define RTL815X_PLA_TALLY_CNT       0xe890
 #define RTL815X_PLA_PHYSTATUS       0xe908
 
 #define RTL815X_USB_CSR_DUMMY1          0xb464
@@ -131,11 +132,12 @@
 #define RTL815X_NOW_IS_OOB         0x0080
 #define RTL815X_LINK_LIST_READY    0x0002
 
-#define RTL815X_BYTE_EN_START_MASK 0x000f
-#define RTL815X_BYTE_EN_END_MASK   0x00f0
-#define RTL815X_BYTEN_EN_BYTE      0x11
-#define RTL815X_BYTEN_EN_WORD      0x33
-#define RTL815X_BYTEN_EN_DWORD     0xff
+#define RTL815X_BYTE_EN_START_MASK  0x000f
+#define RTL815X_BYTE_EN_END_MASK    0x00f0
+#define RTL815X_BYTE_EN_BYTE        0x11
+#define RTL815X_BYTE_EN_WORD        0x33
+#define RTL815X_BYTE_EN_SIX_BYTES   0x3f
+#define RTL815X_BYTE_EN_DWORD       0xff
 
 #define RTL815X_MTPS_JUMBO      (12 * 1024 / 64)
 #define RTL815X_MTPS_DEFAULT    (6 * 1024 / 64)
@@ -181,6 +183,8 @@
 /* USB_WDT11_CTRL */
 #define RTL815X_TIMER11_EN          0x0001
 
+/* PLA_RSTTALLY */
+#define RTL815X_TALLY_RESET         0x0001
 
 #ifdef __cplusplus
 extern "C" {

@@ -16,6 +16,7 @@
 #include <memory/frame.h>
 #include <windowmanager.h>
 #include <stdbufs.h>
+#include <device/event.h>
 #include <device/mouse.h>
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
@@ -32,9 +33,6 @@ MODULE("turnstone.user.programs.shell");
 
 int32_t shell_main(int32_t argc, char* argv[]);
 int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffer);
-
-buffer_t* shell_buffer = NULL;
-buffer_t* mouse_buffer = NULL;
 
 static int8_t shell_handle_module_command(char_t* arguments) {
     argument_parser_t parser = {arguments, 0};
@@ -290,8 +288,8 @@ int8_t  shell_process_command(buffer_t* command_buffer, buffer_t* argument_buffe
         printf("\t%04i-%02i-%02i %02i:%02i:%02i\n", tp.year, tp.month, tp.day, tp.hours, tp.minutes, tp.seconds);
 
         res = 0;
-    } else if(strcmp(command, "usbprobe") == 0) {
-        res = usb_probe_all_devices_all_ports();
+    } else if(strcmp(command, "usbreset") == 0) {
+        res = usb_reset_all_devices_all_ports();
     } else if(strcmp(command, "free") == 0) {
         printf("\tfree frames: 0x%llx\n\tallocated frames: 0x%llx\n\ttotal frames: 0x%llx\n",
                frame_get_allocator()->get_free_frame_count(frame_get_allocator()),
@@ -377,7 +375,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
 
     task_set_interruptible();
 
-    shell_buffer = buffer_new_with_capacity(NULL, 4100);
+    kbd_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* command_buffer = buffer_new_with_capacity(NULL, 4096);
     buffer_t* argument_buffer = buffer_new_with_capacity(NULL, 4096);
@@ -389,7 +387,7 @@ int32_t shell_main(int32_t argc, char* argv[]) {
         uint64_t mouse_length = 0;
         uint32_t mouse_ev_cnt = 0;
 
-        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(shell_buffer, &kbd_length);
+        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
         mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
         if(kbd_length == 0 && mouse_length == 0) {

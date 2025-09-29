@@ -445,7 +445,13 @@ int8_t kmain64(size_t entry_point) {
         PRINTLOG(KERNEL, LOG_INFO, "BootCurrent %i", boot_order_idx);
     }
 
-    PRINTLOG(KERNEL, LOG_INFO, "smbios version 0x%llx smbios data address 0x%p", SYSTEM_INFO->smbios_version, SYSTEM_INFO->smbios_table);
+    if(SYSTEM_INFO->smbios_table_v2) {
+        PRINTLOG(KERNEL, LOG_INFO, "smbios v2 table at 0x%p", SYSTEM_INFO->smbios_table_v2);
+    }
+
+    if(SYSTEM_INFO->smbios_table_v3) {
+        PRINTLOG(KERNEL, LOG_INFO, "smbios v3 table at 0x%p", SYSTEM_INFO->smbios_table_v3);
+    }
 
     hello_world_cpp_test();
 

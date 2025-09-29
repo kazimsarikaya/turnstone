@@ -108,9 +108,7 @@ typedef struct usb_audio_channel_volume_t {
 } usb_audio_channel_volume_t;
 
 typedef struct usb_driver_t {
-    usb_device_t*                        usb_device;
-    usb_interface_t*                     interface;
-    usb_pipeline_callback_f              pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS;
     usb_audio_driver_type_t              driver_type;
     int32_t                              num_channels;
     boolean_t                            is_muted;
@@ -120,7 +118,8 @@ typedef struct usb_driver_t {
     usb_audio_ac_feature_unit_desc_t*    feature_unit;
 } usb_driver_t;
 
-
+static int16_t* usb_audio_beep = NULL;
+static size_t usb_audio_beep_samples = 0;
 
 int8_t usb_audio_control_init(usb_device_t* device, usb_interface_t* interface) {
     if(!device || !interface || !interface->desc) {
@@ -356,27 +355,32 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
 
     interface->driver = driver;
 
-    size_t samples = 0;
-    int16_t* beep = usb_audio_generate_beep(440.0, 1000, 100000, 48000, &samples);
+    if(!usb_audio_beep) {
+        usb_audio_beep = usb_audio_generate_beep(440.0, 1000, 100000, 48000, &usb_audio_beep_samples);
+
+        if(!usb_audio_beep) {
+            PRINTLOG(USB, LOG_ERROR, "cannot generate beep sound");
+            memory_free(driver);
+            interface->driver = NULL;
+            return -1;
+        }
+    }
 
     usb_transfer_t ut = {0};
 
     ut.driver = driver;
     ut.endpoint = interface->endpoints[0];
-    ut.length = samples * 2 * sizeof(int16_t);
-    ut.data = (uint8_t*)beep;
+    ut.length = usb_audio_beep_samples * 2 * sizeof(int16_t);
+    ut.data = (uint8_t*)usb_audio_beep;
     ut.is_async = true;
     ut.is_isochronous = true;
 
     if(device->controller->data_transfer(device->controller, &ut) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send beep data to audio device");
-        memory_free(beep);
         memory_free(driver);
         interface->driver = NULL;
         return -1;
     }
-
-    // memory_free(beep);
 
     PRINTLOG(USB, LOG_INFO, "audio streaming device initialized");
 

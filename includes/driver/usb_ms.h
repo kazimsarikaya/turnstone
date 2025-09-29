@@ -29,13 +29,23 @@ disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_ms, uint8_t lun);
 #define USB_MS_FLAG_DATA_IN  0x80
 #define USB_MS_FLAG_NO_DATA  0x00
 
+#define USB_MS_COMMON_FIELDS \
+        uint32_t expected_packet_size; \
+        uint64_t id; \
+        boolean_t is_uas; \
+        boolean_t command_size_16_supported; \
+        uint32_t max_lun; \
+        uint64_t lba_count; \
+        uint32_t block_size; \
+        scsi_standard_inquiry_data_t* inquiry_data;
+
+
 boolean_t usb_ms_read_write(usb_driver_t* usb_driver, boolean_t read, uint32_t dtl, uint8_t* data);
 boolean_t usb_ms_send_command(usb_driver_t* usb_driver, uint32_t dtl, uint8_t flags, uint8_t lun, uint8_t command_length, uint8_t* command);
 boolean_t usb_ms_get_status(usb_driver_t* usb_driver);
 
 int8_t usb_ms_inquiry(usb_driver_t* usb_ms);
 int8_t usb_ms_sense(usb_driver_t* usb_ms, scsi_sense_data_t* sense);
-int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms);
 int8_t usb_ms_test_unit_ready_with_retry(usb_driver_t* usb_ms);
 
 

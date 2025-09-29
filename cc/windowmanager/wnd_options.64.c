@@ -301,8 +301,7 @@ static int8_t wndmgr_options_on_enter(const window_event_t* event) {
         window_t* next_window = windowmanager_create_options_window(item->next_options_window);
 
         if(next_window) {
-            window_t* next = windowmanager_create_options_window(item->next_options_window);
-            windowmanager_insert_and_set_current_window(next);
+            windowmanager_insert_and_set_current_window(next_window);
             ret = 0;
         }
     } else if(item->action) {

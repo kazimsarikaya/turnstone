@@ -12,9 +12,7 @@
 MODULE("turnstone.kernel.hw.usb");
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS;
 } usb_driver_t;
 
 int8_t usb_vendor_read(usb_driver_t* usb_driver,

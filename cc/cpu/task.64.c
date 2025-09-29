@@ -205,6 +205,8 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     uint32_t cpu_count = apic_get_ap_count() + 1;
 
+    PRINTLOG(TASKING, LOG_INFO, "cpu count 0x%x", cpu_count);
+
     task_queue_and_cleanup_heaps = memory_malloc_ext(heap, sizeof(memory_heap_t*) * cpu_count, 0x0);
     task_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
     task_sleep_queues = memory_malloc_ext(heap, sizeof(list_t*) * cpu_count, 0x0);
@@ -234,13 +236,49 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
             return -1;
         }
 
-        PRINTLOG(TASKING, LOG_INFO, "cpu 0x%x task related heap 0x%p", i, task_related_heap);
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task related heap 0x%p", i, task_related_heap);
 
         task_queue_and_cleanup_heaps[i] = task_related_heap;
+
         task_queues[i] = list_create_queue_with_heap(task_related_heap);
+
+        if(task_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task queue 0x%p", i, task_queues[i]);
+
         task_sleep_queues[i] = list_create_sortedlist_with_heap(task_related_heap, &task_sleep_queue_comparator);
+
+        if(task_sleep_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task sleep queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task sleep queue 0x%p", i, task_sleep_queues[i]);
+
         task_wait_queues[i] = list_create_queue_with_heap(task_related_heap);
+
+        if(task_wait_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task wait queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task wait queue 0x%p", i, task_wait_queues[i]);
+
         task_cleanup_queues[i] = list_create_queue_with_heap(task_related_heap);
+
+        if(task_cleanup_queues[i] == NULL) {
+            PRINTLOG(TASKING, LOG_FATAL, "cannot create task cleanup queue");
+
+            return -1;
+        }
+
+        PRINTLOG(TASKING, LOG_DEBUG, "cpu 0x%x task cleanup queue 0x%p", i, task_cleanup_queues[i]);
     }
 
     {
@@ -267,7 +305,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
         task_map_heap = task_related_heap;
 
-        PRINTLOG(TASKING, LOG_INFO, "task map heap 0x%p", task_map_heap);
+        PRINTLOG(TASKING, LOG_DEBUG, "task map heap 0x%p", task_map_heap);
     }
 
 
@@ -396,7 +434,8 @@ int8_t task_set_current_and_idle_task(void* entry_point, uint64_t stack_base, ui
 
     uint32_t apic_id = apic_get_local_apic_id();
 
-    if(task_queues[apic_id] == NULL || task_cleanup_queues[apic_id] == NULL) {
+    if(task_queues[apic_id] == NULL || task_cleanup_queues[apic_id] == NULL ||
+       task_sleep_queues[apic_id] == NULL || task_wait_queues[apic_id] == NULL) {
         PRINTLOG(TASKING, LOG_FATAL, "task queues for apic id %d are null", apic_id);
 
         return -1;
@@ -674,10 +713,21 @@ task_t* task_find_next_task(void) {
     task_t* tmp_task = NULL;
 
     if(list_size(cpu_state->task_sleep_queue)) {
-        task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, 0);
+        for(uint64_t i = 0; i < list_size(cpu_state->task_sleep_queue); i++) {
+            task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, i);
 
-        if(t->wake_tick < time_timer_get_tick_count()) {
-            tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, 0);
+            if(t->state == TASK_STATE_ENDED) {
+                tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, i);
+                break;
+            }
+        }
+
+        if(!tmp_task && list_size(cpu_state->task_sleep_queue)) {
+            task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, 0);
+
+            if(t->wake_tick < time_timer_get_tick_count()) {
+                tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, 0);
+            }
         }
     }
 
@@ -689,9 +739,22 @@ task_t* task_find_next_task(void) {
 
             if(t->state == TASK_STATE_FUTURE_WAITING) {
                 continue;
-            } else if(t->state == TASK_STATE_INTERRUPT_RECEIVED) {
-                found_index = i;
-                break;
+            } else if(t->attributes & TASK_ATTRIBUTE_INTERRUPTIBLE) {
+                if(t->state == TASK_STATE_INTERRUPT_RECEIVED) {
+                    found_index = i;
+                    break;
+                }
+
+
+                if(t->interrupt_receive_workaround) {
+                    uint64_t current_tick = rdtsc();
+
+                    if((t->last_tick_count + t->interrupt_receive_workaround_max_tick_count) < current_tick) {
+                        found_index = i;
+                        break;
+                    }
+                }
+
             } else if(t->state == TASK_STATE_MESSAGE_WAITING) {
                 if(t->message_queues) {
                     for(uint64_t q_idx = 0; q_idx < list_size(t->message_queues); q_idx++) {
@@ -711,6 +774,9 @@ task_t* task_find_next_task(void) {
                     }
                 }
 
+            } else if(t->state == TASK_STATE_ENDED) {
+                found_index = i;
+                break;
             } else { // wait status cleared task
                 if(t->state != TASK_STATE_SUSPENDED) {
                     video_text_print("task_find_next_task: task state is not suspended: 0x");
@@ -735,6 +801,15 @@ task_t* task_find_next_task(void) {
     }
 
     if(!tmp_task) {
+        tmp_task = (task_t*)cpu_state->idle_task;
+    }
+
+    if(!tmp_task->registers) {
+        video_text_print("task_find_next_task: task registers null : 0x");
+        char_t buf[32] = {0};
+        utoh_with_buffer(buf, (uintptr_t)tmp_task);
+        video_text_print(buf);
+        video_text_print("\n");
         tmp_task = (task_t*)cpu_state->idle_task;
     }
 
@@ -888,6 +963,8 @@ void task_end_task(void) {
         PRINTLOG(TASKING, LOG_INFO, "starting task %s with pid 0x%llx on cpu 0x%llx",
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id);
         ret = entry_point(current_task->arguments_count, current_task->arguments);
+    } if(current_task->state == TASK_STATE_RUNNING) {
+        ret = current_task->exit_code;
     } else {
         PRINTLOG(TASKING, LOG_WARNING, "ending task %s with pid 0x%llx on cpu 0x%llx that is not in starting state but in state 0x%x",
                  current_task->task_name, current_task->task_id, cpu_state->local_apic_id, current_task->state);
@@ -917,6 +994,7 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
 
     if(task == NULL) {
         PRINTLOG(TASKING, LOG_WARNING, "task 0x%llx not found", task_id);
+
         return;
     }
 
@@ -928,29 +1006,9 @@ void task_kill_task(uint64_t task_id, boolean_t force) {
         return;
     }
 
-    if(task->vmcs_physical_address) {
-        if(cpu_get_type() == CPU_TYPE_INTEL) {
-            if(vmx_vmclear(task->vmcs_physical_address) != 0) {
-                PRINTLOG(TASKING, LOG_ERROR, "vmclear failed for task 0x%llx", task->task_id);
-            }
-        }  else if(cpu_get_type() == CPU_TYPE_AMD) {
-
-        }
-    }
-
-    if(task->state == TASK_STATE_SLEEPING) {
-        list_list_delete(cpu_state->task_sleep_queue, task);
-        list_queue_push(cpu_state->task_queue, task);
-    } else if(task->state == TASK_STATE_FUTURE_WAITING ||
-              task->state == TASK_STATE_INTERRUPT_RECEIVED ||
-              task->state == TASK_STATE_MESSAGE_WAITING) {
-        list_list_delete(cpu_state->task_wait_queue, task);
-        list_queue_push(cpu_state->task_queue, task);
-    }
+    PRINTLOG(TASKING, LOG_INFO, "killing task 0x%llx (0x%p) state: %d", task->task_id, task, task->state);
 
     task->state = TASK_STATE_ENDED;
-
-    PRINTLOG(TASKING, LOG_INFO, "task 0x%llx will be ended", task->task_id);
 }
 
 uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stack_size, void* entry_point, uint64_t args_cnt, void** args, const char_t* task_name) {
@@ -1091,11 +1149,11 @@ uint64_t task_create_task(memory_heap_t* heap, uint64_t heap_size, uint64_t stac
     list_t* min_queue = NULL;
 
     for(uint64_t i = 0; i < cpu_count; i++) {
-        list_t* queue = task_queues[i];
+        size_t task_count = list_size(task_queues[i]) + list_size(task_sleep_queues[i]) + list_size(task_wait_queues[i]);
 
-        if(list_size(queue) < min_queue_size) {
-            min_queue_size = list_size(queue);
-            min_queue = queue;
+        if(task_count < min_queue_size) {
+            min_queue_size = task_count;
+            min_queue = task_queues[i];
             new_task->cpu_id = i;
         }
     }
@@ -1254,6 +1312,8 @@ int8_t task_create_idle_task(void) {
 
     hashmap_put(task_map, (void*)new_task->task_id, new_task);
 
+    PRINTLOG(TASKING, LOG_INFO, "created idle task %s 0x%llx 0x%p stack at 0x%llx-0x%llx on cpu 0x%llx", new_task->task_name, new_task->task_id, new_task, registers->rsp, registers->rbp, new_task->cpu_id);
+
     return 0;
 }
 #pragma GCC diagnostic pop
@@ -1283,7 +1343,17 @@ int8_t task_task_switch_isr(interrupt_frame_ext_t* frame) {
 }
 
 void task_remove_task_after_fault(uint64_t task_id) {
+    if(task_id == 0) {
+        PRINTLOG(TASKING, LOG_ERROR, "task_remove_task_after_fault: task id is 0");
+        return;
+    }
+
     task_t* task = (task_t*)hashmap_get(task_map, (void*)task_id);
+
+    if(task == NULL) {
+        PRINTLOG(TASKING, LOG_ERROR, "task_remove_task_after_fault: task 0x%llx not found", task_id);
+        return;
+    }
 
     char_t task_id_buf[100] = {0};
     utoh_with_buffer(task_id_buf, task_id);
@@ -1311,6 +1381,11 @@ void task_remove_task_after_fault(uint64_t task_id) {
 
     cpu_state->current_task = current_task;
     current_task->state = TASK_STATE_RUNNING;
+
+    PRINTLOG(TASKING, LOG_WARNING, "switching to %s task 0x%p (0x%p) 0x%llx on cpu 0x%llx",
+             current_task->task_name,
+             current_task, cpu_state->idle_task,
+             current_task->task_id, cpu_state->local_apic_id);
 
     task_load_registers(current_task->registers);
 

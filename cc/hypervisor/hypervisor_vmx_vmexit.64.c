@@ -572,7 +572,7 @@ static uint64_t hypervisor_vmcs_interrupt_window_handler(vmx_vmcs_vmexit_info_t*
         if(vm->need_to_notify) { // if there is an interrupt need_to_notify still true
             uint32_t interrupt_info = 0;
             interrupt_info = vm->lapic.in_service_vector & 0xFF;
-            interrupt_info |= (1 << 31); // valid
+            interrupt_info |= BIT(31); // valid
 
             if(vm->lapic.in_service_vector >= 0x20) {
                 interrupt_info |= (0 << 8); // type

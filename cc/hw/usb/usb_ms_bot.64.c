@@ -39,23 +39,14 @@ typedef struct usb_mass_storage_csw_t {
 } __attribute__((packed)) usb_mass_storage_csw_t;
 
 typedef struct usb_driver_t {
-    usb_device_t *                device;
-    usb_interface_t*              interface;
-    usb_pipeline_callback_f       pipeline_callback;
-    uint32_t                      expected_packet_size;
-    uint64_t                      id;
-    boolean_t                     is_uas;
-    boolean_t                     command_size_16_supported;
-    uint32_t                      max_lun;
-    uint64_t                      lba_count;
-    uint32_t                      block_size;
-    scsi_standard_inquiry_data_t* inquiry_data;
-    usb_config_t*                 config;
-    uint8_t                       interface_number;
-    uint8_t                       in_endpoint;
-    uint8_t                       out_endpoint;
-    uint32_t                      command_tag;
-    lock_t*                       lock;
+    USB_DRIVER_COMMON_FIELDS;
+    USB_MS_COMMON_FIELDS;
+    usb_config_t* config;
+    uint8_t       interface_number;
+    uint8_t       in_endpoint;
+    uint8_t       out_endpoint;
+    uint32_t      command_tag;
+    lock_t*       lock;
 } usb_driver_t;
 
 
@@ -81,7 +72,7 @@ boolean_t usb_ms_bulk_only_read_write(usb_driver_t* usb_driver, boolean_t read, 
     ut.data = data;
     ut.stream_id = stream_id;
 
-    int8_t res =  usb_driver->device->controller->data_transfer(usb_driver->device->controller, &ut);
+    int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot %s from mass storage device", read ? "read" : "write");
@@ -115,7 +106,7 @@ boolean_t usb_ms_bulk_only_send_command(usb_driver_t* usb_driver, uint32_t dtl, 
     ut.length = sizeof(usb_mass_storage_cbw_t);
     ut.data = (uint8_t*)&cbw;
 
-    int8_t res =  usb_driver->device->controller->data_transfer(usb_driver->device->controller, &ut);
+    int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send command to mass storage device");
@@ -137,7 +128,7 @@ boolean_t usb_ms_bulk_only_get_status(usb_driver_t* usb_driver) {
     ut.length = sizeof(usb_mass_storage_csw_t);
     ut.data = (uint8_t*)&csw;
 
-    int8_t res =  usb_driver->device->controller->data_transfer(usb_driver->device->controller, &ut);
+    int8_t res =  usb_driver->usb_device->controller->data_transfer(usb_driver->usb_device->controller, &ut);
 
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot get status from mass storage device");
@@ -182,8 +173,7 @@ boolean_t usb_ms_bulk_only_get_status(usb_driver_t* usb_driver) {
     return true;
 }
 
-usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* interface)
-{
+usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* interface) {
     usb_driver_t* usb_ms = memory_malloc(sizeof(usb_driver_t));
 
     if (!usb_ms) {
@@ -192,7 +182,7 @@ usb_driver_t* usb_ms_bulk_only_init(usb_device_t * usb_device, usb_interface_t* 
         return NULL;
     }
 
-    usb_ms->device = usb_device;
+    usb_ms->usb_device = usb_device;
     usb_ms->interface = interface;
     interface->driver = usb_ms;
 

@@ -44,15 +44,12 @@ _Static_assert(sizeof(usb_mouse_report_t) == 4, "usb_mouse_report_t is not 4 byt
 _Static_assert(sizeof(usb_qemu_tablet_report_t) == 6, "usb_qemu_tablet_report_t is not 6 bytes");
 
 typedef struct usb_driver_t {
-    usb_device_t*            usb_device;
-    usb_interface_t*         interface;
-    usb_pipeline_callback_f  pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS;
     uint32_t                 expected_packet_size;
     usb_mouse_report_t       old_usb_mouse_report;
     usb_mouse_report_t       new_usb_mouse_report;
     usb_qemu_tablet_report_t old_usb_qemu_tablet_report;
     usb_qemu_tablet_report_t new_usb_qemu_tablet_report;
-    usb_transfer_t*          usb_transfer;
     uint32_t                 max_packet_size;
 } usb_driver_t;
 
@@ -152,28 +149,15 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
 
     usb_mouse->usb_device = usb_device;
     interface->driver = usb_mouse;
-
-    usb_mouse->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
-
-    if(!usb_mouse->usb_transfer) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for usb transfer");
-        memory_free(usb_mouse);
-
-        return -1;
-    }
-
-    usb_mouse->usb_transfer->driver = usb_mouse;
     usb_mouse->interface = interface;
-    usb_mouse->usb_transfer->endpoint = interface->endpoints[0];
 
-    usb_mouse->max_packet_size = usb_mouse->usb_transfer->endpoint->desc->max_packet_size;
+    usb_mouse->max_packet_size = interface->endpoints[0]->desc->max_packet_size;
     usb_mouse->expected_packet_size = sizeof(usb_mouse_report_t);
 
     pipeline_t* pipeline = pipeline_create(usb_mouse->expected_packet_size * 1024);
 
     if(!pipeline) {
         PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
-        memory_free(usb_mouse->usb_transfer);
         memory_free(usb_mouse);
 
         return -1;
@@ -183,10 +167,9 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
                            interface,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_PIPELINE,
-                           usb_mouse->expected_packet_size, usb_mouse->usb_transfer->endpoint->desc->endpoint_address,
+                           usb_mouse->expected_packet_size, interface->endpoints[0]->desc->endpoint_address,
                            0, pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
-        memory_free(usb_mouse->usb_transfer);
         memory_free(usb_mouse);
 
 
@@ -200,19 +183,15 @@ int8_t usb_mouse_init(usb_device_t* usb_device, usb_interface_t* interface) {
                             USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_IDLE,
                             0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
-        memory_free(usb_mouse->usb_transfer);
         memory_free(usb_mouse);
 
         return -1;
     }
 
     if(usb_device->controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
-        memory_free(usb_mouse->usb_transfer);
-        usb_mouse->usb_transfer = NULL;
         usb_mouse->pipeline_callback = usb_mouse_pipeline_callback;
     } else {
         PRINTLOG(USB, LOG_ERROR, "unknown controller type %d", usb_device->controller->controller_type);
-        memory_free(usb_mouse->usb_transfer);
         memory_free(usb_mouse);
 
         return -1;
@@ -237,26 +216,13 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
     usb_qemu_tablet->interface = interface;
     interface->driver = usb_qemu_tablet;
 
-    usb_qemu_tablet->usb_transfer = memory_malloc(sizeof(usb_transfer_t));
-
-    if(!usb_qemu_tablet->usb_transfer) {
-        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for usb transfer");
-        memory_free(usb_qemu_tablet);
-
-        return -1;
-    }
-
-    usb_qemu_tablet->usb_transfer->driver = usb_qemu_tablet;
-    usb_qemu_tablet->usb_transfer->endpoint = interface->endpoints[0];
-
-    usb_qemu_tablet->max_packet_size = usb_qemu_tablet->usb_transfer->endpoint->desc->max_packet_size;
+    usb_qemu_tablet->max_packet_size = interface->endpoints[0]->desc->max_packet_size;
     usb_qemu_tablet->expected_packet_size = sizeof(usb_qemu_tablet_report_t);
 
     pipeline_t* pipeline = pipeline_create(usb_qemu_tablet->expected_packet_size * 1024);
 
     if(!pipeline) {
         PRINTLOG(USB, LOG_ERROR, "cannot create pipeline");
-        memory_free(usb_qemu_tablet->usb_transfer);
         memory_free(usb_qemu_tablet);
 
         return -1;
@@ -266,10 +232,9 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
                            interface,
                            USB_REQUEST_TYPE_STANDARD, USB_REQUEST_RECIPIENT_ENDPOINT,
                            USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_ENDPOINT_SETUP_PIPELINE,
-                           usb_qemu_tablet->expected_packet_size, usb_qemu_tablet->usb_transfer->endpoint->desc->endpoint_address,
+                           usb_qemu_tablet->expected_packet_size, interface->endpoints[0]->desc->endpoint_address,
                            0, pipeline)) {
         PRINTLOG(USB, LOG_ERROR, "cannot setup endpoint pipeline");
-        memory_free(usb_qemu_tablet->usb_transfer);
         memory_free(usb_qemu_tablet);
 
 
@@ -283,19 +248,15 @@ int8_t usb_qemu_tablet_init(usb_device_t* usb_device, usb_interface_t* interface
                             USB_REQUEST_DIRECTION_HOST_TO_DEVICE, USB_REQUEST_SET_IDLE,
                             0, interface->desc->interface_number, 0, NULL)) {
         PRINTLOG(USB, LOG_ERROR, "cannot set idle");
-        memory_free(usb_qemu_tablet->usb_transfer);
         memory_free(usb_qemu_tablet);
 
         return -1;
     }
 
     if(usb_device->controller->controller_type == USB_CONTROLLER_TYPE_XHCI) {
-        memory_free(usb_qemu_tablet->usb_transfer);
-        usb_qemu_tablet->usb_transfer = NULL;
         usb_qemu_tablet->pipeline_callback = usb_qemu_tablet_pipeline_callback;
     } else {
         PRINTLOG(USB, LOG_ERROR, "unknown controller type %d", usb_device->controller->controller_type);
-        memory_free(usb_qemu_tablet->usb_transfer);
         memory_free(usb_qemu_tablet);
 
         return -1;

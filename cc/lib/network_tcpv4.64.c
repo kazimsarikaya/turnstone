@@ -595,7 +595,7 @@ uint8_t* network_tcpv4_process_packet(network_ipv4_address_t dip, network_ipv4_a
     uint8_t* data = (uint8_t*)recv_tcpv4_packet;
     data += header_length;
 
-    PRINTLOG(NETWORK, LOG_INFO, "Data(%i): %s", data_length, data);
+    PRINTLOG(NETWORK, LOG_INFO, "Data(%i):\n---\n%*s\n---", data_length, data_length, data);
 
     // send ACK
 

@@ -9,7 +9,7 @@
 #include <driver/usb.h>
 #include <driver/usb_xhci.h>
 #include <driver/usb_vendor.h>
-#include <hashmap.h>
+#include <list.h>
 #include <logging.h>
 #include <time/timer.h>
 #include <strings.h>
@@ -17,12 +17,10 @@
 
 MODULE("turnstone.kernel.hw.usb");
 
-hashmap_t* usb_devices = NULL;
+static list_t* usb_devices = NULL;
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
+    USB_DRIVER_COMMON_FIELDS;
 } usb_driver_t;
 
 static void usb_device_print_desc(usb_device_t* usb_device) {
@@ -182,7 +180,7 @@ static void usb_device_free(usb_device_t* usb_device) {
         return;
     }
 
-    hashmap_delete(usb_devices, (void*)usb_device->device_id);
+    list_list_delete(usb_devices, usb_device);
 
     if(usb_device->serial) {
         memory_free(usb_device->serial);
@@ -238,6 +236,14 @@ static void usb_device_free(usb_device_t* usb_device) {
                         memory_free(interface->endpoints);
                     }
 
+                    if(interface->driver) {
+                        if(interface->driver->free) {
+                            interface->driver->free(interface->driver);
+                        } else {
+                            memory_free(interface->driver);
+                        }
+                    }
+
                     memory_free(interface);
                 }
 
@@ -261,6 +267,8 @@ static void usb_device_free(usb_device_t* usb_device) {
     }
 
     memory_free(usb_device);
+
+    PRINTLOG(USB, LOG_DEBUG, "usb device freed");
 }
 
 static int8_t usb_device_get_descriptor_strings(usb_device_t* usb_device) {
@@ -520,7 +528,7 @@ static uint32_t usb_device_parse_endpoints_of_interface(usb_config_t* config, us
 
         // maybe there is a endpoint companion descriptor
         if(tmp_type == USB_ENDPOINT_COMPANION_DESC_TYPE) {
-            PRINTLOG(USB, LOG_TRACE, "endpoint companion descriptor for endpoint address 0x%x",
+            PRINTLOG(USB, LOG_DEBUG, "endpoint companion descriptor for endpoint address 0x%x",
                      endpoint->desc->endpoint_address);
             endpoint->endpoint_companion = (usb_endpoint_companion_desc_t*)(config->config_buffer + idx);
             idx += tmp_length;
@@ -602,12 +610,44 @@ static uint32_t usb_device_count_real_interfaces(usb_config_t* config) {
     return interface_count;
 }
 
+int8_t usb_device_deinit(usb_device_t* parent, usb_controller_t* controller, uint32_t port) {
+    if(!usb_devices) {
+        PRINTLOG(USB, LOG_ERROR, "no usb devices");
+
+        return -1;
+    }
+
+
+    usb_device_t* usb_device = NULL;
+
+    for(size_t i = 0; i < list_size(usb_devices); i++) {
+        usb_device_t* dev = (usb_device_t*)list_get_data_at_position(usb_devices, i);
+
+        if(dev->parent == parent && dev->controller == controller && dev->port == port) {
+            usb_device = dev;
+            break;
+        }
+    }
+
+    if(!usb_device) {
+        PRINTLOG(USB, LOG_ERROR, "cannot find usb device for controller 0x%p port %d", controller, port);
+
+        return -1;
+    }
+
+    usb_device_free(usb_device);
+
+    PRINTLOG(USB, LOG_DEBUG, "usb device deinitialized");
+
+    return 0;
+}
+
 int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint32_t port, uint32_t speed) {
     if(usb_devices == NULL) {
-        usb_devices = hashmap_integer(64);
+        usb_devices = list_create_list();
 
         if(!usb_devices) {
-            PRINTLOG(USB, LOG_ERROR, "cannot create hashmap");
+            PRINTLOG(USB, LOG_ERROR, "cannot create usb devices list");
 
             return -1;
         }
@@ -626,9 +666,21 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
     usb_device->controller = controller;
     usb_device->port = port;
     usb_device->speed = speed;
-    usb_device->device_id = hashmap_size(usb_devices);
 
-    hashmap_put(usb_devices, (void*)usb_device->device_id, usb_device);
+    uint64_t parent_device_id = 0;
+    uint64_t parent_port = 0;
+    if(parent) {
+        parent_device_id = parent->device_id;
+        parent_port = parent->port;
+    }
+
+    uint64_t controller_id = controller->controller_id;
+
+    uint64_t device_id = (parent_device_id << 32) | (controller_id << 16) | (parent_port << 8) | port;
+
+    usb_device->device_id = device_id;
+
+    list_list_insert(usb_devices, usb_device);
 
     if(!usb_device_request(usb_device,
                            NULL,
@@ -641,8 +693,6 @@ int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint3
 
         return -1;
     }
-
-    // usb_device->address = usb_device->device_id + 1;
 
     PRINTLOG(USB, LOG_DEBUG, "device address: %x", usb_device->address);
 

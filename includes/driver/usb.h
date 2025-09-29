@@ -161,6 +161,11 @@ typedef struct usb_endpoint_desc_t {
     uint8_t  interval;
 }__attribute__((packed)) usb_endpoint_desc_t;
 
+#define USB_ENDPOINT_DIRECTION_IS_IN(a) (((a) & 0x80) != 0)
+#define USB_ENDPOINT_DIRECTION_IS_OUT(a) (((a) & 0x80) == 0)
+#define USB_ENDPOINT_TYPE_BULK 0x02
+#define USB_ENDPOINT_TYPE_INTERRUPT 0x03
+
 typedef struct usb_hub_desc_t {
     uint8_t  length;
     uint8_t  type;
@@ -254,9 +259,9 @@ typedef enum usb_request_interface_t {
 } usb_request_interface_t;
 
 typedef enum usb_request_endpoint_t {
-    USB_ENDPOINT_SETUP_ENDPOINT = 0x01,
-    USB_ENDPOINT_CLEAR_ENDPOINT = 0x02,
-    USB_ENDPOINT_SETUP_PIPELINE = 0x03,
+    USB_ENDPOINT_SETUP_ENDPOINT = 0x81,
+    USB_ENDPOINT_CLEAR_ENDPOINT = 0x82,
+    USB_ENDPOINT_SETUP_PIPELINE = 0x83,
 } usb_request_endpoint_t;
 
 typedef enum usb_standart_feature_selector_t {
@@ -302,6 +307,14 @@ typedef struct usb_endpoint_t                  usb_endpoint_t;
 typedef struct usb_device_controller_context_t usb_device_controller_context_t;
 
 typedef int8_t (*usb_pipeline_callback_f)(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline);
+typedef int8_t (*usb_driver_free_f)(usb_driver_t* driver);
+
+// usb_driver_fields.h
+#define USB_DRIVER_COMMON_FIELDS \
+        usb_device_t* usb_device; \
+        usb_interface_t* interface; \
+        usb_pipeline_callback_f pipeline_callback; \
+        usb_driver_free_f free;
 
 typedef struct usb_transfer_t {
     usb_driver_t*         driver;
@@ -324,8 +337,7 @@ typedef struct usb_controller_t {
     const pci_capability_msix_t* msix_cap;
     usb_controller_metadata_t*   metadata;
     boolean_t                    initialized;
-    int8_t (*probe_all_ports)(usb_controller_t* controller);
-    int8_t (*probe_port)(usb_controller_t* controller, uint8_t port);
+    int8_t (*reset_all_ports)(usb_controller_t* controller);
     int8_t (*reset_port)(usb_controller_t* controller, uint8_t port);
     int8_t (*control_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
     int8_t (*data_transfer)(usb_controller_t* controller, usb_transfer_t* transfer);
@@ -466,8 +478,9 @@ typedef enum usb_protocol_mass_storage_t {
 int8_t usb_init(void);
 
 int8_t usb_device_init(usb_device_t* parent, usb_controller_t* controller, uint32_t port, uint32_t speed);
+int8_t usb_device_deinit(usb_device_t* parent, usb_controller_t* controller, uint32_t port);
 
-int8_t usb_probe_all_devices_all_ports(void);
+int8_t usb_reset_all_devices_all_ports(void);
 
 int8_t usb_keyboard_init(usb_device_t* device, usb_interface_t* interface);
 

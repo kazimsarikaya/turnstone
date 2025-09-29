@@ -19,13 +19,17 @@
 MODULE("turnstone.kernel.hw.usb");
 
 typedef struct usb_driver_t {
-    usb_device_t*           usb_device;
-    usb_interface_t*        interface;
-    usb_pipeline_callback_f pipeline_callback;
-    uint32_t                expected_packet_size;
-    uint16_t                ocp_base;
-    list_t*                 return_queue;
-    network_mac_address_t   mac;
+    USB_DRIVER_COMMON_FIELDS;
+    uint32_t              expected_packet_size;
+    uint16_t              ocp_base;
+    list_t*               return_queue;
+    network_mac_address_t mac;
+    usb_endpoint_t*       bulk_in;
+    usb_endpoint_t*       bulk_out;
+    usb_endpoint_t*       intr;
+    uint16_t              intr_value;
+    uint64_t              tx_task_id;
+    uint64_t              dhcp_task_id;
 } usb_driver_t;
 
 typedef struct usb_rtl815x_tx_t {
@@ -46,7 +50,23 @@ typedef struct usb_rtl815x_rx_t {
 
 _Static_assert(sizeof(usb_rtl815x_rx_t) == 24, "invalid usb_rtl815x_tx_t size");
 
-static list_t* usb_rtl815x_drivers = NULL;
+typedef struct usb_rtl815x_tally_counter_t {
+    uint64_t tx_packets;
+    uint64_t rx_packets;
+    uint64_t tx_errors;
+    uint32_t rx_errors;
+    uint16_t rx_missed;
+    uint16_t align_errors;
+    uint32_t tx_one_collision;
+    uint32_t tx_multi_collision;
+    uint64_t rx_unicast;
+    uint64_t rx_broadcast;
+    uint32_t rx_multicast;
+    uint16_t tx_aborted;
+    uint16_t tx_underrun;
+} __attribute__((packed)) usb_rtl815x_tally_counter_t;
+
+_Static_assert(sizeof(usb_rtl815x_tally_counter_t) == 64, "invalid usb_rtl815x_tally_counter_t size");
 
 static int8_t usb_rtl815x_read_reg(usb_driver_t* drv, uint16_t type, uint16_t index, void* buf, uint16_t len) {
     if((len & 3) || !len || (index & 3) || !buf) {
@@ -103,7 +123,7 @@ static int8_t usb_rtl815x_read_reg8(usb_driver_t* drv, uint16_t type, uint16_t i
 static int8_t usb_rtl815x_read_reg16(usb_driver_t* drv, uint16_t type, uint16_t index, uint16_t* data) {
     uint32_t input;
     uint32_t output;
-    uint16_t byen = RTL815X_BYTEN_EN_WORD;
+    uint16_t byen = RTL815X_BYTE_EN_WORD;
     uint8_t shift = index & 2;
 
     index &= ~3;
@@ -152,7 +172,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
 
     byen = byteen_start | (byteen_start << 4);
 
-    if(byen != RTL815X_BYTEN_EN_DWORD) {
+    if(byen != RTL815X_BYTE_EN_DWORD) {
         ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | byen, buf, 4);
 
         if(ret != 0) {
@@ -170,14 +190,14 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
 
     byen = byteen_end | (byteen_end >> 4);
 
-    if(byen != RTL815X_BYTEN_EN_DWORD) {
+    if(byen != RTL815X_BYTE_EN_DWORD) {
         len -= 4;
     }
 
     while(len) {
         uint16_t chunk = len > limit ? limit : len;
 
-        ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | RTL815X_BYTEN_EN_DWORD, data, chunk);
+        ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | RTL815X_BYTE_EN_DWORD, data, chunk);
 
         if(ret != 0) {
             return ret;
@@ -188,7 +208,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
         data  += chunk;
     }
 
-    if(byen != RTL815X_BYTEN_EN_DWORD) {
+    if(byen != RTL815X_BYTE_EN_DWORD) {
         ret = usb_vendor_write(drv, RTL8152_REQ_SET_REGS, index, type | byen, data, 4);
     }
 
@@ -198,7 +218,7 @@ static int8_t usb_rtl815x_write_reg(usb_driver_t* drv, uint16_t byteen, uint16_t
 static int8_t usb_rtl815x_write_reg8(usb_driver_t* drv, uint16_t type, uint16_t index, uint8_t data) {
     uint32_t input = data;
 
-    uint16_t byen = RTL815X_BYTEN_EN_BYTE;
+    uint16_t byen = RTL815X_BYTE_EN_BYTE;
     uint8_t shift = index & 3;
 
     if(index & 3) {
@@ -213,7 +233,7 @@ static int8_t usb_rtl815x_write_reg8(usb_driver_t* drv, uint16_t type, uint16_t 
 static int8_t usb_rtl815x_write_reg16(usb_driver_t* drv, uint16_t type, uint16_t index, uint16_t data) {
     uint32_t input = data;
 
-    uint16_t byen = RTL815X_BYTEN_EN_WORD;
+    uint16_t byen = RTL815X_BYTE_EN_WORD;
     uint8_t shift = index & 2;
 
     if(index & 2) {
@@ -226,7 +246,7 @@ static int8_t usb_rtl815x_write_reg16(usb_driver_t* drv, uint16_t type, uint16_t
 }
 
 static int8_t usb_rtl815x_write_reg32(usb_driver_t* drv, uint16_t type, uint16_t index, uint32_t data) {
-    return usb_rtl815x_write_reg(drv, RTL815X_BYTEN_EN_DWORD, type, index, &data, sizeof(uint32_t));
+    return usb_rtl815x_write_reg(drv, RTL815X_BYTE_EN_DWORD, type, index, &data, sizeof(uint32_t));
 }
 
 #if 0
@@ -301,6 +321,26 @@ static inline int usb_rtl815x_mdio_read(usb_driver_t* drv, uint32_t reg_addr, ui
     return usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_BASE_MII + reg_addr * 2, value);
 }
 
+static int8_t usb_rtl815x_tally_reset(usb_driver_t* drv)
+
+{
+    uint32_t ocp_data;
+
+    if (usb_rtl815x_read_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RSTTALLY, &ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_RSTTALLY");
+        return -1;
+    }
+
+    ocp_data |= RTL815X_TALLY_RESET;
+
+    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RSTTALLY, ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write PLA_RSTTALLY");
+        return -1;
+    }
+
+    return 0;
+}
+
 static int8_t usb_rtl815x_aldps_en(usb_driver_t* drv, boolean_t enable) {
     uint16_t data;
 
@@ -326,6 +366,41 @@ static int8_t usb_rtl815x_aldps_en(usb_driver_t* drv, boolean_t enable) {
         }
 
         time_timer_msleep(200);
+    }
+
+    return 0;
+}
+
+static int8_t usb_rtl815x_eee_disable(usb_driver_t* drv) {
+    uint16_t ocp_data;
+    uint16_t config;
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, &ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
+        return -1;
+    }
+
+    if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_EEE_CFG, &config) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read OCP_EEE_CFG");
+        return -1;
+    }
+
+    ocp_data &= ~(RTL815X_EEE_RX_EN | RTL815X_EEE_TX_EN);
+    config &= ~RTL815X_EEE10_EN;
+
+    if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
+        return -1;
+    }
+
+    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_CFG, config) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_CFG");
+        return -1;
+    }
+
+    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_ADV, 0) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_ADV");
+        return -1;
     }
 
     return 0;
@@ -372,7 +447,7 @@ static int8_t usb_rtl815x_reset(usb_driver_t* drv) {
 static int8_t usb_rtl815x_read_mac(usb_driver_t* drv, uint8_t mac[6]) {
     uint64_t __attribute__((aligned(128))) mac_64b = 0;
     if (usb_rtl815x_read_reg64(drv, RTL815X_PLA_BASE, RTL815X_PLA_MAC, &mac_64b) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read MAC low");
+        PRINTLOG(USB, LOG_ERROR, "cannot MAC low");
         return -1;
     }
 
@@ -444,41 +519,6 @@ static int8_t usb_rtl815x_configure_extra_status(usb_driver_t* drv) {
 
     if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EXTRA_STATUS, extra_status) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot write EXTRA_STATUS");
-        return -1;
-    }
-
-    return 0;
-}
-
-static int8_t usb_rtl815x_eee_disable(usb_driver_t* drv) {
-    uint16_t ocp_data;
-    uint16_t config;
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, &ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
-        return -1;
-    }
-
-    if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_EEE_CFG, &config) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read OCP_EEE_CFG");
-        return -1;
-    }
-
-    ocp_data &= ~(RTL815X_EEE_RX_EN | RTL815X_EEE_TX_EN);
-    config &= ~RTL815X_EEE10_EN;
-
-    if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_EEE_CR, ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_EEE_CR");
-        return -1;
-    }
-
-    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_CFG, config) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_CFG");
-        return -1;
-    }
-
-    if(usb_rtl815x_ocp_reg_write(drv, RTL815X_OCP_EEE_ADV, 0) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot write OCP_EEE_ADV");
         return -1;
     }
 
@@ -620,6 +660,31 @@ static int8_t usb_rtl815x_cfg_wdt11(usb_driver_t* drv) {
     return 0;
 }
 
+static int8_t usb_rtl815x_read_tally(usb_driver_t* drv) {
+    usb_rtl815x_tally_counter_t tally = {0};
+
+    if (usb_rtl815x_read_reg(drv, RTL815X_PLA_BASE, RTL815X_PLA_TALLY_CNT, &tally, sizeof(usb_rtl815x_tally_counter_t)) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read TALLY_CNT");
+        return -1;
+    }
+
+    PRINTLOG(USB, LOG_INFO, "tx_packets:        %llu", tally.tx_packets);
+    PRINTLOG(USB, LOG_INFO, "rx_packets:        %llu", tally.rx_packets);
+    PRINTLOG(USB, LOG_INFO, "tx_errors:         %llu", tally.tx_errors);
+    PRINTLOG(USB, LOG_INFO, "rx_errors:         %u", tally.rx_errors);
+    PRINTLOG(USB, LOG_INFO, "rx_missed:         %u", tally.rx_missed);
+    PRINTLOG(USB, LOG_INFO, "align_errors:      %u", tally.align_errors);
+    PRINTLOG(USB, LOG_INFO, "tx_one_collision:   %u", tally.tx_one_collision);
+    PRINTLOG(USB, LOG_INFO, "tx_multi_collision: %u", tally.tx_multi_collision);
+    PRINTLOG(USB, LOG_INFO, "rx_unicast:        %llu", tally.rx_unicast);
+    PRINTLOG(USB, LOG_INFO, "rx_broadcast:      %llu", tally.rx_broadcast);
+    PRINTLOG(USB, LOG_INFO, "rx_multicast:      %u", tally.rx_multicast);
+    PRINTLOG(USB, LOG_INFO, "tx_aborted:        %u", tally.tx_aborted);
+    PRINTLOG(USB, LOG_INFO, "tx_underrun:       %u", tally.tx_underrun);
+
+    return 0;
+}
+
 // may be needed at future
 #if 0
 
@@ -663,6 +728,8 @@ static int8_t usb_rtl815x_wait_oob_link_list_ready(usb_driver_t* drv, uint32_t t
     return -1;
 }
 
+#endif
+
 static int8_t usb_rtl815x_reset_bmu(usb_driver_t* drv) {
     uint8_t ocp_data = 0;
 
@@ -688,148 +755,8 @@ static int8_t usb_rtl815x_reset_bmu(usb_driver_t* drv) {
     return 0;
 }
 
-#endif
-
-static int8_t usb_rtl815x_init(usb_driver_t* drv) {
-    if(usb_rtl815x_reset(drv) != 0) {
-        return -1;
-    }
-
-    uint8_t oob_data;
-
-    if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_OOB_CTRL, &oob_data) != 0) {
-        return -1;
-    }
-
-    oob_data &= ~RTL815X_NOW_IS_OOB;
-
-    if (usb_rtl815x_write_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_OOB_CTRL, oob_data) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_aldps_en(drv, false) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_eee_disable(drv) != 0) {
-        return -1;
-    }
-
-    uint16_t phy_pwr;
-
-    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, &phy_pwr) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_PHY_PWR");
-        return -1;
-    }
-
-    phy_pwr |= RTL815X_PFM_PWM_SWITCH;
-
-    if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, phy_pwr) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot write PLA_PHY_PWR");
-        return -1;
-    }
-
-    if(usb_rtl815x_cfg_dummy1(drv) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_configure_extra_status(drv) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_cfg_dummy2(drv) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_cfg_wdt11(drv) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_LPM_CTRL,
-                                RTL815X_FIFO_EMPTY_1FB | RTL815X_ROK_EXIT_LPM | RTL815X_LPM_TIMER_500US) != 0) {
-        return -1;
-    }
-
-    if(usb_rtl815x_cfg_afe(drv) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_rx_vlan_en(drv, true) != 0) {
-        return -1;
-    }
-
-    // Set MTU to 1500
-    if (usb_rtl815x_set_mtu(drv, 1500) != 0) {
-        return -1;
-    }
-
-    uint16_t tcr0 = 0;
-
-    if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_TCR0, &tcr0) != 0) {
-        return -1;
-    }
-
-    tcr0 |= RTL815X_TCR0_AUTO_FIFO;
-
-    if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_TCR0, tcr0) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RXFIFO_CTRL0,
-                                RTL815X_RXFIFO_THR1_NORMAL) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_RXFIFO_CTRL1,
-                                RTL815X_RXFIFO_THR2_NORMAL) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_RXFIFO_CTRL2,
-                                RTL815X_RXFIFO_THR3_NORMAL) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_TXFIFO_CTRL,
-                                RTL815X_TXFIFO_THR_NORMAL2) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RCR,
-                                RTL815X_RCR_APM | RTL815X_RCR_AM | RTL815X_RCR_AB) != 0) {
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_RX_EARLY_TIMEOUT, RTL815X_COALESCE_SUPER / 8) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot set RX_EARLY_TIMEOUT");
-        return -1;
-    }
-
-    if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_RX_EARLY_SIZE, 1200 / 4) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot set RX_EARLY_SIZE");
-        return -1;
-    }
-
-    uint16_t speed = 0;
-
-    if (usb_rtl815x_reset_packet_filer(drv) != 0) {
-        return -1;
-    }
-
-    uint8_t ocp_data = 0;
-
-    if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot read CR");
-        return -1;
-    }
-
-    ocp_data |= RTL815X_CR_RE | RTL815X_CR_TE;
-
-    // Enable RX and TX by setting CR
-    if (usb_rtl815x_write_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, ocp_data) != 0) {
-        PRINTLOG(USB, LOG_ERROR, "cannot write CR");
-        return -1;
-    }
+static int8_t usb_rtl815x_read_status(usb_driver_t* drv) {
+    uint8_t ocp_data;
 
     if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &ocp_data) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot read CR");
@@ -837,6 +764,8 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
     }
 
     PRINTLOG(USB, LOG_DEBUG, "CR: 0x%02x", ocp_data);
+
+    uint16_t speed = 0;
 
     if (usb_rtl815x_get_speed(drv, &speed) != 0) {
         return -1;
@@ -896,6 +825,8 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
     PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL3: 0x%04x", mac_pwr_ctrl3);
     PRINTLOG(USB, LOG_DEBUG, "MAC_PWR_CTRL4: 0x%04x", mac_pwr_ctrl4);
 
+    uint16_t phy_pwr;
+
     if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, &phy_pwr) != 0) {
         return -1;
     }
@@ -931,82 +862,304 @@ static int8_t usb_rtl815x_init(usb_driver_t* drv) {
     return 0;
 }
 
+static int8_t usb_rtl815x_init(usb_driver_t* drv) {
+    if(usb_rtl815x_reset(drv) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_reset_bmu(drv) != 0) {
+        return -1;
+    }
+
+    uint8_t oob_data;
+
+    if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_OOB_CTRL, &oob_data) != 0) {
+        return -1;
+    }
+
+    oob_data &= ~RTL815X_NOW_IS_OOB;
+
+    if (usb_rtl815x_write_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_OOB_CTRL, oob_data) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_aldps_en(drv, false) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_eee_disable(drv) != 0) {
+        return -1;
+    }
+
+    uint16_t phy_pwr;
+
+    if(usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, &phy_pwr) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read PLA_PHY_PWR");
+        return -1;
+    }
+
+    phy_pwr |= RTL815X_PFM_PWM_SWITCH;
+
+    if(usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_PHY_PWR, phy_pwr) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write PLA_PHY_PWR");
+        return -1;
+    }
+
+    if(usb_rtl815x_cfg_dummy1(drv) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_configure_extra_status(drv) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_cfg_dummy2(drv) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_cfg_wdt11(drv) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_LPM_CTRL,
+                                RTL815X_FIFO_EMPTY_1FB | RTL815X_ROK_EXIT_LPM | RTL815X_LPM_TIMER_500US
+                                ) != 0) {
+        return -1;
+    }
+
+    if(usb_rtl815x_cfg_afe(drv) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_rx_vlan_en(drv, true) != 0) {
+        return -1;
+    }
+
+    // Set MTU to 1500
+    if (usb_rtl815x_set_mtu(drv, 1500) != 0) {
+        return -1;
+    }
+
+    uint16_t tcr0 = 0;
+
+    if (usb_rtl815x_read_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_TCR0, &tcr0) != 0) {
+        return -1;
+    }
+
+    tcr0 |= RTL815X_TCR0_AUTO_FIFO;
+
+    if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_TCR0, tcr0) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RXFIFO_CTRL0,
+                                RTL815X_RXFIFO_THR1_NORMAL) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_RXFIFO_CTRL1,
+                                RTL815X_RXFIFO_THR2_NORMAL) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg16(drv, RTL815X_PLA_BASE, RTL815X_PLA_RXFIFO_CTRL2,
+                                RTL815X_RXFIFO_THR3_NORMAL) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_TXFIFO_CTRL,
+                                RTL815X_TXFIFO_THR_NORMAL2) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg32(drv, RTL815X_PLA_BASE, RTL815X_PLA_RCR,
+                                RTL815X_RCR_ACPT_ALL) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_RX_EARLY_TIMEOUT, RTL815X_COALESCE_SUPER / 8) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot set RX_EARLY_TIMEOUT");
+        return -1;
+    }
+
+    if (usb_rtl815x_write_reg16(drv, RTL815X_USB_BASE, RTL815X_USB_RX_EARLY_SIZE, 1200 / 4) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot set RX_EARLY_SIZE");
+        return -1;
+    }
+
+    if (usb_rtl815x_reset_packet_filer(drv) != 0) {
+        return -1;
+    }
+
+    if (usb_rtl815x_tally_reset(drv) != 0) {
+        return -1;
+    }
+
+    uint8_t ocp_data = 0;
+
+    if (usb_rtl815x_read_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, &ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot read CR");
+        return -1;
+    }
+
+    ocp_data |= RTL815X_CR_RE | RTL815X_CR_TE;
+
+    // Enable RX and TX by setting CR
+    if (usb_rtl815x_write_reg8(drv, RTL815X_PLA_BASE, RTL815X_PLA_CR, ocp_data) != 0) {
+        PRINTLOG(USB, LOG_ERROR, "cannot write CR");
+        return -1;
+    }
+
+    if(usb_rtl815x_read_status(drv) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
 extern uint64_t network_rx_task_id;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t usb_rtl815x_pipeline_callback(const usb_driver_t* driver, uint8_t endpoint, pipeline_t* pipeline) {
-    UNUSED(driver);
-    UNUSED(endpoint);
 
-    uint8_t __attribute__((aligned(128))) buffer[16 << 10];
+    if(endpoint == driver->intr->desc->endpoint_address) {
+        usb_driver_t* drv = (usb_driver_t*)driver;
+        while(pipeline_available_data(pipeline) > 0) {
+            uint16_t new_intr_value;
+            pipeline_read(pipeline, 2, (uint8_t*)&new_intr_value);
+
+            if(driver->intr_value != new_intr_value) {
+                PRINTLOG(USB, LOG_DEBUG, "interrupt value changed: 0x%04x -> 0x%04x", driver->intr_value, new_intr_value);
+                drv->intr_value = new_intr_value;
+/*
+                uint16_t speed = 0;
+
+                if (usb_rtl815x_get_speed(drv, &speed) == 0) {
+                    PRINTLOG(USB, LOG_DEBUG, "link status 0x%04x", speed);
+
+                    PRINTLOG(USB, LOG_DEBUG, "connection speed: %s, %s-duplex",
+                             (speed & RTL815X_1000BPS) ? "1000Mbps" :
+                             (speed & RTL815X_100BPS) ? "100Mbps" : "10Mbps",
+                             (speed & RTL815X_FULL_DUP) ? "full" : "half");
+                }
+
+                uint16_t ocp_phy_status = 0;
+
+                if(usb_rtl815x_ocp_reg_read(drv, RTL815X_OCP_PHY_STATUS, &ocp_phy_status) == 0) {
+                    PRINTLOG(USB, LOG_DEBUG, "OCP_PHY_STATUS: 0x%04x", ocp_phy_status);
+                }
+ */
+            } else {
+                PRINTLOG(USB, LOG_TRACE, "interrupt value unchanged: 0x%04x", driver->intr_value);
+            }
+        }
+
+        return 0;
+    }
 
     boolean_t notify_network_rx = true;
 
     while(pipeline_available_data(pipeline) > 0) {
         // Process all available packets
 
-        uint64_t pkt_size = pipeline_available_data(pipeline);
+        uint64_t available_data = pipeline_available_data(pipeline);
 
-        if(!pkt_size) {
+        PRINTLOG(USB, LOG_TRACE, "pipeline available data: 0x%llx", available_data);
+
+        if(available_data < sizeof(usb_rtl815x_rx_t)) {
+            PRINTLOG(USB, LOG_DEBUG, "not enough data for RX header available_data=%llu", available_data);
             break;
         }
 
-        uint64_t rc = pipeline_read(pipeline,
-                                    pkt_size > sizeof(buffer) ? sizeof(buffer) : pkt_size,
-                                    buffer);
+        usb_rtl815x_rx_t rx_hdr;
 
-        if(rc > 0) {
-            usb_rtl815x_rx_t* rx = (usb_rtl815x_rx_t*)buffer;
+        uint64_t rc = pipeline_read(pipeline, sizeof(usb_rtl815x_rx_t), (uint8_t*)&rx_hdr);
 
-            uint32_t pktlen = rx->length & 0x7FFFU;
+        if(rc == -1ULL || rc != sizeof(usb_rtl815x_rx_t)) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read full RX header rc=%llu", rc);
+            pipeline_clear(pipeline);
+            return -1;
+        }
 
-            boolean_t is_vlan_tagged = (rx->flags1 & BIT(16)) != 0;
-            uint16_t vlan_id = rx->flags1 & 0x0FFFU;
-            vlan_id = BYTE_SWAP16(vlan_id);
-            uint8_t* pkt = buffer + sizeof(usb_rtl815x_rx_t);
+        available_data -= sizeof(usb_rtl815x_rx_t);
 
+        uint32_t pktlen = rx_hdr.length & 0x7FFFU;
 
-            network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
+        PRINTLOG(USB, LOG_TRACE, "rx header: length=0x%08x flags1=0x%08x pktlen=0x%08x",
+                 rx_hdr.length, rx_hdr.flags1, pktlen);
 
-            if(!packet) {
-                PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for received packet");
-                continue;
+        if(available_data < pktlen) {
+            PRINTLOG(USB, LOG_ERROR, "not enough data for full RX packet available_data=%llu pktlen=%u", available_data, pktlen);
+            pipeline_clear(pipeline);
+            return -1;
+        }
+
+        boolean_t is_vlan_tagged = (rx_hdr.flags1 & BIT(16)) != 0;
+        uint16_t vlan_id = rx_hdr.flags1 & 0x0FFFU;
+        vlan_id = BYTE_SWAP16(vlan_id);
+
+        network_received_packet_t* packet = memory_malloc_ext(list_get_heap(network_received_packets), sizeof(network_received_packet_t), 0);
+
+        if(!packet) {
+            PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for received packet");
+            continue;
+        }
+
+        packet->packet_len = pktlen;
+        packet->return_queue = driver->return_queue;
+        packet->network_info = (void*)driver->mac;
+        packet->network_type = NETWORK_TYPE_ETHERNET;
+        packet->is_vlan_tagged = is_vlan_tagged;
+        packet->vlan_id = vlan_id;
+        packet->tx_task_id = driver->tx_task_id;
+
+        packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
+
+        if(packet->packet_data == NULL) {
+            PRINTLOG(USB, LOG_ERROR, "failed to allocate packet");
+            memory_free_ext(list_get_heap(network_received_packets), packet);
+            notify_network_rx = true;
+
+            continue;
+        }
+
+        rc = pipeline_read(pipeline, pktlen, packet->packet_data);
+
+        if(rc == -1ULL || rc != pktlen) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read full RX packet rc=%llu pktlen=%u", rc, pktlen);
+            pipeline_clear(pipeline);
+            return -1;
+        }
+
+        if(list_queue_push(network_received_packets, packet) == -1ULL) {
+            PRINTLOG(USB, LOG_ERROR, "failed to queue packet");
+            memory_free_ext(list_get_heap(network_received_packets), packet->packet_data);
+            memory_free_ext(list_get_heap(network_received_packets), packet);
+        } else {
+            PRINTLOG(USB, LOG_TRACE, "packet queued");
+
+            if(notify_network_rx && network_rx_task_id) {
+                task_set_message_received(network_rx_task_id);
+                PRINTLOG(USB, LOG_TRACE, "cleared message waiting for rx task 0x%llx", network_rx_task_id);
+                notify_network_rx = false;
             }
+        }
 
-            packet->packet_len = pktlen;
-            packet->return_queue = driver->return_queue;
-            packet->network_info = (void*)driver->mac;
-            packet->network_type = NETWORK_TYPE_ETHERNET;
-            packet->is_vlan_tagged = is_vlan_tagged;
-            packet->vlan_id = vlan_id;
+        PRINTLOG(USB, LOG_TRACE, "pipeline available data after processing: %llu", pipeline_available_data(pipeline));
 
-            packet->packet_data = memory_malloc_ext(list_get_heap(network_received_packets), pktlen, 0);
+        char_t junk[8];
 
-            if(packet->packet_data == NULL) {
-                PRINTLOG(USB, LOG_ERROR, "failed to allocate packet");
-                memory_free_ext(list_get_heap(network_received_packets), packet);
-                notify_network_rx = true;
+        available_data = pipeline_available_data(pipeline);
 
-                continue;
-            }
+        uint64_t junk_size = pktlen % 8;
 
-            memory_memcopy(pkt, packet->packet_data, pktlen);
+        if(junk_size) {
+            junk_size = 8 - junk_size;
+        }
 
-            if(list_queue_push(network_received_packets, packet) == -1ULL) {
-                PRINTLOG(USB, LOG_ERROR, "failed to queue packet");
-                memory_free_ext(list_get_heap(network_received_packets), packet->packet_data);
-                memory_free_ext(list_get_heap(network_received_packets), packet);
-            } else {
-                PRINTLOG(USB, LOG_TRACE, "packet queued");
-
-                if(notify_network_rx && network_rx_task_id) {
-                    task_set_message_received(network_rx_task_id);
-                    PRINTLOG(USB, LOG_TRACE, "cleared message waiting for rx task 0x%llx", network_rx_task_id);
-                    notify_network_rx = false;
-                }
-            }
-
+        if(junk_size && available_data >= junk_size) {
+            pipeline_read(pipeline, junk_size, (uint8_t*)junk);
         }
     }
 
@@ -1019,8 +1172,8 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
 
 
     ut.driver = usb_driver;
-    ut.endpoint = usb_driver->interface->endpoints[1];
-
+    ut.endpoint = usb_driver->bulk_out;
+    ut.is_async = false;
 
     ut.length = sizeof(usb_rtl815x_tx_t) + (tx->length & 0x3FFFFU);
 
@@ -1031,84 +1184,108 @@ static boolean_t usb_rtl815x_write(usb_driver_t* usb_driver, usb_rtl815x_tx_t* t
     if(res != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send data");
 
+        if(usb_rtl815x_read_tally(usb_driver) != 0) {
+            PRINTLOG(USB, LOG_ERROR, "cannot read tally after failed tx");
+        }
+
         return false;
     }
 
-    PRINTLOG(USB, LOG_DEBUG, "sent %d bytes", ut.length);
+    PRINTLOG(USB, LOG_TRACE, "sent %d bytes", ut.length);
 
     return ut.complete && ut.success;
 }
 
-static int8_t usb_rtl815x_process_tx(void) {
-
-    for(uint64_t drv_idx = 0; drv_idx < list_size(usb_rtl815x_drivers); drv_idx++) {
-        usb_driver_t* drv = (usb_driver_t*)list_get_data_at_position(usb_rtl815x_drivers, drv_idx);
-
-        drv->return_queue = list_create_queue_with_heap(NULL);
-        task_add_message_queue(drv->return_queue);
-
-        void** args = memory_malloc(sizeof(void*) * 2);
-
-        if(args == NULL) {
-            return -1;
-        }
-
-        char_t* dhcp_task_name = strprintf("dhcp-%02x%02x%02x%02x%02x%02x",
-                                           drv->mac[0], drv->mac[1], drv->mac[2],
-                                           drv->mac[3], drv->mac[4], drv->mac[5]);
-
-        args[0] = (void*)drv->mac;
-        args[1] = drv->return_queue;
-
-        task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, args, dhcp_task_name);
+static int8_t usb_rtl815x_process_tx(uint64_t arg_cnt, void** args) {
+    if(arg_cnt != 1 || !args || !args[0]) {
+        PRINTLOG(USB, LOG_ERROR, "invalid parameters");
+        return -1;
     }
 
-    while(1) {
+    usb_driver_t* drv = args[0];
+
+    drv->return_queue = list_create_queue_with_heap(NULL);
+    task_add_message_queue(drv->return_queue);
+
+    network_info_t ni_reg = {0};
+    memory_memcopy(&drv->mac, &ni_reg.mac, 6);
+    ni_reg.has_hw_vlan_support = true;
+    ni_reg.is_vlan_tagged = true;
+    ni_reg.vlan_id = 12;
+    ni_reg.return_queue = drv->return_queue;
+
+    network_register_network_info(&ni_reg);
+
+    void** dhcp_args = memory_malloc(sizeof(void*) * 2);
+
+    if(dhcp_args == NULL) {
+        return -1;
+    }
+
+    char_t* dhcp_task_name = strprintf("dhcp-%02x%02x%02x%02x%02x%02x",
+                                       drv->mac[0], drv->mac[1], drv->mac[2],
+                                       drv->mac[3], drv->mac[4], drv->mac[5]);
+
+    dhcp_args[0] = (void*)drv->mac;
+    dhcp_args[1] = drv->return_queue;
+
+    drv->dhcp_task_id = task_create_task(NULL, 1 << 20, 64 << 10, &network_dhcpv4_send_discover, 2, dhcp_args, dhcp_task_name);
+
+    memory_free(dhcp_task_name);
+
+    if(drv->dhcp_task_id == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create dhcp task");
+        memory_free(dhcp_args);
+        memory_free(drv->return_queue);
+        network_unregister_network_info(&ni_reg);
+        return -1;
+    }
+
+    while(true) {
         boolean_t packet_exists = false;
 
-        for(uint64_t drv_idx = 0; drv_idx < list_size(usb_rtl815x_drivers); drv_idx++) {
-            usb_driver_t* drv = (usb_driver_t*)list_get_data_at_position(usb_rtl815x_drivers, drv_idx);
 
-            while(list_size(drv->return_queue)) {
-                const network_transmit_packet_t* packet = list_queue_pop(drv->return_queue);
+        const network_info_t* ni = map_get(network_info_map, &drv->mac);
 
-                if(packet) {
-                    PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
-                    packet_exists = true;
+        while(list_size(drv->return_queue)) {
+            const network_transmit_packet_t* packet = list_queue_pop(drv->return_queue);
 
-                    uint32_t packet_len = packet->packet_len & 0x3FFFFU;
+            if(packet) {
+                PRINTLOG(NETWORK, LOG_TRACE, "network packet will be sended with length 0x%llx", packet->packet_len);
+                packet_exists = true;
 
-                    usb_rtl815x_tx_t* tx = memory_malloc(sizeof(usb_rtl815x_tx_t) + packet_len);
+                uint32_t packet_len = packet->packet_len & 0x3FFFFU;
 
-                    if(!tx) {
-                        PRINTLOG(NETWORK, LOG_ERROR, "cannot allocate memory for tx packet");
-                        memory_free((void*)packet);
-                        continue;
-                    }
+                usb_rtl815x_tx_t* tx = memory_malloc(sizeof(usb_rtl815x_tx_t) + packet_len);
 
-                    tx->length = BIT(31) | BIT(30) | packet_len;
-                    tx->flags = 0;
-
-                    if(packet->is_vlan_tagged) {
-                        tx->flags |= BIT(16) | (packet->vlan_id & 0x0FFFU);
-                    }
-
-                    memory_memcopy(packet->packet_data, (uint8_t*)tx + sizeof(usb_rtl815x_tx_t), packet_len);
-
-                    if(!usb_rtl815x_write(drv, tx)) {
-                        PRINTLOG(NETWORK, LOG_ERROR, "cannot send packet");
-                    }
-
-                    memory_free(tx);
-
-                    memory_free(packet->packet_data);
+                if(!tx) {
+                    PRINTLOG(NETWORK, LOG_ERROR, "cannot allocate memory for tx packet");
                     memory_free((void*)packet);
+                    continue;
                 }
 
-                PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", list_size(drv->return_queue));
+                tx->length = BIT(31) | BIT(30) | packet_len;
+                tx->flags = 0;
+
+                if(ni->has_hw_vlan_support && packet->is_vlan_tagged) {
+                    tx->flags |= BIT(16) | BYTE_SWAP16(packet->vlan_id & 0x0FFFU);
+                }
+
+                memory_memcopy(packet->packet_data, (uint8_t*)tx + sizeof(usb_rtl815x_tx_t), packet_len);
+
+                if(!usb_rtl815x_write(drv, tx)) {
+                    PRINTLOG(NETWORK, LOG_ERROR, "cannot send packet");
+                }
+
+                memory_free(tx);
+
+                memory_free(packet->packet_data);
+                memory_free((void*)packet);
             }
 
+            PRINTLOG(NETWORK, LOG_TRACE, "tx queue size 0x%llx", list_size(drv->return_queue));
         }
+
 
         if(!packet_exists) {
             task_set_message_waiting();
@@ -1116,6 +1293,50 @@ static int8_t usb_rtl815x_process_tx(void) {
         }
 
     }
+
+    return 0;
+}
+
+static int8_t usb_device_rtl815x_free_returned_packet(memory_heap_t* heap, void* data) {
+    if(!data) {
+        return 0;
+    }
+
+    network_transmit_packet_t* packet = (network_transmit_packet_t*)data;
+
+    if(packet->packet_data) {
+        memory_free_ext(heap, packet->packet_data);
+    }
+
+    memory_free_ext(heap, packet);
+
+    return 0;
+}
+
+static int8_t usb_device_rtl815x_free(usb_driver_t* drv) {
+    if(!drv) {
+        PRINTLOG(USB, LOG_ERROR, "invalid parameters");
+        return -1;
+    }
+
+    if(drv->tx_task_id) {
+        task_kill_task(drv->tx_task_id, false);
+    }
+
+    if(drv->dhcp_task_id) {
+        task_kill_task(drv->dhcp_task_id, false);
+    }
+
+    if(drv->return_queue) {
+        list_destroy_with_type(drv->return_queue, LIST_DESTROY_WITH_DATA, usb_device_rtl815x_free_returned_packet);
+    }
+
+    network_info_t ni = {0};
+    memory_memcopy(&drv->mac, &ni.mac, sizeof(ni.mac));
+
+    network_unregister_network_info(&ni);
+
+    memory_free(drv);
 
     return 0;
 }
@@ -1128,16 +1349,6 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
 
     PRINTLOG(USB, LOG_INFO, "initializing RTL8152/RTL8153 device");
 
-    if(!usb_rtl815x_drivers) {
-        usb_rtl815x_drivers = list_create_list_with_heap(NULL);
-
-        if(!usb_rtl815x_drivers) {
-            PRINTLOG(USB, LOG_ERROR, "cannot create rtl815x drivers list");
-            return -1;
-        }
-    }
-
-
     usb_driver_t* drv = memory_malloc(sizeof(usb_driver_t));
 
     if(!drv) {
@@ -1148,8 +1359,25 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
     drv->usb_device = device;
     drv->interface = interface;
     drv->pipeline_callback = NULL;
+    drv->free = usb_device_rtl815x_free;
 
     interface->driver = drv;
+
+    for(uint32_t i = 0; i < interface->num_endpoints; i++) {
+        usb_endpoint_t* ep = interface->endpoints[i];
+
+        if(ep->desc->attributes == USB_ENDPOINT_TYPE_BULK) {
+            if(USB_ENDPOINT_DIRECTION_IS_IN(ep->desc->endpoint_address)) {
+                drv->bulk_in = ep;
+            } else {
+                drv->bulk_out = ep;
+            }
+        } else if(ep->desc->attributes == USB_ENDPOINT_TYPE_INTERRUPT) {
+            drv->intr = ep;
+        }
+
+
+    }
 
     // Get version
     uint16_t version = 0;
@@ -1180,17 +1408,17 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
              drv->mac[0], drv->mac[1], drv->mac[2],
              drv->mac[3], drv->mac[4], drv->mac[5]);
 
-    uint16_t rx_ep_size = interface->endpoints[0]->desc->max_packet_size;
+    uint16_t rx_ep_size = drv->bulk_in->desc->max_packet_size;
 
-    if(interface->endpoints[0]->endpoint_companion) {
-        rx_ep_size *= interface->endpoints[0]->endpoint_companion->max_burst + 1;
+    if(drv->bulk_in->endpoint_companion) {
+        rx_ep_size *= drv->bulk_in->endpoint_companion->max_burst + 1;
     }
 
 
     drv->expected_packet_size = rx_ep_size;
     drv->pipeline_callback = usb_rtl815x_pipeline_callback;
 
-    uint8_t rx_ep_address = interface->endpoints[0]->desc->endpoint_address;
+    uint8_t rx_ep_address = drv->bulk_in->desc->endpoint_address;
 
     pipeline_t* rx_pipeline = pipeline_create(drv->expected_packet_size * 4);
 
@@ -1207,8 +1435,8 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
         return -1;
     }
 
-    uint8_t int_ep_address = interface->endpoints[2]->desc->endpoint_address;
-    uint16_t int_ep_size = interface->endpoints[2]->desc->max_packet_size;
+    uint8_t int_ep_address = drv->intr->desc->endpoint_address;
+    uint16_t int_ep_size = drv->intr->desc->max_packet_size;
 
     pipeline_t* int_pipeline = pipeline_create(int_ep_size * 32);
 
@@ -1225,10 +1453,35 @@ int8_t usb_device_rtl815x_init(usb_device_t* device, usb_interface_t* interface)
         return -1;
     }
 
+    void** args = memory_malloc(sizeof(void*) * 2);
 
-    task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 0, NULL, "usb-rtl815x-tx");
+    if(!args) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for task args");
+        return -1;
+    }
 
-    list_list_insert(usb_rtl815x_drivers, drv);
+    args[0] = drv;
+
+    char_t* task_name = strprintf("usb-rtl815x-tx-%02x%02x%02x%02x%02x%02x",
+                                  drv->mac[0], drv->mac[1], drv->mac[2],
+                                  drv->mac[3], drv->mac[4], drv->mac[5]);
+
+    if(!task_name) {
+        PRINTLOG(USB, LOG_ERROR, "cannot allocate memory for task name");
+        memory_free(args);
+        return -1;
+    }
+
+    uint64_t tx_task_id =  task_create_task(NULL, 2 << 20, 64 << 10, usb_rtl815x_process_tx, 1, args, task_name);
+
+    memory_free(task_name);
+
+    if(tx_task_id == -1ULL) {
+        PRINTLOG(USB, LOG_ERROR, "cannot create tx task");
+        return -1;
+    }
+
+    drv->tx_task_id = tx_task_id;
 
     PRINTLOG(USB, LOG_INFO, "RTL8152/RTL8153 device initialized");
 

@@ -157,6 +157,8 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
             }
 
             cur_x = abs_x;
+        } else if(wc == '\r') {
+            cur_x = abs_x;
         } else {
             windowmanager_print_glyph(window, cur_x, cur_y, wc);
             cur_x += 1;

@@ -183,7 +183,7 @@ static window_t* wnd_create_numbered_line(int64_t line_number, const char_t* lin
         return NULL;
     }
 
-    window->rect.height = line_window->rect.height;
+    window->rect.height = font_height;
     window->rect.width = line_window->rect.width + line_number_window->rect.width;
 
     return window;
@@ -260,24 +260,31 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
 
     int64_t row_start = extra_data->row_start;
 
+    if(row_start + max_lines > line_count) {
+        row_start = line_count - max_lines;
+
+        if(row_start < 0) {
+            row_start = 0;
+        }
+
+        extra_data->row_start = row_start;
+    }
+
     for(int64_t i = 0; i < print_line_count; i++) {
         char_t* line = NULL;
         int64_t line_length = 0;
 
-        if(row_start + i < line_count) {
-            line = lines[row_start + i];
-            line_length = line_lengths[row_start + i];
+        line = lines[row_start + i];
+        line_length = line_lengths[row_start + i];
 
-            if(col_start > line_length) {
-                col_start = line_length;
-            } else if(col_start < 0) {
-                col_start = 0;
-            }
-
-            line += col_start;
-            line_length -= col_start;
+        if(col_start > line_length) {
+            col_start = line_length;
+        } else if(col_start < 0) {
+            col_start = 0;
         }
 
+        line += col_start;
+        line_length -= col_start;
 
         window_t* line_window = wnd_create_numbered_line(row_start + i + 1, line, line_length, top, editor_window);
 

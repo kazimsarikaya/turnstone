@@ -17,17 +17,8 @@
 MODULE("turnstone.kernel.hw.usb.ms");
 
 typedef struct usb_driver_t {
-    usb_device_t *                device;
-    usb_interface_t*              interface;
-    usb_pipeline_callback_f       pipeline_callback;
-    uint32_t                      expected_packet_size;
-    uint64_t                      id;
-    boolean_t                     is_uas;
-    boolean_t                     command_size_16_supported;
-    uint32_t                      max_lun;
-    uint64_t                      lba_count;
-    uint32_t                      block_size;
-    scsi_standard_inquiry_data_t* inquiry_data;
+    USB_DRIVER_COMMON_FIELDS;
+    USB_MS_COMMON_FIELDS;
 } usb_driver_t;
 
 
@@ -141,7 +132,7 @@ int8_t usb_ms_sense(usb_driver_t* usb_ms, scsi_sense_data_t* sense) {
     return 0;
 }
 
-int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms) {
+static int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms, boolean_t soft) {
     scsi_command_test_unit_ready_t test_unit_ready = {0};
     test_unit_ready.opcode = SCSI_COMMAND_OPCODE_TEST_UNIT_READY;
 
@@ -152,7 +143,7 @@ int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms) {
     }
 
     if(!usb_ms_get_status(usb_ms)) {
-        PRINTLOG(USB, LOG_ERROR, "cannot get succeed status from mass storage device, test unit ready failed");
+        PRINTLOG(USB, soft?LOG_WARNING:LOG_ERROR, "cannot get succeed status from mass storage device, test unit ready failed");
 
         return -1;
     }
@@ -161,7 +152,7 @@ int8_t usb_ms_test_unit_ready(usb_driver_t* usb_ms) {
 }
 
 int8_t usb_ms_test_unit_ready_with_retry(usb_driver_t* usb_ms) {
-    if(usb_ms_test_unit_ready(usb_ms) != 0) {
+    if(usb_ms_test_unit_ready(usb_ms, true) != 0) {
         PRINTLOG(USB, LOG_WARNING, "mass storage device not ready");
 
         scsi_sense_data_t sense = {0};
@@ -179,7 +170,7 @@ int8_t usb_ms_test_unit_ready_with_retry(usb_driver_t* usb_ms) {
             PRINTLOG(USB, LOG_ERROR, "power on, reset or bus device reset occurred");
 
             // test unit ready again
-            if(usb_ms_test_unit_ready(usb_ms) != 0) {
+            if(usb_ms_test_unit_ready(usb_ms, false) != 0) {
                 PRINTLOG(USB, LOG_ERROR, "mass storage device not ready after power on, reset or bus device reset occurred");
                 memory_free(usb_ms->inquiry_data);
                 memory_free(usb_ms);
@@ -342,7 +333,7 @@ int8_t usb_ms_disk_impl_read(const disk_or_partition_t* d, uint64_t lba, uint64_
 
     uint64_t buffer_len = count * ctx->block_size;
 
-    *data = memory_malloc_ext(NULL, buffer_len, 0x1000);
+    *data = memory_malloc_ext(ctx->heap, buffer_len, 0x1000);
 
     if(*data == NULL) {
         return -1;
@@ -453,17 +444,26 @@ disk_t* usb_mass_storage_disk_impl_open(usb_driver_t* usb_ms, uint8_t lun) {
         return NULL;
     }
 
-    disk_context_t* ctx = memory_malloc(sizeof(disk_context_t));
+    if(usb_ms->block_size == 0 || usb_ms->lba_count == 0) {
+        PRINTLOG(USB, LOG_ERROR, "mass storage device has invalid block size 0x%x or lba count 0x%llx", usb_ms->block_size, usb_ms->lba_count);
+
+        return NULL;
+    }
+
+    memory_heap_t* heap = memory_get_default_heap();
+
+    disk_context_t* ctx = memory_malloc_ext(heap, sizeof(disk_context_t), 0);
 
     if(ctx == NULL) {
         return NULL;
     }
 
+    ctx->heap = heap;
     ctx->usb_ms = usb_ms;
     ctx->block_size = usb_ms->block_size;
     ctx->lun = lun;
 
-    disk_t* d = memory_malloc(sizeof(disk_t));
+    disk_t* d = memory_malloc_ext(heap, sizeof(disk_t), 0);
 
     if(d == NULL) {
         memory_free(ctx);

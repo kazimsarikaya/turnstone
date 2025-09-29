@@ -34,6 +34,8 @@ map_t* map_new_with_heap_with_factor(memory_heap_t* heap, int64_t factor, map_ke
 #define map_string() map_new(&map_string_key_extractor)
 #define map_data() map_new(&map_data_key_extractor)
 
+memory_heap_t* map_get_heap(map_t* map);
+
 void*       map_insert(map_t* map, const void* key, const void* data);
 const void* map_get_with_default(map_t* map, const void* key, void* def);
 #define map_get(m, k) map_get_with_default(m, k, NULL)
