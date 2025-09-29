@@ -23,8 +23,6 @@ hashmap_t* usb_controllers = NULL;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 int8_t usb_init(void) {
-    logging_set_level(USB, LOG_DEBUG);
-
     usb_controllers = hashmap_integer(64);
 
     if(!usb_controllers) {
