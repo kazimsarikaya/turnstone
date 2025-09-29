@@ -8,6 +8,7 @@
 
 #include <device/kbd.h>
 #include <device/mouse.h>
+#include <device/event.h>
 #include <logging.h>
 #include <cpu.h>
 #include <cpu/task.h>
@@ -66,8 +67,8 @@ int8_t kbd_handle_key(char16_t key, boolean_t pressed){
     report.is_printable = is_printable;
     report.state = kbd_state;
 
-    if(shell_buffer != NULL) {
-        buffer_append_bytes(shell_buffer, (uint8_t*)&report, sizeof(kbd_report_t));
+    if(kbd_buffer != NULL) {
+        buffer_append_bytes(kbd_buffer, (uint8_t*)&report, sizeof(kbd_report_t));
 
         if(shell_task_id != 0) {
             task_set_interrupt_received(shell_task_id);

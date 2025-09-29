@@ -10,6 +10,7 @@
 #include <types.h>
 #include <utils.h>
 #include <graphics/png.h>
+#include <device/event.h>
 #include <device/mouse.h>
 #include <buffer.h>
 #include <cpu/task.h>
@@ -21,7 +22,6 @@ void video_text_print(const char_t* string);
 
 extern uint8_t mouse_icon_data_start;
 extern uint8_t mouse_icon_data_end;
-extern buffer_t* mouse_buffer;
 extern uint64_t shell_task_id;
 extern uint64_t windowmanager_task_id;
 

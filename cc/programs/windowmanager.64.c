@@ -21,6 +21,7 @@
 #include <cpu.h>
 #include <cpu/task.h>
 #include <utils.h>
+#include <device/event.h>
 #include <device/mouse.h>
 #include <device/kbd.h>
 #include <device/kbd_scancodes.h>
@@ -37,9 +38,6 @@ extern boolean_t windowmanager_initialized;
 
 extern window_t* windowmanager_current_window;
 extern hashmap_t* windowmanager_windows;
-
-extern buffer_t* shell_buffer;
-extern buffer_t* mouse_buffer;
 
 static int8_t windowmanager_main(void) {
     if(windowmanager_init_double_buffer() != 0) {
@@ -65,7 +63,7 @@ static int8_t windowmanager_main(void) {
 
     task_set_interruptible();
 
-    shell_buffer = buffer_new_with_capacity(NULL, 4100);
+    kbd_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
 
     windowmanager_clear_screen(windowmanager_current_window);
@@ -94,7 +92,7 @@ static int8_t windowmanager_main(void) {
             task_set_message_waiting();
             task_yield();
 
-            if(buffer_get_length(shell_buffer) == 0 && buffer_get_length(mouse_buffer) == 0) {
+            if(buffer_get_length(kbd_buffer) == 0 && buffer_get_length(mouse_buffer) == 0) {
                 continue;
             } else {
                 break;
@@ -106,7 +104,7 @@ static int8_t windowmanager_main(void) {
         uint64_t mouse_length = 0;
         uint32_t mouse_ev_cnt = 0;
 
-        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(shell_buffer, &kbd_length);
+        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
         mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
         if(kbd_length == 0 && mouse_length == 0) {
