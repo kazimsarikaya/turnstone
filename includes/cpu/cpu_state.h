@@ -28,7 +28,11 @@ typedef struct cpu_state_t {
     list_t*   task_sleep_queue; ///< task sleep list
     list_t*   task_wait_queue; ///< task wait list
     list_t*   task_cleanup_queue; ///< task cleanup list
+    uint64_t  tick_count; ///< tick count
 } cpu_state_t;
+
+extern boolean_t local_apic_id_is_valid;
+extern volatile cpu_state_t __seg_gs * cpu_state;
 
 #ifdef __cplusplus
 }

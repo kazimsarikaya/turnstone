@@ -334,6 +334,13 @@ int8_t kmain64(size_t entry_point) {
         cpu_hlt();
     }
 
+    if(apic_init_timer() != 0) {
+        PRINTLOG(KERNEL, LOG_FATAL, "cannot init apic timer. Halting...");
+        cpu_hlt();
+    }
+
+    time_timer_configure_sleep();
+
     if(acpi_setup_events() != 0) {
         PRINTLOG(KERNEL, LOG_FATAL, "cannot setup acpi events");
         cpu_hlt();

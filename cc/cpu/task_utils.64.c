@@ -31,9 +31,7 @@ MODULE("turnstone.kernel.cpu.task.utils");
 
 void video_text_print(const char_t* str);
 
-extern volatile cpu_state_t __seg_gs * cpu_state;
 extern hashmap_t* task_map;
-extern volatile uint64_t time_timer_rdtsc_delta;
 
 uint64_t task_get_id(void) {
     uint64_t id = apic_get_local_apic_id() + 1;
@@ -151,7 +149,7 @@ void task_set_interrupt_receive_workaround(uint64_t max_tick_wait_count) {
 
     if(current_task) {
         current_task->interrupt_receive_workaround = true;
-        current_task->interrupt_receive_workaround_max_tick_count = max_tick_wait_count * time_timer_rdtsc_delta;
+        current_task->interrupt_receive_workaround_max_tick_count = max_tick_wait_count * time_timer_get_rdtsc_delta();
     }
 }
 
@@ -473,4 +471,12 @@ void task_toggle_wait_for_future(uint64_t tid) {
 
         task->state = task->state == TASK_STATE_FUTURE_WAITING ? TASK_STATE_SUSPENDED : TASK_STATE_FUTURE_WAITING;
     }
+}
+
+void task_sleep(uint64_t secs) {
+    task_current_task_sleep(cpu_state->tick_count + secs * 1000);
+}
+
+void task_msleep(uint64_t msecs) {
+    task_current_task_sleep(cpu_state->tick_count + msecs);
 }

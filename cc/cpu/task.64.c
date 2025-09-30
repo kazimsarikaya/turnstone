@@ -70,7 +70,6 @@ uint64_t task_xsave_mask = 0;
 uint32_t task_mxcsr_mask = 0;
 
 uint64_t task_max_tick_count_limit = 0;
-extern volatile uint64_t time_timer_rdtsc_delta;
 
 extern int8_t kmain64(void);
 
@@ -83,9 +82,6 @@ task_t*                                         task_find_next_task(void);
 
 void   task_idle_task(void);
 int8_t task_create_idle_task(void);
-
-extern boolean_t local_apic_id_is_valid;
-extern volatile cpu_state_t __seg_gs * cpu_state;
 
 uint64_t task_get_task_xsave_mask(void) {
     return task_xsave_mask;
@@ -124,7 +120,7 @@ int8_t task_init_tasking_ext(memory_heap_t* heap) {
 
     uint32_t apic_id = apic_get_local_apic_id();
 
-    task_max_tick_count_limit = TASK_MAX_TICK_COUNT * time_timer_rdtsc_delta;
+    task_max_tick_count_limit = TASK_MAX_TICK_COUNT * time_timer_get_rdtsc_delta();
 
     frame_t* kernel_gs_frames = NULL;
 
@@ -725,7 +721,7 @@ task_t* task_find_next_task(void) {
         if(!tmp_task && list_size(cpu_state->task_sleep_queue)) {
             task_t* t = (task_t*)list_get_data_at_position(cpu_state->task_sleep_queue, 0);
 
-            if(t->wake_tick < time_timer_get_tick_count()) {
+            if(t->wake_tick < cpu_state->tick_count) {
                 tmp_task = (task_t*)list_delete_at_position(cpu_state->task_sleep_queue, 0);
             }
         }
@@ -1376,7 +1372,7 @@ void task_remove_task_after_fault(uint64_t task_id) {
     }
 
     task_t* current_task = (task_t*)cpu_state->idle_task;
-    current_task->last_tick_count = time_timer_get_tick_count();
+    current_task->last_tick_count = cpu_state->tick_count;
     current_task->task_switch_count++;
 
     cpu_state->current_task = current_task;

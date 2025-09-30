@@ -141,11 +141,19 @@ typedef  struct hpet_t {
 /*! variable for hpet enabled flag */
 extern boolean_t hpet_enabled;
 
+#define HPET_MIN_US_SLEEP 250
+
 /**
  * @brief initializes hpet
  * @return 0 if hpet was initialized, -1 otherwise
  */
 int8_t hpet_init(void);
+
+/**
+ * @brief hpet usleep function
+ * @param usecs microseconds to sleep
+ */
+void hpet_usleep(uint64_t usecs);
 
 #ifdef __cplusplus
 }

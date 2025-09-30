@@ -358,6 +358,9 @@ void task_toggle_wait_for_future(uint64_t task_id);
 uint64_t task_get_task_xsave_mask(void);
 uint32_t task_get_task_mxcsr_mask(void);
 
+void task_sleep(uint64_t secs);
+void task_msleep(uint64_t msecs);
+
 #ifdef __cplusplus
 }
 #endif

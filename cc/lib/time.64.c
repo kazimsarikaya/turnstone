@@ -11,10 +11,14 @@
 
 MODULE("turnstone.lib");
 
-
+// epoch time in microseconds
 uint64_t TIME_EPOCH = 0;
 
 #if ___TESTMODE != 1
+
+#include <time/timer.h>
+
+extern uint64_t hpet_last_rdtsc;
 
 time_t time(time_t* t){
     if(t) {
@@ -35,12 +39,20 @@ time_t time_ms(time_t* t) {
 }
 
 time_t time_ns(time_t* t) {
-    if(t) {
-        *t = (time_t)(TIME_EPOCH * 1000);
-        return *t;
+    uint64_t ns = TIME_EPOCH * 1000ULL; // base ns from HPET + RTC
+
+    // estimate additional ns since last HPET tick using TSC
+    uint64_t tsc_now = rdtsc();
+    uint64_t tsc_delta = tsc_now - hpet_last_rdtsc; // TSC since last update
+    uint64_t extra_ns = (tsc_delta * 1000ULL) / time_timer_get_rdtsc_delta_us(); // convert TSC → ns
+
+    ns += extra_ns;
+
+    if (t) {
+        *t = (time_t)ns;
     }
 
-    return (time_t)(TIME_EPOCH * 1000);
+    return (time_t)ns;
 }
 
 #endif

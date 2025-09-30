@@ -431,11 +431,11 @@ static void usb_keyboard_handle_keys(usb_driver_t* usb_keyboard) {
         if(is_key_new) {
             kbd_handle_key(key, true);
         } else {
-            uint64_t delay = 50;
+            uint64_t delay = 35;
 
             if(!usb_keyboard->is_not_first_repeat[original_key]) {
                 usb_keyboard->is_not_first_repeat[original_key] = true;
-                delay = 500;
+                delay *= 10;
             }
 
             boolean_t send_report = (current_time - old_time) >= delay;

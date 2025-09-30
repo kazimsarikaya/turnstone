@@ -14,7 +14,7 @@
 #include <random.h>
 #include <memory.h>
 #include <utils.h>
-#include <time/timer.h>
+#include <cpu/task.h>
 #include <strings.h>
 
 MODULE("turnstone.programs.user.dhcpd");
@@ -178,7 +178,7 @@ static int8_t network_dhcpv4_send_dhcpv4_discover_or_request_packet(network_info
     int32_t wait_time = 1;
 
     while(wait_time < 16 && ni->is_ipv4_address_requested) {
-        time_timer_sleep(wait_time);
+        task_sleep(wait_time);
         wait_time <<= 1;
     }
 
@@ -192,7 +192,7 @@ static void network_dhcpv4_wait_for_renewal(network_info_t* ni) {
                  ni->lease_time,
                  ni->renewal_time >> 1);
         ni->lease_time -= ni->renewal_time >> 1;
-        time_timer_sleep(ni->renewal_time >> 1);
+        task_sleep(ni->renewal_time >> 1);
     }
 
     PRINTLOG(NETWORK, LOG_INFO, "dhcp lease time expired, requesting again");
@@ -237,7 +237,7 @@ int32_t network_dhcpv4_send_discover(uint64_t args_cnt, void** args) {
                 backoff <<= 1;
             }
 
-            time_timer_sleep(sleep_time);
+            task_sleep(sleep_time);
         }
 
         if(network_dhcpv4_send_dhcpv4_discover_or_request_packet(ni) == -1) {

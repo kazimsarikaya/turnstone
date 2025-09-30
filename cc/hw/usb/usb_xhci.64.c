@@ -172,7 +172,7 @@ static int8_t usb_xhci_pool_event(uint64_t controller_id) {
             return 0;
         }
 
-        time_timer_msleep(5);
+        task_msleep(5);
     }
 
     PRINTLOG(USB, LOG_ERROR, "cannot find event for trb 0x%llx of type %d",
@@ -1525,7 +1525,7 @@ static void usb_xhci_interrupter_task_handle_stall(usb_controller_metadata_t* me
         PRINTLOG(USB, LOG_DEBUG, "reset endpoint %d for device 0x%p slot id %d", ep_id, device, slot_id);
        }
 
-       time_timer_sleep(50); // wait for 50ms
+       task_msleep(50); // wait for 50ms
      */
 
 
@@ -2311,7 +2311,7 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     }
 
     while(!metadata->port_status_listener_task_initialized) {
-        time_timer_msleep(1000);
+        task_msleep(1000);
     }
 
     void** plt_args = memory_malloc(sizeof(void*) * 2);
@@ -2369,7 +2369,7 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     usb_controller->initialized = true;
 
     while(!metadata->interrupter_task_initialized) {
-        time_timer_msleep(1000);
+        task_msleep(1000);
     }
 
     PRINTLOG(USB, LOG_INFO, "XHCI controller initialized successfully with %d ports", metadata->port_count);

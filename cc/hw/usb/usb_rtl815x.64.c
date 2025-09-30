@@ -365,7 +365,7 @@ static int8_t usb_rtl815x_aldps_en(usb_driver_t* drv, boolean_t enable) {
             return -1;
         }
 
-        time_timer_msleep(200);
+        task_msleep(200);
     }
 
     return 0;
@@ -719,7 +719,7 @@ static int8_t usb_rtl815x_wait_oob_link_list_ready(usb_driver_t* drv, uint32_t t
             return 0; // link list ready
         }
 
-        time_timer_msleep(100); // sleep 1 ms
+        task_msleep(100); // sleep 1 ms
     }
 
     PRINTLOG(USB, LOG_DEBUG, "OOB_CTRL: 0x%08x", oob_ctrl);

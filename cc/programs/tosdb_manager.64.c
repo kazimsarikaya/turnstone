@@ -701,7 +701,7 @@ int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
         int32_t retry = 60;
 
         while(retry-- > 0 && !tosdb_manager_is_initialized) {
-            time_timer_sleep(1);
+            task_sleep(1);
         }
 
         if(!tosdb_manager_is_initialized) {
@@ -737,7 +737,7 @@ int8_t tosdb_manager_ipc_send_and_wait(tosdb_manager_ipc_t* ipc) {
             task_yield();
             yield_retry--;
         } else {
-            time_timer_msleep(sleep_time);
+            task_msleep(sleep_time);
             sleep_time = sleep_time * 2;
         }
 

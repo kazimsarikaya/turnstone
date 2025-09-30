@@ -15,13 +15,14 @@
 #include <cpu/interrupt.h>
 #include <logging.h>
 #include <time/timer.h>
+#include <device/hpet.h>
 #include <list.h>
 #include <time.h>
+#include <hypervisor/hypervisor_vm.h>
 
 MODULE("turnstone.kernel.cpu.apic");
 
 uint8_t apic_init_ioapic(const acpi_table_madt_entry_t* ioapic);
-int8_t  apic_init_timer(void);
 
 uint64_t ioapic_bases[2] = {0, 0};
 uint8_t ioapic_count = 0;
@@ -33,13 +34,32 @@ boolean_t apic_x2apic = false;
 
 list_t* irq_remappings = NULL;
 
-extern volatile uint64_t time_timer_rdtsc_delta;
+extern volatile boolean_t task_tasking_initialized;
+
+static int8_t apic_isr(interrupt_frame_ext_t* frame) {
+    UNUSED(frame);
+
+    if(local_apic_id_is_valid) {
+        cpu_state->tick_count++;
+
+        if(cpu_state->local_apic_id == 0){
+            hypervisor_vm_notify_timers(); // TODO: notify only vms on current cpu
+        }
+    }
+
+    if(task_tasking_initialized && (cpu_state->tick_count % TASK_MAX_TICK_COUNT) == 0) {
+        task_task_switch_set_parameters(true);
+        task_switch_task();
+        task_task_switch_exit();
+    } else {
+        apic_eoi();
+    }
+
+    return 0;
+}
 
 typedef uint32_t (*lock_get_local_apic_id_getter_f)(void);
 extern lock_get_local_apic_id_getter_f lock_get_local_apic_id_getter;
-
-extern boolean_t local_apic_id_is_valid;
-extern cpu_state_t __seg_gs * cpu_state;
 
 static inline uint64_t apic_read_timer_current_value(void) {
     if(apic_x2apic) {
@@ -229,7 +249,7 @@ int8_t apic_init_apic(list_t* apic_entries){
     lock_get_local_apic_id_getter = &apic_get_local_apic_id;
     apic_enabled = 1;
 
-    return apic_init_timer();
+    return 0;
 }
 
 uint8_t apic_get_irq_override(uint8_t old_irq){
@@ -254,28 +274,6 @@ uint8_t apic_get_irq_override(uint8_t old_irq){
 int8_t apic_init_timer(void) {
     PRINTLOG(APIC, LOG_DEBUG, "timer init started");
 
-    uint8_t timer_irq = apic_get_irq_override(0);
-
-    PRINTLOG(APIC, LOG_DEBUG, "pic timer irq is: 0x%02x", timer_irq);
-
-    time_timer_pit_set_hz(TIME_TIMER_PIT_HZ_FOR_1MS);
-
-    if(interrupt_irq_set_handler(timer_irq, &time_timer_pit_isr) != 0) {
-        PRINTLOG(APIC, LOG_ERROR, "cannot set pic timer irq");
-
-        return -1;
-    }
-
-    apic_ioapic_setup_irq(timer_irq,
-                          APIC_IOAPIC_INTERRUPT_ENABLED
-                          | APIC_IOAPIC_DELIVERY_MODE_FIXED | APIC_IOAPIC_DELIVERY_STATUS_RELAX
-                          | APIC_IOAPIC_DESTINATION_MODE_PHYSICAL
-                          | APIC_IOAPIC_TRIGGER_MODE_EDGE | APIC_IOAPIC_PIN_POLARITY_ACTIVE_HIGH);
-
-
-    PRINTLOG(APIC, LOG_DEBUG, "pic timer enabled");
-
-
     apic_write_timer_divide_configuration(0x3);
 
     uint32_t total_inits = 0;
@@ -283,7 +281,7 @@ int8_t apic_init_timer(void) {
     for(uint8_t i = 0; i < 10; i++) {
         apic_write_timer_initial_value(0xFFFFFFFF);
 
-        time_timer_pit_sleep(100);
+        hpet_usleep(100 * 1000); // 100ms
 
         total_inits += (0xFFFFFFFF - apic_read_timer_current_value()) / 100;
     }
@@ -294,34 +292,15 @@ int8_t apic_init_timer(void) {
 
     PRINTLOG(APIC, LOG_DEBUG, "apic timer configuration started");
 
-    if(interrupt_irq_set_handler(0x0, &time_timer_apic_isr) != 0) {
+    if(interrupt_irq_set_handler(0x0, &apic_isr) != 0) {
         PRINTLOG(APIC, LOG_ERROR, "cannot set apic timer irq");
 
         return -1;
     }
 
-    time_timer_pit_disable();
-
     apic_write_timer_lvt(APIC_TIMER_PERIODIC | APIC_INTERRUPT_ENABLED | 0x20);
 
     PRINTLOG(APIC, LOG_DEBUG, "apic timer initialized");
-
-    apic_ioapic_disable_irq(timer_irq);
-    interrupt_irq_remove_handler(timer_irq, &time_timer_pit_isr);
-    PRINTLOG(APIC, LOG_DEBUG, "pic timer disabled");
-
-    time_timer_reset_tick_count();
-    time_timer_configure_spinsleep();
-
-    uint64_t old_tsc = rdtsc();
-    time_timer_spinsleep(1000); // 1ms
-    uint64_t new_tsc = rdtsc();
-
-    uint64_t delta = new_tsc - old_tsc;
-    time_timer_rdtsc_delta = delta;
-
-    PRINTLOG(APIC, LOG_INFO, "delta is 0x%016llx", delta);
-
 
     return 0;
 }

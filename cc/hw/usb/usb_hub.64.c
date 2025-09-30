@@ -9,7 +9,7 @@
 #include <driver/usb.h>
 #include <hashmap.h>
 #include <logging.h>
-#include <time/timer.h>
+#include <cpu/task.h>
 #include <strings.h>
 #include <pipeline.h>
 
@@ -261,7 +261,7 @@ static int8_t usb_hub_power_on_ports(usb_device_t* usb_device) {
     }
 
     PRINTLOG(USB, LOG_DEBUG, "all ports powered on, waiting %llims for stabilization", delay_ms);
-    time_timer_msleep(delay_ms);
+    task_msleep(delay_ms);
 
     return 0;
 }

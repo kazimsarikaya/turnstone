@@ -182,6 +182,7 @@ typedef struct apic_lintv_t {
 }__attribute__((packed)) apic_lintv_t;
 
 int8_t apic_setup(acpi_xrsdp_descriptor_t* desc);
+int8_t apic_init_timer(void);
 
 int8_t apic_init_apic(list_t* apic_entries);
 

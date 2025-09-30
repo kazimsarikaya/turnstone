@@ -17,13 +17,12 @@
 #include <memory/paging.h>
 #include <logging.h>
 #include <time.h>
+#include <time/timer.h>
 #include <linker_utils.h>
 
 MODULE("turnstone.hypervisor");
 
 list_t* hypervisor_vm_list = NULL;
-
-extern volatile uint64_t time_timer_rdtsc_delta;
 
 int8_t hypervisor_vm_init(void) {
     if (hypervisor_vm_list != NULL) {
@@ -239,7 +238,7 @@ void hypervisor_vm_notify_timers(void) {
         uint64_t tsc = rdtsc();
 
         uint64_t delta = tsc - vm->last_tsc;
-        delta /= time_timer_rdtsc_delta;
+        delta /= time_timer_get_rdtsc_delta();
         delta *= vm->lapic.timer_divider_realvalue;
 
         vm->last_tsc = tsc;
