@@ -30,7 +30,7 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
     image->width = tga->width;
     image->height = tga->height;
 
-    image->data = memory_malloc(image->width * image->height * sizeof(pixel_t));
+    image->data = memory_malloc(image->width * image->height * sizeof(color_t));
 
     if(!image->data) {
         memory_free(image);
@@ -58,10 +58,12 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
 
             for(x = 0; x < tga->width; x++) {
                 j = data[data_offset + k++] * (tga->color_map_entry_size >> 3) + 18;
-                image->data[i++] = ((tga->color_map_entry_size == 32?data[j + 3]:0xFF) << 24) | // alpha
-                                   (data[j + 2] << 16) | // red
-                                   (data[j + 1] << 8) | // green
-                                   data[j]; // blue
+                image->data[i++] = (color_t){
+                    .alpha = (tga->color_map_entry_size == 32?data[j + 3]:0xFF),
+                    .red   = data[j + 2],
+                    .green = data[j + 1],
+                    .blue  = data[j]
+                };
             }
         }
     } else if(tga->encoding == 2) {
@@ -79,10 +81,13 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
             j = ((!tga->y_origin?tga->height - y - 1:y) * tga->width * (tga->bpp >> 3));
 
             for(x = 0; x < tga->width; x++) {
-                image->data[i++] = ((tga->bpp == 32?data[j + 3]:0xFF) << 24) | // alpha
-                                   (data[j + 2] << 16) | // red
-                                   (data[j + 1] << 8) | // green
-                                   data[j]; // blue
+                image->data[i++] = (color_t) {
+                    .alpha = (tga->bpp == 32?data[j + 3]:0xFF),
+                    .red   = data[j + 2],
+                    .green = data[j + 1],
+                    .blue  = data[j]
+                };
+
                 j += tga->bpp >> 3;
             }
         }
@@ -112,10 +117,12 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
                         y++;
                     }
 
-                    image->data[i++] = ((tga->color_map_entry_size == 32?data[j + 3]:0xFF) << 24) | // alpha
-                                       (data[j + 2] << 16) | // red
-                                       (data[j + 1] << 8) | // green
-                                       data[j]; // blue
+                    image->data[i++] = (color_t){
+                        .alpha = (tga->color_map_entry_size == 32?data[j + 3]:0xFF),
+                        .red   = data[j + 2],
+                        .green = data[j + 1],
+                        .blue  = data[j]
+                    };
                 }
             } else {
                 k++;
@@ -129,10 +136,12 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
                         y++;
                     }
 
-                    image->data[i++] = ((tga->color_map_entry_size == 32?data[j + 3]:0xFF) << 24) | // alpha
-                                       (data[j + 2] << 16) | // red
-                                       (data[j + 1] << 8) | // green
-                                       data[j]; // blue
+                    image->data[i++] = (color_t){
+                        .alpha = (tga->color_map_entry_size == 32?data[j + 3]:0xFF),
+                        .red   = data[j + 2],
+                        .green = data[j + 1],
+                        .blue  = data[j]
+                    };
                 }
             }
         }
@@ -162,10 +171,12 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
                         y++;
                     }
 
-                    image->data[i++] = ((tga->bpp == 32?data[data_offset + 3]:0xFF) << 24) | // alpha
-                                       (data[data_offset + 2] << 16) | // red
-                                       (data[data_offset + 1] << 8) | // green
-                                       data[data_offset]; // blue
+                    image->data[i++] = (color_t) {
+                        .alpha = (tga->bpp == 32?data[data_offset + 3]:0xFF),
+                        .red   = data[data_offset + 2],
+                        .green = data[data_offset + 1],
+                        .blue  = data[data_offset]
+                    };
                 }
 
                 data_offset += tga->bpp >> 3;
@@ -179,10 +190,12 @@ graphics_raw_image_t* graphics_load_tga_image(graphics_tga_image_t* tga, uint32_
                         y++;
                     }
 
-                    image->data[i++] = ((tga->bpp == 32?data[data_offset + 3]:0xFF) << 24) | // alpha
-                                       (data[data_offset + 2] << 16) | // red
-                                       (data[data_offset + 1] << 8) | // green
-                                       data[data_offset]; // blue
+                    image->data[i++] = (color_t) {
+                        .alpha = (tga->bpp == 32?data[data_offset + 3]:0xFF),
+                        .red   = data[data_offset + 2],
+                        .green = data[data_offset + 1],
+                        .blue  = data[data_offset]
+                    };
 
                     data_offset += tga->bpp >> 3;
                 }

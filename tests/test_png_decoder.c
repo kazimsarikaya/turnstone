@@ -109,7 +109,7 @@ int32_t main(uint32_t argc, char_t** argv) {
     print_success("png file decoded successfully");
 
     FILE* out = fopen("tmp/out.raw", "wb");
-    fwrite(image->data, 1, image->width * image->height * sizeof(pixel_t), out);
+    fwrite(image->data, 1, image->width * image->height * sizeof(color_t), out);
     fclose(out);
 
     uint64_t new_png_size = 0;

@@ -643,7 +643,7 @@ static int8_t png_decoder_apply_defilter(png_decoder_t* png_decoder, const uint8
     int64_t dst_idx = 0;
 
     // bbp for R8G8B8A8
-    int32_t bpp = sizeof(pixel_t);
+    int32_t bpp = sizeof(color_t);
     int64_t scanline_len = res->width * bpp;
 
     for(int64_t y = 0; y < res->height; y++) {
@@ -665,7 +665,7 @@ static int8_t png_decoder_apply_defilter(png_decoder_t* png_decoder, const uint8
         }
     }
 
-    uint64_t img_w_f_len = (png_decoder->width * sizeof(pixel_t) + 1) * png_decoder->height;
+    uint64_t img_w_f_len = (png_decoder->width * sizeof(color_t) + 1) * png_decoder->height;
 
     if((uint64_t)src_idx != img_w_f_len) {
         PRINTLOG(PNG, LOG_TRACE, "src length mismatch %lli != %lli", src_idx, img_w_f_len);
@@ -673,7 +673,7 @@ static int8_t png_decoder_apply_defilter(png_decoder_t* png_decoder, const uint8
         return -PNG_DECODER_UNCOMPRESS_SIZE_MISMATCH;
     }
 
-    uint64_t img_len = res->width * res->height * sizeof(pixel_t);
+    uint64_t img_len = res->width * res->height * sizeof(color_t);
 
     if((uint64_t)dst_idx != img_len) {
         PRINTLOG(PNG, LOG_TRACE, "dst length mismatch %lli != %lli", dst_idx, img_len);
@@ -705,7 +705,7 @@ static graphics_raw_image_t* png_decoder_get_image(png_decoder_t* png_decoder) {
         return NULL;
     }
 
-    uint64_t capacity = (sizeof(pixel_t) * png_decoder->width + 1) * png_decoder->height;
+    uint64_t capacity = (sizeof(color_t) * png_decoder->width + 1) * png_decoder->height;
     buffer_t* out = buffer_new_with_capacity(NULL, capacity);
 
     if(!out) {
@@ -776,7 +776,7 @@ static graphics_raw_image_t* png_decoder_get_image(png_decoder_t* png_decoder) {
     res->width = png_decoder->width;
     res->height = png_decoder->height;
 
-    res->data = memory_malloc(res->width * res->height * sizeof(pixel_t));
+    res->data = memory_malloc(res->width * res->height * sizeof(color_t));
 
     if(!res->data) {
         PRINTLOG(PNG, LOG_TRACE, "raw image data memory allocation failed");
@@ -838,14 +838,18 @@ graphics_raw_image_t* graphics_load_png_image(const uint8_t* data, uint32_t size
     // at png alpha channel is first then big endian rgb channel
     // we need to swap it to little endian
     for(uint32_t i = 0; i < image->width * image->height; i++) {
-        pixel_t pixel = image->data[i];
+        color_t pixel = image->data[i];
 
-        uint8_t a = (pixel >> 24) & 0xFF;
-        uint8_t b = (pixel >> 16) & 0xFF;
-        uint8_t g = (pixel >> 8) & 0xFF;
-        uint8_t r = (pixel >> 0) & 0xFF;
 
-        pixel = (a << 24) | (r << 16) | (g << 8) | (b << 0);
+        uint8_t a = (pixel.color >> 24) & 0xFF;
+        uint8_t b = (pixel.color >> 16) & 0xFF;
+        uint8_t g = (pixel.color >> 8) & 0xFF;
+        uint8_t r = (pixel.color >> 0) & 0xFF;
+
+        pixel.alpha = a;
+        pixel.red = r;
+        pixel.green = g;
+        pixel.blue = b;
 
         image->data[i] = pixel;
     }
@@ -878,7 +882,7 @@ static int8_t png_encoder_init(png_encoder_t* png_encoder, graphics_raw_image_t*
         return -PNG_DECODER_MEMORY_ERROR;
     }
 
-    uint64_t capacity = (sizeof(pixel_t) * image->width + 1) * image->height;
+    uint64_t capacity = (sizeof(color_t) * image->width + 1) * image->height;
     png_encoder->encoded_data = memory_malloc(capacity);
 
     if(!png_encoder->encoded_data) {
@@ -901,7 +905,7 @@ static int8_t png_encoder_find_and_apply_filter(png_encoder_t* png_encoder) {
     int64_t dst_idx = 0;
 
     // bbp for R8G8B8A8
-    int32_t bpp = sizeof(pixel_t);
+    int32_t bpp = sizeof(color_t);
     int64_t scanline_len = png_encoder->image->width * bpp;
 
     png_filter_type_t selected_filter_type = PNG_FILTER_TYPE_NONE;
@@ -978,7 +982,7 @@ static int8_t png_encoder_compress(png_encoder_t * png_encoder) {
         return -PNG_DECODER_MEMORY_ERROR;
     }
 
-    uint64_t capacity = (sizeof(pixel_t) * png_encoder->image->width + 1) * png_encoder->image->height;
+    uint64_t capacity = (sizeof(color_t) * png_encoder->image->width + 1) * png_encoder->image->height;
 
     buffer_t* in = buffer_encapsulate(png_encoder->encoded_data, capacity);
 
@@ -1190,21 +1194,21 @@ uint8_t* graphics_save_png_image(const graphics_raw_image_t* image, uint64_t* si
     graphics_raw_image_t image_copy = {0};
     image_copy.width = image->width;
     image_copy.height = image->height;
-    image_copy.data = memory_malloc(image->width * image->height * sizeof(pixel_t));
+    image_copy.data = memory_malloc(image->width * image->height * sizeof(color_t));
 
     if(!image_copy.data) {
         return NULL;
     }
 
     for(uint32_t i = 0; i < image->width * image->height; i++) {
-        pixel_t pixel = image->data[i];
+        color_t pixel = image->data[i];
 
-        uint8_t a = (pixel >> 24) & 0xFF;
-        uint8_t r = (pixel >> 16) & 0xFF;
-        uint8_t g = (pixel >> 8) & 0xFF;
-        uint8_t b = (pixel >> 0) & 0xFF;
+        uint8_t a = (pixel.color >> 24) & 0xFF;
+        uint8_t r = (pixel.color >> 16) & 0xFF;
+        uint8_t g = (pixel.color >> 8) & 0xFF;
+        uint8_t b = (pixel.color >> 0) & 0xFF;
 
-        pixel = (a << 24) | (b << 16) | (g << 8) | (r << 0);
+        pixel.color = (a << 24) | (b << 16) | (g << 8) | (r << 0);
 
         image_copy.data[i] = pixel;
     }

@@ -20,7 +20,7 @@
 
 MODULE("turnstone.kernel.hw.video.fb");
 
-pixel_t* VIDEO_BASE_ADDRESS = NULL;
+color_t* VIDEO_BASE_ADDRESS = NULL;
 
 extern boolean_t GRAPHICS_MODE;
 extern lock_t* video_lock;
@@ -35,7 +35,7 @@ static void video_fb_display_flush_dummy(uint32_t scanout, uint64_t offset, uint
 }
 
 void video_fb_refresh_frame_buffer_address(void) {
-    VIDEO_BASE_ADDRESS = (uint32_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
+    VIDEO_BASE_ADDRESS = (color_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 
     screen_set_dimensions(SYSTEM_INFO->frame_buffer->width, SYSTEM_INFO->frame_buffer->height, SYSTEM_INFO->frame_buffer->pixels_per_scanline);
 
@@ -242,7 +242,7 @@ static void video_fb_graphics_print(const char_t* string) {
             min_y = old_cursor_graphics_y * ft->font_height;
             max_y = min_y + ft->font_height;
 
-            SCREEN_FLUSH(0, flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
+            SCREEN_FLUSH(0, flush_offset * sizeof(color_t), min_x, min_y, max_x - min_x, max_y - min_y);
 
             min_x = 0;
             max_x = max_cursor_graphics_x * ft->font_width;
@@ -252,7 +252,7 @@ static void video_fb_graphics_print(const char_t* string) {
             flush_offset = min_y * screen_info.pixels_per_scanline + min_x;
         }
 
-        SCREEN_FLUSH(0, flush_offset * sizeof(pixel_t), min_x, min_y, max_x - min_x, max_y - min_y);
+        SCREEN_FLUSH(0, flush_offset * sizeof(color_t), min_x, min_y, max_x - min_x, max_y - min_y);
     }
 
     text_cursor_move(cursor_graphics_x, cursor_graphics_y);
@@ -263,14 +263,13 @@ static void video_fb_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, u
         uint32_t i = 0;
         uint32_t j = 0;
         uint32_t line = 0;
-        uint32_t bg = background.color;
         screen_info_t screen_info = screen_get_info();
 
         for(i = 0; i < height; i++) {
             line = (y + i) * screen_info.pixels_per_scanline + x;
 
             for(j = 0; j < width; j++) {
-                *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = bg;
+                *((color_t*)(VIDEO_BASE_ADDRESS + line)) = background;
                 line++;
             }
         }
@@ -283,7 +282,7 @@ void video_fb_init(void) {
     video_text_print("video init\n");
     GRAPHICS_MODE = false;
 
-    VIDEO_BASE_ADDRESS = (pixel_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
+    VIDEO_BASE_ADDRESS = (color_t*)SYSTEM_INFO->frame_buffer->virtual_base_address;
 
     char_t buffer[100] = {0};
     utoh_with_buffer(buffer, (uint64_t)VIDEO_BASE_ADDRESS);
@@ -336,13 +335,13 @@ int8_t video_fb_copy_contents_to_frame_buffer(uint8_t* buffer, uint64_t new_widt
     UNUSED(new_height);
 
     int64_t j = 0;
-    pixel_t* buf = (pixel_t*)buffer;
+    color_t* buf = (color_t*)buffer;
 
     int64_t i = 0;
     int64_t x = 0;
 
     while(i < screen_info.pixels_per_scanline * screen_info.height) {
-        buf[j] = *((pixel_t*)(VIDEO_BASE_ADDRESS + i));
+        buf[j] = *((color_t*)(VIDEO_BASE_ADDRESS + i));
 
         i++;
         j++;

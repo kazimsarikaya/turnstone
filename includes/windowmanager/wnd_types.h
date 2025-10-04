@@ -60,7 +60,7 @@ struct window_t {
     boolean_t      extra_data_is_allocated;
     int32_t        tab_index;
     rect_t         rect;
-    pixel_t*       buffer;
+    color_t*       buffer;
     color_t        background_color;
     color_t        foreground_color;
     window_t*      next;

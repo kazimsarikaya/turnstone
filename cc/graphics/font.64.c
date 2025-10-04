@@ -48,7 +48,7 @@ static char16_t font_lookup_unicode(char16_t wc) {
 static void font_print_glyph_with_stride_raw(char16_t wc,
                                              color_t foreground, color_t background,
                                              uint8_t* font_address,
-                                             pixel_t* base_address,
+                                             color_t* base_address,
                                              uint32_t x, uint32_t y,
                                              uint32_t stride,
                                              uint32_t font_width, uint32_t font_height,
@@ -71,7 +71,7 @@ static void font_print_glyph_with_stride_raw(char16_t wc,
 
         for(lx = 0; lx < font_width; lx++) {
 
-            *(base_address + line) = (pixel_t)(tmp & mask ? foreground.color : background.color);
+            *(base_address + line) = (color_t)(tmp & mask ? foreground.color : background.color);
 
             mask >>= 1;
             line++;
@@ -84,7 +84,7 @@ static void font_print_glyph_with_stride_raw(char16_t wc,
 
 void font_print_glyph_with_stride(char16_t wc,
                                   color_t foreground, color_t background,
-                                  pixel_t* destination_base_address,
+                                  color_t* destination_base_address,
                                   uint32_t x, uint32_t y,
                                   uint32_t stride) {
     font_print_glyph_with_stride_raw(wc,
@@ -116,7 +116,7 @@ static void video_build_font_table(font_psf2_t* font) {
         return;
     }
 
-    font_table->bitmap = memory_malloc(sizeof(pixel_t) * col_count * FONT_WIDTH * row_count * FONT_HEIGHT);
+    font_table->bitmap = memory_malloc(sizeof(color_t) * col_count * FONT_WIDTH * row_count * FONT_HEIGHT);
 
     if(!font_table->bitmap) {
         memory_free(font_table);
@@ -296,16 +296,16 @@ void font_get_font_dimension(uint32_t* width, uint32_t* height) {
     }
 }
 
-void font_dump_colored_font(pixel_t* dst, color_t background, color_t foreground) {
+void font_dump_colored_font(color_t* dst, color_t background, color_t foreground) {
     font_table_t* ft = font_get_font_table();
 
     uint32_t len = ft->column_count * ft->font_width * ft->row_count * ft->font_height;
 
     for(uint32_t i = 0; i < len; i++) {
-        if(ft->bitmap[i] == (pixel_t)0xFFFFFFFF) {
-            dst[i] = foreground.color;
+        if(ft->bitmap[i].color == 0xFFFFFFFF) {
+            dst[i] = foreground;
         } else {
-            dst[i] = background.color;
+            dst[i] = background;
         }
     }
 }

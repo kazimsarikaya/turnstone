@@ -16,22 +16,19 @@
 extern "C" {
 #endif
 
-#ifndef ___PIXEL_T
-#define ___PIXEL_T
-typedef uint32_t pixel_t;
-#endif
-
 typedef union color_t color_t;
 
 union color_t {
     struct {
-        uint8_t alpha;
-        uint8_t red;
-        uint8_t green;
         uint8_t blue;
+        uint8_t green;
+        uint8_t red;
+        uint8_t alpha;
     } __attribute__((packed));
     uint32_t color;
 };
+
+_Static_assert(sizeof(color_t) == sizeof(uint32_t), "Invalid color_t size");
 
 #ifdef __cplusplus
 }

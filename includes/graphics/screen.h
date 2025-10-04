@@ -38,7 +38,7 @@ extern screen_flush_f SCREEN_FLUSH;
 
 typedef void (*screen_print_glyph_with_stride_f)(char16_t wc,
                                                  color_t foreground, color_t background,
-                                                 pixel_t* destination_base_address,
+                                                 color_t* destination_base_address,
                                                  uint32_t x, uint32_t y,
                                                  uint32_t stride);
 
