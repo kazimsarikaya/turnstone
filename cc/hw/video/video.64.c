@@ -10,6 +10,7 @@
 #include <pci.h>
 #include <driver/video.h>
 #include <driver/video_vmwaresvga.h>
+#include <driver/video_qemuvga.h>
 #include <logging.h>
 #include <apic.h>
 #include <ports.h>
@@ -44,8 +45,14 @@ void video_text_print(const char_t* string) {
     if(string == NULL) {
         return;
     }
-    size_t i = 0;
+
     uint32_t apic_id = apic_get_local_apic_id();
+
+    if(apic_id >= ARRAY_SIZE(serial_ports)) {
+        return;
+    }
+
+    size_t i = 0;
 
     while(string[i] != '\0') {
         write_serial(serial_ports[apic_id], string[i]);
@@ -65,6 +72,8 @@ int8_t video_display_init(memory_heap_t* heap, list_t* display_controllers) {
 
         if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_VMWARE && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2) {
             vmware_svga2_init(heap, device);
+        } else if(device->pci_header->vendor_id == VIDEO_PCI_DEVICE_VENDOR_QEMU && device->pci_header->device_id == VIDEO_PCI_DEVICE_ID_QEMU_VGA) {
+            video_qemu_vga_init(heap, device);
         } else {
             PRINTLOG(KERNEL, LOG_WARNING, "Unknown video device: %x:%x", device->pci_header->vendor_id, device->pci_header->device_id);
         }

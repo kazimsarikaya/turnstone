@@ -23,6 +23,10 @@ extern "C" {
 #define VIDEO_PCI_DEVICE_VENDOR_VMWARE 0x15AD
 #define VIDEO_PCI_DEVICE_ID_VMWARE_SVGA2 0x0405
 
+#define VIDEO_PCI_DEVICE_VENDOR_QEMU 0x1234
+#define VIDEO_PCI_DEVICE_ID_QEMU_VGA 0x1111
+
+
 /**
  * @brief video diplay pci devices init
  * @param[in] heap heap to allocate memory
