@@ -362,6 +362,34 @@ void sgfx_destroy_context(sgfx_context_t* ctx) {
     memory_free(ctx);
 }
 
+void sgfx_create_sub_context(sgfx_context_t* ctx,
+                             int32_t x, int32_t y, int32_t width, int32_t height) {
+
+    if (ctx->sub_context_enabled) {
+        return; // Already enabled
+    }
+
+    ctx->modelview_backup = ctx->modelview;
+    ctx->projection_backup = ctx->projection;
+
+    ctx->sub_context.x = x;
+    ctx->sub_context.y = y;
+    ctx->sub_context.w = width;
+    ctx->sub_context.h = height;
+
+    ctx->sub_context_enabled = true;
+}
+
+void sgfx_destroy_sub_context(sgfx_context_t* ctx) {
+    if (!ctx->sub_context_enabled) {
+        return; // Not enabled
+    }
+
+    ctx->modelview = ctx->modelview_backup;
+    ctx->projection = ctx->projection_backup;
+    ctx->sub_context_enabled = false;
+}
+
 void sgfx_clear(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, float32_t a) {
     color_t color = {
         .red = (uint32_t)(r * 255.0f),
@@ -659,32 +687,4 @@ void sgfx_blit_glyph_color(sgfx_context_t* ctx, sgfx_texture_t tex,
             sgfx_plot_pixel(ctx, px, py, out);
         }
     }
-}
-
-void sgfx_create_sub_context(sgfx_context_t* ctx,
-                             int32_t x, int32_t y, int32_t width, int32_t height) {
-
-    if (ctx->sub_context_enabled) {
-        return; // Already enabled
-    }
-
-    ctx->modelview_backup = ctx->modelview;
-    ctx->projection_backup = ctx->projection;
-
-    ctx->sub_context.x = x;
-    ctx->sub_context.y = y;
-    ctx->sub_context.w = width;
-    ctx->sub_context.h = height;
-
-    ctx->sub_context_enabled = true;
-}
-
-void sgfx_destroy_sub_context(sgfx_context_t* ctx) {
-    if (!ctx->sub_context_enabled) {
-        return; // Not enabled
-    }
-
-    ctx->modelview = ctx->modelview_backup;
-    ctx->projection = ctx->projection_backup;
-    ctx->sub_context_enabled = false;
 }
