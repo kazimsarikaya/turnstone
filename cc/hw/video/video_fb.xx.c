@@ -44,32 +44,6 @@ void video_fb_refresh_frame_buffer_address(void) {
     }
 }
 
-static void video_fb_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
-    screen_info_t screen_info = screen_get_info();
-
-    int32_t offs = (y * height * screen_info.pixels_per_scanline) + (x * width);
-    uint32_t orig_offs = offs;
-
-    int32_t lx, ly, line;
-
-    for(ly = 0; ly < height; ly++) {
-        line = offs;
-
-        for(lx = 0; lx < width; lx++) {
-
-            *((pixel_t*)(VIDEO_BASE_ADDRESS + line)) = ~(*((pixel_t*)(VIDEO_BASE_ADDRESS + line)));
-
-            line++;
-        }
-
-        offs  += screen_info.pixels_per_scanline;
-    }
-
-    if(flush) {
-        SCREEN_FLUSH(0, orig_offs * sizeof(pixel_t), x * width, y * height, width, height);
-    }
-}
-
 static void video_fb_graphics_scroll(void){
     font_table_t* ft = font_get_font_table();
     screen_info_t screen_info = screen_get_info();
@@ -311,7 +285,6 @@ void video_fb_init(void) {
         SCREEN_PRINT_GLYPH_WITH_STRIDE = font_print_glyph_with_stride;
         SCREEN_SCROLL = video_fb_graphics_scroll;
         SCREEN_CLEAR_AREA = video_fb_clear_screen_area;
-        TEXT_CURSOR_DRAW = video_fb_text_cursor_draw;
         VIDEO_GRAPHICS_PRINT = video_fb_graphics_print;
     }
 

@@ -16,10 +16,6 @@ MODULE("turnstone.kernel.graphics.text_cursor");
 
 static int32_t text_cursor_x = 0; ///< cursor postion for column
 static int32_t text_cursor_y = 0; ///< cursor porsition for row
-static boolean_t text_cursor_visible = false; ///< cursor visibility flag
-static boolean_t text_cursor_enabled = false; ///< true if cursor is enabled
-
-text_cursor_draw_f TEXT_CURSOR_DRAW = NULL; ///< function pointer to draw cursor
 
 int8_t text_cursor_move(int32_t x, int32_t y) {
     screen_info_t info = screen_get_info();
@@ -46,32 +42,4 @@ void text_cursor_get(int32_t* x, int32_t* y) {
     if(y) {
         *y = text_cursor_y;
     }
-}
-
-void text_cursor_toggle(boolean_t flush) {
-    if(TEXT_CURSOR_DRAW) {
-        if(text_cursor_enabled) {
-            font_table_t* ft = font_get_font_table();
-
-            TEXT_CURSOR_DRAW(text_cursor_x, text_cursor_y, ft->font_width, ft->font_height, flush);
-        }
-
-        text_cursor_visible = !text_cursor_visible;
-    }
-}
-
-void text_cursor_hide(void) {
-    if (text_cursor_visible) {
-        text_cursor_toggle(true);
-    }
-}
-
-void text_cursor_show(void) {
-    if (!text_cursor_visible) {
-        text_cursor_toggle(true);
-    }
-}
-
-void text_cursor_enable(boolean_t enabled) {
-    text_cursor_enabled = enabled;
 }

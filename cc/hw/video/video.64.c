@@ -31,9 +31,7 @@ void video_print(const char_t* string) {
     video_text_print(string);
 
     if(GRAPHICS_MODE) {
-        text_cursor_hide();
         VIDEO_GRAPHICS_PRINT(string);
-        text_cursor_show();
     }
 
     lock_release(video_lock);
