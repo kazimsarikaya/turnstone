@@ -2501,7 +2501,7 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
             }
         }
 
-        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
+        if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 8) != 0) {
             PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
             it->destroy(it);
 
@@ -2515,7 +2515,7 @@ buffer_t* linker_build_metadata_buffer(linker_context_t* ctx) {
 
     it->destroy(it);
 
-    if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 4) != 0) {
+    if(linker_build_metadata_buffer_null_terminator(metadata_buffer, 8) != 0) {
         PRINTLOG(LINKER, LOG_ERROR, "cannot append null terminator to buffer");
 
         goto error_destroy_buffer;

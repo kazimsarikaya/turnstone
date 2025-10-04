@@ -24,6 +24,7 @@ MODULE("turnstone.lib.linker");
 hashmap_t* linker_modules_at_memory = NULL;
 
 void linker_build_modules_at_memory(void) {
+    PRINTLOG(LINKER, LOG_DEBUG, "Building linker modules at memory");
     if(linker_modules_at_memory) {
         return;
     }
@@ -38,6 +39,15 @@ void linker_build_modules_at_memory(void) {
 
     linker_metadata_at_memory_t* module_or_section = (linker_metadata_at_memory_t *)program_header->metadata_virtual_address;
 
+    if(!module_or_section) {
+        PRINTLOG(LINKER, LOG_ERROR, "No metadata found in program header");
+        hashmap_destroy(linker_modules_at_memory);
+        linker_modules_at_memory = NULL;
+        return;
+    }
+
+    uint64_t metadata_end = program_header->metadata_virtual_address + program_header->metadata_size;
+
     while (module_or_section->module.id != 0) {
         hashmap_put(linker_modules_at_memory, (void*)module_or_section->module.id, module_or_section);
         module_or_section++;
@@ -47,7 +57,13 @@ void linker_build_modules_at_memory(void) {
         }
 
         module_or_section++;
+
+        if((uint64_t)module_or_section >= metadata_end) {
+            PRINTLOG(LINKER, LOG_ERROR, "Metadata end reached without module terminator");
+            break;
+        }
     }
+    PRINTLOG(LINKER, LOG_DEBUG, "Linker modules at memory built");
 }
 
 void linker_print_modules_at_memory(void) {
