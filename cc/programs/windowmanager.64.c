@@ -13,7 +13,6 @@
 #include <windowmanager/wnd_create_destroy.h>
 #include <windowmanager/wnd_greater.h>
 #include <windowmanager/wnd_options.h>
-#include <windowmanager/wnd_mouse.h>
 #include <logging.h>
 #include <memory.h>
 #include <utils.h>
@@ -27,240 +26,318 @@
 #include <device/kbd_scancodes.h>
 #include <strings.h>
 #include <graphics/screen.h>
-#include <graphics/text_cursor.h>
 #include <graphics/font.h>
+#include <graphics/softgfx.h>
+#include <time.h>
 
 MODULE("turnstone.user.programs.windowmanager");
 
 void video_text_print(const char_t* text);
 
-extern boolean_t windowmanager_initialized;
-
-extern window_t* windowmanager_current_window;
-extern hashmap_t* windowmanager_windows;
-
-static int8_t windowmanager_main(void) {
-    if(windowmanager_init_double_buffer() != 0) {
-        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize double buffer\n");
-        return -1;
+static void windowmanager_handle_events(windowmanager_t* wndmgr) {
+    if(buffer_get_length(kbd_buffer) == 0 && buffer_get_length(mouse_buffer) == 0) {
+        return;
     }
-
 
     uint32_t font_width = 0, font_height = 0;
 
     font_get_font_dimension(&font_width, &font_height);
 
-    screen_info_t screen_info = screen_get_info();
+    uint64_t kbd_length = 0;
+    uint32_t kbd_ev_cnt = 0;
+    uint64_t mouse_length = 0;
+    uint32_t mouse_ev_cnt = 0;
 
-    windowmanager_current_window = windowmanager_create_greater_window();
-    windowmanager_windows = hashmap_integer(16);
+    kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
+    mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
 
-    list_t* mq = list_create_queue();
+    if(kbd_length == 0 && mouse_length == 0) {
+        memory_free(kbd_data);
+        memory_free(mouse_data);
 
-    task_add_message_queue(mq);
+        return;
+    }
 
-    hashmap_put(windowmanager_windows, (void*)windowmanager_current_window->id, windowmanager_current_window);
+    if(mouse_length) {
+        mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
 
+        for(uint32_t i = 0; i < mouse_ev_cnt; i++) {
+
+            if(mouse_data[i].wheel != 0 && wndmgr->current_window->on_scroll) {
+                window_event_t event = {0};
+                event.window = wndmgr->current_window;
+
+                if(mouse_data[i].wheel > 0) {
+                    event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
+                } else {
+                    event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
+                }
+
+                wndmgr->current_window->on_scroll(&event);
+            }
+        }
+
+        mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
+
+        if((last->buttons & MOUSE_BUTTON_LEFT) && !wndmgr->current_window->has_alert) {
+            wndmgr_text_cursor_move(last->x / font_width, last->y / font_height);
+        }
+
+        wndmgr_mouse_move_cursor(wndmgr, last->x, last->y);
+    }
+
+    memory_free(mouse_data);
+
+
+    if(kbd_length == 0) {
+        memory_free(kbd_data);
+
+        return;
+    }
+
+    char_t data[4096];
+    uint32_t data_idx = 0;
+    data[data_idx] = NULL;
+
+    kbd_ev_cnt = kbd_length / sizeof(kbd_report_t);
+
+    for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
+        if(kbd_data[i].is_pressed) {
+
+            if(wndmgr->current_window->has_alert && kbd_data[i].key != '\n') {
+                continue;
+            }
+
+            if(kbd_data[i].is_printable) {
+                if(kbd_data[i].key == '\n' && wndmgr->current_window->on_enter) {
+                    window_event_t event = {0};
+                    event.type = WINDOW_EVENT_TYPE_ENTER;
+                    event.window = wndmgr->current_window;
+                    wndmgr->current_window->on_enter(&event);
+                } else if(kbd_data[i].key == '\t'){
+                    boolean_t is_reverse = false;
+
+                    if(kbd_data[i].state.is_shift_pressed) {
+                        is_reverse = true;
+                    }
+
+                    windowmanager_move_cursor_to_next_input(wndmgr->current_window, is_reverse);
+                }else {
+                    data_idx = windowmanager_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
+                }
+            } else {
+                if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
+                    data[data_idx++] = '\b';
+                    data[data_idx++] = ' ';
+                    data[data_idx++] = '\b';
+                } else if(kbd_data[i].key == KBD_SCANCODE_F2) {
+                    window_t* options_window = windowmanager_create_primary_options_window();
+
+                    if(options_window != NULL) {
+                        windowmanager_insert_and_set_current_window(options_window);
+                    }
+                } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
+                    windowmanager_remove_and_set_current_window(wndmgr->current_window);
+                } else if(kbd_data[i].key == KBD_SCANCODE_F4) {
+                    wndmgr->current_window->is_dirty = true;
+                } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
+                    wndmgr_text_cursor_move_relative(0, -1);
+                } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
+                    wndmgr_text_cursor_move_relative(0, 1);
+                } else if(kbd_data[i].key == KBD_SCANCODE_LEFT) {
+                    wndmgr_text_cursor_move_relative(-1, 0);
+                } else if(kbd_data[i].key == KBD_SCANCODE_RIGHT) {
+                    wndmgr_text_cursor_move_relative(1, 0);
+                } else if(kbd_data[i].key == KBD_SCANCODE_F5) {
+                    window_event_t event = {0};
+                    event.type = WINDOW_EVENT_TYPE_SCROLL_LEFT;
+                    event.window = wndmgr->current_window;
+                    if(wndmgr->current_window->on_scroll) {
+                        wndmgr->current_window->on_scroll(&event);
+                    }
+                } else if(kbd_data[i].key == KBD_SCANCODE_F6 || kbd_data[i].key == KBD_SCANCODE_PAGEUP) {
+                    window_event_t event = {0};
+                    event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
+                    event.window = wndmgr->current_window;
+                    if(wndmgr->current_window->on_scroll) {
+                        wndmgr->current_window->on_scroll(&event);
+                    }
+                } else if(kbd_data[i].key == KBD_SCANCODE_F7 || kbd_data[i].key == KBD_SCANCODE_PAGEDOWN) {
+                    window_event_t event = {0};
+                    event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
+                    event.window = wndmgr->current_window;
+                    if(wndmgr->current_window->on_scroll) {
+                        wndmgr->current_window->on_scroll(&event);
+                    }
+                } else if(kbd_data[i].key == KBD_SCANCODE_F8) {
+                    window_event_t event = {0};
+                    event.type = WINDOW_EVENT_TYPE_SCROLL_RIGHT;
+                    event.window = wndmgr->current_window;
+                    if(wndmgr->current_window->on_scroll) {
+                        wndmgr->current_window->on_scroll(&event);
+                    }
+                } else if(kbd_data[i].key == KBD_SCANCODE_PRINTSCREEN) {
+                    // clipboard_send_text("hello world from turnstone os!");
+                }
+
+            }
+        }
+    }
+
+    data[data_idx] = NULL;
+
+    memory_free(kbd_data);
+
+    window_t* edit_area = NULL;
+
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &edit_area)) {
+        if(edit_area != NULL) {
+            windowmanager_set_window_text(edit_area, data);
+        }
+    }
+}
+
+static int8_t windowmanager_main(void) {
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Window Manager initializing");
     task_set_interruptible();
+
+    boolean_t test_trigangle = false;
+    boolean_t print_fps = false;
+
+    if(!test_trigangle) {
+        task_set_interrupt_receive_workaround(1000 / 5);
+    }
 
     kbd_buffer = buffer_new_with_capacity(NULL, 4100);
     mouse_buffer = buffer_new_with_capacity(NULL, 4096);
 
-    windowmanager_clear_screen(windowmanager_current_window);
-    SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    text_cursor_enable(true);
+    if(wndmgr == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to get windowmanager instance\n");
+        return -1;
+    }
 
-    if(wndmgr_mouse_init() != 0) {
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    if(wndmgr_mouse_init(wndmgr) != 0) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize mouse\n");
     }
 
-    windowmanager_initialized = true;
+    if(wndmgr_font_init(wndmgr) != 0) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to initialize font\n");
+    }
+
+    wndmgr->current_window = windowmanager_create_greater_window();
+
+    windowmanager_set_initialized(true);
 
     PRINTLOG(WINDOWMANAGER, LOG_INFO, "Window Manager initialized, waiting events\n");
 
-    while(true) {
-        boolean_t flush_needed = windowmanager_draw_window(windowmanager_current_window);
+    float32_t angle = 0.0f;
 
+    uint64_t start_time = 0;
+    uint64_t end_time = 0;
+    uint64_t clear_start = 0;
+    uint64_t clear_end = 0;
 
-        if(flush_needed) {
-            text_cursor_show();
-            SCREEN_FLUSH(0, 0, 0, 0, screen_info.width, screen_info.height);
+    sgfx_clear(gfx_ctx, 0.0f, 0.0f, 0.0f, 1.0f);
+    sgfx_swap_buffers(gfx_ctx);
+
+    while(windowmanager_is_initialized()) {
+        start_time = time_ms(NULL);
+
+        uint64_t event_start = time_ms(NULL);
+        windowmanager_handle_events(wndmgr);
+        uint64_t event_end = time_ms(NULL);
+
+        if(test_trigangle) {
+            clear_start = time_ms(NULL);
+            sgfx_clear(gfx_ctx, 0.0f, 0.0f, 0.0f, 1.0f);
+            clear_end = time_ms(NULL);
+
+            sgfx_matrix_mode(gfx_ctx, SGFX_PROJECTION);
+            sgfx_load_identity(gfx_ctx);
+            sgfx_ortho_f32(gfx_ctx,
+                           -1.0f, 1.0f,
+                           -1.0f, 1.0f,
+                           -1.0f, 1.0f);
+
+            sgfx_matrix_mode(gfx_ctx, SGFX_MODELVIEW);
+            sgfx_load_identity(gfx_ctx);
+            sgfx_rotate_f32(gfx_ctx, angle, 0.0f, 0.0f, 1.0f);
+            sgfx_scale_f32(gfx_ctx, 0.5f, 0.5f, 1.0f);
+
+            sgfx_begin(gfx_ctx, SGFX_TRIANGLES);
+            sgfx_color4_f32(gfx_ctx, 1.0f, 0.0f, 0.0f, 1.0f);
+            sgfx_vertex3_f32(gfx_ctx, 0.0f, 0.5f, 0.0f);
+            sgfx_color4_f32(gfx_ctx, 0.0f, 1.0f, 0.0f, 1.0f);
+            sgfx_vertex3_f32(gfx_ctx, -0.5f, -0.5f, 0.0f);
+            sgfx_color4_f32(gfx_ctx, 0.0f, 0.0f, 1.0f, 1.0f);
+            sgfx_vertex3_f32(gfx_ctx, 0.5f, -0.5f, 0.0f);
+            sgfx_end(gfx_ctx);
+        } else {
+            sgfx_matrix_mode(gfx_ctx, SGFX_PROJECTION);
+            sgfx_load_identity(gfx_ctx);
+            sgfx_ortho_f32(gfx_ctx,
+                           0.0f, (float32_t)wndmgr->screen_width,
+                           (float32_t)wndmgr->screen_height, 0.0f,
+                           -1.0f, 1.0f);
+
+            sgfx_matrix_mode(gfx_ctx, SGFX_MODELVIEW);
+            sgfx_load_identity(gfx_ctx);
+
+            windowmanager_draw_window(wndmgr, wndmgr->current_window);
         }
 
-        while(list_size(mq) == 0) {
+        // Swap buffers (copies diff to framebuffer)
+        uint64_t swap_start = time_ms(NULL);
+        sgfx_swap_buffers(gfx_ctx);
+        uint64_t swap_end = time_ms(NULL);
+
+        end_time = time_ms(NULL);
+
+        uint64_t frame_time = end_time - start_time;
+
+        if(print_fps) {
+            char_t time_str[64] = {0};
+            utoa_with_buffer(time_str, frame_time);
+            video_text_print(time_str);
+            utoa_with_buffer(time_str, swap_end - swap_start);
+            video_text_print(" ms (");
+            video_text_print(time_str);
+            video_text_print(" ms swap, ");
+            utoa_with_buffer(time_str, clear_end - clear_start);
+            video_text_print(time_str);
+            video_text_print(" ms clear, ");
+            utoa_with_buffer(time_str, event_end - event_start);
+            video_text_print(time_str);
+            video_text_print(" ms events) ");
+            if(frame_time < 16) {
+                video_text_print("60 FPS+");
+            } else if(frame_time < 33) {
+                video_text_print("30-60 FPS");
+            } else if(frame_time < 50) {
+                video_text_print("20-30 FPS");
+            } else if(frame_time < 100) {
+                video_text_print("10-20 FPS");
+            } else {
+                video_text_print("<10 FPS");
+            }
+
+            video_text_print("\n");
+        }
+
+        if(test_trigangle) {
+            angle += 0.5f;
+            if(angle >= 360.0f) {
+                angle = 0.0f;
+            }
+
+            task_msleep(16); // ~60 FPS
+        } else {
             task_set_message_waiting();
             task_yield();
-
-            if(buffer_get_length(kbd_buffer) == 0 && buffer_get_length(mouse_buffer) == 0) {
-                continue;
-            } else {
-                break;
-            }
-        }
-
-        uint64_t kbd_length = 0;
-        uint32_t kbd_ev_cnt = 0;
-        uint64_t mouse_length = 0;
-        uint32_t mouse_ev_cnt = 0;
-
-        kbd_report_t* kbd_data = (kbd_report_t*)buffer_get_all_bytes_and_reset(kbd_buffer, &kbd_length);
-        mouse_report_t* mouse_data = (mouse_report_t*)buffer_get_all_bytes_and_reset(mouse_buffer, &mouse_length);
-
-        if(kbd_length == 0 && mouse_length == 0) {
-            memory_free(kbd_data);
-            memory_free(mouse_data);
-
-            continue;
-        }
-
-        if(mouse_length) {
-            mouse_ev_cnt = mouse_length / sizeof(mouse_report_t);
-
-            for(uint32_t i = 0; i < mouse_ev_cnt; i++) {
-
-                if(mouse_data[i].wheel != 0 && windowmanager_current_window->on_scroll) {
-                    window_event_t event = {0};
-                    event.window = windowmanager_current_window;
-
-                    if(mouse_data[i].wheel > 0) {
-                        event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
-                    } else {
-                        event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
-                    }
-
-                    windowmanager_current_window->on_scroll(&event);
-                }
-            }
-
-            mouse_report_t* last = &mouse_data[mouse_ev_cnt - 1];
-
-            if((last->buttons & MOUSE_BUTTON_LEFT) && !windowmanager_current_window->has_alert) {
-                text_cursor_hide();
-                text_cursor_move(last->x / font_width, last->y / font_height);
-                text_cursor_show();
-            }
-
-            if(MOUSE_MOVE_CURSOR) {
-                MOUSE_MOVE_CURSOR(last->x, last->y);
-            }
-        }
-
-        memory_free(mouse_data);
-
-        if(kbd_length == 0) {
-            memory_free(kbd_data);
-
-            continue;
-        }
-
-        char_t data[4096];
-        uint32_t data_idx = 0;
-        data[data_idx] = NULL;
-
-        kbd_ev_cnt = kbd_length / sizeof(kbd_report_t);
-
-        for(uint32_t i = 0; i < kbd_ev_cnt; i++) {
-            if(kbd_data[i].is_pressed) {
-
-                if(windowmanager_current_window->has_alert && kbd_data[i].key != '\n') {
-                    continue;
-                }
-
-                if(kbd_data[i].is_printable) {
-                    if(kbd_data[i].key == '\n' && windowmanager_current_window->on_enter) {
-                        window_event_t event = {0};
-                        event.type = WINDOW_EVENT_TYPE_ENTER;
-                        event.window = windowmanager_current_window;
-                        windowmanager_current_window->on_enter(&event);
-                    } else if(kbd_data[i].key == '\t'){
-                        boolean_t is_reverse = false;
-
-                        if(kbd_data[i].state.is_shift_pressed) {
-                            is_reverse = true;
-                        }
-
-                        windowmanager_move_cursor_to_next_input(windowmanager_current_window, is_reverse);
-                    }else {
-                        data_idx = windowmanager_append_char16_to_buffer(kbd_data[i].key, data, data_idx);
-                    }
-                } else {
-                    if(kbd_data[i].key == KBD_SCANCODE_BACKSPACE) {
-                        data[data_idx++] = '\b';
-                        data[data_idx++] = ' ';
-                        data[data_idx++] = '\b';
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F2) {
-                        window_t* options_window = windowmanager_create_primary_options_window();
-
-                        if(options_window != NULL) {
-                            windowmanager_insert_and_set_current_window(options_window);
-                        }
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F3) {
-                        windowmanager_remove_and_set_current_window(windowmanager_current_window);
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F4) {
-                        windowmanager_current_window->is_dirty = true;
-                    } else if(kbd_data[i].key == KBD_SCANCODE_UP) {
-                        text_cursor_hide();
-                        text_cursor_move_relative(0, -1);
-                        text_cursor_show();
-                    } else if(kbd_data[i].key == KBD_SCANCODE_DOWN) {
-                        text_cursor_hide();
-                        text_cursor_move_relative(0, 1);
-                        text_cursor_show();
-                    } else if(kbd_data[i].key == KBD_SCANCODE_LEFT) {
-                        text_cursor_hide();
-                        text_cursor_move_relative(-1, 0);
-                        text_cursor_show();
-                    } else if(kbd_data[i].key == KBD_SCANCODE_RIGHT) {
-                        text_cursor_hide();
-                        text_cursor_move_relative(1, 0);
-                        text_cursor_show();
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F5) {
-                        window_event_t event = {0};
-                        event.type = WINDOW_EVENT_TYPE_SCROLL_LEFT;
-                        event.window = windowmanager_current_window;
-                        if(windowmanager_current_window->on_scroll) {
-                            windowmanager_current_window->on_scroll(&event);
-                        }
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F6 || kbd_data[i].key == KBD_SCANCODE_PAGEUP) {
-                        window_event_t event = {0};
-                        event.type = WINDOW_EVENT_TYPE_SCROLL_UP;
-                        event.window = windowmanager_current_window;
-                        if(windowmanager_current_window->on_scroll) {
-                            windowmanager_current_window->on_scroll(&event);
-                        }
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F7 || kbd_data[i].key == KBD_SCANCODE_PAGEDOWN) {
-                        window_event_t event = {0};
-                        event.type = WINDOW_EVENT_TYPE_SCROLL_DOWN;
-                        event.window = windowmanager_current_window;
-                        if(windowmanager_current_window->on_scroll) {
-                            windowmanager_current_window->on_scroll(&event);
-                        }
-                    } else if(kbd_data[i].key == KBD_SCANCODE_F8) {
-                        window_event_t event = {0};
-                        event.type = WINDOW_EVENT_TYPE_SCROLL_RIGHT;
-                        event.window = windowmanager_current_window;
-                        if(windowmanager_current_window->on_scroll) {
-                            windowmanager_current_window->on_scroll(&event);
-                        }
-                    } else if(kbd_data[i].key == KBD_SCANCODE_PRINTSCREEN) {
-                        // clipboard_send_text("hello world from turnstone os!");
-                    }
-
-                }
-            }
-        }
-
-        data[data_idx] = NULL;
-
-        memory_free(kbd_data);
-
-        window_t* edit_area = NULL;
-
-        if(windowmanager_find_window_by_text_cursor(windowmanager_current_window, &edit_area)) {
-            if(edit_area != NULL) {
-                windowmanager_set_window_text(edit_area, data);
-            }
         }
     }
 
@@ -274,10 +351,15 @@ int8_t windowmanager_init(void) {
 
     windowmanager_task_id = task_create_task(heap, 64 << 20, 2 << 20, windowmanager_main, 0, NULL, "windowmanager");
 
-    while(!windowmanager_initialized) {
+    if(windowmanager_task_id == -1ULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create windowmanager task\n");
+        return -1;
+    }
+
+    while(!windowmanager_is_initialized()) {
         cpu_sti();
         cpu_idle();
     }
 
-    return windowmanager_task_id == -1ULL ? -1 : 0;
+    return 0;
 }

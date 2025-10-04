@@ -20,111 +20,40 @@ void video_text_print(const char_t* text);
 
 MODULE("turnstone.windowmanager");
 
-static pixel_t* wndmgr_double_buffer = NULL;
-extern pixel_t* VIDEO_BASE_ADDRESS;
+extern color_t* VIDEO_BASE_ADDRESS;
 
-static void windowmanager_clear_screen_area(uint32_t x, uint32_t y, uint32_t width, uint32_t height, color_t background) {
-    uint32_t i = 0;
-    uint32_t j = 0;
-    uint32_t line = 0;
-    uint32_t bg = background.color;
-    screen_info_t screen_info = screen_get_info();
+static windowmanager_t* wndmgr_instance = NULL;
 
-    for(i = 0; i < height; i++) {
-        line = (y + i) * screen_info.pixels_per_scanline + x;
+windowmanager_t* windowmanager_get_instance(void) {
+    if(wndmgr_instance == NULL) {
+        wndmgr_instance = memory_malloc(sizeof(windowmanager_t));
 
-        for(j = 0; j < width; j++) {
-            *((pixel_t*)(wndmgr_double_buffer + line)) = bg;
-            line++;
-        }
-    }
-
-    SCREEN_FLUSH(0, 0, x, y, width, height);
-}
-
-static void windowmanager_screen_flush(uint32_t scanout, uint64_t offset, uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
-    UNUSED(scanout);
-    UNUSED(offset);
-
-    if(VIDEO_BASE_ADDRESS == NULL) {
-        return;
-    }
-    screen_info_t screen_info = screen_get_info();
-
-    uint32_t sw = screen_info.width;
-    uint32_t sh = screen_info.height;
-
-    if(x >= sw || y >= sh) {
-        return;
-    }
-
-    if(x + width > sw) {
-        width = sw - x;
-    }
-
-    if(y + height > sh) {
-        height = sh - y;
-    }
-
-    for(uint32_t i = 0; i < height; i++) {
-        uint32_t line = (y + i) * screen_info.pixels_per_scanline + x;
-
-        uint8_t* src = (uint8_t*)(wndmgr_double_buffer + line);
-        uint8_t* dst = (uint8_t*)(VIDEO_BASE_ADDRESS + line);
-
-        memory_memcopy(src, dst, width * sizeof(pixel_t));
-    }
-}
-
-static void windowmanager_text_cursor_draw(int32_t x, int32_t y, int32_t width, int32_t height, boolean_t flush) {
-    screen_info_t screen_info = screen_get_info();
-
-    int32_t offs = (y * height * screen_info.pixels_per_scanline) + (x * width);
-    uint32_t orig_offs = offs;
-
-    int32_t lx, ly, line;
-
-    for(ly = 0; ly < height; ly++) {
-        line = offs;
-
-        for(lx = 0; lx < width; lx++) {
-
-            *((pixel_t*)(wndmgr_double_buffer + line)) = ~(*((pixel_t*)(wndmgr_double_buffer + line)));
-
-            line++;
+        if(wndmgr_instance == NULL) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for windowmanager instance\n");
+            return NULL;
         }
 
-        offs  += screen_info.pixels_per_scanline;
+        screen_info_t screen_info = screen_get_info();
+
+        PRINTLOG(WINDOWMANAGER, LOG_INFO, "Screen res: %dx%d", screen_info.width, screen_info.height);
+
+        sgfx_context_t* gfx_ctx = sgfx_create_context(screen_info.width, screen_info.height, VIDEO_BASE_ADDRESS);
+
+        if(gfx_ctx == NULL) {
+            PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create graphics context\n");
+            memory_free(wndmgr_instance);
+            wndmgr_instance = NULL;
+            return NULL;
+        }
+
+        wndmgr_instance->gfx_ctx = gfx_ctx;
+        wndmgr_instance->screen_width = screen_info.width;
+        wndmgr_instance->screen_height = screen_info.height;
+
+        wndmgr_instance->padding = 2;
     }
 
-    if(flush) {
-        SCREEN_FLUSH(0, orig_offs * sizeof(pixel_t), x * width, y * height, width, height);
-    }
-}
-
-int8_t windowmanager_init_double_buffer(void) {
-    screen_info_t screen_info = screen_get_info();
-
-    uint64_t size = screen_info.pixels_per_scanline * screen_info.height * sizeof(pixel_t);
-
-    wndmgr_double_buffer = memory_malloc(size);
-
-    if(wndmgr_double_buffer == NULL) {
-        return -1;
-    }
-
-    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Double buffer initialized at 0x%p with size 0x%llx", wndmgr_double_buffer, size);
-    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Screen info: %dx%d, pixels per scanline: %d", screen_info.width, screen_info.height, screen_info.pixels_per_scanline);
-
-    SCREEN_FLUSH = windowmanager_screen_flush;
-    SCREEN_CLEAR_AREA = windowmanager_clear_screen_area;
-    TEXT_CURSOR_DRAW = windowmanager_text_cursor_draw;
-
-    return 0;
-}
-
-pixel_t* windowmanager_get_double_buffer(void) {
-    return wndmgr_double_buffer;
+    return wndmgr_instance;
 }
 
 rect_t windowmanager_calc_text_rect(const char_t* text, uint32_t max_width) {
@@ -195,75 +124,35 @@ uint32_t windowmanager_append_char16_to_buffer(char16_t src, char_t* dst, uint32
 }
 
 boolean_t windowmanager_is_point_in_rect(const rect_t* rect, uint32_t x, uint32_t y) {
-    if(rect == NULL) {
+    if (!rect) {
         return false;
     }
 
-    if(x < rect->x) {
-        return false;
-    }
-
-    if(x >= rect->x + rect->width) {
-        return false;
-    }
-
-    if(y < rect->y) {
-        return false;
-    }
-
-    if(y >= rect->y + rect->height) {
-        return false;
-    }
-
-    return true;
+    return (x >= rect->x) &
+           (x <  rect->x + rect->width) &
+           (y >= rect->y) &
+           (y <  rect->y + rect->height);
 }
 
-boolean_t windowmanager_is_rect_in_rect(const rect_t* rect1, const rect_t* rect2) {
-    if(rect1 == NULL || rect2 == NULL) {
-        return false;
-    }
-
-    if(rect1->x < rect2->x) {
-        return false;
-    }
-
-    if(rect1->x + rect1->width > rect2->x + rect2->width) {
-        return false;
-    }
-
-    if(rect1->y < rect2->y) {
-        return false;
-    }
-
-    if(rect1->y + rect1->height > rect2->y + rect2->height) {
-        return false;
-    }
-
-    return true;
+boolean_t windowmanager_is_rect_in_rect(const rect_t* r1, const rect_t* r2) {
+    boolean_t valid = (r1 != NULL) & (r2 != NULL);
+    return valid & (
+        (r2->x >= r1->x) &
+        (r2->y >= r1->y) &
+        (r2->x + r2->width <= r1->x + r1->width) &
+        (r2->y + r2->height <= r1->y + r1->height)
+        );
 }
 
-boolean_t windowmanager_is_rects_intersect(const rect_t* rect1, const rect_t* rect2) {
-    if(rect1 == NULL || rect2 == NULL) {
-        return false;
-    }
-
-    if(rect1->x + rect1->width < rect2->x) {
-        return false;
-    }
-
-    if(rect1->x > rect2->x + rect2->width) {
-        return false;
-    }
-
-    if(rect1->y + rect1->height < rect2->y) {
-        return false;
-    }
-
-    if(rect1->y > rect2->y + rect2->height) {
-        return false;
-    }
-
-    return true;
+boolean_t windowmanager_is_rects_intersect(const rect_t* r1, const rect_t* r2) {
+    boolean_t valid = (r1 != NULL) & (r2 != NULL);
+    return valid & (
+        valid &
+        (r1->x + r1->width >= r2->x) &
+        (r2->x + r2->width >= r1->x) &
+        (r1->y + r1->height >= r2->y) &
+        (r2->y + r2->height >= r1->y)
+        );
 }
 
 boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint32_t y, window_t** result) {
@@ -279,11 +168,6 @@ boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint3
         return false;
     }
 
-    if(window->children == NULL) {
-        *result = window;
-        return true;
-    }
-
     for(size_t i = 0; i < list_size(window->children); i++) {
         window_t* child = (window_t*)list_get_data_at_position(window->children, i);
 
@@ -292,7 +176,34 @@ boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint3
         }
     }
 
-    return false;
+    *result = window;
+
+    return true;
+}
+
+void windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rect) {
+    if (window == NULL || rect == NULL) {
+        return;
+    }
+
+    // First check children
+    boolean_t fully_contained = false;
+    for (size_t i = 0; i < list_size(window->children); i++) {
+        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+        if (windowmanager_is_rects_intersect(&child->rect, rect)) {
+            windowmanager_mark_window_dirty_by_rect(child, rect);
+
+            if (windowmanager_is_rect_in_rect(&child->rect, rect)) {
+                fully_contained = true;
+            }
+
+        }
+    }
+
+    // Only mark this window if no child contains/intersects the rect
+    if (!fully_contained && windowmanager_is_rects_intersect(&window->rect, rect)) {
+        window->is_dirty = true;
+    }
 }
 
 boolean_t windowmanager_find_window_by_text_cursor(window_t* window, window_t** result) {
@@ -334,7 +245,6 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     int32_t x, y;
 
     text_cursor_get(&x, &y);
-    text_cursor_hide();
 
     uint32_t font_width = 0, font_height = 0;
 
@@ -347,7 +257,6 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     int32_t start_idx = (y - win_y) * win_w + (x - win_x);
 
     if(start_idx < 0 || start_idx >= window->input_length) {
-        text_cursor_show();
         return -1;
     }
 
@@ -378,7 +287,6 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
     }
 
     text_cursor_move(x, y);
-    text_cursor_show();
 
     window->is_dirty = true;
 
@@ -556,9 +464,57 @@ void windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reve
         return;
     }
 
-    text_cursor_hide();
-    text_cursor_move(next->rect.x / font_width, next->rect.y / font_height);
-    text_cursor_show();
+    wndmgr_text_cursor_move(next->rect.x / font_width, next->rect.y / font_height);
 
     list_destroy_with_type(inputs, LIST_DESTROY_WITH_DATA, wndmgr_iv_list_destroyer);
+}
+
+void wndmgr_text_cursor_move(int32_t x, int32_t y) {
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    if(wndmgr == NULL) {
+        return;
+    }
+
+    window_t* wnd = NULL;
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
+        if(wnd != NULL) {
+            wnd->is_dirty = true;
+        }
+    }
+
+    text_cursor_move(x, y);
+
+    wnd = NULL;
+
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
+        if(wnd != NULL) {
+            wnd->is_dirty = true;
+        }
+    }
+}
+
+void wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy) {
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    if(wndmgr == NULL) {
+        return;
+    }
+
+    window_t* wnd = NULL;
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
+        if(wnd != NULL) {
+            wnd->is_dirty = true;
+        }
+    }
+
+    text_cursor_move_relative(dx, dy);
+
+    wnd = NULL;
+
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
+        if(wnd != NULL) {
+            wnd->is_dirty = true;
+        }
+    }
 }

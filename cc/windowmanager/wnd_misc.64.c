@@ -7,16 +7,19 @@
  */
 
 #include <windowmanager/wnd_misc.h>
+#include <windowmanager.h>
 #include <acpi.h>
 
 MODULE("turnstone.windowmanager");
 
 int8_t wndmgr_reboot(void) {
+    windowmanager_set_initialized(false);
     acpi_reset();
     return 0;
 }
 
 int8_t wndmgr_power_off(void) {
+    windowmanager_set_initialized(false);
     acpi_poweroff();
     return 0;
 }

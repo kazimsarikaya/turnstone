@@ -12,7 +12,6 @@
 #include <hashmap.h>
 #include <buffer.h>
 #include <graphics/screen.h>
-#include <graphics/text_cursor.h>
 #include <time.h>
 #include <strings.h>
 
@@ -20,12 +19,8 @@ MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-uint64_t windowmanager_next_window_id = 0;
-window_t* windowmanager_current_window = NULL;
-hashmap_t* windowmanager_windows = NULL;
-
 window_t* windowmanager_create_top_window(void) {
-    screen_info_t screen_info = screen_get_info();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
     window_t* window = memory_malloc(sizeof(window_t));
 
@@ -33,13 +28,12 @@ window_t* windowmanager_create_top_window(void) {
         return NULL;
     }
 
-    window->id     = windowmanager_next_window_id++;
-    window->rect.x      = 0;
-    window->rect.y      = 0;
-    window->rect.width  = screen_info.width;
-    window->rect.height = screen_info.height;
-    window->buffer = windowmanager_get_double_buffer();
-    window->background_color.color = 0x00000000;
+    window->id = wndmgr->next_window_id++;
+    window->rect.x = 0;
+    window->rect.y = 0;
+    window->rect.width = wndmgr->screen_width;
+    window->rect.height = wndmgr->screen_height;
+    window->background_color.color = 0xFF000000;
     window->foreground_color.color = 0xFFFFFFFF;
     window->is_visible = true;
     window->is_dirty = true;
@@ -49,6 +43,8 @@ window_t* windowmanager_create_top_window(void) {
 
 
 window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rect, color_t background_color, color_t foreground_color) {
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
     window_t* window = memory_malloc(sizeof(window_t));
 
     if(window == NULL) {
@@ -58,10 +54,9 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     int32_t abs_x = parent->rect.x + rect.x;
     int32_t abs_y = parent->rect.y + rect.y;
 
-    window->id     = windowmanager_next_window_id++;
-    window->text  = text;
-    window->rect   = (rect_t){abs_x, abs_y, rect.width, rect.height};
-    window->buffer = windowmanager_get_double_buffer();
+    window->id = wndmgr->next_window_id++;
+    window->text = text;
+    window->rect = (rect_t){abs_x, abs_y, rect.width, rect.height};
     window->background_color = background_color;
     window->foreground_color = foreground_color;
     window->is_visible = true;
@@ -107,15 +102,17 @@ static int8_t wndmgr_create_footer(window_t* parent) {
         return -1;
     }
 
-    font_table_t* ft = font_get_font_table();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    rect_t rect = {0, parent->rect.height - ft->font_height, parent->rect.width, ft->font_height};
+    rect_t rect = {0, parent->rect.height - wndmgr->font_height, parent->rect.width, wndmgr->font_height};
 
     window_t* footer = windowmanager_create_window(parent, NULL, rect, (color_t){.color = 0xFF282828}, (color_t){.color = 0xFFFFFFFF});
 
     if(footer == NULL) {
         return -1;
     }
+
+    footer->is_always_redrawn = true;
 
     timeparsed_t tp = {0};
 
@@ -127,7 +124,7 @@ static int8_t wndmgr_create_footer(window_t* parent) {
 
     rect = windowmanager_calc_text_rect(time_str, 2000);
 
-    rect.x = parent->rect.width - rect.width - ft->font_width;
+    rect.x = parent->rect.width - rect.width - wndmgr->font_width;
 
     window_t* time_wnd = windowmanager_create_window(footer, time_str, rect, (color_t){.color = 0xFF282828}, (color_t){.color = 0xFF2288FF});
 
@@ -149,9 +146,9 @@ void windowmanager_insert_and_set_current_window(window_t* window) {
         return;
     }
 
-    text_cursor_hide();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    window_t* next = windowmanager_current_window->next;
+    window_t* next = wndmgr->current_window->next;
 
     window->next = next;
 
@@ -159,10 +156,10 @@ void windowmanager_insert_and_set_current_window(window_t* window) {
         next->prev = window;
     }
 
-    window->prev = windowmanager_current_window;
-    windowmanager_current_window->next = window;
+    window->prev = wndmgr->current_window;
+    wndmgr->current_window->next = window;
 
-    windowmanager_current_window = window;
+    wndmgr->current_window = window;
 }
 
 void windowmanager_destroy_window(window_t* window) {
@@ -232,9 +229,9 @@ void windowmanager_remove_and_set_current_window(window_t* window) {
         return;
     }
 
-    text_cursor_hide();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    window_t* next = windowmanager_current_window->next;
+    window_t* next = wndmgr->current_window->next;
     window_t* prev = window->prev;
 
     prev->next = next;
@@ -243,8 +240,8 @@ void windowmanager_remove_and_set_current_window(window_t* window) {
         next->prev = prev;
     }
 
-    windowmanager_current_window = prev;
-    windowmanager_current_window->is_dirty = true;
+    wndmgr->current_window = prev;
+    wndmgr->current_window->is_dirty = true;
 
     windowmanager_destroy_window(window);
 }
@@ -260,19 +257,21 @@ static int8_t wndmgr_alert_window_on_enter(const window_event_t* event) {
         return -1;
     }
 
-    wndmgr_alert_window_data_t* alert_window_data = (wndmgr_alert_window_data_t*)windowmanager_current_window->extra_data;
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    wndmgr_alert_window_data_t* alert_window_data = (wndmgr_alert_window_data_t*)wndmgr->current_window->extra_data;
     window_t* alert_window = alert_window_data->self;
 
     if(alert_window == NULL) {
         return -1;
     }
 
-    list_list_delete(windowmanager_current_window->children, alert_window);
+    list_list_delete(wndmgr->current_window->children, alert_window);
 
-    windowmanager_current_window->on_enter = alert_window_data->on_enter;
-    windowmanager_current_window->extra_data = alert_window_data->extra_data;
-    windowmanager_current_window->has_alert = false;
-    windowmanager_current_window->is_dirty = true;
+    wndmgr->current_window->on_enter = alert_window_data->on_enter;
+    wndmgr->current_window->extra_data = alert_window_data->extra_data;
+    wndmgr->current_window->has_alert = false;
+    wndmgr->current_window->is_dirty = true;
 
     windowmanager_destroy_window(alert_window);
 
@@ -280,19 +279,17 @@ static int8_t wndmgr_alert_window_on_enter(const window_event_t* event) {
 }
 
 void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_t type, const char_t* text) {
-    screen_info_t screen_info = screen_get_info();
-    uint32_t font_width = 0, font_height = 0;
-    font_get_font_dimension(&font_width, &font_height);
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
     rect_t rect = windowmanager_calc_text_rect(text, 400);
 
-    rect_t alert_rect = {0, 0, rect.width + font_width * 4, rect.height + font_height * 4};
+    rect_t alert_rect = {0, 0, rect.width + wndmgr->font_width * 4, rect.height + wndmgr->font_height * 4};
 
-    alert_rect.x = (screen_info.width - alert_rect.width) / 2;
-    alert_rect.y = (screen_info.height - alert_rect.height) / 2;
+    alert_rect.x = (wndmgr->screen_height - alert_rect.width) / 2;
+    alert_rect.y = (wndmgr->screen_height - alert_rect.height) / 2;
 
-    int32_t linecharcount = alert_rect.width / font_width;
-    int32_t linecount = alert_rect.height / font_height;
+    int32_t linecharcount = alert_rect.width / wndmgr->font_width;
+    int32_t linecount = alert_rect.height / wndmgr->font_height;
 
     buffer_t* text_buffer = buffer_new_with_capacity(NULL, linecharcount * linecount);
 
@@ -333,15 +330,15 @@ void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_
         foreground_color.color = 0xFFFFFFFF;
     }
 
-    window_t* alert_window = windowmanager_create_window(windowmanager_current_window, frame_text, alert_rect, background_color, foreground_color);
+    window_t* alert_window = windowmanager_create_window(wndmgr->current_window, frame_text, alert_rect, background_color, foreground_color);
 
     if(alert_window == NULL) {
         memory_free(frame_text);
         return;
     }
 
-    rect.x = 2 * font_width;
-    rect.y = 2 * font_height;
+    rect.x = 2 * wndmgr->font_width;
+    rect.y = 2 * wndmgr->font_height;
 
     window_t* text_window = windowmanager_create_window(alert_window, strdup(text), rect, background_color, foreground_color);
 
@@ -360,11 +357,11 @@ void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_
     }
 
     alert_window_data->self = alert_window;
-    alert_window_data->on_enter = windowmanager_current_window->on_enter;
-    alert_window_data->extra_data = windowmanager_current_window->extra_data;
+    alert_window_data->on_enter = wndmgr->current_window->on_enter;
+    alert_window_data->extra_data = wndmgr->current_window->extra_data;
 
-    windowmanager_current_window->on_enter = wndmgr_alert_window_on_enter;
-    windowmanager_current_window->extra_data = alert_window_data;
-    windowmanager_current_window->has_alert = true;
-    windowmanager_current_window->is_dirty = true;
+    wndmgr->current_window->on_enter = wndmgr_alert_window_on_enter;
+    wndmgr->current_window->extra_data = alert_window_data;
+    wndmgr->current_window->has_alert = true;
+    wndmgr->current_window->is_dirty = true;
 }

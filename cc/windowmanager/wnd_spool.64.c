@@ -118,22 +118,20 @@ static int8_t wndmgr_spool_item_on_redraw(const window_event_t* event) {
 }
 
 static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spool_item){
-    screen_info_t screen_info = screen_get_info();
-
+    windowmanager_t* wndmgr = windowmanager_get_instance();
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {
         return -1;
     }
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
+    uint32_t screen_width = wndmgr->screen_width;
 
     char_t* title_str = strprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
-    rect.x = (screen_info.width - rect.width) / 2;
+    rect.x = (screen_width - rect.width) / 2;
     rect.y = font_height;
 
 
@@ -163,7 +161,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
                                                        NULL,
                                                        (rect_t){0,
                                                                 option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                screen_info.width,
+                                                                screen_width,
                                                                 font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
@@ -178,7 +176,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){font_width, 0, screen_info.width - font_width, font_height},
+                                                            (rect_t){font_width, 0, screen_width - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -200,7 +198,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
                                                                 strdup("_"),
                                                                 (rect_t){font_width*2, top, font_width, font_height},
                                                                 (color_t){.color = 0x00000000},
-                                                                (color_t){.color = 0xFFF0000});
+                                                                (color_t){.color = 0xFFF00000});
 
         if(!wnd_spool_input) {
             windowmanager_destroy_window(window);
@@ -218,7 +216,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
-                                                          (rect_t){left, top, screen_info.width - left, font_height},
+                                                          (rect_t){left, top, screen_width - left, font_height},
                                                           (color_t){.color = 0x00000000},
                                                           (color_t){.color = 0xFF00FF00});
 
@@ -345,7 +343,7 @@ static int8_t wndmgr_spool_browser_wnd_spool_on_redraw(const window_event_t* eve
 }
 
 int8_t windowmanager_create_and_show_spool_browser_window(void) {
-    screen_info_t screen_info = screen_get_info();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
     window_t* window = windowmanager_create_top_window();
 
@@ -353,14 +351,13 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
         return -1;
     }
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
+    uint32_t screen_width = wndmgr->screen_width;
 
     char_t* title_str = strdup("tOS Spool Browser");
 
     rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
-    rect.x = (screen_info.width - rect.width) / 2;
+    rect.x = (screen_width - rect.width) / 2;
     rect.y = font_height;
 
 
@@ -390,7 +387,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                                        NULL,
                                                        (rect_t){0,
                                                                 option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                screen_info.width,
+                                                                screen_width,
                                                                 font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
@@ -405,7 +402,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){font_width, 0, screen_info.width - font_width, font_height},
+                                                            (rect_t){font_width, 0, screen_width - font_width, font_height},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -427,7 +424,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
                                                                 strdup("_"),
                                                                 (rect_t){font_width*2, top, font_width, font_height},
                                                                 (color_t){.color = 0x00000000},
-                                                                (color_t){.color = 0xFFF0000});
+                                                                (color_t){.color = 0xFFF00000});
 
         if(!wnd_spool_input) {
             windowmanager_destroy_window(window);
@@ -446,7 +443,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
         window_t* wnd_spool = windowmanager_create_window(window,
                                                           spool_text,
-                                                          (rect_t){left, top, screen_info.width - left, font_height},
+                                                          (rect_t){left, top, screen_width - left, font_height},
                                                           (color_t){.color = 0x00000000},
                                                           (color_t){.color = 0xFF00FF00});
 

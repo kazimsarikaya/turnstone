@@ -131,17 +131,17 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
                                           const char_t* input_text,
                                           const char_t* input_text_id,
                                           const char_t* tooltip_text) {
-    screen_info_t screen_info = screen_get_info();
 
-    uint32_t font_width = 0, font_height = 0;
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
+    uint32_t screen_width = wndmgr->screen_width;
 
-    font_get_font_dimension(&font_width, &font_height);
 
     window_t* option_input_row = windowmanager_create_window(parent,
                                                              NULL,
                                                              (rect_t){font_width,
                                                                       pos.y + pos.height + 2 * font_height,
-                                                                      screen_info.width - font_width,
+                                                                      screen_width - font_width,
                                                                       font_height},
                                                              (color_t){.color = 0x00000000},
                                                              (color_t){.color = 0xFF00FF00});
@@ -321,9 +321,9 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
         return NULL;
     }
 
-    const wnd_options_list_t* options_list = &wnd_options_list[option_window_type];
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    screen_info_t screen_info = screen_get_info();
+    const wnd_options_list_t* options_list = &wnd_options_list[option_window_type];
 
     window_t* window = windowmanager_create_top_window();
 
@@ -331,14 +331,13 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
         return NULL;
     }
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
+    uint32_t screen_width = wndmgr->screen_width;
 
     char_t* title_str = strdup(options_list->title);
 
-    rect_t rect = windowmanager_calc_text_rect(options_list->title, screen_info.width);
-    rect.x = (screen_info.width - rect.width) / 2;
+    rect_t rect = windowmanager_calc_text_rect(options_list->title, screen_width);
+    rect.x = (screen_width - rect.width) / 2;
     rect.y = font_height;
 
 
@@ -368,7 +367,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
                                                             NULL,
                                                             (rect_t){font_width,
                                                                      option_input_row->rect.y + option_input_row->rect.height + 2 * font_height,
-                                                                     screen_info.width - font_width,
+                                                                     screen_width - font_width,
                                                                      0},
                                                             (color_t){.color = 0x00000000},
                                                             (color_t){.color = 0xFF00FF00});
@@ -401,7 +400,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
         char_t* option_text = strprintf("%s", options_list->items[i].text);
 
-        rect = windowmanager_calc_text_rect(option_text, screen_info.width - option_number_area->rect.width - font_width);
+        rect = windowmanager_calc_text_rect(option_text, screen_width - option_number_area->rect.width - font_width);
 
         rect.x = option_number_area->rect.width +  font_width;
 

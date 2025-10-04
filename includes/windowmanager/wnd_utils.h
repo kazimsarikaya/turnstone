@@ -26,9 +26,9 @@ int8_t    windowmanager_set_window_text(window_t* window, const char_t* text);
 list_t*   windowmanager_get_input_values(const window_t* window);
 void      windowmanager_move_cursor_to_next_input(window_t* window, boolean_t is_reverse);
 int8_t    windowmanager_destroy_inputs(list_t* inputs);
-int8_t    windowmanager_init_double_buffer(void);
-pixel_t*  windowmanager_get_double_buffer(void);
-
+void      wndmgr_text_cursor_move(int32_t x, int32_t y);
+void      wndmgr_text_cursor_move_relative(int32_t dx, int32_t dy);
+void      windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rect);
 
 #ifdef __cplusplus
 }

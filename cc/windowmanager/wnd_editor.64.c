@@ -43,10 +43,8 @@ static window_t* wnd_create_textbox(char_t* text, window_t* parent, int64_t x_of
     return window;
 }
 
-static window_t* wnd_create_editor_ruler(window_t* parent, int64_t start, int64_t top, color_t bg_color, color_t fg_color) {
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* parent, int64_t start, int64_t top, color_t bg_color, color_t fg_color) {
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
 
     int64_t max_ruler = (parent->rect.width / font_width) - 9;
     int64_t ruler_col_count = max_ruler;
@@ -146,10 +144,8 @@ static window_t* wnd_create_editor_ruler(window_t* parent, int64_t start, int64_
     return ruler_window;
 }
 
-static window_t* wnd_create_numbered_line(int64_t line_number, const char_t* line, int64_t line_length, int64_t top, window_t* parent) {
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+static window_t* wnd_create_numbered_line(windowmanager_t* wndmgr, int64_t line_number, const char_t* line, int64_t line_length, int64_t top, window_t* parent) {
+    uint32_t font_height = wndmgr->font_height;
 
     window_t* window = windowmanager_create_window(parent,
                                                    NULL,
@@ -200,9 +196,9 @@ typedef struct wnd_editor_extra_data_t {
 } wnd_editor_extra_data_t;
 
 static int8_t wnd_editor_on_redraw(const window_event_t* event) {
-    uint32_t font_width = 0, font_height = 0;
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_height = wndmgr->font_height;
 
     window_t* window = event->window;
 
@@ -218,7 +214,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
         windowmanager_destroy_child_window(window, extra_data->ruler_window);
     }
 
-    window_t* ruler_window = wnd_create_editor_ruler(window, col_start + 1, rect_ruler_top, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
+    window_t* ruler_window = wnd_create_editor_ruler(wndmgr, window, col_start + 1, rect_ruler_top, (color_t){.color = 0x00000000}, (color_t){.color = 0xFFF00000});
 
     if(ruler_window == NULL) {
         return -1;
@@ -286,7 +282,7 @@ static int8_t wnd_editor_on_redraw(const window_event_t* event) {
         line += col_start;
         line_length -= col_start;
 
-        window_t* line_window = wnd_create_numbered_line(row_start + i + 1, line, line_length, top, editor_window);
+        window_t* line_window = wnd_create_numbered_line(wndmgr, row_start + i + 1, line, line_length, top, editor_window);
 
         if(line_window == NULL) {
             memory_free(line_lengths);
@@ -340,17 +336,15 @@ int8_t windowmanager_create_and_show_editor_window(const char_t* title, const ch
         return -1;
     }
 
-    screen_info_t screen_info = screen_get_info();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_height = wndmgr->font_height;
 
     window->is_writable = !is_text_readonly;
 
     char_t* title_str = strdup(title);
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_info.width);
+    rect_t rect = windowmanager_calc_text_rect(title_str, wndmgr->screen_width);
     rect.x = (window->rect.width - rect.width) / 2;
     rect.y = font_height;
 

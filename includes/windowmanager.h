@@ -16,8 +16,13 @@
 extern "C" {
 #endif
 
+typedef struct windowmanager_t windowmanager_t;
+
 int8_t    windowmanager_init(void);
 boolean_t windowmanager_is_initialized(void);
+boolean_t windowmanager_set_initialized(boolean_t initialized);
+
+windowmanager_t* windowmanager_get_instance(void);
 
 #ifdef __cplusplus
 }

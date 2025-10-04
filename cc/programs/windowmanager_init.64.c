@@ -15,3 +15,9 @@ boolean_t windowmanager_initialized = false;
 boolean_t windowmanager_is_initialized(void) {
     return windowmanager_initialized;
 }
+
+boolean_t windowmanager_set_initialized(boolean_t initialized) {
+    boolean_t old = windowmanager_initialized;
+    windowmanager_initialized = initialized;
+    return old;
+}

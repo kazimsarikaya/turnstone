@@ -25,6 +25,8 @@ void video_text_print(const char_t* str);
 static int8_t wnd_task_list_on_redraw(const window_event_t* event) {
     UNUSED(event);
 
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
     window_t* window = event->window;
 
     window_t* wnd_task_list_area = (window_t*)window->extra_data;
@@ -56,9 +58,7 @@ static int8_t wnd_task_list_on_redraw(const window_event_t* event) {
 
     int64_t task_list_item_count = buf_len / sizeof(task_list_item_t);
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_height = wndmgr->font_height;
 
     int64_t top = 0;
 
@@ -115,15 +115,15 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
         return -1;
     }
 
-    screen_info_t screen_info = screen_get_info();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
+    uint32_t screen_width = wndmgr->screen_width;
+    uint32_t screen_height = wndmgr->screen_height;
 
     char_t* title_str = strdup("Task List");
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_info.width);
+    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
     rect.x = (window->rect.width - rect.width) / 2;
     rect.y = font_height;
 
@@ -156,7 +156,7 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
                                                        NULL,
                                                        (rect_t){0,
                                                                 option_input_row_bottom + font_height,
-                                                                screen_info.width,
+                                                                screen_width,
                                                                 font_height},
                                                        (color_t){.color = 0x00000000},
                                                        (color_t){.color = 0xFFee9900});
@@ -172,7 +172,7 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
 
     window_t* wnd_header_text = windowmanager_create_window(wnd_header,
                                                             header_text,
-                                                            (rect_t){0, 0, screen_info.width - font_width, font_height},
+                                                            (rect_t){0, 0, screen_width - font_width, font_height},
                                                             (color_t){.color = 0xFF181818},
                                                             (color_t){.color = 0xFFee9900});
 
@@ -188,8 +188,8 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
 
     rect_t wnd_task_list_area_rect = {0,
                                       wnd_task_list_area_top,
-                                      screen_info.width,
-                                      screen_info.height - wnd_task_list_area_top - font_height};
+                                      screen_width,
+                                      screen_height - wnd_task_list_area_top - font_height};
 
     window_t* wnd_task_list_area = windowmanager_create_window(window,
                                                                NULL,
@@ -202,11 +202,13 @@ int8_t windowmanager_create_and_show_task_vm_list_window(void) {
         return -1;
     }
 
-    window->extra_data = (void*)wnd_task_list_area;
-    window->extra_data_is_allocated = false;
+    wnd_task_list_area->is_always_redrawn = true;
 
-    window->on_redraw = wnd_task_list_on_redraw;
-    window->on_scroll = wnd_task_list_on_scroll;
+    wnd_task_list_area->extra_data = (void*)wnd_task_list_area;
+    wnd_task_list_area->extra_data_is_allocated = false;
+
+    wnd_task_list_area->on_redraw = wnd_task_list_on_redraw;
+    wnd_task_list_area->on_scroll = wnd_task_list_on_scroll;
 
     windowmanager_insert_and_set_current_window(window);
 
@@ -299,15 +301,15 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
         return -1;
     }
 
-    screen_info_t screen_info = screen_get_info();
+    windowmanager_t* wndmgr = windowmanager_get_instance();
 
-    uint32_t font_width = 0, font_height = 0;
 
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_height = wndmgr->font_height;
+    uint32_t screen_width = wndmgr->screen_width, screen_height = wndmgr->screen_height;
 
     char_t* title_str = strdup("Create Task or VM");
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, screen_info.width);
+    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
     rect.x = (window->rect.width - rect.width) / 2;
     rect.y = font_height;
 
@@ -338,8 +340,8 @@ int8_t windowmanager_create_and_show_task_vm_create_window(void) {
                                                                NULL,
                                                                (rect_t){0,
                                                                         option_input_row->rect.y + option_input_row->rect.height + font_height,
-                                                                        screen_info.width,
-                                                                        screen_info.height - option_input_row->rect.y - option_input_row->rect.height - font_height},
+                                                                        screen_width,
+                                                                        screen_height - option_input_row->rect.y - option_input_row->rect.height - font_height},
                                                                (color_t){.color = 0x00000000},
                                                                (color_t){.color = 0xFFee9900});
 

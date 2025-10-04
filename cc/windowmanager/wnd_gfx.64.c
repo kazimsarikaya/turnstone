@@ -8,111 +8,226 @@
 
 #include <windowmanager.h>
 #include <windowmanager/wnd_gfx.h>
+#include <windowmanager/wnd_utils.h>
 #include <graphics/screen.h>
+#include <graphics/font.h>
 #include <graphics/text_cursor.h>
+#include <device/mouse.h>
+#include <logging.h>
 
 MODULE("turnstone.windowmanager");
 
 void video_text_print(const char_t* text);
 
-int8_t wnd_gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color) {
-    UNUSED(buffer);
-    UNUSED(area_width);
+extern color_t* VIDEO_BASE_ADDRESS;
 
-    SCREEN_CLEAR_AREA(rect.x, rect.y, rect.width, rect.height, color);
+
+int8_t wndmgr_mouse_init(windowmanager_t* wndmgr) {
+    graphics_raw_image_t* wndmgr_mouse_image = mouse_get_image();
+
+    if(wndmgr_mouse_image == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to get mouse image\n");
+        return -1;
+    }
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Mouse image loaded with size %dx%d", wndmgr_mouse_image->width, wndmgr_mouse_image->height);
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Mouse image first pixel: 0x%x", wndmgr_mouse_image->data[0].color);
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Mouse image last pixel: 0x%x", wndmgr_mouse_image->data[wndmgr_mouse_image->width * wndmgr_mouse_image->height - 1].color);
+
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    wndmgr->mouse_texture = sgfx_gen_texture(gfx_ctx);
+    sgfx_bind_texture(gfx_ctx, wndmgr->mouse_texture);
+    sgfx_tex_image2d(gfx_ctx, wndmgr_mouse_image->width, wndmgr_mouse_image->height, wndmgr_mouse_image->data);
+    sgfx_bind_texture(gfx_ctx, 0);
+
+    wndmgr->mouse_image_width = wndmgr_mouse_image->width;
+    wndmgr->mouse_image_height = wndmgr_mouse_image->height;
+
+    wndmgr->mouse_x = (wndmgr->screen_width - wndmgr->mouse_image_width) / 2;
+    wndmgr->mouse_y = (wndmgr->screen_height - wndmgr->mouse_image_height) / 2;
+
+    wndmgr->mouse_initialized = true;
 
     return 0;
 }
 
-color_t wnd_gfx_blend_colors(color_t fg_color, color_t bg_color) {
-    if(bg_color.color == 0) {
-        return fg_color;
+int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
+    font_table_t* font = font_get_font_table();
+
+    if(font == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to get font table\n");
+        return -1;
     }
 
-    float32_t alpha1 = fg_color.alpha;
-    float32_t red1 = fg_color.red;
-    float32_t green1 = fg_color.green;
-    float32_t blue1 = fg_color.blue;
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
-    float32_t alpha2 = bg_color.alpha;
-    float32_t red2 = bg_color.red;
-    float32_t green2 = bg_color.green;
-    float32_t blue2 = bg_color.blue;
+    wndmgr->font_texture = sgfx_gen_texture(gfx_ctx);
+    sgfx_bind_texture(gfx_ctx, wndmgr->font_texture);
+    sgfx_tex_image2d(gfx_ctx, font->font_width * font->column_count, font->font_height * font->row_count, font->bitmap);
+    sgfx_bind_texture(gfx_ctx, 0);
 
-    float32_t r = (alpha1 / 255) * red1;
-    float32_t g = (alpha1 / 255) * green1;
-    float32_t b = (alpha1 / 255) * blue1;
+    wndmgr->font_width = font->font_width;
+    wndmgr->font_height = font->font_height;
+    wndmgr->font_column_count = font->column_count;
+    wndmgr->font_row_count = font->row_count;
 
-    r = r + (((255 - alpha1) / 255) * (alpha2 / 255)) * red2;
-    g = g + (((255 - alpha1) / 255) * (alpha2 / 255)) * green2;
-    b = b + (((255 - alpha1) / 255) * (alpha2 / 255)) * blue2;
+    wndmgr->font_uv_table = memory_malloc(sizeof(wndmgr_font_uv_t) * font->glyph_count);
 
-    float32_t new_alpha = alpha1 + ((255 - alpha1) / 255) * alpha2;
+    if(wndmgr->font_uv_table == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for font UV table\n");
+        return -2;
+    }
 
-    uint32_t ir = (uint32_t)r;
-    uint32_t ig = (uint32_t)g;
-    uint32_t ib = (uint32_t)b;
-    uint32_t ia = (uint32_t)new_alpha;
+    for(uint32_t i = 0; i < font->glyph_count; i++) {
+        uint32_t x = i % font->column_count;
+        uint32_t y = i / font->column_count;
 
-    color_t fg_color_over_bg_color = {.color = (ia << 24) | (ir << 16) | (ig << 8) | (ib << 0)};
+        wndmgr->font_uv_table[i].u0 = (float32_t)(x * font->font_width) / (float32_t)(font->font_width * font->column_count);
+        wndmgr->font_uv_table[i].v0 = (float32_t)(y * font->font_height) / (float32_t)(font->font_height * font->row_count);
+        wndmgr->font_uv_table[i].u1 = (float32_t)((x + 1) * font->font_width) / (float32_t)(font->font_width * font->column_count);
+        wndmgr->font_uv_table[i].v1 = (float32_t)((y + 1) * font->font_height) / (float32_t)(font->font_height * font->row_count);
+    }
 
-    return fg_color_over_bg_color;
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Font texture created with size %dx%d", font->font_width * font->column_count, font->font_height * font->row_count);
+
+    return 0;
+
+}
+void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
+    if (!wndmgr->mouse_initialized) {
+        return;
+    }
+
+    if (x >= wndmgr->screen_width || y >= wndmgr->screen_height) {
+        return;
+    }
+
+    rect_t mouse_rect = {
+        .x = wndmgr->mouse_x,
+        .y = wndmgr->mouse_y,
+        .width = wndmgr->mouse_image_width,
+        .height = wndmgr->mouse_image_height
+    };
+
+    windowmanager_mark_window_dirty_by_rect(wndmgr->current_window, &mouse_rect);
+
+
+    wndmgr->mouse_x = x;
+    wndmgr->mouse_y = y;
+
+    mouse_rect.x = wndmgr->mouse_x;
+    mouse_rect.y = wndmgr->mouse_y;
+
+    windowmanager_mark_window_dirty_by_rect(wndmgr->current_window, &mouse_rect);
 }
 
-boolean_t windowmanager_draw_window(window_t* window) {
-    if(window == NULL) {
-        return false;
+static void wndmgr_mouse_draw_cursor(windowmanager_t* wndmgr) {
+    if (!wndmgr->mouse_initialized) {
+        return;
     }
 
-    if(!window->is_visible) {
-        return false;
-    }
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
-    screen_info_t screen_info = screen_get_info();
+    float32_t w = (float32_t)wndmgr->mouse_image_width;
+    float32_t h = (float32_t)wndmgr->mouse_image_height;
 
-    boolean_t flush_needed = false;
+    sgfx_bind_texture(gfx_ctx, wndmgr->mouse_texture);
+    sgfx_begin(gfx_ctx, SGFX_QUADS);
+    sgfx_color4_f32(gfx_ctx, 1.0f, 1.0f, 1.0f, 1.0f);
 
-    if(window->is_dirty) {
-        flush_needed = true;
-        text_cursor_hide();
+    sgfx_texcoord2_f32(gfx_ctx, 0.0f, 0.0f);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)wndmgr->mouse_x, (float32_t)wndmgr->mouse_y, 0.0f);
 
-        if(window->on_redraw) {
-            window_event_t event = {.type = WINDOW_EVENT_TYPE_REDRAW, .window = window};
-            window->on_redraw(&event);
+    sgfx_texcoord2_f32(gfx_ctx, 1.0f, 0.0f);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)(wndmgr->mouse_x + w), (float32_t)wndmgr->mouse_y, 0.0f);
+
+    sgfx_texcoord2_f32(gfx_ctx, 1.0f, 1.0f);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)(wndmgr->mouse_x + w), (float32_t)(wndmgr->mouse_y + h), 0.0f);
+
+    sgfx_texcoord2_f32(gfx_ctx, 0.0f, 1.0f);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)wndmgr->mouse_x, (float32_t)(wndmgr->mouse_y + h), 0.0f);
+
+    sgfx_end(gfx_ctx);
+    sgfx_bind_texture(gfx_ctx, 0);
+}
+
+static void wndmgr_draw_text_cursor(windowmanager_t* wndmgr) {
+    window_t* tcw = NULL;
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &tcw)){
+        if(tcw == NULL){
+            return;
         }
 
-        wnd_gfx_draw_rectangle(window->buffer, screen_info.pixels_per_scanline, window->rect, window->background_color);
-
-        windowmanager_print_text(window, 0, 0, window->text);
-
-        window->is_dirty = false;
+        if(!tcw->is_drawing_occured){
+            return;
+        }
     }
 
-    for (size_t i = 0; i < list_size(window->children); i++) {
-        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+    int32_t cursor_x, cursor_y;
+    text_cursor_get(&cursor_x, &cursor_y);
 
-        child->is_dirty = flush_needed | child->is_dirty;
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
-        // boolean_t child_flush_needed = windowmanager_draw_window(child);
+    // Draw filled quad at cursor position
+    sgfx_begin(gfx_ctx, SGFX_QUADS);
+    sgfx_color4_f32(gfx_ctx, 1.0f, 1.0f, 1.0f, 0.5f); // White
 
-        flush_needed = flush_needed | windowmanager_draw_window(child);
-    }
+    float32_t x0 = (float32_t)(cursor_x * wndmgr->font_width);
+    float32_t y0 = (float32_t)(cursor_y * wndmgr->font_height);
+    float32_t x1 = x0 + wndmgr->font_width;
+    float32_t y1 = y0 + wndmgr->font_height;
 
-    return flush_needed;
+    sgfx_vertex3_f32(gfx_ctx, x0, y0, 0.0f); // Top-left
+    sgfx_vertex3_f32(gfx_ctx, x1, y0, 0.0f); // Top-right
+    sgfx_vertex3_f32(gfx_ctx, x1, y1, 0.0f); // Bottom-right
+    sgfx_vertex3_f32(gfx_ctx, x0, y1, 0.0f); // Bottom-left
+
+    sgfx_end(gfx_ctx);
 }
 
-void windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, char16_t wc) {
-    screen_info_t screen_info = screen_get_info();
+static int8_t wnd_gfx_draw_rectangle(windowmanager_t* wndmgr, rect_t rect, color_t color) {
 
-    SCREEN_PRINT_GLYPH_WITH_STRIDE(wc,
-                                   window->foreground_color, window->background_color,
-                                   window->buffer,
-                                   x, y,
-                                   screen_info.pixels_per_scanline);
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    sgfx_create_sub_context(gfx_ctx, rect.x, rect.y, rect.width, rect.height);
+
+    sgfx_clear(gfx_ctx,
+               (float32_t)color.red / 255.0f,
+               (float32_t)color.green / 255.0f,
+               (float32_t)color.blue / 255.0f,
+               (float32_t)color.alpha / 255.0f);
+
+    sgfx_destroy_sub_context(gfx_ctx);
+
+    return 0;
+}
+
+static void windowmanager_print_glyph(const windowmanager_t* wndmgr, uint32_t x, uint32_t y, char16_t wc) {
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    float32_t u0 = wndmgr->font_uv_table[wc].u0;
+    float32_t v0 = wndmgr->font_uv_table[wc].v0;
+    float32_t u1 = wndmgr->font_uv_table[wc].u1;
+    float32_t v1 = wndmgr->font_uv_table[wc].v1;
+
+    sgfx_texcoord2_f32(gfx_ctx, u0, v0);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)(x * wndmgr->font_width),
+                     (float32_t)(y * wndmgr->font_height), 0.0f);
+    sgfx_texcoord2_f32(gfx_ctx, u1, v0);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)((x + 1) * wndmgr->font_width),
+                     (float32_t)(y * wndmgr->font_height), 0.0f);
+    sgfx_texcoord2_f32(gfx_ctx, u1, v1);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)((x + 1) * wndmgr->font_width),
+                     (float32_t)((y + 1) * wndmgr->font_height), 0.0f);
+    sgfx_texcoord2_f32(gfx_ctx, u0, v1);
+    sgfx_vertex3_f32(gfx_ctx, (float32_t)(x * wndmgr->font_width),
+                     (float32_t)((y + 1) * wndmgr->font_height), 0.0f);
 
 }
 
-void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text) {
+static void windowmanager_print_text(const windowmanager_t* wndmgr, const window_t* window,
+                                     uint32_t x, uint32_t y, const char_t* text) {
     if(window == NULL) {
         return;
     }
@@ -121,15 +236,11 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
         return;
     }
 
-    screen_info_t screen_info = screen_get_info();
-
-    if(window->rect.x + (int64_t)x >= screen_info.width || window->rect.y + (int64_t)y >= screen_info.height) {
+    if(window->rect.x + (int64_t)x >= wndmgr->screen_width || window->rect.y + (int64_t)y >= wndmgr->screen_height) {
         return;
     }
 
-    uint32_t font_width = 0, font_height = 0;
-
-    font_get_font_dimension(&font_width, &font_height);
+    uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
 
     uint32_t abs_x = (window->rect.x + x) / font_width;
     uint32_t abs_y = (window->rect.y + y) / font_height;
@@ -143,6 +254,20 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
     if(cur_x >= max_cur_x || cur_y >= max_cur_y) {
         return;
     }
+
+    color_t fg = window->foreground_color;
+
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    sgfx_bind_texture(gfx_ctx, wndmgr->font_texture);
+
+    sgfx_color4_f32(gfx_ctx,
+                    fg.red / 255.0f,
+                    fg.green / 255.0f,
+                    fg.blue / 255.0f,
+                    fg.alpha / 255.0f);
+
+    sgfx_begin(gfx_ctx, SGFX_QUADS);
 
     int64_t i = 0;
 
@@ -160,7 +285,8 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
         } else if(wc == '\r') {
             cur_x = abs_x;
         } else {
-            windowmanager_print_glyph(window, cur_x, cur_y, wc);
+            windowmanager_print_glyph(wndmgr, cur_x, cur_y, wc);
+
             cur_x += 1;
 
             if(cur_x >= max_cur_x && text[i + 1] && text[i + 1] != '\n') {
@@ -176,10 +302,90 @@ void windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, co
 
         i++;
     }
+
+    sgfx_end(gfx_ctx);
+
+    sgfx_bind_texture(gfx_ctx, 0);
 }
 
-void windowmanager_clear_screen(window_t* window) {
-    SCREEN_CLEAR_AREA(window->rect.x, window->rect.y, window->rect.width, window->rect.height, window->background_color);
+static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t* parent, window_t* window) {
+    if(window == NULL) {
+        return;
+    }
+
+    if(!window->is_visible) {
+        return;
+    }
+
+    boolean_t parent_is_dirty = false;
+
+    if(window->is_dirty || window->is_always_redrawn) {
+        if(0 && parent && parent->background_color.color == window->background_color.color) {
+            // No need to redraw if background color is same as parent
+        } else {
+            color_t bg = window->background_color;
+
+            while(bg.color == 0x00000000 && parent != NULL) {
+                bg = parent->background_color;
+                parent = NULL;
+            }
+
+            wnd_gfx_draw_rectangle(wndmgr, window->rect, window->background_color);
+        }
+
+        if(window->on_redraw) {
+            window_event_t event = {.type = WINDOW_EVENT_TYPE_REDRAW, .window = window};
+            window->on_redraw(&event);
+        }
+
+        windowmanager_print_text(wndmgr, window, 0, 0, window->text);
+
+        parent_is_dirty = true;
+        window->is_dirty = false;
+        window->is_drawing_occured = true;
+    } else {
+        window->is_drawing_occured = false;
+    }
+
+    for (size_t i = 0; i < list_size(window->children); i++) {
+        window_t* child = (window_t*)list_get_data_at_position(window->children, i);
+
+        child->is_dirty = child->is_dirty || parent_is_dirty;
+
+        windowmanager_draw_window_internal(wndmgr, window, child);
+    }
+
+    return;
 }
 
+void windowmanager_draw_window(windowmanager_t* wndmgr, window_t* window) {
+    if(wndmgr == NULL || window == NULL) {
+        return;
+    }
 
+    /*
+
+       window_t* wnd = NULL;
+
+       if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
+        if (wnd != NULL) {
+            // always mark window with text cursor as dirty to redraw text cursor
+            wnd->is_dirty = true;
+        }
+       }
+
+
+       rect_t mouse_rect = {
+       .x = wndmgr->mouse_x,
+       .y = wndmgr->mouse_y,
+       .width = wndmgr->mouse_image_width,
+       .height = wndmgr->mouse_image_height
+       };
+
+       windowmanager_mark_window_dirty_by_rect(wndmgr->current_window, &mouse_rect);
+     */
+
+    windowmanager_draw_window_internal(wndmgr, NULL, window);
+    wndmgr_draw_text_cursor(wndmgr);
+    wndmgr_mouse_draw_cursor(wndmgr);
+}

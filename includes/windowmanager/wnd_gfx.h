@@ -10,17 +10,17 @@
 #define ___WND_GFX_H
 
 #include <windowmanager/wnd_types.h>
+#include <graphics/softgfx.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-boolean_t windowmanager_draw_window(window_t* window);
-void      windowmanager_print_glyph(const window_t* window, uint32_t x, uint32_t y, char16_t wc);
-void      windowmanager_print_text(const window_t* window, uint32_t x, uint32_t y, const char_t* text);
-void      windowmanager_clear_screen(window_t* window);
-color_t   wnd_gfx_blend_colors(color_t color1, color_t color2);
-int8_t    wnd_gfx_draw_rectangle(pixel_t* buffer, uint32_t area_width, rect_t rect, color_t color);
+void windowmanager_draw_window(windowmanager_t* wndmgr, window_t* window);
+
+int8_t wndmgr_mouse_init(windowmanager_t* wndmgr);
+int8_t wndmgr_font_init(windowmanager_t* wndmgr);
+void   wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y);
 
 #ifdef __cplusplus
 }

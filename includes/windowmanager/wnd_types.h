@@ -9,10 +9,11 @@
 #ifndef ___WND_TYPES_H
 #define ___WND_TYPES_H
 
-#include <types.h>
+#include <windowmanager.h>
 #include <list.h>
 #include <graphics/color.h>
 #include <graphics/font.h>
+#include <graphics/softgfx.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +32,31 @@ typedef enum window_event_type_t {
     WINDOW_EVENT_TYPE_SCROLL_LEFT,
     WINDOW_EVENT_TYPE_SCROLL_RIGHT,
 } window_event_type_t;
+
+typedef struct wndmgr_font_uv_t {
+    float32_t u0, v0, u1, v1;
+} wndmgr_font_uv_t;
+
+struct windowmanager_t {
+    sgfx_context_t*   gfx_ctx;
+    sgfx_texture_t    font_texture;
+    sgfx_texture_t    mouse_texture;
+    uint32_t          screen_width;
+    uint32_t          screen_height;
+    uint32_t          font_width;
+    uint32_t          font_height;
+    uint32_t          font_column_count;
+    uint32_t          font_row_count;
+    wndmgr_font_uv_t* font_uv_table;
+    uint32_t          padding;
+    boolean_t         mouse_initialized;
+    uint32_t          mouse_image_width;
+    uint32_t          mouse_image_height;
+    uint32_t          mouse_x;
+    uint32_t          mouse_y;
+    window_t*         current_window;
+    uint64_t          next_window_id;
+};
 
 struct rect_t {
     uint32_t x;
@@ -51,6 +77,8 @@ struct window_t {
     char_t*        text;
     boolean_t      is_text_readonly;
     boolean_t      is_dirty;
+    boolean_t      is_always_redrawn;
+    boolean_t      is_drawing_occured;
     boolean_t      is_visible;
     boolean_t      is_writable;
     boolean_t      has_alert;
