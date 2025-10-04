@@ -153,6 +153,14 @@ void task_set_interrupt_receive_workaround(uint64_t max_tick_wait_count) {
     }
 }
 
+void task_set_message_waiting_timeout(uint64_t msecs) {
+    task_t* current_task = task_get_current_task();
+
+    if(current_task) {
+        current_task->message_waiting_max_tick_count = msecs * time_timer_get_rdtsc_delta();
+    }
+}
+
 void task_set_custom_has_message_func(task_custom_has_message_func_t func, void* args) {
     task_t* current_task = task_get_current_task();
 

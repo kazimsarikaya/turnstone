@@ -763,6 +763,14 @@ task_t* task_find_next_task(void) {
                     }
                 }
 
+                if(t->message_waiting_max_tick_count) {
+                    uint64_t current_tick = rdtsc();
+
+                    if((t->last_tick_count + t->message_waiting_max_tick_count) < current_tick) {
+                        found_index = i;
+                    }
+                }
+
                 if(found_index != i && t->custom_has_message_func) {
                     if(t->custom_has_message_func(t->custom_has_message_func_args)) {
                         found_index = i;

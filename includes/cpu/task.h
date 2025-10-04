@@ -161,6 +161,7 @@ typedef struct task_t {
     task_attribute_t               attributes; ///< task attributes
     boolean_t                      interrupt_receive_workaround; ///< interrupt receive workaround flag FIXME: remove this field
     uint64_t                       interrupt_receive_workaround_max_tick_count; ///< max tick count for interrupt receive workaround
+    uint64_t                       message_waiting_max_tick_count; ///< max tick count for message waiting
     void*                          entry_point; ///< entry point address
     uint64_t                       arguments_count; ///< argument count
     void**                         arguments; ///< argument list
@@ -181,7 +182,7 @@ typedef struct task_t {
     task_registers_t*              registers; ///< task registers
 } task_t; ///< short hand for struct
 
-_Static_assert(offsetof_field(task_t, registers) == 0xD8, "task_t registers offset is at 0xD8");
+_Static_assert(offsetof_field(task_t, registers) == 0xE0, "task_t registers offset is at 0xE0");
 
 /**
  * @brief inits kernel tasking, configures tss and kernel task
@@ -236,6 +237,12 @@ task_t* task_get_current_task(void);
  * @return if message waiting state is set true, false otherwise
  */
 boolean_t task_set_message_waiting(void);
+
+/**
+ * @brief sets current task's message waiting timeout in milliseconds
+ * @param[in] msecs timeout in milliseconds
+ */
+void task_set_message_waiting_timeout(uint64_t msecs);
 
 /**
  * @brief clears current task's message waiting flag
