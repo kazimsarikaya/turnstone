@@ -202,7 +202,7 @@ static int8_t windowmanager_main(void) {
     task_set_interruptible();
 
     boolean_t test_trigangle = false;
-    boolean_t print_fps = true;
+    boolean_t print_fps = false;
 
     if(!test_trigangle) {
         task_set_interrupt_receive_workaround(1000 / 5);
@@ -300,15 +300,26 @@ static int8_t windowmanager_main(void) {
         uint64_t frame_time = end_time - start_time;
 
         if(print_fps) {
-            char_t* fps_str = strprintf("WM: %llu us, evt: %llu us, clr: %llu us, swp: %llu us fps: %04.02f                           \r",
-                                        frame_time,
-                                        event_end - event_start,
-                                        clear_end - clear_start,
-                                        swap_end - swap_start,
-                                        (frame_time) ? (1000000.0f / (float32_t)frame_time) : 1000000.0f
-                                        );
-            video_text_print(fps_str);
-            memory_free(fps_str);
+            if(test_trigangle) {
+                char_t* fps_str = strprintf("WM: %llu us, evt: %llu us, clr: %llu us, swp: %llu us fps: %04.02f\n",
+                                            frame_time,
+                                            event_end - event_start,
+                                            clear_end - clear_start,
+                                            swap_end - swap_start,
+                                            (frame_time) ? (1000000.0f / (float32_t)frame_time) : 1000000.0f
+                                            );
+                video_text_print(fps_str);
+                memory_free(fps_str);
+            } else {
+                char_t* fps_str = strprintf("WM: %llu us, evt: %llu us, swp: %llu us fps: %04.02f\n",
+                                            frame_time,
+                                            event_end - event_start,
+                                            swap_end - swap_start,
+                                            (frame_time) ? (1000000.0f / (float32_t)frame_time) : 1000000.0f
+                                            );
+                video_text_print(fps_str);
+                memory_free(fps_str);
+            }
         }
 
         if(test_trigangle) {
