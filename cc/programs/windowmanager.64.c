@@ -299,6 +299,8 @@ static int8_t windowmanager_main(void) {
 
         uint64_t frame_time = end_time - start_time;
 
+        wndmgr->previous_render_time = frame_time;
+
         if(print_fps) {
             if(test_trigangle) {
                 char_t* fps_str = strprintf("WM: %llu us, evt: %llu us, clr: %llu us, swp: %llu us fps: %04.02f\n",

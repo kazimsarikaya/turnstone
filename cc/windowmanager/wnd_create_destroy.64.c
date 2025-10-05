@@ -97,6 +97,28 @@ static int8_t wndmgr_footer_time_on_redraw(const window_event_t* event) {
     return 0;
 }
 
+static int8_t wndmgr_footer_fps_on_redraw(const window_event_t* event) {
+    if(event == NULL) {
+        return -1;
+    }
+
+    windowmanager_t* wndmgr = windowmanager_get_instance();
+
+    window_t* window = event->window;
+
+    if(window == NULL) {
+        return -1;
+    }
+
+    char_t* fps_str = strprintf("FPS: %.02f", (wndmgr->previous_render_time) ? (1000000.0f / (float32_t)wndmgr->previous_render_time) : 1000000.0f);
+
+    memory_free(window->text);
+
+    ((window_t*)window)->text = fps_str;
+
+    return 0;
+}
+
 static int8_t wndmgr_create_footer(window_t* parent) {
     if(parent == NULL) {
         return -1;
@@ -129,10 +151,24 @@ static int8_t wndmgr_create_footer(window_t* parent) {
     window_t* time_wnd = windowmanager_create_window(footer, time_str, rect, (color_t){.color = 0xFF282828}, (color_t){.color = 0xFF2288FF});
 
     if(time_wnd == NULL) {
+        windowmanager_destroy_window(footer);
         return -1;
     }
 
     time_wnd->on_redraw = wndmgr_footer_time_on_redraw;
+
+    uint32_t fps_wnd_width = wndmgr->font_width * 20;
+
+    rect = (rect_t){wndmgr->font_width, 0, fps_wnd_width, wndmgr->font_height};
+
+    window_t* fps_wnd = windowmanager_create_window(footer, strprintf("FPS: %.02f", (wndmgr->previous_render_time) ? (1000000.0f / (float32_t)wndmgr->previous_render_time) : 1000000.0f), rect, (color_t){.color = 0xFF282828}, (color_t){.color = 0xFF22FF22});
+
+    if(fps_wnd == NULL) {
+        windowmanager_destroy_window(footer);
+        return -1;
+    }
+
+    fps_wnd->on_redraw = wndmgr_footer_fps_on_redraw;
 
     return 0;
 }
@@ -278,6 +314,8 @@ static int8_t wndmgr_alert_window_on_enter(const window_event_t* event) {
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_t type, const char_t* text) {
     windowmanager_t* wndmgr = windowmanager_get_instance();
 
@@ -365,3 +403,4 @@ void windowmanager_create_and_show_alert_window(windowmanager_alert_window_type_
     wndmgr->current_window->has_alert = true;
     wndmgr->current_window->is_dirty = true;
 }
+#pragma GCC diagnostic pop

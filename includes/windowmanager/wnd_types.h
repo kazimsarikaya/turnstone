@@ -56,6 +56,7 @@ struct windowmanager_t {
     uint32_t          mouse_y;
     window_t*         current_window;
     uint64_t          next_window_id;
+    uint64_t          previous_render_time;
 };
 
 struct rect_t {
