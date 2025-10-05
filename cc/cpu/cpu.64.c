@@ -87,13 +87,35 @@ void cpu_cr0_enable_wp(void) {
     cpu_write_cr0(cr0);
 }
 
+__attribute__((target("general-regs-only"))) static inline uint64_t xgetbv(uint32_t index) {
+    uint32_t eax, edx;
+    __asm__ volatile ("xgetbv" : "=a" (eax), "=d" (edx) : "c" (index));
+    return ((uint64_t)edx << 32) | eax;
+}
+
+__attribute__((target("general-regs-only"))) static inline void xsetbv(uint32_t index, uint64_t value) {
+    uint32_t eax = (uint32_t)value;
+    uint32_t edx = (uint32_t)(value >> 32);
+    __asm__ volatile ("xsetbv" : : "c" (index), "a" (eax), "d" (edx));
+}
+
 __attribute__((target("general-regs-only"))) static inline void cpu_enable_avx(void) {
-    asm volatile (
-        "xor %rcx, %rcx\n"
-        "xgetbv\n"
-        "or $0xe7, %rax\n"
-        "xsetbv\n"
-        );
+    uint64_t xcr0 = xgetbv(0);
+
+    cpu_cpuid_regs_t query = {.eax = 0xd};
+    cpu_cpuid_regs_t answer = {0};
+
+    cpu_cpuid(query, &answer);
+    uint64_t supported_xcr0 = answer.eax | (uint64_t)answer.edx << 32;
+
+    if (supported_xcr0 & (1 << 0)) xcr0 |= (1 << 0);  // x87
+    if (supported_xcr0 & (1 << 1)) xcr0 |= (1 << 1);  // SSE
+    if (supported_xcr0 & (1 << 2)) xcr0 |= (1 << 2);  // AVX
+    if (supported_xcr0 & (1 << 5)) xcr0 |= (1 << 5);  // opmask
+    if (supported_xcr0 & (1 << 6)) xcr0 |= (1 << 6);  // ZMM_Hi256
+    if (supported_xcr0 & (1 << 7)) xcr0 |= (1 << 7);  // Hi16_ZMM
+
+    xsetbv(0, xcr0);
 }
 
 __attribute__((target("general-regs-only"))) void cpu_enable_sse(void) {
