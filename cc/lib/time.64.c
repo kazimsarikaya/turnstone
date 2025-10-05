@@ -55,6 +55,23 @@ time_t time_ns(time_t* t) {
     return (time_t)ns;
 }
 
+time_t time_us(time_t* t) {
+    uint64_t us = TIME_EPOCH; // base µs from HPET + RTC
+
+    // estimate additional µs since last HPET tick using TSC
+    uint64_t tsc_now = rdtsc();
+    uint64_t tsc_delta = tsc_now - hpet_last_rdtsc; // TSC since last update
+    uint64_t extra_us = tsc_delta / time_timer_get_rdtsc_delta_us(); // convert TSC → µs
+
+    us += extra_us;
+
+    if (t) {
+        *t = (time_t)us;
+    }
+
+    return (time_t)us;
+}
+
 #endif
 
 boolean_t     time_is_leap(int64_t year);

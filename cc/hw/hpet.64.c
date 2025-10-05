@@ -25,10 +25,22 @@ MODULE("turnstone.kernel.hw.hpet");
 boolean_t hpet_enabled = false;
 
 volatile uint64_t hpet_tick_count = 0;
-uint64_t hpet_rtc_next_update = 0;
-uint64_t hpet_last_rdtsc = 0;
+volatile uint64_t hpet_rdtsc_start = 0;
+volatile uint64_t hpet_rdtsc_end = 0;
+volatile uint64_t hpet_last_rdtsc = 0;
 
-#define HPET_RTC_UPDATE_TICK_COUNT  (15 * 60 * 1000 * 1000) / HPET_MIN_US_SLEEP // 15 minutes
+uint64_t hpet_next_calibration_tick = 0;
+uint64_t hpet_next_rtc_resync_tick = 0;
+
+extern uint64_t time_timer_rdtsc_delta; // cycles per ms
+extern uint64_t time_timer_rdtsc_delta_us; // cycles per µs
+
+#define HPET_CALIBRATION_INTERVAL_US     (1000000ULL) // 1 second
+#define HPET_CALIBRATION_INTERVAL_TICKS  (HPET_CALIBRATION_INTERVAL_US / HPET_MIN_US_SLEEP)
+
+#define HPET_RTC_RESYNC_INTERVAL_US      (15ULL * 60ULL * 1000000ULL) // 15 minutes
+#define HPET_RTC_RESYNC_TICKS            (HPET_RTC_RESYNC_INTERVAL_US / HPET_MIN_US_SLEEP)
+
 
 void video_text_print(const char_t* str);
 
@@ -42,16 +54,35 @@ static int8_t hpet_isr(interrupt_frame_ext_t* frame) {
     UNUSED(frame);
 
     hpet_tick_count++;
-
-    TIME_EPOCH += HPET_MIN_US_SLEEP;
+    TIME_EPOCH += HPET_MIN_US_SLEEP; // advance OS time by µs per tick
 
     hpet_last_rdtsc = rdtsc();
 
-    if(hpet_tick_count >= hpet_rtc_next_update) {
-        hpet_rtc_next_update = hpet_tick_count + HPET_RTC_UPDATE_TICK_COUNT;
-        TIME_EPOCH = rtc_get_time() * 1000000;
+    // --- Start calibration window ---
+    if (hpet_tick_count == hpet_next_calibration_tick) {
+        hpet_rdtsc_start = hpet_last_rdtsc;
+        hpet_next_calibration_tick = hpet_tick_count + HPET_CALIBRATION_INTERVAL_TICKS;
+    }
 
+    // --- End calibration window ---
+    else if (hpet_tick_count == hpet_next_calibration_tick - 1) {
+        hpet_rdtsc_end = hpet_last_rdtsc;
+
+        uint64_t delta_tsc = hpet_rdtsc_end - hpet_rdtsc_start;
+        uint64_t delta_us  = HPET_CALIBRATION_INTERVAL_US;
+
+        uint64_t new_cycles_per_us = delta_tsc / delta_us;
+
+        // Smooth result with exponential moving average (7/8 old + 1/8 new)
+        time_timer_rdtsc_delta_us = (time_timer_rdtsc_delta_us * 7 + new_cycles_per_us) / 8;
+        time_timer_rdtsc_delta = time_timer_rdtsc_delta_us * 1000;
+    }
+
+    // --- Periodic RTC resync (every ~15 min) ---
+    if (hpet_tick_count >= hpet_next_rtc_resync_tick) {
+        TIME_EPOCH = rtc_get_time() * 1000000ULL;
         srand(TIME_EPOCH);
+        hpet_next_rtc_resync_tick = hpet_tick_count + HPET_RTC_RESYNC_TICKS;
     }
 
     apic_eoi();
