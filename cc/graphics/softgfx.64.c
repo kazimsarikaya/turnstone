@@ -23,6 +23,10 @@ typedef enum sgfx_buffer_type_t {
     SGFX_BUFFER_COUNT
 } sgfx_buffer_type_t;
 
+typedef struct sgfx_vec4_i32_t {
+    int32_t x, y, z, w;
+} sgfx_vec4_i32_t;
+
 // Context definition
 struct sgfx_context_t {
     int32_t  width, height;
@@ -51,9 +55,8 @@ struct sgfx_context_t {
 
     sgfx_cap_t enabled_caps;
 
-    struct {
-        int32_t x, y, w, h;
-    } scissor;
+    sgfx_vec4_i32_t scissor; // x, y, w, h for scissor test
+    sgfx_vec4_i32_t scissor_backup; // backup for scissor test
 
     // Immediate mode buffers
     sgfx_vec4_f32_t vertices[SGFX_MAX_VERTICES];
@@ -188,8 +191,8 @@ static void sgfx_plot_pixel(sgfx_context_t* ctx, int32_t x, int32_t y, color_t p
     }
 
     if (sgfx_is_enabled(ctx, SGFX_CAP_SCISSOR_TEST)) {
-        if (x < ctx->scissor.x || x >= ctx->scissor.x + ctx->scissor.w ||
-            y < ctx->scissor.y || y >= ctx->scissor.y + ctx->scissor.h) {
+        if (x < ctx->scissor.x || x >= ctx->scissor.x + ctx->scissor.z ||
+            y < ctx->scissor.y || y >= ctx->scissor.y + ctx->scissor.w) {
             return;
         }
     }
@@ -371,6 +374,7 @@ void sgfx_create_sub_context(sgfx_context_t* ctx,
 
     ctx->modelview_backup = ctx->modelview;
     ctx->projection_backup = ctx->projection;
+    ctx->scissor_backup = ctx->scissor;
 
     ctx->sub_context.x = x;
     ctx->sub_context.y = y;
@@ -387,6 +391,7 @@ void sgfx_destroy_sub_context(sgfx_context_t* ctx) {
 
     ctx->modelview = ctx->modelview_backup;
     ctx->projection = ctx->projection_backup;
+    ctx->scissor = ctx->scissor_backup;
     ctx->sub_context_enabled = false;
 }
 
@@ -490,7 +495,7 @@ void sgfx_perspective_f32(sgfx_context_t* ctx, float32_t fovy, float32_t aspect,
     sgfx_mat4_perspective(ctx->current_matrix, fovy, aspect, near, far);
 }
 
-// Enable/scissor
+// Capabilities enable/disable
 void sgfx_enable(sgfx_context_t* ctx, sgfx_cap_t cap) {
     ctx->enabled_caps |= cap;
 }
@@ -503,11 +508,12 @@ boolean_t sgfx_is_enabled(sgfx_context_t* ctx, sgfx_cap_t cap) {
     return (ctx->enabled_caps & cap) != 0;
 }
 
+// Scissor
 void sgfx_scissor(sgfx_context_t* ctx, int32_t x, int32_t y, int32_t w, int32_t h) {
     ctx->scissor.x = x;
     ctx->scissor.y = y;
-    ctx->scissor.w = w;
-    ctx->scissor.h = h;
+    ctx->scissor.z = w;
+    ctx->scissor.w = h;
 }
 
 // Drawing
