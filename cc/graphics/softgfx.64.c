@@ -424,9 +424,11 @@ void sgfx_clear(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, floa
     }
 }
 
+#ifdef __AVX512F__
+// AVX-512 version
 static inline void sgfx_blit_changed_pixels(
     const color_t * front,
-    const color_t * back,
+    color_t *       back,
     color_t *       frame,
     size_t          size
     ) {
@@ -453,6 +455,43 @@ static inline void sgfx_blit_changed_pixels(
             );
     }
 }
+#else
+// AVX2 version
+static inline void sgfx_blit_changed_pixels(
+    const color_t * front,
+    color_t *       back,
+    color_t *       frame,
+    size_t          size
+    ) {
+    size_t i = 0;
+    size_t stride = 8; // 8 pixels per __m256 (8 * 32-bit = 256-bit)
+
+    for (; i + stride <= size; i += stride) {
+        long offset = i * sizeof(color_t);
+
+        asm volatile (
+            // Load 8 pixels from front and back
+            "vmovdqu   (%0,%3), %%ymm0\n\t"
+            "vmovdqu   (%1,%3), %%ymm1\n\t"
+
+            // Compare each 32-bit lane
+            "vpcmpeqd  %%ymm1, %%ymm0, %%ymm2\n\t"
+            "vpcmpeqd  %%ymm0, %%ymm0, %%ymm3\n\t" // all ones mask
+            "vpxor     %%ymm2, %%ymm3, %%ymm2\n\t" // invert mask -> 0xFFFFFFFF if different
+
+            // Blend manually
+            "vblendvps %%ymm1, %%ymm0, %%ymm2, %%ymm0\n\t"
+
+            // Store to back and frame
+            "vmovdqu   %%ymm0, (%1,%3)\n\t"
+            "vmovdqu   %%ymm0, (%2,%3)\n\t"
+            :
+            : "r" (front), "r" (back), "r" (frame), "r" (offset)
+            : "memory", "ymm0", "ymm1", "ymm2", "ymm3"
+            );
+    }
+}
+#endif
 
 void sgfx_swap_buffers(sgfx_context_t* ctx) {
     int32_t size = ctx->width * ctx->height;
