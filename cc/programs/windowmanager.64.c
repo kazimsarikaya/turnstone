@@ -202,7 +202,7 @@ static int8_t windowmanager_main(void) {
     task_set_interruptible();
 
     boolean_t test_trigangle = false;
-    boolean_t print_fps = false;
+    boolean_t print_fps = true;
 
     if(!test_trigangle) {
         task_set_interrupt_receive_workaround(1000 / 5);
@@ -245,16 +245,16 @@ static int8_t windowmanager_main(void) {
     sgfx_swap_buffers(gfx_ctx);
 
     while(windowmanager_is_initialized()) {
-        start_time = time_ms(NULL);
+        start_time = time_us(NULL);
 
-        uint64_t event_start = time_ms(NULL);
+        uint64_t event_start = time_us(NULL);
         windowmanager_handle_events(wndmgr);
-        uint64_t event_end = time_ms(NULL);
+        uint64_t event_end = time_us(NULL);
 
         if(test_trigangle) {
-            clear_start = time_ms(NULL);
+            clear_start = time_us(NULL);
             sgfx_clear(gfx_ctx, 0.0f, 0.0f, 0.0f, 1.0f);
-            clear_end = time_ms(NULL);
+            clear_end = time_us(NULL);
 
             sgfx_matrix_mode(gfx_ctx, SGFX_PROJECTION);
             sgfx_load_identity(gfx_ctx);
@@ -291,41 +291,24 @@ static int8_t windowmanager_main(void) {
         }
 
         // Swap buffers (copies diff to framebuffer)
-        uint64_t swap_start = time_ms(NULL);
+        uint64_t swap_start = time_us(NULL);
         sgfx_swap_buffers(gfx_ctx);
-        uint64_t swap_end = time_ms(NULL);
+        uint64_t swap_end = time_us(NULL);
 
-        end_time = time_ms(NULL);
+        end_time = time_us(NULL);
 
         uint64_t frame_time = end_time - start_time;
 
         if(print_fps) {
-            char_t time_str[64] = {0};
-            utoa_with_buffer(time_str, frame_time);
-            video_text_print(time_str);
-            utoa_with_buffer(time_str, swap_end - swap_start);
-            video_text_print(" ms (");
-            video_text_print(time_str);
-            video_text_print(" ms swap, ");
-            utoa_with_buffer(time_str, clear_end - clear_start);
-            video_text_print(time_str);
-            video_text_print(" ms clear, ");
-            utoa_with_buffer(time_str, event_end - event_start);
-            video_text_print(time_str);
-            video_text_print(" ms events) ");
-            if(frame_time < 16) {
-                video_text_print("60 FPS+");
-            } else if(frame_time < 33) {
-                video_text_print("30-60 FPS");
-            } else if(frame_time < 50) {
-                video_text_print("20-30 FPS");
-            } else if(frame_time < 100) {
-                video_text_print("10-20 FPS");
-            } else {
-                video_text_print("<10 FPS");
-            }
-
-            video_text_print("\n");
+            char_t* fps_str = strprintf("WM: %llu us, evt: %llu us, clr: %llu us, swp: %llu us fps: %04.02f                           \r",
+                                        frame_time,
+                                        event_end - event_start,
+                                        clear_end - clear_start,
+                                        swap_end - swap_start,
+                                        (frame_time) ? (1000000.0f / (float32_t)frame_time) : 1000000.0f
+                                        );
+            video_text_print(fps_str);
+            memory_free(fps_str);
         }
 
         if(test_trigangle) {
