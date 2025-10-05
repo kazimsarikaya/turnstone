@@ -210,7 +210,8 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
 
     tosdb_cached_bloomfilter_t* c_bf = NULL;
 
-    tosdb_cache_key_t cache_key = {0};
+    tosdb_cache_key_t cache_key;
+    memory_memclean(&cache_key, sizeof(tosdb_cache_key_t));
 
     cache_key.type = TOSDB_CACHE_ITEM_TYPE_BLOOMFILTER;
     cache_key.database_id = tbl->db->id;
@@ -462,8 +463,10 @@ static boolean_t tosdb_sstable_compact(const tosdb_table_t* tbl, const tosdb_ind
     }
 
     for(uint64_t i = 0; i < record_count; i++) {
-        tosdb_record_t t_rec = {0};
-        tosdb_record_context_t t_ctx = {0};
+        tosdb_record_t t_rec;
+        memory_memclean(&t_rec, sizeof(tosdb_record_t));
+        tosdb_record_context_t t_ctx;
+        memory_memclean(&t_ctx, sizeof(tosdb_record_context_t));
         t_rec.context = &t_ctx;
         t_ctx.table = (tosdb_table_t*)tbl;
 

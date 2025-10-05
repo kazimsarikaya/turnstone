@@ -201,7 +201,7 @@ boolean_t tosdb_load_databases(tosdb_t* tdb) {
             return false;
         }
 
-        char_t name_buf[TOSDB_NAME_MAX_LEN + 1] = {0};
+        char_t name_buf[TOSDB_NAME_MAX_LEN + 1];
 
         for(uint64_t i = 0; i < db_list->database_count; i++) {
             memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);

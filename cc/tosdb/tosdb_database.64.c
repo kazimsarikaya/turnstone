@@ -44,7 +44,7 @@ boolean_t tosdb_database_load_tables(tosdb_database_t* db) {
             return false;
         }
 
-        char_t name_buf[TOSDB_NAME_MAX_LEN + 1] = {0};
+        char_t name_buf[TOSDB_NAME_MAX_LEN + 1];
 
         for(uint64_t i = 0; i < tbl_list->table_count; i++) {
             memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);

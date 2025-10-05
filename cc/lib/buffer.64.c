@@ -597,8 +597,8 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
         if(data == '%') {
             fmt++;
             int8_t wfmtb = 1;
-            char_t buf[257] = {0};
-            char_t ito_buf[64] = {0};
+            char_t buf[257];
+            char_t ito_buf[64];
             int32_t val = 0;
             boolean_t fill_after = false;
             const char_t* str = NULL;
@@ -609,7 +609,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
             int32_t idx = 0;
             int8_t l_flag = 0;
             int8_t sign = 0;
-            char_t fto_buf[128] = {0};
+            char_t fto_buf[128];
             // float128_t fval = 0; // TODO: float128_t ops
             float64_t fval = 0;
             number_t prec = 0;

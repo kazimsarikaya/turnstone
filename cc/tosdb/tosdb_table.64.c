@@ -251,7 +251,7 @@ boolean_t tosdb_table_load_columns(tosdb_table_t* tbl) {
             return false;
         }
 
-        char_t name_buf[TOSDB_NAME_MAX_LEN + 1] = {0};
+        char_t name_buf[TOSDB_NAME_MAX_LEN + 1];
 
         for(uint64_t i = 0; i < col_list->column_count; i++) {
             memory_memclean(name_buf, TOSDB_NAME_MAX_LEN + 1);

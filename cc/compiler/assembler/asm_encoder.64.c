@@ -1118,7 +1118,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
         return false;
     }
 
-    asm_instruction_param_t params[4] = {0};
+    asm_instruction_param_t params[4];
     uint8_t param_count = 0;
 
     while(true) {
@@ -1154,7 +1154,7 @@ boolean_t asm_encode_instruction(iterator_t* it, buffer_t* outbuf, list_t* reloc
         param_count++;
     }
 
-    asm_instruction_mnemonic_t mnemonics[5] = {0};
+    asm_instruction_mnemonic_t mnemonics[5];
     mnemonics[0] = map->mnemonic;
 
     uint8_t idx = 1;
