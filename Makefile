@@ -12,9 +12,10 @@ DOCSGEN = doxygen
 DOCSFILES = $(shell find . -type f -name \*.md)
 DOCSCONF = docs.doxygen
 INCLUDESDIR = includes
+INCLUDESGENDIR = includes-gen
 LOCALINCLUDESDIR = includes-local
 
-BASEFLAGS += -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) \
+BASEFLAGS += -O3 -nostdlib -nostdinc -ffreestanding -fno-builtin -c -I$(INCLUDESDIR) -I$(INCLUDESGENDIR) \
 	-Werror -Wall -Wextra -ffunction-sections -fdata-sections \
 	-mno-red-zone -fstack-protector-all -fno-omit-frame-pointer \
     -Wshadow -Wpointer-arith -Wcast-align \
@@ -62,13 +63,15 @@ CCOBJDIR = $(OBJDIR)/cc
 LOCALOBJDIR = $(OBJDIR)/cc-local
 EFIOBJDIR = $(OBJDIR)/efi
 DOCSOBJDIR = $(OBJDIR)/docs
+ASSETCCGENOBJDIR = $(OBJDIR)/assets-cc-gen
 ASSRCDIR = asm
 CCSRCDIR = cc
 CCGENDIR = cc-gen
-INCLUDESGENDIR = includes-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
 TMPDIR = tmp
 ASSETSDIR = assets
+ASSETSGENDIR = assets-gen
+ASSETSCCGENDIR = assets-cc-gen
 ASSETOBJDIR = $(OBJDIR)/assets
 EFISRCDIR = efi
 UTILSSRCDIR = utils
@@ -100,6 +103,8 @@ TESTSCPP64SRCS = $(shell find $(TESTSSRCDIR) -maxdepth 1 -type f -name \*.cpp)
 EFICC64SRCS = $(shell find $(EFISRCDIR) -maxdepth 1 -type f -name \*.c)
 EFICPP64SRCS = $(shell find $(EFISRCDIR) -maxdepth 1 -type f -name \*.cpp)
 
+EFISRCS = $(EFICC64SRCS) $(EFICPP64SRCS)
+
 CCGENSCRIPTS = $(shell find $(CCGENSCRIPTSDIR) -type f -name \*.sh)
 GENCCSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%.c,$(CCGENSCRIPTS))
 
@@ -130,6 +135,15 @@ DOCSFILES += $(shell find $(UTILSSRCDIR) -type f -name \*.h)
 ASSETS = $(shell find $(ASSETSDIR) -type f)
 ASSETOBJS = $(patsubst %,$(OBJDIR)/%.data.o,$(ASSETS))
 
+ASSETSGEN = $(shell find $(ASSETSGENDIR) -type f)
+ASSETGENOBJS = $(patsubst %,$(OBJDIR)/%.data.o,$(ASSETSGEN))
+
+ASSETSALL = $(ASSETS) $(ASSETSGEN)
+ASSETALLOBJS = $(ASSETOBJS) $(ASSETGENOBJS)
+
+ASSETSCCGEN = $(shell find $(ASSETSCCGENDIR) -type f)
+ASSETCCGENOBJS = $(patsubst $(ASSETSCCGENDIR)/%.64.c,$(ASSETCCGENOBJDIR)/%.64.o,$(ASSETSCCGEN))
+
 OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS) $(CPP64OBJS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
 
@@ -151,10 +165,12 @@ EFISRCS = $(shell find $(EFISRCDIR) -type f -name \*.c)
 EFIOBJS = $(patsubst $(EFISRCDIR)/%.c,$(EFIOBJDIR)/%.o,$(EFISRCS))
 
 ifeq (,$(wildcard $(TOSDBIMG)))
-LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(CPP64OBJS)
+LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(ASSETGENOBJS) $(ASSETCCGENOBJS) $(CPP64OBJS)
 else
 LASTCCOBJS = $(shell find $(CCOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
 LASTCCOBJS += $(shell find $(ASSETOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
+LASTCCOBJS += $(shell find $(ASSETGENOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
+LASTCCOBJS += $(shell find $(ASSETCCGENOBJDIR) -type f -name \*.o -newer $(TOSDBIMG))
 endif
 
 ifeq (,$(wildcard $(EFITOSDBIMG)))
@@ -207,13 +223,6 @@ tests: $(TESTSOUTPUTS)
 
 utils: $(UTILSOUTPUTS)
 
-gendirs:
-	mkdir -p $(CCGENDIR) $(INCLUDESGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
-	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
-	find $(ASSETSDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
-	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/efi%' |xargs mkdir -p
-	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/cc-local%' |xargs mkdir -p
-
 $(OBJDIR)/docs: $(DOCSCONF) $(DOCSFILES)
 	$(DOCSGEN) $(DOCSCONF)
 	find $(OBJDIR)/docs/html/ -name "*.html"|sed 's-'$(OBJDIR)'/docs/html-https://turnstoneos.com-' > $(OBJDIR)/docs/html/sitemap.txt
@@ -229,7 +238,7 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(CPP64OBJS)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETALLOBJS) $(ASSETCCGENOBJS) $(CPP64OBJS)
 	$(TOSDBIMG_BUILDER) $(TOSDBIMG_BUILDER_FLAGS) -o $@ $(LASTCCOBJS)
 
 $(EFITOSDBIMG): $(EFIOBJS) $(TOSDBIMG_BUILDER)
@@ -316,8 +325,17 @@ $(EFIOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 $(EFIOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(EFICPP64FLAGS) -o $@ $<
 
-$(ASSETOBJS): $(ASSETS) 
+$(ASSETALLOBJS): $(ASSETSALL) 
+	rm -f $(TOSDBIMG)
 	scripts/assets/build.sh $@
+
+$(ASSETCCGENOBJDIR)/%.64.o: $(ASSETSCCGENDIR)/%.64.c
+	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
+
+guifont:
+	scripts/gen-assets/guifont.sh
+
+print-%: ; @echo $* = $($*)
 
 clean:
 	rm -fr $(DOCSOBJDIR)/*
@@ -325,13 +343,22 @@ clean:
 	find . -type f -name .depend\* -delete
 	if [ -d $(CCGENDIR) ]; then find $(CCGENDIR) -type f -delete; fi
 	if [ -d $(INCLUDESGENDIR) ]; then find $(INCLUDESGENDIR) -type f -delete; fi
+	if [ -d $(ASSETSGENDIR) ]; then find $(ASSETSGENDIR) -type f -delete; fi
+	if [ -d $(ASSETSCCGENDIR) ]; then find $(ASSETSCCGENDIR) -type f -delete; fi
 	rm -f $(MKDIRSDONE)
 	rm -f compile_commands.json
 
 cleandirs:
 	rm -fr $(CCGENDIR) $(INCLUDESGENDIR) $(OBJDIR)
 
-print-%: ; @echo $* = $($*)
+gendirs:
+	mkdir -p $(CCGENDIR) $(INCLUDESGENDIR) $(ASSETSGENDIR) $(ASSETSCCGENDIR) $(ASOBJDIR) $(CCOBJDIR) $(DOCSOBJDIR) $(TMPDIR)
+	find $(CCSRCDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
+	find $(ASSETSDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
+	find $(ASSETSGENDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
+	find $(ASSETSCCGENDIR) -type d -exec mkdir -p $(OBJDIR)/{} \;
+	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/efi%' |xargs mkdir -p
+	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/cc-local%' |xargs mkdir -p
 
 .PHONY: depend
 depend: .depend64c .depend64cpp .dependutils .dependtests .dependefi
@@ -345,7 +372,7 @@ depend: .depend64c .depend64cpp .dependutils .dependtests .dependefi
 	scripts/create-cc-deps.sh "$(CPP64) $(KERNELCPP64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" >> .depend64
 	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
 
-.dependutils:
+.dependutils: $(EFISRCS)
 	scripts/create_depends.sh $(UTILSPROGS) >.dependutils
 
 .dependtests:

@@ -7,6 +7,7 @@ CURRENTDIR=`dirname $0`
 BASEDIR="${CURRENTDIR}/../../"
 OUTPUTDIR="${BASEDIR}/build"
 ASSETSDIR="${BASEDIR}/assets"
+ASSETSGENDIR="${BASEDIR}/assets-gen"
 OBJCOPY="objcopy"
 CCOUTPUTDIR="${OUTPUTDIR}/cc"
 
@@ -24,7 +25,20 @@ echo "INPUT_FILE: ${INPUT_FILE}"
 set -x
 
 asset=${INPUT_FILE}
-asset_rel=${asset#${ASSETSDIR}/}
+asset_rel=""
+
+#asset may have assets-gen or asset prefix
+if [[ ${asset} == assets-gen* ]]; then
+    asset_rel=${asset#assets-gen/}
+    #also we need to replace assets-gen with assets_gen in asset
+    asset=${asset//assets-gen/assets_gen}
+elif [[ ${asset} == assets* ]]; then
+    asset_rel=${asset#assets/}
+else
+    echo "Error: Asset ${asset} is not well formed"
+    exit 1
+fi
+
 asset_under=${asset//\//_}
 asset_under=${asset_under//./_}
 

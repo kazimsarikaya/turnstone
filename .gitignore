@@ -2,6 +2,8 @@ build/
 tmp/
 .depend*
 .mkdirsdone
+assets-gen
+assets-cc-gen
 cc-gen
 includes-gen
 scripts/osx-hacks/edk2-i386-vars.fd
