@@ -54,7 +54,10 @@ typedef struct font_psf1_t {
  * @brief font table
  */
 typedef struct font_table_t {
-    color_t* bitmap; ///< bitmap of font
+    union {
+        color_t*   color_data; ///< pointer to color data
+        float32_t* float_data; ///< pointer to float data
+    };
     uint32_t font_width; ///< width of font
     uint32_t font_height; ///< height of font
     uint32_t glyph_count; ///< number of glyphs
@@ -69,8 +72,10 @@ void font_print_glyph_with_stride(char16_t wc,
                                   uint32_t stride);
 
 font_table_t* font_get_font_table(void);
+font_table_t* font_atlas_get_font_table(void);
 
 char16_t font_get_wc(const char_t* string, int64_t* idx);
+char16_t font_atlas_get_wc(const char_t* string, int64_t * idx);
 
 int8_t font_init(void);
 
