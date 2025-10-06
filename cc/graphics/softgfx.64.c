@@ -7,13 +7,20 @@
  */
 #include <graphics/softgfx.h>
 #include <memory.h>
+#include <strings.h>
 
 MODULE("turnstone.kernel.graphics.sgfx");
 
+void video_text_print(const char_t* text);
+
 // Internal texture struct
 typedef struct sgfx_texture_internal_t {
-    int32_t  width, height;
-    color_t* data;
+    sgfx_texture_format_t format;
+    int32_t               width, height;
+    union {
+        float32_t* sdf_data; // for SDF format
+        color_t*   color_data; // for color format
+    };
 } sgfx_texture_internal_t;
 
 typedef enum sgfx_buffer_type_t {
@@ -93,9 +100,9 @@ static void sgfx_mat4_mul(sgfx_mat4_f32_t* out, const sgfx_mat4_f32_t* a, const 
 static void sgfx_mat4_translate(sgfx_mat4_f32_t* mat, float32_t x, float32_t y, float32_t z) {
     sgfx_mat4_f32_t trans;
     sgfx_mat4_identity(&trans);
-    trans.m[12] = x;
-    trans.m[13] = y;
-    trans.m[14] = z;
+    trans.m[3]  = x;
+    trans.m[7]  = y;
+    trans.m[11] = z;
     sgfx_mat4_mul(mat, mat, &trans);
 }
 
@@ -109,7 +116,7 @@ static void sgfx_mat4_scale(sgfx_mat4_f32_t* mat, float32_t x, float32_t y, floa
 }
 
 static void sgfx_mat4_rotate(sgfx_mat4_f32_t* mat, float32_t angle, float32_t x, float32_t y, float32_t z) {
-    float32_t c = math_cos_f32(angle * math_pi_f32() / 180.0f); // Degrees? OpenGL uses degrees
+    float32_t c = math_cos_f32(angle * math_pi_f32() / 180.0f);
     float32_t s = math_sin_f32(angle * math_pi_f32() / 180.0f);
     float32_t len = math_sqrt_f32(x * x + y * y + z * z);
 
@@ -120,8 +127,8 @@ static void sgfx_mat4_rotate(sgfx_mat4_f32_t* mat, float32_t angle, float32_t x,
     sgfx_mat4_f32_t rot;
     sgfx_mat4_identity(&rot);
 
-    rot.m[0] = x * x * (1 - c) + c;   rot.m[1] = x * y * (1 - c) - z * s; rot.m[2] = x * z * (1 - c) + y * s;
-    rot.m[4] = y * x * (1 - c) + z * s; rot.m[5] = y * y * (1 - c) + c;   rot.m[6] = y * z * (1 - c) - x * s;
+    rot.m[0] = x * x * (1 - c) + c;     rot.m[1] = x * y * (1 - c) - z * s; rot.m[2] = x * z * (1 - c) + y * s;
+    rot.m[4] = y * x * (1 - c) + z * s; rot.m[5] = y * y * (1 - c) + c;     rot.m[6] = y * z * (1 - c) - x * s;
     rot.m[8] = z * x * (1 - c) - y * s; rot.m[9] = z * y * (1 - c) + x * s; rot.m[10] = z * z * (1 - c) + c;
 
     sgfx_mat4_mul(mat, mat, &rot);
@@ -204,11 +211,33 @@ static void sgfx_plot_pixel(sgfx_context_t* ctx, int32_t x, int32_t y, color_t p
 
 // Texture sample nearest
 static color_t sgfx_sample_texture(const sgfx_texture_internal_t* tex, float32_t u, float32_t v) {
-    int32_t tx = (int32_t)(u * (float32_t)tex->width) % tex->width;
-    int32_t ty = (int32_t)(v * (float32_t)tex->height) % tex->height;
-    if (tx < 0) tx += tex->width;
-    if (ty < 0) ty += tex->height;
-    return tex->data[ty * tex->width + tx];
+    if (!tex || tex->width <= 0 || tex->height <= 0) {
+        return (color_t){{0, 0, 0, 0}};
+    }
+
+    // Map u,v [0,1] to pixel coordinates
+    int32_t tx = (int32_t)(u * (float32_t)tex->width);
+    int32_t ty = (int32_t)(v * (float32_t)tex->height);
+
+    // Clamp to edge
+    if (tx < 0) tx = 0;
+    else if (tx >= tex->width) tx = tex->width - 1;
+
+    if (ty < 0) ty = 0;
+    else if (ty >= tex->height) ty = tex->height - 1;
+
+    if (tex->format == SGFX_TEXTURE_COLOR) {
+        return tex->color_data[ty * tex->width + tx];
+    } else if (tex->format == SGFX_TEXTURE_SDF) {
+        float32_t alpha = tex->sdf_data[ty * tex->width + tx] * 255.0f;
+        if (alpha < 0.0f) alpha = 0.0f;
+        else if (alpha > 255.0f) alpha = 255.0f;
+
+        // Return white with alpha from SDF
+        return (color_t){.red = 255, .green = 255, .blue = 255, .alpha = (uint8_t)alpha};
+    }
+
+    return (color_t){{0, 0, 0, 0}};
 }
 
 // Rasterizers
@@ -356,7 +385,11 @@ sgfx_context_t* sgfx_create_context(int32_t width, int32_t height, color_t* fram
 
 void sgfx_destroy_context(sgfx_context_t* ctx) {
     for (uint32_t i = 0; i < ctx->texture_count; ++i) {
-        memory_free(ctx->textures[i].data);
+        if (ctx->textures[i].format == SGFX_TEXTURE_COLOR) {
+            memory_free(ctx->textures[i].color_data);
+        } else if (ctx->textures[i].format == SGFX_TEXTURE_SDF) {
+            memory_free(ctx->textures[i].sdf_data);
+        }
     }
 
     if (ctx->buffers[0]) memory_free(ctx->buffers[0]);
@@ -689,16 +722,32 @@ void sgfx_bind_texture(sgfx_context_t* ctx, sgfx_texture_t tex) {
     }
 }
 
-void sgfx_tex_image2d(sgfx_context_t* ctx, int32_t width, int32_t height, const color_t* data) {
+void sgfx_tex_with_format(sgfx_context_t* ctx, int32_t width, int32_t height, const void* data, sgfx_texture_format_t format) {
     if (!ctx->bound_texture) {
         return;
     }
 
+    if (width <= 0 || height <= 0 || data == NULL) {
+        return;
+    }
+
+    if (format != SGFX_TEXTURE_COLOR && format != SGFX_TEXTURE_SDF) {
+        return;
+    }
+
     sgfx_texture_internal_t* tex = &ctx->textures[ctx->bound_texture - 1];
+    tex->format = format;
     tex->width = width;
     tex->height = height;
-    tex->data = memory_malloc(width * height * sizeof(color_t));
-    memory_memcopy(data, tex->data, width * height * sizeof(color_t));
+    size_t data_size = (format == SGFX_TEXTURE_COLOR) ? (width * height * sizeof(color_t)) : (width * height * sizeof(float32_t));
+
+    if (format == SGFX_TEXTURE_COLOR) {
+        tex->color_data = memory_malloc(data_size);
+        memory_memcopy(data, tex->color_data, data_size);
+    } else if (format == SGFX_TEXTURE_SDF) {
+        tex->sdf_data = memory_malloc(data_size);
+        memory_memcopy(data, tex->sdf_data, data_size);
+    }
 }
 
 // Blit glyph with foreground and background colors

@@ -52,6 +52,11 @@ typedef enum sgfx_cap_t {
     SGFX_CAP_SCISSOR_TEST = BIT(3),
 } sgfx_cap_t;
 
+typedef enum {
+    SGFX_TEXTURE_COLOR, // color_t (uint32_t BGRA)
+    SGFX_TEXTURE_SDF // float32_t SDF atlas
+} sgfx_texture_format_t;
+
 // API
 sgfx_context_t* sgfx_create_context(int32_t width, int32_t height, color_t* framebuffer);
 void            sgfx_destroy_context(sgfx_context_t* ctx);
@@ -81,7 +86,9 @@ void sgfx_end(sgfx_context_t* ctx);
 
 sgfx_texture_t sgfx_gen_texture(sgfx_context_t* ctx);
 void           sgfx_bind_texture(sgfx_context_t* ctx, sgfx_texture_t tex);
-void           sgfx_tex_image2d(sgfx_context_t* ctx, int32_t width, int32_t height, const color_t* data); // Copies data, RGBA
+void           sgfx_tex_with_format(sgfx_context_t* ctx, int32_t width, int32_t height, const void* data, sgfx_texture_format_t format);
+#define sgfx_tex_image2d(ctx, w, h, data) sgfx_tex_with_format(ctx, w, h, data, SGFX_TEXTURE_COLOR)
+#define sgfx_tex_sdf(ctx, w, h, data)   sgfx_tex_with_format(ctx, w, h, data, SGFX_TEXTURE_SDF)
 
 
 void sgfx_blit_glyph_color(sgfx_context_t* ctx, sgfx_texture_t tex,
