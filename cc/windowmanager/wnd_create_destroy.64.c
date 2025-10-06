@@ -144,7 +144,7 @@ static int8_t wndmgr_create_footer(window_t* parent) {
                                  tp.hours, tp.minutes, tp.seconds,
                                  tp.year, tp.month, tp.day);
 
-    rect = windowmanager_calc_text_rect(time_str, 2000);
+    rect = windowmanager_calc_text_rect(time_str, wndmgr->screen_width);
 
     rect.x = parent->rect.width - rect.width - wndmgr->font_width;
 

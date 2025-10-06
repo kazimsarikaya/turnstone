@@ -152,7 +152,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
 
     char_t* input_label_text = strprintf("%s ==> ", label_text);
 
-    rect_t rect = windowmanager_calc_text_rect(input_label_text, 2000);
+    rect_t rect = windowmanager_calc_text_rect(input_label_text, screen_width);
 
     window_t* option_input_label = windowmanager_create_window(option_input_row,
                                                                input_label_text,
@@ -167,7 +167,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
 
     char_t* wnd_input_text = strdup(input_text);
 
-    rect = windowmanager_calc_text_rect(input_text, 2000);
+    rect = windowmanager_calc_text_rect(input_text, screen_width);
 
     rect.x = option_input_label->rect.width + 2 * font_width;
 
@@ -189,7 +189,7 @@ window_t* windowmanager_add_option_window(window_t* parent, rect_t pos,
         return option_input_row;
     }
 
-    rect = windowmanager_calc_text_rect(tooltip_text, 2000);
+    rect = windowmanager_calc_text_rect(tooltip_text, screen_width);
 
     rect.x = option_input_text->rect.x + option_input_text->rect.width  + 2 * font_width;
 
@@ -383,7 +383,7 @@ static window_t* windowmanager_create_options_window(wnd_options_windows_t optio
 
         char_t* option_number = strprintf("% 8d.", i);
 
-        rect = windowmanager_calc_text_rect(option_number, 2000);
+        rect = windowmanager_calc_text_rect(option_number, screen_width);
 
         rect.y = option_list_height;
 

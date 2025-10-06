@@ -130,7 +130,7 @@ static int8_t windowmanager_create_and_show_spool_item_window(spool_item_t* spoo
 
     char_t* title_str = strprintf("tOS Spool Item %s Details", spool_get_name(spool_item));
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
+    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
     rect.x = (screen_width - rect.width) / 2;
     rect.y = font_height;
 
@@ -356,7 +356,7 @@ int8_t windowmanager_create_and_show_spool_browser_window(void) {
 
     char_t* title_str = strdup("tOS Spool Browser");
 
-    rect_t rect = windowmanager_calc_text_rect(title_str, 2000);
+    rect_t rect = windowmanager_calc_text_rect(title_str, screen_width);
     rect.x = (screen_width - rect.width) / 2;
     rect.y = font_height;
 
