@@ -11,6 +11,7 @@
 #include <windowmanager/wnd_utils.h>
 #include <strings.h>
 #include <graphics/screen.h>
+#include <logging.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -90,6 +91,18 @@ window_t* windowmanager_create_greater_window(void) {
     char_t* windowmanager_turnstone_ascii_art = strdup((char_t*)&tos_logo_data_start);
 
     rect_t rect = windowmanager_calc_text_rect(windowmanager_turnstone_ascii_art, screen_width);
+
+    if(rect.width == 0 || rect.height == 0) {
+        memory_free(window);
+        return NULL;
+    }
+
+    if(rect.width > screen_width - 2 * font_width ||
+       rect.height > screen_height - 2 * font_height) {
+        memory_free(window);
+        return NULL;
+    }
+
     rect.x = (screen_width - rect.width) / 2;
     rect.y = (screen_height - rect.height) / 2;
     // align x to font width, y to font height
@@ -137,6 +150,8 @@ window_t* windowmanager_create_greater_window(void) {
         .height = old_y - 2 * font_height
     };
 
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Rainbow rect: x=%d y=%d w=%d h=%d", rainbow_rect.x, rainbow_rect.y, rainbow_rect.width, rainbow_rect.height);
+
     window_t* rainbow_window = windowmanager_create_window(window,
                                                            NULL,
                                                            rainbow_rect,
@@ -160,6 +175,8 @@ window_t* windowmanager_create_greater_window(void) {
         .width = 300,
         .height = 300
     };
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Rainbow rect: x=%d y=%d w=%d h=%d", rainbow_rect.x, rainbow_rect.y, rainbow_rect.width, rainbow_rect.height);
 
     rainbow_window = windowmanager_create_window(window,
                                                  NULL,
