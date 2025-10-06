@@ -101,7 +101,11 @@ int8_t video_qemu_vga_init(memory_heap_t* heap, const pci_dev_t* device){
 
     uint8_t* edid = qemuvga_device->mmio_data + VIDEO_QEMU_VGA_EDID_OFFSET;
 
-    video_edid_get_max_resolution(edid, (uint32_t*)&qemuvga_device->max_width, (uint32_t*)&qemuvga_device->max_height);
+    if(video_edid_get_max_resolution(edid, (uint32_t*)&qemuvga_device->max_width, (uint32_t*)&qemuvga_device->max_height) != 0) {
+        PRINTLOG(VIDEO, LOG_WARNING, "Failed to get max resolution from EDID, using from screen info");
+        qemuvga_device->max_width = screen_info.width;
+        qemuvga_device->max_height = screen_info.height;
+    }
 
     PRINTLOG(VIDEO, LOG_INFO, "QEMU VGA max resolution from EDID: %dx%d", qemuvga_device->max_width, qemuvga_device->max_height);
 

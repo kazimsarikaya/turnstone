@@ -16,10 +16,13 @@
 extern "C" {
 #endif
 
-typedef struct video_edid_standart_timing_t {
-    uint8_t horizontal_active_pixels;
-    uint8_t vertical_frequency : 6;
-    uint8_t aspect_ratio       : 2;
+typedef union video_edid_standart_timing_t {
+    struct {
+        uint8_t horizontal_active_pixels;
+        uint8_t vertical_frequency : 6;
+        uint8_t aspect_ratio       : 2;
+    };
+    uint16_t raw;
 } __attribute__((packed)) video_edid_standart_timing_t;
 
 _Static_assert(sizeof(video_edid_standart_timing_t) == 2, "video_edid_standart_timing_t is not 2 bytes");
@@ -29,24 +32,24 @@ typedef struct video_edid_detailed_timing_t {
     uint8_t vertical_frequency;
     uint8_t horizontal_active_pixels_lsb;
     uint8_t horizontal_blanking_pixels_lsb;
-    uint8_t horizontal_active_pixels_msb   : 4;
     uint8_t horizontal_blanking_pixels_msb : 4;
+    uint8_t horizontal_active_pixels_msb   : 4;
     uint8_t vertical_active_pixels_lsb;
     uint8_t vertical_blanking_pixels_lsb;
-    uint8_t vertical_active_pixels_msb   : 4;
     uint8_t vertical_blanking_pixels_msb : 4;
+    uint8_t vertical_active_pixels_msb   : 4;
     uint8_t horizontal_sync_offset;
     uint8_t horizontal_sync_pulse_width;
-    uint8_t vertical_sync_offset_msb        : 4;
     uint8_t vertical_sync_pulse_width_msb   : 4;
-    uint8_t horizontal_sync_pulse_width_msb : 2;
-    uint8_t horizontal_sync_offset_msb      : 2;
-    uint8_t vertical_sync_pulse_width       : 2;
+    uint8_t vertical_sync_offset_msb        : 4;
     uint8_t vertical_sync_offset            : 2;
+    uint8_t vertical_sync_pulse_width       : 2;
+    uint8_t horizontal_sync_offset_msb      : 2;
+    uint8_t horizontal_sync_pulse_width_msb : 2;
     uint8_t horizontal_image_size_lsb;
     uint8_t vertical_image_size_lsb;
-    uint8_t horizontal_image_size_msb : 4;
     uint8_t vertical_image_size_msb   : 4;
+    uint8_t horizontal_image_size_msb : 4;
     uint8_t horizontal_border_pixels;
     uint8_t vertical_border_pixels;
     uint8_t flags;
@@ -78,7 +81,7 @@ typedef struct video_edid_t {
 
 _Static_assert(sizeof(video_edid_t) == 128, "video_edid_t is not 128 bytes");
 
-void video_edid_get_max_resolution(uint8_t* edid_data, uint32_t* max_width, uint32_t* max_height);
+int8_t video_edid_get_max_resolution(uint8_t* edid_data, uint32_t* max_width, uint32_t* max_height);
 
 #ifdef __cplusplus
 }
