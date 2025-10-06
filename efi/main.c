@@ -232,6 +232,7 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
     }
 
     uint64_t next_mode = gop->mode->mode;
+    uint64_t current_mode = gop->mode->mode;
     for(int64_t i = 0; i < gop->mode->max_mode; i++) {
         uint64_t gop_mode_size = 0;
         efi_gop_mode_info_t* gop_mi = NULL;
@@ -243,6 +244,13 @@ efi_status_t efi_setup_graphics(video_frame_buffer_t** vfb_res) {
                 next_mode = i;
             }
         }
+    }
+
+    if(next_mode != current_mode) {
+        PRINTLOG(EFI, LOG_WARNING, "gop is not in desired mode %lli, current mode %lli", next_mode, current_mode);
+        // TODO: ovmf does not report available modes correctly, so setting mode is disabled for now
+        PRINTLOG(EFI, LOG_WARNING, "skipping gop mode set due to ovmf bug");
+        next_mode = current_mode;
     }
 
     res = gop->set_mode(gop, next_mode);
