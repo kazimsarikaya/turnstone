@@ -36,6 +36,7 @@ typedef struct sgfx_vec4_i32_t {
 
 typedef struct sgfx_context_info_t {
     int32_t         x, y, width, height;
+    int32_t         ortho_left, ortho_right, ortho_bottom, ortho_top;
     sgfx_mat4_f32_t modelview;
     sgfx_mat4_f32_t projection;
     sgfx_vec4_i32_t scissor; // x, y, w, h
@@ -418,19 +419,26 @@ sgfx_context_t* sgfx_create_context(int32_t width, int32_t height, color_t* fram
     ctx->current_context = &ctx->contexts[0];
     ctx->base_context = &ctx->contexts[0];
     ctx->current_context_idx = 0;
+
+    // boundaries
     ctx->current_context->x = 0;
     ctx->current_context->y = 0;
     ctx->current_context->width = width;
     ctx->current_context->height = height;
+
+    // Orthographic projection boundaries
     sgfx_mat4_identity(&ctx->current_context->projection);
     sgfx_mat4_ortho(&ctx->current_context->projection, 0.0f, (float32_t)width, (float32_t)height, 0.0f, -1.0f, 1.0f);
     ctx->current_matrix = &ctx->current_context->modelview;
     sgfx_mat4_identity(&ctx->current_context->modelview);
     ctx->matrix_mode = SGFX_MODELVIEW;
-    ctx->current_color = (sgfx_vec4_f32_t){1.0f, 1.0f, 1.0f, 1.0f};
-    ctx->texture_count = 0;
-    ctx->bound_texture = 0;
-    ctx->enabled_caps = 0;
+
+    // default ortho boundaries
+    ctx->current_context->ortho_left = 0;
+    ctx->current_context->ortho_right = width;
+    ctx->current_context->ortho_top = 0;
+    ctx->current_context->ortho_bottom = height;
+
     return ctx;
 }
 
@@ -459,17 +467,25 @@ void sgfx_create_sub_context(sgfx_context_t* ctx,
     ctx->current_context_idx++;
 
     ctx->current_context = &ctx->contexts[ctx->current_context_idx];
+
+    // boundaries
     ctx->current_context->x = x;
     ctx->current_context->y = y;
     ctx->current_context->width = width;
     ctx->current_context->height = height;
-    ctx->current_context->scissor = (sgfx_vec4_i32_t){0, 0, width, height};
+
+    // Orthographic projection boundaries
     sgfx_mat4_identity(&ctx->current_context->projection);
     sgfx_mat4_ortho(&ctx->current_context->projection, 0.0f, (float32_t)width, (float32_t)height, 0.0f, -1.0f, 1.0f);
     sgfx_mat4_identity(&ctx->current_context->modelview);
     ctx->current_matrix = &ctx->current_context->modelview;
     ctx->matrix_mode = SGFX_MODELVIEW;
 
+    // default ortho boundaries
+    ctx->current_context->ortho_left = 0;
+    ctx->current_context->ortho_right = width;
+    ctx->current_context->ortho_top = 0;
+    ctx->current_context->ortho_bottom = height;
 }
 
 void sgfx_destroy_sub_context(sgfx_context_t* ctx) {
@@ -496,10 +512,10 @@ void sgfx_clear(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, floa
     if (ctx->current_context_idx > 0) {
         // Define subcontext rectangle corners in projection(?) space (same as vertices)
         sgfx_vec4_f32_t corners[4] = {
-            { 0, 0, 0.0f, 1.0f }, // Top-left
-            { ctx->current_context->width, 0, 0.0f, 1.0f }, // Top-right
-            { 0, ctx->current_context->height, 0.0f, 1.0f }, // Bottom-left
-            { ctx->current_context->width, ctx->current_context->height, 0.0f, 1.0f } // Bottom-right
+            { ctx->current_context->ortho_left, ctx->current_context->ortho_top, 0.0f, 1.0f }, // Top-left
+            { ctx->current_context->ortho_right, ctx->current_context->ortho_top, 0.0f, 1.0f }, // Top-right
+            { ctx->current_context->ortho_left, ctx->current_context->ortho_bottom, 0.0f, 1.0f }, // Bottom-left
+            { ctx->current_context->ortho_right, ctx->current_context->ortho_bottom, 0.0f, 1.0f } // Bottom-right
         };
 
         // Compute MVP matrix (row-major)
@@ -658,6 +674,10 @@ void sgfx_scale_f32(sgfx_context_t* ctx, float32_t x, float32_t y, float32_t z) 
 
 void sgfx_ortho_f32(sgfx_context_t* ctx, float32_t left, float32_t right, float32_t bottom, float32_t top, float32_t near, float32_t far) {
     sgfx_mat4_ortho(ctx->current_matrix, left, right, bottom, top, near, far);
+    ctx->current_context->ortho_left = left;
+    ctx->current_context->ortho_right = right;
+    ctx->current_context->ortho_bottom = bottom;
+    ctx->current_context->ortho_top = top;
 }
 
 void sgfx_perspective_f32(sgfx_context_t* ctx, float32_t fovy, float32_t aspect, float32_t near, float32_t far) {
