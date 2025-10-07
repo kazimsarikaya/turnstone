@@ -15,17 +15,6 @@ typedef union {
     unsigned int u;
 } f32_u;
 
-// Constants
-float32_t math_pi_f32(void) {
-    return 3.141592653589793f;
-}
-float32_t math_tau_f32(void) {
-    return 6.283185307179586f;
-}
-float32_t math_epsilon_f32(void) {
-    return 1e-6f;
-}
-
 // Basic utilities
 float32_t math_fabs_f32(float32_t x) {
     f32_u u = {x};

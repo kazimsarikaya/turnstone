@@ -12,9 +12,15 @@
 #include <types.h>
 
 // Constants
-float32_t math_pi_f32(void);
-float32_t math_tau_f32(void);
-float32_t math_epsilon_f32(void);
+static inline float32_t math_pi_f32(void) {
+    return 3.141592653589793f;
+}
+static inline float32_t math_tau_f32(void) {
+    return 6.283185307179586f;
+}
+static inline float32_t math_epsilon_f32(void) {
+    return 1e-6f;
+}
 
 // Basic utilities
 float32_t math_fabs_f32(float32_t x);
