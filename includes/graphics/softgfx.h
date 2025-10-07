@@ -21,6 +21,8 @@
 #define SGFX_QUADS 2 // For rectangles
 
 #define SGFX_MAX_VERTICES 1200 // it should multiples of 2 (for lines), 3 (for triangles) and 4 (for quads)
+#define SGFX_MAX_TEXTURES 16
+#define SGFX_MAX_SUB_CONTEXT_DEPTH 16
 
 typedef uint32_t sgfx_texture_t;
 
