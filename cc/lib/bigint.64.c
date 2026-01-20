@@ -13,83 +13,101 @@
 #include <utils.h>
 #include <logging.h>
 #include <random.h>
+#include <int_limits.h>
 
 MODULE("turnstone.lib");
 
-typedef struct bigint_item_t bigint_item_t;
-
 /*! each value is 48 bits */
-#define BIGINT_ITEM_BITS       48
-#define BIGINT_ITEM_HEX_DIGITS 12
-
-#define BIGINT_ITEM_MAX   0x0000FFFFFFFFFFFFUL
-#define BIGINT_ITEM_MSB   0x0000800000000000UL
-#define BIGINT_ITEM_CARRY 0x0001000000000000UL
-
-typedef struct bigint_item_t {
-    uint64_t       value;
-    bigint_item_t* next;
-    bigint_item_t* prev;
-} bigint_item_t;
+#define BIGINT_LIMB_BITS           64
+#define BIGINT_HEX_DIGITS_PER_LIMB 16
+#define BIGINT_INITIAL_CAPACITY     4
 
 struct bigint_t {
-    bigint_item_t* lsb;
-    bigint_item_t* msb;
-    int32_t        sign;
-    boolean_t      neged_with_sign;
+    uint64_t* limbs; // Dynamic array, limbs[0] = LSB
+    uint64_t  limb_count; // Allocated/used size
+    uint64_t  capacity; // For growth (e.g., start with 4, double on resize)
+    int32_t   sign;
+    boolean_t neged_with_sign;
 };
-
 
 bigint_t* bigint_create(void) {
     bigint_t* bigint = (bigint_t*)memory_malloc(sizeof(bigint_t));
 
-    if (bigint) {
-        bigint->lsb = NULL;
-        bigint->msb = NULL;
-        bigint->sign = 0;
+    if (!bigint) {
+        return NULL;
     }
+
+    bigint->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * BIGINT_INITIAL_CAPACITY);
+    if (!bigint->limbs) {
+        memory_free(bigint);
+        return NULL;
+    }
+
+    bigint->limb_count = 1;
+    bigint->capacity = BIGINT_INITIAL_CAPACITY;
+    bigint->sign = 0;
+    bigint->neged_with_sign = false;
 
     return bigint;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-use-after-free"
-static void bigint_destroy_items(bigint_t* bigint) {
+static int8_t bigint_destroy_limbs(bigint_t* bigint) {
     if(!bigint) {
-        return;
+        return -1;
     }
 
-    bigint_item_t* item = bigint->lsb;
-
-    while (item) {
-        bigint_item_t* next = item->next;
-        memory_free(item);
-        item = next;
+    if(bigint->limbs) {
+        memory_free(bigint->limbs);
     }
 
-    bigint->lsb = NULL;
-    bigint->msb = NULL;
+    bigint->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * BIGINT_INITIAL_CAPACITY);
+
+    if (!bigint->limbs) {
+        return -1;
+    }
+
+    bigint->limb_count = 0;
+    bigint->capacity = BIGINT_INITIAL_CAPACITY;
+
     bigint->sign = 0;
     bigint->neged_with_sign = false;
+
+    return 0;
 }
-#pragma GCC diagnostic pop
 
 void bigint_destroy(bigint_t* bigint) {
-    bigint_destroy_items(bigint);
-
+    memory_free(bigint->limbs);
     memory_free(bigint);
 }
 
-static uint64_t bigint_item_count(const bigint_t* bigint) {
-    uint64_t count = 0;
-    bigint_item_t* item = bigint->lsb;
-
-    while (item) {
-        count++;
-        item = item->next;
+static int8_t bigint_ensure_capacity(bigint_t* bigint, uint64_t required_capacity) {
+    if (!bigint) {
+        return -1;
     }
 
-    return count;
+    if (bigint->capacity >= required_capacity) {
+        return 0;
+    }
+
+    uint64_t new_capacity = bigint->capacity;
+
+    while (new_capacity < required_capacity) {
+        new_capacity *= 2;
+    }
+
+    uint64_t* new_limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * new_capacity);
+    if (!new_limbs) {
+        return -1;
+    }
+
+    memory_memcopy(bigint->limbs, new_limbs, sizeof(uint64_t) * bigint->limb_count);
+
+    memory_free(bigint->limbs);
+
+    bigint->limbs = new_limbs;
+    bigint->capacity = new_capacity;
+
+    return 0;
 }
 
 int8_t bigint_set_int64(bigint_t* bigint, int64_t value) {
@@ -97,116 +115,44 @@ int8_t bigint_set_int64(bigint_t* bigint, int64_t value) {
         return -1;
     }
 
-    bigint_item_t* item;
     uint64_t uvalue;
-    boolean_t need_next = false;
-    uint64_t next_value = 0;
 
-    bigint_destroy_items(bigint);
+    bigint_destroy_limbs(bigint);
 
     if(value == 0) {
+        bigint->sign = 0;
+        bigint->limb_count = 1;
         return 0;
     }
 
     if (value < 0) {
         bigint->sign = -1;
+        bigint->neged_with_sign = true;
         uvalue = -value;
     } else {
         bigint->sign = 1;
         uvalue = value;
     }
 
-    if (uvalue > BIGINT_ITEM_MAX) {
-        need_next = true;
-        next_value = uvalue >> BIGINT_ITEM_BITS;
-        uvalue &= BIGINT_ITEM_MAX;
-    }
-
-    item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-    if (!item) {
-        return -1;
-    }
-
-    item->value = uvalue;
-    item->next = NULL;
-
-    if (need_next) {
-        bigint_item_t* next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!next) {
-            memory_free(item);
-            return -1;
-        }
-
-        next->value = next_value;
-        next->prev = item;
-        next->next = NULL;
-
-        item->next = next;
-    }
-
-    bigint->lsb = item;
-
-    if (need_next) {
-        bigint->msb = item->next;
-    } else {
-        bigint->msb = item;
-    }
+    bigint->limbs[0] = uvalue;
+    bigint->limb_count = 1;
 
     return 0;
 }
 
 int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value) {
-    bigint_item_t* item;
-    boolean_t need_next = false;
-    uint64_t next_value = 0;
-
-    bigint_destroy_items(bigint);
+    bigint_destroy_limbs(bigint);
 
     if (value == 0) {
+        bigint->sign = 0;
+        bigint->limb_count = 1;
         return 0;
     }
 
     bigint->sign = 1;
 
-    if (value > BIGINT_ITEM_MAX) {
-        need_next = true;
-        next_value = value >> BIGINT_ITEM_BITS;
-        value &= BIGINT_ITEM_MAX;
-    }
-
-    item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-    if (!item) {
-        return -1;
-    }
-
-    item->value = value;
-    item->next = NULL;
-
-    if (need_next) {
-        bigint_item_t* next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!next) {
-            memory_free(item);
-            return -1;
-        }
-
-        next->value = next_value;
-        next->next = NULL;
-        next->prev = item;
-
-        item->next = next;
-    }
-
-    bigint->lsb = item;
-
-    if (need_next) {
-        bigint->msb = item->next;
-    } else {
-        bigint->msb = item;
-    }
+    bigint->limbs[0] = value;
+    bigint->limb_count = 1;
 
     return 0;
 }
@@ -231,94 +177,170 @@ bigint_t* bigint_two(void) {
     return bigint;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+static inline int8_t bigint_set_zero(bigint_t* bigint) {
+    return bigint_set_int64(bigint, 0);
+}
+
 int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src) {
     if(!bigint || !src) {
         return -1;
     }
 
-    bigint_item_t* item = src->lsb;
-    bigint_item_t* dest_item = bigint->lsb;
-    bigint_item_t* prev = NULL;
-    bigint_item_t* first = NULL;
-    bigint_item_t* next = NULL;
+    if(bigint == src) {
+        return 0;
+    }
 
+    memory_free(bigint->limbs);
+    bigint->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * src->capacity);
+
+    if (!bigint->limbs) {
+        return -1;
+    }
+
+    memory_memcopy(src->limbs, bigint->limbs, sizeof(uint64_t) * src->limb_count);
+
+    bigint->capacity = src->capacity;
+    bigint->limb_count = src->limb_count;
     bigint->sign = src->sign;
     bigint->neged_with_sign = src->neged_with_sign;
 
-    while(dest_item && item) { // fill the existing items
-        dest_item->value = item->value;
+    return 0;
+}
 
-        prev = dest_item;
-
-        dest_item = dest_item->next;
-        item = item->next;
+static int8_t bigint_normalize(bigint_t* bigint) {
+    if (!bigint) {
+        return -1;
     }
 
-    if(!item && !dest_item) {
-        // nothing to do
+    if (bigint->limb_count == 0) {
+        bigint->sign = 0;
+        bigint->neged_with_sign = false;
         return 0;
     }
 
-    if(!item && dest_item) {
-        bigint->msb = prev;
-
-        if(bigint->msb) {
-            bigint->msb->next = NULL;
+    if (bigint->sign >= 0)
+    {
+        while (bigint->limb_count > 0 && bigint->limbs[bigint->limb_count - 1] == 0)
+        {
+            bigint->limb_count--;
         }
 
-        // remove the rest of the items from dest
-        while(dest_item) {
-            next = dest_item->next;
-            memory_free(dest_item);
-            dest_item = next;
-        }
-
-        if(!bigint->msb) {
-            bigint->lsb = NULL;
+        if (bigint->limb_count == 0) {
             bigint->sign = 0;
+            bigint->neged_with_sign = false;
         }
 
         return 0;
     }
 
-    // there are two cases fisrt dest is already empty or dest is not empty
-    // prev is the last item in dest if it is null then dest is empty
-    // so we need to set first as new item, otherwise first is the lsb of dest
+    if (bigint->sign == -1 && bigint->neged_with_sign)
+    {
+        while (bigint->limb_count > 0 && bigint->limbs[bigint->limb_count - 1] == UINT64_MAX)
+        {
+            if (bigint->limb_count == 1) {
+                break;
+            }
 
-    if(prev) {
-        first = bigint->lsb;
-    }
-
-    while(item) {
-        next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if(!next) {
-            return -1;
+            bigint->limb_count--;
         }
 
-        next->value = item->value;
-        next->prev = prev;
-        next->next = NULL;
+        if (bigint->limb_count == 0) {
+            bigint->sign = 0;
+            bigint->neged_with_sign = false;
 
-        if(prev) {
-            prev->next = next;
-        } else {
-            first = next;
+            return 0;
         }
-
-        prev = next;
-        item = item->next;
     }
-
-    bigint->lsb = first;
-    bigint->msb = prev;
-
 
     return 0;
 }
-#pragma GCC diagnostic pop
+
+static int8_t bigint_ensure_normal_form(bigint_t* a) {
+    if (!a || a->sign >= 0 || (a->sign < 0 && a->neged_with_sign)) {
+        return 0; // Already normal or zero
+    }
+
+    /* To convert from two's complement back to magnitude:
+       1. Invert all bits
+       2. Add 1
+     */
+    for (uint64_t i = 0; i < a->limb_count; i++) {
+        a->limbs[i] = ~a->limbs[i];
+    }
+
+    // Add 1 to the magnitude
+    uint64_t carry = 1;
+    for (uint64_t i = 0; i < a->limb_count && carry; i++) {
+        uint64_t val = a->limbs[i] + carry;
+        carry = (val < a->limbs[i]) ? 1 : 0;
+        a->limbs[i] = val;
+    }
+
+    if (carry) {
+        if (bigint_ensure_capacity(a, a->limb_count + 1) == -1) return -1;
+        a->limbs[a->limb_count++] = carry;
+    }
+
+    a->neged_with_sign = true; // Mark as normal form
+    bigint_normalize(a);
+    return 0;
+}
+
+static int8_t bigint_copy(bigint_t* dest, const bigint_t* src) {
+    if (!dest || !src) return -1;
+    if (dest == src) return 0;  // Self-copy protection
+
+    // 1. Match capacity
+    if (bigint_ensure_capacity(dest, src->limb_count) == -1) {
+        return -1;
+    }
+
+    // 2. Copy the actual limb data
+    if (src->limb_count > 0) {
+        memory_memcopy(src->limbs, dest->limbs, src->limb_count * sizeof(uint64_t));
+    }
+
+    // 3. Match metadata
+    dest->limb_count = src->limb_count;
+    dest->sign = src->sign;
+    dest->neged_with_sign = src->neged_with_sign;
+
+    // 4. Ensure extra limbs in destination are zeroed out
+    if (dest->capacity > dest->limb_count) {
+        memory_memset(dest->limbs + dest->limb_count, 0, (dest->capacity - dest->limb_count) * sizeof(uint64_t));
+    }
+
+    return 0;
+}
+
+static int8_t bigint_abs_copy(bigint_t* dest, const bigint_t* src) {
+    if (!dest || !src) return -1;
+
+    // 1. Perform a standard copy
+    if (bigint_copy(dest, src) == -1) {
+        return -1;
+    }
+
+    // 2. If it's zero, we are done
+    if (dest->sign == 0) {
+        return 0;
+    }
+
+    // 3. If it's in Two's Complement form, normalize it to Magnitude form
+    if (!dest->neged_with_sign) {
+        if (bigint_ensure_normal_form(dest) == -1) {
+            return -1;
+        }
+    }
+
+    // 4. Force the sign to positive
+    dest->sign = 1;
+    dest->neged_with_sign = true;
+
+    return 0;
+}
+
+
 
 bigint_t* bigint_clone(const bigint_t* src) {
     if(!src) {
@@ -337,185 +359,119 @@ bigint_t* bigint_clone(const bigint_t* src) {
     return bigint;
 }
 
-int8_t bigint_set_str(bigint_t* bigint, const char_t* str) {
-    if (!str || !bigint) {
-        return -1;
-    }
+static inline int hex_digit_value(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+}
 
+int8_t bigint_set_str(bigint_t* bigint, const char* str) {
+    if (!bigint || !str) return -1;
+
+    // 1. Handle Sign
     int32_t sign = 1;
-
     if (*str == '-') {
         sign = -1;
         str++;
-    }
-
-    while (*str && *str == '0') {
+    } else if (*str == '+') {
         str++;
     }
 
-    uint32_t len = strlen(str);
+    // 2. Skip Leading Zeros
+    while (*str == '0') {
+        str++;
+    }
+
+    size_t len = strlen(str);
 
     if (len == 0) {
         bigint->sign = 0;
-
+        bigint->limb_count = 0;
         return 0;
     }
 
-
-    bigint_destroy_items(bigint);
-
-    bigint->sign = sign;
-
-    int32_t parts = len / BIGINT_ITEM_HEX_DIGITS;
-
-    if (len % BIGINT_ITEM_HEX_DIGITS) {
-        parts++;
+    // 3. Allocate Memory
+    size_t limbs_needed = (len + BIGINT_HEX_DIGITS_PER_LIMB - 1) / BIGINT_HEX_DIGITS_PER_LIMB;
+    if (bigint_ensure_capacity(bigint, limbs_needed) == -1) {
+        return -1;
     }
 
-    int32_t first_len = len % BIGINT_ITEM_HEX_DIGITS;
+    // Clear limbs before use to avoid garbage values
+    memory_memset(bigint->limbs, 0, bigint->capacity * sizeof(uint64_t));
+    bigint->limb_count = limbs_needed;
 
-    if (first_len == 0) {
-        first_len = BIGINT_ITEM_HEX_DIGITS;
-    }
+    // 4. Parse String (Right to Left)
+    // We process the string from the end because the end is the Least Significant Digit.
+    const char* end = str + len;
+    for (size_t i = 0; i < limbs_needed; i++) {
+        uint64_t current_limb = 0;
 
-    bigint_item_t* next = NULL;
+        // We take up to 16 characters from the string, moving backwards
+        for (int j = 0; j < BIGINT_HEX_DIGITS_PER_LIMB; j++) {
+            const char* current_char_ptr = end - 1 - (i * BIGINT_HEX_DIGITS_PER_LIMB + j);
 
-    for (int32_t i = 0; i < parts; i++) {
-        int32_t part_len = (i == 0) ? first_len : BIGINT_ITEM_HEX_DIGITS;
-
-        uint64_t value = 0;
-
-        for (int32_t j = 0; j < part_len; j++) {
-            value <<= 4;
-
-            if (str[j] >= '0' && str[+j] <= '9') {
-                value += str[j] - '0';
-            } else if (str[j] >= 'A' && str[j] <= 'F') {
-                value += str[j] - 'A' + 10;
-            } else if (str[j] >= 'a' && str[j] <= 'f') {
-                value += str[j] - 'a' + 10;
-            } else {
-                return -1;
+            // If we've reached the start of the string (str), stop for this limb
+            if (current_char_ptr < str) {
+                break;
             }
+
+            int val = hex_digit_value(*current_char_ptr);
+            if (val < 0) {
+                return -1; // Invalid hex
+            }
+
+            current_limb |= ((uint64_t)val) << (j * 4);
         }
 
-        str += part_len;
-
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            return -1;
-        }
-
-        item->value = value;
-        item->next = next;
-
-        if (next) {
-            next->prev = item;
-        }
-
-        next = item;
-
-        if (i == 0) {
-            bigint->msb = item;
-        }
+        bigint->limbs[i] = current_limb;
     }
 
-    bigint->lsb = next;
+    // 5. Finalize Sign and Normalization
+    // (A quick normalization in case the string had zeros that were skipped or was small)
+    while (bigint->limb_count > 0 && bigint->limbs[bigint->limb_count - 1] == 0) {
+        bigint->limb_count--;
+    }
+
+    if (bigint->limb_count == 0) {
+        bigint->sign = 0;
+    } else {
+        bigint->sign = sign;
+        if(sign < 0) {
+            // Since input is a normal string, it's not in two's complement yet
+            bigint->neged_with_sign = true;
+        }
+    }
 
     return 0;
 }
 
 static int8_t bigint_inc_with_overflow(bigint_t* bigint) {
+    if (!bigint) {
+        return -1;
+    }
+
     if (bigint->sign == 0) {
-        bigint->sign = 1;
-        bigint->lsb = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!bigint->lsb) {
-            return -1;
-        }
-
-        bigint->lsb->value = 1;
-        bigint->lsb->next = NULL;
-        bigint->lsb->prev = NULL;
-        bigint->msb = bigint->lsb;
-
-        return 0;
+        return bigint_set_int64(bigint, 1);
     }
 
-    bigint_item_t* item = bigint->lsb;
     uint64_t carry = 1;
+    size_t i = 0;
 
-    while (item) {
-        item->value += carry;
+    // Process from LSB upward
+    while (carry && i < bigint->limb_count)
+    {
+        uint64_t new_value = bigint->limbs[i] + carry;
 
-        carry = item->value >> BIGINT_ITEM_BITS;
-
-        item->value &= BIGINT_ITEM_MAX;
-
-        if (carry == 0) {
-            break;
-        }
-
-        item = item->next;
-    }
-
-
-    return 0;
-}
-
-static int8_t bigint_remove_leading_zeros(bigint_t* bigint) {
-    bigint_item_t* item = bigint->msb;
-
-    while (item && item->value == 0) {
-        bigint_item_t* prev = item->prev;
-
-        if (prev) {
-            prev->next = NULL;
-        }
-
-        memory_free(item);
-
-        item = prev;
-    }
-
-    bigint->msb = item;
-
-    if (!item) {
-        bigint->sign = 0;
-        bigint->lsb = NULL;
-        bigint->neged_with_sign = false;
-    }
-
-    if(bigint->sign == -1 && bigint->neged_with_sign) {
-        item = bigint->msb;
-
-        while (item && item->value == BIGINT_ITEM_MAX && item != bigint->lsb) {
-            bigint_item_t* prev = item->prev;
-
-            if (prev) {
-                prev->next = NULL;
-            }
-
-            memory_free(item);
-
-            item = prev;
-        }
-
-        if (!item) {
-            bigint->sign = 0;
-            bigint->neged_with_sign = false;
-            bigint->lsb = NULL;
-
+        if (new_value >= bigint->limbs[i])
+        {
+            bigint->limbs[i] = new_value;
             return 0;
         }
 
-        if(item == bigint->lsb) {
-            item->next = NULL;
-            item->prev = NULL;
-        }
-
-        bigint->msb = item;
+        bigint->limbs[i] = 0;
+        carry = 1;
+        i++;
     }
 
     return 0;
@@ -547,91 +503,51 @@ static int8_t bigint_neg_with_sign_inplace(bigint_t* a, boolean_t force) {
     return 0;
 }
 
-static int8_t bigint_neg_with_sign(bigint_t* result, const bigint_t* a, boolean_t force) {
-    if (result == a) {
-        return bigint_neg_with_sign_inplace(result, force);
-    }
-
-    if (a->sign == 0) {
-        result->sign = 0;
-
-        return 0;
-    }
-
-    if(!force && a->sign > 0) { // prevent positive to negative
-        return 0;
-    }
-
-    if(!force && a->neged_with_sign && a->sign < 0) { // already neged
-        return 0;
-    }
-
-    if (bigint_set_bigint(result, a) == -1) {
-        return -1;
-    }
-
-    if(bigint_not(result, result) == -1) {
-        return -1;
-    }
-
-    if(bigint_inc_with_overflow(result) == -1) {
-        return -1;
-    }
-
-    result->neged_with_sign = !result->neged_with_sign;
-
-    return 0;
-}
-
-const char_t* bigint_to_str(const bigint_t* bigint) {
+const char* bigint_to_str(const bigint_t* bigint) {
     if (!bigint) {
         return NULL;
     }
 
-    if (!bigint->msb) {
+    if (bigint->sign == 0 || bigint->limb_count == 0) {
         return strdup("0");
     }
 
-    if(bigint->sign == 0) {
-        return strdup("0");
+    buffer_t* buf = buffer_new_with_capacity(NULL, 32); // reasonable starting size
+    if (!buf) {
+        return NULL;
     }
 
+    boolean_t is_negative = (bigint->sign < 0);
+    if (is_negative) {
+        buffer_append_byte(buf, '-');
 
-    buffer_t* buffer = buffer_new_with_capacity(NULL, 64);
-    bigint_item_t* item = bigint->msb; // msb is at msb
-
-    if (bigint->sign < 0) {
-        buffer_append_byte(buffer, '-');
-
-        if(bigint->neged_with_sign) {
+        if (!bigint->neged_with_sign) {
             bigint_neg_with_sign_inplace((bigint_t*)bigint, true);
         }
-
     }
 
-    while (item && item->value == 0) {
-        item = item->prev;
+    size_t idx = bigint->limb_count - 1;
+    while (idx > 0 && bigint->limbs[idx] == 0) {
+        idx--;
     }
 
-    if(!item) {
-        buffer_destroy(buffer);
+    if (bigint->limbs[idx] == 0) {
+        buffer_destroy(buf);
         return strdup("0");
     }
 
-    buffer_printf(buffer, "%llx", item->value); // first item max 48 bits so 12 hex digits and no leading zeros at the beginning
+    buffer_printf(buf, "%llx", bigint->limbs[idx]);
 
-    item = item->prev;
-
-    while (item) {
-        buffer_printf(buffer, "%012llx", item->value); // each item max 48 bits so 12 hex digits
-        item = item->prev;
+    while (idx > 0) {
+        idx--;
+        buffer_printf(buf, "%016llx", bigint->limbs[idx]);
     }
 
-    buffer_append_byte(buffer, '\0');
+    buffer_append_byte(buf, '\0');
 
-    uint8_t* str = buffer_get_all_bytes_and_destroy(buffer, NULL);
+    uint8_t* result = buffer_get_all_bytes_and_destroy(buf, NULL);
 
-    return (const char_t*)str;
+    return (const char*)result;
 }
 
 boolean_t bigint_is_zero(const bigint_t* a) {
@@ -659,7 +575,7 @@ boolean_t bigint_is_odd(const bigint_t* a) {
         return false;
     }
 
-    return a->lsb->value & 1;
+    return a->limbs[0] & 1;
 }
 
 boolean_t bigint_is_even(const bigint_t* a) {
@@ -671,11 +587,7 @@ boolean_t bigint_is_even(const bigint_t* a) {
         return true;
     }
 
-    if(!a->lsb) {
-        return false;
-    }
-
-    return (a->lsb->value & 1) == 0;
+    return !(a->limbs[0] & 1);
 }
 
 boolean_t bigint_is_int64(const bigint_t* a, int64_t value) {
@@ -699,31 +611,13 @@ boolean_t bigint_is_int64(const bigint_t* a, int64_t value) {
         }
     }
 
+    if(a->limb_count > 1) {
+        return false;
+    }
+
     uint64_t uvalue = (value < 0) ? -value : value;
-    uint64_t low = uvalue & BIGINT_ITEM_MAX;
-    uint64_t high = uvalue >> BIGINT_ITEM_BITS;
 
-    uint64_t item_count = bigint_item_count(a);
-
-    if(item_count == 0) {
-        return false;
-    }
-
-    if (a->lsb->value != low) {
-        return false;
-    }
-
-    if (high == 0) {
-        return item_count == 1;
-    }
-
-    if (item_count != 2) {
-        return false;
-    }
-
-    bigint_item_t* item = a->lsb->next;
-
-    return item->value == high;
+    return a->limbs[0] == uvalue;
 }
 
 boolean_t bigint_is_uint64(const bigint_t* a, uint64_t value) {
@@ -735,72 +629,16 @@ boolean_t bigint_is_uint64(const bigint_t* a, uint64_t value) {
         return value == 0;
     }
 
-    uint64_t low = value & BIGINT_ITEM_MAX;
-    uint64_t high = value >> BIGINT_ITEM_BITS;
-
-    uint64_t bit_count = bigint_bit_length(a);
-
-    if(bit_count > 63) {
+    if (a->sign < 0) {
         return false;
     }
 
-    if (a->lsb->value != low) {
+    if(a->limb_count > 1) {
         return false;
     }
 
-    if (high == 0) {
-        return bit_count <= 47;
-    }
-
-    bigint_item_t* item = a->lsb->next;
-
-    return item->value == high;
+    return a->limbs[0] == value;
 }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-static int8_t bigint_sign_extend(bigint_t* bigint, uint64_t item_count) {
-    if(!bigint) {
-        return -1;
-    }
-
-    uint64_t count = bigint_item_count(bigint);
-
-    if (count >= item_count) {
-        return 0;
-    }
-
-    if(bigint->sign < 0 && !bigint->neged_with_sign && bigint_neg_with_sign_inplace(bigint, false) == -1) {
-        return -1;
-    }
-
-    item_count -= count; // how many items to add
-
-    for (uint64_t i = 0; i < item_count; i++) {
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            return -1;
-        }
-
-        item->value = (bigint->sign < 0) ? BIGINT_ITEM_MAX : 0;
-        item->next = NULL;
-
-        if(bigint->msb) {
-            item->prev = bigint->msb;
-
-            bigint->msb->next = item;
-            bigint->msb = item;
-        } else {
-            bigint->lsb = item;
-            bigint->msb = item;
-        }
-
-    }
-
-    return 0;
-}
-#pragma GCC diagnostic pop
 
 int8_t bigint_neg(bigint_t* result, const bigint_t* a) {
     if(!result || !a) {
@@ -819,8 +657,6 @@ int8_t bigint_neg(bigint_t* result, const bigint_t* a) {
         return 0;
     }
 
-    // bigint_destroy_items(result);
-
     if (a->sign == 0) {
         return 0;
     }
@@ -836,431 +672,182 @@ int8_t bigint_neg(bigint_t* result, const bigint_t* a) {
 }
 
 int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
+    if (!result || !a || !b) return -1;
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
-
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
-        }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
-    }
-
+    // 1. Handle Zero Case
     if (a->sign == 0 || b->sign == 0) {
-        result->sign = 0;
-
-        if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
-            bigint_destroy(result);
-        }
-
+        // 0 & anything is 0
+        // If result is 'a' or 'b', bigint_set_zero handles it safely
+        bigint_set_zero(result);
         return 0;
     }
 
+    if(a->sign < 0 && a->neged_with_sign) {
+        if(bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
+            return -1;
+        }
+    }
+
+    if(b->sign < 0 && b->neged_with_sign) {
+        if(bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
+            return -1;
+        }
+    }
+
+    // 2. Determine the working range
+    // We need to iterate up to the largest limb count to handle
+    // Two's Complement sign extension properly.
+    uint64_t max_limbs = (a->limb_count > b->limb_count) ? a->limb_count : b->limb_count;
+
+    if (bigint_ensure_capacity(result, max_limbs) == -1) return -1;
+
+    // 3. Bitwise AND with Virtual Sign Extension
+    // A negative number in Two's Complement form is conceptually padded with 1s to the left.
+    // A positive number is conceptually padded with 0s.
+
+    uint64_t a_pad = (a->sign < 0 && !a->neged_with_sign) ? 0xFFFFFFFFFFFFFFFFUL : 0;
+    uint64_t b_pad = (b->sign < 0 && !b->neged_with_sign) ? 0xFFFFFFFFFFFFFFFFUL : 0;
+
+    for (uint64_t i = 0; i < max_limbs; i++) {
+        uint64_t val_a = (i < a->limb_count) ? a->limbs[i] : a_pad;
+        uint64_t val_b = (i < b->limb_count) ? b->limbs[i] : b_pad;
+
+        result->limbs[i] = val_a & val_b;
+    }
+
+    result->limb_count = max_limbs;
+
+    // 4. Determine Result Metadata
+    // Logic: negative & negative = negative
     if (a->sign < 0 && b->sign < 0) {
         result->sign = -1;
+        result->neged_with_sign = false; // Keep in Two's Complement
     } else {
         result->sign = 1;
+        result->neged_with_sign = false; // Result is a positive magnitude
     }
 
-    bigint_t* tmp_a = (bigint_t*)a;
-    bigint_t* tmp_b = (bigint_t*)b;
-
-    if (a->sign < 0) {
-        if(bigint_neg_with_sign_inplace(tmp_a, false) == -1) {
-            if(orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-    }
-
-    if (b->sign < 0) {
-        if(bigint_neg_with_sign_inplace(tmp_b, false) == -1) {
-            if(orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-    }
-
-    uint64_t item_count = MAX(bigint_item_count(tmp_a), bigint_item_count(tmp_b));
-
-    if (bigint_sign_extend(tmp_a, item_count) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    if (bigint_sign_extend(tmp_b, item_count) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    bigint_item_t* item_a = tmp_a->lsb;
-    bigint_item_t* item_b = tmp_b->lsb;
-    bigint_item_t* prev = NULL;
-
-    while (item_a && item_b) {
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-
-        item->value = item_a->value & item_b->value;
-
-        item->prev = prev;
-
-        if (prev) {
-            prev->next = item;
-        }
-
-        if(!result->lsb) {
-            result->lsb = item;
-        }
-
-        prev = item;
-
-        item_a = item_a->next;
-        item_b = item_b->next;
-    }
-
-    result->msb = prev;
-
-    if(result->sign < 0) {
-        result->neged_with_sign = true;
-    }
-
-    if (bigint_remove_leading_zeros(result) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
-    }
-
-    return 0;
-}
-
-static int8_t bigint_or_inplace(bigint_t* result, const bigint_t* a) {
-    if (result->sign == 0) {
-        return bigint_set_bigint(result, a);
-    }
-
-    if (a->sign == 0) {
-        return bigint_set_bigint(result, a);
-    }
-
-    if (result->sign < 0) {
-        if(bigint_neg_with_sign(result, result, false) == -1) {
-            return -1;
-        }
-    }
-
-    if (result->sign > 0 && a->sign > 0) {
-        result->sign = 1;
-    } else {
-        result->sign = -1;
-    }
-
-    bigint_t* tmp_a = (bigint_t*)a;
-
-    if (a->sign < 0) {
-        if(bigint_neg_with_sign(tmp_a, tmp_a, false) == -1) {
-            return -1;
-        }
-    }
-
-    uint64_t item_count_a = bigint_item_count(a);
-
-    uint64_t item_count = MAX(bigint_item_count(result), item_count_a);
-
-    if (bigint_sign_extend(result, item_count) == -1) {
-        return -1;
-    }
-
-    if (bigint_sign_extend(tmp_a, item_count) == -1) {
-        return -1;
-    }
-
-
-    bigint_item_t* item_a = tmp_a->lsb;
-    bigint_item_t* item_result = result->lsb;
-
-    while (item_a && item_result) {
-        item_result->value |= item_a->value;
-
-        item_a = item_a->next;
-        item_result = item_result->next;
-    }
-
-    if(result->sign < 0) {
-        result->neged_with_sign = true;
-    }
-
-    if (bigint_remove_leading_zeros(result) == -1) {
-        return -1;
-    }
+    // 5. Cleanup
+    bigint_normalize(result);
 
     return 0;
 }
 
 int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
+    if (!result || !a || !b) return -1;
 
-    if (result == a) {
-        return bigint_or_inplace(result, b);
-    }
-
-    bigint_destroy_items(result);
-
+    // 1. Handle Zero Cases
     if (a->sign == 0) {
-        return bigint_set_bigint(result, b);
+        return bigint_copy(result, b);
     }
 
     if (b->sign == 0) {
-        return bigint_set_bigint(result, a);
+        return bigint_copy(result, a);
     }
 
-    if (a->sign > 0 && b->sign > 0) {
-        result->sign = 1;
-    } else {
+    if(a->sign < 0 && a->neged_with_sign) {
+        if(bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
+            return -1;
+        }
+    }
+
+    if(b->sign < 0 && b->neged_with_sign) {
+        if(bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
+            return -1;
+        }
+    }
+
+    // 2. Determine working range
+    uint64_t max_limbs = (a->limb_count > b->limb_count) ? a->limb_count : b->limb_count;
+
+    if (bigint_ensure_capacity(result, max_limbs) == -1) return -1;
+
+    // 3. Bitwise OR with Virtual Sign Extension
+    // Negative Two's Complement: conceptually padded with 1s (0xFF...FF)
+    // Positive/Magnitude: conceptually padded with 0s
+    uint64_t a_pad = (a->sign < 0 && !a->neged_with_sign) ? 0xFFFFFFFFFFFFFFFFUL : 0;
+    uint64_t b_pad = (b->sign < 0 && !b->neged_with_sign) ? 0xFFFFFFFFFFFFFFFFUL : 0;
+
+    for (uint64_t i = 0; i < max_limbs; i++) {
+        uint64_t val_a = (i < a->limb_count) ? a->limbs[i] : a_pad;
+        uint64_t val_b = (i < b->limb_count) ? b->limbs[i] : b_pad;
+
+        result->limbs[i] = val_a | val_b;
+    }
+
+    result->limb_count = max_limbs;
+
+    // 4. Metadata
+    // Logic: If either is negative (1), the result is negative (1 | 0 = 1)
+    if (a->sign < 0 || b->sign < 0) {
         result->sign = -1;
-    }
-
-    bigint_t* tmp_a = (bigint_t*)a;
-    bigint_t* tmp_b = (bigint_t*)b;
-
-    if (tmp_a->sign < 0) {
-        if(bigint_neg_with_sign(tmp_a, tmp_a, false) == -1) {
-            return -1;
-        }
-    }
-
-    if (tmp_b->sign < 0) {
-        if(bigint_neg_with_sign(tmp_b, tmp_b, false) == -1) {
-            return -1;
-        }
-    }
-
-    uint64_t item_count = MAX(bigint_item_count(tmp_a), bigint_item_count(tmp_b));
-
-    if (bigint_sign_extend(tmp_a, item_count) == -1) {
-        return -1;
-    }
-
-    if (bigint_sign_extend(tmp_b, item_count) == -1) {
-        return -1;
-    }
-
-    bigint_item_t* item_a = tmp_a->lsb;
-    bigint_item_t* item_b = tmp_b->lsb;
-    bigint_item_t* prev = NULL;
-
-    while (item_a && item_b) {
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            return -1;
-        }
-
-        item->value = item_a->value | item_b->value;
-
-        item->prev = prev;
-
-        if (prev) {
-            prev->next = item;
-        }
-
-        if(!result->lsb) {
-            result->lsb = item;
-        }
-
-        prev = item;
-
-        item_a = item_a->next;
-        item_b = item_b->next;
-    }
-
-    result->msb = prev;
-
-    if(result->sign < 0) {
+        // If either was already in Two's Complement, keep result that way
+        result->neged_with_sign = false;
+    } else {
+        result->sign = 1;
         result->neged_with_sign = true;
     }
 
-    if (bigint_remove_leading_zeros(result) == -1) {
-        return -1;
-    }
+    // 5. Cleanup
+    bigint_normalize(result);
 
     return 0;
 }
 
 int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
+    if (!result || !a || !b) return -1;
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
-
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
-        }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
-    }
-
+    // 1. Handle Zero Cases
     if (a->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return bigint_set_bigint(orig_result, b);
+        return bigint_copy(result, b);
     }
 
     if (b->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-
-            return 0; // result is already a
-        }
-
-        return bigint_set_bigint(orig_result, a);
+        return bigint_copy(result, a);
     }
 
-    if (a->sign < 0 && b->sign < 0) {
-        result->sign = 1;
-    } else if (a->sign > 0 && b->sign > 0) {
-        result->sign = 1;
-    } else {
+    if(a->sign < 0 && a->neged_with_sign) {
+        if(bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
+            return -1;
+        }
+    }
+
+    if(b->sign < 0 && b->neged_with_sign) {
+        if(bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
+            return -1;
+        }
+    }
+
+    // 2. Determine working range
+    uint64_t max_limbs = (a->limb_count > b->limb_count) ? a->limb_count : b->limb_count;
+
+    if (bigint_ensure_capacity(result, max_limbs) == -1) return -1;
+
+    // 3. Bitwise XOR with Virtual Sign Extension
+    uint64_t a_pad = (a->sign < 0 && !a->neged_with_sign) ? 0xFFFFFFFFFFFFFFFFUL : 0;
+    uint64_t b_pad = (b->sign < 0 && !b->neged_with_sign) ? 0xFFFFFFFFFFFFFFFFUL : 0;
+
+    for (uint64_t i = 0; i < max_limbs; i++) {
+        uint64_t val_a = (i < a->limb_count) ? a->limbs[i] : a_pad;
+        uint64_t val_b = (i < b->limb_count) ? b->limbs[i] : b_pad;
+
+        result->limbs[i] = val_a ^ val_b;
+    }
+
+    result->limb_count = max_limbs;
+
+    // 4. Metadata
+    // XOR logic: Result is negative only if signs are different
+    if ((a->sign < 0) ^ (b->sign < 0)) {
         result->sign = -1;
+        result->neged_with_sign = false; // Result is in Two's Complement
+    } else {
+        result->sign = (a->sign == 0 && b->sign == 0) ? 0 : 1;
+        result->neged_with_sign = true; // Result is a magnitude
     }
 
-    bigint_t* tmp_a = (bigint_t*)a;
-    bigint_t* tmp_b = (bigint_t*)b;
-
-    if (tmp_a->sign < 0) {
-        if(bigint_neg_with_sign(tmp_a, tmp_a, false) == -1) {
-            if(orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-    }
-
-    if (tmp_b->sign < 0) {
-        if(bigint_neg_with_sign(tmp_b, tmp_b, false) == -1) {
-            if(orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-    }
-
-    uint64_t item_count = MAX(bigint_item_count(tmp_a), bigint_item_count(tmp_b));
-
-    if (bigint_sign_extend(tmp_a, item_count) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    if (bigint_sign_extend(tmp_b, item_count) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    bigint_item_t* item_a = tmp_a->lsb;
-    bigint_item_t* item_b = tmp_b->lsb;
-    bigint_item_t* prev = NULL;
-
-    while (item_a && item_b) {
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-
-        item->value = item_a->value ^ item_b->value;
-
-        item->prev = prev;
-
-        if (prev) {
-            prev->next = item;
-        }
-
-        if(!result->lsb) {
-            result->lsb = item;
-        }
-
-        prev = item;
-
-        item_a = item_a->next;
-        item_b = item_b->next;
-    }
-
-    result->msb = prev;
-
-    if(result->sign < 0) {
-        result->neged_with_sign = true;
-    }
-
-    if (bigint_remove_leading_zeros(result) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
-    }
+    // 5. Cleanup
+    bigint_normalize(result);
 
     return 0;
 }
@@ -1274,13 +861,8 @@ static int8_t bigint_not_inplace(bigint_t* a) {
         return 0;
     }
 
-    bigint_item_t* item = a->lsb;
-
-    while (item) {
-        item->value = ~item->value;
-        item->value &= BIGINT_ITEM_MAX;
-
-        item = item->next;
+    for (uint64_t i = 0; i < a->limb_count; i++) {
+        a->limbs[i] = ~a->limbs[i] & UINT64_MAX;
     }
 
     return 0;
@@ -1295,1148 +877,875 @@ int8_t bigint_not(bigint_t* result, const bigint_t* a) {
         return bigint_not_inplace(result);
     }
 
-    bigint_destroy_items(result);
+    memory_free(result->limbs);
+
+    result->limb_count = a->limb_count;
+    result->capacity = a->capacity;
+
+    result->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * result->capacity);
+
+    if (!result->limbs) {
+        return -1;
+    }
 
     result->sign = a->sign;
 
-    bigint_item_t* item = a->lsb;
-    bigint_item_t* prev = NULL;
-
-    while (item) {
-        bigint_item_t* next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        next->value = ~item->value;
-
-        next->value &= BIGINT_ITEM_MAX;
-
-        next->prev = prev;
-
-        if (prev) {
-            prev->next = next;
-        } else {
-            result->lsb = next;
-        }
-
-        prev = next;
-
-        item = item->next;
+    for (uint64_t i = 0; i < a->limb_count; i++) {
+        result->limbs[i] = ~a->limbs[i] & UINT64_MAX;
     }
-
-    result->msb = prev;
 
     return 0;
 }
 
 int8_t bigint_shl_one(bigint_t* a) {
-    if(!a) {
+    if (!a) {
         return -1;
     }
 
-    if(a->sign == 0) {
+    if (a->sign == 0) {
         return 0;
     }
 
-    bigint_item_t* item = a->lsb;
-    uint64_t carry = 0;
+    // 1. Check if the current MSB will overflow
+    // If the top bit of the top limb is 1, we definitely need a new limb.
+    uint64_t msb_val = a->limbs[a->limb_count - 1];
+    int needs_extra_limb = (msb_val >> (BIGINT_LIMB_BITS - 1)) & 1;
 
-    while (item) {
-        uint64_t next_carry = item->value >> (BIGINT_ITEM_BITS - 1);
-
-        item->value <<= 1;
-        item->value |= carry;
-
-        carry = next_carry;
-
-        item->value &= BIGINT_ITEM_MAX;
-
-        item = item->next;
-    }
-
-    if (carry) {
-        bigint_item_t* next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!next) {
+    if (needs_extra_limb) {
+        if (bigint_ensure_capacity(a, a->limb_count + 1) == -1) {
             return -1;
         }
-
-        if(a->sign < 0 && a->neged_with_sign) {
-            next->value = BIGINT_ITEM_MAX;
-        } else {
-            next->value = carry;
-        }
-
-        next->next = NULL;
-        next->prev = a->msb;
-
-        a->msb->next = next;
-        a->msb = next;
     }
 
+    // 2. The Ripple Shift
+    uint64_t carry = 0;
+    for (uint64_t i = 0; i < a->limb_count; i++) {
+        uint64_t current = a->limbs[i];
+
+        // New value is (current shifted) OR (carry from previous limb)
+        a->limbs[i] = (current << 1) | carry;
+
+        // Carry for the NEXT limb is the bit that falls off the top of THIS limb
+        carry = (current >> (BIGINT_LIMB_BITS - 1)) & 1;
+    }
+
+    // 3. Handle the final carry if it exists
+    if (carry) {
+        // Here we handle your specific logic for negative two's complement
+        if (a->sign < 0 && !a->neged_with_sign) {
+            // Sign extend with 1s if it's a negative two's complement value
+            a->limbs[a->limb_count] = UINT64_MAX;
+        } else {
+            a->limbs[a->limb_count] = carry;
+        }
+        a->limb_count++;
+    }
+
+    // 4. Cleanup
+    bigint_normalize(a);
     return 0;
 }
 
 int8_t bigint_shr_one(bigint_t* a) {
-    if(!a) {
+    if (!a) {
         return -1;
     }
 
-    if(a->sign == 0) {
+    if (a->sign == 0) {
         return 0;
     }
 
-    bigint_item_t* item = a->msb;
-    uint64_t carry = (a->sign < 0 && a->neged_with_sign) ? BIGINT_ITEM_MSB : 0;
+    uint64_t carry = 0;
 
-    while (item) {
-        uint64_t next_carry = item->value & 1;
+    // We work from MSB down to LSB (High index to Low index)
+    // to handle the carry flowing from higher bits to lower bits.
+    for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
+        uint64_t current = a->limbs[i];
 
-        item->value = carry | (item->value >> 1);
+        // Shift current limb right and pull in the carry from the higher limb
+        uint64_t next_val = (current >> 1) | carry;
 
-        carry = next_carry << (BIGINT_ITEM_BITS - 1);
+        // The carry for the NEXT (lower) limb is the bit that falls off the bottom of THIS limb
+        carry = (current & 1ULL) << (BIGINT_LIMB_BITS - 1);
 
-        item = item->prev;
+        a->limbs[i] = next_val;
     }
 
-    bigint_remove_leading_zeros(a);
+    // Handle Arithmetic Shift for Two's Complement
+    // If negative and not in "normal" form, we must set the MSB back to 1
+    if (a->sign < 0 && !a->neged_with_sign) {
+        a->limbs[a->limb_count - 1] |= (1ULL << (BIGINT_LIMB_BITS - 1));
+    }
+
+    // Normalizing is important because if the MSB was 1 and it shifted right,
+    // the highest limb might become 0.
+    bigint_normalize(a);
 
     return 0;
 }
 
 int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
-    if(!result || !a) {
-        return -1;
-    }
+    if (!result || !a) return -1;
 
     if (a->sign == 0) {
+        bigint_set_zero(result); // Helper to set limb_count to 0 and sign to 0
         return 0;
     }
-
     if (shift < 0) {
         return bigint_shr(result, a, -shift);
     }
 
-    result->sign = a->sign;
-    result->neged_with_sign = a->neged_with_sign;
-
-    int64_t item_shift = shift / BIGINT_ITEM_BITS;
-    int64_t bit_shift = shift % BIGINT_ITEM_BITS;
-
-    uint64_t result_bit_count = bigint_bit_length(a) + bit_shift + 1;
-
-    uint64_t result_item_count = result_bit_count / BIGINT_ITEM_BITS;
-
-    if (result_bit_count % BIGINT_ITEM_BITS) {
-        result_item_count++;
+    if (shift == 0) {
+        return bigint_copy(result, a); // Helper for deep copy
     }
 
-    if (bigint_sign_extend(result, result_item_count) == -1) {
+    int64_t limb_shift = shift / BIGINT_LIMB_BITS;
+    int32_t bit_shift = (int32_t)(shift % BIGINT_LIMB_BITS);
+
+    // 1. Calculate new required size
+    // We need current used limbs + limb_shift, plus potentially 1 extra if bit_shift causes an overflow
+    uint64_t needed_limbs = a->limb_count + limb_shift + 1;
+
+    // 2. Ensure capacity (Helper function to realloc limbs if needed)
+    if (bigint_ensure_capacity(result, needed_limbs) == -1) {
         return -1;
     }
 
+    // 3. Handle the bit-level shift and move
+    // We work backwards to handle the case where result == a
     uint64_t carry = 0;
+    for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
+        uint64_t val = a->limbs[i];
+        uint64_t next_carry = (bit_shift == 0) ? 0 : (val >> (BIGINT_LIMB_BITS - bit_shift));
 
-    bigint_item_t* item = a->lsb;
-    bigint_item_t* item_result = result->lsb;
-
-    while (item) {
-        uint64_t next_carry = item->value >> (BIGINT_ITEM_BITS - bit_shift);
-
-        item_result->value = (item->value << bit_shift) | carry;
-        item_result->value &= BIGINT_ITEM_MAX;
+        result->limbs[i + limb_shift + 1] = 0; // Clear the potential carry slot
+        result->limbs[i + limb_shift] = (val << bit_shift) | carry;
 
         carry = next_carry;
-
-        item = item->next;
-        item_result = item_result->next;
     }
 
+    // Place the final carry if it exists
     if (carry) {
-        if(!item_result) {
-            item_result = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-            if (!item_result) {
-                return -1;
-            }
-
-            item_result->next = NULL;
-            item_result->prev = result->msb;
-
-            result->msb->next = item_result;
-            result->msb = item_result;
-        }
-
-        if(result->sign < 0 && result->neged_with_sign) {
-            uint64_t msb_bit_pos = bit_most_significant(carry);
-            uint64_t mask = (BIGINT_ITEM_MAX - (BIGINT_ITEM_MAX >> (BIGINT_ITEM_BITS - msb_bit_pos)));
-            item_result->value = carry | mask;
-        } else {
-            item_result->value = carry;
-        }
-
-        item_result = item_result->next;
+        result->limbs[a->limb_count + limb_shift] = carry;
+        result->limb_count = a->limb_count + limb_shift + 1;
+    } else {
+        result->limb_count = a->limb_count + limb_shift;
     }
 
-    while (item_result) {
-        item_result->value = 0;
-
-        item_result = item_result->next;
+    // 4. Zero out the low-order limbs created by limb_shift
+    if (limb_shift > 0) {
+        memory_memset(result->limbs, 0, limb_shift * sizeof(uint64_t));
     }
 
-    if (item_shift) {
-        bigint_item_t* prev = result->lsb;
+    // 5. Handle sign and "neged_with_sign" (Two's Complement logic)
+    result->sign = a->sign;
+    result->neged_with_sign = a->neged_with_sign;
 
-        for (int64_t i = 0; i < item_shift; i++) {
-            bigint_item_t* next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-            next->value = 0;
-
-            prev->prev = next;
-            next->next = prev;
-
-            prev = next;
-        }
-
-        result->lsb = prev;
+    if (result->sign < 0 && !result->neged_with_sign) {
+        // If it's in two's complement form and negative,
+        // shifting left usually requires sign extension on the new bits.
+        // However, standard bigint SHL usually treats the number as a
+        // magnitude. If you want to maintain the "Two's Complement"
+        // invariant, you may need to mask or extend the MSB here.
     }
+
+    // 6. Final cleanup: normalize (remove leading zero limbs)
+    bigint_normalize(result);
 
     return 0;
 }
 
 int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift) {
-    if(!result || !a) {
-        return -1;
-    }
+    if (!result || !a) return -1;
+    if (shift < 0) return bigint_shl(result, a, -shift);
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
+    // If shift is 0, just copy
+    if (shift == 0) return bigint_copy(result, a);
 
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
+    // If a is zero, or shift is so large it wipes everything out
+    uint64_t total_bits = a->limb_count * BIGINT_LIMB_BITS;
+    if (a->sign == 0 || (uint64_t)shift >= total_bits) {
+        // For standard bigints, shifting right beyond length results in 0
+        // (Unless handling negative two's complement, which results in -1)
+        if (a->sign < 0 && !a->neged_with_sign) {
+            bigint_set_int64(result, -1); // Helper to set value to -1
+        } else {
+            bigint_set_zero(result);
         }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
-    }
-
-    if (a->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
         return 0;
     }
 
-    if (shift < 0) {
-        return bigint_shl(result, a, -shift);
+    int64_t limb_shift = shift / BIGINT_LIMB_BITS;
+    int32_t bit_shift = (int32_t)(shift % BIGINT_LIMB_BITS);
+
+    // 1. Ensure result has enough space (no growth needed usually, but result might be a different object)
+    if (bigint_ensure_capacity(result, a->limb_count) == -1) return -1;
+
+    uint64_t new_limb_count = a->limb_count - limb_shift;
+
+    // 2. Perform the shift
+    // We work forward (from LSB to MSB) to safely handle result == a
+    for (uint64_t i = 0; i < new_limb_count; i++) {
+        uint64_t current_limb = a->limbs[i + limb_shift];
+        uint64_t next_limb = (i + limb_shift + 1 < a->limb_count) ? a->limbs[i + limb_shift + 1] : 0;
+
+        uint64_t val = current_limb >> bit_shift;
+        if (bit_shift > 0 && (i + limb_shift + 1 < a->limb_count)) {
+            // Pull bits from the next higher limb
+            val |= (next_limb << (BIGINT_LIMB_BITS - bit_shift));
+        }
+
+        result->limbs[i] = val;
     }
 
+    result->limb_count = new_limb_count;
     result->sign = a->sign;
     result->neged_with_sign = a->neged_with_sign;
 
-    int64_t item_shift = shift / BIGINT_ITEM_BITS;
-    int64_t bit_shift = shift % BIGINT_ITEM_BITS;
+    // 3. Handle Sign Extension for Two's Complement
+    // If negative and in two's complement (neged_with_sign == false),
+    // we must fill the vacated upper bits with 1s.
+    if (result->sign < 0 && !result->neged_with_sign) {
+        uint64_t msb_idx = result->limb_count - 1;
+        // Calculate how many bits in the top limb should be 1
+        // (Bits shifted in from "infinity")
+        uint64_t mask = 0xFFFFFFFFFFFFFFFFUL << (BIGINT_LIMB_BITS - bit_shift);
+        if (bit_shift == 0) mask = 0;
 
-    bigint_item_t* item = a->msb;
-    bigint_item_t* prev = NULL;
-    // if a is negative and neged with sign then
-    // carry's left bit_shift bits are 1
-    uint64_t carry = (a->sign < 0 && a->neged_with_sign) ? (BIGINT_ITEM_MAX - (BIGINT_ITEM_MAX >> bit_shift)) : 0;
-
-    while (item) {
-        bigint_item_t* next = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!next) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
-
-        next->value = carry | item->value >> bit_shift;
-
-        carry = item->value << (BIGINT_ITEM_BITS - bit_shift);
-        carry &= BIGINT_ITEM_MAX;
-
-        if (prev) {
-            prev->prev = next;
-        } else {
-            result->msb = next;
-        }
-
-        next->next = prev;
-
-        prev = next;
-
-        item = item->prev;
+        result->limbs[msb_idx] |= mask;
     }
 
-    result->lsb = prev;
-
-    if (item_shift) {
-        // remove the first item_shift items
-        prev = result->lsb;
-
-        for (int64_t i = 0; i < item_shift; i++) {
-            if (!prev) {
-                break;
-            }
-
-            bigint_item_t* next = prev->next;
-
-            memory_free(prev);
-
-            prev = next;
-        }
-
-        result->lsb = prev;
-
-        if (prev) {
-            prev->prev = NULL;
-        }
-    }
-
-    if (result->lsb == NULL) {
-        result->msb = NULL;
-    }
-
-    if (bigint_remove_leading_zeros(result) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
-    }
+    // 4. Cleanup
+    bigint_normalize(result);
 
     return 0;
 }
 
 int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value) {
-    if(!bigint) {
-        return -1;
-    }
+    if (!bigint) return -1;
 
-    if (bigint->sign == 0) {
-        if (value) {
-            bigint->sign = 1;
-            bigint->lsb = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
+    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
+    const uint64_t needed_limbs = limb_index + 1;
 
-            if (!bigint->lsb) {
-                return -1;
-            }
-
-            bigint->lsb->value = 0;
-            bigint->lsb->next = NULL;
-            bigint->lsb->prev = NULL;
-            bigint->msb = bigint->lsb;
-        } else {
-            return 0;
-        }
-    }
-
-    bigint_item_t* item = bigint->lsb;
-    uint64_t item_bit = bit % BIGINT_ITEM_BITS;
-
-    for (uint64_t i = 0; i < bit / BIGINT_ITEM_BITS; i++) {
-        if (!item) {
-            item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-            if (!item) {
-                return -1;
-            }
-
-            item->value = 0;
-            item->next = NULL;
-            item->prev = bigint->msb;
-
-            bigint->msb->next = item;
-            bigint->msb = item;
+    // 1. Ensure Capacity
+    if (needed_limbs > bigint->capacity) {
+        uint64_t new_capacity = bigint->capacity ? bigint->capacity : BIGINT_INITIAL_CAPACITY;
+        while (new_capacity < needed_limbs) {
+            new_capacity *= 2;
         }
 
-        item = item->next;
-    }
+        uint64_t* new_limbs = (uint64_t*)memory_malloc(new_capacity * sizeof(uint64_t));
+        if (!new_limbs) return -1;
 
-    if (!item) {
-        item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            return -1;
+        // Copy old data
+        if (bigint->limb_count > 0) {
+            memory_memcopy(bigint->limbs, new_limbs, bigint->limb_count * sizeof(uint64_t));
         }
 
-        item->value = 0;
-        item->next = NULL;
-        item->prev = bigint->msb;
+        // IMPORTANT: Initialize ALL remaining capacity to 0 (or sign fill)
+        // Not just up to 'needed_limbs', but the whole new allocation.
+        uint64_t fill = (bigint->sign < 0 && !bigint->neged_with_sign) ? UINT64_MAX : 0ULL;
+        for (uint64_t i = bigint->limb_count; i < new_capacity; i++) {
+            new_limbs[i] = fill;
+        }
 
-        bigint->msb->next = item;
-        bigint->msb = item;
+        if (bigint->limbs) memory_free(bigint->limbs);
+        bigint->limbs = new_limbs;
+        bigint->capacity = new_capacity;
     }
 
+    // 2. Adjust limb_count if we are expanding
+    if (needed_limbs > bigint->limb_count) {
+        uint64_t fill = (bigint->sign < 0 && !bigint->neged_with_sign) ? UINT64_MAX : 0ULL;
+        for (uint64_t i = bigint->limb_count; i < needed_limbs; i++) {
+            bigint->limbs[i] = fill;
+        }
+        bigint->limb_count = needed_limbs;
+    }
+
+    // 3. Set the Bit
     if (value) {
-        item->value |= 1ULL << item_bit;
+        bigint->limbs[limb_index] |= (1ULL << bit_in_limb);
+        // If the number was zero, it is now positive
+        if (bigint->sign == 0) {
+            bigint->sign = 1;
+            bigint->neged_with_sign = true;
+        }
     } else {
-        item->value &= ~(1ULL << item_bit);
+        bigint->limbs[limb_index] &= ~(1ULL << bit_in_limb);
     }
 
+    // 4. Cleanup
+    bigint_normalize(bigint);
     return 0;
 }
 
 int8_t bigint_get_bit(const bigint_t* bigint, uint64_t bit, boolean_t* value) {
-    if(!bigint || !value) {
-        return -1;
-    }
+    if (!bigint || !value) return -1;
 
+    // 0 is always all 0 bits
     if (bigint->sign == 0) {
         *value = false;
         return 0;
     }
 
-    bigint_item_t* item = bigint->lsb;
-    uint64_t item_bit = bit % BIGINT_ITEM_BITS;
+    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
 
-    for (uint64_t i = 0; i < bit / BIGINT_ITEM_BITS; i++) {
-        if (!item) {
-            *value = false;
-            return 0;
-        }
-
-        item = item->next;
-    }
-
-    if (!item) {
-        *value = false;
+    // Handle bits within the existing allocated limbs
+    if (limb_index < bigint->limb_count) {
+        *value = (bigint->limbs[limb_index] >> bit_in_limb) & 1ULL;
         return 0;
     }
 
-    *value = (item->value >> item_bit) & 1;
+    // Handle bits beyond the physical limbs (Virtual Sign Extension)
+    // If it's Two's Complement and Negative, the "infinite" bits are 1s.
+    // Otherwise (Magnitude or Positive), the infinite bits are 0s.
+    if (bigint->sign < 0 && !bigint->neged_with_sign) {
+        *value = true;
+    } else {
+        *value = false;
+    }
 
     return 0;
 }
 
 int8_t bigint_flip_bit(bigint_t* bigint, uint64_t bit) {
-    if(!bigint) {
+    if (!bigint) {
         return -1;
     }
 
-    if (bigint->sign == 0) {
+    if (bigint->sign == 0 || bigint->limb_count == 0) {
+        if (bit > 0) {
+            return 0; // no change needed
+        }
+
+        if (bigint->capacity == 0) {
+            uint64_t* new_limbs = memory_malloc(BIGINT_INITIAL_CAPACITY * sizeof(uint64_t));
+            if (!new_limbs) return -1;
+            bigint->limbs = new_limbs;
+            bigint->capacity = BIGINT_INITIAL_CAPACITY;
+        }
+        bigint->limbs[0] = 1;
+        bigint->limb_count = 1;
         bigint->sign = 1;
-        bigint->lsb = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
+        bigint->neged_with_sign = false;
+        return 0;
+    }
 
-        if (!bigint->lsb) {
+    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
+
+    uint64_t needed = limb_index + 1;
+
+    if (needed > bigint->limb_count || needed > bigint->capacity)
+    {
+        uint64_t new_capacity = bigint->capacity ? bigint->capacity : BIGINT_INITIAL_CAPACITY;
+        while (new_capacity < needed) {
+            new_capacity *= 2;
+        }
+
+        uint64_t* new_limbs = memory_malloc(new_capacity * sizeof(uint64_t));
+        if (!new_limbs) {
             return -1;
         }
 
-        bigint->lsb->value = 0;
-        bigint->lsb->next = NULL;
-        bigint->lsb->prev = NULL;
-        bigint->msb = bigint->lsb;
-    }
-
-    bigint_item_t* item = bigint->lsb;
-    uint64_t item_bit = bit % BIGINT_ITEM_BITS;
-
-    for (uint64_t i = 0; i < bit / BIGINT_ITEM_BITS; i++) {
-        if (!item) {
-            item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-            if (!item) {
-                return -1;
-            }
-
-            item->value = 0;
-            item->next = NULL;
-            item->prev = bigint->msb;
-
-            bigint->msb->next = item;
-            bigint->msb = item;
+        if (bigint->limb_count > 0) {
+            memory_memcopy(bigint->limbs, new_limbs, bigint->limb_count * sizeof(uint64_t));
         }
 
-        item = item->next;
-    }
-
-    if (!item) {
-        item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            return -1;
+        uint64_t fill = (bigint->sign < 0) ? UINT64_MAX : 0ULL;
+        for (uint64_t i = bigint->limb_count; i < needed; i++) {
+            new_limbs[i] = fill;
         }
 
-        item->value = 0;
-        item->next = NULL;
-        item->prev = bigint->msb;
+        memory_free(bigint->limbs);
+        bigint->limbs = new_limbs;
+        bigint->capacity = new_capacity;
+        bigint->limb_count = needed;
+    } else if (needed > bigint->limb_count) {
+        uint64_t fill = (bigint->sign < 0) ? UINT64_MAX : 0ULL;
+        for (uint64_t i = bigint->limb_count; i < needed; i++) {
+            bigint->limbs[i] = fill;
+        }
 
-        bigint->msb->next = item;
-        bigint->msb = item;
+        bigint->limb_count = needed;
     }
 
-    item->value ^= 1ULL << item_bit;
+    bigint->limbs[limb_index] ^= (1ULL << bit_in_limb);
+
+    bigint_normalize(bigint);
 
     return 0;
 }
 
 int8_t bigint_clear_bit(bigint_t* bigint, uint64_t bit) {
-    if(!bigint) {
+    if (!bigint) {
         return -1;
     }
 
-    if (bigint->sign == 0) {
+    if (bigint->sign == 0 || bigint->limb_count == 0) {
         return 0;
     }
 
-    bigint_item_t* item = bigint->lsb;
-    uint64_t item_bit = bit % BIGINT_ITEM_BITS;
+    const uint64_t limb_index = bit / BIGINT_LIMB_BITS;
+    const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
 
-    for (uint64_t i = 0; i < bit / BIGINT_ITEM_BITS; i++) {
-        if (!item) {
-            return 0;
-        }
-
-        item = item->next;
-    }
-
-    if (!item) {
+    if (limb_index >= bigint->limb_count) {
         return 0;
     }
 
-    item->value &= ~(1ULL << item_bit);
+    bigint->limbs[limb_index] &= ~(1ULL << bit_in_limb);
 
     return 0;
 }
 
-int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
+static int8_t bigint_cmp_magnitudes(const bigint_t* a, const bigint_t* b) {
+    if (!a || !b) return -2;  // Error case
+
+    // 1. Compare by limb count first (O(1) check)
+    // Because the bigint is normalized, more limbs always means a larger magnitude.
+    if (a->limb_count > b->limb_count) return 1;
+    if (a->limb_count < b->limb_count) return -1;
+
+    // 2. If limb counts are equal, compare from MSB to LSB
+    // We start at the highest index because it holds the highest power of 2^64.
+    for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
+        if (a->limbs[i] > b->limbs[i]) return 1;
+        if (a->limbs[i] < b->limbs[i]) return -1;
     }
 
-    if (a->sign == 0) {
-        return bigint_neg(result, b);
-    }
-
-    if(b->sign == 0) {
-        if(a == result) {
-            return 0;
-        }
-
-        return bigint_set_bigint(result, a);
-    }
-
-    uint64_t a_item_count = bigint_item_count(a);
-    uint64_t b_item_count = bigint_item_count(b);
-
-    uint64_t result_item_count = MAX(a_item_count, b_item_count);
-
-    bigint_t* tmp_a = (bigint_t*)a;
-    bigint_t* tmp_b = (bigint_t*)b;
-
-    if (tmp_a->sign < 0) {
-        if(bigint_neg_with_sign(tmp_a, tmp_a, false) == -1) {
-            return -1;
-        }
-    }
-
-    if (tmp_b->sign < 0) {
-        if(bigint_neg_with_sign(tmp_b, tmp_b, false) == -1) {
-            return -1;
-        }
-    }
-
-    if (bigint_sign_extend(tmp_a, result_item_count) == -1) {
-        return -1;
-    }
-
-    if (bigint_sign_extend(tmp_b, result_item_count) == -1) {
-        return -1;
-    }
-
-    if(a != result) {
-        if (bigint_sign_extend(result, result_item_count) == -1) {
-            return -1;
-        }
-    }
-
-    bigint_item_t* item_a = tmp_a->lsb;
-    bigint_item_t* item_b = tmp_b->lsb;
-    bigint_item_t* item_result = result->lsb;
-
-    uint64_t borrow = 0;
-
-    while (item_a && item_b) {
-        uint64_t a_value = item_a->value;
-        uint64_t b_value = item_b->value;
-        boolean_t next_borrow = false;
-
-        if (borrow) {
-            if (a_value == 0) {
-                a_value = BIGINT_ITEM_MAX;
-                next_borrow = true;
-            } else {
-                a_value--;
-            }
-        }
-
-        if (a_value < b_value) {
-            borrow = 1;
-            a_value += BIGINT_ITEM_MAX + 1;
-        } else if (!next_borrow) {
-            borrow = 0;
-        }
-
-        item_result->value = a_value - b_value;
-        item_result->value &= BIGINT_ITEM_MAX;
-
-        item_a = item_a->next;
-        item_b = item_b->next;
-        item_result = item_result->next;
-    }
-
-    if(item_result) {
-        printf("do we hit?\n");
-        bigint_item_t* tmp = item_result;
-
-        while(tmp) {
-            tmp->value = 0;
-            tmp = tmp->next;
-        }
-    }
-
-    if (borrow) {
-        result->sign = -1;
-        result->neged_with_sign = true;
-    } else {
-        result->sign = 1;
-    }
-
-    if (bigint_remove_leading_zeros(result) == -1) {
-        return -1;
-    }
-
+    // 3. All limbs are identical
     return 0;
 }
-
-int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
-
-    if (a->sign == 0) {
-        return bigint_set_bigint(result, b);
-    }
-
-    if (b->sign == 0) {
-        if (result == a) {
-            return 0;
-        }
-
-        return bigint_set_bigint(result, a);
-    }
-
-    bigint_t* tmp_a = (bigint_t*)a;
-    bigint_t* tmp_b = (bigint_t*)b;
-
-    if (tmp_a->sign < 0) {
-        if(bigint_neg_with_sign(tmp_a, tmp_a, false) == -1) {
-            return -1;
-        }
-    }
-
-    if (tmp_b->sign < 0) {
-        if(bigint_neg_with_sign(tmp_b, tmp_b, false) == -1) {
-            return -1;
-        }
-    }
-
-    int32_t sign = 1;
-
-    if (a->sign < 0 && b->sign < 0) {
-        sign = -1;
-    } else if(a->sign < 0 || b->sign < 0) { // one of them is negative
-        sign = -2; // -2 means we need to check the carry
-    }
-
-    uint64_t item_count = MAX(bigint_item_count(tmp_a), bigint_item_count(tmp_b)) + 1;
-
-    if(result != a) {
-        if (bigint_sign_extend(result, item_count) == -1) {
-            return -1;
-        }
-
-        result->sign = 1;
-    }
-
-    if (bigint_sign_extend(tmp_a, item_count) == -1) {
-        return -1;
-    }
-
-    if (bigint_sign_extend(tmp_b, item_count) == -1) {
-        return -1;
-    }
-
-    bigint_item_t* item_result = result->lsb;
-    bigint_item_t* item_a = tmp_a->lsb;
-    bigint_item_t* item_b = tmp_b->lsb;
-    bigint_item_t* prev = NULL;
-    uint64_t carry = 0;
-
-    while (item_a && item_b) {
-        item_result->value = item_a->value + item_b->value + carry;
-        carry = item_result->value >> BIGINT_ITEM_BITS;
-        item_result->value &= BIGINT_ITEM_MAX;
-
-
-        prev = item_result;
-
-        item_a = item_a->next;
-        item_b = item_b->next;
-        item_result = item_result->next;
-    }
-
-    if(item_result) {
-        bigint_item_t* tmp = item_result;
-
-        while(tmp) {
-            tmp->value = 0;
-            tmp = tmp->next;
-        }
-    }
-
-    if (carry) {
-        if(sign == -2) {
-            result->sign = 1;
-            result->neged_with_sign = false;
-        } else {
-            if(sign == 1) {
-                printf("do we hit?\n");
-                bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-                if (!item) {
-                    return -1;
-                }
-
-                item->value = carry;
-
-                if (prev) {
-                    prev->next = item;
-                } else {
-                    result->lsb = item;
-                }
-
-                item->prev = prev;
-
-                prev = item;
-
-                result->msb = prev;
-            }
-
-            if(sign == -1) {
-                result->sign = -1;
-                result->neged_with_sign = true;
-            }
-
-            result->sign = sign;
-        }
-    } else if(sign != -2) {
-        result->sign = sign;
-    } else {
-        result->sign = -1;
-        result->neged_with_sign = true;
-    }
-
-    if (bigint_remove_leading_zeros(result) == -1) {
-        return -1;
-    }
-
-    return 0;
-}
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-use-after-free"
-uint64_t bigint_bit_length(const bigint_t* bigint) {
-    if(!bigint) {
-        return 0;
-    }
-
-    if (bigint->sign == 0) {
-        return 0;
-    }
-
-    if(bigint->lsb == NULL) {
-        return 0;
-    }
-
-
-    bigint_item_t* item = bigint->msb;
-
-    while(item && item->value == 0) {
-        item = item->prev;
-    }
-
-    if(!item) {
-        return 0;
-    }
-
-    uint64_t length = bit_most_significant(item->value);
-
-    item = item->prev;
-
-    while (item) {
-        length += BIGINT_ITEM_BITS;
-
-        item = item->prev;
-    }
-
-    return length;
-
-}
-#pragma GCC diagnostic pop
 
 int8_t bigint_cmp(const bigint_t* a, const bigint_t* b) {
-    if(!a || !b) {
-        return -1;
+    if (!a || !b) {
+        return -2; // Use -2 or a specific error code since -1 is a valid result
+    }
+
+    // 1. Compare Signs
+    if (a->sign > b->sign) {
+        return 1;
     }
 
     if (a->sign < b->sign) {
         return -1;
     }
 
-    if (a->sign > b->sign) {
-        return 1;
-    }
-
+    // If both are zero
     if (a->sign == 0) {
         return 0;
     }
 
-    if(a->sign < 0 && a->neged_with_sign) {
-        if(bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
-            return -1;
+    // 2. Compare Lengths (Limb Count)
+    // Both numbers have the same sign at this point.
+    // Note: This assumes numbers are normalized (no leading zero limbs).
+    if (a->limb_count > b->limb_count) {
+        return (a->sign > 0) ? 1 : -1;
+    }
+    if (a->limb_count < b->limb_count) {
+        return (a->sign > 0) ? -1 : 1;
+    }
+
+    // 3. Compare Limb-by-Limb (from MSB to LSB)
+    // We start from the highest index because it carries the most weight.
+    for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
+        if (a->limbs[i] > b->limbs[i]) {
+            return (a->sign > 0) ? 1 : -1;
+        }
+        if (a->limbs[i] < b->limbs[i]) {
+            return (a->sign > 0) ? -1 : 1;
         }
     }
 
-    if(b->sign < 0 && b->neged_with_sign) {
-        if(bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
-            return -1;
-        }
-    }
-
-    uint64_t a_length = bigint_bit_length(a);
-    uint64_t b_length = bigint_bit_length(b);
-
-    if (a_length < b_length) {
-        return -a->sign;
-    }
-
-    if (a_length > b_length) {
-        return a->sign;
-    }
-
-    bigint_item_t* item_a = a->msb;
-
-    while(item_a && item_a->value == 0) { // remove leading zeros
-        item_a = item_a->prev;
-    }
-
-    bigint_item_t* item_b = b->msb;
-
-    while(item_b && item_b->value == 0) { // remove leading zeros
-        item_b = item_b->prev;
-    }
-
-    while (item_a && item_b) {
-        if (item_a->value < item_b->value) {
-            return -a->sign;
-        }
-
-        if (item_a->value > item_b->value) {
-            return a->sign;
-        }
-
-        item_a = item_a->prev;
-        item_b = item_b->prev;
-    }
-
+    // All limbs are equal
     return 0;
 }
 
-int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
+/**
+ * Internal Helper: Subtracts |b| from |a|. Assumes |a| > |b|.
+ */
+static int8_t bigint_sub_magnitudes(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    if (bigint_ensure_capacity(result, a->limb_count) == -1) return -1;
+
+    uint64_t borrow = 0;
+    for (uint64_t i = 0; i < a->limb_count; i++) {
+        uint64_t val_a = a->limbs[i];
+        uint64_t val_b = (i < b->limb_count) ? b->limbs[i] : 0;
+
+        // Perform subtraction with borrow
+        // Logic: (val_a - borrow) - val_b
+        uint64_t temp = val_a - borrow;
+        if (temp > val_a) { // Underflow from the previous borrow
+            // borrow remains 1
+        } else if (temp < val_b) {
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+
+        result->limbs[i] = temp - val_b;
+    }
+
+    result->limb_count = a->limb_count;
+    bigint_normalize(result);
+    return 0;
+}
+
+/**
+ * Internal Helper: Adds |a| and |b|.
+ */
+static int8_t bigint_add_magnitudes(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    uint64_t max_limbs = (a->limb_count > b->limb_count) ? a->limb_count : b->limb_count;
+
+    // We might need one extra limb for the final carry
+    if (bigint_ensure_capacity(result, max_limbs + 1) == -1) return -1;
+
+    uint64_t carry = 0;
+    for (uint64_t i = 0; i < max_limbs; i++) {
+        uint64_t val_a = (i < a->limb_count) ? a->limbs[i] : 0;
+        uint64_t val_b = (i < b->limb_count) ? b->limbs[i] : 0;
+
+        // sum = val_a + val_b + carry
+        // We use two steps to safely detect overflow for the carry
+        uint64_t sum = val_a + val_b;
+        uint64_t next_carry = (sum < val_a) ? 1 : 0;
+
+        sum += carry;
+        if (sum < carry) next_carry++;
+
+        result->limbs[i] = sum;
+        carry = next_carry;
+    }
+
+    if (carry) {
+        result->limbs[max_limbs] = carry;
+        result->limb_count = max_limbs + 1;
+    } else {
+        result->limb_count = max_limbs;
+    }
+
+    bigint_normalize(result);
+    return 0;
+}
+
+int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    if (!result || !a || !b) {
         return -1;
     }
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
+    // 1. Normalize inputs if they are in two's complement
+    const bigint_t * op_a = a;
+    const bigint_t * op_b = b;
+    bigint_t * tmp_a = NULL;
+    bigint_t * tmp_b = NULL;
 
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
-        }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
+    if (!a->neged_with_sign && a->sign < 0) {
+        tmp_a = bigint_create();
+        bigint_copy(tmp_a, a);
+        bigint_ensure_normal_form(tmp_a);
+        op_a = tmp_a;
+    }
+    if (!b->neged_with_sign && b->sign < 0) {
+        tmp_b = bigint_create();
+        bigint_copy(tmp_b, b);
+        bigint_ensure_normal_form(tmp_b);
+        op_b = tmp_b;
     }
 
-    if (a->sign == 0 || b->sign == 0) {
-        result->sign = 0;
-
-        if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
-            bigint_destroy(result);
+    // 2. Standard Subtraction Logic
+    int8_t status = 0;
+    if (op_b->sign == 0) {
+        status = bigint_copy(result, op_a);
+    } else if (op_a->sign == 0) {
+        status = bigint_copy(result, op_b);
+        if (status == 0) {
+            result->sign = -op_b->sign;
         }
+    } else if (op_a->sign != op_b->sign) {
+        // Different signs: (-a) - (+b) = -(a+b) or (+a) - (-b) = +(a+b)
+        status = bigint_add_magnitudes(result, op_a, op_b);
+        if (status == 0) {
+            result->sign = op_a->sign;
+        }
+    } else {
+        // Same signs: (+a) - (+b) or (-a) - (-b)
+        int8_t cmp = bigint_cmp_magnitudes(op_a, op_b);
+        if (cmp == 0) {
+            bigint_set_zero(result);
+        } else if (cmp > 0) {
+            status = bigint_sub_magnitudes(result, op_a, op_b);
+            if (status == 0) {
+                result->sign = op_a->sign;
+            }
+        } else {
+            status = bigint_sub_magnitudes(result, op_b, op_a);
+            if (status == 0) {
+                result->sign = -op_a->sign;
+            }
+        }
+    }
 
+    if (tmp_a) {
+        bigint_destroy(tmp_a);
+    }
+
+    if (tmp_b) {
+        bigint_destroy(tmp_b);
+    }
+
+    result->neged_with_sign = true;
+    return status;
+}
+
+int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    if (!result || !a || !b) {
+        return -1;
+    }
+
+    // 1. If inputs are in Two's Complement, we must normalize them.
+    // Since a and b are const, if they aren't normal, we must copy them
+    // to a temporary bigint to normalize.
+    const bigint_t * op_a = a;
+    const bigint_t * op_b = b;
+    bigint_t * tmp_a = NULL;
+    bigint_t * tmp_b = NULL;
+
+    if (!a->neged_with_sign && a->sign < 0) {
+        tmp_a = bigint_create(); // Use your library's creator
+        bigint_copy(tmp_a, a);
+        bigint_ensure_normal_form(tmp_a);
+        op_a = tmp_a;
+    }
+    if (!b->neged_with_sign && b->sign < 0) {
+        tmp_b = bigint_create();
+        bigint_copy(tmp_b, b);
+        bigint_ensure_normal_form(tmp_b);
+        op_b = tmp_b;
+    }
+
+    // 2. Standard Sign-Magnitude Addition Logic
+    int8_t status = 0;
+    if (op_a->sign == 0) {
+        status = bigint_copy(result, op_b);
+    } else if (op_b->sign == 0) {
+        status = bigint_copy(result, op_a);
+    } else if (op_a->sign == op_b->sign) {
+        status = bigint_add_magnitudes(result, op_a, op_b);
+        if (status == 0) {
+            result->sign = op_a->sign;
+        }
+    } else {
+        // Signs differ: Use magnitude subtraction
+        int8_t cmp = bigint_cmp_magnitudes(op_a, op_b);
+        if (cmp == 0) {
+            bigint_set_zero(result);
+        } else if (cmp > 0) {
+            status = bigint_sub_magnitudes(result, op_a, op_b);
+            if (status == 0) {
+                result->sign = op_a->sign;
+            }
+        } else {
+            status = bigint_sub_magnitudes(result, op_b, op_a);
+            if (status == 0) {
+                result->sign = op_b->sign;
+            }
+        }
+    }
+
+    // 3. Cleanup temps
+    if (tmp_a) {
+        bigint_destroy(tmp_a);
+    }
+
+    if (tmp_b) {
+        bigint_destroy(tmp_b);
+    }
+
+    result->neged_with_sign = true;
+    return status;
+}
+
+uint64_t bigint_bit_length(const bigint_t* bigint) {
+    if (!bigint || bigint->sign == 0 || bigint->limb_count == 0) {
         return 0;
     }
 
-    if(a->sign < 0 && a->neged_with_sign) {
-        if(bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
+    size_t i = bigint->limb_count - 1;
+    while (i > 0 && bigint->limbs[i] == 0) {
+        i--;
     }
 
-    if(b->sign < 0 && b->neged_with_sign) {
-        if(bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            return -1;
-        }
+    if (bigint->limbs[i] == 0) {
+        return 0;
     }
 
-    bigint_item_t* item_a = a->msb;
-    bigint_item_t* item_b = b->lsb;
+    return (i * BIGINT_LIMB_BITS) + bit_most_significant(bigint->limbs[i]);
+}
 
-    bigint_t* row_result = bigint_create();
-
-    if (!row_result) {
+int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
+    if (!result || !a || !b) {
         return -1;
     }
 
-    if(bigint_sign_extend(row_result, bigint_item_count(b) + 1) == -1) {
-        bigint_destroy(row_result);
-
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
+    // 1. Handle zero cases
+    if (a->sign == 0 || b->sign == 0) {
+        bigint_set_zero(result);
+        return 0;
     }
 
-    row_result->sign = 1;
+    // 2. Normalize inputs if they are in two's complement
+    // Multiplication MUST be done on magnitudes.
+    const bigint_t * op_a = a;
+    const bigint_t * op_b = b;
+    bigint_t * tmp_a = NULL;
+    bigint_t * tmp_b = NULL;
 
-    while (item_a) {
-        bigint_item_t* item = row_result->lsb;
-        uint128_t carry = 0;
-
-        while (item_b) {
-            uint128_t value = (uint128_t)item_a->value * (uint128_t)item_b->value + carry;
-
-            item->value = value & BIGINT_ITEM_MAX;
-
-            carry = value >> BIGINT_ITEM_BITS;
-
-            item = item->next;
-
-            item_b = item_b->next;
-
-        } // while (item_b)
-
-        if (carry) {
-            item->value = carry;
-        } else {
-            item->value = 0;
-        }
-
-        while(item->next) {
-            item = item->next;
-            item->value = 0;
-        }
-
-        item_a = item_a->prev;
-        item_b = b->lsb;
-
-        if(bigint_shl(result, result, BIGINT_ITEM_BITS) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(row_result);
-            return -1;
-        }
-
-        if(bigint_add(result, result, row_result) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(row_result);
-            return -1;
-        }
+    if (!a->neged_with_sign && a->sign < 0) {
+        tmp_a = bigint_create();
+        bigint_copy(tmp_a, a);
+        bigint_ensure_normal_form(tmp_a);
+        op_a = tmp_a;
+    }
+    if (!b->neged_with_sign && b->sign < 0) {
+        tmp_b = bigint_create();
+        bigint_copy(tmp_b, b);
+        bigint_ensure_normal_form(tmp_b);
+        op_b = tmp_b;
     }
 
-    bigint_destroy(row_result);
+    // 3. Prepare the result
+    // Max limbs required for a * b is a->limb_count + b->limb_count
+    uint64_t total_limbs = op_a->limb_count + op_b->limb_count;
 
+    // If result is the same as a or b, we need a temporary buffer to avoid corruption
+    uint64_t* res_limbs;
+    boolean_t use_temp_res = (result == a || result == b);
+
+    if (use_temp_res) {
+        res_limbs = (uint64_t*)memory_malloc(total_limbs * sizeof(uint64_t));
+        if (!res_limbs) {
+            return -1;
+        }
+    } else {
+        if (bigint_ensure_capacity(result, total_limbs) == -1) {
+            return -1;
+        }
+        res_limbs = result->limbs;
+    }
+    memory_memset(res_limbs, 0, total_limbs * sizeof(uint64_t));
+
+    // 4. Nested Loop Multiplication (Comba/Schoolbook)
+    for (uint64_t i = 0; i < op_a->limb_count; i++) {
+        uint64_t carry = 0;
+        for (uint64_t j = 0; j < op_b->limb_count; j++) {
+            // Use 128-bit math for the 64x64 multiply + accumulation
+            uint128_t product = (uint128_t)op_a->limbs[i] * op_b->limbs[j];
+            product += res_limbs[i + j];
+            product += carry;
+
+            res_limbs[i + j] = (uint64_t)product; // Lower 64 bits
+            carry = (uint64_t)(product >> 64); // Upper 64 bits
+        }
+        res_limbs[i + op_b->limb_count] = carry;
+    }
+
+    // 5. Finalize Result
+    if (use_temp_res) {
+        memory_free(result->limbs);
+        result->limbs = res_limbs;
+        result->capacity = total_limbs;
+    }
+
+    result->limb_count = total_limbs;
     result->sign = a->sign * b->sign;
-    result->neged_with_sign = false;
+    result->neged_with_sign = true;
 
-    // bigint_remove_leading_zeros(result);
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
+    // Cleanup inputs
+    if (tmp_a) {
+        bigint_destroy(tmp_a);
     }
 
+    if (tmp_b) {
+        bigint_destroy(tmp_b);
+    }
+
+    bigint_normalize(result);
     return 0;
 }
 
 int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
+    if (!result || !a || !b) return -1;
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
-
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
-        }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
-    }
-
-    if(a->sign == 0 && b->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    if (a->sign == 0) {
-        result->sign = 0;
-
-        if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
-            bigint_destroy(result);
-        }
-
-        return 0;
-    }
-
+    // 1. Handle special cases for exponent b
     if (b->sign == 0) {
-        result->sign = 1;
-        bigint_set_int64(result, 1);
-
-        if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
-            bigint_destroy(result);
-        }
-
+        bigint_set_int64(result, 1); // a^0 = 1
+        return 0;
+    }
+    if (b->sign < 0) {
+        bigint_set_zero(result); // a^-n = 0 for integers
         return 0;
     }
 
-    if (b->sign < 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
+    // 2. Handle special cases for base a
+    if (a->sign == 0) {
+        bigint_set_zero(result); // 0^b = 0
+        return 0;
     }
 
-    bigint_t* base = bigint_clone(a);
+    // 3. Normalize inputs (ensure magnitudes are accessible)
+    bigint_t* base = bigint_create();
+    bigint_t* exp = bigint_create();
+    bigint_copy(base, a);
+    bigint_copy(exp, b);
+    bigint_ensure_normal_form(base);
+    bigint_ensure_normal_form(exp);
 
-    if (!base) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(base);
-        return -1;
-    }
-
-    bigint_t* exp = bigint_clone(b);
-
-    if (!exp) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(base);
-        bigint_destroy(exp);
-        return -1;
-    }
-
-    if (bigint_set_uint64(result, 1) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(base);
-        bigint_destroy(exp);
-        return -1;
-    }
+    // 4. Square-and-Multiply Algorithm
+    bigint_t* res = bigint_create();
+    bigint_set_int64(res, 1);
 
     while (exp->sign > 0) {
-        if(bigint_is_odd(exp)) {
-            if (bigint_mul(result, result, base) == -1) {
-                if (orig_result_is_a) {
-                    bigint_destroy(result);
-                }
-
-                bigint_destroy(base);
-                bigint_destroy(exp);
-                return -1;
+        // If exp is odd (bit 0 is 1)
+        if (exp->limbs[0] & 1) {
+            if (bigint_mul(res, res, base) == -1) {
+                goto cleanup_fail;
             }
         }
 
+        // base = base * base
         if (bigint_mul(base, base, base) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(base);
-            bigint_destroy(exp);
-            return -1;
+            goto cleanup_fail;
         }
 
-        if(bigint_shr_one(exp) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(base);
-            bigint_destroy(exp);
-            return -1;
+        // exp = exp >> 1
+        if (bigint_shr_one(exp) == -1) {
+            goto cleanup_fail;
         }
     }
+
+    // 5. Finalize Sign
+    // Negative base raised to odd exponent is negative
+    if (a->sign < 0 && (b->limbs[0] & 1)) {
+        res->sign = -1;
+    } else {
+        res->sign = 1;
+    }
+
+    bigint_copy(result, res);
 
     bigint_destroy(base);
     bigint_destroy(exp);
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
-    }
-
+    bigint_destroy(res);
     return 0;
+
+cleanup_fail:
+    bigint_destroy(base);
+    bigint_destroy(exp);
+    bigint_destroy(res);
+    return -1;
 }
 
 int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* c) {
@@ -2454,7 +1763,7 @@ int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
             return 0;
         }
 
-        bigint_destroy_items(result);
+        bigint_destroy_limbs(result);
 
         return 0;
     }
@@ -2487,7 +1796,7 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
 
         orig_result_is_a = true;
     }else {
-        bigint_destroy_items(result);
+        bigint_destroy_limbs(result);
     }
 
     if(a->sign == 0 && b->sign == 0) {
@@ -2609,7 +1918,7 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
     bigint_destroy(base);
     bigint_destroy(exp);
 
-    bigint_remove_leading_zeros(result);
+    bigint_normalize(result);
 
     if (orig_result_is_a) {
         bigint_set_bigint(orig_result, result);
@@ -2620,300 +1929,141 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
 }
 
 int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) { // remainder can be NULL
-        return -1;
-    }
-
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
-
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
-        }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
-    }
-
-    if (b->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
+    if (!a || !b || b->sign == 0) return -1;
 
     if (a->sign == 0) {
-        result->sign = 0;
-
-        if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
-            bigint_destroy(result);
-        }
-
+        if (result) bigint_set_zero(result);
+        if (remainder) bigint_set_zero(remainder);
         return 0;
     }
 
-    if(orig_result_is_a) {
-        bigint_destroy(result);
-        result = NULL;
+    // Normalizing inputs
+    bigint_t * op_a = bigint_create();
+    bigint_t * op_b = bigint_create();
+    bigint_copy(op_a, a);
+    bigint_copy(op_b, b);
+    bigint_ensure_normal_form(op_a);
+    bigint_ensure_normal_form(op_b);
+
+    // Prepare internal outputs
+    bigint_t * q = bigint_create();
+    bigint_t * r = bigint_create();
+
+    if (bigint_div_unsigned(q, r, op_a, op_b) == -1) {
+        goto fail;
     }
 
-    if (b->sign == 1 && a->sign == 1) {
-        return bigint_div_unsigned(orig_result, remainder, a, b);
+    // Safely assign result
+    if (result) {
+        bigint_copy(result, q);
+        result->sign = a->sign * b->sign;
+        result->neged_with_sign = true;
     }
 
-    if (b->sign == -1 && a->sign == -1) {
-
-        bigint_t* neg_a = bigint_create();
-
-        if(a->neged_with_sign && bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
-            bigint_destroy(neg_a);
-            return -1;
-        }
-
-        if (bigint_neg(neg_a, a) == -1) {
-            bigint_destroy(neg_a);
-            return -1;
-        }
-
-        bigint_t* neg_b = bigint_create();
-
-        if(b->neged_with_sign && bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
-            bigint_destroy(neg_a);
-            bigint_destroy(neg_b);
-            return -1;
-        }
-
-        if (bigint_neg(neg_b, b) == -1) {
-            bigint_destroy(neg_a);
-            bigint_destroy(neg_b);
-            return -1;
-        }
-
-        int8_t ret = bigint_div_unsigned(orig_result, remainder, neg_a, neg_b);
-
-        orig_result->sign = 1;
-        orig_result->neged_with_sign = false;
-
-        bigint_destroy(neg_a);
-        bigint_destroy(neg_b);
-
-        return ret;
+    // Safely assign remainder only if pointer is NOT NULL
+    if (remainder) {
+        bigint_copy(remainder, r);
+        remainder->sign = a->sign;
+        remainder->neged_with_sign = true;
     }
 
-    bigint_t* neg_a = bigint_create();
+    bigint_destroy(op_a); bigint_destroy(op_b);
+    bigint_destroy(q); bigint_destroy(r);
+    return 0;
 
-    if(a->sign != -1) {
-        if (bigint_set_bigint(neg_a, a) == -1) {
-            bigint_destroy(neg_a);
-            return -1;
-        }
-
-        neg_a->sign = 1;
-    } else {
-        if(a->neged_with_sign && bigint_neg_with_sign_inplace((bigint_t*)a, true) == -1) {
-            bigint_destroy(neg_a);
-            return -1;
-        }
-
-        if (bigint_neg(neg_a, a) == -1) {
-            bigint_destroy(neg_a);
-            return -1;
-        }
-    }
-
-    bigint_t* neg_b = bigint_create();
-
-    if(b->sign != -1) {
-        if (bigint_set_bigint(neg_b, b) == -1) {
-            bigint_destroy(neg_a);
-            bigint_destroy(neg_b);
-            return -1;
-        }
-
-        neg_b->sign = 1;
-    } else {
-        if(b->neged_with_sign && bigint_neg_with_sign_inplace((bigint_t*)b, true) == -1) {
-            bigint_destroy(neg_a);
-            bigint_destroy(neg_b);
-            return -1;
-        }
-
-        if (bigint_neg(neg_b, b) == -1) {
-            bigint_destroy(neg_a);
-            bigint_destroy(neg_b);
-            return -1;
-        }
-    }
-
-    int8_t ret = bigint_div_unsigned(orig_result, remainder, neg_a, neg_b);
-
-    if (ret == -1) {
-        bigint_destroy(neg_a);
-        bigint_destroy(neg_b);
-        return -1;
-    }
-
-    bigint_t* one = bigint_one();
-
-    if(!one) {
-        bigint_destroy(neg_a);
-        bigint_destroy(neg_b);
-        return -1;
-    }
-
-    if(bigint_add(orig_result, orig_result, one) == -1) {
-        bigint_destroy(neg_a);
-        bigint_destroy(neg_b);
-        bigint_destroy(one);
-        return -1;
-    }
-
-    bigint_destroy(one);
-
-    orig_result->sign = -1;
-
-    bigint_destroy(neg_a);
-    bigint_destroy(neg_b);
-
-    return ret;
+fail:
+    bigint_destroy(op_a); bigint_destroy(op_b);
+    bigint_destroy(q); bigint_destroy(r);
+    return -1;
 }
 
-int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) { // remainder can be NULL
-        return -1;
+int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint_t* a, const bigint_t* b) {
+    if (!quotient || !a || !b) return -1;
+
+    // 1. Handle NULL remainder by creating a local temporary one
+    bigint_t* internal_rem = remainder;
+    boolean_t destroy_rem = false;
+
+    if (remainder == NULL) {
+        internal_rem = bigint_create();
+        if (!internal_rem) return -1;
+        destroy_rem = true;
     }
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
+    bigint_t* internal_quotient = quotient;
+    boolean_t destroy_quotient = false;
 
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
+    if (quotient == NULL) {
+        internal_quotient = bigint_create();
+        if (!internal_quotient) {
+            if (destroy_rem) bigint_destroy(internal_rem);
             return -1;
         }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
+        destroy_quotient = true;
     }
 
-    if (b->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
+    // 2. Initial comparison
+    int8_t cmp = bigint_cmp_magnitudes(a, b);
+    if (cmp < 0) {
+        bigint_set_zero(internal_quotient);
+        bigint_copy(internal_rem, a);
+        goto success;
+    }
+    if (cmp == 0) {
+        bigint_set_int64(internal_quotient, 1);
+        bigint_set_zero(internal_rem);
+        goto success;
     }
 
-    if (a->sign == 0 && b->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
+    // 3. Setup for bitwise division
+    bigint_set_zero(internal_quotient);
+    bigint_set_zero(internal_rem);
 
-        return -1;
-    }
+    uint64_t a_bits = bigint_bit_length(a) + 1; // +1 to include the highest bit
+    if (bigint_ensure_capacity(quotient, a->limb_count) == -1) goto fail;
+    memory_memset(quotient->limbs, 0, quotient->capacity * sizeof(uint64_t));
 
-    if (a->sign == 0) {
-        if (orig_result_is_a) {
-            bigint_destroy_items(orig_result);
-            bigint_destroy(result);
-        }
+    // 4. Main Loop
+    for (int64_t i = (int64_t)a_bits - 1; i >= 0; i--) {
+        // Shift remainder up to make room for the next bit
+        if (bigint_shl_one(internal_rem) == -1) goto fail;
 
-        return 0;
-    }
+        // Extract i-th bit from 'a' and put it in remainder's LSB
+        boolean_t bit_value;
+        if (bigint_get_bit(a, (uint64_t)i, &bit_value) == -1) goto fail;
+        if (bigint_set_bit(internal_rem, 0, bit_value) == -1) goto fail;
 
-    uint64_t a_length = bigint_bit_length(a);
-    uint64_t b_length = bigint_bit_length(b);
+        // Critical: normalization is required for cmp_magnitudes to work!
+        bigint_normalize(internal_rem);
 
-    int64_t max_bit_length = MAX(a_length, b_length);
+        if (bigint_cmp_magnitudes(internal_rem, b) >= 0) {
+            // remainder -= b
+            if (bigint_sub_magnitudes(internal_rem, internal_rem, b) == -1) goto fail;
 
-    bigint_t* quotient = result; // for readability
-
-    bigint_t* tmp_remainder = bigint_create();
-
-    if(!tmp_remainder) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
-    for(int64_t i = max_bit_length; i > -1; i--) {
-        if(bigint_shl_one(tmp_remainder) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(tmp_remainder);
-            return -1;
-        }
-
-        boolean_t bit = false;
-
-        if(bigint_get_bit(a, i, &bit) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(tmp_remainder);
-            return -1;
-        }
-
-        if(bit) {
-            if(bigint_set_bit(tmp_remainder, 0, true) == -1) {
-                if (orig_result_is_a) {
-                    bigint_destroy(result);
-                }
-
-                bigint_destroy(tmp_remainder);
-                return -1;
-            }
-        }
-
-        if(bigint_cmp(tmp_remainder, b) != -1) {
-            if(bigint_sub(tmp_remainder, tmp_remainder, b) == -1) {
-                if (orig_result_is_a) {
-                    bigint_destroy(result);
-                }
-
-                bigint_destroy(tmp_remainder);
-                return -1;
-            }
-
-            if(bigint_set_bit(quotient, i, true) == -1) {
-                if (orig_result_is_a) {
-                    bigint_destroy(result);
-                }
-
-                bigint_destroy(tmp_remainder);
-                return -1;
-            }
+            // Set bit in quotient
+            if (bigint_set_bit(internal_quotient, (uint64_t)i, true) == -1) goto fail;
         }
     }
 
-    if(remainder) {
-        bigint_remove_leading_zeros(tmp_remainder);
-        bigint_set_bigint(remainder, tmp_remainder);
+success:
+    bigint_normalize(internal_quotient);
+    if (quotient != internal_quotient) {
+        bigint_copy(quotient, internal_quotient);
     }
 
-    bigint_destroy(tmp_remainder);
-
-    bigint_remove_leading_zeros(result);
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
+    bigint_normalize(internal_rem);
+    if (remainder != internal_rem) {
+        bigint_copy(remainder, internal_rem);
     }
 
+    if (destroy_rem) bigint_destroy(internal_rem);
+    if (destroy_quotient) bigint_destroy(internal_quotient);
     return 0;
+
+fail:
+    if (destroy_rem) bigint_destroy(internal_rem);
+    if (destroy_quotient) bigint_destroy(internal_quotient);
+    return -1;
 }
 
 int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
@@ -2921,295 +2071,137 @@ int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 }
 
 int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
+    if (!result || !a || !b) return -1;
 
-    bigint_t* tmp_result = bigint_create();
+    // Use a temporary to handle cases where result is the same as a or b
     bigint_t* tmp_remainder = bigint_create();
+    if (!tmp_remainder) return -1;
 
-    if (!tmp_result || !tmp_remainder) {
-        bigint_destroy(tmp_result);
+    // bigint_div_with_remainder already calculates the remainder r
+    // where sign(r) == sign(a).
+    // result is NULL because we don't care about the quotient here.
+    if (bigint_div_with_remainder(NULL, tmp_remainder, a, b) == -1) {
         bigint_destroy(tmp_remainder);
         return -1;
     }
 
-    if (bigint_div_with_remainder(tmp_result, tmp_remainder, a, b) == -1) {
-        bigint_destroy(tmp_result);
-        bigint_destroy(tmp_remainder);
-        return -1;
-    }
+    // Since we are using C-style truncated division:
+    // a % b has the same sign as a.
+    // div_with_remainder already handles this correctly.
 
-    if(a->sign > 0 && b->sign > 0) {
-        // do nothing
-    } else if(a->sign < 0 && b->sign < 0) {
-        if (tmp_remainder->sign < 0 && tmp_remainder->neged_with_sign) {
-            bigint_neg_with_sign_inplace((bigint_t*)tmp_remainder, true);
-        }
+    // Ensure the output is in normal form (Sign-Magnitude)
+    bigint_normalize(tmp_remainder);
+    bigint_ensure_normal_form(tmp_remainder);
 
-        tmp_remainder->sign = -1;
-        tmp_remainder->neged_with_sign = false;
-    } else if(a->sign < 0) {
-        if(bigint_sub(tmp_remainder, tmp_remainder, b) == -1) {
-            bigint_destroy(tmp_result);
-            bigint_destroy(tmp_remainder);
-            return -1;
-        }
-
-        if(bigint_neg_with_sign_inplace((bigint_t*)tmp_remainder, true) == -1) {
-            bigint_destroy(tmp_result);
-            bigint_destroy(tmp_remainder);
-            return -1;
-        }
-
-        tmp_remainder->sign = 1;
-    } else {
-        if(bigint_add(tmp_remainder, tmp_remainder, b) == -1) {
-            bigint_destroy(tmp_result);
-            bigint_destroy(tmp_remainder);
-            return -1;
-        }
-
-        tmp_remainder->sign = -1;
-    }
-
-    bigint_destroy(tmp_result);
-
-    bigint_remove_leading_zeros(tmp_remainder);
-
-    if (bigint_set_bigint(result, tmp_remainder) == -1) {
+    if (bigint_copy(result, tmp_remainder) == -1) {
         bigint_destroy(tmp_remainder);
         return -1;
     }
 
     bigint_destroy(tmp_remainder);
-
     return 0;
 }
 
 int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
-    if(!result || !a || !b) {
-        return -1;
-    }
+    if (!result || !a || !b) return -1;
 
-    bigint_t* orig_result = result;
-    boolean_t orig_result_is_a = false;
+    // 1. Handle special cases: GCD(0, x) = |x|, GCD(x, 0) = |x|
+    if (a->sign == 0) return bigint_abs_copy(result, b);
+    if (b->sign == 0) return bigint_abs_copy(result, a);
 
-    if (result == a) {
-        result = bigint_create();
-
-        if (!result) {
-            return -1;
-        }
-
-        orig_result_is_a = true;
-    }else {
-        bigint_destroy_items(result);
-    }
-
-    int8_t cmp = bigint_cmp(a, b);
-    boolean_t a_is_smaller = false;
-
-    if (cmp == 0) {
-        if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, a);
-            bigint_destroy(result);
-        }
-
-        return 0;
-    } else if (cmp == -1) {
-        a_is_smaller = true;
-    }
-
+    // 2. Prepare temporary variables for the Euclidean loop
+    // We use magnitudes because GCD is always positive.
     bigint_t* tmp_a = bigint_clone(a);
-
-    if (!tmp_a) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        return -1;
-    }
-
     bigint_t* tmp_b = bigint_clone(b);
+    bigint_t* rem = bigint_create();
 
-    if (!tmp_b) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
-        bigint_destroy(tmp_a);
-        return -1;
-    }
-
-    bigint_t* tmp = bigint_create();
-
-    if (!tmp) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
-
+    if (!tmp_a || !tmp_b || !rem) {
         bigint_destroy(tmp_a);
         bigint_destroy(tmp_b);
+        bigint_destroy(rem);
         return -1;
     }
 
-    if(!a_is_smaller) {
-        bigint_t* swap = tmp_a;
-        tmp_a = tmp_b;
-        tmp_b = swap;
-    }
+    // Ensure they are in normal form and positive
+    bigint_ensure_normal_form(tmp_a);
+    bigint_ensure_normal_form(tmp_b);
+    tmp_a->sign = 1;
+    tmp_b->sign = 1;
 
+    // 3. Euclidean Algorithm Loop
+    // Logic: while a != 0: b = b % a, then swap(a, b)
     while (tmp_a->sign != 0) {
-        if (bigint_mod(tmp, tmp_b, tmp_a) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
+        if (bigint_mod(rem, tmp_b, tmp_a) == -1) {
             bigint_destroy(tmp_a);
             bigint_destroy(tmp_b);
-            bigint_destroy(tmp);
+            bigint_destroy(rem);
             return -1;
         }
 
-        if (bigint_set_bigint(tmp_b, tmp_a) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(tmp_a);
-            bigint_destroy(tmp_b);
-            bigint_destroy(tmp);
-            return -1;
-        }
-
-        if (bigint_set_bigint(tmp_a, tmp) == -1) {
-            if (orig_result_is_a) {
-                bigint_destroy(result);
-            }
-
-            bigint_destroy(tmp_a);
-            bigint_destroy(tmp_b);
-            bigint_destroy(tmp);
-            return -1;
-        }
-
+        // tmp_b = tmp_a
+        bigint_copy(tmp_b, tmp_a);
+        // tmp_a = rem
+        bigint_copy(tmp_a, rem);
     }
 
-    if (bigint_set_bigint(result, tmp_b) == -1) {
-        if (orig_result_is_a) {
-            bigint_destroy(result);
-        }
+    // 4. Finalize result
+    // The GCD is stored in tmp_b
+    bigint_copy(result, tmp_b);
+    result->sign = 1;
+    result->neged_with_sign = true;
 
-        bigint_destroy(tmp_a);
-        bigint_destroy(tmp_b);
-        bigint_destroy(tmp);
-        return -1;
-    }
-
-    if(result->sign == -1) {
-        result->sign = 1;
-    }
-
-    bigint_remove_leading_zeros(result);
-
+    // 5. Cleanup
     bigint_destroy(tmp_a);
     bigint_destroy(tmp_b);
-    bigint_destroy(tmp);
-
-    if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
-        bigint_destroy(result);
-    }
+    bigint_destroy(rem);
 
     return 0;
 }
 
 static bigint_t* bigint_random_internal(uint64_t bits, boolean_t force_msb) {
+    if (bits == 0) return bigint_create();  // Returns a zero bigint
+
     bigint_t* result = bigint_create();
+    if (!result) return NULL;
 
-    if (!result) {
-        return NULL;
-    }
+    uint64_t item_count = (bits + BIGINT_LIMB_BITS - 1) / BIGINT_LIMB_BITS;
 
-    if (bits == 0) {
-        return result;
-    }
-
-    uint64_t item_count = bits / BIGINT_ITEM_BITS;
-    uint64_t remaining_bits = bits % BIGINT_ITEM_BITS;
-
-    if(item_count == 0 && remaining_bits == 0) {
+    // Use your helper to ensure capacity and zero initialization
+    if (bigint_ensure_capacity(result, item_count) == -1) {
         bigint_destroy(result);
         return NULL;
     }
-
-    bigint_item_t* prev = NULL;
-
-    for (uint64_t i = 0; i < item_count; i++) {
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            bigint_destroy(result);
-            return NULL;
-        }
-
-        item->value = rand64();
-        item->value &= BIGINT_ITEM_MAX;
-        item->next = NULL;
-        item->prev = prev;
-
-        if (prev) {
-            prev->next = item;
-        } else {
-            result->lsb = item;
-        }
-
-        prev = item;
-    }
-
-    if (remaining_bits) {
-        bigint_item_t* item = (bigint_item_t*)memory_malloc(sizeof(bigint_item_t));
-
-        if (!item) {
-            bigint_destroy(result);
-            return NULL;
-        }
-
-        item->value = rand64();
-        item->value &= (1ULL << remaining_bits) - 1;
-        item->next = NULL;
-        item->prev = prev;
-
-        if (prev) {
-            prev->next = item;
-        } else {
-            result->lsb = item;
-        }
-
-        prev = item;
-    }
-
-    if(!prev) { // never happens
-        bigint_destroy(result);
-        return NULL;
-    }
-
-    result->msb = prev;
 
     result->sign = 1;
+    result->limb_count = item_count;
+    result->neged_with_sign = true;
 
-    if(!force_msb) {
-        return result;
+    // Fill all limbs with random data
+    for (uint64_t i = 0; i < item_count; i++) {
+        result->limbs[i] = rand64();
     }
 
-    // ensure the most significant bit is set
-    if (remaining_bits) {
-        result->msb->value |= 1ULL << (remaining_bits - 1);
-    } else {
-        result->msb->value |= 1ULL << (BIGINT_ITEM_BITS - 1);
+    // --- Fix the MSB Limb ---
+
+    // How many bits are actually used in the highest limb?
+    // If bits = 64, used_in_msb = 64. If bits = 65, used_in_msb = 1.
+    uint64_t used_in_msb = bits % BIGINT_LIMB_BITS;
+    if (used_in_msb == 0) used_in_msb = BIGINT_LIMB_BITS;
+
+    // 1. Mask out bits above the requested length
+    // This ensures that even if force_msb is false, the number isn't larger than 'bits'
+    if (used_in_msb < 64) {
+        uint64_t mask = (1ULL << used_in_msb) - 1;
+        result->limbs[item_count - 1] &= mask;
     }
 
+    // 2. Force the MSB to be 1 if requested
+    if (force_msb) {
+        result->limbs[item_count - 1] |= (1ULL << (used_in_msb - 1));
+    }
+
+    // Final normalization in case the random bits resulted in leading zeros
+    bigint_normalize(result);
 
     return result;
 }
@@ -3509,46 +2501,44 @@ boolean_t bigint_is_prime(const bigint_t* a) {
 }
 
 bigint_t* bigint_random_prime(uint64_t bits) {
-    if(bits < 2) {
-        return NULL;
-    }
+    if (bits < 2) return NULL;
 
-    bigint_t* two = bigint_one();
+    // We need a constant '2' to increment our odd candidates
+    bigint_t* two = bigint_create();
+    if (!two) return NULL;
+    bigint_set_int64(two, 2);
 
-    if (!two) {
-        return NULL;
-    }
-
-    while(true) {
-        bigint_t* result = bigint_random(bits);
-
+    while (true) {
+        // Generate a random number with the MSB forced to 1 to ensure bit length
+        bigint_t* result = bigint_random_internal(bits, true);
         if (!result) {
             bigint_destroy(two);
             return NULL;
         }
 
-        result->lsb->value |= 1;
+        // Ensure the candidate is odd
+        result->limbs[0] |= 1;
+        if (result->limb_count == 0) result->limb_count = 1;
 
-        for (uint64_t i = 0; i < 100; i++) {
+        // Search in a local window of 1000 candidates (adding 2 each time)
+        for (uint64_t i = 0; i < 1000; i++) {
+            // Optimization: Trial division by small primes (like 3, 5, 7, 11...)
+            // could be added here to fail 80% of composites instantly.
+
             if (bigint_is_prime(result)) {
                 bigint_destroy(two);
                 return result;
             }
 
-            if(bigint_add(result, result, two) == -1) {
+            // result = result + 2 (keeps the candidate odd)
+            if (bigint_add(result, result, two) == -1) {
                 bigint_destroy(result);
                 bigint_destroy(two);
                 return NULL;
             }
-
         }
 
+        // If no prime found in this window, pick a new random starting point
         bigint_destroy(result);
     }
-
-    bigint_destroy(two);
-
-    return NULL;
 }
-
-

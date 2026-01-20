@@ -5,7 +5,7 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
-#define RAMSIZE 0x800000
+#define RAMSIZE 0x8000000
 #include "setup.h"
 #include <bigint.h>
 #include <strings.h>
@@ -109,6 +109,27 @@ static int32_t bigint_test_set_str(void) {
             return -1;
         }
 
+        bigint_set_str(bigint, "-1");
+
+        str = bigint_to_str(bigint);
+
+        if (str) {
+            printf("bigint_to_string: %s\n", str);
+
+            if(strncmp(str, "-1", 2) != 0) {
+                print_error("bigint_to_string failed for -1");
+            } else {
+                print_success("bigint_to_string passed for -1");
+            }
+
+            memory_free((void*)str);
+
+        } else {
+            bigint_destroy(bigint);
+            print_error("bigint_to_string failed for -1");
+            return -1;
+        }
+
         bigint_set_str(bigint, "-1234567890ABCDEF1234567890ABCDEF");
 
         str = bigint_to_str(bigint);
@@ -117,7 +138,7 @@ static int32_t bigint_test_set_str(void) {
             printf("negative bigint_to_string: %s\n", str);
 
             if(strncmp(str, "-1234567890ABCDEF1234567890ABCDEF", 33) != 0) {
-                print_error("negative bigint_to_string failed");
+                print_error("negative bigint_to_string failed, expected -1234567890ABCDEF1234567890ABCDEF got %s", str);
             } else {
                 print_success("negative bigint_to_string passed");
             }
@@ -278,7 +299,7 @@ static int32_t bigint_test_shl_shr(void) {
             printf("bigint_shl: %s\n", str);
 
             if(strncmp(str, "12340000000000000000", 20) != 0) {
-                print_error("bigint_shl failed");
+                print_error("bigint_shl failed, expected 12340000000000000000");
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -340,7 +361,7 @@ static int32_t bigint_test_shl_shr(void) {
             printf("bigint_shr: %s\n", str);
 
             if(strncmp(str, "1234567890ABCDEF", 16) != 0 || strlen(str) != 16) {
-                print_error("bigint_shr failed");
+                print_error("bigint_shr failed, expected 1234567890ABCDEF");
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -455,6 +476,29 @@ static int32_t bigint_test_shl_shr(void) {
 
         bigint_set_str(bigint_1, "867890ABCDEF1234567890AB");
 
+        str = bigint_to_str(bigint_1);
+
+        if (str) {
+            printf("bigint_to_str: %s\n", str);
+
+            if(strncmp(str, "867890ABCDEF1234567890AB", 24) != 0 || strlen(str) != 24) {
+                print_error("bigint_to_str failed expected 867890ABCDEF1234567890AB got %s", str);
+                memory_free((void*)str);
+                bigint_destroy(bigint_1);
+                bigint_destroy(bigint_2);
+                return -1;
+            } else {
+                print_success("bigint_to_str passed");
+            }
+
+            memory_free((void*)str);
+        } else {
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            print_error("bigint_to_str failed");
+            return -1;
+        }
+
         if(bigint_shl_one(bigint_1) == -1) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
@@ -468,7 +512,7 @@ static int32_t bigint_test_shl_shr(void) {
             printf("bigint_shl_one: %s\n", str);
 
             if(strncmp(str, "10CF121579BDE2468ACF12156", 25) != 0 || strlen(str) != 25) {
-                print_error("bigint_shl_one failed");
+                print_error("bigint_shl_one failed, expected 10CF121579BDE2468ACF12156 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -645,8 +689,8 @@ static int32_t bigint_test_not(void) {
         if (str) {
             printf("bigint_not: %s\n", str);
 
-            if(strncmp(str, "FFFFFFFFEDCB", 12) != 0) {
-                print_error("bigint_not failed");
+            if(strncmp(str, "FFFFFFFFFFFFEDCB", 16) != 0) {
+                print_error("bigint_not failed. expected FFFFFFFFFFFFEDCB got %s (%lli)", str, strlen(str));
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -798,7 +842,7 @@ static int32_t bigint_test_and(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_and failed");
+            print_error("bigint_and failed. expected -9A78 but got error");
             return -1;
         }
 
@@ -808,7 +852,7 @@ static int32_t bigint_test_and(void) {
             printf("bigint_and: %s\n", str);
 
             if(strncmp(str, "-9A78", 5) != 0) {
-                print_error("bigint_and failed");
+                print_error("bigint_and failed, expected -9A78 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2299,7 +2343,7 @@ static int32_t bigint_test_pow(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_pow failed");
+            print_error("bigint_pow failed with -1");
             return -1;
         }
 
@@ -2309,7 +2353,7 @@ static int32_t bigint_test_pow(void) {
             printf("bigint_pow: %s\n", str);
 
             if(strncmp(str, "9", 1) != 0) {
-                print_error("bigint_pow failed");
+                print_error("bigint_pow failed. expected 9 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2393,7 +2437,7 @@ static int32_t bigint_test_div(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_div failed");
+            print_error("bigint_div failed, got -1");
             return -1;
         }
 
@@ -2403,7 +2447,7 @@ static int32_t bigint_test_div(void) {
             printf("bigint_div: %s\n", str);
 
             if(strncmp(str, "36", 2) != 0) {
-                print_error("bigint_div failed");
+                print_error("bigint_div failed, expected 36 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2429,7 +2473,7 @@ static int32_t bigint_test_div(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_div failed");
+            print_error("bigint_div failed, got -1");
             return -1;
         }
 
@@ -2439,7 +2483,7 @@ static int32_t bigint_test_div(void) {
             printf("bigint_div: %s\n", str);
 
             if(strncmp(str, "3630A22567", 2) != 0) {
-                print_error("bigint_div failed");
+                print_error("bigint_div failed, expected 3630A22567 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2465,7 +2509,7 @@ static int32_t bigint_test_div(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_div failed");
+            print_error("bigint_div failed, got -1");
             return -1;
         }
 
@@ -2475,7 +2519,7 @@ static int32_t bigint_test_div(void) {
             printf("bigint_div: %s\n", str);
 
             if(strncmp(str, "10004C01602D88D768FF32BC2824B", 29) != 0) {
-                print_error("bigint_div failed");
+                print_error("bigint_div failed, expected 10004C01602D88D768FF32BC2824B got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2501,7 +2545,7 @@ static int32_t bigint_test_div(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_div failed");
+            print_error("bigint_div failed, got -1");
             return -1;
         }
 
@@ -2511,7 +2555,7 @@ static int32_t bigint_test_div(void) {
             printf("bigint_div: %s\n", str);
 
             if(strncmp(str, "124924923F07FFFE", 16) != 0) {
-                print_error("bigint_div failed");
+                print_error("bigint_div failed, expected 124924923F07FFFE got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2537,7 +2581,7 @@ static int32_t bigint_test_div(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_div failed");
+            print_error("bigint_div failed, got -1");
             return -1;
         }
 
@@ -2546,8 +2590,8 @@ static int32_t bigint_test_div(void) {
         if (str) {
             printf("bigint_div: %s\n", str);
 
-            if(strncmp(str, "-124924923F07FFFF", 17) != 0) {
-                print_error("bigint_div failed");
+            if(strncmp(str, "-124924923F07FFFE", 17) != 0) {
+                print_error("bigint_div failed, expected -124924923F07FFFE got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2573,7 +2617,7 @@ static int32_t bigint_test_div(void) {
             bigint_destroy(bigint_1);
             bigint_destroy(bigint_2);
             bigint_destroy(bigint_3);
-            print_error("bigint_div failed");
+            print_error("bigint_div failed, got -1");
             return -1;
         }
 
@@ -2583,7 +2627,7 @@ static int32_t bigint_test_div(void) {
             printf("bigint_div: %s\n", str);
 
             if(strncmp(str, "124924923F07FFFE", 16) != 0) {
-                print_error("bigint_div failed");
+                print_error("bigint_div failed, expected 124924923F07FFFE got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2641,7 +2685,7 @@ static int32_t bigint_test_mod(void) {
             printf("bigint_mod: %s\n", str);
 
             if(strncmp(str, "10", 2) != 0) {
-                print_error("bigint_mod failed");
+                print_error("bigint_mod failed, expected 10 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2677,7 +2721,7 @@ static int32_t bigint_test_mod(void) {
             printf("bigint_mod: %s\n", str);
 
             if(strncmp(str, "11", 2) != 0) {
-                print_error("bigint_mod failed");
+                print_error("bigint_mod failed, expected 11 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2713,7 +2757,7 @@ static int32_t bigint_test_mod(void) {
             printf("bigint_mod: %s\n", str);
 
             if(strncmp(str, "10B3", 4) != 0) {
-                print_error("bigint_mod failed");
+                print_error("bigint_mod failed, expected 10B3 got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2749,7 +2793,7 @@ static int32_t bigint_test_mod(void) {
             printf("bigint_mod: %s\n", str);
 
             if(strncmp(str, "FC6C9395FCD4320F", 16) != 0) {
-                print_error("bigint_mod failed");
+                print_error("bigint_mod failed, expected FC6C9395FCD4320F got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2784,8 +2828,8 @@ static int32_t bigint_test_mod(void) {
         if (str) {
             printf("bigint_mod: %s\n", str);
 
-            if(strncmp(str, "-270270279800001", 16) != 0) {
-                print_error("bigint_mod failed");
+            if(strncmp(str, "FC6C9395FCD4320F", 16) != 0) {
+                print_error("bigint_mod failed, expected FC6C9395FCD4320F got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2821,7 +2865,7 @@ static int32_t bigint_test_mod(void) {
             printf("bigint_mod: %s\n", str);
 
             if(strncmp(str, "-FC6C9395FCD4320F", 17) != 0) {
-                print_error("bigint_mod failed");
+                print_error("bigint_mod failed, expected -FC6C9395FCD4320F got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2856,8 +2900,8 @@ static int32_t bigint_test_mod(void) {
         if (str) {
             printf("bigint_mod: %s\n", str);
 
-            if(strncmp(str, "270270279800001", 15) != 0) {
-                print_error("bigint_mod failed");
+            if(strncmp(str, "-FC6C9395FCD4320F", 17) != 0) {
+                print_error("bigint_mod failed, expected -FC6C9395FCD4320F got %s", str);
                 memory_free((void*)str);
                 bigint_destroy(bigint_1);
                 bigint_destroy(bigint_2);
@@ -2889,10 +2933,13 @@ static int32_t bigint_test_mod(void) {
     bigint_destroy(bigint_2);
     bigint_destroy(bigint_3);
 
+    printf("bigint_mod tests completed\n");
+
     return 0;
 }
 
 static int32_t bigint_test_gcd(void) {
+    printf("Starting bigint_gcd tests\n");
     bigint_t* bigint_1 = bigint_create();
     bigint_t* bigint_2 = bigint_create();
     bigint_t* bigint_3 = bigint_create();
@@ -3385,20 +3432,23 @@ static int32_t bigint_test_prime(void) {
         print_success("bigint_is_prime passed");
 
 
-        int32_t test_count = 5;
+        int32_t test_count = 6;
         int32_t bit_count = 32;
 
         while(test_count--) {
             bigint_destroy(bigint_1);
 
+            time_t start_time = time_ns(NULL);
             bigint_1 = bigint_random_prime(bit_count);
+            time_t end_time = time_ns(NULL);
+            uint64_t passed_time = end_time - start_time;
+            printf("bigint_random_prime (%i-bits) time: %llu ns %llu ms\n", bit_count, passed_time, passed_time / 1000000);
 
             if(bigint_1) {
-                print_success("bigint_random_prime passed");
-
                 const char_t* str = bigint_to_str(bigint_1);
-                printf("bigint_random_prime: %s (%i-bits)\n", str, bit_count);
+                printf("bigint_random_prime: %s (%i(%lli)-bits)\n", str, bit_count, bigint_bit_length(bigint_1) + 1);
                 memory_free((void*)str);
+                print_success("bigint_random_prime passed");
             } else {
                 bigint_destroy(bigint_1);
                 print_error("bigint_random_prime failed");
