@@ -3177,6 +3177,55 @@ static int32_t bigint_test_gcd(void) {
     return 0;
 }
 
+static int32_t bigint_test_isqrt(void) {
+    bigint_t* bigint_1 = bigint_create();
+    bigint_t* bigint_2 = bigint_create();
+
+    if(!bigint_1 || !bigint_2) {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        print_error("bigint_create failed");
+        return -1;
+    }
+
+    bigint_set_str(bigint_1, "144");
+
+    if(bigint_isqrt(bigint_2, bigint_1) == -1) {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        print_error("bigint_isqrt failed");
+        return -1;
+    }
+
+    const char_t* str = bigint_to_str(bigint_2);
+
+    if (str) {
+        printf("bigint_isqrt: %s\n", str);
+
+        if(strncmp(str, "12", 2) != 0) {
+            print_error("bigint_isqrt failed");
+            memory_free((void*)str);
+            bigint_destroy(bigint_1);
+            bigint_destroy(bigint_2);
+            return -1;
+        } else {
+            print_success("bigint_isqrt passed");
+        }
+
+        memory_free((void*)str);
+    } else {
+        bigint_destroy(bigint_1);
+        bigint_destroy(bigint_2);
+        print_error("bigint_isqrt failed");
+        return -1;
+    }
+
+    bigint_destroy(bigint_1);
+    bigint_destroy(bigint_2);
+
+    return 0;
+}
+
 static int32_t bigint_test_mul_mod(void){
     bigint_t* bigint_1 = bigint_create();
     bigint_t* bigint_2 = bigint_create();
@@ -3535,6 +3584,12 @@ int32_t main(void) {
     }
 
     result = bigint_test_gcd();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_isqrt();
 
     if(result != 0) {
         return result;
