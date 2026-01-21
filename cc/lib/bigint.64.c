@@ -183,7 +183,7 @@ bigint_t* bigint_two(void) {
     return bigint;
 }
 
-static inline int8_t bigint_set_zero(bigint_t* bigint) {
+int8_t bigint_set_zero(bigint_t* bigint) {
     return bigint_set_int64(bigint, 0);
 }
 
@@ -308,6 +308,10 @@ static int8_t bigint_copy(bigint_t* dest, const bigint_t* src) {
     // 4. Ensure extra limbs in destination are zeroed out
     if (dest->capacity > dest->limb_count) {
         memory_memclean(dest->limbs + dest->limb_count, (dest->capacity - dest->limb_count) * sizeof(uint64_t));
+    }
+
+    if(bigint_normalize(dest) == -1) {
+        return -1;
     }
 
     return 0;
@@ -565,7 +569,7 @@ boolean_t bigint_is_zero(const bigint_t* a) {
         return true;
     }
 
-    return a->sign == 0;
+    return a->sign == 0 || (a->limb_count == 1 && a->limbs[0] == 0);
 }
 
 boolean_t bigint_is_negative(const bigint_t* a) {
@@ -2391,6 +2395,231 @@ fail:
         bigint_destroy(tmp);
     }
     return -1;
+}
+
+int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n) {
+    if (!result || !a || !n || bigint_is_zero(n)) {
+        return -1;
+    }
+
+    // GCD is only defined for positive magnitudes in this context
+    if (a->sign < 0) {
+        bigint_t* tmp_a = bigint_clone(a);
+        if (!tmp_a) {
+            return -1;
+        }
+        bigint_mod(tmp_a, tmp_a, n); // Bring into range [0, n-1]
+        int8_t ret = bigint_mod_inv(result, tmp_a, n);
+        bigint_destroy(tmp_a);
+        return ret;
+    }
+
+    bigint_t * t = bigint_create(); // Coefficient t
+    bigint_t * newt = bigint_create();
+    bigint_t * r = bigint_clone(n); // Remainder r
+    bigint_t * newr = bigint_clone(a);
+    bigint_t * q = bigint_create();
+    bigint_t * tmp = bigint_create();
+    bigint_t * prod = bigint_create();
+
+    if (!t || !newt || !r || !newr || !q || !tmp || !prod) {
+        goto fail;
+    }
+
+    bigint_set_int64(t, 0);
+    bigint_set_int64(newt, 1);
+
+    // Standard Extended Euclidean Algorithm
+    while (!bigint_is_zero(newr)) {
+        // Quotient q = r / newr, Remainder tmp = r % newr
+        if (bigint_div_with_remainder(q, tmp, r, newr) == -1) {
+            goto fail;
+        }
+
+        // r = newr, newr = tmp
+        bigint_copy(r, newr);
+        bigint_copy(newr, tmp);
+
+        // (t, newt) = (newt, t - q * newt)
+        bigint_copy(tmp, t); // tmp = old_t
+        bigint_copy(t, newt);
+
+        if (bigint_mul(prod, q, newt) == -1) {
+            goto fail;
+        }
+        if (bigint_sub(newt, tmp, prod) == -1) {
+            goto fail;
+        }
+    }
+
+    // If r > 1, then a is not invertible (gcd(a, n) != 1)
+    if (!bigint_is_int64(r, 1)) {
+        goto fail;
+    }
+
+    // If t is negative, add n to make it positive
+    if (bigint_is_negative(t)) {
+        if (bigint_add(t, t, n) == -1) {
+            goto fail;
+        }
+    }
+
+    bigint_copy(result, t);
+
+    bigint_destroy(t); bigint_destroy(newt); bigint_destroy(r);
+    bigint_destroy(newr); bigint_destroy(q); bigint_destroy(tmp);
+    bigint_destroy(prod);
+    return 0;
+
+fail:
+    if(t) {
+        bigint_destroy(t);
+    }
+    if(newt) {
+        bigint_destroy(newt);
+    }
+    if(r) {
+        bigint_destroy(r);
+    }
+    if(newr) {
+        bigint_destroy(newr);
+    }
+    if(q) {
+        bigint_destroy(q);
+    }
+    if(tmp) {
+        bigint_destroy(tmp);
+    }
+    if(prod) {
+        bigint_destroy(prod);
+    }
+    return -1;
+}
+
+int8_t bigint_add_uint64(bigint_t* a, uint64_t b) {
+    if (!a) {
+        return -1;
+    }
+    if (b == 0) {
+        return 0;
+    }
+    if (a->sign == 0) {
+        return bigint_set_uint64(a, b);
+    }
+
+    // If signs are different, we redirect to subtraction
+    if (a->sign < 0) {
+        a->sign = 1; // Temporarily make positive
+        int8_t res = bigint_sub_uint64(a, b);
+        if (a->sign != 0) {
+            a->sign *= -1; // Restore/Flip sign
+        }
+        return res;
+    }
+
+    if (bigint_ensure_capacity(a, a->limb_count + 1) == -1) {
+        return -1;
+    }
+
+    uint64_t carry = b;
+    for (uint64_t i = 0; i < a->limb_count && carry > 0; i++) {
+        uint64_t old = a->limbs[i];
+        a->limbs[i] += carry;
+        carry = (a->limbs[i] < old) ? 1 : 0;
+    }
+
+    if (carry) {
+        a->limbs[a->limb_count] = carry;
+        a->limb_count++;
+    }
+
+    return bigint_normalize(a);
+}
+
+int8_t bigint_sub_uint64(bigint_t* a, uint64_t b) {
+    if (!a) {
+        return -1;
+    }
+    if (b == 0) {
+        return 0;
+    }
+    if (a->sign == 0) {
+        int8_t res = bigint_set_uint64(a, b);
+        a->sign = -1;
+        return res;
+    }
+
+    // If signs different (Negative - Positive), it's actually an addition
+    if (a->sign < 0) {
+        a->sign = 1;
+        int8_t res = bigint_add_uint64(a, b);
+        a->sign = -1;
+        return res;
+    }
+
+    // If a < b, result will be negative
+    if (a->limb_count == 1 && a->limbs[0] < b) {
+        a->limbs[0] = b - a->limbs[0];
+        a->sign = -1;
+        return 0;
+    }
+
+    uint64_t borrow = b;
+    for (uint64_t i = 0; i < a->limb_count && borrow > 0; i++) {
+        uint64_t old = a->limbs[i];
+        a->limbs[i] -= borrow;
+        borrow = (old < a->limbs[i]) ? 1 : 0;
+    }
+
+    return bigint_normalize(a);
+}
+
+int8_t bigint_mul_uint64(bigint_t* a, uint64_t b) {
+    if (!a) {
+        return -1;
+    }
+    if (b == 0 || a->sign == 0) {
+        return bigint_set_zero(a);
+    }
+    if (b == 1) {
+        return 0;
+    }
+
+    if (bigint_ensure_capacity(a, a->limb_count + 1) == -1) {
+        return -1;
+    }
+
+    uint64_t carry = 0;
+    for (uint64_t i = 0; i < a->limb_count; i++) {
+        uint128_t res = (uint128_t)a->limbs[i] * b + carry;
+        a->limbs[i] = (uint64_t)res;
+        carry = (uint64_t)(res >> 64);
+    }
+
+    if (carry) {
+        a->limbs[a->limb_count] = carry;
+        a->limb_count++;
+    }
+
+    return bigint_normalize(a);
+}
+
+uint64_t bigint_mod_uint64(const bigint_t* a, uint64_t m) {
+    if (!a || m == 0 || a->sign == 0) {
+        return 0;
+    }
+    if (m == 1) {
+        return 0;
+    }
+
+    uint64_t rem = 0;
+    for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
+        uint128_t res = (uint128_t)rem << 64;
+        res |= a->limbs[i];
+        rem = (uint64_t)(res % m);
+    }
+
+    return rem;
 }
 
 static bigint_t* bigint_random_internal(uint64_t bits, boolean_t force_msb) {

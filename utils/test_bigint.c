@@ -3675,6 +3675,145 @@ static int32_t bigint_test_sub_add_mod(void) {
     return 0;
 }
 
+static int32_t bigint_test_mod_inv(void) {
+    bigint_t * a = bigint_create();
+    bigint_t * n = bigint_create();
+    bigint_t * inv = bigint_create();
+    bigint_t * check = bigint_create();
+
+    // Test 1: Simple prime modulus
+    // a = 3, n = 11. Inverse should be 4 (because 3*4 = 12, 12 % 11 = 1)
+    bigint_set_int64(a, 3);
+    bigint_set_int64(n, 11);
+    if (bigint_mod_inv(inv, a, n) == -1 || !bigint_is_int64(inv, 4)) {
+        print_error("mod_inv Test 1 failed (3 mod 11)");
+        return -1;
+    }
+
+    // Test 2: Larger number
+    // a = 127, n = 101. Inverse should be 12 (127*12 = 1524, 1524 % 101 = 9, wait...)
+    // Let's use a known pair: 17 mod 3120 (from RSA e/phi). inv = 2753
+    bigint_set_int64(a, 17);
+    bigint_set_int64(n, 3120);
+    if (bigint_mod_inv(inv, a, n) == -1 || !bigint_is_int64(inv, 2753)) {
+        print_error("mod_inv Test 2 failed (17 mod 3120)");
+        return -1;
+    }
+
+    // Verify Property: (a * inv) % n == 1
+    bigint_mul_mod(check, a, inv, n);
+    if (!bigint_is_int64(check, 1)) {
+        print_error("mod_inv property verification failed");
+        return -1;
+    }
+
+    // Test 3: Not invertible (gcd != 1)
+    // a = 6, n = 9. Should return -1
+    bigint_set_int64(a, 6);
+    bigint_set_int64(n, 9);
+    if (bigint_mod_inv(inv, a, n) != -1) {
+        print_error("mod_inv Test 3 failed (Should have failed for non-coprime)");
+        return -1;
+    }
+
+    print_success("bigint_mod_inv tests passed");
+
+    bigint_destroy(a); bigint_destroy(n);
+    bigint_destroy(inv); bigint_destroy(check);
+    return 0;
+}
+
+static int32_t bigint_test_uint64_ops(void) {
+    bigint_t* a = bigint_create();
+    bigint_t* expected = bigint_create();
+
+    if (!a || !expected) {
+        print_error("bigint_create failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    bigint_set_uint64(a, 0xFFFFFFFFFFFFFFFFULL);
+    bigint_add_uint64(a, 1);
+
+    bigint_set_str(expected, "10000000000000000");
+
+    if (bigint_cmp(a, expected) != 0) {
+        print_error("bigint_add_uint64 failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    bigint_set_uint64(a, 0x100000000ULL);
+    bigint_sub_uint64(a, 1);
+
+    if(!bigint_is_uint64(a, 0xFFFFFFFFULL)) {
+        print_error("bigint_sub_uint64 failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    bigint_set_uint64(a, 5);
+    bigint_sub_uint64(a, 10);
+
+    if(!bigint_is_negative(a)) {
+        print_error("bigint_sub_uint64 negative check failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    if(!bigint_is_int64(a, -5)) {
+        print_error("bigint_sub_uint64 negative result failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    bigint_set_uint64(a, 0xFFFFFFFFFFFFFFFFULL);
+    bigint_mul_uint64(a, 2);
+    bigint_set_str(expected, "1FFFFFFFFFFFFFFFE");
+
+    if (bigint_cmp(a, expected) != 0) {
+        print_error("bigint_mul_uint64 failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    bigint_set_str(a, "1234567890ABCDEF1234567890ABCDEF");
+    uint64_t rem = bigint_mod_uint64(a, 97);
+
+    bigint_sub_uint64(a, rem);
+
+    uint64_t check_rem = bigint_mod_uint64(a, 97);
+
+    if (check_rem != 0) {
+        print_error("bigint_mod_uint64 failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    bigint_set_zero(a);
+    bigint_mul_uint64(a, 12345);
+
+    if (!bigint_is_uint64(a, 0)) {
+        print_error("bigint_mul_uint64 zero check failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
+
+    print_success("bigint uint64 ops tests passed");
+    bigint_destroy(a);
+    bigint_destroy(expected);
+    return 0;
+}
+
 int32_t main(void) {
     int32_t result = 0;
 
@@ -3751,6 +3890,18 @@ int32_t main(void) {
     }
 
     result = bigint_test_isqrt();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_mod_inv();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_uint64_ops();
 
     if(result != 0) {
         return result;

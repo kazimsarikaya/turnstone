@@ -20,6 +20,7 @@ typedef struct bigint_t bigint_t;
 bigint_t* bigint_create(void);
 void      bigint_destroy(bigint_t* bigint);
 
+int8_t bigint_set_zero(bigint_t* bigint);
 int8_t bigint_set_str(bigint_t* bigint, const char_t* str);
 int8_t bigint_set_int64(bigint_t* bigint, int64_t value);
 int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value);
@@ -53,6 +54,12 @@ int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_isqrt(bigint_t* result, const bigint_t* a);
+int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n);
+
+int8_t   bigint_add_uint64(bigint_t* a, uint64_t b);
+int8_t   bigint_sub_uint64(bigint_t* a, uint64_t b);
+int8_t   bigint_mul_uint64(bigint_t* a, uint64_t b);
+uint64_t bigint_mod_uint64(const bigint_t* a, uint64_t m);
 
 int8_t bigint_add_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
 int8_t bigint_sub_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
