@@ -19,6 +19,7 @@ MODULE("turnstone.lib");
 
 /*! each value is 48 bits */
 #define BIGINT_LIMB_BITS           64
+#define BIGINT_LIMB_BYTES          (BIGINT_LIMB_BITS / 8)
 #define BIGINT_HEX_DIGITS_PER_LIMB 16
 #define BIGINT_INITIAL_CAPACITY     4
 
@@ -63,14 +64,15 @@ static int8_t bigint_destroy_limbs(bigint_t* bigint) {
     bigint->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * BIGINT_INITIAL_CAPACITY);
 
     if (!bigint->limbs) {
+        bigint->limb_count = 0;
+        bigint->capacity = 0;
         return -1;
     }
 
-    bigint->limb_count = 0;
     bigint->capacity = BIGINT_INITIAL_CAPACITY;
-
+    bigint->limb_count = 1;
     bigint->sign = 0;
-    bigint->neged_with_sign = false;
+    bigint->neged_with_sign = true;
 
     return 0;
 }
@@ -155,6 +157,10 @@ int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value) {
     bigint->limb_count = 1;
 
     return 0;
+}
+
+bigint_t* bigint_zero(void) {
+    return bigint_create();
 }
 
 bigint_t* bigint_one(void) {
@@ -301,7 +307,7 @@ static int8_t bigint_copy(bigint_t* dest, const bigint_t* src) {
 
     // 4. Ensure extra limbs in destination are zeroed out
     if (dest->capacity > dest->limb_count) {
-        memory_memset(dest->limbs + dest->limb_count, 0, (dest->capacity - dest->limb_count) * sizeof(uint64_t));
+        memory_memclean(dest->limbs + dest->limb_count, (dest->capacity - dest->limb_count) * sizeof(uint64_t));
     }
 
     return 0;
@@ -402,7 +408,7 @@ int8_t bigint_set_str(bigint_t* bigint, const char* str) {
     }
 
     // Clear limbs before use to avoid garbage values
-    memory_memset(bigint->limbs, 0, bigint->capacity * sizeof(uint64_t));
+    memory_memclean(bigint->limbs, bigint->capacity * sizeof(uint64_t));
     bigint->limb_count = limbs_needed;
 
     // 4. Parse String (Right to Left)
@@ -1052,7 +1058,7 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
 
     // 4. Zero out the low-order limbs created by limb_shift
     if (limb_shift > 0) {
-        memory_memset(result->limbs, 0, limb_shift * sizeof(uint64_t));
+        memory_memclean(result->limbs, limb_shift * sizeof(uint64_t));
     }
 
     // 5. Handle sign and "neged_with_sign" (Two's Complement logic)
@@ -1687,7 +1693,7 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         }
         res_limbs = result->limbs;
     }
-    memory_memset(res_limbs, 0, total_limbs * sizeof(uint64_t));
+    memory_memclean(res_limbs, total_limbs * sizeof(uint64_t));
 
     // 4. Nested Loop Multiplication (Comba/Schoolbook)
     for (uint64_t i = 0; i < op_a->limb_count; i++) {
@@ -1802,12 +1808,63 @@ cleanup_fail:
     return -1;
 }
 
-int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* c) {
-    if(!result || !a || !b || !c) {
+int8_t bigint_add_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m) {
+    if (!result || !a || !b || !m || m->sign == 0) {
         return -1;
     }
 
-    if (c->sign == 0) {
+    // 1. Perform standard addition
+    if (bigint_add(result, a, b) == -1) {
+        return -1;
+    }
+
+    // 2. Optimization: If result >= m, result = result - m
+    // This replaces the expensive bigint_mod (division)
+    if (bigint_cmp_magnitudes(result, m) >= 0) {
+        if (bigint_sub(result, result, m) == -1) {
+            return -1;
+        }
+    }
+
+    // Safety: ensure it handles negative results if inputs weren't reduced
+    if (result->sign < 0) {
+        return bigint_mod(result, result, m);
+    }
+
+    return 0;
+}
+
+int8_t bigint_sub_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m) {
+    if (!result || !a || !b || !m || m->sign == 0) {
+        return -1;
+    }
+
+    // 1. Perform standard subtraction
+    if (bigint_sub(result, a, b) == -1) {
+        return -1;
+    }
+
+    // 2. Optimization: If result < 0, result = result + m
+    if (result->sign < 0) {
+        if (bigint_add(result, result, m) == -1) {
+            return -1;
+        }
+    }
+
+    // 3. Final check: ensure result < m (in case inputs were large)
+    if (bigint_cmp_magnitudes(result, m) >= 0) {
+        return bigint_mod(result, result, m);
+    }
+
+    return 0;
+}
+
+int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m) {
+    if(!result || !a || !b || !m) {
+        return -1;
+    }
+
+    if (m->sign == 0) {
         return -1;
     }
 
@@ -1826,15 +1883,15 @@ int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
         return -1;
     }
 
-    if (bigint_mod(result, result, c) == -1) {
+    if (bigint_mod(result, result, m) == -1) {
         return -1;
     }
 
     return 0;
 }
 
-int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* c) {
-    if(!result || !a || !b || !c) {
+int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m) {
+    if(!result || !a || !b || !m) {
         return -1;
     }
 
@@ -1903,7 +1960,7 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
         return -1;
     }
 
-    if (bigint_mod(base, base, c) == -1) {
+    if (bigint_mod(base, base, m) == -1) {
         if (orig_result_is_a) {
             bigint_destroy(result);
         }
@@ -1936,7 +1993,7 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
 
     while (exp->sign > 0) {
         if(bigint_is_odd(exp)) {
-            if (bigint_mul_mod(result, result, base, c) == -1) {
+            if (bigint_mul_mod(result, result, base, m) == -1) {
                 if (orig_result_is_a) {
                     bigint_destroy(result);
                 }
@@ -1947,7 +2004,7 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
             }
         }
 
-        if (bigint_mul_mod(base, base, base, c) == -1) {
+        if (bigint_mul_mod(base, base, base, m) == -1) {
             if (orig_result_is_a) {
                 bigint_destroy(result);
             }
@@ -2097,7 +2154,7 @@ int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint
     if (bigint_ensure_capacity(quotient, a->limb_count) == -1) {
         goto fail;
     }
-    memory_memset(quotient->limbs, 0, quotient->capacity * sizeof(uint64_t));
+    memory_memclean(quotient->limbs, quotient->capacity * sizeof(uint64_t));
 
     // 4. Main Loop
     for (int64_t i = (int64_t)a_bits - 1; i >= 0; i--) {
@@ -2730,4 +2787,70 @@ bigint_t* bigint_random_prime(uint64_t bits) {
         // If no prime found in this window, pick a new random starting point
         bigint_destroy(result);
     }
+}
+
+int8_t bigint_to_bytes(const bigint_t* a, uint8_t* buf, uint64_t len) {
+    if (!a || (!buf && len > 0)) {
+        return -1;
+    }
+
+    if (len > 0) {
+        memory_memclean(buf, len);
+    }
+
+    if (a->sign == 0) {
+        return 0;
+    }
+
+    uint64_t required_bytes = (bigint_bit_length(a) + 1 + 8 - 1) / 8;
+
+    if (len < required_bytes) {
+        printf("Required bytes: %llu, Provided bytes: %llu\n", required_bytes, len);
+        return -1; // Buffer too small
+    }
+
+    // Fill buffer from limbs (buffer is big-endian)
+    for(uint64_t i = 0; i < required_bytes; i++) {
+        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
+        buf[len - 1 - i] = (a->limbs[limb_index] >> (8 * byte_offset)) & 0xFF;
+    }
+
+    return 0;
+}
+
+int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len) {
+    if (!a || (!buf && len > 0)) {
+        return -1;
+    }
+
+    bigint_destroy_limbs(a);
+
+    if (len == 0) {
+        bigint_set_zero(a);
+        return 0;
+    }
+
+    uint64_t required_limbs = (len + BIGINT_LIMB_BYTES - 1) / BIGINT_LIMB_BYTES;
+
+    if (bigint_ensure_capacity(a, required_limbs) == -1) {
+        return -1;
+    }
+
+    memory_memclean(a->limbs, a->capacity * sizeof(uint64_t));
+
+    // Fill limbs from the byte buffer (buffer is big-endian)
+    for(uint64_t i = 0; i < len; i++) {
+        uint64_t byte = buf[len - 1 - i];
+        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
+        a->limbs[limb_index] |= (byte << (8 * byte_offset));
+    }
+
+    a->limb_count = required_limbs;
+    a->sign = 1;
+    a->neged_with_sign = true;
+
+    bigint_normalize(a);
+    return 0;
 }

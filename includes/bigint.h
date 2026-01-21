@@ -25,6 +25,7 @@ int8_t bigint_set_int64(bigint_t* bigint, int64_t value);
 int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value);
 int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src);
 
+bigint_t* bigint_zero(void);
 bigint_t* bigint_one(void);
 bigint_t* bigint_two(void);
 bigint_t* bigint_clone(const bigint_t* src);
@@ -53,8 +54,10 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_isqrt(bigint_t* result, const bigint_t* a);
 
-int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* c);
-int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* c);
+int8_t bigint_add_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+int8_t bigint_sub_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
 
 int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b);
 int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b);
@@ -76,6 +79,9 @@ boolean_t bigint_is_even(const bigint_t* a);
 boolean_t bigint_is_int64(const bigint_t* a, int64_t value);
 boolean_t bigint_is_uint64(const bigint_t* a, uint64_t value);
 boolean_t bigint_is_prime(const bigint_t* a);
+
+int8_t bigint_to_bytes(const bigint_t* a, uint8_t* buf, uint64_t len);
+int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len);
 
 #ifdef __cplusplus
 }
