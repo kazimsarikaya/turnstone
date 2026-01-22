@@ -3614,6 +3614,39 @@ static int32_t bigint_test_from_to_bytes(void) {
         return -1;
     }
 
+    if(bigint_to_bytes_le(bigint_1, buffer, buffer_len) == -1) {
+        bigint_destroy(bigint_1);
+        print_error("bigint_to_bytes_le failed");
+        return -1;
+    }
+
+    if(bigint_from_bytes_le(bigint_1, buffer, buffer_len) == -1) {
+        bigint_destroy(bigint_1);
+        print_error("bigint_from_bytes_le failed");
+        return -1;
+    }
+
+    str = bigint_to_str(bigint_1);
+
+    if (str) {
+        printf("bigint_from_bytes_le: %s\n", str);
+
+        if(strncmp(str, "1234567890ABCDEF1234567890ABCDEF", 32) != 0 || strlen(str) != 32) {
+            print_error("bigint_from_bytes_le failed");
+            memory_free((void*)str);
+            bigint_destroy(bigint_1);
+            return -1;
+        } else {
+            print_success("bigint_from_bytes_le passed");
+        }
+
+        memory_free((void*)str);
+    } else {
+        bigint_destroy(bigint_1);
+        print_error("bigint_from_bytes_le failed");
+        return -1;
+    }
+
     bigint_destroy(bigint_1);
 
     return 0;
@@ -3786,6 +3819,13 @@ static int32_t bigint_test_uint64_ops(void) {
 
     bigint_set_str(a, "1234567890ABCDEF1234567890ABCDEF");
     uint64_t rem = bigint_mod_uint64(a, 97);
+
+    if(rem != 0x53) {
+        print_error("bigint_mod_uint64 failed");
+        bigint_destroy(a);
+        bigint_destroy(expected);
+        return -1;
+    }
 
     bigint_sub_uint64(a, rem);
 

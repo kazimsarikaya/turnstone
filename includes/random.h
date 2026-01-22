@@ -33,6 +33,13 @@ uint32_t rand(void);
  */
 uint64_t rand64(void);
 
+/**
+ * @brief fills buffer with random bytes
+ * @param[out] buffer buffer to fill
+ * @param[in] size size of buffer
+ */
+void get_random_bytes(uint8_t* buffer, size_t size);
+
 #ifdef __cplusplus
 }
 #endif

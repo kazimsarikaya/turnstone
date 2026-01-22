@@ -57,6 +57,7 @@ typedef enum logging_modules_t {
     HYPERVISOR_IOMMU,
     WINDOWMANAGER,
     PNG,
+    CRYPTOLIB,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -251,6 +252,11 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_PNG
 /*! default log level for png module */
 #define LOG_LEVEL_PNG LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_CRYPTOLIB
+/*! default log level for cryptolib module */
+#define LOG_LEVEL_CRYPTOLIB LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

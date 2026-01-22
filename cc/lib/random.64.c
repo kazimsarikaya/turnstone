@@ -9,6 +9,7 @@
 #include <random.h>
 #include <xxhash.h>
 #include <cpu.h>
+#include <memory.h>
 
 MODULE("turnstone.lib.random");
 
@@ -95,4 +96,26 @@ uint64_t rand64(void) {
     }
 
     return result;
+}
+
+void get_random_bytes(uint8_t* buffer, size_t size) {
+    size_t offset = 0;
+
+    while(size - offset >= sizeof(uint64_t)) {
+        uint64_t r = rand64();
+        memory_memcopy(&r, buffer + offset, sizeof(uint64_t));
+        offset += sizeof(uint64_t);
+    }
+
+    while(size - offset >= sizeof(uint32_t)) {
+        uint32_t r = rand();
+        memory_memcopy(&r, buffer + offset, sizeof(uint32_t));
+        offset += sizeof(uint32_t);
+    }
+
+    while(offset < size) {
+        uint8_t r = (uint8_t)(rand() & 0xFF);
+        buffer[offset] = r;
+        offset++;
+    }
 }

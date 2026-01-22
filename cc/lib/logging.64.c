@@ -48,6 +48,7 @@ const char_t*const logging_module_names[] = {
     "HYPERVISOR_IOMMU",
     "WINDOWMANAGER",
     "PNG",
+    "CRYPTOLIB",
 };
 
 
@@ -98,6 +99,7 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_HYPERVISOR_IOMMU,
     LOG_LEVEL_WINDOWMANAGER,
     LOG_LEVEL_PNG,
+    LOG_LEVEL_CRYPTOLIB,
 };
 
 boolean_t logging_need_logging(logging_modules_t module, logging_level_t level) {

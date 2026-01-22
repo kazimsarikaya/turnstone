@@ -18,16 +18,17 @@ uint8_t byte64_convert(uint8_t ch);
 
 uint8_t byte64_convert(uint8_t ch)
 {
-    if (ch >= 'A' && ch <= 'Z')
+    if (ch >= 'A' && ch <= 'Z') {
         ch -= 'A';
-    else if (ch >= 'a' && ch <= 'z')
+    }else if (ch >= 'a' && ch <= 'z') {
         ch = ch - 'a' + 26;
-    else if (ch >= '0' && ch <= '9')
+    }else if (ch >= '0' && ch <= '9') {
         ch = ch - '0' + 52;
-    else if (ch == '+')
+    }else if (ch == '+') {
         ch = 62;
-    else if (ch == '/')
+    }else if (ch == '/') {
         ch = 63;
+    }
 
     return(ch);
 }
@@ -79,8 +80,7 @@ size_t base64_encode(const uint8_t* in, size_t len, boolean_t add_newline, uint8
         tmp_out[out_idx + 2] = '=';
         tmp_out[out_idx + 3] = '=';
         out_idx += 4;
-    }
-    else if (left_over == 2) {
+    }else if (left_over == 2) {
         tmp_out[out_idx]     = charset[in[in_idx] >> 2];
         tmp_out[out_idx + 1] = charset[((in[in_idx] & 0x03) << 4) | (in[in_idx + 1] >> 4)];
         tmp_out[out_idx + 2] = charset[(in[in_idx + 1] & 0x0F) << 2];
@@ -103,6 +103,11 @@ size_t base64_encode(const uint8_t* in, size_t len, boolean_t add_newline, uint8
 size_t base64_decode(const uint8_t* in, size_t len, uint8_t** out) {
     if(out == NULL) {
         return NULL;
+    }
+
+    // last one may be new line
+    if (in[len - 1] == '\n') {
+        len--;
     }
 
     if (in[len - 1] == '=') {

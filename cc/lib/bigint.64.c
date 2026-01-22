@@ -52,21 +52,63 @@ bigint_t* bigint_create(void) {
     return bigint;
 }
 
+void bigint_destroy(bigint_t* bigint) {
+    if(!bigint) {
+        return;
+    }
+
+    memory_free(bigint->limbs);
+    memory_free(bigint);
+}
+
+bigint_t* bigint_zero(void) {
+    return bigint_create();
+}
+
+bigint_t* bigint_one(void) {
+    bigint_t* bigint = bigint_create();
+
+    if (bigint) {
+        bigint_set_int64(bigint, 1);
+    }
+
+    return bigint;
+}
+
+bigint_t* bigint_two(void) {
+    bigint_t* bigint = bigint_create();
+
+    if (bigint) {
+        bigint_set_int64(bigint, 2);
+    }
+
+    return bigint;
+}
+
+bigint_t* bigint_clone(const bigint_t* src) {
+    if(!src) {
+        return NULL;
+    }
+
+    bigint_t* bigint = bigint_create();
+
+    if (bigint) {
+        if (bigint_set_bigint(bigint, src) == -1) {
+            bigint_destroy(bigint);
+            bigint = NULL;
+        }
+    }
+
+    return bigint;
+}
+
 static int8_t bigint_destroy_limbs(bigint_t* bigint) {
     if(!bigint) {
         return -1;
     }
 
-    if(bigint->limbs) {
-        memory_free(bigint->limbs);
-    }
-
-    bigint->limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * BIGINT_INITIAL_CAPACITY);
-
-    if (!bigint->limbs) {
-        bigint->limb_count = 0;
-        bigint->capacity = 0;
-        return -1;
+    for (uint64_t i = 0; i < bigint->limb_count; i++) {
+        bigint->limbs[i] = 0;
     }
 
     bigint->capacity = BIGINT_INITIAL_CAPACITY;
@@ -75,11 +117,6 @@ static int8_t bigint_destroy_limbs(bigint_t* bigint) {
     bigint->neged_with_sign = true;
 
     return 0;
-}
-
-void bigint_destroy(bigint_t* bigint) {
-    memory_free(bigint->limbs);
-    memory_free(bigint);
 }
 
 static int8_t bigint_ensure_capacity(bigint_t* bigint, uint64_t required_capacity) {
@@ -157,30 +194,6 @@ int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value) {
     bigint->limb_count = 1;
 
     return 0;
-}
-
-bigint_t* bigint_zero(void) {
-    return bigint_create();
-}
-
-bigint_t* bigint_one(void) {
-    bigint_t* bigint = bigint_create();
-
-    if (bigint) {
-        bigint_set_int64(bigint, 1);
-    }
-
-    return bigint;
-}
-
-bigint_t* bigint_two(void) {
-    bigint_t* bigint = bigint_create();
-
-    if (bigint) {
-        bigint_set_int64(bigint, 2);
-    }
-
-    return bigint;
 }
 
 int8_t bigint_set_zero(bigint_t* bigint) {
@@ -344,25 +357,6 @@ static int8_t bigint_abs_copy(bigint_t* dest, const bigint_t* src) {
     dest->neged_with_sign = true;
 
     return 0;
-}
-
-
-
-bigint_t* bigint_clone(const bigint_t* src) {
-    if(!src) {
-        return NULL;
-    }
-
-    bigint_t* bigint = bigint_create();
-
-    if (bigint) {
-        if (bigint_set_bigint(bigint, src) == -1) {
-            bigint_destroy(bigint);
-            bigint = NULL;
-        }
-    }
-
-    return bigint;
 }
 
 static inline int hex_digit_value(char c) {
@@ -1506,12 +1500,25 @@ int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     if (!a->neged_with_sign && a->sign < 0) {
         tmp_a = bigint_create();
+
+        if (!tmp_a) {
+            return -1;
+        }
+
         bigint_copy(tmp_a, a);
         bigint_ensure_normal_form(tmp_a);
         op_a = tmp_a;
     }
     if (!b->neged_with_sign && b->sign < 0) {
         tmp_b = bigint_create();
+
+        if (!tmp_b) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            return -1;
+        }
+
         bigint_copy(tmp_b, b);
         bigint_ensure_normal_form(tmp_b);
         op_b = tmp_b;
@@ -1577,12 +1584,25 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     if (!a->neged_with_sign && a->sign < 0) {
         tmp_a = bigint_create(); // Use your library's creator
+
+        if (!tmp_a) {
+            return -1;
+        }
+
         bigint_copy(tmp_a, a);
         bigint_ensure_normal_form(tmp_a);
         op_a = tmp_a;
     }
     if (!b->neged_with_sign && b->sign < 0) {
         tmp_b = bigint_create();
+
+        if (!tmp_b) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            return -1;
+        }
+
         bigint_copy(tmp_b, b);
         bigint_ensure_normal_form(tmp_b);
         op_b = tmp_b;
@@ -2604,6 +2624,23 @@ int8_t bigint_mul_uint64(bigint_t* a, uint64_t b) {
     return bigint_normalize(a);
 }
 
+static inline uint64_t bigint_mod128_by_64(uint64_t high, uint64_t low, uint64_t m) {
+    uint64_t quotient; // We need a place for the quotient even if we ignore it
+    uint64_t remainder;
+
+    __asm__ (
+        "divq %[divisor]"
+        : "=a" (quotient), // %0: RAX receives quotient
+        "=d" (remainder) // %1: RDX receives remainder
+        : "a" (low), // %2: Input RAX
+        "d" (high), // %3: Input RDX
+        [divisor] "rm" (m) // %4: Can be register or memory
+        : "cc"
+        );
+
+    return remainder;
+}
+
 uint64_t bigint_mod_uint64(const bigint_t* a, uint64_t m) {
     if (!a || m == 0 || a->sign == 0) {
         return 0;
@@ -2614,9 +2651,7 @@ uint64_t bigint_mod_uint64(const bigint_t* a, uint64_t m) {
 
     uint64_t rem = 0;
     for (int64_t i = (int64_t)a->limb_count - 1; i >= 0; i--) {
-        uint128_t res = (uint128_t)rem << 64;
-        res |= a->limbs[i];
-        rem = (uint64_t)(res % m);
+        rem = bigint_mod128_by_64(rem, a->limbs[i], m);
     }
 
     return rem;
@@ -3071,6 +3106,71 @@ int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len) {
     // Fill limbs from the byte buffer (buffer is big-endian)
     for(uint64_t i = 0; i < len; i++) {
         uint64_t byte = buf[len - 1 - i];
+        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
+        a->limbs[limb_index] |= (byte << (8 * byte_offset));
+    }
+
+    a->limb_count = required_limbs;
+    a->sign = 1;
+    a->neged_with_sign = true;
+
+    bigint_normalize(a);
+    return 0;
+}
+
+int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, uint64_t len) {
+    if (!a || (!buf && len > 0)) {
+        return -1;
+    }
+
+    if (len > 0) {
+        memory_memclean(buf, len);
+    }
+
+    if (a->sign == 0) {
+        return 0;
+    }
+
+    uint64_t required_bytes = (bigint_bit_length(a) + 1 + 8 - 1) / 8;
+
+    if (len < required_bytes) {
+        return -1; // Buffer too small
+    }
+
+    // Fill buffer from limbs (buffer is little-endian)
+    for(uint64_t i = 0; i < required_bytes; i++) {
+        uint64_t limb_index = i / BIGINT_LIMB_BYTES;
+        uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
+        buf[i] = (a->limbs[limb_index] >> (8 * byte_offset)) & 0xFF;
+    }
+
+    return 0;
+}
+
+int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len) {
+    if (!a || (!buf && len > 0)) {
+        return -1;
+    }
+
+    bigint_destroy_limbs(a);
+
+    if (len == 0) {
+        bigint_set_zero(a);
+        return 0;
+    }
+
+    uint64_t required_limbs = (len + BIGINT_LIMB_BYTES - 1) / BIGINT_LIMB_BYTES;
+
+    if (bigint_ensure_capacity(a, required_limbs) == -1) {
+        return -1;
+    }
+
+    memory_memclean(a->limbs, a->capacity * sizeof(uint64_t));
+
+    // Fill limbs from the byte buffer (buffer is little-endian)
+    for(uint64_t i = 0; i < len; i++) {
+        uint64_t byte = buf[i];
         uint64_t limb_index = i / BIGINT_LIMB_BYTES;
         uint64_t byte_offset = i % BIGINT_LIMB_BYTES;
         a->limbs[limb_index] |= (byte << (8 * byte_offset));

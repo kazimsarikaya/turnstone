@@ -16,23 +16,24 @@ extern "C" {
 
 typedef struct bigint_t bigint_t;
 
+#define BIGINT_OWNER __attribute__((warn_unused_result))
 
-bigint_t* bigint_create(void);
-void      bigint_destroy(bigint_t* bigint);
+
+void __attribute__((no_reorder)) bigint_destroy(bigint_t* bigint);
+BIGINT_OWNER bigint_t*           bigint_create(void);
+BIGINT_OWNER bigint_t*           bigint_zero(void);
+BIGINT_OWNER bigint_t*           bigint_one(void);
+BIGINT_OWNER bigint_t*           bigint_two(void);
+BIGINT_OWNER bigint_t*           bigint_clone(const bigint_t* src);
+BIGINT_OWNER bigint_t*           bigint_random(uint64_t bits);
+BIGINT_OWNER bigint_t*           bigint_random_range(const bigint_t* min, const bigint_t* max);
+BIGINT_OWNER bigint_t*           bigint_random_prime(uint64_t bits);
 
 int8_t bigint_set_zero(bigint_t* bigint);
 int8_t bigint_set_str(bigint_t* bigint, const char_t* str);
 int8_t bigint_set_int64(bigint_t* bigint, int64_t value);
 int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value);
 int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src);
-
-bigint_t* bigint_zero(void);
-bigint_t* bigint_one(void);
-bigint_t* bigint_two(void);
-bigint_t* bigint_clone(const bigint_t* src);
-bigint_t* bigint_random(uint64_t bits);
-bigint_t* bigint_random_range(const bigint_t* min, const bigint_t* max);
-bigint_t* bigint_random_prime(uint64_t bits);
 
 int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value);
 int8_t bigint_get_bit(const bigint_t* bigint, uint64_t bit, boolean_t* value);
@@ -89,6 +90,9 @@ boolean_t bigint_is_prime(const bigint_t* a);
 
 int8_t bigint_to_bytes(const bigint_t* a, uint8_t* buf, uint64_t len);
 int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len);
+
+int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, uint64_t len);
+int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len);
 
 #ifdef __cplusplus
 }
