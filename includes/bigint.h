@@ -16,67 +16,67 @@ extern "C" {
 
 typedef struct bigint_t bigint_t;
 
-#define BIGINT_OWNER __attribute__((warn_unused_result))
+#define BIGINT_CHECK_RESULT __attribute__((warn_unused_result))
 
 
 void __attribute__((no_reorder)) bigint_destroy(bigint_t* bigint);
-BIGINT_OWNER bigint_t*           bigint_create(void);
-BIGINT_OWNER bigint_t*           bigint_zero(void);
-BIGINT_OWNER bigint_t*           bigint_one(void);
-BIGINT_OWNER bigint_t*           bigint_two(void);
-BIGINT_OWNER bigint_t*           bigint_clone(const bigint_t* src);
-BIGINT_OWNER bigint_t*           bigint_random(uint64_t bits);
-BIGINT_OWNER bigint_t*           bigint_random_range(const bigint_t* min, const bigint_t* max);
-BIGINT_OWNER bigint_t*           bigint_random_prime(uint64_t bits);
+BIGINT_CHECK_RESULT bigint_t*    bigint_create(void);
+BIGINT_CHECK_RESULT bigint_t*    bigint_zero(void);
+BIGINT_CHECK_RESULT bigint_t*    bigint_one(void);
+BIGINT_CHECK_RESULT bigint_t*    bigint_two(void);
+BIGINT_CHECK_RESULT bigint_t*    bigint_clone(const bigint_t* src);
+BIGINT_CHECK_RESULT bigint_t*    bigint_random(uint64_t bits);
+BIGINT_CHECK_RESULT bigint_t*    bigint_random_range(const bigint_t* min, const bigint_t* max);
+BIGINT_CHECK_RESULT bigint_t*    bigint_random_prime(uint64_t bits);
 
-int8_t bigint_set_zero(bigint_t* bigint);
-int8_t bigint_set_str(bigint_t* bigint, const char_t* str);
-int8_t bigint_set_int64(bigint_t* bigint, int64_t value);
-int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value);
-int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src);
+BIGINT_CHECK_RESULT int8_t bigint_set_zero(bigint_t* bigint);
+BIGINT_CHECK_RESULT int8_t bigint_set_str(bigint_t* bigint, const char_t* str);
+BIGINT_CHECK_RESULT int8_t bigint_set_int64(bigint_t* bigint, int64_t value);
+BIGINT_CHECK_RESULT int8_t bigint_set_uint64(bigint_t* bigint, uint64_t value);
+BIGINT_CHECK_RESULT int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src);
 
-int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value);
-int8_t bigint_get_bit(const bigint_t* bigint, uint64_t bit, boolean_t* value);
-int8_t bigint_flip_bit(bigint_t* bigint, uint64_t bit);
-int8_t bigint_clear_bit(bigint_t* bigint, uint64_t bit);
+BIGINT_CHECK_RESULT int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value);
+BIGINT_CHECK_RESULT int8_t bigint_get_bit(const bigint_t* bigint, uint64_t bit, boolean_t* value);
+BIGINT_CHECK_RESULT int8_t bigint_flip_bit(bigint_t* bigint, uint64_t bit);
+BIGINT_CHECK_RESULT int8_t bigint_clear_bit(bigint_t* bigint, uint64_t bit);
 
-const char_t* bigint_to_str(const bigint_t* bigint);
+char_t* bigint_to_str(const bigint_t* bigint);
 
 uint64_t bigint_bit_length(const bigint_t* bigint);
 
-int8_t bigint_neg(bigint_t* result, const bigint_t* a);
-int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b);
-int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b);
-int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_isqrt(bigint_t* result, const bigint_t* a);
-int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n);
+BIGINT_CHECK_RESULT int8_t bigint_neg(bigint_t* result, const bigint_t* a);
+BIGINT_CHECK_RESULT int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_div(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_div_unsigned(bigint_t* result, bigint_t* remainder, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_isqrt(bigint_t* result, const bigint_t* a);
+BIGINT_CHECK_RESULT int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n);
+BIGINT_CHECK_RESULT
+BIGINT_CHECK_RESULT int8_t bigint_add_uint64(bigint_t* a, uint64_t b);
+BIGINT_CHECK_RESULT int8_t bigint_sub_uint64(bigint_t* a, uint64_t b);
+BIGINT_CHECK_RESULT int8_t bigint_mul_uint64(bigint_t* a, uint64_t b);
+uint64_t                   bigint_mod_uint64(const bigint_t* a, uint64_t m);
 
-int8_t   bigint_add_uint64(bigint_t* a, uint64_t b);
-int8_t   bigint_sub_uint64(bigint_t* a, uint64_t b);
-int8_t   bigint_mul_uint64(bigint_t* a, uint64_t b);
-uint64_t bigint_mod_uint64(const bigint_t* a, uint64_t m);
+BIGINT_CHECK_RESULT int8_t bigint_add_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+BIGINT_CHECK_RESULT int8_t bigint_sub_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+BIGINT_CHECK_RESULT int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+BIGINT_CHECK_RESULT int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
 
-int8_t bigint_add_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
-int8_t bigint_sub_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
-int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
-int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m);
+BIGINT_CHECK_RESULT int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b);
+BIGINT_CHECK_RESULT int8_t bigint_not(bigint_t* result, const bigint_t* a);
 
-int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_or(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b);
-int8_t bigint_not(bigint_t* result, const bigint_t* a);
+BIGINT_CHECK_RESULT int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift);
+BIGINT_CHECK_RESULT int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift);
 
-int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift);
-int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift);
-
-int8_t bigint_shl_one(bigint_t* a);
-int8_t bigint_shr_one(bigint_t* a);
+BIGINT_CHECK_RESULT int8_t bigint_shl_one(bigint_t* a);
+BIGINT_CHECK_RESULT int8_t bigint_shr_one(bigint_t* a);
 
 int8_t bigint_cmp(const bigint_t* a, const bigint_t* b);
 
@@ -88,11 +88,11 @@ boolean_t bigint_is_int64(const bigint_t* a, int64_t value);
 boolean_t bigint_is_uint64(const bigint_t* a, uint64_t value);
 boolean_t bigint_is_prime(const bigint_t* a);
 
-int8_t bigint_to_bytes(const bigint_t* a, uint8_t* buf, uint64_t len);
-int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len);
+BIGINT_CHECK_RESULT int8_t bigint_to_bytes(const bigint_t* a, uint8_t* buf, uint64_t len);
+BIGINT_CHECK_RESULT int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len);
 
-int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, uint64_t len);
-int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len);
+BIGINT_CHECK_RESULT int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, uint64_t len);
+BIGINT_CHECK_RESULT int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len);
 
 #ifdef __cplusplus
 }

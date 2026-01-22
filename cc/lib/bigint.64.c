@@ -22,6 +22,7 @@ MODULE("turnstone.lib");
 #define BIGINT_LIMB_BYTES          (BIGINT_LIMB_BITS / 8)
 #define BIGINT_HEX_DIGITS_PER_LIMB 16
 #define BIGINT_INITIAL_CAPACITY     4
+#define BIGINT_MAX_SAFE_CAPACITY   (1024 * 1024 * 16) // 16 million limbs = 128MB
 
 struct bigint_t {
     uint64_t* limbs; // Dynamic array, limbs[0] = LSB
@@ -69,7 +70,10 @@ bigint_t* bigint_one(void) {
     bigint_t* bigint = bigint_create();
 
     if (bigint) {
-        bigint_set_int64(bigint, 1);
+        if(bigint_set_int64(bigint, 1) == -1) {
+            bigint_destroy(bigint);
+            return NULL;
+        }
     }
 
     return bigint;
@@ -79,7 +83,10 @@ bigint_t* bigint_two(void) {
     bigint_t* bigint = bigint_create();
 
     if (bigint) {
-        bigint_set_int64(bigint, 2);
+        if(bigint_set_int64(bigint, 2) == -1) {
+            bigint_destroy(bigint);
+            return NULL;
+        }
     }
 
     return bigint;
@@ -102,11 +109,7 @@ bigint_t* bigint_clone(const bigint_t* src) {
     return bigint;
 }
 
-static int8_t bigint_destroy_limbs(bigint_t* bigint) {
-    if(!bigint) {
-        return -1;
-    }
-
+__attribute__((nonnull(1))) static void bigint_destroy_limbs(bigint_t* bigint) {
     for (uint64_t i = 0; i < bigint->limb_count; i++) {
         bigint->limbs[i] = 0;
     }
@@ -115,23 +118,36 @@ static int8_t bigint_destroy_limbs(bigint_t* bigint) {
     bigint->limb_count = 1;
     bigint->sign = 0;
     bigint->neged_with_sign = true;
-
-    return 0;
 }
 
-static int8_t bigint_ensure_capacity(bigint_t* bigint, uint64_t required_capacity) {
+BIGINT_CHECK_RESULT static int8_t bigint_ensure_capacity(bigint_t* bigint, uint64_t required_capacity) {
     if (!bigint) {
         return -1;
     }
-
     if (bigint->capacity >= required_capacity) {
         return 0;
     }
 
     uint64_t new_capacity = bigint->capacity;
 
+    // Fix 1: Handle initial zero capacity
+    if (new_capacity == 0) {
+        new_capacity = BIGINT_INITIAL_CAPACITY;
+    }
+
+    // Fix 2: Prevent infinite loop and handle scaling
     while (new_capacity < required_capacity) {
-        new_capacity *= 2;
+        // Check for overflow before doubling
+        if (new_capacity > (UINT64_MAX >> 1)) {
+            new_capacity = required_capacity;
+            break;
+        }
+        new_capacity <<= 1; // Faster than *= 2
+    }
+
+    // Fix 3: Sanity limit (e.g., don't allow 1GB for a single BigInt)
+    if (new_capacity > BIGINT_MAX_SAFE_CAPACITY) {
+        return -1;
     }
 
     uint64_t* new_limbs = (uint64_t*)memory_malloc(sizeof(uint64_t) * new_capacity);
@@ -140,12 +156,10 @@ static int8_t bigint_ensure_capacity(bigint_t* bigint, uint64_t required_capacit
     }
 
     memory_memcopy(bigint->limbs, new_limbs, sizeof(uint64_t) * bigint->limb_count);
-
     memory_free(bigint->limbs);
 
     bigint->limbs = new_limbs;
     bigint->capacity = new_capacity;
-
     return 0;
 }
 
@@ -226,11 +240,7 @@ int8_t bigint_set_bigint(bigint_t* bigint, const bigint_t* src) {
     return 0;
 }
 
-static int8_t bigint_normalize(bigint_t* bigint) {
-    if (!bigint) {
-        return -1;
-    }
-
+__attribute__((nonnull(1))) static void bigint_normalize(bigint_t* bigint) {
     // Case 1: Sign-Magnitude (Normal) or Positive
     // We strip leading Zeros.
     if (bigint->sign >= 0 || (bigint->sign == -1 && bigint->neged_with_sign)) {
@@ -243,7 +253,7 @@ static int8_t bigint_normalize(bigint_t* bigint) {
             bigint->sign = 0;
             bigint->neged_with_sign = true;
         }
-        return 0;
+        return;
     }
 
     // Case 2: Two's Complement (neged_with_sign == false)
@@ -259,11 +269,9 @@ static int8_t bigint_normalize(bigint_t* bigint) {
             bigint->neged_with_sign = true;
         }
     }
-
-    return 0;
 }
 
-static int8_t bigint_ensure_normal_form(bigint_t* a) {
+BIGINT_CHECK_RESULT static int8_t bigint_ensure_normal_form(bigint_t* a) {
     if (!a || a->sign >= 0 || (a->sign < 0 && a->neged_with_sign)) {
         return 0; // Already normal or zero
     }
@@ -296,7 +304,7 @@ static int8_t bigint_ensure_normal_form(bigint_t* a) {
     return 0;
 }
 
-static int8_t bigint_copy(bigint_t* dest, const bigint_t* src) {
+BIGINT_CHECK_RESULT static int8_t bigint_copy(bigint_t* dest, const bigint_t* src) {
     if (!dest || !src) {
         return -1;
     }
@@ -323,14 +331,12 @@ static int8_t bigint_copy(bigint_t* dest, const bigint_t* src) {
         memory_memclean(dest->limbs + dest->limb_count, (dest->capacity - dest->limb_count) * sizeof(uint64_t));
     }
 
-    if(bigint_normalize(dest) == -1) {
-        return -1;
-    }
+    bigint_normalize(dest);
 
     return 0;
 }
 
-static int8_t bigint_abs_copy(bigint_t* dest, const bigint_t* src) {
+BIGINT_CHECK_RESULT static int8_t bigint_abs_copy(bigint_t* dest, const bigint_t* src) {
     if (!dest || !src) {
         return -1;
     }
@@ -485,7 +491,11 @@ static int8_t bigint_inc_with_overflow(bigint_t* bigint) {
     return 0;
 }
 
-static int8_t bigint_neg_with_sign_inplace(bigint_t* a, boolean_t force) {
+BIGINT_CHECK_RESULT static int8_t bigint_neg_with_sign_inplace(bigint_t* a, boolean_t force) {
+    if(!a) {
+        return -1;
+    }
+
     if(a->sign == 0) {
         return 0;
     }
@@ -511,7 +521,7 @@ static int8_t bigint_neg_with_sign_inplace(bigint_t* a, boolean_t force) {
     return 0;
 }
 
-const char* bigint_to_str(const bigint_t* bigint) {
+char* bigint_to_str(const bigint_t* bigint) {
     if (!bigint) {
         return NULL;
     }
@@ -530,7 +540,10 @@ const char* bigint_to_str(const bigint_t* bigint) {
         buffer_append_byte(buf, '-');
 
         if (!bigint->neged_with_sign) {
-            bigint_neg_with_sign_inplace((bigint_t*)bigint, true);
+            if(bigint_neg_with_sign_inplace((bigint_t*)bigint, true) == -1) {
+                buffer_destroy(buf);
+                return NULL;
+            }
         }
     }
 
@@ -555,7 +568,7 @@ const char* bigint_to_str(const bigint_t* bigint) {
 
     uint8_t* result = buffer_get_all_bytes_and_destroy(buf, NULL);
 
-    return (const char*)result;
+    return (char*)result;
 }
 
 boolean_t bigint_is_zero(const bigint_t* a) {
@@ -688,8 +701,7 @@ int8_t bigint_and(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     if (a->sign == 0 || b->sign == 0) {
         // 0 & anything is 0
         // If result is 'a' or 'b', bigint_set_zero handles it safely
-        bigint_set_zero(result);
-        return 0;
+        return bigint_set_zero(result);
     }
 
     if(a->sign < 0 && a->neged_with_sign) {
@@ -872,7 +884,7 @@ int8_t bigint_xor(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     return 0;
 }
 
-static int8_t bigint_not_inplace(bigint_t* a) {
+BIGINT_CHECK_RESULT static int8_t bigint_not_inplace(bigint_t* a) {
     if(!a) {
         return -1;
     }
@@ -1010,8 +1022,7 @@ int8_t bigint_shl(bigint_t* result, const bigint_t* a, int64_t shift) {
     }
 
     if (a->sign == 0) {
-        bigint_set_zero(result); // Helper to set limb_count to 0 and sign to 0
-        return 0;
+        return bigint_set_zero(result); // Helper to set limb_count to 0 and sign to 0
     }
     if (shift < 0) {
         return bigint_shr(result, a, -shift);
@@ -1096,9 +1107,13 @@ int8_t bigint_shr(bigint_t* result, const bigint_t* a, int64_t shift) {
         // For standard bigints, shifting right beyond length results in 0
         // (Unless handling negative two's complement, which results in -1)
         if (a->sign < 0 && !a->neged_with_sign) {
-            bigint_set_int64(result, -1); // Helper to set value to -1
+            if(bigint_set_int64(result, -1) == -1) {
+                return -1;
+            }
         } else {
-            bigint_set_zero(result);
+            if(bigint_set_zero(result) == -1) {
+                return -1;
+            }
         }
         return 0;
     }
@@ -1162,43 +1177,16 @@ int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value) {
     const uint64_t bit_in_limb = bit % BIGINT_LIMB_BITS;
     const uint64_t needed_limbs = limb_index + 1;
 
-    // 1. Ensure Capacity
-    if (needed_limbs > bigint->capacity) {
-        uint64_t new_capacity = bigint->capacity ? bigint->capacity : BIGINT_INITIAL_CAPACITY;
-        while (new_capacity < needed_limbs) {
-            new_capacity *= 2;
-        }
-
-        uint64_t* new_limbs = (uint64_t*)memory_malloc(new_capacity * sizeof(uint64_t));
-        if (!new_limbs) {
-            return -1;
-        }
-
-        // Copy old data
-        if (bigint->limb_count > 0) {
-            memory_memcopy(bigint->limbs, new_limbs, bigint->limb_count * sizeof(uint64_t));
-        }
-
-        // IMPORTANT: Initialize ALL remaining capacity to 0 (or sign fill)
-        // Not just up to 'needed_limbs', but the whole new allocation.
-        uint64_t fill = (bigint->sign < 0 && !bigint->neged_with_sign) ? UINT64_MAX : 0ULL;
-        for (uint64_t i = bigint->limb_count; i < new_capacity; i++) {
-            new_limbs[i] = fill;
-        }
-
-        if (bigint->limbs) {
-            memory_free(bigint->limbs);
-        }
-        bigint->limbs = new_limbs;
-        bigint->capacity = new_capacity;
+    // 1 & 2. Ensure Capacity and Adjust limb_count
+    if (bigint_ensure_capacity(bigint, needed_limbs) == -1) {
+        return -1;
     }
 
-    // 2. Adjust limb_count if we are expanding
+    uint64_t fill = (bigint->sign < 0 && !bigint->neged_with_sign) ? UINT64_MAX : 0ULL;
+    for (uint64_t i = bigint->limb_count; i < needed_limbs; i++) {
+        bigint->limbs[i] = fill;
+    }
     if (needed_limbs > bigint->limb_count) {
-        uint64_t fill = (bigint->sign < 0 && !bigint->neged_with_sign) ? UINT64_MAX : 0ULL;
-        for (uint64_t i = bigint->limb_count; i < needed_limbs; i++) {
-            bigint->limbs[i] = fill;
-        }
         bigint->limb_count = needed_limbs;
     }
 
@@ -1214,7 +1202,6 @@ int8_t bigint_set_bit(bigint_t* bigint, uint64_t bit, boolean_t value) {
         bigint->limbs[limb_index] &= ~(1ULL << bit_in_limb);
     }
 
-    // 4. Cleanup
     bigint_normalize(bigint);
     return 0;
 }
@@ -1281,37 +1268,17 @@ int8_t bigint_flip_bit(bigint_t* bigint, uint64_t bit) {
 
     uint64_t needed = limb_index + 1;
 
-    if (needed > bigint->limb_count || needed > bigint->capacity) {
-        uint64_t new_capacity = bigint->capacity ? bigint->capacity : BIGINT_INITIAL_CAPACITY;
-        while (new_capacity < needed) {
-            new_capacity *= 2;
-        }
+    if(bigint_ensure_capacity(bigint, needed) == -1) {
+        return -1;
+    }
 
-        uint64_t* new_limbs = memory_malloc(new_capacity * sizeof(uint64_t));
-        if (!new_limbs) {
-            return -1;
-        }
-
-        if (bigint->limb_count > 0) {
-            memory_memcopy(bigint->limbs, new_limbs, bigint->limb_count * sizeof(uint64_t));
-        }
-
-        uint64_t fill = (bigint->sign < 0) ? UINT64_MAX : 0ULL;
-        for (uint64_t i = bigint->limb_count; i < needed; i++) {
-            new_limbs[i] = fill;
-        }
-
-        memory_free(bigint->limbs);
-        bigint->limbs = new_limbs;
-        bigint->capacity = new_capacity;
+    if (needed > bigint->limb_count) {
         bigint->limb_count = needed;
-    } else if (needed > bigint->limb_count) {
-        uint64_t fill = (bigint->sign < 0) ? UINT64_MAX : 0ULL;
-        for (uint64_t i = bigint->limb_count; i < needed; i++) {
-            bigint->limbs[i] = fill;
-        }
+    }
 
-        bigint->limb_count = needed;
+    uint64_t fill = (bigint->sign < 0) ? UINT64_MAX : 0ULL;
+    for (uint64_t i = bigint->limb_count; i < needed; i++) {
+        bigint->limbs[i] = fill;
     }
 
     bigint->limbs[limb_index] ^= (1ULL << bit_in_limb);
@@ -1505,8 +1472,14 @@ int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             return -1;
         }
 
-        bigint_copy(tmp_a, a);
-        bigint_ensure_normal_form(tmp_a);
+        if(bigint_copy(tmp_a, a) == -1) {
+            bigint_destroy(tmp_a);
+            return -1;
+        }
+        if(bigint_ensure_normal_form(tmp_a) == -1) {
+            bigint_destroy(tmp_a);
+            return -1;
+        }
         op_a = tmp_a;
     }
     if (!b->neged_with_sign && b->sign < 0) {
@@ -1519,8 +1492,20 @@ int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             return -1;
         }
 
-        bigint_copy(tmp_b, b);
-        bigint_ensure_normal_form(tmp_b);
+        if(bigint_copy(tmp_b, b) == -1) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            bigint_destroy(tmp_b);
+            return -1;
+        }
+        if(bigint_ensure_normal_form(tmp_b) == -1) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            bigint_destroy(tmp_b);
+            return -1;
+        }
         op_b = tmp_b;
     }
 
@@ -1543,7 +1528,9 @@ int8_t bigint_sub(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         // Same signs: (+a) - (+b) or (-a) - (-b)
         int8_t cmp = bigint_cmp_magnitudes(op_a, op_b);
         if (cmp == 0) {
-            bigint_set_zero(result);
+            if(bigint_set_zero(result) == -1) {
+                status = -1;
+            }
         } else if (cmp > 0) {
             status = bigint_sub_magnitudes(result, op_a, op_b);
             if (status == 0) {
@@ -1589,8 +1576,14 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             return -1;
         }
 
-        bigint_copy(tmp_a, a);
-        bigint_ensure_normal_form(tmp_a);
+        if(bigint_copy(tmp_a, a) == -1) {
+            bigint_destroy(tmp_a);
+            return -1;
+        }
+        if(bigint_ensure_normal_form(tmp_a) == -1) {
+            bigint_destroy(tmp_a);
+            return -1;
+        }
         op_a = tmp_a;
     }
     if (!b->neged_with_sign && b->sign < 0) {
@@ -1603,8 +1596,20 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
             return -1;
         }
 
-        bigint_copy(tmp_b, b);
-        bigint_ensure_normal_form(tmp_b);
+        if(bigint_copy(tmp_b, b) == -1) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            bigint_destroy(tmp_b);
+            return -1;
+        }
+        if(bigint_ensure_normal_form(tmp_b) == -1) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            bigint_destroy(tmp_b);
+            return -1;
+        }
         op_b = tmp_b;
     }
 
@@ -1623,7 +1628,9 @@ int8_t bigint_add(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         // Signs differ: Use magnitude subtraction
         int8_t cmp = bigint_cmp_magnitudes(op_a, op_b);
         if (cmp == 0) {
-            bigint_set_zero(result);
+            if(bigint_set_zero(result) == -1) {
+                status = -1;
+            }
         } else if (cmp > 0) {
             status = bigint_sub_magnitudes(result, op_a, op_b);
             if (status == 0) {
@@ -1674,8 +1681,7 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     // 1. Handle zero cases
     if (a->sign == 0 || b->sign == 0) {
-        bigint_set_zero(result);
-        return 0;
+        return bigint_set_zero(result);
     }
 
     // 2. Normalize inputs if they are in two's complement
@@ -1687,14 +1693,30 @@ int8_t bigint_mul(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     if (!a->neged_with_sign && a->sign < 0) {
         tmp_a = bigint_create();
-        bigint_copy(tmp_a, a);
-        bigint_ensure_normal_form(tmp_a);
+        if(bigint_copy(tmp_a, a) == -1) {
+            return -1;
+        }
+        if(bigint_ensure_normal_form(tmp_a) == -1) {
+            bigint_destroy(tmp_a);
+            return -1;
+        }
         op_a = tmp_a;
     }
     if (!b->neged_with_sign && b->sign < 0) {
         tmp_b = bigint_create();
-        bigint_copy(tmp_b, b);
-        bigint_ensure_normal_form(tmp_b);
+        if(bigint_copy(tmp_b, b) == -1) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            return -1;
+        }
+        if(bigint_ensure_normal_form(tmp_b) == -1) {
+            if (tmp_a) {
+                bigint_destroy(tmp_a);
+            }
+            bigint_destroy(tmp_b);
+            return -1;
+        }
         op_b = tmp_b;
     }
 
@@ -1765,48 +1787,58 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     // 1. Handle special cases for exponent b
     if (b->sign == 0) {
-        bigint_set_int64(result, 1); // a^0 = 1
-        return 0;
+        return bigint_set_int64(result, 1); // a^0 = 1
     }
     if (b->sign < 0) {
-        bigint_set_zero(result); // a^-n = 0 for integers
-        return 0;
+        return bigint_set_zero(result); // a^-n = 0 for integers
     }
 
     // 2. Handle special cases for base a
     if (a->sign == 0) {
-        bigint_set_zero(result); // 0^b = 0
-        return 0;
+        return bigint_set_zero(result); // 0^b = 0
     }
+
+    int8_t err = -1;
 
     // 3. Normalize inputs (ensure magnitudes are accessible)
     bigint_t* base = bigint_create();
     bigint_t* exp = bigint_create();
-    bigint_copy(base, a);
-    bigint_copy(exp, b);
-    bigint_ensure_normal_form(base);
-    bigint_ensure_normal_form(exp);
+    bigint_t* res = bigint_create();
+
+    if(bigint_copy(base, a) != 0) {
+        goto cleanup;
+    }
+    if(bigint_copy(exp, b) != 0) {
+        goto cleanup;
+    }
+    if(bigint_ensure_normal_form(base) != 0) {
+        goto cleanup;
+    }
+    if(bigint_ensure_normal_form(exp) != 0) {
+        goto cleanup;
+    }
 
     // 4. Square-and-Multiply Algorithm
-    bigint_t* res = bigint_create();
-    bigint_set_int64(res, 1);
+    if(bigint_set_int64(res, 1) == -1) {
+        goto cleanup;
+    }
 
     while (exp->sign > 0) {
         // If exp is odd (bit 0 is 1)
         if (exp->limbs[0] & 1) {
             if (bigint_mul(res, res, base) == -1) {
-                goto cleanup_fail;
+                goto cleanup;
             }
         }
 
         // base = base * base
         if (bigint_mul(base, base, base) == -1) {
-            goto cleanup_fail;
+            goto cleanup;
         }
 
         // exp = exp >> 1
         if (bigint_shr_one(exp) == -1) {
-            goto cleanup_fail;
+            goto cleanup;
         }
     }
 
@@ -1818,18 +1850,17 @@ int8_t bigint_pow(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         res->sign = 1;
     }
 
-    bigint_copy(result, res);
+    if(bigint_copy(result, res) == -1) {
+        goto cleanup;
+    }
 
+    err = 0;
+
+cleanup:
     bigint_destroy(base);
     bigint_destroy(exp);
     bigint_destroy(res);
-    return 0;
-
-cleanup_fail:
-    bigint_destroy(base);
-    bigint_destroy(exp);
-    bigint_destroy(res);
-    return -1;
+    return err;
 }
 
 int8_t bigint_add_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, const bigint_t* m) {
@@ -1946,7 +1977,10 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
         result->sign = 0;
 
         if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
+            if(bigint_set_bigint(orig_result, result) == -1) {
+                bigint_destroy(result);
+                return -1;
+            }
             bigint_destroy(result);
         }
 
@@ -1955,10 +1989,18 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
 
     if (b->sign == 0) {
         result->sign = 1;
-        bigint_set_int64(result, 1);
+        if(bigint_set_int64(result, 1) == -1) {
+            if (orig_result_is_a) {
+                bigint_destroy(result);
+            }
+            return -1;
+        }
 
         if (orig_result_is_a) {
-            bigint_set_bigint(orig_result, result);
+            if(bigint_set_bigint(orig_result, result) == -1) {
+                bigint_destroy(result);
+                return -1;
+            }
             bigint_destroy(result);
         }
 
@@ -2056,7 +2098,10 @@ int8_t bigint_pow_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
     bigint_normalize(result);
 
     if (orig_result_is_a) {
-        bigint_set_bigint(orig_result, result);
+        if(bigint_set_bigint(orig_result, result) == -1) {
+            bigint_destroy(result);
+            return -1;
+        }
         bigint_destroy(result);
     }
 
@@ -2070,59 +2115,85 @@ int8_t bigint_div_with_remainder(bigint_t* result, bigint_t* remainder, const bi
 
     if (a->sign == 0) {
         if (result) {
-            bigint_set_zero(result);
+            if(bigint_set_zero(result) == -1) {
+                return -1;
+            }
         }
 
         if (remainder) {
-            bigint_set_zero(remainder);
+            if(bigint_set_zero(remainder) == -1) {
+                return -1;
+            }
         }
 
         return 0;
     }
 
+    int err = -1;
+
+    bigint_t* op_a = NULL;
+    bigint_t* op_b = NULL;
+    bigint_t* q = NULL;
+    bigint_t* r = NULL;
+
     // Normalizing inputs
-    bigint_t * op_a = bigint_create();
-    bigint_t * op_b = bigint_create();
-    bigint_copy(op_a, a);
-    bigint_copy(op_b, b);
-    bigint_ensure_normal_form(op_a);
-    bigint_ensure_normal_form(op_b);
+    op_a = bigint_create();
+    if(bigint_copy(op_a, a) == -1) {
+        bigint_destroy(op_a);
+        return -1;
+    }
+    if(bigint_ensure_normal_form(op_a) == -1) {
+        bigint_destroy(op_a);
+        return -1;
+    }
+
+    op_b = bigint_create();
+    if(bigint_copy(op_b, b) == -1) {
+        bigint_destroy(op_a);
+        bigint_destroy(op_b);
+        return -1;
+    }
+    if(bigint_ensure_normal_form(op_b) == -1) {
+        bigint_destroy(op_a);
+        bigint_destroy(op_b);
+        return -1;
+    }
 
     // Prepare internal outputs
-    bigint_t * q = bigint_create();
-    bigint_t * r = bigint_create();
+    q = bigint_create();
+    r = bigint_create();
 
     if (bigint_div_unsigned(q, r, op_a, op_b) == -1) {
-        goto fail;
+        goto cleanup;
     }
 
     // Safely assign result
     if (result) {
-        bigint_copy(result, q);
+        if(bigint_copy(result, q) == -1) {
+            goto cleanup;
+        }
         result->sign = a->sign * b->sign;
         result->neged_with_sign = true;
     }
 
     // Safely assign remainder only if pointer is NOT NULL
     if (remainder) {
-        bigint_copy(remainder, r);
+        if(bigint_copy(remainder, r) == -1) {
+            goto cleanup;
+        }
         remainder->sign = a->sign;
         remainder->neged_with_sign = true;
     }
 
-    bigint_destroy(op_a);
-    bigint_destroy(op_b);
-    bigint_destroy(q);
-    bigint_destroy(r);
-    return 0;
+    err = 0;
 
-fail:
+cleanup:
     bigint_destroy(op_a);
     bigint_destroy(op_b);
     bigint_destroy(q);
     bigint_destroy(r);
 
-    return -1;
+    return err;
 }
 
 int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint_t* a, const bigint_t* b) {
@@ -2160,19 +2231,31 @@ int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint
     // 2. Initial comparison
     int8_t cmp = bigint_cmp_magnitudes(a, b);
     if (cmp < 0) {
-        bigint_set_zero(internal_quotient);
-        bigint_copy(internal_rem, a);
+        if(bigint_set_zero(internal_quotient) == -1) {
+            goto fail;
+        }
+        if(bigint_copy(internal_rem, a) == -1) {
+            goto fail;
+        }
         goto success;
     }
     if (cmp == 0) {
-        bigint_set_int64(internal_quotient, 1);
-        bigint_set_zero(internal_rem);
+        if(bigint_set_int64(internal_quotient, 1) == -1) {
+            goto fail;
+        }
+        if(bigint_set_zero(internal_rem) == -1) {
+            goto fail;
+        }
         goto success;
     }
 
     // 3. Setup for bitwise division
-    bigint_set_zero(internal_quotient);
-    bigint_set_zero(internal_rem);
+    if(bigint_set_zero(internal_quotient) == -1) {
+        goto fail;
+    }
+    if(bigint_set_zero(internal_rem) == -1) {
+        goto fail;
+    }
 
     uint64_t a_bits = bigint_bit_length(a) + 1; // +1 to include the highest bit
     if (bigint_ensure_capacity(quotient, a->limb_count) == -1) {
@@ -2216,12 +2299,16 @@ int8_t bigint_div_unsigned(bigint_t* quotient, bigint_t* remainder, const bigint
 success:
     bigint_normalize(internal_quotient);
     if (quotient != internal_quotient) {
-        bigint_copy(quotient, internal_quotient);
+        if(bigint_copy(quotient, internal_quotient) == -1) {
+            goto fail;
+        }
     }
 
     bigint_normalize(internal_rem);
     if (remainder != internal_rem) {
-        bigint_copy(remainder, internal_rem);
+        if(bigint_copy(remainder, internal_rem) == -1) {
+            goto fail;
+        }
     }
 
     if (destroy_rem) {
@@ -2275,7 +2362,10 @@ int8_t bigint_mod(bigint_t* result, const bigint_t* a, const bigint_t* b) {
 
     // Ensure the output is in normal form (Sign-Magnitude)
     bigint_normalize(tmp_remainder);
-    bigint_ensure_normal_form(tmp_remainder);
+    if(bigint_ensure_normal_form(tmp_remainder) == -1) {
+        bigint_destroy(tmp_remainder);
+        return -1;
+    }
 
     if (bigint_copy(result, tmp_remainder) == -1) {
         bigint_destroy(tmp_remainder);
@@ -2300,6 +2390,8 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
         return bigint_abs_copy(result, a);
     }
 
+    int err = -1;
+
     // 2. Prepare temporary variables for the Euclidean loop
     // We use magnitudes because GCD is always positive.
     bigint_t* tmp_a = bigint_clone(a);
@@ -2307,15 +2399,16 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     bigint_t* rem = bigint_create();
 
     if (!tmp_a || !tmp_b || !rem) {
-        bigint_destroy(tmp_a);
-        bigint_destroy(tmp_b);
-        bigint_destroy(rem);
-        return -1;
+        goto cleanup;
     }
 
     // Ensure they are in normal form and positive
-    bigint_ensure_normal_form(tmp_a);
-    bigint_ensure_normal_form(tmp_b);
+    if(bigint_ensure_normal_form(tmp_a) == -1) {
+        goto cleanup;
+    }
+    if(bigint_ensure_normal_form(tmp_b) == -1) {
+        goto cleanup;
+    }
     tmp_a->sign = 1;
     tmp_b->sign = 1;
 
@@ -2323,30 +2416,36 @@ int8_t bigint_gcd(bigint_t* result, const bigint_t* a, const bigint_t* b) {
     // Logic: while a != 0: b = b % a, then swap(a, b)
     while (tmp_a->sign != 0) {
         if (bigint_mod(rem, tmp_b, tmp_a) == -1) {
-            bigint_destroy(tmp_a);
-            bigint_destroy(tmp_b);
-            bigint_destroy(rem);
-            return -1;
+            goto cleanup;
         }
 
         // tmp_b = tmp_a
-        bigint_copy(tmp_b, tmp_a);
+        if(bigint_copy(tmp_b, tmp_a) == -1) {
+            goto cleanup;
+        }
         // tmp_a = rem
-        bigint_copy(tmp_a, rem);
+        if(bigint_copy(tmp_a, rem) == -1) {
+            goto cleanup;
+        }
     }
 
     // 4. Finalize result
     // The GCD is stored in tmp_b
-    bigint_copy(result, tmp_b);
+    if(bigint_copy(result, tmp_b) == -1) {
+        goto cleanup;
+    }
     result->sign = 1;
     result->neged_with_sign = true;
 
+    err = 0;
+
+cleanup:
     // 5. Cleanup
     bigint_destroy(tmp_a);
     bigint_destroy(tmp_b);
     bigint_destroy(rem);
 
-    return 0;
+    return err;
 }
 
 int8_t bigint_isqrt(bigint_t* result, const bigint_t* a) {
@@ -2355,40 +2454,43 @@ int8_t bigint_isqrt(bigint_t* result, const bigint_t* a) {
 
     }
     if (a->sign == 0) {
-        bigint_set_zero(result);
-        return 0;
+        return bigint_set_zero(result);
     }
+
+    int8_t err = -1;
 
     // Initial Guess: 2^(bit_length / 2)
     bigint_t* x = bigint_create();
     bigint_t* y = bigint_create();
     bigint_t* tmp = bigint_create();
     if (!x || !y || !tmp) {
-        goto fail;
+        goto cleanup;
     }
 
     // Use a starting guess of 2^((bits/2)+1)
     uint64_t bits = bigint_bit_length(a);
-    bigint_set_bit(x, (bits / 2) + 1, true);
+    if(bigint_set_bit(x, (bits / 2) + 1, true) == -1) {
+        goto cleanup;
+    }
 
     while (true) {
         // y = a / x
         if (bigint_div(y, a, x) == -1) {
-            goto fail;
+            goto cleanup;
         }
 
         // tmp = x + y
         if (bigint_add(tmp, x, y) == -1) {
-            goto fail;
+            goto cleanup;
         }
 
         // y = tmp >> 1 (Divide by 2)
         if (bigint_shr_one(tmp) == -1) {
-            goto fail;
+            goto cleanup;
         }
 
         if (bigint_copy(y, tmp) == -1) {
-            goto fail;
+            goto cleanup;
         }
 
         // If y >= x, we have converged
@@ -2396,15 +2498,18 @@ int8_t bigint_isqrt(bigint_t* result, const bigint_t* a) {
             break;
         }
 
-        bigint_copy(x, y);
+        if(bigint_copy(x, y) == -1) {
+            goto cleanup;
+        }
     }
 
-    bigint_copy(result, x);
+    if(bigint_copy(result, x) == -1) {
+        goto cleanup;
+    }
 
-    bigint_destroy(x); bigint_destroy(y); bigint_destroy(tmp);
-    return 0;
+    err = 0;
 
-fail:
+cleanup:
     if(x) {
         bigint_destroy(x);
     }
@@ -2414,7 +2519,7 @@ fail:
     if(tmp) {
         bigint_destroy(tmp);
     }
-    return -1;
+    return err;
 }
 
 int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n) {
@@ -2428,11 +2533,16 @@ int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n) {
         if (!tmp_a) {
             return -1;
         }
-        bigint_mod(tmp_a, tmp_a, n); // Bring into range [0, n-1]
+        if(bigint_mod(tmp_a, tmp_a, n) != 0) { // Bring into range [0, n-1]
+            bigint_destroy(tmp_a);
+            return -1;
+        }
         int8_t ret = bigint_mod_inv(result, tmp_a, n);
         bigint_destroy(tmp_a);
         return ret;
     }
+
+    int8_t err = -1;
 
     bigint_t * t = bigint_create(); // Coefficient t
     bigint_t * newt = bigint_create();
@@ -2443,55 +2553,66 @@ int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n) {
     bigint_t * prod = bigint_create();
 
     if (!t || !newt || !r || !newr || !q || !tmp || !prod) {
-        goto fail;
+        goto cleanup;
     }
 
-    bigint_set_int64(t, 0);
-    bigint_set_int64(newt, 1);
+    if(bigint_set_int64(t, 0) == -1) {
+        goto cleanup;
+    }
+    if(bigint_set_int64(newt, 1) == -1) {
+        goto cleanup;
+    }
 
     // Standard Extended Euclidean Algorithm
     while (!bigint_is_zero(newr)) {
         // Quotient q = r / newr, Remainder tmp = r % newr
         if (bigint_div_with_remainder(q, tmp, r, newr) == -1) {
-            goto fail;
+            goto cleanup;
         }
 
         // r = newr, newr = tmp
-        bigint_copy(r, newr);
-        bigint_copy(newr, tmp);
+        if(bigint_copy(r, newr) == -1) {
+            goto cleanup;
+        }
+        if(bigint_copy(newr, tmp) == -1) {
+            goto cleanup;
+        }
 
         // (t, newt) = (newt, t - q * newt)
-        bigint_copy(tmp, t); // tmp = old_t
-        bigint_copy(t, newt);
+        if(bigint_copy(tmp, t) != 0) { // tmp = old_t
+            goto cleanup;
+        }
+        if(bigint_copy(t, newt) != 0) {
+            goto cleanup;
+        }
 
         if (bigint_mul(prod, q, newt) == -1) {
-            goto fail;
+            goto cleanup;
         }
         if (bigint_sub(newt, tmp, prod) == -1) {
-            goto fail;
+            goto cleanup;
         }
     }
 
     // If r > 1, then a is not invertible (gcd(a, n) != 1)
     if (!bigint_is_int64(r, 1)) {
-        goto fail;
+        goto cleanup;
     }
 
     // If t is negative, add n to make it positive
     if (bigint_is_negative(t)) {
         if (bigint_add(t, t, n) == -1) {
-            goto fail;
+            goto cleanup;
         }
     }
 
-    bigint_copy(result, t);
+    if(bigint_copy(result, t) == -1) {
+        goto cleanup;
+    }
 
-    bigint_destroy(t); bigint_destroy(newt); bigint_destroy(r);
-    bigint_destroy(newr); bigint_destroy(q); bigint_destroy(tmp);
-    bigint_destroy(prod);
-    return 0;
+    err = 0;
 
-fail:
+cleanup:
     if(t) {
         bigint_destroy(t);
     }
@@ -2513,7 +2634,7 @@ fail:
     if(prod) {
         bigint_destroy(prod);
     }
-    return -1;
+    return err;
 }
 
 int8_t bigint_add_uint64(bigint_t* a, uint64_t b) {
@@ -2553,7 +2674,9 @@ int8_t bigint_add_uint64(bigint_t* a, uint64_t b) {
         a->limb_count++;
     }
 
-    return bigint_normalize(a);
+    bigint_normalize(a);
+
+    return 0;
 }
 
 int8_t bigint_sub_uint64(bigint_t* a, uint64_t b) {
@@ -2591,7 +2714,9 @@ int8_t bigint_sub_uint64(bigint_t* a, uint64_t b) {
         borrow = (old < a->limbs[i]) ? 1 : 0;
     }
 
-    return bigint_normalize(a);
+    bigint_normalize(a);
+
+    return 0;
 }
 
 int8_t bigint_mul_uint64(bigint_t* a, uint64_t b) {
@@ -2621,7 +2746,9 @@ int8_t bigint_mul_uint64(bigint_t* a, uint64_t b) {
         a->limb_count++;
     }
 
-    return bigint_normalize(a);
+    bigint_normalize(a);
+
+    return 0;
 }
 
 static inline uint64_t bigint_mod128_by_64(uint64_t high, uint64_t low, uint64_t m) {
@@ -2657,7 +2784,7 @@ uint64_t bigint_mod_uint64(const bigint_t* a, uint64_t m) {
     return rem;
 }
 
-static bigint_t* bigint_random_internal(uint64_t bits, boolean_t force_msb) {
+BIGINT_CHECK_RESULT static bigint_t* bigint_random_internal(uint64_t bits, boolean_t force_msb) {
     if (bits == 0) {
         return bigint_create(); // Returns a zero bigint
     }
@@ -2764,7 +2891,7 @@ bigint_t* bigint_random_range(const bigint_t* min, const bigint_t* max) {
     return result;
 }
 
-static boolean_t bigint_is_prime_miller_rabin(const bigint_t* a, uint64_t try) {
+BIGINT_CHECK_RESULT static boolean_t bigint_is_prime_miller_rabin(const bigint_t* a, uint64_t try) {
     if(!a) {
         return false;
     }
@@ -2785,66 +2912,49 @@ static boolean_t bigint_is_prime_miller_rabin(const bigint_t* a, uint64_t try) {
         return false;
     }
 
+    boolean_t is_prime = false;
+
     bigint_t* one = bigint_one();
     bigint_t* two = bigint_two();
+    bigint_t* n_minus_1 = NULL;
+    bigint_t* d = NULL;
+    bigint_t* r = NULL;
+    bigint_t* x = NULL;
+    bigint_t* a_minus_2 = NULL;
 
     if(!one || !two) {
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
-    bigint_t* n_minus_1 = bigint_clone(a);
+    n_minus_1 = bigint_clone(a);
 
     if (!n_minus_1) {
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
     if (bigint_sub(n_minus_1, n_minus_1, one) == -1) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
-    bigint_t* d = bigint_clone(n_minus_1);
+    d = bigint_clone(n_minus_1);
 
     if (!d) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
-    bigint_t* r = bigint_create();
+    r = bigint_create();
 
     if (!r) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(d);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
     while (bigint_is_even(d)) {
         if(bigint_add(r, r, one) == -1) {
-            bigint_destroy(n_minus_1);
-            bigint_destroy(d);
-            bigint_destroy(r);
-            bigint_destroy(one);
-            bigint_destroy(two);
-            return false;
+            goto cleanup;
         }
 
         if (bigint_shr_one(d) == -1) {
-            bigint_destroy(n_minus_1);
-            bigint_destroy(d);
-            bigint_destroy(r);
-            bigint_destroy(one);
-            bigint_destroy(two);
-            return false;
+            goto cleanup;
         }
 
         if(d->sign == 0) {
@@ -2853,48 +2963,25 @@ static boolean_t bigint_is_prime_miller_rabin(const bigint_t* a, uint64_t try) {
     }
 
     if(bigint_sub(r, r, one) == -1) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(d);
-        bigint_destroy(r);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
     bigint_t* r_minus_1 = r; // for readability
 
-    bigint_t* x = bigint_create();
+    x = bigint_create();
 
     if (!x) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(d);
-        bigint_destroy(r);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
-    bigint_t* a_minus_2 = bigint_clone(a);
+    a_minus_2 = bigint_clone(a);
 
     if (!a_minus_2) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(d);
-        bigint_destroy(r);
-        bigint_destroy(x);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
     if (bigint_sub(a_minus_2, a_minus_2, two) == -1) {
-        bigint_destroy(n_minus_1);
-        bigint_destroy(d);
-        bigint_destroy(r);
-        bigint_destroy(x);
-        bigint_destroy(a_minus_2);
-        bigint_destroy(one);
-        bigint_destroy(two);
-        return false;
+        goto cleanup;
     }
 
     // const char * str = NULL;
@@ -2902,99 +2989,65 @@ static boolean_t bigint_is_prime_miller_rabin(const bigint_t* a, uint64_t try) {
     for (uint64_t i = 0; i < try; i++) {
         bigint_t* test_random = bigint_random_range(two, a_minus_2);
         if (!test_random) {
-            bigint_destroy(n_minus_1);
-            bigint_destroy(d);
-            bigint_destroy(r);
-            bigint_destroy(x);
-            bigint_destroy(a_minus_2);
-            bigint_destroy(one);
-            bigint_destroy(two);
-            return false;
+            goto cleanup;
         }
 
         if (bigint_pow_mod(x, test_random, d, a) == -1) {
-            bigint_destroy(n_minus_1);
-            bigint_destroy(d);
-            bigint_destroy(r);
-            bigint_destroy(x);
             bigint_destroy(test_random);
-            bigint_destroy(a_minus_2);
-            bigint_destroy(one);
-            bigint_destroy(two);
-            return false;
+            goto cleanup;
         }
 
         if (!bigint_is_uint64(x, 1) && bigint_cmp(x, n_minus_1) != 0) {
             bigint_t* j = bigint_create();
 
             if (!j) {
-                bigint_destroy(n_minus_1);
-                bigint_destroy(d);
-                bigint_destroy(r);
-                bigint_destroy(x);
-                bigint_destroy(test_random);
-                bigint_destroy(a_minus_2);
-                bigint_destroy(one);
-                bigint_destroy(two);
-                return false;
+                goto cleanup;
             }
 
             while(bigint_cmp(j, r_minus_1) == -1 && bigint_cmp(x, n_minus_1) != 0) {
                 if (bigint_pow_mod(x, x, two, a) == -1) {
-                    bigint_destroy(n_minus_1);
-                    bigint_destroy(d);
-                    bigint_destroy(r);
-                    bigint_destroy(x);
-                    bigint_destroy(test_random);
-                    bigint_destroy(a_minus_2);
                     bigint_destroy(j);
-                    bigint_destroy(one);
-                    bigint_destroy(two);
-                    return false;
+                    bigint_destroy(test_random);
+                    goto cleanup;
                 }
 
                 if (bigint_is_uint64(x, 1)) {
+                    bigint_destroy(j);
                     bigint_destroy(test_random);
-                    bigint_destroy(n_minus_1);
-                    bigint_destroy(d);
-                    bigint_destroy(r);
-                    bigint_destroy(x);
-                    bigint_destroy(a_minus_2);
-                    bigint_destroy(one);
-                    bigint_destroy(two);
-                    return false;
+                    goto cleanup;
                 }
 
-                bigint_add(j, j, one);
+                if(bigint_add(j, j, one) == -1) {
+                    bigint_destroy(j);
+                    bigint_destroy(test_random);
+                    goto cleanup;
+                }
+            }
+
+            if (bigint_cmp(x, n_minus_1) != 0) {
+                bigint_destroy(j);
+                bigint_destroy(test_random);
+                goto cleanup;
             }
 
             bigint_destroy(j);
-
-            if (bigint_cmp(x, n_minus_1) != 0) {
-                bigint_destroy(test_random);
-                bigint_destroy(n_minus_1);
-                bigint_destroy(d);
-                bigint_destroy(r);
-                bigint_destroy(x);
-                bigint_destroy(a_minus_2);
-                bigint_destroy(one);
-                bigint_destroy(two);
-                return false;
-            }
         }
 
         bigint_destroy(test_random);
     }
 
+    is_prime = true;
+
+cleanup:
+    bigint_destroy(one);
+    bigint_destroy(two);
     bigint_destroy(n_minus_1);
     bigint_destroy(d);
     bigint_destroy(r);
     bigint_destroy(x);
     bigint_destroy(a_minus_2);
-    bigint_destroy(one);
-    bigint_destroy(two);
 
-    return true;
+    return is_prime;
 }
 
 boolean_t bigint_is_prime(const bigint_t* a) {
@@ -3091,8 +3144,7 @@ int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, uint64_t len) {
     bigint_destroy_limbs(a);
 
     if (len == 0) {
-        bigint_set_zero(a);
-        return 0;
+        return bigint_set_zero(a);
     }
 
     uint64_t required_limbs = (len + BIGINT_LIMB_BYTES - 1) / BIGINT_LIMB_BYTES;
@@ -3156,8 +3208,7 @@ int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len) {
     bigint_destroy_limbs(a);
 
     if (len == 0) {
-        bigint_set_zero(a);
-        return 0;
+        return bigint_set_zero(a);
     }
 
     uint64_t required_limbs = (len + BIGINT_LIMB_BYTES - 1) / BIGINT_LIMB_BYTES;

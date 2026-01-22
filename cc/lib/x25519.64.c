@@ -16,116 +16,6 @@
 
 MODULE("turnstone.lib.crypto");
 
-
-int8_t x25519_shared_secret(uint8_t       out_shared[X25519_SHARED_SECRET_LEN],
-                            const uint8_t my_priv[X25519_PRIVATE_KEY_RAW_LEN],
-                            const uint8_t their_pub[X25519_PUBLIC_KEY_RAW_LEN]) {
-    if (!out_shared || !my_priv || !their_pub) {
-        return -1;
-    }
-
-    // 1. Prepare my private key (Scalar)
-    uint8_t k[X25519_PRIVATE_KEY_RAW_LEN];
-    memory_memcopy(my_priv, k, X25519_PRIVATE_KEY_RAW_LEN);
-    x25519_clamp(k); // Clamping (Bit 0,1,2=0; Bit 255=0; Bit 254=1)
-
-    // 2. Constants and Modulus
-    bigint_t * p = bigint_create();
-    bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
-
-    bigint_t * u_peer = bigint_create();
-    bigint_from_bytes_le(u_peer, their_pub, 32);
-
-    // 3. Initialize Ladder State
-    // R0 = Identity (1:0), R1 = (u_peer : 1)
-    bigint_t * x0 = bigint_one();
-    bigint_t * z0 = bigint_zero();
-    bigint_t * x1 = bigint_clone(u_peer);
-    bigint_t * z1 = bigint_one();
-
-    // Temporary variables for the ladder math
-    bigint_t * da = bigint_create(), * db = bigint_create();
-    bigint_t * dc = bigint_create(), * dd = bigint_create();
-    bigint_t * e  = bigint_create(), * f  = bigint_create();
-    bigint_t * g  = bigint_create(), * h  = bigint_create();
-
-    const uint64_t a24 = 121666;
-
-    // 4. The Montgomery Ladder Loop
-    for (int64_t i = 254; i >= 0; i--) {
-        uint8_t bit = (k[i >> 3] >> (i & 7)) & 1;
-
-        // Conditional Swap
-        if (bit) {
-            bigint_t* t;
-            t = x0; x0 = x1; x1 = t;
-            t = z0; z0 = z1; z1 = t;
-        }
-
-        // --- Point Double and Differential Add ---
-        bigint_add_mod(da, x0, z0, p); // da = x0 + z0
-        bigint_sub_mod(db, x0, z0, p); // db = x0 - z0
-        bigint_add_mod(dc, x1, z1, p); // dc = x1 + z1
-        bigint_sub_mod(dd, x1, z1, p); // dd = x1 - z1
-
-        bigint_mul_mod(e, dd, da, p); // e = (x1-z1)(x0+z0)
-        bigint_mul_mod(f, dc, db, p); // f = (x1+z1)(x0-z0)
-
-        // x1 = (e + f)^2
-        bigint_add_mod(g, e, f, p);
-        bigint_mul_mod(x1, g, g, p);
-
-        // z1 = u_peer * (e - f)^2  <-- IMPORTANT: Peer's PubKey instead of 9
-        bigint_sub_mod(g, e, f, p);
-        bigint_mul_mod(h, g, g, p);
-        bigint_mul_mod(z1, h, u_peer, p);
-
-        // AA = da^2, BB = db^2, E = AA - BB
-        bigint_mul_mod(e, da, da, p); // e = AA
-        bigint_mul_mod(f, db, db, p); // f = BB
-        bigint_sub_mod(g, e, f, p); // g = E
-
-        // x0 = AA * BB
-        bigint_mul_mod(x0, e, f, p);
-
-        // z0 = E * (BB + a24 * E)
-        bigint_set_bigint(h, g);
-        bigint_mul_uint64(h, a24);
-        bigint_mod(h, h, p);
-        bigint_add_mod(h, h, f, p);
-        bigint_mul_mod(z0, g, h, p);
-
-        // Swap back
-        if (bit) {
-            bigint_t* t;
-            t = x0; x0 = x1; x1 = t;
-            t = z0; z0 = z1; z1 = t;
-        }
-    }
-
-    // 5. Finalize: x = x0 * inv(z0) mod p
-    bigint_t * inv_z0 = bigint_create();
-    if (bigint_mod_inv(inv_z0, z0, p) == 0) {
-        bigint_mul_mod(x0, x0, inv_z0, p);
-        bigint_to_bytes_le(x0, out_shared, X25519_SHARED_SECRET_LEN);
-    } else {
-        // This happens if z0 is zero (invalid public key/point at infinity)
-        memory_memset(out_shared, 0, X25519_SHARED_SECRET_LEN);
-    }
-
-    // 6. Mandatory Cleanup
-    bigint_destroy(p); bigint_destroy(u_peer);
-    bigint_destroy(x0); bigint_destroy(z0);
-    bigint_destroy(x1); bigint_destroy(z1);
-    bigint_destroy(da); bigint_destroy(db);
-    bigint_destroy(dc); bigint_destroy(dd);
-    bigint_destroy(e);  bigint_destroy(f);
-    bigint_destroy(g);  bigint_destroy(h);
-    bigint_destroy(inv_z0);
-
-    return 0;
-}
-
 int8_t x25519_generate_keypair(uint8_t out_priv[X25519_PRIVATE_KEY_RAW_LEN], uint8_t out_pub[X25519_PUBLIC_KEY_RAW_LEN]) {
     // 1. Get 32 random bytes
     get_random_bytes(out_priv, X25519_PRIVATE_KEY_RAW_LEN);
@@ -139,120 +29,180 @@ int8_t x25519_generate_keypair(uint8_t out_priv[X25519_PRIVATE_KEY_RAW_LEN], uin
     return 0;
 }
 
-int8_t x25519_derive_public(uint8_t out_pub[X25519_PUBLIC_KEY_RAW_LEN], const uint8_t in_priv[X25519_PRIVATE_KEY_RAW_LEN]) {
-    // 1. Prepare Scalar (Clamping)
-    uint8_t k[32];
-    memory_memcopy(in_priv, k, 32);
-    k[0] &= 248;
-    k[31] &= 127;
-    k[31] |= 64;
-
-    // 2. Constants and State
-    bigint_t * p = bigint_create();
-    bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
-
-    // Projective coordinates for R0 (initialized to Identity) and R1 (Base Point)
-    bigint_t * x0 = bigint_one(); // X0
-    bigint_t * z0 = bigint_zero(); // Z0
-    bigint_t* x1 = bigint_create();
-    bigint_set_uint64(x1, 9); // X1 (Base x=9)
-    bigint_t * z1 = bigint_one(); // Z1
-
-    // Temp variables for the ladder (A, B, C, D, E...)
-    bigint_t * da = bigint_create(), * db = bigint_create();
-    bigint_t * dc = bigint_create(), * dd = bigint_create();
-    bigint_t * e  = bigint_create(), * f  = bigint_create();
-    bigint_t * g  = bigint_create(), * h  = bigint_create();
+static int8_t x25519_scalarmult(uint8_t out[32], const uint8_t scalar[32], const bigint_t* u_base) {
+    int8_t res = -1;
+    bigint_t * p = NULL, * x0 = NULL, * z0 = NULL, * x1 = NULL, * z1 = NULL;
+    bigint_t * da = NULL, * db = NULL, * dc = NULL, * dd = NULL;
+    bigint_t * e = NULL, * f = NULL, * g = NULL, * h = NULL, * inv_z0 = NULL;
 
     const uint64_t a24 = 121666;
 
+    // 1. Initialize Modulus and State
+    p = bigint_create();
+    if (bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
+        goto cleanup;
+    }
+
+    x0 = bigint_one();
+    z0 = bigint_zero();
+    x1 = bigint_clone(u_base);
+    z1 = bigint_one();
+
+    // 2. Initialize Temporaries
+    da = bigint_create(); db = bigint_create(); dc = bigint_create(); dd = bigint_create();
+    e = bigint_create(); f = bigint_create(); g = bigint_create(); h = bigint_create();
+    if (!h) {
+        goto cleanup; // Check last allocation
+
+    }
     // 3. The Montgomery Ladder
     for (int64_t i = 254; i >= 0; i--) {
-        uint8_t bit = (k[i >> 3] >> (i & 7)) & 1;
+        uint8_t bit = (scalar[i >> 3] >> (i & 7)) & 1;
 
-        // Conditional Swap based on bit
+        // Conditional Swap
         if (bit) {
-            bigint_t* tmp;
-            tmp = x0; x0 = x1; x1 = tmp;
-            tmp = z0; z0 = z1; z1 = tmp;
+            bigint_t* t;
+            t = x0; x0 = x1; x1 = t;
+            t = z0; z0 = z1; z1 = t;
         }
 
-        // Formulas for Montgomery Ladder (X-only)
-        // A = x0 + z0
-        bigint_add_mod(da, x0, z0, p);
-        // B = x0 - z0
-        bigint_sub_mod(db, x0, z0, p);
-        // C = x1 + z1
-        bigint_add_mod(dc, x1, z1, p);
-        // D = x1 - z1
-        bigint_sub_mod(dd, x1, z1, p);
+        // Formulas
+        if (bigint_add_mod(da, x0, z0, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_sub_mod(db, x0, z0, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_add_mod(dc, x1, z1, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_sub_mod(dd, x1, z1, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(e, dd, da, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(f, dc, db, p) != 0) {
+            goto cleanup;
+        }
 
-        // DA = D * A
-        bigint_mul_mod(e, dd, da, p);
-        // CB = C * B
-        bigint_mul_mod(f, dc, db, p);
+        // x1 = (e + f)^2
+        if (bigint_add_mod(g, e, f, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(x1, g, g, p) != 0) {
+            goto cleanup;
+        }
 
-        // x1 = (DA + CB)^2
-        bigint_add_mod(g, e, f, p);
-        bigint_mul_mod(x1, g, g, p);
-        // z1 = 9 * (DA - CB)^2  (Note: 9 is the original x-coordinate)
-        bigint_sub_mod(g, e, f, p);
-        bigint_mul_mod(h, g, g, p);
-        bigint_set_bigint(z1, h);
-        bigint_mul_uint64(z1, 9);
-        bigint_mod(z1, z1, p);
+        // z1 = u_base * (e - f)^2
+        if (bigint_sub_mod(g, e, f, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(h, g, g, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(z1, h, u_base, p) != 0) {
+            goto cleanup;
+        }
 
-        // AA = A^2
-        bigint_mul_mod(e, da, da, p);
-        // BB = B^2
-        bigint_mul_mod(f, db, db, p);
-        // E = AA - BB
-        bigint_sub_mod(g, e, f, p);
+        // AA = da^2, BB = db^2, E = AA - BB
+        if (bigint_mul_mod(e, da, da, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(f, db, db, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_sub_mod(g, e, f, p) != 0) {
+            goto cleanup;
+        }
 
         // x0 = AA * BB
-        bigint_mul_mod(x0, e, f, p);
+        if (bigint_mul_mod(x0, e, f, p) != 0) {
+            goto cleanup;
+        }
+
         // z0 = E * (BB + a24 * E)
-        bigint_set_bigint(h, g);
-        bigint_mul_uint64(h, a24);
-        bigint_mod(h, h, p);
-        bigint_add_mod(h, h, f, p);
-        bigint_mul_mod(z0, g, h, p);
+        if (bigint_set_bigint(h, g) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_uint64(h, a24) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mod(h, h, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_add_mod(h, h, f, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_mul_mod(z0, g, h, p) != 0) {
+            goto cleanup;
+        }
 
         if (bit) {
-            bigint_t* tmp;
-            tmp = x0; x0 = x1; x1 = tmp;
-            tmp = z0; z0 = z1; z1 = tmp;
+            bigint_t* t;
+            t = x0; x0 = x1; x1 = t;
+            t = z0; z0 = z1; z1 = t;
         }
     }
 
-    // 4. Convert back to Affine: x = x0 / z0
-    bigint_t * inv_z0 = bigint_create();
-    bigint_mod_inv(inv_z0, z0, p);
-    bigint_mul_mod(x0, x0, inv_z0, p);
+    // 4. Finalize: x = x0 * inv(z0)
+    inv_z0 = bigint_create();
+    if (bigint_mod_inv(inv_z0, z0, p) == 0) {
+        if (bigint_mul_mod(x0, x0, inv_z0, p) != 0) {
+            goto cleanup;
+        }
+        if (bigint_to_bytes_le(x0, out, 32) != 0) {
+            goto cleanup;
+        }
+    } else {
+        // Point at infinity/Zero
+        memory_memset(out, 0, 32);
+    }
 
-    // 5. Serialize
-    bigint_to_bytes_le(x0, out_pub, X25519_PUBLIC_KEY_RAW_LEN);
+    res = 0;
 
-    // 6. Cleanup (Essential for security!)
-    // Destroy all bigints...
-    bigint_destroy(p);
-    bigint_destroy(x0);
-    bigint_destroy(z0);
-    bigint_destroy(x1);
-    bigint_destroy(z1);
-    bigint_destroy(da);
-    bigint_destroy(db);
-    bigint_destroy(dc);
-    bigint_destroy(dd);
-    bigint_destroy(e);
-    bigint_destroy(f);
-    bigint_destroy(g);
-    bigint_destroy(h);
-    bigint_destroy(inv_z0);
-
-    return 0;
+cleanup:
+    bigint_destroy(p); bigint_destroy(x0); bigint_destroy(z0);
+    bigint_destroy(x1); bigint_destroy(z1); bigint_destroy(da);
+    bigint_destroy(db); bigint_destroy(dc); bigint_destroy(dd);
+    bigint_destroy(e); bigint_destroy(f); bigint_destroy(g);
+    bigint_destroy(h); bigint_destroy(inv_z0);
+    return res;
 }
 
+int8_t x25519_derive_public(uint8_t out_pub[32], const uint8_t in_priv[32]) {
+    uint8_t k[32];
+    memory_memcopy(in_priv, k, 32);
+    x25519_clamp(k);
+
+    bigint_t* u_base = bigint_create();
+    if(bigint_set_uint64(u_base, 9) != 0) {
+        bigint_destroy(u_base);
+        return -1;
+    }
+
+    int8_t res = x25519_scalarmult(out_pub, k, u_base);
+
+    bigint_destroy(u_base);
+    return res;
+}
+
+int8_t x25519_shared_secret(uint8_t out_shared[32], const uint8_t my_priv[32], const uint8_t their_pub[32]) {
+    uint8_t k[32];
+    memory_memcopy(my_priv, k, 32);
+    x25519_clamp(k);
+
+    bigint_t* u_peer = bigint_create();
+    if (bigint_from_bytes_le(u_peer, their_pub, 32) != 0) {
+        bigint_destroy(u_peer);
+        return -1;
+    }
+
+    int8_t res = x25519_scalarmult(out_shared, k, u_peer);
+
+    bigint_destroy(u_peer);
+    return res;
+}
 
 void x25519_clamp(uint8_t k[X25519_PRIVATE_KEY_RAW_LEN]) {
     k[0] &= 248; // Clear bits 0, 1, 2
