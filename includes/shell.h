@@ -15,6 +15,10 @@
 extern "C" {
 #endif
 
+/**
+ * @brief initializes shell
+ * @return 0 on success, negative value on error
+ */
 int8_t shell_init(void);
 
 #ifdef __cplusplus
