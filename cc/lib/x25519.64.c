@@ -55,16 +55,24 @@ static int8_t x25519_scalarmult(uint8_t out[32], const uint8_t scalar[32], const
         goto cleanup; // Check last allocation
 
     }
+
+    uint8_t prev_bit = 0;
+
     // 3. The Montgomery Ladder
     for (int64_t i = 254; i >= 0; i--) {
         uint8_t bit = (scalar[i >> 3] >> (i & 7)) & 1;
 
-        // Conditional Swap
-        if (bit) {
-            bigint_t* t;
-            t = x0; x0 = x1; x1 = t;
-            t = z0; z0 = z1; z1 = t;
+        uint8_t swap = bit ^ prev_bit;
+
+        if(bigint_cswap(x0, x1, swap) != 0) {
+            goto cleanup;
         }
+
+        if(bigint_cswap(z0, z1, swap) != 0) {
+            goto cleanup;
+        }
+
+        prev_bit = bit;
 
         // Formulas
         if (bigint_add_mod(da, x0, z0, p) != 0) {
@@ -137,12 +145,14 @@ static int8_t x25519_scalarmult(uint8_t out[32], const uint8_t scalar[32], const
         if (bigint_mul_mod(z0, g, h, p) != 0) {
             goto cleanup;
         }
+    }
 
-        if (bit) {
-            bigint_t* t;
-            t = x0; x0 = x1; x1 = t;
-            t = z0; z0 = z1; z1 = t;
-        }
+    if(bigint_cswap(x0, x1, prev_bit) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_cswap(z0, z1, prev_bit) != 0) {
+        goto cleanup;
     }
 
     // 4. Finalize: x = x0 * inv(z0)

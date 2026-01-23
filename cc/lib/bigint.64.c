@@ -146,7 +146,10 @@ BIGINT_CHECK_RESULT static int8_t bigint_ensure_capacity(bigint_t* bigint, uint6
     }
 
     // Fix 3: Sanity limit (e.g., don't allow 1GB for a single BigInt)
-    if (new_capacity > BIGINT_MAX_SAFE_CAPACITY) {
+    if (new_capacity > BIGINT_MAX_SAFE_CAPACITY ||
+        new_capacity < bigint->limb_count ||
+        new_capacity < required_capacity ||
+        new_capacity == 0) {
         return -1;
     }
 
@@ -248,6 +251,10 @@ __attribute__((nonnull(1))) static void bigint_normalize(bigint_t* bigint) {
             bigint->limb_count--;
         }
 
+        if(bigint->limb_count == 0) {
+            bigint->limb_count = 1;
+        }
+
         // If the resulting value is 0, fix the sign
         if (bigint->limb_count == 1 && bigint->limbs[0] == 0) {
             bigint->sign = 0;
@@ -261,6 +268,10 @@ __attribute__((nonnull(1))) static void bigint_normalize(bigint_t* bigint) {
     if (bigint->sign == -1 && !bigint->neged_with_sign) {
         while (bigint->limb_count > 1 && bigint->limbs[bigint->limb_count - 1] == UINT64_MAX) {
             bigint->limb_count--;
+        }
+
+        if(bigint->limb_count == 0) {
+            bigint->limb_count = 1;
         }
 
         // Safety: If it stripped down to 0, it's actually zero.
@@ -400,8 +411,10 @@ int8_t bigint_set_str(bigint_t* bigint, const char* str) {
     size_t len = strlen(str);
 
     if (len == 0) {
+        memory_memclean(bigint->limbs, bigint->capacity * sizeof(uint64_t));
         bigint->sign = 0;
-        bigint->limb_count = 0;
+        bigint->limb_count = 1;
+        bigint->neged_with_sign = true;
         return 0;
     }
 
@@ -3232,5 +3245,50 @@ int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len) {
     a->neged_with_sign = true;
 
     bigint_normalize(a);
+    return 0;
+}
+
+int8_t bigint_cswap(bigint_t* a, bigint_t* b, uint8_t swap) {
+    if (!a || !b) {
+        return -1;
+    }
+    // Ensure swap is exactly 0 or 1 for the mask to work
+    swap = (swap != 0);
+
+    uint64_t mask64 = -(uint64_t)swap;
+    uint8_t mask8  = -(uint8_t)swap;
+
+    // 1. Swap Limbs
+    // Note: We use the actual limb_count used by the bigints
+    // In X25519, these are always 4 limbs (256 bits)
+    uint64_t max_limbs = (a->limb_count > b->limb_count) ? a->limb_count : b->limb_count;
+    if(max_limbs > a->capacity || max_limbs > b->capacity) {
+        return -1; // Safety check to avoid OOB
+    }
+    for (uint64_t i = 0; i < max_limbs; i++) {
+        uint64_t tmp = (a->limbs[i] ^ b->limbs[i]) & mask64;
+        a->limbs[i] ^= tmp;
+        b->limbs[i] ^= tmp;
+    }
+
+    // 2. Swap limb_count
+    uint64_t tmp_cnt = (a->limb_count ^ b->limb_count) & mask64;
+    a->limb_count ^= tmp_cnt;
+    b->limb_count ^= tmp_cnt;
+
+    // 3. Swap Sign (Treat as raw bytes to avoid signed overflow/bit issues)
+    uint8_t* a_sign = (uint8_t*)&a->sign;
+    uint8_t* b_sign = (uint8_t*)&b->sign;
+    uint8_t tmp_s = (*a_sign ^ *b_sign) & mask8;
+    *a_sign ^= tmp_s;
+    *b_sign ^= tmp_s;
+
+    // 4. Swap neged_with_sign (Treat as raw bytes)
+    uint8_t* a_neg = (uint8_t*)&a->neged_with_sign;
+    uint8_t* b_neg = (uint8_t*)&b->neged_with_sign;
+    uint8_t tmp_n = (*a_neg ^ *b_neg) & mask8;
+    *a_neg ^= tmp_n;
+    *b_neg ^= tmp_n;
+
     return 0;
 }

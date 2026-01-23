@@ -94,6 +94,8 @@ BIGINT_CHECK_RESULT int8_t bigint_from_bytes(bigint_t* a, const uint8_t* buf, ui
 BIGINT_CHECK_RESULT int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, uint64_t len);
 BIGINT_CHECK_RESULT int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len);
 
+BIGINT_CHECK_RESULT int8_t bigint_cswap(bigint_t* a, bigint_t* b, uint8_t swap);
+
 #ifdef __cplusplus
 }
 #endif
