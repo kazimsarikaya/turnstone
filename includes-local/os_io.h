@@ -61,6 +61,54 @@ typedef void (*sighandler_t)(int32_t);
 
 sighandler_t signal(int32_t signum, sighandler_t handler);
 
+typedef struct in_addr {
+    uint32_t s_addr; // load with inet_pton()
+} in_addr_t;
+
+typedef uint16_t in_port_t;
+
+typedef uint16_t sa_family_t;
+
+typedef uint32_t socklen_t;
+
+enum {
+    AF_INET = 2,
+    SOCK_STREAM = 1,
+    SOL_SOCKET = 1,
+    SO_REUSEADDR = 2,
+    SO_REUSEPORT = 15,
+};
+
+enum {
+    INADDR_ANY = 0x00000000,
+};
+
+#define INET_ADDRSTRLEN 16
+
+struct sockaddr_in {
+    sa_family_t    sin_family; // address family: AF_INET
+    in_port_t      sin_port; // port in network byte order
+    struct in_addr sin_addr; // internet address
+    unsigned char  sin_zero[8]; // padding
+};
+
+struct sockaddr {
+    sa_family_t sa_family; // address family
+    char_t      sa_data[14]; // up to 14 bytes of direct address
+};
+
+int32_t     socket(int domain, int type, int protocol);
+int32_t     close(int32_t fd);
+int32_t     bind(int32_t sockfd, const struct sockaddr * addr, socklen_t addrlen);
+int32_t     listen(int32_t sockfd, int32_t backlog);
+int32_t     accept(int32_t sockfd, struct sockaddr * addr, socklen_t * addrlen);
+int32_t     setsockopt(int32_t sockfd, int32_t level, int32_t optname, const void * optval, socklen_t optlen);
+int32_t     send(int32_t sockfd, const void * buf, size_t len, int32_t flags);
+int32_t     recv(int32_t sockfd, void * buf, size_t len, int32_t flags);
+const char* inet_ntop(int32_t af, const void * src, char_t * dst, socklen_t size);
+int32_t     htons(uint16_t hostshort);
+int32_t     ntohs(uint16_t netshort);
+
 #ifdef __cplusplus
 }
 #endif
