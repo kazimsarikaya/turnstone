@@ -190,7 +190,7 @@ static int8_t font_atlas_init(void) {
     uint8_t* font_atlas_compressed = (uint8_t*)&font_atlas_bitmap_data_start;
     uint8_t* font_atlas_compressed_end = (uint8_t*)&font_atlas_bitmap_data_end;
 
-    size_t compressed_size = font_atlas_compressed_end - font_atlas_compressed;
+    size_t compressed_size = (uintptr_t)font_atlas_compressed_end - (uintptr_t)font_atlas_compressed;
     size_t decompressed_size = FONT_ATLAS_WIDTH * FONT_ATLAS_HEIGHT * sizeof(float32_t);
 
     buffer_t* in = buffer_encapsulate(font_atlas_compressed, compressed_size);
