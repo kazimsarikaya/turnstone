@@ -29,7 +29,7 @@ mouse_move_cursor_f MOUSE_MOVE_CURSOR = NULL;
 
 graphics_raw_image_t* mouse_get_image(void) {
     uint8_t* tga_image = (uint8_t*)&mouse_icon_data_start;
-    uint64_t mouse_data_size = &mouse_icon_data_end - &mouse_icon_data_start;
+    uint64_t mouse_data_size = (uintptr_t)&mouse_icon_data_end - (uintptr_t)&mouse_icon_data_start;
 
     uint32_t size = mouse_data_size;
 
