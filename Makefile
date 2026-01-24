@@ -28,7 +28,7 @@ PIFLAGS = -fPIC -fpic -fplt -mcmodel=large
 NOPIFLAGS = -fno-pic -fno-PIC -fno-plt -mcmodel=large
 
 CC64FLAGS = $(BASEFLAGS) \
-		  -std=gnu18 \
+		  -std=gnu23 \
           -Wnested-externs \
 		  -Wmissing-prototypes -Wstrict-prototypes
 CPP64FLAGS = $(BASEFLAGS) \
