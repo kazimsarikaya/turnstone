@@ -56,6 +56,43 @@ fi
 NUMCPUS=4
 RAMSIZE=8
 
+MONITOR_XMAX=2048
+MONITOR_YMAX=1152
+
+# reserved vertical space (waybar etc.)
+MONITOR_GAP=100
+
+# get focused monitor resolution
+read MON_W MON_H <<<"$(
+  hyprctl monitors -j |
+    jq -r '.[] | select(.focused==true) | "\(.width) \(.height)"'
+)"
+
+# usable area
+AVAIL_W=$(( MON_W - MONITOR_GAP))
+AVAIL_H=$(( MON_H - MONITOR_GAP))
+
+# current desired aspect (should already be 16:9)
+# but we calculate dynamically to be safe
+DESIRED_W=$MONITOR_XMAX
+DESIRED_H=$MONITOR_YMAX
+
+# if it already fits, do nothing
+if (( DESIRED_W <= AVAIL_W && DESIRED_H <= AVAIL_H )); then
+    : # no-op
+else
+    # scale down while keeping aspect ratio
+    if (( AVAIL_W * DESIRED_H >= AVAIL_H * DESIRED_W )); then
+        # height limited
+        MONITOR_YMAX=$AVAIL_H
+        MONITOR_XMAX=$(( MONITOR_YMAX * DESIRED_W / DESIRED_H ))
+    else
+        # width limited
+        MONITOR_XMAX=$AVAIL_W
+        MONITOR_YMAX=$(( MONITOR_XMAX * DESIRED_H / DESIRED_W ))
+    fi
+fi
+
 SERIALS=""
 
 for i in `seq 0 $((NUMCPUS-1))`; do
@@ -83,7 +120,7 @@ qemu-system-x86_64 \
   -drive id=usbuas,if=none,format=raw,file=${OUTPUTDIR}/qemu-usb-uas,werror=report,rerror=report \
   -device ide-hd,drive=system,bootindex=1 \
   -device nvme,drive=cache,serial=qn0001,id=nvme0,logical_block_size=4096,physical_block_size=4096 \
-  -device VGA,id=gpu0,vgamem_mb=256 \
+  -device VGA,id=gpu0,vgamem_mb=256,xmax=${MONITOR_XMAX},ymax=${MONITOR_YMAX},xres=640,yres=480 \
   -device igb,netdev=t0,id=nic0 \
   -netdev $NETDEV \
   -device nec-usb-xhci,id=xhci0 \
