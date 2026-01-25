@@ -847,6 +847,24 @@ static int32_t bigint_test_mul_mod(void){
 
     BIGINT_TEST(mul_mod, "8FD619722A77625BA23AD86CEF48FAB83EC2E83B905B4A475E5BD88383296653", bigint_4, bigint_1, bigint_2, bigint_3);
 
+    // Case 1: Squaring p-1 (Result must be 1)
+    // (p-1)*(p-1) mod p == (-1)*(-1) mod p == 1
+    BIGINT_SET_STR(bigint_1, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEC");
+    BIGINT_SET_STR(bigint_3, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
+    BIGINT_TEST(mul_mod, "1", bigint_4, bigint_1, bigint_1, bigint_3);
+
+    // Case 2: Squaring the 254th bit
+    // (2^254 * 2^254) mod p == 2^508 mod p
+    // 2^508 is (2^255 * 2^253). Since 2^255 = 19 mod p,
+    // this is 19 * 2^253 mod p.
+    BIGINT_SET_STR(bigint_1, "4000000000000000000000000000000000000000000000000000000000000000");
+    // Expected: 19 * 2^253 = 0x4C00000000000000000000000000000000000000000000000000000000000000
+    BIGINT_TEST(mul_mod, "600000000000000000000000000000000000000000000000000000000000004C", bigint_4, bigint_1, bigint_1, bigint_3);
+
+    BIGINT_SET_STR(bigint_1, "1234");
+    BIGINT_SET_STR(bigint_3, "5678");
+    BIGINT_TEST(mul_mod, "B8", bigint_1, bigint_1, bigint_1, bigint_3);
+
     return 0;
 }
 
@@ -1037,7 +1055,6 @@ static int32_t bigint_test_from_to_bytes(void) {
 }
 
 static int32_t bigint_test_sub_add_mod(void) {
-    return 0; // Temporarily disable sub/add mod tests to speed up testing
     auto_destroy(bigint_t, a);
     auto_destroy(bigint_t, b);
     auto_destroy(bigint_t, m);
@@ -1100,11 +1117,38 @@ static int32_t bigint_test_sub_add_mod(void) {
     }
     print_success("add_mod large numbers passed");
 
+    BIGINT_SET_STR(a, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEC");
+    BIGINT_SET_STR(b, "1");
+    BIGINT_SET_STR(m, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
+    BIGINT_TEST(add_mod, "0", res, a, b, m);
+
+    BIGINT_TEST(add_mod, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEB", res, a, a, m);
+
+    BIGINT_SET_STR(a, "4000000000000000000000000000000000000000000000000000000000000000");
+    BIGINT_SET_STR(b, "4000000000000000000000000000000000000000000000000000000000000000");
+    BIGINT_TEST(add_mod, "13", res, a, b, m);
+
+    BIGINT_SET_STR(a, "7000000000000000000000000000000000000000000000000000000000000000");
+    BIGINT_SET_STR(b, "1000000000000000000000000000000000000000000000000000000000000000");
+    BIGINT_TEST(add_mod, "13", res, a, b, m);
+
+    // Case 1: Standard small borrow
+    BIGINT_SET_STR(a, "1");
+    BIGINT_SET_STR(b, "2");
+    BIGINT_SET_STR(m, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
+    BIGINT_TEST(sub_mod, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEC", res, a, b, m);
+
+    // Case 2: Zero result
+    BIGINT_TEST(sub_mod, "0", res, a, a, m);
+
+    // Case 3: P - (P-1)
+    BIGINT_SET_STR(b, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEC");
+    BIGINT_TEST(sub_mod, "1", res, m, b, m);
+
     return 0;
 }
 
 static int32_t bigint_test_mod_inv(void) {
-    return 0; // Temporarily disable mod_inv tests to speed up testing
     auto_destroy(bigint_t, a);
     auto_destroy(bigint_t, n);
     auto_destroy(bigint_t, inv);
@@ -1114,24 +1158,20 @@ static int32_t bigint_test_mod_inv(void) {
     inv = bigint_create();
     check = bigint_create();
 
+    char_t* str = NULL;
+
     // Test 1: Simple prime modulus
     // a = 3, n = 11. Inverse should be 4 (because 3*4 = 12, 12 % 11 = 1)
     BIGINT_SET_INT64(a, 3);
     BIGINT_SET_INT64(n, 11);
-    if (bigint_mod_inv(inv, a, n) == -1 || !bigint_is_int64(inv, 4)) {
-        print_error("mod_inv Test 1 failed (3 mod 11)");
-        return -1;
-    }
+    BIGINT_TEST(mod_inv, "4", inv, a, n);
 
     // Test 2: Larger number
     // a = 127, n = 101. Inverse should be 12 (127*12 = 1524, 1524 % 101 = 9, wait...)
     // Let's use a known pair: 17 mod 3120 (from RSA e/phi). inv = 2753
     BIGINT_SET_INT64(a, 17);
     BIGINT_SET_INT64(n, 3120);
-    if (bigint_mod_inv(inv, a, n) == -1 || !bigint_is_int64(inv, 2753)) {
-        print_error("mod_inv Test 2 failed (17 mod 3120)");
-        return -1;
-    }
+    BIGINT_TEST(mod_inv, "AC1", inv, a, n);
 
     // Verify Property: (a * inv) % n == 1
     if(bigint_mul_mod(check, a, inv, n) == -1) {
@@ -1152,13 +1192,147 @@ static int32_t bigint_test_mod_inv(void) {
         return -1;
     }
 
+    // Case 1: Inverse of 2
+    // Inverse of 2 mod p is (p+1)/2
+    BIGINT_SET_STR(a, "2");
+    BIGINT_SET_STR(n, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
+    // Expected: 0x3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF77
+    BIGINT_TEST(mod_inv, "3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7", inv, a, n);
+
     print_success("bigint_mod_inv tests passed");
 
     return 0;
 }
 
+static int32_t bigint_test_mod_sqrt(void) {
+    auto_destroy(bigint_t, a);
+    auto_destroy(bigint_t, p);
+    auto_destroy(bigint_t, sqrt);
+    auto_destroy(bigint_t, check);
+    a = bigint_create();
+    p = bigint_create();
+    sqrt = bigint_create();
+    check = bigint_create();
+
+    char_t* str = NULL;
+
+    // Test 1: Simple case
+    // a = 10, p = 13. sqrt should be 6 (because 6*6=36, 36 % 13 = 10) or 7 (because 7*7=49, 49 % 13 = 10)
+    BIGINT_SET_INT64(a, 10);
+    BIGINT_SET_INT64(p, 13);
+    if (bigint_mod_sqrt(sqrt, a, p) == -1) {
+        print_error("mod_sqrt Test 1 failed");
+        return -1;
+    }
+
+    str = bigint_to_str(sqrt);
+    printf("mod_sqrt Test 1 result: %s\n", str);
+    memory_free((void*)str);
+
+    // Verify Property: (sqrt * sqrt) % p == a
+    if(bigint_mul_mod(check, sqrt, sqrt, p) == -1) {
+        print_error("mod_sqrt property verification failed (multiplication)");
+        return -1;
+    }
+    if (bigint_cmp(check, a) != 0) {
+        print_error("mod_sqrt property verification failed");
+        return -1;
+    }
+
+    // Test 2
+    BIGINT_SET_INT64(a, 56);
+    BIGINT_SET_INT64(p, 101);
+    if (bigint_mod_sqrt(sqrt, a, p) == -1) {
+        print_error("mod_sqrt Test 2 failed");
+        return -1;
+    }
+
+    str = bigint_to_str(sqrt);
+    printf("mod_sqrt Test 2 result: %s\n", str);
+    memory_free((void*)str);
+
+    // Verify Property: (sqrt * sqrt) % p == a
+    if(bigint_mul_mod(check, sqrt, sqrt, p) == -1) {
+        print_error("mod_sqrt property verification failed (multiplication)");
+        return -1;
+    }
+    if (bigint_cmp(check, a) != 0) {
+        print_error("mod_sqrt property verification failed");
+        return -1;
+    }
+
+    // Test 3
+    BIGINT_SET_INT64(a, 10);
+    BIGINT_SET_INT64(p, 13);
+    if (bigint_mod_sqrt(sqrt, a, p) == -1) {
+        print_error("mod_sqrt Test 3 failed");
+        return -1;
+    }
+
+    str = bigint_to_str(sqrt);
+    printf("mod_sqrt Test 3 result: %s\n", str);
+    memory_free((void*)str);
+
+    // Verify Property: (sqrt * sqrt) % p == a
+    if(bigint_mul_mod(check, sqrt, sqrt, p) == -1) {
+        print_error("mod_sqrt property verification failed (multiplication)");
+        return -1;
+    }
+    if (bigint_cmp(check, a) != 0) {
+        print_error("mod_sqrt property verification failed");
+        return -1;
+    }
+
+    // Test 4
+    BIGINT_SET_STR(a, "4E30F56AA3991ABB06678FA27E58DBC43E9E29DA59189CCD76D4C41233D85DD2");
+    BIGINT_SET_STR(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED");
+    if (bigint_mod_sqrt(sqrt, a, p) == -1) {
+        print_error("mod_sqrt Test 4 failed");
+        return -1;
+    }
+
+    str = bigint_to_str(sqrt);
+    printf("mod_sqrt Test 4 result: %s\n", str);
+    memory_free((void*)str);
+
+    // Verify Property: (sqrt * sqrt) % p == a
+    if(bigint_mul_mod(check, sqrt, sqrt, p) == -1) {
+        print_error("mod_sqrt property verification failed (multiplication)");
+        return -1;
+    }
+    if (bigint_cmp(check, a) != 0) {
+        print_error("mod_sqrt property verification failed");
+        return -1;
+    }
+
+    // Test 5
+    BIGINT_SET_INT64(a, 2);
+    BIGINT_SET_INT64(p, 17);
+    if (bigint_mod_sqrt(sqrt, a, p) == -1) {
+        print_error("mod_sqrt Test 5 failed");
+        return -1;
+    }
+
+    str = bigint_to_str(sqrt);
+    printf("mod_sqrt Test 5 result: %s\n", str);
+    memory_free((void*)str);
+
+    // Verify Property: (sqrt * sqrt) % p == a
+    if(bigint_mul_mod(check, sqrt, sqrt, p) == -1) {
+        print_error("mod_sqrt property verification failed (multiplication)");
+        return -1;
+    }
+    if (bigint_cmp(check, a) != 0) {
+        print_error("mod_sqrt property verification failed");
+        return -1;
+    }
+
+    print_success("bigint_mod_sqrt tests passed");
+
+    return 0;
+}
+
 static int32_t bigint_test_uint64_ops(void) {
-    return 0; // Temporarily disable uint64 ops tests to speed up testing
     auto_destroy(bigint_t, a);
     auto_destroy(bigint_t, expected);
     a = bigint_create();
@@ -1340,7 +1514,25 @@ int32_t main(void) {
         return result;
     }
 
+    result = bigint_test_mul_mod();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_pow_mod();
+
+    if(result != 0) {
+        return result;
+    }
+
     result = bigint_test_mod_inv();
+
+    if(result != 0) {
+        return result;
+    }
+
+    result = bigint_test_mod_sqrt();
 
     if(result != 0) {
         return result;
@@ -1353,18 +1545,6 @@ int32_t main(void) {
     }
 
     result = bigint_test_sub_add_mod();
-
-    if(result != 0) {
-        return result;
-    }
-
-    result = bigint_test_mul_mod();
-
-    if(result != 0) {
-        return result;
-    }
-
-    result = bigint_test_pow_mod();
 
     if(result != 0) {
         return result;

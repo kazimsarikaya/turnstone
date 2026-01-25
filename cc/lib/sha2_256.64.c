@@ -41,7 +41,7 @@ static const uint32_t sha256_k[64] = {
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-uint8_t* sha256_hash(uint8_t* data, size_t length) {
+uint8_t* sha256_hash(const uint8_t* data, size_t length) {
     sha256_ctx_t* ctx = sha256_init();
     sha256_update(ctx, data, length);
     return sha256_final(ctx);
@@ -150,8 +150,7 @@ uint8_t* sha256_final(sha256_ctx_t* ctx) {
         while (i < 56) {
             ctx->data[i++] = 0x00;
         }
-    }
-    else {
+    }else {
         ctx->data[i++] = 0x80;
 
         while (i < SHA256_BLOCK_SIZE) {
@@ -245,7 +244,7 @@ uint8_t* sha224_final(sha224_ctx_t* ctx) {
     return hash;
 }
 
-uint8_t* sha224_hash(uint8_t* data, size_t length) {
+uint8_t* sha224_hash(const uint8_t* data, size_t length) {
     sha224_ctx_t* ctx = sha224_init();
     sha224_update(ctx, data, length);
     return sha224_final(ctx);

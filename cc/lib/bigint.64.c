@@ -1942,7 +1942,7 @@ int8_t bigint_mul_mod(bigint_t* result, const bigint_t* a, const bigint_t* b, co
             return 0;
         }
 
-        bigint_destroy_limbs(result);
+        bigint_destroy_limbs(result); // 4 limbs and all set to 0
 
         return 0;
     }
@@ -2650,6 +2650,230 @@ cleanup:
     return err;
 }
 
+int8_t bigint_mod_sqrt(bigint_t* result, const bigint_t* a, const bigint_t* p) {
+    if (!result || !a || !p || bigint_is_even(p)) {
+        return -1;
+    }
+    if (bigint_is_zero(a)) {
+        if(bigint_set_zero(result) == -1) {
+            return -1;
+        }
+        return 0;
+    }
+
+    int8_t err = -1;
+
+    bigint_t* exp = NULL;
+    bigint_t* check = NULL;
+    bigint_t* Q = NULL;
+    bigint_t* z = NULL;
+    bigint_t* p_minus_one = NULL;
+    bigint_t* M = NULL;
+    bigint_t* c = NULL;
+    bigint_t* t = NULL;
+    bigint_t* R = NULL;
+
+    // Legendre symbol check: a^((p-1)/2) % p must be 1
+    exp = bigint_create();
+    check = bigint_create();
+
+    if (!exp || !check) {
+        goto cleanup;
+    }
+
+    if(bigint_copy(exp, p) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_sub_uint64(exp, 1) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_shr_one(exp) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_pow_mod(check, a, exp, p) != 0) {
+        goto cleanup;
+    }
+
+    if (!bigint_is_uint64(check, 1)) {
+        printf("No square root exists for the given input.\n");
+        err = -2; // Not a quadratic residue (no solution)
+        goto cleanup;
+    }
+
+    // 1. Factor p-1 = Q * 2^S
+    uint64_t S = 0;
+    Q = bigint_clone(exp); // exp is already (p-1)/2, so we start there
+
+    if (!Q) {
+        goto cleanup;
+    }
+
+    S = 1;
+    while (bigint_is_even(Q)) {
+        if(bigint_shr_one(Q) == -1) {
+            goto cleanup;
+        }
+        S++;
+    }
+
+    // 2. Find a non-residue 'z'
+    z = bigint_two();
+    if (!z) {
+        goto cleanup;
+    }
+
+    p_minus_one = bigint_clone(p);
+    if (!p_minus_one) {
+        goto cleanup;
+    }
+
+    if(bigint_sub_uint64(p_minus_one, 1) != 0) {
+        goto cleanup;
+    }
+
+    while (true) {
+        if(bigint_pow_mod(check, z, exp, p) != 0) { // Reuse (p-1)/2 exp
+            goto cleanup;
+        }
+        if (bigint_cmp(check, p_minus_one) == 0) {
+            // If check == p-1 (which is exp * 2), it's a non-residue
+            // Note: in mod p, p-1 is -1.
+            break;
+        }
+        if(bigint_add_uint64(z, 1) != 0) {
+            goto cleanup;
+        }
+    }
+
+    // 3. Initialize variables
+    M = bigint_create();
+    c = bigint_create();
+    t = bigint_create();
+    R = bigint_create();
+
+    if (!M || !c || !t || !R) {
+        goto cleanup;
+    }
+
+    if(bigint_set_uint64(M, S) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_pow_mod(c, z, Q, p) != 0) { // c = z^Q mod p
+        goto cleanup;
+    }
+
+    if(bigint_pow_mod(t, a, Q, p) != 0) { // t = a^Q mod p
+        goto cleanup;
+    }
+
+    if(bigint_set_bigint(exp, Q) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_add_uint64(exp, 1) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_shr_one(exp) != 0) {
+        goto cleanup;
+    }
+
+    if(bigint_pow_mod(R, a, exp, p) != 0) { // R = a^((Q+1)/2) mod p
+        goto cleanup;
+    }
+
+    // 4. Loop
+    while (!bigint_is_uint64(t, 1)) {
+        uint64_t i = 0;
+        bigint_t * temp_t = bigint_clone(t);
+
+        uint64_t uint64_M = 0;
+
+        if(bigint_get_uint64(M, &uint64_M) != 0) {
+            bigint_destroy(temp_t);
+            goto cleanup;
+        }
+
+        for (i = 1; i < uint64_M; i++) {
+            if(bigint_mul_mod(temp_t, temp_t, temp_t, p) != 0) {
+                bigint_destroy(temp_t);
+                goto cleanup;
+            }
+
+            if (bigint_is_uint64(temp_t, 1)) {
+                break;
+            }
+        }
+
+        bigint_t * b = bigint_clone(c);
+
+        if (!b) {
+            bigint_destroy(temp_t);
+            goto cleanup;
+        }
+
+        // exponent = 2^(M - i - 1)
+        if(bigint_get_uint64(M, &uint64_M) != 0) {
+            bigint_destroy(temp_t);
+            bigint_destroy(b);
+            goto cleanup;
+        }
+        uint64_t pow_count = uint64_M - i - 1;
+
+        for (uint64_t j = 0; j < pow_count; j++) {
+            if(bigint_mul_mod(b, b, b, p) != 0) {
+                bigint_destroy(temp_t);
+                bigint_destroy(b);
+                goto cleanup;
+            }
+        }
+
+        if(bigint_set_uint64(M, i) != 0) {
+            bigint_destroy(temp_t);
+            bigint_destroy(b);
+            goto cleanup;
+        }
+
+        if(bigint_mul_mod(c, b, b, p) != 0) {
+            bigint_destroy(temp_t);
+            bigint_destroy(b);
+            goto cleanup;
+        }
+
+        if(bigint_mul_mod(t, t, c, p) != 0) {
+            bigint_destroy(temp_t);
+            bigint_destroy(b);
+            goto cleanup;
+        }
+
+        if(bigint_mul_mod(R, R, b, p) != 0) {
+            bigint_destroy(temp_t);
+            bigint_destroy(b);
+            goto cleanup;
+        }
+
+        bigint_destroy(temp_t); bigint_destroy(b);
+    }
+
+    if(bigint_set_bigint(result, R) != 0) {
+        goto cleanup;
+    }
+
+    err = 0;
+
+    // Cleanup everything
+cleanup:
+    bigint_destroy(exp); bigint_destroy(check); bigint_destroy(Q);
+    bigint_destroy(z); bigint_destroy(M); bigint_destroy(c);
+    bigint_destroy(t); bigint_destroy(R); bigint_destroy(p_minus_one);
+
+    return err;
+}
+
 int8_t bigint_add_uint64(bigint_t* a, uint64_t b) {
     if (!a) {
         return -1;
@@ -3245,6 +3469,21 @@ int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len) {
     a->neged_with_sign = true;
 
     bigint_normalize(a);
+    return 0;
+}
+
+int8_t bigint_get_uint64(const bigint_t* a, uint64_t* value) {
+    if (!a || !value) {
+        return -1;
+    }
+    if (a->sign == 0) {
+        *value = 0;
+        return 0;
+    }
+    if (a->limb_count > 1) {
+        return -1; // Too large to fit in uint64_t
+    }
+    *value = a->limbs[0];
     return 0;
 }
 

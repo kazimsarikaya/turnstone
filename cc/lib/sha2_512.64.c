@@ -49,7 +49,7 @@ static const uint64_t sha512_k[80] = {
     0x431d67c49c100d4cULL, 0x4cc5d4becb3e42b6ULL, 0x597f299cfc657e2aULL, 0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL
 };
 
-uint8_t* sha512_hash(uint8_t* data, size_t length) {
+uint8_t* sha512_hash(const uint8_t* data, size_t length) {
     sha512_ctx_t* ctx = sha512_init();
     sha512_update(ctx, data, length);
     return sha512_final(ctx);
@@ -160,8 +160,7 @@ uint8_t* sha512_final(sha512_ctx_t* ctx) {
         while (i < 120) {
             ctx->data[i++] = 0x00;
         }
-    }
-    else {
+    }else {
         ctx->data[i++] = 0x80;
 
         while (i < SHA256_BLOCK_SIZE) {
@@ -250,7 +249,7 @@ uint8_t* sha384_final(sha384_ctx_t* ctx) {
     return hash;
 }
 
-uint8_t* sha384_hash(uint8_t* data, size_t length) {
+uint8_t* sha384_hash(const uint8_t* data, size_t length) {
     sha384_ctx_t* ctx = sha384_init();
     sha384_update(ctx, data, length);
     return sha384_final(ctx);

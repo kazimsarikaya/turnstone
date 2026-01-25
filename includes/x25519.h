@@ -133,6 +133,37 @@ int8_t x25519_shared_secret(uint8_t       out_shared[X25519_SHARED_SECRET_LEN],
                             const uint8_t my_priv[X25519_PRIVATE_KEY_RAW_LEN],
                             const uint8_t their_pub[X25519_PUBLIC_KEY_RAW_LEN]);
 
+/**
+ * @brief Derives the Ed25519 public key from a given private seed.
+ * @param[out] pub_out A buffer of size 32 bytes to store the derived public key.
+ * @param[in] priv_seed A buffer of size 32 bytes containing the private seed.
+ * @return 0 on success, non-zero on failure.
+ */
+int8_t ed25519_get_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]);
+
+/**
+ * @brief Signs a message using the Ed25519 signature algorithm.
+ *
+ * @param[out] sig A buffer of size 64 bytes to store the generated signature.
+ * @param[in] msg A pointer to the message to be signed.
+ * @param[in] msg_len The length of the message in bytes.
+ * @param[in] priv_seed A buffer of size 32 bytes containing the private seed.
+ * @param[in] pub_key A buffer of size 32 bytes containing the public key.
+ * @return 0 on success, non-zero on failure.
+ */
+int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
+                    const uint8_t priv_seed[32], const uint8_t pub_key[32]);
+
+/**
+ * @brief Verifies an Ed25519 signature for a given message and public key.
+ * @param[in] sig A buffer of size 64 bytes containing the signature to verify.
+ * @param[in] msg A pointer to the message whose signature is to be verified.
+ * @param[in] msg_len The length of the message in bytes.
+ * @param[in] pub_key A buffer of size 32 bytes containing the public key.
+ * @return 0 if the signature is valid, non-zero if invalid or on failure.
+ */
+int8_t ed25519_verify(const uint8_t sig[64], const uint8_t* msg, size_t msg_len, const uint8_t pub_key[32]);
+
 #ifdef __cplusplus
 }
 #endif

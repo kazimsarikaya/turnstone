@@ -278,6 +278,15 @@ BIGINT_CHECK_RESULT int8_t bigint_isqrt(bigint_t* result, const bigint_t* a);
 BIGINT_CHECK_RESULT int8_t bigint_mod_inv(bigint_t* result, const bigint_t* a, const bigint_t* n);
 
 /**
+ * @brief result = sqrt(a) mod p
+ * @param result Destination for result.
+ * @param a Operand.
+ * @param p Modulus (should be prime).
+ * @return 0 on success, non-zero if square root does not exist.
+ */
+BIGINT_CHECK_RESULT int8_t bigint_mod_sqrt(bigint_t* result, const bigint_t* a, const bigint_t* p);
+
+/**
  * @brief a = a + b (uint64)
  * @param a Destination and first operand.
  * @param b 64-bit operand.
@@ -510,6 +519,14 @@ BIGINT_CHECK_RESULT int8_t bigint_to_bytes_le(const bigint_t* a, uint8_t* buf, u
  * @return 0 on success.
  */
 BIGINT_CHECK_RESULT int8_t bigint_from_bytes_le(bigint_t* a, const uint8_t* buf, uint64_t len);
+
+/**
+ * @brief Retrieves bigint value as int64_t.
+ * @param a The bigint instance.
+ * @param value Pointer to store the result.
+ * @return 0 on success.
+ */
+BIGINT_CHECK_RESULT int8_t bigint_get_uint64(const bigint_t* a, uint64_t* value);
 
 /**
  * @brief Constant-time conditional swap.
