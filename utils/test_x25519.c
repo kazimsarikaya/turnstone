@@ -307,7 +307,7 @@ int main(void) {
 
     print_success("Ed25519 public key successfully derived and verified\n");
 
-    res = ed25519_sign(signature, (const uint8_t*)message, strlen(message), ed25519_priv_key_raw, ed25519_pubkey);
+    res = ed25519_sign(signature, (const uint8_t*)message, strlen(message), ed25519_priv_key_raw);
 
     if (res != 0) {
         print_error("Failed to sign message with Ed25519\n");
@@ -350,7 +350,7 @@ int main(void) {
 
     print_success("Ed25519 public key from OpenSSL seed successfully derived and verified\n");
 
-    res = ed25519_sign(signature, (const uint8_t*)message, strlen(message), openssl_seed_bin, ed25519_pubkey);
+    res = ed25519_sign(signature, (const uint8_t*)message, strlen(message), openssl_seed_bin);
 
     if (res != 0) {
         print_error("Failed to sign message with Ed25519 using OpenSSL seed\n");

@@ -1296,7 +1296,12 @@ static int8_t ed25519_reduce_L(uint8_t out[32], const uint8_t in_64[64]) {
 }
 
 int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
-                    const uint8_t priv_seed[32], const uint8_t pub_key[32]) {
+                    const uint8_t priv_seed[32]) {
+    uint8_t pub_key[32];
+    if (ed25519_get_pubkey(pub_key, priv_seed) != 0) {
+        return -1;
+    }
+
     uint8_t r_reduced[32];
     uint8_t k_reduced[32];
     uint8_t* az = NULL;
@@ -1612,7 +1617,7 @@ static int8_t ed25519_scalar_mult_generic(ed25519_point_t* R, const uint8_t scal
 
     /* 4. Constant-Time Montgomery Ladder (Edwards Variant) */
     uint8_t dummy_bit = 0;
-    for (int64_t i = 254; i >= 0; i--) {
+    for (int64_t i = 255; i >= 0; i--) {
         uint8_t bit = (scalar[i >> 3] >> (i & 7)) & 1;
         uint8_t swap = bit ^ dummy_bit;
 
@@ -1801,4 +1806,20 @@ fail:
     bigint_destroy(G.X); bigint_destroy(G.Y); bigint_destroy(G.Z); bigint_destroy(G.T);
     memory_free(k_hash);
     return err;
+}
+
+int8_t ed25519_generate_keypair(uint8_t out_priv[32], uint8_t out_pub[32]) {
+    if (!out_priv || !out_pub) {
+        return -1;
+    }
+
+    // 1. Generate 32 random bytes for the private seed
+    get_random_bytes(out_priv, 32);
+
+    // 2. Derive the public key from the private seed
+    if (ed25519_get_pubkey(out_pub, out_priv) != 0) {
+        return -1;
+    }
+
+    return 0;
 }

@@ -148,11 +148,10 @@ int8_t ed25519_get_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]);
  * @param[in] msg A pointer to the message to be signed.
  * @param[in] msg_len The length of the message in bytes.
  * @param[in] priv_seed A buffer of size 32 bytes containing the private seed.
- * @param[in] pub_key A buffer of size 32 bytes containing the public key.
  * @return 0 on success, non-zero on failure.
  */
 int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
-                    const uint8_t priv_seed[32], const uint8_t pub_key[32]);
+                    const uint8_t priv_seed[32]);
 
 /**
  * @brief Verifies an Ed25519 signature for a given message and public key.
@@ -163,6 +162,17 @@ int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
  * @return 0 if the signature is valid, non-zero if invalid or on failure.
  */
 int8_t ed25519_verify(const uint8_t sig[64], const uint8_t* msg, size_t msg_len, const uint8_t pub_key[32]);
+
+/**
+ * @brief Generates a new Ed25519 key pair (private seed and public key).
+ *
+ * The private seed is generated randomly, and the public key is derived from it.
+ *
+ * @param[out] out_priv A buffer of size 32 bytes to store the generated private seed.
+ * @param[out] out_pub A buffer of size 32 bytes to store the generated public key.
+ * @return 0 on success, non-zero on failure.
+ */
+int8_t ed25519_generate_keypair(uint8_t out_priv[32], uint8_t out_pub[32]);
 
 #ifdef __cplusplus
 }
