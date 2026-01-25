@@ -433,7 +433,7 @@ int8_t pem_write_x25519_private_key(const uint8_t* in_key, char_t** out_pem) {
     }
 
     uint8_t* b64_encoded = NULL;
-    size_t b64_len = base64_encode(der_data, expected_der_len, true, &b64_encoded);
+    size_t b64_len = base64_encode(der_data, expected_der_len, false, &b64_encoded);
     memory_free(der_data);
 
     // Format PEM
@@ -459,6 +459,71 @@ int8_t pem_write_x25519_private_key(const uint8_t* in_key, char_t** out_pem) {
 
     *out_pem = (char_t*)buffer_get_all_bytes_and_destroy(pem_buf, NULL);
 
+    return 0;
+}
+
+int8_t pem_write_ed25519_private_key(const uint8_t* in_key, char_t** out_pem) {
+    buffer_t* der_buf = buffer_new();
+    if (!der_buf) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for DER buffer");
+        return -1;
+    }
+
+    // Construct DER structure for PKCS#8 private key
+    // SEQUENCE {
+    buffer_append_byte(der_buf, 0x30); // SEQUENCE
+    buffer_append_byte(der_buf, 46); // Length
+    // INTEGER (0)
+    buffer_append_byte(der_buf, 0x02); // INTEGER
+    buffer_append_byte(der_buf, 1); // Length
+    buffer_append_byte(der_buf, 0x00); // Value
+    // SEQUENCE {
+    buffer_append_byte(der_buf, 0x30); // SEQUENCE
+    buffer_append_byte(der_buf, 5); // Length
+    // OBJECT IDENTIFIER (id-Ed25519)
+    buffer_append_byte(der_buf, 0x06); // OBJECT IDENTIFIER
+    buffer_append_byte(der_buf, 3); // Length
+    buffer_append_byte(der_buf, 0x2b); // 1.3
+    buffer_append_byte(der_buf, 0x65); // 101
+    buffer_append_byte(der_buf, 0x70); // 112
+    // OCTET STRING (private key)
+    buffer_append_byte(der_buf, 0x04); // OCTET STRING
+    buffer_append_byte(der_buf, 34); // Length
+    buffer_append_byte(der_buf, 0x04); // OCTET STRING inside
+    buffer_append_byte(der_buf, 32); // Length of raw key
+    buffer_append_bytes(der_buf, (uint8_t*)in_key, 32);
+    // }
+    // }
+    // }
+    // Base64 encode DER
+    uint64_t expected_der_len = 0;
+    uint8_t* der_data = buffer_get_all_bytes_and_destroy(der_buf, &expected_der_len);
+    if (expected_der_len != ED25519_PRIVATE_KEY_DER_LEN) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Constructed DER length mismatch: expected %d, got %llu", ED25519_PRIVATE_KEY_DER_LEN, expected_der_len);
+        memory_free(der_data);
+        return -1;
+    }
+    uint8_t* b64_encoded = NULL;
+    size_t b64_len = base64_encode(der_data, expected_der_len, false, &b64_encoded);
+    memory_free(der_data);
+    // Format PEM
+    buffer_t* pem_buf = buffer_new();
+    if (!pem_buf) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for PEM buffer");
+        memory_free(b64_encoded);
+        return -1;
+    }
+    const char_t* header = "-----BEGIN PRIVATE KEY-----\n";
+    const char_t* footer = "-----END PRIVATE KEY-----\n";
+    buffer_append_bytes(pem_buf, (uint8_t*)header, strlen(header));
+    for (size_t i = 0; i < b64_len; i += 64) {
+        size_t line_len = (b64_len - i > 64) ? 64 : (b64_len - i);
+        buffer_append_bytes(pem_buf, (uint8_t*)(b64_encoded + i), line_len);
+        buffer_append_byte(pem_buf, '\n');
+    }
+    buffer_append_bytes(pem_buf, (uint8_t*)footer, strlen(footer));
+    memory_free(b64_encoded);
+    *out_pem = (char_t*)buffer_get_all_bytes_and_destroy(pem_buf, NULL);
     return 0;
 }
 
@@ -502,7 +567,7 @@ int8_t pem_write_x25519_public_key(const uint8_t* in_key, char_t** out_pem) {
     }
 
     uint8_t* b64_encoded = NULL;
-    size_t b64_len = base64_encode(der_data, expected_der_len, true, &b64_encoded);
+    size_t b64_len = base64_encode(der_data, expected_der_len, false, &b64_encoded);
     memory_free(der_data);
 
     // Format PEM
@@ -1236,7 +1301,7 @@ cleanup:
     return err;
 }
 
-int8_t ed25519_get_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]) {
+int8_t ed25519_derive_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]) {
     uint8_t* az = sha512_hash(priv_seed, 32); // Step 2: Hash
     if (!az) {
         return -1;
@@ -1298,7 +1363,7 @@ static int8_t ed25519_reduce_L(uint8_t out[32], const uint8_t in_64[64]) {
 int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
                     const uint8_t priv_seed[32]) {
     uint8_t pub_key[32];
-    if (ed25519_get_pubkey(pub_key, priv_seed) != 0) {
+    if (ed25519_derive_pubkey(pub_key, priv_seed) != 0) {
         return -1;
     }
 
@@ -1817,7 +1882,7 @@ int8_t ed25519_generate_keypair(uint8_t out_priv[32], uint8_t out_pub[32]) {
     get_random_bytes(out_priv, 32);
 
     // 2. Derive the public key from the private seed
-    if (ed25519_get_pubkey(out_pub, out_priv) != 0) {
+    if (ed25519_derive_pubkey(out_pub, out_priv) != 0) {
         return -1;
     }
 

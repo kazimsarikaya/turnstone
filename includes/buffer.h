@@ -108,7 +108,7 @@ uint64_t buffer_get_position(buffer_t* buffer);
  * @param[in] length length of bytes
  * @return buffer_t* pointer to buffer
  */
-buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length);
+buffer_t* buffer_append_bytes(buffer_t* buffer, const uint8_t* data, uint64_t length);
 
 /**
  * @brief appends buffer to buffer

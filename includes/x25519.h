@@ -50,6 +50,36 @@ extern "C" {
 #define X25519_SHARED_SECRET_LEN 32
 
 /**
+ * @def ED25519_PRIVATE_KEY_DER_LEN
+ * @brief Length of an Ed25519 private key when encoded in DER format (PKCS#8).
+ */
+#define ED25519_PRIVATE_KEY_DER_LEN 48
+
+/**
+ * @def ED25519_PRIVATE_KEY_RAW_LEN
+ * @brief Length of a raw Ed25519 private key in bytes.
+ */
+#define ED25519_PRIVATE_KEY_RAW_LEN 32
+
+/**
+ * @def ED25519_PUBLIC_KEY_DER_LEN
+ * @brief Length of an Ed25519 public key when encoded in DER format (SubjectPublicKeyInfo).
+ */
+#define ED25519_PUBLIC_KEY_DER_LEN 44
+
+/**
+ * @def ED25519_PUBLIC_KEY_RAW_LEN
+ * @brief Length of a raw Ed25519 public key in bytes.
+ */
+#define ED25519_PUBLIC_KEY_RAW_LEN 32
+
+/**
+ * @def ED25519_SIGNATURE_LEN
+ * @brief Length of an Ed25519 signature in bytes.
+ */
+#define ED25519_SIGNATURE_LEN 64
+
+/**
  * @brief Reads an X25519 private key from a PEM-encoded string.
  *
  * @param[in] pem A null-terminated string containing the PEM-encoded private key.
@@ -139,7 +169,7 @@ int8_t x25519_shared_secret(uint8_t       out_shared[X25519_SHARED_SECRET_LEN],
  * @param[in] priv_seed A buffer of size 32 bytes containing the private seed.
  * @return 0 on success, non-zero on failure.
  */
-int8_t ed25519_get_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]);
+int8_t ed25519_derive_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]);
 
 /**
  * @brief Signs a message using the Ed25519 signature algorithm.
@@ -173,6 +203,17 @@ int8_t ed25519_verify(const uint8_t sig[64], const uint8_t* msg, size_t msg_len,
  * @return 0 on success, non-zero on failure.
  */
 int8_t ed25519_generate_keypair(uint8_t out_priv[32], uint8_t out_pub[32]);
+
+/**
+ * @brief Writes a raw Ed25519 private key to a newly allocated PEM-encoded string.
+ *
+ * The caller is responsible for freeing the allocated string `*out_pem`.
+ *
+ * @param[in] in_key A buffer of size #ED25519_PRIVATE_KEY_RAW_LEN containing the raw private key.
+ * @param[out] out_pem A pointer to a char_t* that will be allocated and filled with the PEM string.
+ * @return 0 on success, non-zero on failure (e.g., memory allocation error).
+ */
+int8_t pem_write_ed25519_private_key(const uint8_t* in_key, char_t** out_pem);
 
 #ifdef __cplusplus
 }

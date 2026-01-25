@@ -229,7 +229,7 @@ buffer_t* buffer_append_byte(buffer_t* buffer, uint8_t data) {
     return buffer;
 }
 
-buffer_t* buffer_append_bytes(buffer_t* buffer, uint8_t* data, uint64_t length) {
+buffer_t* buffer_append_bytes(buffer_t* buffer, const uint8_t* data, uint64_t length) {
     if(!buffer) {
         return NULL;
     }
@@ -683,7 +683,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                         slen = prec;
                     }
 
-                    if(val > slen){
+                    if(val > slen) {
                         val -= slen;
                     } else {
                         val = 0;
@@ -853,7 +853,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                 case 'f':
                     if(l_flag == 2) {
                         // fval = va_arg(args, float128_t); // TODO: float128_t ops
-                    } else  {
+                    } else {
                         fval = va_arg(args, float64_t);
                     }
 
