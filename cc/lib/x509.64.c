@@ -48,6 +48,15 @@ struct x509_extension_t {
 
         // X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME
         x509_subject_alternative_name_t* san_list;
+
+        struct {
+            size_t   length;
+            uint8_t* data;
+        } skid; // Subject Key Identifier
+        struct {
+            size_t   length;
+            uint8_t* data;
+        } akid; // Authority Key Identifier
     }                 data;
     x509_extension_t* next;
 };
@@ -93,6 +102,8 @@ static const uint8_t OID_EXT_BASIC_CONSTRAINTS[] = { 0x06, 0x03, 0x55, 0x1D, 0x1
 static const uint8_t OID_EXT_KEY_USAGE[] = { 0x06, 0x03, 0x55, 0x1D, 0x0F };
 static const uint8_t OID_EXT_EXTENDED_KEY_USAGE[] = { 0x06, 0x03, 0x55, 0x1D, 0x25 };
 static const uint8_t OID_EXT_SAN[] = { 0x06, 0x03, 0x55, 0x1D, 0x11 };
+static const uint8_t OID_EXT_SKID[] = { 0x06, 0x03, 0x55, 0x1D, 0x0E };
+static const uint8_t OID_EXT_AKID[] = { 0x06, 0x03, 0x55, 0x1D, 0x23 };
 
 x509_certificate_t* x509_certificate_new(void) {
     x509_certificate_t* cert = memory_malloc(sizeof(x509_certificate_t));
@@ -144,6 +155,18 @@ void x509_certificate_free(x509_certificate_t* cert) {
                 }
                 memory_free(san);
                 san = next_san;
+            }
+        }
+
+        if (ext->type == X509_EXTENSION_SKID) {
+            if (ext->data.skid.data != NULL) {
+                memory_free(ext->data.skid.data);
+            }
+        }
+
+        if (ext->type == X509_EXTENSION_AKID) {
+            if (ext->data.akid.data != NULL) {
+                memory_free(ext->data.akid.data);
             }
         }
 
@@ -309,6 +332,56 @@ int8_t x509_certificate_add_subject_alternative_name(x509_certificate_t* cert, x
     }
     san_entry->next = san_ext->data.san_list;
     san_ext->data.san_list = san_entry;
+
+    return 0;
+}
+
+int8_t x509_certificate_add_subject_key_identifier(x509_certificate_t* cert, const uint8_t* skid, size_t skid_length) {
+    if (cert == NULL || skid == NULL || skid_length == 0) {
+        return -1;
+    }
+
+    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
+    if (ext == NULL) {
+        return -1;
+    }
+
+    ext->type = X509_EXTENSION_SKID;
+    ext->is_critical = false;
+    ext->data.skid.length = skid_length;
+    ext->data.skid.data = memory_malloc(skid_length);
+    if (ext->data.skid.data == NULL) {
+        memory_free(ext);
+        return -1;
+    }
+    memory_memcopy(skid, ext->data.skid.data, skid_length);
+    ext->next = cert->extensions;
+    cert->extensions = ext;
+
+    return 0;
+}
+
+int8_t x509_certificate_add_authority_key_identifier(x509_certificate_t* cert, const uint8_t* akid, size_t akid_length) {
+    if (cert == NULL || akid == NULL || akid_length == 0) {
+        return -1;
+    }
+
+    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
+    if (ext == NULL) {
+        return -1;
+    }
+
+    ext->type = X509_EXTENSION_AKID;
+    ext->is_critical = false;
+    ext->data.akid.length = akid_length;
+    ext->data.akid.data = memory_malloc(akid_length);
+    if (ext->data.akid.data == NULL) {
+        memory_free(ext);
+        return -1;
+    }
+    memory_memcopy(akid, ext->data.akid.data, akid_length);
+    ext->next = cert->extensions;
+    cert->extensions = ext;
 
     return 0;
 }
@@ -565,6 +638,31 @@ static buffer_t* x509_encode_extension_value(x509_extension_t* ext) {
             san = san->next;
         }
 
+        der_encode_length(value, buffer_get_length(seq));
+        buffer_append_buffer(value, seq);
+        buffer_destroy(seq);
+        break;
+    }
+    case X509_EXTENSION_SKID: {
+        buffer_append_byte(value, 0x04); // OCTET STRING
+        buffer_t* octet_str = buffer_new();
+
+        buffer_append_bytes(octet_str, ext->data.skid.data, ext->data.skid.length);
+
+        der_encode_length(value, buffer_get_length(octet_str));
+        buffer_append_buffer(value, octet_str);
+        buffer_destroy(octet_str);
+        break;
+    }
+    case X509_EXTENSION_AKID: {
+        buffer_append_byte(value, 0x30); // SEQUENCE
+        buffer_t* seq = buffer_new();
+        buffer_append_byte(seq, 0x80); // [0] keyIdentifier
+        buffer_t* octet_str = buffer_new();
+        buffer_append_bytes(octet_str, ext->data.akid.data, ext->data.akid.length);
+        der_encode_length(seq, buffer_get_length(octet_str));
+        buffer_append_buffer(seq, octet_str);
+        buffer_destroy(octet_str);
         der_encode_length(value, buffer_get_length(seq));
         buffer_append_buffer(value, seq);
         buffer_destroy(seq);
@@ -828,6 +926,20 @@ static int8_t x509_encode_tbs(x509_certificate_t* cert) {
                 }
             } else if (curr->type == X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME) {
                 if(!buffer_append_bytes(ext_seq, OID_EXT_SAN, sizeof(OID_EXT_SAN))) {
+                    buffer_destroy(ext_seq);
+                    buffer_destroy(ext_list);
+                    buffer_destroy(body);
+                    return -1;
+                }
+            } else if( curr->type == X509_EXTENSION_SKID) {
+                if(!buffer_append_bytes(ext_seq, OID_EXT_SKID, sizeof(OID_EXT_SKID))) {
+                    buffer_destroy(ext_seq);
+                    buffer_destroy(ext_list);
+                    buffer_destroy(body);
+                    return -1;
+                }
+            } else if( curr->type == X509_EXTENSION_AKID) {
+                if(!buffer_append_bytes(ext_seq, OID_EXT_AKID, sizeof(OID_EXT_AKID))) {
                     buffer_destroy(ext_seq);
                     buffer_destroy(ext_list);
                     buffer_destroy(body);

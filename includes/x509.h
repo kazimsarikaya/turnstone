@@ -33,7 +33,9 @@ typedef enum x509_extension_type_t {
     X509_EXTENSION_BASIC_CONSTRAINTS, ///< Basic Constraints extension (e.g., CA flag, path length).
     X509_EXTENSION_KEY_USAGE, ///< Key Usage extension (defines permitted uses of the key).
     X509_EXTENSION_EXTENDED_KEY_USAGE, ///< Extended Key Usage extension (further specifies permitted uses).
-    X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME ///< Subject Alternative Name extension (e.g., DNS names, IP addresses).
+    X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME, ///< Subject Alternative Name extension (e.g., DNS names, IP addresses).
+    X509_EXTENSION_SKID, ///< Subject Key Identifier extension.
+    X509_EXTENSION_AKID, ///< Authority Key Identifier extension.
 } x509_extension_type_t;
 
 /**
@@ -207,6 +209,30 @@ int8_t x509_certificate_add_extended_key_usage(x509_certificate_t* cert, x509_ex
  * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
  */
 int8_t x509_certificate_add_subject_alternative_name(x509_certificate_t* cert, x509_subject_alternative_name_type_t type, const char_t* value);
+
+/**
+ * @brief Adds the Subject Key Identifier (SKID) extension to the certificate.
+ *
+ * The SKID is a unique identifier for the public key contained in the certificate.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param skid Pointer to the raw SKID bytes.
+ * @param skid_length The length of the SKID in bytes.
+ * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
+ */
+int8_t x509_certificate_add_subject_key_identifier(x509_certificate_t* cert, const uint8_t* skid, size_t skid_length);
+
+/**
+ * @brief Adds the Authority Key Identifier (AKID) extension to the certificate.
+ *
+ * The AKID is used to identify the public key corresponding to the private key used to sign the certificate.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param akid Pointer to the raw AKID bytes.
+ * @param akid_length The length of the AKID in bytes.
+ * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
+ */
+int8_t x509_certificate_add_authority_key_identifier(x509_certificate_t* cert, const uint8_t* akid, size_t akid_length);
 
 /**
  * @brief Adds the public key information to the certificate.
