@@ -150,7 +150,7 @@ uint8_t* sha256_final(sha256_ctx_t* ctx) {
         while (i < 56) {
             ctx->data[i++] = 0x00;
         }
-    }else {
+    }else if (ctx->datalen < SHA256_BLOCK_SIZE) {
         ctx->data[i++] = 0x80;
 
         while (i < SHA256_BLOCK_SIZE) {
@@ -159,6 +159,10 @@ uint8_t* sha256_final(sha256_ctx_t* ctx) {
 
         sha256_transform(ctx, ctx->data);
         memory_memset(ctx->data, 0, SHA256_BLOCK_SIZE);
+    } else {
+        // This case should not happen
+        memory_free(ctx);
+        return NULL;
     }
 
     ctx->bitlen += ctx->datalen * 8;
