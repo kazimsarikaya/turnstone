@@ -13,6 +13,7 @@
 #include <crypto/x25519.h>
 #include <crypto/sha2.h>
 #include <crypto/pem.h>
+#include <crypto/der.h>
 
 int main(void);
 

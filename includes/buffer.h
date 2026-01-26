@@ -169,6 +169,13 @@ uint8_t* buffer_get_all_bytes_and_reset(buffer_t* buffer, uint64_t* length);
 uint8_t* buffer_get_all_bytes_and_destroy(buffer_t* buffer, uint64_t* length);
 
 /**
+ * @brief returns raw byte array from buffer, byte array is not copied, position is not advanced
+ * @param[in] buffer buffer to get raw bytes
+ * @return uint8_t* pointer to raw byte array
+ */
+uint8_t* buffer_get_raw_bytes(buffer_t* buffer);
+
+/**
  * @brief changes position of buffer
  * @param[in] buffer buffer to change position
  * @param[in] position position to change

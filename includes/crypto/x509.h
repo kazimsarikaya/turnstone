@@ -95,25 +95,16 @@ typedef enum x509_subject_alternative_name_type_t {
     X509_SUBJECT_ALTERNATIVE_NAME_TYPE_EMAIL, ///< Email address.
 } x509_subject_alternative_name_type_t;
 
-
-/**
- * @brief Enumeration for the public key algorithm used in the certificate.
- */
-typedef enum x509_public_key_algorithm_t {
-    X509_PUBLIC_KEY_ALGORITHM_UNKNOWN, ///< Unknown public key algorithm.
-    X509_PUBLIC_KEY_ALGORITHM_EC, ///< Elliptic Curve (EC) algorithm.
-    X509_PUBLIC_KEY_ALGORITHM_ED25519, ///< Ed25519 algorithm (a specific elliptic curve digital signature algorithm).
-    X509_PUBLIC_KEY_ALGORITHM_X25519, ///< X25519 algorithm (an elliptic curve Diffie-Hellman function).
-} x509_public_key_algorithm_t;
-
 /**
  * @brief Enumeration for the signature algorithm used to sign the certificate.
  */
-typedef enum x509_signature_algorithm_t {
-    X509_SIGNATURE_ALGORITHM_UNKNOWN, ///< Unknown signature algorithm.
-    X509_SIGNATURE_ALGORITHM_ECDSA_SECP256R1_SHA256, ///< ECDSA with SECP256R1 curve and SHA256 hash.
-    X509_SIGNATURE_ALGORITHM_ED25519, ///< Ed25519 signature algorithm.
-} x509_signature_algorithm_t;
+typedef enum x509_algorithm_t {
+    X509_ALGORITHM_UNKNOWN, ///< Unknown signature algorithm.
+    X509_ALGORITHM_EC, ///< Elliptic Curve (EC) algorithm.
+    X509_ALGORITHM_ECDSA_SECP256R1_SHA256, ///< ECDSA with SECP256R1 curve and SHA256 hash.
+    X509_ALGORITHM_ED25519, ///< Ed25519 signature algorithm.
+    X509_ALGORITHM_X25519, ///< X25519 key agreement algorithm.
+} x509_algorithm_t;
 
 
 /**
@@ -245,10 +236,10 @@ int8_t x509_certificate_add_authority_key_identifier(x509_certificate_t* cert, c
  * @param public_key_length The length of the public key in bytes.
  * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
  */
-int8_t x509_certificate_add_public_key(x509_certificate_t*         cert,
-                                       x509_public_key_algorithm_t algorithm,
-                                       const uint8_t*              public_key,
-                                       size_t                      public_key_length);
+int8_t x509_certificate_add_public_key(x509_certificate_t* cert,
+                                       x509_algorithm_t    algorithm,
+                                       const uint8_t*      public_key,
+                                       size_t              public_key_length);
 
 /**
  * @brief Signs the certificate using the provided private key.
@@ -262,10 +253,10 @@ int8_t x509_certificate_add_public_key(x509_certificate_t*         cert,
  * @param private_key_length The length of the private key in bytes.
  * @return 0 on success, -1 on failure (e.g., invalid input, TBS encoding failed, signing failed).
  */
-int8_t x509_certificate_sign(x509_certificate_t*        cert,
-                             x509_signature_algorithm_t algorithm,
-                             const uint8_t*             private_key,
-                             size_t                     private_key_length);
+int8_t x509_certificate_sign(x509_certificate_t* cert,
+                             x509_algorithm_t    algorithm,
+                             const uint8_t*      private_key,
+                             size_t              private_key_length);
 
 /**
  * @brief Assembles the final DER-encoded certificate structure.

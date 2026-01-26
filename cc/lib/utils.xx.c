@@ -141,7 +141,7 @@ int8_t fto_base_with_buffer(char_t* buffer, float64_t number, number_t prec, num
 
     int sign = 0;
 
-    if(number < 0)  {
+    if(number < 0) {
         sign = 1;
     }
 

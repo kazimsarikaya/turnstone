@@ -20,7 +20,7 @@ uint32_t main(uint32_t argc, char_t** argv) {
 
     size_t res_enc_len = 0, res_dec_len;
 
-    res_enc_len = base64_encode(original_data, strlen((char_t*)original_data), true, &enc_result);
+    res_enc_len = base64_encode(original_data, strlen((char_t*)original_data), &enc_result);
 
     if(res_enc_len == 0 || enc_result == NULL) {
         print_error("base64 encode failed");

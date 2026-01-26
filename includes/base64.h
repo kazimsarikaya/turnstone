@@ -23,12 +23,44 @@ extern "C" {
  *
  * @param in Pointer to the input byte array.
  * @param len Length of the input byte array.
- * @param add_newline If TRUE, a newline character is appended to the encoded string.
  * @param out Pointer to a pointer that will store the dynamically allocated
  *            Base64 encoded string. This pointer will be NULL on failure.
  * @return The length of the encoded string (excluding null terminator), or 0 on failure.
  */
-size_t base64_encode(const uint8_t* in, size_t len, boolean_t add_newline, uint8_t** out);
+size_t base64_encode(const uint8_t* in, size_t len, uint8_t** out);
+
+/**
+ * @brief Encodes a byte array into a Base64 string following RFC 7468.
+ *
+ * This function takes a byte array as input and encodes it into a Base64
+ * string according to the specifications outlined in RFC 7468. The resulting
+ * string is dynamically allocated and should be freed by the caller.
+ * There will be new lines added every 64 characters.
+ *
+ * @param in Pointer to the input byte array.
+ * @param len Length of the input byte array.
+ * @param out Pointer to a pointer that will store the dynamically allocated
+ *            Base64 encoded string. This pointer will be NULL on failure.
+ * @return The length of the encoded string (excluding null terminator), or 0 on failure.
+ */
+size_t base64_encode_rfc7468(const uint8_t* in, size_t len, uint8_t** out);
+
+/**
+ * @brief Encodes a byte array into a Base64 string following RFC 2045.
+ *
+ * This function takes a byte array as input and encodes it into a Base64
+ * string according to the specifications outlined in RFC 2045. The resulting
+ * string is dynamically allocated and should be freed by the caller.
+ * There will be new lines added every 76 characters.
+ *
+ * @param in Pointer to the input byte array.
+ * @param len Length of the input byte array.
+ * @param out Pointer to a pointer that will store the dynamically allocated
+ *            Base64 encoded string. This pointer will be NULL on failure.
+ * @return The length of the encoded string (excluding null terminator), or 0 on failure.
+ */
+size_t base64_encode_rfc2045(const uint8_t* in, size_t len, uint8_t** out);
+
 
 /**
  * @brief Decodes a Base64 string into a byte array.

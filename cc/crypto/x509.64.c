@@ -17,6 +17,7 @@
 #include <crypto/x25519.h>
 #include <base64.h>
 #include <crypto/pem.h>
+#include <crypto/der.h>
 
 MODULE("turnstone.lib.crypto");
 
@@ -76,14 +77,14 @@ struct x509_certificate_t {
     x509_extension_t* extensions;
 
     // Public Key Info (The "SubjectPublicKeyInfo" part)
-    x509_public_key_algorithm_t public_key_algorithm;
-    size_t                      public_key_length;
-    uint8_t*                    public_key;
+    x509_algorithm_t public_key_algorithm;
+    size_t           public_key_length;
+    uint8_t*         public_key;
 
     // Signature Info
-    x509_signature_algorithm_t signature_algorithm;
-    size_t                     signature_length;
-    uint8_t*                   signature;
+    x509_algorithm_t signature_algorithm;
+    size_t           signature_length;
+    uint8_t*         signature;
 
     // tbs data cache
     uint8_t* tbs_data;
@@ -93,18 +94,6 @@ struct x509_certificate_t {
     uint8_t* certificate_data;
     size_t   certificate_length;
 };
-
-static const uint8_t OID_CN[] = { 0x06, 0x03, 0x55, 0x04, 0x03 };
-static const uint8_t OID_ED25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x70 };
-static const uint8_t OID_X25519[] = { 0x06, 0x03, 0x2B, 0x65, 0x6E };
-static const uint8_t OID_SERVER_AUTH[] = { 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01 };
-static const uint8_t OID_CLIENT_AUTH[] = { 0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02 };
-static const uint8_t OID_EXT_BASIC_CONSTRAINTS[] = { 0x06, 0x03, 0x55, 0x1D, 0x13 };
-static const uint8_t OID_EXT_KEY_USAGE[] = { 0x06, 0x03, 0x55, 0x1D, 0x0F };
-static const uint8_t OID_EXT_EXTENDED_KEY_USAGE[] = { 0x06, 0x03, 0x55, 0x1D, 0x25 };
-static const uint8_t OID_EXT_SAN[] = { 0x06, 0x03, 0x55, 0x1D, 0x11 };
-static const uint8_t OID_EXT_SKID[] = { 0x06, 0x03, 0x55, 0x1D, 0x0E };
-static const uint8_t OID_EXT_AKID[] = { 0x06, 0x03, 0x55, 0x1D, 0x23 };
 
 x509_certificate_t* x509_certificate_new(void) {
     x509_certificate_t* cert = memory_malloc(sizeof(x509_certificate_t));
@@ -387,10 +376,10 @@ int8_t x509_certificate_add_authority_key_identifier(x509_certificate_t* cert, c
     return 0;
 }
 
-int8_t x509_certificate_add_public_key(x509_certificate_t*         cert,
-                                       x509_public_key_algorithm_t algorithm,
-                                       const uint8_t*              public_key,
-                                       size_t                      public_key_length) {
+int8_t x509_certificate_add_public_key(x509_certificate_t* cert,
+                                       x509_algorithm_t    algorithm,
+                                       const uint8_t*      public_key,
+                                       size_t              public_key_length) {
     if (cert == NULL || public_key == NULL || public_key_length == 0) {
         return -1;
     }
@@ -406,82 +395,44 @@ int8_t x509_certificate_add_public_key(x509_certificate_t*         cert,
     return 0;
 }
 
-static size_t der_encode_length(buffer_t* buffer, size_t length) {
-    if (length < 0x80) {
-        buffer_append_byte(buffer, (uint8_t)length);
-        return 1;
+static int8_t x509_encode_name(der_encoder_t* der_encoder, const char_t* common_name) {
+    if(!der_encoder || !common_name) {
+        return -1;
     }
 
-    size_t num_bytes = 0;
-    size_t len = length;
-    while (len > 0) {
-        len >>= 8;
-        num_bytes++;
-    }
-    buffer_append_byte(buffer, (uint8_t)(0x80 | num_bytes));
-    for (size_t i = num_bytes; i > 0; i--) {
-        buffer_append_byte(buffer, (uint8_t)((length >> ((i - 1) * 8)) & 0xFF));
-    }
-    return 1 + num_bytes;
-}
-
-static void der_encode_integer_u128(buffer_t* buffer, uint128_t value) {
-    uint8_t bytes[16];
-    // Convert u128 to big-endian bytes...
-    for (int32_t i = 15; i >= 0; i--) {
-        bytes[i] = (uint8_t)(value & 0xFF);
-        value >>= 8;
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
     }
 
-    // Find first non-zero byte
-    int start = 0;
-    while (start < 15 && bytes[start] == 0) {start++;}
-
-    size_t len = 16 - start;
-    buffer_append_byte(buffer, 0x02); // Tag: INTEGER
-
-    // If MSB is 1, prepend 0x00
-    if (bytes[start] & 0x80) {
-        der_encode_length(buffer, len + 1);
-        buffer_append_byte(buffer, 0x00);
-    } else {
-        der_encode_length(buffer, len);
+    if(der_encoder_start_set(der_encoder) != 0) {
+        return -1;
     }
 
-    buffer_append_bytes(buffer, &bytes[start], len);
-}
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
 
-static buffer_t* x509_encode_name(const char_t* common_name) {
-    // 1. Create the innermost content: The AttributeTypeAndValue (Sequence)
-    buffer_t* attr_type_val_content = buffer_new();
-    buffer_append_bytes(attr_type_val_content, OID_CN, sizeof(OID_CN));
+    if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CN) != 0) {
+        return -1;
+    }
 
-    buffer_append_byte(attr_type_val_content, 0x13); // PrintableString
-    der_encode_length(attr_type_val_content, strlen(common_name));
-    buffer_append_bytes(attr_type_val_content, (uint8_t*)common_name, strlen(common_name));
+    if(der_encoder_encode_printable_string(der_encoder, common_name, strlen(common_name)) != 0) {
+        return -1;
+    }
 
-    // 2. Wrap it in a SEQUENCE, then into the RDN (Set)
-    buffer_t* rdn_set_content = buffer_new();
-    buffer_append_byte(rdn_set_content, 0x30); // SEQUENCE Tag
-    der_encode_length(rdn_set_content, buffer_get_length(attr_type_val_content));
-    buffer_append_buffer(rdn_set_content, attr_type_val_content);
-    buffer_destroy(attr_type_val_content);
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
 
-    // 3. Wrap the RDN into the Name (Sequence)
-    buffer_t* name_content = buffer_new();
-    buffer_append_byte(name_content, 0x31); // SET Tag
-    der_encode_length(name_content, buffer_get_length(rdn_set_content));
-    buffer_append_buffer(name_content, rdn_set_content);
-    buffer_destroy(rdn_set_content);
+    if(der_encoder_end_set(der_encoder) != 0) {
+        return -1;
+    }
 
-    // 4. Final Name Wrapper
-    buffer_t* name_final = buffer_new();
-    buffer_append_byte(name_final, 0x30); // SEQUENCE Tag
-    der_encode_length(name_final, buffer_get_length(name_content));
-    buffer_append_buffer(name_final, name_content);
-    buffer_destroy(name_content);
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
 
-    return name_final;
+    return 0;
 }
 
 static int8_t x509_parse_ipv4address(const char_t* ip_str, uint8_t* out_bytes) {
@@ -529,563 +480,450 @@ static int8_t x509_parse_ipv4address(const char_t* ip_str, uint8_t* out_bytes) {
     return 0;
 }
 
-static buffer_t* x509_encode_extension_value(x509_extension_t* ext) {
-    buffer_t* value = buffer_new();
+static int8_t x509_encode_extension_basic_conntraints(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if(!der_encoder || !ext) {
+        return -1;
+    }
 
-    switch (ext->type) {
-    case X509_EXTENSION_BASIC_CONSTRAINTS: {
-        buffer_append_byte(value, 0x30); // SEQUENCE
-        buffer_t* seq = buffer_new();
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
 
-        // isCA BOOLEAN
-        buffer_append_byte(seq, 0x01);
-        der_encode_length(seq, 1);
-        buffer_append_byte(seq, ext->data.basic_constraints.is_ca ? 0xFF : 0x00);
+    if(der_encoder_encode_boolean(der_encoder, ext->data.basic_constraints.is_ca) != 0) {
+        return -1;
+    }
 
-        // pathLenConstraint INTEGER (if applicable)
-        if (ext->data.basic_constraints.path_len >= 0) {
-            der_encode_integer_u128(seq, (uint128_t)ext->data.basic_constraints.path_len);
+    if (ext->data.basic_constraints.path_len >= 0) {
+        if(der_encoder_encode_integer(der_encoder, (uint128_t)ext->data.basic_constraints.path_len) != 0) {
+            return -1;
         }
+    }
 
-        der_encode_length(value, buffer_get_length(seq));
-        buffer_append_buffer(value, seq);
-        buffer_destroy(seq);
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_extension_key_usage(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    if(der_encoder_encode_bit_string(der_encoder, (uint8_t*)&ext->data.key_usage, 1) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_extension_extended_key_usage(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    // OID for EKU based on type
+    switch (ext->data.eku) {
+    case X509_EXTENDED_KEY_USAGE_SERVER_AUTH: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_SERVER_AUTH) != 0) {
+            return -1;
+        }
         break;
     }
-    case X509_EXTENSION_KEY_USAGE: {
-        buffer_append_byte(value, 0x03); // BIT STRING
-        buffer_t* bitstr = buffer_new();
-
-        // Unused bits
-        buffer_append_byte(bitstr, 0x00);
-
-        // Key usage bits
-        buffer_append_byte(bitstr, (uint8_t)ext->data.key_usage);
-
-        der_encode_length(value, buffer_get_length(bitstr));
-        buffer_append_buffer(value, bitstr);
-        buffer_destroy(bitstr);
-        break;
-    }
-    case X509_EXTENSION_EXTENDED_KEY_USAGE: {
-        buffer_append_byte(value, 0x30); // SEQUENCE
-        buffer_t* seq = buffer_new();
-
-        // OID for EKU based on type
-        const uint8_t* eku_oid = NULL;
-        size_t eku_oid_len = 0;
-        switch (ext->data.eku) {
-        case X509_EXTENDED_KEY_USAGE_SERVER_AUTH: {
-            eku_oid = OID_SERVER_AUTH;
-            eku_oid_len = sizeof(OID_SERVER_AUTH);
-            break;
+    case X509_EXTENDED_KEY_USAGE_CLIENT_AUTH: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CLIENT_AUTH) != 0) {
+            return -1;
         }
-        case X509_EXTENDED_KEY_USAGE_CLIENT_AUTH: {
-            eku_oid = OID_CLIENT_AUTH;
-            eku_oid_len = sizeof(OID_CLIENT_AUTH);
-            break;
-        }
-        default:
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported EKU type");
-            buffer_destroy(value);
-            return NULL;
-        }
-        buffer_append_bytes(seq, (uint8_t*)eku_oid, eku_oid_len);
-
-        der_encode_length(value, buffer_get_length(seq));
-        buffer_append_buffer(value, seq);
-        buffer_destroy(seq);
-        break;
-    }
-    case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: {
-        buffer_append_byte(value, 0x30); // SEQUENCE
-        buffer_t* seq = buffer_new();
-
-        x509_subject_alternative_name_t* san = ext->data.san_list;
-        while (san) {
-            switch (san->type) {
-            case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_DNS: {
-                buffer_append_byte(seq, 0x82); // [2] DNSName
-                der_encode_length(seq, strlen(san->value));
-                buffer_append_bytes(seq, (uint8_t*)san->value, strlen(san->value));
-                break;
-            }
-            case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_IP: {
-                buffer_append_byte(seq, 0x87); // [7] iPAddress
-                // Assuming IPv4 for simplicity
-                uint8_t ip_bytes[4];
-                if (x509_parse_ipv4address(san->value, ip_bytes) != 0) {
-                    PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid IP address format");
-                    buffer_destroy(value);
-                    buffer_destroy(seq);
-                    return NULL;
-                }
-                der_encode_length(seq, 4);
-                buffer_append_bytes(seq, ip_bytes, 4);
-                break;
-            }
-            case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_EMAIL: {
-                buffer_append_byte(seq, 0x81); // [1] rfc822Name
-                der_encode_length(seq, strlen(san->value));
-                buffer_append_bytes(seq, (uint8_t*)san->value, strlen(san->value));
-                break;
-            }
-            default:
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported SAN type");
-                buffer_destroy(value);
-                buffer_destroy(seq);
-                return NULL;
-            }
-            san = san->next;
-        }
-
-        der_encode_length(value, buffer_get_length(seq));
-        buffer_append_buffer(value, seq);
-        buffer_destroy(seq);
-        break;
-    }
-    case X509_EXTENSION_SKID: {
-        buffer_append_byte(value, 0x04); // OCTET STRING
-        buffer_t* octet_str = buffer_new();
-
-        buffer_append_bytes(octet_str, ext->data.skid.data, ext->data.skid.length);
-
-        der_encode_length(value, buffer_get_length(octet_str));
-        buffer_append_buffer(value, octet_str);
-        buffer_destroy(octet_str);
-        break;
-    }
-    case X509_EXTENSION_AKID: {
-        buffer_append_byte(value, 0x30); // SEQUENCE
-        buffer_t* seq = buffer_new();
-        buffer_append_byte(seq, 0x80); // [0] keyIdentifier
-        buffer_t* octet_str = buffer_new();
-        buffer_append_bytes(octet_str, ext->data.akid.data, ext->data.akid.length);
-        der_encode_length(seq, buffer_get_length(octet_str));
-        buffer_append_buffer(seq, octet_str);
-        buffer_destroy(octet_str);
-        der_encode_length(value, buffer_get_length(seq));
-        buffer_append_buffer(value, seq);
-        buffer_destroy(seq);
         break;
     }
     default:
-        // Unsupported extension type
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported extension type: %d", ext->type);
-        buffer_destroy(value);
-        return NULL;
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported EKU type");
+        return -1;
     }
 
-    return value;
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
-static int8_t x509_encode_tbs(x509_certificate_t* cert) {
-    if (!cert || !cert->issuer_common_name || !cert->subject_common_name ||
+static int8_t x509_encode_extension_subject_alternative_name(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    x509_subject_alternative_name_t* san = ext->data.san_list;
+    while (san) {
+        switch (san->type) {
+        case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_DNS: {
+            if(der_encoder_encode_context_specific_string(der_encoder, 2, (uint8_t*)san->value, strlen(san->value)) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_IP: {
+            uint8_t ip_bytes[4];
+            if (x509_parse_ipv4address(san->value, ip_bytes) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid IP address format");
+                return -1;
+            }
+            if(der_encoder_encode_context_specific_string(der_encoder, 7, ip_bytes, 4) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_EMAIL: {
+            if(der_encoder_encode_context_specific_string(der_encoder, 1, (uint8_t*)san->value, strlen(san->value)) != 0) {
+                return -1;
+            }
+            break;
+        }
+        default:
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported SAN type");
+            return -1;
+        }
+        san = san->next;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_extension_skid(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    if(der_encoder_encode_octet_string(der_encoder, ext->data.skid.data, ext->data.skid.length) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_extension_akid(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_encode_context_specific_string(der_encoder, 0, ext->data.akid.data, ext->data.akid.length) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_extension_value(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    switch (ext->type) {
+    case X509_EXTENSION_BASIC_CONSTRAINTS: return x509_encode_extension_basic_conntraints(der_encoder, ext);
+    case X509_EXTENSION_KEY_USAGE: return x509_encode_extension_key_usage(der_encoder, ext);
+    case X509_EXTENSION_EXTENDED_KEY_USAGE: return x509_encode_extension_extended_key_usage(der_encoder, ext);
+    case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: return x509_encode_extension_subject_alternative_name(der_encoder, ext);
+    case X509_EXTENSION_SKID: return x509_encode_extension_skid(der_encoder, ext);
+    case X509_EXTENSION_AKID: return x509_encode_extension_akid(der_encoder, ext);
+    default:
+    }
+
+    PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported extension type: %d", ext->type);
+
+    return -1;
+}
+
+static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificate_t* cert) {
+    if(!der_encoder || !cert) {
+        return -1;
+    }
+
+    if(cert->extensions == NULL) {
+        return 0; // No extensions to encode
+    }
+
+    if(der_encoder_start_explicit_tag(der_encoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 3) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    x509_extension_t* ext = cert->extensions;
+    while (ext) {
+        if(der_encoder_start_sequence(der_encoder) != 0) {
+            return -1;
+        }
+
+        // Encode OID based on extension type
+        switch (ext->type) {
+        case X509_EXTENSION_BASIC_CONSTRAINTS: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_BASIC_CONSTRAINTS) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_EXTENSION_KEY_USAGE: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_KEY_USAGE) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_EXTENSION_EXTENDED_KEY_USAGE: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_EXTENDED_KEY_USAGE) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_SAN) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_EXTENSION_SKID: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_SKID) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_EXTENSION_AKID: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_AKID) != 0) {
+                return -1;
+            }
+            break;
+        }
+        default:
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported extension type: %d", ext->type);
+            return -1;
+        }
+
+        if (ext->is_critical) {
+            if(der_encoder_encode_boolean(der_encoder, true) != 0) {
+                return -1;
+            }
+        }
+
+        if(der_encoder_start_octet_string(der_encoder) != 0) {
+            return -1;
+        }
+
+        if(x509_encode_extension_value(der_encoder, ext) != 0) {
+            return -1;
+        }
+
+        if(der_encoder_end_octet_string(der_encoder) != 0) {
+            return -1;
+        }
+
+        if(der_encoder_end_sequence(der_encoder) != 0) {
+            return -1;
+        }
+
+        ext = ext->next;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_end_explicit_tag(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_validity(der_encoder_t* der_encoder, time_t not_before, time_t not_after) {
+    if(!der_encoder) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_encode_utc_time(der_encoder, not_before) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_encode_utc_time(der_encoder, not_after) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_algorithm_identifier(der_encoder_t* der_encoder, x509_algorithm_t algorithm) {
+    if(!der_encoder || algorithm == 0) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    switch (algorithm) {
+    case X509_ALGORITHM_ED25519: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ED25519) != 0) {
+            return -1;
+        }
+        break;
+    }
+    case X509_ALGORITHM_X25519: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_X25519) != 0) {
+            return -1;
+        }
+        break;
+    }
+    default:
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported algorithm: %d", algorithm);
+        return -1;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_data_with_bit_string_with_alogrithm_identifier(der_encoder_t*   der_encoder,
+                                                                         x509_algorithm_t algorithm,
+                                                                         const uint8_t*   data,
+                                                                         size_t           data_length) {
+    if(!der_encoder || algorithm == 0 || !data || data_length == 0) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    if(x509_encode_algorithm_identifier(der_encoder, algorithm) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_encode_bit_string(der_encoder, data, data_length) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_encode_tbs_internal(der_encoder_t* der_encoder, x509_certificate_t* cert) {
+    if (!cert || !der_encoder || !cert->issuer_common_name || !cert->subject_common_name ||
         !cert->public_key || cert->not_before == 0 || cert->not_after == 0) {
         return -1;
     }
 
-    buffer_t* body = buffer_new();
-
-    if(!body) {
+    if(der_encoder_start_sequence(der_encoder) != 0) {
         return -1;
     }
 
     // 1. Version [0] EXPLICIT INTEGER (v3 = 2)
     // Hex: A0 03 02 01 02
-    uint8_t version_data[] = { 0xA0, 0x03, 0x02, 0x01, 0x02 };
-    if(!buffer_append_bytes(body, version_data, 5)) {
-        buffer_destroy(body);
+    if(der_encoder_start_explicit_tag(der_encoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 0) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_encode_integer(der_encoder, (uint128_t)cert->version) != 0) {
+        return -1;
+    }
+
+    if(der_encoder_end_explicit_tag(der_encoder) != 0) {
         return -1;
     }
 
     // 2. Serial Number (Integer)
-    der_encode_integer_u128(body, cert->serial_number);
-
-    // 3. Signature Algorithm Identifier (Ed25519)
-    // SEQUENCE { OID 1.3.101.112 }
-    if(!buffer_append_byte(body, 0x30)) {
-        buffer_destroy(body);
+    if(der_encoder_encode_integer_u128(der_encoder, cert->serial_number) != 0) {
         return -1;
     }
 
-    switch (cert->signature_algorithm) {
-    case X509_SIGNATURE_ALGORITHM_ED25519: {
-        der_encode_length(body, sizeof(OID_ED25519));
-        if(buffer_append_bytes(body, OID_ED25519, sizeof(OID_ED25519)) == false) {
-            buffer_destroy(body);
-            return -1;
-        }
-        break;
-    }
-    default:
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm: %d", cert->signature_algorithm);
-        buffer_destroy(body);
+    // 3. Signature Algorithm Identifier
+    if(x509_encode_algorithm_identifier(der_encoder, cert->signature_algorithm) != 0) {
         return -1;
     }
 
-    // 4 & 6. Issuer and Subject (Helper for DN)
+    //// 4. Issuer (Helper for DN)
     // Encodes: SEQUENCE { SET { SEQUENCE { OID(CN), PrintableString(val) } } }
-    buffer_t* issuer_dn = x509_encode_name(cert->issuer_common_name);
-    if(!issuer_dn) {
-        buffer_destroy(body);
+    if(x509_encode_name(der_encoder, cert->issuer_common_name) != 0) {
         return -1;
     }
-
-    if(!buffer_append_buffer(body, issuer_dn)) {
-        buffer_destroy(issuer_dn);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    buffer_destroy(issuer_dn);
 
     // 5. Validity
-    // SEQUENCE { UTCTime, UTCTime }
-    buffer_t* validity = buffer_new();
-    if(!validity) {
-        buffer_destroy(body);
+    if(x509_encode_validity(der_encoder, cert->not_before, cert->not_after) != 0) {
         return -1;
     }
 
-    char_t time_str[14]; // YYMMDDHHMMSSZ + null
-
-    if(!buffer_append_byte(validity, 0x17)) { // UTCTime
-        buffer_destroy(validity);
-        buffer_destroy(body);
+    // 6. Subject (Helper for DN)
+    if(x509_encode_name(der_encoder, cert->subject_common_name) != 0) {
         return -1;
     }
-
-    time_ns_format_utc(cert->not_before, time_str, sizeof(time_str));
-    der_encode_length(validity, 13);
-    if(!buffer_append_bytes(validity, (uint8_t*)time_str, 13)) {
-        buffer_destroy(validity);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    if(!buffer_append_byte(validity, 0x17)) { // UTCTime
-        buffer_destroy(validity);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    time_ns_format_utc(cert->not_after, time_str, sizeof(time_str));
-    der_encode_length(validity, 13);
-    if(!buffer_append_bytes(validity, (uint8_t*)time_str, 13)) {
-        buffer_destroy(validity);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    if(!buffer_append_byte(body, 0x30)) { // Wrap Validity
-        buffer_destroy(validity);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    der_encode_length(body, buffer_get_length(validity));
-    if(!buffer_append_buffer(body, validity)) {
-        buffer_destroy(validity);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    buffer_destroy(validity);
-
-    // Subject DN
-    buffer_t* subject_dn = x509_encode_name(cert->subject_common_name);
-    if(!subject_dn) {
-        buffer_destroy(body);
-        return -1;
-    }
-
-    if(!buffer_append_buffer(body, subject_dn)) {
-        buffer_destroy(subject_dn);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    buffer_destroy(subject_dn);
 
     // 7. SubjectPublicKeyInfo (Crucial structure for X25519)
-    // SEQUENCE { SEQUENCE { OID X25519 }, BIT STRING { KeyBytes } }
-    buffer_t* spki = buffer_new();
-    if(!spki) {
-        buffer_destroy(body);
+    if(x509_encode_data_with_bit_string_with_alogrithm_identifier(der_encoder,
+                                                                  cert->public_key_algorithm,
+                                                                  cert->public_key,
+                                                                  cert->public_key_length) != 0) {
         return -1;
     }
-
-    // Algorithm Identifier Sequence
-    if(!buffer_append_byte(spki, 0x30)) {
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    switch (cert->public_key_algorithm) {
-    case X509_PUBLIC_KEY_ALGORITHM_ED25519: {
-        der_encode_length(spki, sizeof(OID_ED25519));
-        if(buffer_append_bytes(spki, OID_ED25519, sizeof(OID_ED25519)) == false) {
-            buffer_destroy(spki);
-            buffer_destroy(body);
-            return -1;
-        }
-        break;
-    }
-    case X509_PUBLIC_KEY_ALGORITHM_X25519: {
-        der_encode_length(spki, sizeof(OID_X25519));
-        if(buffer_append_bytes(spki, OID_X25519, sizeof(OID_X25519)) == false) {
-            buffer_destroy(spki);
-            buffer_destroy(body);
-            return -1;
-        }
-        break;
-    }
-    default:
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported public key algorithm: %d", cert->public_key_algorithm);
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    // Public Key BitString
-    if(!buffer_append_byte(spki, 0x03)) {
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    der_encode_length(spki, cert->public_key_length + 1);
-    if(!buffer_append_byte(spki, 0x00)) { // 0 unused bits
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    if(!buffer_append_bytes(spki, cert->public_key, cert->public_key_length)) {
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    if(!buffer_append_byte(body, 0x30)) { // Wrap SPKI
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    der_encode_length(body, buffer_get_length(spki));
-    if(!buffer_append_buffer(body, spki)) {
-        buffer_destroy(spki);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    buffer_destroy(spki);
 
     // 8. Extensions [3] EXPLICIT SEQUENCE
-    if (cert->extensions) {
-        buffer_t* ext_list = buffer_new();
-        if(!ext_list) {
-            buffer_destroy(body);
-            return -1;
-        }
-
-        x509_extension_t* curr = cert->extensions;
-
-        while (curr) {
-            buffer_t* ext_seq = buffer_new();
-
-            if(!ext_seq) {
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            // OID
-            if (curr->type == X509_EXTENSION_BASIC_CONSTRAINTS) {
-                if(!buffer_append_bytes(ext_seq, OID_EXT_BASIC_CONSTRAINTS, sizeof(OID_EXT_BASIC_CONSTRAINTS))) {
-                    buffer_destroy(ext_seq);
-                    buffer_destroy(ext_list);
-                    buffer_destroy(body);
-                    return -1;
-                }
-            } else if (curr->type == X509_EXTENSION_KEY_USAGE) {
-                if(!buffer_append_bytes(ext_seq, OID_EXT_KEY_USAGE, sizeof(OID_EXT_KEY_USAGE))) {
-                    buffer_destroy(ext_seq);
-                    buffer_destroy(ext_list);
-                    buffer_destroy(body);
-                    return -1;
-                }
-            } else if (curr->type == X509_EXTENSION_EXTENDED_KEY_USAGE) {
-                if(buffer_append_bytes(ext_seq, OID_EXT_EXTENDED_KEY_USAGE, sizeof(OID_EXT_EXTENDED_KEY_USAGE)) == false) {
-                    buffer_destroy(ext_seq);
-                    buffer_destroy(ext_list);
-                    buffer_destroy(body);
-                    return -1;
-                }
-            } else if (curr->type == X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME) {
-                if(!buffer_append_bytes(ext_seq, OID_EXT_SAN, sizeof(OID_EXT_SAN))) {
-                    buffer_destroy(ext_seq);
-                    buffer_destroy(ext_list);
-                    buffer_destroy(body);
-                    return -1;
-                }
-            } else if( curr->type == X509_EXTENSION_SKID) {
-                if(!buffer_append_bytes(ext_seq, OID_EXT_SKID, sizeof(OID_EXT_SKID))) {
-                    buffer_destroy(ext_seq);
-                    buffer_destroy(ext_list);
-                    buffer_destroy(body);
-                    return -1;
-                }
-            } else if( curr->type == X509_EXTENSION_AKID) {
-                if(!buffer_append_bytes(ext_seq, OID_EXT_AKID, sizeof(OID_EXT_AKID))) {
-                    buffer_destroy(ext_seq);
-                    buffer_destroy(ext_list);
-                    buffer_destroy(body);
-                    return -1;
-                }
-            } else {
-                // Unknown extension type
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unknown extension type: %d", curr->type);
-                buffer_destroy(ext_seq);
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            // Criticality (Only if true)
-            if (curr->is_critical) {
-                uint8_t crit[] = { 0x01, 0x01, 0xFF };
-                buffer_append_bytes(ext_seq, crit, 3);
-            }
-
-            // Extension Value (OCTET STRING containing the DER encoded extension)
-            buffer_t* ext_val_raw = x509_encode_extension_value(curr);
-
-            if (ext_val_raw == NULL) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode extension value");
-                buffer_destroy(ext_seq);
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            if(!buffer_append_byte(ext_seq, 0x04)) { // OCTET STRING
-                buffer_destroy(ext_val_raw);
-                buffer_destroy(ext_seq);
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            der_encode_length(ext_seq, buffer_get_length(ext_val_raw));
-            if(!buffer_append_buffer(ext_seq, ext_val_raw)) {
-                buffer_destroy(ext_val_raw);
-                buffer_destroy(ext_seq);
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            buffer_destroy(ext_val_raw);
-
-            // Wrap single extension in SEQUENCE
-            if(!buffer_append_byte(ext_list, 0x30)) {
-                buffer_destroy(ext_seq);
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            der_encode_length(ext_list, buffer_get_length(ext_seq));
-            if(buffer_append_buffer(ext_list, ext_seq) == false) {
-                buffer_destroy(ext_seq);
-                buffer_destroy(ext_list);
-                buffer_destroy(body);
-                return -1;
-            }
-
-            buffer_destroy(ext_seq);
-
-            curr = curr->next;
-        }
-
-        // Wrap [3] { SEQUENCE { ...ext_list... } }
-        buffer_t* ext_wrapper = buffer_new();
-        if(!ext_wrapper) {
-            buffer_destroy(ext_list);
-            buffer_destroy(body);
-            return -1;
-        }
-
-        if(!buffer_append_byte(ext_wrapper, 0x30)) {
-            buffer_destroy(ext_wrapper);
-            buffer_destroy(ext_list);
-            buffer_destroy(body);
-            return -1;
-        }
-
-        der_encode_length(ext_wrapper, buffer_get_length(ext_list));
-        if(!buffer_append_buffer(ext_wrapper, ext_list)) {
-            buffer_destroy(ext_wrapper);
-            buffer_destroy(ext_list);
-            buffer_destroy(body);
-            return -1;
-        }
-
-        buffer_destroy(ext_list);
-
-        if(!buffer_append_byte(body, 0xA3)) { // [3] EXPLICIT
-            buffer_destroy(ext_wrapper);
-            buffer_destroy(body);
-            return -1;
-        }
-
-        der_encode_length(body, buffer_get_length(ext_wrapper));
-        if(!buffer_append_buffer(body, ext_wrapper)) {
-            buffer_destroy(ext_wrapper);
-            buffer_destroy(body);
-            return -1;
-        }
-
-        buffer_destroy(ext_wrapper);
-    }
-
-    // Final Outer TBS SEQUENCE
-    buffer_t* tbs = buffer_new();
-    if(!tbs) {
-        buffer_destroy(body);
+    if(x509_encode_extensions(der_encoder, cert) != 0) {
         return -1;
     }
 
-    if(!buffer_append_byte(tbs, 0x30)) {
-        buffer_destroy(tbs);
-        buffer_destroy(body);
+    if(der_encoder_end_sequence(der_encoder) != 0) {
         return -1;
     }
 
-    der_encode_length(tbs, buffer_get_length(body));
-    if(!buffer_append_buffer(tbs, body)) {
-        buffer_destroy(tbs);
-        buffer_destroy(body);
-        return -1;
-    }
-
-    buffer_destroy(body);
-
-    cert->tbs_data = buffer_get_all_bytes_and_destroy(tbs, &cert->tbs_length);
-
-    if(!cert->tbs_data) {
-        return -1;
-    }
-
-    if(cert->tbs_length == 0) {
+    if(der_encoder_get_der_data(der_encoder, &cert->tbs_data, &cert->tbs_length) != 0) {
         return -1;
     }
 
     return 0;
+}
+
+static int8_t x509_encode_tbs(x509_certificate_t* cert) {
+    der_encoder_t* der_encoder = der_encoder_new();
+    if (!der_encoder) {
+        return -1;
+    }
+
+    int8_t result = x509_encode_tbs_internal(der_encoder, cert);
+    der_encoder_destroy(der_encoder);
+    return result;
 }
 
 static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
@@ -1095,7 +933,7 @@ static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
         return -1;
     }
 
-    cert->signature_algorithm = X509_SIGNATURE_ALGORITHM_ED25519;
+    cert->signature_algorithm = X509_ALGORITHM_ED25519;
 
     if (x509_encode_tbs(cert) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to encode TBS data");
@@ -1118,16 +956,16 @@ static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
     return 0;
 }
 
-int8_t x509_certificate_sign(x509_certificate_t*        cert,
-                             x509_signature_algorithm_t algorithm,
-                             const uint8_t*             private_key,
-                             size_t                     private_key_length) {
+int8_t x509_certificate_sign(x509_certificate_t* cert,
+                             x509_algorithm_t    algorithm,
+                             const uint8_t*      private_key,
+                             size_t              private_key_length) {
     if (cert == NULL || private_key == NULL || private_key_length == 0) {
         return -1;
     }
 
     switch (algorithm) {
-    case X509_SIGNATURE_ALGORITHM_ED25519:
+    case X509_ALGORITHM_ED25519:
         return x509_certificate_sign_with_ed25519(cert, private_key, private_key_length);
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm: %d", algorithm);
@@ -1137,116 +975,57 @@ int8_t x509_certificate_sign(x509_certificate_t*        cert,
     return 0;
 }
 
-int8_t x509_certificate_assemble(x509_certificate_t* cert) {
-    if (cert == NULL || cert->tbs_data == NULL || cert->tbs_length == 0 || cert->signature == NULL) {
+static int8_t x509_certificate_assemble_internal(der_encoder_t* der_encoder, x509_certificate_t* cert) {
+    if (der_encoder == NULL || cert == NULL || cert->tbs_data == NULL || cert->tbs_length == 0 || cert->signature == NULL) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "invalid certificate state for assembly");
         return -1;
     }
 
-    buffer_t* cert_seq = buffer_new();
-
-    if (cert_seq == NULL) {
+    if(der_encoder_start_sequence(der_encoder) != 0) {
         return -1;
     }
 
     // 1. TBSCertificate
-    if(!buffer_append_bytes(cert_seq, cert->tbs_data, cert->tbs_length)) {
-        buffer_destroy(cert_seq);
+    if(der_encoder_encode_raw_bytes(der_encoder, cert->tbs_data, cert->tbs_length) != 0) {
         return -1;
     }
 
-    // 2. AlgorithmIdentifier (Ed25519)
-    // SEQUENCE { OID 1.3.101.112 }
-    buffer_t* alg_id = buffer_new();
-    if(!alg_id) {
-        buffer_destroy(cert_seq);
+    // 2. Signature Algorithm Identifier
+    if(x509_encode_algorithm_identifier(der_encoder, cert->signature_algorithm) != 0) {
         return -1;
     }
 
-    switch (cert->signature_algorithm) {
-    case X509_SIGNATURE_ALGORITHM_ED25519: {
-        if(!buffer_append_bytes(alg_id, OID_ED25519, sizeof(OID_ED25519))) {
-            buffer_destroy(alg_id);
-            buffer_destroy(cert_seq);
-            return -1;
-        }
-    }
-    break;
-    default:
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm in assembly: %d", cert->signature_algorithm);
-        buffer_destroy(alg_id);
-        buffer_destroy(cert_seq);
+    // 3. Signature Value
+    if(der_encoder_encode_bit_string(der_encoder, cert->signature, cert->signature_length) != 0) {
         return -1;
     }
 
-
-    if(!buffer_append_byte(cert_seq, 0x30)) {
-        buffer_destroy(alg_id);
-        buffer_destroy(cert_seq);
-        return -1;
-    }
-
-    der_encode_length(cert_seq, buffer_get_length(alg_id));
-    if(!buffer_append_buffer(cert_seq, alg_id)) {
-        buffer_destroy(alg_id);
-        buffer_destroy(cert_seq);
-        return -1;
-    }
-
-    buffer_destroy(alg_id);
-
-    // 3. Signature Value (BIT STRING)
-    // 64 bytes + 1 byte for "0 unused bits"
-    if(!buffer_append_byte(cert_seq, 0x03)) {
-        buffer_destroy(cert_seq);
-        return -1;
-    }
-
-    der_encode_length(cert_seq, 65);
-    if(!buffer_append_byte(cert_seq, 0x00)) { // 0 unused bits
-        buffer_destroy(cert_seq);
-        return -1;
-    }
-
-    if(!buffer_append_bytes(cert_seq, cert->signature, 64)) {
-        buffer_destroy(cert_seq);
-        return -1;
-    }
-
-    // Final Wrap
-    buffer_t* final_output = buffer_new();
-
-    if(!final_output) {
-        buffer_destroy(cert_seq);
-        return -1;
-    }
-
-    if(!buffer_append_byte(final_output, 0x30)) {
-        buffer_destroy(cert_seq);
-        buffer_destroy(final_output);
-        return -1;
-    }
-
-    der_encode_length(final_output, buffer_get_length(cert_seq));
-    if(!buffer_append_buffer(final_output, cert_seq)) {
-        buffer_destroy(cert_seq);
-        buffer_destroy(final_output);
-        return -1;
-    }
-
-    buffer_destroy(cert_seq);
-
-    cert->certificate_data = buffer_get_all_bytes_and_destroy(final_output, &cert->certificate_length);
-
-    if(!cert->certificate_data) {
-        return -1;
-    }
-
-    if(cert->certificate_length == 0) {
+    if(der_encoder_end_sequence(der_encoder) != 0) {
         return -1;
     }
 
     return 0;
+}
+
+int8_t x509_certificate_assemble(x509_certificate_t* cert) {
+    if (cert == NULL) {
+        return -1;
+    }
+
+    der_encoder_t* der_encoder = der_encoder_new();
+    if (der_encoder == NULL) {
+        return -1;
+    }
+
+    int8_t result = x509_certificate_assemble_internal(der_encoder, cert);
+    if (result != 0) {
+        der_encoder_destroy(der_encoder);
+        return result;
+    }
+
+    result = der_encoder_get_der_data(der_encoder, &cert->certificate_data, &cert->certificate_length);
+    der_encoder_destroy(der_encoder);
+    return result;
 }
 
 uint8_t* x509_certificate_get_der(x509_certificate_t* cert, size_t* out_length) {

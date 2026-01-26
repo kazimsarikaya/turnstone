@@ -341,6 +341,14 @@ uint8_t* buffer_get_all_bytes_and_destroy(buffer_t* buffer, uint64_t* length) {
     return res;
 }
 
+uint8_t* buffer_get_raw_bytes(buffer_t* buffer) {
+    if(!buffer) {
+        return NULL;
+    }
+
+    return buffer->data;
+}
+
 uint8_t  buffer_get_byte(buffer_t* buffer) {
     lock_acquire(buffer->lock);
 

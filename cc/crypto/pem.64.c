@@ -17,7 +17,7 @@ MODULE("turnstone.lib.crypto");
 
 #define PEM_START_MARKER "-----BEGIN "
 #define PEM_START_MARKER_LEN (sizeof(PEM_START_MARKER) - 1)
-#define PEM_END_MARKER   "\n-----END "
+#define PEM_END_MARKER   "-----END "
 #define PEM_END_MARKER_LEN (sizeof(PEM_END_MARKER) - 1)
 #define PEM_MARKER_SUFFIX "-----\n"
 #define PEM_MARKER_SUFFIX_LEN (sizeof(PEM_MARKER_SUFFIX) - 1)
@@ -50,8 +50,9 @@ int8_t pem_encode(const char_t* header,
     }
 
     uint8_t* b64_encoded = NULL;
-    size_t b64_length = base64_encode(der_data, der_length, true, &b64_encoded); // third parameter true to add newlines
+    size_t b64_length = base64_encode_rfc7468(der_data, der_length, &b64_encoded); // third parameter true to add newlines
     if (b64_length == 0 || b64_encoded == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to base64 encode DER data. b64_length=%llu, b64_encoded is null %i", b64_length, b64_encoded == NULL);
         buffer_destroy(pem_buffer);
         return -1;
     }
