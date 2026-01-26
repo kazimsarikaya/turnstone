@@ -16,6 +16,7 @@
 #include <logging.h>
 #include <crypto/x25519.h>
 #include <base64.h>
+#include <crypto/pem.h>
 
 MODULE("turnstone.lib.crypto");
 
@@ -1272,79 +1273,6 @@ uint8_t* x509_certificate_get_der(x509_certificate_t* cert, size_t* out_length) 
     return der_data;
 }
 
-static char_t* pem_encode(const char_t* header, const uint8_t* der_data, size_t der_length, size_t* out_pem_length) {
-    if (header == NULL || der_data == NULL || der_length == 0 || out_pem_length == NULL) {
-        return NULL;
-    }
-
-    buffer_t* pem_buffer = buffer_new();
-    if (pem_buffer == NULL) {
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"-----BEGIN ", strlen("-----BEGIN "))) {
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)header, strlen(header))) {
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"-----\n", strlen("-----\n"))) {
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    uint8_t* b64_encoded = NULL;
-    size_t b64_length = base64_encode(der_data, der_length, true, &b64_encoded);
-    if (b64_length == 0 || b64_encoded == NULL) {
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, b64_encoded, b64_length)) {
-        memory_free(b64_encoded);
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"\n-----END ", strlen("\n-----END "))) {
-        memory_free(b64_encoded);
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)header, strlen(header))) {
-        memory_free(b64_encoded);
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"-----\n", strlen("-----\n"))) {
-        memory_free(b64_encoded);
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    if(!buffer_append_byte(pem_buffer, '\0')) {
-        memory_free(b64_encoded);
-        buffer_destroy(pem_buffer);
-        return NULL;
-    }
-
-    uint8_t* pem_data_bytes = buffer_get_all_bytes_and_destroy(pem_buffer, out_pem_length);
-    memory_free(b64_encoded);
-
-    if (pem_data_bytes == NULL || *out_pem_length == 0) {
-        return NULL;
-    }
-
-
-    return (char_t*)pem_data_bytes;
-}
-
 char_t* x509_certificate_get_pem(x509_certificate_t* cert) {
     if (cert == NULL) {
         return NULL;
@@ -1358,8 +1286,10 @@ char_t* x509_certificate_get_pem(x509_certificate_t* cert) {
     }
 
     size_t pem_length = 0;
-    char_t* pem_data = pem_encode("CERTIFICATE", cert->certificate_data, cert->certificate_length, &pem_length);
-    if (pem_data == NULL) {
+    char_t* pem_data = NULL;
+
+    if(pem_encode("CERTIFICATE", cert->certificate_data, cert->certificate_length, &pem_data, &pem_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to PEM encode certificate");
         return NULL;
     }
 

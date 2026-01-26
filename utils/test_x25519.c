@@ -12,6 +12,7 @@
 #include <strings.h>
 #include <crypto/x25519.h>
 #include <crypto/sha2.h>
+#include <crypto/pem.h>
 
 int main(void);
 
@@ -282,7 +283,7 @@ int main(void) {
     uint8_t signature[64];
     uint8_t ed25519_pubkey[32] = {0};
 
-    res = ed25519_get_pubkey(ed25519_pubkey, ed25519_priv_key_raw);
+    res = ed25519_derive_pubkey(ed25519_pubkey, ed25519_priv_key_raw);
 
     if (res != 0) {
         print_error("Failed to derive Ed25519 public key from seed\n");
@@ -338,7 +339,7 @@ int main(void) {
 
     printf("Testing Ed25519 with OpenSSL generated seed\n");
 
-    if(ed25519_get_pubkey(ed25519_pubkey, openssl_seed_bin) != 0) {
+    if(ed25519_derive_pubkey(ed25519_pubkey, openssl_seed_bin) != 0) {
         print_error("Failed to derive Ed25519 public key from OpenSSL seed\n");
         return -1;
     }
