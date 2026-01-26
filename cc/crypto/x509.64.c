@@ -755,7 +755,7 @@ static int8_t x509_encode_tbs(x509_certificate_t* cert) {
         return -1;
     }
 
-    time_format_utc(cert->not_before, time_str, sizeof(time_str));
+    time_ns_format_utc(cert->not_before, time_str, sizeof(time_str));
     der_encode_length(validity, 13);
     if(!buffer_append_bytes(validity, (uint8_t*)time_str, 13)) {
         buffer_destroy(validity);
@@ -769,7 +769,7 @@ static int8_t x509_encode_tbs(x509_certificate_t* cert) {
         return -1;
     }
 
-    time_format_utc(cert->not_after, time_str, sizeof(time_str));
+    time_ns_format_utc(cert->not_after, time_str, sizeof(time_str));
     der_encode_length(validity, 13);
     if(!buffer_append_bytes(validity, (uint8_t*)time_str, 13)) {
         buffer_destroy(validity);

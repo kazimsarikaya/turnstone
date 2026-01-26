@@ -135,6 +135,42 @@ time_t timeparsed_to_time(timeparsed_t* tp);
 timeparsed_t* time_to_timeparsed(time_t t);
 
 /**
+ * @brief Formats a `time_t` value into a UTC string representation.
+ *
+ * The formatted string follows the "YYMMDDHHMMSSZ" format, where:
+ * - YY: Last two digits of the year
+ * - MM: Month (01-12)
+ * - DD: Day of the month (01-31)
+ * - HH: Hour (00-23)
+ * - MM: Minute (00-59)
+ * - SS: Second (00-59)
+ * - Z: Indicates UTC time
+ *
+ * @param t The `time_t` value to format.
+ * @param buffer Pointer to a character buffer where the formatted string will be stored.
+ * @param buffer_size Size of the provided buffer. Must be at least 13 bytes to hold the full string and null terminator.
+ */
+void time_format_utc(time_t t, char_t* buffer, size_t buffer_size);
+
+/**
+ * @brief Formats a `time_t` value into a UTC string representation with nanosecond precision.
+ *
+ * The formatted string follows the "YYMMDDHHMMSSZ" format, where:
+ * - YY: Last two digits of the year
+ * - MM: Month (01-12)
+ * - DD: Day of the month (01-31)
+ * - HH: Hour (00-23)
+ * - MM: Minute (00-59)
+ * - SS: Second (00-59)
+ * - Z: Indicates UTC time
+ *
+ * @param t The `time_t` value to format. It is expected to represent time in nanoseconds.
+ * @param buffer Pointer to a character buffer where the formatted string will be stored.
+ * @param buffer_size Size of the provided buffer. Must be at least 13 bytes to hold the full string and null terminator.
+ */
+void time_ns_format_utc(time_t t, char_t* buffer, size_t buffer_size);
+
+/**
  * @brief Reads the Time Stamp Counter (TSC) of the CPU.
  *
  * This function provides access to the CPU's internal Time Stamp Counter,

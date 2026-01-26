@@ -8,6 +8,7 @@
 
 #include <time.h>
 #include <memory.h>
+#include <strings.h>
 
 MODULE("turnstone.lib");
 
@@ -111,8 +112,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
     while (days_till_now >= TIME_DAYS_AT_YEAR) {
         if (time_is_leap(tp->year)) {
             days_till_now -= TIME_DAYS_AT_LEAP_YEAR;
-        }
-        else {
+        }else {
             days_till_now -= TIME_DAYS_AT_YEAR;
         }
         tp->year += 1;
@@ -129,12 +129,12 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
         while (1) {
 
             if (index == 1) {
-                if (extra_days - 29 <= 0)
+                if (extra_days - 29 <= 0) {
                     break;
+                }
                 tp->month += 1;
                 extra_days -= 29;
-            }
-            else {
+            }else {
                 if (extra_days - time_days_of_month[index] <= 0) {
                     break;
                 }
@@ -143,8 +143,7 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
             }
             index += 1;
         }
-    }
-    else {
+    }else {
         while (1) {
 
             if (extra_days  - time_days_of_month[index] <= 0) {
@@ -159,11 +158,10 @@ timeparsed_t* parse_time(timeparsed_t* tp, time_t t) {
     if (extra_days > 0) {
         tp->month += 1;
         tp->day = extra_days;
-    }
-    else {
-        if (tp->month == 2 && flag == 1)
+    }else {
+        if (tp->month == 2 && flag == 1) {
             tp->day = 29;
-        else {
+        }else{
             tp->day = time_days_of_month[tp->month - 1];
         }
     }
@@ -215,4 +213,35 @@ uint64_t rdtsc(void) {
     uint32_t lo, hi;
     __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
     return ((uint64_t)hi << 32) | lo;
+}
+
+void time_format_utc(time_t t, char_t* buffer, size_t buffer_size) {
+    if (buffer_size < 13) {
+        return;
+    }
+
+
+    timeparsed_t tp;
+    parse_time(&tp, t);
+
+    // Format: "YYMMDDHHMMSSZ"
+    char_t* tmp_res = strprintf("%02u%02u%02u%02u%02u%02uZ",
+                                tp.year % 100,
+                                tp.month,
+                                tp.day,
+                                tp.hours,
+                                tp.minutes,
+                                tp.seconds);
+    if (tmp_res == NULL) {
+        return;
+    }
+
+    memory_memcopy(tmp_res, buffer, 13);
+
+    memory_free(tmp_res);
+}
+
+void time_ns_format_utc(time_t t, char_t* buffer, size_t buffer_size) {
+    t = t / 1000000000ULL;
+    time_format_utc(t, buffer, buffer_size);
 }
