@@ -15,6 +15,13 @@
 
 MODULE("turnstone.lib.crypto");
 
+#define PEM_START_MARKER "-----BEGIN "
+#define PEM_START_MARKER_LEN (sizeof(PEM_START_MARKER) - 1)
+#define PEM_END_MARKER   "\n-----END "
+#define PEM_END_MARKER_LEN (sizeof(PEM_END_MARKER) - 1)
+#define PEM_MARKER_SUFFIX "-----\n"
+#define PEM_MARKER_SUFFIX_LEN (sizeof(PEM_MARKER_SUFFIX) - 1)
+
 int8_t pem_encode(const char_t* header,
                   const uint8_t* der_data, size_t der_length,
                   char_t** out_pem, size_t* out_pem_length) {
@@ -27,7 +34,7 @@ int8_t pem_encode(const char_t* header,
         return -1;
     }
 
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"-----BEGIN ", strlen("-----BEGIN "))) {
+    if(!buffer_append_bytes(pem_buffer, (uint8_t*)PEM_START_MARKER, PEM_START_MARKER_LEN)) {
         buffer_destroy(pem_buffer);
         return -1;
     }
@@ -37,13 +44,13 @@ int8_t pem_encode(const char_t* header,
         return -1;
     }
 
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"-----\n", strlen("-----\n"))) {
+    if(!buffer_append_bytes(pem_buffer, (uint8_t*)PEM_MARKER_SUFFIX, PEM_MARKER_SUFFIX_LEN)) {
         buffer_destroy(pem_buffer);
         return -1;
     }
 
     uint8_t* b64_encoded = NULL;
-    size_t b64_length = base64_encode(der_data, der_length, true, &b64_encoded);
+    size_t b64_length = base64_encode(der_data, der_length, true, &b64_encoded); // third parameter true to add newlines
     if (b64_length == 0 || b64_encoded == NULL) {
         buffer_destroy(pem_buffer);
         return -1;
@@ -55,7 +62,7 @@ int8_t pem_encode(const char_t* header,
         return -1;
     }
 
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"\n-----END ", strlen("\n-----END "))) {
+    if(!buffer_append_bytes(pem_buffer, (uint8_t*)PEM_END_MARKER, PEM_END_MARKER_LEN)) {
         memory_free(b64_encoded);
         buffer_destroy(pem_buffer);
         return -1;
@@ -67,7 +74,7 @@ int8_t pem_encode(const char_t* header,
         return -1;
     }
 
-    if(!buffer_append_bytes(pem_buffer, (uint8_t*)"-----\n", strlen("-----\n"))) {
+    if(!buffer_append_bytes(pem_buffer, (uint8_t*)PEM_MARKER_SUFFIX, PEM_MARKER_SUFFIX_LEN)) {
         memory_free(b64_encoded);
         buffer_destroy(pem_buffer);
         return -1;
@@ -99,15 +106,13 @@ int8_t pem_decode(const char_t* header,
         return -1;
     }
 
-    const char_t* begin_marker = "-----BEGIN ";;
-    const char_t* end_marker = "\n-----END ";
 
-    if(strncmp(pem_data, begin_marker, strlen(begin_marker)) != 0) {
+    if(strncmp(pem_data, PEM_START_MARKER, PEM_START_MARKER_LEN) != 0) {
         return -1;
     }
 
-    pem_data += strlen(begin_marker);
-    pem_length -= strlen(begin_marker);
+    pem_data += PEM_START_MARKER_LEN;
+    pem_length -= PEM_START_MARKER_LEN;
 
     if(strncmp(pem_data, header, strlen(header)) != 0) {
         return -1;
@@ -116,27 +121,27 @@ int8_t pem_decode(const char_t* header,
     pem_data += strlen(header);
     pem_length -= strlen(header);
 
-    if(strncmp(pem_data, "-----\n", strlen("-----\n")) != 0) {
+    if(strncmp(pem_data, PEM_MARKER_SUFFIX, PEM_MARKER_SUFFIX_LEN) != 0) {
         return -1;
     }
 
-    pem_data += strlen("-----\n");
-    pem_length -= strlen("-----\n");
+    pem_data += PEM_MARKER_SUFFIX_LEN;
+    pem_length -= PEM_MARKER_SUFFIX_LEN;
 
-    const char_t* end_marker_pos = strstr(pem_data, end_marker);
+    const char_t* end_marker_pos = strstr(pem_data, PEM_END_MARKER);
     if (end_marker_pos == NULL) {
         return -1;
     }
 
     const char_t* b64_end = end_marker_pos;
 
-    end_marker_pos += strlen(end_marker);
+    end_marker_pos += PEM_END_MARKER_LEN;
     if(strncmp(end_marker_pos, header, strlen(header)) != 0) {
         return -1;
     }
 
     end_marker_pos += strlen(header);
-    if(strncmp(end_marker_pos, "-----", strlen("-----")) != 0) {
+    if(strncmp(end_marker_pos, PEM_MARKER_SUFFIX, PEM_MARKER_SUFFIX_LEN - 1) != 0) { // -1 to ignore final newline
         return -1;
     }
 
@@ -150,7 +155,7 @@ int8_t pem_decode(const char_t* header,
     b64_data[b64_length] = '\0';
 
     uint8_t* der_data = NULL;
-    size_t der_length = base64_decode(b64_data, b64_length, &der_data);
+    size_t der_length = base64_decode(b64_data, b64_length, &der_data); // auto handles newlines
     memory_free(b64_data);
 
     if (der_length == 0 || der_data == NULL) {
