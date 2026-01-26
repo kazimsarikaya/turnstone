@@ -8,7 +8,7 @@
 #include <utils.h>
 #include <buffer.h>
 #include <data.h>
-#include <sha2.h>
+#include <crypto/sha2.h>
 #include <bplustree.h>
 #include <map.h>
 #include <xxhash.h>

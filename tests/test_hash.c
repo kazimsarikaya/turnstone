@@ -4,7 +4,7 @@
  */
 
 #include "setup.h"
-#include <sha2.h>
+#include <crypto/sha2.h>
 #include <xxhash.h>
 #include <strings.h>
 #include <utils.h>

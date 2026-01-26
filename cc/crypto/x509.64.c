@@ -7,14 +7,14 @@
  */
 
 
-#include <x509.h>
+#include <crypto/x509.h>
 #include <time.h>
 #include <memory.h>
 #include <random.h>
 #include <buffer.h>
 #include <strings.h>
 #include <logging.h>
-#include <x25519.h>
+#include <crypto/x25519.h>
 #include <base64.h>
 
 MODULE("turnstone.lib.crypto");

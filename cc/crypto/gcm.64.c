@@ -5,8 +5,8 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
-#include <gcm.h>
-#include <aes.h>
+#include <crypto/gcm.h>
+#include <crypto/aes.h>
 #include <memory.h>
 
 MODULE("turnstone.lib.crypto");
@@ -157,7 +157,7 @@ int32_t gcm_start(gcm_context_t * ctx, int32_t mode, const uint8_t * iv, size_t 
 
         while( iv_len > 0 ) {
             use_len = ( iv_len < 16 ) ? iv_len : 16;
-            for( i = 0; i < use_len; i++ ) ctx->y[i] ^= p[i];
+            for( i = 0; i < use_len; i++ ) {ctx->y[i] ^= p[i];}
             gcm_mult( ctx, ctx->y, ctx->y );
             iv_len -= use_len;
             p += use_len;

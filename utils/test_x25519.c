@@ -10,8 +10,8 @@
 #include <base64.h>
 #include <bigint.h>
 #include <strings.h>
-#include <x25519.h>
-#include <sha2.h>
+#include <crypto/x25519.h>
+#include <crypto/sha2.h>
 
 int main(void);
 

@@ -6,7 +6,7 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <sha2.h>
+#include <crypto/sha2.h>
 #include <memory.h>
 #include <utils.h>
 

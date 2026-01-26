@@ -6,14 +6,14 @@
  * Please read and understand latest version of Licence.
  */
 
-#include <x25519.h>
+#include <crypto/x25519.h>
 #include <bigint.h>
 #include <memory.h>
 #include <random.h>
 #include <logging.h>
 #include <strings.h>
 #include <base64.h>
-#include <sha2.h>
+#include <crypto/sha2.h>
 
 MODULE("turnstone.lib.crypto");
 

@@ -5,7 +5,7 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
-#include <aes.h>
+#include <crypto/aes.h>
 #include <memory.h>
 
 MODULE("turnstone.lib.crypto");
@@ -238,8 +238,9 @@ int32_t aes_set_decryption_key(aes_context_t * ctx, const uint8_t * key, uint32_
 
     ret = aes_set_encryption_key( &cty, key, keysize );
 
-    if (ret != 0 )
+    if (ret != 0 ) {
         return ret;
+    }
 
     SK = cty.rk + cty.rounds * 4;
 
@@ -328,8 +329,7 @@ int32_t aes_cipher( aes_context_t * ctx,
              ( (uint32_t) AES_RSb[ ( Y2 >>  8 ) & 0xFF ] <<  8 ) ^
              ( (uint32_t) AES_RSb[ ( Y1 >> 16 ) & 0xFF ] << 16 ) ^
              ( (uint32_t) AES_RSb[ ( Y0 >> 24 ) & 0xFF ] << 24 );
-    }
-    else {
+    }else {
 
         for( i = (ctx->rounds >> 1) - 1; i > 0; i-- ) {
             AES_FROUND( Y0, Y1, Y2, Y3, X0, X1, X2, X3 );

@@ -12,7 +12,7 @@
 #ifndef ___AES_GCM_HEADER_H
 #define ___AES_GCM_HEADER_H
 
-#include <gcm.h>
+#include <crypto/gcm.h>
 #include <types.h> // Assuming types.h defines uint8_t, int32_t, size_t
 
 #ifdef __cplusplus

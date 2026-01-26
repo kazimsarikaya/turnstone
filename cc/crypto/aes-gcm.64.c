@@ -5,7 +5,7 @@
  * This work is licensed under TURNSTONE OS Public License.
  * Please read and understand latest version of Licence.
  */
-#include <aes-gcm.h>
+#include <crypto/aes-gcm.h>
 
 MODULE("turnstone.lib.crypto");
 

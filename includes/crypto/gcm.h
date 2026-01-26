@@ -20,7 +20,7 @@
 
 #define GCM_AUTH_FAILURE    0x55555555 // Error code indicating authentication failure
 
-#include <aes.h> // Includes the AES context structure and related definitions
+#include <crypto/aes.h> // Includes the AES context structure and related definitions
 
 #ifdef __cplusplus
 extern "C" {
