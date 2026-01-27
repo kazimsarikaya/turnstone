@@ -245,3 +245,34 @@ void time_ns_format_utc(time_t t, char_t* buffer, size_t buffer_size) {
     t = t / 1000000000ULL;
     time_format_utc(t, buffer, buffer_size);
 }
+
+time_t time_parse_utc(const char_t* time_str) {
+    if (time_str == NULL || strlen(time_str) < 13) {
+        return 0;
+    }
+
+    timeparsed_t tp;
+    tp.year = (uint16_t)((time_str[0] - '0') * 10 + (time_str[1] - '0'));
+    tp.month = (uint8_t)((time_str[2] - '0') * 10 + (time_str[3] - '0'));
+    tp.day = (uint8_t)((time_str[4] - '0') * 10 + (time_str[5] - '0'));
+    tp.hours = (uint8_t)((time_str[6] - '0') * 10 + (time_str[7] - '0'));
+    tp.minutes = (uint8_t)((time_str[8] - '0') * 10 + (time_str[9] - '0'));
+    tp.seconds = (uint8_t)((time_str[10] - '0') * 10 + (time_str[11] - '0'));
+
+    // Adjust year to full year
+    if (tp.year >= 50) {
+        tp.year += 1900;
+    } else {
+        tp.year += 2000;
+    }
+
+    return timeparsed_to_time(&tp);
+}
+
+time_t time_ns_parse_utc(const char_t* time_str) {
+    time_t t = time_parse_utc(time_str);
+    if (t == 0) {
+        return 0;
+    }
+    return t * 1000000000ULL;
+}

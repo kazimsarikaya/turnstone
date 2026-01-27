@@ -36,6 +36,7 @@ typedef enum x509_extension_type_t {
     X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME, ///< Subject Alternative Name extension (e.g., DNS names, IP addresses).
     X509_EXTENSION_SKID, ///< Subject Key Identifier extension.
     X509_EXTENSION_AKID, ///< Authority Key Identifier extension.
+    X509_EXTENSION_COUNT ///< Total number of extension types.
 } x509_extension_type_t;
 
 /**
@@ -259,6 +260,36 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
                              size_t              private_key_length);
 
 /**
+ * @brief Verifies the certificate's signature using the provided public key.
+ *
+ * This function checks that the signature on the certificate matches the TBS data when verified
+ * with the given public key of the issuer.
+ * @param cert Pointer to the `x509_certificate_t` structure. Requires TBS data and signature to be present.
+ * @param public_key Pointer to the raw public key bytes.
+ * @param public_key_length The length of the public key in bytes.
+ * @param rebuild Boolean flag indicating whether to rebuild the TBS data after first verification, then re-verify.
+ * @return 0 if the signature is valid, -1 if invalid or on failure (e.g., invalid input, verification failed).
+ */
+int8_t x509_certificate_verify_signature_with_rebuild(x509_certificate_t* cert,
+                                                      const uint8_t*      public_key,
+                                                      size_t              public_key_length,
+                                                      boolean_t           rebuild);
+
+/**
+ * @brief Verifies the certificate's signature using the provided public key.
+ *
+ * This function checks that the signature on the certificate matches the TBS data when verified
+ * with the given public key of the issuer.
+ * It always rebuild the TBS data for double-checking.
+ * @param cert Pointer to the `x509_certificate_t` structure. Requires TBS data and signature to be present.
+ * @param public_key Pointer to the raw public key bytes.
+ * @param public_key_length The length of the public key in bytes.
+ * @return 0 if the signature is valid, -1 if invalid or on failure (e.g., invalid input, verification failed).
+ */
+#define x509_certificate_verify_signature(cert, public_key, public_key_length) \
+        x509_certificate_verify_signature_with_rebuild((cert), (public_key), (public_key_length), true)
+
+/**
  * @brief Assembles the final DER-encoded certificate structure.
  *
  * This function takes the internally generated TBS data and the signature, and combines them
@@ -291,6 +322,32 @@ uint8_t* x509_certificate_get_der(x509_certificate_t* cert, size_t* out_length);
  * @return A pointer to a newly allocated null-terminated string containing the PEM-encoded certificate, or NULL on failure.
  */
 char_t* x509_certificate_get_pem(x509_certificate_t* cert);
+
+/**
+ * @brief Creates an X.509 certificate structure from DER-encoded data.
+ *
+ * This function parses the provided DER data and populates a new `x509_certificate_t` structure.
+ * The caller is responsible for freeing the returned structure using `x509_certificate_free`.
+ *
+ * @param der_data Pointer to the DER-encoded certificate data.
+ * @param der_length The length of the DER-encoded data in bytes.
+ * @return A pointer to the newly created `x509_certificate_t` structure, or NULL on failure.
+ */
+x509_certificate_t* x509_certificate_from_der(const uint8_t* der_data, size_t der_length);
+
+/**
+ * @brief Creates an X.509 certificate structure from PEM-encoded data.
+ *
+ * This function decodes the provided PEM string to extract the DER data,
+ * then parses it to populate a new `x509_certificate_t` structure.
+ * The caller is responsible for freeing the returned structure using `x509_certificate_free`.
+ *
+ * @param pem_data Pointer to the PEM-encoded certificate string.
+ * @return A pointer to the newly created `x509_certificate_t` structure, or NULL on failure.
+ */
+x509_certificate_t* x509_certificate_from_pem(const char_t* pem_data);
+
+uint8_t* x509_certificate_get_tbs_data(x509_certificate_t* cert, boolean_t rebuild, size_t* out_length);
 
 #ifdef __cplusplus
 }

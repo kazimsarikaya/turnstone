@@ -171,6 +171,41 @@ void time_format_utc(time_t t, char_t* buffer, size_t buffer_size);
 void time_ns_format_utc(time_t t, char_t* buffer, size_t buffer_size);
 
 /**
+ * @brief Parses a UTC time string into a `time_t` value.
+ *
+ * The input string should be in the "YYMMDDHHMMSSZ" format, where:
+ * - YY: Last two digits of the year
+ * - MM: Month (01-12)
+ * - DD: Day of the month (01-31)
+ * - HH: Hour (00-23)
+ * - MM: Minute (00-59)
+ * - SS: Second (00-59)
+ * - Z: Indicates UTC time
+ *
+ * @param time_str Pointer to the UTC time string to parse.
+ * @return The corresponding `time_t` value on success, or 0 on failure.
+ */
+time_t time_parse_utc(const char_t* time_str);
+
+/**
+ * @brief Parses a UTC time string with nanosecond precision into a `time_t` value.
+ *
+ * The input string should be in the "YYMMDDHHMMSSZ" format, where:
+ * - YY: Last two digits of the year
+ * - MM: Month (01-12)
+ * - DD: Day of the month (01-31)
+ * - HH: Hour (00-23)
+ * - MM: Minute (00-59)
+ * - SS: Second (00-59)
+ * - Z: Indicates UTC time
+ *
+ * @param time_str Pointer to the UTC time string to parse.
+ * @return The corresponding `time_t` value in nanoseconds on success, or 0 on failure.
+ */
+time_t time_ns_parse_utc(const char_t* time_str);
+
+
+/**
  * @brief Reads the Time Stamp Counter (TSC) of the CPU.
  *
  * This function provides access to the CPU's internal Time Stamp Counter,

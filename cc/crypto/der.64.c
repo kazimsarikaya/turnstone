@@ -9,6 +9,7 @@
 #include <crypto/der.h>
 #include <buffer.h>
 #include <strings.h>
+#include <logging.h>
 
 MODULE("turnstone.lib.crypto");
 
@@ -300,7 +301,8 @@ int8_t der_encoder_encode_integer(der_encoder_t * encoder, int64_t value) {
 }
 
 int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value) {
-    uint8_t int_bytes[16];
+    // FIX: Size must be 17 to accommodate the potential sign byte
+    uint8_t int_bytes[17];
     size_t int_len = 0;
 
     if (value == 0) {
@@ -312,10 +314,12 @@ int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value)
             value >>= 8;
         }
 
+        // If MSB is 1, we must add a 0x00 byte to keep it positive
         if (int_bytes[int_len - 1] & 0x80) {
             int_bytes[int_len++] = 0x00;
         }
 
+        // Reverse to Big Endian
         for (size_t i = 0; i < int_len / 2; i++) {
             uint8_t temp = int_bytes[i];
             int_bytes[i] = int_bytes[int_len - 1 - i];
@@ -439,11 +443,18 @@ int8_t der_encoder_get_der_data(der_encoder_t * encoder, uint8_t ** out_data, si
     return 0;
 }
 
+// Most X.509 certs are < 8 levels deep. 16 is plenty of safety margin.
+#define DER_MAX_NESTING_DEPTH 16
 
 struct der_decoder_t {
     const uint8_t* data;
     size_t         data_length;
     size_t         position;
+
+    // Stack to track expected end positions
+    size_t start_stack[DER_MAX_NESTING_DEPTH];
+    size_t end_stack[DER_MAX_NESTING_DEPTH];
+    int    stack_top; // Index of the next free slot (starts at 0)
 };
 
 
@@ -500,73 +511,177 @@ static int8_t _der_decoder_parse_length(der_decoder_t* decoder, size_t* out_leng
     return 0;
 }
 
-int8_t der_decoder_start_sequence(der_decoder_t* decoder) {
+static int8_t _der_decoder_push_container(der_decoder_t* decoder, uint8_t expected_tag) {
     if (!decoder || decoder->position >= decoder->data_length) {
         return -1;
     }
 
-    uint8_t tag = decoder->data[decoder->position++];
-    if (tag != (DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_CONSTRUCTED | DER_TAG_NUMBER_SEQUENCE)) {
+    // 1. Stack Overflow Check
+    if (decoder->stack_top >= DER_MAX_NESTING_DEPTH) {
+        // Error: Structure too deep (prevents stack overflow attacks)
         return -1;
     }
 
-    // parse length
+    // 2. Tag Check
+    uint8_t tag = decoder->data[decoder->position];
+    if (tag != expected_tag) {
+        return -1;
+    }
+
+    decoder->start_stack[decoder->stack_top] = decoder->position;
+
+    decoder->position++;
+
+    // 3. Length Parse
     size_t length = 0;
     if (_der_decoder_parse_length(decoder, &length) != 0) {
         return -1;
     }
 
+    // 4. Boundary Check
     if (decoder->position + length > decoder->data_length) {
         return -1;
     }
 
+    // 5. Nested Boundary Check (Crucial!)
+    // If we are already inside a container, the new container must fit inside it.
+    if (decoder->stack_top > 0) {
+        size_t current_limit = decoder->end_stack[decoder->stack_top - 1];
+        if (decoder->position + length > current_limit) {
+            return -1; // Child container extends beyond parent!
+        }
+    }
+
+    // 6. Push to Stack
+    decoder->end_stack[decoder->stack_top++] = decoder->position + length;
+
     return 0;
+}
+
+static int8_t _der_decoder_pop_container(der_decoder_t* decoder) {
+    if (!decoder || decoder->stack_top == 0) {
+        return -1;
+    }
+
+    // Get expected end from top of stack
+    size_t expected_end = decoder->end_stack[decoder->stack_top - 1];
+
+    // Strict Check: Did we consume exactly the right amount?
+    if (decoder->position != expected_end) {
+        return -1;
+    }
+
+    // Pop stack
+    decoder->stack_top--;
+    return 0;
+}
+
+boolean_t der_decoder_has_container_ended(der_decoder_t* decoder) {
+    if (!decoder || decoder->stack_top == 0) {
+        return true;
+    }
+
+    size_t expected_end = decoder->end_stack[decoder->stack_top - 1];
+    return decoder->position >= expected_end ? true : false;
+}
+
+int8_t der_decoder_start_sequence(der_decoder_t* decoder) {
+    return _der_decoder_push_container(decoder,
+                                       DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_CONSTRUCTED | DER_TAG_NUMBER_SEQUENCE);
+}
+
+int8_t der_decoder_end_sequence(der_decoder_t* decoder) {
+    return _der_decoder_pop_container(decoder);
 }
 
 int8_t der_decoder_start_octet_string(der_decoder_t* decoder) {
-    if (!decoder || decoder->position >= decoder->data_length) {
+    // Note: We expect PRIMITIVE here because it's DER,
+    // even though we treat it as a container logically.
+    return _der_decoder_push_container(decoder,
+                                       DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OCTET_STRING);
+}
+
+int8_t der_decoder_end_octet_string(der_decoder_t* decoder) {
+    return _der_decoder_pop_container(decoder);
+}
+
+int8_t der_decoder_start_set(der_decoder_t* decoder) {
+    return _der_decoder_push_container(decoder,
+                                       DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_CONSTRUCTED | DER_TAG_NUMBER_SET);
+}
+
+int8_t der_decoder_end_set(der_decoder_t* decoder) {
+    return _der_decoder_pop_container(decoder);
+}
+
+int8_t der_decoder_start_explicit_tag(der_decoder_t* decoder, der_tag_class_t inner_tag_class, uint8_t inner_tag_number) {
+    uint8_t tag_byte = (uint8_t)(DER_TAG_TYPE_CONSTRUCTED | (inner_tag_class & 0xC0) | (inner_tag_number & 0x1F));
+    return _der_decoder_push_container(decoder, tag_byte);
+}
+
+int8_t der_decoder_end_explicit_tag(der_decoder_t* decoder) {
+    return _der_decoder_pop_container(decoder);
+}
+
+/**
+ * @brief Validates Tag, Decodes Length, and checks strict boundaries.
+ * * @param decoder The decoder instance.
+ * @param expected_tag The exact tag byte expected (e.g. INTEGER | PRIMITIVE | UNIVERSAL).
+ * @param out_len Pointer to store the decoded length.
+ * @return 0 on success, -1 on mismatch or error.
+ */
+static int8_t _der_match_tlv(der_decoder_t* decoder, uint8_t expected_tag, size_t* out_len) {
+    if (!decoder || decoder->position >= decoder->data_length || !out_len) {
         return -1;
     }
 
-    uint8_t tag = decoder->data[decoder->position++];
-    if (tag != (DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OCTET_STRING)) {
+    // 1. Stack Safety Check (prevent reading past parent container)
+    if (decoder->stack_top > 0) {
+        if (decoder->position >= decoder->end_stack[decoder->stack_top - 1]) {
+            return -1;
+        }
+    }
+
+    // 2. Check Tag
+    uint8_t tag = decoder->data[decoder->position];
+    if (tag != expected_tag) {
+        return -1;
+    }
+    decoder->position++; // Move past Tag
+
+    // 3. Parse Length
+    if (_der_decoder_parse_length(decoder, out_len) != 0) {
         return -1;
     }
 
-    // parse length
-    size_t length = 0;
-    if (_der_decoder_parse_length(decoder, &length) != 0) {
+    // 4. Global Boundary Check
+    if (decoder->position + *out_len > decoder->data_length) {
         return -1;
     }
 
-    if (decoder->position + length > decoder->data_length) {
-        return -1;
+    // 5. Nested Boundary Check (The "Strict" Check)
+    if (decoder->stack_top > 0) {
+        if (decoder->position + *out_len > decoder->end_stack[decoder->stack_top - 1]) {
+            return -1; // Child extends beyond parent
+        }
     }
 
     return 0;
 }
 
-int8_t der_decoder_read_integer(der_decoder_t* decoder, int64_t* out_value) {
-    if (!decoder || decoder->position >= decoder->data_length || !out_value) {
-        return -1;
-    }
-
-    uint8_t tag = decoder->data[decoder->position++];
-    if (tag != (DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER)) {
-        return -1;
-    }
-
-    // parse length
+int8_t der_decoder_decode_integer(der_decoder_t* decoder, int64_t* out_value) {
     size_t length = 0;
-    if (_der_decoder_parse_length(decoder, &length) != 0) {
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER, &length) != 0) {
         return -1;
     }
 
-    if (decoder->position + length > decoder->data_length || length == 0 || length > 8) {
-        return -1;
+    // Integer specific checks
+    if (length == 0 || length > 8) {
+        return -1; // We only support up to 64-bit integers
     }
 
     int64_t value = 0;
+    // Read bytes (Big Endian)
     for (size_t i = 0; i < length; i++) {
         value = (value << 8) | decoder->data[decoder->position++];
     }
@@ -575,76 +690,9 @@ int8_t der_decoder_read_integer(der_decoder_t* decoder, int64_t* out_value) {
     return 0;
 }
 
-int8_t der_decoder_read_object_identifier(der_decoder_t* decoder, der_object_identifier_t* out_oid) {
-    if (!decoder || decoder->position >= decoder->data_length || !out_oid) {
-        return -1;
-    }
-
-    uint8_t tag = decoder->data[decoder->position++];
-    if (tag != (DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OBJECT_ID)) {
-        return -1;
-    }
-
-    // parse length
+int8_t der_decoder_decode_octet_string(der_decoder_t* decoder, uint8_t** out_data, size_t* out_data_len) {
     size_t length = 0;
-    if (_der_decoder_parse_length(decoder, &length) != 0) {
-        return -1;
-    }
-
-    if (decoder->position + length > decoder->data_length) {
-        return -1;
-    }
-
-    const uint8_t* oid_data = &decoder->data[decoder->position];
-    decoder->position += length;
-
-    // Match against known OIDs
-    if (length == sizeof(OID_CN) && memory_memcompare(oid_data, OID_CN, sizeof(OID_CN)) == 0) {
-        *out_oid = DER_OID_CN;
-    } else if (length == sizeof(OID_ED25519) && memory_memcompare(oid_data, OID_ED25519, sizeof(OID_ED25519)) == 0) {
-        *out_oid = DER_OID_ED25519;
-    } else if (length == sizeof(OID_X25519) && memory_memcompare(oid_data, OID_X25519, sizeof(OID_X25519)) == 0) {
-        *out_oid = DER_OID_X25519;
-    } else if (length == sizeof(OID_SERVER_AUTH) && memory_memcompare(oid_data, OID_SERVER_AUTH, sizeof(OID_SERVER_AUTH)) == 0) {
-        *out_oid = DER_OID_SERVER_AUTH;
-    } else if (length == sizeof(OID_CLIENT_AUTH) && memory_memcompare(oid_data, OID_CLIENT_AUTH, sizeof(OID_CLIENT_AUTH)) == 0) {
-        *out_oid = DER_OID_CLIENT_AUTH;
-    } else if (length == sizeof(OID_EXT_BASIC_CONSTRAINTS) && memory_memcompare(oid_data, OID_EXT_BASIC_CONSTRAINTS, sizeof(OID_EXT_BASIC_CONSTRAINTS)) == 0) {
-        *out_oid = DER_OID_EXT_BASIC_CONSTRAINTS;
-    } else if (length == sizeof(OID_EXT_KEY_USAGE) && memory_memcompare(oid_data, OID_EXT_KEY_USAGE, sizeof(OID_EXT_KEY_USAGE)) == 0) {
-        *out_oid = DER_OID_EXT_KEY_USAGE;
-    } else if (length == sizeof(OID_EXT_EXTENDED_KEY_USAGE) && memory_memcompare(oid_data, OID_EXT_EXTENDED_KEY_USAGE, sizeof(OID_EXT_EXTENDED_KEY_USAGE)) == 0) {
-        *out_oid = DER_OID_EXT_EXTENDED_KEY_USAGE;
-    } else if (length == sizeof(OID_EXT_SAN) && memory_memcompare(oid_data, OID_EXT_SAN, sizeof(OID_EXT_SAN)) == 0) {
-        *out_oid = DER_OID_EXT_SAN;
-    } else if (length == sizeof(OID_EXT_SKID) && memory_memcompare(oid_data, OID_EXT_SKID, sizeof(OID_EXT_SKID)) == 0) {
-        *out_oid = DER_OID_EXT_SKID;
-    } else if (length == sizeof(OID_EXT_AKID) && memory_memcompare(oid_data, OID_EXT_AKID, sizeof(OID_EXT_AKID)) == 0) {
-        *out_oid = DER_OID_EXT_AKID;
-    } else {
-        return -1; // Unknown OID
-    }
-
-    return 0;
-}
-
-int8_t der_decoder_read_octet_string(der_decoder_t* decoder, uint8_t** out_data, size_t* out_data_len) {
-    if (!decoder || decoder->position >= decoder->data_length || !out_data || !out_data_len) {
-        return -1;
-    }
-
-    uint8_t tag = decoder->data[decoder->position++];
-    if (tag != (DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OCTET_STRING)) {
-        return -1;
-    }
-
-    // parse length
-    size_t length = 0;
-    if (_der_decoder_parse_length(decoder, &length) != 0) {
-        return -1;
-    }
-
-    if (decoder->position + length > decoder->data_length) {
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OCTET_STRING, &length) != 0) {
         return -1;
     }
 
@@ -658,31 +706,21 @@ int8_t der_decoder_read_octet_string(der_decoder_t* decoder, uint8_t** out_data,
 
     *out_data = data;
     *out_data_len = length;
-
     return 0;
 }
 
-int8_t der_decoder_read_bit_string(der_decoder_t* decoder, uint8_t** out_data, size_t* out_data_len) {
-    if (!decoder || decoder->position >= decoder->data_length || !out_data || !out_data_len) {
-        return -1;
-    }
-
-    uint8_t tag = decoder->data[decoder->position++];
-    if (tag != (DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BIT_STRING)) {
-        return -1;
-    }
-
-    // parse length
+int8_t der_decoder_decode_bit_string(der_decoder_t* decoder, uint8_t** out_data, size_t* out_data_len) {
     size_t length = 0;
-    if (_der_decoder_parse_length(decoder, &length) != 0) {
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BIT_STRING, &length) != 0) {
         return -1;
     }
 
-    if (decoder->position + length > decoder->data_length || length == 0) {
-        return -1;
-    }
+    if (length == 0) {
+        return -1; // BIT STRING must contain at least the "unused bits" byte
 
-    // First byte is "Unused Bits"
+    }
+    // Skip the "Unused Bits" byte (first byte)
+    // Note: In strict DER, we should verify this is 0 for key data, but loose parsing ignores it.
     decoder->position++;
     length--;
 
@@ -696,6 +734,212 @@ int8_t der_decoder_read_bit_string(der_decoder_t* decoder, uint8_t** out_data, s
 
     *out_data = data;
     *out_data_len = length;
+    return 0;
+}
 
+typedef struct {
+    der_object_identifier_t oid_enum;
+    const uint8_t*          oid_bytes;
+    size_t                  oid_len;
+} oid_entry_t;
+
+// Table of supported OIDs
+static const oid_entry_t OID_TABLE[] = {
+    { DER_OID_CN,                     OID_CN,                     sizeof(OID_CN) },
+    { DER_OID_ED25519,                OID_ED25519,                sizeof(OID_ED25519) },
+    { DER_OID_X25519,                 OID_X25519,                 sizeof(OID_X25519) },
+    { DER_OID_SERVER_AUTH,            OID_SERVER_AUTH,            sizeof(OID_SERVER_AUTH) },
+    { DER_OID_CLIENT_AUTH,            OID_CLIENT_AUTH,            sizeof(OID_CLIENT_AUTH) },
+    { DER_OID_EXT_BASIC_CONSTRAINTS,  OID_EXT_BASIC_CONSTRAINTS,  sizeof(OID_EXT_BASIC_CONSTRAINTS) },
+    { DER_OID_EXT_KEY_USAGE,          OID_EXT_KEY_USAGE,          sizeof(OID_EXT_KEY_USAGE) },
+    { DER_OID_EXT_EXTENDED_KEY_USAGE, OID_EXT_EXTENDED_KEY_USAGE, sizeof(OID_EXT_EXTENDED_KEY_USAGE) },
+    { DER_OID_EXT_SAN,                OID_EXT_SAN,                sizeof(OID_EXT_SAN) },
+    { DER_OID_EXT_SKID,               OID_EXT_SKID,               sizeof(OID_EXT_SKID) },
+    { DER_OID_EXT_AKID,               OID_EXT_AKID,               sizeof(OID_EXT_AKID) },
+};
+#define OID_TABLE_COUNT (sizeof(OID_TABLE) / sizeof(oid_entry_t))
+
+int8_t der_decoder_decode_object_identifier(der_decoder_t* decoder, der_object_identifier_t* out_oid) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OBJECT_ID, &length) != 0) {
+        return -1;
+    }
+
+    const uint8_t* raw_oid = &decoder->data[decoder->position];
+    decoder->position += length; // Advance cursor now
+
+    // Linear scan is efficient enough for small tables (< 20 items)
+    for (size_t i = 0; i < OID_TABLE_COUNT; i++) {
+        if (length == OID_TABLE[i].oid_len &&
+            memory_memcompare(raw_oid, OID_TABLE[i].oid_bytes, length) == 0) {
+            *out_oid = OID_TABLE[i].oid_enum;
+            return 0;
+        }
+    }
+
+    return -1; // Unknown OID
+}
+
+int8_t der_decoder_decode_printable_string(der_decoder_t* decoder, char_t** out_str, size_t* out_str_len) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_PRINTABLE_STRING, &length) != 0) {
+        return -1;
+    }
+
+    char_t* str = memory_malloc(length + 1);
+    if (!str) {
+        return -1;
+    }
+
+    memory_memcopy(&decoder->data[decoder->position], str, length);
+    str[length] = '\0'; // Null-terminate
+    decoder->position += length;
+
+    *out_str = str;
+    *out_str_len = length;
+    return 0;
+}
+
+int8_t der_decoder_decode_boolean(der_decoder_t* decoder, boolean_t* out_value) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BOOLEAN, &length) != 0) {
+        return -1;
+    }
+
+    if (length != 1) {
+        return -1; // Boolean must be exactly 1 byte
+    }
+
+    uint8_t bool_byte = decoder->data[decoder->position++];
+    *out_value = (bool_byte != 0) ? true : false;
+    return 0;
+}
+
+int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_value) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER, &length) != 0) {
+        return -1;
+    }
+
+    // FIX: Allow 17 bytes, but ONLY if it's due to the sign bit padding
+    if (length > 17 || length == 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unsupported integer length %llu\n", length);
+        return -1;
+    }
+
+    // Peek at the first byte
+    uint8_t first_byte = decoder->data[decoder->position];
+
+    // If we have 17 bytes, the first byte MUST be 0x00
+    if (length == 17) {
+        if (first_byte != 0x00) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Integer overflow (17 bytes but first is not 0x00)\n");
+            return -1;
+        }
+        // Skip the padding byte
+        decoder->position++;
+        length--;
+    }
+    // If we have 16 bytes or fewer, check for negative numbers (which we can't store in u128)
+    else if (first_byte & 0x80) {
+        // Technically a negative number in ASN.1, but we are parsing into u128.
+        // Depending on your OS policy, you might want to return error or cast it.
+        // For a strictly unsigned parser, this is usually an error.
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unexpected negative integer\n");
+        return -1;
+    }
+
+    uint128_t value = 0;
+    // Read bytes (Big Endian)
+    for (size_t i = 0; i < length; i++) {
+        value = (value << 8) | decoder->data[decoder->position++];
+    }
+
+    *out_value = value;
+    return 0;
+}
+
+int8_t der_decoder_decode_context_specific_string(der_decoder_t* decoder, uint8_t expected_tag_number, uint8_t** out_data, size_t* out_data_len) {
+    uint8_t expected_tag = DER_TAG_CLASS_CONTEXT_SPECIFIC | DER_TAG_TYPE_PRIMITIVE | (expected_tag_number & 0x1F);
+    size_t length = 0;
+    if (_der_match_tlv(decoder, expected_tag, &length) != 0) {
+        return -1;
+    }
+
+    uint8_t* data = memory_malloc(length);
+    if (!data) {
+        return -1;
+    }
+
+    memory_memcopy(&decoder->data[decoder->position], data, length);
+    decoder->position += length;
+
+    *out_data = data;
+    *out_data_len = length;
+    return 0;
+}
+
+boolean_t der_decoder_has_context_specific_tag(der_decoder_t* decoder, uint8_t expected_tag_number) {
+    if (!decoder || decoder->position >= decoder->data_length) {
+        return false;
+    }
+
+    uint8_t expected_tag = DER_TAG_CLASS_CONTEXT_SPECIFIC | DER_TAG_TYPE_PRIMITIVE | (expected_tag_number & 0x1F);
+    uint8_t tag = decoder->data[decoder->position];
+
+    return (tag == expected_tag) ? true : false;
+}
+
+int8_t der_decoder_decode_utc_time(der_decoder_t* decoder, time_t* out_time_value) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_UTC_TIME, &length) != 0) {
+        return -1;
+    }
+
+    if (length >= 16) {
+        return -1; // Too long for UTC time format
+    }
+
+    char_t time_str[16] = {0};
+    memory_memcopy(&decoder->data[decoder->position], time_str, length);
+    time_str[length] = '\0'; // Null-terminate
+    decoder->position += length;
+
+    time_t parsed_time = time_ns_parse_utc(time_str);
+    if (parsed_time == (time_t)(-1)) {
+        return -1; // Failed to parse
+    }
+
+    *out_time_value = parsed_time;
+    return 0;
+}
+
+boolean_t der_decoder_has_tag(der_decoder_t* decoder, der_tag_class_t expected_tag_class, der_tag_type_t expected_tag_type, uint8_t expected_tag_number) {
+    if (!decoder || decoder->position >= decoder->data_length) {
+        return false;
+    }
+
+    uint8_t expected_tag = (uint8_t)(expected_tag_class | expected_tag_type | (expected_tag_number & 0x1F));
+    uint8_t tag = decoder->data[decoder->position];
+
+    return (tag == expected_tag) ? true : false;
+}
+
+boolean_t der_decoder_has_explicit_tag(der_decoder_t* decoder, der_tag_class_t expected_tag_class, uint8_t expected_tag_number) {
+    if (!decoder || decoder->position >= decoder->data_length) {
+        return false;
+    }
+
+    uint8_t expected_tag = (uint8_t)(DER_TAG_TYPE_CONSTRUCTED | (expected_tag_class & 0xC0) | (expected_tag_number & 0x1F));
+    uint8_t tag = decoder->data[decoder->position];
+
+    return (tag == expected_tag) ? true : false;
+}
+
+int8_t der_decoder_get_current_position(der_decoder_t* decoder, size_t* out_position) {
+    if (!decoder || !out_position) {
+        return -1;
+    }
+    *out_position = decoder->position;
     return 0;
 }

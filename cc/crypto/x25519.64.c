@@ -1525,143 +1525,124 @@ int8_t ed25519_generate_keypair(uint8_t out_priv[ED25519_PRIVATE_KEY_RAW_LEN], u
 static int8_t _pem_x_ed_25519_read_key(const char_t*           pem,
                                        der_object_identifier_t expected_oid,
                                        boolean_t               is_pub_key,
-                                       size_t                  expected_der_len,
                                        size_t                  expected_key_len,
                                        uint8_t*                out_key) {
-
     if (!pem || !out_key) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid arguments");
         return -1;
     }
 
     uint8_t* decoded_data = NULL;
     size_t decoded_len = 0;
-
     const char_t* pem_type = is_pub_key ? "PUBLIC KEY" : "PRIVATE KEY";
 
-    if(pem_decode(pem_type, pem, strlen(pem), &decoded_data, &decoded_len) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode PEM key");
+    // 1. Decode PEM (Base64 -> Binary DER)
+    if (pem_decode(pem_type, pem, strlen(pem), &decoded_data, &decoded_len) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode PEM");
         return -1;
     }
 
-    if (decoded_len != expected_der_len) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Decoded key length mismatch: expected %llu, got %llu",
-                 expected_der_len, decoded_len);
+    // 2. Init Decoder
+    der_decoder_t* der = der_decoder_new(decoded_data, decoded_len);
+    if (!der) {
         memory_free(decoded_data);
         return -1;
     }
 
-    der_decoder_t* der_decoder = der_decoder_new(decoded_data, decoded_len);
-    if (!der_decoder) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create DER decoder");
-        memory_free(decoded_data);
-        return -1;
+    // --- PARSE ROOT ---
+    // Outer Sequence (SubjectPublicKeyInfo or PrivateKeyInfo)
+    if (der_decoder_start_sequence(der) != 0) {
+        goto error;
     }
 
-    if(der_decoder_start_sequence(der_decoder) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected SEQUENCE");
-        der_decoder_destroy(der_decoder);
-        memory_free(decoded_data);
-        return -1;
-    }
-
-    if(!is_pub_key) {
-        int64_t dummy_int;
-        if(der_decoder_read_integer(der_decoder, &dummy_int) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected INTEGER");
-            der_decoder_destroy(der_decoder);
-            memory_free(decoded_data);
-            return -1;
-        }
-
-        if(dummy_int != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected INTEGER value 0");
-            der_decoder_destroy(der_decoder);
-            memory_free(decoded_data);
-            return -1;
+    // --- PARSE VERSION (Private Key Only) ---
+    if (!is_pub_key) {
+        int64_t version;
+        if (der_decoder_decode_integer(der, &version) != 0 || version != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid PKCS#8 Version");
+            goto error;
         }
     }
 
-    if(der_decoder_start_sequence(der_decoder) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected SEQUENCE");
-        der_decoder_destroy(der_decoder);
-        memory_free(decoded_data);
-        return -1;
+    // --- PARSE ALGORITHM IDENTIFIER ---
+    // This is a SEQUENCE containing an OID
+    if (der_decoder_start_sequence(der) != 0) {
+        goto error;
     }
 
     der_object_identifier_t oid;
-    if(der_decoder_read_object_identifier(der_decoder, &oid) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected OBJECT IDENTIFIER");
-        der_decoder_destroy(der_decoder);
-        memory_free(decoded_data);
-        return -1;
+    if (der_decoder_decode_object_identifier(der, &oid) != 0) {
+        goto error;
     }
 
-    if(oid != expected_oid) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid OID: expected %d, got %d", expected_oid, oid);
-        der_decoder_destroy(der_decoder);
-        memory_free(decoded_data);
-        return -1;
+    if (oid != expected_oid) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "OID Mismatch");
+        goto error;
     }
 
-    size_t str_len = 0;
-    uint8_t* str = NULL;
+    // FIX 1: Explicitly end/exit the AlgorithmIdentifier Sequence.
+    // This skips any optional parameters (should be none for Ed25519) and aligns cursor.
+    if (der_decoder_end_sequence(der) != 0) {
+        goto error;
+    }
 
-    if(is_pub_key) {
-        if(der_decoder_read_bit_string(der_decoder, &str, &str_len) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected BIT STRING");
-            der_decoder_destroy(der_decoder);
-            memory_free(decoded_data);
-            return -1;
+    // --- PARSE KEY DATA ---
+    uint8_t* raw_der_key = NULL;
+    size_t raw_der_len = 0;
+
+    if (is_pub_key) {
+        // Public Key: BIT STRING containing the key
+        if (der_decoder_decode_bit_string(der, &raw_der_key, &raw_der_len) != 0) {
+            goto error;
         }
     } else {
-        if(der_decoder_start_octet_string(der_decoder) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected OCTET STRING");
-            der_decoder_destroy(der_decoder);
-            memory_free(decoded_data);
-            return -1;
+        // Private Key: OCTET STRING (Wrapper) -> OCTET STRING (CurvePrivateKey)
+        // 1. Enter the wrapper field
+        if (der_decoder_start_octet_string(der) != 0) {
+            goto error;
         }
 
-        if(der_decoder_read_octet_string(der_decoder, &str, &str_len) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: expected OCTET STRING");
-            der_decoder_destroy(der_decoder);
-            memory_free(decoded_data);
-            return -1;
+        // 2. Read the inner CurvePrivateKey
+        if (der_decoder_decode_octet_string(der, &raw_der_key, &raw_der_len) != 0) {
+            goto error;
         }
+
+        // 3. Exit the wrapper (Optional depending on your decoder, but good practice)
+        der_decoder_end_octet_string(der);
     }
 
-    if (str_len != expected_key_len) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid OCTET/BIT STRING length: expected %llu, got %llu",
-                 expected_key_len, str_len);
-        der_decoder_destroy(der_decoder);
-        memory_free(str);
-        memory_free(decoded_data);
-        return -1;
+    // --- VALIDATE & COPY ---
+    if (raw_der_len != expected_key_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Key length mismatch. Got %llu, expected %llu", raw_der_len, expected_key_len);
+        memory_free(raw_der_key);
+        goto error;
     }
 
-    if(!der_decoder_is_at_end(der_decoder)) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid DER format: extra data at end");
-        der_decoder_destroy(der_decoder);
-        memory_free(str);
-        memory_free(decoded_data);
-        return -1;
+    // FIX 2: Check if we are at the end of the OUTER sequence
+    if (der_decoder_end_sequence(der) != 0) {
+        // If we can't exit the root sequence, structure is malformed
+        memory_free(raw_der_key);
+        goto error;
     }
 
-    memory_memcopy(str, out_key, expected_key_len);
+    // Copy to output
+    memory_memcopy(raw_der_key, out_key, expected_key_len);
 
-    memory_free(str);
-
-    der_decoder_destroy(der_decoder);
+    // Cleanup
+    memory_free(raw_der_key);
+    der_decoder_destroy(der);
     memory_free(decoded_data);
-
     return 0;
+
+error:
+    der_decoder_destroy(der);
+    memory_free(decoded_data);
+    return -1;
 }
 
 int8_t pem_read_x25519_private_key(const char_t* pem, uint8_t* out_key) {
     return _pem_x_ed_25519_read_key(pem,
                                     DER_OID_X25519,
                                     false,
-                                    X25519_PRIVATE_KEY_DER_LEN,
                                     X25519_PRIVATE_KEY_RAW_LEN,
                                     out_key);
 }
@@ -1670,7 +1651,6 @@ int8_t pem_read_x25519_public_key(const char_t* pem, uint8_t* out_key) {
     return _pem_x_ed_25519_read_key(pem,
                                     DER_OID_X25519,
                                     true,
-                                    X25519_PUBLIC_KEY_DER_LEN,
                                     X25519_PUBLIC_KEY_RAW_LEN,
                                     out_key);
 }
@@ -1679,7 +1659,6 @@ int8_t pem_read_ed25519_private_key(const char_t* pem, uint8_t* out_key) {
     return _pem_x_ed_25519_read_key(pem,
                                     DER_OID_ED25519,
                                     false,
-                                    ED25519_PRIVATE_KEY_DER_LEN,
                                     ED25519_PRIVATE_KEY_RAW_LEN,
                                     out_key);
 }
@@ -1688,7 +1667,6 @@ int8_t pem_read_ed25519_public_key(const char_t* pem, uint8_t* out_key) {
     return _pem_x_ed_25519_read_key(pem,
                                     DER_OID_ED25519,
                                     true,
-                                    ED25519_PUBLIC_KEY_DER_LEN,
                                     ED25519_PUBLIC_KEY_RAW_LEN,
                                     out_key);
 }

@@ -18,6 +18,7 @@
 #include <base64.h>
 #include <crypto/pem.h>
 #include <crypto/der.h>
+#include <crypto/sha2.h>
 
 MODULE("turnstone.lib.crypto");
 
@@ -33,6 +34,7 @@ struct x509_subject_alternative_name_t {
 typedef struct x509_extension_t x509_extension_t;
 
 struct x509_extension_t {
+    boolean_t             is_valid;
     x509_extension_type_t type;
     boolean_t             is_critical;
     union {
@@ -59,8 +61,7 @@ struct x509_extension_t {
             size_t   length;
             uint8_t* data;
         } akid; // Authority Key Identifier
-    }                 data;
-    x509_extension_t* next;
+    } data;
 };
 
 struct x509_certificate_t {
@@ -74,7 +75,7 @@ struct x509_certificate_t {
     time_t not_after;
 
     // The Extension Chain
-    x509_extension_t* extensions;
+    x509_extension_t extensions[X509_EXTENSION_COUNT];
 
     // Public Key Info (The "SubjectPublicKeyInfo" part)
     x509_algorithm_t public_key_algorithm;
@@ -132,36 +133,29 @@ void x509_certificate_free(x509_certificate_t* cert) {
     }
 
     // Free extensions
-    x509_extension_t* ext = cert->extensions;
-    while (ext != NULL) {
-        x509_extension_t* next_ext = ext->next;
-
-        if (ext->type == X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME) {
-            x509_subject_alternative_name_t* san = ext->data.san_list;
-            while (san != NULL) {
-                x509_subject_alternative_name_t* next_san = san->next;
-                if (san->value != NULL) {
-                    memory_free(san->value);
+    for (size_t i = 0; i < X509_EXTENSION_COUNT; i++) {
+        x509_extension_t* ext = &cert->extensions[i];
+        if (ext->is_valid) {
+            if (ext->type == X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME) {
+                x509_subject_alternative_name_t* san_entry = ext->data.san_list;
+                while (san_entry != NULL) {
+                    x509_subject_alternative_name_t* next_entry = san_entry->next;
+                    if (san_entry->value != NULL) {
+                        memory_free(san_entry->value);
+                    }
+                    memory_free(san_entry);
+                    san_entry = next_entry;
                 }
-                memory_free(san);
-                san = next_san;
+            } else if (ext->type == X509_EXTENSION_SKID) {
+                if (ext->data.skid.data != NULL) {
+                    memory_free(ext->data.skid.data);
+                }
+            } else if (ext->type == X509_EXTENSION_AKID) {
+                if (ext->data.akid.data != NULL) {
+                    memory_free(ext->data.akid.data);
+                }
             }
         }
-
-        if (ext->type == X509_EXTENSION_SKID) {
-            if (ext->data.skid.data != NULL) {
-                memory_free(ext->data.skid.data);
-            }
-        }
-
-        if (ext->type == X509_EXTENSION_AKID) {
-            if (ext->data.akid.data != NULL) {
-                memory_free(ext->data.akid.data);
-            }
-        }
-
-        memory_free(ext);
-        ext = next_ext;
     }
 
     // Free public key
@@ -226,17 +220,11 @@ int8_t x509_certificate_set_is_ca(x509_certificate_t* cert, boolean_t is_ca, int
         return -1;
     }
 
-    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
-    if (ext == NULL) {
-        return -1;
-    }
-
-    ext->type = X509_EXTENSION_BASIC_CONSTRAINTS;
-    ext->is_critical = true;
-    ext->data.basic_constraints.is_ca = is_ca;
-    ext->data.basic_constraints.path_len = path_len;
-    ext->next = cert->extensions;
-    cert->extensions = ext;
+    cert->extensions[X509_EXTENSION_BASIC_CONSTRAINTS].is_valid = true;
+    cert->extensions[X509_EXTENSION_BASIC_CONSTRAINTS].type = X509_EXTENSION_BASIC_CONSTRAINTS;
+    cert->extensions[X509_EXTENSION_BASIC_CONSTRAINTS].is_critical = true;
+    cert->extensions[X509_EXTENSION_BASIC_CONSTRAINTS].data.basic_constraints.is_ca = is_ca;
+    cert->extensions[X509_EXTENSION_BASIC_CONSTRAINTS].data.basic_constraints.path_len = path_len;
 
     return 0;
 }
@@ -246,16 +234,10 @@ int8_t x509_certificate_add_key_usage(x509_certificate_t* cert, x509_key_usage_t
         return -1;
     }
 
-    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
-    if (ext == NULL) {
-        return -1;
-    }
-
-    ext->type = X509_EXTENSION_KEY_USAGE;
-    ext->is_critical = true;
-    ext->data.key_usage = key_usage;
-    ext->next = cert->extensions;
-    cert->extensions = ext;
+    cert->extensions[X509_EXTENSION_KEY_USAGE].is_valid = true;
+    cert->extensions[X509_EXTENSION_KEY_USAGE].type = X509_EXTENSION_KEY_USAGE;
+    cert->extensions[X509_EXTENSION_KEY_USAGE].is_critical = true;
+    cert->extensions[X509_EXTENSION_KEY_USAGE].data.key_usage = key_usage;
 
     return 0;
 }
@@ -265,16 +247,10 @@ int8_t x509_certificate_add_extended_key_usage(x509_certificate_t* cert, x509_ex
         return -1;
     }
 
-    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
-    if (ext == NULL) {
-        return -1;
-    }
-
-    ext->type = X509_EXTENSION_EXTENDED_KEY_USAGE;
-    ext->is_critical = false;
-    ext->data.eku = eku;
-    ext->next = cert->extensions;
-    cert->extensions = ext;
+    cert->extensions[X509_EXTENSION_EXTENDED_KEY_USAGE].is_valid = true;
+    cert->extensions[X509_EXTENSION_EXTENDED_KEY_USAGE].type = X509_EXTENSION_EXTENDED_KEY_USAGE;
+    cert->extensions[X509_EXTENSION_EXTENDED_KEY_USAGE].is_critical = false;
+    cert->extensions[X509_EXTENSION_EXTENDED_KEY_USAGE].data.eku = eku;
 
     return 0;
 }
@@ -284,44 +260,31 @@ int8_t x509_certificate_add_subject_alternative_name(x509_certificate_t* cert, x
         return -1;
     }
 
-    x509_extension_t* ext = cert->extensions;
-    x509_extension_t* san_ext = NULL;
+    x509_extension_t* ext = &cert->extensions[X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME];
 
-    // Find existing SAN extension
-    while (ext != NULL) {
-        if (ext->type == X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME) {
-            san_ext = ext;
-            break;
-        }
-        ext = ext->next;
+    if (!ext->is_valid) {
+        ext->is_valid = true;
+        ext->type = X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME;
+        ext->is_critical = false;
+        ext->data.san_list = NULL;
     }
 
-    // If SAN extension does not exist, create it
-    if (san_ext == NULL) {
-        san_ext = memory_malloc(sizeof(x509_extension_t));
-        if (san_ext == NULL) {
-            return -1;
-        }
-        san_ext->type = X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME;
-        san_ext->is_critical = false;
-        san_ext->data.san_list = NULL;
-        san_ext->next = cert->extensions;
-        cert->extensions = san_ext;
-    }
-
-    // Create new SAN entry
     x509_subject_alternative_name_t* san_entry = memory_malloc(sizeof(x509_subject_alternative_name_t));
     if (san_entry == NULL) {
+        ext->is_valid = false;
         return -1;
     }
+
     san_entry->type = type;
     san_entry->value = strdup(value);
     if (san_entry->value == NULL) {
+        ext->is_valid = false;
         memory_free(san_entry);
         return -1;
     }
-    san_entry->next = san_ext->data.san_list;
-    san_ext->data.san_list = san_entry;
+
+    san_entry->next = ext->data.san_list;
+    ext->data.san_list = san_entry;
 
     return 0;
 }
@@ -331,22 +294,16 @@ int8_t x509_certificate_add_subject_key_identifier(x509_certificate_t* cert, con
         return -1;
     }
 
-    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
-    if (ext == NULL) {
+    cert->extensions[X509_EXTENSION_SKID].is_valid = true;
+    cert->extensions[X509_EXTENSION_SKID].type = X509_EXTENSION_SKID;
+    cert->extensions[X509_EXTENSION_SKID].is_critical = false;
+    cert->extensions[X509_EXTENSION_SKID].data.skid.length = skid_length;
+    cert->extensions[X509_EXTENSION_SKID].data.skid.data = memory_malloc(skid_length);
+    if (cert->extensions[X509_EXTENSION_SKID].data.skid.data == NULL) {
+        cert->extensions[X509_EXTENSION_SKID].is_valid = false;
         return -1;
     }
-
-    ext->type = X509_EXTENSION_SKID;
-    ext->is_critical = false;
-    ext->data.skid.length = skid_length;
-    ext->data.skid.data = memory_malloc(skid_length);
-    if (ext->data.skid.data == NULL) {
-        memory_free(ext);
-        return -1;
-    }
-    memory_memcopy(skid, ext->data.skid.data, skid_length);
-    ext->next = cert->extensions;
-    cert->extensions = ext;
+    memory_memcopy(skid, cert->extensions[X509_EXTENSION_SKID].data.skid.data, skid_length);
 
     return 0;
 }
@@ -356,22 +313,16 @@ int8_t x509_certificate_add_authority_key_identifier(x509_certificate_t* cert, c
         return -1;
     }
 
-    x509_extension_t* ext = memory_malloc(sizeof(x509_extension_t));
-    if (ext == NULL) {
+    cert->extensions[X509_EXTENSION_AKID].is_valid = true;
+    cert->extensions[X509_EXTENSION_AKID].type = X509_EXTENSION_AKID;
+    cert->extensions[X509_EXTENSION_AKID].is_critical = false;
+    cert->extensions[X509_EXTENSION_AKID].data.akid.length = akid_length;
+    cert->extensions[X509_EXTENSION_AKID].data.akid.data = memory_malloc(akid_length);
+    if (cert->extensions[X509_EXTENSION_AKID].data.akid.data == NULL) {
+        cert->extensions[X509_EXTENSION_AKID].is_valid = false;
         return -1;
     }
-
-    ext->type = X509_EXTENSION_AKID;
-    ext->is_critical = false;
-    ext->data.akid.length = akid_length;
-    ext->data.akid.data = memory_malloc(akid_length);
-    if (ext->data.akid.data == NULL) {
-        memory_free(ext);
-        return -1;
-    }
-    memory_memcopy(akid, ext->data.akid.data, akid_length);
-    ext->next = cert->extensions;
-    cert->extensions = ext;
+    memory_memcopy(akid, cert->extensions[X509_EXTENSION_AKID].data.akid.data, akid_length);
 
     return 0;
 }
@@ -511,7 +462,49 @@ static int8_t x509_encode_extension_key_usage(der_encoder_t* der_encoder, x509_e
         return -1;
     }
 
-    if(der_encoder_encode_bit_string(der_encoder, (uint8_t*)&ext->data.key_usage, 1) != 0) {
+    uint8_t ku_byte = 0;
+    uint32_t flags = ext->data.key_usage;
+
+    // Use the ENUM constants to check flags and construct the byte.
+    // Since your enum matches ASN.1 bit positions (0x80, 0x40...),
+    // we can OR them directly.
+
+    if (flags & X509_KEY_USAGE_DIGITAL_SIGNATURE) {
+        ku_byte |= X509_KEY_USAGE_DIGITAL_SIGNATURE;
+    }
+
+    if (flags & X509_KEY_USAGE_NON_REPUDIATION) {
+        ku_byte |= X509_KEY_USAGE_NON_REPUDIATION;
+    }
+
+    if (flags & X509_KEY_USAGE_KEY_ENCIPHERMENT) {
+        ku_byte |= X509_KEY_USAGE_KEY_ENCIPHERMENT;
+    }
+
+    if (flags & X509_KEY_USAGE_DATA_ENCIPHERMENT) {
+        ku_byte |= X509_KEY_USAGE_DATA_ENCIPHERMENT;
+    }
+
+    if (flags & X509_KEY_USAGE_KEY_AGREEMENT) {
+        ku_byte |= X509_KEY_USAGE_KEY_AGREEMENT;
+    }
+
+    if (flags & X509_KEY_USAGE_KEY_CERT_SIGN) {
+        ku_byte |= X509_KEY_USAGE_KEY_CERT_SIGN;
+    }
+
+    if (flags & X509_KEY_USAGE_CRL_SIGN) {
+        ku_byte |= X509_KEY_USAGE_CRL_SIGN;
+    }
+
+    if (flags & X509_KEY_USAGE_ENCIPHER_ONLY) {
+        ku_byte |= X509_KEY_USAGE_ENCIPHER_ONLY;
+    }
+
+    // Pass the constructed byte to your encoder.
+    // Note: Your bit_string encoder adds the "Unused Bits: 0" byte automatically,
+    // which is valid here (asserting the unused bits are effectively 0/False).
+    if(der_encoder_encode_bit_string(der_encoder, &ku_byte, 1) != 0) {
         return -1;
     }
 
@@ -528,22 +521,40 @@ static int8_t x509_encode_extension_extended_key_usage(der_encoder_t* der_encode
     }
 
     // OID for EKU based on type
-    switch (ext->data.eku) {
-    case X509_EXTENDED_KEY_USAGE_SERVER_AUTH: {
+    if(ext->data.eku & X509_EXTENDED_KEY_USAGE_SERVER_AUTH) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_SERVER_AUTH) != 0) {
             return -1;
         }
-        break;
     }
-    case X509_EXTENDED_KEY_USAGE_CLIENT_AUTH: {
+
+    if(ext->data.eku & X509_EXTENDED_KEY_USAGE_CLIENT_AUTH) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CLIENT_AUTH) != 0) {
             return -1;
         }
-        break;
     }
-    default:
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported EKU type");
-        return -1;
+
+    if(ext->data.eku & X509_EXTENDED_KEY_USAGE_CODE_SIGNING) {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CODE_SIGNING) != 0) {
+            return -1;
+        }
+    }
+
+    if(ext->data.eku & X509_EXTENDED_KEY_USAGE_EMAIL_PROTECTION) {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EMAIL_PROTECTION) != 0) {
+            return -1;
+        }
+    }
+
+    if(ext->data.eku & X509_EXTENDED_KEY_USAGE_TIME_STAMPING) {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_TIME_STAMPING) != 0) {
+            return -1;
+        }
+    }
+
+    if(ext->data.eku & X509_EXTENDED_KEY_USAGE_OCSP_SIGNING) {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_OCSP_SIGNING) != 0) {
+            return -1;
+        }
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
@@ -659,7 +670,16 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
         return -1;
     }
 
-    if(cert->extensions == NULL) {
+    boolean_t has_extensions = false;
+
+    for (size_t i = 0; i < X509_EXTENSION_COUNT; i++) {
+        if (cert->extensions[i].is_valid) {
+            has_extensions = true;
+            break;
+        }
+    }
+
+    if (!has_extensions) {
         return 0; // No extensions to encode
     }
 
@@ -671,8 +691,12 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
         return -1;
     }
 
-    x509_extension_t* ext = cert->extensions;
-    while (ext) {
+    for (size_t i = 0; i < X509_EXTENSION_COUNT; i++) {
+        x509_extension_t* ext = &cert->extensions[i];
+        if (!ext->is_valid) {
+            continue;
+        }
+
         if(der_encoder_start_sequence(der_encoder) != 0) {
             return -1;
         }
@@ -741,8 +765,6 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
         if(der_encoder_end_sequence(der_encoder) != 0) {
             return -1;
         }
-
-        ext = ext->next;
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
@@ -946,6 +968,17 @@ static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
         return -1;
     }
 
+    uint8_t public_key[32];
+    if (ed25519_derive_pubkey(public_key, private_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to derive public key from private key");
+        return -1;
+    }
+
+    if(ed25519_verify(signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "signature verification failed after signing");
+        return -1;
+    }
+
     cert->signature_length = 64;
     cert->signature = memory_malloc(64);
     if (cert->signature == NULL) {
@@ -970,6 +1003,116 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm: %d", algorithm);
         return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_compute_subject_key_identifier(const uint8_t* public_key, size_t public_key_length, uint8_t* out_skid, size_t out_skid_length) {
+    if (public_key == NULL || public_key_length == 0 || out_skid == NULL || out_skid_length != SHA256_OUTPUT_SIZE) {
+        return -1;
+    }
+
+    // Simple SKID computation: SHA-256 hash of the public key
+    uint8_t* hash = sha256_hash(public_key, public_key_length);
+    if (hash == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to compute SHA-256 hash for SKID");
+        return -1;
+    }
+
+    if (memory_memcopy(hash, out_skid, out_skid_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to copy SKID data");
+        memory_free(hash);
+        return -1;
+    }
+
+    memory_free(hash);
+
+    return 0;
+}
+
+int8_t x509_certificate_verify_signature_with_rebuild(x509_certificate_t* cert,
+                                                      const uint8_t*      public_key,
+                                                      size_t              public_key_length,
+                                                      boolean_t           rebuild) {
+    if (cert == NULL || public_key == NULL || public_key_length == 0 ||
+        cert->tbs_data == NULL || cert->tbs_length == 0 ||
+        cert->signature == NULL || cert->signature_length == 0) {
+        return -1;
+    }
+
+    // --- Step 1: Authority Key Identifier (AKID) Link Check ---
+    // Verifies: "Is 'public_key' really the parent of this cert?"
+    x509_extension_t* ext = &cert->extensions[X509_EXTENSION_AKID];
+    if (ext->is_valid) {
+        if (ext->data.akid.length != SHA256_OUTPUT_SIZE) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "AKID Error: Legacy/Invalid length %llu (Strict SHA-256 required)", ext->data.akid.length);
+            return -1;
+        }
+
+        uint8_t derived_akid[SHA256_OUTPUT_SIZE];
+        if (x509_compute_subject_key_identifier(public_key, public_key_length, derived_akid, sizeof(derived_akid)) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to hash parent public key for AKID check");
+            return -1;
+        }
+
+        if (memory_memcompare(ext->data.akid.data, derived_akid, sizeof(derived_akid)) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "AKID Mismatch: Provided key is not the issuer");
+            return -1;
+        }
+    }
+
+    // --- Step 2: Subject Key Identifier (SKID) Integrity Check ---
+    // Verifies: "Is this cert's internal key ID consistent with its actual key?"
+    ext = &cert->extensions[X509_EXTENSION_SKID];
+    if (ext->is_valid) {
+        if (ext->data.skid.length != SHA256_OUTPUT_SIZE) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "SKID Error: Legacy/Invalid length %llu (Strict SHA-256 required)", ext->data.skid.length);
+            return -1;
+        }
+
+        uint8_t derived_skid[SHA256_OUTPUT_SIZE];
+        if (x509_compute_subject_key_identifier(cert->public_key, cert->public_key_length, derived_skid, sizeof(derived_skid)) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to hash subject public key for SKID check");
+            return -1;
+        }
+
+        if (memory_memcompare(ext->data.skid.data, derived_skid, sizeof(derived_skid)) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "SKID Integrity Error: Extension does not match public key");
+            return -1;
+        }
+    }
+
+    // --- Step 3: Raw Verification (The "Real" Verify) ---
+    // We must ALWAYS verify the raw bytes first. If this fails, the cert is 100% invalid.
+    if (cert->signature_algorithm != X509_ALGORITHM_ED25519) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported algorithm: %d", cert->signature_algorithm);
+        return -1;
+    }
+
+    if (ed25519_verify(cert->signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature verification failed on raw data");
+        return -1;
+    }
+
+    // --- Step 4: Re-encoding Check (Optional Strict Mode) ---
+    // This ensures your internal struct perfectly captures the DER representation.
+    if (rebuild) {
+        // Free raw data to force reconstruction
+        memory_free(cert->tbs_data);
+        cert->tbs_data = NULL;
+        cert->tbs_length = 0;
+
+        if (x509_encode_tbs(cert) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to rebuild TBS data");
+            return -1;
+        }
+
+        // Verify again against the rebuilt bytes
+        if (ed25519_verify(cert->signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Rebuild Mismatch: Encoder output differs from original signature input");
+            return -1;
+        }
     }
 
     return 0;
@@ -1073,4 +1216,750 @@ char_t* x509_certificate_get_pem(x509_certificate_t* cert) {
     }
 
     return pem_data;
+}
+
+static int8_t x509_decode_name(der_decoder_t* der_decoder, char_t** common_name) {
+    if(!der_decoder || !common_name) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_start_set(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    der_object_identifier_t oid;
+
+    if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+        return -1;
+    }
+
+    if(oid != DER_OID_CN) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported DN OID: %d. We only support CN now.", oid);
+        return -1;
+    }
+
+    size_t name_length = 0;
+
+    if(der_decoder_decode_printable_string(der_decoder, common_name, &name_length) != 0) {
+        return -1;
+    }
+
+    if(strlen(*common_name) != name_length) {
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_end_set(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_basic_conntraints(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if(!der_decoder || !ext) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_decode_boolean(der_decoder, &ext->data.basic_constraints.is_ca) != 0) {
+        return -1;
+    }
+
+    if(!der_decoder_has_container_ended(der_decoder)) {
+        int64_t path_len = 0;
+        if(der_decoder_decode_integer(der_decoder, &path_len) != 0) {
+            return -1;
+        }
+        ext->data.basic_constraints.path_len = (int32_t)path_len;
+    } else {
+        ext->data.basic_constraints.path_len = -1;
+    }
+
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_key_usage(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    size_t flags_length = 0;
+    uint8_t* flags_data = NULL;
+
+    if(der_decoder_decode_bit_string(der_decoder, &flags_data, &flags_length) != 0) {
+        return -1;
+    }
+
+    if (flags_length != 1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key usage length: %llu", flags_length);
+        memory_free(flags_data);
+        return -1;
+    }
+
+    uint8_t ku_byte = flags_data[0];
+    memory_free(flags_data);
+
+    uint32_t flags = 0;
+
+    // Use the ENUM constants to check flags and construct the byte.
+    // Since your enum matches ASN.1 bit positions (0x80, 0x40...),
+    // we can OR them directly.
+
+    if (ku_byte & X509_KEY_USAGE_DIGITAL_SIGNATURE) {
+        flags |= X509_KEY_USAGE_DIGITAL_SIGNATURE;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_NON_REPUDIATION) {
+        flags |= X509_KEY_USAGE_NON_REPUDIATION;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_KEY_ENCIPHERMENT) {
+        flags |= X509_KEY_USAGE_KEY_ENCIPHERMENT;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_DATA_ENCIPHERMENT) {
+        flags |= X509_KEY_USAGE_DATA_ENCIPHERMENT;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_KEY_AGREEMENT) {
+        flags |= X509_KEY_USAGE_KEY_AGREEMENT;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_KEY_CERT_SIGN) {
+        flags |= X509_KEY_USAGE_KEY_CERT_SIGN;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_CRL_SIGN) {
+        flags |= X509_KEY_USAGE_CRL_SIGN;
+    }
+
+    if (ku_byte & X509_KEY_USAGE_ENCIPHER_ONLY) {
+        flags |= X509_KEY_USAGE_ENCIPHER_ONLY;
+    }
+
+    ext->data.key_usage = flags;
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_extended_key_usage(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    x509_extended_key_usage_t eku_flags = X509_EXTENDED_KEY_USAGE_UNKNOWN;
+
+    while(!der_decoder_has_container_ended(der_decoder)) {
+        der_object_identifier_t oid;
+        if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+            return -1;
+        }
+
+        switch (oid) {
+        case DER_OID_SERVER_AUTH:
+            eku_flags |= X509_EXTENDED_KEY_USAGE_SERVER_AUTH;
+            break;
+        case DER_OID_CLIENT_AUTH:
+            eku_flags |= X509_EXTENDED_KEY_USAGE_CLIENT_AUTH;
+            break;
+        case DER_OID_CODE_SIGNING:
+            eku_flags |= X509_EXTENDED_KEY_USAGE_CODE_SIGNING;
+            break;
+        case DER_OID_EMAIL_PROTECTION:
+            eku_flags |= X509_EXTENDED_KEY_USAGE_EMAIL_PROTECTION;
+            break;
+        case DER_OID_TIME_STAMPING:
+            eku_flags |= X509_EXTENDED_KEY_USAGE_TIME_STAMPING;
+            break;
+        case DER_OID_OCSP_SIGNING:
+            eku_flags |= X509_EXTENDED_KEY_USAGE_OCSP_SIGNING;
+            break;
+        default:
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported EKU OID: %d", oid);
+            return -1;
+        }
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    ext->data.eku = eku_flags;
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_subject_alternative_name(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    while(!der_decoder_has_container_ended(der_decoder)) {
+        if(der_decoder_has_context_specific_tag(der_decoder, 2)) {
+            // DNS
+            x509_subject_alternative_name_t* san = memory_malloc(sizeof(x509_subject_alternative_name_t));
+            if (!san) {
+                return -1;
+            }
+            san->type = X509_SUBJECT_ALTERNATIVE_NAME_TYPE_DNS;
+            size_t value_length = 0;
+            if(der_decoder_decode_context_specific_string(der_decoder, 2, (uint8_t**)&san->value, &value_length) != 0) {
+                memory_free(san);
+                return -1;
+            }
+            san->next = ext->data.san_list;
+            ext->data.san_list = san;
+        } else if(der_decoder_has_context_specific_tag(der_decoder, 7)) {
+            // IP
+            x509_subject_alternative_name_t* san = memory_malloc(sizeof(x509_subject_alternative_name_t));
+            if (!san) {
+                return -1;
+            }
+            san->type = X509_SUBJECT_ALTERNATIVE_NAME_TYPE_IP;
+            uint8_t* ip_bytes;
+            size_t ip_length = 0;
+            if(der_decoder_decode_context_specific_string(der_decoder, 7, &ip_bytes, &ip_length) != 0) {
+                memory_free(san);
+                return -1;
+            }
+            if (ip_length != 4) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid IP address length in SAN: %llu", ip_length);
+                memory_free(san);
+                return -1;
+            }
+            san->value = strprintf("%u.%u.%u.%u", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
+            san->next = ext->data.san_list;
+            ext->data.san_list = san;
+        } else if(der_decoder_has_context_specific_tag(der_decoder, 1)) {
+            // Email
+            x509_subject_alternative_name_t* san = memory_malloc(sizeof(x509_subject_alternative_name_t));
+            if (!san) {
+                return -1;
+            }
+            san->type = X509_SUBJECT_ALTERNATIVE_NAME_TYPE_EMAIL;
+            size_t value_length = 0;
+            if(der_decoder_decode_context_specific_string(der_decoder, 1, (uint8_t**)&san->value, &value_length) != 0) {
+                memory_free(san);
+                return -1;
+            }
+            san->next = ext->data.san_list;
+            ext->data.san_list = san;
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported SAN tag");
+            return -1;
+        }
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_skid(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    if(der_decoder_decode_octet_string(der_decoder, &ext->data.skid.data, &ext->data.skid.length) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_akid(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_decode_context_specific_string(der_decoder, 0, &ext->data.akid.data, &ext->data.akid.length) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_extension_value(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    switch (ext->type) {
+    case X509_EXTENSION_BASIC_CONSTRAINTS: return x509_decode_extension_basic_conntraints(der_decoder, ext);
+    case X509_EXTENSION_KEY_USAGE: return x509_decode_extension_key_usage(der_decoder, ext);
+    case X509_EXTENSION_EXTENDED_KEY_USAGE: return x509_decode_extension_extended_key_usage(der_decoder, ext);
+    case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: return x509_decode_extension_subject_alternative_name(der_decoder, ext);
+    case X509_EXTENSION_SKID: return x509_decode_extension_skid(der_decoder, ext);
+    case X509_EXTENSION_AKID: return x509_decode_extension_akid(der_decoder, ext);
+    default:
+    }
+
+    PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported extension type: %d", ext->type);
+
+    return -1;
+}
+
+static int8_t x509_decode_extensions(der_decoder_t* der_decoder, x509_certificate_t* cert) {
+    if(!der_decoder || !cert) {
+        return -1;
+    }
+
+    if(!der_decoder_has_explicit_tag(der_decoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 3)) {
+        return 0; // No extensions present
+    }
+
+    if(der_decoder_start_explicit_tag(der_decoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 3) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    while (!der_decoder_has_container_ended(der_decoder)) {
+        if(der_decoder_start_sequence(der_decoder) != 0) {
+            return -1;
+        }
+
+        der_object_identifier_t oid;
+
+        if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+            return -1;
+        }
+
+        x509_extension_type_t ext_type;
+
+        switch (oid) {
+        case DER_OID_EXT_BASIC_CONSTRAINTS:
+            ext_type = X509_EXTENSION_BASIC_CONSTRAINTS;
+            break;
+        case DER_OID_EXT_KEY_USAGE:
+            ext_type = X509_EXTENSION_KEY_USAGE;
+            break;
+        case DER_OID_EXT_EXTENDED_KEY_USAGE:
+            ext_type = X509_EXTENSION_EXTENDED_KEY_USAGE;
+            break;
+        case DER_OID_EXT_SAN:
+            ext_type = X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME;
+            break;
+        case DER_OID_EXT_SKID:
+            ext_type = X509_EXTENSION_SKID;
+            break;
+        case DER_OID_EXT_AKID:
+            ext_type = X509_EXTENSION_AKID;
+            break;
+        default:
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported extension OID: %d", oid);
+            return -1;
+        }
+
+        boolean_t is_critical = false;
+
+        if(der_decoder_has_boolean_tag(der_decoder)) {
+            if(der_decoder_decode_boolean(der_decoder, &is_critical) != 0) {
+                return -1;
+            }
+        }
+
+        if(der_decoder_start_octet_string(der_decoder) != 0) {
+            return -1;
+        }
+
+        x509_extension_t* ext = &cert->extensions[ext_type];
+
+        ext->is_valid = true;
+        ext->type = ext_type;
+        ext->is_critical = is_critical;
+
+        if(x509_decode_extension_value(der_decoder, ext) != 0) {
+            return -1;
+        }
+
+        if(der_decoder_end_octet_string(der_decoder) != 0) {
+            return -1;
+        }
+
+        if(der_decoder_end_sequence(der_decoder) != 0) {
+            return -1;
+        }
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_end_explicit_tag(der_decoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_validity(der_decoder_t* der_decoder, time_t* not_before, time_t* not_after) {
+    if(!der_decoder || !not_before || !not_after) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_decode_utc_time(der_decoder, not_before) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_decode_utc_time(der_decoder, not_after) != 0) {
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_algorithm_identifier(der_decoder_t* der_decoder, x509_algorithm_t* algorithm) {
+    if(!der_decoder || algorithm == 0) {
+        return -1;
+    }
+
+    *algorithm = X509_ALGORITHM_UNKNOWN;
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to start algorithm identifier sequence");
+        return -1;
+    }
+
+    der_object_identifier_t oid;
+
+    if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode algorithm OID");
+        return -1;
+    }
+
+    switch (oid) {
+    case DER_OID_ED25519: {
+        *algorithm = X509_ALGORITHM_ED25519;
+        break;
+    }
+    case DER_OID_X25519: {
+        *algorithm = X509_ALGORITHM_X25519;
+        break;
+    }
+    default:
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported algorithm: %d", oid);
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to end algorithm identifier sequence");
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_data_with_bit_string_with_alogrithm_identifier(der_decoder_t*    der_decoder,
+                                                                         x509_algorithm_t* algorithm,
+                                                                         uint8_t**         data,
+                                                                         size_t*           data_length) {
+    if(!der_decoder || !algorithm || !data ) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to start data with bit string sequence");
+        return -1;
+    }
+
+    if(x509_decode_algorithm_identifier(der_decoder, algorithm) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode algorithm identifier");
+        return -1;
+    }
+
+    if(der_decoder_decode_bit_string(der_decoder, data, data_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode bit string data");
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to end data with bit string sequence");
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t x509_decode_tbs(der_decoder_t* der_decoder, x509_certificate_t* cert) {
+    if (!der_decoder || !cert) {
+        return -1;
+    }
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to start TBS sequence");
+        return -1;
+    }
+
+    // 1. Version [0] EXPLICIT INTEGER (v3 = 2)
+    if(der_decoder_start_explicit_tag(der_decoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 0) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to start version explicit tag");
+        return -1;
+    }
+
+    int64_t version = 0;
+    if(der_decoder_decode_integer(der_decoder, &version) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode version integer");
+        return -1;
+    }
+
+    if(version != 2) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported certificate version: %lld", version);
+        return -1;
+    }
+
+    cert->version = (uint8_t)version;
+
+    if(der_decoder_end_explicit_tag(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to end version explicit tag");
+        return -1;
+    }
+
+    // 2. Serial Number (Integer)
+    uint128_t serial_number = 0;
+    if(der_decoder_decode_integer_u128(der_decoder, &serial_number) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode serial number");
+        return -1;
+    }
+    cert->serial_number = serial_number;
+
+    // 3. Signature Algorithm Identifier
+    if(x509_decode_algorithm_identifier(der_decoder, &cert->signature_algorithm) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode signature algorithm");
+        return -1;
+    }
+
+    // 4. Issuer
+    if(x509_decode_name(der_decoder, &cert->issuer_common_name) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode issuer name");
+        return -1;
+    }
+
+    // 5. Validity
+    if(x509_decode_validity(der_decoder, &cert->not_before, &cert->not_after) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode validity");
+        return -1;
+    }
+
+    // 6. Subject
+    if(x509_decode_name(der_decoder, &cert->subject_common_name) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode subject name");
+        return -1;
+    }
+
+    // 7. SubjectPublicKeyInfo
+    if(x509_decode_data_with_bit_string_with_alogrithm_identifier(der_decoder,
+                                                                  &cert->public_key_algorithm,
+                                                                  &cert->public_key,
+                                                                  &cert->public_key_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode subject public key info");
+        return -1;
+    }
+
+    // 8. Extensions [3] EXPLICIT SEQUENCE
+    if(x509_decode_extensions(der_decoder, cert) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode extensions");
+        return -1;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to end TBS sequence");
+        return -1;
+    }
+
+    return 0;
+}
+
+x509_certificate_t* x509_certificate_from_der(const uint8_t* der_data, size_t der_length) {
+    if (der_data == NULL || der_length == 0) {
+        return NULL;
+    }
+
+    der_decoder_t* der_decoder = NULL;
+
+    der_decoder = der_decoder_new(der_data, der_length);
+    if (der_decoder == NULL) {
+        return NULL;
+    }
+
+    boolean_t success = false;
+
+    x509_certificate_t* cert = x509_certificate_new();
+    if (cert == NULL) {
+        der_decoder_destroy(der_decoder);
+        return NULL;
+    }
+
+    cert->version = 0;
+    cert->serial_number = 0;
+
+    if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to start DER sequence");
+        goto cleanup;
+    }
+
+    // 1. parse tbsCertificate
+    size_t tbs_start_pos = 0;
+    size_t tbs_end_pos = 0;
+
+    if(der_decoder_get_current_position(der_decoder, &tbs_start_pos) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to get TBS start position");
+        goto cleanup;
+    }
+
+    if(x509_decode_tbs(der_decoder, cert) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode TBS certificate");
+        goto cleanup;
+    }
+
+    if(der_decoder_get_current_position(der_decoder, &tbs_end_pos) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to get TBS end position");
+        goto cleanup;
+    }
+
+    size_t tbs_length = tbs_end_pos - tbs_start_pos;
+    cert->tbs_length = tbs_length;
+    cert->tbs_data = memory_malloc(tbs_length);
+    if (cert->tbs_data == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to allocate memory for TBS data");
+        goto cleanup;
+    }
+
+    memory_memcopy(der_data + tbs_start_pos, cert->tbs_data, tbs_length);
+
+    // 2. parse signatureAlgorithm
+    if(x509_decode_algorithm_identifier(der_decoder, &cert->signature_algorithm) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode signature algorithm");
+        goto cleanup;
+    }
+
+    // 3. parse signatureValue
+    size_t signature_length = 0;
+    uint8_t* signature = NULL;
+
+    if(der_decoder_decode_bit_string(der_decoder, &signature, &signature_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode signature value");
+        goto cleanup;
+    }
+
+    if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to end DER sequence");
+        goto cleanup;
+    }
+
+    cert->signature_length = signature_length;
+    cert->signature = signature;
+
+    success = true;
+
+cleanup:
+    if(!success) {
+        x509_certificate_free(cert);
+        cert = NULL;
+    }
+
+    der_decoder_destroy(der_decoder);
+
+    return cert;
+}
+
+x509_certificate_t* x509_certificate_from_pem(const char_t* pem_data) {
+    if (pem_data == NULL) {
+        return NULL;
+    }
+
+    uint8_t* der_data = NULL;
+    size_t der_length = 0;
+
+    if(pem_decode("CERTIFICATE", pem_data, strlen(pem_data), &der_data, &der_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to PEM decode certificate");
+        return NULL;
+    }
+
+    x509_certificate_t* cert = x509_certificate_from_der(der_data, der_length);
+    memory_free(der_data);
+
+    return cert;
+}
+
+uint8_t* x509_certificate_get_tbs_data(x509_certificate_t* cert, boolean_t rebuild, size_t* out_length) {
+    if (cert == NULL || out_length == NULL) {
+        return NULL;
+    }
+
+    if(rebuild || cert->tbs_data == NULL || cert->tbs_length == 0) {
+        if(cert->tbs_data) {
+            memory_free(cert->tbs_data);
+            cert->tbs_data = NULL;
+            cert->tbs_length = 0;
+        }
+
+        if (x509_encode_tbs(cert) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to encode TBS data");
+            return NULL;
+        }
+    }
+
+    *out_length = cert->tbs_length;
+
+    uint8_t* tbs_data = memory_malloc(cert->tbs_length);
+    if (tbs_data == NULL) {
+        return NULL;
+    }
+
+    memory_memcopy(cert->tbs_data, tbs_data, cert->tbs_length);
+
+    return tbs_data;
 }
