@@ -169,7 +169,7 @@ int8_t x25519_shared_secret(uint8_t       out_shared[X25519_SHARED_SECRET_LEN],
  * @param[in] priv_seed A buffer of size 32 bytes containing the private seed.
  * @return 0 on success, non-zero on failure.
  */
-int8_t ed25519_derive_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]);
+int8_t ed25519_derive_pubkey(uint8_t pub_out[ED25519_PUBLIC_KEY_RAW_LEN], const uint8_t priv_seed[ED25519_PRIVATE_KEY_RAW_LEN]);
 
 /**
  * @brief Signs a message using the Ed25519 signature algorithm.
@@ -181,7 +181,7 @@ int8_t ed25519_derive_pubkey(uint8_t pub_out[32], const uint8_t priv_seed[32]);
  * @return 0 on success, non-zero on failure.
  */
 int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
-                    const uint8_t priv_seed[32]);
+                    const uint8_t priv_seed[ED25519_PRIVATE_KEY_RAW_LEN]);
 
 /**
  * @brief Verifies an Ed25519 signature for a given message and public key.
@@ -191,7 +191,9 @@ int8_t ed25519_sign(uint8_t sig[64], const uint8_t* msg, size_t msg_len,
  * @param[in] pub_key A buffer of size 32 bytes containing the public key.
  * @return 0 if the signature is valid, non-zero if invalid or on failure.
  */
-int8_t ed25519_verify(const uint8_t sig[64], const uint8_t* msg, size_t msg_len, const uint8_t pub_key[32]);
+int8_t ed25519_verify(const uint8_t sig[ED25519_SIGNATURE_LEN],
+                      const uint8_t* msg, size_t msg_len,
+                      const uint8_t pub_key[ED25519_PUBLIC_KEY_RAW_LEN]);
 
 /**
  * @brief Generates a new Ed25519 key pair (private seed and public key).
@@ -202,7 +204,25 @@ int8_t ed25519_verify(const uint8_t sig[64], const uint8_t* msg, size_t msg_len,
  * @param[out] out_pub A buffer of size 32 bytes to store the generated public key.
  * @return 0 on success, non-zero on failure.
  */
-int8_t ed25519_generate_keypair(uint8_t out_priv[32], uint8_t out_pub[32]);
+int8_t ed25519_generate_keypair(uint8_t out_priv[ED25519_PRIVATE_KEY_RAW_LEN], uint8_t out_pub[ED25519_PUBLIC_KEY_RAW_LEN]);
+
+/**
+ * @brief Reads an Ed25519 private key from a PEM-encoded string.
+ *
+ * @param[in] pem A null-terminated string containing the PEM-encoded private key.
+ * @param[out] out_key A buffer of size #ED25519_PRIVATE_KEY_RAW_LEN to store the raw private key.
+ * @return 0 on success, non-zero on failure (e.g., invalid PEM format, buffer too small).
+ */
+int8_t pem_read_ed25519_private_key(const char_t* pem, uint8_t* out_key);
+
+/**
+ * @brief Reads an Ed25519 public key from a PEM-encoded string.
+ *
+ * @param[in] pem A null-terminated string containing the PEM-encoded public key.
+ * @param[out] out_key A buffer of size #ED25519_PUBLIC_KEY_RAW_LEN to store the raw public key.
+ * @return 0 on success, non-zero on failure (e.g., invalid PEM format, buffer too small).
+ */
+int8_t pem_read_ed25519_public_key(const char_t* pem, uint8_t* out_key);
 
 /**
  * @brief Writes a raw Ed25519 private key to a newly allocated PEM-encoded string.
@@ -214,6 +234,17 @@ int8_t ed25519_generate_keypair(uint8_t out_priv[32], uint8_t out_pub[32]);
  * @return 0 on success, non-zero on failure (e.g., memory allocation error).
  */
 int8_t pem_write_ed25519_private_key(const uint8_t* in_key, char_t** out_pem);
+
+/**
+ * @brief Writes a raw Ed25519 public key to a newly allocated PEM-encoded string.
+ *
+ * The caller is responsible for freeing the allocated string `*out_pem`.
+ *
+ * @param[in] in_key A buffer of size #ED25519_PUBLIC_KEY_RAW_LEN containing the raw public key.
+ * @param[out] out_pem A pointer to a char_t* that will be allocated and filled with the PEM string.
+ * @return 0 on success, non-zero on failure (e.g., memory allocation error).
+ */
+int8_t pem_write_ed25519_public_key(const uint8_t* in_key, char_t** out_pem);
 
 #ifdef __cplusplus
 }

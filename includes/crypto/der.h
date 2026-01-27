@@ -323,6 +323,28 @@ int8_t der_encoder_encode_raw_bytes(der_encoder_t * encoder, const uint8_t * dat
  */
 int8_t der_encoder_get_der_data(der_encoder_t * encoder, uint8_t ** out_data, size_t * out_len);
 
+
+typedef struct der_decoder_t der_decoder_t;
+
+der_decoder_t* der_decoder_new(const uint8_t* data, size_t data_len);
+
+void der_decoder_destroy(der_decoder_t* decoder);
+
+boolean_t der_decoder_is_at_end(der_decoder_t* decoder);
+
+int8_t der_decoder_start_sequence(der_decoder_t* decoder);
+
+int8_t der_decoder_start_octet_string(der_decoder_t* decoder);
+
+int8_t der_decoder_read_integer(der_decoder_t* decoder, int64_t* out_value);
+
+int8_t der_decoder_read_object_identifier(der_decoder_t* decoder, der_object_identifier_t* out_oid);
+
+int8_t der_decoder_read_octet_string(der_decoder_t* decoder, uint8_t** out_data, size_t* out_data_len);
+
+int8_t der_decoder_read_bit_string(der_decoder_t* decoder, uint8_t** out_data, size_t* out_data_len);
+
+
 #ifdef __cplusplus
 }
 #endif
