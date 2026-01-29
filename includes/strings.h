@@ -146,7 +146,7 @@ unumber_t atou_base(const char_t * source, number_t base);
 
 
 /*! atou_base macro for base 10 */
-#define atou(number) atou_base(number, 16)
+#define atou(number) atou_base(number, 10)
 /*! atou_base macro for base 16 */
 #define atoh(number) atou_base(number, 16)
 
