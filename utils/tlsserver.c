@@ -1,4 +1,4 @@
-/**
+/*n*
  * @file tlsserver.c
  * @brief tls server test application.
  *
@@ -18,6 +18,7 @@
 #include <crypto/pem.h>
 #include <crypto/x509.h>
 #include <base64.h>
+#include <list.h>
 
 #define PORT 10443
 
@@ -1829,6 +1830,590 @@ static int8_t tls13_send_close_notify(tls13_context_t* ctx, int32_t client_fd) {
     return status;
 }
 
+static int8_t tls13_handle_handshake(tls13_context_t* ctx, int32_t client_fd) {
+    int32_t res_client_hello = tls13_client_hello(ctx, client_fd);
+
+    if(res_client_hello == -2) {
+        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Redirecting HTTP/1.1 client to HTTPS URL");
+        return -1;
+    }
+
+    if(res_client_hello == -1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse Client Hello");
+        return -1;
+    }
+
+    get_random_bytes(ctx->server_random, sizeof(ctx->server_random));
+    if(x25519_generate_keypair(ctx->server_privkey, ctx->server_pubkey) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
+        return -1;
+    }
+
+    if(x25519_shared_secret(ctx->shared_secret,
+                            ctx->server_privkey,
+                            ctx->client_pubkey) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+        return -1;
+    }
+
+    ctx->shared_secret_len = X25519_PUBLIC_KEY_RAW_LEN;
+
+    if(tls13_send_server_hello(ctx, client_fd) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Server Hello");
+        return -1;
+    }
+
+    if(tls13_generate_handshake_key_and_iv(ctx) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate handshake key and IV");
+        return -1;
+    }
+
+    if(tls13_send_encrypted_extensions(ctx, client_fd) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Encrypted Extensions");
+        return -1;
+    }
+
+    if(tls13_send_certificate(ctx, client_fd) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate");
+        return -1;
+    }
+
+    if(tls13_send_certificate_verify(ctx, client_fd) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate Verify");
+        return -1;
+    }
+
+    if(tls13_send_finished(ctx, client_fd) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Finished");
+        return -1;
+    }
+
+    if(tls13_generate_application_keys(ctx) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate application keys");
+        return -1;
+    }
+
+    if(tls13_handle_client_finished_record(ctx, client_fd) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to handle Client Finished record");
+        return -1;
+    }
+
+    return 0;
+}
+
+typedef enum http_version_t {
+    HTTP_VERSION_1_1,
+    HTTP_VERSION_2,
+} http_version_t;
+
+typedef enum http_method_t {
+    HTTP_METHOD_UNKNOWN,
+    HTTP_METHOD_GET,
+    HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
+    HTTP_METHOD_DELETE,
+    HTTP_METHOD_HEAD,
+    HTTP_METHOD_OPTIONS,
+    HTTP_METHOD_PATCH,
+} http_method_t;
+
+typedef enum content_type_t {
+    CONTENT_TYPE_TEXT_HTML,
+    CONTENT_TYPE_APPLICATION_JSON,
+    CONTENT_TYPE_TEXT_PLAIN,
+    CONTENT_TYPE_APPLICATION_OCTET_STREAM,
+} content_type_t;
+
+typedef struct http_request_t {
+    http_version_t version;
+    http_method_t  method;
+    char_t         path[1024]; // request path without query string
+    list_t*        headers; // list of http_header_t
+    list_t*        query_params; // list of http_query_param_t
+    buffer_t*      body; // for storing request body
+} http_request_t;
+
+typedef struct http_header_t {
+    char_t* name;
+    char_t* value;
+} http_header_t;
+
+typedef struct http_query_param_t {
+    char_t* name;
+    char_t* value;
+} http_query_param_t;
+
+typedef struct http_response_t {
+    http_version_t version;
+    int32_t        status_code;
+    list_t*        headers; // list of http_header_t
+    buffer_t*      body; // for storing response body
+} http_response_t;
+
+static int8_t http_handle(http_request_t* request, http_response_t* response) {
+    // Simple handler: respond with 200 OK and a hello message
+    response->status_code = 200;
+    response->version = request->version;
+    response->body = buffer_new();
+    if(!response->body) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for response body");
+        return -1;
+    }
+
+    PRINTLOG(CRYPTOLIB, LOG_INFO, "Handling HTTP request for path: %s", request->path);
+    for (size_t i = 0; i < list_size(request->headers); i++) {
+        http_header_t* header = (http_header_t*)list_get_data_at_position(request->headers, i);
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "Request Header: %s: %s", header->name, header->value);
+    }
+    for (size_t i = 0; i < list_size(request->query_params); i++) {
+        http_query_param_t* param = (http_query_param_t*)list_get_data_at_position(request->query_params, i);
+        PRINTLOG(CRYPTOLIB, LOG_INFO, "Query Param: %s=%s", param->name, param->value);
+    }
+
+    const char_t* message = "<html><body><h1>Hello, World!</h1></body></html>\n";
+    buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
+
+    // Add Content-Type header
+    http_header_t* content_type_header = (http_header_t*)memory_malloc(sizeof(http_header_t));
+    if(!content_type_header) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for Content-Type header");
+        return -1;
+    }
+    content_type_header->name = strdup("Content-Type");
+    content_type_header->value = strdup("text/html; charset=UTF-8");
+    if(!content_type_header->name || !content_type_header->value) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for Content-Type header strings");
+        memory_free(content_type_header);
+        return -1;
+    }
+
+    response->headers = list_create_list();
+    if(!response->headers) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for response headers list");
+        memory_free(content_type_header->name);
+        memory_free(content_type_header->value);
+        memory_free(content_type_header);
+        return -1;
+    }
+    list_list_insert(response->headers, content_type_header);
+
+    // Add Content-Length header
+    http_header_t* content_length_header = (http_header_t*)memory_malloc(sizeof(http_header_t));
+    if(!content_length_header) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for Content-Length header");
+        return -1;
+    }
+    content_length_header->name = strdup("Content-Length");
+    content_length_header->value = itoa(buffer_get_length(response->body));
+    if(!content_length_header->name || !content_length_header->value) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for Content-Length header name");
+        memory_free(content_length_header->name);
+        memory_free(content_length_header->value);
+        memory_free(content_length_header);
+        return -1;
+    }
+    list_list_insert(response->headers, content_length_header);
+
+    return 0;
+}
+
+static void http_free_request(http_request_t* request) {
+    if(!request) {
+        return;
+    }
+
+    if(request->headers) {
+        size_t header_count = list_size(request->headers);
+        for(size_t i = 0; i < header_count; i++) {
+            http_header_t* header = (http_header_t*)list_get_data_at_position(request->headers, i);
+            if(header) {
+                memory_free(header->name);
+                memory_free(header->value);
+                memory_free(header);
+            }
+        }
+        list_destroy(request->headers);
+    }
+
+    if(request->query_params) {
+        size_t param_count = list_size(request->query_params);
+        for(size_t i = 0; i < param_count; i++) {
+            http_query_param_t* param = (http_query_param_t*)list_get_data_at_position(request->query_params, i);
+            if(param) {
+                memory_free(param->name);
+                memory_free(param->value);
+                memory_free(param);
+            }
+        }
+        list_destroy(request->query_params);
+    }
+
+    if(request->body) {
+        buffer_destroy(request->body);
+    }
+
+    memory_free(request);
+}
+
+static void http_free_response(http_response_t* response) {
+    if(!response) {
+        return;
+    }
+
+    if(response->headers) {
+        size_t header_count = list_size(response->headers);
+        for(size_t i = 0; i < header_count; i++) {
+            http_header_t* header = (http_header_t*)list_get_data_at_position(response->headers, i);
+            if(header) {
+                memory_free(header->name);
+                memory_free(header->value);
+                memory_free(header);
+            }
+        }
+        list_destroy(response->headers);
+    }
+
+    if(response->body) {
+        buffer_destroy(response->body);
+    }
+
+    memory_free(response);
+}
+
+static int8_t http11_handle_connection(tls13_context_t* ctx, int32_t client_fd) {
+    int8_t ret = -1;
+    http_request_t* request = NULL;
+    http_response_t* response = NULL;
+
+
+    uint8_t buffer[16384];
+    int32_t bytes_received = 0;
+    bytes_received = tls13_read(ctx, client_fd, buffer, sizeof(buffer) - 1);
+    if (bytes_received < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS application data read failed");
+        return -1;
+    }
+
+    buffer[bytes_received] = '\0'; // Null-terminate for string operations
+
+    request = (http_request_t*)memory_malloc(sizeof(http_request_t));
+    if(!request) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP request");
+        return -1;
+    }
+
+    char_t method[16], path[1024], version[16];
+    size_t offset = 0;
+
+    while(buffer[offset] == ' ') {
+        offset++; // Skip leading spaces
+    }
+
+    while(buffer[offset] != ' ' && buffer[offset] != '\0' && offset < sizeof(buffer) - 1) {
+        method[offset] = buffer[offset];
+        offset++;
+    }
+    method[offset] = '\0';
+
+    if(strcmp(method, "GET") == 0) {
+        request->method = HTTP_METHOD_GET;
+    } else if(strcmp(method, "POST") == 0) {
+        request->method = HTTP_METHOD_POST;
+    } else if(strcmp(method, "PUT") == 0) {
+        request->method = HTTP_METHOD_PUT;
+    } else if(strcmp(method, "DELETE") == 0) {
+        request->method = HTTP_METHOD_DELETE;
+    } else if(strcmp(method, "HEAD") == 0) {
+        request->method = HTTP_METHOD_HEAD;
+    } else if(strcmp(method, "OPTIONS") == 0) {
+        request->method = HTTP_METHOD_OPTIONS;
+    } else if(strcmp(method, "PATCH") == 0) {
+        request->method = HTTP_METHOD_PATCH;
+    } else {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unknown HTTP method: %s", method);
+        goto error_cleanup;
+    }
+
+    while(buffer[offset] == ' ') {
+        offset++; // Skip spaces
+    }
+
+    size_t path_start = offset;
+    while(buffer[offset] != ' ' && buffer[offset] != '\0' && offset < sizeof(buffer) - 1) {
+        path[offset - path_start] = buffer[offset];
+        offset++;
+    }
+    path[offset - path_start] = '\0';
+
+    while(buffer[offset] == ' ') {
+        offset++; // Skip spaces
+    }
+
+    size_t version_start = offset;
+    while(buffer[offset] != '\r' && buffer[offset] != '\n' && buffer[offset] != '\0' && offset < sizeof(buffer) - 1) {
+        version[offset - version_start] = buffer[offset];
+        offset++;
+    }
+    version[offset - version_start] = '\0';
+
+    if(strcmp(version, "HTTP/1.1") == 0) {
+        request->version = HTTP_VERSION_1_1;
+    } else {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported HTTP version: %s", version);
+        goto error_cleanup;
+    }
+
+    // path can have query string, parse and separate it
+    size_t query_pos = 0;
+    while(path[query_pos] != '\0' && path[query_pos] != '?') {
+        query_pos++;
+    }
+
+    if(path[query_pos] == '?') {
+        request->query_params = list_create_list();
+        if(!request->query_params) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP query params list");
+            goto error_cleanup;
+        }
+
+        path[query_pos] = '\0'; // terminate path
+        memory_memcopy(path, request->path, query_pos + 1);
+
+        // now parse query string
+        size_t qp_start = query_pos + 1;;
+        while(path[qp_start] != '\0') {
+            size_t name_start = qp_start;
+
+            while(path[qp_start] != '=' && path[qp_start] != '&' && path[qp_start] != '\0') {
+                qp_start++;
+            }
+
+            char_t* name = (char_t*)memory_malloc(qp_start - name_start + 1);
+            memory_memcopy(&path[name_start], name, qp_start - name_start);
+
+            name[qp_start - name_start] = '\0';
+
+            char_t* value = NULL;
+
+            if(path[qp_start] == '=') {
+                qp_start++;
+                size_t value_start = qp_start;
+
+                while(path[qp_start] != '&' && path[qp_start] != '\0') {
+                    qp_start++;
+                }
+
+                value = (char_t*)memory_malloc(qp_start - value_start + 1);
+                memory_memcopy(&path[value_start], value, qp_start - value_start);
+                value[qp_start - value_start] = '\0';
+            }
+
+            http_query_param_t* param = (http_query_param_t*)memory_malloc(sizeof(http_query_param_t));
+            if(!param) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP query param");
+                goto error_cleanup;
+            }
+
+            param->name = name;
+            param->value = value;
+
+            if(list_list_insert(request->query_params, param) == -1ULL) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to insert HTTP query param into list");
+                goto error_cleanup;
+            }
+
+            if(path[qp_start] == '&') {
+                qp_start++;
+            }
+        }
+    } else {
+        memory_memcopy(path, request->path, strlen(path) + 1);
+    }
+
+    request->headers = list_create_list();
+    if(!request->headers) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP headers list");
+        goto error_cleanup;
+    }
+
+    size_t content_length = 0;
+
+    // remove CRLF from the end of the request line
+    if(buffer[offset] == '\r' && buffer[offset + 1] == '\n') {
+        offset += 2;
+    }
+
+    while(buffer[offset] != '\0' && !(buffer[offset] == '\r' && buffer[offset + 1] == '\n') && offset < (size_t)bytes_received) {
+        // parse header line
+        size_t name_start = offset;
+        while(buffer[offset] != ':' && buffer[offset] != '\0') {
+            offset++;
+        }
+
+        if(buffer[offset] == '\0') {
+            break;
+        }
+
+        char_t* name = (char_t*)memory_malloc(offset - name_start + 1);
+        memory_memcopy(&buffer[name_start], name, offset - name_start);
+        name[offset - name_start] = '\0';
+
+        offset++; // skip ':'
+        while(buffer[offset] == ' ') {
+            offset++; // skip spaces
+        }
+
+        size_t value_start = offset;
+        while(!(buffer[offset] == '\r' && buffer[offset + 1] == '\n') && buffer[offset] != '\0') {
+            offset++;
+        }
+
+        char_t* value = (char_t*)memory_malloc(offset - value_start + 1);
+        memory_memcopy(&buffer[value_start], value, offset - value_start);
+        value[offset - value_start] = '\0';
+
+        if(buffer[offset] == '\r' && buffer[offset + 1] == '\n') {
+            offset += 2; // skip CRLF
+        }
+
+        http_header_t* header = (http_header_t*)memory_malloc(sizeof(http_header_t));
+        if(!header) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP header");
+            goto error_cleanup;
+        }
+
+        header->name = name;
+        header->value = value;
+
+        if(list_list_insert(request->headers, header) == -1ULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to insert HTTP header into list");
+            goto error_cleanup;
+        }
+
+        if(strcmp(name, "Content-Length") == 0  || strcmp(name, "content-length") == 0) {
+            content_length = atou(value);
+        }
+    }
+
+    if(buffer[offset] == '\r' && buffer[offset + 1] == '\n') {
+        offset += 2; // skip final CRLF
+    }
+
+    if(content_length > 0) {
+        request->body = buffer_new_with_capacity(NULL, content_length);
+        if(!request->body) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP request body");
+            goto error_cleanup;
+        }
+
+        size_t body_bytes_read = bytes_received - offset;
+        if(body_bytes_read > content_length) {
+            body_bytes_read = content_length;
+        }
+
+        buffer_append_bytes(request->body, &buffer[offset], body_bytes_read);
+
+        while(body_bytes_read < content_length) {
+            uint8_t temp_buffer[4096];
+            int32_t to_read = (content_length - body_bytes_read > sizeof(temp_buffer)) ? sizeof(temp_buffer) : (content_length - body_bytes_read);
+            int32_t br = tls13_read(ctx, client_fd, temp_buffer, to_read);
+            if(br <= 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read HTTP request body");
+                goto error_cleanup;
+            }
+            buffer_append_bytes(request->body, temp_buffer, br);
+            body_bytes_read += br;
+        }
+    }
+
+    response = (http_response_t*)memory_malloc(sizeof(http_response_t));
+    if(!response) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for HTTP response");
+        goto error_cleanup;
+    }
+
+    if(http_handle(request, response) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP handler failed");
+        goto error_cleanup;
+    }
+
+    // Send response
+    char_t* status_line = strprintf("HTTP/1.1 %d OK\r\n", response->status_code);
+    tls13_write(ctx, client_fd, (uint8_t*)status_line, strlen(status_line));
+    memory_free(status_line);
+    // Send headers
+    for(size_t i = 0; i < list_size(response->headers); i++) {
+        http_header_t* header = (http_header_t*)list_get_data_at_position(response->headers, i);
+        char_t* header_line = strprintf("%s: %s\r\n", header->name, header->value);
+        tls13_write(ctx, client_fd, (uint8_t*)header_line, strlen(header_line));
+        memory_free(header_line);
+    }
+    // End of headers
+    tls13_write(ctx, client_fd, (uint8_t*)"\r\n", 2);
+    // Send body
+    if(response->body && buffer_get_length(response->body) > 0) {
+        size_t body_data_len = 0;
+        uint8_t* body_data = buffer_get_all_bytes_and_destroy(response->body, &body_data_len);
+        uint8_t* original_body_data = body_data;
+        response->body = NULL; // prevent double free
+
+        while(body_data_len > 0) {
+            int32_t to_write = (body_data_len > 4096) ? 4096 : body_data_len;
+            int32_t written = tls13_write(ctx, client_fd, body_data, to_write);
+            if(written <= 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send HTTP response body");
+                memory_free(body_data);
+                goto error_cleanup;
+            }
+            body_data += to_write;
+            body_data_len -= to_write;
+        }
+
+        memory_free(original_body_data);
+    }
+
+    ret = 0;
+error_cleanup:
+    http_free_request(request);
+    http_free_response(response);
+    return ret;
+}
+
+static int8_t http2_handle_connection(tls13_context_t* ctx, int32_t client_fd) {
+    static const uint8_t http2_response[] = {
+        // SETTINGS (empty)
+        0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        // SETTINGS ACK
+        0x00, 0x00, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
+
+        // HEADERS frame
+        0x00, 0x00, 0x0d, // 20 bytes HPACK
+        0x01,
+        0x04, // END_HEADERS only
+        0x00, 0x00, 0x00, 0x01,
+
+        // HPACK
+        0x88, // :status: 200
+        0x5f, 0x0a, // Literal never indexed: content-type
+        't', 'e', 'x', 't', '/', 'p', 'l', 'a', 'i', 'n',
+
+        // DATA frame
+        0x00, 0x00, 0x0d,
+        0x00,
+        0x01, // END_STREAM
+        0x00, 0x00, 0x00, 0x01,
+        'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '!', '\n'
+    };
+
+    if(tls13_write(ctx, client_fd, http2_response, sizeof(http2_response)) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send HTTP/2 application data");
+        return -1;
+    }
+
+    return 0;
+}
+
 int32_t main(int32_t argc, char_t** argv) {
     UNUSED(argc);
     UNUSED(argv);
@@ -1905,189 +2490,20 @@ int32_t main(int32_t argc, char_t** argv) {
             continue;
         }
 
-        int32_t res_client_hello = tls13_client_hello(tls13_ctx, client_fd);
-
-        if(res_client_hello == -2) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Redirecting HTTP/1.1 client to HTTPS URL");
+        if(tls13_handle_handshake(tls13_ctx, client_fd) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS handshake failed");
             tls13_destroy_context(tls13_ctx);
             close(client_fd);
             continue;
         }
-
-        if(res_client_hello == -1) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse Client Hello");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        get_random_bytes(tls13_ctx->server_random, sizeof(tls13_ctx->server_random));
-        if(x25519_generate_keypair(tls13_ctx->server_privkey, tls13_ctx->server_pubkey) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(x25519_shared_secret(tls13_ctx->shared_secret,
-                                tls13_ctx->server_privkey,
-                                tls13_ctx->client_pubkey) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        tls13_ctx->shared_secret_len = X25519_PUBLIC_KEY_RAW_LEN;
-
-        if(tls13_send_server_hello(tls13_ctx, client_fd) < 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Server Hello");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_generate_handshake_key_and_iv(tls13_ctx) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate handshake key and IV");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_send_encrypted_extensions(tls13_ctx, client_fd) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Encrypted Extensions");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_send_certificate(tls13_ctx, client_fd) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_send_certificate_verify(tls13_ctx, client_fd) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate Verify");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_send_finished(tls13_ctx, client_fd) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Finished");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_generate_application_keys(tls13_ctx) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate application keys");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_handle_client_finished_record(tls13_ctx, client_fd) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to handle Client Finished record");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        uint8_t buffer[16384];
-        int32_t bytes_received = 0;
-        bytes_received = tls13_read(tls13_ctx, client_fd, buffer, sizeof(buffer) - 1);
-
-        if (bytes_received < 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS application data read failed");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        // print received application data as hex
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Received %d bytes of application data from client: ", bytes_received);
-        for (int32_t i = 0; i < bytes_received; i += 16) {
-            // first write 16 bytes per line then inside | | write ascii representation if printable
-            printf("%04x: ", i);
-
-            for (int32_t j = 0; j < 16 && (i + j) < bytes_received; j++) {
-                if (i + j < bytes_received) {
-                    printf("%02x ", buffer[i + j]);
-                } else {
-                    printf("   ");
-                }
-            }
-
-            // when less than 16 bytes, fill the gaps
-            for (int32_t j = bytes_received - i; j < 16; j++) {
-                printf("   ");
-            }
-
-            printf(" |");
-
-            for (int32_t j = 0; j < 16 && (i + j) < bytes_received; j++) {
-                if (i + j < bytes_received) {
-                    uint8_t c = buffer[i + j];
-                    if (c >= 32 && c <= 126) {
-                        printf("%c", c);
-                    } else {
-                        printf(".");
-                    }
-                }
-            }
-
-            printf("|\n");
-        }
-        printf("\n");
 
         if(tls13_ctx->alpn_h2) {
-            static const uint8_t http2_response[] = {
-                // SETTINGS (empty)
-                0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-                // SETTINGS ACK
-                0x00, 0x00, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
-
-                // HEADERS frame
-                0x00, 0x00, 0x0d, // 20 bytes HPACK
-                0x01,
-                0x04, // END_HEADERS only
-                0x00, 0x00, 0x00, 0x01,
-
-                // HPACK
-                0x88, // :status: 200
-                0x5f, 0x0a, // Literal never indexed: content-type
-                't', 'e', 'x', 't', '/', 'p', 'l', 'a', 'i', 'n',
-
-                // DATA frame
-                0x00, 0x00, 0x0d,
-                0x00,
-                0x01, // END_STREAM
-                0x00, 0x00, 0x00, 0x01,
-                'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '!', '\n'
-            };
-
-            if(tls13_write(tls13_ctx, client_fd, http2_response, sizeof(http2_response)) < 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send HTTP/2 application data");
-                tls13_destroy_context(tls13_ctx);
-                close(client_fd);
-                continue;
+            if(http2_handle_connection(tls13_ctx, client_fd) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
             }
-
         } else {
-            const char_t* msg = "HTTP/1.1 200 OK\r\n"
-                                "Content-Length: 15\r\n"
-                                "Content-Type: text/plain; charset=utf-8\r\n"
-                                "\r\n"
-                                "Hello World !\r\n";
-            if(tls13_write(tls13_ctx, client_fd, (uint8_t*)msg, strlen(msg)) < 0) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send application data");
-                tls13_destroy_context(tls13_ctx);
-                close(client_fd);
-                continue;
+            if(http11_handle_connection(tls13_ctx, client_fd) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
             }
         }
 
@@ -2098,7 +2514,8 @@ int32_t main(int32_t argc, char_t** argv) {
             continue;
         }
 
-        bytes_received = tls13_read(tls13_ctx, client_fd, buffer, sizeof(buffer) - 1);
+        uint8_t buffer[16384];
+        int32_t bytes_received = tls13_read(tls13_ctx, client_fd, buffer, sizeof(buffer) - 1);
 
         if (bytes_received < 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS application data read failed");
