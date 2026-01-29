@@ -41,6 +41,18 @@ extern "C" {
 /** @} */
 
 /**
+ * @brief AES Output Block Sizes (in bytes)
+ * @{
+ */
+/** @brief 128-bit block size. */
+#define AES128_OUTPUT_SIZE 16
+/** @brief 192-bit block size. */
+#define AES192_OUTPUT_SIZE 24
+/** @brief 256-bit block size. */
+#define AES256_OUTPUT_SIZE 32
+/** @} */
+
+/**
  * @brief Initializes the internal lookup tables for AES key generation.
  *
  * This function must be called before any other AES functions to populate

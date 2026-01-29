@@ -9,17 +9,14 @@
 
 MODULE("turnstone.lib.crypto");
 
-int32_t aes_gcm_encrypt(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t * iv, const size_t iv_len){
+int32_t aes_gcm_encrypt_with_aad_with_tag(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t * iv, const size_t iv_len, const uint8_t* aad, const size_t aad_len, uint8_t* tag_buf, const size_t tag_len){
 
     int32_t ret = 0;
     gcm_context_t ctx;
 
-    size_t tag_len = 0;
-    uint8_t * tag_buf = NULL;
-
     gcm_setkey( &ctx, key, key_len );
 
-    ret = gcm_crypt_and_tag( &ctx, AES_ENCRYPT, iv, iv_len, NULL, 0,
+    ret = gcm_crypt_and_tag( &ctx, AES_ENCRYPT, iv, iv_len, aad, aad_len,
                              input, output, input_length, tag_buf, tag_len);
 
     gcm_zero_ctx( &ctx );
@@ -27,17 +24,14 @@ int32_t aes_gcm_encrypt(uint8_t* output, const uint8_t* input, int32_t input_len
     return( ret );
 }
 
-int32_t aes_gcm_decrypt(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t * iv, const size_t iv_len){
+int32_t aes_gcm_decrypt_with_aad_with_tag(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t * iv, const size_t iv_len, const uint8_t* aad, const size_t aad_len, uint8_t* tag_buf, const size_t tag_len){
 
     int32_t ret = 0;
     gcm_context_t ctx;
 
-    size_t tag_len = 0;
-    uint8_t * tag_buf = NULL;
-
     gcm_setkey( &ctx, key, key_len );
 
-    ret = gcm_crypt_and_tag( &ctx, AES_DECRYPT, iv, iv_len, NULL, 0,
+    ret = gcm_crypt_and_tag( &ctx, AES_DECRYPT, iv, iv_len, aad, aad_len,
                              input, output, input_length, tag_buf, tag_len);
 
     gcm_zero_ctx( &ctx );

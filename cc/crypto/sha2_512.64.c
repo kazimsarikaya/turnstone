@@ -150,36 +150,39 @@ uint8_t* sha512_final(sha512_ctx_t* ctx) {
         return NULL;
     }
 
-    uint32_t i;
+    uint32_t i = ctx->datalen;
 
-    i = ctx->datalen;
+    // 1. Add the 0x80 bit
+    ctx->data[i++] = 0x80;
 
-    if (ctx->datalen < 120) {
-        ctx->data[i++] = 0x80;
-
-        while (i < 120) {
-            ctx->data[i++] = 0x00;
-        }
-    }else {
-        ctx->data[i++] = 0x80;
-
-        while (i < SHA256_BLOCK_SIZE) {
-            ctx->data[i++] = 0x00;
-        }
-
+    // 2. If we don't have room for the 16-byte length, wrap to a new block
+    if (i > 112) {
+        while (i < 128) {ctx->data[i++] = 0x00;}
         sha512_transform(ctx, ctx->data);
-        memory_memset(ctx->data, 0, SHA256_BLOCK_SIZE);
+        i = 0;
     }
 
+    // 3. Pad zeros up to the length field
+    while (i < 112) {
+        ctx->data[i++] = 0x00;
+    }
+
+    // 4. Update total bit length (handle the leftover datalen)
     ctx->bitlen += ctx->datalen * 8;
-    ctx->data[127] = ctx->bitlen;
-    ctx->data[126] = ctx->bitlen >> 8;
-    ctx->data[125] = ctx->bitlen >> 16;
-    ctx->data[124] = ctx->bitlen >> 24;
-    ctx->data[123] = ctx->bitlen >> 32;
-    ctx->data[122] = ctx->bitlen >> 40;
-    ctx->data[121] = ctx->bitlen >> 48;
-    ctx->data[120] = ctx->bitlen >> 56;
+
+    // 5. Fill the 128-bit length field (Last 16 bytes)
+    // Bytes 112-119: High 64 bits (usually 0 unless hashing > 2 exabytes)
+    memory_memset(&ctx->data[112], 0, 8);
+
+    // Bytes 120-127: Low 64 bits
+    ctx->data[127] = (uint8_t)(ctx->bitlen);
+    ctx->data[126] = (uint8_t)(ctx->bitlen >> 8);
+    ctx->data[125] = (uint8_t)(ctx->bitlen >> 16);
+    ctx->data[124] = (uint8_t)(ctx->bitlen >> 24);
+    ctx->data[123] = (uint8_t)(ctx->bitlen >> 32);
+    ctx->data[122] = (uint8_t)(ctx->bitlen >> 40);
+    ctx->data[121] = (uint8_t)(ctx->bitlen >> 48);
+    ctx->data[120] = (uint8_t)(ctx->bitlen >> 56);
 
     sha512_transform(ctx, ctx->data);
 
@@ -253,4 +256,113 @@ uint8_t* sha384_hash(const uint8_t* data, size_t length) {
     sha384_ctx_t* ctx = sha384_init();
     sha384_update(ctx, data, length);
     return sha384_final(ctx);
+}
+
+uint8_t* sha512_hmac(const uint8_t* key, size_t key_len,
+                     const uint8_t* data, size_t data_len) {
+    uint8_t k_ipad[SHA512_BLOCK_SIZE];
+    uint8_t k_opad[SHA512_BLOCK_SIZE];
+    uint8_t tk[SHA512_OUTPUT_SIZE];
+    uint8_t* hash;
+    sha512_ctx_t* context;
+
+    if (key_len > SHA512_BLOCK_SIZE) {
+        sha512_ctx_t* tctx = sha512_init();
+        sha512_update(tctx, key, key_len);
+        uint8_t* tkey = sha512_final(tctx);
+        memory_memcopy(tkey, tk, SHA512_OUTPUT_SIZE);
+        memory_free(tkey);
+        key = tk;
+        key_len = SHA512_OUTPUT_SIZE;
+    }
+
+    memory_memset(k_ipad, 0x36, SHA512_BLOCK_SIZE);
+    memory_memset(k_opad, 0x5c, SHA512_BLOCK_SIZE);
+    for (size_t i = 0; i < key_len; i++) {
+        k_ipad[i] ^= key[i];
+        k_opad[i] ^= key[i];
+    }
+
+    context = sha512_init();
+    sha512_update(context, k_ipad, SHA512_BLOCK_SIZE);
+    sha512_update(context, data, data_len);
+    hash = sha512_final(context);
+
+    context = sha512_init();
+    sha512_update(context, k_opad, SHA512_BLOCK_SIZE);
+    sha512_update(context, hash, SHA512_OUTPUT_SIZE);
+    memory_free(hash);
+    hash = sha512_final(context);
+
+    // Optional: clear sensitive buffers
+    memory_memset(tk, 0, sizeof(tk));
+    memory_memset(k_ipad, 0, sizeof(k_ipad));
+    memory_memset(k_opad, 0, sizeof(k_opad));
+
+    return hash;
+}
+
+uint8_t* sha384_hmac(const uint8_t* key, size_t key_len,
+                     const uint8_t* data, size_t data_len)
+{
+    uint8_t k_ipad[SHA512_BLOCK_SIZE];
+    uint8_t k_opad[SHA512_BLOCK_SIZE];
+    uint8_t tk[SHA384_OUTPUT_SIZE];
+    uint8_t* hash;
+    sha384_ctx_t* context;
+
+    if (key_len > SHA512_BLOCK_SIZE) {
+        sha384_ctx_t* tctx = sha384_init();
+        sha384_update(tctx, key, key_len);
+        uint8_t* tkey = sha384_final(tctx); // <--- fixed from sha512_final
+        memory_memcopy(tkey, tk, SHA384_OUTPUT_SIZE);
+        memory_free(tkey);
+        key = tk;
+        key_len = SHA384_OUTPUT_SIZE;
+    }
+
+    memory_memset(k_ipad, 0x36, SHA512_BLOCK_SIZE);
+    memory_memset(k_opad, 0x5c, SHA512_BLOCK_SIZE);
+    for (size_t i = 0; i < key_len; i++) {
+        k_ipad[i] ^= key[i];
+        k_opad[i] ^= key[i];
+    }
+
+    context = sha384_init();
+    sha384_update(context, k_ipad, SHA512_BLOCK_SIZE);
+    sha384_update(context, data, data_len);
+    hash = sha384_final(context);
+
+    context = sha384_init();
+    sha384_update(context, k_opad, SHA512_BLOCK_SIZE);
+    sha384_update(context, hash, SHA384_OUTPUT_SIZE);
+    memory_free(hash);
+    hash = sha384_final(context);
+
+    // Optional: clear sensitive buffers
+    memory_memset(tk, 0, sizeof(tk));
+    memory_memset(k_ipad, 0, sizeof(k_ipad));
+    memory_memset(k_opad, 0, sizeof(k_opad));
+
+    return hash;
+}
+
+sha512_ctx_t* sha512_clone(sha512_ctx_t* ctx) {
+    if(ctx == NULL) {
+        return NULL;
+    }
+
+    sha512_ctx_t* new_ctx = memory_malloc(sizeof(sha512_ctx_t));
+
+    if(new_ctx == NULL) {
+        return NULL;
+    }
+
+    memory_memcopy(ctx, new_ctx, sizeof(sha512_ctx_t));
+
+    return new_ctx;
+}
+
+sha384_ctx_t* sha384_clone(sha384_ctx_t* ctx) {
+    return (sha384_ctx_t*)sha512_clone((sha512_ctx_t*)ctx);
 }

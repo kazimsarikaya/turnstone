@@ -26,6 +26,8 @@
 extern "C" {
 #endif
 
+#define GCM_TAG_LENGTH_BYTES 16 ///< Standard length of the GCM authentication tag in bytes
+
 /**
  * @brief Structure to hold the GCM context.
  *

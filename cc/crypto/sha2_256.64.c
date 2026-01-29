@@ -140,40 +140,33 @@ uint8_t* sha256_final(sha256_ctx_t* ctx) {
         return NULL;
     }
 
-    uint32_t i;
+    uint32_t i = ctx->datalen;
 
-    i = ctx->datalen;
+    // 1. Always append the 0x80 bit
+    ctx->data[i++] = 0x80;
 
-    if (ctx->datalen < 56) {
-        ctx->data[i++] = 0x80;
-
-        while (i < 56) {
-            ctx->data[i++] = 0x00;
-        }
-    }else if (ctx->datalen < SHA256_BLOCK_SIZE) {
-        ctx->data[i++] = 0x80;
-
-        while (i < SHA256_BLOCK_SIZE) {
-            ctx->data[i++] = 0x00;
-        }
-
+    // 2. If no room for 8-byte length (i > 56), transform and start a new block
+    if (i > 56) {
+        while (i < 64) {ctx->data[i++] = 0x00;}
         sha256_transform(ctx, ctx->data);
-        memory_memset(ctx->data, 0, SHA256_BLOCK_SIZE);
-    } else {
-        // This case should not happen
-        memory_free(ctx);
-        return NULL;
+        i = 0;
     }
 
+    // 3. Zero out the rest of the block until the length field
+    while (i < 56) {
+        ctx->data[i++] = 0x00;
+    }
+
+    // 4. Append the bit length (Big Endian)
     ctx->bitlen += ctx->datalen * 8;
-    ctx->data[63] = ctx->bitlen;
-    ctx->data[62] = ctx->bitlen >> 8;
-    ctx->data[61] = ctx->bitlen >> 16;
-    ctx->data[60] = ctx->bitlen >> 24;
-    ctx->data[59] = ctx->bitlen >> 32;
-    ctx->data[58] = ctx->bitlen >> 40;
-    ctx->data[57] = ctx->bitlen >> 48;
-    ctx->data[56] = ctx->bitlen >> 56;
+    ctx->data[63] = (uint8_t)(ctx->bitlen);
+    ctx->data[62] = (uint8_t)(ctx->bitlen >> 8);
+    ctx->data[61] = (uint8_t)(ctx->bitlen >> 16);
+    ctx->data[60] = (uint8_t)(ctx->bitlen >> 24);
+    ctx->data[59] = (uint8_t)(ctx->bitlen >> 32);
+    ctx->data[58] = (uint8_t)(ctx->bitlen >> 40);
+    ctx->data[57] = (uint8_t)(ctx->bitlen >> 48);
+    ctx->data[56] = (uint8_t)(ctx->bitlen >> 56);
 
     sha256_transform(ctx, ctx->data);
 
@@ -252,4 +245,113 @@ uint8_t* sha224_hash(const uint8_t* data, size_t length) {
     sha224_ctx_t* ctx = sha224_init();
     sha224_update(ctx, data, length);
     return sha224_final(ctx);
+}
+
+uint8_t* sha256_hmac(const uint8_t* key, size_t key_len,
+                     const uint8_t* data, size_t data_len) {
+    uint8_t k_ipad[SHA256_BLOCK_SIZE];
+    uint8_t k_opad[SHA256_BLOCK_SIZE];
+    uint8_t tk[SHA256_OUTPUT_SIZE];
+    uint8_t* hash;
+    sha256_ctx_t* context;
+
+    if (key_len > SHA256_BLOCK_SIZE) {
+        sha256_ctx_t* tctx = sha256_init();
+        sha256_update(tctx, key, key_len);
+        uint8_t* temp_key = sha256_final(tctx);
+        memory_memcopy(temp_key, tk, SHA256_OUTPUT_SIZE);
+        memory_free(temp_key);
+        key = tk;
+        key_len = SHA256_OUTPUT_SIZE;
+    }
+
+    memory_memset(k_ipad, 0x36, SHA256_BLOCK_SIZE);
+    memory_memset(k_opad, 0x5c, SHA256_BLOCK_SIZE);
+    for (size_t i = 0; i < key_len; i++) {
+        k_ipad[i] ^= key[i];
+        k_opad[i] ^= key[i];
+    }
+
+    context = sha256_init();
+    sha256_update(context, k_ipad, SHA256_BLOCK_SIZE);
+    sha256_update(context, data, data_len);
+    hash = sha256_final(context);
+
+    sha256_ctx_t* context2 = sha256_init();
+    sha256_update(context2, k_opad, SHA256_BLOCK_SIZE);
+    sha256_update(context2, hash, SHA256_OUTPUT_SIZE);
+    memory_free(hash);
+    hash = sha256_final(context2);
+
+    // Optional: clear sensitive buffers
+    memory_memset(tk, 0, sizeof(tk));
+    memory_memset(k_ipad, 0, sizeof(k_ipad));
+    memory_memset(k_opad, 0, sizeof(k_opad));
+
+
+    return hash;
+}
+
+uint8_t* sha224_hmac(const uint8_t* key, size_t key_len,
+                     const uint8_t* data, size_t data_len) {
+    uint8_t k_ipad[SHA256_BLOCK_SIZE];
+    uint8_t k_opad[SHA256_BLOCK_SIZE];
+    uint8_t tk[SHA224_OUTPUT_SIZE];
+    uint8_t* hash;
+    sha224_ctx_t* context;
+
+    if (key_len > SHA256_BLOCK_SIZE) {
+        sha224_ctx_t* tctx = sha224_init();
+        sha224_update(tctx, key, key_len);
+        uint8_t* temp_key = sha224_final(tctx);
+        memory_memcopy(temp_key, tk, SHA224_OUTPUT_SIZE);
+        memory_free(temp_key);
+        key = tk;
+        key_len = SHA224_OUTPUT_SIZE;
+    }
+
+    memory_memset(k_ipad, 0x36, SHA256_BLOCK_SIZE);
+    memory_memset(k_opad, 0x5c, SHA256_BLOCK_SIZE);
+    for (size_t i = 0; i < key_len; i++) {
+        k_ipad[i] ^= key[i];
+        k_opad[i] ^= key[i];
+    }
+
+    context = sha224_init();
+    sha224_update(context, k_ipad, SHA256_BLOCK_SIZE);
+    sha224_update(context, data, data_len);
+    hash = sha224_final(context);
+
+    sha224_ctx_t* context2 = sha224_init();
+    sha224_update(context2, k_opad, SHA256_BLOCK_SIZE);
+    sha224_update(context2, hash, SHA224_OUTPUT_SIZE);
+    memory_free(hash);
+    hash = sha224_final(context2);
+
+    // Optional: clear sensitive buffers
+    memory_memset(tk, 0, sizeof(tk));
+    memory_memset(k_ipad, 0, sizeof(k_ipad));
+    memory_memset(k_opad, 0, sizeof(k_opad));
+
+    return hash;
+}
+
+sha256_ctx_t* sha256_clone(sha256_ctx_t* ctx) {
+    if(ctx == NULL) {
+        return NULL;
+    }
+
+    sha256_ctx_t* new_ctx = memory_malloc(sizeof(sha256_ctx_t));
+
+    if(new_ctx == NULL) {
+        return NULL;
+    }
+
+    memory_memcopy(ctx, new_ctx, sizeof(sha256_ctx_t));
+
+    return new_ctx;
+}
+
+sha224_ctx_t* sha224_clone(sha224_ctx_t* ctx) {
+    return (sha224_ctx_t*)sha256_clone((sha256_ctx_t*)ctx);
 }

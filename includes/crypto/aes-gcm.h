@@ -35,9 +35,19 @@ extern "C" {
  * @param key_len Length of the AES key in bytes (e.g., 16 for AES-128, 24 for AES-192, 32 for AES-256).
  * @param iv Pointer to the Initialization Vector (IV). For GCM, this is typically a 12-byte (96-bit) nonce.
  * @param iv_len Length of the IV in bytes.
+ * @param aad Pointer to the Additional Authenticated Data (AAD). This data is authenticated but not encrypted.
+ * @param aad_len Length of the AAD in bytes.
+ * @param tag Pointer to the buffer where the authentication tag will be stored.
+ * @param tag_len Length of the authentication tag in bytes. Typically 16 bytes (128 bits).
  * @return 0 on success, or a negative error code on failure.
  */
-int32_t aes_gcm_encrypt(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t* iv, const size_t iv_len);
+int32_t aes_gcm_encrypt_with_aad_with_tag(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t* iv, const size_t iv_len, const uint8_t* aad, const size_t aad_len, uint8_t* tag, const size_t tag_len);
+
+#define aes_gcm_encrypt(output, input, input_length, key, key_len, iv, iv_len) \
+        aes_gcm_encrypt_with_aad(output, input, input_length, key, key_len, iv, iv_len, NULL, 0, NULL, 0)
+
+#define aes_gcm_encrypt_with_aad(output, input, input_length, key, key_len, iv, iv_len, aad, aad_len) \
+        aes_gcm_encrypt_with_aad_with_tag(output, input, input_length, key, key_len, iv, iv_len, aad, aad_len, NULL, 0)
 
 /**
  * @brief Decrypts data using AES-GCM and verifies its authenticity.
@@ -56,10 +66,20 @@ int32_t aes_gcm_encrypt(uint8_t* output, const uint8_t* input, int32_t input_len
  * @param key_len Length of the AES key in bytes.
  * @param iv Pointer to the Initialization Vector (IV) used during encryption.
  * @param iv_len Length of the IV in bytes.
+ * @param aad Pointer to the Additional Authenticated Data (AAD) used during encryption.
+ * @param aad_len Length of the AAD in bytes.
+ * @param tag Pointer to the buffer containing the authentication tag to be verified.
+ * @param tag_len Length of the authentication tag in bytes.
  * @return 0 on successful decryption and authentication, or a negative error code on failure
  *         (e.g., authentication failure, invalid input).
  */
-int32_t aes_gcm_decrypt(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t* iv, const size_t iv_len);
+int32_t aes_gcm_decrypt_with_aad_with_tag(uint8_t* output, const uint8_t* input, int32_t input_length, const uint8_t* key, const size_t key_len, const uint8_t* iv, const size_t iv_len, const uint8_t* aad, const size_t aad_len, uint8_t* tag, const size_t tag_len);
+
+#define aes_gcm_decrypt(output, input, input_length, key, key_len,  iv, iv_len) \
+        aes_gcm_decrypt_with_aad_with_tag(output, input, input_length, key, key_len, iv, iv_len, NULL, 0, NULL, 0)
+
+#define aes_gcm_decrypt_with_aad(output, input, input_length, key, key_len, iv, iv_len, aad, aad_len) \
+        aes_gcm_decrypt_with_aad_with_tag(output, input, input_length, key, key_len, iv, iv_len, aad, aad_len, NULL, 0)
 
 #ifdef __cplusplus
 }
