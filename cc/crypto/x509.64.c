@@ -61,12 +61,16 @@ struct x509_extension_t {
             size_t   length;
             uint8_t* data;
         } akid; // Authority Key Identifier
+
+        // X509_EXTENSION_NETSCAPE_CERT_TYPE
+        x509_netscape_cert_type_t netscape_cert_type;
+
     } data;
 };
 
 struct x509_certificate_t {
-    uint32_t  version;
-    uint128_t serial_number;
+    uint32_t version;
+    uint8_t  serial_number[20]; // up to 160 bits
 
     char_t* issuer_common_name;
     char_t* subject_common_name;
@@ -113,7 +117,10 @@ x509_certificate_t* x509_certificate_new(void) {
     time_hi_and_version |= (7 << 12); // version 7
     uint64_t clock_seq = (uint64_t)(((uint16_t)rand()) & 0x3FFF);
     uint64_t node = ((uint64_t)rand() << 32) | ((uint64_t)rand() << 16) | ((uint64_t)rand());
-    cert->serial_number = ((uint128_t)time_low << 96) | ((uint128_t)time_mid << 80) | ((uint128_t)time_hi_and_version << 64) | ((uint128_t)clock_seq << 48) | (uint128_t)node;
+    uint8_t pre_serial_number = ((uint128_t)time_low << 96) | ((uint128_t)time_mid << 80) | ((uint128_t)time_hi_and_version << 64) | ((uint128_t)clock_seq << 48) | (uint128_t)node;
+
+    get_random_bytes(cert->serial_number, 20 - sizeof(uint128_t)); // pad with random bytes
+    memory_memcopy(&pre_serial_number, cert->serial_number + 20 - sizeof(uint128_t), sizeof(uint128_t)); // append the generated part
 
     return cert;
 }
@@ -645,6 +652,60 @@ static int8_t x509_encode_extension_akid(der_encoder_t* der_encoder, x509_extens
     return 0;
 }
 
+static int8_t x509_encode_extension_netscape_cert_type(der_encoder_t* der_encoder, x509_extension_t* ext) {
+    if (!der_encoder || !ext) {
+        return -1;
+    }
+
+    uint8_t ku_byte = 0;
+    uint32_t flags = ext->data.netscape_cert_type;
+
+    // Use the ENUM constants to check flags and construct the byte.
+    // Since your enum matches ASN.1 bit positions (0x80, 0x40...),
+    // we can OR them directly.
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_SSL_CLIENT) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_SSL_CLIENT;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_SSL_SERVER) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_SSL_SERVER;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_SMIME) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_SMIME;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_RESERVED) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_RESERVED;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_SSL_CA) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_SSL_CA;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_SMIME_CA) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_SMIME_CA;
+    }
+
+    if (flags & X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA) {
+        ku_byte |= X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA;
+    }
+
+// Pass the constructed byte to your encoder.
+// Note: Your bit_string encoder adds the "Unused Bits: 0" byte automatically,
+// which is valid here (asserting the unused bits are effectively 0/False).
+    if(der_encoder_encode_bit_string(der_encoder, &ku_byte, 1) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
 static int8_t x509_encode_extension_value(der_encoder_t* der_encoder, x509_extension_t* ext) {
     if (!der_encoder || !ext) {
         return -1;
@@ -657,6 +718,7 @@ static int8_t x509_encode_extension_value(der_encoder_t* der_encoder, x509_exten
     case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: return x509_encode_extension_subject_alternative_name(der_encoder, ext);
     case X509_EXTENSION_SKID: return x509_encode_extension_skid(der_encoder, ext);
     case X509_EXTENSION_AKID: return x509_encode_extension_akid(der_encoder, ext);
+    case X509_EXTENSION_NETSCAPE_CERT_TYPE: return x509_encode_extension_netscape_cert_type(der_encoder, ext);
     default:
     }
 
@@ -735,6 +797,12 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
         }
         case X509_EXTENSION_AKID: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_AKID) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case X509_EXTENSION_NETSCAPE_CERT_TYPE: {
+            if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_NETSCAPE_CERT_TYPE) != 0) {
                 return -1;
             }
             break;
@@ -888,7 +956,7 @@ static int8_t x509_encode_tbs_internal(der_encoder_t* der_encoder, x509_certific
     }
 
     // 2. Serial Number (Integer)
-    if(der_encoder_encode_integer_u128(der_encoder, cert->serial_number) != 0) {
+    if(der_encoder_encode_integer_u160(der_encoder, cert->serial_number) != 0) {
         return -1;
     }
 
@@ -1224,20 +1292,24 @@ static int8_t x509_decode_name(der_decoder_t* der_decoder, char_t** common_name)
     }
 
     if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start sequence for DN");
         return -1;
     }
 
     if(der_decoder_start_set(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start set for DN");
         return -1;
     }
 
     if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start inner sequence for DN");
         return -1;
     }
 
     der_object_identifier_t oid;
 
     if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode OID for DN");
         return -1;
     }
 
@@ -1249,22 +1321,27 @@ static int8_t x509_decode_name(der_decoder_t* der_decoder, char_t** common_name)
     size_t name_length = 0;
 
     if(der_decoder_decode_printable_string(der_decoder, common_name, &name_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode PrintableString for CN");
         return -1;
     }
 
     if(strlen(*common_name) != name_length) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "CN length mismatch: expected %llu, got %llu", name_length, strlen(*common_name));
         return -1;
     }
 
     if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end inner sequence for DN");
         return -1;
     }
 
     if(der_decoder_end_set(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end set for DN");
         return -1;
     }
 
     if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end sequence for DN");
         return -1;
     }
 
@@ -1277,16 +1354,23 @@ static int8_t x509_decode_extension_basic_conntraints(der_decoder_t* der_decoder
     }
 
     if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start sequence for Basic Constraints");
         return -1;
     }
 
-    if(der_decoder_decode_boolean(der_decoder, &ext->data.basic_constraints.is_ca) != 0) {
-        return -1;
+    if(!der_decoder_has_container_ended(der_decoder)) {
+        if(der_decoder_decode_boolean(der_decoder, &ext->data.basic_constraints.is_ca) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode is_ca for Basic Constraints");
+            return -1;
+        }
+    } else {
+        ext->data.basic_constraints.is_ca = false;
     }
 
     if(!der_decoder_has_container_ended(der_decoder)) {
         int64_t path_len = 0;
         if(der_decoder_decode_integer(der_decoder, &path_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode path_len for Basic Constraints");
             return -1;
         }
         ext->data.basic_constraints.path_len = (int32_t)path_len;
@@ -1296,6 +1380,7 @@ static int8_t x509_decode_extension_basic_conntraints(der_decoder_t* der_decoder
 
 
     if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end sequence for Basic Constraints");
         return -1;
     }
 
@@ -1521,6 +1606,70 @@ static int8_t x509_decode_extension_akid(der_decoder_t* der_decoder, x509_extens
     return 0;
 }
 
+static int8_t x509_decode_extension_netscape_cert_type(der_decoder_t* der_decoder, x509_extension_t* ext) {
+    if (!der_decoder || !ext) {
+        return -1;
+    }
+
+    size_t flags_length = 0;
+    uint8_t* flags_data = NULL;
+
+    if(der_decoder_decode_bit_string(der_decoder, &flags_data, &flags_length) != 0) {
+        return -1;
+    }
+
+    if (flags_length != 1) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key usage length: %llu", flags_length);
+        memory_free(flags_data);
+        return -1;
+    }
+
+    uint8_t ku_byte = flags_data[0];
+    memory_free(flags_data);
+
+    uint32_t flags = 0;
+
+    // Use the ENUM constants to check flags and construct the byte.
+    // Since your enum matches ASN.1 bit positions (0x80, 0x40...),
+    // we can OR them directly.
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_SSL_CLIENT) {
+        flags |= X509_NETSCAPE_CERT_TYPE_SSL_CLIENT;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_SSL_SERVER) {
+        flags |= X509_NETSCAPE_CERT_TYPE_SSL_SERVER;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_SMIME) {
+        flags |= X509_NETSCAPE_CERT_TYPE_SMIME;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING) {
+        flags |= X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_RESERVED) {
+        flags |= X509_NETSCAPE_CERT_TYPE_RESERVED;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_SSL_CA) {
+        flags |= X509_NETSCAPE_CERT_TYPE_SSL_CA;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_SMIME_CA) {
+        flags |= X509_NETSCAPE_CERT_TYPE_SMIME_CA;
+    }
+
+    if (ku_byte & X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA) {
+        flags |= X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA;
+    }
+
+    ext->data.netscape_cert_type = flags;
+
+    return 0;
+}
+
 static int8_t x509_decode_extension_value(der_decoder_t* der_decoder, x509_extension_t* ext) {
     if (!der_decoder || !ext) {
         return -1;
@@ -1533,6 +1682,7 @@ static int8_t x509_decode_extension_value(der_decoder_t* der_decoder, x509_exten
     case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: return x509_decode_extension_subject_alternative_name(der_decoder, ext);
     case X509_EXTENSION_SKID: return x509_decode_extension_skid(der_decoder, ext);
     case X509_EXTENSION_AKID: return x509_decode_extension_akid(der_decoder, ext);
+    case X509_EXTENSION_NETSCAPE_CERT_TYPE: return x509_decode_extension_netscape_cert_type(der_decoder, ext);
     default:
     }
 
@@ -1551,21 +1701,25 @@ static int8_t x509_decode_extensions(der_decoder_t* der_decoder, x509_certificat
     }
 
     if(der_decoder_start_explicit_tag(der_decoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 3) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start extensions explicit tag");
         return -1;
     }
 
     if(der_decoder_start_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start extensions sequence");
         return -1;
     }
 
     while (!der_decoder_has_container_ended(der_decoder)) {
         if(der_decoder_start_sequence(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start extension sequence");
             return -1;
         }
 
         der_object_identifier_t oid;
 
         if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode extension OID");
             return -1;
         }
 
@@ -1590,6 +1744,9 @@ static int8_t x509_decode_extensions(der_decoder_t* der_decoder, x509_certificat
         case DER_OID_EXT_AKID:
             ext_type = X509_EXTENSION_AKID;
             break;
+        case DER_OID_EXT_NETSCAPE_CERT_TYPE:
+            ext_type = X509_EXTENSION_NETSCAPE_CERT_TYPE;
+            break;
         default:
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported extension OID: %d", oid);
             return -1;
@@ -1599,11 +1756,13 @@ static int8_t x509_decode_extensions(der_decoder_t* der_decoder, x509_certificat
 
         if(der_decoder_has_boolean_tag(der_decoder)) {
             if(der_decoder_decode_boolean(der_decoder, &is_critical) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode extension critical flag");
                 return -1;
             }
         }
 
         if(der_decoder_start_octet_string(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start extension value octet string");
             return -1;
         }
 
@@ -1614,23 +1773,28 @@ static int8_t x509_decode_extensions(der_decoder_t* der_decoder, x509_certificat
         ext->is_critical = is_critical;
 
         if(x509_decode_extension_value(der_decoder, ext) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode extension value for type %d", ext_type);
             return -1;
         }
 
         if(der_decoder_end_octet_string(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end extension value octet string");
             return -1;
         }
 
         if(der_decoder_end_sequence(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end extension sequence");
             return -1;
         }
     }
 
     if(der_decoder_end_sequence(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end extensions sequence");
         return -1;
     }
 
     if(der_decoder_end_explicit_tag(der_decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end extensions explicit tag");
         return -1;
     }
 
@@ -1768,12 +1932,10 @@ static int8_t x509_decode_tbs(der_decoder_t* der_decoder, x509_certificate_t* ce
     }
 
     // 2. Serial Number (Integer)
-    uint128_t serial_number = 0;
-    if(der_decoder_decode_integer_u128(der_decoder, &serial_number) != 0) {
+    if(der_decoder_decode_integer_u160(der_decoder, cert->serial_number) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode serial number");
         return -1;
     }
-    cert->serial_number = serial_number;
 
     // 3. Signature Algorithm Identifier
     if(x509_decode_algorithm_identifier(der_decoder, &cert->signature_algorithm) != 0) {
@@ -1843,7 +2005,7 @@ x509_certificate_t* x509_certificate_from_der(const uint8_t* der_data, size_t de
     }
 
     cert->version = 0;
-    cert->serial_number = 0;
+    memory_memclean(cert->serial_number, sizeof(cert->serial_number));
 
     if(der_decoder_start_sequence(der_decoder) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to start DER sequence");
@@ -1962,4 +2124,21 @@ uint8_t* x509_certificate_get_tbs_data(x509_certificate_t* cert, boolean_t rebui
     memory_memcopy(cert->tbs_data, tbs_data, cert->tbs_length);
 
     return tbs_data;
+}
+
+uint8_t* x509_certificate_get_public_key_data(x509_certificate_t* cert, size_t* out_length) {
+    if (cert == NULL || out_length == NULL) {
+        return NULL;
+    }
+
+    *out_length = cert->public_key_length;
+
+    uint8_t* public_key_data = memory_malloc(cert->public_key_length);
+    if (public_key_data == NULL) {
+        return NULL;
+    }
+
+    memory_memcopy(cert->public_key, public_key_data, cert->public_key_length);
+
+    return public_key_data;
 }

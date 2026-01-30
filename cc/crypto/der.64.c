@@ -25,6 +25,7 @@ static const uint8_t OID_EXT_EXTENDED_KEY_USAGE[] = { 0x55, 0x1D, 0x25 };
 static const uint8_t OID_EXT_SAN[] = { 0x55, 0x1D, 0x11 };
 static const uint8_t OID_EXT_SKID[] = { 0x55, 0x1D, 0x0E };
 static const uint8_t OID_EXT_AKID[] = { 0x55, 0x1D, 0x23 };
+static const uint8_t OID_EXT_NETSCAPE_CERT_TYPE[] = { 0x60, 0x86, 0x48, 0x01, 0x86, 0xF8, 0x42, 0x01, 0x01 };
 
 /* --- Structures --- */
 typedef struct der_encoder_buffer_chain_t der_encoder_buffer_chain_t;
@@ -332,6 +333,43 @@ int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value)
                                 int_bytes, int_len);
 }
 
+int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, uint8_t value[20]) {
+    // FIX: Size must be 21 to accommodate the potential sign byte
+    uint8_t int_bytes[21];
+    size_t int_len = 0;
+
+    // Find first non-zero byte
+    // If all zero, we encode as single 0x00 byte
+    size_t start_index = 0;
+    while (start_index < 20 && value[start_index] == 0) {
+        start_index++;
+    }
+
+    if (start_index == 20) {
+        int_bytes[0] = 0x00;
+        int_len = 1;
+    } else {
+        // Copy relevant bytes
+        for (size_t i = start_index; i < 20; i++) {
+            int_bytes[int_len++] = value[i];
+        }
+
+        // If MSB is 1, we must add a 0x00 byte to keep it positive
+        if (int_bytes[0] & 0x80) {
+            // Shift right to make space for 0x00
+            for (size_t i = int_len; i > 0; i--) {
+                int_bytes[i] = int_bytes[i - 1];
+            }
+            int_bytes[0] = 0x00;
+            int_len++;
+        }
+    }
+
+    return _der_write_primitive(encoder,
+                                DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER,
+                                int_bytes, int_len);
+}
+
 int8_t der_encoder_encode_octet_string(der_encoder_t * encoder, const uint8_t * data, size_t data_len) {
     if (!data && data_len > 0) {
         return -1;
@@ -394,7 +432,7 @@ int8_t der_encoder_encode_printable_string(der_encoder_t * encoder, const char_t
         return -1;
     }
     return _der_write_primitive(encoder,
-                                DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_PRINTABLE_STRING,
+                                DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_UTF8_STRING,
                                 (const uint8_t*)str, str_len);
 }
 
@@ -756,6 +794,7 @@ static const oid_entry_t OID_TABLE[] = {
     { DER_OID_EXT_SAN,                OID_EXT_SAN,                sizeof(OID_EXT_SAN) },
     { DER_OID_EXT_SKID,               OID_EXT_SKID,               sizeof(OID_EXT_SKID) },
     { DER_OID_EXT_AKID,               OID_EXT_AKID,               sizeof(OID_EXT_AKID) },
+    { DER_OID_EXT_NETSCAPE_CERT_TYPE, OID_EXT_NETSCAPE_CERT_TYPE, sizeof(OID_EXT_NETSCAPE_CERT_TYPE) },
 };
 #define OID_TABLE_COUNT (sizeof(OID_TABLE) / sizeof(oid_entry_t))
 
@@ -782,8 +821,12 @@ int8_t der_decoder_decode_object_identifier(der_decoder_t* decoder, der_object_i
 
 int8_t der_decoder_decode_printable_string(der_decoder_t* decoder, char_t** out_str, size_t* out_str_len) {
     size_t length = 0;
-    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_PRINTABLE_STRING, &length) != 0) {
-        return -1;
+    // first try UTF8 STRING tag
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_UTF8_STRING, &length) != 0) {
+        // failback PRINTABLE STRING tag
+        if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_PRINTABLE_STRING, &length) != 0) {
+            return -1;
+        }
     }
 
     char_t* str = memory_malloc(length + 1);
@@ -856,6 +899,48 @@ int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_va
     }
 
     *out_value = value;
+    return 0;
+}
+
+int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value[20]) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER, &length) != 0) {
+        return -1;
+    }
+
+    // FIX: Allow 21 bytes, but ONLY if it's due to the sign bit padding
+    if (length > 21 || length == 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unsupported integer length %llu\n", length);
+        return -1;
+    }
+
+    // Peek at the first byte
+    uint8_t first_byte = decoder->data[decoder->position];
+
+    // If we have 21 bytes, the first byte MUST be 0x00
+    if (length == 21) {
+        if (first_byte != 0x00) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Integer overflow (21 bytes but first is not 0x00)\n");
+            return -1;
+        }
+        // Skip the padding byte
+        decoder->position++;
+        length--;
+    }
+    // If we have 16 bytes or fewer, check for negative numbers (which we can't store in u128)
+    else if (first_byte & 0x80) {
+        // Technically a negative number in ASN.1, but we are parsing into u128.
+        // Depending on your OS policy, you might want to return error or cast it.
+        // For a strictly unsigned parser, this is usually an error.
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unexpected negative integer\n");
+        return -1;
+    }
+
+    // Read bytes (Big Endian)
+    for (size_t i = 0; i < length; i++) {
+        out_value[20 - length + i] = decoder->data[decoder->position++];
+    }
+
     return 0;
 }
 

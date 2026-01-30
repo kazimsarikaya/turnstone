@@ -88,6 +88,7 @@ typedef enum der_object_identifier_t {
     DER_OID_EXT_SAN, ///< Subject Alternative Name extension OID
     DER_OID_EXT_SKID, ///< Subject Key Identifier extension OID
     DER_OID_EXT_AKID, ///< Authority Key Identifier extension OID
+    DER_OID_EXT_NETSCAPE_CERT_TYPE ///< Netscape Certificate Type extension OID
 } der_object_identifier_t;
 
 /**
@@ -277,7 +278,7 @@ int8_t der_encoder_encode_bit_string(der_encoder_t * encoder, const uint8_t * da
 /**
  * @brief Encodes and appends a DER printable string.
  *
- * Encodes the given string as a DER printable string and appends it to the current buffer.
+ * Encodes the given string as a DER utf8 (not printable) string and appends it to the current buffer.
  * Printable strings typically contain characters like A-Z, a-z, 0-9, and some punctuation.
  *
  * @param encoder The DER encoder instance.
@@ -335,6 +336,18 @@ int8_t der_encoder_encode_utc_time(der_encoder_t * encoder, time_t time_value);
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
 int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value);
+
+/**
+ * @brief Encodes and appends a DER integer using a 160-bit unsigned integer.
+ *
+ * Encodes the given 160-bit unsigned integer (20 bytes) into DER format and appends it to the current buffer.
+ * This is useful for very large integers that exceed the capacity of `uint128_t`.
+ *
+ * @param encoder The DER encoder instance.
+ * @param value A 20-byte array representing the unsigned 160-bit integer in big-endian format.
+ * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
+ */
+int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, uint8_t value[20]);
 
 /**
  * @brief Appends raw bytes directly to the DER buffer.
@@ -542,7 +555,7 @@ int8_t der_decoder_decode_bit_string(der_decoder_t* decoder, uint8_t** out_data,
 /**
  * @brief Decodes a DER printable string.
  *
- * Attempts to parse the next element as a DER printable string. If successful, it allocates memory
+ * Attempts to parse the next element as a DER printable/utf8 string. If successful, it allocates memory
  * for the string, null-terminates it, and stores a pointer to it in `out_str` and its length in `out_str_len`.
  * The caller is responsible for freeing the allocated memory.
  *
@@ -575,6 +588,18 @@ int8_t der_decoder_decode_boolean(der_decoder_t* decoder, boolean_t* out_value);
  * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for `uint128_t`).
  */
 int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_value);
+
+/**
+ * @brief Decodes a DER integer using a 160-bit unsigned integer.
+ *
+ * Attempts to parse the next element as a DER integer and stores the value in `out_value`.
+ * Supports up to 160-bit unsigned integers (20 bytes), handling potential sign extension bytes.
+ *
+ * @param decoder The DER decoder instance.
+ * @param out_value A 20-byte array where the decoded 160-bit integer will be stored in big-endian format.
+ * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for 160 bits).
+ */
+int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value[20]);
 
 /**
  * @brief Decodes a context-specific string.

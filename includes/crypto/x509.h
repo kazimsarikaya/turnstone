@@ -36,6 +36,7 @@ typedef enum x509_extension_type_t {
     X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME, ///< Subject Alternative Name extension (e.g., DNS names, IP addresses).
     X509_EXTENSION_SKID, ///< Subject Key Identifier extension.
     X509_EXTENSION_AKID, ///< Authority Key Identifier extension.
+    X509_EXTENSION_NETSCAPE_CERT_TYPE, ///< Netscape Certificate Type extension.
     X509_EXTENSION_COUNT ///< Total number of extension types.
 } x509_extension_type_t;
 
@@ -67,6 +68,24 @@ typedef enum x509_key_usage_t {
     X509_KEY_USAGE_CRL_SIGN          = 0x02, ///< The public key may be used to sign Certificate Revocation Lists (CRLs).
     X509_KEY_USAGE_ENCIPHER_ONLY     = 0x01, ///< The public key may be used only to encrypt keys.
 } x509_key_usage_t;
+
+/**
+ * @brief Enumeration for the Netscape Certificate Type extension.
+ *
+ * Specifies the type of Netscape certificate.
+ * Multiple flags can be combined using the bitwise OR operator.
+ */
+typedef enum x509_netscape_cert_type_t {
+    X509_NETSCAPE_CERT_TYPE_UNKNOWN        = 0x00, ///< Unknown Netscape certificate type.
+    X509_NETSCAPE_CERT_TYPE_SSL_CLIENT     = 0x01, ///< SSL Client certificate.
+    X509_NETSCAPE_CERT_TYPE_SSL_SERVER     = 0x02, ///< SSL Server certificate.
+    X509_NETSCAPE_CERT_TYPE_SMIME          = 0x04, ///< S/MIME certificate.
+    X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING = 0x08, ///< Object Signing certificate.
+    X509_NETSCAPE_CERT_TYPE_RESERVED       = 0x10, ///< Reserved for future use.
+    X509_NETSCAPE_CERT_TYPE_SSL_CA         = 0x20, ///< SSL CA certificate.
+    X509_NETSCAPE_CERT_TYPE_SMIME_CA       = 0x40, ///< S/MIME CA certificate.
+    X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA = 0x80, ///< Object Signing CA certificate.
+} x509_netscape_cert_type_t;
 
 /**
  * @brief Enumeration for the Extended Key Usage extension.
@@ -347,7 +366,31 @@ x509_certificate_t* x509_certificate_from_der(const uint8_t* der_data, size_t de
  */
 x509_certificate_t* x509_certificate_from_pem(const char_t* pem_data);
 
+/**
+ * @brief Retrieves the "To Be Signed" (TBS) data of the certificate.
+ *
+ * This function returns the DER-encoded TBS portion of the certificate.
+ * If `rebuild` is set to true, it will re-encode the TBS data before returning it.
+ * The caller is responsible for freeing the returned buffer using `memory_free`.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param rebuild Boolean flag indicating whether to rebuild the TBS data before retrieval.
+ * @param out_length Pointer to a `size_t` variable that will receive the length of the TBS data.
+ * @return A pointer to a newly allocated buffer containing the TBS data, or NULL on failure.
+ */
 uint8_t* x509_certificate_get_tbs_data(x509_certificate_t* cert, boolean_t rebuild, size_t* out_length);
+
+/**
+ * @brief Retrieves the public key data from the certificate.
+ *
+ * This function returns the raw public key bytes contained in the certificate.
+ * The caller is responsible for freeing the returned buffer using `memory_free`.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param out_length Pointer to a `size_t` variable that will receive the length of the public key data.
+ * @return A pointer to a newly allocated buffer containing the public key data, or NULL on failure.
+ */
+uint8_t* x509_certificate_get_public_key_data(x509_certificate_t* cert, size_t* out_length);
 
 #ifdef __cplusplus
 }
