@@ -126,7 +126,7 @@ sha512_ctx_t* sha512_init(void) {
 }
 
 int8_t sha512_update(sha512_ctx_t* ctx, const uint8_t* data, size_t len) {
-    if(ctx == NULL) {
+    if(ctx == NULL || data == NULL) {
         return -1;
     }
 
