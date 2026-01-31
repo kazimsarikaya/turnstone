@@ -58,6 +58,7 @@ typedef enum logging_modules_t {
     WINDOWMANAGER,
     PNG,
     CRYPTOLIB,
+    HTTP,
 } logging_modules_t; ///< type short hand for enum @ref logging_modules_e
 
 /**
@@ -257,6 +258,11 @@ extern logging_level_t logging_module_levels[];
 #ifndef LOG_LEVEL_CRYPTOLIB
 /*! default log level for cryptolib module */
 #define LOG_LEVEL_CRYPTOLIB LOG_INFO
+#endif
+
+#ifndef LOG_LEVEL_HTTP
+/*! default log level for http module */
+#define LOG_LEVEL_HTTP LOG_INFO
 #endif
 
 #ifndef LOG_LOCATION

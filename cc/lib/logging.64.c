@@ -49,6 +49,7 @@ const char_t*const logging_module_names[] = {
     "WINDOWMANAGER",
     "PNG",
     "CRYPTOLIB",
+    "HTTP",
 };
 
 
@@ -100,6 +101,7 @@ logging_level_t logging_module_levels[] = {
     LOG_LEVEL_WINDOWMANAGER,
     LOG_LEVEL_PNG,
     LOG_LEVEL_CRYPTOLIB,
+    LOG_LEVEL_HTTP,
 };
 
 boolean_t logging_need_logging(logging_modules_t module, logging_level_t level) {

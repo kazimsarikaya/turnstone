@@ -19,6 +19,7 @@
 #include <xxhash.h>
 #include <cpu.h>
 #include <strings.h>
+#include <cpu/sync.h>
 
 #ifndef RAMSIZE
 #define RAMSIZE 0x100000
@@ -200,11 +201,6 @@ extern "C" {
 
 typedef struct future_t future_t;
 
-lock_t*   lock_create_with_heap(memory_heap_t* heap);
-int8_t    lock_destroy(lock_t* lock);
-void      lock_acquire(lock_t* lock);
-void      lock_release(lock_t* lock);
-lock_t*   lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id);
 void      dump_ram(char_t* fname);
 void      apic_eoi(void);
 void      task_current_task_sleep(uint64_t when_tick);
@@ -254,11 +250,6 @@ time_t rtc_get_time(void){
 
 void* task_get_current_task(void){
     return NULL;
-}
-
-lock_t* lock_create_with_heap(memory_heap_t* heap){
-    UNUSED(heap);
-    return (lock_t*)0xdeadbeaf;
 }
 
 lock_t* lock_create_with_heap_for_future(memory_heap_t* heap, boolean_t for_future, uint64_t task_id){
