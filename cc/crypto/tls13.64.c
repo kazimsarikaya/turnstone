@@ -1769,16 +1769,7 @@ static int8_t tls13_generate_application_keys(tls13_context_t* ctx) {
     return 0;
 }
 
-int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
-    if(!ctx || !data) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or data buffer is NULL");
-        return -1;
-    }
-
-    if(len == 0) {
-        return 0;
-    }
-
+static int32_t tls13_write_chunk(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
     // 16384 is the max TLS record size
     uint32_t p_len = len + 1;
     uint8_t plaintext[p_len];
@@ -1805,18 +1796,48 @@ int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
         );
 
     if (status != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Encryption Failed! Nonce/Key/AAD mismatch.");
         return -1;
     }
 
     // Send Header + Ciphertext
     if (ctx->network_send(ctx->network_client_identifier, aad, 5, 0) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
         return -1;
     }
     if (ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record ciphertext");
         return -1;
     }
 
     ctx->write_seq_num++;
+    return len;
+}
+
+int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
+    if(!ctx || !data) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or data buffer is NULL");
+        return -1;
+    }
+
+    if(len == 0) {
+        return 0;
+    }
+
+    int64_t remaining = len;
+    int32_t total_sent = 0;
+
+    while(remaining > 0) {
+        uint32_t chunk_size = remaining > 16384 ? 16384 : (uint32_t)remaining;
+        int32_t sent = tls13_write_chunk(ctx, data + total_sent, chunk_size);
+        if(sent < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write TLS chunk");
+            return -1;
+        }
+        total_sent += sent;
+        remaining -= sent;
+    }
+
     return len;
 }
 
@@ -1850,6 +1871,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
     uint8_t header[5];
 
     if (ctx->network_recv(ctx->network_client_identifier, header, 5, 0) <= 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read TLS record header");
         return -1;
     }
 
@@ -1888,6 +1910,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
 
     memory_free(buffer);
     if (status != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Decryption Failed! Nonce/Key/AAD mismatch.");
         memory_free(plaintext);
         return -1;
     }
@@ -1907,7 +1930,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Close Notify.");
         }
         memory_free(plaintext);
-        return 0;
+        return -1;
     }
 
     if (inner_type == 0x16) { // POST-HANDSHAKE (e.g. KeyUpdate or NewSessionTicket)
@@ -1921,7 +1944,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
     if (inner_type != 0x17) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unexpected inner type 0x%02x", inner_type);
         memory_free(plaintext);
-        return 0;
+        return -1;
     }
 
     // Success: Copy application data
@@ -1936,7 +1959,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
 
     ctx->read_seq_num++;
     memory_free(plaintext);
-    return to_copy;
+    return to_copy + total_read;
 }
 
 int8_t tls13_send_close_notify(tls13_context_t* ctx) {

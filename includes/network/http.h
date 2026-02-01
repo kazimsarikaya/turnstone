@@ -100,6 +100,23 @@ typedef enum http2_setting_id_t {
     HTTP2_SETTING_MAX_HEADER_LIST_SIZE = 0x6,
 } http2_setting_id_t;
 
+typedef enum http2_error_code_t {
+    HTTP2_ERROR_NO_ERROR = 0x0,
+    HTTP2_ERROR_PROTOCOL_ERROR = 0x1,
+    HTTP2_ERROR_INTERNAL_ERROR = 0x2,
+    HTTP2_ERROR_FLOW_CONTROL_ERROR = 0x3,
+    HTTP2_ERROR_SETTINGS_TIMEOUT = 0x4,
+    HTTP2_ERROR_STREAM_CLOSED = 0x5,
+    HTTP2_ERROR_FRAME_SIZE_ERROR = 0x6,
+    HTTP2_ERROR_REFUSED_STREAM = 0x7,
+    HTTP2_ERROR_CANCEL = 0x8,
+    HTTP2_ERROR_COMPRESSION_ERROR = 0x9,
+    HTTP2_ERROR_CONNECT_ERROR = 0xa,
+    HTTP2_ERROR_ENHANCE_YOUR_CALM = 0xb,
+    HTTP2_ERROR_INADEQUATE_SECURITY = 0xc,
+    HTTP2_ERROR_HTTP_1_1_REQUIRED = 0xd,
+} http2_error_code_t;
+
 typedef struct http2_frame_t {
     uint32_t           length;
     http2_frame_type_t type;
@@ -109,10 +126,13 @@ typedef struct http2_frame_t {
 } http2_frame_t;
 
 typedef struct http2_stream_t {
-    uint32_t         stream_id;
-    uint32_t         window_size;
-    http_request_t*  request;
-    http_response_t* response;
+    boolean_t          active;
+    uint32_t           stream_id;
+    http2_error_code_t error_code;
+    uint32_t           local_window_size;
+    uint32_t           remote_window_size;
+    http_request_t*    request;
+    http_response_t*   response;
 } http2_stream_t;
 
 typedef struct http2_settings_t {
@@ -129,7 +149,7 @@ typedef struct http2_settings_t {
 typedef struct http2_context_t {
     http2_settings_t local_settings;
     http2_settings_t remote_settings;
-    http2_stream_t   streams[HTTP2_MAX_STREAMS]; // Simple fixed-size array for streams
+    http2_stream_t*  streams;
     uint32_t         stream_count;
     list_t*          headers_table; // For HPACK header compression
     size_t           headers_table_size;

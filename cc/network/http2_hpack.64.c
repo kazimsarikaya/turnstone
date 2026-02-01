@@ -132,12 +132,15 @@ static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t in
     const char_t* name = NULL;
     if(index < HTTP2_HPACK_STATIC_TABLE_SIZE) {
         name = http2_hpack_static_names[index].name;
+        PRINTLOG(HTTP, LOG_INFO, "HPACK Static Table lookup for index %u: name='%s'", index, name ? name : "NULL");
         return strdup(name);
     }
 
     index -= HTTP2_HPACK_STATIC_TABLE_SIZE;
     const http2_hpack_entry_t* entry = list_get_data_at_position(ctx->headers_table, index);
     name = entry ? entry->name : NULL;
+
+    PRINTLOG(HTTP, LOG_INFO, "HPACK Dynamic Table lookup for index %lu: name='%s'", index + HTTP2_HPACK_STATIC_TABLE_SIZE, name ? name : "NULL");
 
     return name ? strdup(name) : NULL;
 }
@@ -631,6 +634,34 @@ static int8_t http2_hpack_decode_string(uint8_t* data, char_t** output, size_t* 
     return 0;
 }
 
+static uint32_t http2_hpack_decode_int(uint8_t first_byte, uint8_t prefix_mask,
+                                       const uint8_t* data, size_t* consumed_bytes) {
+    uint32_t value = first_byte & prefix_mask;
+
+    // If the value is less than the mask, we are done.
+    if (value < prefix_mask) {
+        *consumed_bytes = 0;
+        return value;
+    }
+
+    // Otherwise, we have to read the continuation bytes
+    uint32_t shift = 0;
+    int32_t max_bytes = 5; // Prevent infinite loops
+    int32_t bytes_read = 0;
+    while (*data && bytes_read < max_bytes) {
+        bytes_read++;
+        uint8_t byte = *data;
+        data++;
+        value += (byte & 0x7F) << shift;
+        if ((byte & 0x80) == 0) {
+            break;
+        }
+        shift += 7;
+    }
+
+    *consumed_bytes += bytes_read;
+    return value;
+}
 
 
 int8_t http2_apply_header(http_request_t* request, const char_t* name, const char_t* value);
@@ -642,12 +673,16 @@ int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
     uint8_t first_byte = data[offset++];
 
     // Mask based on the type (0x40 for Incremental, 0x00/0x10 for others)
+    PRINTLOG(HTTP, LOG_INFO, "Decoding HPACK Literal Header Field (add to dynamic table: %s)",
+             add_to_dynamic_table ? "yes" : "no");
     uint32_t name_index;
+    size_t name_index_consumed = 0;
     if (add_to_dynamic_table) {
-        name_index = first_byte & 0x3F; // 6 bits
+        name_index = http2_hpack_decode_int(first_byte, 0x3F, &data[offset], &name_index_consumed);
     } else {
-        name_index = first_byte & 0x0F; // 4 bits
+        name_index = http2_hpack_decode_int(first_byte, 0x0F, &data[offset], &name_index_consumed);
     }
+    offset += name_index_consumed;
 
     char_t* name = NULL;
     if (name_index > 0) {

@@ -57,7 +57,7 @@ int8_t http_handle(http_request_t* request, http_response_t* response) {
         return -1;
     }
 
-    if(list_list_insert(response->headers, content_type_header) != -1ULL) {
+    if(list_list_insert(response->headers, content_type_header) == -1ULL) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to insert Content-Type header into response headers list");
         memory_free(content_type_header->name);
         memory_free(content_type_header->value);
@@ -81,7 +81,7 @@ int8_t http_handle(http_request_t* request, http_response_t* response) {
         return -1;
     }
 
-    if(list_list_insert(response->headers, content_length_header) != -1ULL) {
+    if(list_list_insert(response->headers, content_length_header) == -1ULL) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to insert Content-Length header into response headers list");
         memory_free(content_length_header->name);
         memory_free(content_length_header->value);
