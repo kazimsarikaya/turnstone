@@ -77,7 +77,6 @@ char_t* strrev(const char_t* source) {
 }
 
 number_t ato_base(const char_t* source, number_t base) {
-    // TODO: lower upper case chars are same when base<=36
     number_t ret = 0;
     number_t p = 0;
 
@@ -99,9 +98,11 @@ number_t ato_base(const char_t* source, number_t base) {
     size_t l = strlen(source);
     for(size_t i = 1; i <= l; i++) {
         if(source[l - i] <= '9') {
-            ret += ((number_t)(source[l - i] - 48)) * power(base, p);
+            ret += ((number_t)(source[l - i] - '0')) * power(base, p);
+        } else if(source[l - i] <= 'Z') {
+            ret += ((number_t)(source[l - i] - 'A') + 10) * power(base, p);
         } else {
-            ret += ((number_t)(source[l - i] - 55)) * power(base, p);
+            ret += ((number_t)(source[l - i] - 'a') + 10) * power(base, p);
         }
         p++;
     }
@@ -109,7 +110,6 @@ number_t ato_base(const char_t* source, number_t base) {
 }
 
 unumber_t atou_base(const char_t* source, number_t base) {
-    // TODO: lower upper case chars are same when base<=36
     number_t ret = 0;
     number_t p = 0;
 
