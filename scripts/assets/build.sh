@@ -19,8 +19,6 @@ OUTPUT_FILE=$2
 echo "OUTPUT_FILE: ${OUTPUT_FILE}"
 echo "INPUT_FILE: ${INPUT_FILE}"
 
-set -x
-
 asset=${INPUT_FILE}
 asset_rel=""
 
