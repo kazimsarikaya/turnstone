@@ -340,7 +340,7 @@ static void tls13_make_nonce(uint8_t* iv, uint64_t seq_num, uint8_t* out_nonce) 
     }
 }
 
-static int8_t tls13_client_hello(tls13_context_t* ctx) {
+static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
     if(!ctx) {
         return -1;
     }
@@ -354,12 +354,15 @@ static int8_t tls13_client_hello(tls13_context_t* ctx) {
         return -1;
     }
 
-    if(header[0] != 0x16) {
+    if(header[0] != 0x16 || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Not a handshake record");
 
         // check for GET request (HTTP)
-        if(header[0] == 'G' && header[1] == 'E' && header[2] == 'T') {
-            PRINTLOG(CRYPTOLIB, LOG_INFO, "Received HTTP GET request, ctx->network_sending 301 redirect to HTTPS");
+        if(memory_memcompare(header, "GET ", 4) == 0 // GET
+           || (memory_memcompare(header, "HEAD ", 5) == 0) // HEAD
+           || (memory_memcompare(header, "POST ", 5) == 0) // POST
+           ) {
+            PRINTLOG(CRYPTOLIB, LOG_INFO, "Received HTTP request on TLS port, sending 308 redirect to HTTPS");
             uint8_t buffer[512];
             memory_memclean(buffer, sizeof(buffer));
             memory_memcopy(header, &buffer[0], 5);
@@ -383,7 +386,7 @@ static int8_t tls13_client_hello(tls13_context_t* ctx) {
                 }
 
                 char_t* response = strprintf(
-                    "HTTP/1.1 301 Moved Permanently\r\n"
+                    "HTTP/1.1 308 Permanent Redirect\r\n"
                     "Location: https://%s/\r\n"
                     "Content-Length: 0\r\n"
                     "Connection: close\r\n"
@@ -392,12 +395,12 @@ static int8_t tls13_client_hello(tls13_context_t* ctx) {
                     );
                 ctx->network_send(ctx->network_client_identifier, (uint8_t*)response, strlen(response), 0);
                 memory_free(response);
-                PRINTLOG(CRYPTOLIB, LOG_INFO, "Sent 301 redirect to https://%s/", default_host);
+                PRINTLOG(CRYPTOLIB, LOG_INFO, "Sent 308 redirect to https://%s/", default_host);
 
                 return -2;
             }
 
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete HTTP GET request");
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete HTTP request");
             return -1;
         }
 
@@ -1988,7 +1991,7 @@ int8_t tls13_send_close_notify(tls13_context_t* ctx) {
 }
 
 int8_t tls13_handle_handshake(tls13_context_t* ctx) {
-    int32_t res_client_hello = tls13_client_hello(ctx);
+    int32_t res_client_hello = tls13_parse_client_hello(ctx);
 
     if(res_client_hello == -2) {
         PRINTLOG(CRYPTOLIB, LOG_WARNING, "Redirecting HTTP/1.1 client to HTTPS URL");
