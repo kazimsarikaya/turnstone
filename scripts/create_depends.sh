@@ -3,48 +3,41 @@
 # This work is licensed under TURNSTONE OS Public License.
 # Please read and understand latest version of Licence.
 
-for var in "$@"
-do
-   also_cpp=0 
-   if [[ ! -f ${var}.c ]]; then
-        if [[ -f ${var}.cpp ]]; then
-            also_cpp=1
-            file=${var}.cpp
-        else
-            echo "File ${var}.c not found"
-            exit 1
-        fi
-   else 
-       file=${var}.c
-   fi
+BUILDDIR="build"
+SRCDIR="cc"
+DESTDIR=$1
+DEPFILE=$2
+OBJFILE=${DEPFILE%.dep}
 
-  _depends=$(gcc -Iincludes -Iincludes-local -MM ${file} | tr -d '\\\n'|cut -d':' -f2|sed 's/includes\///g')
-  _sources=$(echo $_depends|sed -E 's/\.(h|hpp)//g')
-  for _s in $_sources;
-  do
-    _s=$(basename $_s|tr -d ' ')
-    for _f in $(find cc -name "$_s*.c"|grep -v video| grep -v '\.test\.c');
-    do
-      _f=$(echo $_f|sed 's-cc/--g'|sed 's-\.c-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
-      echo -e "build/$(basename $var).bin: build/cc-local/$_f"
-    done
+# Optional override for BINFILE
+if [ -n "$3" ]; then
+    BINFILE="$3"
+else
+    BINFILE=$(basename "$OBJFILE" .o).bin
+fi
 
-    if [[ $also_cpp -eq 1 ]]; then
-      for _f in $(find cc -name "$_s*.cpp"|grep -v video);
-      do
-        _f=$(echo $_f|sed 's-cc/--g'|sed 's-\.cpp-\.o-g'|sed 's-\.xx\.o-\.xx_64\.o-g')
-        echo -e "build/$(basename $var).bin: build/cc-local/$_f"
-      done
-    fi
-  done
+HEADERS=$(sed 's/\\$//' "$DEPFILE" | tr -s ' ' '\n' \
+    | grep -E '^\S+\.h$' \
+    | grep -v '^includes-local/' \
+    | sed 's|.*/||; s|\.h$||' \
+    | paste -sd ' ' -)
 
-  _headers=$(echo $_depends|tr ' ' '\n'|grep -v ^$|grep -v ".c$"|sort|uniq)
-  for _h in $_headers;
-  do
-   _f=$(find includes|grep $_h|tr '\n' ' ')
-   if [[ "${_f}x" != "x" ]]; then
-       echo -e "build/cc-local/$(basename $var).o: $_f"
-   fi
-  done
-  echo
-done
+echo $HEADERS >&2
+
+DEPSRC=`for h in $HEADERS; do
+    # find matching .c or .cpp files under cc/
+    find cc/ -type f \( -name "$h*.c" -o -name "$h*.cpp" \)
+done`
+
+DEPOBJ=$(for h in $HEADERS; do
+    find "$SRCDIR"/ -type f \( -name "$h*.c" -o -name "$h*.cpp" \)
+done | sed -e "s|^$SRCDIR|$BUILDDIR/$DESTDIR|" \
+          -e "s|\.xx\.|.xx_64.|g" \
+          -e "s|\.c$|.o|" \
+          -e "s|\.cpp$|.o|")
+
+# Optional: flatten into single line for Makefile usage
+DEPOBJ_LINE=$(echo $DEPOBJ | tr '\n' ' ')
+
+# Produce Makefile-style rule
+echo "$BUILDDIR/$BINFILE: $OBJFILE $DEPOBJ_LINE"

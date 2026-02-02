@@ -57,6 +57,8 @@ TESTSLDFLAGS = $(UTILSLDFLAGS) -Wl,-nostdlib -nostdlib -Wl,-e_tos_start -Wl,-pie
 EFICC64FLAGS = -D___EFIBUILD=1 -D___KERNELBUILD=0 -Iefi $(CC64FLAGS) $(NOPIFLAGS)
 EFICPP64FLAGS = -D___EFIBUILD=1 -D___KERNELBUILD=0 -Iefi $(CPP64FLAGS) $(NOPIFLAGS)
 
+DEPEND_FLAGS = -D___DEPEND_ANALYSIS -MM
+
 OBJDIR = build
 ASSRCDIR = asm
 CCSRCDIR = cc
@@ -115,7 +117,10 @@ ASOBJS = $(patsubst $(ASSRCDIR)/%.s,$(ASOBJDIR)/%.o,$(ASSRCS))
 ASTESTOBJS = $(patsubst $(ASSRCDIR)/%.s,$(ASOBJDIR)/%.test.o,$(ASSRCS))
 
 CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
+CC64DEPS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o.dep,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
+CC64DEPS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o.dep,$(CCXXSRCS))
+
 CC64GENOBJS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
 
 CC64ASMOUTS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.s,$(CC64SRCS))
@@ -126,6 +131,17 @@ CC64TESTOBJS = $(patsubst $(CCSRCDIR)/%.64.test.c,$(CCOBJDIR)/%.64.test.o,$(CC64
 CC64TESTOBJS += $(patsubst $(CCSRCDIR)/%.xx.test.c,$(CCOBJDIR)/%.xx_64.test.o,$(CCXXTESTSRCS))
 
 CPP64OBJS = $(patsubst $(CCSRCDIR)/%.64.cpp,$(CCOBJDIR)/%.64.o,$(CPP64SRCS))
+CPP64DEPS = $(patsubst $(CCSRCDIR)/%.64.cpp,$(CCOBJDIR)/%.64.o.dep,$(CPP64SRCS))
+
+TESTSOBJS = $(patsubst $(TESTSSRCDIR)/%.c,$(LOCALOBJDIR)/%.o,$(TESTSCC64SRCS))
+TESTSDEPS = $(patsubst $(TESTSSRCDIR)/%.c,$(LOCALOBJDIR)/%.o.dep,$(TESTSCC64SRCS))
+TESTSOBJS += $(patsubst $(TESTSSRCDIR)/%.cpp,$(LOCALOBJDIR)/%.o,$(TESTSCPP64SRCS))
+TESTSDEPS += $(patsubst $(TESTSSRCDIR)/%.cpp,$(LOCALOBJDIR)/%.o.dep,$(TESTSCPP64SRCS))
+
+UTILSOBJS = $(patsubst $(UTILSSRCDIR)/%.c,$(LOCALOBJDIR)/%.o,$(UTILSCC64SRCS))
+UTILSDEPS = $(patsubst $(UTILSSRCDIR)/%.c,$(LOCALOBJDIR)/%.o.dep,$(UTILSCC64SRCS))
+UTILSOBJS += $(patsubst $(UTILSSRCDIR)/%.cpp,$(LOCALOBJDIR)/%.o,$(UTILSCPP64SRCS))
+UTILSDEPS += $(patsubst $(UTILSSRCDIR)/%.cpp,$(LOCALOBJDIR)/%.o.dep,$(UTILSCPP64SRCS))
 
 DOCSFILES += $(CC64SRCS) $(CCXXSRCS) $(CPP64SRCS)
 DOCSFILES += $(shell find $(INCLUDESDIR) -type f -name \*.h)
@@ -163,8 +179,14 @@ TESTSPROGS = $(TESTSCCPROGS) $(TESTSCPPPROGS)
 
 TESTSOUTPUTS := $(patsubst $(TESTSSRCDIR)/%,$(OBJDIR)/%.bin,$(TESTSPROGS))
 
+BINOUTPUTS = $(UTILSOUTPUTS) $(TESTSOUTPUTS)
+
+BINOUTPUTDEPS = $(patsubst $(OBJDIR)/%.bin,$(LOCALOBJDIR)/%.bin.dep,$(BINOUTPUTS))
+
 EFISRCS = $(shell find $(EFISRCDIR) -type f -name \*.c)
 EFIOBJS = $(patsubst $(EFISRCDIR)/%.c,$(EFIOBJDIR)/%.o,$(EFISRCS))
+EFIDEPS = $(patsubst $(EFISRCDIR)/%.c,$(EFIOBJDIR)/%.o.dep,$(EFISRCS))
+EFIDEPDEPS = $(patsubst $(EFISRCDIR)/%.c,$(EFIOBJDIR)/%.o.dep.dep,$(EFISRCS))
 
 ifeq (,$(wildcard $(TOSDBIMG)))
 LASTCCOBJS = $(CC64OBJS) $(CC64GENOBJS) $(ASSETOBJS) $(ASSETGENOBJS) $(ASSETCCGENOBJS) $(CPP64OBJS)
@@ -176,7 +198,7 @@ LASTCCOBJS += $(shell find $(ASSETCCGENOBJDIR) -type f -name \*.o -newer $(TOSDB
 endif
 
 ifeq (,$(wildcard $(EFITOSDBIMG)))
-EFILASTCCOBJS = $(EFIOBJS)
+EFILASTCCOBJS = $(shell find $(EFIOBJDIR) -type f -name \*.o)
 else
 EFILASTCCOBJS = $(shell find $(EFIOBJDIR) -type f -name \*.o -newer $(EFITOSDBIMG))
 endif
@@ -215,6 +237,8 @@ asm:
 asm-internal: $(CC64ASMOUTS)
 
 bear:
+	rm -f $(TOSDBIMG) ${EFITOSDBIMG}
+	find $(OBJDIR) -type f -name '*.o' -delete
 	bear --output $(OBJDIR)/compile_commands.json --append -- make qemu
 	bear --output $(OBJDIR)/compile_commands.json --append -- make -j $(shell nproc) tests
 
@@ -240,7 +264,7 @@ $(MKDIRSDONE):
 	mkdir -p $(CCGENDIR) $(ASOBJDIR) $(CCOBJDIR)
 	touch $(MKDIRSDONE)
 
-$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(CC64OBJS) $(CC64GENOBJS) $(ASSETALLOBJS) $(ASSETCCGENOBJS) $(CPP64OBJS)
+$(TOSDBIMG): $(TOSDBIMG_BUILDER) $(ASSETALLOBJS) $(ASSETCCGENOBJS) $(CC64OBJS) $(CC64GENOBJS) $(CPP64OBJS)
 	$(TOSDBIMG_BUILDER) $(TOSDBIMG_BUILDER_FLAGS) -o $@ $(LASTCCOBJS)
 
 $(EFITOSDBIMG): $(EFIOBJS) $(TOSDBIMG_BUILDER)
@@ -249,11 +273,20 @@ $(EFITOSDBIMG): $(EFIOBJS) $(TOSDBIMG_BUILDER)
 $(EFIBOOTFILE): $(EFITOSDBIMG) $(EFILD)
 	$(EFILD) $(EFILDFLAGS) -o $@ -db $(EFITOSDBIMG)
 
+$(CCOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.c
+	$(CC64) $(KERNELCC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(CCOBJDIR)/$*.64.o $<
+
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
 
+$(CCOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.cpp
+	$(CPP64) $(KERNELCPP64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(CCOBJDIR)/$*.64.o $<
+
 $(CCOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(KERNELCPP64FLAGS) -o $@ $<
+
+$(CCOBJDIR)/%.xx_64.o.dep: $(CCSRCDIR)/%.xx.c
+	$(CC64) $(KERNELCC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(CCOBJDIR)/$*.xx_64.o $<
 
 $(CCOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
@@ -288,41 +321,83 @@ $(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
 $(CCOBJDIR)/vm_guest_interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/vm_guest_interrupt_handlers.c
 	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
 
-$(LOCALOBJDIR)/%.o: $(UTILSSRCDIR)/%.c $(LOCALINCLUDESDIR)/setup.h
+$(LOCALOBJDIR)/%.o.dep: $(UTILSSRCDIR)/%.c
+	$(CC64) $(LOCALCCFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.o $<
+
+$(LOCALOBJDIR)/%.o: $(UTILSSRCDIR)/%.c
 	$(CC64) $(LOCALCCFLAGS) -o $@ $<
 
-$(LOCALOBJDIR)/%.o: $(UTILSSRCDIR)/%.cpp $(LOCALINCLUDESDIR)/setup.h
+$(LOCALOBJDIR)/%.o.dep: $(UTILSSRCDIR)/%.cpp
+	$(CPP64) $(LOCALCPPFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.o $<
+
+$(LOCALOBJDIR)/%.o: $(UTILSSRCDIR)/%.cpp
 	$(CPP64) $(LOCALCPPFLAGS) -o $@ $<
 
-$(LOCALOBJDIR)/%.o: $(TESTSSRCDIR)/%.c $(LOCALINCLUDESDIR)/setup.h
+$(LOCALOBJDIR)/%.o.dep: $(TESTSSRCDIR)/%.c
+	$(CC64) $(LOCALCCFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.o $<
+
+$(LOCALOBJDIR)/%.o: $(TESTSSRCDIR)/%.c
 	$(CC64) $(LOCALCCFLAGS) -o $@ $<
 
-$(LOCALOBJDIR)/%.o: $(TESTSSRCDIR)/%.cpp $(LOCALINCLUDESDIR)/setup.h
+$(LOCALOBJDIR)/%.o.dep: $(TESTSSRCDIR)/%.cpp
+	$(CPP64) $(LOCALCPPFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.o $<
+
+$(LOCALOBJDIR)/%.o: $(TESTSSRCDIR)/%.cpp
 	$(CPP64) $(LOCALCPPFLAGS) -o $@ $<
+
+$(LOCALOBJDIR)/%.xx_64.o.dep: $(CCSRCDIR)/%.xx.c
+	$(CC64) $(LOCALCCFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.xx_64.o $<
 
 $(LOCALOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(LOCALCCFLAGS) -o $@ $<
 
+$(LOCALOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.c
+	$(CC64) $(LOCALCCFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.64.o $<
+
 $(LOCALOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(LOCALCCFLAGS) -o $@ $<
+
+$(LOCALOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.cpp
+	$(CPP64) $(LOCALCPPFLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(LOCALOBJDIR)/$*.64.o $<
 
 $(LOCALOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(LOCALCPPFLAGS) -o $@ $<
 
+$(LOCALOBJDIR)/%.bin.dep: $(LOCALOBJDIR)/%.o.dep
+	scripts/create_depends.sh cc-local $< > $@
+
 $(OBJDIR)/%.bin: $(LOCALOBJDIR)/%.o
 	$(LOCALLD) $(UTILSLDFLAGS) -o $@ $^
+
+$(EFIOBJDIR)/%.o.dep.dep: $(EFIOBJDIR)/%.o.dep
+	scripts/create_depends.sh efi $< $(EFITOSDBIMGNAME) > $@
+
+$(EFIOBJDIR)/%.o.dep: $(EFISRCDIR)/%.c
+	$(CC64) $(EFICC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(EFIOBJDIR)/$*.o $<
 
 $(EFIOBJDIR)/%.o: $(EFISRCDIR)/%.c
 	$(CC64) $(EFICC64FLAGS) -o $@ $<
 
+$(EFIOBJDIR)/%.o.dep: $(EFISRCDIR)/%.cpp
+	$(CPP64) $(EFICPP64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(EFIOBJDIR)/$*.o $<
+
 $(EFIOBJDIR)/%.o: $(EFISRCDIR)/%.cpp
 	$(CPP64) $(EFICPP64FLAGS) -o $@ $<
+
+$(EFIOBJDIR)/%.xx_64.o.dep: $(CCSRCDIR)/%.xx.c
+	$(CC64) $(EFICC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(EFIOBJDIR)/$*.xx_64.o $<
 
 $(EFIOBJDIR)/%.xx_64.o: $(CCSRCDIR)/%.xx.c
 	$(CC64) $(EFICC64FLAGS) -o $@ $<
 
+$(EFIOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.c
+	$(CC64) $(EFICC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(EFIOBJDIR)/$*.64.o $<
+
 $(EFIOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.c
 	$(CC64) $(EFICC64FLAGS) -o $@ $<
+
+$(EFIOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.cpp
+	$(CPP64) $(EFICPP64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(EFIOBJDIR)/$*.64.o $<
 
 $(EFIOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(EFICPP64FLAGS) -o $@ $<
@@ -362,28 +437,10 @@ gendirs:
 	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/efi%' |xargs mkdir -p
 	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/cc-local%' |xargs mkdir -p
 
-.PHONY: depend
-depend: .depend64c .depend64cpp .dependutils .dependtests .dependefi
-	@echo "Dependencies generated" 
-
-.depend64c: $(CC64SRCS) $(CCXXSRCS) $(CC64TESTSRCS)
-	scripts/create-cc-deps.sh "$(CC64) $(KERNELCC64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" > .depend64
-	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
-
-.depend64cpp: $(CPP64SRCS)
-	scripts/create-cc-deps.sh "$(CPP64) $(KERNELCPP64FLAGS) -D___DEPEND_ANALYSIS -MM" "$^" >> .depend64
-	$(SEDNOBAK) 's/xx.o:/xx_64.o:/g' .depend64
-
-.dependutils: $(EFISRCS)
-	scripts/create_depends.sh $(UTILSPROGS) >.dependutils
-
-.dependtests:
-	scripts/create_depends.sh $(TESTSPROGS) >.dependtests
-
-.dependefi: $(EFISRCS)
-	scripts/create_efi_depends.sh $(EFITOSDBIMG) $(EFISRCS)  >.dependefi
-
--include .depend64
--include .dependutils
--include .dependtests
--include .dependefi
+-include $(CC64DEPS)
+-include $(CPP64DEPS)
+-include $(UTILSDEPS)
+-include $(TESTSDEPS)
+-include $(EFIDEPS)
+-include $(EFIDEPDEPS)
+-include ${BINOUTPUTDEPS}

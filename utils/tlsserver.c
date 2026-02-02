@@ -8,9 +8,8 @@
 
 #define RAMSIZE 0x8000000
 #include "setup.h"
-#include <strings.h>
 #include <bigint.h>
-#include <crypto/aes-gcm.h>
+#include <crypto/gcm.h>
 #include <crypto/sha2.h>
 #include <crypto/x25519.h>
 #include <crypto/der.h>
@@ -19,7 +18,6 @@
 #include <crypto/tls13.h>
 #include <errno.h>
 #include <base64.h>
-#include <list.h>
 #include <pipeline.h>
 #include <cpu/sync.h>
 #include <network/http.h>
