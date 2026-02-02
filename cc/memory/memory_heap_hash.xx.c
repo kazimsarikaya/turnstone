@@ -381,6 +381,10 @@ void* memory_heap_hash_malloc_ext(memory_heap_t* heap, uint64_t size, uint64_t a
     for(uint16_t pool_id = 0; pool_id < metadata->pool_count; pool_id++) {
         memory_heap_hash_pool_t* pool = memory_heap_hash_pool_get(metadata, pool_id);
 
+        if(!pool) {
+            continue;
+        }
+
         if(pool->last_address < size) {
             // PRINTLOG(HEAP_HASH, LOG_TRACE, "pool %d last address 0x%x is less than size 0x%llx", pool_id, pool->last_address, size);
 
