@@ -1629,13 +1629,12 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
             return -1;
         }
 
-        // FIX: Pass 'header' as AAD, not 'buffer'
         int32_t status = aes_gcm_decrypt_with_aad_with_tag(
             plaintext,
             buffer, ciphertext_len,
             ctx->client_handshake_key, ctx->handshake_key_len,
             nonce, 12,
-            header, 5, // AAD is the header!
+            header, 5,
             tag, 16
             );
 

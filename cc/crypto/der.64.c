@@ -302,7 +302,6 @@ int8_t der_encoder_encode_integer(der_encoder_t * encoder, int64_t value) {
 }
 
 int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value) {
-    // FIX: Size must be 17 to accommodate the potential sign byte
     uint8_t int_bytes[17];
     size_t int_len = 0;
 
@@ -334,7 +333,6 @@ int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value)
 }
 
 int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, uint8_t value[20]) {
-    // FIX: Size must be 21 to accommodate the potential sign byte
     uint8_t int_bytes[21];
     size_t int_len = 0;
 
@@ -864,7 +862,6 @@ int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_va
         return -1;
     }
 
-    // FIX: Allow 17 bytes, but ONLY if it's due to the sign bit padding
     if (length > 17 || length == 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unsupported integer length %llu\n", length);
         return -1;
@@ -908,7 +905,6 @@ int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value
         return -1;
     }
 
-    // FIX: Allow 21 bytes, but ONLY if it's due to the sign bit padding
     if (length > 21 || length == 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unsupported integer length %llu\n", length);
         return -1;
