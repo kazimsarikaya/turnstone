@@ -71,6 +71,7 @@ EFIOBJDIR = $(OBJDIR)/$(EFISRCDIR)
 DOCSOBJDIR = $(OBJDIR)/docs
 CCGENDIR = cc-gen
 CCGENSCRIPTSDIR = scripts/gen-cc
+ASSETGENSCRIPTSDIR = scripts/gen-assets
 TMPDIR = tmp
 ASSETSDIR = assets
 ASSETSGENDIR = assets-gen
@@ -110,7 +111,9 @@ EFICPP64SRCS = $(shell find $(EFISRCDIR) -maxdepth 1 -type f -name \*.cpp)
 EFISRCS = $(EFICC64SRCS) $(EFICPP64SRCS)
 
 CCGENSCRIPTS = $(shell find $(CCGENSCRIPTSDIR) -type f -name \*.sh)
-GENCCSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%.c,$(CCGENSCRIPTS))
+CCGENSRCS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCGENDIR)/%.c,$(CCGENSCRIPTS))
+CC64GENOBJS = $(patsubst $(CCGENDIR)/%.c,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSRCS))
+CC64GENDEPS = $(patsubst $(CCGENDIR)/%.c,$(CCOBJDIR)/%.cc-gen.x86_64.o.dep,$(CCGENSRCS))
 
 ASOBJS = $(patsubst $(ASSRCDIR)/%.s,$(ASOBJDIR)/%.o,$(ASSRCS))
 
@@ -120,8 +123,6 @@ CC64OBJS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o,$(CC64SRCS))
 CC64DEPS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.o.dep,$(CC64SRCS))
 CC64OBJS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o,$(CCXXSRCS))
 CC64DEPS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.o.dep,$(CCXXSRCS))
-
-CC64GENOBJS = $(patsubst $(CCGENSCRIPTSDIR)/%.sh,$(CCOBJDIR)/%.cc-gen.x86_64.o,$(CCGENSCRIPTS))
 
 CC64ASMOUTS = $(patsubst $(CCSRCDIR)/%.64.c,$(CCOBJDIR)/%.64.s,$(CC64SRCS))
 CC64ASMOUTS += $(patsubst $(CCSRCDIR)/%.xx.c,$(CCOBJDIR)/%.xx_64.s,$(CCXXSRCS))
@@ -158,9 +159,11 @@ ASSETGENOBJS = $(patsubst %,$(OBJDIR)/%.data.o,$(ASSETSGEN))
 
 ASSETSALL = $(ASSETS) $(ASSETSGEN)
 ASSETALLOBJS = $(ASSETOBJS) $(ASSETGENOBJS)
+ASSETALLDEPS = $(patsubst %,$(OBJDIR)/%.data.o.dep,$(ASSETSALL))
 
-ASSETSCCGEN = $(shell find $(ASSETSCCGENDIR) -type f)
+ASSETSCCGEN = $(shell find $(ASSETGENSCRIPTSDIR) -type f -name \*.sh -print0 | xargs -0 -I SCRIPTFILE SCRIPTFILE output)
 ASSETCCGENOBJS = $(patsubst $(ASSETSCCGENDIR)/%.64.c,$(ASSETCCGENOBJDIR)/%.64.o,$(ASSETSCCGEN))
+ASSETCCGENDEPS = $(patsubst $(ASSETSCCGENDIR)/%.64.c,$(ASSETCCGENOBJDIR)/%.64.o.dep,$(ASSETSCCGEN))
 
 OBJS = $(ASOBJS) $(CC64OBJS) $(ASSETOBJS) $(CC64ASMOUTS) $(CPP64OBJS)
 TESTOBJS= $(ASTESTOBJS) $(CC64TESTOBJS)
@@ -310,15 +313,12 @@ $(ASOBJDIR)/%64.test.o: $(ASSRCDIR)/%64.S
 	$(CC64) $(KERNELCC64FLAGS) $(CXXTESTFLAGS) -o $@ $^
 
 $(CCGENDIR)/%.c: $(CCGENSCRIPTSDIR)/%.sh
-	if [[ ! -f $@ ]]; then $^ > $@; else $^ > $@.tmp; diff $@  $@.tmp  2>/dev/null && rm -f $@.tmp || mv $@.tmp $@; fi
+	$^ > $@
+
+$(CCOBJDIR)/%.cc-gen.x86_64.o.dep: $(CCGENDIR)/%.c
+	$(CC64) $(KERNELCC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(CCOBJDIR)/$*.cc-gen.x86_64.o $<
 
 $(CCOBJDIR)/%.cc-gen.x86_64.o: $(CCGENDIR)/%.c
-	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
-
-$(CCOBJDIR)/interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/interrupt_handlers.c
-	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
-
-$(CCOBJDIR)/vm_guest_interrupt_handlers.cc-gen.x86_64.o: $(CCGENDIR)/vm_guest_interrupt_handlers.c
 	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
 
 $(LOCALOBJDIR)/%.o.dep: $(UTILSSRCDIR)/%.c
@@ -363,13 +363,13 @@ $(LOCALOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.cpp
 $(LOCALOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(LOCALCPPFLAGS) -o $@ $<
 
-$(LOCALOBJDIR)/%.bin.dep: $(LOCALOBJDIR)/%.o.dep
+$(LOCALOBJDIR)/%.bin.dep: $(LOCALOBJDIR)/%.o.dep scripts/create_depends.sh
 	scripts/create_depends.sh cc-local $< > $@
 
 $(OBJDIR)/%.bin: $(LOCALOBJDIR)/%.o
 	$(LOCALLD) $(UTILSLDFLAGS) -o $@ $^
 
-$(EFIOBJDIR)/%.o.dep.dep: $(EFIOBJDIR)/%.o.dep
+$(EFIOBJDIR)/%.o.dep.dep: $(EFIOBJDIR)/%.o.dep scripts/create_depends.sh
 	scripts/create_depends.sh efi $< $(EFITOSDBIMGNAME) > $@
 
 $(EFIOBJDIR)/%.o.dep: $(EFISRCDIR)/%.c
@@ -402,28 +402,37 @@ $(EFIOBJDIR)/%.64.o.dep: $(CCSRCDIR)/%.64.cpp
 $(EFIOBJDIR)/%.64.o: $(CCSRCDIR)/%.64.cpp
 	$(CPP64) $(EFICPP64FLAGS) -o $@ $<
 
-$(ASSETALLOBJS): $(ASSETSALL) 
-	rm -f $(TOSDBIMG)
-	scripts/assets/build.sh $@
+$(ASSETOBJDIR)/%.data.o.dep: $(ASSETSDIR)/%
+	echo $(ASSETOBJDIR)/$*.data.o: $< > $@
+
+$(ASSETGENOBJDIR)/%.data.o.dep: $(ASSETSGENDIR)/%
+	echo $(ASSETOBJDIR)/$*.data.o: $< > $@
+
+$(ASSETOBJDIR)/%.data.o: $(ASSETSDIR)/% scripts/assets/build.sh
+	scripts/assets/build.sh $< $@
+
+$(ASSETGENOBJDIR)/%.data.o: $(ASSETSGENDIR)/% scripts/assets/build.sh
+	scripts/assets/build.sh $< $@
+
+$(ASSETSCCGENDIR)/%.64.c: $(ASSETGENSCRIPTSDIR)/%.sh
+	$^ build
+
+$(ASSETCCGENOBJDIR)/%.64.o.dep: $(ASSETSCCGENDIR)/%.64.c
+	$(CC64) $(KERNELCC64FLAGS) $(DEPEND_FLAGS) -MF $@ -MT $(ASSETCCGENOBJDIR)/$*.64.o $<
 
 $(ASSETCCGENOBJDIR)/%.64.o: $(ASSETSCCGENDIR)/%.64.c
 	$(CC64) $(KERNELCC64FLAGS) -o $@ $<
-
-guifont:
-	scripts/gen-assets/guifont.sh
 
 print-%: ; @echo $* = $($*)
 
 clean:
 	rm -fr $(DOCSOBJDIR)/*
 	if [ -d $(OBJDIR) ]; then find $(OBJDIR) -type f -delete; fi
-	find . -type f -name .depend\* -delete
 	if [ -d $(CCGENDIR) ]; then find $(CCGENDIR) -type f -delete; fi
 	if [ -d $(INCLUDESGENDIR) ]; then find $(INCLUDESGENDIR) -type f -delete; fi
 	if [ -d $(ASSETSGENDIR) ]; then find $(ASSETSGENDIR) -type f -delete; fi
 	if [ -d $(ASSETSCCGENDIR) ]; then find $(ASSETSCCGENDIR) -type f -delete; fi
 	rm -f $(MKDIRSDONE)
-	rm -f compile_commands.json
 
 cleandirs:
 	rm -fr $(CCGENDIR) $(INCLUDESGENDIR) $(OBJDIR)
@@ -437,8 +446,11 @@ gendirs:
 	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/efi%' |xargs mkdir -p
 	find $(CCOBJDIR) -type d |sed 's%'$(OBJDIR)'/cc%'$(OBJDIR)'/cc-local%' |xargs mkdir -p
 
+-include $(ASSETCCGENDEPS)
+-include $(ASSETALLDEPS)
 -include $(CC64DEPS)
 -include $(CPP64DEPS)
+-include $(CC64GENDEPS)
 -include $(UTILSDEPS)
 -include $(TESTSDEPS)
 -include $(EFIDEPS)

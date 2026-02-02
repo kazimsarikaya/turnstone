@@ -13,11 +13,8 @@ CCOUTPUTDIR="${OUTPUTDIR}/cc"
 
 ASSETSDIR=$(readlink -f ${ASSETSDIR})
 
-OUTPUT_FILE=$1
-#remove .data.o at end
-INPUT_FILE=${OUTPUT_FILE%.data.o}
-#remove build/ at start
-INPUT_FILE=${INPUT_FILE#build/}
+INPUT_FILE=$1
+OUTPUT_FILE=$2
 
 echo "OUTPUT_FILE: ${OUTPUT_FILE}"
 echo "INPUT_FILE: ${INPUT_FILE}"

@@ -7,18 +7,27 @@ set -eux
 
 CURRENTDIR=`dirname $0`
 CURRENTDIR="`readlink -f ${CURRENTDIR}`"
-BASEDIR="${CURRENTDIR}/../../"
+BASEDIR="${CURRENTDIR}/../../../"
 BASEDIR="`readlink -f ${BASEDIR}`"
 OUTPUTDIR="${BASEDIR}/build"
 CCGENDIR="${OUTPUTDIR}/cc-gen"
 INCLUDESGENDIR="${OUTPUTDIR}/includes-gen"
 ASSETSGENDIR="${OUTPUTDIR}/assets-gen"
+ASSETSCCGENDIR="assets-cc-gen"
 PYENVDIR="${OUTPUTDIR}/pyenv"
 
-PYFILE="${CURRENTDIR}/../assets-data/build_font_atlas.py"
+PYFILE="${CURRENTDIR}/../../assets-data/build_font_atlas.py"
 PYFILE="`readlink -f ${PYFILE}`"
 
-make -C "${BASEDIR}" "build/deflate.bin"
+ARG=$1 
+
+if [ -n "${ARG}" ]; then
+    if [ "${ARG}" == "output" ]; then
+        ARTIFACT="${ASSETSCCGENDIR}/graphics/font_atlas.64.c"
+        echo ${ARTIFACT}
+        exit 0
+    fi
+fi
 
 if ! python3 --version >/dev/null 2>&1; then
   echo "Python3 is not installed. Please install Python3."

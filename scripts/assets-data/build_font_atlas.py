@@ -5,6 +5,7 @@ from scipy.ndimage import distance_transform_edt
 from PIL import Image
 import math, os
 import argparse
+import zlib
 
 parser =argparse.ArgumentParser(description="Generate SDF font atlas from TTF")
 parser.add_argument("--base_dir", type=str, default="..", help="Base directory")
@@ -197,11 +198,12 @@ atlas.tofile(f"{asset_pre_bin_path}")
 print(f"Saved atlas binary data as {asset_pre_bin_path}")
 
 # Optionally deflate
-if os.path.exists(deflate_exec):
-    os.system(f"{deflate_exec} c {asset_pre_bin_path} {asset_bin_path}")
-    print(f"Deflated to {asset_bin_path}")
-else:
-    print(f"Deflate executable not found, skipping deflation.")
+with open(asset_pre_bin_path, "rb") as f:
+    data = f.read()
+compressed_data = zlib.compress(data, level=9, wbits=-15)
+with open(asset_bin_path, "wb") as f:
+    f.write(compressed_data)
+print(f"Saved compressed atlas binary data as {asset_bin_path}")
 
 img = (1.0 - atlas if invert_png else atlas) * 255
 img = Image.fromarray(img.astype(np.uint8), "L")
