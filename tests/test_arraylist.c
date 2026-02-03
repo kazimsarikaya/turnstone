@@ -5,6 +5,7 @@
 
 #include "setup.h"
 #include <list.h>
+#include <random.h>
 
 int32_t main(uint32_t argc, char_t** argv, char_t** en);
 
@@ -34,7 +35,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
 
     list_set_comparator(list, int_comparator);
 
-    for(uint64_t i = 0; i < 10; i++){
+    for(uint64_t i = 0; i < 10; i++) {
         if(list_list_insert(list, (void*)i) == -1ULL) {
             print_error("Insert item: FAILED");
             list_destroy(list);
@@ -120,7 +121,7 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
         }
 
 
-        if(expected_item == 5){
+        if(expected_item == 5) {
             iter->delete_item(iter);
         }
 
@@ -171,6 +172,227 @@ int32_t main(uint32_t argc, char_t** argv, char_t** en) {
 
     list_destroy(list);
     list_destroy(dup_list);
+
+    list = list_create_arraylist();
+
+    if(list == NULL) {
+        print_error("Create arraylist: FAILED");
+        return -1;
+    }
+
+    list_queue_push(list, (void*)10);
+    list_queue_push(list, (void*)20);
+
+    int64_t val = (int64_t)list_queue_pop(list);;
+    if(val != 10) {
+        print_error("Queue pop expected 10 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    val = (int64_t)list_queue_pop(list);;
+    if(val != 20) {
+        print_error("Queue pop expected 20 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    list_destroy(list);
+
+    print_success("Queue TESTS PASSED");
+
+    list = list_create_arraylist();
+
+    if(list == NULL) {
+        print_error("Create arraylist: FAILED");
+        return -1;
+    }
+
+    list_stack_push(list, (void*)30);
+    list_stack_push(list, (void*)40);
+
+    val = (int64_t)list_stack_pop(list);;
+    if(val != 40) {
+        print_error("Stack pop expected 40 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    val = (int64_t)list_stack_pop(list);;
+    if(val != 30) {
+        print_error("Stack pop expected 30 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    list_destroy(list);
+
+    print_success("Stack TESTS PASSED");
+
+    list = list_create_arraylist();
+
+    if(list == NULL) {
+        print_error("Create arraylist: FAILED");
+        return -1;
+    }
+
+    list_insert_at_position(list, (void*)100, 0); // head
+    list_insert_at_position(list, (void*)200, 1); // tail
+    list_insert_at_position(list, (void*)150, 1); // middle
+
+    val = (int64_t)list_get_data_at_position(list, 0);
+    if(val != 100) {
+        print_error("Expected 100 at position 0 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    val = (int64_t)list_get_data_at_position(list, 1);
+    if(val != 150) {
+        print_error("Expected 150 at position 1 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    val = (int64_t)list_get_data_at_position(list, 2);
+    if(val != 200) {
+        print_error("Expected 200 at position 2 but got %lld", val);
+        list_destroy(list);
+        return -1;
+    }
+
+    list_destroy(list);
+
+    print_success("Insert at position TESTS PASSED");
+
+    list = list_create_arraylist();
+
+    if(list == NULL) {
+        print_error("Create arraylist: FAILED");
+        return -1;
+    }
+
+    list_set_comparator(list, int_comparator);
+
+
+    for(int64_t i = 0; i < 100; i++) {
+        list_sortedlist_insert(list, (void*)((rand64() % 200) + 200));
+    }
+
+    if(list_size(list) != 100) {
+        print_error("Sorted list size is not 1000, but %llu", list_size(list));
+        list_destroy(list);
+        return -1;
+    }
+
+    int64_t last_val = -1;
+    for(uint64_t i = 0; i < list_size(list); i++) {
+        int64_t item = (int64_t)list_get_data_at_position(list, i);
+        if(item < last_val) {
+            print_error("List is not sorted at position %llu: %lld < %lld", i, item, last_val);
+            list_destroy(list);
+            return -1;
+        }
+        last_val = item;
+    }
+
+    print_success("Sorted list verified with size %llu", list_size(list));
+
+    iterator_t* s_iter = list_iterator_create(list);
+
+    if(s_iter == NULL) {
+        print_error("Create iterator for sorted list: FAILED");
+        list_destroy(list);
+        return -1;
+    }
+
+    last_val = -1;
+    while(s_iter->end_of_iterator(s_iter) != 0) {
+        const void* item = s_iter->get_item(s_iter);
+        val = (int64_t)item;
+        if(val < last_val) {
+            print_error("List is not sorted in iterator: %lld < %lld", val, last_val);
+            s_iter->destroy(s_iter);
+            list_destroy(list);
+            return -1;
+        }
+        last_val = val;
+        s_iter = s_iter->next(s_iter);
+    }
+
+    s_iter->destroy(s_iter);
+
+    print_success("Sorted list iterator verified with size %llu", list_size(list));
+
+
+    list_set_capacity(list, 1000);
+
+    last_val = -1;
+    for(uint64_t i = 0; i < list_size(list); i++) {
+        int64_t item = (int64_t)list_get_data_at_position(list, i);
+        if(item < last_val) {
+            print_error("List is not sorted at position %llu after capacity increase: %lld < %lld", i, item, last_val);
+            list_destroy(list);
+            return -1;
+        }
+        last_val = item;
+    }
+
+    print_success("Sorted list verified after capacity increase with size %llu", list_size(list));
+
+    for(int64_t i = 0; i < 500; i++) {
+        list_sortedlist_insert(list, (void*)(rand64() % 500));
+    }
+
+    last_val = -1;
+    for(uint64_t i = 0; i < list_size(list); i++) {
+        int64_t item = (int64_t)list_get_data_at_position(list, i);
+        if(item < last_val) {
+            print_error("List is not sorted at position %llu after capacity increase: %lld < %lld", i, item, last_val);
+            list_destroy(list);
+            return -1;
+        }
+        last_val = item;
+    }
+
+    print_success("Sorted list verified after more inserts with size %llu", list_size(list));
+
+    s_iter = list_iterator_create(list);
+
+    if(s_iter == NULL) {
+        print_error("Create iterator for sorted list: FAILED");
+        list_destroy(list);
+        return -1;
+    }
+
+    last_val = -1;
+    while(s_iter->end_of_iterator(s_iter) != 0) {
+        const void* item = s_iter->delete_item(s_iter);
+        val = (int64_t)item;
+        if(val < last_val) {
+            print_error("List is not sorted in iterator after more inserts: %lld < %lld", val, last_val);
+            s_iter->destroy(s_iter);
+            list_destroy(list);
+            return -1;
+        }
+        last_val = val;
+        s_iter = s_iter->next(s_iter);
+    }
+
+    s_iter->destroy(s_iter);
+
+    if(list_size(list) != 0) {
+        print_error("Sorted list is not empty after deleting all with iterator, but size %llu", list_size(list));
+        list_destroy(list);
+        return -1;
+    }
+
+    print_success("Sorted list iterator verified after deleting with size %llu", list_size(list));
+
+    list_destroy(list);
+
+    print_success("Sorted insert TESTS PASSED");
+
 
     print_success("TESTS PASSED");
 
