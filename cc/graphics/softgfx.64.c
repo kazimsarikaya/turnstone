@@ -726,25 +726,23 @@ void sgfx_end(sgfx_context_t* ctx) {
         return;
     }
 
+    sgfx_mat4_f32_t local_mvps[SGFX_MAX_SUB_CONTEXT_DEPTH];
+
+    for (int d = 0; d <= ctx->current_context_idx; d++) {
+        sgfx_context_info_t* curr = &ctx->contexts[d];
+        sgfx_mat4_mul(&local_mvps[d], &curr->projection, &curr->modelview);
+    }
+
     sgfx_vec4_f32_t* screen_verts = ctx->screen_vertices;
-    // char* dbg_str;
 
     for (int i = 0; i < ctx->vertex_count; i++) {
         sgfx_vec4_f32_t v = ctx->vertices[i];
-        // dbg_str = strprintf("Vertex %d Start: (%.2f, %.2f, %.2f, %.2f)\n", i, v.x, v.y, v.z, v.w);
-        // video_text_print(dbg_str);
-        // memory_free(dbg_str);
 
         for (int d = ctx->current_context_idx; d >= 0; d--) {
             sgfx_context_info_t* curr = &ctx->contexts[d];
 
             // 1. Local Transform
-            sgfx_mat4_f32_t local_mvp;
-            sgfx_mat4_mul(&local_mvp, &curr->projection, &curr->modelview);
-            v = sgfx_mat4_mul_vec4(&local_mvp, v);
-            // dbg_str = strprintf("After MVP at depth %d: (%.2f, %.2f, %.2f, %.2f)\n", d, v.x, v.y, v.z, v.w);
-            // video_text_print(dbg_str);
-            // memory_free(dbg_str);
+            v = sgfx_mat4_mul_vec4(&local_mvps[d], v);
 
             // 2. PERSPECTIVE DIVIDE (The Critical Step)
             // We do this here so 'v' becomes true NDC (-1 to 1)
@@ -771,9 +769,6 @@ void sgfx_end(sgfx_context_t* ctx) {
                 v.y = ((1.0f - v.y) * 0.5f) * (float32_t)curr->height;
             }
         }
-        // dbg_str = strprintf("Final Screen Vertex %d: (%.2f, %.2f, %.2f, %.2f)\n", i, v.x, v.y, v.z, v.w);
-        // video_text_print(dbg_str);
-        // memory_free(dbg_str);
         screen_verts[i] = v;
     }
 
