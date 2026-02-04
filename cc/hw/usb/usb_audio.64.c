@@ -317,9 +317,11 @@ static int16_t* usb_audio_generate_beep(float64_t freq, int32_t duration_ms,
     *out_samples = total_samples;
 
     int16_t* buffer = memory_malloc(total_samples * 2 * sizeof(int16_t)); // stereo
-    if (!buffer) return NULL;
+    if (!buffer) {
+        return NULL;
+    }
 
-    float64_t phase_step = 2.0 * PI * freq / sample_rate;
+    float64_t phase_step = 2.0 * PI * (float64_t)freq / (float64_t)sample_rate;
     float64_t phase = 0.0;
 
     for (size_t i = 0; i < total_samples; i++) {
@@ -327,7 +329,9 @@ static int16_t* usb_audio_generate_beep(float64_t freq, int32_t duration_ms,
         buffer[2 * i]     = sample; // Left
         buffer[2 * i + 1] = sample; // Right
         phase += phase_step;
-        if (phase > 2.0 * PI) phase -= 2.0 * PI;
+        if (phase > 2.0 * PI) {
+            phase -= 2.0 * PI;
+        }
     }
 
     return buffer;
@@ -356,7 +360,7 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
     interface->driver = driver;
 
     if(!usb_audio_beep) {
-        usb_audio_beep = usb_audio_generate_beep(440.0, 1000, 100000, 48000, &usb_audio_beep_samples);
+        usb_audio_beep = usb_audio_generate_beep(440.0, 1000, 30000, 48000, &usb_audio_beep_samples);
 
         if(!usb_audio_beep) {
             PRINTLOG(USB, LOG_ERROR, "cannot generate beep sound");
@@ -374,6 +378,7 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
     ut.data = (uint8_t*)usb_audio_beep;
     ut.is_async = true;
     ut.is_isochronous = true;
+    ut.iso_packet_size = 192; // 48kHz * 2 channels * 16 bits = 192000 bps / 1000 ms = 192 bytes per ms
 
     if(device->controller->data_transfer(device->controller, &ut) != 0) {
         PRINTLOG(USB, LOG_ERROR, "cannot send beep data to audio device");
@@ -381,6 +386,10 @@ int8_t usb_audio_streaming_init(usb_device_t* device, usb_interface_t* interface
         interface->driver = NULL;
         return -1;
     }
+
+    PRINTLOG(USB, LOG_INFO, "beep sound sent to audio device. address 0x%p, length %llu bytes",
+             usb_audio_beep,
+             usb_audio_beep_samples * 2 * sizeof(int16_t));
 
     PRINTLOG(USB, LOG_INFO, "audio streaming device initialized");
 

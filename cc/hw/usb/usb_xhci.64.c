@@ -52,6 +52,7 @@ typedef struct usb_controller_metadata_t {
     uint64_t                                   port_status_listener_tid;
     list_t*                                    port_status_listener_event_queue;
     uint32_t                                   max_psa_size;
+    uint32_t                                   isoc_shed_tresh;
 } usb_controller_metadata_t;
 
 typedef struct usb_device_controller_context_t {
@@ -1300,8 +1301,9 @@ static uint32_t usb_xhci_get_microframe_index(usb_controller_t* usb_controller) 
     uint32_t mfindex = 0;
 
     // MFIndex is supported
-    mfindex = (metadata->runtime->mfindex & 0x7FF);
+    mfindex = metadata->runtime->mfindex;
     mfindex = mfindex >> 3;
+    mfindex = mfindex & 0x7FF;
 
     return mfindex;
 }
@@ -1409,28 +1411,32 @@ static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_trans
         uint32_t mfindex = 0;
 
         uint32_t ioc = 1;
-        uint32_t mfindex_inc = 0;
+
+        usb_xhci_trb_type_t trb_type = USB_XHCI_TRB_TYPE_TR_NORMAL;
 
         if(transfer->is_isochronous) {
-            mfindex = usb_xhci_get_microframe_index(usb_controller);
-            PRINTLOG(USB, LOG_TRACE, "current microframe index: %d", mfindex);
+            trb_type = USB_XHCI_TRB_TYPE_TR_ISOCH;
+
+            if(transfer->iso_packet_size > 0) {
+                max_packet_size = MIN(max_packet_size, transfer->iso_packet_size);
+            }
+
             ioc = 0;
+            mfindex = usb_xhci_get_microframe_index(usb_controller) + metadata->isoc_shed_tresh + 1;
+            mfindex &= 0x7FF;
         }
+
+        uint32_t trbs_needed = (length + max_packet_size - 1) / max_packet_size;
+        uint32_t trbs_sended = 0;
 
         while (remaining_length > 0) {
             uint32_t curr_length = MIN(remaining_length, max_packet_size);
 
             // PRINTLOG(USB, LOG_TRACE, "data fa: 0x%llx length 0x%x", data_fa, curr_length);
 
-            usb_xhci_trb_type_t trb_type = USB_XHCI_TRB_TYPE_TR_NORMAL;
-
             if(transfer->is_isochronous) {
-                trb_type = USB_XHCI_TRB_TYPE_TR_ISOCH;
-                mfindex_inc++;
-                if(mfindex_inc == 8) {
-                    mfindex = (mfindex + 1); // % 8;
-                    mfindex_inc = 0;
-                }
+                mfindex++;
+                mfindex &= 0x7FF;
             }
 
             transfer_ring[trb_index].parameter = data_fa;
@@ -1444,7 +1450,12 @@ static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_trans
                 usb_xhci_pool_event_init(metadata->controller_id, cur_trb_fa, USB_XHCI_TRB_TYPE_ER_TRANSFER);
             }
 
-            doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
+            // Ring doorbell for transfer when sync or last TRB for async
+            // for isochronous transfers, ring doorbell for each 32 TRBs
+            if(!transfer->is_async || (trbs_sended + 1) == trbs_needed ||
+               (transfer->is_isochronous && ((trbs_sended + 1) % 32 == 0))) {
+                doorbell->db =  (transfer->stream_id << 16) | ep_index; // DCI = ep_index
+            }
 
             if((trb_index + 1) == metadata->cmd_ring_size) {
                 context->endpoints[ep_index - 1].cycle_bit ^= 1;
@@ -1474,6 +1485,7 @@ static int8_t usb_xhci_data_transfer(usb_controller_t* usb_controller, usb_trans
 
             data_fa += curr_length;
             remaining_length -= curr_length;
+            trbs_sended++;
         }
     } else {
         PRINTLOG(USB, LOG_ERROR, "zero-length data transfer");
@@ -2040,6 +2052,8 @@ int8_t usb_xhci_init(usb_controller_t* usb_controller) {
     usb_xhci_hcs_params_2_t hcs_params2 = (usb_xhci_hcs_params_2_t)xhci_cap->hcs_params_2;
 
     PRINTLOG(USB, LOG_DEBUG, "XHCI max erst size: %d", hcs_params2.bits.erst_max);
+
+    metadata->isoc_shed_tresh = hcs_params2.bits.ist;
 
     usb_xhci_hcc_params_1_t hcc_params1 = (usb_xhci_hcc_params_1_t)xhci_cap->hcc_params_1;
 

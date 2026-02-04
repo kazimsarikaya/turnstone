@@ -328,6 +328,7 @@ typedef struct usb_transfer_t {
     uint32_t              stream_id;
     boolean_t             is_async;
     boolean_t             is_isochronous;
+    uint32_t              iso_packet_size;
 } usb_transfer_t;
 
 typedef struct usb_controller_t {
