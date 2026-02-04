@@ -11,9 +11,11 @@
 #include <windowmanager/wnd_utils.h>
 #include <graphics/screen.h>
 #include <graphics/font.h>
+#include <graphics/font_atlas.h>
 #include <graphics/text_cursor.h>
 #include <device/mouse.h>
 #include <logging.h>
+#include <strings.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -53,24 +55,62 @@ int8_t wndmgr_mouse_init(windowmanager_t* wndmgr) {
 }
 
 int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
-    font_table_t* font = font_get_font_table();
+    boolean_t use_old_font = false;
 
-    if(font == NULL) {
+    font_table_t* old_font = font_get_font_table();
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Old font has size %dx%d, columns: %d, rows: %d, glyphs: %d",
+             old_font->font_width,
+             old_font->font_height,
+             old_font->column_count,
+             old_font->row_count,
+             old_font->glyph_count);
+
+    font_table_t* new_font = font_atlas_get_font_table();
+
+    if(new_font == NULL) {
         PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to get font table\n");
         return -1;
     }
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "New font has size %dx%d, columns: %d, rows: %d, glyphs: %d",
+             new_font->font_width,
+             new_font->font_height,
+             new_font->column_count,
+             new_font->row_count,
+             new_font->glyph_count);
+
+    font_table_t* font = use_old_font ? old_font : new_font;
+
+    PRINTLOG(WINDOWMANAGER, LOG_INFO, "Font loaded with size %dx%d, columns: %d, rows: %d, glyphs: %d",
+             font->font_width,
+             font->font_height,
+             font->column_count,
+             font->row_count,
+             font->glyph_count);
 
     sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
     wndmgr->font_texture = sgfx_gen_texture(gfx_ctx);
     sgfx_bind_texture(gfx_ctx, wndmgr->font_texture);
-    sgfx_tex_image2d(gfx_ctx, font->font_width * font->column_count, font->font_height * font->row_count, font->bitmap);
+
+    if(use_old_font) {
+        sgfx_tex_image2d(gfx_ctx, font->font_width * font->column_count, font->font_height * font->row_count, font->color_data);
+    } else {
+        sgfx_tex_sdf(gfx_ctx, font->font_width * font->column_count, font->font_height * font->row_count, font->float_data);
+    }
+
     sgfx_bind_texture(gfx_ctx, 0);
 
-    wndmgr->font_width = font->font_width;
-    wndmgr->font_height = font->font_height;
+    wndmgr->font_is_sdf = !use_old_font;
+
     wndmgr->font_column_count = font->column_count;
     wndmgr->font_row_count = font->row_count;
+    wndmgr->font_real_width = font->font_width;
+    wndmgr->font_real_height = font->font_height;
+
+    wndmgr->font_width = old_font->font_width;
+    wndmgr->font_height = old_font->font_height;
 
     wndmgr->font_uv_table = memory_malloc(sizeof(wndmgr_font_uv_t) * font->glyph_count);
 
@@ -79,14 +119,24 @@ int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
         return -2;
     }
 
-    for(uint32_t i = 0; i < font->glyph_count; i++) {
-        uint32_t x = i % font->column_count;
-        uint32_t y = i / font->column_count;
+    if(use_old_font) {
+        // manually create uv table for old font
+        for(uint32_t i = 0; i < font->glyph_count; i++) {
+            uint32_t col = i % font->column_count;
+            uint32_t row = i / font->column_count;
 
-        wndmgr->font_uv_table[i].u0 = (float32_t)(x * font->font_width) / (float32_t)(font->font_width * font->column_count);
-        wndmgr->font_uv_table[i].v0 = (float32_t)(y * font->font_height) / (float32_t)(font->font_height * font->row_count);
-        wndmgr->font_uv_table[i].u1 = (float32_t)((x + 1) * font->font_width) / (float32_t)(font->font_width * font->column_count);
-        wndmgr->font_uv_table[i].v1 = (float32_t)((y + 1) * font->font_height) / (float32_t)(font->font_height * font->row_count);
+            wndmgr->font_uv_table[i].u0 = (float32_t)(col * font->font_width) / (float32_t)(font->font_width * font->column_count);
+            wndmgr->font_uv_table[i].v0 = (float32_t)(row * font->font_height) / (float32_t)(font->font_height * font->row_count);
+            wndmgr->font_uv_table[i].u1 = (float32_t)((col + 1) * font->font_width) / (float32_t)(font->font_width * font->column_count);
+            wndmgr->font_uv_table[i].v1 = (float32_t)((row + 1) * font->font_height) / (float32_t)(font->font_height * font->row_count);
+        }
+    } else {
+        for(uint32_t i = 0; i < font->glyph_count; i++) {
+            wndmgr->font_uv_table[i].u0 = font_glyphs[i].u0;
+            wndmgr->font_uv_table[i].v0 = font_glyphs[i].v0;
+            wndmgr->font_uv_table[i].u1 = font_glyphs[i].u1;
+            wndmgr->font_uv_table[i].v1 = font_glyphs[i].v1;
+        }
     }
 
     PRINTLOG(WINDOWMANAGER, LOG_INFO, "Font texture created with size %dx%d", font->font_width * font->column_count, font->font_height * font->row_count);
@@ -94,6 +144,7 @@ int8_t wndmgr_font_init(windowmanager_t* wndmgr) {
     return 0;
 
 }
+
 void wndmgr_mouse_move_cursor(windowmanager_t* wndmgr, uint32_t x, uint32_t y) {
     if (!wndmgr->mouse_initialized) {
         return;
@@ -242,14 +293,11 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
 
     uint32_t font_width = wndmgr->font_width, font_height = wndmgr->font_height;
 
-    uint32_t abs_x = (window->rect.x + x) / font_width;
-    uint32_t abs_y = (window->rect.y + y) / font_height;
+    uint32_t cur_x = 0;
+    uint32_t cur_y = 0;
 
-    uint32_t cur_x = abs_x;
-    uint32_t cur_y = abs_y;
-
-    uint32_t max_cur_x = (window->rect.x + window->rect.width) / font_width;
-    uint32_t max_cur_y = (window->rect.y + window->rect.height) / font_height;
+    uint32_t max_cur_x = window->rect.width / font_width;
+    uint32_t max_cur_y = window->rect.height / font_height;
 
     if(cur_x >= max_cur_x || cur_y >= max_cur_y) {
         return;
@@ -272,7 +320,13 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
     int64_t i = 0;
 
     while(text[i]) {
-        char16_t wc = font_get_wc(text + i, &i);
+        char16_t wc;
+
+        if(wndmgr->font_is_sdf) {
+            wc = font_atlas_get_wc(text + i, &i);
+        } else {
+            wc = font_get_wc(text + i, &i);
+        }
 
         if(wc == '\n') {
             cur_y += 1;
@@ -281,9 +335,9 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
                 break;
             }
 
-            cur_x = abs_x;
+            cur_x = 0;
         } else if(wc == '\r') {
-            cur_x = abs_x;
+            cur_x = 0;
         } else {
             windowmanager_print_glyph(wndmgr, cur_x, cur_y, wc);
 
@@ -296,7 +350,7 @@ static void windowmanager_print_text(const windowmanager_t* wndmgr, const window
                     break;
                 }
 
-                cur_x = abs_x;
+                cur_x = 0;
             }
         }
 

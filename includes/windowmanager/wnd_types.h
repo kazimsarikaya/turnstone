@@ -43,6 +43,9 @@ struct windowmanager_t {
     sgfx_texture_t    mouse_texture;
     uint32_t          screen_width;
     uint32_t          screen_height;
+    boolean_t         font_is_sdf;
+    uint32_t          font_real_width;
+    uint32_t          font_real_height;
     uint32_t          font_width;
     uint32_t          font_height;
     uint32_t          font_column_count;
@@ -89,9 +92,11 @@ struct window_t {
     boolean_t      extra_data_is_allocated;
     int32_t        tab_index;
     rect_t         rect;
+    rect_t         absolute_rect;
     color_t*       buffer;
     color_t        background_color;
     color_t        foreground_color;
+    window_t*      parent;
     window_t*      next;
     window_t*      prev;
     list_t*        children;

@@ -14,6 +14,7 @@
 #include <graphics/screen.h>
 #include <time.h>
 #include <strings.h>
+#include <logging.h>
 
 MODULE("turnstone.windowmanager");
 
@@ -33,6 +34,7 @@ window_t* windowmanager_create_top_window(void) {
     window->rect.y = 0;
     window->rect.width = wndmgr->screen_width;
     window->rect.height = wndmgr->screen_height;
+    window->absolute_rect = window->rect;
     window->background_color.color = 0xFF000000;
     window->foreground_color.color = 0xFFFFFFFF;
     window->is_visible = true;
@@ -48,19 +50,19 @@ window_t* windowmanager_create_window(window_t* parent, char_t* text, rect_t rec
     window_t* window = memory_malloc(sizeof(window_t));
 
     if(window == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to allocate memory for window\n");
         return NULL;
     }
 
-    int32_t abs_x = parent->rect.x + rect.x;
-    int32_t abs_y = parent->rect.y + rect.y;
-
     window->id = wndmgr->next_window_id++;
     window->text = text;
-    window->rect = (rect_t){abs_x, abs_y, rect.width, rect.height};
+    window->rect = rect;
+    window->absolute_rect = (rect_t){rect.x + parent->rect.x, rect.y + parent->rect.y, rect.width, rect.height};
     window->background_color = background_color;
     window->foreground_color = foreground_color;
     window->is_visible = true;
     window->is_dirty = true;
+    window->parent = parent;
 
     if(parent->children == NULL) {
         parent->children = list_create_queue();
@@ -212,7 +214,7 @@ void windowmanager_destroy_window(window_t* window) {
         list_destroy(window->children);
     }
 
-    if(!window->is_text_readonly){
+    if(!window->is_text_readonly) {
         memory_free(window->text);
     }
 

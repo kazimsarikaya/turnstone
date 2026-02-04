@@ -16,6 +16,7 @@ extern "C" {
 #endif
 
 rect_t    windowmanager_calc_text_rect(const char_t* text, uint32_t max_width);
+rect_t    windowmanager_get_window_absolute_rect(const window_t* window);
 uint32_t  windowmanager_append_char16_to_buffer(char16_t src, char_t* dst, uint32_t dst_idx);
 boolean_t windowmanager_is_point_in_rect(const rect_t* rect, uint32_t x, uint32_t y);
 boolean_t windowmanager_is_rect_in_rect(const rect_t* rect1, const rect_t* rect2);

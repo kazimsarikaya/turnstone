@@ -155,6 +155,26 @@ boolean_t windowmanager_is_rects_intersect(const rect_t* r1, const rect_t* r2) {
         );
 }
 
+rect_t windowmanager_get_window_absolute_rect(const window_t* window) {
+    rect_t rect = {0};
+
+    if(window == NULL) {
+        return rect;
+    }
+
+    rect = window->rect;
+
+    window_t* p = window->parent;
+
+    while(p != NULL) {
+        rect.x += p->rect.x;
+        rect.y += p->rect.y;
+        p = p->parent;
+    }
+
+    return rect;
+}
+
 boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint32_t y, window_t** result) {
     if(window == NULL) {
         return false;
@@ -164,7 +184,7 @@ boolean_t windowmanager_find_window_by_point(window_t* window, uint32_t x, uint3
         return false;
     }
 
-    if(!windowmanager_is_point_in_rect(&window->rect, x, y)) {
+    if(!windowmanager_is_point_in_rect(&window->absolute_rect, x, y)) {
         return false;
     }
 
@@ -190,10 +210,10 @@ void windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rec
     boolean_t fully_contained = false;
     for (size_t i = 0; i < list_size(window->children); i++) {
         window_t* child = (window_t*)list_get_data_at_position(window->children, i);
-        if (windowmanager_is_rects_intersect(&child->rect, rect)) {
+        if (windowmanager_is_rects_intersect(&child->absolute_rect, rect)) {
             windowmanager_mark_window_dirty_by_rect(child, rect);
 
-            if (windowmanager_is_rect_in_rect(&child->rect, rect)) {
+            if (windowmanager_is_rect_in_rect(&child->absolute_rect, rect)) {
                 fully_contained = true;
             }
 
@@ -201,7 +221,7 @@ void windowmanager_mark_window_dirty_by_rect(window_t* window, const rect_t* rec
     }
 
     // Only mark this window if no child contains/intersects the rect
-    if (!fully_contained && windowmanager_is_rects_intersect(&window->rect, rect)) {
+    if (!fully_contained && windowmanager_is_rects_intersect(&window->absolute_rect, rect)) {
         window->is_dirty = true;
     }
 }
@@ -250,9 +270,9 @@ int8_t windowmanager_set_window_text(window_t* window, const char_t* text) {
 
     font_get_font_dimension(&font_width, &font_height);
 
-    int32_t win_x = window->rect.x / font_width;
-    int32_t win_y = window->rect.y / font_height;
-    int32_t win_w = window->rect.width / font_width;
+    int32_t win_x = window->absolute_rect.x / font_width;
+    int32_t win_y = window->absolute_rect.y / font_height;
+    int32_t win_w = window->absolute_rect.width / font_width;
 
     int32_t start_idx = (y - win_y) * win_w + (x - win_x);
 
@@ -351,7 +371,7 @@ list_t* windowmanager_get_input_values(const window_t* window) {
             value->id = w->input_id;
             value->value = strdup(w->text);
             value->extra_data = w->extra_data;
-            value->rect = w->rect;
+            value->rect = w->absolute_rect;
 
             for(size_t i = 0; i < strlen(value->value); i++) { // TODO: find best way for this
                 if(value->value[i] == '_') {

@@ -85,6 +85,7 @@ window_t* windowmanager_create_greater_window(void) {
     window_t* window = windowmanager_create_top_window();
 
     if(window == NULL) {
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window\n");
         return NULL;
     }
 
@@ -94,12 +95,14 @@ window_t* windowmanager_create_greater_window(void) {
 
     if(rect.width == 0 || rect.height == 0) {
         memory_free(window);
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to calculate text rect for greater window\n");
         return NULL;
     }
 
     if(rect.width > screen_width - 2 * font_width ||
        rect.height > screen_height - 2 * font_height) {
         memory_free(window);
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Greater window text too large for screen\n");
         return NULL;
     }
 
@@ -117,6 +120,7 @@ window_t* windowmanager_create_greater_window(void) {
 
     if(child == NULL) {
         memory_free(window);
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window child\n");
         return NULL;
     }
 
@@ -139,6 +143,7 @@ window_t* windowmanager_create_greater_window(void) {
 
     if(child == NULL) {
         windowmanager_destroy_window(window);
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window instruction child\n");
         return NULL;
     }
 
@@ -160,6 +165,7 @@ window_t* windowmanager_create_greater_window(void) {
 
     if(rainbow_window == NULL) {
         windowmanager_destroy_window(window);
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window rainbow child\n");
         return NULL;
     }
 
@@ -186,6 +192,7 @@ window_t* windowmanager_create_greater_window(void) {
 
     if(rainbow_window == NULL) {
         windowmanager_destroy_window(window);
+        PRINTLOG(WINDOWMANAGER, LOG_ERROR, "Failed to create greater window rainbow child\n");
         return NULL;
     }
 

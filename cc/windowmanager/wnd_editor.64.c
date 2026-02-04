@@ -118,6 +118,7 @@ static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* pare
     }
 
     int64_t offset_x = 9 * font_width;
+    int64_t offset_y = 0;
 
     for(int64_t i = 0; i < ruler_line_count; i++) {
         window_t* ruler_line_window = wnd_create_textbox(ruler_lines[i], ruler_window, offset_x, bg_color, fg_color);
@@ -134,9 +135,9 @@ static window_t* wnd_create_editor_ruler(windowmanager_t* wndmgr, window_t* pare
             return NULL;
         }
 
-        ruler_line_window->rect.y = ruler_line_top;
+        ruler_line_window->rect.y = offset_y;
 
-        ruler_line_top += ruler_line_window->rect.height;
+        offset_y += ruler_line_window->rect.height;
     }
 
     memory_free(ruler_lines);
@@ -371,7 +372,9 @@ int8_t windowmanager_create_and_show_editor_window(const char_t* title, const ch
         return NULL;
     }
 
-    int64_t rect_rule_top = option_input_row->rect.y + option_input_row->rect.height + font_height;
+    rect_t option_input_row_rect = option_input_row->absolute_rect;
+
+    int64_t rect_ruler_top = option_input_row_rect.y + option_input_row->rect.height + font_height;
 
 
     wnd_editor_extra_data_t* extra_data = memory_malloc(sizeof(wnd_editor_extra_data_t));
@@ -382,7 +385,7 @@ int8_t windowmanager_create_and_show_editor_window(const char_t* title, const ch
     }
 
     extra_data->ruler_window = NULL;
-    extra_data->rect_ruler_top = rect_rule_top;
+    extra_data->rect_ruler_top = rect_ruler_top;
     extra_data->editor_window = NULL;
     extra_data->text = text;
     extra_data->is_text_readonly = is_text_readonly;
