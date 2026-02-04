@@ -32,8 +32,8 @@ static int8_t wndmgr_rainbow_on_redraw(const window_event_t* event) {
     sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
 
     sgfx_create_sub_context(gfx_ctx,
-                            window->rect.x,
-                            window->rect.y,
+                            0,
+                            0,
                             window->rect.width,
                             window->rect.height);
 

@@ -22,11 +22,15 @@
 
 #define SGFX_MAX_VERTICES 1200 // it should multiples of 2 (for lines), 3 (for triangles) and 4 (for quads)
 #define SGFX_MAX_TEXTURES 16
-#define SGFX_MAX_SUB_CONTEXT_DEPTH 16
+#define SGFX_MAX_SUB_CONTEXT_DEPTH 32
 
 typedef uint32_t sgfx_texture_t;
 
 // Vector and matrix types
+typedef struct sgfx_vec4_i32_t {
+    int32_t x, y, z, w;
+} sgfx_vec4_i32_t;
+
 typedef struct sgfx_vec2_f32_t {
     float32_t x, y;
 } sgfx_vec2_f32_t;
@@ -64,6 +68,7 @@ sgfx_context_t* sgfx_create_context(int32_t width, int32_t height, color_t* fram
 void            sgfx_destroy_context(sgfx_context_t* ctx);
 
 void sgfx_clear(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, float32_t a);
+void sgfx_clear_color(sgfx_context_t* ctx, color_t color);
 void sgfx_swap_buffers(sgfx_context_t* ctx);
 
 void sgfx_matrix_mode(sgfx_context_t* ctx, int32_t mode);
@@ -82,6 +87,7 @@ void sgfx_scissor(sgfx_context_t* ctx, int32_t x, int32_t y, int32_t w, int32_t 
 
 void sgfx_begin(sgfx_context_t* ctx, int32_t mode);
 void sgfx_vertex3_f32(sgfx_context_t* ctx, float32_t x, float32_t y, float32_t z);
+void sgfx_vertex2_f32(sgfx_context_t* ctx, float32_t x, float32_t y);
 void sgfx_texcoord2_f32(sgfx_context_t* ctx, float32_t u, float32_t v);
 void sgfx_color4_f32(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, float32_t a);
 void sgfx_end(sgfx_context_t* ctx);

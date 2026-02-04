@@ -13,6 +13,9 @@ MODULE("turnstone.kernel.graphics.sgfx");
 
 void video_text_print(const char_t* text);
 
+#define SGFX_EPS_RASTER (1e-4f)
+#define SGFX_EPS_MATH   (1e-6f)
+
 // Internal texture struct
 typedef struct sgfx_texture_internal_t {
     sgfx_texture_format_t format;
@@ -30,13 +33,8 @@ typedef enum sgfx_buffer_type_t {
     SGFX_BUFFER_COUNT
 } sgfx_buffer_type_t;
 
-typedef struct sgfx_vec4_i32_t {
-    int32_t x, y, z, w;
-} sgfx_vec4_i32_t;
-
 typedef struct sgfx_context_info_t {
     int32_t         x, y, width, height;
-    int32_t         ortho_left, ortho_right, ortho_bottom, ortho_top;
     sgfx_mat4_f32_t modelview;
     sgfx_mat4_f32_t projection;
     sgfx_vec4_i32_t scissor; // x, y, w, h
@@ -74,9 +72,6 @@ struct sgfx_context_t {
     uint32_t                texture_count;
 };
 
-static void sgfx_perspective_divide_by_count(sgfx_context_t* ctx, sgfx_vec4_f32_t* clip, int32_t count);
-static void sgfx_viewport_by_count(sgfx_context_t* ctx, sgfx_vec4_f32_t* clip, int32_t count);
-
 // Matrix helpers
 static void sgfx_mat4_identity(sgfx_mat4_f32_t* mat) {
     memory_memset(mat->m, 0, sizeof(mat->m));
@@ -97,6 +92,7 @@ static void sgfx_mat4_mul(sgfx_mat4_f32_t* out, const sgfx_mat4_f32_t* a, const 
     *out = tmp;
 }
 
+#if 0
 static void sgfx_mat4_vec4_mul(sgfx_vec4_f32_t* result, const sgfx_mat4_f32_t* mat, const sgfx_vec4_f32_t* vec) {
     sgfx_vec4_f32_t tmp;
     tmp.x = mat->m[0] * vec->x + mat->m[1] * vec->y + mat->m[2] * vec->z + mat->m[3] * vec->w;
@@ -105,6 +101,7 @@ static void sgfx_mat4_vec4_mul(sgfx_vec4_f32_t* result, const sgfx_mat4_f32_t* m
     tmp.w = mat->m[12] * vec->x + mat->m[13] * vec->y + mat->m[14] * vec->z + mat->m[15] * vec->w;
     *result = tmp;
 }
+#endif
 
 static void sgfx_mat4_translate(sgfx_mat4_f32_t* mat, float32_t x, float32_t y, float32_t z) {
     sgfx_mat4_f32_t trans;
@@ -190,8 +187,15 @@ static color_t sgfx_modulate_color(color_t tex, sgfx_vec4_f32_t vertex_color) {
 }
 
 // Alpha blend src with dst (used in plot_pixel)
-static color_t sgfx_alpha_blend(color_t src, color_t dst) {
-    if (src.alpha == 0) return dst;  // Skip fully transparent
+static color_t sgfx_alpha_blend(sgfx_context_t* ctx, color_t src, color_t dst) {
+    if (src.alpha == 0) {
+        return dst; // Skip fully transparent
+    }
+
+    if(!sgfx_is_enabled(ctx, SGFX_CAP_BLEND)) {
+        return src; // No blending, just overwrite
+    }
+
     float32_t a = (float32_t)src.alpha / 255.0f;
     uint8_t r = (uint8_t)(src.red * a + dst.red * (1.0f - a));
     uint8_t g = (uint8_t)(src.green * a + dst.green * (1.0f - a));
@@ -220,7 +224,7 @@ static void sgfx_plot_pixel(sgfx_context_t* ctx, int32_t x, int32_t y, color_t p
 
     int32_t idx = y * ctx->base_context->width + x;
     color_t dst = ctx->buffers[SGFX_BUFFER_FRONT][idx];
-    ctx->buffers[SGFX_BUFFER_FRONT][idx] = sgfx_alpha_blend(pix, dst);
+    ctx->buffers[SGFX_BUFFER_FRONT][idx] = sgfx_alpha_blend(ctx, pix, dst);
 }
 
 // Texture sample nearest
@@ -234,18 +238,27 @@ static color_t sgfx_sample_texture(const sgfx_texture_internal_t* tex, float32_t
     int32_t ty = (int32_t)(v * (float32_t)tex->height);
 
     // Clamp to edge
-    if (tx < 0) tx = 0;
-    else if (tx >= tex->width) tx = tex->width - 1;
+    if (tx < 0) {
+        tx = 0;
+    }else if (tx >= tex->width) {
+        tx = tex->width - 1;
+    }
 
-    if (ty < 0) ty = 0;
-    else if (ty >= tex->height) ty = tex->height - 1;
+    if (ty < 0) {
+        ty = 0;
+    }else if (ty >= tex->height) {
+        ty = tex->height - 1;
+    }
 
     if (tex->format == SGFX_TEXTURE_COLOR) {
         return tex->color_data[ty * tex->width + tx];
     } else if (tex->format == SGFX_TEXTURE_SDF) {
         float32_t alpha = tex->sdf_data[ty * tex->width + tx] * 255.0f;
-        if (alpha < 0.0f) alpha = 0.0f;
-        else if (alpha > 255.0f) alpha = 255.0f;
+        if (alpha < 0.0f) {
+            alpha = 0.0f;
+        }else if (alpha > 255.0f) {
+            alpha = 255.0f;
+        }
 
         // Return white with alpha from SDF
         return (color_t){.red = 255, .green = 255, .blue = 255, .alpha = (uint8_t)alpha};
@@ -254,11 +267,11 @@ static color_t sgfx_sample_texture(const sgfx_texture_internal_t* tex, float32_t
     return (color_t){{0, 0, 0, 0}};
 }
 
+#if 0
 static boolean_t sgfx_point_in_triangle(float32_t px, float32_t py,
                                         const sgfx_vec4_f32_t* a,
                                         const sgfx_vec4_f32_t* b,
                                         const sgfx_vec4_f32_t* c) {
-    // Barycentric technique
     float32_t v0x = b->x - a->x;
     float32_t v0y = b->y - a->y;
     float32_t v1x = c->x - a->x;
@@ -276,14 +289,15 @@ static boolean_t sgfx_point_in_triangle(float32_t px, float32_t py,
     float32_t u = (dot11 * dot02 - dot01 * dot12) * invDenom;
     float32_t v = (dot00 * dot12 - dot01 * dot02) * invDenom;
 
-    return (u >= 0.0f) && (v >= 0.0f) && (u + v <= 1.0f);
+    return (u >= -SGFX_EPS_RASTER) && (v >= -SGFX_EPS_RASTER) && (u + v <= 1.0f + SGFX_EPS_RASTER);
 }
 
 static boolean_t sgfx_point_in_quad(float32_t x, float32_t y, const sgfx_vec4_f32_t* c) {
-    // Divide quad into two triangles: (0,1,2) and (2,1,3)
+    // Split into two triangles
     return sgfx_point_in_triangle(x, y, &c[0], &c[1], &c[2]) ||
-           sgfx_point_in_triangle(x, y, &c[2], &c[1], &c[3]);
+           sgfx_point_in_triangle(x, y, &c[2], &c[3], &c[1]);
 }
+#endif
 
 // Rasterizers
 static void sgfx_draw_line(sgfx_context_t* ctx,
@@ -408,53 +422,25 @@ sgfx_context_t* sgfx_create_context(int32_t width, int32_t height, color_t* fram
     ctx->buffers[SGFX_BUFFER_BACK] = memory_malloc_ext(NULL, width * height * sizeof(uint32_t), 0x1000); // 4K aligned for SIMD
 
     if (!ctx->buffers[SGFX_BUFFER_FRONT] || !ctx->buffers[SGFX_BUFFER_BACK]) {
-        if (ctx->buffers[SGFX_BUFFER_FRONT]) memory_free(ctx->buffers[SGFX_BUFFER_FRONT]);
-        if (ctx->buffers[SGFX_BUFFER_BACK]) memory_free(ctx->buffers[SGFX_BUFFER_BACK]);
+        if (ctx->buffers[SGFX_BUFFER_FRONT]) {
+            memory_free(ctx->buffers[SGFX_BUFFER_FRONT]);
+        }
+        if (ctx->buffers[SGFX_BUFFER_BACK]) {
+            memory_free(ctx->buffers[SGFX_BUFFER_BACK]);
+        }
         memory_free(ctx);
         return NULL;
     }
 
     ctx->buffers[SGFX_BUFFER_FRAME] = framebuffer;
 
-    ctx->current_context = &ctx->contexts[0];
-    ctx->base_context = &ctx->contexts[0];
-    ctx->current_context_idx = 0;
+    ctx->current_context_idx = -1; // subcontext will increment to 0
 
-    // boundaries
-    ctx->current_context->x = 0;
-    ctx->current_context->y = 0;
-    ctx->current_context->width = width;
-    ctx->current_context->height = height;
+    sgfx_create_sub_context(ctx, 0, 0, width, height);
 
-    // Orthographic projection boundaries
-    sgfx_mat4_identity(&ctx->current_context->projection);
-    sgfx_mat4_ortho(&ctx->current_context->projection, 0.0f, (float32_t)width, (float32_t)height, 0.0f, -1.0f, 1.0f);
-    ctx->current_matrix = &ctx->current_context->modelview;
-    sgfx_mat4_identity(&ctx->current_context->modelview);
-    ctx->matrix_mode = SGFX_MODELVIEW;
-
-    // default ortho boundaries
-    ctx->current_context->ortho_left = 0;
-    ctx->current_context->ortho_right = width;
-    ctx->current_context->ortho_top = 0;
-    ctx->current_context->ortho_bottom = height;
+    ctx->base_context = ctx->current_context;
 
     return ctx;
-}
-
-void sgfx_destroy_context(sgfx_context_t* ctx) {
-    for (uint32_t i = 0; i < ctx->texture_count; ++i) {
-        if (ctx->textures[i].format == SGFX_TEXTURE_COLOR) {
-            memory_free(ctx->textures[i].color_data);
-        } else if (ctx->textures[i].format == SGFX_TEXTURE_SDF) {
-            memory_free(ctx->textures[i].sdf_data);
-        }
-    }
-
-    if (ctx->buffers[0]) memory_free(ctx->buffers[0]);
-    if (ctx->buffers[1]) memory_free(ctx->buffers[1]);
-
-    memory_free(ctx);
 }
 
 void sgfx_create_sub_context(sgfx_context_t* ctx,
@@ -480,12 +466,25 @@ void sgfx_create_sub_context(sgfx_context_t* ctx,
     sgfx_mat4_identity(&ctx->current_context->modelview);
     ctx->current_matrix = &ctx->current_context->modelview;
     ctx->matrix_mode = SGFX_MODELVIEW;
+}
 
-    // default ortho boundaries
-    ctx->current_context->ortho_left = 0;
-    ctx->current_context->ortho_right = width;
-    ctx->current_context->ortho_top = 0;
-    ctx->current_context->ortho_bottom = height;
+void sgfx_destroy_context(sgfx_context_t* ctx) {
+    for (uint32_t i = 0; i < ctx->texture_count; ++i) {
+        if (ctx->textures[i].format == SGFX_TEXTURE_COLOR) {
+            memory_free(ctx->textures[i].color_data);
+        } else if (ctx->textures[i].format == SGFX_TEXTURE_SDF) {
+            memory_free(ctx->textures[i].sdf_data);
+        }
+    }
+
+    if (ctx->buffers[0]) {
+        memory_free(ctx->buffers[0]);
+    }
+    if (ctx->buffers[1]) {
+        memory_free(ctx->buffers[1]);
+    }
+
+    memory_free(ctx);
 }
 
 void sgfx_destroy_sub_context(sgfx_context_t* ctx) {
@@ -499,73 +498,62 @@ void sgfx_destroy_sub_context(sgfx_context_t* ctx) {
     ctx->matrix_mode = SGFX_MODELVIEW;
 }
 
+
 void sgfx_clear(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b, float32_t a) {
-    color_t color = {
-        .red = (uint32_t)(r * 255.0f),
-        .green = (uint32_t)(g * 255.0f),
-        .blue = (uint32_t)(b * 255.0f),
-        .alpha = (uint32_t)(a * 255.0f)
-    };
-
-    color_t* buf = ctx->buffers[SGFX_BUFFER_FRONT];
-
-    if (ctx->current_context_idx > 0) {
-        // Define subcontext rectangle corners in projection(?) space (same as vertices)
-        sgfx_vec4_f32_t corners[4] = {
-            { ctx->current_context->ortho_left, ctx->current_context->ortho_top, 0.0f, 1.0f }, // Top-left
-            { ctx->current_context->ortho_right, ctx->current_context->ortho_top, 0.0f, 1.0f }, // Top-right
-            { ctx->current_context->ortho_left, ctx->current_context->ortho_bottom, 0.0f, 1.0f }, // Bottom-left
-            { ctx->current_context->ortho_right, ctx->current_context->ortho_bottom, 0.0f, 1.0f } // Bottom-right
+// If it's the base context, use the fast path (memset-style)
+    if (ctx->current_context_idx == 0) {
+        color_t color = {
+            .red = (uint8_t)(r * 255.0f),
+            .green = (uint8_t)(g * 255.0f),
+            .blue = (uint8_t)(b * 255.0f),
+            .alpha = (uint8_t)(a * 255.0f)
         };
-
-        // Compute MVP matrix (row-major)
-        sgfx_mat4_f32_t mvp;
-        sgfx_mat4_mul(&mvp, &ctx->current_context->projection, &ctx->current_context->modelview);
-
-        // Transform corners to clip space
-        sgfx_vec4_f32_t clip_corners[ARRAY_SIZE(corners)];
-        for (int i = 0; i < 4; ++i) {
-            sgfx_mat4_vec4_mul(&clip_corners[i], &mvp, &corners[i]);
-        }
-
-        // Apply perspective division
-        sgfx_perspective_divide_by_count(ctx, clip_corners, ARRAY_SIZE(corners));
-
-        // Map to viewport (pixel) coordinates
-        sgfx_viewport_by_count(ctx, clip_corners, ARRAY_SIZE(corners));
-
-        // Find bounding box in pixel space
-        int32_t min_x = ctx->base_context->width, max_x = 0, min_y = ctx->base_context->height, max_y = 0;
-        for (int32_t i = 0; i < 4; ++i) {
-            int32_t x = (int32_t)clip_corners[i].x;
-            int32_t y = (int32_t)clip_corners[i].y;
-            min_x = x < min_x ? x : min_x;
-            max_x = x > max_x ? x : max_x;
-            min_y = y < min_y ? y : min_y;
-            max_y = y > max_y ? y : max_y;
-        }
-
-        // Clamp to buffer bounds
-        min_x = min_x < 0 ? 0 : min_x;
-        max_x = max_x >= ctx->base_context->width ? ctx->base_context->width - 1 : max_x;
-        min_y = min_y < 0 ? 0 : min_y;
-        max_y = max_y >= ctx->base_context->height ? ctx->base_context->height - 1 : max_y;
-
-        // Clear the bounding box
-        for (int32_t y = min_y; y <= max_y; ++y) {
-            for (int32_t x = min_x; x <= max_x; ++x) {
-                if (sgfx_point_in_quad((float32_t)x + 0.5f, (float32_t)y + 0.5f, clip_corners)) {
-                    buf[y * ctx->base_context->width + x] = color;
-                }
-            }
-        }
-
+        color_t* buf = ctx->buffers[SGFX_BUFFER_FRONT];
+        int total_pixels = ctx->base_context->width * ctx->base_context->height;
+        for (int i = 0; i < total_pixels; ++i) {buf[i] = color;}
         return;
     }
 
-    for (int i = 0; i < ctx->base_context->width * ctx->base_context->height; ++i) {
-        buf[i] = color;
+    boolean_t is_blend_enabled = sgfx_is_enabled(ctx, SGFX_CAP_BLEND);
+    sgfx_disable(ctx, SGFX_CAP_BLEND); // Disable blending for clear
+
+    // Manual backup instead of push_context_info
+    sgfx_mat4_f32_t old_proj = ctx->current_context->projection;
+    sgfx_mat4_f32_t old_view = ctx->current_context->modelview;
+
+    // If it's a sub-context, it might be rotated.
+    // Draw a "Full-Screen" Quad in local NDC space.
+    sgfx_matrix_mode(ctx, SGFX_MODELVIEW);
+    sgfx_load_identity(ctx);
+
+    sgfx_matrix_mode(ctx, SGFX_PROJECTION);
+    sgfx_load_identity(ctx); // Identity projection = NDC space (-1 to 1)
+
+    sgfx_begin(ctx, SGFX_QUADS);
+    sgfx_color4_f32(ctx, r, g, b, a);
+    sgfx_vertex2_f32(ctx, -1.0f, -1.0f);
+    sgfx_vertex2_f32(ctx,  1.0f, -1.0f);
+    sgfx_vertex2_f32(ctx,  1.0f,  1.0f);
+    sgfx_vertex2_f32(ctx, -1.0f,  1.0f);
+    sgfx_end(ctx);
+
+    // Restore matrices
+    ctx->current_context->projection = old_proj;
+    ctx->current_context->modelview = old_view;
+    sgfx_matrix_mode(ctx, SGFX_MODELVIEW);
+
+    if (is_blend_enabled) {
+        sgfx_enable(ctx, SGFX_CAP_BLEND); // Restore blending state
     }
+}
+
+void sgfx_clear_color(sgfx_context_t* ctx, color_t color) {
+    float32_t r = (float32_t)color.red / 255.0f;
+    float32_t g = (float32_t)color.green / 255.0f;
+    float32_t b = (float32_t)color.blue / 255.0f;
+    float32_t a = (float32_t)color.alpha / 255.0f;
+
+    sgfx_clear(ctx, r, g, b, a);
 }
 
 #ifdef __AVX512F__
@@ -674,10 +662,6 @@ void sgfx_scale_f32(sgfx_context_t* ctx, float32_t x, float32_t y, float32_t z) 
 
 void sgfx_ortho_f32(sgfx_context_t* ctx, float32_t left, float32_t right, float32_t bottom, float32_t top, float32_t near, float32_t far) {
     sgfx_mat4_ortho(ctx->current_matrix, left, right, bottom, top, near, far);
-    ctx->current_context->ortho_left = left;
-    ctx->current_context->ortho_right = right;
-    ctx->current_context->ortho_bottom = bottom;
-    ctx->current_context->ortho_top = top;
 }
 
 void sgfx_perspective_f32(sgfx_context_t* ctx, float32_t fovy, float32_t aspect, float32_t near, float32_t far) {
@@ -725,6 +709,10 @@ void sgfx_vertex3_f32(sgfx_context_t* ctx, float32_t x, float32_t y, float32_t z
     }
 }
 
+void sgfx_vertex2_f32(sgfx_context_t* ctx, float32_t x, float32_t y) {
+    sgfx_vertex3_f32(ctx, x, y, 0.0f);
+}
+
 void sgfx_texcoord2_f32(sgfx_context_t* ctx, float32_t u, float32_t v) {
     ctx->current_texcoord = (sgfx_vec2_f32_t){u, v};
 }
@@ -733,53 +721,62 @@ void sgfx_color4_f32(sgfx_context_t* ctx, float32_t r, float32_t g, float32_t b,
     ctx->current_color = (sgfx_vec4_f32_t){r, g, b, a};
 }
 
-static void sgfx_vertex_shader(sgfx_context_t* ctx, sgfx_mat4_f32_t* mvp, sgfx_vec4_f32_t* out) {
-    for(int32_t i = 0; i < ctx->vertex_count; ++i) {
-        out[i] = sgfx_mat4_mul_vec4(mvp, ctx->vertices[i]);
-    }
-}
-
-static void sgfx_perspective_divide_by_count(sgfx_context_t* ctx, sgfx_vec4_f32_t* clip, int32_t count) {
-    UNUSED(ctx);
-    for(int32_t i = 0; i < count; ++i) {
-        if(clip[i].w > math_epsilon_f32()) {
-            clip[i].x /= clip[i].w;
-            clip[i].y /= clip[i].w;
-            clip[i].z /= clip[i].w;
-        } else {
-            clip[i].x = clip[i].y = clip[i].z = 0.0f;
-        }
-    }
-}
-
-static void sgfx_perspective_divide(sgfx_context_t* ctx, sgfx_vec4_f32_t* clip) {
-    sgfx_perspective_divide_by_count(ctx, clip, ctx->vertex_count);
-}
-
-static void sgfx_viewport_by_count(sgfx_context_t* ctx, sgfx_vec4_f32_t* clip, int32_t count) {
-    for(int32_t i = 0; i < count; ++i) {
-        clip[i].x = (clip[i].x * 0.5f + 0.5f) * (float32_t)ctx->current_context->width + (float32_t)ctx->current_context->x;
-        clip[i].y = (1.0f - (clip[i].y * 0.5f + 0.5f)) * (float32_t)ctx->current_context->height + (float32_t)ctx->current_context->y;
-    }
-}
-
-static void sgfx_viewport(sgfx_context_t* ctx, sgfx_vec4_f32_t* clip) {
-    sgfx_viewport_by_count(ctx, clip, ctx->vertex_count);
-}
-
 void sgfx_end(sgfx_context_t* ctx) {
     if (ctx->vertex_count == 0) {
         return;
     }
 
-    sgfx_mat4_f32_t mvp;
-    sgfx_mat4_mul(&mvp, &ctx->current_context->projection, &ctx->current_context->modelview);
-
     sgfx_vec4_f32_t* screen_verts = ctx->screen_vertices;
+    // char* dbg_str;
 
-    sgfx_vertex_shader(ctx, &mvp, screen_verts);
-    sgfx_perspective_divide(ctx, screen_verts);
-    sgfx_viewport(ctx, screen_verts);
+    for (int i = 0; i < ctx->vertex_count; i++) {
+        sgfx_vec4_f32_t v = ctx->vertices[i];
+        // dbg_str = strprintf("Vertex %d Start: (%.2f, %.2f, %.2f, %.2f)\n", i, v.x, v.y, v.z, v.w);
+        // video_text_print(dbg_str);
+        // memory_free(dbg_str);
+
+        for (int d = ctx->current_context_idx; d >= 0; d--) {
+            sgfx_context_info_t* curr = &ctx->contexts[d];
+
+            // 1. Local Transform
+            sgfx_mat4_f32_t local_mvp;
+            sgfx_mat4_mul(&local_mvp, &curr->projection, &curr->modelview);
+            v = sgfx_mat4_mul_vec4(&local_mvp, v);
+            // dbg_str = strprintf("After MVP at depth %d: (%.2f, %.2f, %.2f, %.2f)\n", d, v.x, v.y, v.z, v.w);
+            // video_text_print(dbg_str);
+            // memory_free(dbg_str);
+
+            // 2. PERSPECTIVE DIVIDE (The Critical Step)
+            // We do this here so 'v' becomes true NDC (-1 to 1)
+            // before we try to map it to the parent's pixel coordinates.
+            if (math_fabs_f32(v.w) > SGFX_EPS_MATH) {
+                float32_t inv_w = 1.0f / v.w;
+                v.x *= inv_w;
+                v.y *= inv_w;
+                v.z *= inv_w;
+                // Note: We usually keep v.w as is or set to 1.0f after divide
+            } else {
+                v.x = v.y = v.z = 0.0f;
+            }
+
+            // 3. Map to Space
+            if (d > 0) {
+                // Map NDC to Parent Local Pixels
+                v.x = ((v.x + 1.0f) * 0.5f) * (float32_t)curr->width + (float32_t)curr->x;
+                v.y = ((1.0f - v.y) * 0.5f) * (float32_t)curr->height + (float32_t)curr->y;
+                v.w = 1.0f; // Reset W because the parent now treats this as a 2D point
+            } else {
+                // Map NDC to Base Framebuffer Pixels
+                v.x = ((v.x + 1.0f) * 0.5f) * (float32_t)curr->width;
+                v.y = ((1.0f - v.y) * 0.5f) * (float32_t)curr->height;
+            }
+        }
+        // dbg_str = strprintf("Final Screen Vertex %d: (%.2f, %.2f, %.2f, %.2f)\n", i, v.x, v.y, v.z, v.w);
+        // video_text_print(dbg_str);
+        // memory_free(dbg_str);
+        screen_verts[i] = v;
+    }
+
 
     if (ctx->draw_mode == SGFX_LINES) {
         for (int32_t i = 0; i < ctx->vertex_count; i += 2) {
@@ -827,7 +824,9 @@ void sgfx_end(sgfx_context_t* ctx) {
 
 // Textures
 sgfx_texture_t sgfx_gen_texture(sgfx_context_t* ctx) {
-    if (ctx->texture_count >= 16) {return 0;}
+    if (ctx->texture_count >= SGFX_MAX_TEXTURES) {
+        return 0;
+    }
 
     return ++ctx->texture_count;
 }
@@ -894,7 +893,7 @@ void sgfx_blit_glyph_color(sgfx_context_t* ctx, sgfx_texture_t tex,
             // If you want alpha blending with framebuffer:
             color_t dst_color = ctx->buffers[SGFX_BUFFER_FRONT][py * ctx->current_context->width + px];
             color_t out = sgfx_modulate_color(src_color, (sgfx_vec4_f32_t){1.0f, 1.0f, 1.0f, (float32_t)mask.alpha / 255.0f});
-            out = sgfx_alpha_blend(out, dst_color);
+            out = sgfx_alpha_blend(ctx, out, dst_color);
 
             sgfx_plot_pixel(ctx, px, py, out);
         }
