@@ -46,6 +46,8 @@ windowmanager_t* windowmanager_get_instance(void) {
             return NULL;
         }
 
+        sgfx_enable(gfx_ctx, SGFX_CAP_BLEND);
+
         wndmgr_instance->gfx_ctx = gfx_ctx;
         wndmgr_instance->screen_width = screen_info.width;
         wndmgr_instance->screen_height = screen_info.height;

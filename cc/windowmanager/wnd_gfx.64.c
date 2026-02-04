@@ -205,12 +205,12 @@ static void wndmgr_mouse_draw_cursor(windowmanager_t* wndmgr) {
 
 static void wndmgr_draw_text_cursor(windowmanager_t* wndmgr) {
     window_t* tcw = NULL;
-    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &tcw)){
-        if(tcw == NULL){
+    if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &tcw)) {
+        if(tcw == NULL) {
             return;
         }
 
-        if(!tcw->is_drawing_occured){
+        if(!tcw->is_drawing_occured) {
             return;
         }
     }
@@ -235,23 +235,6 @@ static void wndmgr_draw_text_cursor(windowmanager_t* wndmgr) {
     sgfx_vertex3_f32(gfx_ctx, x0, y1, 0.0f); // Bottom-left
 
     sgfx_end(gfx_ctx);
-}
-
-static int8_t wnd_gfx_draw_rectangle(windowmanager_t* wndmgr, rect_t rect, color_t color) {
-
-    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
-
-    sgfx_create_sub_context(gfx_ctx, rect.x, rect.y, rect.width, rect.height);
-
-    sgfx_clear(gfx_ctx,
-               (float32_t)color.red / 255.0f,
-               (float32_t)color.green / 255.0f,
-               (float32_t)color.blue / 255.0f,
-               (float32_t)color.alpha / 255.0f);
-
-    sgfx_destroy_sub_context(gfx_ctx);
-
-    return 0;
 }
 
 static void windowmanager_print_glyph(const windowmanager_t* wndmgr, uint32_t x, uint32_t y, char16_t wc) {
@@ -373,6 +356,12 @@ static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t
 
     boolean_t parent_is_dirty = false;
 
+    sgfx_context_t* gfx_ctx = wndmgr->gfx_ctx;
+
+    rect_t rect = window->rect;
+
+    sgfx_create_sub_context(gfx_ctx, rect.x, rect.y, rect.width, rect.height);
+
     if(window->is_dirty || window->is_always_redrawn) {
         if(0 && parent && parent->background_color.color == window->background_color.color) {
             // No need to redraw if background color is same as parent
@@ -381,10 +370,10 @@ static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t
 
             while(bg.color == 0x00000000 && parent != NULL) {
                 bg = parent->background_color;
-                parent = NULL;
+                parent = parent->parent;
             }
 
-            wnd_gfx_draw_rectangle(wndmgr, window->rect, window->background_color);
+            sgfx_clear_color(gfx_ctx, bg);
         }
 
         if(window->on_redraw) {
@@ -409,6 +398,8 @@ static void windowmanager_draw_window_internal(windowmanager_t* wndmgr, window_t
         windowmanager_draw_window_internal(wndmgr, window, child);
     }
 
+    sgfx_destroy_sub_context(gfx_ctx);
+
     return;
 }
 
@@ -416,28 +407,6 @@ void windowmanager_draw_window(windowmanager_t* wndmgr, window_t* window) {
     if(wndmgr == NULL || window == NULL) {
         return;
     }
-
-    /*
-
-       window_t* wnd = NULL;
-
-       if(windowmanager_find_window_by_text_cursor(wndmgr->current_window, &wnd)) {
-        if (wnd != NULL) {
-            // always mark window with text cursor as dirty to redraw text cursor
-            wnd->is_dirty = true;
-        }
-       }
-
-
-       rect_t mouse_rect = {
-       .x = wndmgr->mouse_x,
-       .y = wndmgr->mouse_y,
-       .width = wndmgr->mouse_image_width,
-       .height = wndmgr->mouse_image_height
-       };
-
-       windowmanager_mark_window_dirty_by_rect(wndmgr->current_window, &mouse_rect);
-     */
 
     windowmanager_draw_window_internal(wndmgr, NULL, window);
     wndmgr_draw_text_cursor(wndmgr);
