@@ -19,6 +19,49 @@
 
 MODULE("turnstone.lib.crypto");
 
+static const uint8_t x25519_ed25519_p[] = {
+    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xed
+};
+#define X25519_ED25519_P_LEN 32
+static const uint8_t x25519_ed25519_d[] = {
+    0x52, 0x03, 0x6c, 0xee, 0x2b, 0x6f, 0xfe, 0x73,
+    0x8c, 0xc7, 0x40, 0x79, 0x77, 0x79, 0xe8, 0x98,
+    0x00, 0x70, 0x0a, 0x4d, 0x41, 0x41, 0xd8, 0xab,
+    0x75, 0xeb, 0x4d, 0xca, 0x13, 0x59, 0x78, 0xa3
+};
+#define X25519_ED25519_D_LEN 32
+static const uint8_t x25519_ed25519_d2[] = {
+    0x24, 0x06, 0xd9, 0xdc, 0x56, 0xdf, 0xfc, 0xe7,
+    0x19, 0x8e, 0x80, 0xf2, 0xee, 0xf3, 0xd1, 0x30,
+    0x00, 0xe0, 0x14, 0x9a, 0x82, 0x83, 0xb1, 0x56,
+    0xeb, 0xd6, 0x9b, 0x94, 0x26, 0xb2, 0xf1, 0x59
+};
+#define X25519_ED25519_D2_LEN 32
+static const uint8_t x25519_ed25519_l[] = {
+    0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x14, 0xde, 0xf9, 0xde, 0xa2, 0xf7, 0x9c, 0xd6,
+    0x58, 0x12, 0x63, 0x1a, 0x5c, 0xf5, 0xd3, 0xed
+};
+#define X25519_ED25519_L_LEN 32
+static const uint8_t x25519_ed25519_g_x[] = {
+    0x21, 0x69, 0x36, 0xd3, 0xcd, 0x6e, 0x53, 0xfe,
+    0xc0, 0xa4, 0xe2, 0x31, 0xfd, 0xd6, 0xdc, 0x5c,
+    0x69, 0x2c, 0xc7, 0x60, 0x95, 0x25, 0xa7, 0xb2,
+    0xc9, 0x56, 0x2d, 0x60, 0x8f, 0x25, 0xd5, 0x1a
+};
+#define X25519_ED25519_G_X_LEN 32
+static const uint8_t x25519_ed25519_g_y[] = {
+    0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
+    0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
+    0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
+    0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x58
+};
+#define X25519_ED25519_G_Y_LEN 32
+
 int8_t x25519_generate_keypair(uint8_t out_priv[X25519_PRIVATE_KEY_RAW_LEN], uint8_t out_pub[X25519_PUBLIC_KEY_RAW_LEN]) {
     // 1. Get 32 random bytes
     get_random_bytes(out_priv, X25519_PRIVATE_KEY_RAW_LEN);
@@ -42,7 +85,7 @@ static int8_t x25519_scalarmult(uint8_t out[32], const uint8_t scalar[32], const
 
     // 1. Initialize Modulus and State
     p = bigint_create();
-    if (bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
+    if (bigint_from_bytes(p, x25519_ed25519_p, X25519_ED25519_P_LEN) != 0) {
         goto cleanup;
     }
 
@@ -246,7 +289,7 @@ static int8_t ed25519_point_add(ed25519_point_t* res, const ed25519_point_t* p1,
     bigint_t * d2 = bigint_create();
 
     // d2 = 2 * d mod p
-    if(bigint_set_str(d2, "2406D9DC56DFFCE7198E80F2EEF3D13000E0149A8283B156EBD69B9426B2F159") != 0) {
+    if(bigint_from_bytes(d2, x25519_ed25519_d2, X25519_ED25519_D2_LEN) != 0) {
         goto cleanup;
     }
 
@@ -416,375 +459,6 @@ cleanup:
     return err;
 }
 
-#if 0
-int8_t test_ed25519_point_add();
-int8_t test_ed25519_point_add() {
-    // This function would contain test cases to validate ed25519_point_add
-    int8_t err = -1;
-
-    bigint_t * lhs = bigint_create();
-    bigint_t * rhs = bigint_create();
-    ed25519_point_t P, Q, R;
-    bigint_t* one = bigint_one();
-    bigint_t * expected_2g_y = bigint_create();
-    bigint_t * p = bigint_create();
-    if(bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
-        goto cleanup;
-    }
-    P.X = bigint_create(); P.Y = bigint_create(); P.Z = bigint_create(); P.T = bigint_create();
-    Q.X = bigint_create(); Q.Y = bigint_create(); Q.Z = bigint_create(); Q.T = bigint_create();
-    R.X = bigint_create(); R.Y = bigint_create(); R.Z = bigint_create(); R.T = bigint_create();
-    // Initialize P and Q with known values
-    // Identity Point (0, 1, 1, 0)
-    if(bigint_set_zero(P.X) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(P.Y, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(P.Z, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_zero(P.T) != 0) {
-        goto cleanup;
-    }
-
-    // Base Point G
-    if(bigint_set_str(Q.X, "216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_str(Q.Y, "6666666666666666666666666666666666666666666666666666666666666658") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(Q.Z, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(Q.T, Q.X, Q.Y, p) != 0) {
-        goto cleanup;
-    }
-    // Verify R against expected results
-    if(ed25519_point_add(&R, &P, &Q, p) != 0) {
-        goto cleanup;
-    }
-
-    // R should equal Q since P is the identity point
-    // Intermediate variables for cross-multiplication
-
-    // 1. Verify X ratio: R.X * Q.Z == Q.X * R.Z
-    if(bigint_mul_mod(lhs, R.X, Q.Z, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(rhs, Q.X, R.Z, p) != 0) {
-        goto cleanup;
-    }
-    if (bigint_cmp(lhs, rhs) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "X coordinate ratio mismatch!");
-    }
-
-    // 2. Verify Y ratio: R.Y * Q.Z == Q.Y * R.Z
-    if(bigint_mul_mod(lhs, R.Y, Q.Z, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(rhs, Q.Y, R.Z, p) != 0) {
-        goto cleanup;
-    }
-    if (bigint_cmp(lhs, rhs) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Y coordinate ratio mismatch!");
-    }
-
-    // 3. Verify T (Auxiliary) ratio: R.T * Q.Z == (Q.X * Q.Y) * R.Z
-    // Note: Since Q.Z is 1, it's just R.T == (Q.X * Q.Y) * R.Z
-    // But R.T must also satisfy R.X * R.Y == R.Z * R.T
-    if(bigint_mul_mod(lhs, R.X, R.Y, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(rhs, R.Z, R.T, p) != 0) {
-        goto cleanup;
-    }
-    if (bigint_cmp(lhs, rhs) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "I + G = G test failed on T coordinate!");
-    } else {
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "I + G = G test passed!");
-    }
-
-    // --- TEST CASE: G + G = 2G ---
-    // Copy Q (which is G) into P
-    if(bigint_set_bigint(P.X, Q.X) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_bigint(P.Y, Q.Y) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_bigint(P.Z, Q.Z) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_bigint(P.T, Q.T) != 0) {
-        goto cleanup;
-    }
-
-    if(ed25519_point_add(&R, &P, &Q, p) != 0) {
-        goto cleanup;
-    }
-
-    // Expected Affine Y for 2G
-    if(bigint_set_str(expected_2g_y, "2260cdf3092329c21da25ee8c9a21f5697390f51643851560e5f46ae6af8a3c9") != 0) {
-        goto cleanup;
-    }
-
-    // Ratio Check: R.Y * 1 == expected_2g_y * R.Z
-    if(bigint_mul_mod(lhs, R.Y, one, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(rhs, expected_2g_y, R.Z, p) != 0) {
-        goto cleanup;
-    }
-
-    if (bigint_cmp(lhs, rhs) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "G + G = 2G test failed!");
-    } else {
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "G + G = 2G test passed!");
-    }
-
-    // --- TEST CASE: G + 2G = 3G ---
-    // P is now G, Q is now R (which is 2G)
-    if(bigint_set_bigint(Q.X, R.X) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_bigint(Q.Y, R.Y) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_bigint(Q.Z, R.Z) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_bigint(Q.T, R.T) != 0) {
-        goto cleanup;
-    }
-    // Reset P to G
-    if(bigint_set_str(P.X, "216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_str(P.Y, "6666666666666666666666666666666666666666666666666666666666666658") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(P.Z, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(P.T, P.X, P.Y, p) != 0) {
-        goto cleanup;
-    }
-
-    if(ed25519_point_add(&R, &P, &Q, p) != 0) {
-        goto cleanup;
-    }
-
-    // Expected Affine Y for 3G
-    if(bigint_set_str(expected_2g_y, "1267b1d177ee69aba126a18e60269ef79f16ec176724030402c3684878f5b4d4") != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(lhs, R.Y, one, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(rhs, expected_2g_y, R.Z, p) != 0) {
-        goto cleanup;
-    }
-
-    if (bigint_cmp(lhs, rhs) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "G + 2G = 3G test failed!");
-    } else {
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "G + 2G = 3G test passed!");
-    }
-
-    // Base Point G
-    if(bigint_set_str(P.X, "216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_str(P.Y, "6666666666666666666666666666666666666666666666666666666666666658") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(P.Z, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(P.T, P.X, P.Y, p) != 0) {
-        goto cleanup;
-    }
-
-    // Base Point G
-    if(bigint_sub_mod(Q.X, p, P.X, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_str(Q.Y, "6666666666666666666666666666666666666666666666666666666666666658") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(Q.Z, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(Q.T, Q.X, Q.Y, p) != 0) {
-        goto cleanup;
-    }
-    // Verify R against expected results
-    if(ed25519_point_add(&R, &P, &Q, p) != 0) {
-        goto cleanup;
-    }
-
-    // R should equal the identity point since Q is -G
-    // Ratio Check: R.Y * 1 == 1 * R.Z
-    if(bigint_mul_mod(lhs, R.Y, one, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(rhs, one, R.Z, p) != 0) {
-        goto cleanup;
-    }
-    if (bigint_cmp(lhs, rhs) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "G + (-G) = I test failed!");
-    } else {
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "G + (-G) = I test passed!");
-    }
-
-    err = 0;
-cleanup:
-    bigint_destroy(p);
-    bigint_destroy(P.X); bigint_destroy(P.Y); bigint_destroy(P.Z); bigint_destroy(P.T);
-    bigint_destroy(Q.X); bigint_destroy(Q.Y); bigint_destroy(Q.Z); bigint_destroy(Q.T);
-    bigint_destroy(R.X); bigint_destroy(R.Y); bigint_destroy(R.Z); bigint_destroy(R.T);
-    bigint_destroy(lhs); bigint_destroy(rhs);
-    bigint_destroy(one);
-    bigint_destroy(expected_2g_y);
-    return err;
-}
-
-
-int8_t test_ed25519_point_double();
-int8_t test_ed25519_point_double() {
-    int8_t err = -1;
-    bigint_t* p = NULL;
-    bigint_t * invZ1 = bigint_create();
-    bigint_t * invZ2 = bigint_create();
-    bigint_t * y1 = bigint_create();
-    bigint_t * y2 = bigint_create();
-    bigint_t* one = bigint_create();
-    char_t* str = NULL;
-
-    if(bigint_set_uint64(one, 1) != 0) {
-        return -1;
-    }
-
-    ed25519_point_t G, R, R_add;
-    p = bigint_create();
-    if(bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
-        goto cleanup;
-    }
-
-    G.X = bigint_create(); G.Y = bigint_create(); G.Z = bigint_create(); G.T = bigint_create();
-    R.X = bigint_create(); R.Y = bigint_create(); R.Z = bigint_create(); R.T = bigint_create();
-    R_add.X = bigint_create(); R_add.Y = bigint_create(); R_add.Z = bigint_create(); R_add.T = bigint_create();
-
-    // 1. Initialize G
-    if(bigint_set_str(G.X, "216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_str(G.Y, "6666666666666666666666666666666666666666666666666666666666666658") != 0) {
-        goto cleanup;
-    }
-    if(bigint_set_uint64(G.Z, 1) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(G.T, G.X, G.Y, p) != 0) {
-        goto cleanup;
-    }
-
-    str = bigint_to_str(G.X);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Base Point G X Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(G.Y);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Base Point G Y Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(G.Z);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Base Point G Z Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(G.T);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Base Point G T Coordinate: %s", str);
-    memory_free(str);
-
-    // 2. Perform Double
-    ed25519_point_double(&R, &G, p);
-
-    // 3. Expected Affine Y for 2G (Big Endian)
-    // 733D031C813D6D2CD6713D74F7CC4420B3A635D9D2F9508326C9A3F86AED4484
-    str = bigint_to_str(R.X);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Doubled X Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(R.Y);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Doubled Y Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(R.Z);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Doubled Z Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(R.T);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Doubled T Coordinate: %s", str);
-    memory_free(str);
-
-    // Perform the Ratio Check: R.Y * 1 == Expected_Y * R.Z
-    if(ed25519_point_add(&R_add, &G, &G, p) != 0) { // R_add = G + G (to verify addition matches doubling)
-        goto cleanup;
-    }
-
-    str = bigint_to_str(R_add.X);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Added X Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(R_add.Y);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Added Y Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(R_add.Z);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Added Z Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(R_add.T);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Added T Coordinate: %s", str);
-    memory_free(str);
-
-    // y = Y * Z^(p-2) mod p
-    if(bigint_mod_inv(invZ1, R.Z, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(y1, R.Y, invZ1, p) != 0) {
-        goto cleanup;
-    }
-
-    if(bigint_mod_inv(invZ2, R_add.Z, p) != 0) {
-        goto cleanup;
-    }
-    if(bigint_mul_mod(y2, R_add.Y, invZ2, p) != 0) {
-        goto cleanup;
-    }
-
-    str = bigint_to_str(y1);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Doubled Affine Y Coordinate: %s", str);
-    memory_free(str);
-    str = bigint_to_str(y2);
-    PRINTLOG(CRYPTOLIB, LOG_INFO, "Added Affine Y Coordinate: %s", str);
-    memory_free(str);
-
-    if (bigint_cmp(y1, y2) == 0) {
-        PRINTLOG(CRYPTOLIB, LOG_INFO, "ed25519_point_double test passed");
-        err = 0;
-    } else {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "ed25519_point_double test failed!");
-    }
-
-    // Cleanup...
-cleanup:
-    bigint_destroy(p);
-    bigint_destroy(G.X); bigint_destroy(G.Y); bigint_destroy(G.Z); bigint_destroy(G.T);
-    bigint_destroy(R.X); bigint_destroy(R.Y); bigint_destroy(R.Z); bigint_destroy(R.T);
-    bigint_destroy(R_add.X); bigint_destroy(R_add.Y); bigint_destroy(R_add.Z); bigint_destroy(R_add.T);
-    bigint_destroy(one);
-    bigint_destroy(invZ1);
-    bigint_destroy(invZ2);
-    bigint_destroy(y1);
-    bigint_destroy(y2);
-    return err;
-}
-#endif
-
 static int8_t ed25519_scalar_mult(uint8_t out_pub[32], const uint8_t scalar[32]) {
     if (!out_pub || !scalar) {
         return -1;
@@ -797,8 +471,7 @@ static int8_t ed25519_scalar_mult(uint8_t out_pub[32], const uint8_t scalar[32])
 
     /* Field prime p = 2^255 - 19 */
     p = bigint_create();
-    if (bigint_set_str(p,
-                       "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
+    if (bigint_from_bytes(p, x25519_ed25519_p, X25519_ED25519_P_LEN) != 0) {
         goto cleanup;
     }
 
@@ -821,10 +494,8 @@ static int8_t ed25519_scalar_mult(uint8_t out_pub[32], const uint8_t scalar[32])
     R1->Z = bigint_one();
     R1->T = bigint_create();
 
-    if (bigint_set_str(R1->X,
-                       "216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A") != 0 ||
-        bigint_set_str(R1->Y,
-                       "6666666666666666666666666666666666666666666666666666666666666658") != 0) {
+    if (bigint_from_bytes(R1->X, x25519_ed25519_g_x, X25519_ED25519_G_X_LEN) != 0 ||
+        bigint_from_bytes(R1->Y, x25519_ed25519_g_y, X25519_ED25519_G_Y_LEN) != 0) {
         goto cleanup;
     }
 
@@ -959,7 +630,7 @@ static int8_t ed25519_reduce_L(uint8_t out[32], const uint8_t in_64[64]) {
     bigint_t* L = bigint_create();
 
     // Set L
-    if(bigint_set_str(L, "1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED") != 0) {
+    if(bigint_from_bytes(L, x25519_ed25519_l, X25519_ED25519_L_LEN) != 0) {
         bigint_destroy(val);
         bigint_destroy(L);
         return -1;
@@ -1067,7 +738,7 @@ int8_t ed25519_sign(uint8_t sig[ED25519_SIGNATURE_LEN], const uint8_t* msg, size
     if(bigint_from_bytes_le(br, r_reduced, 32) != 0 ||
        bigint_from_bytes_le(bk, k_reduced, 32) != 0 ||
        bigint_from_bytes_le(ba, az, 32) != 0 ||
-       bigint_set_str(bL, "1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED") != 0) {
+       bigint_from_bytes(bL, x25519_ed25519_l, X25519_ED25519_L_LEN) != 0) {
         goto cleanup2;
     }
 
@@ -1122,11 +793,11 @@ static int8_t ed25519_decode_point(ed25519_point_t* P, const uint8_t encoded[32]
         goto fail;
     }
 
-    if(bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set prime p for Ed25519.");
+    if (bigint_from_bytes(p, x25519_ed25519_p, X25519_ED25519_P_LEN) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set prime p from byte array for Ed25519.");
         goto fail;
     }
-    if(bigint_set_str(ED25519_D, "52036CEE2B6FFE738CC740797779E89800700A4D4141D8AB75EB4DCA135978A3") != 0) {
+    if(bigint_from_bytes(ED25519_D, x25519_ed25519_d, X25519_ED25519_D_LEN) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set curve parameter d for Ed25519.");
         goto fail;
     }
@@ -1231,7 +902,8 @@ static int8_t ed25519_points_equal(const ed25519_point_t* p1, const ed25519_poin
         return -1;
     }
 
-    if (bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
+    if (bigint_from_bytes(p, x25519_ed25519_p, X25519_ED25519_P_LEN) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set prime p from byte array for Ed25519.");
         goto fail;
     }
 
@@ -1275,7 +947,8 @@ static int8_t ed25519_scalar_mult_generic(ed25519_point_t* R, const uint8_t scal
     ed25519_point_t * R0 = NULL, * R1 = NULL;
 
     p = bigint_create();
-    if (bigint_set_str(p, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
+    if (bigint_from_bytes(p, x25519_ed25519_p, X25519_ED25519_P_LEN) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set prime p from byte array for Ed25519.");
         goto cleanup;
     }
 
@@ -1427,13 +1100,14 @@ int8_t ed25519_verify(const uint8_t sig[ED25519_SIGNATURE_LEN],
     bigint_t* p_field = NULL;
 
     p_field = bigint_create();
-    if (bigint_set_str(p_field, "7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFED") != 0) {
+    if (bigint_from_bytes(p_field, x25519_ed25519_p, X25519_ED25519_P_LEN) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set prime p_filed from byte array for Ed25519.");
         bigint_destroy(p_field);
         goto fail;
     }
 
-    if(bigint_set_str(G.X, "216936D3CD6E53FEC0A4E231FDD6DC5C692CC7609525A7B2C9562D608F25D51A") != 0 ||
-       bigint_set_str(G.Y, "6666666666666666666666666666666666666666666666666666666666666658") != 0 ||
+    if(bigint_from_bytes(G.X, x25519_ed25519_g_x, X25519_ED25519_G_X_LEN) != 0 ||
+       bigint_from_bytes(G.Y, x25519_ed25519_g_y, X25519_ED25519_G_Y_LEN) != 0 ||
        bigint_set_uint64(G.Z, 1) != 0 ||
        bigint_mul_mod(G.T, G.X, G.Y, p_field) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set base point G.");
