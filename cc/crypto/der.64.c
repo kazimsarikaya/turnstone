@@ -15,8 +15,14 @@ MODULE("turnstone.lib.crypto");
 
 /* --- Constants --- */
 static const uint8_t OID_CN[] = { 0x55, 0x04, 0x03 };
+static const uint8_t OID_ORGANIZATION[] = { 0x55, 0x04, 0x0A };
+static const uint8_t OID_ORGANIZATIONAL_UNIT[] = { 0x55, 0x04, 0x0B };
+static const uint8_t OID_COUNTRY[] = { 0x55, 0x04, 0x06 };
 static const uint8_t OID_ED25519[] = { 0x2B, 0x65, 0x70 };
 static const uint8_t OID_X25519[] = { 0x2B, 0x65, 0x6E };
+static const uint8_t OID_ECDSA_WITH_SHA256[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x02 };
+static const uint8_t OID_ECDSA_PUBLIC_KEY[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
+static const uint8_t OID_EC_SECP256R1[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07 };
 static const uint8_t OID_SERVER_AUTH[] = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01 };
 static const uint8_t OID_CLIENT_AUTH[] = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02 };
 static const uint8_t OID_EXT_BASIC_CONSTRAINTS[] = { 0x55, 0x1D, 0x13 };
@@ -244,6 +250,14 @@ int8_t der_encoder_end_octet_string(der_encoder_t * encoder) {
     return _der_end_chain(encoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_OCTET_STRING);
 }
 
+int8_t der_encoder_start_bit_string(der_encoder_t * encoder) {
+    return _der_start_chain(encoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BIT_STRING);
+}
+
+int8_t der_encoder_end_bit_string(der_encoder_t * encoder) {
+    return _der_end_chain(encoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BIT_STRING);
+}
+
 int8_t der_encoder_start_explicit_tag(der_encoder_t * encoder, der_tag_class_t inner_tag_class, uint8_t inner_tag_number) {
     uint8_t tag_byte = (uint8_t)(DER_TAG_TYPE_CONSTRUCTED | (inner_tag_class & 0xC0) | (inner_tag_number & 0x1F));
     return _der_start_chain(encoder, tag_byte);
@@ -383,8 +397,14 @@ int8_t der_encoder_encode_object_identifier(der_encoder_t * encoder, der_object_
 
     switch (oid) {
     case DER_OID_CN: oid_data = OID_CN; oid_len = sizeof(OID_CN); break;
+    case DER_OID_ORGANIZATION: oid_data = OID_ORGANIZATION; oid_len = sizeof(OID_ORGANIZATION); break;
+    case DER_OID_ORGANIZATIONAL_UNIT: oid_data = OID_ORGANIZATIONAL_UNIT; oid_len = sizeof(OID_ORGANIZATIONAL_UNIT); break;
+    case DER_OID_COUNTRY: oid_data = OID_COUNTRY; oid_len = sizeof(OID_COUNTRY); break;
     case DER_OID_ED25519: oid_data = OID_ED25519; oid_len = sizeof(OID_ED25519); break;
     case DER_OID_X25519: oid_data = OID_X25519; oid_len = sizeof(OID_X25519); break;
+    case DER_OID_ECDSA_WITH_SHA256: oid_data = OID_ECDSA_WITH_SHA256; oid_len = sizeof(OID_ECDSA_WITH_SHA256); break;
+    case DER_OID_ECDSA_PUBLIC_KEY: oid_data = OID_ECDSA_PUBLIC_KEY; oid_len = sizeof(OID_ECDSA_PUBLIC_KEY); break;
+    case DER_OID_EC_SECP256R1: oid_data = OID_EC_SECP256R1; oid_len = sizeof(OID_EC_SECP256R1); break;
     case DER_OID_SERVER_AUTH: oid_data = OID_SERVER_AUTH; oid_len = sizeof(OID_SERVER_AUTH); break;
     case DER_OID_CLIENT_AUTH: oid_data = OID_CLIENT_AUTH; oid_len = sizeof(OID_CLIENT_AUTH); break;
     case DER_OID_EXT_BASIC_CONSTRAINTS: oid_data = OID_EXT_BASIC_CONSTRAINTS; oid_len = sizeof(OID_EXT_BASIC_CONSTRAINTS); break;
@@ -641,6 +661,17 @@ int8_t der_decoder_end_octet_string(der_decoder_t* decoder) {
     return _der_decoder_pop_container(decoder);
 }
 
+int8_t der_decoder_start_bit_string(der_decoder_t* decoder) {
+    // Note: We expect PRIMITIVE here because it's DER,
+    // even though we treat it as a container logically.
+    return _der_decoder_push_container(decoder,
+                                       DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BIT_STRING);
+}
+
+int8_t der_decoder_end_bit_string(der_decoder_t* decoder) {
+    return _der_decoder_pop_container(decoder);
+}
+
 int8_t der_decoder_start_set(der_decoder_t* decoder) {
     return _der_decoder_push_container(decoder,
                                        DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_CONSTRUCTED | DER_TAG_NUMBER_SET);
@@ -782,8 +813,14 @@ typedef struct {
 // Table of supported OIDs
 static const oid_entry_t OID_TABLE[] = {
     { DER_OID_CN,                     OID_CN,                     sizeof(OID_CN) },
+    { DER_OID_ORGANIZATION,           OID_ORGANIZATION,           sizeof(OID_ORGANIZATION) },
+    { DER_OID_ORGANIZATIONAL_UNIT,    OID_ORGANIZATIONAL_UNIT,    sizeof(OID_ORGANIZATIONAL_UNIT) },
+    { DER_OID_COUNTRY,                OID_COUNTRY,                sizeof(OID_COUNTRY) },
     { DER_OID_ED25519,                OID_ED25519,                sizeof(OID_ED25519) },
     { DER_OID_X25519,                 OID_X25519,                 sizeof(OID_X25519) },
+    { DER_OID_ECDSA_WITH_SHA256,      OID_ECDSA_WITH_SHA256,      sizeof(OID_ECDSA_WITH_SHA256) },
+    { DER_OID_ECDSA_PUBLIC_KEY,       OID_ECDSA_PUBLIC_KEY,       sizeof(OID_ECDSA_PUBLIC_KEY) },
+    { DER_OID_EC_SECP256R1,           OID_EC_SECP256R1,           sizeof(OID_EC_SECP256R1) },
     { DER_OID_SERVER_AUTH,            OID_SERVER_AUTH,            sizeof(OID_SERVER_AUTH) },
     { DER_OID_CLIENT_AUTH,            OID_CLIENT_AUTH,            sizeof(OID_CLIENT_AUTH) },
     { DER_OID_EXT_BASIC_CONSTRAINTS,  OID_EXT_BASIC_CONSTRAINTS,  sizeof(OID_EXT_BASIC_CONSTRAINTS) },

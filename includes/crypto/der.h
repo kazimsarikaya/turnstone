@@ -73,9 +73,15 @@ typedef enum der_universal_tag_number_t {
  */
 typedef enum der_object_identifier_t {
     DER_OID_UNDEFINED = 0,
+    DER_OID_ORGANIZATION, ///< Organization Name
+    DER_OID_ORGANIZATIONAL_UNIT, ///< Organizational Unit Name
+    DER_OID_COUNTRY, ///< Country Name
     DER_OID_CN, ///< Common Name
     DER_OID_ED25519, ///< Ed25519 signature algorithm OID
     DER_OID_X25519, ///< X25519 key exchange algorithm OID
+    DER_OID_ECDSA_WITH_SHA256, ///< ECDSA with SHA-256 signature algorithm OID
+    DER_OID_ECDSA_PUBLIC_KEY, ///< ECDSA public key OID
+    DER_OID_EC_SECP256R1, ///< secp256r1 curve OID
     DER_OID_SERVER_AUTH, ///< Server Authentication EKU
     DER_OID_CLIENT_AUTH, ///< Client Authentication EKU
     DER_OID_CODE_SIGNING, ///< Code Signing EKU
@@ -151,6 +157,29 @@ int8_t der_encoder_end_sequence(der_encoder_t * encoder);
  * @return 0 on success, -1 on failure (e.g., invalid encoder, memory allocation error).
  */
 int8_t der_encoder_start_octet_string(der_encoder_t * encoder);
+
+/**
+ * @brief Starts encoding a DER bit string.
+ *
+ * This function is used when a bit string will contain other DER encoded elements (i.e., it's a constructed bit string).
+ * It pushes a new bit string context onto the encoder's internal stack.
+ * The corresponding `der_encoder_end_bit_string` must be called later to finalize and append the bit string.
+ *
+ * @param encoder The DER encoder instance.
+ * @return 0 on success, -1 on failure (e.g., invalid encoder, memory allocation error).
+ */
+int8_t der_encoder_start_bit_string(der_encoder_t * encoder);
+
+/**
+ * @brief Ends encoding a DER bit string.
+ *
+ * This function finalizes the current bit string, calculates its length, and appends it
+ * to the parent structure.
+ *
+ * @param encoder The DER encoder instance.
+ * @return 0 on success, -1 on failure (e.g., invalid encoder, mismatched start/end calls).
+ */
+int8_t der_encoder_end_bit_string(der_encoder_t * encoder);
 
 /**
  * @brief Ends encoding a DER octet string.
@@ -453,6 +482,28 @@ int8_t der_decoder_start_octet_string(der_decoder_t* decoder);
  * @return 0 on success, -1 on failure (e.g., not at the end of the octet string, stack underflow).
  */
 int8_t der_decoder_end_octet_string(der_decoder_t* decoder);
+
+/**
+ * @brief Starts decoding a DER bit string.
+ *
+ * Attempts to parse the next element as a bit string. If successful, it pushes
+ * the bit string's boundaries onto the decoder's stack.
+ *
+ * @param decoder The DER decoder instance.
+ * @return 0 on success, -1 on failure (e.g., not a bit string, unexpected end of data).
+ */
+int8_t der_decoder_start_bit_string(der_decoder_t* decoder);
+
+/**
+ * @brief Ends decoding a DER bit string.
+ *
+ * Checks if the decoder has consumed all data within the current bit string context.
+ * If the end is reached correctly, it pops the bit string's boundaries from the stack.
+ *
+ * @param decoder The DER decoder instance.
+ * @return 0 on success, -1 on failure (e.g., not at the end of the bit string, stack underflow).
+ */
+int8_t der_decoder_end_bit_string(der_decoder_t* decoder);
 
 /**
  * @brief Starts decoding a DER set.

@@ -54,13 +54,13 @@ static int8_t tls13_load_ca_certificate_and_key(void) {
         return -1;
     }
 
-    if (x509_certificate_add_issuer_common_name(cert, "Test CA") != 0) {
+    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add issuer common name");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_add_subject_common_name(cert, "Test CA") != 0) {
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject common name");
         x509_certificate_free(cert);
         return -1;
@@ -251,13 +251,13 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t* tls13_ctx) 
         return -1;
     }
 
-    if (x509_certificate_add_issuer_common_name(cert, "Test CA") != 0) {
+    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME,  "Test CA") != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add issuer common name");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_add_subject_common_name(cert, "Test Server") != 0) {
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test Server") != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject common name");
         x509_certificate_free(cert);
         return -1;

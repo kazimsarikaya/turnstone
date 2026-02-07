@@ -116,6 +116,7 @@ int8_t pem_decode(const char_t* header,
     pem_length -= PEM_START_MARKER_LEN;
 
     if(strncmp(pem_data, header, strlen(header)) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "PEM header mismatch: expected '%s', got '%*s'", header, (int)strlen(header), pem_data);
         return -1;
     }
 
@@ -123,6 +124,7 @@ int8_t pem_decode(const char_t* header,
     pem_length -= strlen(header);
 
     if(strncmp(pem_data, PEM_MARKER_SUFFIX, PEM_MARKER_SUFFIX_LEN) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "PEM marker suffix mismatch after header: expected '%s', got '%*s'", PEM_MARKER_SUFFIX, (int)PEM_MARKER_SUFFIX_LEN, pem_data);
         return -1;
     }
 
@@ -131,6 +133,7 @@ int8_t pem_decode(const char_t* header,
 
     const char_t* end_marker_pos = strstr(pem_data, PEM_END_MARKER);
     if (end_marker_pos == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "PEM end marker not found");
         return -1;
     }
 
@@ -138,17 +141,20 @@ int8_t pem_decode(const char_t* header,
 
     end_marker_pos += PEM_END_MARKER_LEN;
     if(strncmp(end_marker_pos, header, strlen(header)) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "PEM end marker header mismatch: expected '%s', got '%*s'", header, (int)strlen(header), end_marker_pos);
         return -1;
     }
 
     end_marker_pos += strlen(header);
     if(strncmp(end_marker_pos, PEM_MARKER_SUFFIX, PEM_MARKER_SUFFIX_LEN - 1) != 0) { // -1 to ignore final newline
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "PEM end marker suffix mismatch: expected '%s', got '%*s'", PEM_MARKER_SUFFIX, (int)(PEM_MARKER_SUFFIX_LEN - 1), end_marker_pos);
         return -1;
     }
 
     size_t b64_length = b64_end - pem_data;
     uint8_t* b64_data = memory_malloc(b64_length + 1);
     if (b64_data == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for Base64 data");
         return -1;
     }
 
@@ -160,6 +166,7 @@ int8_t pem_decode(const char_t* header,
     memory_free(b64_data);
 
     if (der_length == 0 || der_data == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode Base64 data. der_length=%llu, der_data is null %i", der_length, der_data == NULL);
         return -1;
     }
 

@@ -68,12 +68,21 @@ struct x509_extension_t {
     } data;
 };
 
+static const der_object_identifier_t ISSUER_SUBJECT_FIELD_OIDS[X509_ISSUER_SUBJECT_FIELD_COUNT] = {
+    [X509_ISSUER_SUBJECT_FIELD_UNKNOWN] = DER_OID_UNDEFINED,
+    [X509_ISSUER_SUBJECT_FIELD_ORGANIZATION] = DER_OID_ORGANIZATION,
+    [X509_ISSUER_SUBJECT_FIELD_ORGANIZATIONAL_UNIT] = DER_OID_ORGANIZATIONAL_UNIT,
+    [X509_ISSUER_SUBJECT_FIELD_COUNTRY] = DER_OID_COUNTRY,
+    [X509_ISSUER_SUBJECT_FIELD_COMMON_NAME] = DER_OID_CN,
+};
+
 struct x509_certificate_t {
     uint32_t version;
     uint8_t  serial_number[20]; // up to 160 bits
 
-    char_t* issuer_common_name;
-    char_t* subject_common_name;
+    // Issuer and Subject Info
+    char_t* issuer[X509_ISSUER_SUBJECT_FIELD_COUNT];
+    char_t* subject[X509_ISSUER_SUBJECT_FIELD_COUNT];
 
     time_t not_before;
     time_t not_after;
@@ -130,13 +139,14 @@ void x509_certificate_free(x509_certificate_t* cert) {
         return;
     }
 
-    // Free issuer and subject common names
-    if (cert->issuer_common_name != NULL) {
-        memory_free(cert->issuer_common_name);
-    }
-
-    if (cert->subject_common_name != NULL) {
-        memory_free(cert->subject_common_name);
+    // Free issuer and subject
+    for (size_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
+        if (cert->issuer[i] != NULL) {
+            memory_free(cert->issuer[i]);
+        }
+        if (cert->subject[i] != NULL) {
+            memory_free(cert->subject[i]);
+        }
     }
 
     // Free extensions
@@ -187,27 +197,29 @@ void x509_certificate_free(x509_certificate_t* cert) {
     memory_free(cert);
 }
 
-int8_t x509_certificate_add_issuer_common_name(x509_certificate_t* cert, const char_t* common_name){
-    if (cert == NULL || common_name == NULL) {
+int8_t x509_certificate_add_issuer_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value){
+    if (cert == NULL || value == NULL || field <= X509_ISSUER_SUBJECT_FIELD_UNKNOWN || field >= X509_ISSUER_SUBJECT_FIELD_COUNT) {
         return -1;
     }
 
-    cert->issuer_common_name = strdup(common_name);
-    if (cert->issuer_common_name == NULL) {
+    cert->issuer[field] = strdup(value);
+    if (cert->issuer[field] == NULL) {
         return -1;
     }
+
     return 0;
 }
 
-int8_t x509_certificate_add_subject_common_name(x509_certificate_t* cert, const char_t* common_name){
-    if (cert == NULL || common_name == NULL) {
+int8_t x509_certificate_add_subject_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value){
+    if (cert == NULL || value == NULL || field <= X509_ISSUER_SUBJECT_FIELD_UNKNOWN || field >= X509_ISSUER_SUBJECT_FIELD_COUNT) {
         return -1;
     }
 
-    cert->subject_common_name = strdup(common_name);
-    if (cert->subject_common_name == NULL) {
+    cert->subject[field] = strdup(value);
+    if (cert->subject[field] == NULL) {
         return -1;
     }
+
     return 0;
 }
 
@@ -353,8 +365,8 @@ int8_t x509_certificate_add_public_key(x509_certificate_t* cert,
     return 0;
 }
 
-static int8_t x509_encode_name(der_encoder_t* der_encoder, const char_t* common_name) {
-    if(!der_encoder || !common_name) {
+static int8_t x509_encode_dn(der_encoder_t* der_encoder, char_t* fields[X509_ISSUER_SUBJECT_FIELD_COUNT]) {
+    if(!der_encoder || !fields) {
         return -1;
     }
 
@@ -362,28 +374,34 @@ static int8_t x509_encode_name(der_encoder_t* der_encoder, const char_t* common_
         return -1;
     }
 
-    if(der_encoder_start_set(der_encoder) != 0) {
-        return -1;
-    }
+    for (size_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
+        if (fields[i] == NULL) {
+            continue; // skip empty fields
+        }
 
-    if(der_encoder_start_sequence(der_encoder) != 0) {
-        return -1;
-    }
+        if(der_encoder_start_set(der_encoder) != 0) {
+            return -1;
+        }
 
-    if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CN) != 0) {
-        return -1;
-    }
+        if(der_encoder_start_sequence(der_encoder) != 0) {
+            return -1;
+        }
 
-    if(der_encoder_encode_printable_string(der_encoder, common_name, strlen(common_name)) != 0) {
-        return -1;
-    }
+        if(der_encoder_encode_object_identifier(der_encoder, ISSUER_SUBJECT_FIELD_OIDS[i]) != 0) {
+            return -1;
+        }
 
-    if(der_encoder_end_sequence(der_encoder) != 0) {
-        return -1;
-    }
+        if(der_encoder_encode_printable_string(der_encoder, fields[i], strlen(fields[i])) != 0) {
+            return -1;
+        }
 
-    if(der_encoder_end_set(der_encoder) != 0) {
-        return -1;
+        if(der_encoder_end_sequence(der_encoder) != 0) {
+            return -1;
+        }
+
+        if(der_encoder_end_set(der_encoder) != 0) {
+            return -1;
+        }
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
@@ -892,6 +910,21 @@ static int8_t x509_encode_algorithm_identifier(der_encoder_t* der_encoder, x509_
         }
         break;
     }
+    case X509_ALGORITHM_ECDSA_WITH_SHA256: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_WITH_SHA256) != 0) {
+            return -1;
+        }
+        break;
+    }
+    case X509_ALGORITHM_ECDSA_SECP256R1: {
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_PUBLIC_KEY) != 0) {
+            return -1;
+        }
+        if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EC_SECP256R1) != 0) {
+            return -1;
+        }
+        break;
+    }
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported algorithm: %d", algorithm);
         return -1;
@@ -932,8 +965,24 @@ static int8_t x509_encode_data_with_bit_string_with_alogrithm_identifier(der_enc
 }
 
 static int8_t x509_encode_tbs_internal(der_encoder_t* der_encoder, x509_certificate_t* cert) {
-    if (!cert || !der_encoder || !cert->issuer_common_name || !cert->subject_common_name ||
+    if (!cert || !der_encoder ||
         !cert->public_key || cert->not_before == 0 || cert->not_after == 0) {
+        return -1;
+    }
+
+    // min one field is not null in issuer and subject
+    boolean_t has_issuer_field = false;
+    boolean_t has_subject_field = false;
+    for (size_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
+        if (cert->issuer[i] != NULL) {
+            has_issuer_field = true;
+        }
+        if (cert->subject[i] != NULL) {
+            has_subject_field = true;
+        }
+    }
+
+    if (!has_issuer_field || !has_subject_field) {
         return -1;
     }
 
@@ -967,7 +1016,7 @@ static int8_t x509_encode_tbs_internal(der_encoder_t* der_encoder, x509_certific
 
     //// 4. Issuer (Helper for DN)
     // Encodes: SEQUENCE { SET { SEQUENCE { OID(CN), PrintableString(val) } } }
-    if(x509_encode_name(der_encoder, cert->issuer_common_name) != 0) {
+    if(x509_encode_dn(der_encoder, cert->issuer) != 0) {
         return -1;
     }
 
@@ -977,7 +1026,7 @@ static int8_t x509_encode_tbs_internal(der_encoder_t* der_encoder, x509_certific
     }
 
     // 6. Subject (Helper for DN)
-    if(x509_encode_name(der_encoder, cert->subject_common_name) != 0) {
+    if(x509_encode_dn(der_encoder, cert->subject) != 0) {
         return -1;
     }
 
@@ -1286,8 +1335,8 @@ char_t* x509_certificate_get_pem(x509_certificate_t* cert) {
     return pem_data;
 }
 
-static int8_t x509_decode_name(der_decoder_t* der_decoder, char_t** common_name) {
-    if(!der_decoder || !common_name) {
+static int8_t x509_decode_dn(der_decoder_t* der_decoder, char_t* values[X509_ISSUER_SUBJECT_FIELD_COUNT]) {
+    if(!der_decoder || !values) {
         return -1;
     }
 
@@ -1296,48 +1345,66 @@ static int8_t x509_decode_name(der_decoder_t* der_decoder, char_t** common_name)
         return -1;
     }
 
-    if(der_decoder_start_set(der_decoder) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start set for DN");
-        return -1;
-    }
+    while(!der_decoder_has_container_ended(der_decoder)) {
+        if(der_decoder_start_set(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start set for DN");
+            return -1;
+        }
 
-    if(der_decoder_start_sequence(der_decoder) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start inner sequence for DN");
-        return -1;
-    }
+        if(der_decoder_start_sequence(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start inner sequence for DN");
+            return -1;
+        }
 
-    der_object_identifier_t oid;
+        der_object_identifier_t oid;
 
-    if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode OID for DN");
-        return -1;
-    }
+        if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode OID for DN");
+            return -1;
+        }
 
-    if(oid != DER_OID_CN) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported DN OID: %d. We only support CN now.", oid);
-        return -1;
-    }
+        size_t name_length = 0;
+        char_t* value = NULL;
 
-    size_t name_length = 0;
+        if(der_decoder_decode_printable_string(der_decoder, &value, &name_length) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode PrintableString for CN");
+            return -1;
+        }
 
-    if(der_decoder_decode_printable_string(der_decoder, common_name, &name_length) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode PrintableString for CN");
-        return -1;
-    }
+        if(strlen(value) != name_length) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "CN length mismatch: expected %llu, got %llu", name_length, strlen(value));
+            memory_free(value);
+            return -1;
+        }
 
-    if(strlen(*common_name) != name_length) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "CN length mismatch: expected %llu, got %llu", name_length, strlen(*common_name));
-        return -1;
-    }
+        switch (oid) {
+        case DER_OID_ORGANIZATION:
+            values[X509_ISSUER_SUBJECT_FIELD_ORGANIZATION] = value;
+            break;
+        case DER_OID_ORGANIZATIONAL_UNIT:
+            values[X509_ISSUER_SUBJECT_FIELD_ORGANIZATIONAL_UNIT] = value;
+            break;
+        case DER_OID_COUNTRY:
+            values[X509_ISSUER_SUBJECT_FIELD_COUNTRY] = value;
+            break;
+        case DER_OID_CN:
+            values[X509_ISSUER_SUBJECT_FIELD_COMMON_NAME] = value;
+            break;
+        default:
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unknown OID in DN: %d", oid);
+            memory_free(value);
+            break;
+        }
 
-    if(der_decoder_end_sequence(der_decoder) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end inner sequence for DN");
-        return -1;
-    }
+        if(der_decoder_end_sequence(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end inner sequence for DN");
+            return -1;
+        }
 
-    if(der_decoder_end_set(der_decoder) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end set for DN");
-        return -1;
+        if(der_decoder_end_set(der_decoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end set for DN");
+            return -1;
+        }
     }
 
     if(der_decoder_end_sequence(der_decoder) != 0) {
@@ -1853,6 +1920,22 @@ static int8_t x509_decode_algorithm_identifier(der_decoder_t* der_decoder, x509_
         *algorithm = X509_ALGORITHM_X25519;
         break;
     }
+    case DER_OID_ECDSA_WITH_SHA256: {
+        *algorithm = X509_ALGORITHM_ECDSA_WITH_SHA256;
+        break;
+    }
+    case DER_OID_ECDSA_PUBLIC_KEY: {
+        if(der_decoder_decode_object_identifier(der_decoder, &oid) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode EC public key curve OID");
+            return -1;
+        }
+        if(oid != DER_OID_EC_SECP256R1) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported EC curve OID: %d", oid);
+            return -1;
+        }
+        *algorithm = X509_ALGORITHM_ECDSA_SECP256R1;
+        break;
+    }
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported algorithm: %d", oid);
         return -1;
@@ -1944,8 +2027,8 @@ static int8_t x509_decode_tbs(der_decoder_t* der_decoder, x509_certificate_t* ce
     }
 
     // 4. Issuer
-    if(x509_decode_name(der_decoder, &cert->issuer_common_name) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode issuer name");
+    if(x509_decode_dn(der_decoder, cert->issuer) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode issuer");
         return -1;
     }
 
@@ -1956,8 +2039,8 @@ static int8_t x509_decode_tbs(der_decoder_t* der_decoder, x509_certificate_t* ce
     }
 
     // 6. Subject
-    if(x509_decode_name(der_decoder, &cert->subject_common_name) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode subject name");
+    if(x509_decode_dn(der_decoder, cert->subject) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to decode subject");
         return -1;
     }
 

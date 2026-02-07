@@ -120,12 +120,20 @@ typedef enum x509_subject_alternative_name_type_t {
  */
 typedef enum x509_algorithm_t {
     X509_ALGORITHM_UNKNOWN, ///< Unknown signature algorithm.
-    X509_ALGORITHM_EC, ///< Elliptic Curve (EC) algorithm.
-    X509_ALGORITHM_ECDSA_SECP256R1_SHA256, ///< ECDSA with SECP256R1 curve and SHA256 hash.
     X509_ALGORITHM_ED25519, ///< Ed25519 signature algorithm.
     X509_ALGORITHM_X25519, ///< X25519 key agreement algorithm.
+    X509_ALGORITHM_ECDSA_WITH_SHA256, ///< ECDSA with SHA-256 signature algorithm.
+    X509_ALGORITHM_ECDSA_SECP256R1, ///< ECDSA with secp256r1 curve signature algorithm.
 } x509_algorithm_t;
 
+typedef enum x509_issuer_subject_field_t {
+    X509_ISSUER_SUBJECT_FIELD_UNKNOWN,
+    X509_ISSUER_SUBJECT_FIELD_ORGANIZATION,
+    X509_ISSUER_SUBJECT_FIELD_ORGANIZATIONAL_UNIT,
+    X509_ISSUER_SUBJECT_FIELD_COUNTRY,
+    X509_ISSUER_SUBJECT_FIELD_COMMON_NAME,
+    X509_ISSUER_SUBJECT_FIELD_COUNT,
+} x509_issuer_subject_field_t;
 
 /**
  * @brief Creates a new, empty X.509 certificate structure.
@@ -142,26 +150,24 @@ x509_certificate_t* x509_certificate_new(void);
 void x509_certificate_free(x509_certificate_t* cert);
 
 /**
- * @brief Adds the issuer's common name to the certificate.
- *
- * The common name typically represents the distinguished name of the issuer (e.g., "Test CA").
+ * @brief Adds a field to the issuer information of the certificate.
  *
  * @param cert Pointer to the `x509_certificate_t` structure.
- * @param common_name The issuer's common name string.
+ * @param field The field to add (e.g., organization, common name).
+ * @param value The value of the field as a string.
  * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
  */
-int8_t x509_certificate_add_issuer_common_name(x509_certificate_t* cert, const char_t* common_name);
+int8_t x509_certificate_add_issuer_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value);
 
 /**
- * @brief Adds the subject's common name to the certificate.
- *
- * The common name typically represents the distinguished name of the subject (e.g., "Test Server").
+ * @brief Adds a field to the subject information of the certificate.
  *
  * @param cert Pointer to the `x509_certificate_t` structure.
- * @param common_name The subject's common name string.
+ * @param field The field to add (e.g., organization, common name).
+ * @param value The value of the field as a string.
  * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
  */
-int8_t x509_certificate_add_subject_common_name(x509_certificate_t* cert, const char_t* common_name);
+int8_t x509_certificate_add_subject_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value);
 
 /**
  * @brief Sets the validity period of the certificate.

@@ -31,13 +31,13 @@ int32_t main(void) {
         return -1;
     }
 
-    if (x509_certificate_add_issuer_common_name(cert, "Test CA") != 0) {
+    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
         print_error("Failed to add issuer common name\n");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_add_subject_common_name(cert, "Test CA") != 0) {
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
         print_error("Failed to add subject common name\n");
         x509_certificate_free(cert);
         return -1;
@@ -173,13 +173,13 @@ int32_t main(void) {
         return -1;
     }
 
-    if (x509_certificate_add_issuer_common_name(cert, "Test CA") != 0) {
+    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
         print_error("Failed to add issuer common name\n");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_add_subject_common_name(cert, "Test Server") != 0) {
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test Server") != 0) {
         print_error("Failed to add subject common name\n");
         x509_certificate_free(cert);
         return -1;
