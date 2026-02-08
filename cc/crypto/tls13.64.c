@@ -10,6 +10,7 @@
 #include <crypto/sha2.h>
 #include <crypto/x509.h>
 #include <crypto/x25519.h>
+#include <crypto/ellipticcurve.h>
 #include <crypto/aes-gcm.h>
 #include <strings.h>
 #include <pipeline.h>
@@ -18,16 +19,31 @@
 
 MODULE("turnstone.lib.crypto.tls13");
 
-typedef enum tls13_extension_type_t {
-    TLS_EXTENSION_SNI                = 0x0000,
-    TLS_EXTENSION_ALPN               = 0x0010,
-    TLS_EXTENSION_SUPPORTED_VERSIONS = 0x002b,
-    TLS_EXTENSION_KEY_SHARE          = 0x0033,
+typedef enum tls13_extension_type_t : uint16_t {
+    TLS_EXTENSION_SNI                       = 0x0000,
+    TLS_EXTENSION_SUPPORTED_GROUPS          = 0x000a,
+    TLS_EXTENSION_SIGNATURE_ALGORITHMS      = 0x000d,
+    TLS_EXTENSION_ALPN                      = 0x0010,
+    TLS_EXTENSION_SUPPORTED_VERSIONS        = 0x002b,
+    TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES    = 0x002d,
+    TLS_EXTENSION_POST_HANDSHAKE_AUTH       = 0x0031,
+    TLS_EXTENSION_KEY_SHARE                 = 0x0033,
 } tls13_extension_type_t;
 
-typedef enum tls13_key_exchange_group_t {
-    TLS_GROUP_X25519 = 0x001d,
+typedef enum tls13_key_exchange_group_t : uint16_t {
+    TLS_GROUP_NONE = 0x0000,
+    TLS_GROUP_SECP160R1 = 0x0010,
     TLS_GROUP_SECP256R1 = 0x0017,
+    TLS_GROUP_SECP384R1 = 0x0018,
+    TLS_GROUP_SECP521R1 = 0x0019,
+    TLS_GROUP_X25519 = 0x001d,
+    TLS_GROUP_X448 = 0x001e,
+    TLS_GROUP_FFDHE2048 = 0x0100,
+    TLS_GROUP_FFDHE3072 = 0x0101,
+    TLS_GROUP_FFDHE4096 = 0x0102,
+    TLS_GROUP_FFDHE6144 = 0x0103,
+    TLS_GROUP_FFDHE8192 = 0x0104,
+    TLS_GROUP_X25519MLKEM768 = 0x11ec, // not implemented PQC group, reserved for future use
 } tls13_key_exchange_group_t;
 
 typedef enum tls13_hash_algorithm_t {
@@ -36,30 +52,56 @@ typedef enum tls13_hash_algorithm_t {
     TLS_HASH_SHA384 = 0x05,
 } tls13_hash_algorithm_t;
 
-typedef enum tls13_cipher_suite_t {
+typedef enum tls13_cipher_suite_t : uint16_t {
     TLS_AES_128_GCM_SHA256       = 0x1301,
     TLS_AES_256_GCM_SHA384       = 0x1302,
     TLS_CHACHA20_POLY1305_SHA256 = 0x1303,
 } tls13_cipher_suite_t;
 
+typedef enum tls13_signature_algorithm_t : uint16_t {
+    TLS_SIG_ALG_NONE                   = 0x0000,
+
+    /* Traditional ECDSA / RSA-PSS */
+    TLS_SIG_ALG_RSA_PSS_RSAE_SHA256    = 0x0804,
+    TLS_SIG_ALG_RSA_PSS_RSAE_SHA384    = 0x0805,
+    TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 = 0x0403,
+    TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 = 0x0503,
+    TLS_SIG_ALG_ECDSA_SECP521R1_SHA512 = 0x0603,
+
+    /* EdDSA (Keep this! It's your current favorite) */
+    TLS_SIG_ALG_ED25519                = 0x0807,
+    TLS_SIG_ALG_ED448                  = 0x0808,
+
+    /* Post-Quantum ML-DSA (NIST FIPS 204) */
+    TLS_SIG_ALG_MLDSA_44               = 0x0904, // Smallest/Fastest
+    TLS_SIG_ALG_MLDSA_65               = 0x0905, // Balanced (Recommended)
+    TLS_SIG_ALG_MLDSA_87               = 0x0906, // Highest Security
+
+    /* Experimental / Early NIST Drafts */
+    TLS_SIG_ALG_DILITHIUM_2            = 0x0034, // Older ID for ML-DSA-44 level
+} tls13_signature_algorithm_t;
+
 struct tls13_context_t {
-    const char_t*          default_host_port;
-    uint16_t               version;
-    boolean_t              tls13_supported;
-    uint8_t                client_random[32];
-    uint8_t                server_random[32];
-    uint8_t                session_id_len;
-    uint8_t*               session_id;
-    tls13_cipher_suite_t   cipher_suite;
-    char_t                 sni_hostname[256];
-    boolean_t              has_alpn;
-    boolean_t              alpn_h2;
-    boolean_t              alpn_http11;
-    boolean_t              x25519_supported;
-    uint8_t                client_key_exchange_public_key[X25519_PUBLIC_KEY_RAW_LEN];
-    uint8_t                server_key_exchange_private_key[X25519_PRIVATE_KEY_RAW_LEN];
-    uint8_t                server_key_exchange_public_key[X25519_PUBLIC_KEY_RAW_LEN];
-    tls13_hash_algorithm_t selected_hash_algorithm;
+    const char_t*                default_host_port;
+    uint16_t                     version;
+    boolean_t                    tls13_supported;
+    uint8_t                      client_random[32];
+    uint8_t                      server_random[32];
+    uint8_t                      session_id_len;
+    uint8_t*                     session_id;
+    tls13_cipher_suite_t         cipher_suite;
+    char_t                       sni_hostname[256];
+    boolean_t                    has_alpn;
+    boolean_t                    alpn_h2;
+    boolean_t                    alpn_http11;
+    tls13_key_exchange_group_t   selected_group;
+    uint8_t*                     server_key_exchange_public_key;
+    size_t                       server_key_exchange_public_key_len;
+    tls13_hash_algorithm_t       selected_hash_algorithm;
+    tls13_key_exchange_group_t*  client_supported_groups;
+    size_t                       client_supported_groups_len;
+    tls13_signature_algorithm_t* client_supported_signature_algorithms;
+    size_t                       client_supported_signature_algorithms_len;
     union {
         sha256_ctx_t* sha256;
         sha384_ctx_t* sha384;
@@ -190,6 +232,18 @@ void tls13_destroy_context(tls13_context_t* ctx) {
 
     if(ctx->read_buffer) {
         pipeline_destroy(ctx->read_buffer);
+    }
+
+    if(ctx->server_key_exchange_public_key) {
+        memory_free(ctx->server_key_exchange_public_key);
+    }
+
+    if(ctx->client_supported_groups) {
+        memory_free(ctx->client_supported_groups);
+    }
+
+    if(ctx->client_supported_signature_algorithms) {
+        memory_free(ctx->client_supported_signature_algorithms);
     }
 
     memory_free(ctx);
@@ -570,22 +624,157 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                 uint8_t * key_data = current_share + 4;
 
                 if (group == TLS_GROUP_X25519) { // X25519
-                    ctx->x25519_supported = true;
-                    if (key_len == X25519_PUBLIC_KEY_RAW_LEN) {
-                        memory_memcopy(key_data, ctx->client_key_exchange_public_key, X25519_PUBLIC_KEY_RAW_LEN);
-                    } else {
+                    if (key_len != X25519_PUBLIC_KEY_RAW_LEN) {
                         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid X25519 public key length: %d", key_len);
-                        return false;
+                        memory_free(buffer);
+                        return -1;
                     }
+
+                    ctx->server_key_exchange_public_key_len = X25519_PUBLIC_KEY_RAW_LEN;
+                    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
+                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(X25519_PUBLIC_KEY_RAW_LEN);
+
+                    if (!ctx->server_key_exchange_public_key) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
+
+                    if(x25519_generate_keypair(server_private_key, ctx->server_key_exchange_public_key) != 0) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    if(x25519_shared_secret(ctx->shared_secret,
+                                            server_private_key,
+                                            key_data) != 0) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    ctx->shared_secret_len = X25519_SHARED_SECRET_LEN; // X25519 shared secret is 32 bytes
+                    ctx->selected_group = TLS_GROUP_X25519;
+                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: x25519");
                 } else if (group == TLS_GROUP_SECP256R1) { // Secp256r1 (P-256)
-                    PRINTLOG(CRYPTOLIB, LOG_ERROR, "    Found P-256 Key Share (Group 0x0017)");
-                    // If you choose P-256, handle it here
+                    if(ctx->selected_group == TLS_GROUP_X25519) {
+                        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
+                        int32_t jump = 4 + key_len;
+                        current_share += jump;
+                        processed += jump;
+                        continue; // Prioritize X25519 if both are offered
+                    }
+
+                    if (key_len != (ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1) || key_data[0] != 0x04) { // Uncompressed point should be 65 bytes and start with 0x04
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Secp256r1 public key format or length: %d", key_len);
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    key_data++; // Skip the 0x04 prefix
+
+                    ctx->server_key_exchange_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
+                    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
+                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1);
+                    if (!ctx->server_key_exchange_public_key) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    ctx->server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
+
+                    uint8_t server_private_key[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN];
+
+                    if(ellipticcurve_secp256r1_generate_keypair(server_private_key, ctx->server_key_exchange_public_key + 1) != 0) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate Secp256r1 keypair");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    if(ellipticcurve_secp256r1_shared_secret(ctx->shared_secret,
+                                                             server_private_key,
+                                                             key_data) != 0) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    ctx->shared_secret_len = ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN; // P-256 shared secret is 32 bytes
+                    ctx->selected_group = TLS_GROUP_SECP256R1;
+                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp256r1");
+                } else {
+                    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unsupported Key Share Group: 0x%04x", group);
                 }
 
                 int32_t jump = 4 + key_len;
                 current_share += jump;
                 processed += jump;
             }
+        } else if(ext_type == TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES) { // PSK Key Exchange Modes
+            // For simplicity, we won't support PSK in this implementation, but we can log it
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports PSK key exchange modes (not implemented)");
+
+        } else if(ext_type == TLS_EXTENSION_SIGNATURE_ALGORITHMS) {
+            uint16_t sigalgs_len = (ext_ptr[2] << 8) | ext_ptr[3];
+            uint8_t* sigalgs_data = ext_ptr + 4;
+
+            ctx->client_supported_signature_algorithms_len = sigalgs_len / 2;
+            ctx->client_supported_signature_algorithms = (tls13_signature_algorithm_t*)memory_malloc(ctx->client_supported_signature_algorithms_len * sizeof(tls13_signature_algorithm_t));
+            if (!ctx->client_supported_signature_algorithms) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported signature algorithms failed");
+                memory_free(buffer);
+                return -1;
+            }
+            for (int i = 0; i < sigalgs_len; i += 2) {
+                uint16_t alg = (sigalgs_data[i] << 8) | sigalgs_data[i + 1];
+                ctx->client_supported_signature_algorithms[i / 2] = alg;
+                PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported signature algorithm: 0x%04x", alg);
+            }
+        } else if(ext_type == TLS_EXTENSION_SUPPORTED_GROUPS) {
+            uint16_t groups_len = (ext_ptr[2] << 8) | ext_ptr[3];
+            uint8_t* groups_data = ext_ptr + 4;
+
+            // if list contains TLS_GROUP_SECP160R1, bad it.
+            // ignore 0x01XX series, they are slow we don't like them.
+            for (int i = 0; i < groups_len; i += 2) {
+                uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
+                if(group == TLS_GROUP_SECP160R1) {
+                    groups_len -= 2;
+                }
+                if((group & 0xFF00) == 0x0100) {
+                    groups_len -= 2;
+                }
+            }
+
+            ctx->client_supported_groups_len = groups_len / 2;
+            ctx->client_supported_groups = (tls13_key_exchange_group_t*)memory_malloc(ctx->client_supported_groups_len * sizeof(tls13_key_exchange_group_t));
+            if (!ctx->client_supported_groups) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported groups failed");
+                memory_free(buffer);
+                return -1;
+            }
+            for (int i = 0; i < groups_len; i += 2) {
+                uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
+                if(group == TLS_GROUP_SECP160R1) {
+                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: secp160r1, skipping");
+                    continue;
+                }
+                if((group & 0xFF00) == 0x0100) {
+                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: 0x%04x, skipping", group);
+                    continue;
+                }
+                ctx->client_supported_groups[i / 2] = group;
+                PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported group: 0x%04x", group);
+            }
+        } else if(ext_type == TLS_EXTENSION_POST_HANDSHAKE_AUTH) {
+            // For simplicity, we won't support post-handshake authentication in this implementation, but we can log it
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports post-handshake authentication (not implemented)");
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Skipping unsupported extension type: 0x%04x", ext_type);
         }
 
 
@@ -605,8 +794,21 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
         return -1;
     }
 
-    if (!ctx->x25519_supported) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client does not support X25519 key exchange");
+    if (ctx->selected_group == TLS_GROUP_NONE) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported key exchange group found");
+        memory_free(buffer);
+        return -1;
+    }
+
+    boolean_t selected_group_supported_by_client = false;
+    for (size_t i = 0; i < ctx->client_supported_groups_len; i++) {
+        if (ctx->client_supported_groups[i] == ctx->selected_group) {
+            selected_group_supported_by_client = true;
+            break;
+        }
+    }
+    if (!selected_group_supported_by_client) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Selected key exchange group not supported by client");
         memory_free(buffer);
         return -1;
     }
@@ -629,7 +831,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
 }
 
 static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
-    uint8_t msg[256];
+    uint8_t msg[512];
     int32_t p = 5; // Start after Record Header
 
     // Handshake Type & Placeholder for Length
@@ -667,13 +869,21 @@ static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
     msg[p++] = 0x00; msg[p++] = 0x02;
     msg[p++] = 0x03; msg[p++] = 0x04; // TLS 1.3
 
+    uint8_t key_len = ctx->server_key_exchange_public_key_len;
+    uint8_t* key_data = ctx->server_key_exchange_public_key;
+
     // Extension: Key Share (0x0033)
     msg[p++] = 0x00; msg[p++] = 0x33;
-    msg[p++] = 0x00; msg[p++] = 0x24; // Len 36
-    msg[p++] = 0x00; msg[p++] = 0x1d; // X25519
-    msg[p++] = 0x00; msg[p++] = 0x20; // Key Len 32
-    memory_memcopy(ctx->server_key_exchange_public_key, &msg[p], 32);
-    p += 32;
+    msg[p++] = 0x00; msg[p++] = key_len + 4; // Placeholder for Key Share length
+    // Key Share Group
+    msg[p++] = ((ctx->selected_group >> 8) & 0xFF);
+    msg[p++] = (ctx->selected_group & 0xFF);
+    // Key Length
+    msg[p++] = ((key_len >> 8) & 0xFF);
+    msg[p++] = (key_len & 0xFF);
+    // Key Data
+    memory_memcopy(key_data, &msg[p], key_len);
+    p += key_len;
 
     // Fix up Lengths
     uint32_t hs_body_len = p - hs_len_ptr - 3;
@@ -692,7 +902,6 @@ static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
     msg[3] = (rec_len >> 8) & 0xFF;
     msg[4] = rec_len & 0xFF;
 
-    // IMPORTANT: Update Handshake Hash with Handshake Data ONLY (msg + 5)
     if(tls13_hash_update(ctx, msg + 5, p - 5) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash with Server Hello");
         return -1;
@@ -1009,12 +1218,12 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
 
     /* --- Send record --- */
     if (ctx->network_send(ctx->network_client_identifier, aad, 5, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send TLS record header");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
         return -1;
     }
 
     if (ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send encrypted extensions");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send encrypted extensions");
         return -1;
     }
 
@@ -1102,12 +1311,12 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
 
     /* --- Send record --- */
     if (ctx->network_send(ctx->network_client_identifier, aad, 5, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send TLS record header");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
         return -1;
     }
 
     if (ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send encrypted extensions");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send encrypted extensions");
         return -1;
     }
 
@@ -1225,7 +1434,7 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     // 1. Construct the buffer to be signed
     memory_memset(sign_buffer, 0x20, space_count); // 64 spaces
     memory_memcopy(sign_string, sign_buffer + space_count, strlen(sign_string));
-    sign_buffer[64 + strlen(sign_string)] = 0x00; // Null terminator
+    sign_buffer[space_count + strlen(sign_string)] = 0x00; // Null terminator
 
     // Get the current snapshot of the handshake hash
     uint32_t hlen = ctx->handshake_hash_len;
@@ -1239,29 +1448,86 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
 
     memory_memcopy(current_hash, sign_buffer + space_count + strlen(sign_string) + 1, hlen);
 
-    // 2. Sign the buffer using Ed25519
-    uint8_t signature[ED25519_SIGNATURE_LEN];
-    if (ed25519_sign(signature, sign_buffer, space_count + strlen(sign_string) + 1 + hlen,
-                     ctx->server_private_key.data) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Ed25519 signing failed");
+    // 2. Sign the buffer
+    size_t sign_buffer_len = space_count + strlen(sign_string) + 1 + hlen;
+    uint16_t signature_len = 0;
+    tls13_signature_algorithm_t sig_alg = TLS_SIG_ALG_NONE;
+    uint8_t* signature = NULL;
+
+    x509_algorithm_t cert_alg = x509_certificate_get_public_key_algorithm(ctx->server_certificate);
+
+    if (cert_alg == X509_ALGORITHM_ED25519) {
+        sig_alg = TLS_SIG_ALG_ED25519;
+        signature_len = 64;
+        signature = (uint8_t*)memory_malloc(signature_len);
+
+        if (!signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for signature");
+            return -1;
+        }
+
+        if (ed25519_sign(signature, sign_buffer, sign_buffer_len,
+                         ctx->server_private_key.data) != 0) {
+            memory_free(signature);
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Ed25519 signing failed");
+            return -1;
+        }
+    } else if(cert_alg == X509_ALGORITHM_ECDSA_SECP256R1) {
+        sig_alg = TLS_SIG_ALG_ECDSA_SECP256R1_SHA256;
+        signature_len = ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN;
+        signature = (uint8_t*)memory_malloc(signature_len);
+
+        if (!signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for signature");
+            return -1;
+        }
+
+        if(ellipticcurve_secp256r1_sign(signature, sign_buffer, sign_buffer_len,
+                                        ctx->server_private_key.data) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA P-256 signing failed");
+            memory_free(signature);
+            return -1;
+        }
+
+        size_t der_signature_len = 0;
+        uint8_t* der_signature = ellipticcurve_secp256r1_encode_signature(signature, &der_signature_len);
+        memory_free(signature);
+
+        if(!der_signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA P-256 sign to der sign failed");
+            return -1;
+        }
+
+        signature = der_signature;
+        signature_len = der_signature_len;
+    } else {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported certificate public key algorithm for signing: %d", cert_alg);
         return -1;
     }
 
-    uint8_t plaintext[256];
+    uint8_t plaintext[512];
     int32_t p = 0;
 
     /* --- Build Handshake Message --- */
     plaintext[p++] = 0x0f; // Type: Certificate Verify
-    // Length: 2 (Algorithm) + 2 (Sig Len) + 64 (Signature) = 68 bytes
-    plaintext[p++] = 0x00; plaintext[p++] = 0x00; plaintext[p++] = 2 + 2 + ED25519_SIGNATURE_LEN;
+    // Length: 2 (Algorithm) + 2 (Sig Len) + signature_len (Signature)
+    uint16_t hs_body_len = 2 + 2 + signature_len;
+    plaintext[p++] = ((hs_body_len >> 16) & 0xFF);
+    plaintext[p++] = ((hs_body_len >> 8) & 0xFF);
+    plaintext[p++] = (hs_body_len & 0xFF);
 
-    // Algorithm: Ed25519 is 0x0807
-    plaintext[p++] = 0x08; plaintext[p++] = 0x07;
+    // Algorithm: 2 bytes
+    plaintext[p++] = ((sig_alg >> 8) & 0xFF);
+    plaintext[p++] = (sig_alg & 0xFF);
 
-    // Signature Length: 64 bytes
-    plaintext[p++] = 0x00; plaintext[p++] = ED25519_SIGNATURE_LEN;
-    memory_memcopy(signature, &plaintext[p], ED25519_SIGNATURE_LEN);
-    p += ED25519_SIGNATURE_LEN;
+    // Signature Length: signature_len bytes
+    plaintext[p++] = ((signature_len >> 8) & 0xFF);
+    plaintext[p++] = (signature_len & 0xFF);
+
+    // Signature bytes
+    memory_memcopy(signature, &plaintext[p], signature_len);
+    p += signature_len;
+    memory_free(signature);
 
     /* --- Finalize Transcript and Send --- */
     // 1. Update hash with the Certificate Verify message (p bytes)
@@ -1277,7 +1543,7 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     uint16_t encrypted_len = p + 16;
     uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_len >> 8), (encrypted_len & 0xFF) };
 
-    uint8_t ciphertext[256 + 16];
+    uint8_t ciphertext[512 + 16];
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
                                       ctx->server_handshake_key, key_len,
                                       nonce, 12, aad, 5, ciphertext + p, 16);
@@ -2003,22 +2269,9 @@ int8_t tls13_handle_handshake(tls13_context_t* ctx) {
     }
 
     get_random_bytes(ctx->server_random, sizeof(ctx->server_random));
-    if(x25519_generate_keypair(ctx->server_key_exchange_private_key, ctx->server_key_exchange_public_key) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
-        return -1;
-    }
-
-    if(x25519_shared_secret(ctx->shared_secret,
-                            ctx->server_key_exchange_private_key,
-                            ctx->client_key_exchange_public_key) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
-        return -1;
-    }
-
-    ctx->shared_secret_len = X25519_PUBLIC_KEY_RAW_LEN;
 
     if(tls13_send_server_hello(ctx) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send Server Hello");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Server Hello");
         return -1;
     }
 
@@ -2028,29 +2281,29 @@ int8_t tls13_handle_handshake(tls13_context_t* ctx) {
     }
 
     if(tls13_send_encrypted_extensions(ctx) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send Encrypted Extensions");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Encrypted Extensions");
         return -1;
     }
 
     if(ctx->require_client_certificate) {
         if(tls13_send_certificate_request(ctx) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send Certificate Request");
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate Request");
             return -1;
         }
     }
 
     if(tls13_send_certificate(ctx) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send Certificate");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate");
         return -1;
     }
 
     if(tls13_send_certificate_verify(ctx) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send Certificate Verify");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate Verify");
         return -1;
     }
 
     if(tls13_send_finished(ctx) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to ctx->network_send Finished");
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Finished");
         return -1;
     }
 
