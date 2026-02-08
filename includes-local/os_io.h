@@ -56,8 +56,11 @@ _Noreturn void exit(int32_t status);
 
 
 #define SIGABRT 6
+#define SIGPIPE 13
 
 typedef void (*sighandler_t)(int32_t);
+
+#define SIG_IGN ((sighandler_t)1)
 
 sighandler_t signal(int32_t signum, sighandler_t handler);
 
