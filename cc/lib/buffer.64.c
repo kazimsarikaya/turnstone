@@ -821,6 +821,7 @@ int64_t buffer_vprintf(buffer_t* buffer, const char_t* fmt, va_list args) {
                     l_flag = 1;
                     nobreak;
                 case 'x':
+                case 'X':
                 case 'h':
                     if(l_flag == 2) {
                         uval = va_arg(args, uint64_t);
