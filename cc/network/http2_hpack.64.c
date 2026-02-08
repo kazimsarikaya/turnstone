@@ -13,45 +13,7 @@
 
 MODULE("turnstone.lib.network.http");
 
-int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, uint32_t index);
-int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, uint32_t index) {
-    UNUSED(ctx);
-    http_request_t* req = stream->request;
-
-    switch (index) {
-    case 2: // :method: GET
-        req->method = HTTP_METHOD_GET;
-        break;
-    case 3: // :method: POST
-        req->method = HTTP_METHOD_POST;
-        break;
-    case 4: // :path: /
-        memory_memclean(req->path, sizeof(req->path));
-        memory_memcopy("/", req->path, strlen("/") + 1);
-        break;
-    case 5: // :path: /index.html
-        memory_memclean(req->path, sizeof(req->path));
-        memory_memcopy("/index.html", req->path, strlen("/index.html") + 1);
-        break;
-    case 6: // :scheme: http
-    case 7: // :scheme: https
-        // You can log this, but usually your TLS layer implies the scheme
-        break;
-    case 8: // :status: 200 (Used in responses, but good to have)
-        break;
-
-    default:
-        // For indices like 1 ( :authority ) or 31 ( content-type ),
-        // the static table only provides the NAME.
-        // Since this is an INDEXED field, it means the client is
-        // referring to a full Name+Value pair already in the Dynamic Table.
-        PRINTLOG(HTTP, LOG_INFO, "Lookup in Dynamic Table for index %u", index);
-        // TODO: Implement Dynamic Table lookup
-        return -1; // Placeholder for unimplemented dynamic table lookup
-    }
-
-    return 0;
-}
+int8_t http2_apply_header(http_request_t* request, const char_t* name, const char_t* value);
 
 typedef struct http2_hpack_entry_t {
     const char_t* name;
@@ -128,11 +90,83 @@ static const http2_hpack_entry_t http2_hpack_static_names[] = {
 
 _Static_assert(HTTP2_HPACK_STATIC_TABLE_SIZE == 62, "Static table size mismatch");
 
+int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, uint32_t index);
+int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, uint32_t index) {
+    UNUSED(ctx);
+    http_request_t* req = stream->request;
+
+    if(!req) {
+        PRINTLOG(HTTP, LOG_ERROR, "Stream request object is NULL when handling HPACK indexed header");
+        return -1;
+    }
+
+    switch (index) {
+    case 2: // :method: GET
+        req->method = HTTP_METHOD_GET;
+        break;
+    case 3: // :method: POST
+        req->method = HTTP_METHOD_POST;
+        break;
+    case 4: // :path: /
+        memory_memclean(req->path, sizeof(req->path));
+        memory_memcopy("/", req->path, strlen("/") + 1);
+        break;
+    case 5: // :path: /index.html
+        memory_memclean(req->path, sizeof(req->path));
+        memory_memcopy("/index.html", req->path, strlen("/index.html") + 1);
+        break;
+    case 6: // :scheme: http
+    case 7: // :scheme: https
+        // You can log this, but usually your TLS layer implies the scheme
+        break;
+    case 8: // :status: 200 (Used in responses, but good to have)
+        break;
+
+    default:
+        // For indices like 1 ( :authority ) or 31 ( content-type ),
+        // the static table only provides the NAME.
+        // Since this is an INDEXED field, it means the client is
+        // referring to a full Name+Value pair already in the Dynamic Table.
+
+        if (index < HTTP2_HPACK_STATIC_TABLE_SIZE) {
+            const char_t* name = http2_hpack_static_names[index].name;
+            PRINTLOG(HTTP, LOG_WARNING, "HPACK Static Table lookup for index %u: name='%s'", index, name ? name : "NULL");
+            return -1; // Placeholder for unimplemented static table lookup
+        } else {
+            index -= HTTP2_HPACK_STATIC_TABLE_SIZE;
+
+            if(index >= list_size(ctx->headers_table)) {
+                PRINTLOG(HTTP, LOG_ERROR, "HPACK Dynamic Table lookup failed: index %lu out of bounds (table size: %llu)", index + HTTP2_HPACK_STATIC_TABLE_SIZE, list_size(ctx->headers_table) + HTTP2_HPACK_STATIC_TABLE_SIZE);
+                return -1;
+            }
+
+            const http2_hpack_entry_t* entry = list_get_data_at_position(ctx->headers_table, index);
+            const char_t* name  = entry ? entry->name : NULL;
+            const char_t* value = entry ? entry->value : NULL;
+            PRINTLOG(HTTP, LOG_DEBUG, "HPACK Dynamic Table lookup for index %lu: name='%s', value='%s'",
+                     index + HTTP2_HPACK_STATIC_TABLE_SIZE,
+                     name ? name : "NULL",
+                     value ? value : "NULL");
+            if (name && value) {
+                if (http2_apply_header(req, name, value) != 0) {
+                    PRINTLOG(HTTP, LOG_ERROR, "Failed to apply header from HPACK dynamic table: %s: %s", name, value);
+                    return -1;
+                }
+            } else {
+                PRINTLOG(HTTP, LOG_ERROR, "Invalid entry in HPACK dynamic table at index %lu", index + HTTP2_HPACK_STATIC_TABLE_SIZE);
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t index) {
     const char_t* name = NULL;
     if(index < HTTP2_HPACK_STATIC_TABLE_SIZE) {
         name = http2_hpack_static_names[index].name;
-        PRINTLOG(HTTP, LOG_INFO, "HPACK Static Table lookup for index %u: name='%s'", index, name ? name : "NULL");
+        PRINTLOG(HTTP, LOG_DEBUG, "HPACK Static Table lookup for index %u: name='%s'", index, name ? name : "NULL");
         return strdup(name);
     }
 
@@ -140,7 +174,7 @@ static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t in
     const http2_hpack_entry_t* entry = list_get_data_at_position(ctx->headers_table, index);
     name = entry ? entry->name : NULL;
 
-    PRINTLOG(HTTP, LOG_INFO, "HPACK Dynamic Table lookup for index %lu: name='%s'", index + HTTP2_HPACK_STATIC_TABLE_SIZE, name ? name : "NULL");
+    PRINTLOG(HTTP, LOG_DEBUG, "HPACK Dynamic Table lookup for index %lu: name='%s'", index + HTTP2_HPACK_STATIC_TABLE_SIZE, name ? name : "NULL");
 
     return name ? strdup(name) : NULL;
 }
@@ -148,8 +182,8 @@ static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t in
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, const char_t* value) {
-    size_t name_len = strlen(name);
-    size_t value_len = strlen(value);
+    size_t name_len   = strlen(name);
+    size_t value_len  = strlen(value);
     size_t entry_size = name_len + value_len + 32; // 32 bytes overhead
 
     http2_hpack_entry_t* entry = (http2_hpack_entry_t*)memory_malloc(sizeof(http2_hpack_entry_t));
@@ -158,9 +192,9 @@ static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, 
         return -1;
     }
 
-    entry->name = strdup(name);
+    entry->name  = strdup(name);
     entry->value = strdup(value);
-    entry->size = entry_size;
+    entry->size  = entry_size;
 
     if (!entry->name || !entry->value) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HPACK dynamic table entry name/value");
@@ -174,7 +208,7 @@ static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, 
         return -1;
     }
 
-    if(list_queue_push(ctx->headers_table, entry) == -1ULL) {
+    if(list_insert_at_head(ctx->headers_table, entry) == -1ULL) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to insert entry into HPACK dynamic table");
         memory_free((void*)entry->name);
         memory_free((void*)entry->value);
@@ -186,7 +220,7 @@ static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, 
 
     // Evict entries if table size exceeds limit
     while (ctx->headers_table_size > ctx->local_settings.header_table_size) {
-        http2_hpack_entry_t* evicted_entry = (http2_hpack_entry_t*)list_queue_pop(ctx->headers_table);
+        http2_hpack_entry_t* evicted_entry = (http2_hpack_entry_t*)list_delete_at_tail(ctx->headers_table);
         if (evicted_entry) {
             ctx->headers_table_size -= evicted_entry->size;
             memory_free((void*)evicted_entry->name);
@@ -598,7 +632,7 @@ static int8_t http2_hpack_decode_string(uint8_t* data, char_t** output, size_t* 
     size_t offset = 0;
     uint8_t first_byte = data[offset++];
     bool huffman_encoded = (first_byte & 0x80) != 0;
-    uint32_t str_length = first_byte & 0x7F;
+    uint32_t str_length  = first_byte & 0x7F;
 
     // If length is 127, we need to read more bytes
     if (str_length == 0x7F) {
@@ -634,53 +668,58 @@ static int8_t http2_hpack_decode_string(uint8_t* data, char_t** output, size_t* 
     return 0;
 }
 
-static uint32_t http2_hpack_decode_int(uint8_t first_byte, uint8_t prefix_mask,
-                                       const uint8_t* data, size_t* consumed_bytes) {
-    uint32_t value = first_byte & prefix_mask;
+int8_t http2_hpack_decode_int(const uint8_t* data, uint8_t prefix_bits, uint32_t * result, size_t * consumed);
+int8_t http2_hpack_decode_int(const uint8_t* data, uint8_t prefix_bits, uint32_t * result, size_t * consumed) {
+    uint8_t prefix_mask = (1 << prefix_bits) - 1;
+    uint32_t res = data[0] & prefix_mask;
+    uint32_t off = 1;
 
-    // If the value is less than the mask, we are done.
-    if (value < prefix_mask) {
-        *consumed_bytes = 0;
-        return value;
+    if (res < prefix_mask) {
+        *result = res;
+        *consumed = off;
+        return 0;
     }
 
-    // Otherwise, we have to read the continuation bytes
-    uint32_t shift = 0;
-    int32_t max_bytes = 5; // Prevent infinite loops
-    int32_t bytes_read = 0;
-    while (*data && bytes_read < max_bytes) {
-        bytes_read++;
-        uint8_t byte = *data;
-        data++;
-        value += (byte & 0x7F) << shift;
-        if ((byte & 0x80) == 0) {
+    uint32_t m = 0;
+    while (1) {
+        uint8_t byte = data[off++];
+        res += (byte & 127) * (1 << m);
+        m += 7;
+        if ((byte & 128) == 0) {
             break;
         }
-        shift += 7;
+        if (m > 28) {
+            return -1; // Overflow protection for Turnstone
+        }
     }
-
-    *consumed_bytes += bytes_read;
-    return value;
+    *result = res;
+    *consumed = off;
+    return 0;
 }
 
-
-int8_t http2_apply_header(http_request_t* request, const char_t* name, const char_t* value);
 int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
                                   uint8_t* data, bool add_to_dynamic_table, size_t* consumed_bytes);
 int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
                                   uint8_t* data, bool add_to_dynamic_table, size_t* consumed_bytes) {
     size_t offset = 0;
-    uint8_t first_byte = data[offset++];
 
     // Mask based on the type (0x40 for Incremental, 0x00/0x10 for others)
-    PRINTLOG(HTTP, LOG_INFO, "Decoding HPACK Literal Header Field (add to dynamic table: %s)",
+    PRINTLOG(HTTP, LOG_DEBUG, "Decoding HPACK Literal Header Field (add to dynamic table: %s)",
              add_to_dynamic_table ? "yes" : "no");
+
+    uint8_t prefix_bits = add_to_dynamic_table ? 6 : 4;
     uint32_t name_index;
     size_t name_index_consumed = 0;
     if (add_to_dynamic_table) {
-        name_index = http2_hpack_decode_int(first_byte, 0x3F, &data[offset], &name_index_consumed);
+        if(http2_hpack_decode_int(&data[offset], prefix_bits, &name_index, &name_index_consumed) != 0) {
+            PRINTLOG(HTTP, LOG_ERROR, "Failed to decode name index from HPACK literal header field");
+            return -1;
+        }
     } else {
-        name_index = http2_hpack_decode_int(first_byte, 0x0F, &data[offset], &name_index_consumed);
+        if(http2_hpack_decode_int(&data[offset], prefix_bits, &name_index, &name_index_consumed) != 0) {
+            PRINTLOG(HTTP, LOG_ERROR, "Failed to decode name index from HPACK literal header field");
+            return -1;
+        }
     }
     offset += name_index_consumed;
 

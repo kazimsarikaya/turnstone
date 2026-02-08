@@ -73,48 +73,50 @@ typedef struct http_response_t {
 #define HTTP2_PREFACE_LEN (sizeof(HTTP2_PREFACE) - 1)
 
 typedef enum http2_frame_type_t {
-    HTTP2_FRAME_TYPE_DATA = 0x0,
-    HTTP2_FRAME_TYPE_HEADERS = 0x1,
-    HTTP2_FRAME_TYPE_PRIORITY = 0x2,
-    HTTP2_FRAME_TYPE_RST_STREAM = 0x3,
-    HTTP2_FRAME_TYPE_SETTINGS = 0x4,
-    HTTP2_FRAME_TYPE_PUSH_PROMISE = 0x5,
-    HTTP2_FRAME_TYPE_PING = 0x6,
-    HTTP2_FRAME_TYPE_GOAWAY = 0x7,
+    HTTP2_FRAME_TYPE_DATA          = 0x0,
+    HTTP2_FRAME_TYPE_HEADERS       = 0x1,
+    HTTP2_FRAME_TYPE_PRIORITY      = 0x2,
+    HTTP2_FRAME_TYPE_RST_STREAM    = 0x3,
+    HTTP2_FRAME_TYPE_SETTINGS      = 0x4,
+    HTTP2_FRAME_TYPE_PUSH_PROMISE  = 0x5,
+    HTTP2_FRAME_TYPE_PING          = 0x6,
+    HTTP2_FRAME_TYPE_GOAWAY        = 0x7,
     HTTP2_FRAME_TYPE_WINDOW_UPDATE = 0x8,
-    HTTP2_FRAME_TYPE_CONTINUATION = 0x9,
+    HTTP2_FRAME_TYPE_CONTINUATION  = 0x9,
 } http2_frame_type_t;
 
 typedef enum http2_flag_t {
-    HTTP2_FLAG_END_STREAM = 0x1,
+    HTTP2_FLAG_END_STREAM  = 0x1,
     HTTP2_FLAG_END_HEADERS = 0x4,
-    HTTP2_FLAG_ACK = 0x1,
+    HTTP2_FLAG_ACK         = 0x1,
+    HTTP2_FLAG_PADDED      = 0x8,
+    HTTP2_FLAG_PRIORITY    = 0x20,
 } http2_flag_t;
 
 typedef enum http2_setting_id_t {
-    HTTP2_SETTING_HEADER_TABLE_SIZE = 0x1,
-    HTTP2_SETTING_ENABLE_PUSH = 0x2,
+    HTTP2_SETTING_HEADER_TABLE_SIZE      = 0x1,
+    HTTP2_SETTING_ENABLE_PUSH            = 0x2,
     HTTP2_SETTING_MAX_CONCURRENT_STREAMS = 0x3,
-    HTTP2_SETTING_INITIAL_WINDOW_SIZE = 0x4,
-    HTTP2_SETTING_MAX_FRAME_SIZE = 0x5,
-    HTTP2_SETTING_MAX_HEADER_LIST_SIZE = 0x6,
+    HTTP2_SETTING_INITIAL_WINDOW_SIZE    = 0x4,
+    HTTP2_SETTING_MAX_FRAME_SIZE         = 0x5,
+    HTTP2_SETTING_MAX_HEADER_LIST_SIZE   = 0x6,
 } http2_setting_id_t;
 
 typedef enum http2_error_code_t {
-    HTTP2_ERROR_NO_ERROR = 0x0,
-    HTTP2_ERROR_PROTOCOL_ERROR = 0x1,
-    HTTP2_ERROR_INTERNAL_ERROR = 0x2,
-    HTTP2_ERROR_FLOW_CONTROL_ERROR = 0x3,
-    HTTP2_ERROR_SETTINGS_TIMEOUT = 0x4,
-    HTTP2_ERROR_STREAM_CLOSED = 0x5,
-    HTTP2_ERROR_FRAME_SIZE_ERROR = 0x6,
-    HTTP2_ERROR_REFUSED_STREAM = 0x7,
-    HTTP2_ERROR_CANCEL = 0x8,
-    HTTP2_ERROR_COMPRESSION_ERROR = 0x9,
-    HTTP2_ERROR_CONNECT_ERROR = 0xa,
-    HTTP2_ERROR_ENHANCE_YOUR_CALM = 0xb,
+    HTTP2_ERROR_NO_ERROR            = 0x0,
+    HTTP2_ERROR_PROTOCOL_ERROR      = 0x1,
+    HTTP2_ERROR_INTERNAL_ERROR      = 0x2,
+    HTTP2_ERROR_FLOW_CONTROL_ERROR  = 0x3,
+    HTTP2_ERROR_SETTINGS_TIMEOUT    = 0x4,
+    HTTP2_ERROR_STREAM_CLOSED       = 0x5,
+    HTTP2_ERROR_FRAME_SIZE_ERROR    = 0x6,
+    HTTP2_ERROR_REFUSED_STREAM      = 0x7,
+    HTTP2_ERROR_CANCEL              = 0x8,
+    HTTP2_ERROR_COMPRESSION_ERROR   = 0x9,
+    HTTP2_ERROR_CONNECT_ERROR       = 0xa,
+    HTTP2_ERROR_ENHANCE_YOUR_CALM   = 0xb,
     HTTP2_ERROR_INADEQUATE_SECURITY = 0xc,
-    HTTP2_ERROR_HTTP_1_1_REQUIRED = 0xd,
+    HTTP2_ERROR_HTTP_1_1_REQUIRED   = 0xd,
 } http2_error_code_t;
 
 typedef struct http2_frame_t {
@@ -126,8 +128,9 @@ typedef struct http2_frame_t {
 } http2_frame_t;
 
 typedef struct http2_stream_t {
-    boolean_t          active;
     uint32_t           stream_id;
+    boolean_t          active;
+    buffer_t*          header_block_buffer; // For storing fragmented header blocks
     http2_error_code_t error_code;
     uint32_t           local_window_size;
     uint32_t           remote_window_size;
