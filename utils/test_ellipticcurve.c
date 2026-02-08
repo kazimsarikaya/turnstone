@@ -19,27 +19,27 @@
 
 int32_t main(void);
 
-const char_t* private_key_in_pem =
+static const char_t* private_key_in_pem =
     "-----BEGIN EC PRIVATE KEY-----\n"
     "MHcCAQEEIMy9vBDkkID/EBdI+OE7Z7FpWYTUQujRvHWzf68I9llRoAoGCCqGSM49\n"
     "AwEHoUQDQgAE47PToew+MMscfO6NBP88H5JWp/dz0gXZ//+jRfvTRLHWbHA9BYC/\n"
     "2nP0OnOBvd3YQyY1GnzaDCN9A4kYY9lX8A==\n"
     "-----END EC PRIVATE KEY-----\n";
 
-const char_t* public_key_in_pem =
+static const char_t* public_key_in_pem =
     "-----BEGIN PUBLIC KEY-----\n"
     "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE47PToew+MMscfO6NBP88H5JWp/dz\n"
     "0gXZ//+jRfvTRLHWbHA9BYC/2nP0OnOBvd3YQyY1GnzaDCN9A4kYY9lX8A==\n"
     "-----END PUBLIC KEY-----\n";
 
-const uint8_t private_key_raw[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN] = {
+static const uint8_t private_key_raw[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN] = {
     0xcc, 0xbd, 0xbc, 0x10, 0xe4, 0x90, 0x80, 0xff,
     0x10, 0x17, 0x48, 0xf8, 0xe1, 0x3b, 0x67, 0xb1,
     0x69, 0x59, 0x84, 0xd4, 0x42, 0xe8, 0xd1, 0xbc,
     0x75, 0xb3, 0x7f, 0xaf, 0x08, 0xf6, 0x59, 0x51
 };
 
-const uint8_t public_key_raw[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN] = {
+static const uint8_t public_key_raw[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN] = {
     0xe3, 0xb3, 0xd3, 0xa1, 0xec, 0x3e, 0x30, 0xcb,
     0x1c, 0x7c, 0xee, 0x8d, 0x04, 0xff, 0x3c, 0x1f,
     0x92, 0x56, 0xa7, 0xf7, 0x73, 0xd2, 0x05, 0xd9,
@@ -49,6 +49,19 @@ const uint8_t public_key_raw[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN] = {
     0x43, 0x26, 0x35, 0x1a, 0x7c, 0xda, 0x0c, 0x23,
     0x7d, 0x03, 0x89, 0x18, 0x63, 0xd9, 0x57, 0xf0
 };
+
+static const uint8_t signature_to_verify[] = {
+    0x60, 0x17, 0x01, 0x00, 0x25, 0x09, 0xd8, 0xd4,
+    0x37, 0xdb, 0x7f, 0xc1, 0x38, 0x5b, 0x3e, 0x20,
+    0xb0, 0xc7, 0x59, 0x6d, 0x95, 0x01, 0x98, 0x50,
+    0x6d, 0x0b, 0xfd, 0x40, 0xb2, 0x95, 0x2e, 0x8a,
+    0xab, 0xbf, 0xf0, 0xdd, 0xe7, 0x96, 0x5b, 0x5d,
+    0x94, 0xab, 0xa2, 0xfb, 0x72, 0xb7, 0x30, 0xe1,
+    0x2b, 0x44, 0x31, 0x5a, 0x15, 0xf7, 0xdf, 0xb4,
+    0xa7, 0x3f, 0x40, 0x73, 0x1f, 0x6e, 0x3f, 0x8a
+};
+
+_Static_assert(sizeof(signature_to_verify) == ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN, "Signature size mismatch");
 
 int32_t main(void) {
     int8_t res;
@@ -172,6 +185,15 @@ int32_t main(void) {
 
     print_success("secp256r1 signature successfully verified\n");
 
+    res = ellipticcurve_secp256r1_verify(signature_to_verify, (const uint8_t*)message, strlen(message), public_key_raw_local);
+
+    if (res != 0) {
+        print_error("Failed to verify known signature with secp256r1\n");
+        return -1;
+    }
+
+    print_success("Known signature successfully verified with secp256r1\n");
+
     uint8_t second_public_key_raw[ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN];
     uint8_t second_private_key_raw[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN];
 
@@ -185,14 +207,14 @@ int32_t main(void) {
     uint8_t shared_secret1[32];
     uint8_t shared_secret2[32];
 
-    res = ellipticcurve_secp256r1_compute_shared_secret(shared_secret1, private_key_raw_local, second_public_key_raw);
+    res = ellipticcurve_secp256r1_shared_secret(shared_secret1, private_key_raw_local, second_public_key_raw);
 
     if (res != 0) {
         print_error("Failed to compute shared secret (1)\n");
         return -1;
     }
 
-    res = ellipticcurve_secp256r1_compute_shared_secret(shared_secret2, second_private_key_raw, public_key_raw_local);
+    res = ellipticcurve_secp256r1_shared_secret(shared_secret2, second_private_key_raw, public_key_raw_local);
 
     if (res != 0) {
         print_error("Failed to compute shared secret (2)\n");
