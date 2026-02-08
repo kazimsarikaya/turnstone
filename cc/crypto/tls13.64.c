@@ -20,30 +20,26 @@
 MODULE("turnstone.lib.crypto.tls13");
 
 typedef enum tls13_extension_type_t : uint16_t {
-    TLS_EXTENSION_SNI                       = 0x0000,
-    TLS_EXTENSION_SUPPORTED_GROUPS          = 0x000a,
-    TLS_EXTENSION_SIGNATURE_ALGORITHMS      = 0x000d,
-    TLS_EXTENSION_ALPN                      = 0x0010,
-    TLS_EXTENSION_SUPPORTED_VERSIONS        = 0x002b,
-    TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES    = 0x002d,
-    TLS_EXTENSION_POST_HANDSHAKE_AUTH       = 0x0031,
-    TLS_EXTENSION_KEY_SHARE                 = 0x0033,
+    TLS_EXTENSION_SNI = 0x0000,
+    TLS_EXTENSION_STATUS_REQUEST = 0x0005,
+    TLS_EXTENSION_SUPPORTED_GROUPS = 0x000a,
+    TLS_EXTENSION_SIGNATURE_ALGORITHMS = 0x000d,
+    TLS_EXTENSION_ALPN = 0x0010,
+    TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP = 0x0012,
+    TLS_EXTENSION_SUPPORTED_VERSIONS = 0x002b,
+    TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES = 0x002d,
+    TLS_EXTENSION_POST_HANDSHAKE_AUTH = 0x0031,
+    TLS_EXTENSION_KEY_SHARE = 0x0033,
 } tls13_extension_type_t;
 
 typedef enum tls13_key_exchange_group_t : uint16_t {
     TLS_GROUP_NONE = 0x0000,
-    TLS_GROUP_SECP160R1 = 0x0010,
     TLS_GROUP_SECP256R1 = 0x0017,
     TLS_GROUP_SECP384R1 = 0x0018,
     TLS_GROUP_SECP521R1 = 0x0019,
     TLS_GROUP_X25519 = 0x001d,
     TLS_GROUP_X448 = 0x001e,
-    TLS_GROUP_FFDHE2048 = 0x0100,
-    TLS_GROUP_FFDHE3072 = 0x0101,
-    TLS_GROUP_FFDHE4096 = 0x0102,
-    TLS_GROUP_FFDHE6144 = 0x0103,
-    TLS_GROUP_FFDHE8192 = 0x0104,
-    TLS_GROUP_X25519MLKEM768 = 0x11ec, // not implemented PQC group, reserved for future use
+    TLS_GROUP_X25519_ML_KEM768 = 0x11ec, // not implemented PQC group, reserved for future use
 } tls13_key_exchange_group_t;
 
 typedef enum tls13_hash_algorithm_t {
@@ -53,32 +49,28 @@ typedef enum tls13_hash_algorithm_t {
 } tls13_hash_algorithm_t;
 
 typedef enum tls13_cipher_suite_t : uint16_t {
-    TLS_AES_128_GCM_SHA256       = 0x1301,
-    TLS_AES_256_GCM_SHA384       = 0x1302,
-    TLS_CHACHA20_POLY1305_SHA256 = 0x1303,
+    TLS_AES_128_GCM_SHA256 = 0x1301,
+    TLS_AES_256_GCM_SHA384 = 0x1302,
+    TLS_CHACHA20_POLY1305_SHA256 = 0x1303, // not implemented, reserved for future use
 } tls13_cipher_suite_t;
 
 typedef enum tls13_signature_algorithm_t : uint16_t {
-    TLS_SIG_ALG_NONE                   = 0x0000,
+    TLS_SIG_ALG_NONE = 0x0000,
 
-    /* Traditional ECDSA / RSA-PSS */
-    TLS_SIG_ALG_RSA_PSS_RSAE_SHA256    = 0x0804,
-    TLS_SIG_ALG_RSA_PSS_RSAE_SHA384    = 0x0805,
+    /* ECDSA with SHA-2 */
     TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 = 0x0403,
     TLS_SIG_ALG_ECDSA_SECP384R1_SHA384 = 0x0503,
     TLS_SIG_ALG_ECDSA_SECP521R1_SHA512 = 0x0603,
 
-    /* EdDSA (Keep this! It's your current favorite) */
-    TLS_SIG_ALG_ED25519                = 0x0807,
-    TLS_SIG_ALG_ED448                  = 0x0808,
+    /* EdDSA */
+    TLS_SIG_ALG_ED25519 = 0x0807,
+    TLS_SIG_ALG_ED448 = 0x0808,
 
     /* Post-Quantum ML-DSA (NIST FIPS 204) */
-    TLS_SIG_ALG_MLDSA_44               = 0x0904, // Smallest/Fastest
-    TLS_SIG_ALG_MLDSA_65               = 0x0905, // Balanced (Recommended)
-    TLS_SIG_ALG_MLDSA_87               = 0x0906, // Highest Security
+    TLS_SIG_ALG_MLDSA_44 = 0x0904, // Smallest/Fastest
+    TLS_SIG_ALG_MLDSA_65 = 0x0905, // Balanced (Recommended)
+    TLS_SIG_ALG_MLDSA_87 = 0x0906, // Highest Security
 
-    /* Experimental / Early NIST Drafts */
-    TLS_SIG_ALG_DILITHIUM_2            = 0x0034, // Older ID for ML-DSA-44 level
 } tls13_signature_algorithm_t;
 
 struct tls13_context_t {
@@ -151,7 +143,7 @@ static const uint8_t sha256_empty_hash[] = {
     0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
     0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
     0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
-    0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
+    0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55,
 };
 
 _Static_assert(sizeof(sha256_empty_hash) == SHA256_OUTPUT_SIZE, "SHA256 empty hash size mismatch");
@@ -162,7 +154,7 @@ static const uint8_t sha384_empty_hash[] = {
     0x21, 0xfd, 0xb7, 0x11, 0x14, 0xbe, 0x07, 0x43,
     0x4c, 0x0c, 0xc7, 0xbf, 0x63, 0xf6, 0xe1, 0xda,
     0x27, 0x4e, 0xde, 0xbf, 0xe7, 0x6f, 0x65, 0xfb,
-    0xd5, 0x1a, 0xd2, 0xf1, 0x48, 0x98, 0xb9, 0x5b
+    0xd5, 0x1a, 0xd2, 0xf1, 0x48, 0x98, 0xb9, 0x5b,
 };
 
 _Static_assert(sizeof(sha384_empty_hash) == SHA384_OUTPUT_SIZE, "SHA384 empty hash size mismatch");
@@ -266,7 +258,7 @@ tls13_context_t* tls13_create_server_context(const char_t*        host_port,
     ctx->default_host_port = host_port;
     ctx->network_send = network_send;
     ctx->network_recv = network_recv;
-    ctx->network_client_identifier = network_client_identifier;
+    ctx->network_client_identifier  = network_client_identifier;
     ctx->require_client_certificate = require_client_certificate;
 
     return ctx;
@@ -420,7 +412,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
             uint8_t buffer[512];
             memory_memclean(buffer, sizeof(buffer));
             memory_memcopy(header, &buffer[0], 5);
-            received = ctx->network_recv(ctx->network_client_identifier, &buffer[5], 506, 0);
+            received = ctx->network_recv(ctx->network_client_identifier, &buffer[5], 506, 0 | 0x80000000); // try once.
             if(received > 0) {
                 buffer[5 + received] = '\0';
                 // find Host header
@@ -525,10 +517,13 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
         uint16_t suite = (cipher_suites[i] << 8) | cipher_suites[i + 1];
 
         if (suite == TLS_AES_128_GCM_SHA256) { // TLS_AES_128_GCM_SHA256
+            if(ctx->cipher_suite == TLS_AES_256_GCM_SHA384) { // Prefer stronger suite if both are offered
+                continue; // Already selected, skip
+            }
             ctx->cipher_suite = TLS_AES_128_GCM_SHA256;
             ctx->selected_hash_algorithm = TLS_HASH_SHA256;
             ctx->handshake_hash_len = SHA256_OUTPUT_SIZE;
-            ctx->handshake_key_len = AES128_KEY_SIZE; // AES-128 key length
+            ctx->handshake_key_len  = AES128_KEY_SIZE; // AES-128 key length
             ctx->handshake_iv_len = 12; // AES-GCM standard IV length
             cipher_suit_found = true;
             // You can break here or continue to see what else the client offers
@@ -536,9 +531,14 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
             ctx->cipher_suite = TLS_AES_256_GCM_SHA384;
             ctx->selected_hash_algorithm = TLS_HASH_SHA384;
             ctx->handshake_hash_len = SHA384_OUTPUT_SIZE;
-            ctx->handshake_key_len = AES256_KEY_SIZE; // AES-256 key length
+            ctx->handshake_key_len  = AES256_KEY_SIZE; // AES-256 key length
             ctx->handshake_iv_len = 12; // AES-GCM standard IV length
             cipher_suit_found = true;
+        } else if (suite == TLS_CHACHA20_POLY1305_SHA256) {
+            // Not implemented, reserved for future use
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered not implemented cipher suite: TLS_CHACHA20_POLY1305_SHA256");
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported cipher suite: 0x%04x", suite);
         }
     }
 
@@ -561,12 +561,12 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
     int32_t parsed_len = 0;
     while (parsed_len < extensions_total_len) {
         uint16_t ext_type = (ext_ptr[0] << 8) | ext_ptr[1];
-        uint16_t ext_len = (ext_ptr[2] << 8) | ext_ptr[3];
+        uint16_t ext_len  = (ext_ptr[2] << 8) | ext_ptr[3];
 
         if (ext_type == TLS_EXTENSION_SNI) { // Server Name Indication
             // Parse SNI to extract hostname
             uint8_t * sni_data = ext_ptr + 4;
-            uint16_t sni_list_len = (sni_data[0] << 8) | sni_data[1];
+            uint16_t sni_list_len  = (sni_data[0] << 8) | sni_data[1];
             uint8_t * sni_list_ptr = sni_data + 2;
             int32_t sni_parsed = 0;
             while (sni_parsed < sni_list_len) {
@@ -611,7 +611,14 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                 processed += (1 + str_len);
             }
         } else if (ext_type == TLS_EXTENSION_SUPPORTED_VERSIONS) { // Supported Versions
-            ctx->tls13_supported = true;
+            uint8_t version_count = ext_ptr[4];
+            for (int i = 0; i < version_count; i++) {
+                uint16_t version = (ext_ptr[5 + i * 2] << 8) | ext_ptr[6 + i * 2];
+                if (version == 0x0304) { // TLS 1.3
+                    ctx->tls13_supported = true;
+                    break;
+                }
+            }
         } else if (ext_type == TLS_EXTENSION_KEY_SHARE) { // Client Key Share
             uint8_t * share_ptr = ext_ptr + 4;
             uint16_t total_shares_len = (share_ptr[0] << 8) | share_ptr[1];
@@ -661,7 +668,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: x25519");
                 } else if (group == TLS_GROUP_SECP256R1) { // Secp256r1 (P-256)
                     if(ctx->selected_group == TLS_GROUP_X25519) {
-                        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
+                        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
                         int32_t jump = 4 + key_len;
                         current_share += jump;
                         processed += jump;
@@ -706,6 +713,8 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                     ctx->shared_secret_len = ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN; // P-256 shared secret is 32 bytes
                     ctx->selected_group = TLS_GROUP_SECP256R1;
                     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp256r1");
+                } else if(group == TLS_GROUP_X25519_ML_KEM768) {
+                    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered not implemented KEM group: x25519_mlkem768, skipping");
                 } else {
                     PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unsupported Key Share Group: 0x%04x", group);
                 }
@@ -714,12 +723,8 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                 current_share += jump;
                 processed += jump;
             }
-        } else if(ext_type == TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES) { // PSK Key Exchange Modes
-            // For simplicity, we won't support PSK in this implementation, but we can log it
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports PSK key exchange modes (not implemented)");
-
         } else if(ext_type == TLS_EXTENSION_SIGNATURE_ALGORITHMS) {
-            uint16_t sigalgs_len = (ext_ptr[2] << 8) | ext_ptr[3];
+            uint16_t sigalgs_len  = (ext_ptr[2] << 8) | ext_ptr[3];
             uint8_t* sigalgs_data = ext_ptr + 4;
 
             ctx->client_supported_signature_algorithms_len = sigalgs_len / 2;
@@ -735,14 +740,14 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                 PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported signature algorithm: 0x%04x", alg);
             }
         } else if(ext_type == TLS_EXTENSION_SUPPORTED_GROUPS) {
-            uint16_t groups_len = (ext_ptr[2] << 8) | ext_ptr[3];
+            uint16_t groups_len  = (ext_ptr[2] << 8) | ext_ptr[3];
             uint8_t* groups_data = ext_ptr + 4;
 
             // if list contains TLS_GROUP_SECP160R1, bad it.
             // ignore 0x01XX series, they are slow we don't like them.
             for (int i = 0; i < groups_len; i += 2) {
                 uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
-                if(group == TLS_GROUP_SECP160R1) {
+                if(group == 0x0010) { // TLS_GROUP_SECP160R1
                     groups_len -= 2;
                 }
                 if((group & 0xFF00) == 0x0100) {
@@ -759,7 +764,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
             }
             for (int i = 0; i < groups_len; i += 2) {
                 uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
-                if(group == TLS_GROUP_SECP160R1) {
+                if(group == 0x0010) { // TLS_GROUP_SECP160R1
                     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: secp160r1, skipping");
                     continue;
                 }
@@ -770,9 +775,18 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                 ctx->client_supported_groups[i / 2] = group;
                 PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported group: 0x%04x", group);
             }
+        } else if(ext_type == TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES) { // PSK Key Exchange Modes
+            // For simplicity, we won't support PSK in this implementation, but we can log it
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports PSK key exchange modes (not implemented)");
         } else if(ext_type == TLS_EXTENSION_POST_HANDSHAKE_AUTH) {
             // For simplicity, we won't support post-handshake authentication in this implementation, but we can log it
             PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports post-handshake authentication (not implemented)");
+        } else if (ext_type == TLS_EXTENSION_STATUS_REQUEST) {
+            // For simplicity, we won't support OCSP stapling in this implementation, but we can log it
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports OCSP stapling (not implemented)");
+        } else if (ext_type == TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP) {
+            // For simplicity, we won't support SCTs in this implementation, but we can log it
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports Signed Certificate Timestamps (not implemented)");
         } else {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Skipping unsupported extension type: 0x%04x", ext_type);
         }
@@ -924,7 +938,7 @@ static int32_t hkdf_expand(tls13_context_t* ctx,
     }
     uint8_t T[64]; // Buffer for T(n)
     uint8_t* hash_result = NULL;
-    uint16_t out_offset = 0;
+    uint16_t out_offset  = 0;
 
     // T(0) is empty string
     // T(1) = HMAC-Hash(PRK, T(0) | info | 0x01)
@@ -1028,7 +1042,7 @@ static int32_t hkdf_extract(tls13_context_t* ctx,
 static int8_t tls13_generate_handshake_key_and_iv(tls13_context_t* ctx) {
     uint32_t hlen = ctx->handshake_hash_len;
     uint32_t key_len = ctx->handshake_key_len;
-    uint32_t iv_len = ctx->handshake_iv_len;
+    uint32_t iv_len  = ctx->handshake_iv_len;
 
     uint8_t empty_hash[SHA384_OUTPUT_SIZE] = {0};
     if(tls13_hash_get_empty(ctx, empty_hash) != 0) {
@@ -1137,7 +1151,7 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
     // leaving 1 byte for the Inner Content Type (0x16)
     int32_t reverse_p = 200;
     int32_t start_pos = reverse_p;
-    uint16_t ext_len = 0;
+    uint16_t ext_len  = 0;
 
     /* --- ALPN Extension (Reverse) --- */
     if(ctx->has_alpn) {
@@ -1345,7 +1359,7 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
     size_t estimated_hs_len = 1 + 3 + 1 + 3 + total_cert_len;
     estimated_hs_len += 4096 - (estimated_hs_len % 4096); // Padding for safety
 
-    uint8_t* plaintext = (uint8_t*)memory_malloc(estimated_hs_len);
+    uint8_t* plaintext  = (uint8_t*)memory_malloc(estimated_hs_len);
     uint8_t* ciphertext = (uint8_t*)memory_malloc(estimated_hs_len + 16);
 
     if (!plaintext || !ciphertext) {
@@ -1428,7 +1442,7 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
 }
 
 static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
-    const size_t space_count = 64;
+    const size_t space_count  = 64;
     const char_t* sign_string = "TLS 1.3, server CertificateVerify";
     uint8_t sign_buffer[space_count + strlen(sign_string) + 1 + SHA384_OUTPUT_SIZE];
     // 1. Construct the buffer to be signed
@@ -1645,7 +1659,7 @@ static int8_t tls13_process_client_certificate(tls13_context_t* ctx,
 
     x509_certificate_t* client_certificate = NULL;
     boolean_t client_verified = false;
-    size_t ca_public_key_len = 0;
+    size_t ca_public_key_len  = 0;
     uint8_t* ca_public_key = x509_certificate_get_public_key_data(ctx->ca_certificate, &ca_public_key_len);
     if (!ca_public_key) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get CA public key");
@@ -1989,7 +2003,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
 static int8_t tls13_generate_application_keys(tls13_context_t* ctx) {
     uint32_t hlen = ctx->handshake_hash_len;
     uint32_t key_len = ctx->handshake_key_len;
-    uint32_t iv_len = ctx->handshake_iv_len;
+    uint32_t iv_len  = ctx->handshake_iv_len;
 
     // 1. Get current transcript hash (Includes EVERYTHING up to Client Finished)
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
@@ -2092,7 +2106,7 @@ int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
         return 0;
     }
 
-    int64_t remaining = len;
+    int64_t remaining  = len;
     int32_t total_sent = 0;
 
     while(remaining > 0) {
@@ -2103,7 +2117,7 @@ int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
             return -1;
         }
         total_sent += sent;
-        remaining -= sent;
+        remaining  -= sent;
     }
 
     return len;

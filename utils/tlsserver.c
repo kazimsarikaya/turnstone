@@ -25,7 +25,7 @@
 
 #define PORT 10443
 
-static int8_t tls13_load_ca_certificate_and_key(void) {
+static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, boolean_t use_secp256r1) {
     // first check build/ca.pem and build/ca.key exists
     // if exists load them else generate new CA certificate and key
     boolean_t ca_exists = false;
@@ -44,7 +44,7 @@ static int8_t tls13_load_ca_certificate_and_key(void) {
         ca_exists = false;
     }
 
-    if(ca_exists) {
+    if(ca_exists && !force_regenerate) {
         return 0;
     }
 
@@ -55,13 +55,13 @@ static int8_t tls13_load_ca_certificate_and_key(void) {
         return -1;
     }
 
-    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
+    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "TurnstoneOS CA") != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add issuer common name");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test CA") != 0) {
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "TurnstoneOS CA") != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject common name");
         x509_certificate_free(cert);
         return -1;
@@ -85,49 +85,138 @@ static int8_t tls13_load_ca_certificate_and_key(void) {
         return -1;
     }
 
-    uint8_t private_key[32];
-    uint8_t public_key[32];
+    if(!use_secp256r1) {
+        uint8_t private_key[32];
+        uint8_t public_key[32];
 
-    if(ed25519_generate_keypair(private_key, public_key) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
-        x509_certificate_free(cert);
-        return -1;
-    }
+        if(ed25519_generate_keypair(private_key, public_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
+            x509_certificate_free(cert);
+            return -1;
+        }
 
-    uint8_t* skid = sha256_hash(public_key, 32);
-    if(skid == NULL) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate SKID");
-        x509_certificate_free(cert);
-        return -1;
-    }
+        uint8_t* skid = sha256_hash(public_key, 32);
+        if(skid == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate SKID");
+            x509_certificate_free(cert);
+            return -1;
+        }
 
-    if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject key identifier");
+        if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject key identifier");
+            memory_free(skid);
+            x509_certificate_free(cert);
+            return -1;
+        }
+
+        if (x509_certificate_add_authority_key_identifier(cert, skid, 32) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add authority key identifier");
+            memory_free(skid);
+            x509_certificate_free(cert);
+            return -1;
+        }
+
         memory_free(skid);
-        x509_certificate_free(cert);
-        return -1;
-    }
 
-    if (x509_certificate_add_authority_key_identifier(cert, skid, 32) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add authority key identifier");
+        if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, public_key, 32) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to certificate");
+            x509_certificate_free(cert);
+            return -1;
+        }
+
+        if (x509_certificate_sign(cert, X509_ALGORITHM_ED25519,
+                                  private_key, sizeof(private_key)) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign certificate");
+            x509_certificate_free(cert);
+            return -1;
+        }
+
+        char_t* final_key_data = NULL;
+        if(pem_write_ed25519_private_key(private_key, &final_key_data) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write private key to PEM format");
+            return -1;
+        }
+
+        memory_memclean(private_key, sizeof(private_key));
+
+        f = fopen("build/ca.key", "wb");
+        if (f == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open ca.key for writing");
+            memory_free(final_key_data);
+            return -1;
+        }
+
+        fwrite(final_key_data, 1, strlen(final_key_data), f);
+        fclose(f);
+
+        memory_free(final_key_data);
+    } else {
+        uint8_t private_key[32];
+        uint8_t public_key[65];
+
+        if(ellipticcurve_secp256r1_generate_keypair(private_key, public_key + 1) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate SECP256R1 keypair");
+            x509_certificate_free(cert);
+            return -1;
+        }
+
+        public_key[0] = 0x04; // Uncompressed point prefix
+
+        uint8_t* skid = sha256_hash(public_key, 65);
+        if(skid == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate SKID");
+            x509_certificate_free(cert);
+            return -1;
+        }
+
+        if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject key identifier");
+            memory_free(skid);
+            x509_certificate_free(cert);
+            return -1;
+        }
+
+        if (x509_certificate_add_authority_key_identifier(cert, skid, 32) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add authority key identifier");
+            memory_free(skid);
+            x509_certificate_free(cert);
+            return -1;
+        }
+
         memory_free(skid);
-        x509_certificate_free(cert);
-        return -1;
-    }
 
-    memory_free(skid);
+        if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1, public_key, 65) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to certificate");
+            x509_certificate_free(cert);
+            return -1;
+        }
 
-    if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, public_key, 32) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to certificate");
-        x509_certificate_free(cert);
-        return -1;
-    }
+        if (x509_certificate_sign(cert, X509_ALGORITHM_ECDSA_SECP256R1,
+                                  private_key, sizeof(private_key)) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign certificate");
+            x509_certificate_free(cert);
+            return -1;
+        }
 
-    if (x509_certificate_sign(cert, X509_ALGORITHM_ED25519,
-                              private_key, sizeof(private_key)) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign certificate");
-        x509_certificate_free(cert);
-        return -1;
+        char_t* final_key_data = NULL;
+        if(pem_write_secp256r1_private_key(private_key, &final_key_data) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write private key to PEM format");
+            return -1;
+        }
+
+        memory_memclean(private_key, sizeof(private_key));
+
+        f = fopen("build/ca.key", "wb");
+        if (f == NULL) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open ca.key for writing");
+            memory_free(final_key_data);
+            return -1;
+        }
+
+        fwrite(final_key_data, 1, strlen(final_key_data), f);
+        fclose(f);
+
+        memory_free(final_key_data);
     }
 
     char_t* final_cert_data = x509_certificate_get_pem(cert);
@@ -150,24 +239,6 @@ static int8_t tls13_load_ca_certificate_and_key(void) {
     fclose(f);
 
     memory_free(final_cert_data);
-
-    char_t* final_key_data = NULL;
-    if(pem_write_ed25519_private_key(private_key, &final_key_data) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write private key to PEM format");
-        return -1;
-    }
-
-    f = fopen("build/ca.key", "wb");
-    if (f == NULL) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open ca.key for writing");
-        memory_free(final_key_data);
-        return -1;
-    }
-
-    fwrite(final_key_data, 1, strlen(final_key_data), f);
-    fclose(f);
-
-    memory_free(final_key_data);
 
     print_success("CA certificate generated successfully: ca.pem ca.key");
 
@@ -568,12 +639,16 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t* tls13_ctx) 
 
 static int32_t recv_all(int64_t sockfd, uint8_t* buffer, int32_t length, int32_t flags) {
     int32_t total_received = 0;
+    boolean_t once = flags & 0x80000000; // custom flag to indicate recv should be called only once
     while (total_received < length) {
         int32_t bytes_received = recv(sockfd, buffer + total_received, length - total_received, flags);
         if (bytes_received <= 0) {
             return -1; // error or connection closed
         }
         total_received += bytes_received;
+        if(once) {
+            break;
+        }
     }
     return total_received;
 }
@@ -592,11 +667,18 @@ static int32_t send_all(int64_t sockfd, const uint8_t* buffer, int32_t length, i
 
 int32_t main(int32_t argc, char_t** argv) {
     signal(SIGPIPE, SIG_IGN);
+
+    boolean_t use_secp256r1 = false;
+    boolean_t force_ca_regenerate = false;
     boolean_t require_client_certificate = false;
 
     // parse command line arguments
     for(int32_t i = 1; i < argc; i++) {
-        if(strcmp(argv[i], "--require-client-cert") == 0) {
+        if(strcmp(argv[i], "--use-secp256r1") == 0) {
+            use_secp256r1 = true;
+        } else if(strcmp(argv[i], "--force-ca-regenerate") == 0) {
+            force_ca_regenerate = true;
+        } else if(strcmp(argv[i], "--require-client-cert") == 0) {
             require_client_certificate = true;
         }
     }
@@ -605,7 +687,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     PRINTLOG(CRYPTOLIB, LOG_INFO, "TLS server test application");
 
-    if(tls13_load_ca_certificate_and_key() != 0) {
+    if(tls13_load_ca_certificate_and_key(force_ca_regenerate, use_secp256r1) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load CA certificate and key");
         return 1;
     }
