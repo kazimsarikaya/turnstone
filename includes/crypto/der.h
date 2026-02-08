@@ -376,7 +376,19 @@ int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value)
  * @param value A 20-byte array representing the unsigned 160-bit integer in big-endian format.
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
-int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, uint8_t value[20]);
+int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, const uint8_t value[20]);
+
+/**
+ * @brief Encodes and appends a DER integer using a 256-bit unsigned integer.
+ *
+ * Encodes the given 256-bit unsigned integer (32 bytes) into DER format and appends it to the current buffer.
+ * This is useful for very large integers that exceed the capacity of `uint128_t`.
+ *
+ * @param encoder The DER encoder instance.
+ * @param value A 32-byte array representing the unsigned 256-bit integer in big-endian format.
+ * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
+ */
+int8_t der_encoder_encode_integer_u256(der_encoder_t * encoder, const uint8_t value[32]);
 
 /**
  * @brief Appends raw bytes directly to the DER buffer.
@@ -651,6 +663,18 @@ int8_t der_decoder_decode_integer_u128(der_decoder_t* decoder, uint128_t* out_va
  * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for 160 bits).
  */
 int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value[20]);
+
+/**
+ * @brief Decodes a DER integer using a 256-bit unsigned integer.
+ *
+ * Attempts to parse the next element as a DER integer and stores the value in `out_value`.
+ * Supports up to 256-bit unsigned integers (32 bytes), handling potential sign extension bytes.
+ *
+ * @param decoder The DER decoder instance.
+ * @param out_value A 32-byte array where the decoded 256-bit integer will be stored in big-endian format.
+ * @return 0 on success, -1 on failure (e.g., not an integer, invalid format, value out of range for 256 bits).
+ */
+int8_t der_decoder_decode_integer_u256(der_decoder_t* decoder, uint8_t out_value[32]);
 
 /**
  * @brief Decodes a context-specific string.

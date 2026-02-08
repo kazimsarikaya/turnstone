@@ -346,7 +346,7 @@ int8_t der_encoder_encode_integer_u128(der_encoder_t * encoder, uint128_t value)
                                 int_bytes, int_len);
 }
 
-int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, uint8_t value[20]) {
+int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, const uint8_t value[20]) {
     uint8_t int_bytes[21];
     size_t int_len = 0;
 
@@ -363,6 +363,42 @@ int8_t der_encoder_encode_integer_u160(der_encoder_t * encoder, uint8_t value[20
     } else {
         // Copy relevant bytes
         for (size_t i = start_index; i < 20; i++) {
+            int_bytes[int_len++] = value[i];
+        }
+
+        // If MSB is 1, we must add a 0x00 byte to keep it positive
+        if (int_bytes[0] & 0x80) {
+            // Shift right to make space for 0x00
+            for (size_t i = int_len; i > 0; i--) {
+                int_bytes[i] = int_bytes[i - 1];
+            }
+            int_bytes[0] = 0x00;
+            int_len++;
+        }
+    }
+
+    return _der_write_primitive(encoder,
+                                DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER,
+                                int_bytes, int_len);
+}
+
+int8_t der_encoder_encode_integer_u256(der_encoder_t * encoder, const uint8_t value[32]) {
+    uint8_t int_bytes[33];
+    size_t int_len = 0;
+
+    // Find first non-zero byte
+    // If all zero, we encode as single 0x00 byte
+    size_t start_index = 0;
+    while (start_index < 32 && value[start_index] == 0) {
+        start_index++;
+    }
+
+    if (start_index == 32) {
+        int_bytes[0] = 0x00;
+        int_len = 1;
+    } else {
+        // Copy relevant bytes
+        for (size_t i = start_index; i < 32; i++) {
             int_bytes[int_len++] = value[i];
         }
 
@@ -972,6 +1008,47 @@ int8_t der_decoder_decode_integer_u160(der_decoder_t* decoder, uint8_t out_value
     // Read bytes (Big Endian)
     for (size_t i = 0; i < length; i++) {
         out_value[20 - length + i] = decoder->data[decoder->position++];
+    }
+
+    return 0;
+}
+
+int8_t der_decoder_decode_integer_u256(der_decoder_t* decoder, uint8_t out_value[32]) {
+    size_t length = 0;
+    if (_der_match_tlv(decoder, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_INTEGER, &length) != 0) {
+        return -1;
+    }
+
+    if (length > 33 || length == 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unsupported integer length %llu\n", length);
+        return -1;
+    }
+
+    // Peek at the first byte
+    uint8_t first_byte = decoder->data[decoder->position];
+
+    // If we have 33 bytes, the first byte MUST be 0x00
+    if (length == 33) {
+        if (first_byte != 0x00) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Integer overflow (33 bytes but first is not 0x00)\n");
+            return -1;
+        }
+        // Skip the padding byte
+        decoder->position++;
+        length--;
+    }
+    // If we have 16 bytes or fewer, check for negative numbers (which we can't store in u128)
+    else if (first_byte & 0x80) {
+        // Technically a negative number in ASN.1, but we are parsing into u128.
+        // Depending on your OS policy, you might want to return error or cast it.
+        // For a strictly unsigned parser, this is usually an error.
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "DER Decoder: Unexpected negative integer\n");
+        return -1;
+    }
+
+    // Read bytes (Big Endian)
+    for (size_t i = 0; i < length; i++) {
+        out_value[32 - length + i] = decoder->data[decoder->position++];
     }
 
     return 0;
