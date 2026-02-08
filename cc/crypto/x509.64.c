@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <logging.h>
 #include <crypto/x25519.h>
+#include <crypto/ellipticcurve.h>
 #include <base64.h>
 #include <crypto/pem.h>
 #include <crypto/der.h>
@@ -126,7 +127,7 @@ x509_certificate_t* x509_certificate_new(void) {
     time_hi_and_version |= (7 << 12); // version 7
     uint64_t clock_seq = (uint64_t)(((uint16_t)rand()) & 0x3FFF);
     uint64_t node = ((uint64_t)rand() << 32) | ((uint64_t)rand() << 16) | ((uint64_t)rand());
-    uint8_t pre_serial_number = ((uint128_t)time_low << 96) | ((uint128_t)time_mid << 80) | ((uint128_t)time_hi_and_version << 64) | ((uint128_t)clock_seq << 48) | (uint128_t)node;
+    uint128_t pre_serial_number = ((uint128_t)time_low << 96) | ((uint128_t)time_mid << 80) | ((uint128_t)time_hi_and_version << 64) | ((uint128_t)clock_seq << 48) | (uint128_t)node;
 
     get_random_bytes(cert->serial_number, 20 - sizeof(uint128_t)); // pad with random bytes
     memory_memcopy(&pre_serial_number, cert->serial_number + 20 - sizeof(uint128_t), sizeof(uint128_t)); // append the generated part
@@ -983,71 +984,85 @@ static int8_t x509_encode_tbs_internal(der_encoder_t* der_encoder, x509_certific
     }
 
     if (!has_issuer_field || !has_subject_field) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Issuer and Subject must have at least one field set");
         return -1;
     }
 
     if(der_encoder_start_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start TBS sequence");
         return -1;
     }
 
     // 1. Version [0] EXPLICIT INTEGER (v3 = 2)
     // Hex: A0 03 02 01 02
     if(der_encoder_start_explicit_tag(der_encoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 0) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start version explicit tag");
         return -1;
     }
 
     if(der_encoder_encode_integer(der_encoder, (uint128_t)cert->version) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode version integer");
         return -1;
     }
 
     if(der_encoder_end_explicit_tag(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end version explicit tag");
         return -1;
     }
 
     // 2. Serial Number (Integer)
     if(der_encoder_encode_integer_u160(der_encoder, cert->serial_number) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode serial number");
         return -1;
     }
 
     // 3. Signature Algorithm Identifier
     if(x509_encode_algorithm_identifier(der_encoder, cert->signature_algorithm) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode signature algorithm identifier");
         return -1;
     }
 
     //// 4. Issuer (Helper for DN)
     // Encodes: SEQUENCE { SET { SEQUENCE { OID(CN), PrintableString(val) } } }
     if(x509_encode_dn(der_encoder, cert->issuer) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode issuer DN");
         return -1;
     }
 
     // 5. Validity
     if(x509_encode_validity(der_encoder, cert->not_before, cert->not_after) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode validity");
         return -1;
     }
 
     // 6. Subject (Helper for DN)
     if(x509_encode_dn(der_encoder, cert->subject) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode subject DN");
         return -1;
     }
 
-    // 7. SubjectPublicKeyInfo (Crucial structure for X25519)
+    // 7. SubjectPublicKeyInfo
     if(x509_encode_data_with_bit_string_with_alogrithm_identifier(der_encoder,
                                                                   cert->public_key_algorithm,
                                                                   cert->public_key,
                                                                   cert->public_key_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode subject public key info");
         return -1;
     }
 
     // 8. Extensions [3] EXPLICIT SEQUENCE
     if(x509_encode_extensions(der_encoder, cert) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode extensions");
         return -1;
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end TBS sequence");
         return -1;
     }
 
     if(der_encoder_get_der_data(der_encoder, &cert->tbs_data, &cert->tbs_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get DER data for TBS");
         return -1;
     }
 
@@ -1106,6 +1121,74 @@ static int8_t x509_certificate_sign_with_ed25519(x509_certificate_t* cert,
     return 0;
 }
 
+static int8_t x509_certificate_sign_with_ecdsa_secp256r1(x509_certificate_t* cert,
+                                                         const uint8_t*      private_key,
+                                                         size_t              private_key_length) {
+    if (cert == NULL || private_key == NULL || private_key_length == 0) {
+        return -1;
+    }
+
+    cert->signature_algorithm = X509_ALGORITHM_ECDSA_WITH_SHA256;
+
+    if (x509_encode_tbs(cert) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to encode TBS data");
+        return -1;
+    }
+
+    uint8_t signature[64];
+    if (ellipticcurve_secp256r1_sign(signature, cert->tbs_data, cert->tbs_length, private_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to sign TBS data with ECDSA SECP256R1");
+        return -1;
+    }
+
+    uint8_t public_key[64];
+    if (ellipticcurve_secp256r1_derive_pubkey(public_key, private_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to derive public key from private key for ECDSA SECP256R1");
+        return -1;
+    }
+
+    if(ellipticcurve_secp256r1_verify(signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA SECP256R1 signature verification failed after signing");
+        return -1;
+    }
+
+    // ECDSA signatures are typically encoded as SEQUENCE { r INTEGER, s INTEGER }
+    // We will encode it in that format for the certificate.
+    der_encoder_t* der_encoder = der_encoder_new();
+    if (der_encoder == NULL) {
+        return -1;
+    }
+
+    if(der_encoder_start_sequence(der_encoder) != 0) {
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    if(der_encoder_encode_integer_u256(der_encoder, signature) != 0) {
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    if(der_encoder_encode_integer_u256(der_encoder, signature + 32) != 0) {
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    if(der_encoder_end_sequence(der_encoder) != 0) {
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    if(der_encoder_get_der_data(der_encoder, &cert->signature, &cert->signature_length) != 0) {
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    der_encoder_destroy(der_encoder);
+
+    return 0;
+}
+
 int8_t x509_certificate_sign(x509_certificate_t* cert,
                              x509_algorithm_t    algorithm,
                              const uint8_t*      private_key,
@@ -1117,6 +1200,8 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
     switch (algorithm) {
     case X509_ALGORITHM_ED25519:
         return x509_certificate_sign_with_ed25519(cert, private_key, private_key_length);
+    case X509_ALGORITHM_ECDSA_SECP256R1:
+        return x509_certificate_sign_with_ecdsa_secp256r1(cert, private_key, private_key_length);
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm: %d", algorithm);
         return -1;
@@ -1144,6 +1229,91 @@ static int8_t x509_compute_subject_key_identifier(const uint8_t* public_key, siz
     }
 
     memory_free(hash);
+
+    return 0;
+}
+
+static int8_t x509_decode_secp256r1_signature(x509_certificate_t* cert, uint8_t* out_signature, size_t* out_signature_length) {
+    if (cert == NULL || cert->signature == NULL || cert->signature_length == 0 ||
+        out_signature == NULL || out_signature_length == NULL) {
+        return -1;
+    }
+
+    der_decoder_t* decoder = der_decoder_new(cert->signature, cert->signature_length);
+    if (decoder == NULL) {
+        return -1;
+    }
+
+    // ECDSA signatures are encoded as SEQUENCE { r INTEGER, s INTEGER }
+    if (der_decoder_start_sequence(decoder) != 0) {
+        der_decoder_destroy(decoder);
+        return -1;
+    }
+
+    uint8_t r[32];
+    if (der_decoder_decode_integer_u256(decoder, r) != 0) {
+        der_decoder_destroy(decoder);
+        return -1;
+    }
+
+    uint8_t s[32];
+    if (der_decoder_decode_integer_u256(decoder, s) != 0) {
+        der_decoder_destroy(decoder);
+        return -1;
+    }
+
+    if (der_decoder_end_sequence(decoder) != 0) {
+        der_decoder_destroy(decoder);
+        return -1;
+    }
+
+    der_decoder_destroy(decoder);
+
+    memory_memcopy(r, out_signature, 32);
+    memory_memcopy(s, out_signature + 32, 32);
+    *out_signature_length = 64;
+
+    return 0;
+}
+
+static int8_t x509_certificate_verify_signature_internal(x509_certificate_t* cert,
+                                                         const uint8_t*      public_key,
+                                                         size_t              public_key_length) {
+    if (cert == NULL || public_key == NULL || public_key_length == 0 ||
+        cert->tbs_data == NULL || cert->tbs_length == 0 ||
+        cert->signature == NULL || cert->signature_length == 0) {
+        return -1;
+    }
+
+    switch (cert->signature_algorithm) {
+    case X509_ALGORITHM_ED25519: {
+        if (ed25519_verify(cert->signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature verification failed on raw data");
+            return -1;
+        }
+        break;
+    }
+    case X509_ALGORITHM_ECDSA_WITH_SHA256: {
+        if(cert->public_key_algorithm != X509_ALGORITHM_ECDSA_SECP256R1) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Algorithm Mismatch: Signature algorithm is ECDSA with SHA-256 but public key is not ECDSA SECP256R1");
+            return -1;
+        }
+        uint8_t signature[64];
+        size_t signature_length = 0;
+        if (x509_decode_secp256r1_signature(cert, signature, &signature_length) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode ECDSA signature from certificate");
+            return -1;
+        }
+        if(ellipticcurve_secp256r1_verify(signature, cert->tbs_data, cert->tbs_length, public_key + 1) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA Signature verification failed on raw data");
+            return -1;
+        }
+        break;
+    }
+    default:
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm: %d", cert->signature_algorithm);
+        return -1;
+    }
 
     return 0;
 }
@@ -1202,13 +1372,8 @@ int8_t x509_certificate_verify_signature_with_rebuild(x509_certificate_t* cert,
 
     // --- Step 3: Raw Verification (The "Real" Verify) ---
     // We must ALWAYS verify the raw bytes first. If this fails, the cert is 100% invalid.
-    if (cert->signature_algorithm != X509_ALGORITHM_ED25519) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported algorithm: %d", cert->signature_algorithm);
-        return -1;
-    }
-
-    if (ed25519_verify(cert->signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature verification failed on raw data");
+    if (x509_certificate_verify_signature_internal(cert, public_key, public_key_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Raw signature verification failed");
         return -1;
     }
 
@@ -1216,20 +1381,29 @@ int8_t x509_certificate_verify_signature_with_rebuild(x509_certificate_t* cert,
     // This ensures your internal struct perfectly captures the DER representation.
     if (rebuild) {
         // Free raw data to force reconstruction
-        memory_free(cert->tbs_data);
+        uint8_t* old_tbs_data = cert->tbs_data;
+        size_t old_tbs_length = cert->tbs_length;
+
         cert->tbs_data = NULL;
         cert->tbs_length = 0;
 
         if (x509_encode_tbs(cert) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to rebuild TBS data");
+            cert->tbs_data = old_tbs_data; // Restore old data on failure
+            cert->tbs_length = old_tbs_length;
             return -1;
         }
 
-        // Verify again against the rebuilt bytes
-        if (ed25519_verify(cert->signature, cert->tbs_data, cert->tbs_length, public_key) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Rebuild Mismatch: Encoder output differs from original signature input");
+        if (x509_certificate_verify_signature_internal(cert, public_key, public_key_length) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature verification failed after rebuilding TBS data");
+            memory_free(cert->tbs_data); // Free the newly built TBS data
+            cert->tbs_data = old_tbs_data; // Restore old data on failure
+            cert->tbs_length = old_tbs_length;
             return -1;
         }
+
+        // If we reach here, the rebuild was successful and consistent with the original signature
+        memory_free(old_tbs_data); // Free the old TBS data as it's no longer needed
     }
 
     return 0;
@@ -2224,4 +2398,30 @@ uint8_t* x509_certificate_get_public_key_data(x509_certificate_t* cert, size_t* 
     memory_memcopy(cert->public_key, public_key_data, cert->public_key_length);
 
     return public_key_data;
+}
+
+x509_algorithm_t x509_certificate_get_public_key_algorithm(x509_certificate_t* cert) {
+    if (cert == NULL) {
+        return X509_ALGORITHM_UNKNOWN;
+    }
+
+    return cert->public_key_algorithm;
+}
+
+int8_t x509_certificate_get_issuer_field(const x509_certificate_t* cert, x509_issuer_subject_field_t field, char_t** out_value) {
+    if (cert == NULL || out_value == NULL || field >= X509_ISSUER_SUBJECT_FIELD_COUNT) {
+        return -1;
+    }
+
+    *out_value = strdup(cert->issuer[field]);
+    return 0;
+}
+
+int8_t x509_certificate_get_subject_field(const x509_certificate_t* cert, x509_issuer_subject_field_t field, char_t** out_value) {
+    if (cert == NULL || out_value == NULL || field >= X509_ISSUER_SUBJECT_FIELD_COUNT) {
+        return -1;
+    }
+
+    *out_value = strdup(cert->subject[field]);
+    return 0;
 }

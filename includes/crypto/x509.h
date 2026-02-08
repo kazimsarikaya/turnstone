@@ -160,6 +160,16 @@ void x509_certificate_free(x509_certificate_t* cert);
 int8_t x509_certificate_add_issuer_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value);
 
 /**
+ * @brief Retrieves a field from the issuer information of the certificate.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param field The field to retrieve (e.g., organization, common name).
+ * @param out_value Output parameter that will point to the value of the field if found. The caller is responsible for freeing this memory.
+ * @return 0 on success, -1 on failure (e.g., invalid input, field not found).
+ */
+int8_t x509_certificate_get_issuer_field(const x509_certificate_t* cert, x509_issuer_subject_field_t field, char_t** out_value);
+
+/**
  * @brief Adds a field to the subject information of the certificate.
  *
  * @param cert Pointer to the `x509_certificate_t` structure.
@@ -168,6 +178,16 @@ int8_t x509_certificate_add_issuer_field(x509_certificate_t* cert, x509_issuer_s
  * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
  */
 int8_t x509_certificate_add_subject_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value);
+
+/**
+ * @brief Retrieves a field from the issuer information of the certificate.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param field The field to retrieve (e.g., organization, common name).
+ * @param out_value Output parameter that will point to the value of the field if found. The caller is responsible for freeing this memory.
+ * @return 0 on success, -1 on failure (e.g., invalid input, field not found).
+ */
+int8_t x509_certificate_get_subject_field(const x509_certificate_t* cert, x509_issuer_subject_field_t field, char_t** out_value);
 
 /**
  * @brief Sets the validity period of the certificate.
@@ -397,6 +417,17 @@ uint8_t* x509_certificate_get_tbs_data(x509_certificate_t* cert, boolean_t rebui
  * @return A pointer to a newly allocated buffer containing the public key data, or NULL on failure.
  */
 uint8_t* x509_certificate_get_public_key_data(x509_certificate_t* cert, size_t* out_length);
+
+/**
+ * @brief Retrieves the public key algorithm used in the certificate.
+ *
+ * This function returns the algorithm identifier for the public key contained in the certificate.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @return The `x509_algorithm_t` value representing the public key algorithm, or `X509_ALGORITHM_UNKNOWN` on failure.
+ */
+x509_algorithm_t x509_certificate_get_public_key_algorithm(x509_certificate_t* cert);
+
 
 #ifdef __cplusplus
 }
