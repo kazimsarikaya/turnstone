@@ -34,8 +34,17 @@ int8_t http_handle(http_request_t* request, http_response_t* response) {
         PRINTLOG(HTTP, LOG_INFO, "Query Param: %s=%s", param->name, param->value);
     }
 
-    const char_t* message = "<html><body><h1>Hello, World!</h1></body></html>\n";
-    buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
+    if(strcmp(request->path, "/") == 0 || strcmp(request->path, "/index.html") == 0) {
+        const char_t* message = "<html><body><h1>Welcome to the Home Page!</h1></body></html>\n";
+        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
+    } else if(strcmp(request->path, "/hello") == 0) {
+        const char_t* message = "<html><body><h1>Hello, World!</h1></body></html>\n";
+        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
+    } else {
+        response->status_code = 404;
+        const char_t* message = "<html><body><h1>404 Not Found</h1></body></html>\n";
+        buffer_append_bytes(response->body, (uint8_t*)message, strlen(message));
+    }
 
     response->headers = list_create_list();
     if(!response->headers) {
@@ -49,7 +58,7 @@ int8_t http_handle(http_request_t* request, http_response_t* response) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for Content-Type header");
         return -1;
     }
-    content_type_header->name = strdup("Content-Type");
+    content_type_header->name  = strdup("content-type");
     content_type_header->value = strdup("text/html; charset=UTF-8");
     if(!content_type_header->name || !content_type_header->value) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for Content-Type header strings");
@@ -71,7 +80,7 @@ int8_t http_handle(http_request_t* request, http_response_t* response) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for Content-Length header");
         return -1;
     }
-    content_length_header->name = strdup("Content-Length");
+    content_length_header->name  = strdup("content-length");
     content_length_header->value = itoa(buffer_get_length(response->body));
     if(!content_length_header->name || !content_length_header->value) {
         PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for Content-Length header name");

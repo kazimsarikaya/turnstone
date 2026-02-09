@@ -156,6 +156,8 @@ typedef struct http2_context_t {
     uint32_t         stream_count;
     list_t*          headers_table; // For HPACK header compression
     size_t           headers_table_size;
+    list_t*          remote_headers_table; // For HPACK header compression of headers send to client
+    size_t           remote_headers_table_size;
 } http2_context_t;
 
 int8_t http_handle(http_request_t* request, http_response_t* response);

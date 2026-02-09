@@ -164,7 +164,7 @@ int8_t http11_handle_connection(tls13_context_t* ctx) {
                 goto error_cleanup;
             }
 
-            param->name = name;
+            param->name  = name;
             param->value = value;
 
             if(list_list_insert(request->query_params, param) == -1ULL) {
@@ -248,7 +248,7 @@ int8_t http11_handle_connection(tls13_context_t* ctx) {
             goto error_cleanup;
         }
 
-        header->name = name;
+        header->name  = name;
         header->value = value;
 
         if(list_list_insert(request->headers, header) == -1ULL) {
@@ -312,6 +312,9 @@ int8_t http11_handle_connection(tls13_context_t* ctx) {
     tls13_write(ctx, (uint8_t*)status_line, strlen(status_line));
     memory_free(status_line);
     // Send headers
+    // add x-powered-by header
+    const char_t* x_powered_by_line = "x-powered-by: Turnstone OS\r\n";
+    tls13_write(ctx, (uint8_t*)x_powered_by_line, strlen(x_powered_by_line));
     for(size_t i = 0; i < list_size(response->headers); i++) {
         http_header_t* header = (http_header_t*)list_get_data_at_position(response->headers, i);
         char_t* header_line = strprintf("%s: %s\r\n", header->name, header->value);
@@ -329,7 +332,7 @@ int8_t http11_handle_connection(tls13_context_t* ctx) {
 
         while(body_data_len > 0) {
             int32_t to_write = (body_data_len > 4096) ? 4096 : body_data_len;
-            int32_t written = tls13_write(ctx, body_data, to_write);
+            int32_t written  = tls13_write(ctx, body_data, to_write);
             if(written <= 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP response body");
                 memory_free(body_data);

@@ -162,7 +162,7 @@ int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, 
     return 0;
 }
 
-static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t index) {
+static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t index, boolean_t is_remote) {
     const char_t* name = NULL;
     if(index < HTTP2_HPACK_STATIC_TABLE_SIZE) {
         name = http2_hpack_static_names[index].name;
@@ -170,8 +170,10 @@ static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t in
         return strdup(name);
     }
 
+    list_t* table = is_remote ? ctx->remote_headers_table : ctx->headers_table;
+
     index -= HTTP2_HPACK_STATIC_TABLE_SIZE;
-    const http2_hpack_entry_t* entry = list_get_data_at_position(ctx->headers_table, index);
+    const http2_hpack_entry_t* entry = list_get_data_at_position(table, index);
     name = entry ? entry->name : NULL;
 
     PRINTLOG(HTTP, LOG_DEBUG, "HPACK Dynamic Table lookup for index %lu: name='%s'", index + HTTP2_HPACK_STATIC_TABLE_SIZE, name ? name : "NULL");
@@ -179,9 +181,67 @@ static char_t* http2_hpack_get_name_from_table(http2_context_t* ctx, uint32_t in
     return name ? strdup(name) : NULL;
 }
 
+static uint32_t http2_hpack_find_name_value_in_table(http2_context_t* ctx, const char_t* name, const char_t* value, boolean_t is_remote) {
+// special handling for static table. status codes and method/path/scheme are common, so we can find full match for those. For others, we only find name match, because value can be different and static table allows that.
+    for (size_t i = 0; i < HTTP2_HPACK_STATIC_TABLE_SIZE; i++) {
+        const http2_hpack_entry_t* entry = &http2_hpack_static_names[i];
+        if (entry->name && entry->value) {
+            if (strcmp(entry->name, name) == 0 && strcmp(entry->value, value) == 0) {
+                return i; // Full match in static table
+            }
+        }
+    }
+
+    list_t* table = is_remote ? ctx->remote_headers_table : ctx->headers_table;
+
+    size_t index = 0;
+    for (size_t i = 0; i < list_size(table); i++) {
+        const http2_hpack_entry_t* entry = list_get_data_at_position(table, i);
+        if (entry) {
+            if (strcmp(entry->name, name) == 0 && strcmp(entry->value, value) == 0) {
+                return index + HTTP2_HPACK_STATIC_TABLE_SIZE; // Full match
+            }
+            index++;
+        }
+    }
+
+    return 0; // Not found
+}
+
+static uint32_t http2_hpack_find_name_in_table(http2_context_t* ctx, const char_t* name, boolean_t is_remote) {
+    for (size_t i = 0; i < HTTP2_HPACK_STATIC_TABLE_SIZE; i++) {
+        const http2_hpack_entry_t* entry = &http2_hpack_static_names[i];
+        if (entry->name && strcmp(entry->name, name) == 0) {
+            return i; // Name match in static table
+        }
+    }
+
+    list_t* table = is_remote ? ctx->remote_headers_table : ctx->headers_table;
+
+    size_t index = 0;
+    for (size_t i = 0; i < list_size(table); i++) {
+        const http2_hpack_entry_t* entry = list_get_data_at_position(table, i);
+        if (entry && strcmp(entry->name, name) == 0) {
+            return index + HTTP2_HPACK_STATIC_TABLE_SIZE; // Name match
+        }
+        index++;
+    }
+
+    return 0; // Not found
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, const char_t* value) {
+/**
+ * Adds a new header entry to the HPACK dynamic table and evicts old entries if necessary to maintain the size limit.
+ *
+ * @param ctx The HTTP/2 context containing the dynamic tables and settings.
+ * @param name The header name to add.
+ * @param value The header value to add.
+ * @param is_remote A boolean indicating whether to add to the remote (client) or local (server) dynamic table.
+ * @return 0 on success, or -1 on failure (e.g., memory allocation failure).
+ */
+static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, const char_t* value, boolean_t is_remote) {
     size_t name_len   = strlen(name);
     size_t value_len  = strlen(value);
     size_t entry_size = name_len + value_len + 32; // 32 bytes overhead
@@ -208,7 +268,9 @@ static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, 
         return -1;
     }
 
-    if(list_insert_at_head(ctx->headers_table, entry) == -1ULL) {
+    list_t* table = is_remote ? ctx->remote_headers_table : ctx->headers_table;
+
+    if(list_insert_at_head(table, entry) == -1ULL) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to insert entry into HPACK dynamic table");
         memory_free((void*)entry->name);
         memory_free((void*)entry->value);
@@ -216,13 +278,31 @@ static int8_t hpack_dynamic_table_add(http2_context_t* ctx, const char_t* name, 
         return -1;
     }
 
-    ctx->headers_table_size += entry_size;
+    if (is_remote) {
+        ctx->remote_headers_table_size += entry_size;
+    } else {
+        ctx->headers_table_size += entry_size;
+    }
 
     // Evict entries if table size exceeds limit
-    while (ctx->headers_table_size > ctx->local_settings.header_table_size) {
-        http2_hpack_entry_t* evicted_entry = (http2_hpack_entry_t*)list_delete_at_tail(ctx->headers_table);
+    while (true) {
+        if (is_remote) {
+            if(ctx->remote_headers_table_size <= ctx->remote_settings.header_table_size) {
+                break; // No need to evict
+            }
+        } else {
+            if(ctx->headers_table_size <= ctx->local_settings.header_table_size) {
+                break; // No need to evict
+            }
+        }
+
+        http2_hpack_entry_t* evicted_entry = (http2_hpack_entry_t*)list_delete_at_tail(table);
         if (evicted_entry) {
-            ctx->headers_table_size -= evicted_entry->size;
+            if (is_remote) {
+                ctx->remote_headers_table_size -= evicted_entry->size;
+            } else {
+                ctx->headers_table_size -= evicted_entry->size;
+            }
             memory_free((void*)evicted_entry->name);
             memory_free((void*)evicted_entry->value);
             memory_free(evicted_entry);
@@ -726,7 +806,7 @@ int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
     char_t* name = NULL;
     if (name_index > 0) {
         // Name is in the table (Static or Dynamic)
-        name = http2_hpack_get_name_from_table(ctx, name_index);
+        name = http2_hpack_get_name_from_table(ctx, name_index, false); // false = for local (server's) table
     } else {
         // Name is a new string following this byte
         size_t consumed_name_bytes = 0;
@@ -767,7 +847,7 @@ int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
     }
 
     if (add_to_dynamic_table) {
-        hpack_dynamic_table_add(ctx, name, value);
+        hpack_dynamic_table_add(ctx, name, value, false); // false = for local (server's) table
     }
 
     *consumed_bytes = offset;
@@ -778,18 +858,176 @@ int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
     return 0;
 }
 
-void http2_hpack_free_dynamic_table(http2_context_t* ctx);
-void http2_hpack_free_dynamic_table(http2_context_t* ctx) {
-    if(!ctx || !ctx->headers_table) {
-        return;
+int8_t http2_hpack_encode_int(buffer_t* buffer, uint32_t value, uint8_t prefix_bits, uint8_t type_bits);
+int8_t http2_hpack_encode_int(buffer_t* buffer, uint32_t value, uint8_t prefix_bits, uint8_t type_bits) {
+    uint8_t prefix_mask = (1 << prefix_bits) - 1;
+
+    if (value < prefix_mask) {
+        // Case 1: The value fits entirely in the prefix bits of the first byte
+        // type_bits should already be masked (e.g., 0x80, 0x40, 0x20, or 0x00)
+        if (!buffer_append_byte(buffer, type_bits | (uint8_t)value)) {
+            return -1;
+        }
+        return 0;
     }
-    for(uint32_t i = 0; i < list_size(ctx->headers_table); i++) {
-        http2_hpack_entry_t* entry = (http2_hpack_entry_t*)list_get_data_at_position(ctx->headers_table, i);
-        if(entry) {
-            memory_free((void*)entry->name);
-            memory_free((void*)entry->value);
-            memory_free(entry);
+
+    // Case 2: Value >= prefix_mask. Fill prefix bits with 1s.
+    if (!buffer_append_byte(buffer, type_bits | prefix_mask)) {
+        return -1;
+    }
+
+    uint32_t remaining = value - prefix_mask;
+
+    // Encode the remaining value in 7-bit chunks
+    while (remaining >= 128) {
+        // Set the MSB (0x80) to indicate another byte follows
+        uint8_t byte = (remaining & 0x7F) | 0x80;
+        if (!buffer_append_byte(buffer, byte)) {
+            return -1;
+        }
+        remaining >>= 7;
+    }
+
+    // Last byte of the integer (MSB is 0)
+    if (!buffer_append_byte(buffer, (uint8_t)remaining)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t http2_hpack_encode_huffman(buffer_t* buffer, const char_t* str) {
+    uint64_t accumulator = 0;
+    int32_t bit_count = 0;
+    size_t str_len = strlen(str);
+    size_t total_bits = 0;
+
+    // 1. Calculate compressed length for the HPACK prefix
+    for (size_t i = 0; i < str_len; i++) {
+        uint8_t c = (uint8_t)str[i];
+        total_bits += http2_hpack_sym_table[c].len;
+    }
+
+    uint32_t compressed_len = (total_bits + 7) / 8;
+    // Prefix H=1 (0x80) and encode the length
+    if (http2_hpack_encode_int(buffer, compressed_len, 7, 0x80) != 0) {
+        return -1;
+    }
+
+    // 2. Encode characters
+    for (size_t i = 0; i < str_len; i++) {
+        uint8_t c = (uint8_t)str[i];
+        const http2_hpack_huff_sym_t* sym = &http2_hpack_sym_table[c];
+
+        // The codes in your table are left-aligned in a 32-bit field.
+        // We need to bring them to the right.
+        uint32_t actual_code = sym->code >> (32 - sym->len);
+
+        accumulator = (accumulator << sym->len) | actual_code;
+        bit_count += sym->len;
+
+        while (bit_count >= 8) {
+            bit_count -= 8;
+            uint8_t b = (uint8_t)(accumulator >> bit_count);
+            if (!buffer_append_byte(buffer, b)) {
+                return -1;
+            }
         }
     }
-    list_destroy(ctx->headers_table);
+
+    // 3. HPACK Padding: Fill remaining bits with 1s (EOS prefix)
+    if (bit_count > 0) {
+        uint8_t padding = (uint8_t)((accumulator << (8 - bit_count)) | (0xFF >> bit_count));
+        if (!buffer_append_byte(buffer, padding)) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int8_t http2_hpack_encode_string(buffer_t* buffer, const char_t* str) {
+    if (!str || *str == '\0') {
+        return http2_hpack_encode_int(buffer, 0, 7, 0x00); // Empty string, H=0
+    }
+    // In Turnstone, we always prefer Huffman to save bandwidth
+    return http2_hpack_encode_huffman(buffer, str);
+}
+
+int8_t http2_hpack_encode_literal(http2_context_t* ctx, buffer_t* buffer, const char_t* name, const char_t* value,
+                                  bool add_to_dynamic_table);
+int8_t http2_hpack_encode_literal(http2_context_t* ctx, buffer_t* buffer, const char_t* name, const char_t* value,
+                                  bool add_to_dynamic_table) {
+    // Determine the type bits based on whether we're adding to the dynamic table
+    uint8_t type_bits = add_to_dynamic_table ? 0x40 : 0x00; // 0x40 for Incremental, 0x00 for Non-Indexed or Never-Indexed (we'll handle Never-Indexed separately if needed)
+    uint8_t prefix_bits = add_to_dynamic_table ? 6 : 4;
+
+    // First, try to find the (name,value) in the static or dynamic table
+    uint32_t name_value_index = http2_hpack_find_name_value_in_table(ctx, name, value, true); // true = search remote (client's) table
+
+    if (name_value_index > 0) {
+        // Found an exact match in the table, we can encode as Indexed Header Field
+        type_bits = 0x80; // Set the MSB for Indexed Header Field
+        prefix_bits = 7; // 7 bits for the index
+        return http2_hpack_encode_int(buffer, name_value_index, prefix_bits, type_bits);
+    }
+
+    uint32_t name_index = http2_hpack_find_name_in_table(ctx, name, true); // true = search remote (client's) table
+
+    if (name_index > 0) {
+        // Found the name in the table, encode as Literal Header Field with Indexed Name
+        if (http2_hpack_encode_int(buffer, name_index, prefix_bits, type_bits) != 0) {
+            return -1;
+        }
+    } else {
+        // Name is not in the table, encode as Literal Header Field with New Name
+        if (http2_hpack_encode_int(buffer, 0, prefix_bits, type_bits) != 0) { // 0 indicates new name
+            return -1;
+        }
+        if (http2_hpack_encode_string(buffer, name) != 0) {
+            return -1;
+        }
+    }
+
+    // Encode the value (always as a new string)
+    if (http2_hpack_encode_string(buffer, value) != 0) {
+        return -1;
+    }
+
+
+    // If we're adding to the dynamic table, we need to add this entry
+    if (add_to_dynamic_table) {
+        hpack_dynamic_table_add(ctx, name, value, true); // true = for remote (client's) table
+    }
+
+    return 0;
+}
+
+void http2_hpack_free_dynamic_table(http2_context_t* ctx);
+void http2_hpack_free_dynamic_table(http2_context_t* ctx) {
+    if(!ctx) {
+        return;
+    }
+    if(ctx->headers_table) {
+        for(uint32_t i = 0; i < list_size(ctx->headers_table); i++) {
+            http2_hpack_entry_t* entry = (http2_hpack_entry_t*)list_get_data_at_position(ctx->headers_table, i);
+            if(entry) {
+                memory_free((void*)entry->name);
+                memory_free((void*)entry->value);
+                memory_free(entry);
+            }
+        }
+        list_destroy(ctx->headers_table);
+    }
+    if(ctx->remote_headers_table) {
+        for(uint32_t i = 0; i < list_size(ctx->remote_headers_table); i++) {
+            http2_hpack_entry_t* entry = (http2_hpack_entry_t*)list_get_data_at_position(ctx->remote_headers_table, i);
+            if(entry) {
+                memory_free((void*)entry->name);
+                memory_free((void*)entry->value);
+                memory_free(entry);
+            }
+        }
+        list_destroy(ctx->remote_headers_table);
+    }
 }

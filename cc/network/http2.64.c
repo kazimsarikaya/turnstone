@@ -9,6 +9,7 @@
 #include <network/http.h>
 #include <logging.h>
 #include <strings.h>
+#include <utils.h>
 
 MODULE("turnstone.lib.network.http");
 
@@ -297,6 +298,9 @@ static int8_t http2_send_window_update(tls13_context_t* ctx,
     return 0;
 }
 
+int8_t http2_hpack_encode_int(buffer_t* buffer, uint32_t value, uint8_t prefix_bits, uint8_t type_bits);
+int8_t http2_hpack_encode_literal(http2_context_t* ctx, buffer_t* buffer, const char_t* name, const char_t* value,
+                                  bool add_to_dynamic_table);
 static int8_t http2_send_response(tls13_context_t* tls_ctx,
                                   http2_context_t* ctx, http2_stream_t* stream) {
     http_response_t* res = stream->response;
@@ -307,24 +311,51 @@ static int8_t http2_send_response(tls13_context_t* tls_ctx,
     // For :status, index 8 is ":status: 200", index 14 is ":status: 404".
     buffer_t* hpack_buf = buffer_new();
 
-    // Add :status (Assuming 200 for now, or use Indexed Literal for others)
-    if (res->status_code == 200) {
-        uint8_t status_idx = 0x88; // Indexed Header Field (Static Table 8)
-        buffer_append_bytes(hpack_buf, &status_idx, 1);
-    } else {
-        // Literal without indexing for custom status (Prefix 0x10 | Name Index 8)
-        uint8_t status_prefix = 0x18;
-        buffer_append_bytes(hpack_buf, &status_prefix, 1);
-        char_t* status_str = strprintf("%d", res->status_code);
-        // Huffman: 0, Length: 3
-        uint8_t len = (uint8_t)strlen(status_str);
-        buffer_append_bytes(hpack_buf, &len, 1);
-        buffer_append_bytes(hpack_buf, (uint8_t*)status_str, len);
-        memory_free(status_str);
+    switch(res->status_code) {
+    case 200:
+        http2_hpack_encode_int(hpack_buf, 8, 7, 0x80); // Indexed Header Field (index 8)
+        break;
+    case 404:
+        http2_hpack_encode_int(hpack_buf, 13, 7, 0x80); // Indexed Header Field (index 13)
+        break;
+    default:
+        // For simplicity, encode as Literal Header Field with New Name
+        char status_str[4];
+        itoa_with_buffer(status_str, res->status_code);
+        if(http2_hpack_encode_literal(ctx, hpack_buf, ":status", status_str, false) != 0) {
+            PRINTLOG(HTTP, LOG_ERROR, "Failed to encode :status header for HTTP/2 response");
+            buffer_destroy(hpack_buf);
+            return -1;
+        }
+        break;
     }
 
-    // Add other headers from the list (Literal Without Indexing)
-    // Note: In a real app, loop through res->headers list
+    // add x-powered-by: Turnstone OS header as an example of a custom header
+    if(http2_hpack_encode_literal(ctx, hpack_buf, "x-powered-by", "Turnstone OS", true) != 0) {
+        PRINTLOG(HTTP, LOG_ERROR, "Failed to encode x-powered-by header for HTTP/2 response");
+        buffer_destroy(hpack_buf);
+        return -1;
+    }
+
+    if(res->headers) {
+        for(uint32_t i = 0; i < list_size(res->headers); i++) {
+            http_header_t* header = (http_header_t*)list_get_data_at_position(res->headers, i);
+            if(header && header->name && header->value) {
+                boolean_t add_to_dynamic_table = true; // You can implement logic to decide this based on header name/value
+
+                if(strcmp(header->name, "content-length") == 0) {
+                    add_to_dynamic_table = false; // Content-Length can vary widely, so we might choose not to add it to the dynamic table
+                }
+
+                if(http2_hpack_encode_literal(ctx, hpack_buf, header->name, header->value, add_to_dynamic_table) != 0) {
+                    PRINTLOG(HTTP, LOG_ERROR, "Failed to encode header '%s: %s' for HTTP/2 response",
+                             header->name, header->value);
+                    buffer_destroy(hpack_buf);
+                    return -1;
+                }
+            }
+        }
+    }
 
     // --- 2. SEND HEADERS FRAME ---
     size_t hpack_len = buffer_get_length(hpack_buf);
@@ -345,6 +376,7 @@ static int8_t http2_send_response(tls13_context_t* tls_ctx,
     memory_free(hpack_data);
 
     // --- 3. SEND DATA FRAME ---
+    // TODO: If body is larger than max frame size or window size, we should chunk it and send multiple DATA frames. For simplicity, we assume it fits in one frame here.
     size_t body_len = res->body ? buffer_get_length(res->body) : 0;
 
     // Safety check for Flow Control Windows
@@ -376,7 +408,7 @@ static int8_t http2_send_response(tls13_context_t* tls_ctx,
         stream->remote_window_size -= body_len;
     }
 
-    PRINTLOG(HTTP, LOG_DEBUG, "Response sent on stream %u", stream_id);
+    PRINTLOG(HTTP, LOG_INFO, "Response sent on stream %u", stream_id);
     return 0;
 }
 
@@ -959,12 +991,18 @@ int8_t http2_handle_connection(tls13_context_t* ctx) {
         PRINTLOG(HTTP, LOG_DEBUG, "Sent initial WINDOW_UPDATE frame");
     }
 
-    http2_ctx.headers_table = list_create_queue();
+    http2_ctx.headers_table = list_create_list();
     if(!http2_ctx.headers_table) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to create HTTP/2 headers table");
         return -1;
     }
     http2_ctx.headers_table_size = 0;
+    http2_ctx.remote_headers_table = list_create_list();
+    if(!http2_ctx.remote_headers_table) {
+        PRINTLOG(HTTP, LOG_ERROR, "Failed to create HTTP/2 remote headers table");
+        return -1;
+    }
+    http2_ctx.remote_headers_table_size = 0;
 
     int8_t error_code = 0;
 
