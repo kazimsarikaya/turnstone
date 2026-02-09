@@ -1019,6 +1019,13 @@ int8_t http2_handle_connection(tls13_context_t* ctx) {
         uint8_t flags = header[4];
         uint32_t stream_id = ((header[5] & 0x7F) << 24) | (header[6] << 16) | (header[7] << 8) | header[8];
 
+        if(stream_id > 0 && stream_id % 2 == 0) {
+            PRINTLOG(HTTP, LOG_ERROR, "Received frame with invalid stream ID %u (must be odd for client-initiated frames)", stream_id);
+            http2_send_goaway(ctx, stream_id, HTTP2_ERROR_PROTOCOL_ERROR);
+            error_code = -1;
+            break;
+        }
+
         uint8_t* payload = NULL;
         if(length > 0) {
             payload = memory_malloc(length);
