@@ -17,6 +17,8 @@
 #include <crypto/x509.h>
 #include <crypto/tls13.h>
 #include <crypto/ellipticcurve.h>
+#include <crypto/mlkem768.h>
+#include <crypto/keccak.h>
 #include <errno.h>
 #include <base64.h>
 #include <pipeline.h>

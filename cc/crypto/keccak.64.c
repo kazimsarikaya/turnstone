@@ -30,6 +30,7 @@ struct keccak_ctx_t {
     size_t           capacity;
     size_t           output_len;
     size_t           buffer_len;
+    boolean_t        for_xof;
 };
 
 
@@ -159,44 +160,69 @@ static int8_t keccak_update(keccak_ctx_t* ctx, const uint8_t* data, size_t len) 
     return 0;
 }
 
-static uint8_t* keccak_final(keccak_ctx_t* ctx, uint8_t* hash, size_t hash_len) {
+static int8_t keccak_squeeze(keccak_ctx_t* ctx, uint8_t* output, size_t output_len) {
+    size_t offset = 0;
+    while (offset < output_len) {
+        // 1. If we have used up the current rate block, permute to get next block
+        if (ctx->buffer_len == ctx->rate) {
+            keccak_f1600(ctx);
+            ctx->buffer_len = 0; // Reset buffer pointer for the new block
+        }
+
+        // 2. How much can we take from the current state?
+        size_t available = ctx->rate - ctx->buffer_len;
+        size_t remaining_req = output_len - offset;
+        size_t to_copy = (remaining_req < available) ? remaining_req : available;
+
+        memory_memcopy((uint8_t*)ctx->state + ctx->buffer_len, output + offset, to_copy);
+
+        ctx->buffer_len += to_copy;
+        offset += to_copy;
+    }
+    return 0;
+}
+
+static uint8_t* keccak_final(keccak_ctx_t* ctx, uint8_t* hash, size_t hash_len, boolean_t is_xof) {
     if (ctx == NULL || hash == NULL) {
+        memory_free(hash);
         memory_free(ctx);
         return NULL;
     }
-    // --- 1. Finish the Absorb Phase ---
-    // XOR the remaining "leftover" bytes in the buffer into the state
-    for (size_t i = 0; i < ctx->buffer_len; i++) {
-        ((uint8_t*)ctx->state)[i] ^= ctx->buffer[i];
-    }
 
-    // --- 2. Apply Multi-rate Padding (10*1) ---
-    uint8_t pad_byte = (ctx->variant <= KECCAK_VARIANT_SHA3_512) ? 0x06 : 0x1F;
-
-    // XOR the domain separator + first '1' of padding
-    ((uint8_t*)ctx->state)[ctx->buffer_len] ^= pad_byte;
-
-    // XOR the final '1' of the 10*1 padding at the end of the rate
-    // This is the "1" at the other end of the sponge rate
-    ((uint8_t*)ctx->state)[ctx->rate - 1] ^= 0x80;
-
-    // --- 3. Final Permutation ---
-    keccak_f1600(ctx);
-
-    // --- 4. Squeeze Phase ---
-    // (This part of your previous logic was actually correct for the XOF/SHAKE mode)
-    size_t offset = 0;
-    while (offset < hash_len) {
-        size_t to_copy = (hash_len - offset < ctx->rate) ? (hash_len - offset) : ctx->rate;
-        memory_memcopy(ctx->state, hash + offset, to_copy);
-        offset += to_copy;
-
-        if (offset < hash_len) {
-            keccak_f1600(ctx);
+    if(!ctx->for_xof) {
+        // --- 1. Finish the Absorb Phase ---
+        // XOR the remaining "leftover" bytes in the buffer into the state
+        for (size_t i = 0; i < ctx->buffer_len; i++) {
+            ((uint8_t*)ctx->state)[i] ^= ctx->buffer[i];
         }
+        // --- 2. Apply Multi-rate Padding (10*1) ---
+        uint8_t pad_byte = (ctx->variant <= KECCAK_VARIANT_SHA3_512) ? 0x06 : 0x1F;
+
+        // XOR the domain separator + first '1' of padding
+        ((uint8_t*)ctx->state)[ctx->buffer_len] ^= pad_byte;
+
+        // XOR the final '1' of the 10*1 padding at the end of the rate
+        // This is the "1" at the other end of the sponge rate
+        ((uint8_t*)ctx->state)[ctx->rate - 1] ^= 0x80;
+
+        // --- 3. Final Permutation ---
+        keccak_f1600(ctx);
+        ctx->buffer_len = 0;
+
+        ctx->for_xof = is_xof; // Mark the context as an XOF if needed
     }
 
-    memory_free(ctx);
+    // --- 4. Squeeze ---
+    if (keccak_squeeze(ctx, hash, hash_len) != 0) {
+        memory_free(hash);
+        memory_free(ctx);
+        return NULL;
+    }
+
+    if (!is_xof) {
+        memory_free(ctx);
+    }
+
     return hash;
 }
 
@@ -250,32 +276,42 @@ int8_t shake256_update(shake256_ctx_t* ctx, const uint8_t* data, size_t len) {
 
 uint8_t* sha3_224_final(sha3_224_ctx_t* ctx) {
     uint8_t* hash = memory_malloc(((keccak_ctx_t*)ctx)->output_len);
-    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len, false);
 }
 
 uint8_t* sha3_256_final(sha3_256_ctx_t* ctx) {
     uint8_t* hash = memory_malloc(((keccak_ctx_t*)ctx)->output_len);
-    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len, false);
 }
 
 uint8_t* sha3_384_final(sha3_384_ctx_t* ctx) {
     uint8_t* hash = memory_malloc(((keccak_ctx_t*)ctx)->output_len);
-    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len, false);
 }
 
 uint8_t* sha3_512_final(sha3_512_ctx_t* ctx) {
     uint8_t* hash = memory_malloc(((keccak_ctx_t*)ctx)->output_len);
-    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, ((keccak_ctx_t*)ctx)->output_len, false);
 }
 
 uint8_t* shake128_final(shake128_ctx_t* ctx, size_t output_len) {
     uint8_t* hash = memory_malloc(output_len);
-    return keccak_final((keccak_ctx_t*)ctx, hash, output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, output_len, false);
+}
+
+uint8_t* shake128_next(shake128_ctx_t* ctx, size_t output_len) {
+    uint8_t* hash = memory_malloc(output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, output_len, true);
 }
 
 uint8_t* shake256_final(shake256_ctx_t* ctx, size_t output_len) {
     uint8_t* hash = memory_malloc(output_len);
-    return keccak_final((keccak_ctx_t*)ctx, hash, output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, output_len, false);
+}
+
+uint8_t* shake256_next(shake256_ctx_t* ctx, size_t output_len) {
+    uint8_t* hash = memory_malloc(output_len);
+    return keccak_final((keccak_ctx_t*)ctx, hash, output_len, true);
 }
 
 uint8_t* sha3_224_hash(const uint8_t* data, size_t length) {

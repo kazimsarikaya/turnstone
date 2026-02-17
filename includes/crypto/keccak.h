@@ -53,12 +53,14 @@ sha3_512_ctx_t* sha3_512_clone(const sha3_512_ctx_t* ctx);
 shake128_ctx_t* shake128_init(void);
 int8_t          shake128_update(shake128_ctx_t* ctx, const uint8_t* data, size_t len);
 uint8_t*        shake128_final(shake128_ctx_t* ctx, size_t output_len);
+uint8_t*        shake128_next(shake128_ctx_t* ctx, size_t output_len);
 uint8_t*        shake128_hash(const uint8_t* data, size_t data_len, size_t output_len);
 shake128_ctx_t* shake128_clone(const shake128_ctx_t* ctx);
 
 shake256_ctx_t* shake256_init(void);
 int8_t          shake256_update(shake256_ctx_t* ctx, const uint8_t* data, size_t len);
 uint8_t*        shake256_final(shake256_ctx_t* ctx, size_t output_len);
+uint8_t*        shake256_next(shake256_ctx_t* ctx, size_t output_len);
 uint8_t*        shake256_hash(const uint8_t* data, size_t data_len, size_t output_len);
 shake256_ctx_t* shake256_clone(const shake256_ctx_t* ctx);
 

@@ -943,7 +943,7 @@ static int32_t bigint_test_prime(void) {
 
 
         int32_t test_count = 6;
-        int32_t bit_count = 32;
+        int32_t bit_count  = 32;
 
         while(test_count--) {
             bigint_destroy(bigint_1);
@@ -1211,7 +1211,7 @@ static int32_t bigint_test_mod_sqrt(void) {
     auto_destroy(bigint_t, check);
     a = bigint_create();
     p = bigint_create();
-    sqrt = bigint_create();
+    sqrt  = bigint_create();
     check = bigint_create();
 
     char_t* str = NULL;

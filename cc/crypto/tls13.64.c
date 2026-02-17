@@ -10,6 +10,7 @@
 #include <crypto/sha2.h>
 #include <crypto/x509.h>
 #include <crypto/x25519.h>
+#include <crypto/mlkem768.h>
 #include <crypto/ellipticcurve.h>
 #include <crypto/aes-gcm.h>
 #include <strings.h>
@@ -108,7 +109,7 @@ struct tls13_context_t {
     boolean_t           require_client_certificate;
     x509_certificate_t* client_certificate;
     size_t              shared_secret_len;
-    uint8_t             shared_secret[32]; // X25519 shared secret
+    uint8_t*            shared_secret; // X25519 shared secret
     uint8_t             server_handshake_key[AES256_KEY_SIZE]; // max size
     uint8_t             client_handshake_key[AES256_KEY_SIZE]; // max size
     uint8_t             server_handshake_iv[12];
@@ -236,6 +237,10 @@ void tls13_destroy_context(tls13_context_t* ctx) {
 
     if(ctx->client_supported_signature_algorithms) {
         memory_free(ctx->client_supported_signature_algorithms);
+    }
+
+    if(ctx->shared_secret) {
+        memory_free(ctx->shared_secret);
     }
 
     memory_free(ctx);
@@ -386,7 +391,7 @@ static void tls13_make_nonce(uint8_t* iv, uint64_t seq_num, uint8_t* out_nonce) 
     }
 }
 
-static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
+static int8_t tls13_process_client_hello(tls13_context_t* ctx) {
     if(!ctx) {
         return -1;
     }
@@ -631,6 +636,14 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                 uint8_t * key_data = current_share + 4;
 
                 if (group == TLS_GROUP_X25519) { // X25519
+                    if(ctx->selected_group == TLS_GROUP_X25519_ML_KEM768) {
+                        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519_mlkem768 over x25519");
+                        int32_t jump = 4 + key_len;
+                        current_share += jump;
+                        processed += jump;
+                        continue; // Prioritize x25519_mlkem768 if both are offered
+                    }
+
                     if (key_len != X25519_PUBLIC_KEY_RAW_LEN) {
                         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid X25519 public key length: %d", key_len);
                         memory_free(buffer);
@@ -639,7 +652,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
 
                     ctx->server_key_exchange_public_key_len = X25519_PUBLIC_KEY_RAW_LEN;
                     memory_free(ctx->server_key_exchange_public_key); // Free previous if any
-                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(X25519_PUBLIC_KEY_RAW_LEN);
+                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
 
                     if (!ctx->server_key_exchange_public_key) {
                         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
@@ -655,6 +668,13 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                         return -1;
                     }
 
+                    ctx->shared_secret = (uint8_t*)memory_malloc(X25519_SHARED_SECRET_LEN);
+                    if (!ctx->shared_secret) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
                     if(x25519_shared_secret(ctx->shared_secret,
                                             server_private_key,
                                             key_data) != 0) {
@@ -663,11 +683,13 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                         return -1;
                     }
 
+                    memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
+
                     ctx->shared_secret_len = X25519_SHARED_SECRET_LEN; // X25519 shared secret is 32 bytes
                     ctx->selected_group = TLS_GROUP_X25519;
                     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: x25519");
                 } else if (group == TLS_GROUP_SECP256R1) { // Secp256r1 (P-256)
-                    if(ctx->selected_group == TLS_GROUP_X25519) {
+                    if(ctx->selected_group == TLS_GROUP_X25519 || ctx->selected_group == TLS_GROUP_X25519_ML_KEM768) {
                         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
                         int32_t jump = 4 + key_len;
                         current_share += jump;
@@ -685,7 +707,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
 
                     ctx->server_key_exchange_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
                     memory_free(ctx->server_key_exchange_public_key); // Free previous if any
-                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1);
+                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
                     if (!ctx->server_key_exchange_public_key) {
                         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
                         memory_free(buffer);
@@ -702,6 +724,13 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                         return -1;
                     }
 
+                    ctx->shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN);
+                    if (!ctx->shared_secret) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
                     if(ellipticcurve_secp256r1_shared_secret(ctx->shared_secret,
                                                              server_private_key,
                                                              key_data) != 0) {
@@ -714,7 +743,65 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
                     ctx->selected_group = TLS_GROUP_SECP256R1;
                     PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp256r1");
                 } else if(group == TLS_GROUP_X25519_ML_KEM768) {
-                    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered not implemented KEM group: x25519_mlkem768, skipping");
+                    if(key_len != X25519_PUBLIC_KEY_RAW_LEN + MLKEM768_PUBLICKEYBYTES) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key length for x25519_mlkem768: %d", key_len);
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    ctx->server_key_exchange_public_key_len = MLKEM768_CIPHERTEXTBYTES + X25519_PUBLIC_KEY_RAW_LEN; // Combined length of ML-KEM ciphertext and X25519 public key
+                    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
+                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
+
+                    if (!ctx->server_key_exchange_public_key) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    ctx->shared_secret_len = MLKEM768_SHARED_SECRET_BYTES + X25519_SHARED_SECRET_LEN; // Combined shared secret length
+                    ctx->shared_secret = (uint8_t*)memory_malloc(ctx->shared_secret_len);
+                    if (!ctx->shared_secret) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    uint8_t* mlkem768_public_key = key_data;
+                    uint8_t* x25519_client_public_key = key_data + MLKEM768_PUBLICKEYBYTES;
+
+                    uint8_t* mlkem768_ciphertext = ctx->server_key_exchange_public_key;
+                    uint8_t* server_x25519_public_key = ctx->server_key_exchange_public_key + MLKEM768_CIPHERTEXTBYTES;
+
+                    uint8_t* mlkem768_shared_secret_part = ctx->shared_secret;
+                    uint8_t* x25519_shared_secret_part = ctx->shared_secret + MLKEM768_SHARED_SECRET_BYTES;
+
+                    // Encapsulate ML-KEM768 using client's ML-KEM public key
+                    mlkem768_encaps(mlkem768_ciphertext,
+                                    mlkem768_shared_secret_part,
+                                    mlkem768_public_key);
+
+
+                    // Generate server's X25519 key pair and compute shared secret with client's X25519 public key
+                    uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
+
+                    if(x25519_generate_keypair(server_private_key, server_x25519_public_key) != 0) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    if(x25519_shared_secret(x25519_shared_secret_part,
+                                            server_private_key,
+                                            x25519_client_public_key) != 0) {
+                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+                        memory_free(buffer);
+                        return -1;
+                    }
+
+                    memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
+
+                    ctx->selected_group = TLS_GROUP_X25519_ML_KEM768;
                 } else {
                     PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unsupported Key Share Group: 0x%04x", group);
                 }
@@ -845,7 +932,7 @@ static int8_t tls13_parse_client_hello(tls13_context_t* ctx) {
 }
 
 static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
-    uint8_t msg[512];
+    uint8_t msg[4096];
     int32_t p = 5; // Start after Record Header
 
     // Handshake Type & Placeholder for Length
@@ -883,12 +970,14 @@ static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
     msg[p++] = 0x00; msg[p++] = 0x02;
     msg[p++] = 0x03; msg[p++] = 0x04; // TLS 1.3
 
-    uint8_t key_len = ctx->server_key_exchange_public_key_len;
+    size_t key_len = ctx->server_key_exchange_public_key_len;
+    size_t key_len_placeholder = 4 + key_len; // 2 bytes for group + 2 bytes for key length + key data
     uint8_t* key_data = ctx->server_key_exchange_public_key;
 
     // Extension: Key Share (0x0033)
     msg[p++] = 0x00; msg[p++] = 0x33;
-    msg[p++] = 0x00; msg[p++] = key_len + 4; // Placeholder for Key Share length
+    msg[p++] = (key_len_placeholder >> 8) & 0xFF;
+    msg[p++] = key_len_placeholder & 0xFF;
     // Key Share Group
     msg[p++] = ((ctx->selected_group >> 8) & 0xFF);
     msg[p++] = (ctx->selected_group & 0xFF);
@@ -1057,6 +1146,7 @@ static int8_t tls13_generate_handshake_key_and_iv(tls13_context_t* ctx) {
         return -1;
     }
 
+    // sizes are enough for SHA-256, SHA-384 we dont implemented SHA-512 ciphersuites yet so we dont need 64 bytes here.
     uint8_t zero_ikm[SHA384_OUTPUT_SIZE] = {0};
     uint8_t early_secret[SHA384_OUTPUT_SIZE], derived_early[SHA384_OUTPUT_SIZE],
             handshake_secret[SHA384_OUTPUT_SIZE], s_hs_traffic_secret[SHA384_OUTPUT_SIZE],
@@ -1074,7 +1164,7 @@ static int8_t tls13_generate_handshake_key_and_iv(tls13_context_t* ctx) {
         return -1;
     }
 
-    // 3. Handshake Secret (Shared Secret is X25519 output)
+    // 3. Handshake Secret
     if(hkdf_extract(ctx, derived_early, hlen, ctx->shared_secret, ctx->shared_secret_len, handshake_secret) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive handshake secret");
         return -1;
@@ -2270,7 +2360,7 @@ int8_t tls13_send_close_notify(tls13_context_t* ctx) {
 }
 
 int8_t tls13_handle_handshake(tls13_context_t* ctx) {
-    int32_t res_client_hello = tls13_parse_client_hello(ctx);
+    int32_t res_client_hello = tls13_process_client_hello(ctx);
 
     if(res_client_hello == -2) {
         PRINTLOG(CRYPTOLIB, LOG_WARNING, "Redirecting HTTP/1.1 client to HTTPS URL");

@@ -173,5 +173,48 @@ int32_t main(void) {
         print_error("SHAKE256 failed");
     }
 
+    uint8_t * hash1 = shake128_hash((uint8_t*)"Hello, World!", 13, 64);
+
+    uint8_t hash2_area[64];
+
+    shake128_ctx_t* ctx = shake128_init();
+    shake128_update(ctx, (uint8_t*)"Hello, World!", 13);
+
+    size_t offset = 0;
+    while (offset < 64) {
+        size_t chunk_size = 16; // Read in 16-byte chunks
+        if (offset + chunk_size > 64) {
+            chunk_size = 64 - offset; // Adjust for remaining bytes
+        }
+
+        uint8_t* chunk = shake128_next(ctx, chunk_size);
+        memory_memcopy(chunk, hash2_area + offset, chunk_size);
+        offset += chunk_size;
+
+        memory_free(chunk);
+    }
+
+    memory_free(ctx);
+
+    printf("SHAKE128 direct hash: ");
+    for (size_t i = 0; i < 64; i++) {
+        printf("%02x", hash1[i]);
+    }
+    printf("\n");
+    printf("SHAKE128 stream hash: ");
+    for (size_t i = 0; i < 64; i++) {
+        printf("%02x", hash2_area[i]);
+    }
+    printf("\n");
+
+    if (memory_memcompare(hash1, hash2_area, 64) != 0) {
+        print_error("SHAKE128 streaming output does not match direct hash output.");
+        memory_free(hash1);
+        return -1;
+    }
+
+    memory_free(hash1);
+    print_success("SHAKE128 streaming output matches direct hash output.");
+
     return 0;
 }
