@@ -74,6 +74,77 @@ typedef enum tls13_signature_algorithm_t : uint16_t {
 
 } tls13_signature_algorithm_t;
 
+typedef enum tls13_content_type_t : uint8_t {
+    TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC = 0x14,
+    TLS13_CONTENT_TYPE_ALERT = 0x15,
+    TLS13_CONTENT_TYPE_HANDSHAKE = 0x16,
+    TLS13_CONTENT_TYPE_APPLICATION_DATA = 0x17,
+    TLS13_CONTENT_TYPE_HEARTBEAT = 0x18,
+} tls13_content_type_t;
+
+typedef enum tls13_alert_level_t : uint8_t {
+    TLS13_ALERT_LEVEL_WARNING = 1,
+    TLS13_ALERT_LEVEL_FATAL = 2,
+} tls13_alert_level_t;
+
+typedef enum tls13_alert_description_t : uint8_t {
+    TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY = 0,
+    TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE = 10,
+    TLS13_ALERT_DESCRIPTION_BAD_RECORD_MAC = 20,
+    TLS13_ALERT_DESCRIPTION_DECRYPTION_FAILED = 21,
+    TLS13_ALERT_DESCRIPTION_RECORD_OVERFLOW = 22,
+    TLS13_ALERT_DESCRIPTION_DECOMPRESSION_FAILURE = 30,
+    TLS13_ALERT_DESCRIPTION_HANDSHAKE_FAILURE = 40,
+    TLS13_ALERT_DESCRIPTION_NO_CERTIFICATE  = 41, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE = 42,
+    TLS13_ALERT_DESCRIPTION_UNSUPPORTED_CERTIFICATE = 43,
+    TLS13_ALERT_DESCRIPTION_CERTIFICATE_REVOKED = 44,
+    TLS13_ALERT_DESCRIPTION_CERTIFICATE_EXPIRED = 45,
+    TLS13_ALERT_DESCRIPTION_CERTIFICATE_UNKNOWN = 46,
+    TLS13_ALERT_DESCRIPTION_ILLEGAL_PARAMETER = 47,
+    TLS13_ALERT_DESCRIPTION_UNKNOWN_CA = 48,
+    TLS13_ALERT_DESCRIPTION_ACCESS_DENIED = 49,
+    TLS13_ALERT_DESCRIPTION_DECODE_ERROR  = 50,
+    TLS13_ALERT_DESCRIPTION_DECRYPT_ERROR = 51,
+    TLS13_ALERT_DESCRIPTION_EXPORT_RESTRICTION = 60, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_ALERT_DESCRIPTION_PROTOCOL_VERSION = 70,
+    TLS13_ALERT_DESCRIPTION_INSUFFICIENT_SECURITY = 71,
+    TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR = 80,
+    TLS13_ALERT_DESCRIPTION_USER_CANCELED  = 90,
+    TLS13_ALERT_DESCRIPTION_NO_RENEGOTIATION = 100, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_ALERT_DESCRIPTION_UNSUPPORTED_EXTENSION = 110,
+    TLS13_ALERT_DESCRIPTION_CERTIFICATE_UNOBTAINABLE = 111, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_ALERT_DESCRIPTION_UNRECOGNIZED_NAME = 112,
+    TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE_STATUS_RESPONSE = 113,
+    TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE_HASH_VALUE = 114, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_ALERT_DESCRIPTION_UNKNOWN_PSK_IDENTITY = 115,
+    TLS13_ALERT_DESCRIPTION_CERTIFICATE_REQUIRED = 116,
+    TLS13_ALERT_DESCRIPTION_NO_APPLICATION_PROTOCOL = 120,
+} tls13_alert_description_t;
+
+typedef enum tls13_handshake_type_t : uint8_t {
+    TLS13_HANDSHAKE_TYPE_HELLO_REQUEST = 0, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_CLIENT_HELLO  = 1,
+    TLS13_HANDSHAKE_TYPE_SERVER_HELLO  = 2,
+    TLS13_HANDSHAKE_TYPE_HELLO_VERIFY_REQUEST = 3, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_NEW_SESSION_TICKET   = 4,
+    TLS13_HANDSHAKE_TYPE_END_OF_EARLY_DATA    = 5,
+    TLS13_HANDSHAKE_TYPE_HELLO_RETRY_REQUEST  = 6, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS = 8,
+    TLS13_HANDSHAKE_TYPE_CERTIFICATE = 11,
+    TLS13_HANDSHAKE_TYPE_SERVER_KEY_EXCHANGE = 12, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_CERTIFICATE_REQUEST = 13,
+    TLS13_HANDSHAKE_TYPE_SERVER_HELLO_DONE   = 14, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_CERTIFICATE_VERIFY  = 15,
+    TLS13_HANDSHAKE_TYPE_CLIENT_KEY_EXCHANGE = 16, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_FINISHED = 20,
+    TLS13_HANDSHAKE_TYPE_CERTIFICATE_URL = 21, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_CERTIFICATE_STATUS = 22, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_SUPPLEMENTAL_DATA  = 23, // Not used in TLS 1.3, reserved for backward compatibility
+    TLS13_HANDSHAKE_TYPE_KEY_UPDATE = 24,
+    TLS13_HANDSHAKE_TYPE_MESSAGE_HASH = 254,
+} tls13_handshake_type_t;
+
 struct tls13_context_t {
     const char_t*                default_host_port;
     uint16_t                     version;
@@ -159,6 +230,49 @@ static const uint8_t sha384_empty_hash[] = {
 };
 
 _Static_assert(sizeof(sha384_empty_hash) == SHA384_OUTPUT_SIZE, "SHA384 empty hash size mismatch");
+
+
+static void tls13_print_alert(tls13_alert_level_t level, tls13_alert_description_t description) {
+    const char_t* level_str = (level == TLS13_ALERT_LEVEL_WARNING) ? "Warning" : "Fatal";
+    const char_t* description_str = "Unknown Alert";
+
+    switch (description) {
+    case TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY: description_str = "Close Notify"; break;
+    case TLS13_ALERT_DESCRIPTION_UNEXPECTED_MESSAGE: description_str = "Unexpected Message"; break;
+    case TLS13_ALERT_DESCRIPTION_BAD_RECORD_MAC: description_str = "Bad Record MAC"; break;
+    case TLS13_ALERT_DESCRIPTION_DECRYPTION_FAILED: description_str = "Decryption Failed"; break;
+    case TLS13_ALERT_DESCRIPTION_RECORD_OVERFLOW: description_str = "Record Overflow"; break;
+    case TLS13_ALERT_DESCRIPTION_DECOMPRESSION_FAILURE: description_str = "Decompression Failure"; break;
+    case TLS13_ALERT_DESCRIPTION_HANDSHAKE_FAILURE: description_str = "Handshake Failure"; break;
+    case TLS13_ALERT_DESCRIPTION_NO_CERTIFICATE: description_str  = "No Certificate"; break;
+    case TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE: description_str = "Bad Certificate"; break;
+    case TLS13_ALERT_DESCRIPTION_UNSUPPORTED_CERTIFICATE: description_str = "Unsupported Certificate"; break;
+    case TLS13_ALERT_DESCRIPTION_CERTIFICATE_REVOKED: description_str = "Certificate Revoked"; break;
+    case TLS13_ALERT_DESCRIPTION_CERTIFICATE_EXPIRED: description_str = "Certificate Expired"; break;
+    case TLS13_ALERT_DESCRIPTION_CERTIFICATE_UNKNOWN: description_str = "Certificate Unknown"; break;
+    case TLS13_ALERT_DESCRIPTION_ILLEGAL_PARAMETER: description_str = "Illegal Parameter"; break;
+    case TLS13_ALERT_DESCRIPTION_UNKNOWN_CA: description_str = "Unknown CA"; break;
+    case TLS13_ALERT_DESCRIPTION_ACCESS_DENIED: description_str = "Access Denied"; break;
+    case TLS13_ALERT_DESCRIPTION_DECODE_ERROR: description_str  = "Decode Error"; break;
+    case TLS13_ALERT_DESCRIPTION_DECRYPT_ERROR: description_str = "Decrypt Error"; break;
+    case TLS13_ALERT_DESCRIPTION_EXPORT_RESTRICTION: description_str = "Export Restriction"; break;
+    case TLS13_ALERT_DESCRIPTION_PROTOCOL_VERSION: description_str = "Protocol Version"; break;
+    case TLS13_ALERT_DESCRIPTION_INSUFFICIENT_SECURITY: description_str = "Insufficient Security"; break;
+    case TLS13_ALERT_DESCRIPTION_INTERNAL_ERROR: description_str = "Internal Error"; break;
+    case TLS13_ALERT_DESCRIPTION_USER_CANCELED: description_str  = "User Canceled"; break;
+    case TLS13_ALERT_DESCRIPTION_NO_RENEGOTIATION: description_str = "No Renegotiation"; break;
+    case TLS13_ALERT_DESCRIPTION_UNSUPPORTED_EXTENSION: description_str = "Unsupported Extension"; break;
+    case TLS13_ALERT_DESCRIPTION_CERTIFICATE_UNOBTAINABLE: description_str = "Certificate Unobtainable"; break;
+    case TLS13_ALERT_DESCRIPTION_UNRECOGNIZED_NAME: description_str = "Unrecognized Name"; break;
+    case TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE_HASH_VALUE: description_str = "Bad Certificate Hash Value"; break;
+    case TLS13_ALERT_DESCRIPTION_BAD_CERTIFICATE_STATUS_RESPONSE: description_str = "Bad Certificate Status Response"; break;
+    case TLS13_ALERT_DESCRIPTION_UNKNOWN_PSK_IDENTITY: description_str = "Unknown PSK Identity"; break;
+    case TLS13_ALERT_DESCRIPTION_CERTIFICATE_REQUIRED: description_str = "Certificate Required"; break;
+    case TLS13_ALERT_DESCRIPTION_NO_APPLICATION_PROTOCOL: description_str = "No Application Protocol"; break;
+    }
+
+    PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS Alert: Level=%s, Description=%s", level_str, description_str);
+}
 
 static int8_t tls13_hash_final(tls13_context_t* ctx) {
     if(!ctx) {
@@ -405,7 +519,7 @@ static int8_t tls13_process_client_hello(tls13_context_t* ctx) {
         return -1;
     }
 
-    if(header[0] != 0x16 || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
+    if(header[0] != TLS13_CONTENT_TYPE_HANDSHAKE || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Not a handshake record");
 
         // check for GET request (HTTP)
@@ -478,7 +592,7 @@ static int8_t tls13_process_client_hello(tls13_context_t* ctx) {
     // 2. Move to Handshake Layer (Offset 5)
     uint8_t * handshake = buffer;
     uint8_t msg_type = handshake[0];
-    if (msg_type != 0x01) {
+    if (msg_type != TLS13_HANDSHAKE_TYPE_CLIENT_HELLO) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Not a Client Hello (Type: 0x%02x)", msg_type);
         memory_free(buffer);
         return -1;
@@ -936,7 +1050,7 @@ static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
     int32_t p = 5; // Start after Record Header
 
     // Handshake Type & Placeholder for Length
-    msg[p++] = 0x02;
+    msg[p++] = TLS13_HANDSHAKE_TYPE_SERVER_HELLO;
     int32_t hs_len_ptr = p;
     p += 3;
 
@@ -999,7 +1113,7 @@ static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
     msg[ext_len_ptr + 1] = ext_total_len & 0xFF;
 
     // Fix Record Header
-    msg[0] = 0x16;
+    msg[0] = TLS13_CONTENT_TYPE_HANDSHAKE;
     msg[1] = 0x03; msg[2] = 0x03;
     uint16_t rec_len = p - 5;
     msg[3] = (rec_len >> 8) & 0xFF;
@@ -1285,7 +1399,7 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
     plaintext[--reverse_p] = (handshake_body_len >> 16) & 0xff;
 
     // Type: Encrypted Extensions (0x08)
-    plaintext[--reverse_p] = 0x08;
+    plaintext[--reverse_p] = TLS13_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS;
 
     /* --- Calculation for AEAD --- */
     // 'len' is the total bytes of the handshake message
@@ -1297,7 +1411,7 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
 
     // --- Content Type (Inner) ---
     // The 0x16 byte MUST immediately follow the handshake data
-    plaintext[start_pos] = 0x16;
+    plaintext[start_pos] = TLS13_CONTENT_TYPE_HANDSHAKE;
     int32_t aead_plaintext_len = handshake_total_len + 1;
 
     /* --- Nonce and AAD --- */
@@ -1305,7 +1419,11 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
     tls13_make_nonce(ctx->server_handshake_iv, ctx->write_seq_num, nonce);
 
     uint16_t encrypted_record_len = aead_plaintext_len + 16;
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_record_len >> 8), (encrypted_record_len & 0xff) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_record_len >> 8), (encrypted_record_len & 0xff)
+    };
 
     /* --- Encrypt --- */
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
@@ -1344,6 +1462,7 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
 
     // --- Extensions: signature_algorithms (Reverse) ---
     // 1. The Algorithm ID: Ed25519 (0x0807)
+    // TODO: we should ideally support more algorithms here. We can add more later if needed.
     plaintext[--reverse_p] = 0x07;
     plaintext[--reverse_p] = 0x08;
 
@@ -1380,7 +1499,7 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
     plaintext[--reverse_p] = (uint8_t)((handshake_body_len >> 16) & 0xFF);
 
     // 8. Handshake Type: CertificateRequest (0x0d)
-    plaintext[--reverse_p] = 0x0d;
+    plaintext[--reverse_p] = TLS13_HANDSHAKE_TYPE_CERTIFICATE_REQUEST;
 
     /* --- Handshake calculation and Encryption --- */
     int32_t handshake_total_len = (start_pos - reverse_p);
@@ -1390,7 +1509,7 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
     tls13_hash_update(ctx, handshake_start, handshake_total_len);
 
     // Append Inner Content Type
-    plaintext[start_pos] = 0x16;
+    plaintext[start_pos] = TLS13_CONTENT_TYPE_HANDSHAKE;
     int32_t aead_plaintext_len = handshake_total_len + 1;
 
     /* --- Nonce and AAD --- */
@@ -1398,7 +1517,11 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
     tls13_make_nonce(ctx->server_handshake_iv, ctx->write_seq_num, nonce);
 
     uint16_t encrypted_record_len = aead_plaintext_len + 16;
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_record_len >> 8), (encrypted_record_len & 0xff) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_record_len >> 8), (encrypted_record_len & 0xff)
+    };
 
     /* --- Encrypt --- */
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
@@ -1464,7 +1587,7 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
     int32_t p = 0;
 
     /* --- Build Handshake Body --- */
-    plaintext[p++] = 0x0b; // Type: Certificate
+    plaintext[p++] = TLS13_HANDSHAKE_TYPE_CERTIFICATE; // Type: Certificate
     int32_t hs_len_ptr = p; p += 3; // Placeholder for total HS length
 
     plaintext[p++] = 0x00; // Certificate Request Context (empty)
@@ -1507,7 +1630,7 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
     tls13_hash_update(ctx, plaintext, p);
 
     /* --- Encrypt and Send --- */
-    plaintext[p++] = 0x16; // Inner Type: Handshake
+    plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
     uint8_t nonce[12];
     tls13_make_nonce(ctx->server_handshake_iv, ctx->write_seq_num, nonce);
@@ -1515,7 +1638,11 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
     size_t key_len = ctx->handshake_key_len;
     uint16_t encrypted_len = p + 16;
 
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_len >> 8), (encrypted_len & 0xFF) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_len >> 8), (encrypted_len & 0xFF)
+    };
 
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
                                       ctx->server_handshake_key, key_len,
@@ -1613,7 +1740,7 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     int32_t p = 0;
 
     /* --- Build Handshake Message --- */
-    plaintext[p++] = 0x0f; // Type: Certificate Verify
+    plaintext[p++] = TLS13_HANDSHAKE_TYPE_CERTIFICATE_VERIFY; // Type: Certificate Verify
     // Length: 2 (Algorithm) + 2 (Sig Len) + signature_len (Signature)
     uint16_t hs_body_len = 2 + 2 + signature_len;
     plaintext[p++] = ((hs_body_len >> 16) & 0xFF);
@@ -1638,14 +1765,18 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     tls13_hash_update(ctx, plaintext, p);
 
     // 2. Wrap in encrypted record
-    plaintext[p++] = 0x16; // Inner Type: Handshake
+    plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
     uint8_t nonce[12];
     tls13_make_nonce(ctx->server_handshake_iv, ctx->write_seq_num, nonce);
 
     size_t key_len = ctx->handshake_key_len;
     uint16_t encrypted_len = p + 16;
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_len >> 8), (encrypted_len & 0xFF) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_len >> 8), (encrypted_len & 0xFF)
+    };
 
     uint8_t ciphertext[512 + 16];
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
@@ -1688,7 +1819,7 @@ static int8_t tls13_send_finished(tls13_context_t* ctx) {
     uint8_t ciphertext[128 + 16];
     int32_t p = 0;
 
-    plaintext[p++] = 0x14; // Type: Finished
+    plaintext[p++] = TLS13_HANDSHAKE_TYPE_FINISHED; // Type: Finished
     plaintext[p++] = 0x00; plaintext[p++] = 0x00; plaintext[p++] = hlen; // Length
     memory_memcopy(verify_data, &plaintext[p], hlen);
     p += hlen;
@@ -1697,13 +1828,17 @@ static int8_t tls13_send_finished(tls13_context_t* ctx) {
     tls13_hash_update(ctx, plaintext, p);
 
     /* --- Wrap in Encrypted Record --- */
-    plaintext[p++] = 0x16; // Inner Type: Handshake
+    plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
     uint8_t nonce[12];
     tls13_make_nonce(ctx->server_handshake_iv, ctx->write_seq_num, nonce);
 
     uint16_t encrypted_len = p + 16;
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_len >> 8), (encrypted_len & 0xFF) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_len >> 8), (encrypted_len & 0xFF)
+    };
 
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
                                       ctx->server_handshake_key, key_len,
@@ -1849,7 +1984,9 @@ static int8_t tls13_process_client_certificate_verify(tls13_context_t* ctx,
     }
 
     uint16_t algorithm = (received_verify_data[0] << 8) | received_verify_data[1];;
-    if (algorithm != 0x0807) { // Ed25519
+
+    // TODO: support more algorithms here. For now, we only support Ed25519 for simplicity and security (no hash agility issues)
+    if (algorithm != TLS_SIG_ALG_ED25519) { // Ed25519
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm in CertificateVerify: 0x%04x", algorithm);
         return -1;
     }
@@ -1955,7 +2092,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
         }
 
         // Handle Dummy ChangeCipherSpec (CCS is Type 0x14)
-        if (header[0] == 0x14) {
+        if (header[0] == TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC) {
             uint16_t ccs_len = (header[3] << 8) | header[4];
             uint8_t dummy[16];
             ctx->network_recv(ctx->network_client_identifier, dummy, ccs_len, 0);
@@ -1963,7 +2100,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
             continue;
         }
 
-        if (header[0] != 0x17) {
+        if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected encrypted record (0x17), got 0x%02x", header[0]);
             return -1;
         }
@@ -2021,13 +2158,15 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
         while (type_pos > 0 && plaintext[type_pos] == 0x00) {type_pos--;}
         uint8_t inner_type = plaintext[type_pos];
 
-        if (inner_type == 0x15) { // ALERT
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client sent Alert: %d %d", plaintext[0], plaintext[1]);
+        if (inner_type == TLS13_CONTENT_TYPE_ALERT) { // ALERT
+            tls13_alert_level_t alert_level = plaintext[0];
+            tls13_alert_description_t alert_desc = plaintext[1];
+            tls13_print_alert(alert_level, alert_desc);
             memory_free(plaintext);
             return -1;
         }
 
-        if(inner_type != 0x16) { // Handshake
+        if(inner_type != TLS13_CONTENT_TYPE_HANDSHAKE) { // Handshake
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unexpected Inner Content Type 0x%02x received", inner_type);
             memory_free(plaintext);
             return -1;
@@ -2035,7 +2174,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
 
         uint32_t verify_data_len = (plaintext[1] << 16) | (plaintext[2] << 8) | plaintext[3];
 
-        if(plaintext[0] == 0x0B) { // Certificate
+        if(plaintext[0] == TLS13_HANDSHAKE_TYPE_CERTIFICATE) { // Certificate
             if(!ctx->require_client_certificate) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Received unexpected Client Certificate without request");
                 memory_free(plaintext);
@@ -2047,7 +2186,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
                 return -1;
             }
             ctx->read_seq_num++;
-        } else if(plaintext[0] == 0x0F) { // Certificate Verify
+        } else if(plaintext[0] == TLS13_HANDSHAKE_TYPE_CERTIFICATE_VERIFY) { // Certificate Verify
             if(!ctx->require_client_certificate) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Received unexpected Client CertificateVerify without request");
                 memory_free(plaintext);
@@ -2059,7 +2198,7 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
                 return -1;
             }
             ctx->read_seq_num++;
-        } else if (plaintext[0] == 0x14) { // Finished
+        } else if (plaintext[0] == TLS13_HANDSHAKE_TYPE_FINISHED) { // Finished
             if (tls13_process_client_finished(ctx, &plaintext[4], verify_data_len) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client Finished processing failed");
                 memory_free(plaintext);
@@ -2149,7 +2288,7 @@ static int32_t tls13_write_chunk(tls13_context_t* ctx, const uint8_t* data, uint
 
     // Copy payload and append Inner Content Type (0x17 for Application Data)
     memory_memcopy(data, plaintext, len);
-    plaintext[len] = 0x17;
+    plaintext[len] = TLS13_CONTENT_TYPE_APPLICATION_DATA;
 
     // Prepare Nonce (IV ^ write_seq_num)
     uint8_t nonce[12];
@@ -2157,7 +2296,11 @@ static int32_t tls13_write_chunk(tls13_context_t* ctx, const uint8_t* data, uint
 
     // Prepare AAD (5-byte Record Header)
     uint16_t encrypted_record_len = p_len + 16;
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_record_len >> 8), (encrypted_record_len & 0xFF) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
+    };
 
     // Encrypt
     size_t key_len = ctx->handshake_key_len;
@@ -2248,14 +2391,14 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
     }
 
     // Handle legacy ChangeCipherSpec if it pops up mid-stream (unlikely but possible)
-    if (header[0] == 0x14) {
+    if (header[0] == TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC) {
         uint16_t ccs_len = (header[3] << 8) | header[4];
         uint8_t dummy[16];
         ctx->network_recv(ctx->network_client_identifier, dummy, ccs_len, 0);
         return tls13_read(ctx, out_data, max_len);
     }
 
-    if (header[0] != 0x17) {
+    if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected encrypted record (0x17), got 0x%02x", header[0]);
         return -1;
     }
@@ -2297,15 +2440,16 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
     int32_t real_data_len = type_pos; // Data ends before the type byte
 
     // --- STEP 2: Handle Inner Types ---
-    if (inner_type == 0x15) { // ALERT
-        if (plaintext[0] == 0x01 && plaintext[1] == 0x00) {
+    if (inner_type == TLS13_CONTENT_TYPE_ALERT) { // ALERT
+        if (plaintext[0] == TLS13_ALERT_LEVEL_WARNING
+            && plaintext[1] == TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Close Notify.");
         }
         memory_free(plaintext);
         return -1;
     }
 
-    if (inner_type == 0x16) { // POST-HANDSHAKE (e.g. KeyUpdate or NewSessionTicket)
+    if (inner_type == TLS13_CONTENT_TYPE_HANDSHAKE) { // POST-HANDSHAKE (e.g. KeyUpdate or NewSessionTicket)
         PRINTLOG(CRYPTOLIB, LOG_WARNING, "Received post-handshake message type 0x%02x", plaintext[0]);
         // Note: KeyUpdate is 0x18. If you don't handle it,
         // the next record will fail decryption because keys didn't rotate!
@@ -2313,7 +2457,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
         return tls13_read(ctx, out_data, max_len);
     }
 
-    if (inner_type != 0x17) {
+    if (inner_type != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unexpected inner type 0x%02x", inner_type);
         memory_free(plaintext);
         return -1;
@@ -2335,14 +2479,22 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
 }
 
 int8_t tls13_send_close_notify(tls13_context_t* ctx) {
-    uint8_t plaintext[3] = { 0x01, 0x00, 0x15 }; // Warning, CloseNotify, InnerType: Alert
+    uint8_t plaintext[3] = {
+        TLS13_ALERT_LEVEL_WARNING,
+        TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY,
+        TLS13_CONTENT_TYPE_ALERT,
+    }; // Warning, CloseNotify, InnerType: Alert
     uint8_t ciphertext[3 + 16];
     uint8_t nonce[12];
 
     tls13_make_nonce(ctx->server_application_iv, ctx->write_seq_num, nonce);
 
     uint16_t encrypted_len = 3 + 16;
-    uint8_t aad[5] = { 0x17, 0x03, 0x03, (encrypted_len >> 8), (encrypted_len & 0xFF) };
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_len >> 8), (encrypted_len & 0xFF)
+    };
 
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
         ciphertext, plaintext, 3,
