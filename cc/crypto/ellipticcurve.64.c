@@ -425,7 +425,7 @@ static int8_t ellipticcurve_secp256r1_point_double(ellipticcurve_jacobian_point_
     bigint_t * t4 = bigint_create(); // Y^2
     bigint_t* new_x = bigint_create(); // X3
     bigint_t* new_y = bigint_create(); // Y3
-    bigint_t * p  = curve->p;
+    bigint_t * p = curve->p;
 
     if (!t1 || !t2 || !t3 || !t4 || !new_x || !new_y) {
         goto cleanup;
@@ -564,7 +564,7 @@ static int8_t ellipticcurve_secp256r1_point_add(ellipticcurve_jacobian_point_t* 
     bigint_t * h  = bigint_create(), * r  = bigint_create();
     bigint_t * t1 = bigint_create(), * t2 = bigint_create(), * t3 = bigint_create();
     bigint_t * new_x = bigint_create();
-    bigint_t * p  = curve->p;
+    bigint_t * p = curve->p;
 
     if (!u1 || !u2 || !s1 || !s2 || !h || !r || !t1 || !t2 || !t3 || !new_x) {
         goto cleanup;
@@ -765,7 +765,7 @@ int8_t ellipticcurve_secp256r1_derive_pubkey(uint8_t       out_pub[ELLIPTICCURVE
 
     bigint_t* private_scalar = NULL;
     ellipticcurve_jacobian_point_t* temp = NULL;
-    ellipticcurve_jacobian_point_t* res = NULL;
+    ellipticcurve_jacobian_point_t* res  = NULL;
     ellipticcurve_point_t* affine_res = NULL;
     ellipticcurve_curve_t* curve = NULL;
 
@@ -1053,7 +1053,7 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
     memory_free(hash_result);
 
     // 4. Verification Math (Modulo the Order n)
-    w = bigint_create();
+    w  = bigint_create();
     u1 = bigint_create();
     u2 = bigint_create();
     if (!w || !u1 || !u2) {
@@ -1143,7 +1143,7 @@ int8_t ellipticcurve_secp256r1_shared_secret(uint8_t       shared_secret[ELLIPTI
     int8_t ret = -1;
     bigint_t* private_scalar = NULL;
     ellipticcurve_jacobian_point_t* temp = NULL;
-    ellipticcurve_jacobian_point_t* res = NULL;
+    ellipticcurve_jacobian_point_t* res  = NULL;
     ellipticcurve_point_t* affine_res = NULL;
     ellipticcurve_curve_t* curve = NULL;
 
@@ -1666,4 +1666,58 @@ uint8_t* ellipticcurve_secp256r1_encode_signature(const uint8_t sig[ELLIPTICCURV
 
 
     return der_data;
+}
+
+uint8_t* ellipticcurve_secp256r1_decode_signature(const uint8_t* der_sig, size_t der_sig_len) {
+    if(!der_sig || der_sig_len == 0) {
+        return NULL;
+    }
+
+    der_decoder_t* decoder = der_decoder_new(der_sig, der_sig_len);
+    if(!decoder) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create DER decoder for signature");
+        return NULL;
+    }
+
+    if(der_decoder_start_sequence(decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start DER sequence for signature");
+        der_decoder_destroy(decoder);
+        return NULL;
+    }
+
+    uint8_t r_bytes[32];
+    if(der_decoder_decode_integer_u256(decoder, r_bytes) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode r component of signature");
+        der_decoder_destroy(decoder);
+        return NULL;
+    }
+
+    uint8_t s_bytes[32];
+    if(der_decoder_decode_integer_u256(decoder, s_bytes) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode s component of signature");
+        der_decoder_destroy(decoder);
+        return NULL;
+    }
+
+    if(der_decoder_end_sequence(decoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end DER sequence for signature");
+        der_decoder_destroy(decoder);
+        return NULL;
+    }
+
+    der_decoder_destroy(decoder);
+
+    uint8_t* signature = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN);
+    if (!signature) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for decoded signature");
+        return NULL;
+    }
+
+    memory_memcopy(r_bytes, signature, 32);
+    memory_memcopy(s_bytes, signature + 32, 32);
+
+    memory_memclean(r_bytes, sizeof(r_bytes));
+    memory_memclean(s_bytes, sizeof(s_bytes));
+
+    return signature;
 }

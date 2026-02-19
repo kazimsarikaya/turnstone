@@ -119,6 +119,17 @@ int8_t ellipticcurve_secp256r1_verify(const uint8_t sig[ELLIPTICCURVE_SECP256R1_
 uint8_t* ellipticcurve_secp256r1_encode_signature(const uint8_t sig[ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN], size_t* encoded_length);
 
 /**
+ * @brief Decodes a DER-encoded secp256r1 signature into raw format.
+ *
+ * Parses the ASN.1 DER encoding of an ECDSA signature and extracts the raw 64-byte signature (r || s).
+ *
+ * @param der_sig Pointer to the DER-encoded signature.
+ * @param der_sig_len Length of the DER-encoded signature.
+ * @return A pointer to the allocated buffer containing the raw signature (64 bytes), or `NULL` on failure. The caller is responsible for freeing this buffer.
+ */
+uint8_t* ellipticcurve_secp256r1_decode_signature(const uint8_t* der_sig, size_t der_sig_len);
+
+/**
  * @brief Computes the shared secret using Diffie-Hellman key exchange (ECDH).
  *
  * Given a private key and the peer's public key, this function computes the shared secret

@@ -97,36 +97,13 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
             return -1;
         }
 
-        uint8_t* skid = sha256_hash(public_key, 32);
-        if(skid == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate SKID");
-            x509_certificate_free(cert);
-            return -1;
-        }
-
-        if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject key identifier");
-            memory_free(skid);
-            x509_certificate_free(cert);
-            return -1;
-        }
-
-        if (x509_certificate_add_authority_key_identifier(cert, skid, 32) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add authority key identifier");
-            memory_free(skid);
-            x509_certificate_free(cert);
-            return -1;
-        }
-
-        memory_free(skid);
-
         if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, public_key, 32) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to certificate");
             x509_certificate_free(cert);
             return -1;
         }
 
-        if (x509_certificate_sign(cert, X509_ALGORITHM_ED25519,
+        if (x509_certificate_sign(cert, NULL, X509_ALGORITHM_ED25519,
                                   private_key, sizeof(private_key)) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign certificate");
             x509_certificate_free(cert);
@@ -164,36 +141,13 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
 
         public_key[0] = 0x04; // Uncompressed point prefix
 
-        uint8_t* skid = sha256_hash(public_key, 65);
-        if(skid == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate SKID");
-            x509_certificate_free(cert);
-            return -1;
-        }
-
-        if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject key identifier");
-            memory_free(skid);
-            x509_certificate_free(cert);
-            return -1;
-        }
-
-        if (x509_certificate_add_authority_key_identifier(cert, skid, 32) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add authority key identifier");
-            memory_free(skid);
-            x509_certificate_free(cert);
-            return -1;
-        }
-
-        memory_free(skid);
-
         if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1, public_key, 65) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to certificate");
             x509_certificate_free(cert);
             return -1;
         }
 
-        if (x509_certificate_sign(cert, X509_ALGORITHM_ECDSA_SECP256R1,
+        if (x509_certificate_sign(cert, NULL, X509_ALGORITHM_ECDSA_SECP256R1,
                                   private_key, sizeof(private_key)) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign certificate");
             x509_certificate_free(cert);
@@ -324,9 +278,9 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
 
         ca_public_key_len = ED25519_PUBLIC_KEY_RAW_LEN;
 
-        if(x509_certificate_verify_signature(ca_certificate, ca_public_key, ca_public_key_len) != 0) {
+        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
-            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_public_key, ca_public_key_len, false) != 0) {
+            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
                 return -1;
             }
@@ -349,9 +303,9 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
 
         ca_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
 
-        if(x509_certificate_verify_signature(ca_certificate, ca_public_key, ca_public_key_len) != 0) {
+        if(x509_certificate_verify_signature(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to verify CA certificate signature with rebuild, trying without rebuild");
-            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_public_key, ca_public_key_len, false) != 0) {
+            if(x509_certificate_verify_signature_with_rebuild(ca_certificate, ca_key_algorithm, ca_public_key, ca_public_key_len, false) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to verify CA certificate signature");
                 return -1;
             }
@@ -447,22 +401,6 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
         return -1;
     }
 
-    uint8_t* akid = sha256_hash(ca_public_key, ca_public_key_len);
-    if(akid == NULL) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate server AKID");
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    if (x509_certificate_add_authority_key_identifier(cert, akid, SHA256_OUTPUT_SIZE) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add server authority key identifier");
-        memory_free(akid);
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    memory_free(akid);
-
     uint8_t* server_private_key = NULL;
     size_t server_private_key_len = 0;
 
@@ -484,24 +422,6 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
             return -1;
         }
 
-        uint8_t* skid = sha256_hash(server_public_key, ED25519_PUBLIC_KEY_RAW_LEN);
-        if(skid == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate server SKID");
-            x509_certificate_free(cert);
-            memory_free(server_private_key);
-            return -1;
-        }
-
-        if (x509_certificate_add_subject_key_identifier(cert, skid, SHA256_OUTPUT_SIZE) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add server subject key identifier");
-            memory_free(skid);
-            x509_certificate_free(cert);
-            memory_free(server_private_key);
-            return -1;
-        }
-
-        memory_free(skid);
-
         if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, server_public_key, ED25519_PUBLIC_KEY_RAW_LEN) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to server certificate");
             x509_certificate_free(cert);
@@ -509,7 +429,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
             return -1;
         }
 
-        if (x509_certificate_sign(cert, ca_key_algorithm,
+        if (x509_certificate_sign(cert, ca_certificate, ca_key_algorithm,
                                   ca_private_key, ca_private_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign server certificate");
             x509_certificate_free(cert);
@@ -537,24 +457,6 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
 
         server_public_key[0] = 0x04; // uncompressed point prefix
 
-        uint8_t* skid = sha256_hash(server_public_key, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1);
-        if(skid == NULL) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate server SKID");
-            x509_certificate_free(cert);
-            memory_free(server_private_key);
-            return -1;
-        }
-
-        if (x509_certificate_add_subject_key_identifier(cert, skid, SHA256_OUTPUT_SIZE) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add server subject key identifier");
-            memory_free(skid);
-            x509_certificate_free(cert);
-            memory_free(server_private_key);
-            return -1;
-        }
-
-        memory_free(skid);
-
         if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1, server_public_key, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to server certificate");
             x509_certificate_free(cert);
@@ -562,7 +464,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
             return -1;
         }
 
-        if (x509_certificate_sign(cert, ca_key_algorithm,
+        if (x509_certificate_sign(cert, ca_certificate, ca_key_algorithm,
                                   ca_private_key, ca_private_key_len) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign server certificate");
             x509_certificate_free(cert);

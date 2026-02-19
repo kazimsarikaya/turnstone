@@ -1901,17 +1901,24 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
 
     // --- Extensions: signature_algorithms (Reverse) ---
     // 1. The Algorithm ID: Ed25519 (0x0807)
-    // TODO: we should ideally support more algorithms here. We can add more later if needed.
+    int32_t alg_list_end = reverse_p;
     plaintext[--reverse_p] = 0x07;
     plaintext[--reverse_p] = 0x08;
+    // secp256r1 (0x0403)
+    plaintext[--reverse_p] = 0x03;
+    plaintext[--reverse_p] = 0x04;
+
+    int32_t alg_list_start = reverse_p;
+
+    int32_t alg_list_len = alg_list_end - alg_list_start;
 
     // 2. The Algorithm List Length (2 bytes: 0x0002)
-    plaintext[--reverse_p] = 0x02;
-    plaintext[--reverse_p] = 0x00;
+    plaintext[--reverse_p] = alg_list_len & 0xff;
+    plaintext[--reverse_p] = (alg_list_len >> 8) & 0xff;
 
     // 3. Extension Data Length (same as list length + 2: 0x0004)
     // Actually, it's just the list length here: 0x0004
-    uint16_t ext_data_len = 2 + 2; // list_len_field + list_data
+    uint16_t ext_data_len = 2 + alg_list_len; // 2 bytes for list length + actual list
     plaintext[--reverse_p] = (uint8_t)(ext_data_len & 0xFF);
     plaintext[--reverse_p] = (uint8_t)((ext_data_len >> 8) & 0xFF);
 
@@ -2594,6 +2601,8 @@ static int8_t tls13_process_client_certificate(tls13_context_t* ctx,
         return -1;
     }
 
+    x509_algorithm_t ca_alg = x509_certificate_get_public_key_algorithm(ctx->ca_certificate);
+
     while(cert_list_len > 0) {
         // 3. Parse each certificate entry
         PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Parsing client certificate entry");
@@ -2625,7 +2634,7 @@ static int8_t tls13_process_client_certificate(tls13_context_t* ctx,
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Certificate parsed successfully");
         }
 
-        if(x509_certificate_verify_signature_with_rebuild(client_cert, ca_public_key, ca_public_key_len, false) == 0) {
+        if(x509_certificate_verify_signature_with_rebuild(client_cert, ca_alg, ca_public_key, ca_public_key_len, false) == 0) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client certificate signature verified successfully");
             client_verified = true;
             if(client_certificate) {
@@ -2635,7 +2644,8 @@ static int8_t tls13_process_client_certificate(tls13_context_t* ctx,
             }
             break; // Stop after first valid certificate
         } else {
-            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client certificate signature verification failed");
+            // FIXME: correct handling cert chain should be implemented.
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client certificate signature verification failed");
         }
 
         // Free the certificate if not kept
@@ -2687,16 +2697,29 @@ static int8_t tls13_process_client_certificate_verify(tls13_context_t* ctx,
     }
 
     uint16_t algorithm = (received_verify_data[0] << 8) | received_verify_data[1];;
+    uint16_t sig_len = (received_verify_data[2] << 8) | received_verify_data[3];
 
-    // TODO: support more algorithms here. For now, we only support Ed25519 for simplicity and security (no hash agility issues)
-    if (algorithm != TLS_SIG_ALG_ED25519) { // Ed25519
+    if(algorithm == TLS_SIG_ALG_ED25519) {
+        if (sig_len != ED25519_SIGNATURE_LEN || (4 + sig_len) != verify_data_len) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify");
+            return -1;
+        }
+    } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256) {
+        // ECDSA signatures can vary in length due to DER encoding, but we can set a reasonable max (e.g. 72 bytes)
+        if (sig_len == 0 || sig_len > 72 || (4 + sig_len) != verify_data_len) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify for ECDSA");
+            return -1;
+        }
+    } else {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm in CertificateVerify: 0x%04x", algorithm);
         return -1;
     }
 
-    uint16_t sig_len = (received_verify_data[2] << 8) | received_verify_data[3];
-    if (sig_len != ED25519_SIGNATURE_LEN || (4 + sig_len) != verify_data_len) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid signature length in CertificateVerify");
+    x509_algorithm_t cert_alg = x509_certificate_get_public_key_algorithm(ctx->client_certificate);
+
+    if ((algorithm == TLS_SIG_ALG_ED25519 && cert_alg != X509_ALGORITHM_ED25519) ||
+        (algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256 && cert_alg != X509_ALGORITHM_ECDSA_SECP256R1)) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature algorithm in CertificateVerify does not match client certificate public key algorithm: 0x%04x vs cert alg %d", algorithm, cert_alg);
         return -1;
     }
 
@@ -2718,10 +2741,6 @@ static int8_t tls13_process_client_certificate_verify(tls13_context_t* ctx,
     }
 
     memory_memcopy(current_hash, verify_buffer + space_count + strlen(verify_string) + 1, hlen);
-
-    uint8_t signature[ED25519_SIGNATURE_LEN];
-    memory_memcopy(&received_verify_data[4], signature, ED25519_SIGNATURE_LEN);
-
     size_t total_len = space_count + strlen(verify_string) + 1 + hlen;
 
     size_t public_key_len = 0;
@@ -2731,8 +2750,35 @@ static int8_t tls13_process_client_certificate_verify(tls13_context_t* ctx,
         return -1;
     }
 
-    if (ed25519_verify(signature, verify_buffer, total_len, public_key) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client CertificateVerify signature verification failed");
+    if(algorithm == TLS_SIG_ALG_ED25519) {
+        uint8_t signature[ED25519_SIGNATURE_LEN];
+        memory_memcopy(&received_verify_data[4], signature, ED25519_SIGNATURE_LEN);
+
+        if (ed25519_verify(signature, verify_buffer, total_len, public_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client CertificateVerify signature verification failed");
+            memory_free(public_key);
+            return -1;
+        }
+    } else if(algorithm == TLS_SIG_ALG_ECDSA_SECP256R1_SHA256) {
+        uint8_t* der_signature = &received_verify_data[4];
+        size_t der_signature_len = sig_len;
+
+        uint8_t* raw_signature = ellipticcurve_secp256r1_decode_signature(der_signature, der_signature_len);
+        if (!raw_signature) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to decode DER signature in CertificateVerify");
+            memory_free(public_key);
+            return -1;
+        }
+
+        if (ellipticcurve_secp256r1_verify(raw_signature, verify_buffer, total_len, public_key + 1) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client CertificateVerify ECDSA signature verification failed");
+            memory_free(raw_signature);
+            memory_free(public_key);
+            return -1;
+        }
+        memory_free(raw_signature);
+    } else { // never hit but paranoid checks are good
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported signature algorithm in CertificateVerify: 0x%04x", algorithm);
         memory_free(public_key);
         return -1;
     }

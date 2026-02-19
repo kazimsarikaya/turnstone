@@ -11,6 +11,7 @@
 #include <bigint.h>
 #include <strings.h>
 #include <crypto/x25519.h>
+#include <crypto/ellipticcurve.h>
 #include <time.h>
 #include <buffer.h>
 #include <crypto/x509.h>
@@ -70,29 +71,6 @@ int32_t main(void) {
         return -1;
     }
 
-    uint8_t* skid = sha256_hash(public_key, 32);
-    if(skid == NULL) {
-        print_error("Failed to generate SKID\n");
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
-        print_error("Failed to add subject key identifier\n");
-        memory_free(skid);
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    if (x509_certificate_add_authority_key_identifier(cert, skid, 32) != 0) {
-        print_error("Failed to add authority key identifier\n");
-        memory_free(skid);
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    memory_free(skid);
-
     if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, public_key, 32) != 0) {
         print_error("Failed to add public key to certificate\n");
         x509_certificate_free(cert);
@@ -101,7 +79,7 @@ int32_t main(void) {
 
     time_t start_sign_time = time_ns(NULL);
 
-    if (x509_certificate_sign(cert, X509_ALGORITHM_ED25519,
+    if (x509_certificate_sign(cert, NULL, X509_ALGORITHM_ED25519,
                               private_key, sizeof(private_key)) != 0) {
         print_error("Failed to sign certificate\n");
         x509_certificate_free(cert);
@@ -125,7 +103,7 @@ int32_t main(void) {
     uint64_t diff_pem_time = end_pem_time - start_pem_time;
     printf("X509 CA certificate PEM conversion time: %llu ns %llu ms\n", diff_pem_time, diff_pem_time / 1000000);
 
-    x509_certificate_free(cert);
+    x509_certificate_t* ca_cert = cert;
 
     FILE* f;
 
@@ -224,45 +202,13 @@ int32_t main(void) {
         return -1;
     }
 
-    skid = sha256_hash(server_public_key, 32);
-    if(skid == NULL) {
-        print_error("Failed to generate server SKID\n");
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    if (x509_certificate_add_subject_key_identifier(cert, skid, 32) != 0) {
-        print_error("Failed to add server subject key identifier\n");
-        memory_free(skid);
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    memory_free(skid);
-
-    uint8_t* akid = sha256_hash(public_key, 32);
-    if(akid == NULL) {
-        print_error("Failed to generate server AKID\n");
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    if (x509_certificate_add_authority_key_identifier(cert, akid, 32) != 0) {
-        print_error("Failed to add server authority key identifier\n");
-        memory_free(akid);
-        x509_certificate_free(cert);
-        return -1;
-    }
-
-    memory_free(akid);
-
     if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ED25519, server_public_key, 32) != 0) {
         print_error("Failed to add public key to server certificate\n");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_sign(cert, X509_ALGORITHM_ED25519,
+    if (x509_certificate_sign(cert, ca_cert, X509_ALGORITHM_ED25519,
                               private_key, sizeof(private_key)) != 0) {
         print_error("Failed to sign server certificate\n");
         x509_certificate_free(cert);
@@ -306,7 +252,7 @@ int32_t main(void) {
 
     memory_free(final_server_key_data);
 
-    end_time = time_ns(NULL);
+    end_time  = time_ns(NULL);
     diff_time = end_time - start_time;
     printf("X509 Server certificate generation time: %llu ns %llu ms\n", diff_time, diff_time / 1000000);
 
@@ -319,7 +265,7 @@ int32_t main(void) {
         return -1;
     }
 
-    end_time = time_ns(NULL);
+    end_time  = time_ns(NULL);
     diff_time = end_time - start_time;
     printf("X509 Server certificate PEM parsing time: %llu ns %llu ms\n", diff_time, diff_time / 1000000);
 
@@ -327,17 +273,18 @@ int32_t main(void) {
 
     start_time = time_ns(NULL);
 
-    if( x509_certificate_verify_signature(cert, public_key, 32) != 0) {
+    if( x509_certificate_verify_signature(cert, X509_ALGORITHM_ED25519, public_key, 32) != 0) {
         print_error("Failed to verify server certificate signature\n");
         x509_certificate_free(cert);
         return -1;
     }
 
-    end_time = time_ns(NULL);
+    end_time  = time_ns(NULL);
     diff_time = end_time - start_time;
     printf("X509 Server certificate verification time: %llu ns %llu ms\n", diff_time, diff_time / 1000000);
 
     x509_certificate_free(cert);
+    x509_certificate_free(ca_cert);
 
     print_success("Server certificate generated successfully: server_certificate.pem server_certificate.key\n");
 

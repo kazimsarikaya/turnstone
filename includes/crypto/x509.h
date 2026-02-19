@@ -37,7 +37,7 @@ typedef enum x509_extension_type_t {
     X509_EXTENSION_SKID, ///< Subject Key Identifier extension.
     X509_EXTENSION_AKID, ///< Authority Key Identifier extension.
     X509_EXTENSION_NETSCAPE_CERT_TYPE, ///< Netscape Certificate Type extension.
-    X509_EXTENSION_COUNT ///< Total number of extension types.
+    X509_EXTENSION_COUNT, ///< Total number of extension types.
 } x509_extension_type_t;
 
 /**
@@ -46,8 +46,8 @@ typedef enum x509_extension_type_t {
  * Specifies whether the certificate is a Certificate Authority (CA) or an end-entity certificate.
  */
 typedef enum x509_basic_constraints_t {
-    X509_BASIC_CONSTRAINTS_UNKNOWN = 0, ///< Unknown constraint.
-    X509_BASIC_CONSTRAINTS_CA      = 1, ///< The certificate is a Certificate Authority (CA).
+    X509_BASIC_CONSTRAINTS_UNKNOWN    = 0, ///< Unknown constraint.
+    X509_BASIC_CONSTRAINTS_CA         = 1, ///< The certificate is a Certificate Authority (CA).
     X509_BASIC_CONSTRAINTS_END_ENTITY = 2, ///< The certificate is an end-entity certificate.
 } x509_basic_constraints_t;
 
@@ -76,14 +76,14 @@ typedef enum x509_key_usage_t {
  * Multiple flags can be combined using the bitwise OR operator.
  */
 typedef enum x509_netscape_cert_type_t {
-    X509_NETSCAPE_CERT_TYPE_UNKNOWN        = 0x00, ///< Unknown Netscape certificate type.
-    X509_NETSCAPE_CERT_TYPE_SSL_CLIENT     = 0x01, ///< SSL Client certificate.
-    X509_NETSCAPE_CERT_TYPE_SSL_SERVER     = 0x02, ///< SSL Server certificate.
-    X509_NETSCAPE_CERT_TYPE_SMIME          = 0x04, ///< S/MIME certificate.
-    X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING = 0x08, ///< Object Signing certificate.
-    X509_NETSCAPE_CERT_TYPE_RESERVED       = 0x10, ///< Reserved for future use.
-    X509_NETSCAPE_CERT_TYPE_SSL_CA         = 0x20, ///< SSL CA certificate.
-    X509_NETSCAPE_CERT_TYPE_SMIME_CA       = 0x40, ///< S/MIME CA certificate.
+    X509_NETSCAPE_CERT_TYPE_UNKNOWN           = 0x00, ///< Unknown Netscape certificate type.
+    X509_NETSCAPE_CERT_TYPE_SSL_CLIENT        = 0x01, ///< SSL Client certificate.
+    X509_NETSCAPE_CERT_TYPE_SSL_SERVER        = 0x02, ///< SSL Server certificate.
+    X509_NETSCAPE_CERT_TYPE_SMIME             = 0x04, ///< S/MIME certificate.
+    X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING    = 0x08, ///< Object Signing certificate.
+    X509_NETSCAPE_CERT_TYPE_RESERVED          = 0x10, ///< Reserved for future use.
+    X509_NETSCAPE_CERT_TYPE_SSL_CA            = 0x20, ///< SSL CA certificate.
+    X509_NETSCAPE_CERT_TYPE_SMIME_CA          = 0x40, ///< S/MIME CA certificate.
     X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA = 0x80, ///< Object Signing CA certificate.
 } x509_netscape_cert_type_t;
 
@@ -94,13 +94,13 @@ typedef enum x509_netscape_cert_type_t {
  * Multiple flags can be combined using the bitwise OR operator.
  */
 typedef enum x509_extended_key_usage_t {
-    X509_EXTENDED_KEY_USAGE_UNKNOWN           = 0x00, ///< Unknown extended key usage.
-    X509_EXTENDED_KEY_USAGE_SERVER_AUTH       = 0x01, ///< The public key is intended for server authentication (e.g., TLS/SSL).
-    X509_EXTENDED_KEY_USAGE_CLIENT_AUTH       = 0x02, ///< The public key is intended for client authentication (e.g., TLS/SSL).
-    X509_EXTENDED_KEY_USAGE_CODE_SIGNING      = 0x04, ///< The public key is intended for signing code.
-    X509_EXTENDED_KEY_USAGE_EMAIL_PROTECTION  = 0x08, ///< The public key is intended for email protection (e.g., S/MIME).
-    X509_EXTENDED_KEY_USAGE_TIME_STAMPING     = 0x10, ///< The public key is intended for time stamping.
-    X509_EXTENDED_KEY_USAGE_OCSP_SIGNING      = 0x20, ///< The public key is intended for signing OCSP responses.
+    X509_EXTENDED_KEY_USAGE_UNKNOWN          = 0x00, ///< Unknown extended key usage.
+    X509_EXTENDED_KEY_USAGE_SERVER_AUTH      = 0x01, ///< The public key is intended for server authentication (e.g., TLS/SSL).
+    X509_EXTENDED_KEY_USAGE_CLIENT_AUTH      = 0x02, ///< The public key is intended for client authentication (e.g., TLS/SSL).
+    X509_EXTENDED_KEY_USAGE_CODE_SIGNING     = 0x04, ///< The public key is intended for signing code.
+    X509_EXTENDED_KEY_USAGE_EMAIL_PROTECTION = 0x08, ///< The public key is intended for email protection (e.g., S/MIME).
+    X509_EXTENDED_KEY_USAGE_TIME_STAMPING    = 0x10, ///< The public key is intended for time stamping.
+    X509_EXTENDED_KEY_USAGE_OCSP_SIGNING     = 0x20, ///< The public key is intended for signing OCSP responses.
 } x509_extended_key_usage_t;
 
 /**
@@ -248,33 +248,9 @@ int8_t x509_certificate_add_extended_key_usage(x509_certificate_t* cert, x509_ex
 int8_t x509_certificate_add_subject_alternative_name(x509_certificate_t* cert, x509_subject_alternative_name_type_t type, const char_t* value);
 
 /**
- * @brief Adds the Subject Key Identifier (SKID) extension to the certificate.
- *
- * The SKID is a unique identifier for the public key contained in the certificate.
- *
- * @param cert Pointer to the `x509_certificate_t` structure.
- * @param skid Pointer to the raw SKID bytes.
- * @param skid_length The length of the SKID in bytes.
- * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
- */
-int8_t x509_certificate_add_subject_key_identifier(x509_certificate_t* cert, const uint8_t* skid, size_t skid_length);
-
-/**
- * @brief Adds the Authority Key Identifier (AKID) extension to the certificate.
- *
- * The AKID is used to identify the public key corresponding to the private key used to sign the certificate.
- *
- * @param cert Pointer to the `x509_certificate_t` structure.
- * @param akid Pointer to the raw AKID bytes.
- * @param akid_length The length of the AKID in bytes.
- * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
- */
-int8_t x509_certificate_add_authority_key_identifier(x509_certificate_t* cert, const uint8_t* akid, size_t akid_length);
-
-/**
  * @brief Adds the public key information to the certificate.
  *
- * This includes the algorithm used and the raw public key bytes.
+ * This includes the algorithm used and the raw public key bytes. It also handles SKID generation.
  *
  * @param cert Pointer to the `x509_certificate_t` structure.
  * @param algorithm The public key algorithm (e.g., `X509_PUBLIC_KEY_ALGORITHM_ED25519`).
@@ -294,12 +270,14 @@ int8_t x509_certificate_add_public_key(x509_certificate_t* cert,
  * using the specified algorithm and private key.
  *
  * @param cert Pointer to the `x509_certificate_t` structure. The TBS data will be generated and stored internally.
+ * @param ca_cert Optional pointer to the CA certificate structure. If provided, it can be used to populate the Authority Key Identifier (AKID) extension based on the CA's public key. Can be NULL if not needed.
  * @param algorithm The signature algorithm to use (e.g., `X509_SIGNATURE_ALGORITHM_ED25519`).
  * @param private_key Pointer to the raw private key bytes.
  * @param private_key_length The length of the private key in bytes.
  * @return 0 on success, -1 on failure (e.g., invalid input, TBS encoding failed, signing failed).
  */
 int8_t x509_certificate_sign(x509_certificate_t* cert,
+                             x509_certificate_t* ca_cert,
                              x509_algorithm_t    algorithm,
                              const uint8_t*      private_key,
                              size_t              private_key_length);
@@ -310,12 +288,14 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
  * This function checks that the signature on the certificate matches the TBS data when verified
  * with the given public key of the issuer.
  * @param cert Pointer to the `x509_certificate_t` structure. Requires TBS data and signature to be present.
+ * @param public_key_algorithm The algorithm of the public key.
  * @param public_key Pointer to the raw public key bytes.
  * @param public_key_length The length of the public key in bytes.
  * @param rebuild Boolean flag indicating whether to rebuild the TBS data after first verification, then re-verify.
  * @return 0 if the signature is valid, -1 if invalid or on failure (e.g., invalid input, verification failed).
  */
 int8_t x509_certificate_verify_signature_with_rebuild(x509_certificate_t* cert,
+                                                      x509_algorithm_t    public_key_algorithm,
                                                       const uint8_t*      public_key,
                                                       size_t              public_key_length,
                                                       boolean_t           rebuild);
@@ -327,12 +307,13 @@ int8_t x509_certificate_verify_signature_with_rebuild(x509_certificate_t* cert,
  * with the given public key of the issuer.
  * It always rebuild the TBS data for double-checking.
  * @param cert Pointer to the `x509_certificate_t` structure. Requires TBS data and signature to be present.
+ * @param public_key_algorithm The algorithm of the public key.
  * @param public_key Pointer to the raw public key bytes.
  * @param public_key_length The length of the public key in bytes.
  * @return 0 if the signature is valid, -1 if invalid or on failure (e.g., invalid input, verification failed).
  */
-#define x509_certificate_verify_signature(cert, public_key, public_key_length) \
-        x509_certificate_verify_signature_with_rebuild((cert), (public_key), (public_key_length), true)
+#define x509_certificate_verify_signature(cert, public_key_algorithm, public_key, public_key_length) \
+        x509_certificate_verify_signature_with_rebuild((cert), (public_key_algorithm), (public_key), (public_key_length), true)
 
 /**
  * @brief Assembles the final DER-encoded certificate structure.
