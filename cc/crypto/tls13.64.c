@@ -3202,36 +3202,12 @@ int8_t tls13_send_close_notify(tls13_context_t* ctx) {
         return 0; // Already closed, no need to send again
     }
 
-    uint8_t plaintext[3] = {
+    uint8_t plaintext[2] = {
         TLS13_ALERT_LEVEL_WARNING,
         TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY,
-        TLS13_CONTENT_TYPE_ALERT,
     }; // Warning, CloseNotify, InnerType: Alert
-    uint8_t ciphertext[3 + 16];
-    uint8_t nonce[12];
 
-    tls13_make_nonce(ctx->server_application_iv, ctx->write_seq_num, nonce);
-
-    uint16_t encrypted_len = 3 + 16;
-    uint8_t aad[5] = {
-        TLS13_CONTENT_TYPE_APPLICATION_DATA,
-        0x03, 0x03,
-        (encrypted_len >> 8), (encrypted_len & 0xFF)
-    };
-
-    int32_t status = aes_gcm_encrypt_with_aad_with_tag(
-        ciphertext, plaintext, 3,
-        ctx->server_application_key, ctx->handshake_key_len,
-        nonce, 12, aad, 5, ciphertext + 3, 16
-        );
-
-    if (status == 0) {
-        ctx->network_send(ctx->network_client_identifier, aad, 5, 0);
-        ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_len, 0);
-        ctx->write_seq_num++;
-    }
-
-    return status;
+    return tls13_write_ext(ctx, plaintext, sizeof(plaintext), TLS13_CONTENT_TYPE_ALERT) < (int32_t)sizeof(plaintext) ? -1 : 0;
 }
 
 int8_t tls13_handle_handshake(tls13_context_t* ctx) {

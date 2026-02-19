@@ -950,7 +950,7 @@ void http2_hpack_free_dynamic_table(http2_context_t* ctx);
 int8_t http2_handle_connection(tls13_context_t* ctx) {
 
 
-    uint8_t preface[HTTP2_PREFACE_LEN];
+    uint8_t preface[HTTP2_PREFACE_LEN] = {0};
     if(tls13_read(ctx, preface, sizeof(preface)) < 0) {
         PRINTLOG(HTTP, LOG_ERROR, "Failed to read HTTP/2 preface");
         return -1;

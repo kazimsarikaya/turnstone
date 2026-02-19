@@ -308,22 +308,31 @@ int8_t http11_handle_connection(tls13_context_t* ctx) {
     }
 
     // Send response
-    char_t* status_line = strprintf("HTTP/1.1 %d OK\r\n", response->status_code);
-    tls13_write(ctx, (uint8_t*)status_line, strlen(status_line));
-    memory_free(status_line);
-    // Send headers
+    buffer_t* header_buffer = buffer_new();
+
+    if(!header_buffer) {
+        PRINTLOG(HTTP, LOG_ERROR, "Memory allocation failed for HTTP response header buffer");
+        goto error_cleanup;
+    }
+
+    buffer_printf(header_buffer, "HTTP/1.1 %d OK\r\n", response->status_code);
     // add x-powered-by header
-    const char_t* x_powered_by_line = "x-powered-by: Turnstone OS\r\n";
-    tls13_write(ctx, (uint8_t*)x_powered_by_line, strlen(x_powered_by_line));
+    buffer_printf(header_buffer, "x-powered-by: Turnstone OS\r\n");
     for(size_t i = 0; i < list_size(response->headers); i++) {
         http_header_t* header = (http_header_t*)list_get_data_at_position(response->headers, i);
-        char_t* header_line = strprintf("%s: %s\r\n", header->name, header->value);
-        tls13_write(ctx, (uint8_t*)header_line, strlen(header_line));
-        memory_free(header_line);
+        buffer_printf(header_buffer, "%s: %s\r\n", header->name, header->value);
     }
-    // End of headers
-    tls13_write(ctx, (uint8_t*)"\r\n", 2);
-    // Send body
+    buffer_printf(header_buffer, "\r\n"); // End of headers
+
+    size_t header_data_len = 0;
+    uint8_t* header_data = buffer_get_all_bytes_and_destroy(header_buffer, &header_data_len);
+    if(tls13_write(ctx, header_data, header_data_len) <= 0) {
+        PRINTLOG(HTTP, LOG_ERROR, "Failed to send HTTP response headers");
+        memory_free(header_data);
+        goto error_cleanup;
+    }
+    memory_free(header_data);
+
     if(response->body && buffer_get_length(response->body) > 0) {
         size_t body_data_len = 0;
         uint8_t* body_data = buffer_get_all_bytes_and_destroy(response->body, &body_data_len);

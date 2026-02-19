@@ -631,34 +631,15 @@ int32_t main(int32_t argc, char_t** argv) {
         if(tls13_has_alpn_h2(tls13_ctx)) {
             if(http2_handle_connection(tls13_ctx) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
-                tls13_destroy_context(tls13_ctx);
-                close(client_fd);
-                continue;
             }
         } else {
             if(http11_handle_connection(tls13_ctx) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
-                tls13_destroy_context(tls13_ctx);
-                close(client_fd);
-                continue;
             }
         }
 
         if(tls13_send_close_notify(tls13_ctx) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Close Notify");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
-        }
-
-        uint8_t buffer[16384];
-        int32_t bytes_received = tls13_read(tls13_ctx, buffer, sizeof(buffer) - 1);
-
-        if (bytes_received < 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS application data read failed");
-            tls13_destroy_context(tls13_ctx);
-            close(client_fd);
-            continue;
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to send Close Notify");
         }
 
         tls13_destroy_context(tls13_ctx);
