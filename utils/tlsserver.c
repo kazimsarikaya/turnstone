@@ -731,6 +731,13 @@ int32_t main(int32_t argc, char_t** argv) {
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Server listening on port %d (SO_REUSEADDR enabled)", PORT);
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Waiting for connections...");
 
+    uint8_t psk_encryption_key[AES256_KEY_SIZE];
+    uint8_t psk_encryption_iv[12];
+    uint8_t psk_aed_key[16];
+    get_random_bytes(psk_encryption_key, sizeof(psk_encryption_key));
+    get_random_bytes(psk_encryption_iv, sizeof(psk_encryption_iv));
+    get_random_bytes(psk_aed_key, sizeof(psk_aed_key));
+
     int32_t request_count = 0;
 
     while (true && request_count < 10) {
@@ -752,7 +759,10 @@ int32_t main(int32_t argc, char_t** argv) {
             send_all,
             recv_all,
             client_fd,
-            require_client_certificate
+            require_client_certificate,
+            psk_encryption_key,
+            psk_encryption_iv,
+            psk_aed_key
             );
 
         if(!tls13_ctx) {

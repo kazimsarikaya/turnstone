@@ -17,8 +17,16 @@
 #include <pipeline.h>
 #include <logging.h>
 #include <random.h>
+#include <time.h>
 
 MODULE("turnstone.lib.crypto.tls13");
+
+typedef enum tls_version_t {
+    TLS_VERSION_1_0 = 0x0301,
+    TLS_VERSION_1_1 = 0x0302,
+    TLS_VERSION_1_2 = 0x0303,
+    TLS_VERSION_1_3 = 0x0304,
+} tls_version_t;
 
 typedef enum tls13_extension_type_t : uint16_t {
     TLS_EXTENSION_SNI = 0x0000,
@@ -27,6 +35,7 @@ typedef enum tls13_extension_type_t : uint16_t {
     TLS_EXTENSION_SIGNATURE_ALGORITHMS = 0x000d,
     TLS_EXTENSION_ALPN = 0x0010,
     TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP = 0x0012,
+    TLS_EXTENSION_PRE_SHARED_KEY = 0x0029,
     TLS_EXTENSION_SUPPORTED_VERSIONS = 0x002b,
     TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES = 0x002d,
     TLS_EXTENSION_POST_HANDSHAKE_AUTH = 0x0031,
@@ -73,6 +82,12 @@ typedef enum tls13_signature_algorithm_t : uint16_t {
     TLS_SIG_ALG_MLDSA_87 = 0x0906, // Highest Security
 
 } tls13_signature_algorithm_t;
+
+typedef enum tls13_psk_key_exchange_mode_t : uint8_t {
+    TLS13_PSK_KEY_EXHCANGE_MODE_PSK_ONLY = 0,
+    TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK  = 1,
+    TLS13_PSK_KEY_EXCHANGE_MODE_REJECTED = 255, // Not a real mode, used internally to indicate that PSK key exchange is not used
+} tls13_psk_key_exchange_mode_t;
 
 typedef enum tls13_content_type_t : uint8_t {
     TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC = 0x14,
@@ -146,26 +161,27 @@ typedef enum tls13_handshake_type_t : uint8_t {
 } tls13_handshake_type_t;
 
 struct tls13_context_t {
-    const char_t*                default_host_port;
-    uint16_t                     version;
-    boolean_t                    tls13_supported;
-    uint8_t                      client_random[32];
-    uint8_t                      server_random[32];
-    uint8_t                      session_id_len;
-    uint8_t*                     session_id;
-    tls13_cipher_suite_t         cipher_suite;
-    char_t                       sni_hostname[256];
-    boolean_t                    has_alpn;
-    boolean_t                    alpn_h2;
-    boolean_t                    alpn_http11;
-    tls13_key_exchange_group_t   selected_group;
-    uint8_t*                     server_key_exchange_public_key;
-    size_t                       server_key_exchange_public_key_len;
-    tls13_hash_algorithm_t       selected_hash_algorithm;
-    tls13_key_exchange_group_t*  client_supported_groups;
-    size_t                       client_supported_groups_len;
-    tls13_signature_algorithm_t* client_supported_signature_algorithms;
-    size_t                       client_supported_signature_algorithms_len;
+    const char_t*                 default_host_port;
+    uint16_t                      version;
+    boolean_t                     tls13_supported;
+    uint8_t                       client_random[32];
+    uint8_t                       server_random[32];
+    uint8_t                       session_id_len;
+    uint8_t*                      session_id;
+    tls13_cipher_suite_t          cipher_suite;
+    char_t                        sni_hostname[256];
+    boolean_t                     has_alpn;
+    boolean_t                     alpn_h2;
+    boolean_t                     alpn_http11;
+    tls13_psk_key_exchange_mode_t psk_key_exchange_mode;
+    tls13_key_exchange_group_t    selected_group;
+    uint8_t*                      server_key_exchange_public_key;
+    size_t                        server_key_exchange_public_key_len;
+    tls13_hash_algorithm_t        selected_hash_algorithm;
+    tls13_key_exchange_group_t*   client_supported_groups;
+    size_t                        client_supported_groups_len;
+    tls13_signature_algorithm_t*  client_supported_signature_algorithms;
+    size_t                        client_supported_signature_algorithms_len;
     union {
         sha256_ctx_t* sha256;
         sha384_ctx_t* sha384;
@@ -197,6 +213,13 @@ struct tls13_context_t {
     uint8_t             client_application_key[AES256_KEY_SIZE];
     uint8_t             server_application_iv[12];
     uint8_t             client_application_iv[12];
+    uint8_t             resumption_master_secret[SHA384_OUTPUT_SIZE];
+    uint8_t             psk_encryption_key[AES256_KEY_SIZE];
+    uint8_t             psk_encryption_iv[12];
+    uint8_t             psk_aed_key[16];
+    boolean_t           session_resumed;
+    uint8_t             selected_identity_index;
+    uint8_t             selected_psk_value[SHA384_OUTPUT_SIZE]; // max size for PSK is hash output size
     int32_t             write_seq_num;
     int32_t             read_seq_num;
 
@@ -364,7 +387,10 @@ tls13_context_t* tls13_create_server_context(const char_t*        host_port,
                                              tls13_network_send_f network_send,
                                              tls13_network_recv_f network_recv,
                                              int64_t              network_client_identifier,
-                                             boolean_t            require_client_certificate) {
+                                             boolean_t            require_client_certificate,
+                                             uint8_t*             psk_encryption_key,
+                                             uint8_t*             psk_encryption_iv,
+                                             uint8_t*             psk_aed_key) {
     if (!host_port || !network_send || !network_recv) {
         return NULL;
     }
@@ -379,6 +405,10 @@ tls13_context_t* tls13_create_server_context(const char_t*        host_port,
     ctx->network_recv = network_recv;
     ctx->network_client_identifier  = network_client_identifier;
     ctx->require_client_certificate = require_client_certificate;
+    ctx->psk_key_exchange_mode = TLS13_PSK_KEY_EXCHANGE_MODE_REJECTED; // default to no PSK key exchange
+    memory_memcopy(psk_encryption_key, ctx->psk_encryption_key, AES256_KEY_SIZE);
+    memory_memcopy(psk_encryption_iv, ctx->psk_encryption_iv, 12);
+    memory_memcopy(psk_aed_key, ctx->psk_aed_key, 16);
 
     return ctx;
 }
@@ -416,7 +446,30 @@ boolean_t tls13_has_alpn_h2(tls13_context_t* ctx) {
     return ctx->alpn_h2;
 }
 
-static int8_t tls13_hash_update(tls13_context_t* ctx, uint8_t* data, uint32_t len) {
+static int8_t tls13_hash_compute(tls13_context_t* ctx, const uint8_t* data, uint32_t len, uint8_t* out_hash) {
+    if (ctx->selected_hash_algorithm == TLS_HASH_SHA256) {
+        uint8_t* hash = sha256_hash(data, len);
+        if (!hash) {
+            return -1; // Hash computation failed
+        }
+        memory_memcopy(hash, out_hash, SHA256_OUTPUT_SIZE);
+        memory_free(hash);
+        return 0;
+    } else if (ctx->selected_hash_algorithm == TLS_HASH_SHA384) {
+        uint8_t* hash = sha384_hash(data, len);
+        if (!hash) {
+            return -1; // Hash computation failed
+        }
+        memory_memcopy(hash, out_hash, SHA384_OUTPUT_SIZE);
+        memory_free(hash);
+        return 0;
+    }
+    PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported hash algorithm for handshake hash computation");
+    return -1; // Unsupported hash algorithm
+
+}
+
+static int8_t tls13_hash_update(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
     if (ctx->selected_hash_algorithm == TLS_HASH_SHA256) {
         if (!ctx->handshake_hash_ctx.sha256) {
             ctx->handshake_hash_ctx.sha256 = sha256_init();
@@ -443,8 +496,8 @@ static int8_t tls13_hash_update(tls13_context_t* ctx, uint8_t* data, uint32_t le
 }
 
 static int8_t tls13_hash_hmac(tls13_hash_algorithm_t hash_alg,
-                              uint8_t* key, uint32_t key_len,
-                              uint8_t* data, uint32_t data_len,
+                              const uint8_t* key, uint32_t key_len,
+                              const uint8_t* data, uint32_t data_len,
                               uint8_t** out) {
     if (hash_alg == TLS_HASH_SHA256) {
         *out = sha256_hmac(key, key_len, data, data_len);
@@ -503,628 +556,6 @@ static void tls13_make_nonce(uint8_t* iv, uint64_t seq_num, uint8_t* out_nonce) 
         // XOR the last 8 bytes of the IV with the big-endian sequence number
         out_nonce[4 + i] ^= (uint8_t)(seq_num >> (56 - (i * 8)));
     }
-}
-
-static int8_t tls13_process_client_hello(tls13_context_t* ctx) {
-    if(!ctx) {
-        return -1;
-    }
-
-    uint8_t header[5];
-
-    int32_t received = ctx->network_recv(ctx->network_client_identifier, header, 5, 0);
-
-    if(received != 5) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive TLS record header");
-        return -1;
-    }
-
-    if(header[0] != TLS13_CONTENT_TYPE_HANDSHAKE || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
-        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Not a handshake record");
-
-        // check for GET request (HTTP)
-        if(memory_memcompare(header, "GET ", 4) == 0 // GET
-           || (memory_memcompare(header, "HEAD ", 5) == 0) // HEAD
-           || (memory_memcompare(header, "POST ", 5) == 0) // POST
-           ) {
-            PRINTLOG(CRYPTOLIB, LOG_INFO, "Received HTTP request on TLS port, sending 308 redirect to HTTPS");
-            uint8_t buffer[512];
-            memory_memclean(buffer, sizeof(buffer));
-            memory_memcopy(header, &buffer[0], 5);
-            received = ctx->network_recv(ctx->network_client_identifier, &buffer[5], 506, 0 | 0x80000000); // try once.
-            if(received > 0) {
-                buffer[5 + received] = '\0';
-                // find Host header
-                char_t default_host[256];
-                memory_memclean(default_host, sizeof(default_host));
-                memory_memcopy(ctx->default_host_port, default_host, strlen(ctx->default_host_port));
-                char_t* host_header = strstr((char_t*)buffer, "Host: ");
-                if(host_header) {
-                    char_t* host_end = strstr(host_header, "\r\n");
-                    if(host_end) {
-                        size_t host_len = host_end - (host_header + 6);
-                        if(host_len < sizeof(default_host)) {
-                            memory_memcopy(host_header + 6, default_host, host_len);
-                            default_host[host_len] = '\0';
-                        }
-                    }
-                }
-
-                char_t* response = strprintf(
-                    "HTTP/1.1 308 Permanent Redirect\r\n"
-                    "Location: https://%s/\r\n"
-                    "Content-Length: 0\r\n"
-                    "Connection: close\r\n"
-                    "\r\n",
-                    default_host
-                    );
-                ctx->network_send(ctx->network_client_identifier, (uint8_t*)response, strlen(response), 0);
-                memory_free(response);
-                PRINTLOG(CRYPTOLIB, LOG_INFO, "Sent 308 redirect to https://%s/", default_host);
-
-                return -2;
-            }
-
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete HTTP request");
-            return -1;
-        }
-
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Not a handshake record (Type: 0x%02x)", header[0]);
-        return -1;
-    }
-
-    int32_t record_len = (header[3] << 8) | header[4];
-
-    uint8_t* buffer = memory_malloc(record_len);
-    if(!buffer) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for TLS record failed");
-        return -1;
-    }
-
-    received = ctx->network_recv(ctx->network_client_identifier, buffer, record_len, 0);
-
-    if(received != record_len) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete TLS record");
-        memory_free(buffer);
-        return -1;
-    }
-
-    // 2. Move to Handshake Layer (Offset 5)
-    uint8_t * handshake = buffer;
-    uint8_t msg_type = handshake[0];
-    if (msg_type != TLS13_HANDSHAKE_TYPE_CLIENT_HELLO) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Not a Client Hello (Type: 0x%02x)", msg_type);
-        memory_free(buffer);
-        return -1;
-    }
-
-    // 3. Skip Handshake header (1 byte type + 3 bytes length = 4 bytes)
-    // Client Version (2 bytes)
-    uint16_t client_version = (handshake[4] << 8) | handshake[5];
-    ctx->version = client_version;
-
-    // 4. Client Random (32 bytes)
-    uint8_t* client_random = &handshake[6];
-    memory_memcopy(client_random, ctx->client_random, 32);
-
-    // 5. Session ID (Variable length)
-    uint8_t session_id_len = handshake[38];
-    uint8_t* session_id = &handshake[39];
-    ctx->session_id_len = session_id_len;
-    if (session_id_len > 0) {
-        ctx->session_id = (uint8_t*)memory_malloc(session_id_len);
-        if (!ctx->session_id) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for session_id failed");
-            memory_free(buffer);
-            return -1;
-        }
-        memory_memcopy(session_id, ctx->session_id, session_id_len);
-    } else {
-        ctx->session_id = NULL;
-    }
-
-
-    // 6. Cipher Suites (Variable length)
-    // The offset depends on session_id_len
-    int offset = 39 + session_id_len;
-    uint16_t cipher_suites_len = (handshake[offset] << 8) | handshake[offset + 1];
-    uint8_t* cipher_suites = &handshake[offset + 2];
-
-    boolean_t cipher_suit_found = false;
-
-    for (int i = 0; i < cipher_suites_len; i += 2) {
-        uint16_t suite = (cipher_suites[i] << 8) | cipher_suites[i + 1];
-
-        if (suite == TLS_AES_128_GCM_SHA256) { // TLS_AES_128_GCM_SHA256
-            if(ctx->cipher_suite == TLS_AES_256_GCM_SHA384) { // Prefer stronger suite if both are offered
-                continue; // Already selected, skip
-            }
-            ctx->cipher_suite = TLS_AES_128_GCM_SHA256;
-            ctx->selected_hash_algorithm = TLS_HASH_SHA256;
-            ctx->handshake_hash_len = SHA256_OUTPUT_SIZE;
-            ctx->handshake_key_len  = AES128_KEY_SIZE; // AES-128 key length
-            ctx->handshake_iv_len = 12; // AES-GCM standard IV length
-            cipher_suit_found = true;
-            // You can break here or continue to see what else the client offers
-        } else if (suite == TLS_AES_256_GCM_SHA384) {
-            ctx->cipher_suite = TLS_AES_256_GCM_SHA384;
-            ctx->selected_hash_algorithm = TLS_HASH_SHA384;
-            ctx->handshake_hash_len = SHA384_OUTPUT_SIZE;
-            ctx->handshake_key_len  = AES256_KEY_SIZE; // AES-256 key length
-            ctx->handshake_iv_len = 12; // AES-GCM standard IV length
-            cipher_suit_found = true;
-        } else if (suite == TLS_CHACHA20_POLY1305_SHA256) {
-            // Not implemented, reserved for future use
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered not implemented cipher suite: TLS_CHACHA20_POLY1305_SHA256");
-        } else {
-            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported cipher suite: 0x%04x", suite);
-        }
-    }
-
-    if(!cipher_suit_found) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported cipher suites found");
-        memory_free(buffer);
-        return -1;
-    }
-
-    // Calculate offset to compression methods
-    int32_t comp_offset = offset + 2 + cipher_suites_len;
-    uint8_t comp_len = handshake[comp_offset];
-
-    // Calculate offset to extensions length
-    int32_t ext_len_offset = comp_offset + 1 + comp_len;
-    uint16_t extensions_total_len = (handshake[ext_len_offset] << 8) | handshake[ext_len_offset + 1];
-
-    uint8_t * ext_ptr = &handshake[ext_len_offset + 2];
-
-    int32_t parsed_len = 0;
-    while (parsed_len < extensions_total_len) {
-        uint16_t ext_type = (ext_ptr[0] << 8) | ext_ptr[1];
-        uint16_t ext_len  = (ext_ptr[2] << 8) | ext_ptr[3];
-
-        if (ext_type == TLS_EXTENSION_SNI) { // Server Name Indication
-            // Parse SNI to extract hostname
-            uint8_t * sni_data = ext_ptr + 4;
-            uint16_t sni_list_len  = (sni_data[0] << 8) | sni_data[1];
-            uint8_t * sni_list_ptr = sni_data + 2;
-            int32_t sni_parsed = 0;
-            while (sni_parsed < sni_list_len) {
-                uint8_t name_type = sni_list_ptr[0];
-                uint16_t name_len = (sni_list_ptr[1] << 8) | sni_list_ptr[2];
-                if (name_type == 0) { // hostname
-                    if (name_len < sizeof(ctx->sni_hostname)) {
-                        memory_memcopy(sni_list_ptr + 3, ctx->sni_hostname, name_len);
-                        ctx->sni_hostname[name_len] = '\0';
-                    } else {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "SNI hostname too long: %d", name_len);
-                        memory_free(buffer);
-                        return -1;
-                    }
-                }
-                sni_parsed += 3 + name_len;
-                sni_list_ptr += 3 + name_len;
-            }
-        } else if (ext_type == TLS_EXTENSION_ALPN) { // ALPN
-            ctx->has_alpn = true;
-            uint8_t * alpn_data = ext_ptr + 4;
-            uint16_t alpn_list_len = (alpn_data[0] << 8) | alpn_data[1];
-            uint8_t * ptr = alpn_data + 2;
-            uint16_t processed = 0;
-
-            while (processed < alpn_list_len) {
-                uint8_t str_len = ptr[0];
-                char protocol[32]; // Protocol names are usually short
-
-                if (str_len < sizeof(protocol)) {
-                    memory_memcopy(ptr + 1, protocol, str_len);
-                    protocol[str_len] = '\0';
-
-                    if (strcmp(protocol, "h2") == 0) {
-                        ctx->alpn_h2 = true;
-                    } else if (strcmp(protocol, "http/1.1") == 0) {
-                        ctx->alpn_http11 = true;
-                    }
-                }
-
-                ptr += (1 + str_len);
-                processed += (1 + str_len);
-            }
-        } else if (ext_type == TLS_EXTENSION_SUPPORTED_VERSIONS) { // Supported Versions
-            uint8_t version_count = ext_ptr[4];
-            for (int i = 0; i < version_count; i++) {
-                uint16_t version = (ext_ptr[5 + i * 2] << 8) | ext_ptr[6 + i * 2];
-                if (version == 0x0304) { // TLS 1.3
-                    ctx->tls13_supported = true;
-                    break;
-                }
-            }
-        } else if (ext_type == TLS_EXTENSION_KEY_SHARE) { // Client Key Share
-            uint8_t * share_ptr = ext_ptr + 4;
-            uint16_t total_shares_len = (share_ptr[0] << 8) | share_ptr[1];
-            uint8_t * current_share = share_ptr + 2;
-            uint16_t processed = 0;
-
-            while (processed < total_shares_len) {
-                uint16_t group = (current_share[0] << 8) | current_share[1];
-                uint16_t key_len = (current_share[2] << 8) | current_share[3];
-                uint8_t * key_data = current_share + 4;
-
-                if (group == TLS_GROUP_X25519) { // X25519
-                    if(ctx->selected_group == TLS_GROUP_X25519_ML_KEM768) {
-                        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519_mlkem768 over x25519");
-                        int32_t jump = 4 + key_len;
-                        current_share += jump;
-                        processed += jump;
-                        continue; // Prioritize x25519_mlkem768 if both are offered
-                    }
-
-                    if (key_len != X25519_PUBLIC_KEY_RAW_LEN) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid X25519 public key length: %d", key_len);
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->server_key_exchange_public_key_len = X25519_PUBLIC_KEY_RAW_LEN;
-                    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
-                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
-
-                    if (!ctx->server_key_exchange_public_key) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
-
-                    if(x25519_generate_keypair(server_private_key, ctx->server_key_exchange_public_key) != 0) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->shared_secret = (uint8_t*)memory_malloc(X25519_SHARED_SECRET_LEN);
-                    if (!ctx->shared_secret) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    if(x25519_shared_secret(ctx->shared_secret,
-                                            server_private_key,
-                                            key_data) != 0) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
-
-                    ctx->shared_secret_len = X25519_SHARED_SECRET_LEN; // X25519 shared secret is 32 bytes
-                    ctx->selected_group = TLS_GROUP_X25519;
-                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: x25519");
-                } else if (group == TLS_GROUP_SECP256R1) { // Secp256r1 (P-256)
-                    if(ctx->selected_group == TLS_GROUP_X25519 || ctx->selected_group == TLS_GROUP_X25519_ML_KEM768) {
-                        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
-                        int32_t jump = 4 + key_len;
-                        current_share += jump;
-                        processed += jump;
-                        continue; // Prioritize X25519 if both are offered
-                    }
-
-                    if (key_len != (ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1) || key_data[0] != 0x04) { // Uncompressed point should be 65 bytes and start with 0x04
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Secp256r1 public key format or length: %d", key_len);
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    key_data++; // Skip the 0x04 prefix
-
-                    ctx->server_key_exchange_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
-                    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
-                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
-                    if (!ctx->server_key_exchange_public_key) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
-
-                    uint8_t server_private_key[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN];
-
-                    if(ellipticcurve_secp256r1_generate_keypair(server_private_key, ctx->server_key_exchange_public_key + 1) != 0) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate Secp256r1 keypair");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN);
-                    if (!ctx->shared_secret) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    if(ellipticcurve_secp256r1_shared_secret(ctx->shared_secret,
-                                                             server_private_key,
-                                                             key_data) != 0) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->shared_secret_len = ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN; // P-256 shared secret is 32 bytes
-                    ctx->selected_group = TLS_GROUP_SECP256R1;
-                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp256r1");
-                } else if(group == TLS_GROUP_X25519_ML_KEM768) {
-                    if(key_len != X25519_PUBLIC_KEY_RAW_LEN + MLKEM768_PUBLICKEYBYTES) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key length for x25519_mlkem768: %d", key_len);
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->server_key_exchange_public_key_len = MLKEM768_CIPHERTEXTBYTES + X25519_PUBLIC_KEY_RAW_LEN; // Combined length of ML-KEM ciphertext and X25519 public key
-                    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
-                    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
-
-                    if (!ctx->server_key_exchange_public_key) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    ctx->shared_secret_len = MLKEM768_SHARED_SECRET_BYTES + X25519_SHARED_SECRET_LEN; // Combined shared secret length
-                    ctx->shared_secret = (uint8_t*)memory_malloc(ctx->shared_secret_len);
-                    if (!ctx->shared_secret) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    uint8_t* mlkem768_public_key = key_data;
-                    uint8_t* x25519_client_public_key = key_data + MLKEM768_PUBLICKEYBYTES;
-
-                    uint8_t* mlkem768_ciphertext = ctx->server_key_exchange_public_key;
-                    uint8_t* server_x25519_public_key = ctx->server_key_exchange_public_key + MLKEM768_CIPHERTEXTBYTES;
-
-                    uint8_t* mlkem768_shared_secret_part = ctx->shared_secret;
-                    uint8_t* x25519_shared_secret_part = ctx->shared_secret + MLKEM768_SHARED_SECRET_BYTES;
-
-                    // Encapsulate ML-KEM768 using client's ML-KEM public key
-                    mlkem768_encaps(mlkem768_ciphertext,
-                                    mlkem768_shared_secret_part,
-                                    mlkem768_public_key);
-
-
-                    // Generate server's X25519 key pair and compute shared secret with client's X25519 public key
-                    uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
-
-                    if(x25519_generate_keypair(server_private_key, server_x25519_public_key) != 0) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    if(x25519_shared_secret(x25519_shared_secret_part,
-                                            server_private_key,
-                                            x25519_client_public_key) != 0) {
-                        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
-                        memory_free(buffer);
-                        return -1;
-                    }
-
-                    memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
-
-                    ctx->selected_group = TLS_GROUP_X25519_ML_KEM768;
-                } else {
-                    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unsupported Key Share Group: 0x%04x", group);
-                }
-
-                int32_t jump = 4 + key_len;
-                current_share += jump;
-                processed += jump;
-            }
-        } else if(ext_type == TLS_EXTENSION_SIGNATURE_ALGORITHMS) {
-            uint16_t sigalgs_len  = (ext_ptr[2] << 8) | ext_ptr[3];
-            uint8_t* sigalgs_data = ext_ptr + 4;
-
-            ctx->client_supported_signature_algorithms_len = sigalgs_len / 2;
-            ctx->client_supported_signature_algorithms = (tls13_signature_algorithm_t*)memory_malloc(ctx->client_supported_signature_algorithms_len * sizeof(tls13_signature_algorithm_t));
-            if (!ctx->client_supported_signature_algorithms) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported signature algorithms failed");
-                memory_free(buffer);
-                return -1;
-            }
-            for (int i = 0; i < sigalgs_len; i += 2) {
-                uint16_t alg = (sigalgs_data[i] << 8) | sigalgs_data[i + 1];
-                ctx->client_supported_signature_algorithms[i / 2] = alg;
-                PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported signature algorithm: 0x%04x", alg);
-            }
-        } else if(ext_type == TLS_EXTENSION_SUPPORTED_GROUPS) {
-            uint16_t groups_len  = (ext_ptr[2] << 8) | ext_ptr[3];
-            uint8_t* groups_data = ext_ptr + 4;
-
-            // if list contains TLS_GROUP_SECP160R1, bad it.
-            // ignore 0x01XX series, they are slow we don't like them.
-            for (int i = 0; i < groups_len; i += 2) {
-                uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
-                if(group == 0x0010) { // TLS_GROUP_SECP160R1
-                    groups_len -= 2;
-                }
-                if((group & 0xFF00) == 0x0100) {
-                    groups_len -= 2;
-                }
-            }
-
-            ctx->client_supported_groups_len = groups_len / 2;
-            ctx->client_supported_groups = (tls13_key_exchange_group_t*)memory_malloc(ctx->client_supported_groups_len * sizeof(tls13_key_exchange_group_t));
-            if (!ctx->client_supported_groups) {
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported groups failed");
-                memory_free(buffer);
-                return -1;
-            }
-            for (int i = 0; i < groups_len; i += 2) {
-                uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
-                if(group == 0x0010) { // TLS_GROUP_SECP160R1
-                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: secp160r1, skipping");
-                    continue;
-                }
-                if((group & 0xFF00) == 0x0100) {
-                    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: 0x%04x, skipping", group);
-                    continue;
-                }
-                ctx->client_supported_groups[i / 2] = group;
-                PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported group: 0x%04x", group);
-            }
-        } else if(ext_type == TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES) { // PSK Key Exchange Modes
-            // For simplicity, we won't support PSK in this implementation, but we can log it
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports PSK key exchange modes (not implemented)");
-        } else if(ext_type == TLS_EXTENSION_POST_HANDSHAKE_AUTH) {
-            // For simplicity, we won't support post-handshake authentication in this implementation, but we can log it
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports post-handshake authentication (not implemented)");
-        } else if (ext_type == TLS_EXTENSION_STATUS_REQUEST) {
-            // For simplicity, we won't support OCSP stapling in this implementation, but we can log it
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports OCSP stapling (not implemented)");
-        } else if (ext_type == TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP) {
-            // For simplicity, we won't support SCTs in this implementation, but we can log it
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client supports Signed Certificate Timestamps (not implemented)");
-        } else {
-            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Skipping unsupported extension type: 0x%04x", ext_type);
-        }
-
-
-        ext_ptr += 4 + ext_len;
-        parsed_len += 4 + ext_len;
-    }
-
-    if (parsed_len != extensions_total_len) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Extensions length mismatch");
-        memory_free(buffer);
-        return -1;
-    }
-
-    if (!ctx->tls13_supported) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client does not support TLS 1.3");
-        memory_free(buffer);
-        return -1;
-    }
-
-    if (ctx->selected_group == TLS_GROUP_NONE) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported key exchange group found");
-        memory_free(buffer);
-        return -1;
-    }
-
-    boolean_t selected_group_supported_by_client = false;
-    for (size_t i = 0; i < ctx->client_supported_groups_len; i++) {
-        if (ctx->client_supported_groups[i] == ctx->selected_group) {
-            selected_group_supported_by_client = true;
-            break;
-        }
-    }
-    if (!selected_group_supported_by_client) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Selected key exchange group not supported by client");
-        memory_free(buffer);
-        return -1;
-    }
-
-    if(ctx->selected_hash_algorithm == TLS_HASH_NONE) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported hash algorithm selected");
-        memory_free(buffer);
-        return -1;
-    }
-
-    if(tls13_hash_update(ctx, handshake, record_len) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash");
-        memory_free(buffer);
-        return -1;
-    }
-
-    memory_free(buffer);
-
-    return 0;
-}
-
-static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
-    uint8_t msg[4096];
-    int32_t p = 5; // Start after Record Header
-
-    // Handshake Type & Placeholder for Length
-    msg[p++] = TLS13_HANDSHAKE_TYPE_SERVER_HELLO;
-    int32_t hs_len_ptr = p;
-    p += 3;
-
-    // Legacy Version
-    msg[p++] = 0x03; msg[p++] = 0x03;
-
-    // Server Random
-    memory_memcopy(ctx->server_random, &msg[p], 32);
-    p += 32;
-
-    // Echo Session ID
-    msg[p++] = ctx->session_id_len;
-    if (ctx->session_id_len > 0) {
-        memory_memcopy(ctx->session_id, &msg[p], ctx->session_id_len);
-        p += ctx->session_id_len;
-    }
-
-    // Selected Cipher Suite
-    msg[p++] = (ctx->cipher_suite >> 8) & 0xFF;
-    msg[p++] = ctx->cipher_suite & 0xFF;
-
-    // Compression Method (null)
-    msg[p++] = 0x00;
-
-    // Extensions
-    int32_t ext_len_ptr = p;
-    p += 2;
-
-    // Extension: Supported Versions (0x002b)
-    msg[p++] = 0x00; msg[p++] = 0x2b;
-    msg[p++] = 0x00; msg[p++] = 0x02;
-    msg[p++] = 0x03; msg[p++] = 0x04; // TLS 1.3
-
-    size_t key_len = ctx->server_key_exchange_public_key_len;
-    size_t key_len_placeholder = 4 + key_len; // 2 bytes for group + 2 bytes for key length + key data
-    uint8_t* key_data = ctx->server_key_exchange_public_key;
-
-    // Extension: Key Share (0x0033)
-    msg[p++] = 0x00; msg[p++] = 0x33;
-    msg[p++] = (key_len_placeholder >> 8) & 0xFF;
-    msg[p++] = key_len_placeholder & 0xFF;
-    // Key Share Group
-    msg[p++] = ((ctx->selected_group >> 8) & 0xFF);
-    msg[p++] = (ctx->selected_group & 0xFF);
-    // Key Length
-    msg[p++] = ((key_len >> 8) & 0xFF);
-    msg[p++] = (key_len & 0xFF);
-    // Key Data
-    memory_memcopy(key_data, &msg[p], key_len);
-    p += key_len;
-
-    // Fix up Lengths
-    uint32_t hs_body_len = p - hs_len_ptr - 3;
-    msg[hs_len_ptr] = (hs_body_len >> 16) & 0xFF;
-    msg[hs_len_ptr + 1] = (hs_body_len >> 8) & 0xFF;
-    msg[hs_len_ptr + 2] = hs_body_len & 0xFF;
-
-    uint32_t ext_total_len = p - ext_len_ptr - 2;
-    msg[ext_len_ptr] = (ext_total_len >> 8) & 0xFF;
-    msg[ext_len_ptr + 1] = ext_total_len & 0xFF;
-
-    // Fix Record Header
-    msg[0] = TLS13_CONTENT_TYPE_HANDSHAKE;
-    msg[1] = 0x03; msg[2] = 0x03;
-    uint16_t rec_len = p - 5;
-    msg[3] = (rec_len >> 8) & 0xFF;
-    msg[4] = rec_len & 0xFF;
-
-    if(tls13_hash_update(ctx, msg + 5, p - 5) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash with Server Hello");
-        return -1;
-    }
-
-    return ctx->network_send(ctx->network_client_identifier, msg, p, 0);
 }
 
 static int32_t hkdf_expand(tls13_context_t* ctx,
@@ -1242,6 +673,1024 @@ static int32_t hkdf_extract(tls13_context_t* ctx,
     return 0;
 }
 
+static int8_t tls13_check_plain_text_protcol(tls13_context_t * ctx, uint8_t* header) {
+    if(header[0] != TLS13_CONTENT_TYPE_HANDSHAKE || header[1] != 0x03 || (header[2] < 0x01 || header[2] > 0x04)) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Not a handshake record");
+
+        // check for GET request (HTTP)
+        if(memory_memcompare(header, "GET ", 4) == 0 // GET
+           || (memory_memcompare(header, "HEAD ", 5) == 0) // HEAD
+           || (memory_memcompare(header, "POST ", 5) == 0) // POST
+           ) {
+            PRINTLOG(CRYPTOLIB, LOG_INFO, "Received HTTP request on TLS port, sending 308 redirect to HTTPS");
+            uint8_t buffer[512];
+            memory_memclean(buffer, sizeof(buffer));
+            memory_memcopy(header, &buffer[0], 5);
+            uint32_t received = ctx->network_recv(ctx->network_client_identifier, &buffer[5], 506, 0 | 0x80000000); // try once.
+            if(received > 0) {
+                buffer[5 + received] = '\0';
+                // find Host header
+                char_t default_host[256];
+                memory_memclean(default_host, sizeof(default_host));
+                memory_memcopy(ctx->default_host_port, default_host, strlen(ctx->default_host_port));
+                char_t* host_header = strstr((char_t*)buffer, "Host: ");
+                if(host_header) {
+                    char_t* host_end = strstr(host_header, "\r\n");
+                    if(host_end) {
+                        size_t host_len = host_end - (host_header + 6);
+                        if(host_len < sizeof(default_host)) {
+                            memory_memcopy(host_header + 6, default_host, host_len);
+                            default_host[host_len] = '\0';
+                        }
+                    }
+                }
+
+                char_t* response = strprintf(
+                    "HTTP/1.1 308 Permanent Redirect\r\n"
+                    "Location: https://%s/\r\n"
+                    "Content-Length: 0\r\n"
+                    "Connection: close\r\n"
+                    "\r\n",
+                    default_host
+                    );
+                ctx->network_send(ctx->network_client_identifier, (uint8_t*)response, strlen(response), 0);
+                memory_free(response);
+                PRINTLOG(CRYPTOLIB, LOG_INFO, "Sent 308 redirect to https://%s/", default_host);
+
+                return -2;
+            }
+
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete HTTP request");
+            return -1;
+        }
+
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Not a handshake record (Type: 0x%02x)", header[0]);
+        return -1;
+    }
+
+    return 0; // It's a handshake record, continue processing
+}
+
+static int8_t tls13_parse_client_hello_cipher_suites(tls13_context_t* ctx, uint8_t* cipher_suites, uint16_t cipher_suites_len) {
+    boolean_t cipher_suit_found = false;
+
+    for (int i = 0; i < cipher_suites_len; i += 2) {
+        uint16_t suite = (cipher_suites[i] << 8) | cipher_suites[i + 1];
+
+        if (suite == TLS_AES_128_GCM_SHA256) { // TLS_AES_128_GCM_SHA256
+            if(ctx->cipher_suite == TLS_AES_256_GCM_SHA384) { // Prefer stronger suite if both are offered
+                continue; // Already selected, skip
+            }
+            ctx->cipher_suite = TLS_AES_128_GCM_SHA256;
+            ctx->selected_hash_algorithm = TLS_HASH_SHA256;
+            ctx->handshake_hash_len = SHA256_OUTPUT_SIZE;
+            ctx->handshake_key_len  = AES128_KEY_SIZE; // AES-128 key length
+            ctx->handshake_iv_len = 12; // AES-GCM standard IV length
+            cipher_suit_found = true;
+            // You can break here or continue to see what else the client offers
+        } else if (suite == TLS_AES_256_GCM_SHA384) {
+            ctx->cipher_suite = TLS_AES_256_GCM_SHA384;
+            ctx->selected_hash_algorithm = TLS_HASH_SHA384;
+            ctx->handshake_hash_len = SHA384_OUTPUT_SIZE;
+            ctx->handshake_key_len  = AES256_KEY_SIZE; // AES-256 key length
+            ctx->handshake_iv_len = 12; // AES-GCM standard IV length
+            cipher_suit_found = true;
+        } else if (suite == TLS_CHACHA20_POLY1305_SHA256) {
+            // Not implemented, reserved for future use
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Client offered not implemented cipher suite: TLS_CHACHA20_POLY1305_SHA256");
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported cipher suite: 0x%04x", suite);
+        }
+    }
+
+    if(!cipher_suit_found) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported cipher suites found");
+        return -1;
+    }
+
+    return 0; // Cipher suite successfully parsed and selected
+}
+
+static int8_t tls13_parse_client_hello_extension_sni(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    // Parse SNI to extract hostname
+    uint8_t * sni_data = ext_ptr + 4;
+    uint16_t sni_list_len  = (sni_data[0] << 8) | sni_data[1];
+    uint8_t * sni_list_ptr = sni_data + 2;
+    int32_t sni_parsed = 0;
+
+    if(sni_list_len + 2 > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid SNI extension length");
+        return -1;
+    }
+
+    while (sni_parsed < sni_list_len) {
+        uint8_t name_type = sni_list_ptr[0];
+        uint16_t name_len = (sni_list_ptr[1] << 8) | sni_list_ptr[2];
+        if (name_type == 0) { // hostname
+            if (name_len < sizeof(ctx->sni_hostname)) {
+                memory_memcopy(sni_list_ptr + 3, ctx->sni_hostname, name_len);
+                ctx->sni_hostname[name_len] = '\0';
+            } else {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "SNI hostname too long: %d", name_len);
+                return -1;
+            }
+        }
+        sni_parsed += 3 + name_len;
+        sni_list_ptr += 3 + name_len;
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_alpn(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    ctx->has_alpn = true;
+    uint8_t * alpn_data = ext_ptr + 4;
+    uint16_t alpn_list_len = (alpn_data[0] << 8) | alpn_data[1];
+    uint8_t * ptr = alpn_data + 2;
+    uint16_t processed = 0;
+
+    if(alpn_list_len + 2 > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid ALPN extension length");
+        return -1;
+    }
+
+    while (processed < alpn_list_len) {
+        uint8_t str_len = ptr[0];
+        char protocol[32]; // Protocol names are usually short
+
+        if (str_len < sizeof(protocol)) {
+            memory_memcopy(ptr + 1, protocol, str_len);
+            protocol[str_len] = '\0';
+
+            if (strcmp(protocol, "h2") == 0) {
+                ctx->alpn_h2 = true;
+            } else if (strcmp(protocol, "http/1.1") == 0) {
+                ctx->alpn_http11 = true;
+            }
+        }
+
+        ptr += (1 + str_len);
+        processed += (1 + str_len);
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_supported_versions(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    uint8_t version_count = ext_ptr[4] / 2; // Each version is 2 bytes
+    uint8_t* version_list_ptr = ext_ptr + 5;
+
+    if (version_count * 2 + 1 > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Supported Versions extension length. Expected at least %d bytes, got %d", version_count * 2 + 1, ext_len);
+        return -1;
+    }
+
+    for (int i = 0; i < version_count; i++) {
+        uint16_t version = (version_list_ptr[i * 2] << 8) | version_list_ptr[i * 2 + 1];
+        if (version == TLS_VERSION_1_3) {
+            ctx->tls13_supported = true;
+            return 0; // TLS 1.3 supported, no need to check further
+        }
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_key_share_group_x25519(tls13_context_t* ctx, uint8_t* key_data, uint16_t key_len) {
+    if(ctx->selected_group == TLS_GROUP_X25519_ML_KEM768) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519_mlkem768 over x25519");
+        return 0;
+    }
+
+    if (key_len != X25519_PUBLIC_KEY_RAW_LEN) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid X25519 public key length: %d", key_len);
+        return -1;
+    }
+
+    ctx->server_key_exchange_public_key_len = X25519_PUBLIC_KEY_RAW_LEN;
+    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
+    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
+
+    if (!ctx->server_key_exchange_public_key) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+        return -1;
+    }
+
+    uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
+
+    if(x25519_generate_keypair(server_private_key, ctx->server_key_exchange_public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
+        return -1;
+    }
+
+    ctx->shared_secret = (uint8_t*)memory_malloc(X25519_SHARED_SECRET_LEN);
+    if (!ctx->shared_secret) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+        return -1;
+    }
+
+    if(x25519_shared_secret(ctx->shared_secret,
+                            server_private_key,
+                            key_data) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+        return -1;
+    }
+
+    memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
+
+    ctx->shared_secret_len = X25519_SHARED_SECRET_LEN; // X25519 shared secret is 32 bytes
+    ctx->selected_group = TLS_GROUP_X25519;
+    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: x25519");
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_key_share_group_secp256r1(tls13_context_t* ctx, uint8_t* key_data, uint16_t key_len) {
+    if(ctx->selected_group == TLS_GROUP_X25519 || ctx->selected_group == TLS_GROUP_X25519_ML_KEM768) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered multiple key share groups, prioritizing x25519 over secp256r1");
+        return 0;
+    }
+
+    if (key_len != (ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1) || key_data[0] != 0x04) { // Uncompressed point should be 65 bytes and start with 0x04
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Secp256r1 public key format or length: %d", key_len);
+        return -1;
+    }
+
+    key_data++; // Skip the 0x04 prefix
+
+    ctx->server_key_exchange_public_key_len = ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1;
+    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
+    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
+    if (!ctx->server_key_exchange_public_key) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+        return -1;
+    }
+
+    ctx->server_key_exchange_public_key[0] = 0x04; // Uncompressed point prefix
+
+    uint8_t server_private_key[ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN];
+
+    if(ellipticcurve_secp256r1_generate_keypair(server_private_key, ctx->server_key_exchange_public_key + 1) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate Secp256r1 keypair");
+        return -1;
+    }
+
+    ctx->shared_secret = (uint8_t*)memory_malloc(ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN);
+    if (!ctx->shared_secret) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+        return -1;
+    }
+
+    if(ellipticcurve_secp256r1_shared_secret(ctx->shared_secret,
+                                             server_private_key,
+                                             key_data) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+        return -1;
+    }
+
+    ctx->shared_secret_len = ELLIPTICCURVE_SECP256R1_SHARED_SECRET_LEN; // P-256 shared secret is 32 bytes
+    ctx->selected_group = TLS_GROUP_SECP256R1;
+    PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client Key Share Group: secp256r1");
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(tls13_context_t* ctx, uint8_t* key_data, uint16_t key_len) {
+    if(key_len != X25519_PUBLIC_KEY_RAW_LEN + MLKEM768_PUBLICKEYBYTES) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid key length for x25519_mlkem768: %d", key_len);
+        return -1;
+    }
+
+    ctx->server_key_exchange_public_key_len = MLKEM768_CIPHERTEXTBYTES + X25519_PUBLIC_KEY_RAW_LEN; // Combined length of ML-KEM ciphertext and X25519 public key
+    memory_free(ctx->server_key_exchange_public_key); // Free previous if any
+    ctx->server_key_exchange_public_key = (uint8_t*)memory_malloc(ctx->server_key_exchange_public_key_len);
+
+    if (!ctx->server_key_exchange_public_key) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for server key exchange public key failed");
+        return -1;
+    }
+
+    ctx->shared_secret_len = MLKEM768_SHARED_SECRET_BYTES + X25519_SHARED_SECRET_LEN; // Combined shared secret length
+    ctx->shared_secret = (uint8_t*)memory_malloc(ctx->shared_secret_len);
+    if (!ctx->shared_secret) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for shared secret failed");
+        return -1;
+    }
+
+    uint8_t* mlkem768_public_key = key_data;
+    uint8_t* x25519_client_public_key = key_data + MLKEM768_PUBLICKEYBYTES;
+
+    uint8_t* mlkem768_ciphertext = ctx->server_key_exchange_public_key;
+    uint8_t* server_x25519_public_key = ctx->server_key_exchange_public_key + MLKEM768_CIPHERTEXTBYTES;
+
+    uint8_t* mlkem768_shared_secret_part = ctx->shared_secret;
+    uint8_t* x25519_shared_secret_part = ctx->shared_secret + MLKEM768_SHARED_SECRET_BYTES;
+
+    // Encapsulate ML-KEM768 using client's ML-KEM public key
+    mlkem768_encaps(mlkem768_ciphertext,
+                    mlkem768_shared_secret_part,
+                    mlkem768_public_key);
+
+
+    // Generate server's X25519 key pair and compute shared secret with client's X25519 public key
+    uint8_t server_private_key[X25519_PRIVATE_KEY_RAW_LEN];
+
+    if(x25519_generate_keypair(server_private_key, server_x25519_public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate X25519 keypair");
+        return -1;
+    }
+
+    if(x25519_shared_secret(x25519_shared_secret_part,
+                            server_private_key,
+                            x25519_client_public_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute shared secret");
+        return -1;
+    }
+
+    memory_memclean(server_private_key, sizeof(server_private_key)); // Clear private key from memory
+
+    ctx->selected_group = TLS_GROUP_X25519_ML_KEM768;
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_key_share(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    uint8_t * share_ptr = ext_ptr + 4;
+    uint16_t total_shares_len = (share_ptr[0] << 8) | share_ptr[1];
+    uint8_t * current_share = share_ptr + 2;
+    uint16_t processed = 0;
+
+    if (total_shares_len + 2 > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Key Share extension length");
+        return -1;
+    }
+
+    while (processed < total_shares_len) {
+        uint16_t group = (current_share[0] << 8) | current_share[1];
+        uint16_t key_len = (current_share[2] << 8) | current_share[3];
+        uint8_t * key_data = current_share + 4;
+
+        if (group == TLS_GROUP_X25519) { // X25519
+            if(tls13_parse_client_hello_extension_key_share_group_x25519(ctx, key_data, key_len) != 0) {
+                return -1; // Error already logged in the function
+            }
+        } else if (group == TLS_GROUP_SECP256R1) { // Secp256r1 (P-256)
+            if(tls13_parse_client_hello_extension_key_share_group_secp256r1(ctx, key_data, key_len) != 0) {
+                return -1; // Error already logged in the function
+            }
+        } else if(group == TLS_GROUP_X25519_ML_KEM768) {
+            if(tls13_parse_client_hello_extension_key_share_group_x25519_mlkem768(ctx, key_data, key_len) != 0) {
+                return -1; // Error already logged in the function
+            }
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unsupported Key Share Group: 0x%04x", group);
+        }
+
+        int32_t jump = 4 + key_len;
+        current_share += jump;
+        processed += jump;
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_signature_algorithms(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    uint16_t sigalgs_len  = (ext_ptr[2] << 8) | ext_ptr[3];
+    uint8_t* sigalgs_data = ext_ptr + 4;
+
+    if (sigalgs_len > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Signature Algorithms extension length. Expected at least %d bytes, got %d", sigalgs_len, ext_len);
+        return -1;
+    }
+
+    ctx->client_supported_signature_algorithms_len = sigalgs_len / 2;
+    ctx->client_supported_signature_algorithms = (tls13_signature_algorithm_t*)memory_malloc(ctx->client_supported_signature_algorithms_len * sizeof(tls13_signature_algorithm_t));
+    if (!ctx->client_supported_signature_algorithms) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported signature algorithms failed");
+        return -1;
+    }
+    for (int i = 0; i < sigalgs_len; i += 2) {
+        uint16_t alg = (sigalgs_data[i] << 8) | sigalgs_data[i + 1];
+        ctx->client_supported_signature_algorithms[i / 2] = alg;
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported signature algorithm: 0x%04x", alg);
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_supported_groups(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    uint16_t groups_len  = (ext_ptr[2] << 8) | ext_ptr[3];
+    uint8_t* groups_data = ext_ptr + 4;
+
+    if (groups_len > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Supported Groups extension length. Expected %d, got %d", groups_len, ext_len);
+        return -1;
+    }
+
+    // if list contains TLS_GROUP_SECP160R1, bad it.
+    // ignore 0x01XX series, they are slow we don't like them.
+    for (int i = 0; i < groups_len; i += 2) {
+        uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
+        if(group == 0x0010) { // TLS_GROUP_SECP160R1
+            groups_len -= 2;
+        }
+        if((group & 0xFF00) == 0x0100) {
+            groups_len -= 2;
+        }
+    }
+
+    ctx->client_supported_groups_len = groups_len / 2;
+    ctx->client_supported_groups = (tls13_key_exchange_group_t*)memory_malloc(ctx->client_supported_groups_len * sizeof(tls13_key_exchange_group_t));
+    if (!ctx->client_supported_groups) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for client supported groups failed");
+        return -1;
+    }
+    for (int i = 0; i < groups_len; i += 2) {
+        uint16_t group = (groups_data[i] << 8) | groups_data[i + 1];
+        if(group == 0x0010) { // TLS_GROUP_SECP160R1
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: secp160r1, skipping");
+            continue;
+        }
+        if((group & 0xFF00) == 0x0100) {
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered unsupported group: 0x%04x, skipping", group);
+            continue;
+        }
+        ctx->client_supported_groups[i / 2] = group;
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client supported group: 0x%04x", group);
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_psk_key_exchange_modes(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    uint8_t mode_count  = ext_ptr[4];
+    uint8_t* modes_data = ext_ptr + 4;
+
+    if (mode_count + 1 > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid PSK Key Exchange Modes extension length. Expected at least %d bytes, got %d", mode_count + 1, ext_len);
+        return -1;
+    }
+
+    for (int i = 0; i < mode_count; i++) {
+        uint8_t mode = modes_data[i];
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Client offered PSK Key Exchange Mode: 0x%02x", mode);
+
+        if(mode != TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Unsupported PSK Key Exchange Mode: 0x%02x, skipping", mode);
+            continue;
+        }
+
+        ctx->psk_key_exchange_mode = mode;
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len, const uint8_t* handshake) {
+    uint16_t identity_list_len = (ext_ptr[4] << 8) | ext_ptr[5];
+    uint8_t* identity_list_ptr = ext_ptr + 6;
+    uint8_t* identity_list_end = identity_list_ptr + identity_list_len;
+
+    uint8_t* binders_data_start = identity_list_end;
+    uint16_t binders_list_len = (binders_data_start[0] << 8) | binders_data_start[1];
+    uint8_t* binders_data_ptr = binders_data_start + 2;
+    uint8_t* binders_data_end = binders_data_ptr + binders_list_len;
+
+    if (identity_list_len + 2 + binders_list_len + 2 > ext_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Pre-Shared Key extension length. Expected at least %d bytes, got %d", identity_list_len + 2 + binders_list_len + 2, ext_len);
+        return -1;
+    }
+
+    int32_t identity_count = 0;
+    int32_t binder_count = 0;
+
+    uint8_t* tmp_ptr = identity_list_ptr;
+    while (tmp_ptr < identity_list_end) {
+        if (tmp_ptr + 2 > identity_list_end) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Pre-Shared Key identity list format");
+            return -1;
+        }
+        uint16_t identity_len = (tmp_ptr[0] << 8) | tmp_ptr[1];
+        tmp_ptr += 2 + identity_len + 4; // Move past identity and obfuscated ticket age
+        identity_count++;
+    }
+
+    tmp_ptr = binders_data_ptr;
+    while (tmp_ptr < binders_data_end) {
+        if (tmp_ptr + 1 > binders_data_end) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Pre-Shared Key binders list format");
+            return -1;
+        }
+        uint8_t binder_len = tmp_ptr[0];
+        tmp_ptr += 1 + binder_len; // Move past binder length and binder data
+        binder_count++;
+    }
+
+    if (identity_count != binder_count) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Mismatch between number of PSK identities (%d) and binders (%d)", identity_count, binder_count);
+        return -1;
+    }
+
+    int32_t hash_len = ctx->handshake_hash_len;
+
+    uint8_t* binder_locations[binder_count];
+    int32_t binder_lens[binder_count];
+    tmp_ptr = binders_data_ptr;
+    for (int i = 0; i < binder_count; i++) {
+        uint8_t binder_len = tmp_ptr[0];
+        binder_lens[i] = binder_len;
+        binder_locations[i] = tmp_ptr + 1; // Point to the start of binder data
+        tmp_ptr += 1 + binder_len; // Move to the next binder
+    }
+
+    int32_t psk_index = 0;
+
+#define NEXT_IDENTITY() { \
+            if (psk_index >= identity_count) { \
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "PSK index out of bounds: %d", psk_index); \
+                return -1; \
+            } \
+            psk_index++; \
+            identity_list_ptr += 2 + ((identity_list_ptr[0] << 8) | identity_list_ptr[1]) + 4; /* Move past identity and obfuscated ticket age */ \
+            continue; \
+}
+
+    while (identity_list_ptr < identity_list_end) {
+        uint16_t identity_len  = (identity_list_ptr[0] << 8) | identity_list_ptr[1];
+        uint8_t* identity_data = identity_list_ptr + 2;
+
+        if(binder_lens[psk_index] != hash_len) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Binder length does not match expected hash length for PSK identity %d. Expected: %d, Got: %d", psk_index, hash_len, binder_lens[psk_index]);
+            NEXT_IDENTITY();
+        }
+
+        uint8_t plaintext[4096];
+
+        int32_t ciphertext_len = identity_len - 16; // Subtract tag length
+
+        int32_t status = aes_gcm_decrypt_with_aad_with_tag(
+            plaintext, identity_data, ciphertext_len,
+            ctx->psk_encryption_key, AES256_KEY_SIZE,
+            ctx->psk_encryption_iv, 12,
+            ctx->psk_aed_key, sizeof(ctx->psk_aed_key),
+            identity_data + ciphertext_len, 16
+            );
+
+        if (status != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to decrypt PSK identity");
+            NEXT_IDENTITY();
+        }
+
+        int32_t offset = 0;
+
+        tls13_cipher_suite_t cipher_suite = (plaintext[offset] << 8) | plaintext[offset + 1]; // Extract cipher suite from decrypted PSK identity
+        offset += 2;
+
+        if(cipher_suite != ctx->cipher_suite) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Cipher suite mismatch between PSK identity and ClientHello: 0x%04x vs 0x%04x", cipher_suite, ctx->cipher_suite);
+            NEXT_IDENTITY();
+        }
+
+        uint8_t* psk_bytes = &plaintext[offset];
+        offset += hash_len;
+
+        uint32_t lifetime = (plaintext[offset] << 24) | (plaintext[offset + 1] << 16) | (plaintext[offset + 2] << 8) | plaintext[offset + 3];
+        offset += 4;
+
+        uint32_t ticket_age_add = (plaintext[offset] << 24) | (plaintext[offset + 1] << 16) | (plaintext[offset + 2] << 8) | plaintext[offset + 3];
+        offset += 4;
+
+        uint64_t now_ns_in_ticket = plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+        now_ns_in_ticket <<= 8;
+        now_ns_in_ticket  |= plaintext[offset++];
+
+        uint32_t alpn_name_len = (plaintext[offset] << 8) | plaintext[offset + 1];
+        offset += 2;
+
+        char_t alpn_name[256];
+        if (alpn_name_len < sizeof(alpn_name)) {
+            memory_memcopy(&plaintext[offset], alpn_name, alpn_name_len);
+            alpn_name[alpn_name_len] = '\0';
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "ALPN name in PSK identity too long: %d", alpn_name_len);
+            NEXT_IDENTITY();
+        }
+
+        const char_t* expected_alpn = ctx->alpn_h2 ? "h2" : (ctx->alpn_http11 ? "http/1.1" : NULL);
+        if (expected_alpn && strlen(alpn_name) == strlen(expected_alpn) && strcmp(alpn_name, expected_alpn) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "ALPN name mismatch between PSK identity and ClientHello: %s vs %s", alpn_name, expected_alpn);
+            NEXT_IDENTITY();
+        }
+
+        uint32_t obfuscated_ticket_age = (identity_data[identity_len] << 24) | (identity_data[identity_len + 1] << 16) | (identity_data[identity_len + 2] << 8) | identity_data[identity_len + 3];
+
+        uint32_t reported_age = obfuscated_ticket_age - ticket_age_add;
+
+        if (reported_age > lifetime) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "PSK ticket has expired based on reported age. Reported age: %u ms, Lifetime: %u ms", reported_age, lifetime);
+            NEXT_IDENTITY();
+        }
+
+        uint64_t now_ns = time_ns(NULL);
+        uint64_t ticket_age = (now_ns - now_ns_in_ticket) / 1000000; // Convert to milliseconds
+
+        if (ticket_age > lifetime) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "PSK ticket has expired. Ticket age: %llu ms, Lifetime: %u ms", ticket_age, lifetime);
+            NEXT_IDENTITY();
+        }
+
+        uint8_t* hmac = NULL;
+
+        uint8_t empty_hash[SHA384_OUTPUT_SIZE] = {0};
+        uint8_t early_secret[SHA384_OUTPUT_SIZE];
+        uint8_t binder_key[SHA384_OUTPUT_SIZE];
+        uint8_t finished_key[SHA384_OUTPUT_SIZE];
+
+        if(tls13_hash_get_empty(ctx, empty_hash) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get empty hash");
+            return -1;
+        }
+
+        if(hkdf_extract(ctx, NULL, 0, psk_bytes, hash_len, early_secret) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute early secret");
+            return -1;
+        }
+
+        if(hkdf_expand_label_ext(ctx, early_secret, "res binder", empty_hash, hash_len, binder_key, hash_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute binder key");
+            return -1;
+        }
+
+        if(hkdf_expand_label_ext(ctx, binder_key, "finished", NULL, 0, finished_key, hash_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute finished key");
+            return -1;
+        }
+
+        uint8_t handshake_hash[SHA384_OUTPUT_SIZE];
+
+        if(tls13_hash_compute(ctx, handshake, binders_data_start - handshake, handshake_hash) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute handshake hash for PSK binder verification");
+            return -1;
+        }
+
+        if(tls13_hash_hmac(ctx->selected_hash_algorithm, finished_key, hash_len, handshake_hash, hash_len, &hmac) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to compute PSK binder HMAC");
+            return -1;
+        }
+
+        int32_t diff = 0;
+        for (int i = 0; i < hash_len; i++) {
+            diff |= (hmac[i] ^ binder_locations[psk_index][i]);
+        }
+
+        memory_free(hmac); // Free the HMAC result after use
+
+        if(diff == 0) {
+            ctx->session_resumed = true; // Mark session as resumed based on valid PSK binder
+            ctx->selected_identity_index = psk_index; // Store the index of the selected PSK identity
+            memory_memcopy(psk_bytes, ctx->selected_psk_value, hash_len); // Store the selected PSK identity for later use
+            break; // Stop after the first valid binder is found
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "PSK binder verification failed for identity index %d", psk_index);
+            NEXT_IDENTITY();
+        }
+
+        NEXT_IDENTITY();
+    }
+
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_post_handshake_auth(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    UNUSED(ctx);
+    UNUSED(ext_ptr);
+    UNUSED(ext_len);
+    // Not implemented, reserved for future use
+    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Received Post-Handshake Authentication extension, but it's not implemented");
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_status_request(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    UNUSED(ctx);
+    UNUSED(ext_ptr);
+    UNUSED(ext_len);
+    // Not implemented, reserved for future use
+    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Received Status Request extension, but it's not implemented");
+    return 0;
+}
+
+static int8_t tls13_parse_client_hello_extension_signed_certificate_timestamp(tls13_context_t* ctx, uint8_t* ext_ptr, uint16_t ext_len) {
+    UNUSED(ctx);
+    UNUSED(ext_ptr);
+    UNUSED(ext_len);
+    // Not implemented, reserved for future use
+    PRINTLOG(CRYPTOLIB, LOG_WARNING, "Received Signed Certificate Timestamp extension, but it's not implemented");
+    return 0;
+}
+
+static int8_t tls13_process_client_hello(tls13_context_t* ctx) {
+    if(!ctx) {
+        return -1;
+    }
+
+    uint8_t header[5];
+
+    int32_t received = ctx->network_recv(ctx->network_client_identifier, header, 5, 0);
+
+    if(received != 5) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive TLS record header");
+        return -1;
+    }
+
+    int8_t check = tls13_check_plain_text_protcol(ctx, header);
+    if(check < 0) {
+        return check; // -1 for error, -2 for handled HTTP request
+    }
+
+    int32_t record_len = (header[3] << 8) | header[4];
+
+    uint8_t* buffer = memory_malloc(record_len);
+    if(!buffer) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for TLS record failed");
+        return -1;
+    }
+
+    received = ctx->network_recv(ctx->network_client_identifier, buffer, record_len, 0);
+
+    if(received != record_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to receive complete TLS record");
+        memory_free(buffer);
+        return -1;
+    }
+
+    int32_t offset = 0;
+
+    // 2. Move to Handshake Layer (Offset 5)
+    uint8_t * handshake = buffer;
+    uint8_t msg_type = handshake[0];
+    if (msg_type != TLS13_HANDSHAKE_TYPE_CLIENT_HELLO) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Not a Client Hello (Type: 0x%02x)", msg_type);
+        memory_free(buffer);
+        return -1;
+    }
+
+    // 3. Skip Handshake header (1 byte type + 3 bytes length = 4 bytes)
+    // Client Version (2 bytes)
+    uint16_t client_version = (handshake[4] << 8) | handshake[5];
+    ctx->version = client_version;
+
+    offset = 6; // Start of Client Random
+
+    // 4. Client Random (32 bytes)
+    uint8_t* client_random = &handshake[offset];
+    memory_memcopy(client_random, ctx->client_random, 32);
+
+    offset += 32; // Move past Client Random
+
+    // 5. Session ID (Variable length)
+    uint8_t session_id_len = handshake[offset++];
+    uint8_t* session_id = &handshake[offset];
+    ctx->session_id_len = session_id_len;
+    if (session_id_len > 0) {
+        ctx->session_id = (uint8_t*)memory_malloc(session_id_len);
+        if (!ctx->session_id) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation for session_id failed");
+            memory_free(buffer);
+            return -1;
+        }
+        memory_memcopy(session_id, ctx->session_id, session_id_len);
+    } else {
+        ctx->session_id = NULL;
+    }
+
+    offset += session_id_len; // Move past Session ID
+
+
+    // 6. Cipher Suites (Variable length)
+    // The offset depends on session_id_len
+    uint16_t cipher_suites_len = (handshake[offset] << 8) | handshake[offset + 1];
+    uint8_t* cipher_suites = &handshake[offset + 2];
+
+    if (tls13_parse_client_hello_cipher_suites(ctx, cipher_suites, cipher_suites_len) < 0) {
+        memory_free(buffer);
+        return -1; // No supported cipher suites found or error in parsing
+    }
+
+    // Calculate offset to compression methods
+    int32_t comp_offset = offset + 2 + cipher_suites_len;
+    uint8_t comp_len = handshake[comp_offset];
+
+    // Calculate offset to extensions length
+    int32_t ext_len_offset = comp_offset + 1 + comp_len;
+    uint16_t extensions_total_len = (handshake[ext_len_offset] << 8) | handshake[ext_len_offset + 1];
+
+    uint8_t * ext_ptr = &handshake[ext_len_offset + 2];
+
+    int32_t parsed_len = 0;
+    while (parsed_len < extensions_total_len) {
+        tls13_extension_type_t ext_type = (ext_ptr[0] << 8) | ext_ptr[1];
+        uint16_t ext_len = (ext_ptr[2] << 8) | ext_ptr[3];
+
+        int8_t ext_res = 0;
+
+        switch(ext_type) {
+        case TLS_EXTENSION_SNI:
+            ext_res = tls13_parse_client_hello_extension_sni(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_ALPN:
+            ext_res = tls13_parse_client_hello_extension_alpn(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_SUPPORTED_VERSIONS:
+            ext_res = tls13_parse_client_hello_extension_supported_versions(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_KEY_SHARE:
+            ext_res = tls13_parse_client_hello_extension_key_share(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_SIGNATURE_ALGORITHMS:
+            ext_res = tls13_parse_client_hello_extension_signature_algorithms(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_SUPPORTED_GROUPS:
+            ext_res = tls13_parse_client_hello_extension_supported_groups(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES:
+            ext_res = tls13_parse_client_hello_extension_psk_key_exchange_modes(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_PRE_SHARED_KEY:
+            ext_res = tls13_parse_client_hello_extension_pre_shared_key(ctx, ext_ptr, ext_len, handshake);
+            break;
+        case TLS_EXTENSION_POST_HANDSHAKE_AUTH:
+            ext_res = tls13_parse_client_hello_extension_post_handshake_auth(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_STATUS_REQUEST:
+            ext_res = tls13_parse_client_hello_extension_status_request(ctx, ext_ptr, ext_len);
+            break;
+        case TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP:
+            ext_res = tls13_parse_client_hello_extension_signed_certificate_timestamp(ctx, ext_ptr, ext_len);
+            break;
+        default:
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Skipping unsupported extension type: 0x%04x", ext_type);
+            break;
+        }
+
+        if (ext_res < 0) {
+            memory_free(buffer);
+            return -1; // Error parsing extension, already logged
+        }
+
+        ext_ptr += 4 + ext_len;
+        parsed_len += 4 + ext_len;
+    }
+
+    if (parsed_len != extensions_total_len) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Extensions length mismatch");
+        memory_free(buffer);
+        return -1;
+    }
+
+    if (!ctx->tls13_supported) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client does not support TLS 1.3");
+        memory_free(buffer);
+        return -1;
+    }
+
+    if (ctx->selected_group == TLS_GROUP_NONE) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported key exchange group found");
+        memory_free(buffer);
+        return -1;
+    }
+
+    boolean_t selected_group_supported_by_client = false;
+    for (size_t i = 0; i < ctx->client_supported_groups_len; i++) {
+        if (ctx->client_supported_groups[i] == ctx->selected_group) {
+            selected_group_supported_by_client = true;
+            break;
+        }
+    }
+    if (!selected_group_supported_by_client) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Selected key exchange group not supported by client");
+        memory_free(buffer);
+        return -1;
+    }
+
+    if(ctx->selected_hash_algorithm == TLS_HASH_NONE) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "No supported hash algorithm selected");
+        memory_free(buffer);
+        return -1;
+    }
+
+    if(tls13_hash_update(ctx, handshake, record_len) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash");
+        memory_free(buffer);
+        return -1;
+    }
+
+    memory_free(buffer);
+
+    return 0;
+}
+
+static int32_t tls13_send_server_hello(tls13_context_t* ctx) {
+    uint8_t msg[4096];
+    int32_t p = 5; // Start after Record Header
+
+    // Handshake Type & Placeholder for Length
+    msg[p++] = TLS13_HANDSHAKE_TYPE_SERVER_HELLO;
+    int32_t hs_len_ptr = p;
+    p += 3;
+
+    // Legacy Version
+    msg[p++] = 0x03; msg[p++] = 0x03;
+
+    // Server Random
+    memory_memcopy(ctx->server_random, &msg[p], 32);
+    p += 32;
+
+    // Echo Session ID
+    msg[p++] = ctx->session_id_len;
+    if (ctx->session_id_len > 0) {
+        memory_memcopy(ctx->session_id, &msg[p], ctx->session_id_len);
+        p += ctx->session_id_len;
+    }
+
+    // Selected Cipher Suite
+    msg[p++] = (ctx->cipher_suite >> 8) & 0xFF;
+    msg[p++] = ctx->cipher_suite & 0xFF;
+
+    // Compression Method (null)
+    msg[p++] = 0x00;
+
+    // Extensions
+    int32_t ext_len_ptr = p;
+    p += 2;
+
+    // Extension: Supported Versions (0x002b)
+    msg[p++] = 0x00; msg[p++] = 0x2b;
+    msg[p++] = 0x00; msg[p++] = 0x02;
+    msg[p++] = 0x03; msg[p++] = 0x04; // TLS 1.3
+
+    size_t key_len = ctx->server_key_exchange_public_key_len;
+    size_t key_len_placeholder = 4 + key_len; // 2 bytes for group + 2 bytes for key length + key data
+    uint8_t* key_data = ctx->server_key_exchange_public_key;
+
+    // Extension: Key Share (0x0033)
+    msg[p++] = 0x00; msg[p++] = 0x33;
+    msg[p++] = (key_len_placeholder >> 8) & 0xFF;
+    msg[p++] = key_len_placeholder & 0xFF;
+    // Key Share Group
+    msg[p++] = ((ctx->selected_group >> 8) & 0xFF);
+    msg[p++] = (ctx->selected_group & 0xFF);
+    // Key Length
+    msg[p++] = ((key_len >> 8) & 0xFF);
+    msg[p++] = (key_len & 0xFF);
+    // Key Data
+    memory_memcopy(key_data, &msg[p], key_len);
+    p += key_len;
+
+    if(ctx->session_resumed) {
+        msg[p++] = (TLS_EXTENSION_PRE_SHARED_KEY >> 8) & 0xFF;
+        msg[p++] = TLS_EXTENSION_PRE_SHARED_KEY & 0xFF;
+        msg[p++] = 0x00; msg[p++] = 0x02; // Extension length
+        msg[p++] = (ctx->selected_identity_index >> 8) & 0xFF;
+        msg[p++] = ctx->selected_identity_index & 0xFF;
+    }
+
+    // Fix up Lengths
+    uint32_t hs_body_len = p - hs_len_ptr - 3;
+    msg[hs_len_ptr] = (hs_body_len >> 16) & 0xFF;
+    msg[hs_len_ptr + 1] = (hs_body_len >> 8) & 0xFF;
+    msg[hs_len_ptr + 2] = hs_body_len & 0xFF;
+
+    uint32_t ext_total_len = p - ext_len_ptr - 2;
+    msg[ext_len_ptr] = (ext_total_len >> 8) & 0xFF;
+    msg[ext_len_ptr + 1] = ext_total_len & 0xFF;
+
+    // Fix Record Header
+    msg[0] = TLS13_CONTENT_TYPE_HANDSHAKE;
+    msg[1] = 0x03; msg[2] = 0x03;
+    uint16_t rec_len = p - 5;
+    msg[3] = (rec_len >> 8) & 0xFF;
+    msg[4] = rec_len & 0xFF;
+
+    if(tls13_hash_update(ctx, msg + 5, p - 5) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to update handshake hash with Server Hello");
+        return -1;
+    }
+
+    return ctx->network_send(ctx->network_client_identifier, msg, p, 0);
+}
+
 static int8_t tls13_generate_handshake_key_and_iv(tls13_context_t* ctx) {
     uint32_t hlen = ctx->handshake_hash_len;
     uint32_t key_len = ctx->handshake_key_len;
@@ -1267,9 +1716,17 @@ static int8_t tls13_generate_handshake_key_and_iv(tls13_context_t* ctx) {
             c_hs_traffic_secret[SHA384_OUTPUT_SIZE];
 
     // 1. Early Secret
-    if(hkdf_extract(ctx, NULL, 0, zero_ikm, hlen, early_secret) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive early secret");
-        return -1;
+    if(ctx->session_resumed) {
+        // If resuming, use the selected PSK as the IKM for early secret
+        if(hkdf_extract(ctx, NULL, 0, ctx->selected_psk_value, hlen, early_secret) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive early secret from PSK");
+            return -1;
+        }
+    } else {
+        if(hkdf_extract(ctx, NULL, 0, zero_ikm, hlen, early_secret) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive early secret");
+            return -1;
+        }
     }
 
     // 2. Derived Secret
@@ -1454,6 +1911,11 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
 }
 
 static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
+    if(ctx->session_resumed) {
+        // No need to request certificate if session is resumed
+        return 0;
+    }
+
     uint8_t plaintext[128];
     uint8_t ciphertext[128 + 16];
 
@@ -1553,6 +2015,11 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
 }
 
 static int8_t tls13_send_certificate(tls13_context_t* ctx) {
+    if(ctx->session_resumed) {
+        // No need to send certificate if session is resumed
+        return 0;
+    }
+
     // We need the raw DER for both
     size_t server_der_len = 0;
     uint8_t* server_der = x509_certificate_get_der(ctx->server_certificate, &server_der_len);
@@ -1659,6 +2126,11 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
 }
 
 static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
+    if(ctx->session_resumed) {
+        // No need to send Certificate Verify if session is resumed
+        return 0;
+    }
+
     const size_t space_count  = 64;
     const char_t* sign_string = "TLS 1.3, server CertificateVerify";
     uint8_t sign_buffer[space_count + strlen(sign_string) + 1 + SHA384_OUTPUT_SIZE];
@@ -1788,6 +2260,211 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
 
     ctx->write_seq_num++;
     return 0;
+}
+
+static int32_t tls13_write_chunk(tls13_context_t* ctx, const uint8_t* data, uint32_t len, tls13_content_type_t content_type) {
+    // 16384 is the max TLS record size
+    uint32_t p_len = len + 1;
+    uint8_t plaintext[p_len];
+    uint8_t ciphertext[p_len + 16];
+
+    // Copy payload and append Inner Content Type (0x17 for Application Data)
+    memory_memcopy(data, plaintext, len);
+    plaintext[len] = content_type;
+
+    // Prepare Nonce (IV ^ write_seq_num)
+    uint8_t nonce[12];
+    tls13_make_nonce(ctx->server_application_iv, ctx->write_seq_num, nonce);
+
+    // Prepare AAD (5-byte Record Header)
+    uint16_t encrypted_record_len = p_len + 16;
+    uint8_t aad[5] = {
+        TLS13_CONTENT_TYPE_APPLICATION_DATA,
+        0x03, 0x03,
+        (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
+    };
+
+    // Encrypt
+    size_t key_len = ctx->handshake_key_len;
+    int32_t status = aes_gcm_encrypt_with_aad_with_tag(
+        ciphertext, plaintext, p_len,
+        ctx->server_application_key, key_len,
+        nonce, 12, aad, 5, ciphertext + p_len, 16
+        );
+
+    if (status != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Encryption Failed! Nonce/Key/AAD mismatch.");
+        return -1;
+    }
+
+    // Send Header + Ciphertext
+    if (ctx->network_send(ctx->network_client_identifier, aad, 5, 0) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
+        return -1;
+    }
+    if (ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record ciphertext");
+        return -1;
+    }
+
+    ctx->write_seq_num++;
+    return len;
+}
+
+static int32_t tls13_write_ext(tls13_context_t* ctx, const uint8_t* data, uint32_t len, tls13_content_type_t content_type) {
+    if(!ctx || !data) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or data buffer is NULL");
+        return -1;
+    }
+
+    if(len == 0) {
+        return 0;
+    }
+
+    int64_t remaining  = len;
+    int32_t total_sent = 0;
+
+    while(remaining > 0) {
+        uint32_t chunk_size = remaining > 16384 ? 16384 : (uint32_t)remaining;
+        int32_t sent = tls13_write_chunk(ctx, data + total_sent, chunk_size, content_type);
+        if(sent < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write TLS chunk");
+            return -1;
+        }
+        total_sent += sent;
+        remaining  -= sent;
+    }
+
+    return len;
+}
+
+int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
+    return tls13_write_ext(ctx, data, len, TLS13_CONTENT_TYPE_APPLICATION_DATA);
+}
+
+int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
+    if(!ctx || !out_data) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or output buffer is NULL");
+        return -1;
+    }
+
+    if(max_len == 0) {
+        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Read called with max_len=0, returning 0");
+        return 0;
+    }
+
+    if(!ctx->read_buffer) {
+        ctx->read_buffer = pipeline_create(16384); // 16KB buffer
+        if(!ctx->read_buffer) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create read buffer pipeline");
+            return -1;
+        }
+    }
+
+    int32_t remaining = max_len;
+
+    int32_t total_read = pipeline_read(ctx->read_buffer, remaining, out_data);
+    remaining -= total_read;
+
+    if(remaining == 0) {
+        return total_read;
+    }
+
+    uint8_t header[5];
+
+    if (ctx->network_recv(ctx->network_client_identifier, header, 5, 0) <= 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read TLS record header");
+        return -1;
+    }
+
+    // Handle legacy ChangeCipherSpec if it pops up mid-stream (unlikely but possible)
+    if (header[0] == TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC) {
+        uint16_t ccs_len = (header[3] << 8) | header[4];
+        uint8_t dummy[16];
+        ctx->network_recv(ctx->network_client_identifier, dummy, ccs_len, 0);
+        return tls13_read(ctx, out_data, max_len);
+    }
+
+    if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected encrypted record (0x17), got 0x%02x", header[0]);
+        return -1;
+    }
+
+    uint16_t record_len = (header[3] << 8) | header[4];
+    uint8_t* buffer = memory_malloc(record_len);
+    if (ctx->network_recv(ctx->network_client_identifier, buffer, record_len, 0) <= 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read TLS record payload");
+        memory_free(buffer);
+        return -1;
+    }
+
+    // Decrypt using Application Keys
+    uint8_t nonce[12];
+    tls13_make_nonce(ctx->client_application_iv, ctx->read_seq_num, nonce);
+
+    uint8_t* plaintext = memory_malloc(record_len);
+    uint32_t ciphertext_len = record_len - 16;
+
+    int32_t status = aes_gcm_decrypt_with_aad_with_tag(
+        plaintext, buffer, ciphertext_len,
+        ctx->client_application_key, ctx->handshake_key_len,
+        nonce, 12, header, 5, buffer + ciphertext_len, 16
+        );
+
+    memory_free(buffer);
+    if (status != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Decryption Failed! Nonce/Key/AAD mismatch.");
+        memory_free(plaintext);
+        return -1;
+    }
+
+    // --- STEP 1: Handle Padding ---
+    // The Inner Content Type is the last NON-ZERO byte.
+    int32_t type_pos = ciphertext_len - 1;
+    while (type_pos > 0 && plaintext[type_pos] == 0x00) {
+        type_pos--;
+    }
+    uint8_t inner_type = plaintext[type_pos];
+    int32_t real_data_len = type_pos; // Data ends before the type byte
+
+    // --- STEP 2: Handle Inner Types ---
+    if (inner_type == TLS13_CONTENT_TYPE_ALERT) { // ALERT
+        if (plaintext[0] == TLS13_ALERT_LEVEL_WARNING
+            && plaintext[1] == TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY) {
+            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Close Notify.");
+        }
+        tls13_print_alert(plaintext[0], plaintext[1]);
+        memory_free(plaintext);
+        return -1;
+    }
+
+    if (inner_type == TLS13_CONTENT_TYPE_HANDSHAKE) { // POST-HANDSHAKE (e.g. KeyUpdate or NewSessionTicket)
+        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Received post-handshake message type 0x%02x", plaintext[0]);
+        // Note: KeyUpdate is 0x18. If you don't handle it,
+        // the next record will fail decryption because keys didn't rotate!
+        memory_free(plaintext);
+        return tls13_read(ctx, out_data, max_len);
+    }
+
+    if (inner_type != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unexpected inner type 0x%02x", inner_type);
+        memory_free(plaintext);
+        return -1;
+    }
+
+    // Success: Copy application data
+    int32_t to_copy = (real_data_len < remaining) ? real_data_len : remaining;
+    memory_memcopy(plaintext, out_data, to_copy);
+
+    // Buffer any excess data for future reads
+    if (real_data_len > to_copy) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Buffering %d excess bytes for future reads", real_data_len - to_copy);
+        pipeline_write(ctx->read_buffer, real_data_len - to_copy, &plaintext[to_copy]);
+    }
+
+    ctx->read_seq_num++;
+    memory_free(plaintext);
+    return to_copy + total_read;
 }
 
 static int8_t tls13_send_finished(tls13_context_t* ctx) {
@@ -2081,6 +2758,135 @@ static int8_t tls13_process_client_finished(tls13_context_t* ctx,
     return 0;
 }
 
+static int8_t tls13_send_new_session_ticket(tls13_context_t* ctx) {
+    if(ctx->psk_key_exchange_mode != TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+        return 0; // No ticket if not doing DHE_PSK
+    }
+
+    uint8_t ticket_nonce[16];
+    get_random_bytes(ticket_nonce, sizeof(ticket_nonce));
+
+    uint8_t resumption_secret[SHA384_OUTPUT_SIZE];
+    uint8_t hlen = ctx->handshake_hash_len;
+    if(hkdf_expand_label_ext(ctx, ctx->resumption_master_secret, "resumption", ticket_nonce, sizeof(ticket_nonce), resumption_secret, hlen) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive resumption secret for NewSessionTicket");
+        return -1;
+    }
+
+    uint64_t now_ns = time_ns(NULL);
+    uint32_t lifetime = 24 * 60 * 60;
+    uint32_t ticket_age_add = 0;
+    get_random_bytes((uint8_t*)&ticket_age_add, sizeof(ticket_age_add));
+
+    uint8_t psk_identity[1024];
+    int32_t psk_len = 0;
+
+    // put cipher suite
+    psk_identity[psk_len++] = (ctx->cipher_suite >> 8) & 0xFF;
+    psk_identity[psk_len++] = (ctx->cipher_suite & 0xFF);
+
+    // put resumption secret
+    memory_memcopy(resumption_secret, &psk_identity[psk_len], hlen);
+    psk_len += hlen;
+    memory_memclean(resumption_secret, sizeof(resumption_secret));
+
+    // put lifetime
+    psk_identity[psk_len++] = (lifetime >> 24) & 0xFF;
+    psk_identity[psk_len++] = (lifetime >> 16) & 0xFF;
+    psk_identity[psk_len++] = (lifetime >> 8) & 0xFF;
+    psk_identity[psk_len++] = (lifetime & 0xFF);
+
+    // put ticket_age_add
+    psk_identity[psk_len++] = (ticket_age_add >> 24) & 0xFF;
+    psk_identity[psk_len++] = (ticket_age_add >> 16) & 0xFF;
+    psk_identity[psk_len++] = (ticket_age_add >> 8) & 0xFF;
+    psk_identity[psk_len++] = (ticket_age_add & 0xFF);
+
+    // put ticket now_ns
+    psk_identity[psk_len++] = (now_ns >> 56) & 0xFF;
+    psk_identity[psk_len++] = (now_ns >> 48) & 0xFF;
+    psk_identity[psk_len++] = (now_ns >> 40) & 0xFF;
+    psk_identity[psk_len++] = (now_ns >> 32) & 0xFF;
+    psk_identity[psk_len++] = (now_ns >> 24) & 0xFF;
+    psk_identity[psk_len++] = (now_ns >> 16) & 0xFF;
+    psk_identity[psk_len++] = (now_ns >> 8) & 0xFF;
+    psk_identity[psk_len++] = (now_ns & 0xFF);
+
+    const char* alpn_selected = ctx->alpn_h2 ? "h2" : "http/1.1";
+    int32_t name_len = strlen(alpn_selected);
+
+    psk_identity[psk_len++] = (name_len >> 8) & 0xFF;
+    psk_identity[psk_len++] = (name_len & 0xFF);
+    memory_memcopy(alpn_selected, &psk_identity[psk_len], name_len);
+    psk_len += name_len;
+
+    // put nonce
+    memory_memcopy(ticket_nonce, &psk_identity[psk_len], sizeof(ticket_nonce));
+    psk_len += sizeof(ticket_nonce);
+
+    uint8_t psk_identity_ciphertext[1024];
+
+    int32_t status = aes_gcm_encrypt_with_aad_with_tag(
+        psk_identity_ciphertext, psk_identity, psk_len,
+        ctx->psk_encryption_key, AES256_KEY_SIZE,
+        ctx->psk_encryption_iv, 12,
+        ctx->psk_aed_key, sizeof(ctx->psk_aed_key),
+        psk_identity_ciphertext + psk_len,
+        16
+        );
+
+    memory_memclean(psk_identity, sizeof(psk_identity));
+
+    if (status != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encrypt PSK Identity for NewSessionTicket");
+        return -1;
+    }
+
+    uint8_t plaintext[4096];
+    int32_t p = 0;
+
+    plaintext[p++] = TLS13_HANDSHAKE_TYPE_NEW_SESSION_TICKET; // Type: NewSessionTicket
+    int32_t hs_len_ptr = p; p += 3; // Placeholder for length
+
+    // Ticket Lifetime (4 bytes) - 24 hours
+    plaintext[p++] = (lifetime >> 24) & 0xFF;
+    plaintext[p++] = (lifetime >> 16) & 0xFF;
+    plaintext[p++] = (lifetime >> 8) & 0xFF;
+    plaintext[p++] = (lifetime & 0xFF);
+
+    // Ticket Age Add (4 bytes) - Random value
+    plaintext[p++] = (ticket_age_add >> 24) & 0xFF;
+    plaintext[p++] = (ticket_age_add >> 16) & 0xFF;
+    plaintext[p++] = (ticket_age_add >> 8) & 0xFF;
+    plaintext[p++] = (ticket_age_add & 0xFF);
+
+    // Ticket Nonce (1 byte length + nonce)
+    plaintext[p++] = sizeof(ticket_nonce);
+    memory_memcopy(ticket_nonce, &plaintext[p], sizeof(ticket_nonce));
+    p += sizeof(ticket_nonce);
+    memory_memclean(ticket_nonce, sizeof(ticket_nonce));
+
+    // Ticket Value (2 bytes length + resumption secret)
+    uint16_t ticket_value_len = psk_len + 16; // Encrypted PSK Identity + Tag
+    plaintext[p++] = (ticket_value_len >> 8) & 0xFF;
+    plaintext[p++] = (ticket_value_len & 0xFF);
+    memory_memcopy(psk_identity_ciphertext, &plaintext[p], ticket_value_len);
+    p += ticket_value_len;
+    memory_memclean(psk_identity_ciphertext, sizeof(psk_identity_ciphertext));
+
+    // Extensions (2 bytes length + empty for now)
+    plaintext[p++] = 0x00; // Extensions length high byte
+    plaintext[p++] = 0x00; // Extensions length low byte
+
+    // Fix Handshake Length
+    uint32_t hs_body_len = p - hs_len_ptr - 3;
+    plaintext[hs_len_ptr] = (hs_body_len >> 16) & 0xFF;
+    plaintext[hs_len_ptr + 1] = (hs_body_len >> 8) & 0xFF;
+    plaintext[hs_len_ptr + 2] = (hs_body_len & 0xFF);
+
+    return tls13_write_ext(ctx, plaintext, p, TLS13_CONTENT_TYPE_HANDSHAKE) < p ? -1 : 0;
+}
+
 static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
     boolean_t done = false;
 
@@ -2098,6 +2904,21 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
             ctx->network_recv(ctx->network_client_identifier, dummy, ccs_len, 0);
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Dummy ChangeCipherSpec before Client Finished");
             continue;
+        }
+
+        if(header[0] == TLS13_CONTENT_TYPE_ALERT) {
+            int32_t alert_len = (header[3] << 8) | header[4];
+            if(alert_len != 2) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Malformed Alert message with invalid length: %d", alert_len);
+                return -1;
+            }
+
+            uint8_t alert_payload[2];
+            ctx->network_recv(ctx->network_client_identifier, alert_payload, 2, 0);
+            tls13_alert_level_t alert_level = alert_payload[0];
+            tls13_alert_description_t alert_desc = alert_payload[1];
+            tls13_print_alert(alert_level, alert_desc);
+            return -1;
         }
 
         if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
@@ -2229,6 +3050,27 @@ static int8_t tls13_handle_client_handshake_read(tls13_context_t* ctx) {
     return 0;
 }
 
+static int8_t tls13_generate_resumption_keys(tls13_context_t* ctx) {
+    size_t hlen = ctx->handshake_hash_len;
+    uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
+    if(tls13_hash_get_current(ctx, current_hash) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for post-handshake processing");
+        return -1;
+    }
+
+    if(ctx->psk_key_exchange_mode == TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+        uint8_t resumption_master_secret[64];
+        if(hkdf_expand_label_ext(ctx, ctx->master_secret, "res master", current_hash, hlen, resumption_master_secret, hlen) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive resumption secret");
+            return -1;
+        }
+        memory_memcopy(resumption_master_secret, ctx->resumption_master_secret, hlen);
+        memory_memclean(resumption_master_secret, sizeof(resumption_master_secret));
+    }
+
+    return 0;
+}
+
 static int8_t tls13_generate_application_keys(tls13_context_t* ctx) {
     uint32_t hlen = ctx->handshake_hash_len;
     uint32_t key_len = ctx->handshake_key_len;
@@ -2273,209 +3115,14 @@ static int8_t tls13_generate_application_keys(tls13_context_t* ctx) {
         return -1;
     }
 
+    memory_memclean(s_ap_traffic_secret, sizeof(s_ap_traffic_secret));
+    memory_memclean(c_ap_traffic_secret, sizeof(c_ap_traffic_secret));
+
     // 5. CRITICAL: Reset sequence numbers for Application Phase
     ctx->write_seq_num = 0;
     // ctx->read_seq_num = 0; // it should set to 0 after processing Client Finished
 
     return 0;
-}
-
-static int32_t tls13_write_chunk(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
-    // 16384 is the max TLS record size
-    uint32_t p_len = len + 1;
-    uint8_t plaintext[p_len];
-    uint8_t ciphertext[p_len + 16];
-
-    // Copy payload and append Inner Content Type (0x17 for Application Data)
-    memory_memcopy(data, plaintext, len);
-    plaintext[len] = TLS13_CONTENT_TYPE_APPLICATION_DATA;
-
-    // Prepare Nonce (IV ^ write_seq_num)
-    uint8_t nonce[12];
-    tls13_make_nonce(ctx->server_application_iv, ctx->write_seq_num, nonce);
-
-    // Prepare AAD (5-byte Record Header)
-    uint16_t encrypted_record_len = p_len + 16;
-    uint8_t aad[5] = {
-        TLS13_CONTENT_TYPE_APPLICATION_DATA,
-        0x03, 0x03,
-        (encrypted_record_len >> 8), (encrypted_record_len & 0xFF)
-    };
-
-    // Encrypt
-    size_t key_len = ctx->handshake_key_len;
-    int32_t status = aes_gcm_encrypt_with_aad_with_tag(
-        ciphertext, plaintext, p_len,
-        ctx->server_application_key, key_len,
-        nonce, 12, aad, 5, ciphertext + p_len, 16
-        );
-
-    if (status != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Encryption Failed! Nonce/Key/AAD mismatch.");
-        return -1;
-    }
-
-    // Send Header + Ciphertext
-    if (ctx->network_send(ctx->network_client_identifier, aad, 5, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record header");
-        return -1;
-    }
-    if (ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_record_len, 0) < 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send TLS record ciphertext");
-        return -1;
-    }
-
-    ctx->write_seq_num++;
-    return len;
-}
-
-int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len) {
-    if(!ctx || !data) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or data buffer is NULL");
-        return -1;
-    }
-
-    if(len == 0) {
-        return 0;
-    }
-
-    int64_t remaining  = len;
-    int32_t total_sent = 0;
-
-    while(remaining > 0) {
-        uint32_t chunk_size = remaining > 16384 ? 16384 : (uint32_t)remaining;
-        int32_t sent = tls13_write_chunk(ctx, data + total_sent, chunk_size);
-        if(sent < 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write TLS chunk");
-            return -1;
-        }
-        total_sent += sent;
-        remaining  -= sent;
-    }
-
-    return len;
-}
-
-int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
-    if(!ctx || !out_data) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or output buffer is NULL");
-        return -1;
-    }
-
-    if(max_len == 0) {
-        return 0;
-    }
-
-    if(!ctx->read_buffer) {
-        ctx->read_buffer = pipeline_create(16384); // 16KB buffer
-        if(!ctx->read_buffer) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create read buffer pipeline");
-            return -1;
-        }
-    }
-
-    int32_t remaining = max_len;
-
-    int32_t total_read = pipeline_read(ctx->read_buffer, remaining, out_data);
-    remaining -= total_read;
-
-    if(remaining == 0) {
-        return total_read;
-    }
-
-    uint8_t header[5];
-
-    if (ctx->network_recv(ctx->network_client_identifier, header, 5, 0) <= 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read TLS record header");
-        return -1;
-    }
-
-    // Handle legacy ChangeCipherSpec if it pops up mid-stream (unlikely but possible)
-    if (header[0] == TLS13_CONTENT_TYPE_CHANGE_CIPHER_SPEC) {
-        uint16_t ccs_len = (header[3] << 8) | header[4];
-        uint8_t dummy[16];
-        ctx->network_recv(ctx->network_client_identifier, dummy, ccs_len, 0);
-        return tls13_read(ctx, out_data, max_len);
-    }
-
-    if (header[0] != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Expected encrypted record (0x17), got 0x%02x", header[0]);
-        return -1;
-    }
-
-    uint16_t record_len = (header[3] << 8) | header[4];
-    uint8_t* buffer = memory_malloc(record_len);
-    if (ctx->network_recv(ctx->network_client_identifier, buffer, record_len, 0) <= 0) {
-        memory_free(buffer);
-        return -1;
-    }
-
-    // Decrypt using Application Keys
-    uint8_t nonce[12];
-    tls13_make_nonce(ctx->client_application_iv, ctx->read_seq_num, nonce);
-
-    uint8_t* plaintext = memory_malloc(record_len);
-    uint32_t ciphertext_len = record_len - 16;
-
-    int32_t status = aes_gcm_decrypt_with_aad_with_tag(
-        plaintext, buffer, ciphertext_len,
-        ctx->client_application_key, ctx->handshake_key_len,
-        nonce, 12, header, 5, buffer + ciphertext_len, 16
-        );
-
-    memory_free(buffer);
-    if (status != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Decryption Failed! Nonce/Key/AAD mismatch.");
-        memory_free(plaintext);
-        return -1;
-    }
-
-    // --- STEP 1: Handle Padding ---
-    // The Inner Content Type is the last NON-ZERO byte.
-    int32_t type_pos = ciphertext_len - 1;
-    while (type_pos > 0 && plaintext[type_pos] == 0x00) {
-        type_pos--;
-    }
-    uint8_t inner_type = plaintext[type_pos];
-    int32_t real_data_len = type_pos; // Data ends before the type byte
-
-    // --- STEP 2: Handle Inner Types ---
-    if (inner_type == TLS13_CONTENT_TYPE_ALERT) { // ALERT
-        if (plaintext[0] == TLS13_ALERT_LEVEL_WARNING
-            && plaintext[1] == TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY) {
-            PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Close Notify.");
-        }
-        memory_free(plaintext);
-        return -1;
-    }
-
-    if (inner_type == TLS13_CONTENT_TYPE_HANDSHAKE) { // POST-HANDSHAKE (e.g. KeyUpdate or NewSessionTicket)
-        PRINTLOG(CRYPTOLIB, LOG_WARNING, "Received post-handshake message type 0x%02x", plaintext[0]);
-        // Note: KeyUpdate is 0x18. If you don't handle it,
-        // the next record will fail decryption because keys didn't rotate!
-        memory_free(plaintext);
-        return tls13_read(ctx, out_data, max_len);
-    }
-
-    if (inner_type != TLS13_CONTENT_TYPE_APPLICATION_DATA) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unexpected inner type 0x%02x", inner_type);
-        memory_free(plaintext);
-        return -1;
-    }
-
-    // Success: Copy application data
-    int32_t to_copy = (real_data_len < remaining) ? real_data_len : remaining;
-    memory_memcopy(plaintext, out_data, to_copy);
-
-    // Buffer any excess data for future reads
-    if (real_data_len > to_copy) {
-        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Buffering %d excess bytes for future reads", real_data_len - to_copy);
-        pipeline_write(ctx->read_buffer, real_data_len - to_copy, &plaintext[to_copy]);
-    }
-
-    ctx->read_seq_num++;
-    memory_free(plaintext);
-    return to_copy + total_read;
 }
 
 int8_t tls13_send_close_notify(tls13_context_t* ctx) {
@@ -2571,6 +3218,18 @@ int8_t tls13_handle_handshake(tls13_context_t* ctx) {
     if(tls13_handle_client_handshake_read(ctx) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to handle Client Handshake Read related messages (Certificate, CertificateVerify, Finished)");
         return -1;
+    }
+
+    if(tls13_generate_resumption_keys(ctx) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to generate application keys");
+        return -1;
+    }
+
+    if(ctx->psk_key_exchange_mode == TLS13_PSK_KEY_EXCHANGE_MODE_DHE_PSK) {
+        if(tls13_send_new_session_ticket(ctx) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send NewSessionTicket");
+            return -1;
+        }
     }
 
     return 0;

@@ -31,8 +31,8 @@ int32_t aes_gcm_decrypt_with_aad_with_tag(uint8_t* output, const uint8_t* input,
 
     gcm_setkey( &ctx, key, key_len );
 
-    ret = gcm_crypt_and_tag( &ctx, AES_DECRYPT, iv, iv_len, aad, aad_len,
-                             input, output, input_length, tag_buf, tag_len);
+    ret = gcm_auth_decrypt( &ctx, iv, iv_len, aad, aad_len,
+                            input, output, input_length, tag_buf, tag_len);
 
     gcm_zero_ctx( &ctx );
 
