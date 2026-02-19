@@ -19,21 +19,25 @@ extern "C" {
 
 typedef struct tls13_context_t tls13_context_t;
 
+typedef int8_t (*tls13_load_server_certificate_and_key_f)(tls13_context_t*     ctx,
+                                                          x509_certificate_t** out_server_cert,
+                                                          uint8_t**            out_private_key,
+                                                          size_t*              out_private_key_len);
+
 typedef int32_t (*tls13_network_send_f)(int64_t network_client_identifier, const uint8_t* buf, int32_t len, int32_t flags);
 typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8_t* buf, int32_t len, int32_t flags);
 
 
-tls13_context_t* tls13_create_server_context(const char_t*        host_port,
-                                             tls13_network_send_f network_send,
-                                             tls13_network_recv_f network_recv,
-                                             int64_t              network_client_identifier,
-                                             boolean_t            require_client_certificate,
-                                             uint8_t*             psk_encryption_key,
-                                             uint8_t*             psk_encryption_iv,
-                                             uint8_t*             psk_aed_key);
-int8_t tls13_set_ca_certificate(tls13_context_t* ctx, x509_certificate_t* ca_cert);
-int8_t tls13_set_server_certificate(tls13_context_t* ctx, x509_certificate_t* server_cert,
-                                    uint8_t* private_key, size_t private_key_len);
+tls13_context_t* tls13_create_server_context(const char_t*                           host_port,
+                                             tls13_load_server_certificate_and_key_f load_server_certificate_and_key,
+                                             tls13_network_send_f                    network_send,
+                                             tls13_network_recv_f                    network_recv,
+                                             int64_t                                 network_client_identifier,
+                                             boolean_t                               require_client_certificate,
+                                             uint8_t*                                psk_encryption_key,
+                                             uint8_t*                                psk_encryption_iv,
+                                             uint8_t*                                psk_aed_key);
+int8_t    tls13_set_ca_certificate(tls13_context_t* ctx, x509_certificate_t* ca_cert);
 void      tls13_destroy_context(tls13_context_t* tls13_ctx);
 int32_t   tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len);
 int32_t   tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len);

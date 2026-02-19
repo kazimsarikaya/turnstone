@@ -247,7 +247,10 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
     return 0;
 }
 
-static int8_t tls13_load_server_certificate_and_key(tls13_context_t* tls13_ctx) {
+static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_ctx,
+                                                    x509_certificate_t** out_server_cert,
+                                                    uint8_t**            out_private_key,
+                                                    size_t*              out_private_key_len) {
     FILE* f;
 
     f = fopen("build/ca.pem", "rb");
@@ -574,65 +577,9 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t* tls13_ctx) 
 
     memory_memclean(ca_private_key, ca_private_key_len);
 
-    if(tls13_set_server_certificate(tls13_ctx, cert, server_private_key, server_private_key_len) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set server certificate and key in TLS context");
-        x509_certificate_free(cert);
-        memory_free(server_private_key);
-        return -1;
-    }
-
-    // write server certificate and key to build/server.pem and build/server.key for debugging purposes
-    char_t* final_cert_data = x509_certificate_get_pem(cert);
-    if (final_cert_data == NULL) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get final server certificate data");
-        return -1;
-    }
-
-    f = fopen("build/server.pem", "wb");
-    if (f == NULL) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open server.pem for writing");
-        memory_free(final_cert_data);
-        return -1;
-    }
-
-    fwrite(final_cert_data, 1, strlen(final_cert_data), f);
-    fclose(f);
-
-    memory_free(final_cert_data);
-
-    char_t* final_key_data = NULL;
-
-    if(ca_key_algorithm == X509_ALGORITHM_ED25519) {
-        if(pem_write_ed25519_private_key(server_private_key, &final_key_data) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write server private key to PEM format");
-            memory_free(final_key_data);
-            return -1;
-        }
-    } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1) {
-        if(pem_write_secp256r1_private_key(server_private_key, &final_key_data) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to write server private key to PEM format");
-            memory_free(final_key_data);
-            return -1;
-        }
-    } else {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Unsupported CA public key algorithm: %d", ca_key_algorithm);
-        memory_free(final_key_data);
-        return -1;
-    }
-
-    f = fopen("build/server.key", "wb");
-    if (f == NULL) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open server.key for writing");
-        memory_free(final_key_data);
-        return -1;
-    }
-
-    fwrite(final_key_data, 1, strlen(final_key_data), f);
-    fclose(f);
-
-    memory_free(final_key_data);
-
-    memory_free(server_private_key);
+    *out_server_cert = cert;
+    *out_private_key = server_private_key;
+    *out_private_key_len = server_private_key_len;
 
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Server certificate and key loaded successfully");
 
@@ -756,6 +703,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
         tls13_context_t* tls13_ctx = tls13_create_server_context(
             "localhost:10443",
+            tls13_load_server_certificate_and_key,
             send_all,
             recv_all,
             client_fd,
@@ -767,13 +715,6 @@ int32_t main(int32_t argc, char_t** argv) {
 
         if(!tls13_ctx) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed");
-            close(client_fd);
-            continue;
-        }
-
-        if(tls13_load_server_certificate_and_key(tls13_ctx) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load/generate certificate and key");
-            tls13_destroy_context(tls13_ctx);
             close(client_fd);
             continue;
         }

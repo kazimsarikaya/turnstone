@@ -185,49 +185,46 @@ struct tls13_context_t {
     union {
         sha256_ctx_t* sha256;
         sha384_ctx_t* sha384;
-    }                   handshake_hash_ctx;
-    uint8_t*            handshake_hash_value;
-    x509_certificate_t* server_certificate;
-    struct {
-        uint8_t* data;
-        uint32_t length;
-    }                   server_private_key;
-    x509_certificate_t* ca_certificate;
-    boolean_t           require_client_certificate;
-    x509_certificate_t* client_certificate;
-    size_t              shared_secret_len;
-    uint8_t*            shared_secret; // X25519 shared secret
-    uint8_t             server_handshake_key[AES256_KEY_SIZE]; // max size
-    uint8_t             client_handshake_key[AES256_KEY_SIZE]; // max size
-    uint8_t             server_handshake_iv[12];
-    uint8_t             client_handshake_iv[12];
-    uint8_t             server_handshake_traffic_secret[SHA384_OUTPUT_SIZE];
-    uint8_t             client_handshake_traffic_secret[SHA384_OUTPUT_SIZE];
-    int32_t             handshake_hash_len;
-    int32_t             handshake_key_len;
-    int32_t             handshake_iv_len;
-    uint8_t             server_finished_key[SHA384_OUTPUT_SIZE];
-    uint8_t             client_finished_key[SHA384_OUTPUT_SIZE];
-    uint8_t             master_secret[SHA384_OUTPUT_SIZE];
-    uint8_t             server_application_key[AES256_KEY_SIZE];
-    uint8_t             client_application_key[AES256_KEY_SIZE];
-    uint8_t             server_application_iv[12];
-    uint8_t             client_application_iv[12];
-    uint8_t             resumption_master_secret[SHA384_OUTPUT_SIZE];
-    uint8_t             psk_encryption_key[AES256_KEY_SIZE];
-    uint8_t             psk_encryption_iv[12];
-    uint8_t             psk_aed_key[16];
-    boolean_t           session_resumed;
-    uint8_t             selected_identity_index;
-    uint8_t             selected_psk_value[SHA384_OUTPUT_SIZE]; // max size for PSK is hash output size
-    int32_t             write_seq_num;
-    int32_t             read_seq_num;
+    }                                       handshake_hash_ctx;
+    uint8_t*                                handshake_hash_value;
+    tls13_load_server_certificate_and_key_f load_server_certificate_and_key;
+    x509_certificate_t*                     ca_certificate;
+    boolean_t                               require_client_certificate;
+    x509_certificate_t*                     client_certificate;
+    size_t                                  shared_secret_len;
+    uint8_t*                                shared_secret; // X25519 shared secret
+    uint8_t                                 server_handshake_key[AES256_KEY_SIZE]; // max size
+    uint8_t                                 client_handshake_key[AES256_KEY_SIZE]; // max size
+    uint8_t                                 server_handshake_iv[12];
+    uint8_t                                 client_handshake_iv[12];
+    uint8_t                                 server_handshake_traffic_secret[SHA384_OUTPUT_SIZE];
+    uint8_t                                 client_handshake_traffic_secret[SHA384_OUTPUT_SIZE];
+    int32_t                                 handshake_hash_len;
+    int32_t                                 handshake_key_len;
+    int32_t                                 handshake_iv_len;
+    uint8_t                                 server_finished_key[SHA384_OUTPUT_SIZE];
+    uint8_t                                 client_finished_key[SHA384_OUTPUT_SIZE];
+    uint8_t                                 master_secret[SHA384_OUTPUT_SIZE];
+    uint8_t                                 server_application_key[AES256_KEY_SIZE];
+    uint8_t                                 client_application_key[AES256_KEY_SIZE];
+    uint8_t                                 server_application_iv[12];
+    uint8_t                                 client_application_iv[12];
+    uint8_t                                 resumption_master_secret[SHA384_OUTPUT_SIZE];
+    uint8_t                                 psk_encryption_key[AES256_KEY_SIZE];
+    uint8_t                                 psk_encryption_iv[12];
+    uint8_t                                 psk_aed_key[16];
+    boolean_t                               session_resumed;
+    uint8_t                                 selected_identity_index;
+    uint8_t                                 selected_psk_value[SHA384_OUTPUT_SIZE]; // max size for PSK is hash output size
+    int32_t                                 write_seq_num;
+    int32_t                                 read_seq_num;
 
     // read buffer for application data
     // to handle fragmented records
     pipeline_t* read_buffer;
 
     // send,recv function pointers
+    boolean_t            connection_closed;
     tls13_network_send_f network_send;
     tls13_network_recv_f network_recv;
     int64_t              network_client_identifier;
@@ -344,20 +341,12 @@ void tls13_destroy_context(tls13_context_t* ctx) {
     tls13_hash_final(ctx);
     memory_free(ctx->handshake_hash_value);
 
-    if (ctx->server_certificate) {
-        x509_certificate_free(ctx->server_certificate);
-    }
-
     if (ctx->ca_certificate) {
         x509_certificate_free(ctx->ca_certificate);
     }
 
     if (ctx->client_certificate) {
         x509_certificate_free(ctx->client_certificate);
-    }
-
-    if (ctx->server_private_key.data) {
-        memory_free(ctx->server_private_key.data);
     }
 
     if(ctx->read_buffer) {
@@ -383,14 +372,15 @@ void tls13_destroy_context(tls13_context_t* ctx) {
     memory_free(ctx);
 }
 
-tls13_context_t* tls13_create_server_context(const char_t*        host_port,
-                                             tls13_network_send_f network_send,
-                                             tls13_network_recv_f network_recv,
-                                             int64_t              network_client_identifier,
-                                             boolean_t            require_client_certificate,
-                                             uint8_t*             psk_encryption_key,
-                                             uint8_t*             psk_encryption_iv,
-                                             uint8_t*             psk_aed_key) {
+tls13_context_t* tls13_create_server_context(const char_t*                           host_port,
+                                             tls13_load_server_certificate_and_key_f load_server_certificate_and_key,
+                                             tls13_network_send_f                    network_send,
+                                             tls13_network_recv_f                    network_recv,
+                                             int64_t                                 network_client_identifier,
+                                             boolean_t                               require_client_certificate,
+                                             uint8_t*                                psk_encryption_key,
+                                             uint8_t*                                psk_encryption_iv,
+                                             uint8_t*                                psk_aed_key) {
     if (!host_port || !network_send || !network_recv) {
         return NULL;
     }
@@ -401,6 +391,7 @@ tls13_context_t* tls13_create_server_context(const char_t*        host_port,
     }
 
     ctx->default_host_port = host_port;
+    ctx->load_server_certificate_and_key = load_server_certificate_and_key;
     ctx->network_send = network_send;
     ctx->network_recv = network_recv;
     ctx->network_client_identifier  = network_client_identifier;
@@ -419,23 +410,6 @@ int8_t tls13_set_ca_certificate(tls13_context_t* ctx, x509_certificate_t* ca_cer
 
     ctx->ca_certificate = ca_cert;
 
-    return 0;
-}
-
-int8_t tls13_set_server_certificate(tls13_context_t* ctx, x509_certificate_t* server_cert,
-                                    uint8_t* private_key, size_t private_key_len) {
-    if (!ctx || !server_cert || !private_key || private_key_len == 0) {
-        return -1;
-    }
-
-    ctx->server_certificate = server_cert;
-    ctx->server_private_key.data = (uint8_t*)memory_malloc(private_key_len);
-    if (!ctx->server_private_key.data) {
-        return -1;
-    }
-
-    memory_memcopy(private_key, ctx->server_private_key.data, private_key_len);
-    ctx->server_private_key.length = (uint32_t)private_key_len;
     return 0;
 }
 
@@ -1254,8 +1228,9 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_context_t*
         uint8_t* psk_bytes = &plaintext[offset];
         offset += hash_len;
 
-        uint32_t lifetime = (plaintext[offset] << 24) | (plaintext[offset + 1] << 16) | (plaintext[offset + 2] << 8) | plaintext[offset + 3];
+        uint32_t lifetime_s = (plaintext[offset] << 24) | (plaintext[offset + 1] << 16) | (plaintext[offset + 2] << 8) | plaintext[offset + 3];
         offset += 4;
+        uint32_t lifetime = lifetime_s * 1000; // Convert to milliseconds
 
         uint32_t ticket_age_add = (plaintext[offset] << 24) | (plaintext[offset + 1] << 16) | (plaintext[offset + 2] << 8) | plaintext[offset + 3];
         offset += 4;
@@ -2014,24 +1989,46 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
     return 0;
 }
 
-static int8_t tls13_send_certificate(tls13_context_t* ctx) {
+static int8_t tls13_send_certificate_and_verify(tls13_context_t* ctx) {
     if(ctx->session_resumed) {
         // No need to send certificate if session is resumed
         return 0;
     }
 
+    if(!ctx->load_server_certificate_and_key) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load server certificate and key");
+        return -1;
+    }
+
+    x509_certificate_t* server_certificate = NULL;
+    uint8_t* server_private_key = NULL;
+    size_t server_private_key_len = 0;
+
+    if(ctx->load_server_certificate_and_key(ctx,
+                                            &server_certificate,
+                                            &server_private_key,
+                                            &server_private_key_len) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to load server certificate and key");
+        return -1;
+    }
+
+    x509_algorithm_t cert_alg = x509_certificate_get_public_key_algorithm(server_certificate);
+
     // We need the raw DER for both
     size_t server_der_len = 0;
-    uint8_t* server_der = x509_certificate_get_der(ctx->server_certificate, &server_der_len);
+    uint8_t* server_der = x509_certificate_get_der(server_certificate, &server_der_len);
 
     size_t ca_der_len = 0;
     uint8_t* ca_der = x509_certificate_get_der(ctx->ca_certificate, &ca_der_len);
+
+    x509_certificate_free(server_certificate);
 
     if (!server_der || !ca_der) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get DER encoding of certificates server %d ca %d",
                  server_der ? 1 : 0, ca_der ? 1 : 0);
         memory_free(server_der);
         memory_free(ca_der);
+        memory_free(server_private_key);
         return -1;
     }
 
@@ -2048,6 +2045,7 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
         memory_free(ciphertext);
         memory_free(server_der);
         memory_free(ca_der);
+        memory_free(server_private_key);
         return -1;
     }
 
@@ -2122,14 +2120,6 @@ static int8_t tls13_send_certificate(tls13_context_t* ctx) {
 
     memory_free(plaintext);
     memory_free(ciphertext);
-    return 0;
-}
-
-static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
-    if(ctx->session_resumed) {
-        // No need to send Certificate Verify if session is resumed
-        return 0;
-    }
 
     const size_t space_count  = 64;
     const char_t* sign_string = "TLS 1.3, server CertificateVerify";
@@ -2146,6 +2136,7 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     uint8_t current_hash[SHA384_OUTPUT_SIZE] = {0};
     if(tls13_hash_get_current(ctx, current_hash) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get current handshake hash for CertificateVerify");
+        memory_free(server_private_key);
         return -1;
     }
 
@@ -2157,8 +2148,6 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     tls13_signature_algorithm_t sig_alg = TLS_SIG_ALG_NONE;
     uint8_t* signature = NULL;
 
-    x509_algorithm_t cert_alg = x509_certificate_get_public_key_algorithm(ctx->server_certificate);
-
     if (cert_alg == X509_ALGORITHM_ED25519) {
         sig_alg = TLS_SIG_ALG_ED25519;
         signature_len = 64;
@@ -2166,15 +2155,19 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
 
         if (!signature) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for signature");
+            memory_free(server_private_key);
             return -1;
         }
 
         if (ed25519_sign(signature, sign_buffer, sign_buffer_len,
-                         ctx->server_private_key.data) != 0) {
+                         server_private_key) != 0) {
             memory_free(signature);
+            memory_free(server_private_key);
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Ed25519 signing failed");
             return -1;
         }
+
+        memory_free(server_private_key);
     } else if(cert_alg == X509_ALGORITHM_ECDSA_SECP256R1) {
         sig_alg = TLS_SIG_ALG_ECDSA_SECP256R1_SHA256;
         signature_len = ELLIPTICCURVE_SECP256R1_SIGNATURE_RAW_LEN;
@@ -2186,11 +2179,14 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
         }
 
         if(ellipticcurve_secp256r1_sign(signature, sign_buffer, sign_buffer_len,
-                                        ctx->server_private_key.data) != 0) {
+                                        server_private_key) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "ECDSA P-256 signing failed");
             memory_free(signature);
+            memory_free(server_private_key);
             return -1;
         }
+
+        memory_free(server_private_key);
 
         size_t der_signature_len = 0;
         uint8_t* der_signature = ellipticcurve_secp256r1_encode_signature(signature, &der_signature_len);
@@ -2208,8 +2204,15 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
         return -1;
     }
 
-    uint8_t plaintext[512];
-    int32_t p = 0;
+    plaintext = memory_malloc(4 + 2 + 2 + signature_len); // Handshake Header (4) + Sig Alg (2) + Sig Len (2) + Signature
+
+    if (!plaintext) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for CertificateVerify message");
+        memory_free(signature);
+        return -1;
+    }
+
+    p = 0;
 
     /* --- Build Handshake Message --- */
     plaintext[p++] = TLS13_HANDSHAKE_TYPE_CERTIFICATE_VERIFY; // Type: Certificate Verify
@@ -2239,24 +2242,32 @@ static int8_t tls13_send_certificate_verify(tls13_context_t* ctx) {
     // 2. Wrap in encrypted record
     plaintext[p++] = TLS13_CONTENT_TYPE_HANDSHAKE; // Inner Type: Handshake
 
-    uint8_t nonce[12];
     tls13_make_nonce(ctx->server_handshake_iv, ctx->write_seq_num, nonce);
 
-    size_t key_len = ctx->handshake_key_len;
-    uint16_t encrypted_len = p + 16;
-    uint8_t aad[5] = {
-        TLS13_CONTENT_TYPE_APPLICATION_DATA,
-        0x03, 0x03,
-        (encrypted_len >> 8), (encrypted_len & 0xFF)
-    };
+    encrypted_len = p + 16;
+    aad[0] = TLS13_CONTENT_TYPE_APPLICATION_DATA;
+    aad[1] = 0x03;
+    aad[2] = 0x03;
+    aad[3] = (encrypted_len >> 8) & 0xFF;
+    aad[4] = (encrypted_len & 0xFF);
 
-    uint8_t ciphertext[512 + 16];
+    ciphertext = memory_malloc(encrypted_len);
+    if (!ciphertext) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed for CertificateVerify ciphertext");
+        memory_free(plaintext);
+        return -1;
+    }
+
     aes_gcm_encrypt_with_aad_with_tag(ciphertext, plaintext, p,
                                       ctx->server_handshake_key, key_len,
                                       nonce, 12, aad, 5, ciphertext + p, 16);
 
+    memory_free(plaintext);
+
     ctx->network_send(ctx->network_client_identifier, aad, 5, 0);
     ctx->network_send(ctx->network_client_identifier, ciphertext, encrypted_len, 0);
+
+    memory_free(ciphertext);
 
     ctx->write_seq_num++;
     return 0;
@@ -2321,6 +2332,11 @@ static int32_t tls13_write_ext(tls13_context_t* ctx, const uint8_t* data, uint32
         return 0;
     }
 
+    if(ctx->connection_closed) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Attempted to write to a closed TLS connection");
+        return -1;
+    }
+
     int64_t remaining  = len;
     int32_t total_sent = 0;
 
@@ -2346,6 +2362,11 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
     if(!ctx || !out_data) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS context or output buffer is NULL");
         return -1;
+    }
+
+    if(ctx->connection_closed) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Attempted to read from a closed TLS connection");
+        return 0;
     }
 
     if(max_len == 0) {
@@ -2432,6 +2453,9 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len) {
         if (plaintext[0] == TLS13_ALERT_LEVEL_WARNING
             && plaintext[1] == TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY) {
             PRINTLOG(CRYPTOLIB, LOG_DEBUG, "Received Close Notify.");
+            ctx->connection_closed = true;
+            memory_free(plaintext);
+            return 0;
         }
         tls13_print_alert(plaintext[0], plaintext[1]);
         memory_free(plaintext);
@@ -3126,6 +3150,10 @@ static int8_t tls13_generate_application_keys(tls13_context_t* ctx) {
 }
 
 int8_t tls13_send_close_notify(tls13_context_t* ctx) {
+    if(ctx->connection_closed) {
+        return 0; // Already closed, no need to send again
+    }
+
     uint8_t plaintext[3] = {
         TLS13_ALERT_LEVEL_WARNING,
         TLS13_ALERT_DESCRIPTION_CLOSE_NOTIFY,
@@ -3195,13 +3223,8 @@ int8_t tls13_handle_handshake(tls13_context_t* ctx) {
         }
     }
 
-    if(tls13_send_certificate(ctx) != 0) {
+    if(tls13_send_certificate_and_verify(ctx) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate");
-        return -1;
-    }
-
-    if(tls13_send_certificate_verify(ctx) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to send Certificate Verify");
         return -1;
     }
 
