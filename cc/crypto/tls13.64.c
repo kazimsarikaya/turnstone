@@ -1168,7 +1168,9 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_context_t*
     int32_t hash_len = ctx->handshake_hash_len;
 
     uint8_t* binder_locations[binder_count];
+    memory_memclean(binder_locations, sizeof(binder_locations));
     int32_t binder_lens[binder_count];
+    memory_memclean(binder_lens, sizeof(binder_lens));
     tmp_ptr = binders_data_ptr;
     for (int i = 0; i < binder_count; i++) {
         uint8_t binder_len = tmp_ptr[0];

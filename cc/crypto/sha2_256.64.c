@@ -74,14 +74,14 @@ void sha256_transform(sha256_ctx_t* ctx, const uint8_t* data)
     for (i = 0; i < 64; ++i) {
         t1 = h + EP1(e) + CH(e, f, g) + sha256_k[i] + m[i];
         t2 = EP0(a) + MAJ(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = d + t1;
-        d = c;
-        c = b;
-        b = a;
-        a = t1 + t2;
+        h  = g;
+        g  = f;
+        f  = e;
+        e  = d + t1;
+        d  = c;
+        c  = b;
+        b  = a;
+        a  = t1 + t2;
     }
 
     ctx->state[0] += a;
@@ -101,8 +101,8 @@ sha256_ctx_t* sha256_init(void) {
         return NULL;
     }
 
-    ctx->datalen = 0;
-    ctx->bitlen = 0;
+    ctx->datalen  = 0;
+    ctx->bitlen   = 0;
     ctx->state[0] = 0x6a09e667;
     ctx->state[1] = 0xbb67ae85;
     ctx->state[2] = 0x3c6ef372;
@@ -196,8 +196,8 @@ sha224_ctx_t* sha224_init(void) {
         return NULL;
     }
 
-    ctx->datalen = 0;
-    ctx->bitlen = 0;
+    ctx->datalen  = 0;
+    ctx->bitlen   = 0;
     ctx->state[0] = 0xc1059ed8;
     ctx->state[1] = 0x367cd507;
     ctx->state[2] = 0x3070dd17;
@@ -207,11 +207,11 @@ sha224_ctx_t* sha224_init(void) {
     ctx->state[6] = 0x64f98fa7;
     ctx->state[7] = 0xbefa4fa4;
 
-    return ctx;
+    return (sha224_ctx_t*)ctx;
 }
 
 int8_t  sha224_update(sha224_ctx_t* ctx, const uint8_t* data, size_t len) {
-    return sha256_update(ctx, data, len);
+    return sha256_update((sha256_ctx_t*)ctx, data, len);
 }
 
 uint8_t* sha224_final(sha224_ctx_t* ctx) {
@@ -220,7 +220,7 @@ uint8_t* sha224_final(sha224_ctx_t* ctx) {
         return NULL;
     }
 
-    uint8_t* pre_hash = sha256_final(ctx);
+    uint8_t* pre_hash = sha256_final((sha256_ctx_t*)ctx);
 
     if(pre_hash == NULL) {
         return NULL;

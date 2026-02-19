@@ -82,14 +82,14 @@ void sha512_transform(sha512_ctx_t* ctx, const uint8_t* data)
     for (i = 0; i < 80; ++i) {
         t1 = h + EP1(e) + CH(e, f, g) + sha512_k[i] + m[i];
         t2 = EP0(a) + MAJ(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = d + t1;
-        d = c;
-        c = b;
-        b = a;
-        a = t1 + t2;
+        h  = g;
+        g  = f;
+        f  = e;
+        e  = d + t1;
+        d  = c;
+        c  = b;
+        b  = a;
+        a  = t1 + t2;
     }
 
     ctx->state[0] += a;
@@ -111,8 +111,8 @@ sha512_ctx_t* sha512_init(void) {
         return NULL;
     }
 
-    ctx->datalen = 0;
-    ctx->bitlen = 0;
+    ctx->datalen  = 0;
+    ctx->bitlen   = 0;
     ctx->state[0] = 0x6a09e667f3bcc908ULL;
     ctx->state[1] = 0xbb67ae8584caa73bULL;
     ctx->state[2] = 0x3c6ef372fe94f82bULL;
@@ -212,8 +212,8 @@ sha384_ctx_t* sha384_init(void) {
         return NULL;
     }
 
-    ctx->datalen = 0;
-    ctx->bitlen = 0;
+    ctx->datalen  = 0;
+    ctx->bitlen   = 0;
     ctx->state[0] = 0xcbbb9d5dc1059ed8ULL;
     ctx->state[1] = 0x629a292a367cd507ULL;
     ctx->state[2] = 0x9159015a3070dd17ULL;
@@ -223,15 +223,15 @@ sha384_ctx_t* sha384_init(void) {
     ctx->state[6] = 0xdb0c2e0d64f98fa7ULL;
     ctx->state[7] = 0x47b5481dbefa4fa4ULL;
 
-    return ctx;
+    return (sha384_ctx_t*)ctx;
 }
 
 int8_t  sha384_update(sha384_ctx_t* ctx, const uint8_t* data, size_t len) {
-    return sha512_update(ctx, data, len);
+    return sha512_update((sha512_ctx_t*)ctx, data, len);
 }
 
 uint8_t* sha384_final(sha384_ctx_t* ctx) {
-    uint8_t* pre_hash = sha512_final(ctx);
+    uint8_t* pre_hash = sha512_final((sha512_ctx_t*)ctx);
 
     if(pre_hash == NULL) {
         return NULL;
