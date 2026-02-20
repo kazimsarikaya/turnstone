@@ -150,16 +150,6 @@ x509_certificate_t* x509_certificate_new(void);
 void x509_certificate_free(x509_certificate_t* cert);
 
 /**
- * @brief Adds a field to the issuer information of the certificate.
- *
- * @param cert Pointer to the `x509_certificate_t` structure.
- * @param field The field to add (e.g., organization, common name).
- * @param value The value of the field as a string.
- * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
- */
-int8_t x509_certificate_add_issuer_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value);
-
-/**
  * @brief Retrieves a field from the issuer information of the certificate.
  *
  * @param cert Pointer to the `x509_certificate_t` structure.

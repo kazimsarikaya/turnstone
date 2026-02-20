@@ -19,16 +19,17 @@ static const uint8_t OID_ORGANIZATION[] = { 0x55, 0x04, 0x0A };
 static const uint8_t OID_ORGANIZATIONAL_UNIT[] = { 0x55, 0x04, 0x0B };
 static const uint8_t OID_COUNTRY[] = { 0x55, 0x04, 0x06 };
 static const uint8_t OID_ED25519[] = { 0x2B, 0x65, 0x70 };
-static const uint8_t OID_X25519[] = { 0x2B, 0x65, 0x6E };
+static const uint8_t OID_X25519[]  = { 0x2B, 0x65, 0x6E };
 static const uint8_t OID_ECDSA_WITH_SHA256[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x02 };
-static const uint8_t OID_ECDSA_PUBLIC_KEY[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
+static const uint8_t OID_ECDSA_PUBLIC_KEY[]  = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
 static const uint8_t OID_EC_SECP256R1[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07 };
-static const uint8_t OID_SERVER_AUTH[] = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01 };
-static const uint8_t OID_CLIENT_AUTH[] = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02 };
+static const uint8_t OID_SERVER_AUTH[]  = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01 };
+static const uint8_t OID_CLIENT_AUTH[]  = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02 };
+static const uint8_t OID_OCSP_SIGNING[] = { 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x09 };
 static const uint8_t OID_EXT_BASIC_CONSTRAINTS[] = { 0x55, 0x1D, 0x13 };
 static const uint8_t OID_EXT_KEY_USAGE[] = { 0x55, 0x1D, 0x0F };
 static const uint8_t OID_EXT_EXTENDED_KEY_USAGE[] = { 0x55, 0x1D, 0x25 };
-static const uint8_t OID_EXT_SAN[] = { 0x55, 0x1D, 0x11 };
+static const uint8_t OID_EXT_SAN[]  = { 0x55, 0x1D, 0x11 };
 static const uint8_t OID_EXT_SKID[] = { 0x55, 0x1D, 0x0E };
 static const uint8_t OID_EXT_AKID[] = { 0x55, 0x1D, 0x23 };
 static const uint8_t OID_EXT_NETSCAPE_CERT_TYPE[] = { 0x60, 0x86, 0x48, 0x01, 0x86, 0xF8, 0x42, 0x01, 0x01 };
@@ -437,16 +438,17 @@ int8_t der_encoder_encode_object_identifier(der_encoder_t * encoder, der_object_
     case DER_OID_ORGANIZATIONAL_UNIT: oid_data = OID_ORGANIZATIONAL_UNIT; oid_len = sizeof(OID_ORGANIZATIONAL_UNIT); break;
     case DER_OID_COUNTRY: oid_data = OID_COUNTRY; oid_len = sizeof(OID_COUNTRY); break;
     case DER_OID_ED25519: oid_data = OID_ED25519; oid_len = sizeof(OID_ED25519); break;
-    case DER_OID_X25519: oid_data = OID_X25519; oid_len = sizeof(OID_X25519); break;
+    case DER_OID_X25519: oid_data  = OID_X25519; oid_len = sizeof(OID_X25519); break;
     case DER_OID_ECDSA_WITH_SHA256: oid_data = OID_ECDSA_WITH_SHA256; oid_len = sizeof(OID_ECDSA_WITH_SHA256); break;
-    case DER_OID_ECDSA_PUBLIC_KEY: oid_data = OID_ECDSA_PUBLIC_KEY; oid_len = sizeof(OID_ECDSA_PUBLIC_KEY); break;
+    case DER_OID_ECDSA_PUBLIC_KEY: oid_data  = OID_ECDSA_PUBLIC_KEY; oid_len = sizeof(OID_ECDSA_PUBLIC_KEY); break;
     case DER_OID_EC_SECP256R1: oid_data = OID_EC_SECP256R1; oid_len = sizeof(OID_EC_SECP256R1); break;
-    case DER_OID_SERVER_AUTH: oid_data = OID_SERVER_AUTH; oid_len = sizeof(OID_SERVER_AUTH); break;
-    case DER_OID_CLIENT_AUTH: oid_data = OID_CLIENT_AUTH; oid_len = sizeof(OID_CLIENT_AUTH); break;
+    case DER_OID_SERVER_AUTH: oid_data  = OID_SERVER_AUTH; oid_len = sizeof(OID_SERVER_AUTH); break;
+    case DER_OID_CLIENT_AUTH: oid_data  = OID_CLIENT_AUTH; oid_len = sizeof(OID_CLIENT_AUTH); break;
+    case DER_OID_OCSP_SIGNING: oid_data = OID_OCSP_SIGNING; oid_len = sizeof(OID_OCSP_SIGNING); break;
     case DER_OID_EXT_BASIC_CONSTRAINTS: oid_data = OID_EXT_BASIC_CONSTRAINTS; oid_len = sizeof(OID_EXT_BASIC_CONSTRAINTS); break;
     case DER_OID_EXT_KEY_USAGE: oid_data = OID_EXT_KEY_USAGE; oid_len = sizeof(OID_EXT_KEY_USAGE); break;
     case DER_OID_EXT_EXTENDED_KEY_USAGE: oid_data = OID_EXT_EXTENDED_KEY_USAGE; oid_len = sizeof(OID_EXT_EXTENDED_KEY_USAGE); break;
-    case DER_OID_EXT_SAN: oid_data = OID_EXT_SAN; oid_len = sizeof(OID_EXT_SAN); break;
+    case DER_OID_EXT_SAN: oid_data  = OID_EXT_SAN; oid_len = sizeof(OID_EXT_SAN); break;
     case DER_OID_EXT_SKID: oid_data = OID_EXT_SKID; oid_len = sizeof(OID_EXT_SKID); break;
     case DER_OID_EXT_AKID: oid_data = OID_EXT_AKID; oid_len = sizeof(OID_EXT_AKID); break;
     default: return -1;
@@ -457,23 +459,44 @@ int8_t der_encoder_encode_object_identifier(der_encoder_t * encoder, der_object_
                                 oid_data, oid_len);
 }
 
-int8_t der_encoder_encode_bit_string(der_encoder_t * encoder, const uint8_t * data, size_t data_len) {
-    if (!encoder || !encoder->buffer_chain || !data) {
+int8_t der_encoder_encode_bit_string_ext(der_encoder_t * encoder, const uint8_t * data, size_t data_len, boolean_t is_named_bit_list) {
+    if (!encoder || !encoder->buffer_chain || !data || data_len == 0) {
         return -1;
     }
 
     buffer_t* buffer = encoder->buffer_chain->current_buffer;
+    uint8_t unused_bits = 0;
 
-    // Manually handling Bit String as it has the extra "Unused Bits" byte
-    if(!buffer_append_byte(buffer, DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_BIT_STRING)) {
+    if (is_named_bit_list) {
+        // DER Rule: Trailing zeros in a named bit list MUST be encoded as unused bits
+        uint8_t last_byte = data[data_len - 1];
+        if (last_byte != 0) {
+            while (unused_bits < 7 && !(last_byte & (1 << unused_bits))) {
+                unused_bits++;
+            }
+        } else {
+            // If the whole last byte is 0, a truly 'automatic' DER encoder
+            // should actually reduce data_len. But for KeyUsage (usually 1-2 bytes),
+            // checking the bits is usually enough.
+        }
+    }
+
+    // Tag
+    if(!buffer_append_byte(buffer, DER_TAG_NUMBER_BIT_STRING)) {
         return -1;
     }
+
+    // Length (Data + 1 for the unused bits byte)
     if(_der_encode_length(buffer, data_len + 1) != 0) {
         return -1;
     }
-    if(!buffer_append_byte(buffer, 0x00)) {
-        return -1; // Unused bits
+
+    // Unused bits byte
+    if(!buffer_append_byte(buffer, unused_bits)) {
+        return -1;
     }
+
+    // Data
     if(!buffer_append_bytes(buffer, data, data_len)) {
         return -1;
     }
@@ -485,8 +508,23 @@ int8_t der_encoder_encode_printable_string(der_encoder_t * encoder, const char_t
     if (!str && str_len > 0) {
         return -1;
     }
+
+    boolean_t is_printable = true;
+    for (size_t i = 0; i < str_len; i++) {
+        char_t c = str[i];
+        if (!( (c >= 'A' && c <= 'Z') ||
+               (c >= 'a' && c <= 'z') ||
+               (c >= '0' && c <= '9') ||
+               c == ' ' || c == '\'' || c == '(' || c == ')' || c == '+' || c == ',' || c == '-' || c == '.' || c == '/' || c == ':' || c == '=' || c == '?')) {
+            is_printable = false;
+            break;
+        }
+    }
+
+    der_universal_tag_number_t tag_number = is_printable ? DER_TAG_NUMBER_PRINTABLE_STRING : DER_TAG_NUMBER_UTF8_STRING;
+
     return _der_write_primitive(encoder,
-                                DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | DER_TAG_NUMBER_UTF8_STRING,
+                                DER_TAG_CLASS_UNIVERSAL | DER_TAG_TYPE_PRIMITIVE | tag_number,
                                 (const uint8_t*)str, str_len);
 }
 
@@ -527,7 +565,7 @@ int8_t der_encoder_get_der_data(der_encoder_t * encoder, uint8_t ** out_data, si
 
     }
     buffer_t* buffer = encoder->buffer_chain->current_buffer;
-    *out_len = buffer_get_length(buffer);
+    *out_len  = buffer_get_length(buffer);
     *out_data = buffer_get_all_bytes_and_destroy(buffer, NULL);
 
     memory_free(encoder->buffer_chain);
@@ -859,6 +897,7 @@ static const oid_entry_t OID_TABLE[] = {
     { DER_OID_EC_SECP256R1,           OID_EC_SECP256R1,           sizeof(OID_EC_SECP256R1) },
     { DER_OID_SERVER_AUTH,            OID_SERVER_AUTH,            sizeof(OID_SERVER_AUTH) },
     { DER_OID_CLIENT_AUTH,            OID_CLIENT_AUTH,            sizeof(OID_CLIENT_AUTH) },
+    { DER_OID_OCSP_SIGNING,           OID_OCSP_SIGNING,           sizeof(OID_OCSP_SIGNING) },
     { DER_OID_EXT_BASIC_CONSTRAINTS,  OID_EXT_BASIC_CONSTRAINTS,  sizeof(OID_EXT_BASIC_CONSTRAINTS) },
     { DER_OID_EXT_KEY_USAGE,          OID_EXT_KEY_USAGE,          sizeof(OID_EXT_KEY_USAGE) },
     { DER_OID_EXT_EXTENDED_KEY_USAGE, OID_EXT_EXTENDED_KEY_USAGE, sizeof(OID_EXT_EXTENDED_KEY_USAGE) },
@@ -1097,7 +1136,7 @@ int8_t der_decoder_decode_utc_time(der_decoder_t* decoder, time_t* out_time_valu
 
     char_t time_str[16] = {0};
     memory_memcopy(&decoder->data[decoder->position], time_str, length);
-    time_str[length] = '\0'; // Null-terminate
+    time_str[length]   = '\0'; // Null-terminate
     decoder->position += length;
 
     time_t parsed_time = time_ns_parse_utc(time_str);

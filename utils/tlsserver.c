@@ -59,14 +59,20 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
         return -1;
     }
 
-    if (x509_certificate_add_issuer_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "TurnstoneOS CA") != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add issuer common name");
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "TurnstoneOS CA") != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject common name");
         x509_certificate_free(cert);
         return -1;
     }
 
-    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "TurnstoneOS CA") != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject common name");
+    if(x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_ORGANIZATION, "TurnstoneOS") != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject organization");
+        x509_certificate_free(cert);
+        return -1;
+    }
+
+    if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COUNTRY, "TR") != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject country");
         x509_certificate_free(cert);
         return -1;
     }
@@ -83,7 +89,10 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
         return -1;
     }
 
-    if (x509_certificate_add_key_usage(cert, X509_KEY_USAGE_KEY_CERT_SIGN | X509_KEY_USAGE_CRL_SIGN) != 0) {
+    if (x509_certificate_add_key_usage(cert,
+                                       X509_KEY_USAGE_DIGITAL_SIGNATURE |
+                                       X509_KEY_USAGE_KEY_CERT_SIGN |
+                                       X509_KEY_USAGE_CRL_SIGN) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add key usage");
         x509_certificate_free(cert);
         return -1;
@@ -332,57 +341,20 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
         return -1;
     }
 
-    char_t* ca_subjectfields[X509_ISSUER_SUBJECT_FIELD_COUNT] = {0};
-
-    for(int32_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
-        if(x509_certificate_get_subject_field(ca_certificate, i, &ca_subjectfields[i]) != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get CA certificate subject field: %d", i);
-            return -1;
-        }
-    }
-
     // now generate server certificate signed by CA
     x509_certificate_t* cert = x509_certificate_new();
     if (cert == NULL) {
-        for(int32_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
-            memory_free(ca_subjectfields[i]);
-        }
-
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create new X509 certificate");
         return -1;
     }
 
     if (x509_certificate_add_subject_field(cert, X509_ISSUER_SUBJECT_FIELD_COMMON_NAME, "Test Server") != 0) {
-        for(int32_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
-            memory_free(ca_subjectfields[i]);
-        }
-
-
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add subject common name");
         x509_certificate_free(cert);
         return -1;
     }
 
-    for(int32_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
-        if(ca_subjectfields[i]) {
-            if (x509_certificate_add_issuer_field(cert, i, ca_subjectfields[i]) != 0) {
-                for(int32_t j = 0; j < X509_ISSUER_SUBJECT_FIELD_COUNT; j++) {
-                    memory_free(ca_subjectfields[j]);
-                }
-                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add issuer field: %d", i);
-                x509_certificate_free(cert);
-                return -1;
-            }
-        }
-    }
-
-    for(int32_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
-        if(ca_subjectfields[i]) {
-            memory_free(ca_subjectfields[i]);
-        }
-    }
-
-    if (x509_certificate_add_duration(cert, 365) != 0) {
+    if (x509_certificate_add_duration(cert, 10) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add certificate duration");
         x509_certificate_free(cert);
         return -1;
@@ -539,30 +511,18 @@ static int8_t tls13_client_certificate_verify(tls13_context_t*     ctx,
         }
     }
 
-    boolean_t ca_found_in_chain = false;
+    // Verify the very top cert anchors to our CA
+    if(!x509_certificate_is_authority_of(certificate_chain[chain_length - 1], ca_certificate)) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Top of chain does not anchor to CA");
+        return -1;
+    }
 
+    // Now verify the rest of the chain downward
     for(int32_t i = chain_length - 1; i > 0; i--) {
         if(!x509_certificate_is_authority_of(certificate_chain[i - 1], certificate_chain[i])) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Certificate chain is not valid: certificate at index %d is not signed by certificate at index %d", i - 1, i);
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Broken link at index %d", i);
             return -1;
         }
-
-        if(x509_certificate_is_authority_of(certificate_chain[i], ca_certificate)) {
-            ca_found_in_chain = true;
-        }
-    }
-
-    if(chain_length == 1) {
-        if(!x509_certificate_is_authority_of(certificate_chain[0], ca_certificate)) {
-            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client certificate is not signed by trusted CA");
-            return -1;
-        }
-        ca_found_in_chain = true;
-    }
-
-    if(!ca_found_in_chain) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "None of the certificates in the chain are signed by trusted CA");
-        return -1;
     }
 
     return 0;
@@ -631,7 +591,12 @@ static int32_t recv_all(int64_t sockfd, uint8_t* buffer, int32_t length, int32_t
     boolean_t once = flags & 0x80000000; // custom flag to indicate recv should be called only once
     while (total_received < length) {
         int32_t bytes_received = recv(sockfd, buffer + total_received, length - total_received, flags);
-        if (bytes_received <= 0) {
+        if(bytes_received == 0) {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Connection closed by peer. bytes_received: %d", bytes_received);
+            return total_received; // connection closed, return what we have
+        }
+        if (bytes_received < 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "recv failed or connection closed. error code: %lli. bytes_received: %d", errno, bytes_received);
             return -1; // error or connection closed
         }
         total_received += bytes_received;

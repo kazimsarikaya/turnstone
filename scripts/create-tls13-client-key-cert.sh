@@ -40,7 +40,7 @@ MY_SKID=$(openssl dgst -sha256 -hex build/pub.raw | awk '{print $2}')
 
 # Prepare extension config
 cat > build/client_ext.conf << EOF
-basicConstraints = CA:FALSE
+basicConstraints = critical, CA:FALSE
 nsCertType = client
 keyUsage = critical, digitalSignature
 extendedKeyUsage = clientAuth
@@ -50,6 +50,6 @@ EOF
 
 # Sign the certificate
 openssl x509 -req -in build/client.csr -CA build/ca.pem -CAkey build/ca.key -CAcreateserial \
-    -out build/client.pem -days 365 -sha256 -extfile build/client_ext.conf
+    -out build/client.pem -days 30 -sha256 -extfile build/client_ext.conf
 
 echo "Successfully generated $ALGORITHM certificate in build/client.pem"

@@ -1008,8 +1008,17 @@ int8_t http2_handle_connection(tls13_context_t* ctx) {
 
     while(true && error_code == 0) {
         uint8_t header[9];
-        if(tls13_read(ctx, header, sizeof(header)) < 0) {
-            PRINTLOG(HTTP, LOG_ERROR, "Failed to read HTTP/2 frame header");
+
+        int32_t bytes_read = tls13_read(ctx, header, sizeof(header));
+        if(bytes_read == 0) {
+            PRINTLOG(HTTP, LOG_DEBUG, "Connection closed by client");
+            break;
+        } else if(bytes_read < 0) {
+            PRINTLOG(HTTP, LOG_ERROR, "Failed to read from TLS connection");
+            error_code = -1;
+            break;
+        } else if(bytes_read != sizeof(header)) {
+            PRINTLOG(HTTP, LOG_ERROR, "Incomplete HTTP/2 frame header read: expected 9 bytes, got %d", bytes_read);
             error_code = -1;
             break;
         }
@@ -1035,7 +1044,7 @@ int8_t http2_handle_connection(tls13_context_t* ctx) {
                 break;
             }
 
-            if(tls13_read(ctx, payload, length) < 0) {
+            if(tls13_read(ctx, payload, length) <= 0) {
                 PRINTLOG(HTTP, LOG_ERROR, "Failed to read HTTP/2 frame payload");
                 memory_free(payload);
                 error_code = -1;

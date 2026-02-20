@@ -25,7 +25,7 @@ typedef enum der_tag_class_t {
     DER_TAG_CLASS_UNIVERSAL        = 0x00, ///< Universal class, applies to common ASN.1 types.
     DER_TAG_CLASS_APPLICATION      = 0x40, ///< Application class, specific to ASN.1 applications.
     DER_TAG_CLASS_CONTEXT_SPECIFIC = 0x80, ///< Context-specific class, used for specific structures.
-    DER_TAG_CLASS_PRIVATE          = 0xC0 ///< Private class, for proprietary use.
+    DER_TAG_CLASS_PRIVATE          = 0xC0, ///< Private class, for proprietary use.
 } der_tag_class_t;
 
 /**
@@ -35,7 +35,7 @@ typedef enum der_tag_class_t {
  */
 typedef enum der_tag_type_t {
     DER_TAG_TYPE_PRIMITIVE   = 0x00, ///< Primitive type, data is encoded directly.
-    DER_TAG_TYPE_CONSTRUCTED = 0x20 ///< Constructed type, data is a sequence or set of other DER elements.
+    DER_TAG_TYPE_CONSTRUCTED = 0x20, ///< Constructed type, data is a sequence or set of other DER elements.
 } der_tag_type_t;
 
 /**
@@ -44,26 +44,26 @@ typedef enum der_tag_type_t {
  * These represent standard ASN.1 data types.
  */
 typedef enum der_universal_tag_number_t {
-    DER_TAG_NUMBER_EOC             = 0x00, ///< End of Content
-    DER_TAG_NUMBER_BOOLEAN         = 0x01, ///< Boolean
-    DER_TAG_NUMBER_INTEGER         = 0x02, ///< Integer
-    DER_TAG_NUMBER_BIT_STRING      = 0x03, ///< Bit String
-    DER_TAG_NUMBER_OCTET_STRING    = 0x04, ///< Octet String
-    DER_TAG_NUMBER_NULL            = 0x05, ///< NULL
-    DER_TAG_NUMBER_OBJECT_ID       = 0x06, ///< Object Identifier
-    DER_TAG_NUMBER_OBJECT_DESC     = 0x07, ///< Object Description
-    DER_TAG_NUMBER_EXTERNAL        = 0x08, ///< External
-    DER_TAG_NUMBER_REAL            = 0x09, ///< Real
-    DER_TAG_NUMBER_ENUMERATED      = 0x0A, ///< Enumerated
-    DER_TAG_NUMBER_UTF8_STRING     = 0x0C, ///< UTF8 String
-    DER_TAG_NUMBER_SEQUENCE        = 0x10, ///< Sequence
-    DER_TAG_NUMBER_SET             = 0x11, ///< Set
-    DER_TAG_NUMBER_PRINTABLE_STRING= 0x13, ///< Printable String
-    DER_TAG_NUMBER_T61_STRING      = 0x14, ///< T61 String
-    DER_TAG_NUMBER_IA5_STRING      = 0x16, ///< IA5 String
-    DER_TAG_NUMBER_UTC_TIME        = 0x17, ///< UTC Time
-    DER_TAG_NUMBER_GENERALIZED_TIME= 0x18, ///< Generalized Time
-    DER_TAG_NUMBER_UNIVERSAL_STRING= 0x1C, ///< Universal String
+    DER_TAG_NUMBER_EOC              = 0x00, ///< End of Content
+    DER_TAG_NUMBER_BOOLEAN          = 0x01, ///< Boolean
+    DER_TAG_NUMBER_INTEGER          = 0x02, ///< Integer
+    DER_TAG_NUMBER_BIT_STRING       = 0x03, ///< Bit String
+    DER_TAG_NUMBER_OCTET_STRING     = 0x04, ///< Octet String
+    DER_TAG_NUMBER_NULL             = 0x05, ///< NULL
+    DER_TAG_NUMBER_OBJECT_ID        = 0x06, ///< Object Identifier
+    DER_TAG_NUMBER_OBJECT_DESC      = 0x07, ///< Object Description
+    DER_TAG_NUMBER_EXTERNAL         = 0x08, ///< External
+    DER_TAG_NUMBER_REAL             = 0x09, ///< Real
+    DER_TAG_NUMBER_ENUMERATED       = 0x0A, ///< Enumerated
+    DER_TAG_NUMBER_UTF8_STRING      = 0x0C, ///< UTF8 String
+    DER_TAG_NUMBER_SEQUENCE         = 0x10, ///< Sequence
+    DER_TAG_NUMBER_SET              = 0x11, ///< Set
+    DER_TAG_NUMBER_PRINTABLE_STRING = 0x13, ///< Printable String
+    DER_TAG_NUMBER_T61_STRING       = 0x14, ///< T61 String
+    DER_TAG_NUMBER_IA5_STRING       = 0x16, ///< IA5 String
+    DER_TAG_NUMBER_UTC_TIME         = 0x17, ///< UTC Time
+    DER_TAG_NUMBER_GENERALIZED_TIME = 0x18, ///< Generalized Time
+    DER_TAG_NUMBER_UNIVERSAL_STRING = 0x1C, ///< Universal String
 } der_universal_tag_number_t;
 
 /**
@@ -94,7 +94,7 @@ typedef enum der_object_identifier_t {
     DER_OID_EXT_SAN, ///< Subject Alternative Name extension OID
     DER_OID_EXT_SKID, ///< Subject Key Identifier extension OID
     DER_OID_EXT_AKID, ///< Authority Key Identifier extension OID
-    DER_OID_EXT_NETSCAPE_CERT_TYPE ///< Netscape Certificate Type extension OID
+    DER_OID_EXT_NETSCAPE_CERT_TYPE, ///< Netscape Certificate Type extension OID
 } der_object_identifier_t;
 
 /**
@@ -300,9 +300,22 @@ int8_t der_encoder_encode_object_identifier(der_encoder_t * encoder, der_object_
  * @param encoder The DER encoder instance.
  * @param data Pointer to the bit string data.
  * @param data_len Length of the data (excluding the unused bits byte).
+ * @param is_named_bit_list Indicates if the bit string represents a named bit list, which may require trailing zeros to be encoded as unused bits.
  * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
  */
-int8_t der_encoder_encode_bit_string(der_encoder_t * encoder, const uint8_t * data, size_t data_len);
+int8_t der_encoder_encode_bit_string_ext(der_encoder_t * encoder, const uint8_t * data, size_t data_len, boolean_t is_named_bit_list);
+
+/**
+ * @brief Encodes and appends a DER bit string with no unused bits.
+ *
+ * This is a convenience wrapper around `der_encoder_encode_bit_string_ext` for the common case where all bits in the data are used.
+ *
+ * @param encoder The DER encoder instance.
+ * @param data Pointer to the bit string data.
+ * @param data_len Length of the data (excluding the unused bits byte).
+ * @return 0 on success, -1 on failure (e.g., invalid encoder, buffer error).
+ */
+#define der_encoder_encode_bit_string(encoder, data, data_len) der_encoder_encode_bit_string_ext(encoder, data, data_len, false)
 
 /**
  * @brief Encodes and appends a DER printable string.

@@ -133,6 +133,9 @@ x509_certificate_t* x509_certificate_new(void) {
     get_random_bytes(cert->serial_number, 20 - sizeof(uint128_t)); // pad with random bytes
     memory_memcopy(&pre_serial_number, cert->serial_number + 20 - sizeof(uint128_t), sizeof(uint128_t)); // append the generated part
 
+    // clear upper bit to ensure it's positive
+    cert->serial_number[0] &= 0x7F;
+
     return cert;
 }
 
@@ -296,20 +299,24 @@ static int8_t x509_encode_extension_basic_conntraints(der_encoder_t* der_encoder
     }
 
     if(der_encoder_start_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start DER sequence for Basic Constraints extension");
         return -1;
     }
 
     if(der_encoder_encode_boolean(der_encoder, ext->data.basic_constraints.is_ca) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode 'cA' boolean for Basic Constraints extension");
         return -1;
     }
 
     if (ext->data.basic_constraints.path_len >= 0) {
         if(der_encoder_encode_integer(der_encoder, (uint128_t)ext->data.basic_constraints.path_len) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode 'pathLenConstraint' for Basic Constraints extension");
             return -1;
         }
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end DER sequence for Basic Constraints extension");
         return -1;
     }
 
@@ -363,7 +370,8 @@ static int8_t x509_encode_extension_key_usage(der_encoder_t* der_encoder, x509_e
     // Pass the constructed byte to your encoder.
     // Note: Your bit_string encoder adds the "Unused Bits: 0" byte automatically,
     // which is valid here (asserting the unused bits are effectively 0/False).
-    if(der_encoder_encode_bit_string(der_encoder, &ku_byte, 1) != 0) {
+    if(der_encoder_encode_bit_string_ext(der_encoder, &ku_byte, 1, true) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode Key Usage bit string");
         return -1;
     }
 
@@ -376,47 +384,55 @@ static int8_t x509_encode_extension_extended_key_usage(der_encoder_t* der_encode
     }
 
     if(der_encoder_start_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start DER sequence for Extended Key Usage extension");
         return -1;
     }
 
     // OID for EKU based on type
     if(ext->data.eku & X509_EXTENDED_KEY_USAGE_SERVER_AUTH) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_SERVER_AUTH) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Server Authentication in Extended Key Usage extension");
             return -1;
         }
     }
 
     if(ext->data.eku & X509_EXTENDED_KEY_USAGE_CLIENT_AUTH) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CLIENT_AUTH) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Client Authentication in Extended Key Usage extension");
             return -1;
         }
     }
 
     if(ext->data.eku & X509_EXTENDED_KEY_USAGE_CODE_SIGNING) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_CODE_SIGNING) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Code Signing in Extended Key Usage extension");
             return -1;
         }
     }
 
     if(ext->data.eku & X509_EXTENDED_KEY_USAGE_EMAIL_PROTECTION) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EMAIL_PROTECTION) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Email Protection in Extended Key Usage extension");
             return -1;
         }
     }
 
     if(ext->data.eku & X509_EXTENDED_KEY_USAGE_TIME_STAMPING) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_TIME_STAMPING) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Time Stamping in Extended Key Usage extension");
             return -1;
         }
     }
 
     if(ext->data.eku & X509_EXTENDED_KEY_USAGE_OCSP_SIGNING) {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_OCSP_SIGNING) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for OCSP Signing in Extended Key Usage extension");
             return -1;
         }
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end DER sequence for Extended Key Usage extension");
         return -1;
     }
 
@@ -437,6 +453,7 @@ static int8_t x509_encode_extension_subject_alternative_name(der_encoder_t* der_
         switch (san->type) {
         case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_DNS: {
             if(der_encoder_encode_context_specific_string(der_encoder, 2, (uint8_t*)san->value, strlen(san->value)) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode DNS SAN value");
                 return -1;
             }
             break;
@@ -448,12 +465,14 @@ static int8_t x509_encode_extension_subject_alternative_name(der_encoder_t* der_
                 return -1;
             }
             if(der_encoder_encode_context_specific_string(der_encoder, 7, ip_bytes, 4) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode IP SAN value");
                 return -1;
             }
             break;
         }
         case X509_SUBJECT_ALTERNATIVE_NAME_TYPE_EMAIL: {
             if(der_encoder_encode_context_specific_string(der_encoder, 1, (uint8_t*)san->value, strlen(san->value)) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode Email SAN value");
                 return -1;
             }
             break;
@@ -466,6 +485,7 @@ static int8_t x509_encode_extension_subject_alternative_name(der_encoder_t* der_
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end DER sequence for Subject Alternative Name extension");
         return -1;
     }
 
@@ -478,6 +498,7 @@ static int8_t x509_encode_extension_skid(der_encoder_t* der_encoder, x509_extens
     }
 
     if(der_encoder_encode_octet_string(der_encoder, ext->data.skid.data, ext->data.skid.length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode Subject Key Identifier extension");
         return -1;
     }
 
@@ -490,14 +511,17 @@ static int8_t x509_encode_extension_akid(der_encoder_t* der_encoder, x509_extens
     }
 
     if(der_encoder_start_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start DER sequence for Authority Key Identifier extension");
         return -1;
     }
 
     if(der_encoder_encode_context_specific_string(der_encoder, 0, ext->data.akid.data, ext->data.akid.length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode 'keyIdentifier' for Authority Key Identifier extension");
         return -1;
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end DER sequence for Authority Key Identifier extension");
         return -1;
     }
 
@@ -548,10 +572,11 @@ static int8_t x509_encode_extension_netscape_cert_type(der_encoder_t* der_encode
         ku_byte |= X509_NETSCAPE_CERT_TYPE_OBJECT_SIGNING_CA;
     }
 
-// Pass the constructed byte to your encoder.
-// Note: Your bit_string encoder adds the "Unused Bits: 0" byte automatically,
-// which is valid here (asserting the unused bits are effectively 0/False).
-    if(der_encoder_encode_bit_string(der_encoder, &ku_byte, 1) != 0) {
+    // Pass the constructed byte to your encoder.
+    // Note: Your bit_string encoder adds the "Unused Bits: 0" byte automatically,
+    // which is valid here (asserting the unused bits are effectively 0/False).
+    if(der_encoder_encode_bit_string_ext(der_encoder, &ku_byte, 1, true) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode Netscape Certificate Type bit string");
         return -1;
     }
 
@@ -598,10 +623,12 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
     }
 
     if(der_encoder_start_explicit_tag(der_encoder, DER_TAG_CLASS_CONTEXT_SPECIFIC, 3) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start explicit tag for extensions");
         return -1;
     }
 
     if(der_encoder_start_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start sequence for extensions");
         return -1;
     }
 
@@ -612,6 +639,7 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
         }
 
         if(der_encoder_start_sequence(der_encoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start sequence for extension index %llu", i);
             return -1;
         }
 
@@ -619,42 +647,49 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
         switch (ext->type) {
         case X509_EXTENSION_BASIC_CONSTRAINTS: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_BASIC_CONSTRAINTS) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Basic Constraints");
                 return -1;
             }
             break;
         }
         case X509_EXTENSION_KEY_USAGE: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_KEY_USAGE) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Key Usage");
                 return -1;
             }
             break;
         }
         case X509_EXTENSION_EXTENDED_KEY_USAGE: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_EXTENDED_KEY_USAGE) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Extended Key Usage");
                 return -1;
             }
             break;
         }
         case X509_EXTENSION_SUBJECT_ALTERNATIVE_NAME: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_SAN) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Subject Alternative Name");
                 return -1;
             }
             break;
         }
         case X509_EXTENSION_SKID: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_SKID) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Subject Key Identifier");
                 return -1;
             }
             break;
         }
         case X509_EXTENSION_AKID: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_AKID) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Authority Key Identifier");
                 return -1;
             }
             break;
         }
         case X509_EXTENSION_NETSCAPE_CERT_TYPE: {
             if(der_encoder_encode_object_identifier(der_encoder, DER_OID_EXT_NETSCAPE_CERT_TYPE) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode OID for Netscape Certificate Type");
                 return -1;
             }
             break;
@@ -666,32 +701,39 @@ static int8_t x509_encode_extensions(der_encoder_t* der_encoder, x509_certificat
 
         if (ext->is_critical) {
             if(der_encoder_encode_boolean(der_encoder, true) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode critical flag for extension index %llu", i);
                 return -1;
             }
         }
 
         if(der_encoder_start_octet_string(der_encoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to start octet string for extension value at index %llu", i);
             return -1;
         }
 
         if(x509_encode_extension_value(der_encoder, ext) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode extension value for index %llu", i);
             return -1;
         }
 
         if(der_encoder_end_octet_string(der_encoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end octet string for extension value at index %llu", i);
             return -1;
         }
 
         if(der_encoder_end_sequence(der_encoder) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end sequence for extension index %llu", i);
             return -1;
         }
     }
 
     if(der_encoder_end_sequence(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end sequence for extensions");
         return -1;
     }
 
     if(der_encoder_end_explicit_tag(der_encoder) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to end explicit tag for extensions");
         return -1;
     }
 
@@ -1126,6 +1168,23 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
         ca_cert = cert; // Self-signed
     }
 
+    // copy ca_cert's subject to cert's issuer.
+    for (size_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
+        if (ca_cert->subject[i]) {
+            cert->issuer[i] = strdup(ca_cert->subject[i]);
+            if (cert->issuer[i] == NULL) {
+                for (size_t j = 0; j < i; j++) {
+                    if (cert->issuer[j]) {
+                        memory_free(cert->issuer[j]);
+                        cert->issuer[j] = NULL;
+                    }
+                }
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to copy issuer field from CA certificate");
+                return -1;
+            }
+        }
+    }
+
     if (x509_certificate_add_authority_key_identifier(cert, ca_cert) != 0) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to add authority key identifier");
         return -1;
@@ -1138,19 +1197,6 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
         return x509_certificate_sign_with_ecdsa_secp256r1(cert, private_key, private_key_length);
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm: %d", algorithm);
-        return -1;
-    }
-
-    return 0;
-}
-
-int8_t x509_certificate_add_issuer_field(x509_certificate_t* cert, x509_issuer_subject_field_t field, const char_t* value){
-    if (cert == NULL || value == NULL || field <= X509_ISSUER_SUBJECT_FIELD_UNKNOWN || field >= X509_ISSUER_SUBJECT_FIELD_COUNT) {
-        return -1;
-    }
-
-    cert->issuer[field] = strdup(value);
-    if (cert->issuer[field] == NULL) {
         return -1;
     }
 
