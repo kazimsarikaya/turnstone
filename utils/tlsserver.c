@@ -731,7 +731,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     int32_t request_count = 0;
 
-    while (true && request_count < 1) {
+    while (true && request_count < 10) {
         request_count++;
         // Accept incoming connection
         client_fd = accept(server_fd, (struct sockaddr*) &client_addr, &client_len);

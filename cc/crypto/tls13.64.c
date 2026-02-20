@@ -1792,17 +1792,18 @@ static int8_t tls13_generate_handshake_key_and_iv(tls13_context_t* ctx) {
 }
 
 static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
-    uint8_t plaintext[256]; // Increased slightly for safety
-    uint8_t ciphertext[256 + 16];
+    uint8_t plaintext[4096]; // Increased slightly for safety
+    uint8_t ciphertext[4096 + 16];
 
     // We start reverse filling from the end of the DATA part,
     // leaving 1 byte for the Inner Content Type (0x16)
-    int32_t reverse_p = 200;
+    int32_t reverse_p = 4000;
     int32_t start_pos = reverse_p;
-    uint16_t ext_len  = 0;
 
     /* --- ALPN Extension (Reverse) --- */
     if(ctx->has_alpn) {
+        int32_t alpn_extension_end = reverse_p;
+
         const char* alpn_selected = ctx->alpn_h2 ? "h2" : "http/1.1";
         int name_len = strlen(alpn_selected);
 
@@ -1814,30 +1815,45 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
         plaintext[--reverse_p] = (uint8_t)name_len;
 
         // 3. Protocol List Length (2 bytes)
-        uint16_t list_len = name_len + 1;
+        uint16_t list_len = alpn_extension_end - reverse_p;
         plaintext[--reverse_p] = list_len & 0xff;
         plaintext[--reverse_p] = (list_len >> 8) & 0xff;
 
         // 4. Extension Type (0x0010) and Extension Length
-        uint16_t this_ext_data_len = list_len + 2;
+        uint16_t this_ext_data_len = alpn_extension_end - reverse_p;
         plaintext[--reverse_p] = this_ext_data_len & 0xff;
         plaintext[--reverse_p] = (this_ext_data_len >> 8) & 0xff;
 
-        plaintext[--reverse_p] = 0x10; // ALPN Type 0x0010
-        plaintext[--reverse_p] = 0x00;
-
-        ext_len = (start_pos - reverse_p);
+        plaintext[--reverse_p] = TLS_EXTENSION_ALPN & 0xff;
+        plaintext[--reverse_p] = (TLS_EXTENSION_ALPN >> 8) & 0xff;
     }
 
-    /* --- Extensions Wrapper Length --- */
+    // Suported groups
+    int32_t supported_groups_list_end = reverse_p;
+    plaintext[--reverse_p] = TLS_GROUP_SECP256R1 & 0xff;
+    plaintext[--reverse_p] = (TLS_GROUP_SECP256R1 >> 8) & 0xff;
+    plaintext[--reverse_p] = TLS_GROUP_X25519 & 0xff;
+    plaintext[--reverse_p] = (TLS_GROUP_X25519 >> 8) & 0xff;
+
+    int32_t supported_groups_list_len = supported_groups_list_end - reverse_p;
+    plaintext[--reverse_p] = supported_groups_list_len & 0xff;
+    plaintext[--reverse_p] = (supported_groups_list_len >> 8) & 0xff;
+
+    int32_t supported_groups_ext_data_len = supported_groups_list_end - reverse_p;
+    plaintext[--reverse_p] = supported_groups_ext_data_len & 0xff;
+    plaintext[--reverse_p] = (supported_groups_ext_data_len >> 8) & 0xff;
+
+    plaintext[--reverse_p] = TLS_EXTENSION_SUPPORTED_GROUPS & 0xff;
+    plaintext[--reverse_p] = (TLS_EXTENSION_SUPPORTED_GROUPS >> 8) & 0xff;
+
+
+    /* Extensions length (2 bytes) */
+    int32_t ext_len = start_pos - reverse_p;
     plaintext[--reverse_p] = ext_len & 0xff;
     plaintext[--reverse_p] = (ext_len >> 8) & 0xff;
 
     /* --- Handshake Header --- */
-    // The handshake body length is ext_len + 2 (for the extensions wrapper length bytes)
-    uint32_t handshake_body_len = ext_len + 2;
-
-    // Length (3 bytes in Handshake Header)
+    uint32_t handshake_body_len = start_pos - reverse_p;
     plaintext[--reverse_p] = (handshake_body_len) & 0xff;
     plaintext[--reverse_p] = (handshake_body_len >> 8) & 0xff;
     plaintext[--reverse_p] = (handshake_body_len >> 16) & 0xff;
