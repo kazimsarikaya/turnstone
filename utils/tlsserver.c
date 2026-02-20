@@ -27,6 +27,8 @@
 
 #define PORT 10443
 
+static x509_certificate_t* ca_certificate = NULL;
+
 static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, boolean_t use_secp256r1) {
     // first check build/ca.pem and build/ca.key exists
     // if exists load them else generate new CA certificate and key
@@ -141,13 +143,13 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
 
         public_key[0] = 0x04; // Uncompressed point prefix
 
-        if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1, public_key, 65) != 0) {
+        if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1_SHA256, public_key, 65) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to certificate");
             x509_certificate_free(cert);
             return -1;
         }
 
-        if (x509_certificate_sign(cert, NULL, X509_ALGORITHM_ECDSA_SECP256R1,
+        if (x509_certificate_sign(cert, NULL, X509_ALGORITHM_ECDSA_SECP256R1_SHA256,
                                   private_key, sizeof(private_key)) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to sign certificate");
             x509_certificate_free(cert);
@@ -182,7 +184,7 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
         return -1;
     }
 
-    x509_certificate_free(cert);
+    ca_certificate = cert; // cache CA certificate in memory for future use
 
     f = fopen("build/ca.pem", "wb");
     if (f == NULL) {
@@ -202,41 +204,56 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
 }
 
 static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_ctx,
+                                                    x509_algorithm_t*    supported_algorithms,
+                                                    x509_certificate_t** out_ca_cert,
                                                     x509_certificate_t** out_server_cert,
                                                     uint8_t**            out_private_key,
                                                     size_t*              out_private_key_len) {
+    UNUSED(tls13_ctx);
+
     FILE* f;
 
-    f = fopen("build/ca.pem", "rb");
-    if(!f) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
-        return -1;
-    }
-    fseek(f, 0, SEEK_END);
-    long ca_cert_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
-    if(!ca_cert_data) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
+    if(!ca_certificate) { // cache CA certificate in memory after first load to avoid file I/O on every handshake
+        f = fopen("build/ca.pem", "rb");
+        if(!f) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
+            return -1;
+        }
+        fseek(f, 0, SEEK_END);
+        long ca_cert_size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
+        if(!ca_cert_data) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
+            fclose(f);
+            return -1;
+        }
+        fread(ca_cert_data, 1, ca_cert_size, f);
         fclose(f);
-        return -1;
-    }
-    fread(ca_cert_data, 1, ca_cert_size, f);
-    fclose(f);
 
-    x509_certificate_t* ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
-    memory_free(ca_cert_data);
+        ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
+        memory_free(ca_cert_data);
 
-    if(!ca_certificate) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
-        return -1;
+        if(!ca_certificate) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+            return -1;
+        }
     }
 
-    if(tls13_set_ca_certificate(tls13_ctx, ca_certificate) != 0) {
-        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to set CA certificate in TLS context");
-        x509_certificate_free(ca_certificate);
-        return -1;
+    x509_algorithm_t ca_cert_algorithm = x509_certificate_get_public_key_algorithm(ca_certificate);
+
+    for(int32_t i = 0; supported_algorithms[i] != X509_ALGORITHM_UNKNOWN; i++) {
+        if(supported_algorithms[i] == ca_cert_algorithm) {
+            break;
+        }
+        if(supported_algorithms[i] == X509_ALGORITHM_UNKNOWN) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "CA certificate public key algorithm is not supported by client");
+            x509_certificate_free(ca_certificate);
+            return -1;
+        }
     }
+
+    *out_ca_cert = ca_certificate;
 
     f = fopen("build/ca.key", "rb");
     if(!f) {
@@ -285,7 +302,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
                 return -1;
             }
         }
-    }else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1) {
+    }else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
         ca_private_key_len = ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN;
         if(pem_read_secp256r1_private_key((char_t*)ca_key_data, ca_private_key) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read CA private key from PEM");
@@ -436,7 +453,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
             memory_free(server_private_key);
             return -1;
         }
-    } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1) {
+    } else if(ca_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
         server_private_key_len = ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN;
         server_private_key = memory_malloc(ELLIPTICCURVE_SECP256R1_PRIVATE_KEY_RAW_LEN);
 
@@ -457,7 +474,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
 
         server_public_key[0] = 0x04; // uncompressed point prefix
 
-        if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1, server_public_key, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1) != 0) {
+        if (x509_certificate_add_public_key(cert, X509_ALGORITHM_ECDSA_SECP256R1_SHA256, server_public_key, ELLIPTICCURVE_SECP256R1_PUBLIC_KEY_RAW_LEN + 1) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to add public key to server certificate");
             x509_certificate_free(cert);
             memory_free(server_private_key);
@@ -484,6 +501,127 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
     *out_private_key_len = server_private_key_len;
 
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Server certificate and key loaded successfully");
+
+    return 0;
+}
+
+static int8_t tls13_client_certificate_verify(tls13_context_t*     ctx,
+                                              x509_certificate_t** certificate_chain,
+                                              size_t               chain_length) {
+    UNUSED(ctx);
+
+    if(!ca_certificate) { // cache CA certificate in memory after first load to avoid file I/O on every handshake
+        FILE* f;
+
+        f = fopen("build/ca.pem", "rb");
+        if(!f) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
+            return -1;
+        }
+        fseek(f, 0, SEEK_END);
+        long ca_cert_size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
+        if(!ca_cert_data) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
+            fclose(f);
+            return -1;
+        }
+        fread(ca_cert_data, 1, ca_cert_size, f);
+        fclose(f);
+
+        ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
+        memory_free(ca_cert_data);
+
+        if(!ca_certificate) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+            return -1;
+        }
+    }
+
+    boolean_t ca_found_in_chain = false;
+
+    for(int32_t i = chain_length - 1; i > 0; i--) {
+        if(!x509_certificate_is_authority_of(certificate_chain[i - 1], certificate_chain[i])) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Certificate chain is not valid: certificate at index %d is not signed by certificate at index %d", i - 1, i);
+            return -1;
+        }
+
+        if(x509_certificate_is_authority_of(certificate_chain[i], ca_certificate)) {
+            ca_found_in_chain = true;
+        }
+    }
+
+    if(chain_length == 1) {
+        if(!x509_certificate_is_authority_of(certificate_chain[0], ca_certificate)) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Client certificate is not signed by trusted CA");
+            return -1;
+        }
+        ca_found_in_chain = true;
+    }
+
+    if(!ca_found_in_chain) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "None of the certificates in the chain are signed by trusted CA");
+        return -1;
+    }
+
+    return 0;
+}
+
+static int8_t tls13_client_certificates_ca_dn_list(tls13_context_t* ctx,
+                                                   uint8_t***       out_ca_dn_list,
+                                                   size_t**         out_ca_dn_list_length,
+                                                   size_t*          out_ca_count){
+    UNUSED(ctx);
+
+    if(!ca_certificate) { // cache CA certificate in memory after first load to avoid file I/O on every handshake
+        FILE* f;
+
+        f = fopen("build/ca.pem", "rb");
+        if(!f) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to open CA certificate file");
+            return -1;
+        }
+        fseek(f, 0, SEEK_END);
+        long ca_cert_size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t* ca_cert_data = memory_malloc(ca_cert_size);
+        if(!ca_cert_data) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA certificate");
+            fclose(f);
+            return -1;
+        }
+        fread(ca_cert_data, 1, ca_cert_size, f);
+        fclose(f);
+
+        ca_certificate = x509_certificate_from_pem((char_t*)ca_cert_data);
+        memory_free(ca_cert_data);
+
+        if(!ca_certificate) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to parse CA certificate from PEM");
+            return -1;
+        }
+    }
+
+    uint8_t** ca_dn_list = memory_malloc(sizeof(uint8_t*));
+    size_t* ca_dn_list_length = memory_malloc(sizeof(size_t));
+    if(!ca_dn_list || !ca_dn_list_length) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to allocate memory for CA DN list");
+        memory_free(ca_dn_list);
+        memory_free(ca_dn_list_length);
+        return -1;
+    }
+
+    if(x509_certificate_get_subject_der(ca_certificate, &ca_dn_list[0], &ca_dn_list_length[0]) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get CA certificate subject in DER format");
+        memory_free(ca_dn_list);
+        memory_free(ca_dn_list_length);
+        return -1;
+    }
+
+    *out_ca_dn_list = ca_dn_list;
+    *out_ca_dn_list_length = ca_dn_list_length;
+    *out_ca_count = 1;
 
     return 0;
 }
@@ -551,12 +689,14 @@ int32_t main(int32_t argc, char_t** argv) {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "socket creation failed");
+        x509_certificate_free(ca_certificate);
         return 1;
     }
 
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "setsockopt SO_REUSEADDR failed");
         close(server_fd);
+        x509_certificate_free(ca_certificate);
         return 1;
     }
 
@@ -568,12 +708,14 @@ int32_t main(int32_t argc, char_t** argv) {
     if (bind(server_fd, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "bind failed. error code: %lli", errno);
         close(server_fd);
+        x509_certificate_free(ca_certificate);
         return 1;
     }
 
     if (listen(server_fd, 5) == -1) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "listen failed");
         close(server_fd);
+        x509_certificate_free(ca_certificate);
         return 1;
     }
 
@@ -589,7 +731,7 @@ int32_t main(int32_t argc, char_t** argv) {
 
     int32_t request_count = 0;
 
-    while (true && request_count < 10) {
+    while (true && request_count < 1) {
         request_count++;
         // Accept incoming connection
         client_fd = accept(server_fd, (struct sockaddr*) &client_addr, &client_len);
@@ -606,6 +748,8 @@ int32_t main(int32_t argc, char_t** argv) {
         tls13_context_t* tls13_ctx = tls13_create_server_context(
             "localhost:10443",
             tls13_load_server_certificate_and_key,
+            tls13_client_certificate_verify,
+            tls13_client_certificates_ca_dn_list,
             send_all,
             recv_all,
             client_fd,
@@ -649,6 +793,7 @@ int32_t main(int32_t argc, char_t** argv) {
     }
 
     close(server_fd);
+    x509_certificate_free(ca_certificate);
 
     return 0;
 }

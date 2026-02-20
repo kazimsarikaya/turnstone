@@ -123,7 +123,7 @@ typedef enum x509_algorithm_t {
     X509_ALGORITHM_ED25519, ///< Ed25519 signature algorithm.
     X509_ALGORITHM_X25519, ///< X25519 key agreement algorithm.
     X509_ALGORITHM_ECDSA_WITH_SHA256, ///< ECDSA with SHA-256 signature algorithm.
-    X509_ALGORITHM_ECDSA_SECP256R1, ///< ECDSA with secp256r1 curve signature algorithm.
+    X509_ALGORITHM_ECDSA_SECP256R1_SHA256, ///< ECDSA with secp256r1 curve signature algorithm.
 } x509_algorithm_t;
 
 typedef enum x509_issuer_subject_field_t {
@@ -409,6 +409,30 @@ uint8_t* x509_certificate_get_public_key_data(x509_certificate_t* cert, size_t* 
  */
 x509_algorithm_t x509_certificate_get_public_key_algorithm(x509_certificate_t* cert);
 
+/**
+ * @brief Checks if the given certificate is the issuer of another certificate.
+ *
+ * This function compares the issuer fields of the potential issuer certificate with the subject fields of the certificate in question.
+ * It also checks if the signature on the certificate can be verified using the public key of the potential issuer.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure representing the certificate to check.
+ * @param potential_issuer Pointer to the `x509_certificate_t` structure representing the potential issuer certificate.
+ * @return `true` if `potential_issuer` is indeed the issuer of `cert`, `false` otherwise.
+ */
+boolean_t x509_certificate_is_authority_of(const x509_certificate_t* cert, const x509_certificate_t* potential_issuer);
+
+/**
+ * @brief Retrieves the DER-encoded Subject field of the certificate.
+ *
+ * This function returns the DER-encoded Subject field of the certificate, which contains the distinguished name (DN) information.
+ * The caller is responsible for freeing the returned buffer using `memory_free`.
+ *
+ * @param cert Pointer to the `x509_certificate_t` structure.
+ * @param out_subject_der Output parameter that will point to the newly allocated buffer containing the DER-encoded Subject field.
+ * @param out_subject_der_length Output parameter that will receive the length of the DER-encoded Subject field in bytes.
+ * @return 0 on success, -1 on failure (e.g., invalid input, memory allocation error).
+ */
+int8_t x509_certificate_get_subject_der(const x509_certificate_t* cert, uint8_t** out_subject_der, size_t* out_subject_der_length);
 
 #ifdef __cplusplus
 }

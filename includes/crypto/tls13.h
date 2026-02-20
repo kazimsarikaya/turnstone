@@ -42,15 +42,53 @@ typedef struct tls13_context_t tls13_context_t;
  * pointers with the certificate data and private key material.
  *
  * @param ctx Pointer to the TLS 1.3 context.
+ * @param supported_algorithms Pointer to an array of `x509_algorithm_t` values representing the signature algorithms supported by the client. The implementation can use this information to select an appropriate certificate and key.
+ * @param out_ca_cert Pointer to a pointer that will be set to the loaded CA certificate.
  * @param out_server_cert Pointer to a pointer that will be set to the loaded server certificate(s).
  * @param out_private_key Pointer to a pointer that will be set to the loaded server's private key data.
  * @param out_private_key_len Pointer to a size_t that will be set to the length of the private key data.
  * @return 0 on success, a negative value on failure.
  */
 typedef int8_t (*tls13_load_server_certificate_and_key_f)(tls13_context_t*     ctx,
+                                                          x509_algorithm_t*    supported_algorithms,
+                                                          x509_certificate_t** out_ca_cert,
                                                           x509_certificate_t** out_server_cert,
                                                           uint8_t**            out_private_key,
                                                           size_t*              out_private_key_len);
+
+/**
+ * @brief Function pointer type for client certificate verification callback.
+ *
+ * This callback function is invoked during the TLS handshake when the server requests
+ * a client certificate. The implementation should verify the provided client certificate
+ * chain and return an appropriate status code.
+ *
+ * @param ctx Pointer to the TLS 1.3 context.
+ * @param certificate_chain Pointer to an array of X.509 certificates representing the client's certificate chain.
+ * @param chain_length The number of certificates in the chain.
+ * @return 0 if the client certificate is valid, a negative value if it is invalid or verification fails.
+ */
+typedef int8_t (*tls13_client_certificate_verify_callback_f)(tls13_context_t*     ctx,
+                                                             x509_certificate_t** certificate_chain,
+                                                             size_t               chain_length);
+
+/**
+ * @brief Function pointer type for providing a list of CA Distinguished Names (DNs) to the client.
+ *
+ * This callback function is called when the server needs to provide the client with a list of acceptable
+ * Certificate Authorities (CAs) during the TLS handshake. The implementation should populate the provided
+ * pointers with the list of CA DNs and their count.
+ *
+ * @param ctx Pointer to the TLS 1.3 context.
+ * @param out_ca_dn_list Pointer to a pointer that will be set to an array of byte arrays, where each byte array represents a CA DN in DER format.
+ * @param out_ca_dn_list_length Pointer to a size_t that will be set to the length of the CA DN list.
+ * @param out_ca_count Pointer to a size_t that will be set to the number of CA DNs in the list.
+ * @return 0 on success, a negative value on failure.
+ */
+typedef int8_t (*tls13_client_certificates_ca_dn_list_callback_f)(tls13_context_t* ctx,
+                                                                  uint8_t***       out_ca_dn_list,
+                                                                  size_t**         out_ca_dn_list_length,
+                                                                  size_t*          out_ca_count);
 
 /**
  * @brief Function pointer type for sending data over the network.
@@ -88,6 +126,8 @@ typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8
  *
  * @param host_port The hostname and port string (e.g., "example.com:443") the server is listening on. Used for SNI and logging.
  * @param load_server_certificate_and_key A function pointer to load the server's certificate and private key.
+ * @param client_certificate_verify_callback A function pointer for verifying client certificates during the handshake.
+ * @param client_certificates_ca_dn_list_callback A function pointer for providing a list of acceptable CA DNs to the client.
  * @param network_send A function pointer for sending data over the network.
  * @param network_recv A function pointer for receiving data from the network.
  * @param network_client_identifier An identifier for the specific network connection.
@@ -97,28 +137,17 @@ typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8
  * @param psk_aed_key The authentication encryption data key for PSK operations.
  * @return A pointer to the newly created tls13_context_t on success, or NULL on failure.
  */
-tls13_context_t* tls13_create_server_context(const char_t*                           host_port,
-                                             tls13_load_server_certificate_and_key_f load_server_certificate_and_key,
-                                             tls13_network_send_f                    network_send,
-                                             tls13_network_recv_f                    network_recv,
-                                             int64_t                                 network_client_identifier,
-                                             boolean_t                               require_client_certificate,
-                                             uint8_t*                                psk_encryption_key,
-                                             uint8_t*                                psk_encryption_iv,
-                                             uint8_t*                                psk_aed_key);
-
-/**
- * @brief Sets the Certificate Authority (CA) certificate for the TLS context.
- *
- * This function is used by the server to provide the CA certificate that will be used
- * to verify client certificates if client authentication is required.
- *
- * @param ctx Pointer to the TLS 1.3 context.
- * @param ca_cert Pointer to the X.509 certificate of the CA. The context takes ownership of this certificate.
- * @return 0 on success, -1 on failure (e.g., if ctx or ca_cert is NULL).
- */
-int8_t tls13_set_ca_certificate(tls13_context_t* ctx, x509_certificate_t* ca_cert);
-
+tls13_context_t* tls13_create_server_context(const char_t*                                   host_port,
+                                             tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
+                                             tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
+                                             tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
+                                             tls13_network_send_f                            network_send,
+                                             tls13_network_recv_f                            network_recv,
+                                             int64_t                                         network_client_identifier,
+                                             boolean_t                                       require_client_certificate,
+                                             uint8_t*                                        psk_encryption_key,
+                                             uint8_t*                                        psk_encryption_iv,
+                                             uint8_t*                                        psk_aed_key);
 /**
  * @brief Destroys a TLS 1.3 context and frees associated resources.
  *

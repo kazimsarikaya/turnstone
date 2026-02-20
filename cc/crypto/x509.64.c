@@ -750,7 +750,7 @@ static int8_t x509_encode_algorithm_identifier(der_encoder_t* der_encoder, x509_
         }
         break;
     }
-    case X509_ALGORITHM_ECDSA_SECP256R1: {
+    case X509_ALGORITHM_ECDSA_SECP256R1_SHA256: {
         if(der_encoder_encode_object_identifier(der_encoder, DER_OID_ECDSA_PUBLIC_KEY) != 0) {
             return -1;
         }
@@ -1038,7 +1038,7 @@ static int8_t x509_compute_subject_authority_key_identifier(x509_algorithm_t alg
         // For Ed25519 and X25519, the public key is used as-is for SKID/AKID computation
         data_to_hash = public_key;
         data_length  = public_key_length;
-    } else if (algorithm == X509_ALGORITHM_ECDSA_SECP256R1) {
+    } else if (algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
         // For ECDSA SECP256R1, we should use ASN.1 DER-encoded SubjectPublicKeyInfo for SKID/AKID computation
         der_encoder_t* der_encoder = der_encoder_new();
         if (der_encoder == NULL) {
@@ -1069,7 +1069,7 @@ static int8_t x509_compute_subject_authority_key_identifier(x509_algorithm_t alg
     // Simple SKID computation: SHA-256 hash of the public key
     uint8_t* hash = sha256_hash(data_to_hash, data_length);
     if (hash == NULL) {
-        if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1) {
+        if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
             memory_free((void*)data_to_hash); // Free the DER-encoded data if we allocated it
         }
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "failed to compute SHA-256 hash for SKID");
@@ -1078,7 +1078,7 @@ static int8_t x509_compute_subject_authority_key_identifier(x509_algorithm_t alg
 
     memory_memcopy(hash, out_skid, out_skid_length);
 
-    if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1) {
+    if(algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
         memory_free((void*)data_to_hash); // Free the DER-encoded data if we allocated it
     }
 
@@ -1134,7 +1134,7 @@ int8_t x509_certificate_sign(x509_certificate_t* cert,
     switch (algorithm) {
     case X509_ALGORITHM_ED25519:
         return x509_certificate_sign_with_ed25519(cert, private_key, private_key_length);
-    case X509_ALGORITHM_ECDSA_SECP256R1:
+    case X509_ALGORITHM_ECDSA_SECP256R1_SHA256:
         return x509_certificate_sign_with_ecdsa_secp256r1(cert, private_key, private_key_length);
     default:
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported signature algorithm: %d", algorithm);
@@ -1358,7 +1358,7 @@ static int8_t x509_certificate_verify_signature_internal(x509_certificate_t* cer
         break;
     }
     case X509_ALGORITHM_ECDSA_WITH_SHA256: {
-        if(cert->public_key_algorithm != X509_ALGORITHM_ECDSA_SECP256R1) {
+        if(cert->public_key_algorithm != X509_ALGORITHM_ECDSA_SECP256R1_SHA256) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Algorithm Mismatch: Signature algorithm is ECDSA with SHA-256 but public key is not ECDSA SECP256R1");
             return -1;
         }
@@ -2180,7 +2180,7 @@ static int8_t x509_decode_algorithm_identifier(der_decoder_t* der_decoder, x509_
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "unsupported EC curve OID: %d", oid);
             return -1;
         }
-        *algorithm = X509_ALGORITHM_ECDSA_SECP256R1;
+        *algorithm = X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
         break;
     }
     default:
@@ -2496,5 +2496,98 @@ int8_t x509_certificate_get_subject_field(const x509_certificate_t* cert, x509_i
     }
 
     *out_value = strdup(cert->subject[field]);
+    return 0;
+}
+
+static boolean_t x509_is_signature_algorithm_compatible_with_public_key_algorithm(x509_algorithm_t signature_algorithm, x509_algorithm_t public_key_algorithm) {
+    switch (signature_algorithm) {
+    case X509_ALGORITHM_ED25519:
+        return public_key_algorithm == X509_ALGORITHM_ED25519;
+    case X509_ALGORITHM_ECDSA_WITH_SHA256:
+        return public_key_algorithm == X509_ALGORITHM_ECDSA_SECP256R1_SHA256;
+    default:
+        return false; // Unsupported or unknown signature algorithm
+    }
+}
+
+boolean_t x509_certificate_is_authority_of(const x509_certificate_t* cert, const x509_certificate_t* potential_issuer) {
+    if (cert == NULL || potential_issuer == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Certificate or potential issuer is null");
+        return false;
+    }
+
+    // Check if issuer fields match subject fields
+    for (size_t i = 0; i < X509_ISSUER_SUBJECT_FIELD_COUNT; i++) {
+        const char_t* issuer_value  = cert->issuer[i];
+        const char_t* subject_value = potential_issuer->subject[i];
+
+        if ((issuer_value == NULL && subject_value != NULL) ||
+            (issuer_value != NULL && subject_value == NULL)) {
+            return false; // One is null and the other is not
+        }
+
+        if (issuer_value != NULL && subject_value != NULL) {
+            if (strcmp(issuer_value, subject_value) != 0) {
+                return false; // Values do not match
+            }
+        }
+    }
+
+    // Check SKID/AKID if present
+    const x509_extension_t* issuer_skid_ext = &potential_issuer->extensions[X509_EXTENSION_SKID];
+    const x509_extension_t* cert_akid_ext = &cert->extensions[X509_EXTENSION_AKID];
+
+    if (issuer_skid_ext->is_valid && cert_akid_ext->is_valid) {
+        if (issuer_skid_ext->data.skid.length != cert_akid_ext->data.akid.length ||
+            memory_memcompare(issuer_skid_ext->data.skid.data, cert_akid_ext->data.akid.data, issuer_skid_ext->data.skid.length) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "SKID/AKID mismatch: issuer SKID length %llu, cert AKID length %llu", issuer_skid_ext->data.skid.length, cert_akid_ext->data.akid.length);
+            return false; // SKID/AKID do not match
+        }
+    }
+
+    // check signature algorithm compatibility
+    if (!x509_is_signature_algorithm_compatible_with_public_key_algorithm(cert->signature_algorithm, potential_issuer->public_key_algorithm)) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature algorithm '%d' does not match issuer's public key algorithm '%d'", cert->signature_algorithm, potential_issuer->public_key_algorithm);
+        return false; // Signature algorithm does not match issuer's public key algorithm
+    }
+
+    // check signature verification
+    if(x509_certificate_verify_signature_with_rebuild((x509_certificate_t*)cert,
+                                                      potential_issuer->public_key_algorithm,
+                                                      potential_issuer->public_key,
+                                                      potential_issuer->public_key_length,
+                                                      false) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Signature verification failed for potential issuer");
+        return false; // Signature verification failed
+    }
+
+    return true; // All checks passed, potential_issuer is an authority of cert
+}
+
+int8_t x509_certificate_get_subject_der(const x509_certificate_t* cert, uint8_t** out_subject_der, size_t* out_subject_der_length) {
+    if (cert == NULL || out_subject_der == NULL || out_subject_der_length == NULL) {
+        return -1;
+    }
+
+    der_encoder_t* der_encoder = der_encoder_new();
+    if (der_encoder == NULL) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to create DER encoder");
+        return -1;
+    }
+
+    if(x509_encode_dn(der_encoder, (char_t**)cert->subject) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to encode subject DN");
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    if(der_encoder_get_der_data(der_encoder, out_subject_der, out_subject_der_length) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to get DER data for subject");
+        der_encoder_destroy(der_encoder);
+        return -1;
+    }
+
+    der_encoder_destroy(der_encoder);
+
     return 0;
 }
