@@ -35,6 +35,8 @@ typedef enum tls13_extension_type_t : uint16_t {
     TLS_EXTENSION_SIGNATURE_ALGORITHMS = 0x000d,
     TLS_EXTENSION_ALPN = 0x0010,
     TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP = 0x0012,
+    TLS_EXTENSION_CLIENT_CERTIFICATE_TYPE = 0x0013,
+    TLS_EXTENSION_SERVER_CERTIFICATE_TYPE = 0x0014,
     TLS_EXTENSION_PRE_SHARED_KEY = 0x0029,
     TLS_EXTENSION_SUPPORTED_VERSIONS = 0x002b,
     TLS_EXTENSION_PSK_KEY_EXCHANGE_MODES  = 0x002d,
@@ -193,6 +195,7 @@ struct tls13_context_t {
     tls13_load_server_certificate_and_key_f         load_server_certificate_and_key;
     tls13_client_certificate_verify_callback_f      client_certificate_verify_callback;
     tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback;
+    tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback;
 
     boolean_t require_client_certificate;
     size_t    shared_secret_len;
@@ -214,9 +217,6 @@ struct tls13_context_t {
     uint8_t   server_application_iv[12];
     uint8_t   client_application_iv[12];
     uint8_t   resumption_master_secret[SHA384_OUTPUT_SIZE];
-    uint8_t   psk_encryption_key[AES256_KEY_SIZE];
-    uint8_t   psk_encryption_iv[12];
-    uint8_t   psk_aed_key[16];
     boolean_t session_resumed;
     uint8_t   selected_identity_index;
     uint8_t   selected_psk_value[SHA384_OUTPUT_SIZE]; // max size for PSK is hash output size
@@ -382,13 +382,11 @@ tls13_context_t* tls13_create_server_context(const char_t*                      
                                              tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
                                              tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
                                              tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
+                                             tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
                                              tls13_network_send_f                            network_send,
                                              tls13_network_recv_f                            network_recv,
                                              int64_t                                         network_client_identifier,
-                                             boolean_t                                       require_client_certificate,
-                                             uint8_t*                                        psk_encryption_key,
-                                             uint8_t*                                        psk_encryption_iv,
-                                             uint8_t*                                        psk_aed_key) {
+                                             boolean_t                                       require_client_certificate) {
     if (!host_port || !network_send || !network_recv) {
         return NULL;
     }
@@ -402,14 +400,12 @@ tls13_context_t* tls13_create_server_context(const char_t*                      
     ctx->load_server_certificate_and_key = load_server_certificate_and_key;
     ctx->client_certificate_verify_callback = client_certificate_verify_callback;
     ctx->client_certificates_ca_dn_list_callback = client_certificates_ca_dn_list_callback;
+    ctx->get_psk_encryption_keys_callback = get_psk_encryption_keys_callback;
     ctx->network_send = network_send;
     ctx->network_recv = network_recv;
     ctx->network_client_identifier  = network_client_identifier;
     ctx->require_client_certificate = require_client_certificate;
     ctx->psk_key_exchange_mode = TLS13_PSK_KEY_EXCHANGE_MODE_REJECTED; // default to no PSK key exchange
-    memory_memcopy(psk_encryption_key, ctx->psk_encryption_key, AES256_KEY_SIZE);
-    memory_memcopy(psk_encryption_iv, ctx->psk_encryption_iv, 12);
-    memory_memcopy(psk_aed_key, ctx->psk_aed_key, 16);
 
     return ctx;
 }
@@ -1146,6 +1142,12 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_context_t*
     uint8_t* binders_data_ptr = binders_data_start + 2;
     uint8_t* binders_data_end = binders_data_ptr + binders_list_len;
 
+    if(!ctx->get_psk_encryption_keys_callback) {
+        ctx->session_resumed = false; // Can't resume without keys, but allow full handshake to proceed
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "No callback registered to retrieve PSK encryption keys");
+        return 0;
+    }
+
     if (identity_list_len + 2 + binders_list_len + 2 > ext_len) {
         PRINTLOG(CRYPTOLIB, LOG_ERROR, "Invalid Pre-Shared Key extension length. Expected at least %d bytes, got %d", identity_list_len + 2 + binders_list_len + 2, ext_len);
         return -1;
@@ -1222,17 +1224,42 @@ static int8_t tls13_parse_client_hello_extension_pre_shared_key(tls13_context_t*
 
         int32_t ciphertext_len = identity_len - 16; // Subtract tag length
 
+        uint8_t* psk_encryption_key;
+        uint8_t* psk_encryption_iv;
+        uint8_t* psk_aed_key;
+
+        if(ctx->get_psk_encryption_keys_callback(ctx, false, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
+            PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to retrieve PSK encryption keys for PSK identity %d", psk_index);
+            NEXT_IDENTITY();
+        }
+
         int32_t status = aes_gcm_decrypt_with_aad_with_tag(
             plaintext, identity_data, ciphertext_len,
-            ctx->psk_encryption_key, AES256_KEY_SIZE,
-            ctx->psk_encryption_iv, 12,
-            ctx->psk_aed_key, sizeof(ctx->psk_aed_key),
+            psk_encryption_key, AES256_KEY_SIZE,
+            psk_encryption_iv, 12,
+            psk_aed_key, 16,
             identity_data + ciphertext_len, 16
             );
 
         if (status != 0) {
-            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to decrypt PSK identity");
-            NEXT_IDENTITY();
+            // get previous keys
+            if(ctx->get_psk_encryption_keys_callback(ctx, true, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to retrieve previous PSK encryption keys for PSK identity %d", psk_index);
+                NEXT_IDENTITY();
+            }
+
+            status = aes_gcm_decrypt_with_aad_with_tag(
+                plaintext, identity_data, ciphertext_len,
+                psk_encryption_key, AES256_KEY_SIZE,
+                psk_encryption_iv, 12,
+                psk_aed_key, 16,
+                identity_data + ciphertext_len, 16
+                );
+
+            if (status != 0) {
+                PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to decrypt PSK identity %d with both current and previous keys", psk_index);
+                NEXT_IDENTITY();
+            }
         }
 
         int32_t offset = 0;
@@ -1836,7 +1863,6 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
         plaintext[--reverse_p] = (TLS_EXTENSION_ALPN >> 8) & 0xff;
     }
 
-#if 1
     // Suported groups
     int32_t supported_groups_list_end = reverse_p;
     plaintext[--reverse_p] = TLS_GROUP_SECP256R1 & 0xff;
@@ -1854,7 +1880,7 @@ static int8_t tls13_send_encrypted_extensions(tls13_context_t* ctx) {
 
     plaintext[--reverse_p] = TLS_EXTENSION_SUPPORTED_GROUPS & 0xff;
     plaintext[--reverse_p] = (TLS_EXTENSION_SUPPORTED_GROUPS >> 8) & 0xff;
-#endif
+
 
     /* Extensions length (2 bytes) */
     int32_t ext_len = start_pos - reverse_p;
@@ -2047,7 +2073,6 @@ static int8_t tls13_send_certificate_request(tls13_context_t* ctx) {
     // 4. Extension Type: signature_algorithms_cert (0x0032)
     plaintext[--reverse_p] = TLS_EXTENSION_SIGNATURE_ALGORITHMS_CERT & 0xff;
     plaintext[--reverse_p] = (TLS_EXTENSION_SIGNATURE_ALGORITHMS_CERT >> 8) & 0xff;
-
 
     // --- Handshake Body (Reverse) ---
     uint16_t extensions_vec_len = start_pos - reverse_p;
@@ -3462,6 +3487,11 @@ static int8_t tls13_send_new_session_ticket(tls13_context_t* ctx) {
         return 0; // No ticket if not doing DHE_PSK
     }
 
+    if(!ctx->get_psk_encryption_keys_callback) {
+        PRINTLOG(CRYPTOLIB, LOG_DEBUG, "No callback provided for getting PSK encryption keys - cannot send NewSessionTicket");
+        return 0;
+    }
+
     uint8_t ticket_nonce[16];
     get_random_bytes(ticket_nonce, sizeof(ticket_nonce));
 
@@ -3525,11 +3555,20 @@ static int8_t tls13_send_new_session_ticket(tls13_context_t* ctx) {
 
     uint8_t psk_identity_ciphertext[1024];
 
+    uint8_t* psk_encryption_key;
+    uint8_t* psk_encryption_iv;
+    uint8_t* psk_aed_key;
+
+    if(ctx->get_psk_encryption_keys_callback(ctx, false, &psk_encryption_key, &psk_encryption_iv, &psk_aed_key) != 0) {
+        PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to derive ticket encryption key for NewSessionTicket");
+        return -1;
+    }
+
     int32_t status = aes_gcm_encrypt_with_aad_with_tag(
         psk_identity_ciphertext, psk_identity, psk_len,
-        ctx->psk_encryption_key, AES256_KEY_SIZE,
-        ctx->psk_encryption_iv, 12,
-        ctx->psk_aed_key, sizeof(ctx->psk_aed_key),
+        psk_encryption_key, AES256_KEY_SIZE,
+        psk_encryption_iv, 12,
+        psk_aed_key, 16,
         psk_identity_ciphertext + psk_len,
         16
         );

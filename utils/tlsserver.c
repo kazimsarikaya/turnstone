@@ -586,6 +586,78 @@ static int8_t tls13_client_certificates_ca_dn_list(tls13_context_t* ctx,
     return 0;
 }
 
+typedef struct tls13_psk_encryption_parameters_t {
+    uint8_t key[AES256_KEY_SIZE];
+    uint8_t iv[12];
+    uint8_t aed_key[16];
+} tls13_psk_encryption_parameters_t;
+
+static int8_t tls13_get_psk_encryption_keys(tls13_context_t* ctx,
+                                            boolean_t        previous_key,
+                                            uint8_t**        out_psk_encryption_key,
+                                            uint8_t**        out_psk_encryption_iv,
+                                            uint8_t**        out_psk_aed_key) {
+    UNUSED(ctx);
+
+    static tls13_psk_encryption_parameters_t psk_params[2]; // double buffer for current and previous keys
+    static boolean_t keys_initialized = false;
+
+    if(!keys_initialized) {
+        FILE* f = fopen("build/psk_key.bin", "rb");
+        if(f) {
+            size_t read_size = fread(psk_params[0].key, 1, sizeof(psk_params[0].key), f);
+            if(read_size != sizeof(psk_params[0].key)) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read PSK encryption key from file");
+                fclose(f);
+                return -1;
+            }
+            read_size = fread(psk_params[0].iv, 1, sizeof(psk_params[0].iv), f);
+            if(read_size != sizeof(psk_params[0].iv)) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read PSK encryption IV from file");
+                fclose(f);
+                return -1;
+            }
+            read_size = fread(psk_params[0].aed_key, 1, sizeof(psk_params[0].aed_key), f);
+            if(read_size != sizeof(psk_params[0].aed_key)) {
+                PRINTLOG(CRYPTOLIB, LOG_ERROR, "Failed to read PSK encryption AED key from file");
+                fclose(f);
+                return -1;
+            }
+            fclose(f);
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "PSK key file not found, generating random keys");
+            get_random_bytes(psk_params[0].key, sizeof(psk_params[0].key));
+            get_random_bytes(psk_params[0].iv, sizeof(psk_params[0].iv));
+            get_random_bytes(psk_params[0].aed_key, sizeof(psk_params[0].aed_key));
+        }
+
+
+        get_random_bytes(psk_params[1].key, sizeof(psk_params[1].key));
+        get_random_bytes(psk_params[1].iv, sizeof(psk_params[1].iv));
+        get_random_bytes(psk_params[1].aed_key, sizeof(psk_params[1].aed_key));
+
+        f = fopen("build/psk_key.bin", "wb");
+        if(f) {
+            fwrite(psk_params[1].key, 1, sizeof(psk_params[1].key), f);
+            fwrite(psk_params[1].iv, 1, sizeof(psk_params[1].iv), f);
+            fwrite(psk_params[1].aed_key, 1, sizeof(psk_params[1].aed_key), f);
+            fclose(f);
+        } else {
+            PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to save PSK keys to file");
+        }
+
+        keys_initialized = true;
+    }
+
+    int32_t index = previous_key ? 0 : 1;
+
+    *out_psk_encryption_key = psk_params[index].key;
+    *out_psk_encryption_iv  = psk_params[index].iv;
+    *out_psk_aed_key = psk_params[index].aed_key;
+
+    return 0;
+}
+
 static int32_t recv_all(int64_t sockfd, uint8_t* buffer, int32_t length, int32_t flags) {
     int32_t total_received = 0;
     boolean_t once = flags & 0x80000000; // custom flag to indicate recv should be called only once
@@ -687,13 +759,6 @@ int32_t main(int32_t argc, char_t** argv) {
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Server listening on port %d (SO_REUSEADDR enabled)", PORT);
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Waiting for connections...");
 
-    uint8_t psk_encryption_key[AES256_KEY_SIZE];
-    uint8_t psk_encryption_iv[12];
-    uint8_t psk_aed_key[16];
-    get_random_bytes(psk_encryption_key, sizeof(psk_encryption_key));
-    get_random_bytes(psk_encryption_iv, sizeof(psk_encryption_iv));
-    get_random_bytes(psk_aed_key, sizeof(psk_aed_key));
-
     int32_t request_count = 0;
 
     while (true && request_count < 10) {
@@ -715,13 +780,11 @@ int32_t main(int32_t argc, char_t** argv) {
             tls13_load_server_certificate_and_key,
             tls13_client_certificate_verify,
             tls13_client_certificates_ca_dn_list,
+            tls13_get_psk_encryption_keys,
             send_all,
             recv_all,
             client_fd,
-            require_client_certificate,
-            psk_encryption_key,
-            psk_encryption_iv,
-            psk_aed_key
+            require_client_certificate
             );
 
         if(!tls13_ctx) {

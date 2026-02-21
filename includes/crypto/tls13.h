@@ -91,6 +91,25 @@ typedef int8_t (*tls13_client_certificates_ca_dn_list_callback_f)(tls13_context_
                                                                   size_t*          out_ca_count);
 
 /**
+ * @brief Function pointer type for retrieving PSK encryption keys.
+ *
+ * This callback function is used to obtain the necessary keys and IVs for PSK (Pre-Shared Key) encryption operations during the TLS handshake. The implementation should provide the appropriate keys based on whether the previous key is being used or not.
+ *
+ * @param ctx Pointer to the TLS 1.3 context.
+ * @param previos_key A boolean indicating whether to retrieve the previous key (true) or the current key (false).
+ * @param out_psk_encryption_key Pointer to a buffer where the PSK encryption key will be stored.
+ * @param out_psk_encryption_iv Pointer to a buffer where the PSK encryption IV will be stored.
+ * @param out_psk_aed_key Pointer to a buffer where the PSK authentication encryption data key will be stored.
+ * @return 0 on success, a negative value on failure.
+ */
+typedef int8_t (*tls13_get_psk_encryption_keys_callback_f)(tls13_context_t* ctx,
+                                                           boolean_t        previos_key,
+                                                           uint8_t**        out_psk_encryption_key,
+                                                           uint8_t**        out_psk_encryption_iv,
+                                                           uint8_t**        out_psk_aed_key);
+
+
+/**
  * @brief Function pointer type for sending data over the network.
  *
  * This callback function is used by the TLS library to send data to the remote peer.
@@ -128,26 +147,22 @@ typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8
  * @param load_server_certificate_and_key A function pointer to load the server's certificate and private key.
  * @param client_certificate_verify_callback A function pointer for verifying client certificates during the handshake.
  * @param client_certificates_ca_dn_list_callback A function pointer for providing a list of acceptable CA DNs to the client.
+ * @param get_psk_encryption_keys_callback A function pointer for retrieving PSK encryption keys during the handshake.
  * @param network_send A function pointer for sending data over the network.
  * @param network_recv A function pointer for receiving data from the network.
  * @param network_client_identifier An identifier for the specific network connection.
  * @param require_client_certificate If true, the server will request a client certificate during the handshake.
- * @param psk_encryption_key The encryption key for PSK (Pre-Shared Key) operations.
- * @param psk_encryption_iv The initialization vector for PSK operations.
- * @param psk_aed_key The authentication encryption data key for PSK operations.
  * @return A pointer to the newly created tls13_context_t on success, or NULL on failure.
  */
 tls13_context_t* tls13_create_server_context(const char_t*                                   host_port,
                                              tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
                                              tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
                                              tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
+                                             tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
                                              tls13_network_send_f                            network_send,
                                              tls13_network_recv_f                            network_recv,
                                              int64_t                                         network_client_identifier,
-                                             boolean_t                                       require_client_certificate,
-                                             uint8_t*                                        psk_encryption_key,
-                                             uint8_t*                                        psk_encryption_iv,
-                                             uint8_t*                                        psk_aed_key);
+                                             boolean_t                                       require_client_certificate);
 /**
  * @brief Destroys a TLS 1.3 context and frees associated resources.
  *
