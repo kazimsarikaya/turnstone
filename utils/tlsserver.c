@@ -212,13 +212,13 @@ static int8_t tls13_load_ca_certificate_and_key(boolean_t force_regenerate, bool
     return 0;
 }
 
-static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_ctx,
+static int8_t tls13_load_server_certificate_and_key(tls13_session_t*     tls13_session,
                                                     x509_algorithm_t*    supported_algorithms,
                                                     x509_certificate_t** out_ca_cert,
                                                     x509_certificate_t** out_server_cert,
                                                     uint8_t**            out_private_key,
                                                     size_t*              out_private_key_len) {
-    UNUSED(tls13_ctx);
+    UNUSED(tls13_session);
 
     FILE* f;
 
@@ -477,7 +477,7 @@ static int8_t tls13_load_server_certificate_and_key(tls13_context_t*     tls13_c
     return 0;
 }
 
-static int8_t tls13_client_certificate_verify(tls13_context_t*     ctx,
+static int8_t tls13_client_certificate_verify(tls13_session_t*     ctx,
                                               x509_certificate_t** certificate_chain,
                                               size_t               chain_length) {
     UNUSED(ctx);
@@ -528,7 +528,7 @@ static int8_t tls13_client_certificate_verify(tls13_context_t*     ctx,
     return 0;
 }
 
-static int8_t tls13_client_certificates_ca_dn_list(tls13_context_t* ctx,
+static int8_t tls13_client_certificates_ca_dn_list(tls13_session_t* ctx,
                                                    uint8_t***       out_ca_dn_list,
                                                    size_t**         out_ca_dn_list_length,
                                                    size_t*          out_ca_count){
@@ -592,7 +592,7 @@ typedef struct tls13_psk_encryption_parameters_t {
     uint8_t aed_key[16];
 } tls13_psk_encryption_parameters_t;
 
-static int8_t tls13_get_psk_encryption_keys(tls13_context_t* ctx,
+static int8_t tls13_get_psk_encryption_keys(tls13_session_t* ctx,
                                             boolean_t        previous_key,
                                             uint8_t**        out_psk_encryption_key,
                                             uint8_t**        out_psk_encryption_iv,
@@ -756,6 +756,17 @@ int32_t main(int32_t argc, char_t** argv) {
         return 1;
     }
 
+    tls13_config_t* tls13_config = tls13_create_config(
+        "localhost:10443",
+        tls13_load_server_certificate_and_key,
+        tls13_client_certificate_verify,
+        tls13_client_certificates_ca_dn_list,
+        tls13_get_psk_encryption_keys,
+        send_all,
+        recv_all,
+        require_client_certificate
+        );
+
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Server listening on port %d (SO_REUSEADDR enabled)", PORT);
     PRINTLOG(CRYPTOLIB, LOG_INFO, "Waiting for connections...");
 
@@ -775,50 +786,45 @@ int32_t main(int32_t argc, char_t** argv) {
 
         PRINTLOG(CRYPTOLIB, LOG_INFO, "New connection from %s:%d", client_ip, ntohs(client_addr.sin_port));
 
-        tls13_context_t* tls13_ctx = tls13_create_server_context(
-            "localhost:10443",
-            tls13_load_server_certificate_and_key,
-            tls13_client_certificate_verify,
-            tls13_client_certificates_ca_dn_list,
-            tls13_get_psk_encryption_keys,
-            send_all,
-            recv_all,
-            client_fd,
-            require_client_certificate
+        tls13_session_t* tls13_session = tls13_create_session(
+            tls13_config,
+            client_fd
             );
 
-        if(!tls13_ctx) {
+        if(!tls13_session) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "Memory allocation failed");
             close(client_fd);
             continue;
         }
 
-        if(tls13_handle_handshake(tls13_ctx) != 0) {
+        if(tls13_handle_handshake(tls13_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_ERROR, "TLS handshake failed");
-            tls13_destroy_context(tls13_ctx);
+            tls13_destroy_session(tls13_session);
             close(client_fd);
             continue;
         }
 
-        if(tls13_has_alpn_h2(tls13_ctx)) {
-            if(http2_handle_connection(tls13_ctx) != 0) {
+        if(tls13_has_alpn_h2(tls13_session)) {
+            if(http2_handle_connection(tls13_session) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/2 connection handling failed");
             }
         } else {
-            if(http11_handle_connection(tls13_ctx) != 0) {
+            if(http11_handle_connection(tls13_session) != 0) {
                 PRINTLOG(CRYPTOLIB, LOG_ERROR, "HTTP/1.1 connection handling failed");
             }
         }
 
-        if(tls13_send_close_notify(tls13_ctx) != 0) {
+        if(tls13_send_close_notify(tls13_session) != 0) {
             PRINTLOG(CRYPTOLIB, LOG_WARNING, "Failed to send Close Notify");
         }
 
-        tls13_destroy_context(tls13_ctx);
+        tls13_destroy_session(tls13_session);
 
         close(client_fd);
         PRINTLOG(CRYPTOLIB, LOG_INFO, "Connection closed");
     }
+
+    tls13_destroy_config(tls13_config);
 
     close(server_fd);
     x509_certificate_free(ca_certificate);

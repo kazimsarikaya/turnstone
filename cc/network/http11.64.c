@@ -15,7 +15,7 @@ MODULE("turnstone.lib.network.http");
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-int8_t http11_handle_connection(tls13_context_t* ctx) {
+int8_t http11_handle_connection(tls13_session_t* ctx) {
     int8_t ret = -1;
     http_request_t* request = NULL;
     http_response_t* response = NULL;

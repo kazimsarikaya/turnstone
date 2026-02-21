@@ -387,6 +387,12 @@ sha384_ctx_t* sha384_clone(sha384_ctx_t* ctx);
 uint8_t* sha384_hmac(const uint8_t* key, size_t key_len,
                      const uint8_t* data, size_t data_len);
 
+extern const uint8_t sha256_empty_hash[SHA256_OUTPUT_SIZE];
+extern const uint8_t sha224_empty_hash[SHA224_OUTPUT_SIZE];
+extern const uint8_t sha384_empty_hash[SHA384_OUTPUT_SIZE];
+extern const uint8_t sha512_empty_hash[SHA512_OUTPUT_SIZE];
+
+
 #ifdef __cplusplus
 }
 #endif

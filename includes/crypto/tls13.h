@@ -26,13 +26,23 @@ extern "C" {
 #include <crypto/x509.h>
 
 /**
+ * @brief Opaque structure representing the TLS 1.3 configuration.
+ *
+ * This structure holds the configuration settings and callback function pointers for a TLS 1.3 server.
+ * It includes information such as the server's hostname and port, certificate loading functions,
+ * client certificate verification callbacks, PSK key retrieval callbacks, and network communication
+ * callbacks. The structure is opaque to the user and managed internally by the TLS library.
+ */
+typedef struct tls13_config_t tls13_config_t;
+
+/**
  * @brief Opaque structure representing the TLS 1.3 context.
  *
  * This structure holds all the state information for a TLS 1.3 connection, including
  * cryptographic keys, session state, random values, supported features, and network
  * communication callbacks. It is opaque to the user and managed internally by the TLS library.
  */
-typedef struct tls13_context_t tls13_context_t;
+typedef struct tls13_session_t tls13_session_t;
 
 /**
  * @brief Function pointer type for loading server certificates and private keys.
@@ -49,7 +59,7 @@ typedef struct tls13_context_t tls13_context_t;
  * @param out_private_key_len Pointer to a size_t that will be set to the length of the private key data.
  * @return 0 on success, a negative value on failure.
  */
-typedef int8_t (*tls13_load_server_certificate_and_key_f)(tls13_context_t*     ctx,
+typedef int8_t (*tls13_load_server_certificate_and_key_f)(tls13_session_t*     ctx,
                                                           x509_algorithm_t*    supported_algorithms,
                                                           x509_certificate_t** out_ca_cert,
                                                           x509_certificate_t** out_server_cert,
@@ -68,7 +78,7 @@ typedef int8_t (*tls13_load_server_certificate_and_key_f)(tls13_context_t*     c
  * @param chain_length The number of certificates in the chain.
  * @return 0 if the client certificate is valid, a negative value if it is invalid or verification fails.
  */
-typedef int8_t (*tls13_client_certificate_verify_callback_f)(tls13_context_t*     ctx,
+typedef int8_t (*tls13_client_certificate_verify_callback_f)(tls13_session_t*     ctx,
                                                              x509_certificate_t** certificate_chain,
                                                              size_t               chain_length);
 
@@ -85,7 +95,7 @@ typedef int8_t (*tls13_client_certificate_verify_callback_f)(tls13_context_t*   
  * @param out_ca_count Pointer to a size_t that will be set to the number of CA DNs in the list.
  * @return 0 on success, a negative value on failure.
  */
-typedef int8_t (*tls13_client_certificates_ca_dn_list_callback_f)(tls13_context_t* ctx,
+typedef int8_t (*tls13_client_certificates_ca_dn_list_callback_f)(tls13_session_t* ctx,
                                                                   uint8_t***       out_ca_dn_list,
                                                                   size_t**         out_ca_dn_list_length,
                                                                   size_t*          out_ca_count);
@@ -102,7 +112,7 @@ typedef int8_t (*tls13_client_certificates_ca_dn_list_callback_f)(tls13_context_
  * @param out_psk_aed_key Pointer to a buffer where the PSK authentication encryption data key will be stored.
  * @return 0 on success, a negative value on failure.
  */
-typedef int8_t (*tls13_get_psk_encryption_keys_callback_f)(tls13_context_t* ctx,
+typedef int8_t (*tls13_get_psk_encryption_keys_callback_f)(tls13_session_t* ctx,
                                                            boolean_t        previos_key,
                                                            uint8_t**        out_psk_encryption_key,
                                                            uint8_t**        out_psk_encryption_iv,
@@ -137,7 +147,7 @@ typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8
 
 
 /**
- * @brief Creates a new TLS 1.3 server context.
+ * @brief Creates a new TLS 1.3 config
  *
  * Initializes a TLS 1.3 context for a server. This function sets up the necessary state
  * for handling TLS connections, including network callbacks, certificate loading functions,
@@ -150,28 +160,48 @@ typedef int32_t (*tls13_network_recv_f)(int64_t network_client_identifier, uint8
  * @param get_psk_encryption_keys_callback A function pointer for retrieving PSK encryption keys during the handshake.
  * @param network_send A function pointer for sending data over the network.
  * @param network_recv A function pointer for receiving data from the network.
- * @param network_client_identifier An identifier for the specific network connection.
  * @param require_client_certificate If true, the server will request a client certificate during the handshake.
- * @return A pointer to the newly created tls13_context_t on success, or NULL on failure.
+ * @return A pointer to the initialized TLS 1.3 configuration structure, or NULL if initialization fails. The caller is responsible for freeing the returned pointer using `tls13_destroy_config`.
  */
-tls13_context_t* tls13_create_server_context(const char_t*                                   host_port,
-                                             tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
-                                             tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
-                                             tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
-                                             tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
-                                             tls13_network_send_f                            network_send,
-                                             tls13_network_recv_f                            network_recv,
-                                             int64_t                                         network_client_identifier,
-                                             boolean_t                                       require_client_certificate);
+tls13_config_t* tls13_create_config(const char_t*                                   host_port,
+                                    tls13_load_server_certificate_and_key_f         load_server_certificate_and_key,
+                                    tls13_client_certificate_verify_callback_f      client_certificate_verify_callback,
+                                    tls13_client_certificates_ca_dn_list_callback_f client_certificates_ca_dn_list_callback,
+                                    tls13_get_psk_encryption_keys_callback_f        get_psk_encryption_keys_callback,
+                                    tls13_network_send_f                            network_send,
+                                    tls13_network_recv_f                            network_recv,
+                                    boolean_t                                       require_client_certificate);
 /**
- * @brief Destroys a TLS 1.3 context and frees associated resources.
+ * @brief Destroys a TLS 1.3 config and frees associated resources.
  *
  * This function cleans up all memory and resources allocated for a TLS 1.3 context.
  * It should be called when the TLS connection is no longer needed.
  *
- * @param tls13_ctx Pointer to the TLS 1.3 context to destroy.
+ * @param tls13_config Pointer to the TLS 1.3 configuration structure to be destroyed.
  */
-void tls13_destroy_context(tls13_context_t* tls13_ctx);
+void tls13_destroy_config(tls13_config_t* tls13_config);
+
+/**
+ * @brief Creates a new TLS 1.3 session for a client connection.
+ *
+ * This function initializes a TLS 1.3 session using the provided configuration and network client identifier.
+ * It sets up the necessary state for handling the TLS handshake and subsequent encrypted communication with the client.
+ *
+ * @param config Pointer to the TLS 1.3 configuration structure containing callbacks and settings.
+ * @param network_client_identifier An identifier for the network connection (e.g., socket file descriptor).
+ * @return A pointer to the initialized TLS 1.3 session structure, or NULL if initialization fails. The caller is responsible for freeing the returned pointer using `tls13_destroy_session`.
+ */
+tls13_session_t* tls13_create_session(tls13_config_t* config, int64_t network_client_identifier);
+
+/**
+ * @brief Destroys a TLS 1.3 session and frees associated resources.
+ *
+ * This function cleans up all memory and resources allocated for a TLS 1.3 session.
+ * It should be called when the TLS connection is no longer needed or after a graceful shutdown.
+ *
+ * @param session Pointer to the TLS 1.3 session structure to be destroyed.
+ */
+void tls13_destroy_session(tls13_session_t* session);
 
 /**
  * @brief Reads application data from the TLS connection.
@@ -185,7 +215,7 @@ void tls13_destroy_context(tls13_context_t* tls13_ctx);
  * @return The number of bytes read on success, 0 if the connection is closed gracefully,
  *         or a negative value on error.
  */
-int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len);
+int32_t tls13_read(tls13_session_t* ctx, uint8_t* out_data, uint32_t max_len);
 
 /**
  * @brief Writes application data to the TLS connection.
@@ -198,7 +228,7 @@ int32_t tls13_read(tls13_context_t* ctx, uint8_t* out_data, uint32_t max_len);
  * @param len The number of bytes to send.
  * @return The number of bytes written on success, or a negative value on error.
  */
-int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len);
+int32_t tls13_write(tls13_session_t* ctx, const uint8_t* data, uint32_t len);
 
 /**
  * @brief Sends a TLS Close Notify alert.
@@ -208,7 +238,7 @@ int32_t tls13_write(tls13_context_t* ctx, const uint8_t* data, uint32_t len);
  * @param ctx Pointer to the TLS 1.3 context.
  * @return 0 on success, a negative value on failure.
  */
-int8_t tls13_send_close_notify(tls13_context_t* ctx);
+int8_t tls13_send_close_notify(tls13_session_t* ctx);
 
 /**
  * @brief Handles the TLS 1.3 handshake process.
@@ -220,7 +250,7 @@ int8_t tls13_send_close_notify(tls13_context_t* ctx);
  * @param ctx Pointer to the TLS 1.3 context.
  * @return 0 on successful completion of the handshake, a negative value on failure.
  */
-int8_t tls13_handle_handshake(tls13_context_t* ctx);
+int8_t tls13_handle_handshake(tls13_session_t* ctx);
 
 /**
  * @brief Checks if the client offered HTTP/2 (h2) via ALPN.
@@ -228,7 +258,7 @@ int8_t tls13_handle_handshake(tls13_context_t* ctx);
  * @param ctx Pointer to the TLS 1.3 context.
  * @return true if the client offered h2 via ALPN, false otherwise.
  */
-boolean_t tls13_has_alpn_h2(tls13_context_t* ctx);
+boolean_t tls13_has_alpn_h2(tls13_session_t* ctx);
 
 #ifdef __cplusplus
 }

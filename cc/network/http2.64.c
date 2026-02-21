@@ -13,7 +13,7 @@
 
 MODULE("turnstone.lib.network.http");
 
-static int8_t http2_send_reset_stream(tls13_context_t*   ctx,
+static int8_t http2_send_reset_stream(tls13_session_t*   ctx,
                                       uint32_t           stream_id,
                                       http2_error_code_t error_code) {
     uint8_t payload[4] = {
@@ -42,7 +42,7 @@ static int8_t http2_send_reset_stream(tls13_context_t*   ctx,
     return 0;
 }
 
-static int8_t http2_send_goaway(tls13_context_t*   ctx,
+static int8_t http2_send_goaway(tls13_session_t*   ctx,
                                 uint32_t           last_stream_id,
                                 http2_error_code_t error_code) {
     uint8_t payload[8] = {
@@ -72,7 +72,7 @@ static int8_t http2_send_goaway(tls13_context_t*   ctx,
     return 0;
 }
 
-static int8_t http2_send_settings_ack(tls13_context_t* ctx) {
+static int8_t http2_send_settings_ack(tls13_session_t* ctx) {
     uint8_t settings_ack_frame[9] = {
         0x00, 0x00, 0x00, // Length: 0
         HTTP2_FRAME_TYPE_SETTINGS, // Type: SETTINGS
@@ -88,7 +88,7 @@ static int8_t http2_send_settings_ack(tls13_context_t* ctx) {
     return 0;
 }
 
-static int8_t http2_send_ping_ack(tls13_context_t * ctx, http2_frame_t * rx_frame) {
+static int8_t http2_send_ping_ack(tls13_session_t * ctx, http2_frame_t * rx_frame) {
     uint8_t ack_header[9] = {
         0x00, 0x00, 0x08, // Length 8
         0x06, // Type PING
@@ -160,7 +160,7 @@ static int8_t http2_parse_settings(http2_context_t* ctx, http2_frame_t* frame) {
 }
 
 
-static int8_t http2_send_settings(tls13_context_t* ctx, http2_context_t* http2_ctx) {
+static int8_t http2_send_settings(tls13_session_t* ctx, http2_context_t* http2_ctx) {
     uint8_t settings_payload[128]; // Sufficiently large buffer
     uint32_t offset = 0;
 
@@ -263,7 +263,7 @@ static int8_t http2_parse_window_update(http2_context_t* ctx, http2_frame_t* fra
     return 0;
 }
 
-static int8_t http2_send_window_update(tls13_context_t* ctx,
+static int8_t http2_send_window_update(tls13_session_t* ctx,
                                        http2_context_t* http2_ctx,
                                        uint32_t stream_id, uint32_t window_size_increment) {
     uint8_t payload[4] = {
@@ -301,7 +301,7 @@ static int8_t http2_send_window_update(tls13_context_t* ctx,
 int8_t http2_hpack_encode_int(buffer_t* buffer, uint32_t value, uint8_t prefix_bits, uint8_t type_bits);
 int8_t http2_hpack_encode_literal(http2_context_t* ctx, buffer_t* buffer, const char_t* name, const char_t* value,
                                   bool add_to_dynamic_table);
-static int8_t http2_send_response(tls13_context_t* tls_ctx,
+static int8_t http2_send_response(tls13_session_t* tls_ctx,
                                   http2_context_t* ctx, http2_stream_t* stream) {
     http_response_t* res = stream->response;
     uint32_t stream_id = stream->stream_id;
@@ -416,7 +416,7 @@ int8_t http2_hpack_handle_indexed(http2_context_t* ctx, http2_stream_t* stream, 
 int8_t http2_hpack_decode_int(const uint8_t* data, uint8_t prefix_bits, uint32_t * result, size_t * consumed);
 int8_t http2_hpack_decode_literal(http2_context_t* ctx, http2_stream_t* stream,
                                   uint8_t* data, bool add_to_dynamic_table, size_t* consumed_bytes);
-static int8_t http2_parse_headers(tls13_context_t* tls_ctx,
+static int8_t http2_parse_headers(tls13_session_t* tls_ctx,
                                   http2_context_t* ctx, http2_frame_t* frame) {
     PRINTLOG(HTTP, LOG_DEBUG, "Received %s frame on stream %u",
              (frame->type == HTTP2_FRAME_TYPE_HEADERS) ? "HEADERS" : "CONTINUATION",
@@ -706,7 +706,7 @@ static int8_t http2_parse_headers(tls13_context_t* tls_ctx,
     return 0;
 }
 
-static int8_t http2_parse_data_frame(tls13_context_t* tls_ctx,
+static int8_t http2_parse_data_frame(tls13_session_t* tls_ctx,
                                      http2_context_t* ctx, http2_frame_t* frame) {
     PRINTLOG(HTTP, LOG_DEBUG, "Received DATA frame on stream %u with length %u", frame->stream_id, frame->length);
 
@@ -947,7 +947,7 @@ int8_t http2_apply_header(http_request_t* request, const char_t* name, const cha
 #pragma GCC diagnostic pop
 
 void http2_hpack_free_dynamic_table(http2_context_t* ctx);
-int8_t http2_handle_connection(tls13_context_t* ctx) {
+int8_t http2_handle_connection(tls13_session_t* ctx) {
 
 
     uint8_t preface[HTTP2_PREFACE_LEN] = {0};

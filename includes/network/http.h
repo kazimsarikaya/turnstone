@@ -164,8 +164,8 @@ int8_t http_handle(http_request_t* request, http_response_t* response);
 void   http_free_request(http_request_t* request);
 void   http_free_response(http_response_t* response);
 
-int8_t http11_handle_connection(tls13_context_t* ctx);
-int8_t http2_handle_connection(tls13_context_t* ctx);
+int8_t http11_handle_connection(tls13_session_t* ctx);
+int8_t http2_handle_connection(tls13_session_t* ctx);
 
 #ifdef __cplusplus
 }
